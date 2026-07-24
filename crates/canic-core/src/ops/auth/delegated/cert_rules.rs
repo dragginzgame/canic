@@ -5,7 +5,7 @@
 //! Boundary: pure delegated auth helper shared by root and issuer flows.
 
 use super::{
-    audience::{AudienceError, validate_audience_shape, validate_role_grants},
+    audience::{AudienceError, validate_role_grants},
     canonical::issuer_proof_binding_hash,
 };
 use crate::{cdk::types::Principal, dto::auth::DelegationCert};
@@ -102,7 +102,6 @@ pub fn validate_cert_issuance_rules(
         });
     }
 
-    validate_audience_shape(&cert.aud)?;
     validate_role_grants(&cert.grants)?;
 
     if issuer_proof_binding_hash(
@@ -159,7 +158,7 @@ mod tests {
             not_before_ns: 100,
             expires_at_ns: 500,
             max_token_ttl_ns: 120,
-            aud: DelegationAudience::Project("test".to_string()),
+            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
             grants: vec![DelegatedRoleGrant {
                 target: role,
                 scopes: vec!["read".to_string()],

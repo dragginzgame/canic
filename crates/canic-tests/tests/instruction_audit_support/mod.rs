@@ -31,7 +31,8 @@ use canic_control_plane::{
 use canic_core::cdk::utils::hash::wasm_hash;
 use canic_testing_internal::canister::{APP, SCALE_HUB, TEST, USER_HUB};
 use canic_testing_internal::pic::{
-    create_user_shard, issue_delegated_token_from_active_proof, role_grant,
+    create_user_shard, issue_delegated_token_from_active_proof, managed_test_init_identity,
+    role_grant,
 };
 use canic_tests::root::{self, RootSetupProfile, harness::setup_root};
 use ic_testkit::pic::Pic;
@@ -63,6 +64,10 @@ const PERF_COUNTER_ID: u8 = 1;
 const PERF_COUNTER_SOURCE: &str = "performance_counter(1)";
 const PERF_PAGE_LIMIT: u64 = 512;
 const CHECKPOINT_SCAN_ROOTS: &[&str] = &["crates"];
+
+fn test_fleet() -> canic::ids::FleetKey {
+    managed_test_init_identity().fleet.fleet
+}
 const FLOW_GAPS: &[(&str, &str)] = &[
     (
         "root capability dispatch",

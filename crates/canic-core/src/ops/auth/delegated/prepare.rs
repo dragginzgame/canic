@@ -5,10 +5,7 @@
 //! Boundary: pure token construction helper used by issuer-local auth ops.
 
 use super::{
-    audience::{
-        AudienceError, audience_subset, role_grants_subset, validate_audience_shape,
-        validate_role_grants,
-    },
+    audience::{AudienceError, audience_subset, role_grants_subset, validate_role_grants},
     canonical::{CanonicalAuthError, cert_hash, claims_hash},
 };
 use crate::{
@@ -131,7 +128,6 @@ pub fn prepare_delegated_token(
         return Err(PrepareDelegatedTokenError::TokenOutlivesCert);
     }
 
-    validate_audience_shape(&input.audience)?;
     validate_role_grants(&input.grants)?;
     if !audience_subset(&input.audience, &cert.aud) {
         return Err(PrepareDelegatedTokenError::AudienceNotSubset);
@@ -240,7 +236,7 @@ mod tests {
             not_before_ns: 100,
             expires_at_ns: 500,
             max_token_ttl_ns: 120,
-            aud: DelegationAudience::Project("test".to_string()),
+            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
             grants: vec![
                 grant("project_hub", &["session", "upload"]),
                 grant("project_instance", &["read", "write"]),
@@ -265,7 +261,7 @@ mod tests {
             operation_id: [4; 32],
             prepared_by: p(9),
             subject: p(9),
-            audience: DelegationAudience::Project("test".to_string()),
+            audience: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
             grants: vec![grant("project_instance", &["read"])],
             ttl_ns: 60,
             ext: None,
@@ -367,10 +363,8 @@ mod tests {
         verify_delegated_token(
             VerifyDelegatedTokenInput {
                 token: &token,
-                local_canister: p(20),
-                local_canic_subnet: Some(p(21)),
+                local_fleet: crate::test::support::fleet_key(1),
                 local_role: Some(&role),
-                local_project: Some("test"),
                 ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
                     max_cert_ttl_ns: 600,
                     max_token_ttl_ns: 120,
@@ -407,10 +401,8 @@ mod tests {
             verify_delegated_token(
                 VerifyDelegatedTokenInput {
                     token,
-                    local_canister: p(20),
-                    local_canic_subnet: Some(p(21)),
+                    local_fleet: crate::test::support::fleet_key(1),
                     local_role: Some(&role),
-                    local_project: Some("test"),
                     ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
                         max_cert_ttl_ns: 600,
                         max_token_ttl_ns: 120,
@@ -439,10 +431,8 @@ mod tests {
             verify_delegated_token(
                 VerifyDelegatedTokenInput {
                     token: &token,
-                    local_canister: p(20),
-                    local_canic_subnet: Some(p(21)),
+                    local_fleet: crate::test::support::fleet_key(1),
                     local_role: Some(&role),
-                    local_project: Some("test"),
                     ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
                         max_cert_ttl_ns: 600,
                         max_token_ttl_ns: 120,
@@ -477,10 +467,8 @@ mod tests {
             verify_delegated_token(
                 VerifyDelegatedTokenInput {
                     token: &token,
-                    local_canister: p(20),
-                    local_canic_subnet: Some(p(21)),
+                    local_fleet: crate::test::support::fleet_key(1),
                     local_role: Some(&role),
-                    local_project: Some("test"),
                     ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
                         max_cert_ttl_ns: 600,
                         max_token_ttl_ns: 120,
@@ -526,7 +514,7 @@ mod tests {
     fn prepare_delegated_token_rejects_audience_expansion() {
         let proof = proof();
         let mut input = input(&proof);
-        input.audience = DelegationAudience::Project("other".to_string());
+        input.audience = DelegationAudience::Fleet(crate::test::support::fleet_key(2));
 
         assert_eq!(
             prepare_and_finish_delegated_token_for_tests(input, |_| Ok(issuer_proof_for_hash(

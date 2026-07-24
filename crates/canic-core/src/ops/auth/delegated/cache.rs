@@ -164,7 +164,7 @@ mod tests {
             not_before_ns: 10,
             expires_at_ns: 200,
             max_token_ttl_ns: 60,
-            aud: DelegationAudience::Project("test".to_string()),
+            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
             grants: vec![DelegatedRoleGrant {
                 target: CanisterRole::owned("project_instance".to_string()),
                 scopes: vec!["read".to_string()],
@@ -178,7 +178,7 @@ mod tests {
                 cert_hash,
                 issued_at_ns: 100,
                 expires_at_ns: 150,
-                aud: DelegationAudience::Project("test".to_string()),
+                aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
                 grants: vec![DelegatedRoleGrant {
                     target: CanisterRole::owned("project_instance".to_string()),
                     scopes: vec!["read".to_string()],

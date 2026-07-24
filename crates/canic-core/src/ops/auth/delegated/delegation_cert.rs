@@ -5,7 +5,7 @@
 //! Boundary: pure certificate construction helper used by root provisioning flows.
 
 use super::{
-    audience::{AudienceError, validate_audience_shape, validate_role_grants},
+    audience::{AudienceError, validate_role_grants},
     canonical::{CanonicalAuthError, cert_hash, issuer_proof_binding_hash},
     cert_rules::{CertRuleError, DelegatedAuthTtlLimits},
 };
@@ -102,7 +102,6 @@ pub fn prepare_delegation_cert(
         return Err(PrepareDelegationCertError::CertTtlZero);
     }
 
-    validate_audience_shape(&input.audience)?;
     validate_role_grants(&input.grants)?;
 
     let expires_at = input
@@ -189,7 +188,7 @@ mod tests {
             issued_at_ns: 100,
             cert_ttl_ns: 400,
             max_token_ttl_ns: 120,
-            audience: DelegationAudience::Project("test".to_string()),
+            audience: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
             grants: vec![grant("project_instance", &["read", "write"])],
             ttl_limits: ttl_limits(),
         }

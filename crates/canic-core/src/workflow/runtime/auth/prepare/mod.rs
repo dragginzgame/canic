@@ -397,7 +397,7 @@ mod tests {
         DelegatedTokenPrepareRequest {
             metadata: Some(meta(metadata_id, 60_000_000_000)),
             subject: p(8),
-            aud: DelegationAudience::Project("test".to_string()),
+            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
             grants: vec![grant("project_instance", &["canic.verify"])],
             ttl_ns: 30_000_000_000,
             ext: None,

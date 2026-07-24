@@ -15,7 +15,7 @@ use super::{
 use crate::{
     cdk::types::Principal,
     dto::auth::{DelegatedToken, DelegationCert, IssuerProof, RootProof},
-    ids::CanisterRole,
+    ids::{CanisterRole, FleetKey},
     ops::auth::AUTH_TIME_SKEW_ALLOWANCE_NS,
 };
 use thiserror::Error;
@@ -28,10 +28,8 @@ use thiserror::Error;
 
 pub struct VerifyDelegatedTokenInput<'a> {
     pub token: &'a DelegatedToken,
-    pub local_canister: Principal,
-    pub local_canic_subnet: Option<Principal>,
+    pub local_fleet: FleetKey,
     pub local_role: Option<&'a CanisterRole>,
-    pub local_project: Option<&'a str>,
     pub ttl_limits: DelegatedAuthTtlLimits,
     pub required_scopes: &'a [String],
     pub now_ns: u64,
@@ -252,9 +250,7 @@ fn verify_audience_and_grants<RootProofError, IssuerProofError>(
         return Err(VerifyDelegatedTokenError::AudienceNotSubset);
     }
     let audience_ctx = AudienceAcceptanceContext {
-        local_canister: input.local_canister,
-        local_canic_subnet: input.local_canic_subnet,
-        local_project: input.local_project,
+        local_fleet: input.local_fleet,
     };
     if !audience_accepted(audience_ctx, claims_aud) {
         return Err(VerifyDelegatedTokenError::TokenAudienceRejected);
@@ -332,7 +328,7 @@ mod tests {
             not_before_ns: 100,
             expires_at_ns: 500,
             max_token_ttl_ns: 120,
-            aud: DelegationAudience::Project("test".to_string()),
+            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
             grants: vec![
                 grant("project_hub", &["session", "upload"]),
                 grant("project_instance", &["read", "write"]),
@@ -385,10 +381,8 @@ mod tests {
     ) -> VerifyDelegatedTokenInput<'a> {
         VerifyDelegatedTokenInput {
             token,
-            local_canister: p(20),
-            local_canic_subnet: Some(p(21)),
+            local_fleet: crate::test::support::fleet_key(1),
             local_role,
-            local_project: Some("test"),
             ttl_limits: ttl_limits(),
             required_scopes,
             now_ns: 150,
@@ -648,7 +642,7 @@ mod tests {
     #[test]
     fn verify_delegated_token_rejects_audience_subset_drift() {
         let mut token = token();
-        token.claims.aud = DelegationAudience::Canister(p(20));
+        token.claims.aud = DelegationAudience::Fleet(crate::test::support::fleet_key(2));
         let role = role();
 
         assert_eq!(
@@ -658,10 +652,10 @@ mod tests {
     }
 
     #[test]
-    fn verify_delegated_token_rejects_non_matching_project_audience() {
+    fn verify_delegated_token_rejects_non_matching_fleet_audience() {
         let mut token = token();
-        token.proof.cert.aud = DelegationAudience::Project("other".to_string());
-        token.claims.aud = DelegationAudience::Project("other".to_string());
+        token.proof.cert.aud = DelegationAudience::Fleet(crate::test::support::fleet_key(2));
+        token.claims.aud = DelegationAudience::Fleet(crate::test::support::fleet_key(2));
         token.claims.cert_hash = cert_hash(&token.proof.cert).unwrap();
         let role = role();
 

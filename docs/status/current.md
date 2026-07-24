@@ -14,13 +14,15 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.16`.
-- The latest published release is `v0.99.16` at
-  `e30c2cff5b58d8affcca62e4f1e92e2a6074480d`.
-- The `v0.99.16` source tree is
-  `8c3930490e9d125d15a1be63a98e2d8668cf3f33`. Its Cargo.lock SHA-256 is
-  `1212e2a90bc3a6db8ad944a2267174a7259fc240b84db5271047827ef4555e45`.
-- The open `0.99.17` draft keeps Prepared roots inert across upgrade and gives
+- The workspace package version is `0.99.17`.
+- The latest published release is `v0.99.17` at
+  `878feebf5dd827b7982f1a6fb21169c224b1afc4`.
+- The `v0.99.17` source tree is
+  `f0e783e00fb3a3294ceb7196da27c554c59d95a5`. Its Cargo.lock SHA-256 is
+  `014c32ba2283eea7e0b91d0aba64e4547ec95d8ee122a5bab3a196c1a7a8ab5b`.
+- The open `0.99.18` draft hard-cuts delegated-auth audience identity to the
+  exact protected `FleetKey` before implementing prepared credential bundles.
+- Released `0.99.17` keeps Prepared roots inert across upgrade and gives
   non-root application init bytes one durable activation owner.
 - Released `0.99.16` completes the one-member Directory/Placement Binding
   hard cut and the protected fresh-install activation path.
@@ -1268,14 +1270,19 @@ root is Prepared so it can assemble the exact managed inventory; the former
 root bootstrap-resume endpoint is removed rather than retained as a competing
 activation path.
 
-The open `0.99.17` draft closes the two lifecycle gaps found by the focused
-post-release start-macro audit. Root post-upgrade now mirrors non-root phase
-gating: synchronous invariants restore in both phases, while runtime services,
-bootstrap and application upgrade hooks start only for `Active`. Non-root
-application init bytes move from transient heap state into the protected
-ID-21 `Prepared` record and leave that record only through the first exact
-activation transition. This is a reinstall-only record hard cut with no
-pre-0.99.17 decoder or migration path.
+Released `0.99.17` closes the two lifecycle gaps found by the focused
+post-release start-macro audit. Root post-upgrade mirrors non-root phase
+gating, and non-root application init bytes live only in the protected ID-21
+`Prepared` record until the first exact activation transition.
+
+The open `0.99.18` draft establishes the delegated-auth identity prerequisite
+for fresh-install qualification. `DelegationAudience::Fleet(FleetKey)` is the
+sole public, model, stable and canonical audience; verification resolves the
+immutable protected activation binding, and root issuer policy/template
+admission rejects a different Fleet before mutation. Removed Canister,
+CanicSubnet and Project audience shapes have no compatibility reader or
+fallback. Complete credential-bundle generation, manifest delivery and
+expiry recovery remain the next bounded Slice 6 work.
 
 Do not inspect or edit the stale local Toko repository, change Cargo package
 versions outside the maintainer-owned release flow, or commit, tag, publish

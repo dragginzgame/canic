@@ -61,8 +61,8 @@ retained-method owner below.
 
 | Definition | Disposition | Active method | Canonical property |
 | --- | --- | --- | --- |
-| `audience-target-binding.md` | `revise` | `CANIC-AUTH-AUDIENCE-001/v2` | Signed audience/target/local-role binding. |
-| `auth-abstraction-equivalence.md` | `revise` | `CANIC-AUTH-EQUIVALENCE-001/v1` | Equivalent auth abstractions enforce the same property set. |
+| `audience-target-binding.md` | `revise` | `CANIC-AUTH-AUDIENCE-001/v3` | Signed Fleet audience and local-role binding. |
+| `auth-abstraction-equivalence.md` | `revise` | `CANIC-AUTH-EQUIVALENCE-001/v2` | Equivalent auth abstractions enforce the same property set. |
 | `canonical-auth-boundary.md` | `revise` | `CANIC-AUTH-BOUNDARY-001/v1` | Authenticated entrypoints converge on the canonical verifier boundary. |
 | `capability-scope-enforcement.md` | `revise` | `CANIC-AUTH-CAPABILITY-001/v1` | Capability and local-role scopes are enforced before execution. |
 | `expiry-replay-single-use.md` | `revise` | `CANIC-AUTH-REPLAY-001/v2` | Expiry, replay identity, and single-use/domain-receipt boundaries. |

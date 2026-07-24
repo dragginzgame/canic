@@ -11,10 +11,8 @@ use super::{
 };
 
 pub(super) struct DelegatedTokenLocalContext {
-    local_canister: Principal,
-    local_canic_subnet: Principal,
+    local_fleet: FleetKey,
     local_role: CanisterRole,
-    local_project: Option<String>,
 }
 
 pub(super) fn delegated_tokens_config_for_verification()
@@ -74,39 +72,28 @@ pub(super) fn delegated_token_local_context() -> Result<DelegatedTokenLocalConte
             return Err(err);
         }
     };
-    let local_project = match ConfigOps::get() {
-        Ok(cfg) => Some(cfg.app_id().to_string()),
+    let local_fleet = match FleetActivationOps::fleet_binding() {
+        Ok(binding) => binding.fleet,
         Err(err) => {
             DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::InvalidState);
-            return Err(err);
-        }
-    };
-    let local_canic_subnet = match EnvOps::subnet_pid() {
-        Ok(pid) => pid,
-        Err(err) => {
-            DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::InvalidState);
-            return Err(err);
+            return Err(InternalError::from(StorageOpsError::from(err)));
         }
     };
 
     Ok(DelegatedTokenLocalContext {
-        local_canister: IcOps::canister_self(),
-        local_canic_subnet,
+        local_fleet,
         local_role,
-        local_project,
     })
 }
 
-fn delegated_token_verify_input<'a>(
+const fn delegated_token_verify_input<'a>(
     input: &'a VerifyDelegatedTokenRuntimeInput<'a>,
     ctx: &'a DelegatedTokenLocalContext,
 ) -> VerifyDelegatedTokenInput<'a> {
     VerifyDelegatedTokenInput {
         token: input.token,
-        local_canister: ctx.local_canister,
-        local_canic_subnet: Some(ctx.local_canic_subnet),
+        local_fleet: ctx.local_fleet,
         local_role: Some(&ctx.local_role),
-        local_project: ctx.local_project.as_deref(),
         ttl_limits: DelegatedAuthTtlLimits {
             max_cert_ttl_ns: input.max_cert_ttl_ns,
             max_token_ttl_ns: input.max_token_ttl_ns,

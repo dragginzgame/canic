@@ -33,7 +33,9 @@ fn policy(issuer_pid: Principal) -> RootIssuerPolicy {
     RootIssuerPolicy {
         issuer_pid,
         enabled: true,
-        allowed_audiences: vec![RootDelegationAudiencePolicy::Project("test".to_string())],
+        allowed_audiences: vec![RootDelegationAudiencePolicy::Fleet(
+            crate::test::support::fleet_key(1),
+        )],
         allowed_grants: vec![RootDelegatedRoleGrantPolicy {
             target: CanisterRole::owned("project_instance".to_string()),
             scopes: vec!["canic.issue".to_string()],
@@ -47,7 +49,7 @@ fn upsert_request(issuer_pid: Principal) -> RootIssuerRenewalTemplateUpsertReque
     RootIssuerRenewalTemplateUpsertRequest {
         issuer_pid,
         enabled: true,
-        aud: DelegationAudience::Project("test".to_string()),
+        aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
         grants: vec![grant("canic.issue")],
         cert_ttl_ns: 60_000_000_000,
     }
@@ -97,7 +99,7 @@ fn renewal_batch(
                 not_before_ns: 10,
                 expires_at_ns: 200,
                 max_token_ttl_ns: 60,
-                aud: DelegationAudience::Project("test".to_string()),
+                aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
                 grants: vec![grant("canic.issue")],
             },
             chain_key_delegation_cert: ChainKeyDelegationCertV1 {
@@ -108,7 +110,7 @@ fn renewal_batch(
                 issuer_proof_binding_hash: [47; 32],
                 issuer_proof_binding,
                 max_token_ttl_ns: 60,
-                audience: DelegationAudience::Project("test".to_string()),
+                audience: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
                 grants: vec![grant("canic.issue")],
                 not_before_ns: 10,
                 expires_at_ns: 200,

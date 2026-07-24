@@ -3,14 +3,15 @@
 //! Responsibility: define root-owned issuer policy and renewal state.
 //! Does not own: admission decisions, DTO conversion, or persisted record layout.
 
-use crate::{cdk::types::Principal, ids::CanisterRole};
+use crate::{
+    cdk::types::Principal,
+    ids::{CanisterRole, FleetKey},
+};
 
 /// Audience admitted by one root issuer policy.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RootDelegationAudiencePolicy {
-    Canister(Principal),
-    CanicSubnet(Principal),
-    Project(String),
+    Fleet(FleetKey),
 }
 
 /// Role and scopes admitted by one root issuer policy.

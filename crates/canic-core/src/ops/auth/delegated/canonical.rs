@@ -13,7 +13,7 @@ use crate::{
         DelegationAudience, DelegationCert, DelegationProof, IcChainKeyBatchSignatureProofV1,
         IssuerProof, IssuerProofAlgorithm, IssuerProofBinding, RootKeyPolicyV1, RootProof,
     },
-    ids::{BuildNetwork, CanisterRole},
+    ids::{BuildNetwork, CanisterRole, FleetKey},
 };
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -62,10 +62,6 @@ pub enum CanonicalAuthError {
     NonCanonicalScopes,
     #[error("delegated auth role grants must be strictly sorted and unique")]
     NonCanonicalRoles,
-    #[error("delegated auth project audience is empty")]
-    EmptyProject,
-    #[error("delegated auth project audience contains invalid characters: {project}")]
-    InvalidProject { project: String },
     #[error("delegated auth audiences must be strictly sorted and unique")]
     NonCanonicalAudiences,
     #[error("delegated auth issuer policies must be strictly sorted and unique")]
@@ -157,7 +153,7 @@ pub fn cert_bytes(cert: &DelegationCert) -> Result<Vec<u8>, CanonicalAuthError> 
     encode_u64(&mut out, cert.not_before_ns);
     encode_u64(&mut out, cert.expires_at_ns);
     encode_u64(&mut out, cert.max_token_ttl_ns);
-    encode_audience(&mut out, &cert.aud)?;
+    encode_audience(&mut out, &cert.aud);
     encode_role_grants(&mut out, &cert.grants)?;
 
     Ok(out)
@@ -171,7 +167,7 @@ pub fn claims_bytes(claims: &DelegatedTokenClaims) -> Result<Vec<u8>, CanonicalA
     encode_fixed_32(&mut out, claims.cert_hash);
     encode_u64(&mut out, claims.issued_at_ns);
     encode_u64(&mut out, claims.expires_at_ns);
-    encode_audience(&mut out, &claims.aud)?;
+    encode_audience(&mut out, &claims.aud);
     encode_role_grants(&mut out, &claims.grants)?;
     out.extend_from_slice(&claims.nonce);
     encode_token_ext(&mut out, claims.ext.as_deref())?;
@@ -212,26 +208,18 @@ fn encode_issuer_proof_algorithm(out: &mut Vec<u8>, alg: IssuerProofAlgorithm) {
     out.push(tag);
 }
 
-fn encode_audience(
-    out: &mut Vec<u8>,
-    audience: &DelegationAudience,
-) -> Result<(), CanonicalAuthError> {
+fn encode_audience(out: &mut Vec<u8>, audience: &DelegationAudience) {
     match audience {
-        DelegationAudience::Canister(canister) => {
+        DelegationAudience::Fleet(fleet) => {
             out.push(1);
-            encode_principal(out, *canister);
-        }
-        DelegationAudience::CanicSubnet(subnet) => {
-            out.push(2);
-            encode_principal(out, *subnet);
-        }
-        DelegationAudience::Project(project) => {
-            out.push(3);
-            encode_project(out, project)?;
+            encode_fleet_key(out, *fleet);
         }
     }
+}
 
-    Ok(())
+fn encode_fleet_key(out: &mut Vec<u8>, fleet: FleetKey) {
+    encode_fixed_32(out, *fleet.network.as_bytes());
+    encode_fixed_32(out, *fleet.fleet_id.as_bytes());
 }
 
 fn encode_role_grants(
@@ -297,7 +285,7 @@ fn chain_key_delegation_cert_bytes(
     encode_fixed_32(&mut out, cert.issuer_proof_binding_hash);
     encode_issuer_proof_binding(&mut out, cert.issuer_proof_binding);
     encode_u64(&mut out, cert.max_token_ttl_ns);
-    encode_audience(&mut out, &cert.audience)?;
+    encode_audience(&mut out, &cert.audience);
     encode_role_grants(&mut out, &cert.grants)?;
     encode_u64(&mut out, cert.not_before_ns);
     encode_u64(&mut out, cert.expires_at_ns);
@@ -432,7 +420,7 @@ fn encode_audiences(
     encode_len(out, audiences.len());
     let mut previous = None;
     for audience in audiences {
-        let current = audience_bytes(audience)?;
+        let current = audience_bytes(audience);
         if previous
             .as_ref()
             .is_some_and(|previous: &Vec<u8>| previous.as_slice() >= current.as_slice())
@@ -445,10 +433,10 @@ fn encode_audiences(
     Ok(())
 }
 
-fn audience_bytes(audience: &DelegationAudience) -> Result<Vec<u8>, CanonicalAuthError> {
+fn audience_bytes(audience: &DelegationAudience) -> Vec<u8> {
     let mut out = Vec::with_capacity(64);
-    encode_audience(&mut out, audience)?;
-    Ok(out)
+    encode_audience(&mut out, audience);
+    out
 }
 
 fn encode_build_network(out: &mut Vec<u8>, build_network: BuildNetwork) {
@@ -549,30 +537,8 @@ pub fn validate_scope_label(scope: &str) -> Result<(), CanonicalAuthError> {
     Ok(())
 }
 
-fn validate_project(project: &str) -> Result<(), CanonicalAuthError> {
-    if project.is_empty() {
-        return Err(CanonicalAuthError::EmptyProject);
-    }
-    if !project.bytes().all(is_canonical_project_byte) {
-        return Err(CanonicalAuthError::InvalidProject {
-            project: project.to_string(),
-        });
-    }
-    Ok(())
-}
-
-fn encode_project(out: &mut Vec<u8>, project: &str) -> Result<(), CanonicalAuthError> {
-    validate_project(project)?;
-    encode_bytes(out, project.as_bytes());
-    Ok(())
-}
-
 const fn is_canonical_label_byte(byte: u8) -> bool {
     byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b':' | b'-')
-}
-
-const fn is_canonical_project_byte(byte: u8) -> bool {
-    is_canonical_label_byte(byte) || byte == b'.'
 }
 
 fn encode_string(out: &mut Vec<u8>, value: &str) {
@@ -630,7 +596,7 @@ mod tests {
             not_before_ns: 100,
             expires_at_ns: 200,
             max_token_ttl_ns: 60,
-            aud: DelegationAudience::Project("test".to_string()),
+            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
             grants: vec![grant("project_instance", &["read", "write"])],
         }
     }
@@ -673,7 +639,7 @@ mod tests {
                     seed_hash: [36; 32],
                 },
                 max_token_ttl_ns: 60,
-                audience: DelegationAudience::Project("test".to_string()),
+                audience: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
                 grants: vec![grant("project_instance", &["read", "write"])],
                 not_before_ns: 100,
                 expires_at_ns: 200,
@@ -728,7 +694,9 @@ mod tests {
         crate::dto::auth::DelegatedAuthIssuerPolicySnapshotV1 {
             issuer_canister_id,
             enabled: true,
-            allowed_audiences: vec![DelegationAudience::Project("test".to_string())],
+            allowed_audiences: vec![DelegationAudience::Fleet(crate::test::support::fleet_key(
+                1,
+            ))],
             allowed_grants: vec![grant("project_instance", &["read", "write"])],
             max_root_proof_ttl_ns: 600,
             max_token_ttl_ns: 60,
@@ -787,7 +755,7 @@ mod tests {
             cert_hash: [12; 32],
             issued_at_ns: 100,
             expires_at_ns: 120,
-            aud: DelegationAudience::Project("test".to_string()),
+            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
             grants: vec![DelegatedRoleGrant {
                 target: CanisterRole::new("project_instance"),
                 scopes: vec!["Read".to_string()],
@@ -812,7 +780,7 @@ mod tests {
             cert_hash: [12; 32],
             issued_at_ns: 100,
             expires_at_ns: 120,
-            aud: DelegationAudience::Project("test".to_string()),
+            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
             grants: vec![grant("project_instance", &["write", "read"])],
             nonce: [14; 16],
             ext: None,
@@ -863,8 +831,8 @@ mod tests {
         assert_eq!(
             chain_key_delegation_cert_hash(&proof.delegation_cert).unwrap(),
             [
-                244, 24, 85, 249, 39, 254, 112, 50, 126, 247, 218, 189, 252, 25, 113, 117, 21, 152,
-                4, 105, 235, 7, 3, 3, 67, 37, 164, 14, 150, 2, 48, 80,
+                229, 125, 46, 9, 210, 247, 67, 53, 147, 231, 131, 196, 39, 154, 47, 102, 180, 230,
+                40, 138, 15, 36, 24, 77, 76, 112, 166, 245, 86, 22, 94, 216,
             ]
         );
         assert_eq!(
@@ -877,8 +845,8 @@ mod tests {
         assert_eq!(
             delegated_auth_registry_hash(&registry_snapshot()).unwrap(),
             [
-                72, 31, 253, 127, 58, 158, 80, 36, 116, 136, 245, 81, 34, 232, 181, 103, 56, 209,
-                126, 205, 6, 229, 11, 132, 160, 225, 169, 9, 150, 238, 35, 58,
+                252, 195, 129, 249, 237, 10, 248, 99, 142, 69, 196, 148, 124, 251, 232, 153, 92,
+                99, 53, 228, 121, 76, 34, 241, 69, 48, 243, 134, 180, 173, 194, 44,
             ]
         );
         assert_eq!(
@@ -888,8 +856,8 @@ mod tests {
             })
             .unwrap(),
             [
-                76, 118, 34, 138, 14, 247, 151, 185, 110, 139, 52, 156, 178, 233, 45, 67, 147, 228,
-                240, 50, 93, 113, 3, 31, 183, 207, 161, 217, 74, 90, 254, 172,
+                40, 0, 43, 111, 76, 97, 74, 157, 46, 216, 136, 161, 160, 142, 247, 203, 124, 187,
+                2, 145, 177, 196, 48, 209, 112, 103, 122, 135, 249, 222, 243, 111,
             ]
         );
     }
@@ -953,8 +921,8 @@ mod tests {
     fn delegated_auth_registry_hash_rejects_noncanonical_audience_order() {
         let mut snapshot = registry_snapshot();
         snapshot.issuer_policies[0].allowed_audiences = vec![
-            DelegationAudience::Project("z".to_string()),
-            DelegationAudience::Project("a".to_string()),
+            DelegationAudience::Fleet(crate::test::support::fleet_key(2)),
+            DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
         ];
 
         assert_eq!(
@@ -1003,7 +971,7 @@ mod tests {
             cert_hash: [12; 32],
             issued_at_ns: 100,
             expires_at_ns: 120,
-            aud: DelegationAudience::Project("test".to_string()),
+            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
             grants: vec![grant("project_instance", &["read"])],
             nonce: [14; 16],
             ext: Some(b"user=1".to_vec()),
@@ -1024,7 +992,7 @@ mod tests {
             cert_hash: [12; 32],
             issued_at_ns: 100,
             expires_at_ns: 120,
-            aud: DelegationAudience::Project("test".to_string()),
+            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
             grants: vec![grant("project_instance", &["read"])],
             nonce: [14; 16],
             ext: Some(vec![1; MAX_TOKEN_EXT_BYTES + 1]),

@@ -122,7 +122,7 @@ mod tests {
             not_before_ns: 20,
             expires_at_ns: 120,
             max_token_ttl_ns: 30,
-            aud: DelegationAudience::CanicSubnet(p(7)),
+            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
             grants: vec![DelegatedRoleGrant {
                 target: CanisterRole::owned("project_instance".to_string()),
                 scopes: vec!["read".to_string()],

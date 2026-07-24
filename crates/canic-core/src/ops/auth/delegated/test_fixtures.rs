@@ -12,6 +12,7 @@ use crate::{
         delegated::canonical::chain_key_delegation_cert_hash,
         issuer_canister_sig::issuer_canister_sig_seed_hash,
     },
+    test::support::fleet_key,
 };
 
 pub fn chain_key_root_proof(byte: u8) -> RootProof {
@@ -29,7 +30,7 @@ pub fn chain_key_root_proof(byte: u8) -> RootProof {
         issuer_proof_binding_hash: [byte; 32],
         issuer_proof_binding,
         max_token_ttl_ns: 60,
-        audience: DelegationAudience::Project(format!("test-{byte}")),
+        audience: DelegationAudience::Fleet(fleet_key(byte)),
         grants: vec![DelegatedRoleGrant {
             target: CanisterRole::owned(format!("role-{byte}")),
             scopes: vec!["read".to_string()],

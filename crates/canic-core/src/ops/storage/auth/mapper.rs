@@ -590,19 +590,15 @@ fn chain_key_key_id_record_to_dto(record: ChainKeyKeyIdRecord) -> ChainKeyKeyId 
     ChainKeyKeyId { name: record.name }
 }
 
-fn audience_to_record(audience: DelegationAudience) -> DelegationAudienceRecord {
+const fn audience_to_record(audience: DelegationAudience) -> DelegationAudienceRecord {
     match audience {
-        DelegationAudience::Canister(canister) => DelegationAudienceRecord::Canister(canister),
-        DelegationAudience::CanicSubnet(subnet) => DelegationAudienceRecord::CanicSubnet(subnet),
-        DelegationAudience::Project(project) => DelegationAudienceRecord::Project(project),
+        DelegationAudience::Fleet(fleet) => DelegationAudienceRecord::Fleet(fleet),
     }
 }
 
-fn audience_record_to_dto(record: DelegationAudienceRecord) -> DelegationAudience {
+const fn audience_record_to_dto(record: DelegationAudienceRecord) -> DelegationAudience {
     match record {
-        DelegationAudienceRecord::Canister(canister) => DelegationAudience::Canister(canister),
-        DelegationAudienceRecord::CanicSubnet(subnet) => DelegationAudience::CanicSubnet(subnet),
-        DelegationAudienceRecord::Project(project) => DelegationAudience::Project(project),
+        DelegationAudienceRecord::Fleet(fleet) => DelegationAudience::Fleet(fleet),
     }
 }
 
@@ -620,31 +616,19 @@ fn grant_record_to_dto(record: DelegatedRoleGrantRecord) -> DelegatedRoleGrant {
     }
 }
 
-fn audience_record_to_policy(record: DelegationAudienceRecord) -> RootDelegationAudiencePolicy {
+const fn audience_record_to_policy(
+    record: DelegationAudienceRecord,
+) -> RootDelegationAudiencePolicy {
     match record {
-        DelegationAudienceRecord::Canister(canister) => {
-            RootDelegationAudiencePolicy::Canister(canister)
-        }
-        DelegationAudienceRecord::CanicSubnet(subnet) => {
-            RootDelegationAudiencePolicy::CanicSubnet(subnet)
-        }
-        DelegationAudienceRecord::Project(project) => {
-            RootDelegationAudiencePolicy::Project(project)
-        }
+        DelegationAudienceRecord::Fleet(fleet) => RootDelegationAudiencePolicy::Fleet(fleet),
     }
 }
 
-fn audience_policy_to_record(policy: RootDelegationAudiencePolicy) -> DelegationAudienceRecord {
+const fn audience_policy_to_record(
+    policy: RootDelegationAudiencePolicy,
+) -> DelegationAudienceRecord {
     match policy {
-        RootDelegationAudiencePolicy::Canister(canister) => {
-            DelegationAudienceRecord::Canister(canister)
-        }
-        RootDelegationAudiencePolicy::CanicSubnet(subnet) => {
-            DelegationAudienceRecord::CanicSubnet(subnet)
-        }
-        RootDelegationAudiencePolicy::Project(project) => {
-            DelegationAudienceRecord::Project(project)
-        }
+        RootDelegationAudiencePolicy::Fleet(fleet) => DelegationAudienceRecord::Fleet(fleet),
     }
 }
 

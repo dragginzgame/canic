@@ -10,8 +10,16 @@ use canic_core::dto::{
     },
     error::{Error as CanicError, ErrorCode},
 };
+use canic_core::ids::{CanonicalNetworkId, FleetId, FleetKey};
 use canic_host::icp::IcpJsonResponseError;
 use std::{cell::RefCell, collections::VecDeque};
+
+fn fleet() -> FleetKey {
+    FleetKey {
+        network: CanonicalNetworkId::public_ic(),
+        fleet_id: FleetId::from_generated_bytes([1; 32]),
+    }
+}
 
 #[test]
 fn icp_io_failure_keeps_usage_exit_class() {
@@ -318,7 +326,7 @@ fn renewal_template(issuer: &str) -> RootIssuerRenewalTemplateView {
     RootIssuerRenewalTemplateView {
         issuer_pid: Principal::from_text(issuer).expect("issuer principal"),
         enabled: true,
-        aud: DelegationAudience::Project("test".to_string()),
+        aud: DelegationAudience::Fleet(fleet()),
         grants: Vec::new(),
         cert_ttl_ns: 300_000_000_000,
     }
