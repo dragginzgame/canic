@@ -14,12 +14,15 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.4`.
-- The latest published release is `v0.99.4` at
-  `3e4b125ff2eaf0c471546d889190059b12cebab9`.
-- The `v0.99.4` source tree is
-  `0aed5613950840c9f6691bb02d6d3a88573a3d70`. Its Cargo.lock SHA-256 is
-  `4f2236596eb154a1d09b9bc50a0bd4c864b90534bc8a44d8c3fbb53414e414db`.
+- The workspace package version is `0.99.5`.
+- The latest published release is `v0.99.5` at
+  `032d0866a4d170173c591e0ff713ca3591d02e29`.
+- The `v0.99.5` source tree is
+  `3c73cd9b924adc11acab55f9f5d09c4559a83e08`. Its Cargo.lock SHA-256 is
+  `ffeb0204f1bc5c55a24dd7b3e2d38a51953207d09507ff2ac71cbc913308314e`.
+- Released `0.99.5` separates fresh-install source and target operands. The
+  sole command is `canic install <app> <fleet>`; the removed one-argument and
+  `--app` forms have no alias or inferred fallback.
 - Released `0.99.4` establishes one durable non-circular release-build
   identity before Wasm compilation and finalizes exact release-set manifest
   evidence before Canister creation.
@@ -1152,14 +1155,16 @@ command family, and discovery fallback do not survive. Live
 install/deployment behavior and runtime topology authorities remain for their
 explicit later slices.
 
-The open `0.99.5` batch continues Implementation Slice 3 by separating fresh
-install's required source App from its required Fleet label. The sole
-maintained command is `canic install <app> <fleet>`; config lookup and identity
-validation use the first operand, while deployment-truth and installed-target
-lookup use the second. The removed one-argument and `--app` forms have no
-inference or compatibility fallback.
+The open `0.99.6` batch establishes the private fresh-install recovery
+foundation without admitting live mutation. Shared passive activation shapes
+prevent a later host/runtime identity fork. The host can generate Fleet and
+operation identities, create and validate the exact canonical sequence-zero
+`Planned` journal, and admit it only from unchanged finalized release-build
+evidence. Later phase discriminants fail closed until their transitions
+exist; the live install workflow does not publish a journal in this batch.
 
-Fleet ID cryptographic generation and activation-journal commitment, supplied
+Journal discovery/concurrency ownership, live pre-mutation commitment,
+`RootInstalled` and later transition/reconciliation logic, supplied
 deployment-plan release-build admission, the installed Fleet tree, complete
 plan/receipt/host-state identity propagation and post-activation Fleet catalog
 commitment remain the next bounded Slice 3 and Slice 4 work. No standalone

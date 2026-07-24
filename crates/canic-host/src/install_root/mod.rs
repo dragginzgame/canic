@@ -23,6 +23,7 @@ mod current_execution;
 mod deployment_registration;
 mod deployment_truth_gate;
 mod execution_preflight;
+mod fleet_activation_journal;
 mod identity;
 mod install_state;
 mod operations;

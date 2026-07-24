@@ -10,6 +10,7 @@ mod tests;
 use crate::durable_io::{
     RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes, write_bytes,
 };
+use crate::entropy::{EntropyError, random_bytes_32};
 use canic_core::ids::{ReleaseBuildId, ReleaseBuildNonce};
 use ciborium::Value;
 use sha2::{Digest, Sha256};
@@ -466,38 +467,15 @@ fn lock_plan_file(path: &Path) -> Result<std::fs::File, ReleaseBuildPlanError> {
 }
 
 fn random_nonce() -> Result<ReleaseBuildNonce, ReleaseBuildPlanError> {
-    #[cfg(not(windows))]
-    {
-        use rustix::rand::{GetRandomFlags, getrandom};
-
-        let mut bytes = [0; 32];
-        let mut filled = 0;
-        while filled < bytes.len() {
-            let current =
-                getrandom(&mut bytes[filled..], GetRandomFlags::empty()).map_err(|source| {
-                    ReleaseBuildPlanError::Io {
-                        path: PathBuf::from("<operating-system random source>"),
-                        source: io::Error::from_raw_os_error(source.raw_os_error()),
-                    }
-                })?;
-            if current == 0 {
-                return Err(ReleaseBuildPlanError::ShortRandomRead { actual: filled });
-            }
-            filled += current;
-        }
-        Ok(ReleaseBuildNonce::from_random_bytes(bytes))
-    }
-
-    #[cfg(windows)]
-    {
-        Err(ReleaseBuildPlanError::Io {
-            path: PathBuf::from("<operating-system random source>"),
-            source: io::Error::new(
-                io::ErrorKind::Unsupported,
-                "release-build planning is unsupported on Windows",
-            ),
+    random_bytes_32()
+        .map(ReleaseBuildNonce::from_random_bytes)
+        .map_err(|error| match error {
+            EntropyError::Io(source) => ReleaseBuildPlanError::Io {
+                path: PathBuf::from("<operating-system random source>"),
+                source,
+            },
+            EntropyError::ShortRead { actual } => ReleaseBuildPlanError::ShortRandomRead { actual },
         })
-    }
 }
 
 fn domain_hash(domain: &[u8], bytes: &[u8]) -> [u8; 32] {

@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.6` establishes the private fresh-install recovery foundation: one
+  shared Fleet-activation evidence shape and one canonical, create-new
+  `Planned` journal admitted only from unchanged finalized release-build
+  authority. Later phases remain rejected until their live transitions exist.
+
 - `0.99.5` hard-cuts fresh install to independent Fleet and App identity:
   `canic install <app> <fleet>` makes both identities required operands,
   selects source only by App and keeps the Fleet label as the installed
