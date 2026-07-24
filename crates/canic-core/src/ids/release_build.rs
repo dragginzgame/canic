@@ -4,6 +4,7 @@
 //! Does not own: nonce generation, durable build plans, manifests, or deployment admission.
 //! Boundary: the host supplies random nonce bytes and every selected Wasm receives the derived ID.
 
+use candid::CandidType;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use sha2::{Digest, Sha256};
 use std::{fmt, str::FromStr};
@@ -69,6 +70,19 @@ impl fmt::Display for ReleaseBuildId {
             write!(formatter, "{byte:02x}")?;
         }
         Ok(())
+    }
+}
+
+impl CandidType for ReleaseBuildId {
+    fn _ty() -> candid::types::Type {
+        candid::types::TypeInner::Text.into()
+    }
+
+    fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
+    where
+        S: candid::types::Serializer,
+    {
+        serializer.serialize_text(&self.to_string())
     }
 }
 

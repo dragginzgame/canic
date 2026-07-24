@@ -10,6 +10,7 @@
 use serde::Serialize;
 
 use crate::role_contract::allocation::memory::{
+    activation::FLEET_ACTIVATION_ID,
     auth::{AUTH_STATE_ID, REPLAY_RECEIPTS_ID},
     blob_storage::{
         BLOB_DELETION_PENDING_ID, BLOB_STORAGE_BILLING_ID, STORAGE_GATEWAY_PRINCIPALS_ID,
@@ -200,6 +201,11 @@ fn core_runtime_descriptors() -> Vec<StateAllocationDescriptor> {
         descriptor(
             StateAllocationKey::CoreRuntimeEnvironment,
             runtime_env_domains(),
+            Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::CoreFleetActivation,
+            fleet_activation_domains(),
             Vec::new(),
         ),
         descriptor(
@@ -495,6 +501,19 @@ fn replay_receipt_domains() -> Vec<StateDomainManifest> {
     )]
 }
 
+fn fleet_activation_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::fleet_activation::{FleetActivationData, FleetActivationRecord};
+
+    vec![state_domain(
+        "fleet_activation",
+        FLEET_ACTIVATION_ID,
+        FleetActivationRecord::STATE_CONTRACT_NAME,
+        FleetActivationData::STATE_CONTRACT_NAME,
+        55,
+        "fleet_activation_identity_and_phase_are_protected",
+    )]
+}
+
 fn runtime_observability_domains() -> Vec<StateDomainManifest> {
     use crate::storage::stable::cycles::{
         CycleTopupEventRecord, CycleTopupEventsData, CycleTrackerData, CycleTrackerEntryRecord,
@@ -726,6 +745,7 @@ mod tests {
             APP_STATE_ID,
             AUTH_STATE_ID,
             REPLAY_RECEIPTS_ID,
+            FLEET_ACTIVATION_ID,
             CYCLE_TOPUP_EVENTS_ID,
             LOG_ENTRIES_ID,
             ICP_REFILL_RECORDS_ID,

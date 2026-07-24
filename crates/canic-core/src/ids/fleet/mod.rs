@@ -5,6 +5,7 @@
 //! Boundary: IDs use canonical lowercase hexadecimal text; names are validated labels.
 
 use super::{AppId, CanonicalNetworkId};
+use candid::CandidType;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use std::{fmt, str::FromStr};
 use thiserror::Error as ThisError;
@@ -42,6 +43,19 @@ impl fmt::Display for FleetId {
             write!(formatter, "{byte:02x}")?;
         }
         Ok(())
+    }
+}
+
+impl CandidType for FleetId {
+    fn _ty() -> candid::types::Type {
+        candid::types::TypeInner::Text.into()
+    }
+
+    fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
+    where
+        S: candid::types::Serializer,
+    {
+        serializer.serialize_text(&self.to_string())
     }
 }
 
@@ -149,7 +163,9 @@ impl<'de> Deserialize<'de> for FleetName {
 /// Complete network-qualified Fleet identity.
 ///
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(
+    CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
+)]
 #[serde(deny_unknown_fields)]
 pub struct FleetKey {
     pub network: CanonicalNetworkId,
@@ -162,7 +178,7 @@ pub struct FleetKey {
 /// Immutable binding between one installed Fleet and its source App.
 ///
 
-#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetBinding {
     pub fleet: FleetKey,

@@ -35,6 +35,10 @@ pub mod memory {
         pub const REPLAY_RECEIPTS_ID: u8 = 20;
     }
 
+    pub mod activation {
+        pub const FLEET_ACTIVATION_ID: u8 = 21;
+    }
+
     pub mod observability {
         pub const CYCLE_TRACKER_ID: u8 = 29;
         pub const CYCLE_TOPUP_EVENTS_ID: u8 = 30;
@@ -85,6 +89,7 @@ pub mod memory {
 }
 
 use memory::{
+    activation::FLEET_ACTIVATION_ID,
     auth::{AUTH_STATE_ID, REPLAY_RECEIPTS_ID},
     blob_storage::{
         BLOB_DELETION_PENDING_ID, BLOB_STORAGE_BILLING_ID, STORAGE_GATEWAY_PRINCIPALS_ID,
@@ -129,6 +134,7 @@ const RETIRED_MEMORY_IDS: &[MemoryId] = &[
 ];
 const CORE_AUTH_STATE_IDS: &[MemoryId] = &[MemoryId::new(AUTH_STATE_ID)];
 const CORE_REPLAY_RECEIPTS_IDS: &[MemoryId] = &[MemoryId::new(REPLAY_RECEIPTS_ID)];
+const CORE_FLEET_ACTIVATION_IDS: &[MemoryId] = &[MemoryId::new(FLEET_ACTIVATION_ID)];
 const CORE_RUNTIME_OBSERVABILITY_IDS: &[MemoryId] = &[
     MemoryId::new(CYCLE_TRACKER_ID),
     MemoryId::new(CYCLE_TOPUP_EVENTS_ID),
@@ -184,6 +190,11 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         StateAllocationKey::CoreReplayReceipts,
         AllocationOwner::CanicCore,
         CORE_REPLAY_RECEIPTS_IDS,
+    ),
+    definition(
+        StateAllocationKey::CoreFleetActivation,
+        AllocationOwner::CanicCore,
+        CORE_FLEET_ACTIVATION_IDS,
     ),
     definition(
         StateAllocationKey::CoreRuntimeObservability,

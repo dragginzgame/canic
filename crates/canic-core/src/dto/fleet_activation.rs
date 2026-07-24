@@ -5,7 +5,21 @@
 //! Boundary: authoritative owners validate these passive shapes before storing or acting on them.
 
 use crate::ids::{FleetBinding, FleetKey, ReleaseBuildId};
-use candid::Principal;
+use candid::{CandidType, Principal};
+use serde::Deserialize;
+
+///
+/// CurrentRootInstallIdentity
+///
+
+/// Exact current-only identity accepted by a fresh or reinstalled Fleet root.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct CurrentRootInstallIdentity {
+    pub fleet: FleetBinding,
+    pub install_id: [u8; 32],
+    pub release_build_id: ReleaseBuildId,
+    pub expected_module_hash: Option<[u8; 32]>,
+}
 
 ///
 /// FleetCascadeManifestEntry
@@ -90,4 +104,34 @@ pub struct FleetActivationHostRecord {
     pub credential: Option<FleetCredentialGenerationRef>,
     pub credential_manifest: Option<FleetCredentialManifest>,
     pub canisters: Vec<FleetHostCanisterActivationEvidence>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ids::{AppId, CanonicalNetworkId, FleetId, FleetKey, ReleaseBuildNonce};
+
+    #[test]
+    fn current_root_install_identity_roundtrips_with_text_ids() {
+        let input = CurrentRootInstallIdentity {
+            fleet: FleetBinding {
+                fleet: FleetKey {
+                    network: CanonicalNetworkId::public_ic(),
+                    fleet_id: FleetId::from_generated_bytes([7; 32]),
+                },
+                app: AppId::from("toko"),
+            },
+            install_id: [8; 32],
+            release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
+                [9; 32],
+            )),
+            expected_module_hash: Some([10; 32]),
+        };
+
+        let bytes = candid::encode_one(&input).expect("encode current root install identity");
+        let decoded: CurrentRootInstallIdentity =
+            candid::decode_one(&bytes).expect("decode current root install identity");
+
+        assert_eq!(decoded, input);
+    }
 }

@@ -7,6 +7,7 @@
 pub mod auth;
 pub mod children;
 pub mod cycles;
+pub mod fleet_activation;
 pub mod icp_refill;
 pub mod index;
 pub mod intent;
@@ -27,6 +28,9 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum StorageOpsError {
+    #[error(transparent)]
+    FleetActivationOps(#[from] fleet_activation::FleetActivationOpsError),
+
     #[error(transparent)]
     IndexOps(#[from] index::IndexOpsError),
 

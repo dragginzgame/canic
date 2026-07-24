@@ -257,6 +257,7 @@ mod tests {
                 &[
                     StateAllocationKey::CoreRuntimeTopology,
                     StateAllocationKey::CoreRuntimeEnvironment,
+                    StateAllocationKey::CoreFleetActivation,
                     StateAllocationKey::CoreAuthState,
                     StateAllocationKey::CoreReplayReceipts,
                     StateAllocationKey::CoreRuntimeObservability,
@@ -518,8 +519,8 @@ mod tests {
         assert_eq!(
             ids,
             vec![
-                11, 12, 13, 15, 16, 18, 20, 29, 30, 34, 35, 39, 40, 41, 42, 43, 44, 45, 46, 47, 80,
-                81, 82, 83, 85,
+                11, 12, 13, 15, 16, 18, 20, 21, 29, 30, 34, 35, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+                80, 81, 82, 83, 85,
             ]
         );
         assert_eq!(

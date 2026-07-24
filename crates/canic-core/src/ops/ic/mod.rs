@@ -9,6 +9,7 @@ pub mod call;
 pub mod icp_refill;
 pub mod mgmt;
 pub mod nns;
+pub mod release_build;
 
 use crate::cdk::types::Principal;
 use std::time::SystemTime;
