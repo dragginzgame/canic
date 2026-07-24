@@ -426,7 +426,7 @@ macro_rules! start {
         $crate::canic_bundle_shared_runtime_endpoints!();
 
         #[cfg(not(canic_is_root))]
-        $crate::canic_bundle_nonroot_only_endpoints!();
+        $crate::canic_bundle_managed_nonroot_only_endpoints!();
 
         #[cfg(canic_is_root)]
         $crate::canic_bundle_root_only_endpoints!();
@@ -458,7 +458,7 @@ macro_rules! start_local {
         );
         $crate::__canic_start_ingress_payload_inspect!();
         $crate::canic_bundle_shared_runtime_endpoints!();
-        $crate::canic_bundle_nonroot_only_endpoints!();
+        $crate::canic_bundle_local_nonroot_only_endpoints!();
     };
 }
 

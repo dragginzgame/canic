@@ -219,3 +219,52 @@ fn prepared_activation_schedules_each_current_application_install_hook_once() {
         );
     }
 }
+
+#[test]
+fn standalone_local_bundle_excludes_managed_fleet_activation_updates() {
+    let workspace = workspace_root();
+    let start_path = workspace.join("crates/canic/src/macros/start.rs");
+    let start = fs::read_to_string(&start_path)
+        .unwrap_or_else(|error| panic!("read {}: {error}", start_path.display()));
+    let bundles_path = workspace.join("crates/canic/src/macros/endpoints/bundles.rs");
+    let bundles = fs::read_to_string(&bundles_path)
+        .unwrap_or_else(|error| panic!("read {}: {error}", bundles_path.display()));
+
+    let local_start = start
+        .split("macro_rules! start_local")
+        .nth(1)
+        .and_then(|rest| rest.split("macro_rules! start_wasm_store").next())
+        .expect("standalone-local start macro");
+    assert!(
+        local_start.contains("canic_bundle_local_nonroot_only_endpoints!()")
+            && !local_start.contains("canic_bundle_managed_nonroot_only_endpoints!()"),
+        "standalone-local startup must select only its local endpoint bundle"
+    );
+
+    let local_bundle = bundles
+        .split("macro_rules! canic_bundle_local_nonroot_only_endpoints")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("macro_rules! canic_bundle_wasm_store_runtime_endpoints")
+                .next()
+        })
+        .expect("standalone-local endpoint bundle");
+    assert!(
+        local_bundle.contains("canic_emit_nonroot_sync_topology_endpoints!()")
+            && !local_bundle.contains("canic_emit_nonroot_fleet_activation_endpoints!()"),
+        "standalone-local canisters must not export managed Fleet activation updates"
+    );
+
+    let managed_bundle = bundles
+        .split("macro_rules! canic_bundle_managed_nonroot_only_endpoints")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("macro_rules! canic_bundle_local_nonroot_only_endpoints")
+                .next()
+        })
+        .expect("managed non-root endpoint bundle");
+    assert!(
+        managed_bundle.contains("canic_emit_nonroot_fleet_activation_endpoints!()"),
+        "managed non-roots must retain the current Fleet activation updates"
+    );
+}
