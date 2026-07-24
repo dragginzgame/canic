@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.25` advances fresh installation through one complete, bounded and
+  canonically journalled `CanistersPrepared` authority, with exact
+  root-receipt recovery and no duplicate install work on restart.
+
 - `0.99.24` gives deployment receipts one canonical network/Fleet-ID
   namespace and binds successful root-install evidence to the complete
   activation identity before the journal can advance.

@@ -29,6 +29,11 @@ fn current_install_records_gates_before_activation_mutation() {
         "plan_fleet_install_activation(",
         "resolve_root_canister_after_manifest(",
     );
+    assert_before(
+        install,
+        "recover_activation_root_canister(",
+        "resolve_root_canister_after_manifest(",
+    );
 
     let gate = include_str!("../../current_execution/mod.rs");
     assert_before(

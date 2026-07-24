@@ -24,20 +24,29 @@ use crate::{
     },
 };
 use canic_core::{
+    api::fleet_activation::FleetActivationApi,
     cdk::types::Principal,
-    dto::fleet_activation::{FleetActivationHostRecord, FleetActivationIdentity},
+    dto::fleet_activation::{
+        FleetActivationHostRecord, FleetActivationIdentity, FleetActivationPhase,
+        FleetActivationStatusResponse, FleetCascadeActivationEvidence, FleetCascadeManifestEntry,
+        FleetCredentialGenerationRef, FleetCredentialManifest, FleetCredentialManifestEntry,
+        FleetHostCanisterActivationEvidence, MAX_FLEET_ACTIVATION_CANISTERS,
+        MAX_FLEET_ACTIVATION_HOST_RECORD_BYTES, MAX_FLEET_CREDENTIAL_MANIFEST_ENTRIES,
+    },
     ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, FleetName, ReleaseBuildId},
 };
 use ciborium::Value;
 use sha2::{Digest, Sha256};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs, io,
     path::{Path, PathBuf},
 };
 use thiserror::Error as ThisError;
 
 const JOURNAL_HASH_DOMAIN: &[u8] = b"canic:fleet-install:activation-journal\0";
+const MAX_FLEET_INSTALL_ACTIVATION_JOURNAL_BYTES: usize =
+    MAX_FLEET_ACTIVATION_HOST_RECORD_BYTES + 1_024;
 const RANDOM_ATTEMPTS: usize = 16;
 
 ///
@@ -94,6 +103,28 @@ pub(super) struct RootInstalledFleetInstallActivation {
 }
 
 ///
+/// CanistersPreparedFleetInstallActivation
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct CanistersPreparedFleetInstallActivation {
+    pub journal: FleetInstallActivationJournal,
+    pub journal_hash: [u8; 32],
+    pub path: PathBuf,
+    pub advanced: bool,
+}
+
+///
+/// PreparedFleetActivationEvidence
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct PreparedFleetActivationEvidence {
+    root_canister: Principal,
+    activation: FleetActivationHostRecord,
+}
+
+///
 /// RootInstallReceiptEvidence
 ///
 
@@ -142,6 +173,14 @@ pub(super) enum FleetInstallActivationJournalError {
     #[error("root-install receipt is missing: {path}")]
     MissingRootInstallReceipt { path: PathBuf },
 
+    #[error(
+        "root-install receipt identifies Canister {receipt_root}, not resolved root {resolved_root}"
+    )]
+    RootInstallReceiptCanisterMismatch {
+        receipt_root: Principal,
+        resolved_root: Principal,
+    },
+
     #[error("invalid Fleet install activation journal {path}: {reason}")]
     InvalidDocument { path: PathBuf, reason: String },
 
@@ -167,6 +206,20 @@ pub(super) enum FleetInstallActivationJournalError {
 
     #[error("Fleet install activation journal cannot transition from {phase:?} to RootInstalled")]
     InvalidRootInstalledTransition { phase: FleetInstallActivationPhase },
+
+    #[error("prepared Fleet activation evidence differs from the journalled identity")]
+    PreparedActivationIdentityMismatch,
+
+    #[error("invalid prepared Fleet activation evidence: {reason}")]
+    InvalidPreparedActivationEvidence { reason: String },
+
+    #[error("CanistersPrepared transition conflicts with durable prepared activation evidence")]
+    PreparedActivationEvidenceMismatch,
+
+    #[error(
+        "Fleet install activation journal cannot transition from {phase:?} to CanistersPrepared"
+    )]
+    InvalidCanistersPreparedTransition { phase: FleetInstallActivationPhase },
 
     #[error(
         "active Fleet {fleet_name} at {path} belongs to App {existing_app}, not requested App {requested_app}"
@@ -450,6 +503,96 @@ pub(super) fn admit_root_install_receipt(
     })
 }
 
+/// Recover the exact root-install receipt named by its journalled raw-byte hash.
+pub(super) fn recover_root_install_receipt(
+    receipt_directory: &Path,
+    expected_hash: [u8; 32],
+) -> Result<RootInstallReceiptEvidence, FleetInstallActivationJournalError> {
+    let metadata = fs::symlink_metadata(receipt_directory).map_err(|source| {
+        if source.kind() == io::ErrorKind::NotFound {
+            FleetInstallActivationJournalError::MissingRootInstallReceipt {
+                path: receipt_directory.to_path_buf(),
+            }
+        } else {
+            FleetInstallActivationJournalError::Io {
+                path: receipt_directory.to_path_buf(),
+                source,
+            }
+        }
+    })?;
+    if !metadata.file_type().is_dir() {
+        return Err(FleetInstallActivationJournalError::UnsafeDirectoryEntry {
+            path: receipt_directory.to_path_buf(),
+        });
+    }
+    let mut entries = fs::read_dir(receipt_directory)
+        .map_err(|source| FleetInstallActivationJournalError::Io {
+            path: receipt_directory.to_path_buf(),
+            source,
+        })?
+        .map(|entry| {
+            entry.map_err(|source| FleetInstallActivationJournalError::Io {
+                path: receipt_directory.to_path_buf(),
+                source,
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    entries.sort_by_key(fs::DirEntry::file_name);
+    for entry in entries {
+        let path = entry.path();
+        let file_type =
+            entry
+                .file_type()
+                .map_err(|source| FleetInstallActivationJournalError::Io {
+                    path: path.clone(),
+                    source,
+                })?;
+        if !file_type.is_file() {
+            return Err(FleetInstallActivationJournalError::UnsafeRootInstallReceipt { path });
+        }
+        let bytes = read_root_install_receipt_bytes(&path)?;
+        if <[u8; 32]>::from(Sha256::digest(&bytes)) == expected_hash {
+            return admit_root_install_receipt(&path);
+        }
+    }
+    Err(
+        FleetInstallActivationJournalError::MissingRootInstallReceipt {
+            path: receipt_directory.to_path_buf(),
+        },
+    )
+}
+
+/// Recover the already installed root before any root-resolution side effect.
+pub(super) fn recover_activation_root_canister(
+    resolved: &ResolvedFleetInstallActivation,
+    receipt_directory: &Path,
+) -> Result<Option<Principal>, FleetInstallActivationJournalError> {
+    match resolved.journal.phase {
+        FleetInstallActivationPhase::Planned => Ok(None),
+        FleetInstallActivationPhase::RootInstalled => {
+            let receipt = recover_root_install_receipt(
+                receipt_directory,
+                resolved
+                    .journal
+                    .root_install_receipt_hash
+                    .expect("validated RootInstalled journal retains its receipt hash"),
+            )?;
+            if receipt.activation_identity != resolved.journal.activation.identity {
+                return Err(FleetInstallActivationJournalError::RootInstallReceiptIdentityMismatch);
+            }
+            Ok(Some(receipt.root_canister))
+        }
+        FleetInstallActivationPhase::CanistersPrepared => {
+            validate_prepared_activation_record(&resolved.journal.activation)
+                .map(Some)
+                .map_err(invalid_prepared)
+        }
+        phase => {
+            Err(FleetInstallActivationJournalError::InvalidCanistersPreparedTransition { phase })
+        }
+    }
+}
+
 /// Advance one exact `Planned` journal from durable root-install evidence.
 pub(super) fn record_root_installed(
     root: &Path,
@@ -548,6 +691,282 @@ pub(super) fn record_root_installed(
         ));
     }
     Ok(root_installed_result(next, resolved.path.clone(), true))
+}
+
+/// Admit one successfully cascaded root `Prepared` manifest into canonical host evidence.
+pub(super) fn admit_canisters_prepared(
+    root_canister: Principal,
+    expected_identity: &FleetActivationIdentity,
+    root_status: &FleetActivationStatusResponse,
+) -> Result<PreparedFleetActivationEvidence, FleetInstallActivationJournalError> {
+    let admitted_root = admit_prepared_root_status(expected_identity, root_status)?;
+    let mut canisters = prepared_child_inventory(root_canister, admitted_root.cascade_manifest)?;
+    canisters.push(FleetHostCanisterActivationEvidence {
+        principal: root_canister,
+        activation_evidence_hash: Some(admitted_root.activation_evidence_hash),
+    });
+    canisters.sort_by(|left, right| left.principal.as_slice().cmp(right.principal.as_slice()));
+
+    let activation = FleetActivationHostRecord {
+        identity: expected_identity.clone(),
+        cascade_manifest: Some(admitted_root.cascade_manifest.to_vec()),
+        credential: Some(admitted_root.credential),
+        credential_manifest: Some(admitted_root.credential_manifest.clone()),
+        canisters,
+    };
+    let observed_root =
+        validate_prepared_activation_record(&activation).map_err(invalid_prepared)?;
+    if observed_root != root_canister {
+        return Err(invalid_prepared(
+            "prepared activation record does not identify the installed root",
+        ));
+    }
+    Ok(PreparedFleetActivationEvidence {
+        root_canister,
+        activation,
+    })
+}
+
+struct AdmittedPreparedRoot<'a> {
+    cascade_manifest: &'a [FleetCascadeManifestEntry],
+    credential: FleetCredentialGenerationRef,
+    credential_manifest: &'a FleetCredentialManifest,
+    activation_evidence_hash: [u8; 32],
+}
+
+fn admit_prepared_root_status<'a>(
+    expected_identity: &FleetActivationIdentity,
+    root_status: &'a FleetActivationStatusResponse,
+) -> Result<AdmittedPreparedRoot<'a>, FleetInstallActivationJournalError> {
+    if root_status.phase != FleetActivationPhase::Prepared
+        || root_status.identity != *expected_identity
+        || root_status.activated_at_ns.is_some()
+    {
+        return Err(invalid_prepared(
+            "root status is not the exact expected Prepared activation",
+        ));
+    }
+    let cascade_manifest = root_status
+        .cascade_manifest
+        .as_ref()
+        .ok_or_else(|| invalid_prepared("root status is missing its cascade manifest"))?;
+    let credential = root_status
+        .credential
+        .ok_or_else(|| invalid_prepared("root status is missing its credential generation"))?;
+    let credential_manifest = root_status
+        .credential_manifest
+        .as_ref()
+        .ok_or_else(|| invalid_prepared("root status is missing its credential manifest"))?;
+    let FleetCascadeActivationEvidence::Source {
+        cascade_manifest_hash,
+    } = root_status
+        .cascade
+        .as_ref()
+        .ok_or_else(|| invalid_prepared("root status is missing source cascade evidence"))?
+    else {
+        return Err(invalid_prepared(
+            "root status must contain source cascade evidence",
+        ));
+    };
+    if cascade_manifest
+        .len()
+        .checked_add(1)
+        .is_none_or(|count| count > MAX_FLEET_ACTIVATION_CANISTERS)
+    {
+        return Err(invalid_prepared(
+            "prepared activation exceeds the Canister inventory bound",
+        ));
+    }
+    if credential_manifest.entries.len() > MAX_FLEET_CREDENTIAL_MANIFEST_ENTRIES {
+        return Err(invalid_prepared(
+            "prepared credential manifest exceeds its entry bound",
+        ));
+    }
+
+    let observed_cascade_hash = FleetActivationApi::cascade_manifest_hash(cascade_manifest)
+        .map_err(|error| invalid_prepared(format!("invalid cascade manifest: {error}")))?;
+    if observed_cascade_hash != *cascade_manifest_hash {
+        return Err(invalid_prepared(
+            "root source cascade hash does not match its manifest",
+        ));
+    }
+    if credential_manifest.fleet != expected_identity.fleet.fleet
+        || credential_manifest.activation_id != expected_identity.operation_id
+        || credential_manifest.generation != credential.generation
+    {
+        return Err(invalid_prepared(
+            "credential manifest does not match the activation identity and generation",
+        ));
+    }
+    let observed_credential_hash =
+        FleetActivationApi::credential_manifest_hash(credential_manifest)
+            .map_err(|error| invalid_prepared(format!("invalid credential manifest: {error}")))?;
+    if observed_credential_hash != credential.manifest_hash {
+        return Err(invalid_prepared(
+            "credential generation hash does not match its manifest",
+        ));
+    }
+
+    let activation_evidence_hash = FleetActivationApi::activation_evidence_hash(
+        expected_identity,
+        root_status
+            .cascade
+            .as_ref()
+            .expect("root cascade evidence was admitted"),
+        credential,
+    )
+    .map_err(|error| invalid_prepared(format!("invalid root activation evidence: {error}")))?;
+    Ok(AdmittedPreparedRoot {
+        cascade_manifest,
+        credential,
+        credential_manifest,
+        activation_evidence_hash,
+    })
+}
+
+fn prepared_child_inventory(
+    root_canister: Principal,
+    cascade_manifest: &[FleetCascadeManifestEntry],
+) -> Result<Vec<FleetHostCanisterActivationEvidence>, FleetInstallActivationJournalError> {
+    cascade_manifest
+        .iter()
+        .map(|entry| {
+            if entry.principal == root_canister {
+                return Err(invalid_prepared(
+                    "root Canister must not appear in its child cascade manifest",
+                ));
+            }
+            Ok(FleetHostCanisterActivationEvidence {
+                principal: entry.principal,
+                activation_evidence_hash: None,
+            })
+        })
+        .collect()
+}
+
+/// Advance one exact `RootInstalled` journal from complete Prepared status evidence.
+pub(super) fn record_canisters_prepared(
+    root: &Path,
+    resolved: &RootInstalledFleetInstallActivation,
+    evidence: &PreparedFleetActivationEvidence,
+) -> Result<CanistersPreparedFleetInstallActivation, FleetInstallActivationJournalError> {
+    let identity = &resolved.journal.activation.identity;
+    let expected_path = fleet_install_activation_journal_path(
+        root,
+        identity.fleet.fleet.network,
+        identity.fleet.fleet.fleet_id,
+        identity.operation_id,
+    );
+    if resolved.path != expected_path {
+        return Err(invalid(
+            &resolved.path,
+            "resolved journal path is not canonical for its activation identity",
+        ));
+    }
+    if evidence.activation.identity != *identity {
+        return Err(FleetInstallActivationJournalError::PreparedActivationIdentityMismatch);
+    }
+    let observed_root =
+        validate_prepared_activation_record(&evidence.activation).map_err(invalid_prepared)?;
+    if observed_root != evidence.root_canister {
+        return Err(invalid_prepared(
+            "prepared activation root differs from the installed root",
+        ));
+    }
+
+    let _lock = lock_fleet_install_activation(
+        root,
+        identity.fleet.fleet.network,
+        &resolved.journal.fleet_name,
+    )?;
+    let observed = load_fleet_install_activation_journal(
+        root,
+        identity.fleet.fleet.network,
+        identity.fleet.fleet.fleet_id,
+        identity.operation_id,
+    )?;
+    if observed.phase == FleetInstallActivationPhase::CanistersPrepared {
+        if observed.activation == evidence.activation {
+            return Ok(canisters_prepared_result(
+                observed,
+                resolved.path.clone(),
+                false,
+            ));
+        }
+        return Err(FleetInstallActivationJournalError::PreparedActivationEvidenceMismatch);
+    }
+    if observed.phase != FleetInstallActivationPhase::RootInstalled {
+        return Err(
+            FleetInstallActivationJournalError::InvalidCanistersPreparedTransition {
+                phase: observed.phase,
+            },
+        );
+    }
+    let observed_hash = fleet_install_activation_journal_hash(&observed);
+    if observed_hash != resolved.journal_hash || observed != resolved.journal {
+        return Err(FleetInstallActivationJournalError::JournalChanged {
+            expected: hex_digest(resolved.journal_hash),
+            observed: hex_digest(observed_hash),
+        });
+    }
+
+    let mut next = observed;
+    next.sequence = next
+        .sequence
+        .checked_add(1)
+        .expect("validated RootInstalled sequence one advances to two");
+    next.phase = FleetInstallActivationPhase::CanistersPrepared;
+    next.activation = evidence.activation.clone();
+    let bytes = encode_journal(&next)?;
+    if let Err(source) = write_bytes(&resolved.path, &bytes) {
+        match load_fleet_install_activation_journal(
+            root,
+            identity.fleet.fleet.network,
+            identity.fleet.fleet.fleet_id,
+            identity.operation_id,
+        ) {
+            Ok(observed) if observed == next => {
+                return Ok(canisters_prepared_result(next, resolved.path.clone(), true));
+            }
+            _ => {
+                return Err(FleetInstallActivationJournalError::Io {
+                    path: resolved.path.clone(),
+                    source,
+                });
+            }
+        }
+    }
+    let durable = load_fleet_install_activation_journal(
+        root,
+        identity.fleet.fleet.network,
+        identity.fleet.fleet.fleet_id,
+        identity.operation_id,
+    )?;
+    if durable != next {
+        return Err(invalid(
+            &resolved.path,
+            "published CanistersPrepared journal differs from the transition record",
+        ));
+    }
+    Ok(canisters_prepared_result(next, resolved.path.clone(), true))
+}
+
+/// Resolve an already durable `CanistersPrepared` journal without another effect.
+pub(super) fn resume_canisters_prepared(
+    resolved: &ResolvedFleetInstallActivation,
+) -> Result<CanistersPreparedFleetInstallActivation, FleetInstallActivationJournalError> {
+    if resolved.journal.phase != FleetInstallActivationPhase::CanistersPrepared {
+        return Err(
+            FleetInstallActivationJournalError::InvalidCanistersPreparedTransition {
+                phase: resolved.journal.phase,
+            },
+        );
+    }
+    Ok(canisters_prepared_result(
+        resolved.journal.clone(),
+        resolved.path.clone(),
+        false,
+    ))
 }
 
 fn plan_fleet_install_activation_with_ids(
@@ -881,22 +1300,35 @@ fn encode_journal(
 ) -> Result<Vec<u8>, FleetInstallActivationJournalError> {
     let path = Path::new("<candidate Fleet install activation journal>");
     validate_journal(path, journal)?;
-    Ok(encode_value(&Value::Array(vec![
+    let bytes = encode_value(&Value::Array(vec![
         integer(journal.sequence),
         integer(phase_discriminant(journal.phase)),
         Value::Text(journal.fleet_name.to_string()),
         digest(journal.release_build_plan_hash),
         digest(journal.release_set_manifest_digest),
         optional_digest(journal.root_install_receipt_hash),
-        encode_initial_activation(&journal.activation),
-        Value::Null,
-    ])))
+        encode_activation_host_record(&journal.activation),
+        optional_digest(journal.committed_fleet_catalog_hash),
+    ]));
+    if bytes.len() > MAX_FLEET_INSTALL_ACTIVATION_JOURNAL_BYTES {
+        return Err(invalid(
+            path,
+            "canonical Fleet install activation journal exceeds its byte bound",
+        ));
+    }
+    Ok(bytes)
 }
 
 fn decode_journal(
     path: &Path,
     bytes: &[u8],
 ) -> Result<FleetInstallActivationJournal, FleetInstallActivationJournalError> {
+    if bytes.len() > MAX_FLEET_INSTALL_ACTIVATION_JOURNAL_BYTES {
+        return Err(invalid(
+            path,
+            "Fleet install activation journal exceeds its byte bound",
+        ));
+    }
     let value: Value =
         ciborium::de::from_reader(bytes).map_err(|error| invalid(path, error.to_string()))?;
     let fields = exact_array(path, value, 8, "journal")?;
@@ -913,8 +1345,12 @@ fn decode_journal(
             &fields[5],
             "root_install_receipt_hash",
         )?,
-        activation: decode_initial_activation(path, &fields[6])?,
-        committed_fleet_catalog_hash: exact_null(path, &fields[7], "committed_fleet_catalog_hash")?,
+        activation: decode_activation_host_record(path, &fields[6])?,
+        committed_fleet_catalog_hash: exact_optional_digest(
+            path,
+            &fields[7],
+            "committed_fleet_catalog_hash",
+        )?,
     };
     validate_journal(path, &journal)?;
     if encode_journal(&journal)? != bytes {
@@ -928,35 +1364,43 @@ fn validate_journal(
     journal: &FleetInstallActivationJournal,
 ) -> Result<(), FleetInstallActivationJournalError> {
     validate_app(&journal.activation.identity.fleet.app)?;
-    if journal.committed_fleet_catalog_hash.is_some()
-        || journal.activation.cascade_manifest.is_some()
-        || journal.activation.credential.is_some()
-        || journal.activation.credential_manifest.is_some()
-        || !journal.activation.canisters.is_empty()
-    {
-        return Err(invalid(
-            path,
-            "journal contains evidence legal only after RootInstalled",
-        ));
-    }
     match journal.phase {
         FleetInstallActivationPhase::Planned
-            if journal.sequence == 0 && journal.root_install_receipt_hash.is_none() =>
+            if journal.sequence == 0
+                && journal.root_install_receipt_hash.is_none()
+                && journal.committed_fleet_catalog_hash.is_none()
+                && is_initial_activation(&journal.activation) =>
         {
             Ok(())
         }
         FleetInstallActivationPhase::RootInstalled
-            if journal.sequence == 1 && journal.root_install_receipt_hash.is_some() =>
+            if journal.sequence == 1
+                && journal.root_install_receipt_hash.is_some()
+                && journal.committed_fleet_catalog_hash.is_none()
+                && is_initial_activation(&journal.activation) =>
         {
             Ok(())
         }
+        FleetInstallActivationPhase::CanistersPrepared
+            if journal.sequence == 2
+                && journal.root_install_receipt_hash.is_some()
+                && journal.committed_fleet_catalog_hash.is_none() =>
+        {
+            validate_prepared_activation_record(&journal.activation)
+                .map(|_| ())
+                .map_err(|reason| invalid(path, reason))
+        }
         FleetInstallActivationPhase::Planned => Err(invalid(
             path,
-            "Planned requires sequence 0 and no root-install receipt",
+            "Planned requires sequence 0 and no later-phase evidence",
         )),
         FleetInstallActivationPhase::RootInstalled => Err(invalid(
             path,
-            "RootInstalled requires sequence 1 and one root-install receipt",
+            "RootInstalled requires sequence 1, one root-install receipt and no later-phase evidence",
+        )),
+        FleetInstallActivationPhase::CanistersPrepared => Err(invalid(
+            path,
+            "CanistersPrepared requires sequence 2, one root-install receipt, complete Prepared evidence and no catalog hash",
         )),
         phase => Err(invalid(
             path,
@@ -965,44 +1409,393 @@ fn validate_journal(
     }
 }
 
-fn encode_initial_activation(record: &FleetActivationHostRecord) -> Value {
+fn validate_prepared_activation_record(
+    record: &FleetActivationHostRecord,
+) -> Result<Principal, String> {
+    validate_app(&record.identity.fleet.app).map_err(|error| error.to_string())?;
+    let authority = validate_prepared_manifest_authority(record)?;
+    let inventory = validate_prepared_canister_inventory(
+        record,
+        authority.cascade_manifest,
+        authority.credential_manifest,
+    )?;
+    let root_cascade = FleetCascadeActivationEvidence::Source {
+        cascade_manifest_hash: authority.cascade_manifest_hash,
+    };
+    let expected_root_hash = FleetActivationApi::activation_evidence_hash(
+        &record.identity,
+        &root_cascade,
+        authority.credential,
+    )
+    .map_err(|error| format!("invalid Prepared root activation evidence: {error}"))?;
+    if inventory
+        .canisters
+        .get(&inventory.root_canister)
+        .copied()
+        .flatten()
+        != Some(expected_root_hash)
+    {
+        return Err(
+            "Prepared root activation evidence hash does not match the canonical record"
+                .to_string(),
+        );
+    }
+    if encode_value(&encode_activation_host_record(record)).len()
+        > MAX_FLEET_ACTIVATION_HOST_RECORD_BYTES
+    {
+        return Err("Prepared activation host record exceeds its byte bound".to_string());
+    }
+    Ok(inventory.root_canister)
+}
+
+struct ValidatedPreparedManifestAuthority<'a> {
+    cascade_manifest: &'a [FleetCascadeManifestEntry],
+    credential: FleetCredentialGenerationRef,
+    credential_manifest: &'a FleetCredentialManifest,
+    cascade_manifest_hash: [u8; 32],
+}
+
+struct ValidatedPreparedCanisterInventory {
+    root_canister: Principal,
+    canisters: BTreeMap<Principal, Option<[u8; 32]>>,
+}
+
+fn validate_prepared_manifest_authority(
+    record: &FleetActivationHostRecord,
+) -> Result<ValidatedPreparedManifestAuthority<'_>, String> {
+    let cascade_manifest = record
+        .cascade_manifest
+        .as_ref()
+        .ok_or_else(|| "Prepared activation is missing its cascade manifest".to_string())?;
+    let credential = record
+        .credential
+        .ok_or_else(|| "Prepared activation is missing its credential generation".to_string())?;
+    let credential_manifest = record
+        .credential_manifest
+        .as_ref()
+        .ok_or_else(|| "Prepared activation is missing its credential manifest".to_string())?;
+    if record.canisters.is_empty()
+        || record.canisters.len() > MAX_FLEET_ACTIVATION_CANISTERS
+        || cascade_manifest
+            .len()
+            .checked_add(1)
+            .is_none_or(|count| count != record.canisters.len())
+    {
+        return Err(
+            "Prepared activation must contain exactly one root plus every cascade child"
+                .to_string(),
+        );
+    }
+    if credential_manifest.entries.len() > MAX_FLEET_CREDENTIAL_MANIFEST_ENTRIES {
+        return Err("Prepared credential manifest exceeds its entry bound".to_string());
+    }
+    if credential_manifest.fleet != record.identity.fleet.fleet
+        || credential_manifest.activation_id != record.identity.operation_id
+        || credential_manifest.generation != credential.generation
+    {
+        return Err(
+            "Prepared credential manifest does not match its activation identity and generation"
+                .to_string(),
+        );
+    }
+    let cascade_manifest_hash = FleetActivationApi::cascade_manifest_hash(cascade_manifest)
+        .map_err(|error| format!("invalid Prepared cascade manifest: {error}"))?;
+    let credential_manifest_hash =
+        FleetActivationApi::credential_manifest_hash(credential_manifest)
+            .map_err(|error| format!("invalid Prepared credential manifest: {error}"))?;
+    if credential_manifest_hash != credential.manifest_hash {
+        return Err("Prepared credential generation hash does not match its manifest".to_string());
+    }
+    Ok(ValidatedPreparedManifestAuthority {
+        cascade_manifest,
+        credential,
+        credential_manifest,
+        cascade_manifest_hash,
+    })
+}
+
+fn validate_prepared_canister_inventory(
+    record: &FleetActivationHostRecord,
+    cascade_manifest: &[FleetCascadeManifestEntry],
+    credential_manifest: &FleetCredentialManifest,
+) -> Result<ValidatedPreparedCanisterInventory, String> {
+    if record
+        .canisters
+        .windows(2)
+        .any(|entries| entries[0].principal.as_slice() >= entries[1].principal.as_slice())
+    {
+        return Err("Prepared Canister inventory must use strict raw-principal order".to_string());
+    }
+
+    let cascade_canisters = cascade_manifest
+        .iter()
+        .map(|entry| entry.principal)
+        .collect::<BTreeSet<_>>();
+    let host_canisters = record
+        .canisters
+        .iter()
+        .map(|entry| (entry.principal, entry.activation_evidence_hash))
+        .collect::<BTreeMap<_, _>>();
+    if host_canisters.len() != record.canisters.len()
+        || !cascade_canisters
+            .iter()
+            .all(|principal| host_canisters.contains_key(principal))
+    {
+        return Err(
+            "Prepared Canister inventory does not exactly cover the cascade manifest".to_string(),
+        );
+    }
+    let roots = host_canisters
+        .keys()
+        .copied()
+        .filter(|principal| !cascade_canisters.contains(principal))
+        .collect::<Vec<_>>();
+    let [root_canister] = roots.as_slice() else {
+        return Err(
+            "Prepared Canister inventory must identify exactly one root outside the cascade manifest"
+                .to_string(),
+        );
+    };
+    for principal in &cascade_canisters {
+        if host_canisters.get(principal).copied().flatten().is_some() {
+            return Err(format!(
+                "Prepared child {principal} must not claim activation evidence before resume"
+            ));
+        }
+    }
+    if credential_manifest
+        .entries
+        .iter()
+        .any(|entry| !host_canisters.contains_key(&entry.subject_canister))
+    {
+        return Err(
+            "Prepared credential manifest contains a subject outside the Canister inventory"
+                .to_string(),
+        );
+    }
+    Ok(ValidatedPreparedCanisterInventory {
+        root_canister: *root_canister,
+        canisters: host_canisters,
+    })
+}
+
+const fn is_initial_activation(record: &FleetActivationHostRecord) -> bool {
+    record.cascade_manifest.is_none()
+        && record.credential.is_none()
+        && record.credential_manifest.is_none()
+        && record.canisters.is_empty()
+}
+
+fn encode_activation_host_record(record: &FleetActivationHostRecord) -> Value {
     Value::Array(vec![
         encode_activation_identity(&record.identity),
-        Value::Null,
-        Value::Null,
-        Value::Null,
-        Value::Array(Vec::new()),
+        record
+            .cascade_manifest
+            .as_ref()
+            .map_or(Value::Null, |value| {
+                Value::Array(value.iter().map(encode_cascade_manifest_entry).collect())
+            }),
+        record
+            .credential
+            .map_or(Value::Null, encode_credential_generation),
+        record
+            .credential_manifest
+            .as_ref()
+            .map_or(Value::Null, encode_credential_manifest),
+        Value::Array(
+            record
+                .canisters
+                .iter()
+                .map(encode_host_canister_evidence)
+                .collect(),
+        ),
     ])
 }
 
-fn decode_initial_activation(
+fn decode_activation_host_record(
     path: &Path,
     value: &Value,
 ) -> Result<FleetActivationHostRecord, FleetInstallActivationJournalError> {
     let fields = exact_array_ref(path, value, 5, "activation")?;
-    let _: Option<[u8; 32]> = exact_null(path, &fields[1], "cascade_manifest")?;
-    let _: Option<[u8; 32]> = exact_null(path, &fields[2], "credential")?;
-    let _: Option<[u8; 32]> = exact_null(path, &fields[3], "credential_manifest")?;
-    if !exact_array_ref(path, &fields[4], 0, "canisters")?.is_empty() {
-        unreachable!("exact zero-length array was validated");
-    }
     Ok(FleetActivationHostRecord {
         identity: decode_activation_identity(path, &fields[0])?,
-        cascade_manifest: None,
-        credential: None,
-        credential_manifest: None,
-        canisters: Vec::new(),
+        cascade_manifest: decode_optional_cascade_manifest(path, &fields[1])?,
+        credential: decode_optional_credential_generation(path, &fields[2])?,
+        credential_manifest: decode_optional_credential_manifest(path, &fields[3])?,
+        canisters: decode_host_canister_evidence(path, &fields[4])?,
     })
+}
+
+fn encode_cascade_manifest_entry(entry: &FleetCascadeManifestEntry) -> Value {
+    Value::Array(vec![
+        principal(entry.principal),
+        digest(entry.state_snapshot_hash),
+        digest(entry.topology_snapshot_hash),
+    ])
+}
+
+fn decode_optional_cascade_manifest(
+    path: &Path,
+    value: &Value,
+) -> Result<Option<Vec<FleetCascadeManifestEntry>>, FleetInstallActivationJournalError> {
+    if matches!(value, Value::Null) {
+        return Ok(None);
+    }
+    let Value::Array(entries) = value else {
+        return Err(invalid(path, "cascade_manifest must be null or an array"));
+    };
+    if entries.len() >= MAX_FLEET_ACTIVATION_CANISTERS {
+        return Err(invalid(
+            path,
+            "cascade_manifest exceeds the Canister inventory bound",
+        ));
+    }
+    entries
+        .iter()
+        .map(|entry| {
+            let fields = exact_array_ref(path, entry, 3, "cascade_manifest entry")?;
+            Ok(FleetCascadeManifestEntry {
+                principal: exact_principal(path, &fields[0], "cascade principal")?,
+                state_snapshot_hash: exact_digest(path, &fields[1], "state_snapshot_hash")?,
+                topology_snapshot_hash: exact_digest(path, &fields[2], "topology_snapshot_hash")?,
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map(Some)
+}
+
+fn encode_credential_generation(value: FleetCredentialGenerationRef) -> Value {
+    Value::Array(vec![integer(value.generation), digest(value.manifest_hash)])
+}
+
+fn decode_optional_credential_generation(
+    path: &Path,
+    value: &Value,
+) -> Result<Option<FleetCredentialGenerationRef>, FleetInstallActivationJournalError> {
+    if matches!(value, Value::Null) {
+        return Ok(None);
+    }
+    let fields = exact_array_ref(path, value, 2, "credential")?;
+    Ok(Some(FleetCredentialGenerationRef {
+        generation: exact_u64(path, &fields[0], "credential generation")?,
+        manifest_hash: exact_digest(path, &fields[1], "credential manifest_hash")?,
+    }))
+}
+
+fn encode_credential_manifest(value: &FleetCredentialManifest) -> Value {
+    Value::Array(vec![
+        encode_fleet_key(value.fleet),
+        digest(value.activation_id),
+        integer(value.generation),
+        digest(value.root_policy_set_hash),
+        digest(value.renewal_template_set_hash),
+        Value::Array(
+            value
+                .entries
+                .iter()
+                .map(encode_credential_manifest_entry)
+                .collect(),
+        ),
+    ])
+}
+
+fn decode_optional_credential_manifest(
+    path: &Path,
+    value: &Value,
+) -> Result<Option<FleetCredentialManifest>, FleetInstallActivationJournalError> {
+    if matches!(value, Value::Null) {
+        return Ok(None);
+    }
+    let fields = exact_array_ref(path, value, 6, "credential_manifest")?;
+    let Value::Array(entries) = &fields[5] else {
+        return Err(invalid(
+            path,
+            "credential_manifest entries must be an array",
+        ));
+    };
+    if entries.len() > MAX_FLEET_CREDENTIAL_MANIFEST_ENTRIES {
+        return Err(invalid(path, "credential_manifest exceeds its entry bound"));
+    }
+    let entries = entries
+        .iter()
+        .map(|entry| {
+            let fields = exact_array_ref(path, entry, 8, "credential_manifest entry")?;
+            Ok::<_, FleetInstallActivationJournalError>(FleetCredentialManifestEntry {
+                root_issuer: exact_principal(path, &fields[0], "root_issuer")?,
+                subject_canister: exact_principal(path, &fields[1], "subject_canister")?,
+                not_before_ns: exact_u64(path, &fields[2], "not_before_ns")?,
+                expires_at_ns: exact_u64(path, &fields[3], "expires_at_ns")?,
+                key_identity_hash: exact_digest(path, &fields[4], "key_identity_hash")?,
+                cert_hash: exact_digest(path, &fields[5], "cert_hash")?,
+                proof_hash: exact_digest(path, &fields[6], "proof_hash")?,
+                bundle_hash: exact_digest(path, &fields[7], "bundle_hash")?,
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(Some(FleetCredentialManifest {
+        fleet: decode_fleet_key(path, &fields[0])?,
+        activation_id: exact_digest(path, &fields[1], "credential activation_id")?,
+        generation: exact_u64(path, &fields[2], "credential generation")?,
+        root_policy_set_hash: exact_digest(path, &fields[3], "root_policy_set_hash")?,
+        renewal_template_set_hash: exact_digest(path, &fields[4], "renewal_template_set_hash")?,
+        entries,
+    }))
+}
+
+fn encode_credential_manifest_entry(value: &FleetCredentialManifestEntry) -> Value {
+    Value::Array(vec![
+        principal(value.root_issuer),
+        principal(value.subject_canister),
+        integer(value.not_before_ns),
+        integer(value.expires_at_ns),
+        digest(value.key_identity_hash),
+        digest(value.cert_hash),
+        digest(value.proof_hash),
+        digest(value.bundle_hash),
+    ])
+}
+
+fn encode_host_canister_evidence(value: &FleetHostCanisterActivationEvidence) -> Value {
+    Value::Array(vec![
+        principal(value.principal),
+        optional_digest(value.activation_evidence_hash),
+    ])
+}
+
+fn decode_host_canister_evidence(
+    path: &Path,
+    value: &Value,
+) -> Result<Vec<FleetHostCanisterActivationEvidence>, FleetInstallActivationJournalError> {
+    let Value::Array(entries) = value else {
+        return Err(invalid(path, "canisters must be an array"));
+    };
+    if entries.len() > MAX_FLEET_ACTIVATION_CANISTERS {
+        return Err(invalid(
+            path,
+            "canisters exceeds the activation inventory bound",
+        ));
+    }
+    entries
+        .iter()
+        .map(|entry| {
+            let fields = exact_array_ref(path, entry, 2, "canister evidence")?;
+            Ok(FleetHostCanisterActivationEvidence {
+                principal: exact_principal(path, &fields[0], "canister principal")?,
+                activation_evidence_hash: exact_optional_digest(
+                    path,
+                    &fields[1],
+                    "activation_evidence_hash",
+                )?,
+            })
+        })
+        .collect()
 }
 
 fn encode_activation_identity(identity: &FleetActivationIdentity) -> Value {
     Value::Array(vec![
         Value::Array(vec![
-            Value::Array(vec![
-                digest(*identity.fleet.fleet.network.as_bytes()),
-                digest(*identity.fleet.fleet.fleet_id.as_bytes()),
-            ]),
-            Value::Text(identity.fleet.app.to_string()),
+            encode_fleet_key(identity.fleet.fleet),
+            Value::Bytes(identity.fleet.app.as_str().as_bytes().to_vec()),
         ]),
         digest(identity.operation_id),
         digest(*identity.release_build_id.as_bytes()),
@@ -1016,18 +1809,11 @@ fn decode_activation_identity(
     let fields = exact_array_ref(path, value, 3, "activation identity")?;
     let binding = exact_array_ref(path, &fields[0], 2, "Fleet binding")?;
     let key = exact_array_ref(path, &binding[0], 2, "Fleet key")?;
-    let app = AppId::owned(exact_text(path, &binding[1], "app")?.to_string());
+    let app = AppId::owned(exact_utf8_bytes(path, &binding[1], "app")?.to_string());
     validate_app(&app)?;
     Ok(FleetActivationIdentity {
         fleet: FleetBinding {
-            fleet: FleetKey {
-                network: id_from_digest(
-                    exact_digest(path, &key[0], "canonical_network_id")?,
-                    "canonical_network_id",
-                    path,
-                )?,
-                fleet_id: FleetId::from_generated_bytes(exact_digest(path, &key[1], "fleet_id")?),
-            },
+            fleet: decode_fleet_key_fields(path, key)?,
             app,
         },
         operation_id: exact_digest(path, &fields[1], "operation_id")?,
@@ -1036,6 +1822,35 @@ fn decode_activation_identity(
             "release_build_id",
             path,
         )?,
+    })
+}
+
+fn encode_fleet_key(value: FleetKey) -> Value {
+    Value::Array(vec![
+        digest(*value.network.as_bytes()),
+        digest(*value.fleet_id.as_bytes()),
+    ])
+}
+
+fn decode_fleet_key(
+    path: &Path,
+    value: &Value,
+) -> Result<FleetKey, FleetInstallActivationJournalError> {
+    let fields = exact_array_ref(path, value, 2, "Fleet key")?;
+    decode_fleet_key_fields(path, fields)
+}
+
+fn decode_fleet_key_fields(
+    path: &Path,
+    fields: &[Value],
+) -> Result<FleetKey, FleetInstallActivationJournalError> {
+    Ok(FleetKey {
+        network: id_from_digest(
+            exact_digest(path, &fields[0], "canonical_network_id")?,
+            "canonical_network_id",
+            path,
+        )?,
+        fleet_id: FleetId::from_generated_bytes(exact_digest(path, &fields[1], "fleet_id")?),
     })
 }
 
@@ -1218,6 +2033,19 @@ fn root_installed_result(
     }
 }
 
+fn canisters_prepared_result(
+    journal: FleetInstallActivationJournal,
+    path: PathBuf,
+    advanced: bool,
+) -> CanistersPreparedFleetInstallActivation {
+    CanistersPreparedFleetInstallActivation {
+        journal_hash: fleet_install_activation_journal_hash(&journal),
+        journal,
+        path,
+        advanced,
+    }
+}
+
 fn validate_app(app: &AppId) -> Result<(), FleetInstallActivationJournalError> {
     let value = app.as_str();
     if value.is_empty()
@@ -1302,6 +2130,18 @@ fn exact_text<'a>(
         .ok_or_else(|| invalid(path, format!("{field} must be text")))
 }
 
+fn exact_utf8_bytes<'a>(
+    path: &Path,
+    value: &'a Value,
+    field: &str,
+) -> Result<&'a str, FleetInstallActivationJournalError> {
+    let Value::Bytes(bytes) = value else {
+        return Err(invalid(path, format!("{field} must be a byte string")));
+    };
+    std::str::from_utf8(bytes)
+        .map_err(|error| invalid(path, format!("{field} must contain UTF-8 bytes: {error}")))
+}
+
 fn exact_digest(
     path: &Path,
     value: &Value,
@@ -1316,6 +2156,18 @@ fn exact_digest(
         .map_err(|_| invalid(path, format!("{field} must contain exactly 32 bytes")))
 }
 
+fn exact_principal(
+    path: &Path,
+    value: &Value,
+    field: &str,
+) -> Result<Principal, FleetInstallActivationJournalError> {
+    let Value::Bytes(bytes) = value else {
+        return Err(invalid(path, format!("{field} must be a byte string")));
+    };
+    Principal::try_from(bytes.as_slice())
+        .map_err(|error| invalid(path, format!("{field} is invalid: {error}")))
+}
+
 fn exact_optional_digest(
     path: &Path,
     value: &Value,
@@ -1325,21 +2177,6 @@ fn exact_optional_digest(
         Ok(None)
     } else {
         exact_digest(path, value, field).map(Some)
-    }
-}
-
-fn exact_null<T>(
-    path: &Path,
-    value: &Value,
-    field: &str,
-) -> Result<Option<T>, FleetInstallActivationJournalError> {
-    if matches!(value, Value::Null) {
-        Ok(None)
-    } else {
-        Err(invalid(
-            path,
-            format!("{field} must be null before CanistersPrepared"),
-        ))
     }
 }
 
@@ -1372,6 +2209,10 @@ fn digest(value: [u8; 32]) -> Value {
     Value::Bytes(value.to_vec())
 }
 
+fn principal(value: Principal) -> Value {
+    Value::Bytes(value.as_slice().to_vec())
+}
+
 fn optional_digest(value: Option<[u8; 32]>) -> Value {
     value.map_or(Value::Null, digest)
 }
@@ -1401,6 +2242,12 @@ fn domain_hash(domain: &[u8], bytes: &[u8]) -> [u8; 32] {
 fn invalid(path: &Path, reason: impl Into<String>) -> FleetInstallActivationJournalError {
     FleetInstallActivationJournalError::InvalidDocument {
         path: path.to_path_buf(),
+        reason: reason.into(),
+    }
+}
+
+fn invalid_prepared(reason: impl Into<String>) -> FleetInstallActivationJournalError {
+    FleetInstallActivationJournalError::InvalidPreparedActivationEvidence {
         reason: reason.into(),
     }
 }

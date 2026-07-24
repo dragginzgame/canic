@@ -8,7 +8,7 @@ use config_selection::resolve_install_config_path;
 use std::{
     fmt,
     path::{Path, PathBuf},
-    time::Instant,
+    time::{Duration, Instant},
 };
 use thiserror::Error as ThisError;
 
@@ -60,6 +60,7 @@ use phase_receipts::{
 };
 use plan_artifacts::emit_manifest_with_phase;
 use preparation::{prepare_install_deployment_truth, resolve_root_canister_after_manifest};
+use receipt_io::install_deployment_truth_receipts_dir;
 pub use receipt_io::latest_deployment_truth_receipt_path_from_root;
 use timing::InstallTimingSummary as CurrentInstallTimingSummary;
 pub use truth_check::{check_install_deployment_truth, check_install_execution_preflight};
@@ -284,20 +285,13 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
             ReleaseBuildPlanError::MissingFinalizedAuthority,
         )
     })?;
-    let canonical_network_id = resolve_canonical_network_id_from_root(&icp_root, environment)
-        .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))?;
-    let activation = fleet_activation_journal::plan_fleet_install_activation(
-        fleet_activation_journal::PlanFleetInstallActivationRequest {
-            root: &icp_root,
-            canonical_network_id,
-            fleet_name: fleet_name
-                .parse()
-                .map_err(|source| InstallRootError::new(InstallRootPhase::Identity, source))?,
-            app: app_id.into(),
-            finalized_release_build: &finalized_release_build,
-        },
-    )
-    .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))?;
+    let activation = plan_current_fleet_activation(
+        &icp_root,
+        environment,
+        &fleet_name,
+        &app_id,
+        &finalized_release_build,
+    )?;
     let receipt_scope = InstallReceiptScope {
         icp_root: &icp_root,
         environment,
@@ -312,9 +306,14 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         emitted_manifest.phase,
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
-    let (root_canister_id, create_duration) =
-        resolve_root_canister_after_manifest(receipt_scope, &options, &config_path, &build_context)
-            .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
+    let (root_canister_id, create_duration) = resolve_or_recover_activation_root(
+        &activation,
+        receipt_scope,
+        &options,
+        &config_path,
+        &build_context,
+    )
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
     timings.create_canisters = create_duration;
     let prepared_root = install_root_prepared(
         receipt_scope,
@@ -329,6 +328,50 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
 
     print_install_timing_summary(&timings, total_started_at.elapsed());
     Err(continuation_required(root_canister_id, &prepared_root))
+}
+
+fn plan_current_fleet_activation(
+    icp_root: &Path,
+    environment: &str,
+    fleet_name: &str,
+    app_id: &str,
+    finalized_release_build: &crate::release_build::FinalizedReleaseBuild,
+) -> Result<fleet_activation_journal::ResolvedFleetInstallActivation, InstallRootError> {
+    let canonical_network_id = resolve_canonical_network_id_from_root(icp_root, environment)
+        .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))?;
+    let fleet_name = fleet_name
+        .parse()
+        .map_err(|source| InstallRootError::new(InstallRootPhase::Identity, source))?;
+    fleet_activation_journal::plan_fleet_install_activation(
+        fleet_activation_journal::PlanFleetInstallActivationRequest {
+            root: icp_root,
+            canonical_network_id,
+            fleet_name,
+            app: app_id.into(),
+            finalized_release_build,
+        },
+    )
+    .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))
+}
+
+fn resolve_or_recover_activation_root(
+    activation: &fleet_activation_journal::ResolvedFleetInstallActivation,
+    receipt_scope: InstallReceiptScope<'_>,
+    options: &InstallRootOptions,
+    config_path: &Path,
+    build_context: &crate::canister_build::WorkspaceBuildContext,
+) -> Result<(String, Duration), Box<dyn std::error::Error>> {
+    let receipt_directory =
+        install_deployment_truth_receipts_dir(receipt_scope.icp_root, receipt_scope.fleet);
+    match fleet_activation_journal::recover_activation_root_canister(
+        activation,
+        &receipt_directory,
+    )? {
+        Some(root_canister) => Ok((root_canister.to_text(), Duration::ZERO)),
+        None => {
+            resolve_root_canister_after_manifest(receipt_scope, options, config_path, build_context)
+        }
+    }
 }
 
 fn print_install_identity(app: &str, fleet_name: &str) {
