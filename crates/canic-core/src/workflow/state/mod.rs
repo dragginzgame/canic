@@ -1,6 +1,6 @@
 //! Module: workflow::state
 //!
-//! Responsibility: orchestrate app-state mutations and downstream state cascades.
+//! Responsibility: orchestrate Fleet-state mutations and downstream state cascades.
 //! Does not own: endpoint authorization, stable state records, or DTO schemas.
 //! Boundary: workflow layer between state API calls, storage ops, and cascade workflow.
 
@@ -8,22 +8,22 @@ pub mod query;
 
 use crate::{
     InternalError,
-    dto::state::{AppCommand, AppCommandResponse},
-    ops::{runtime::env::EnvOps, storage::state::app::AppStateOps},
+    dto::state::{FleetCommand, FleetCommandResponse},
+    ops::{runtime::env::EnvOps, storage::state::fleet::FleetStateOps},
     workflow::cascade::{snapshot::StateSnapshotBuilder, state::StateCascadeWorkflow},
 };
 
 ///
-/// AppStateWorkflow
-/// Orchestrates application state mutations and downstream cascades
+/// FleetStateWorkflow
+/// Orchestrates Fleet-state mutations and downstream cascades
 ///
 
-pub struct AppStateWorkflow;
+pub struct FleetStateWorkflow;
 
-impl AppStateWorkflow {
-    /// Apply an application-level command (internal).
+impl FleetStateWorkflow {
+    /// Apply a Fleet-level command (internal).
     ///
-    /// Workflow-level orchestration for mutating application state.
+    /// Workflow-level orchestration for mutating Fleet state.
     /// This function:
     /// - enforces execution context (root-only)
     /// - applies the command via storage ops
@@ -32,23 +32,23 @@ impl AppStateWorkflow {
     ///
     /// Returns internal [`InternalError`]. Public error mapping is handled
     /// exclusively at the API boundary.
-    pub async fn execute_command(cmd: AppCommand) -> Result<AppCommandResponse, InternalError> {
+    pub async fn execute_command(cmd: FleetCommand) -> Result<FleetCommandResponse, InternalError> {
         EnvOps::require_root()?;
-        let response = AppStateOps::apply_command(cmd);
-        if !app_command_response_changed(response) {
+        let response = FleetStateOps::apply_command(cmd);
+        if !fleet_command_response_changed(response) {
             return Ok(response);
         }
 
-        let snapshot = StateSnapshotBuilder::new()?.with_app_state().build();
+        let snapshot = StateSnapshotBuilder::new()?.with_fleet_state().build();
         StateCascadeWorkflow::root_cascade_state(&snapshot).await?;
 
         Ok(response)
     }
 }
 
-const fn app_command_response_changed(response: AppCommandResponse) -> bool {
+const fn fleet_command_response_changed(response: FleetCommandResponse) -> bool {
     match response {
-        AppCommandResponse::Status(status) => status.changed,
-        AppCommandResponse::CyclesFundingEnabled(enabled) => enabled.changed,
+        FleetCommandResponse::Status(status) => status.changed,
+        FleetCommandResponse::CyclesFundingEnabled(enabled) => enabled.changed,
     }
 }

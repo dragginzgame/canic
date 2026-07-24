@@ -40,12 +40,12 @@ impl Level {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[remain::sorted]
 pub enum Topic {
-    App,
     Auth,
     CanisterLifecycle,
     CanisterPool,
     Config,
     Cycles,
+    Fleet,
     Icrc,
     Init,
     Memory,
@@ -61,12 +61,12 @@ impl Topic {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
-            Self::App => "App",
             Self::Auth => "Auth",
             Self::CanisterLifecycle => "CanisterLifecycle",
             Self::CanisterPool => "CanisterPool",
             Self::Config => "Config",
             Self::Cycles => "Cycles",
+            Self::Fleet => "Fleet",
             Self::Icrc => "Icrc",
             Self::Init => "Init",
             Self::Memory => "Memory",
@@ -82,12 +82,12 @@ impl Topic {
     #[must_use]
     pub const fn log_label(self) -> &'static str {
         match self {
-            Self::App => "app",
             Self::Auth => "auth",
             Self::CanisterLifecycle => "canister_lifecycle",
             Self::CanisterPool => "canister_pool",
             Self::Config => "config",
             Self::Cycles => "cycles",
+            Self::Fleet => "fleet",
             Self::Icrc => "icrc",
             Self::Init => "init",
             Self::Memory => "memory",

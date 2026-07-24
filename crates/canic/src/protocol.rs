@@ -26,7 +26,7 @@ pub use canic_core::protocol::{
     CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS,
 };
 
-pub const CANIC_APP: &str = "canic_app";
+pub const CANIC_FLEET_ADMIN: &str = "canic_fleet_admin";
 pub const CANIC_CANISTER_UPGRADE: &str = "canic_canister_upgrade";
 pub const CANIC_CANISTER_STATUS: &str = "canic_canister_status";
 pub const CANIC_CONFIG: &str = "canic_config";
@@ -41,7 +41,7 @@ pub const CANIC_ENV: &str = "canic_env";
 pub const CANIC_LOG: &str = "canic_log";
 pub const CANIC_METRICS: &str = "canic_metrics";
 pub const CANIC_READY: &str = "canic_ready";
-pub const CANIC_APP_STATE: &str = "canic_app_state";
+pub const CANIC_FLEET_STATE: &str = "canic_fleet_state";
 pub const CANIC_APP_INDEX: &str = "canic_app_index";
 pub const CANIC_SUBNET_INDEX: &str = "canic_subnet_index";
 pub const CANIC_CANISTER_CHILDREN: &str = "canic_canister_children";

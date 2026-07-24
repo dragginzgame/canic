@@ -18,7 +18,7 @@ fn ping() -> String {
     "ok".to_string()
 }
 
-#[canic_update(requires(app::allows_updates(), caller::is_controller()))]
+#[canic_update(requires(fleet::allows_updates(), caller::is_controller()))]
 async fn admin_only_expr() -> Result<(), canic::Error> {
     Ok(())
 }

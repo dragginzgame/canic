@@ -276,7 +276,7 @@ pub(super) fn authorize_request_cycles_inner(
         return Err(RpcWorkflowError::NotChildOfCaller(ctx.caller, ctx.self_pid).into());
     }
 
-    if !crate::ops::storage::state::app::AppStateOps::cycles_funding_enabled() {
+    if !crate::ops::storage::state::fleet::FleetStateOps::cycles_funding_enabled() {
         CyclesFundingMetrics::record_denied(
             ctx.caller,
             req.cycles,

@@ -1,23 +1,23 @@
 use crate::{
     dto::{
         error::Error,
-        state::{AppCommand, AppCommandResponse},
+        state::{FleetCommand, FleetCommandResponse},
     },
-    workflow::state::AppStateWorkflow,
+    workflow::state::FleetStateWorkflow,
 };
 
 /// Re-export of read-only state query surfaces.
-pub use crate::workflow::state::query::AppStateQuery;
+pub use crate::workflow::state::query::FleetStateQuery;
 
 ///
-/// AppStateApi
+/// FleetStateApi
 ///
 
-pub struct AppStateApi;
+pub struct FleetStateApi;
 
-impl AppStateApi {
-    pub async fn execute_command(cmd: AppCommand) -> Result<AppCommandResponse, Error> {
-        AppStateWorkflow::execute_command(cmd)
+impl FleetStateApi {
+    pub async fn execute_command(cmd: FleetCommand) -> Result<FleetCommandResponse, Error> {
+        FleetStateWorkflow::execute_command(cmd)
             .await
             .map_err(Error::from)
     }

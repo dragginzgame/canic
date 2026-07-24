@@ -18,7 +18,7 @@ use crate::{
         },
         storage::{
             fleet_activation::FleetActivationOps, registry::subnet::SubnetRegistryOps,
-            state::app::AppStateOps,
+            state::fleet::FleetStateOps,
         },
     },
     workflow::runtime::{
@@ -104,7 +104,7 @@ pub fn init_root_canister(identity: CurrentRootInstallIdentity) -> Result<(), In
             format!("app mode init failed: {err}"),
         )
     })?;
-    AppStateOps::init_mode(app_mode);
+    FleetStateOps::init_mode(app_mode);
     RuntimeAuthWorkflow::ensure_root_crypto_contract()?;
 
     let created_at = IcOps::now_secs();

@@ -27,7 +27,7 @@ pub mod memory {
     pub mod env {
         pub const ENV_ID: u8 = 16;
         pub const RETIRED_SUBNET_STATE_ID: u8 = 17;
-        pub const APP_STATE_ID: u8 = 18;
+        pub const FLEET_STATE_ID: u8 = 18;
     }
 
     pub mod auth {
@@ -95,7 +95,7 @@ use memory::{
         BLOB_DELETION_PENDING_ID, BLOB_STORAGE_BILLING_ID, STORAGE_GATEWAY_PRINCIPALS_ID,
         STORED_BLOBS_ID,
     },
-    env::{APP_STATE_ID, ENV_ID, RETIRED_SUBNET_STATE_ID},
+    env::{ENV_ID, FLEET_STATE_ID, RETIRED_SUBNET_STATE_ID},
     intent::{
         APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID, INTENT_EXPIRY_INDEX_ID,
         INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
@@ -127,7 +127,7 @@ const CORE_RUNTIME_TOPOLOGY_IDS: &[MemoryId] = &[
     MemoryId::new(SUBNET_REGISTRY_ID),
 ];
 const CORE_RUNTIME_ENVIRONMENT_IDS: &[MemoryId] =
-    &[MemoryId::new(ENV_ID), MemoryId::new(APP_STATE_ID)];
+    &[MemoryId::new(ENV_ID), MemoryId::new(FLEET_STATE_ID)];
 const RETIRED_MEMORY_IDS: &[MemoryId] = &[
     MemoryId::new(RETIRED_APP_REGISTRY_ID),
     MemoryId::new(RETIRED_SUBNET_STATE_ID),

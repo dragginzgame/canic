@@ -1,24 +1,24 @@
 use crate::dto::prelude::*;
 
-pub use crate::domain::state::{AppMode, AppStatus};
+pub use crate::domain::state::{FleetMode, FleetStatus};
 
 //
-// AppCommand
+// FleetCommand
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub enum AppCommand {
-    SetStatus(AppStatus),
+pub enum FleetCommand {
+    SetStatus(FleetStatus),
     SetCyclesFundingEnabled(bool),
 }
 
 //
-// AppCommandResponse
+// FleetCommandResponse
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub enum AppCommandResponse {
-    Status(SetStateResponse<AppStatus>),
+pub enum FleetCommandResponse {
+    Status(SetStateResponse<FleetStatus>),
     CyclesFundingEnabled(SetStateResponse<bool>),
 }
 
@@ -34,22 +34,22 @@ pub struct SetStateResponse<T> {
 }
 
 //
-// AppStateInput
+// FleetStateInput
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub struct AppStateInput {
-    pub mode: AppMode,
+pub struct FleetStateInput {
+    pub mode: FleetMode,
     pub cycles_funding_enabled: bool,
 }
 
 //
-// AppStateResponse
+// FleetStateResponse
 //
 
 #[derive(CandidType, Deserialize)]
-pub struct AppStateResponse {
-    pub mode: AppMode,
+pub struct FleetStateResponse {
+    pub mode: FleetMode,
     pub cycles_funding_enabled: bool,
 }
 
@@ -72,13 +72,13 @@ mod tests {
     use std::fmt::Debug;
 
     #[test]
-    fn app_mode_roundtrips_candid_through_dto_path() {
-        assert_enum_candid_contract(AppMode::Readonly);
+    fn fleet_mode_roundtrips_candid_through_dto_path() {
+        assert_enum_candid_contract(FleetMode::Readonly);
     }
 
     #[test]
-    fn app_status_roundtrips_candid_through_dto_path() {
-        assert_enum_candid_contract(AppStatus::Readonly);
+    fn fleet_status_roundtrips_candid_through_dto_path() {
+        assert_enum_candid_contract(FleetStatus::Readonly);
     }
 
     fn assert_enum_candid_contract<T>(value: T)

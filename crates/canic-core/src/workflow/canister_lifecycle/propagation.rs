@@ -37,10 +37,10 @@ impl PropagationWorkflow {
         TopologyCascadeWorkflow::root_cascade_topology_for_pid(target).await
     }
 
-    /// Propagate application/subnet state and index snapshots after structural mutations.
+    /// Propagate Fleet state and Directory snapshots after structural mutations.
     ///
     /// This rebuilds index snapshots from the registry, applies current
-    /// app state, cascades it to root children, and finally re-asserts
+    /// Fleet state, cascades it to root children, and finally re-asserts
     /// index ↔ registry consistency.
     pub async fn propagate_state(role: &CanisterRole) -> Result<(), InternalError> {
         // The implicit wasm_store receives the normal topology cascade, but its
@@ -50,10 +50,10 @@ impl PropagationWorkflow {
             return Ok(());
         }
 
-        // Shared index/app-state changes are sibling-visible, so create/adopt
+        // Shared Directory/Fleet-state changes are sibling-visible, so create/adopt
         // state propagation must refresh all root children, not only the target branch.
         let snapshot = ProvisionWorkflow::rebuild_indexes_from_registry(Some(role))?
-            .with_app_state()
+            .with_fleet_state()
             .build();
 
         StateCascadeWorkflow::root_cascade_state(&snapshot).await?;

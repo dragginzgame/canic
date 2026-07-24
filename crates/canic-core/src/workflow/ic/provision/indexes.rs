@@ -45,7 +45,7 @@ impl ProvisionWorkflow {
             } else {
                 AppIndexOps::import(app_data)?;
             }
-            builder = builder.with_app_index()?;
+            builder = builder.with_fleet_directory()?;
         }
 
         if include_subnet {
@@ -56,7 +56,7 @@ impl ProvisionWorkflow {
             } else {
                 SubnetIndexOps::import(subnet_data)?;
             }
-            builder = builder.with_subnet_index()?;
+            builder = builder.with_subnet_directory()?;
         }
 
         Ok(builder)

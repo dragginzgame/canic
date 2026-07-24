@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.15` hard-cuts live operational state from App to Fleet across its
+  Candid, runtime, access, storage and cascade authorities, with no legacy
+  endpoint, type, field or predicate aliases.
+
 - `0.99.14` gives every managed non-root one exact Fleet-bound fresh-install
   payload and ID-21 `Prepared` authority, keeps application work and timers
   stopped behind the role-specific endpoint fence, and separates standalone

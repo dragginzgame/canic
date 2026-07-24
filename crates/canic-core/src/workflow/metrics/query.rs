@@ -140,7 +140,7 @@ mod tests {
         metrics::reset_for_tests();
 
         AccessMetrics::increment("zeta", AccessMetricKind::Auth, "caller_is_root");
-        AccessMetrics::increment("alpha", AccessMetricKind::Guard, "app_allows_updates");
+        AccessMetrics::increment("alpha", AccessMetricKind::Guard, "fleet_allows_updates");
 
         let page = MetricsQuery::page(
             MetricsKind::Security,
@@ -153,7 +153,7 @@ mod tests {
         assert_eq!(page.total, 2);
         assert_eq!(
             page.entries[0].labels,
-            ["access", "alpha", "guard", "app_allows_updates"]
+            ["access", "alpha", "guard", "fleet_allows_updates"]
         );
 
         let page = MetricsQuery::page(

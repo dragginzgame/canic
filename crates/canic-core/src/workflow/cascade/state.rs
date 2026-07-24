@@ -31,7 +31,7 @@ use crate::{
             children::CanisterChildrenOps,
             index::{app::AppIndexOps, subnet::SubnetIndexOps},
             registry::subnet::SubnetRegistryOps,
-            state::app::AppStateOps,
+            state::fleet::FleetStateOps,
         },
     },
     workflow::cascade::{
@@ -274,16 +274,16 @@ impl StateCascadeWorkflow {
     fn apply_state(snapshot: &StateSnapshot) -> Result<(), InternalError> {
         EnvOps::deny_root()?;
 
-        if let Some(app) = snapshot.app_state {
-            AppStateOps::import_input(app);
+        if let Some(fleet) = snapshot.fleet_state {
+            FleetStateOps::import_input(fleet);
         }
 
-        if let Some(index) = &snapshot.app_index {
+        if let Some(index) = &snapshot.fleet_directory {
             let filtered = AppIndexOps::filter_args_for_local_config(index.clone())?;
             AppIndexOps::import_args_allow_incomplete(filtered)?;
         }
 
-        if let Some(index) = &snapshot.subnet_index {
+        if let Some(index) = &snapshot.subnet_directory {
             let filtered = SubnetIndexOps::filter_args_for_local_config(index.clone())?;
             SubnetIndexOps::import_args_allow_incomplete(filtered)?;
         }

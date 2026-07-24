@@ -16,7 +16,7 @@ use crate::role_contract::allocation::memory::{
         BLOB_DELETION_PENDING_ID, BLOB_STORAGE_BILLING_ID, STORAGE_GATEWAY_PRINCIPALS_ID,
         STORED_BLOBS_ID,
     },
-    env::{APP_STATE_ID, ENV_ID},
+    env::{ENV_ID, FLEET_STATE_ID},
     intent::{
         APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID, INTENT_EXPIRY_INDEX_ID,
         INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
@@ -452,7 +452,7 @@ fn runtime_topology_domains() -> Vec<StateDomainManifest> {
 fn runtime_env_domains() -> Vec<StateDomainManifest> {
     use crate::storage::stable::{
         env::{EnvData, EnvRecord},
-        state::app::{AppStateData, AppStateRecord},
+        state::fleet::{FleetStateData, FleetStateRecord},
     };
 
     vec![
@@ -465,12 +465,12 @@ fn runtime_env_domains() -> Vec<StateDomainManifest> {
             "env_root_and_role_bindings_are_restored",
         ),
         state_domain(
-            "app_state",
-            APP_STATE_ID,
-            AppStateRecord::STATE_CONTRACT_NAME,
-            AppStateData::STATE_CONTRACT_NAME,
+            "fleet_state",
+            FLEET_STATE_ID,
+            FleetStateRecord::STATE_CONTRACT_NAME,
+            FleetStateData::STATE_CONTRACT_NAME,
             50,
-            "app_state_mode_is_restored_before_hooks",
+            "fleet_state_mode_is_restored_before_hooks",
         ),
     ]
 }
@@ -742,7 +742,7 @@ mod tests {
             SUBNET_INDEX_ID,
             SUBNET_REGISTRY_ID,
             ENV_ID,
-            APP_STATE_ID,
+            FLEET_STATE_ID,
             AUTH_STATE_ID,
             REPLAY_RECEIPTS_ID,
             FLEET_ACTIVATION_ID,
@@ -844,7 +844,7 @@ mod tests {
     fn runtime_env_descriptors_reference_canonical_data_types() {
         use crate::storage::stable::{
             env::{EnvData, EnvRecord},
-            state::app::{AppStateData, AppStateRecord},
+            state::fleet::{FleetStateData, FleetStateRecord},
         };
 
         let descriptors = canic_state_descriptors();
@@ -860,9 +860,9 @@ mod tests {
                 EnvData::STATE_CONTRACT_NAME,
             ),
             (
-                "app_state",
-                AppStateRecord::STATE_CONTRACT_NAME,
-                AppStateData::STATE_CONTRACT_NAME,
+                "fleet_state",
+                FleetStateRecord::STATE_CONTRACT_NAME,
+                FleetStateData::STATE_CONTRACT_NAME,
             ),
         ] {
             let declaration = runtime_env

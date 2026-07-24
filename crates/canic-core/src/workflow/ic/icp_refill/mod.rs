@@ -26,7 +26,7 @@ use crate::{
     ops::{
         config::ConfigOps,
         ic::{IcOps, build_network::BuildNetworkOps, icp_refill::IcpRefillOps},
-        storage::{icp_refill::IcpRefillStoreOps, state::app::AppStateOps},
+        storage::{icp_refill::IcpRefillStoreOps, state::fleet::FleetStateOps},
     },
 };
 use thiserror::Error as ThisError;
@@ -111,7 +111,7 @@ impl ManualRefillPreflight {
             request,
             None,
             active_for_request(request, root_canister)?,
-            AppStateOps::cycles_funding_enabled(),
+            FleetStateOps::cycles_funding_enabled(),
         );
         let rate_gate_configured = policy_requires_rate(policy);
         let policy = policy.map(icp_refill_policy_rules);

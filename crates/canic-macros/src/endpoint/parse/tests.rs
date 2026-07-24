@@ -50,6 +50,31 @@ fn public_marker_is_parsed() {
 }
 
 #[test]
+fn fleet_state_predicates_parse_as_builtins() {
+    let parsed = parse_args(quote!(requires(
+        fleet::allows_updates(),
+        fleet::is_queryable()
+    )))
+    .expect("Fleet predicates should parse");
+
+    assert!(matches!(
+        &parsed.requires[..],
+        [AccessExprAst::All(predicates)]
+            if matches!(
+                &predicates[..],
+                [
+                    AccessExprAst::Pred(AccessPredicateAst::Builtin(
+                        BuiltinPredicate::FleetAllowsUpdates
+                    )),
+                    AccessExprAst::Pred(AccessPredicateAst::Builtin(
+                        BuiltinPredicate::FleetIsQueryable
+                    ))
+                ]
+            )
+    ));
+}
+
+#[test]
 fn public_false_marker_is_rejected() {
     let err = parse_args(quote!(public = false)).expect_err("false public");
 

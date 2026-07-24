@@ -26,11 +26,11 @@ pub mod compiled {
     pub use crate::{
         cdk::{candid::Principal, types::Cycles},
         config::schema::{
-            AppConfig, AppInitMode, AuthConfig, BindingConfig, BindingPool, CanisterAuthConfig,
-            CanisterConfig, CanisterKind, CanisterPool, CanisterRoleNameIssue,
-            ChainKeyRootProofConfig, ConfigModel, CyclesFundingPolicyConfig, DelegatedTokenConfig,
-            DiagnosticsCanisterConfig, FleetServicesConfig, IcpRefillPolicy, LogConfig,
-            MetricsCanisterConfig, MetricsProfile, NAME_MAX_BYTES, PoolImport,
+            AppConfig, AuthConfig, BindingConfig, BindingPool, CanisterAuthConfig, CanisterConfig,
+            CanisterKind, CanisterPool, CanisterRoleNameIssue, ChainKeyRootProofConfig,
+            ConfigModel, CyclesFundingPolicyConfig, DelegatedTokenConfig,
+            DiagnosticsCanisterConfig, FleetInitMode, FleetServicesConfig, IcpRefillPolicy,
+            LogConfig, MetricsCanisterConfig, MetricsProfile, NAME_MAX_BYTES, PoolImport,
             RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool,
             ScalePoolPolicy, ScalingConfig, ServicesConfig, ShardPool, ShardPoolPolicy,
             ShardingConfig, Standards, StandardsCanisterConfig, SubnetConfig, TopupPolicy,

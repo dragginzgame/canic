@@ -297,7 +297,7 @@ impl ConfigModel {
 /// AppConfig
 ///
 /// App identity, startup mode and optional whitelist configuration.
-/// Owned by config schema and consumed by access/app-state setup.
+/// Owned by config schema and consumed by access/Fleet-state setup.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -306,7 +306,7 @@ pub struct AppConfig {
     pub name: AppId,
 
     #[serde(default)]
-    pub init_mode: AppInitMode,
+    pub init_mode: FleetInitMode,
 
     /// Principal whitelist.
     ///
@@ -321,7 +321,7 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             name: AppId::default(),
-            init_mode: AppInitMode::Enabled,
+            init_mode: FleetInitMode::Enabled,
             whitelist: None,
         }
     }
@@ -356,15 +356,15 @@ pub struct FleetServicesConfig {
 }
 
 ///
-/// AppInitMode
+/// FleetInitMode
 ///
-/// Configurable initial app state.
-/// Owned by config schema and mapped into app runtime state during bootstrap.
+/// Configurable initial Fleet state for an App installation.
+/// Owned by config schema and mapped into Fleet runtime state during bootstrap.
 ///
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
-pub enum AppInitMode {
+pub enum FleetInitMode {
     #[default]
     Enabled,
     Readonly,
