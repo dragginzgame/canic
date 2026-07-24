@@ -387,7 +387,7 @@ fn install_verifier_test_config(
     };
 
     let mut cfg = ConfigTestBuilder::new()
-        .with_prime_canister("project_instance", canister_cfg)
+        .with_default_canister("project_instance", canister_cfg)
         .build();
     cfg.auth.delegated_tokens.build_network = BuildNetwork::Local;
     cfg.auth.delegated_tokens.root_canister_id = Some(root_pid().to_string());
@@ -436,8 +436,8 @@ fn install_verifier_test_config(
 
     Env::import(EnvData {
         record: EnvRecord {
-            prime_root_pid: Some(root_pid()),
-            subnet_role: Some(SubnetSlotId::DEFAULT),
+            fleet_root_pid: Some(root_pid()),
+            subnet_slot: Some(SubnetSlotId::DEFAULT),
             subnet_pid: Some(p(9)),
             root_pid: Some(root_pid()),
             canister_role: Some(CanisterRole::new("project_instance")),

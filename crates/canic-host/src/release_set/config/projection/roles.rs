@@ -38,19 +38,19 @@ pub(in crate::release_set) fn configured_role_lifecycle_from_config(
     let attached_roles = config.attached_roles();
     let mut topology = BTreeMap::<CanisterRole, Vec<String>>::new();
 
-    for (subnet_role, subnet) in &config.subnets {
+    for (subnet_slot, subnet) in &config.subnets {
         for (role, canister) in &subnet.canisters {
             topology
                 .entry(role.clone())
                 .or_default()
-                .push(format!("{subnet_role}/{role}"));
+                .push(format!("{subnet_slot}/{role}"));
 
             if let Some(scaling) = &canister.scaling {
                 for (pool, scale_pool) in &scaling.pools {
                     topology
                         .entry(scale_pool.canister_role.clone())
                         .or_default()
-                        .push(format!("{subnet_role}/{role}/scaling/{pool}"));
+                        .push(format!("{subnet_slot}/{role}/scaling/{pool}"));
                 }
             }
 
@@ -59,7 +59,7 @@ pub(in crate::release_set) fn configured_role_lifecycle_from_config(
                     topology
                         .entry(shard_pool.canister_role.clone())
                         .or_default()
-                        .push(format!("{subnet_role}/{role}/sharding/{pool}"));
+                        .push(format!("{subnet_slot}/{role}/sharding/{pool}"));
                 }
             }
 
@@ -68,7 +68,7 @@ pub(in crate::release_set) fn configured_role_lifecycle_from_config(
                     topology
                         .entry(binding_pool.canister_role.clone())
                         .or_default()
-                        .push(format!("{subnet_role}/{role}/binding/{pool}"));
+                        .push(format!("{subnet_slot}/{role}/binding/{pool}"));
                 }
             }
         }

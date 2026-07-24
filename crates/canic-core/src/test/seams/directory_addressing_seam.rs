@@ -126,8 +126,8 @@ fn directory_addressing_does_not_fallback_to_registry() {
 
 fn install_index_service_test_config(service_role: &CanisterRole, singleton_role: &CanisterRole) {
     let _config = ConfigTestBuilder::new()
-        .with_prime_canister_kind(service_role.clone(), CanisterKind::Service)
-        .with_prime_canister_kind(singleton_role.clone(), CanisterKind::Singleton)
+        .with_default_canister_kind(service_role.clone(), CanisterKind::Service)
+        .with_default_canister_kind(singleton_role.clone(), CanisterKind::Singleton)
         .with_fleet_service(service_role.clone())
         .install();
     import_test_env(

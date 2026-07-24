@@ -14,28 +14,28 @@ use crate::{
 // Env Checks
 // -----------------------------------------------------------------------------
 
-/// is_prime_root
+/// is_fleet_root
 ///
-/// Permit access only from the configured prime root canister.
-pub fn is_prime_root() -> Result<(), AccessError> {
-    if EnvOps::is_prime_root() {
+/// Permit access only from the configured Fleet root canister.
+pub fn is_fleet_root() -> Result<(), AccessError> {
+    if EnvOps::is_fleet_root() {
         Ok(())
     } else {
         Err(AccessError::Denied(
-            "this endpoint is only available on prime root".to_string(),
+            "this endpoint is only available on the Fleet root".to_string(),
         ))
     }
 }
 
-/// is_prime_subnet
+/// is_default_subnet
 ///
-/// Permit access only from a canister on the configured prime subnet.
-pub fn is_prime_subnet() -> Result<(), AccessError> {
-    if EnvOps::is_prime_subnet() {
+/// Permit access only from a canister in the configured default Subnet Slot.
+pub fn is_default_subnet() -> Result<(), AccessError> {
+    if EnvOps::is_default_subnet() {
         Ok(())
     } else {
         Err(AccessError::Denied(
-            "this endpoint is only available on the prime subnet".to_string(),
+            "this endpoint is only available in the default Subnet Slot".to_string(),
         ))
     }
 }

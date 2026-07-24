@@ -33,6 +33,7 @@ use canic::{
     dto::blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
     dto::cascade::StateSnapshotInput,
     dto::cycles::Cycles,
+    dto::env::{EnvBootstrapArgs, EnvSnapshotResponse},
     dto::fleet_activation::FleetActivationStatusResponse,
     dto::icp_refill::{IcpRefillDryRun, IcpRefillRequest},
     dto::icrc21::{
@@ -129,6 +130,20 @@ fn fleet_state_and_cascade_candid_shapes_use_the_current_contract() {
     }
 
     assert_candid_roundtrip(FleetMode::Readonly);
+}
+
+#[test]
+fn environment_candid_shapes_use_fleet_root_and_subnet_slot() {
+    for env in [
+        candid_type_env::<EnvBootstrapArgs>(),
+        candid_type_env::<EnvSnapshotResponse>(),
+    ] {
+        assert!(
+            env.contains("fleet_root_pid : opt principal")
+                && env.contains("subnet_slot : opt text"),
+            "environment Candid must expose Fleet root and Subnet Slot identity:\n{env}"
+        );
+    }
 }
 
 #[test]

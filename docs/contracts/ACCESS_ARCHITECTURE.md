@@ -92,10 +92,8 @@ Cryptographic and structural verification is delegated to
 ## Audience Binding
 
 Audience answers which Canic boundary may accept the token:
-- `Canister(canister_id)` is accepted only by that canister.
-- `CanicSubnet(subnet_id)` is accepted only by a verifier on that Canic subnet.
-- `Project(project_id)` is accepted only when the verifier's local project id
-  matches `project_id`.
+- `Fleet(FleetKey)` is accepted only when the verifier's immutable protected
+  Fleet binding matches the canonical network and generated Fleet ID exactly.
 
 Authorization is carried by signed role grants:
 - token audience must be accepted locally and be a subset of cert audience

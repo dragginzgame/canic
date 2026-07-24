@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.21` completes the runtime Prime hard cut: environment state and Candid
+  use `fleet_root_pid` and `subnet_slot`, while access predicates use
+  `is_fleet_root` and `is_default_subnet` with no old alias or decoder.
+
 - `0.99.20` makes same-Subnet cascade retry convergent, applies received state
   atomically after complete validation, rejects contradictory topology
   branches and enforces raw payload limits before inter-Canister decoding.

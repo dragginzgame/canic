@@ -11,8 +11,8 @@ use thiserror::Error as ThisError;
 
 #[derive(Clone, Debug)]
 pub struct EnvInput {
-    pub prime_root_pid: Option<Principal>,
-    pub subnet_role: Option<SubnetSlotId>,
+    pub fleet_root_pid: Option<Principal>,
+    pub subnet_slot: Option<SubnetSlotId>,
     pub subnet_pid: Option<Principal>,
     pub root_pid: Option<Principal>,
     pub canister_role: Option<CanisterRole>,
@@ -31,11 +31,11 @@ pub enum EnvPolicyError {
 
 pub fn validate_or_default(raw_env: EnvInput) -> Result<ValidatedEnv, EnvPolicyError> {
     let mut missing = Vec::new();
-    if raw_env.prime_root_pid.is_none() {
-        missing.push("prime_root_pid");
+    if raw_env.fleet_root_pid.is_none() {
+        missing.push("fleet_root_pid");
     }
-    if raw_env.subnet_role.is_none() {
-        missing.push("subnet_role");
+    if raw_env.subnet_slot.is_none() {
+        missing.push("subnet_slot");
     }
     if raw_env.subnet_pid.is_none() {
         missing.push("subnet_pid");
@@ -54,12 +54,12 @@ pub fn validate_or_default(raw_env: EnvInput) -> Result<ValidatedEnv, EnvPolicyE
         return Err(EnvPolicyError::MissingEnvFields(missing.join(", ")));
     }
 
-    let prime_root_pid = raw_env
-        .prime_root_pid
-        .ok_or_else(|| EnvPolicyError::MissingEnvFields("prime_root_pid".to_string()))?;
-    let subnet_role = raw_env
-        .subnet_role
-        .ok_or_else(|| EnvPolicyError::MissingEnvFields("subnet_role".to_string()))?;
+    let fleet_root_pid = raw_env
+        .fleet_root_pid
+        .ok_or_else(|| EnvPolicyError::MissingEnvFields("fleet_root_pid".to_string()))?;
+    let subnet_slot = raw_env
+        .subnet_slot
+        .ok_or_else(|| EnvPolicyError::MissingEnvFields("subnet_slot".to_string()))?;
     let subnet_pid = raw_env
         .subnet_pid
         .ok_or_else(|| EnvPolicyError::MissingEnvFields("subnet_pid".to_string()))?;
@@ -74,8 +74,8 @@ pub fn validate_or_default(raw_env: EnvInput) -> Result<ValidatedEnv, EnvPolicyE
         .ok_or_else(|| EnvPolicyError::MissingEnvFields("parent_pid".to_string()))?;
 
     Ok(ValidatedEnv {
-        prime_root_pid,
-        subnet_role,
+        fleet_root_pid,
+        subnet_slot,
         subnet_pid,
         root_pid,
         canister_role,

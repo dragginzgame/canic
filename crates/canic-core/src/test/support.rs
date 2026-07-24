@@ -82,9 +82,9 @@ pub fn init_sharding_test_config() {
     };
 
     let _config = ConfigTestBuilder::new()
-        .with_prime_canister(CanisterRole::ROOT, root_cfg)
-        .with_prime_canister("manager", manager_cfg)
-        .with_prime_canister("shard", shard_cfg)
+        .with_default_canister(CanisterRole::ROOT, root_cfg)
+        .with_default_canister("manager", manager_cfg)
+        .with_default_canister("shard", shard_cfg)
         .install();
 
     // Single synthetic principal for root/subnet/parent roles in tests.
@@ -99,14 +99,14 @@ pub fn init_sharding_test_config() {
 /// Panics if the synthetic environment snapshot fails runtime import.
 pub fn import_test_env(
     canister_role: impl Into<CanisterRole>,
-    subnet_role: impl Into<SubnetSlotId>,
+    subnet_slot: impl Into<SubnetSlotId>,
     root_pid: Principal,
 ) {
     let snapshot = EnvRecord {
         canister_role: Some(canister_role.into()),
-        subnet_role: Some(subnet_role.into()),
+        subnet_slot: Some(subnet_slot.into()),
         root_pid: Some(root_pid),
-        prime_root_pid: Some(root_pid),
+        fleet_root_pid: Some(root_pid),
         subnet_pid: Some(root_pid),
         parent_pid: Some(root_pid),
     };

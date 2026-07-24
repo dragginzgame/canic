@@ -14,14 +14,18 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.19`.
-- The latest published release is `v0.99.19` at
-  `0e0ef8b9f914daffa648824e8a455e5089a4a25e`.
-- The `v0.99.19` source tree is
-  `52bae1fa8f2f2a36c5a21617a5f49deb55ffbf39`. Its Cargo.lock SHA-256 is
-  `c7ca79db61ae6dd388ff264b9e93751f2f0f7668152fa20e412004f8d5c53530`.
-- The open `0.99.20` draft makes the surviving one-Subnet cascade convergent
-  and fail closed: exact Fleet-state retry repairs incomplete fanout, received
+- The workspace package version is `0.99.20`.
+- The latest published release is `v0.99.20` at
+  `a2200c7a60accaaa656618ec01dd7105d63f55e3`.
+- The `v0.99.20` source tree is
+  `ffd6fceccd2f2e5439c555c69fde4309bc6eceec`. Its Cargo.lock SHA-256 is
+  `96111ffc59e1ef9f686b774f1ba52deed16f24afe447507e4ff342fd0483b450`.
+- The open `0.99.21` draft completes the runtime Prime hard cut:
+  environment/stable/Candid state uses `fleet_root_pid` and `subnet_slot`,
+  and the sole access predicates use `is_fleet_root` and
+  `is_default_subnet` without aliases or a legacy decoder.
+- Released `0.99.20` makes the surviving one-Subnet cascade convergent and
+  fail closed: exact Fleet-state retry repairs incomplete fanout, received
   state validates fully before mutation, contradictory topology branches
   reject before acceptance and raw limits cover inter-Canister decoding.
 - Released `0.99.19` makes active-Fleet provisioning finish the exact cascade,
@@ -1277,19 +1281,21 @@ root is Prepared so it can assemble the exact managed inventory; the former
 root bootstrap-resume endpoint is removed rather than retained as a competing
 activation path.
 
-Released `0.99.17` closes the two lifecycle gaps found by the focused
-post-release start-macro audit. Root post-upgrade mirrors non-root phase
-gating, and non-root application init bytes live only in the protected ID-21
-`Prepared` record until the first exact activation transition.
+Released `0.99.17` closes the lifecycle audit gaps. Released `0.99.18`
+hard-cuts delegated-auth audience identity to the exact protected Fleet.
+Released `0.99.19` completes active-Fleet child provisioning through cascade,
+credential-generation and activation. Released `0.99.20` completes the
+one-Subnet cascade-correctness slice with convergent retry, atomic local
+acceptance, structural topology validation and raw inter-Canister payload
+bounds.
 
-The open `0.99.18` draft establishes the delegated-auth identity prerequisite
-for fresh-install qualification. `DelegationAudience::Fleet(FleetKey)` is the
-sole public, model, stable and canonical audience; verification resolves the
-immutable protected activation binding, and root issuer policy/template
-admission rejects a different Fleet before mutation. Removed Canister,
-CanicSubnet and Project audience shapes have no compatibility reader or
-fallback. Complete credential-bundle generation, manifest delivery and
-expiry recovery remain the next bounded Slice 6 work.
+The open `0.99.21` begins closeout with the confirmed remaining runtime
+terminology defect. Stable environment allocation 16, public DTOs, lifecycle
+payloads, access expressions, macro predicates and active documentation use
+only `fleet_root_pid`, `subnet_slot`, `is_fleet_root` and
+`is_default_subnet`. The removed Prime/subnet-role spellings have no alias or
+decoder. Final CLI disposition inventory and the remaining bounded stale-path
+search follow within Slice 8.
 
 Do not inspect or edit the stale local Toko repository, change Cargo package
 versions outside the maintainer-owned release flow, or commit, tag, publish

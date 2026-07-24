@@ -58,7 +58,7 @@ The install flow:
 - creates the reference canisters in `icp`
 - builds the local canister artifacts
 - emits the build-produced root staging manifest from the configured ordinary `.wasm.gz` artifacts
-- reinstalls `root` in `Prime` mode
+- reinstalls `root` in the default Subnet Slot
 - stages the configured ordinary fleet artifacts into `root` through the install flow
 - resumes bootstrap so `root` can create the internal `wasm_store` and publish the staged artifacts
 - waits for `root` to report `READY`

@@ -88,9 +88,7 @@ Source of truth: `crates/canic-core/src/dto/auth/`.
 
 ```rust
 pub enum DelegationAudience {
-    Canister(Principal),
-    CanicSubnet(Principal),
-    Project(String),
+    Fleet(FleetKey),
 }
 
 pub struct DelegatedRoleGrant {
@@ -639,11 +637,11 @@ project_instance = 1
 Per-canister auth roles:
 
 ```toml
-[subnets.prime.canisters.user_shard.auth]
+[subnets.default.canisters.user_shard.auth]
 delegated_token_issuer = true
 delegated_token_verifier = true
 
-[subnets.prime.canisters.project_instance.auth]
+[subnets.default.canisters.project_instance.auth]
 delegated_token_verifier = true
 ```
 

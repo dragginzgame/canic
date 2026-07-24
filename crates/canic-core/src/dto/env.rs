@@ -6,11 +6,11 @@ use crate::dto::prelude::*;
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct EnvBootstrapArgs {
-    // app
-    pub prime_root_pid: Option<Principal>,
+    // fleet
+    pub fleet_root_pid: Option<Principal>,
 
     // subnet
-    pub subnet_role: Option<SubnetSlotId>,
+    pub subnet_slot: Option<SubnetSlotId>,
     pub subnet_pid: Option<Principal>,
     pub root_pid: Option<Principal>,
 
@@ -25,11 +25,11 @@ pub struct EnvBootstrapArgs {
 
 #[derive(CandidType, Deserialize)]
 pub struct EnvSnapshotResponse {
-    // app
-    pub prime_root_pid: Option<Principal>,
+    // fleet
+    pub fleet_root_pid: Option<Principal>,
 
     // subnet
-    pub subnet_role: Option<SubnetSlotId>,
+    pub subnet_slot: Option<SubnetSlotId>,
     pub subnet_pid: Option<Principal>,
     pub root_pid: Option<Principal>,
 

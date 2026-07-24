@@ -418,7 +418,7 @@ mod state_apply_tests {
         };
 
         let _config = ConfigTestBuilder::new()
-            .with_prime_canister_kind(service.clone(), CanisterKind::Service)
+            .with_default_canister_kind(service.clone(), CanisterKind::Service)
             .with_fleet_service(service.clone())
             .install();
         import_test_env(service.clone(), SubnetSlotId::DEFAULT, root);

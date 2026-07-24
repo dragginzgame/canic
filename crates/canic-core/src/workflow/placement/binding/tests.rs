@@ -64,8 +64,8 @@ fn install_binding_test_context(child_role: &CanisterRole, child_pid: Principal)
     let hub_pid = p(2);
 
     let _cfg = ConfigTestBuilder::new()
-        .with_prime_canister("project_hub", binding_hub_config(child_role))
-        .with_prime_canister(
+        .with_default_canister("project_hub", binding_hub_config(child_role))
+        .with_default_canister(
             "project_instance",
             ConfigTestBuilder::canister_config(CanisterKind::Instance),
         )
