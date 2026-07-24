@@ -36,8 +36,9 @@ impl BootstrapPhaseLabel {
     pub const ROOT_INIT_SET_SUBNET_ID: Self = Self("root:init:set_subnet_id");
     pub const ROOT_INIT_IMPORT_POOL: Self = Self("root:init:import_pool");
     pub const ROOT_INIT_CREATE_CANISTERS: Self = Self("root:init:create_canisters");
-    pub const ROOT_INIT_REBUILD_INDEXES: Self = Self("root:init:rebuild_indexes");
+    pub const ROOT_INIT_REBUILD_DIRECTORIES: Self = Self("root:init:rebuild_directories");
     pub const ROOT_INIT_VALIDATE: Self = Self("root:init:validate");
+    pub const ROOT_INIT_ACTIVATION_PREPARED: Self = Self("root:init:activation_prepared");
     pub const ROOT_UPGRADE_WAITING_STAGED_RELEASES: Self =
         Self("root:upgrade:waiting_staged_releases");
     pub const ROOT_UPGRADE_SET_SUBNET_ID: Self = Self("root:upgrade:set_subnet_id");

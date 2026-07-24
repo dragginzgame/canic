@@ -53,6 +53,9 @@ pub struct TopologySnapshotAdapter;
 impl TopologySnapshotAdapter {
     #[must_use]
     pub fn to_input(snapshot: &TopologySnapshot) -> TopologySnapshotInput {
+        let mut children_map = snapshot.children_map.iter().collect::<Vec<_>>();
+        children_map.sort_by_key(|(pid, _)| pid.as_slice().to_vec());
+
         TopologySnapshotInput {
             parents: snapshot
                 .parents
@@ -64,18 +67,21 @@ impl TopologySnapshotAdapter {
                 })
                 .collect(),
 
-            children_map: snapshot
-                .children_map
-                .iter()
+            children_map: children_map
+                .into_iter()
                 .map(|(pid, children)| TopologyChildren {
                     parent_pid: *pid,
-                    children: children
-                        .iter()
-                        .map(|c| TopologyDirectChildDto {
-                            pid: c.pid,
-                            role: c.role.clone(),
-                        })
-                        .collect(),
+                    children: {
+                        let mut children = children.clone();
+                        children.sort_by_key(|child| child.pid.as_slice().to_vec());
+                        children
+                            .iter()
+                            .map(|c| TopologyDirectChildDto {
+                                pid: c.pid,
+                                role: c.role.clone(),
+                            })
+                            .collect()
+                    },
                 })
                 .collect(),
         }

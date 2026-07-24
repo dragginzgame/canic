@@ -23,11 +23,11 @@ pub(in crate::release_set) fn configured_role_details_from_config(
                 .or_default()
                 .insert("auto_create".to_string());
         }
-        for role in subnet.subnet_index_roles() {
+        for role in subnet.subnet_directory_roles() {
             details
                 .entry(role.as_str().to_string())
                 .or_default()
-                .insert("subnet_index".to_string());
+                .insert("subnet_directory".to_string());
         }
 
         for (role, canister) in &subnet.canisters {

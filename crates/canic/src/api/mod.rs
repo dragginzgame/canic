@@ -46,8 +46,10 @@ pub mod canister {
         pub use crate::__internal::core::api::topology::children::CanisterChildrenApi;
     }
 
-    pub mod index {
-        pub use crate::__internal::core::api::topology::index::{AppIndexApi, SubnetIndexApi};
+    pub mod directory {
+        pub use crate::__internal::core::api::topology::directory::{
+            FleetDirectoryApi, SubnetDirectoryApi,
+        };
     }
 
     pub mod registry {
@@ -55,7 +57,7 @@ pub mod canister {
     }
 
     pub mod placement {
-        pub use crate::__internal::core::api::placement::directory::DirectoryApi;
+        pub use crate::__internal::core::api::placement::binding::PlacementBindingApi;
         pub use crate::__internal::core::api::placement::scaling::ScalingApi;
 
         #[cfg(feature = "sharding")]

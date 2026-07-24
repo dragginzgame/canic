@@ -65,24 +65,24 @@ pub fn setup_root_topology(
         super::stage_managed_release_set(spec, &pic, root_id);
         progress_elapsed(spec, "staged managed release set", stage_started_at);
 
-        progress(spec, "resuming root bootstrap");
+        progress(spec, "activating managed Fleet");
         let resume_started_at = Instant::now();
-        super::artifacts::resume_root_bootstrap(&pic, root_id);
-        progress_elapsed(spec, "resumed root bootstrap", resume_started_at);
+        crate::pic::canic::activate_managed_fleet(&pic, root_id);
+        progress_elapsed(spec, "activated managed Fleet", resume_started_at);
 
         progress(spec, "waiting for root bootstrap");
         let root_wait_started_at = Instant::now();
         wait_for_bootstrap(spec, &pic, root_id);
         progress_elapsed(spec, "root bootstrap ready", root_wait_started_at);
 
-        progress(spec, "fetching subnet index");
-        let index_started_at = Instant::now();
-        let subnet_index = fetch_subnet_index(&pic, root_id);
-        progress_elapsed(spec, "fetched subnet index", index_started_at);
+        progress(spec, "fetching Subnet Directory");
+        let directory_started_at = Instant::now();
+        let subnet_directory = fetch_subnet_directory(&pic, root_id);
+        progress_elapsed(spec, "fetched Subnet Directory", directory_started_at);
 
         progress(spec, "waiting for child canisters ready");
         let child_wait_started_at = Instant::now();
-        wait_for_children_ready(spec, &pic, &subnet_index);
+        wait_for_children_ready(spec, &pic, &subnet_directory);
         progress_elapsed(spec, "child canisters ready", child_wait_started_at);
 
         progress(spec, "fetching registered child snapshots");
@@ -101,7 +101,7 @@ pub fn setup_root_topology(
             pic,
             metadata: RootBaselineMetadata {
                 root_id,
-                subnet_index,
+                subnet_directory,
                 snapshot_pids,
                 managed_store_pids,
             },
@@ -120,10 +120,10 @@ pub(super) fn wait_for_bootstrap(spec: &RootBaselineSpec<'_>, pic: &Pic, root_id
 pub(super) fn wait_for_children_ready(
     spec: &RootBaselineSpec<'_>,
     pic: &Pic,
-    subnet_index: &HashMap<CanisterRole, Principal>,
+    subnet_directory: &HashMap<CanisterRole, Principal>,
 ) {
     pic.wait_for_all_ready(
-        subnet_index
+        subnet_directory
             .iter()
             .filter(|(role, _)| !role.is_root())
             .map(|(_, pid)| *pid),
@@ -170,7 +170,7 @@ const fn should_retry_root_pic_start(
 
 // Fetch the authoritative subnet registry from root and project it into the
 // role → principal map used by the root harness metadata.
-fn fetch_subnet_index(pic: &Pic, root_id: Principal) -> HashMap<CanisterRole, Principal> {
+fn fetch_subnet_directory(pic: &Pic, root_id: Principal) -> HashMap<CanisterRole, Principal> {
     let registry: Result<SubnetRegistryResponse, canic::Error> = pic
         .query_call(root_id, canic::protocol::CANIC_SUBNET_REGISTRY, ())
         .expect("query subnet registry transport");

@@ -6,7 +6,13 @@ use std::{
 use candid::{Principal, encode_one};
 use canic::{
     Error,
-    dto::{fleet_activation::CurrentRootInstallIdentity, topology::SubnetRegistryResponse},
+    dto::{
+        fleet_activation::{
+            CurrentRootInstallIdentity, FleetActivationPhase, FleetActivationResumeRequest,
+            FleetActivationStatusResponse,
+        },
+        topology::SubnetRegistryResponse,
+    },
     ids::CanisterRole,
     protocol,
 };
@@ -83,6 +89,40 @@ impl CanicPicExt for Pic {
         }
         panic!("{context}: canisters did not become ready after {tick_limit} ticks");
     }
+}
+
+/// Drive one prepared managed Fleet through the exact controller activation protocol.
+///
+/// # Panics
+///
+/// Panics when preparation or activation transport fails, the root rejects
+/// either operation, or the resulting phase is not the exact expected phase.
+pub(super) fn activate_managed_fleet(
+    pic: &Pic,
+    root_id: Principal,
+) -> FleetActivationStatusResponse {
+    let prepared: Result<FleetActivationStatusResponse, Error> = pic
+        .update_call(root_id, protocol::CANIC_PREPARE_FLEET_ACTIVATION, ())
+        .expect("Fleet activation preparation transport");
+    let prepared = prepared.expect("Fleet activation preparation application");
+    assert_eq!(prepared.phase, FleetActivationPhase::Prepared);
+    let credential = prepared
+        .credential
+        .expect("prepared root must expose its credential generation");
+
+    let activated: Result<FleetActivationStatusResponse, Error> = pic
+        .update_call(
+            root_id,
+            protocol::CANIC_RESUME_FLEET_ACTIVATION,
+            (FleetActivationResumeRequest {
+                operation_id: prepared.identity.operation_id,
+                credential,
+            },),
+        )
+        .expect("Fleet activation resume transport");
+    let activated = activated.expect("Fleet activation resume application");
+    assert_eq!(activated.phase, FleetActivationPhase::Active);
+    activated
 }
 
 /// Wait until one Canic canister reports `canic_ready`.

@@ -7,6 +7,14 @@
 #[macro_export]
 macro_rules! __canic_start_nonroot_lifecycle_core {
     ($canister_role:expr $(, $init:block)?) => {
+        ::std::thread_local! {
+            static __CANIC_PREPARED_APPLICATION_INIT_ARGS:
+                ::std::cell::RefCell<::core::option::Option<::std::vec::Vec<u8>>> =
+                const { ::std::cell::RefCell::new(::core::option::Option::None) };
+            static __CANIC_PREPARED_APPLICATION_INIT_SCHEDULED:
+                ::std::cell::Cell<bool> = const { ::std::cell::Cell::new(false) };
+        }
+
         // The activation adapter owns execution of this application hook.
         // Keep the contract bound without polling or scheduling it in Prepared.
         #[doc(hidden)]
@@ -14,17 +22,29 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
             let _ = canic_install;
         };
 
-        $(
-            #[doc(hidden)]
-            async fn __canic_prepared_user_init_block() {
-                $init
+        #[doc(hidden)]
+        fn __canic_schedule_prepared_activation_init() {
+            if __CANIC_PREPARED_APPLICATION_INIT_SCHEDULED.replace(true) {
+                return;
             }
-
-            #[doc(hidden)]
-            const _: () = {
-                let _ = __canic_prepared_user_init_block;
-            };
-        )?
+            let args =
+                __CANIC_PREPARED_APPLICATION_INIT_ARGS.with_borrow_mut(::core::option::Option::take);
+            $crate::__canic_after_optional_start_init_hook!(
+                "canic:user:prepared_activation_block",
+                {
+                    $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap();
+                    $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
+                        ::core::time::Duration::ZERO,
+                        "canic:user:init",
+                        async move {
+                            canic_setup().await;
+                            canic_install(args).await;
+                        },
+                    );
+                }
+                $(, $init)?
+            );
+        }
 
         #[doc(hidden)]
         fn __canic_compiled_config() -> (
@@ -39,7 +59,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
         }
 
         #[$crate::__internal::cdk::init]
-        fn init(payload: ::canic::dto::abi::v1::CanisterInitPayload, _args: Option<Vec<u8>>) {
+        fn init(payload: ::canic::dto::abi::v1::CanisterInitPayload, args: Option<Vec<u8>>) {
             let (config, config_source, config_path) = __canic_compiled_config();
 
             $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_nonroot_canister_before_bootstrap(
@@ -49,6 +69,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
                 config_source,
                 config_path,
             );
+            __CANIC_PREPARED_APPLICATION_INIT_ARGS.with_borrow_mut(|stored| *stored = args);
         }
 
         #[$crate::__internal::cdk::post_upgrade]
@@ -130,8 +151,6 @@ macro_rules! __canic_start_local_lifecycle_core {
             $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_local_nonroot_canister_before_bootstrap(
                 role,
                 env,
-                ::canic::dto::topology::FleetDirectoryInput(Vec::new()),
-                ::canic::dto::topology::SubnetDirectoryInput(Vec::new()),
                 config,
                 config_source,
                 config_path,
@@ -189,12 +208,42 @@ macro_rules! __canic_start_local_lifecycle_core {
 #[macro_export]
 macro_rules! __canic_root_lifecycle_core {
     ($( $init:block )?) => {
+        ::std::thread_local! {
+            static __CANIC_PREPARED_ROOT_INIT_COMPLETED:
+                ::std::cell::Cell<bool> = const { ::std::cell::Cell::new(false) };
+            static __CANIC_PREPARED_APPLICATION_INIT_SCHEDULED:
+                ::std::cell::Cell<bool> = const { ::std::cell::Cell::new(false) };
+        }
+
         // The activation adapter owns execution of this application hook.
         // Keep the contract bound without polling or scheduling it in Prepared.
         #[doc(hidden)]
         const _: () = {
             let _ = canic_install;
         };
+
+        #[doc(hidden)]
+        async fn __canic_run_prepared_root_init_block() {
+            if __CANIC_PREPARED_ROOT_INIT_COMPLETED.replace(true) {
+                return;
+            }
+            $($init)?
+        }
+
+        #[doc(hidden)]
+        fn __canic_schedule_prepared_activation_init() {
+            if __CANIC_PREPARED_APPLICATION_INIT_SCHEDULED.replace(true) {
+                return;
+            }
+            $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
+                ::core::time::Duration::ZERO,
+                "canic:user:init",
+                async move {
+                    canic_setup().await;
+                    canic_install().await;
+                },
+            );
+        }
 
         #[doc(hidden)]
         fn __canic_compiled_config() -> (

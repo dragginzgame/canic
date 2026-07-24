@@ -144,6 +144,8 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path) {
             workspace_root.to_str().expect("workspace root UTF-8"),
             workspace_root.to_str().expect("ICP root UTF-8"),
             config_path.to_str().expect("config path UTF-8"),
+            "--release-build-id",
+            INTERNAL_TEST_RELEASE_BUILD_ID.1,
         ])
         .output()
         .expect("run bootstrap wasm_store artifact builder");

@@ -4,6 +4,11 @@
 
 pub const CANIC_RESPONSE_CAPABILITY_V1: &str = "canic_response_capability_v1";
 pub const CANIC_FLEET_ACTIVATION_STATUS: &str = "canic_fleet_activation_status";
+pub const CANIC_PREPARE_FLEET_ACTIVATION: &str = "canic_prepare_fleet_activation";
+pub const CANIC_RESUME_FLEET_ACTIVATION: &str = "canic_resume_fleet_activation";
+pub const CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION: &str =
+    "canic_prepare_fleet_credential_generation";
+pub const CANIC_ACTIVATE_FLEET: &str = "canic_activate_fleet";
 pub const CANIC_UPSERT_ROOT_ISSUER_POLICY: &str = "canic_upsert_root_issuer_policy";
 pub const CANIC_UPSERT_ROOT_ISSUER_RENEWAL_TEMPLATE: &str =
     "canic_upsert_root_issuer_renewal_template";
@@ -34,8 +39,6 @@ pub const CANIC_WASM_STORE_PREPARE: &str = "canic_wasm_store_prepare";
 pub const CANIC_WASM_STORE_CHUNK: &str = "canic_wasm_store_chunk";
 pub const CANIC_WASM_STORE_PUBLISH_CHUNK: &str = "canic_wasm_store_publish_chunk";
 pub const CANIC_WASM_STORE_STAGE_MANIFEST: &str = "canic_wasm_store_stage_manifest";
-pub const CANIC_WASM_STORE_BOOTSTRAP_RESUME_ROOT_ADMIN: &str =
-    "canic_wasm_store_bootstrap_resume_root_admin";
 pub const CANIC_WASM_STORE_BOOTSTRAP_DEBUG: &str = "canic_wasm_store_bootstrap_debug";
 pub const CANIC_WASM_STORE_OVERVIEW: &str = "canic_wasm_store_overview";
 pub const CANIC_TEMPLATE_PREPARE_ADMIN: &str = "canic_template_prepare_admin";

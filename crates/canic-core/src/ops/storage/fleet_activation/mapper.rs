@@ -27,6 +27,8 @@ pub(super) fn record_to_status(
 ) -> Result<FleetActivationStatusResponse, FleetActivationOpsError> {
     let FleetActivationRecord {
         state,
+        prepared_state_snapshot_hash: _,
+        prepared_topology_snapshot_hash: _,
         cascade_manifest,
         credential_manifests,
     } = record;

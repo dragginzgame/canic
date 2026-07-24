@@ -319,7 +319,7 @@ fn sharding_pool_references_must_exist_in_subnet() {
 }
 
 #[test]
-fn service_roles_are_derived_for_auto_create_and_subnet_index() {
+fn service_roles_are_derived_for_auto_create_and_subnet_directory() {
     let mut subnet = SubnetConfig::default();
     subnet.canisters.insert(
         CanisterRole::from("app"),
@@ -335,12 +335,12 @@ fn service_roles_are_derived_for_auto_create_and_subnet_index() {
     );
 
     let auto_create = subnet.auto_create_roles();
-    let subnet_index = subnet.subnet_index_roles();
+    let subnet_directory = subnet.subnet_directory_roles();
 
     assert!(auto_create.contains("app"));
     assert!(!auto_create.contains("ledger"));
     assert!(!auto_create.contains("worker"));
-    assert_eq!(auto_create, subnet_index);
+    assert_eq!(auto_create, subnet_directory);
 }
 
 #[test]

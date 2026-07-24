@@ -62,7 +62,7 @@ fn retains_replica_query_error() {
 
 // Ensure the resolved topology gives command code parent/role projections without reparsing.
 #[test]
-fn topology_indexes_registry_entries() {
+fn topology_projects_registry_entries() {
     let registry = InstalledDeploymentRegistry {
         root_canister_id: "root-id".to_string(),
         entries: vec![

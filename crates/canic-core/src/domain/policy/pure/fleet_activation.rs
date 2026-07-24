@@ -6,7 +6,12 @@
 
 use crate::{
     ids::{EndpointCall, EndpointCallKind},
-    protocol::CANIC_FLEET_ACTIVATION_STATUS,
+    protocol::{
+        CANIC_ACTIVATE_FLEET, CANIC_FLEET_ACTIVATION_STATUS, CANIC_PREPARE_FLEET_ACTIVATION,
+        CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION, CANIC_RESUME_FLEET_ACTIVATION, CANIC_SYNC_STATE,
+        CANIC_SYNC_TOPOLOGY, CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
+        CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
+    },
 };
 use thiserror::Error as ThisError;
 
@@ -27,23 +32,52 @@ pub enum FleetActivationEndpointPolicyError {
 pub fn require_prepared_nonroot_endpoint(
     call: EndpointCall,
 ) -> Result<(), FleetActivationEndpointPolicyError> {
-    require_prepared_status_query(call)
+    if is_status_query(call)
+        || is_update(
+            call,
+            &[
+                CANIC_SYNC_STATE,
+                CANIC_SYNC_TOPOLOGY,
+                CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION,
+                CANIC_ACTIVATE_FLEET,
+            ],
+        )
+    {
+        return Ok(());
+    }
+    fenced(call)
 }
 
 /// Require one exact recovery endpoint admitted for a Prepared root.
 pub fn require_prepared_root_endpoint(
     call: EndpointCall,
 ) -> Result<(), FleetActivationEndpointPolicyError> {
-    require_prepared_status_query(call)
-}
-
-fn require_prepared_status_query(
-    call: EndpointCall,
-) -> Result<(), FleetActivationEndpointPolicyError> {
-    if call.kind == EndpointCallKind::Query && call.endpoint.name == CANIC_FLEET_ACTIVATION_STATUS {
+    if is_status_query(call)
+        || is_update(
+            call,
+            &[
+                CANIC_PREPARE_FLEET_ACTIVATION,
+                CANIC_RESUME_FLEET_ACTIVATION,
+                CANIC_TEMPLATE_PREPARE_ADMIN,
+                CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
+                CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
+            ],
+        )
+    {
         return Ok(());
     }
+    fenced(call)
+}
 
+fn is_status_query(call: EndpointCall) -> bool {
+    call.kind == EndpointCallKind::Query && call.endpoint.name == CANIC_FLEET_ACTIVATION_STATUS
+}
+
+fn is_update(call: EndpointCall, endpoints: &[&str]) -> bool {
+    call.kind == EndpointCallKind::Update && endpoints.contains(&call.endpoint.name)
+}
+
+const fn fenced(call: EndpointCall) -> Result<(), FleetActivationEndpointPolicyError> {
     Err(FleetActivationEndpointPolicyError::Fenced {
         endpoint: call.endpoint.name,
         kind: call.kind,
@@ -63,21 +97,27 @@ mod tests {
     }
 
     #[test]
-    fn prepared_root_admits_only_implemented_recovery_inspection() {
-        assert_eq!(
-            require_prepared_root_endpoint(call(
-                CANIC_FLEET_ACTIVATION_STATUS,
-                EndpointCallKind::Query,
-            )),
-            Ok(())
-        );
+    fn prepared_root_admits_exact_staging_and_activation_updates() {
+        for (endpoint, kind) in [
+            (CANIC_FLEET_ACTIVATION_STATUS, EndpointCallKind::Query),
+            (CANIC_PREPARE_FLEET_ACTIVATION, EndpointCallKind::Update),
+            (CANIC_RESUME_FLEET_ACTIVATION, EndpointCallKind::Update),
+            (CANIC_TEMPLATE_PREPARE_ADMIN, EndpointCallKind::Update),
+            (CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN, EndpointCallKind::Update),
+            (
+                CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
+                EndpointCallKind::Update,
+            ),
+        ] {
+            assert_eq!(require_prepared_root_endpoint(call(endpoint, kind)), Ok(()));
+        }
     }
 
     #[test]
     fn prepared_root_rejects_ordinary_and_wrong_kind_calls() {
         for (endpoint, kind) in [
             ("application_update", EndpointCallKind::Update),
-            ("canic_sync_state", EndpointCallKind::Update),
+            (CANIC_SYNC_STATE, EndpointCallKind::Update),
             ("canic_upsert_root_issuer_policy", EndpointCallKind::Update),
             (CANIC_FLEET_ACTIVATION_STATUS, EndpointCallKind::Update),
             (
@@ -94,17 +134,24 @@ mod tests {
 
     #[test]
     fn prepared_nonroot_uses_its_own_exact_recovery_allowlist() {
-        assert_eq!(
-            require_prepared_nonroot_endpoint(call(
-                CANIC_FLEET_ACTIVATION_STATUS,
-                EndpointCallKind::Query,
-            )),
-            Ok(())
-        );
+        for (endpoint, kind) in [
+            (CANIC_FLEET_ACTIVATION_STATUS, EndpointCallKind::Query),
+            (CANIC_SYNC_STATE, EndpointCallKind::Update),
+            (CANIC_SYNC_TOPOLOGY, EndpointCallKind::Update),
+            (
+                CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION,
+                EndpointCallKind::Update,
+            ),
+            (CANIC_ACTIVATE_FLEET, EndpointCallKind::Update),
+        ] {
+            assert_eq!(
+                require_prepared_nonroot_endpoint(call(endpoint, kind)),
+                Ok(())
+            );
+        }
 
         for (endpoint, kind) in [
             ("application_update", EndpointCallKind::Update),
-            ("canic_sync_state", EndpointCallKind::Update),
             (
                 "canic_active_delegation_proof_status",
                 EndpointCallKind::Query,

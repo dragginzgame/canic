@@ -14,12 +14,17 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.14`.
-- The latest published release is `v0.99.14` at
-  `13bf60ef6f2be19fa567e50561d655fcc9424635`.
-- The `v0.99.14` source tree is
-  `1bcfd251930269db639b605784ddfc9516ea51f5`. Its Cargo.lock SHA-256 is
-  `bf768dc42fbe4a40e2d7c41422943c176fb9549105be03bc4305ac76aa2bcea8`.
+- The workspace package version is `0.99.15`.
+- The latest published release is `v0.99.15` at
+  `74b2493ecaa3f7fda520acb81fb0381dc0f02fd1`.
+- The `v0.99.15` source tree is
+  `c7dacdb082c0acfd740e01031c1bebc87880b6b4`. Its Cargo.lock SHA-256 is
+  `71ba1eec55648d2d9a73dcf57631bf3310c082fccb1c9509270a8a5df6f1dfcd`.
+- The open `0.99.16` draft completes the one-member Directory/Placement
+  Binding hard cut and the protected fresh-install activation path without
+  changing package versions.
+- Released `0.99.15` hard-cuts installed Fleet state across Candid, runtime,
+  access, storage and cascade authorities.
 - Released `0.99.14` gives every managed non-root one exact Fleet-bound
   `Prepared` init path and keeps runtime work stopped behind its endpoint
   fence.
@@ -1237,7 +1242,7 @@ schedule runtime services, bootstrap, timers or application hooks.
 fabricated Fleet payload, and standalone PocketIC probes retain their prior
 runtime behavior.
 
-The open `0.99.15` batch hard-cuts the live state owner from App to Fleet.
+Released `0.99.15` hard-cuts the live state owner from App to Fleet.
 `FleetMode`, `FleetStatus`, `FleetCommand`, `FleetState`, the
 `fleet::allows_updates`/`fleet::is_queryable` access predicates,
 `canic_fleet_admin`, `canic_fleet_state` and the
@@ -1245,9 +1250,20 @@ The open `0.99.15` batch hard-cuts the live state owner from App to Fleet.
 state cascade's other two fields are now `fleet_directory` and
 `subnet_directory`; no old endpoint, DTO, storage module, access predicate or
 field-label alias remains. Stable allocation 18 retains its number but uses
-the reinstall-only Fleet-state contract. Provenance-bearing Directory
-envelopes, current cascade activation evidence, credentials and final
-activation remain the next bounded work.
+the reinstall-only Fleet-state contract.
+
+The open `0.99.16` draft completes the next one-member runtime boundary.
+Fleet/Subnet Directory envelopes carry protected Fleet/source-root provenance
+and exact decode/page bounds; keyed placement is named Placement Binding; and
+fresh managed installation performs the controller prepare/resume protocol,
+children-first activation and post-activation bootstrap without admitting
+ordinary endpoints through the Prepared fence. The current activation path
+supports the credential-empty authority set and fails closed when issuer
+policy or renewal-template state requires the later credential-bundle slice.
+The three controller-only template staging updates remain available while the
+root is Prepared so it can assemble the exact managed inventory; the former
+root bootstrap-resume endpoint is removed rather than retained as a competing
+activation path.
 
 Do not inspect or edit the stale local Toko repository, change Cargo package
 versions outside the maintainer-owned release flow, or commit, tag, publish

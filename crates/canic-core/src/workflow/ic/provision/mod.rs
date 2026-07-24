@@ -6,7 +6,7 @@
 
 mod allocation;
 mod delete;
-mod indexes;
+mod directories;
 mod install;
 mod metrics;
 mod payload;

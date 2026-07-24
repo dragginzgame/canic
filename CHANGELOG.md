@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.16` completes the one-member runtime topology and fresh-activation
+  boundary: provenance-bound Fleet/Subnet Directories and explicit Placement
+  Bindings replace the old index/directory ambiguity, while prepared managed
+  Canisters activate children-first before ordinary bootstrap work resumes;
+  the superseded root bootstrap-resume endpoint is removed.
+
 - `0.99.15` hard-cuts live operational state from App to Fleet across its
   Candid, runtime, access, storage and cascade authorities, with no legacy
   endpoint, type, field or predicate aliases.

@@ -84,6 +84,22 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "canic_sync_topology",
         command_kind("cascade.sync_topology.v1"),
     ),
+    update_response_idempotent(
+        "canic_prepare_fleet_activation",
+        command_kind("fleet_activation.prepare.v1"),
+    ),
+    update_response_idempotent(
+        "canic_resume_fleet_activation",
+        command_kind("fleet_activation.resume.v1"),
+    ),
+    update_monotonic_transition(
+        "canic_prepare_fleet_credential_generation",
+        command_kind("fleet_activation.prepare_credential_generation.v1"),
+    ),
+    update_response_idempotent(
+        "canic_activate_fleet",
+        command_kind("fleet_activation.activate.v1"),
+    ),
     update_intentionally_non_idempotent(
         "canic_install_active_delegation_proof",
         command_kind("auth.install_active_delegation_proof.v1"),
@@ -113,10 +129,6 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     update_monotonic_transition(
         "canic_template_stage_manifest_admin",
         command_kind("wasm_store.template_stage_manifest_admin.v1"),
-    ),
-    update_response_idempotent(
-        "canic_wasm_store_bootstrap_resume_root_admin",
-        command_kind("wasm_store.bootstrap_resume.ensure_v1"),
     ),
     update_monotonic_publish(
         "canic_wasm_store_admin",

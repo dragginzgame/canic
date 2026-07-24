@@ -3,7 +3,10 @@ use canic_core::{
         LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole, LifecycleMetricsApi,
     },
     bootstrap::{EmbeddedRootBootstrapEntry, compiled::ConfigModel},
-    dto::fleet_activation::CurrentRootInstallIdentity,
+    control_plane_support::view::fleet_activation::FleetActivationTransition,
+    dto::fleet_activation::{
+        CurrentRootInstallIdentity, FleetActivationResumeRequest, FleetActivationStatusResponse,
+    },
 };
 use std::time::Duration;
 
@@ -37,23 +40,29 @@ impl LifecycleApi {
         );
     }
 
-    /// Delegate root init-time bootstrap scheduling to the current core implementation.
-    pub fn schedule_init_root_bootstrap() -> Result<(), canic_core::dto::error::Error> {
-        canic_core::api::fleet_activation::FleetActivationApi::require_active()?;
-        LifecycleMetricsApi::record_bootstrap(
-            LifecycleMetricPhase::Init,
-            LifecycleMetricRole::Root,
-            LifecycleMetricOutcome::Scheduled,
-        );
+    pub async fn prepare_fleet_activation()
+    -> Result<FleetActivationStatusResponse, canic_core::dto::error::Error> {
+        crate::workflow::bootstrap::root::bootstrap_init_root_canister().await;
+        if !crate::workflow::bootstrap::root::activation_preparation_complete() {
+            return Err(canic_core::dto::error::Error::unavailable(
+                "root bootstrap has not prepared the complete managed inventory; inspect bootstrap status and retry activation preparation",
+            ));
+        }
+        canic_core::api::fleet_activation::FleetActivationApi::prepare_root().await
+    }
 
-        canic_core::api::timer::TimerApi::defer_lifecycle(
-            Duration::ZERO,
-            "canic:bootstrap:init_root_canister",
-            async {
-                crate::workflow::bootstrap::root::bootstrap_init_root_canister().await;
-            },
-        );
-        Ok(())
+    pub async fn resume_fleet_activation(
+        request: FleetActivationResumeRequest,
+    ) -> Result<FleetActivationTransition, canic_core::dto::error::Error> {
+        let transition =
+            canic_core::api::fleet_activation::FleetActivationApi::resume_root(request).await?;
+        crate::workflow::bootstrap::root::bootstrap_init_root_canister().await;
+        if !canic_core::api::ready::ReadyApi::is_ready() {
+            return Err(canic_core::dto::error::Error::unavailable(
+                "Fleet activation completed but root bootstrap is not ready; inspect bootstrap status and retry activation resume",
+            ));
+        }
+        Ok(transition)
     }
 
     /// Delegate root post-upgrade runtime restore to the current core implementation.

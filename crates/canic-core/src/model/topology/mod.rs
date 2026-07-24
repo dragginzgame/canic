@@ -18,8 +18,8 @@ pub struct TopologyRegistry {
     pub entries: Vec<TopologyEntry>,
 }
 
-/// One observed role binding in an app or subnet index.
-pub struct TopologyIndexEntry {
+/// One observed role binding in a Fleet or Subnet Directory.
+pub struct TopologyDirectoryEntry {
     pub role: CanisterRole,
     pub pid: Principal,
 }

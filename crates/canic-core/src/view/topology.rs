@@ -7,13 +7,13 @@
 use crate::{cdk::types::Principal, ids::CanisterRole};
 
 ///
-/// IndexEntryView
+/// DirectoryEntryView
 ///
-/// Internal read-only projection of one app or subnet index entry.
+/// Internal read-only projection of one Fleet or Subnet Directory entry.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct IndexEntryView {
+pub struct DirectoryEntryView {
     pub role: CanisterRole,
     pub pid: Principal,
 }

@@ -23,7 +23,6 @@ use crate::{
             delegated_auth::{
                 DelegatedAuthMetricOperation, DelegatedAuthMetricOutcome, DelegatedAuthMetricReason,
             },
-            directory::{DirectoryMetricOperation, DirectoryMetricOutcome, DirectoryMetricReason},
             icp_refill::entries_from_snapshot,
             intent::{
                 IntentMetricOperation, IntentMetricOutcome, IntentMetricReason, IntentMetricSurface,
@@ -35,6 +34,10 @@ use crate::{
             management_call::{
                 ManagementCallMetricOperation, ManagementCallMetricOutcome,
                 ManagementCallMetricReason,
+            },
+            placement_binding::{
+                PlacementBindingMetricOperation, PlacementBindingMetricOutcome,
+                PlacementBindingMetricReason,
             },
             platform_call::{
                 PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
@@ -267,31 +270,40 @@ fn cascade_metrics_are_exposed_with_stable_labels() {
 }
 
 #[test]
-fn directory_metrics_are_exposed_with_stable_labels() {
+fn placement_binding_metrics_are_exposed_with_stable_labels() {
     reset_for_tests();
 
-    DirectoryMetrics::record(
-        DirectoryMetricOperation::Resolve,
-        DirectoryMetricOutcome::Started,
-        DirectoryMetricReason::Ok,
+    PlacementBindingMetrics::record(
+        PlacementBindingMetricOperation::Resolve,
+        PlacementBindingMetricOutcome::Started,
+        PlacementBindingMetricReason::Ok,
     );
-    DirectoryMetrics::record(
-        DirectoryMetricOperation::Classify,
-        DirectoryMetricOutcome::Completed,
-        DirectoryMetricReason::PendingFresh,
+    PlacementBindingMetrics::record(
+        PlacementBindingMetricOperation::Classify,
+        PlacementBindingMetricOutcome::Completed,
+        PlacementBindingMetricReason::PendingFresh,
     );
-    DirectoryMetrics::record(
-        DirectoryMetricOperation::Classify,
-        DirectoryMetricOutcome::Completed,
-        DirectoryMetricReason::PendingFresh,
+    PlacementBindingMetrics::record(
+        PlacementBindingMetricOperation::Classify,
+        PlacementBindingMetricOutcome::Completed,
+        PlacementBindingMetricReason::PendingFresh,
     );
 
     let entries = entries(MetricsKind::Placement);
 
-    assert_metric_count(&entries, &["directory", "resolve", "started", "ok"], 1);
     assert_metric_count(
         &entries,
-        &["directory", "classify", "completed", "pending_fresh"],
+        &["placement_binding", "resolve", "started", "ok"],
+        1,
+    );
+    assert_metric_count(
+        &entries,
+        &[
+            "placement_binding",
+            "classify",
+            "completed",
+            "pending_fresh",
+        ],
         2,
     );
 }
@@ -896,10 +908,10 @@ fn seed_all_metric_families_for_reset_test() {
     CyclesFundingMetrics::record_denied(principal, 10, CyclesFundingDeniedReason::ChildNotFound);
     CyclesTopupMetrics::record_request_scheduled();
     DelegatedAuthMetrics::record_authority(principal);
-    DirectoryMetrics::record(
-        DirectoryMetricOperation::Resolve,
-        DirectoryMetricOutcome::Started,
-        DirectoryMetricReason::Ok,
+    PlacementBindingMetrics::record(
+        PlacementBindingMetricOperation::Resolve,
+        PlacementBindingMetricOutcome::Started,
+        PlacementBindingMetricReason::Ok,
     );
     PlatformCallMetrics::record(
         PlatformCallMetricSurface::Generic,

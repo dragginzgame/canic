@@ -11,7 +11,7 @@ use crate::{
     ids::CanisterRole,
     ops::{
         storage::{
-            index::{app::AppIndexOps, subnet::SubnetIndexOps},
+            directory::{fleet::FleetDirectoryOps, subnet::SubnetDirectoryOps},
             registry::subnet::SubnetRegistryOps,
         },
         topology::input::mapper::TopologyRegistryMapper,
@@ -39,9 +39,9 @@ impl PropagationWorkflow {
 
     /// Propagate Fleet state and Directory snapshots after structural mutations.
     ///
-    /// This rebuilds index snapshots from the registry, applies current
+    /// This rebuilds Directory snapshots from the registry, applies current
     /// Fleet state, cascades it to root children, and finally re-asserts
-    /// index ↔ registry consistency.
+    /// Directory ↔ Registry consistency.
     pub async fn propagate_state(role: &CanisterRole) -> Result<(), InternalError> {
         // The implicit wasm_store receives the normal topology cascade, but its
         // publication inventory is synchronized in root-owned subnet state after
@@ -52,7 +52,7 @@ impl PropagationWorkflow {
 
         // Shared Directory/Fleet-state changes are sibling-visible, so create/adopt
         // state propagation must refresh all root children, not only the target branch.
-        let snapshot = ProvisionWorkflow::rebuild_indexes_from_registry(Some(role))?
+        let snapshot = ProvisionWorkflow::rebuild_directories_from_registry(Some(role))?
             .with_fleet_state()
             .build();
 
@@ -60,13 +60,16 @@ impl PropagationWorkflow {
 
         let registry_data = SubnetRegistryOps::data();
         let registry_input = TopologyRegistryMapper::data_to_registry(registry_data);
-        let app_policy_input = AppIndexOps::topology_entries();
-        let subnet_policy_input = SubnetIndexOps::topology_entries();
+        let app_policy_input = FleetDirectoryOps::topology_entries();
+        let subnet_policy_input = SubnetDirectoryOps::topology_entries();
 
-        TopologyPolicy::assert_index_consistent_with_registry(&registry_input, &app_policy_input)
-            .map_err(InternalError::from)?;
+        TopologyPolicy::assert_directory_consistent_with_registry(
+            &registry_input,
+            &app_policy_input,
+        )
+        .map_err(InternalError::from)?;
 
-        TopologyPolicy::assert_index_consistent_with_registry(
+        TopologyPolicy::assert_directory_consistent_with_registry(
             &registry_input,
             &subnet_policy_input,
         )

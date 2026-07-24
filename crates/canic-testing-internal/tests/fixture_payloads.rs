@@ -43,8 +43,8 @@ fn invalid_init_args_encode_missing_env_fields() {
     assert!(payload.env.root_pid.is_none());
     assert!(payload.env.canister_role.is_none());
     assert!(payload.env.parent_pid.is_none());
-    assert!(payload.fleet_directory.0.is_empty());
-    assert!(payload.subnet_directory.0.is_empty());
+    assert!(payload.fleet_directory.entries.is_empty());
+    assert!(payload.subnet_directory.entries.is_empty());
 }
 
 // Verify the upgrade fixture is the empty tuple expected by no-payload upgrades.

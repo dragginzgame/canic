@@ -1,4 +1,4 @@
-//! Minimal directory-bearing hub canister for keyed instance placement tests.
+//! Minimal placement-binding hub canister for keyed instance placement tests.
 
 #![expect(clippy::unused_async)]
 
@@ -6,10 +6,10 @@ use candid::Principal;
 use canic::{
     Error,
     api::auth::AuthApi,
-    api::canister::placement::DirectoryApi,
+    api::canister::placement::PlacementBindingApi,
     dto::{
         auth::{DelegatedToken, SignedRoleAttestation},
-        placement::directory::{DirectoryEntryStatusResponse, DirectoryRecoveryResponse},
+        placement::binding::{PlacementBindingRecoveryResponse, PlacementBindingStatusResponse},
     },
     ids::cap,
     prelude::*,
@@ -61,28 +61,31 @@ async fn verifier_verify_role_attestation(
 
 /// Resolve one logical project key to a dedicated instance, creating it when absent.
 #[canic_update(public)]
-async fn resolve_project(project_key: String) -> Result<DirectoryEntryStatusResponse, Error> {
-    DirectoryApi::resolve_or_create(PROJECTS_POOL, project_key).await
+async fn resolve_project(project_key: String) -> Result<PlacementBindingStatusResponse, Error> {
+    PlacementBindingApi::resolve_or_create(PROJECTS_POOL, project_key).await
 }
 
-/// Repair or release one directory entry after partial failure.
+/// Repair or release one placement binding after partial failure.
 #[canic_update(public)]
-async fn recover_project(project_key: String) -> Result<DirectoryRecoveryResponse, Error> {
-    DirectoryApi::recover_entry(PROJECTS_POOL, project_key).await
+async fn recover_project(project_key: String) -> Result<PlacementBindingRecoveryResponse, Error> {
+    PlacementBindingApi::recover_entry(PROJECTS_POOL, project_key).await
 }
 
 /// Look up the currently bound instance pid for one project key.
 #[canic_query(public)]
 async fn lookup_project(project_key: String) -> Result<Option<Principal>, Error> {
-    Ok(DirectoryApi::lookup_key(PROJECTS_POOL, &project_key))
+    Ok(PlacementBindingApi::lookup_key(PROJECTS_POOL, &project_key))
 }
 
-/// Return the full directory entry state for one project key.
+/// Return the full placement-binding state for one project key.
 #[canic_query(public)]
 async fn lookup_project_entry(
     project_key: String,
-) -> Result<Option<DirectoryEntryStatusResponse>, Error> {
-    Ok(DirectoryApi::lookup_entry(PROJECTS_POOL, &project_key))
+) -> Result<Option<PlacementBindingStatusResponse>, Error> {
+    Ok(PlacementBindingApi::lookup_entry(
+        PROJECTS_POOL,
+        &project_key,
+    ))
 }
 
 canic::finish!();

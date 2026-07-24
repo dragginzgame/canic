@@ -20,6 +20,7 @@ pub mod cascade;
 pub mod cashier;
 pub mod config;
 pub mod cost_guard;
+pub mod fleet_activation;
 pub mod ic;
 pub mod perf;
 pub mod placement;

@@ -1,3 +1,4 @@
+use canic_core::ids::ReleaseBuildId;
 use canic_host::canister_build::{
     CanisterBuildProfile, WorkspaceBuildContext, build_workspace_canister_artifact,
     copy_icp_wasm_output, print_workspace_build_context_once,
@@ -22,20 +23,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     else {
         return Err(
-            "usage: cargo run -p canic-host --example build_artifact -- <canister-name> <debug|fast|release> <workspace-root> <icp-root> <config-path> [--refresh-wasm-store-did]"
+            "usage: cargo run -p canic-host --example build_artifact -- <canister-name> <debug|fast|release> <workspace-root> <icp-root> <config-path> [--refresh-wasm-store-did] [--release-build-id <id>]"
                 .into(),
         );
     };
-    let refresh_canonical_wasm_store_did = match args.next().as_deref() {
-        None => false,
-        Some("--refresh-wasm-store-did") if canister_name == "wasm_store" => true,
-        Some("--refresh-wasm-store-did") => {
-            return Err("--refresh-wasm-store-did requires canister-name wasm_store".into());
+    let mut refresh_canonical_wasm_store_did = false;
+    let mut release_build_id = None;
+    while let Some(argument) = args.next() {
+        match argument.as_str() {
+            "--refresh-wasm-store-did" if canister_name == "wasm_store" => {
+                refresh_canonical_wasm_store_did = true;
+            }
+            "--refresh-wasm-store-did" => {
+                return Err("--refresh-wasm-store-did requires canister-name wasm_store".into());
+            }
+            "--release-build-id" => {
+                if release_build_id.is_some() {
+                    return Err("--release-build-id may be supplied only once".into());
+                }
+                let value = args
+                    .next()
+                    .ok_or("--release-build-id requires a canonical release-build ID")?;
+                release_build_id = Some(value.parse::<ReleaseBuildId>()?);
+            }
+            _ => return Err("unknown build_artifact argument".into()),
         }
-        Some(_) => return Err("unknown build_artifact argument".into()),
-    };
-    if args.next().is_some() {
-        return Err("build_artifact accepts at most six arguments".into());
     }
     let profile = profile.parse::<CanisterBuildProfile>()?;
 
@@ -54,7 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         icp_root,
         local_replica: None,
         refresh_canonical_wasm_store_did,
-        release_build_id: None,
+        release_build_id,
     };
     print_workspace_build_context_once(&context)?;
     let output = build_workspace_canister_artifact(&context)?;

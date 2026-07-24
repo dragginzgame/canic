@@ -46,6 +46,7 @@ use canic::{
         RuntimeFieldVisibility,
     },
     dto::state::{FleetCommand, FleetCommandResponse, FleetMode, FleetStateResponse},
+    dto::topology::{FleetDirectoryInput, SubnetDirectoryInput},
     ids::CanisterRole,
 };
 
@@ -84,6 +85,14 @@ fn candid_type_env<T: candid::CandidType>() -> String {
 fn fleet_state_and_cascade_candid_shapes_use_the_current_contract() {
     assert_eq!(canic::protocol::CANIC_FLEET_ADMIN, "canic_fleet_admin");
     assert_eq!(canic::protocol::CANIC_FLEET_STATE, "canic_fleet_state");
+    assert_eq!(
+        canic::protocol::CANIC_FLEET_DIRECTORY,
+        "canic_fleet_directory"
+    );
+    assert_eq!(
+        canic::protocol::CANIC_SUBNET_DIRECTORY,
+        "canic_subnet_directory"
+    );
 
     let command_env = candid_type_env::<FleetCommand>();
     assert!(command_env.contains("FleetCommand"));
@@ -99,6 +108,17 @@ fn fleet_state_and_cascade_candid_shapes_use_the_current_contract() {
             cascade_env.contains(field),
             "state cascade Candid must contain {field}"
         );
+    }
+    for directory_env in [
+        candid_type_env::<FleetDirectoryInput>(),
+        candid_type_env::<SubnetDirectoryInput>(),
+    ] {
+        for field in ["provenance", "fleet", "source_root", "entries"] {
+            assert!(
+                directory_env.contains(field),
+                "Directory Candid must contain {field}"
+            );
+        }
     }
 
     assert_candid_roundtrip(FleetMode::Readonly);
@@ -252,6 +272,15 @@ fn wasm_store_canonical_did_parses() {
             .any(|(name, _)| name == canic::protocol::CANIC_FLEET_ACTIVATION_STATUS),
         "parsed default wasm_store service must include the canonical Fleet activation status query"
     );
+    for endpoint in [
+        canic::protocol::CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION,
+        canic::protocol::CANIC_ACTIVATE_FLEET,
+    ] {
+        assert!(
+            service.iter().any(|(name, _)| name == endpoint),
+            "parsed default wasm_store service must include {endpoint}"
+        );
+    }
 
     let status_env = candid_type_env::<FleetActivationStatusResponse>();
     assert!(status_env.contains("FleetActivationStatusResponse"));

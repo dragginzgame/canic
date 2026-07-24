@@ -46,7 +46,7 @@ Public thin-root flow:
 - build the implicit bootstrap `wasm_store` through the same backend builder
 - emit the root staging manifest under `.icp/<artifact-environment>/canisters/root/`
 - stage the ordinary fleet artifacts into `root`
-- resume root bootstrap
+- prepare and resume the exact Fleet activation
 - drive local root install, including one clean local `icp` restart attempt when `icp ping local` fails
 
 Build profile selection:

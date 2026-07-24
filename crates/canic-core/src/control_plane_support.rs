@@ -66,13 +66,13 @@ pub mod ops {
     }
 
     pub mod storage {
-        pub mod index {
-            pub mod app {
-                pub use crate::ops::storage::index::app::AppIndexOps;
+        pub mod directory {
+            pub mod fleet {
+                pub use crate::ops::storage::directory::fleet::FleetDirectoryOps;
             }
 
             pub mod subnet {
-                pub use crate::ops::storage::index::subnet::SubnetIndexOps;
+                pub use crate::ops::storage::directory::subnet::SubnetDirectoryOps;
             }
         }
 
@@ -89,8 +89,12 @@ pub mod ops {
 }
 
 pub mod view {
+    pub mod fleet_activation {
+        pub use crate::view::fleet_activation::FleetActivationTransition;
+    }
+
     pub mod topology {
-        pub use crate::view::topology::{IndexEntryView, RegisteredCanisterView};
+        pub use crate::view::topology::{DirectoryEntryView, RegisteredCanisterView};
     }
 }
 

@@ -11,12 +11,12 @@ pub mod cascade;
 pub mod cycles_funding;
 pub mod cycles_topup;
 pub mod delegated_auth;
-pub mod directory;
 pub mod icp_refill;
 pub mod intent;
 pub mod inter_canister_call;
 pub mod lifecycle;
 pub mod management_call;
+pub mod placement_binding;
 pub mod platform_call;
 pub mod pool;
 pub mod provisioning;
@@ -40,11 +40,11 @@ use {
     access::AccessMetrics, auth::AuthMetrics, canister_ops::CanisterOpsMetrics,
     cascade::CascadeMetrics, cycles_funding::CyclesFundingMetrics,
     cycles_topup::CyclesTopupMetrics, delegated_auth::DelegatedAuthMetrics,
-    directory::DirectoryMetrics, icp_refill::IcpRefillMetrics, intent::IntentMetrics,
+    icp_refill::IcpRefillMetrics, intent::IntentMetrics,
     inter_canister_call::InterCanisterCallMetrics, lifecycle::LifecycleMetrics,
-    platform_call::PlatformCallMetrics, pool::PoolMetrics, replay::ReplayMetrics,
-    root_capability::RootCapabilityMetrics, scaling::ScalingMetrics, timer::TimerMetrics,
-    wasm_store::WasmStoreMetrics,
+    placement_binding::PlacementBindingMetrics, platform_call::PlatformCallMetrics,
+    pool::PoolMetrics, replay::ReplayMetrics, root_capability::RootCapabilityMetrics,
+    scaling::ScalingMetrics, timer::TimerMetrics, wasm_store::WasmStoreMetrics,
 };
 
 #[cfg(feature = "sharding")]
@@ -81,7 +81,10 @@ pub fn core_entries() -> Vec<MetricEntry> {
 #[must_use]
 pub fn placement_entries() -> Vec<MetricEntry> {
     let mut entries = prefix_entries("cascade", cascade_entries());
-    entries.extend(prefix_entries("directory", directory_entries()));
+    entries.extend(prefix_entries(
+        "placement_binding",
+        placement_binding_entries(),
+    ));
     entries.extend(prefix_entries("pool", pool_entries()));
     entries.extend(prefix_entries("scaling", scaling_entries()));
     #[cfg(feature = "sharding")]
@@ -142,7 +145,7 @@ pub fn reset_for_tests() {
     CyclesFundingMetrics::reset();
     CyclesTopupMetrics::reset();
     DelegatedAuthMetrics::reset();
-    DirectoryMetrics::reset();
+    PlacementBindingMetrics::reset();
     PlatformCallMetrics::reset();
     InterCanisterCallMetrics::reset();
     IntentMetrics::reset();
@@ -232,10 +235,10 @@ fn auth_entries() -> Vec<MetricEntry> {
         .collect()
 }
 
-/// Project directory placement counters into the unified public metrics row shape.
+/// Project binding placement counters into the unified public metrics row shape.
 #[must_use]
-fn directory_entries() -> Vec<MetricEntry> {
-    DirectoryMetrics::snapshot()
+fn placement_binding_entries() -> Vec<MetricEntry> {
+    PlacementBindingMetrics::snapshot()
         .into_iter()
         .map(|(key, count)| MetricEntry {
             labels: vec![

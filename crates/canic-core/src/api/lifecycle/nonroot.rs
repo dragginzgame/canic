@@ -1,10 +1,6 @@
 use crate::{
     config::schema::ConfigModel,
-    dto::{
-        abi::v1::CanisterInitPayload,
-        env::EnvBootstrapArgs,
-        topology::{FleetDirectoryInput, SubnetDirectoryInput},
-    },
+    dto::{abi::v1::CanisterInitPayload, env::EnvBootstrapArgs},
     ids::CanisterRole,
     lifecycle,
 };
@@ -39,8 +35,6 @@ impl LifecycleApi {
     pub fn init_local_nonroot_canister_before_bootstrap(
         role: CanisterRole,
         env: EnvBootstrapArgs,
-        fleet_directory: FleetDirectoryInput,
-        subnet_directory: SubnetDirectoryInput,
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
@@ -48,8 +42,6 @@ impl LifecycleApi {
         lifecycle::init::nonroot::init_local_nonroot_canister_before_bootstrap(
             role,
             env,
-            fleet_directory,
-            subnet_directory,
             config,
             config_source,
             config_path,

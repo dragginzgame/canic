@@ -5,8 +5,8 @@ use ic_testkit::pic::{
 use std::sync::{Mutex, OnceLock};
 
 use crate::pic::{
-    canic::install_root_args, role_pid as lookup_role_pid,
-    wait_until_ready as wait_for_ready_canister,
+    canic::{activate_managed_fleet, install_root_args},
+    role_pid as lookup_role_pid, wait_until_ready as wait_for_ready_canister,
 };
 
 use super::{
@@ -116,8 +116,15 @@ fn install_test_root() -> InstalledRoot {
 fn install_root_fixture(root_wasm: Vec<u8>) -> InstalledRoot {
     let pic = build_pic();
     let root_id = install_root_canister(&pic, root_wasm);
+    activate_test_fleet(&pic, root_id);
 
     InstalledRoot { pic, root_id }
+}
+
+fn activate_test_fleet(pic: &Pic, root_id: Principal) {
+    progress("preparing Fleet activation");
+    progress("activating prepared Fleet");
+    activate_managed_fleet(pic, root_id);
 }
 
 // Install the root canister under PocketIC with the current exact Fleet identity.

@@ -4,7 +4,7 @@ use crate::{
     config::schema::CanisterKind,
     domain::policy::pure::topology::{TopologyPolicy, TopologyPolicyError},
     ids::CanisterRole,
-    model::topology::{TopologyEntry, TopologyIndexEntry, TopologyRegistry},
+    model::topology::{TopologyDirectoryEntry, TopologyEntry, TopologyRegistry},
     test::{
         config::ConfigTestBuilder,
         seams::{lock, p},
@@ -30,13 +30,14 @@ fn topology_invariants_live_in_policy() {
         }],
     };
 
-    let mismatched = vec![TopologyIndexEntry {
+    let mismatched = vec![TopologyDirectoryEntry {
         role: CanisterRole::new("beta"),
         pid: p(30),
     }];
 
-    let err = TopologyPolicy::assert_index_consistent_with_registry(&registry_data, &mismatched)
-        .expect_err("policy should detect index divergence");
+    let err =
+        TopologyPolicy::assert_directory_consistent_with_registry(&registry_data, &mismatched)
+            .expect_err("policy should detect Directory divergence");
 
-    std::assert_matches!(err, TopologyPolicyError::IndexRoleMismatch { .. });
+    std::assert_matches!(err, TopologyPolicyError::DirectoryRoleMismatch { .. });
 }

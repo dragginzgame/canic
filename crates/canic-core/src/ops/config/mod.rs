@@ -149,8 +149,8 @@ impl ConfigOps {
         Ok(Self::current_canister()?.scaling)
     }
 
-    /// Fetch the directory placement config for the *current* canister.
-    pub(crate) fn current_directory_config() -> Result<Option<BindingConfig>, InternalError> {
+    /// Fetch the binding placement config for the *current* canister.
+    pub(crate) fn current_binding_config() -> Result<Option<BindingConfig>, InternalError> {
         Ok(Self::current_canister()?.binding)
     }
 

@@ -57,10 +57,10 @@ fn root_reference_topology_is_consistent() {
     assert_children_match_registry(&setup.pic, setup.root_id);
 
     let app_pid = setup
-        .subnet_index
+        .subnet_directory
         .get(&canister::APP)
         .copied()
-        .expect("app must exist in subnet index");
+        .expect("app must exist in Subnet Directory");
 
     test_progress(
         "root_reference_topology_is_consistent",

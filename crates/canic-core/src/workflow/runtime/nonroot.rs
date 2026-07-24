@@ -19,10 +19,11 @@ use crate::{
         ic::release_build::ReleaseBuildOps,
         runtime::{fleet_activation::FleetActivationRuntimeOps, memory::MemoryRegistryOps},
         storage::{
+            directory::{fleet::FleetDirectoryOps, subnet::SubnetDirectoryOps},
             fleet_activation::FleetActivationOps,
-            index::{app::AppIndexOps, subnet::SubnetIndexOps},
             state::fleet::FleetStateOps,
         },
+        topology::directory::validate_provenance,
     },
     workflow::{
         env::EnvWorkflow,
@@ -65,7 +66,7 @@ pub fn init_nonroot_canister(
     .map_err(crate::ops::storage::StorageOpsError::from)?;
 
     // --- Phase 2: Payload registration ---
-    register_nonroot_payload(&canister_role, env, fleet_directory, subnet_directory)?;
+    register_managed_nonroot_payload(&canister_role, env, fleet_directory, subnet_directory)?;
 
     // Prepared managed Canisters do not start timers or application hooks.
     Ok(())
@@ -75,12 +76,16 @@ pub fn init_nonroot_canister(
 pub fn init_local_nonroot_canister(
     canister_role: CanisterRole,
     env: EnvBootstrapArgs,
-    fleet_directory: FleetDirectoryInput,
-    subnet_directory: SubnetDirectoryInput,
 ) -> Result<(), InternalError> {
     initialize_nonroot_base(&canister_role)?;
     FleetActivationRuntimeOps::set_standalone_local();
-    register_nonroot_payload(&canister_role, env, fleet_directory, subnet_directory)?;
+    EnvWorkflow::init_env_from_args(env, canister_role.clone()).map_err(|err| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            format!("env import failed: {err}"),
+        )
+    })?;
+    register_nonroot_runtime_contract(&canister_role)?;
     RuntimeWorkflow::start_all()
 }
 
@@ -98,7 +103,7 @@ fn initialize_nonroot_base(canister_role: &CanisterRole) -> Result<(), InternalE
     Ok(())
 }
 
-fn register_nonroot_payload(
+fn register_managed_nonroot_payload(
     canister_role: &CanisterRole,
     env: EnvBootstrapArgs,
     fleet_directory: FleetDirectoryInput,
@@ -111,33 +116,50 @@ fn register_nonroot_payload(
         )
     })?;
 
-    let fleet_directory =
-        AppIndexOps::filter_args_for_local_config(fleet_directory).map_err(|err| {
+    validate_provenance(&fleet_directory.provenance).map_err(|err| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            format!("Fleet Directory provenance failed: {err}"),
+        )
+    })?;
+    validate_provenance(&subnet_directory.provenance).map_err(|err| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            format!("Subnet Directory provenance failed: {err}"),
+        )
+    })?;
+
+    let fleet_directory = FleetDirectoryOps::filter_args_for_local_config(fleet_directory)
+        .map_err(|err| {
             InternalError::invariant(
                 InternalErrorOrigin::Workflow,
                 format!("Fleet Directory filter failed: {err}"),
             )
         })?;
-    AppIndexOps::import_args_allow_incomplete(fleet_directory).map_err(|err| {
+    FleetDirectoryOps::import_args_allow_incomplete(fleet_directory).map_err(|err| {
         InternalError::invariant(
             InternalErrorOrigin::Workflow,
             format!("Fleet Directory import failed: {err}"),
         )
     })?;
-    let subnet_index =
-        SubnetIndexOps::filter_args_for_local_config(subnet_directory).map_err(|err| {
+    let subnet_directory = SubnetDirectoryOps::filter_args_for_local_config(subnet_directory)
+        .map_err(|err| {
             InternalError::invariant(
                 InternalErrorOrigin::Workflow,
                 format!("Subnet Directory filter failed: {err}"),
             )
         })?;
-    SubnetIndexOps::import_args_allow_incomplete(subnet_index).map_err(|err| {
+    SubnetDirectoryOps::import_args_allow_incomplete(subnet_directory).map_err(|err| {
         InternalError::invariant(
             InternalErrorOrigin::Workflow,
             format!("Subnet Directory import failed: {err}"),
         )
     })?;
 
+    register_nonroot_runtime_contract(canister_role)
+}
+
+fn register_nonroot_runtime_contract(canister_role: &CanisterRole) -> Result<(), InternalError> {
     let app_mode = ConfigOps::app_init_mode().map_err(|err| {
         InternalError::invariant(
             InternalErrorOrigin::Workflow,

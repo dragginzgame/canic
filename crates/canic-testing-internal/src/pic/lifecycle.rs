@@ -4,7 +4,9 @@ use canic::{
     dto::{
         abi::v1::CanisterInitPayload,
         env::EnvBootstrapArgs,
-        topology::{FleetDirectoryInput, IndexEntryInput, SubnetDirectoryInput},
+        topology::{
+            DirectoryEntryInput, DirectoryProvenance, FleetDirectoryInput, SubnetDirectoryInput,
+        },
     },
     ids::{CanisterRole, SubnetSlotId},
 };
@@ -123,6 +125,10 @@ pub fn install_lifecycle_boundary_fixture() -> LifecycleBoundaryFixture {
 #[must_use]
 pub fn invalid_init_args() -> Vec<u8> {
     let identity = managed_test_init_identity();
+    let provenance = DirectoryProvenance {
+        fleet: identity.fleet.clone(),
+        source_root: Fake::principal(1),
+    };
     let payload = CanisterInitPayload {
         fleet: identity.fleet,
         install_id: identity.install_id,
@@ -135,8 +141,14 @@ pub fn invalid_init_args() -> Vec<u8> {
             canister_role: None,
             parent_pid: None,
         },
-        fleet_directory: FleetDirectoryInput(Vec::new()),
-        subnet_directory: SubnetDirectoryInput(Vec::new()),
+        fleet_directory: FleetDirectoryInput {
+            provenance: provenance.clone(),
+            entries: Vec::new(),
+        },
+        subnet_directory: SubnetDirectoryInput {
+            provenance,
+            entries: Vec::new(),
+        },
     };
 
     encode_init_args(payload)
@@ -167,10 +179,14 @@ fn build_canisters_once(workspace_root: &Path) {
 
 // Encode the standard valid non-root init payload for the lifecycle-boundary test canister.
 fn init_payload(canister_id: Principal) -> CanisterInitPayload {
-    let fleet_directory = fleet_directory_input();
-    let subnet_directory = subnet_directory_input(canister_id);
     let root_pid = Fake::principal(1);
     let identity = managed_test_init_identity();
+    let provenance = DirectoryProvenance {
+        fleet: identity.fleet.clone(),
+        source_root: root_pid,
+    };
+    let fleet_directory = fleet_directory_input(provenance.clone());
+    let subnet_directory = subnet_directory_input(canister_id, provenance);
 
     let env = EnvBootstrapArgs {
         prime_root_pid: Some(root_pid),
@@ -197,25 +213,34 @@ fn encode_init_args(payload: CanisterInitPayload) -> Vec<u8> {
         .expect("encode init args")
 }
 
-// Build the minimal app index args used by lifecycle-boundary installs.
-fn fleet_directory_input() -> FleetDirectoryInput {
+// Build the minimal Fleet Directory input used by lifecycle-boundary installs.
+fn fleet_directory_input(provenance: DirectoryProvenance) -> FleetDirectoryInput {
     let roles = [USER_HUB, SCALE_HUB];
-    FleetDirectoryInput(index_entries(&roles, None, 10))
+    FleetDirectoryInput {
+        provenance,
+        entries: directory_entries(&roles, None, 10),
+    }
 }
 
-// Build the subnet index args used by lifecycle-boundary installs.
-fn subnet_directory_input(canister_id: Principal) -> SubnetDirectoryInput {
+// Build the minimal Subnet Directory input used by lifecycle-boundary installs.
+fn subnet_directory_input(
+    canister_id: Principal,
+    provenance: DirectoryProvenance,
+) -> SubnetDirectoryInput {
     let roles = [APP, USER_HUB, SCALE_HUB, TEST];
     let override_role = Some((TEST, canister_id));
-    SubnetDirectoryInput(index_entries(&roles, override_role, 20))
+    SubnetDirectoryInput {
+        provenance,
+        entries: directory_entries(&roles, override_role, 20),
+    }
 }
 
-// Build deterministic index entries with one optional explicit role override.
-fn index_entries(
+// Build deterministic Directory entries with one optional explicit role override.
+fn directory_entries(
     roles: &[CanisterRole],
     override_role: Option<(CanisterRole, Principal)>,
     mut next_id: u8,
-) -> Vec<IndexEntryInput> {
+) -> Vec<DirectoryEntryInput> {
     let mut entries = Vec::new();
 
     for role in roles {
@@ -233,7 +258,7 @@ fn index_entries(
             pid
         };
 
-        entries.push(IndexEntryInput {
+        entries.push(DirectoryEntryInput {
             role: role.clone(),
             pid,
         });
