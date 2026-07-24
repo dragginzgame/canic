@@ -111,7 +111,7 @@ fn test_build_context() -> WorkspaceBuildContext {
 }
 
 #[test]
-fn current_install_activation_records_verified_root_before_advancing_the_journal() {
+fn current_install_activation_records_verified_evidence_before_each_journal_transition() {
     let activation = include_str!("../../activation/mod.rs");
 
     assert_before(
@@ -123,5 +123,20 @@ fn current_install_activation_records_verified_root_before_advancing_the_journal
         activation,
         "admit_root_install_receipt(&completed_root_install.receipt_path)",
         "record_root_installed(receipt_scope.icp_root, activation, &receipt)",
+    );
+    assert_before(
+        activation,
+        "record_root_installed(receipt_scope.icp_root, activation, &receipt)",
+        "protocol::CANIC_PREPARE_FLEET_ACTIVATION",
+    );
+    assert_before(
+        activation,
+        "protocol::CANIC_PREPARE_FLEET_ACTIVATION",
+        "admit_canisters_prepared(",
+    );
+    assert_before(
+        activation,
+        "admit_canisters_prepared(",
+        "record_canisters_prepared(receipt_scope.icp_root, &root_installed, &evidence)",
     );
 }

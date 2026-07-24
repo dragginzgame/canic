@@ -8,6 +8,13 @@ use crate::ids::{FleetBinding, FleetKey, ReleaseBuildId};
 use candid::{CandidType, Principal};
 use serde::Deserialize;
 
+/// Maximum managed Canisters represented by one Fleet activation.
+pub const MAX_FLEET_ACTIVATION_CANISTERS: usize = 4_096;
+/// Maximum issuer entries represented by one Fleet credential manifest.
+pub const MAX_FLEET_CREDENTIAL_MANIFEST_ENTRIES: usize = 64;
+/// Maximum canonical host activation-record size.
+pub const MAX_FLEET_ACTIVATION_HOST_RECORD_BYTES: usize = 2_097_152;
+
 ///
 /// CurrentRootInstallIdentity
 ///

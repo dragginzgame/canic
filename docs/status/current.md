@@ -14,13 +14,17 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.23`.
-- The latest published release is `v0.99.23` at
-  `ee1364697ef0fc1b4ee048f0ee53f948e16af1ed`.
-- The `v0.99.23` source tree is
-  `51fe662cedef3a3d7e063ad6014ac618c716be6c`. Its Cargo.lock SHA-256 is
-  `a0aa51b4cc0f816d13044b5aa4bf3198f7a75f724eb34c870073b65c7586c7ae`.
-- The open `0.99.24` draft makes `(CanonicalNetworkId, FleetId)` the sole
+- The workspace package version is `0.99.24`.
+- The latest published release is `v0.99.24` at
+  `0468042f8cec470fc8c39e85d26272287fee1806`.
+- The `v0.99.24` source tree is
+  `68a32fcfc14c760565a34cb5ab627ce548438153`. Its Cargo.lock SHA-256 is
+  `5cdfec361238036fbb0780396a424d4c033212a0f7dbf96d830e5ce165e3566f`.
+- The open `0.99.25` draft makes the sequence-two `CanistersPrepared`
+  activation journal real: the host prepares and verifies the complete
+  bounded root/child inventory, stores exact canonical evidence and recovers
+  `RootInstalled` without duplicate root resolution, creation or install.
+- Released `0.99.24` makes `(CanonicalNetworkId, FleetId)` the sole
   deployment-receipt namespace, resolves default CLI receipt lookup through
   the canonical Fleet catalog and requires a successful root-install receipt
   to prove the complete activation identity before the journal can advance.

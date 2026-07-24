@@ -14,6 +14,7 @@ use crate::{
         fleet_activation::{
             FleetActivationIdentity, FleetCascadeActivationEvidence, FleetCascadeManifestEntry,
             FleetCredentialGenerationRef, FleetCredentialManifest, FleetCredentialManifestEntry,
+            MAX_FLEET_ACTIVATION_CANISTERS, MAX_FLEET_CREDENTIAL_MANIFEST_ENTRIES,
         },
         state::FleetStateInput,
         topology::{
@@ -50,6 +51,11 @@ impl FleetActivationEvidenceOps {
     pub fn cascade_manifest_hash(
         value: &[FleetCascadeManifestEntry],
     ) -> Result<[u8; 32], InternalError> {
+        if value.len() >= MAX_FLEET_ACTIVATION_CANISTERS {
+            return Err(canonical_error(
+                "Fleet cascade manifest leaves no bounded inventory slot for the root Canister",
+            ));
+        }
         require_strict_bytes_order(
             value.iter().map(|entry| entry.principal.as_slice()),
             "Fleet cascade manifest",
@@ -66,6 +72,11 @@ impl FleetActivationEvidenceOps {
         if value.generation == 0 {
             return Err(canonical_error(
                 "Fleet credential manifest generation must be greater than zero",
+            ));
+        }
+        if value.entries.len() > MAX_FLEET_CREDENTIAL_MANIFEST_ENTRIES {
+            return Err(canonical_error(
+                "Fleet credential manifest exceeds its entry bound",
             ));
         }
         require_strict_bytes_order(
@@ -474,6 +485,44 @@ mod tests {
 
         assert!(FleetActivationEvidenceOps::cascade_manifest_hash(&[entry(2), entry(1)]).is_err());
         assert!(FleetActivationEvidenceOps::cascade_manifest_hash(&[entry(1), entry(1)]).is_err());
+    }
+
+    #[test]
+    fn activation_manifests_reject_entry_counts_over_the_frozen_bounds() {
+        let cascade_entry = FleetCascadeManifestEntry {
+            principal: candid::Principal::from_slice(&[1]),
+            state_snapshot_hash: [9; 32],
+            topology_snapshot_hash: [10; 32],
+        };
+        assert!(
+            FleetActivationEvidenceOps::cascade_manifest_hash(&vec![
+                cascade_entry;
+                MAX_FLEET_ACTIVATION_CANISTERS
+            ])
+            .is_err()
+        );
+
+        let credential_entry = FleetCredentialManifestEntry {
+            root_issuer: candid::Principal::from_slice(&[1]),
+            subject_canister: candid::Principal::from_slice(&[2]),
+            not_before_ns: 1,
+            expires_at_ns: 2,
+            key_identity_hash: [3; 32],
+            cert_hash: [4; 32],
+            proof_hash: [5; 32],
+            bundle_hash: [6; 32],
+        };
+        let credential_manifest = FleetCredentialManifest {
+            fleet: identity().fleet.fleet,
+            activation_id: [7; 32],
+            generation: 1,
+            root_policy_set_hash: [8; 32],
+            renewal_template_set_hash: [9; 32],
+            entries: vec![credential_entry; MAX_FLEET_CREDENTIAL_MANIFEST_ENTRIES + 1],
+        };
+        assert!(
+            FleetActivationEvidenceOps::credential_manifest_hash(&credential_manifest).is_err()
+        );
     }
 
     fn assert_only_canonical_value_kinds(value: &Value) {
