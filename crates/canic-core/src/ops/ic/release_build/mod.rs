@@ -4,11 +4,6 @@
 //! Does not own: build planning, install payloads, or activation persistence.
 //! Boundary: lifecycle workflows use this facade before accepting install identity.
 
-#![expect(
-    dead_code,
-    reason = "the embedded identity is staged with ID-21 admission before root lifecycle wiring"
-)]
-
 use crate::{
     InternalError,
     ids::ReleaseBuildId,

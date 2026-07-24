@@ -1,7 +1,7 @@
-//! Module: release_set::stage::artifact
+//! Module: release_set::artifact
 //!
 //! Responsibility: resolve, validate, and describe release-set Wasm artifacts.
-//! Does not own: release staging calls, manifest persistence, or build orchestration.
+//! Does not own: manifest persistence or build orchestration.
 //! Boundary: keeps every artifact read within the canonical ICP project root.
 
 use crate::release_set::{GZIP_MAGIC, ReleaseSetEntry, WASM_MAGIC};

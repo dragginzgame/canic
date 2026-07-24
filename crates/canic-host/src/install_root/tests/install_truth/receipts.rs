@@ -30,6 +30,26 @@ impl InstallPhaseOperation for VerifiedInstallOperation {
     }
 }
 
+struct FailedMaterializeOperation;
+
+impl InstallPhaseOperation for FailedMaterializeOperation {
+    fn phase(&self) -> InstallPhaseLabel {
+        InstallPhaseLabel::MATERIALIZE_ARTIFACTS
+    }
+
+    fn attempted_action(&self) -> &'static str {
+        "materialize install artifacts"
+    }
+
+    fn evidence(&self) -> Vec<String> {
+        vec!["artifact_root:/tmp/artifacts".to_string()]
+    }
+
+    fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
+        Err(std::io::Error::other("materialization failed").into())
+    }
+}
+
 #[test]
 fn install_truth_gate_persists_machine_readable_receipt() {
     let root = temp_dir("canic-install-truth-receipt-json");
@@ -172,12 +192,10 @@ kind = "root"
         fleet_name: "demo".to_string(),
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
-        ready_timeout_seconds: 30,
         config_path: Some("apps/demo/canic.toml".to_string()),
         expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
-        artifact_promotion_plan_override: None,
     };
     let check = current_install_deployment_truth_check_at(
         &options,
@@ -283,7 +301,7 @@ fn install_truth_completed_phase_receipt_records_pre_gate_evidence() {
 }
 
 #[test]
-fn install_truth_receipted_phase_records_success_and_failure() {
+fn install_truth_receipted_operation_records_success_and_failure() {
     let (root, check) = demo_install_deployment_truth_check("canic-install-truth-receipted-phase");
     let execution_context = current_install_execution_context(&root, &root, "local");
     let scope = InstallReceiptScope {
@@ -295,29 +313,12 @@ fn install_truth_receipted_phase_records_success_and_failure() {
     };
 
     scope
-        .run_phase(
-            InstallPhaseLabel::INSTALL_ROOT,
-            "install root wasm",
-            vec!["root_canister:aaaaa-aa".to_string()],
-            || Ok(()),
-        )
-        .expect("successful phase should record");
+        .run_operation_with_receipt(&VerifiedInstallOperation, Some("aaaaa-aa"))
+        .expect("successful operation should record");
     let err = scope
-        .run_phase(
-            InstallPhaseLabel::STAGE_RELEASE_SET,
-            "stage root release set",
-            vec!["manifest_path:/tmp/release-set.json".to_string()],
-            || Err::<(), Box<dyn std::error::Error>>(std::io::Error::other("stage failed").into()),
-        )
-        .expect_err("failed phase should return original error");
-    scope
-        .run_phase(
-            InstallPhaseLabel::WAIT_READY,
-            "wait for root bootstrap readiness",
-            vec!["timeout_seconds:30".to_string()],
-            || Ok(()),
-        )
-        .expect("wait-ready phase should record");
+        .run_operation_with_receipt(&FailedMaterializeOperation, None)
+        .err()
+        .expect("failed operation should return original error");
 
     assert_eq!(
         err.downcast_ref::<std::io::Error>()
@@ -337,39 +338,40 @@ fn install_truth_receipted_phase_records_success_and_failure() {
             .expect("decode receipt")
         })
         .collect::<Vec<_>>();
-    let install = receipts
+    let successful_install = receipts
         .iter()
-        .find(|receipt| receipt.operation_id.ends_with(":install_root"))
+        .find(|receipt| {
+            receipt.operation_id.ends_with(":install_root")
+                && receipt.operation_status == DeploymentExecutionStatusV1::Complete
+        })
         .expect("install receipt");
-    let stage = receipts
+    let failed_materialization = receipts
         .iter()
-        .find(|receipt| receipt.operation_id.ends_with(":stage_release_set"))
-        .expect("stage receipt");
-    let wait = receipts
-        .iter()
-        .find(|receipt| receipt.operation_id.ends_with(":wait_ready"))
-        .expect("wait-ready receipt");
+        .find(|receipt| {
+            receipt.operation_id.ends_with(":materialize_artifacts")
+                && receipt.operation_status == DeploymentExecutionStatusV1::FailedAfterMutation
+        })
+        .expect("failed materialization receipt");
 
     assert_eq!(
-        install.operation_status,
+        successful_install.operation_status,
         DeploymentExecutionStatusV1::Complete
     );
     assert_eq!(
-        install.phase_receipts[0].verified_postcondition.status,
+        successful_install.phase_receipts[0]
+            .verified_postcondition
+            .status,
         ObservationStatusV1::Observed
     );
     assert_eq!(
-        stage.operation_status,
+        failed_materialization.operation_status,
         DeploymentExecutionStatusV1::FailedAfterMutation
     );
     assert_eq!(
-        stage.phase_receipts[0].verified_postcondition.status,
+        failed_materialization.phase_receipts[0]
+            .verified_postcondition
+            .status,
         ObservationStatusV1::Inconclusive
-    );
-    assert_eq!(wait.operation_status, DeploymentExecutionStatusV1::Complete);
-    assert_eq!(
-        wait.phase_receipts[0].verified_postcondition.status,
-        ObservationStatusV1::Observed
     );
 
     fs::remove_dir_all(root).expect("clean temp dir");
@@ -431,13 +433,9 @@ fn install_truth_phase_preserves_operation_and_failure_receipt_errors() {
     };
 
     let err = scope
-        .run_phase(
-            InstallPhaseLabel::STAGE_RELEASE_SET,
-            "stage root release set",
-            Vec::new(),
-            || Err::<(), Box<dyn std::error::Error>>(std::io::Error::other("stage failed").into()),
-        )
-        .expect_err("operation and receipt write must both fail");
+        .run_operation_with_receipt(&FailedMaterializeOperation, None)
+        .err()
+        .expect("operation and receipt write must both fail");
     let composite = err
         .downcast_ref::<crate::install_root::InstallPhaseFailureError>()
         .expect("combined failure remains typed");

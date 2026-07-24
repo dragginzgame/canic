@@ -18,7 +18,6 @@ fn install_defaults_to_root_target() {
     assert_eq!(install.root_build_target, "root");
     assert_eq!(install.icp_root, None);
     assert_eq!(install.build_profile, None);
-    assert_eq!(install.ready_timeout_seconds, DEFAULT_READY_TIMEOUT_SECONDS);
     assert_eq!(
         install.config_path,
         Some("apps/demo/canic.toml".to_string())

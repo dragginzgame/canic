@@ -1,4 +1,4 @@
-use super::{DEFAULT_READY_TIMEOUT_SECONDS, DEFAULT_ROOT_TARGET, DeployCommandError, value_arg};
+use super::{DEFAULT_ROOT_TARGET, DeployCommandError, value_arg};
 use crate::{
     cli::{
         clap::{
@@ -54,7 +54,6 @@ pub(super) struct DeployInstallPlanOptions {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct DeployInstallPlanInput {
     pub(super) deployment_plan: DeploymentPlanV1,
-    pub(super) artifact_promotion_plan: Option<ArtifactPromotionPlanV1>,
 }
 
 pub(super) fn run<I>(args: I) -> Result<(), DeployCommandError>
@@ -84,16 +83,12 @@ pub(super) fn read_plan(path: &PathBuf) -> Result<DeployInstallPlanInput, Deploy
             )));
         }
         return Ok(DeployInstallPlanInput {
-            deployment_plan: plan.transform.promoted_plan.clone(),
-            artifact_promotion_plan: Some(plan),
+            deployment_plan: plan.transform.promoted_plan,
         });
     }
 
     serde_json::from_slice::<DeploymentPlanV1>(&bytes)
-        .map(|deployment_plan| DeployInstallPlanInput {
-            deployment_plan,
-            artifact_promotion_plan: None,
-        })
+        .map(|deployment_plan| DeployInstallPlanInput { deployment_plan })
         .map_err(|err| {
             DeployCommandError::Check(
                 format!(
@@ -133,12 +128,10 @@ impl DeployInstallPlanOptions {
             fleet_name: self.deployment,
             icp_root,
             build_profile: self.profile,
-            ready_timeout_seconds: DEFAULT_READY_TIMEOUT_SECONDS,
             config_path: Some(default_app_config_path(&fleet_template)),
             expected_app: Some(fleet_template),
             interactive_config_selection: false,
             deployment_plan_override: Some(plan.deployment_plan),
-            artifact_promotion_plan_override: plan.artifact_promotion_plan,
         }
     }
 }

@@ -179,9 +179,7 @@ fn install_truth_reports_executor_missing_required_capabilities() {
         vec![
             DeploymentExecutorCapabilityV1::CreateCanister,
             DeploymentExecutorCapabilityV1::InstallCode,
-            DeploymentExecutorCapabilityV1::Call,
             DeploymentExecutorCapabilityV1::Query,
-            DeploymentExecutorCapabilityV1::StageArtifact,
         ],
     );
 }

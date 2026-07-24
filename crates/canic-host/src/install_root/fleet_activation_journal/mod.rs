@@ -5,11 +5,6 @@
 //! Boundary: a journal is admitted only from finalized release-build evidence and is durable
 //! before any Canister mutation.
 
-#![expect(
-    dead_code,
-    reason = "the journal authority is staged and tested before live install mutation is admitted"
-)]
-
 #[cfg(test)]
 mod tests;
 

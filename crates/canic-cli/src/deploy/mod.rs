@@ -47,7 +47,6 @@ use std::{
 use thiserror::Error as ThisError;
 
 const DEFAULT_ROOT_TARGET: &str = "root";
-const DEFAULT_READY_TIMEOUT_SECONDS: u64 = 120;
 
 ///
 /// DeployCommandError
@@ -213,12 +212,10 @@ impl DeployTruthOptions {
             fleet_name: self.deployment,
             icp_root,
             build_profile: self.profile,
-            ready_timeout_seconds: DEFAULT_READY_TIMEOUT_SECONDS,
             config_path: None,
             expected_app: None,
             interactive_config_selection: false,
             deployment_plan_override: None,
-            artifact_promotion_plan_override: None,
         }
     }
 }

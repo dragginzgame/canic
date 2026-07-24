@@ -14,12 +14,15 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.10`.
-- The latest published release is `v0.99.10` at
-  `df3effd486095237c872946c408452c9e209c5e0`.
-- The `v0.99.10` source tree is
-  `1763f155fc09869e9ee2d3324f50081c32d82984`. Its Cargo.lock SHA-256 is
-  `05ca80f6b475e643acdbfc320c6d9ed29c299672e657076d89173671acb3d1d7`.
+- The workspace package version is `0.99.11`.
+- The latest published release is `v0.99.11` at
+  `417a3ab61cd58fd70acd504cb8bb1b71550f899b`.
+- The `v0.99.11` source tree is
+  `a242566e5f353cd6399dcd8c0a4bbf7b4763c071`. Its Cargo.lock SHA-256 is
+  `9e62a91bab978fcbf344158a4feb6b9896aeec1265ecca429712745849f89e66`.
+- Released `0.99.11` adds the sole controller-only Fleet-activation status
+  query on every maintained runtime without mutating protected state or
+  making `Prepared` operational.
 - Released `0.99.10` makes root installation depend on an independently
   observed exact module match and persists the canonical verified receipt
   required by fresh-install recovery.
@@ -1187,23 +1190,28 @@ expected/observed module-hash match. The one receipt owner returns its durable
 canonical path, records the exact root principal and postcondition, and passes
 that file through the existing strict journal admission.
 
-The open `0.99.11` batch establishes the one controller-only
+Released `0.99.11` establishes the one controller-only
 `canic_fleet_activation_status` query on every managed runtime. It reads the
 sole protected ID-21 record, projects only role-valid identity, phase and
 evidence, and fails closed on absent or contradictory state. This observation
 surface is deliberately non-mutating: it does not initialize ID 21, activate,
 start timers or make `Prepared` operational.
 
-The next bounded batch can connect the protected Canister owner to host
-recovery without an unobservable half-cut. It must publish `Planned` before
-root resolution, replace `PrimeWithModuleHash` on both sides, install the root
-into `Prepared`, use the activation-status query to reconcile a lost response,
-advance the exact receipt to `RootInstalled`, and ensure the existing
-completion path cannot publish `Prepared` as operational. The current macro
-and installer remain paired on their old root input until that complete
-handoff is ready. Supplied deployment-plan release-build admission, later
-activation phases, installed Fleet state and final catalog commitment remain
-after that prerequisite.
+The open `0.99.12` batch connects that protected owner to host recovery.
+Fresh install publishes `Planned` before root resolution, uses only
+`CurrentRootInstallIdentity`, atomically initializes the root as `Prepared`,
+reconciles a lost install response through exact module and activation-status
+observation, and advances the admitted durable receipt to `RootInstalled`.
+The deleted funding, release-staging, bootstrap-resume, readiness,
+installed-state and install-specific promotion path cannot publish this
+unfinished Fleet as operational. Root init schedules no timers, bootstrap or
+application hook, and the legacy bootstrap-resume endpoint requires `Active`.
+
+The batch deliberately stops at `RootInstalled` with a typed
+continuation-required result. Supplied deployment-plan release-build
+admission, non-root preparation, current cascades and credentials, final
+activation, installed Fleet state and catalog commitment remain the next
+bounded work.
 
 Do not inspect or edit the stale local Toko repository, change Cargo package
 versions outside the maintainer-owned release flow, or commit, tag, publish

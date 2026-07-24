@@ -4,13 +4,13 @@ use crate::{
     },
     bootstrap,
     config::schema::ConfigModel,
-    dto::subnet::SubnetIdentity,
+    dto::fleet_activation::CurrentRootInstallIdentity,
     lifecycle::{LifecyclePhase, config_with_current_root_controller, lifecycle_trap},
     workflow,
 };
 
 pub fn init_root_canister_before_bootstrap(
-    identity: SubnetIdentity,
+    identity: CurrentRootInstallIdentity,
     config: ConfigModel,
     config_source: &str,
     config_path: &str,

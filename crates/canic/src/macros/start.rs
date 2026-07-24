@@ -213,7 +213,7 @@ macro_rules! __canic_root_lifecycle_core {
         }
 
         #[$crate::__internal::cdk::init]
-        fn init(identity: ::canic::dto::subnet::SubnetIdentity) {
+        fn init(identity: ::canic::dto::fleet_activation::CurrentRootInstallIdentity) {
             let (config, config_source, config_path) = __canic_compiled_config();
             let embedded_wasm_store_bootstrap_release_set =
                 __canic_embedded_root_wasm_store_bootstrap_release_set();
@@ -224,22 +224,6 @@ macro_rules! __canic_root_lifecycle_core {
                 config_source,
                 config_path,
                 embedded_wasm_store_bootstrap_release_set,
-            );
-
-            $crate::__canic_after_optional_start_init_hook!(
-                "canic:user:init_block",
-                {
-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_init_root_bootstrap();
-                    $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
-                        ::core::time::Duration::ZERO,
-                        "canic:user:init",
-                        async move {
-                            canic_setup().await;
-                            canic_install().await;
-                        },
-                    );
-                }
-                $(, $init)?
             );
         }
 

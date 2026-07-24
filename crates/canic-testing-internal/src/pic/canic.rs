@@ -9,19 +9,22 @@ use canic::{
     dto::{
         abi::v1::CanisterInitPayload,
         env::EnvBootstrapArgs,
-        subnet::SubnetIdentity,
+        fleet_activation::CurrentRootInstallIdentity,
         topology::{AppIndexArgs, SubnetIndexArgs, SubnetRegistryResponse},
     },
     ids::{CanisterRole, SubnetSlotId},
     protocol,
 };
+use canic_core::ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, ReleaseBuildId};
 use ic_testkit::{
     Fake,
     artifacts::{read_wasm, test_target_dir, workspace_root_for},
     pic::{InstallSpec, Pic, StandaloneCanisterFixture, install_prebuilt_canister_from_spec},
 };
 
-use super::artifacts::{CanicWasmBuildProfile, build_internal_test_wasm_canisters};
+use super::artifacts::{
+    CanicWasmBuildProfile, INTERNAL_TEST_RELEASE_BUILD_ID, build_internal_test_wasm_canisters,
+};
 
 const INSTALL_CYCLES: u128 = 500_000_000_000_000;
 const STANDALONE_READY_TICK_LIMIT: usize = 60;
@@ -280,9 +283,24 @@ fn install_args(role: CanisterRole) -> Result<Vec<u8>, Error> {
     }
 }
 
-fn install_root_args() -> Result<Vec<u8>, Error> {
-    encode_one(SubnetIdentity::Manual)
-        .map_err(|err| Error::internal(format!("encode_one failed: {err}")))
+pub fn install_root_args() -> Result<Vec<u8>, Error> {
+    let release_build_id = INTERNAL_TEST_RELEASE_BUILD_ID
+        .1
+        .parse::<ReleaseBuildId>()
+        .map_err(|err| Error::internal(format!("parse release-build ID failed: {err}")))?;
+    encode_one(CurrentRootInstallIdentity {
+        fleet: FleetBinding {
+            fleet: FleetKey {
+                network: CanonicalNetworkId::public_ic(),
+                fleet_id: FleetId::from_generated_bytes([0x42; 32]),
+            },
+            app: AppId::from("canic-internal-test"),
+        },
+        install_id: [0x43; 32],
+        release_build_id,
+        expected_module_hash: None,
+    })
+    .map_err(|err| Error::internal(format!("encode_one failed: {err}")))
 }
 
 fn ensure_canister_wasm_ready(

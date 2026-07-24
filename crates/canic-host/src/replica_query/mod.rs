@@ -11,16 +11,13 @@ mod wire;
 
 use self::{
     transport::local_query,
-    wire::{
-        decode_bootstrap_status_response, decode_cycle_balance_response,
-        decode_subnet_registry_response,
-    },
+    wire::{decode_cycle_balance_response, decode_subnet_registry_response},
 };
 use crate::registry::{RegistryEntry, RegistryParseError, registry_entries_from_response};
 use std::path::Path;
 
 use candid::Decode;
-use canic_core::dto::{error::Error as CanicError, state::BootstrapStatusResponse};
+use canic_core::dto::error::Error as CanicError;
 use thiserror::Error as ThisError;
 
 pub use self::status::local_replica_status_reachable_from_root;
@@ -80,21 +77,6 @@ pub(crate) fn query_ready(
     Decode!(&bytes, bool).map_err(ReplicaQueryError::Candid)
 }
 
-/// Query `canic_bootstrap_status` using the configured port from one ICP root.
-pub(crate) fn query_bootstrap_status_from_root(
-    environment: Option<&str>,
-    canister: &str,
-    icp_root: &Path,
-) -> Result<BootstrapStatusResponse, ReplicaQueryError> {
-    let bytes = local_query(
-        environment,
-        canister,
-        "canic_bootstrap_status",
-        Some(icp_root),
-    )?;
-    decode_bootstrap_status_response(&bytes)
-}
-
 /// Query `canic_cycle_balance` directly through the local replica HTTP API.
 pub(crate) fn query_cycle_balance(
     environment: Option<&str>,
@@ -114,18 +96,4 @@ pub(crate) fn query_subnet_registry_entries(
     let bytes = local_query(environment, root, "canic_subnet_registry", icp_root)?;
     let response = decode_subnet_registry_response(&bytes)?;
     registry_entries_from_response(response).map_err(Into::into)
-}
-
-/// Query `canic_subnet_registry` using the configured port from one ICP root and return roles.
-pub(crate) fn query_subnet_registry_roles_from_root(
-    environment: Option<&str>,
-    root: &str,
-    icp_root: &Path,
-) -> Result<Vec<String>, ReplicaQueryError> {
-    Ok(
-        query_subnet_registry_entries(environment, root, Some(icp_root))?
-            .into_iter()
-            .filter_map(|entry| entry.role)
-            .collect(),
-    )
 }

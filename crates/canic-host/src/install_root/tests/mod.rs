@@ -17,9 +17,8 @@ use super::deployment_truth_gate::{
 use super::execution_preflight::write_current_install_execution_preflight_receipt;
 use super::identity::resolve_install_identity;
 use super::operations::{
-    BuildInstallTargetsOperation, EmitRootManifestOperation, EnsureRootCyclesOperation,
-    InstallPhaseLabel, InstallPhaseOperation, InstallRootWasmOperation,
-    ResolveRootCanisterOperation, ResumeBootstrapOperation, WaitRootReadyOperation,
+    BuildInstallTargetsOperation, EmitRootManifestOperation, InstallPhaseLabel,
+    InstallPhaseOperation, InstallRootWasmOperation, ResolveRootCanisterOperation,
 };
 use super::output::render_install_timing_summary;
 use super::phase_receipts::{
@@ -34,7 +33,6 @@ use super::receipt_io::{
 };
 use super::root_cycles::add_local_root_create_cycles_arg;
 use super::root_verification::write_verified_root_state_if_unchanged;
-use super::staging::{StageReleaseSetOperation, current_install_staging_evidence};
 use super::state::{
     INSTALL_STATE_SCHEMA_VERSION, InstallStateError, deployment_install_state_path,
     read_deployment_install_state, validate_environment_name, validate_state_name,
@@ -43,33 +41,34 @@ use super::state::{
 use super::timing::InstallTimingSummary;
 use super::truth_check::{current_install_deployment_truth_check_at, validate_expected_app_id};
 use super::{
-    InstallRootBlockKind, InstallRootBlockedError, InstallRootError, InstallRootOptions,
-    InstallRootPhase, InstallState, RegisterDeploymentStateOptions, RootVerificationStatus,
-    VerifyDeploymentRootOptions, check_install_deployment_truth, check_install_execution_preflight,
+    FleetActivationContinuationRequired, InstallRootBlockKind, InstallRootBlockedError,
+    InstallRootError, InstallRootOptions, InstallRootPhase, InstallState,
+    RegisterDeploymentStateOptions, RootVerificationStatus, VerifyDeploymentRootOptions,
+    check_install_deployment_truth, check_install_execution_preflight,
     latest_deployment_truth_receipt_path_from_root, register_deployment_state,
-    verify_registered_deployment_root, write_artifact_promotion_execution_receipt_for_install,
-    write_install_state_with_deployment_truth_receipt,
+    verify_registered_deployment_root,
 };
 use crate::canister_build::{
     CanisterArtifactBuildSpec, CanisterBuildProfile, WorkspaceBuildContext,
 };
 use crate::deployment_truth::{
-    ArtifactPromotionExecutionReceiptV1, ArtifactPromotionPlanRequest, ArtifactPromotionPlanV1,
     CanisterControlClassV1, DeploymentCheckV1, DeploymentExecutionContextV1,
     DeploymentExecutionPreflightStatusV1, DeploymentExecutionStatusV1, DeploymentExecutorBackendV1,
     DeploymentExecutorCapabilityV1, DeploymentReceiptV1, DeploymentRootObservationSourceV1,
-    ObservationStatusV1, ObservedCanisterV1, PromotionArtifactIdentityReportRequest,
-    PromotionArtifactLevelV1, PromotionPlanTransformRequest, RoleArtifactSourceKindV1,
-    RoleArtifactSourceV1, RolePromotionInputV1, SafetyFindingV1, SafetySeverityV1, SafetyStatusV1,
-    artifact_gate_phase_receipt, artifact_gate_role_phase_receipts, artifact_promotion_plan,
-    compare_plan_to_inventory, promoted_deployment_plan_transform_from_inputs,
-    promotion_artifact_identity_report_from_inputs, promotion_readiness_from_inputs,
+    ObservationStatusV1, ObservedCanisterV1, SafetyFindingV1, SafetySeverityV1, SafetyStatusV1,
+    artifact_gate_phase_receipt, artifact_gate_role_phase_receipts, compare_plan_to_inventory,
     safety_report_from_diff, validate_deployment_root_verification_receipt,
 };
 use crate::icp::LocalReplicaTarget;
-use crate::release_set::{ReleaseSetEntry, RootReleaseSetBuildSnapshot, RootReleaseSetManifest};
+use crate::release_set::RootReleaseSetBuildSnapshot;
 use crate::test_support::temp_dir;
-use canic_core::ids::BuildNetwork;
+use canic_core::{
+    dto::fleet_activation::FleetActivationIdentity,
+    ids::{
+        AppId, BuildNetwork, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, ReleaseBuildId,
+        ReleaseBuildNonce,
+    },
+};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -94,6 +93,25 @@ fn public_install_error_preserves_phase_and_typed_source() {
             .and_then(|source| source.downcast_ref::<std::io::Error>())
             .is_some()
     );
+}
+
+#[test]
+fn activation_continuation_exposes_typed_recovery_identity() {
+    let continuation = FleetActivationContinuationRequired {
+        root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
+        journal_path: PathBuf::from("/tmp/fleet-activation.json"),
+        sequence: 3,
+    };
+
+    assert_eq!(
+        continuation.root_canister_id(),
+        "uxrrr-q7777-77774-qaaaq-cai"
+    );
+    assert_eq!(
+        continuation.journal_path(),
+        Path::new("/tmp/fleet-activation.json")
+    );
+    assert_eq!(continuation.sequence(), 3);
 }
 
 #[test]
@@ -239,12 +257,10 @@ fn local_demo_install_options(root: &Path) -> InstallRootOptions {
         fleet_name: "demo".to_string(),
         icp_root: Some(root.to_path_buf()),
         build_profile: Some(CanisterBuildProfile::Fast),
-        ready_timeout_seconds: 30,
         config_path: Some("apps/demo/canic.toml".to_string()),
         expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
-        artifact_promotion_plan_override: None,
     }
 }
 
@@ -354,12 +370,10 @@ kind = "root"
         fleet_name: "demo".to_string(),
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
-        ready_timeout_seconds: 30,
         config_path: Some("apps/demo/canic.toml".to_string()),
         expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
-        artifact_promotion_plan_override: None,
     };
     let check = current_install_deployment_truth_check_at(
         &options,
@@ -454,12 +468,10 @@ fn demo_registered_root_check_from_state(root: &Path) -> DeploymentCheckV1 {
         fleet_name: "demo-local".to_string(),
         icp_root: Some(root.to_path_buf()),
         build_profile: Some(CanisterBuildProfile::Fast),
-        ready_timeout_seconds: 30,
         config_path: Some("apps/demo/canic.toml".to_string()),
         expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
-        artifact_promotion_plan_override: None,
     };
     let mut check = current_install_deployment_truth_check_at(
         &options,
@@ -488,72 +500,16 @@ fn demo_registered_root_check_from_state(root: &Path) -> DeploymentCheckV1 {
     check
 }
 
-fn sample_artifact_promotion_plan_for_install(
-    check: &DeploymentCheckV1,
-) -> ArtifactPromotionPlanV1 {
-    let input = sample_role_promotion_input_for_install(check);
-    let readiness = promotion_readiness_from_inputs(
-        "promotion-readiness-1",
-        &check.plan,
-        std::slice::from_ref(&input),
-    );
-    let artifact_identity_report =
-        promotion_artifact_identity_report_from_inputs(PromotionArtifactIdentityReportRequest {
-            report_id: "promotion-artifact-identity-1".to_string(),
-            inputs: vec![input.clone()],
-        })
-        .expect("sample promotion artifact identity report");
-    let transform =
-        promoted_deployment_plan_transform_from_inputs(&PromotionPlanTransformRequest {
-            promoted_plan_id: check.plan.plan_id.clone(),
-            target_plan: check.plan.clone(),
-            inputs: vec![input],
-        })
-        .expect("sample promotion transform");
-
-    artifact_promotion_plan(ArtifactPromotionPlanRequest {
-        plan_id: "artifact-promotion-plan-1".to_string(),
-        generated_at: "2026-05-26T00:00:00Z".to_string(),
-        readiness,
-        artifact_identity_report,
-        transform,
-        target_execution_lineage: None,
-    })
-    .expect("sample artifact promotion plan")
-}
-
-fn sample_role_promotion_input_for_install(check: &DeploymentCheckV1) -> RolePromotionInputV1 {
-    let artifact = check
-        .plan
-        .role_artifacts
-        .iter()
-        .find(|artifact| artifact.role == "root")
-        .expect("root artifact");
-    RolePromotionInputV1 {
-        role: "root".to_string(),
-        promotion_level: PromotionArtifactLevelV1::SealedWasm,
-        source: RoleArtifactSourceV1 {
-            role: "root".to_string(),
-            kind: RoleArtifactSourceKindV1::LocalWasmGz,
-            locator: artifact.wasm_gz_path.clone(),
-            previous_receipt_kind: None,
-            previous_receipt_lineage_digest: None,
-            expected_wasm_sha256: artifact.wasm_sha256.clone(),
-            expected_wasm_gz_sha256: artifact
-                .wasm_gz_sha256
-                .clone()
-                .or_else(|| artifact.observed_wasm_gz_file_sha256.clone()),
-            expected_candid_sha256: artifact.candid_sha256.clone(),
-            expected_canonical_embedded_config_sha256: artifact
-                .canonical_embedded_config_sha256
-                .clone(),
+fn sample_fleet_activation_identity() -> FleetActivationIdentity {
+    FleetActivationIdentity {
+        fleet: FleetBinding {
+            fleet: FleetKey {
+                network: CanonicalNetworkId::public_ic(),
+                fleet_id: FleetId::from_generated_bytes([7; 32]),
+            },
+            app: AppId::from("demo"),
         },
-        require_byte_identical_wasm: true,
-        require_target_embedded_config: true,
-        target_store_has_artifact: Some(true),
+        operation_id: [8; 32],
+        release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([9; 32])),
     }
-}
-
-fn sample_sha256(seed: &str) -> String {
-    seed.repeat(64)
 }

@@ -69,6 +69,35 @@ fn nonroot_init_arguments_reach_only_the_application_hook() {
     );
 }
 
+#[test]
+fn root_init_stays_prepared_without_scheduling_bootstrap_or_application_hooks() {
+    let source = read_source("crates/canic/src/macros/start.rs");
+    let body = macro_section(
+        &source,
+        "macro_rules! __canic_root_lifecycle_core",
+        "// Run the optional init block from a lifecycle timer",
+    );
+    let init = function_body(body, "init");
+
+    assert!(
+        body.contains(
+            "fn init(identity: ::canic::dto::fleet_activation::CurrentRootInstallIdentity)"
+        ),
+        "root init must accept the exact current install identity"
+    );
+    for forbidden in [
+        "schedule_init_root_bootstrap",
+        "TimerApi::defer_lifecycle",
+        "canic_setup().await",
+        "canic_install().await",
+    ] {
+        assert!(
+            !init.contains(forbidden),
+            "Prepared root init must not schedule `{forbidden}`"
+        );
+    }
+}
+
 struct FunctionRef {
     path: &'static str,
     function: &'static str,
@@ -144,6 +173,7 @@ const SCHEDULE_HELPERS: &[ScheduleHelper] = &[
         path: "crates/canic-control-plane/src/api/lifecycle.rs",
         function: "schedule_init_root_bootstrap",
         required_fragments: &[
+            "FleetActivationApi::require_active()?",
             "Duration::ZERO",
             "TimerApi::defer_lifecycle",
             "canic:bootstrap:init_root_canister",
@@ -194,6 +224,15 @@ fn function_body<'a>(source: &'a str, function: &str) -> &'a str {
     }
 
     panic!("`{signature}` body should close")
+}
+
+fn macro_section<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
+    let start = source.find(start).expect("macro section start");
+    let end = source[start..]
+        .find(end)
+        .map(|offset| start + offset)
+        .expect("macro section end");
+    &source[start..end]
 }
 
 fn workspace_root() -> PathBuf {

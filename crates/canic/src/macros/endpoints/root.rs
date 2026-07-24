@@ -118,8 +118,7 @@ macro_rules! canic_emit_root_wasm_store_endpoints {
     () => {
         #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_wasm_store_bootstrap_resume_root_admin() -> Result<(), ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_init_root_bootstrap();
-            Ok(())
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_init_root_bootstrap()
         }
 
         #[$crate::canic_query(requires(caller::is_controller()))]

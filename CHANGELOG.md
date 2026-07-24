@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.12` connects fresh root installation to the sole Fleet-activation
+  authority: planning is durable before creation, exact installs reconcile
+  through `Prepared`, and the host records `RootInstalled` without publishing
+  the unfinished Fleet as operational.
+
 - `0.99.11` adds the one controller-only Fleet-activation status query to
   every managed runtime. It projects the protected ID-21 identity, phase and
   role-valid evidence directly, rejects contradictory records, and gives host

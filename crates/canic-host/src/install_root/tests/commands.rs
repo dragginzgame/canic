@@ -112,21 +112,13 @@ fn install_timing_summary_uses_standard_table_format() {
         build_all: Duration::from_millis(2340),
         emit_manifest: Duration::from_millis(10),
         install_root: Duration::from_millis(20),
-        fund_root: Duration::from_millis(30),
-        stage_release_set: Duration::from_millis(40),
-        resume_bootstrap: Duration::from_millis(50),
-        wait_ready: Duration::from_millis(60),
-        finalize_root_funding: Duration::from_millis(70),
     };
 
     let table = render_install_timing_summary(&timings, Duration::from_millis(3900));
 
     assert_eq!(
         table.lines().take(2).collect::<Vec<_>>(),
-        vec![
-            "PHASE                   ELAPSED",
-            "---------------------   -------"
-        ]
+        vec!["PHASE              ELAPSED", "----------------   -------"]
     );
     assert!(
         table.lines().any(
@@ -136,8 +128,7 @@ fn install_timing_summary_uses_standard_table_format() {
     assert!(
         table
             .lines()
-            .any(|line| line.split_whitespace().collect::<Vec<_>>()
-                == ["finalize_root_funding", "0.07s"])
+            .any(|line| line.split_whitespace().collect::<Vec<_>>() == ["install_root", "0.02s"])
     );
     assert!(
         table
@@ -147,18 +138,27 @@ fn install_timing_summary_uses_standard_table_format() {
 }
 
 #[test]
-fn root_init_args_include_wasm_module_hash() {
-    let root = temp_dir("canic-root-init-args");
-    fs::create_dir_all(&root).expect("create temp root");
-    let wasm = root.join("root.wasm");
-    fs::write(&wasm, b"\0asm\x01\0\0\0").expect("write wasm");
+fn root_init_args_roundtrip_the_exact_current_identity() {
+    use candid::{CandidType, TypeEnv};
+    use canic_core::dto::fleet_activation::CurrentRootInstallIdentity;
 
-    let args = root_init_args(&wasm).expect("build init args");
+    let activation = sample_fleet_activation_identity();
+    let identity = CurrentRootInstallIdentity {
+        fleet: activation.fleet,
+        install_id: activation.operation_id,
+        release_build_id: activation.release_build_id,
+        expected_module_hash: Some([10; 32]),
+    };
 
-    fs::remove_dir_all(root).expect("remove temp root");
-    assert!(args.starts_with("(variant { PrimeWithModuleHash = blob \""));
-    assert!(args.ends_with("\" })"));
-    assert!(args.contains("\\93\\A4\\4B\\BB"));
+    let args = root_init_args(&identity).expect("build init args");
+    let parsed = candid_parser::parse_idl_args(&args).expect("parse textual Candid");
+    let bytes = parsed
+        .to_bytes_with_types(&TypeEnv::new(), &[CurrentRootInstallIdentity::ty()])
+        .expect("encode typed textual Candid");
+    let decoded: CurrentRootInstallIdentity =
+        candid::decode_one(&bytes).expect("decode init identity");
+
+    assert_eq!(decoded, identity);
 }
 
 #[test]

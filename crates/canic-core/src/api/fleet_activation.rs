@@ -19,4 +19,8 @@ impl FleetActivationApi {
     pub fn status() -> Result<FleetActivationStatusResponse, Error> {
         FleetActivationWorkflow::status().map_err(Error::from)
     }
+
+    pub fn require_active() -> Result<(), Error> {
+        FleetActivationWorkflow::require_active().map_err(Error::from)
+    }
 }

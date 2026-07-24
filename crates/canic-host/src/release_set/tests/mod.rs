@@ -1,3 +1,4 @@
+use super::artifact::{read_release_artifact, resolve_release_artifact_path};
 use super::config::{
     attach_app_role_source, configured_bootstrap_roles_from_config,
     configured_controllers_from_config, configured_deployable_roles_from_config,
@@ -7,7 +8,6 @@ use super::config::{
     configured_role_lifecycle_from_config, configured_role_metrics_profiles_from_config,
     configured_role_topups_from_config, declare_app_role_source, rename_app_role_source,
 };
-use super::stage::{read_release_artifact, resolve_release_artifact_path};
 use super::{
     ArtifactRootError, app_sources_root, artifact_root_path, config_path, plan_attach_app_role,
     plan_declare_app_role, plan_rename_app_role, resolve_artifact_root,

@@ -31,7 +31,6 @@ use std::{ffi::OsString, path::PathBuf};
 use thiserror::Error as ThisError;
 
 const DEFAULT_ROOT_TARGET: &str = "root";
-const DEFAULT_READY_TIMEOUT_SECONDS: u64 = 120;
 const INSTALL_HELP_AFTER: &str = "\
 Examples:
   canic install toko toko-local
@@ -119,12 +118,10 @@ impl InstallOptions {
             fleet_name: self.fleet,
             icp_root,
             build_profile: self.profile,
-            ready_timeout_seconds: DEFAULT_READY_TIMEOUT_SECONDS,
             config_path: Some(config_path),
             expected_app: Some(self.app),
             interactive_config_selection: false,
             deployment_plan_override: None,
-            artifact_promotion_plan_override: None,
         }
     }
 }

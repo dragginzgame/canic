@@ -25,4 +25,10 @@ impl FleetActivationWorkflow {
             .map_err(StorageOpsError::from)
             .map_err(Into::into)
     }
+
+    pub fn require_active() -> Result<(), InternalError> {
+        FleetActivationOps::require_active(EnvOps::is_root())
+            .map_err(StorageOpsError::from)
+            .map_err(Into::into)
+    }
 }

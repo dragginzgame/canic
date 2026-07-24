@@ -163,23 +163,15 @@ fn verify_registered_deployment_root_rejects_local_state_only_evidence() {
 }
 
 #[test]
-fn verified_root_state_writes_stay_on_explicit_install_or_verify_paths() {
-    let install_source = include_str!("../../install_state/mod.rs");
+fn verified_root_state_writes_stay_on_the_explicit_verify_path() {
     let registration_source = include_str!("../../deployment_registration/mod.rs");
 
-    assert_eq!(
-        install_source
-            .matches("root_verification: RootVerificationStatus::Verified")
-            .count(),
-        1,
-        "only install-created state may initialize verified root state"
-    );
     assert_eq!(
         registration_source
             .matches("root_verification = RootVerificationStatus::Verified")
             .count(),
         1,
-        "only explicit root verification may promote existing registered state"
+        "only explicit root verification may promote registered state"
     );
 }
 
