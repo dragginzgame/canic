@@ -8,9 +8,6 @@
 macro_rules! __canic_start_nonroot_lifecycle_core {
     ($canister_role:expr $(, $init:block)?) => {
         ::std::thread_local! {
-            static __CANIC_PREPARED_APPLICATION_INIT_ARGS:
-                ::std::cell::RefCell<::core::option::Option<::std::vec::Vec<u8>>> =
-                const { ::std::cell::RefCell::new(::core::option::Option::None) };
             static __CANIC_PREPARED_APPLICATION_INIT_SCHEDULED:
                 ::std::cell::Cell<bool> = const { ::std::cell::Cell::new(false) };
         }
@@ -23,12 +20,10 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
         };
 
         #[doc(hidden)]
-        fn __canic_schedule_prepared_activation_init() {
+        fn __canic_schedule_prepared_activation_init(args: Option<Vec<u8>>) {
             if __CANIC_PREPARED_APPLICATION_INIT_SCHEDULED.replace(true) {
                 return;
             }
-            let args =
-                __CANIC_PREPARED_APPLICATION_INIT_ARGS.with_borrow_mut(::core::option::Option::take);
             $crate::__canic_after_optional_start_init_hook!(
                 "canic:user:prepared_activation_block",
                 {
@@ -65,11 +60,11 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
             $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_nonroot_canister_before_bootstrap(
                 $canister_role,
                 payload,
+                args,
                 config,
                 config_source,
                 config_path,
             );
-            __CANIC_PREPARED_APPLICATION_INIT_ARGS.with_borrow_mut(|stored| *stored = args);
         }
 
         #[$crate::__internal::cdk::post_upgrade]
@@ -292,28 +287,30 @@ macro_rules! __canic_root_lifecycle_core {
             let embedded_wasm_store_bootstrap_release_set =
                 __canic_embedded_root_wasm_store_bootstrap_release_set();
 
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
+            let active = $crate::__internal::control_plane::api::lifecycle::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
                 config,
                 config_source,
                 config_path,
                 embedded_wasm_store_bootstrap_release_set,
             );
 
-            $crate::__canic_after_optional_start_init_hook!(
-                "canic:user:post_upgrade_block",
-                {
-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_post_upgrade_root_bootstrap();
-                    $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
-                        ::core::time::Duration::ZERO,
-                        "canic:user:post_upgrade",
-                        async move {
-                            canic_setup().await;
-                            canic_upgrade().await;
-                        },
-                    );
-                }
-                $(, $init)?
-            );
+            if active {
+                $crate::__canic_after_optional_start_init_hook!(
+                    "canic:user:post_upgrade_block",
+                    {
+                        $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_post_upgrade_root_bootstrap();
+                        $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
+                            ::core::time::Duration::ZERO,
+                            "canic:user:post_upgrade",
+                            async move {
+                                canic_setup().await;
+                                canic_upgrade().await;
+                            },
+                        );
+                    }
+                    $(, $init)?
+                );
+            }
         }
     };
 }

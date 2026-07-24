@@ -23,15 +23,16 @@ impl LifecycleApi {
         );
     }
 
+    #[must_use]
     pub fn post_upgrade_root_canister_before_bootstrap(
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
-    ) {
+    ) -> bool {
         lifecycle::upgrade::root::post_upgrade_root_canister_before_bootstrap(
             config,
             config_source,
             config_path,
-        );
+        )
     }
 }

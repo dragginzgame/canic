@@ -86,6 +86,7 @@ pub enum FleetActivationStateRecord {
     Prepared {
         identity: FleetActivationIdentityRecord,
         evidence: FleetActivationEvidenceRecord,
+        application_init_args: Option<Vec<u8>>,
     },
     Active {
         identity: FleetActivationIdentityRecord,
@@ -250,6 +251,7 @@ mod tests {
                     cascade: None,
                     credential: None,
                 },
+                application_init_args: Some(vec![4, 5, 6]),
             },
             prepared_state_snapshot_hash: None,
             prepared_topology_snapshot_hash: None,

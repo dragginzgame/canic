@@ -21,7 +21,7 @@ macro_rules! canic_emit_nonroot_fleet_activation_endpoints {
         ) -> Result<::canic::dto::fleet_activation::FleetActivationStatusResponse, ::canic::Error> {
             let transition =
                 $crate::__internal::core::api::fleet_activation::FleetActivationApi::activate_nonroot(request)?;
-            __canic_schedule_prepared_activation_init();
+            __canic_schedule_prepared_activation_init(transition.application_init_args);
             Ok(transition.status)
         }
     };

@@ -17,12 +17,13 @@ use std::time::Duration;
 pub fn init_nonroot_canister_before_bootstrap(
     role: CanisterRole,
     payload: CanisterInitPayload,
+    application_init_args: Option<Vec<u8>>,
     config: ConfigModel,
     config_source: &str,
     config_path: &str,
 ) {
     init_nonroot_before_bootstrap(role, config, config_source, config_path, move |role| {
-        workflow::runtime::init_nonroot_canister(role, payload)
+        workflow::runtime::init_nonroot_canister(role, payload, application_init_args)
     });
 }
 

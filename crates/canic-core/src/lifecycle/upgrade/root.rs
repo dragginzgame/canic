@@ -13,7 +13,7 @@ pub fn post_upgrade_root_canister_before_bootstrap(
     config: ConfigModel,
     config_source: &str,
     config_path: &str,
-) {
+) -> bool {
     LifecycleMetricsApi::record_runtime(
         LifecycleMetricPhase::PostUpgrade,
         LifecycleMetricRole::Root,
@@ -56,18 +56,22 @@ pub fn post_upgrade_root_canister_before_bootstrap(
             format!("env restore failed (root upgrade): {err}"),
         );
     }
-    if let Err(err) = workflow::runtime::post_upgrade_root_canister_after_memory_init() {
-        LifecycleMetricsApi::record_runtime(
-            LifecycleMetricPhase::PostUpgrade,
-            LifecycleMetricRole::Root,
-            LifecycleMetricOutcome::Failed,
-        );
-        lifecycle_trap(LifecyclePhase::PostUpgrade, err);
-    }
+    let active = match workflow::runtime::post_upgrade_root_canister_after_memory_init() {
+        Ok(active) => active,
+        Err(err) => {
+            LifecycleMetricsApi::record_runtime(
+                LifecycleMetricPhase::PostUpgrade,
+                LifecycleMetricRole::Root,
+                LifecycleMetricOutcome::Failed,
+            );
+            lifecycle_trap(LifecyclePhase::PostUpgrade, err);
+        }
+    };
 
     LifecycleMetricsApi::record_runtime(
         LifecycleMetricPhase::PostUpgrade,
         LifecycleMetricRole::Root,
         LifecycleMetricOutcome::Completed,
     );
+    active
 }

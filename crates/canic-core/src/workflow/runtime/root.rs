@@ -7,7 +7,7 @@
 use crate::{
     InternalError, InternalErrorOrigin, VERSION,
     domain::policy::pure::env::{EnvInput, EnvPolicyError, validate_or_default},
-    dto::fleet_activation::CurrentRootInstallIdentity,
+    dto::fleet_activation::{CurrentRootInstallIdentity, FleetActivationPhase},
     ids::{CanisterRole, SubnetSlotId},
     log::Topic,
     ops::{
@@ -117,7 +117,7 @@ pub fn init_root_canister(identity: CurrentRootInstallIdentity) -> Result<(), In
 /// post_upgrade_root_canister
 ///
 
-pub fn post_upgrade_root_canister_after_memory_init() -> Result<(), InternalError> {
+pub fn post_upgrade_root_canister_after_memory_init() -> Result<bool, InternalError> {
     rebuild_root_derived_storage_indexes()?;
     FleetActivationRuntimeOps::set_managed();
     require_no_resumable_refill_for_upgrade()?;
@@ -128,13 +128,20 @@ pub fn post_upgrade_root_canister_after_memory_init() -> Result<(), InternalErro
     // --- Phase 2 intentionally omitted: post-upgrade does not re-import env or directories.
     RuntimeAuthWorkflow::ensure_root_crypto_contract()?;
 
-    // --- Phase 3: Service startup ---
-    RuntimeWorkflow::start_all_root().map_err(|err| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("root service startup failed: {err}"),
-        )
-    })?;
+    let active = FleetActivationOps::status(true)
+        .map_err(crate::ops::storage::StorageOpsError::from)?
+        .phase
+        == FleetActivationPhase::Active;
 
-    Ok(())
+    if active {
+        // --- Phase 3: Service startup ---
+        RuntimeWorkflow::start_all_root().map_err(|err| {
+            InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                format!("root service startup failed: {err}"),
+            )
+        })?;
+    }
+
+    Ok(active)
 }

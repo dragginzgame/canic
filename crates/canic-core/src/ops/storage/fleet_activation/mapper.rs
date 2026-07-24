@@ -33,7 +33,16 @@ pub(super) fn record_to_status(
         credential_manifests,
     } = record;
     let (phase, identity, evidence, activated_at_ns) = match state {
-        FleetActivationStateRecord::Prepared { identity, evidence } => {
+        FleetActivationStateRecord::Prepared {
+            identity,
+            evidence,
+            application_init_args,
+        } => {
+            if is_root && application_init_args.is_some() {
+                return Err(invalid(
+                    "root Fleet activation retains non-root application init arguments",
+                ));
+            }
             (FleetActivationPhase::Prepared, identity, evidence, None)
         }
         FleetActivationStateRecord::Active {

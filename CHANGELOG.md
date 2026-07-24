@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.17` keeps every `Prepared` lifecycle inert across upgrades and makes
+  the protected activation record retain non-root application init bytes until
+  their first exact activation transition.
+
 - `0.99.16` completes the one-member runtime topology and fresh-activation
   boundary: provenance-bound Fleet/Subnet Directories and explicit Placement
   Bindings replace the old index/directory ambiguity, while prepared managed
