@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.11` adds the one controller-only Fleet-activation status query to
+  every managed runtime. It projects the protected ID-21 identity, phase and
+  role-valid evidence directly, rejects contradictory records, and gives host
+  recovery one canonical observation surface before the live install handoff.
+
 - `0.99.10` makes successful root installation mean an independently observed
   exact module match and persists the canonical verified receipt required by
   fresh-install recovery; command success alone can no longer advance the

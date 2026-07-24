@@ -15,6 +15,8 @@ use std::cell::RefCell;
 
 /// Maximum canonical bytes admitted for the complete protected activation record.
 pub const MAX_FLEET_ACTIVATION_RECORD_BYTES: u32 = 2_097_152;
+/// Maximum credential generations retained while a Fleet is being activated.
+pub const MAX_RETAINED_PREPARED_CREDENTIAL_GENERATIONS: usize = 2;
 
 const FLEET_ACTIVATION_RECORD_KEY: u8 = 0;
 

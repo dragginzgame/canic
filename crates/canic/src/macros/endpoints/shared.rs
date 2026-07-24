@@ -22,6 +22,12 @@ macro_rules! canic_emit_lifecycle_core_endpoints {
         fn canic_bootstrap_status() -> ::canic::dto::state::BootstrapStatusResponse {
             $crate::__internal::core::api::ready::ReadyApi::bootstrap_status()
         }
+
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_fleet_activation_status()
+        -> Result<::canic::dto::fleet_activation::FleetActivationStatusResponse, ::canic::Error> {
+            $crate::__internal::core::api::fleet_activation::FleetActivationApi::status()
+        }
     };
 }
 

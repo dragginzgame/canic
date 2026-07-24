@@ -3,6 +3,7 @@
 /// Keep these synchronized with the macro-defined endpoints.
 
 pub const CANIC_RESPONSE_CAPABILITY_V1: &str = "canic_response_capability_v1";
+pub const CANIC_FLEET_ACTIVATION_STATUS: &str = "canic_fleet_activation_status";
 pub const CANIC_UPSERT_ROOT_ISSUER_POLICY: &str = "canic_upsert_root_issuer_policy";
 pub const CANIC_UPSERT_ROOT_ISSUER_RENEWAL_TEMPLATE: &str =
     "canic_upsert_root_issuer_renewal_template";

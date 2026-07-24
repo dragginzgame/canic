@@ -6,6 +6,7 @@
 
 pub mod auth;
 pub mod cycles;
+pub mod fleet_activation;
 pub mod install;
 pub mod intent;
 pub mod log;

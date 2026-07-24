@@ -11,6 +11,7 @@ pub mod call;
 pub mod cascade;
 pub mod config;
 pub mod error;
+pub mod fleet_activation;
 pub mod ic;
 pub mod icp_refill;
 pub mod intent;

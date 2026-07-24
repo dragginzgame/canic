@@ -1,19 +1,15 @@
 //! Module: ops::storage::fleet_activation
 //!
-//! Responsibility: validate, convert, and initialize the protected Fleet activation record.
+//! Responsibility: validate, initialize, and project the protected Fleet activation record.
 //! Does not own: lifecycle orchestration, embedded build lookup, endpoint policy, or timers.
-//! Boundary: one successful initialization writes `Prepared`; an existing record fails closed.
+//! Boundary: initialization writes `Prepared` once; status rejects invalid role/state projections.
 
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the protected owner is staged before root lifecycle mutation is admitted"
-    )
-)]
+mod mapper;
 
 use crate::{
-    dto::fleet_activation::{CurrentRootInstallIdentity, FleetActivationIdentity},
+    dto::fleet_activation::{
+        CurrentRootInstallIdentity, FleetActivationIdentity, FleetActivationStatusResponse,
+    },
     ids::ReleaseBuildId,
     model::fleet_activation::{
         PrepareFleetActivationError, RootInstallIdentity, prepare_root_install,
@@ -43,6 +39,12 @@ pub enum FleetActivationOpsError {
 
     #[error("protected Fleet activation record is already initialized")]
     AlreadyInitialized,
+
+    #[error("protected Fleet activation record is not initialized")]
+    NotInitialized,
+
+    #[error("protected Fleet activation record is invalid: {reason}")]
+    InvalidRecord { reason: String },
 }
 
 ///
@@ -52,6 +54,13 @@ pub enum FleetActivationOpsError {
 pub struct FleetActivationOps;
 
 impl FleetActivationOps {
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "root initialization remains staged until the live lifecycle handoff"
+        )
+    )]
     pub(crate) fn initialize_root_prepared(
         input: CurrentRootInstallIdentity,
         embedded_release_build_id: ReleaseBuildId,
@@ -92,8 +101,22 @@ impl FleetActivationOps {
     }
 
     #[must_use]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "the activation snapshot remains staged for lifecycle persistence"
+        )
+    )]
     pub(crate) fn snapshot() -> FleetActivationData {
         FleetActivation::export()
+    }
+
+    pub(crate) fn status(
+        is_root: bool,
+    ) -> Result<FleetActivationStatusResponse, FleetActivationOpsError> {
+        let record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
+        mapper::record_to_status(record, is_root)
     }
 
     #[cfg(test)]
@@ -120,7 +143,11 @@ mod tests {
     use super::*;
     use crate::{
         ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, ReleaseBuildNonce},
-        storage::stable::fleet_activation::FleetActivationStateRecord,
+        storage::stable::fleet_activation::{
+            FleetActivationEvidenceRecord, FleetActivationStateRecord,
+            FleetCascadeActivationEvidenceRecord, FleetCredentialGenerationRefRecord,
+            FleetCredentialManifestRecord,
+        },
     };
 
     fn release_build(byte: u8) -> ReleaseBuildId {
@@ -194,5 +221,174 @@ mod tests {
             FleetActivationOps::snapshot(),
             FleetActivationData::default()
         );
+    }
+
+    #[test]
+    fn status_projects_the_exact_prepared_identity() {
+        FleetActivationOps::reset_for_tests();
+        let release_build_id = release_build(17);
+        FleetActivationOps::initialize_root_prepared(input(release_build_id), release_build_id)
+            .expect("initialize Prepared");
+
+        let status = FleetActivationOps::status(true).expect("activation status");
+
+        assert_eq!(
+            status.phase,
+            crate::dto::fleet_activation::FleetActivationPhase::Prepared
+        );
+        assert_eq!(status.identity.operation_id, [12; 32]);
+        assert_eq!(status.identity.release_build_id, release_build_id);
+        assert_eq!(status.cascade, None);
+        assert_eq!(status.credential, None);
+        assert_eq!(status.activated_at_ns, None);
+
+        FleetActivationOps::reset_for_tests();
+    }
+
+    #[test]
+    fn status_rejects_absent_and_contradictory_protected_state() {
+        FleetActivationOps::reset_for_tests();
+        assert_eq!(
+            FleetActivationOps::status(true),
+            Err(FleetActivationOpsError::NotInitialized)
+        );
+
+        let release_build_id = release_build(18);
+        FleetActivationOps::initialize_root_prepared(input(release_build_id), release_build_id)
+            .expect("initialize Prepared");
+        let mut data = FleetActivationOps::snapshot();
+        data.record
+            .as_mut()
+            .expect("record")
+            .credential_manifests
+            .push(FleetCredentialManifestRecord {
+                fleet: FleetKey {
+                    network: CanonicalNetworkId::public_ic(),
+                    fleet_id: FleetId::from_generated_bytes([11; 32]),
+                },
+                activation_id: [12; 32],
+                generation: 1,
+                root_policy_set_hash: [19; 32],
+                renewal_template_set_hash: [20; 32],
+                entries: Vec::new(),
+            });
+        FleetActivation::import(data);
+
+        assert!(matches!(
+            FleetActivationOps::status(true),
+            Err(FleetActivationOpsError::InvalidRecord { .. })
+        ));
+        assert!(matches!(
+            FleetActivationOps::status(false),
+            Err(FleetActivationOpsError::InvalidRecord { .. })
+        ));
+
+        FleetActivationOps::reset_for_tests();
+    }
+
+    #[test]
+    fn status_projects_complete_active_root_evidence() {
+        FleetActivationOps::reset_for_tests();
+        let release_build_id = release_build(21);
+        FleetActivationOps::initialize_root_prepared(input(release_build_id), release_build_id)
+            .expect("initialize Prepared");
+        let mut data = FleetActivationOps::snapshot();
+        let record = data.record.as_mut().expect("record");
+        let FleetActivationStateRecord::Prepared { identity, .. } = &record.state else {
+            panic!("expected Prepared")
+        };
+        let identity = identity.clone();
+        record.state = FleetActivationStateRecord::Active {
+            identity: identity.clone(),
+            evidence: FleetActivationEvidenceRecord {
+                cascade: Some(FleetCascadeActivationEvidenceRecord::Source {
+                    cascade_manifest_hash: [22; 32],
+                }),
+                credential: Some(FleetCredentialGenerationRefRecord {
+                    generation: 1,
+                    manifest_hash: [23; 32],
+                }),
+            },
+            activated_at_ns: 24,
+        };
+        record.cascade_manifest = Some(Vec::new());
+        record.credential_manifests = vec![FleetCredentialManifestRecord {
+            fleet: identity.fleet.fleet,
+            activation_id: identity.operation_id,
+            generation: 1,
+            root_policy_set_hash: [25; 32],
+            renewal_template_set_hash: [26; 32],
+            entries: Vec::new(),
+        }];
+        FleetActivation::import(data);
+
+        let status = FleetActivationOps::status(true).expect("active root status");
+
+        assert_eq!(
+            status.phase,
+            crate::dto::fleet_activation::FleetActivationPhase::Active
+        );
+        assert_eq!(status.activated_at_ns, Some(24));
+        assert_eq!(status.cascade_manifest, Some(Vec::new()));
+        assert_eq!(
+            status
+                .credential_manifest
+                .as_ref()
+                .map(|manifest| manifest.generation),
+            Some(1)
+        );
+
+        FleetActivationOps::reset_for_tests();
+    }
+
+    #[test]
+    fn status_projects_only_nonroot_applied_evidence() {
+        FleetActivationOps::reset_for_tests();
+        let release_build_id = release_build(27);
+        FleetActivationOps::initialize_root_prepared(input(release_build_id), release_build_id)
+            .expect("initialize Prepared");
+        let mut data = FleetActivationOps::snapshot();
+        let record = data.record.as_mut().expect("record");
+        let FleetActivationStateRecord::Prepared { identity, .. } = &record.state else {
+            panic!("expected Prepared")
+        };
+        record.state = FleetActivationStateRecord::Active {
+            identity: identity.clone(),
+            evidence: FleetActivationEvidenceRecord {
+                cascade: Some(FleetCascadeActivationEvidenceRecord::Applied {
+                    state_snapshot_hash: [28; 32],
+                    topology_snapshot_hash: [29; 32],
+                }),
+                credential: Some(FleetCredentialGenerationRefRecord {
+                    generation: 1,
+                    manifest_hash: [30; 32],
+                }),
+            },
+            activated_at_ns: 31,
+        };
+        FleetActivation::import(data);
+
+        let status = FleetActivationOps::status(false).expect("active non-root status");
+
+        assert_eq!(
+            status.cascade,
+            Some(
+                crate::dto::fleet_activation::FleetCascadeActivationEvidence::Applied {
+                    state_snapshot_hash: [28; 32],
+                    topology_snapshot_hash: [29; 32],
+                }
+            )
+        );
+        assert_eq!(
+            status.credential,
+            Some(crate::dto::fleet_activation::FleetCredentialGenerationRef {
+                generation: 1,
+                manifest_hash: [30; 32],
+            })
+        );
+        assert_eq!(status.cascade_manifest, None);
+        assert_eq!(status.credential_manifest, None);
+
+        FleetActivationOps::reset_for_tests();
     }
 }
