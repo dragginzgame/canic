@@ -191,7 +191,7 @@ fn deploy_leaf_accepts_global_environment(tail: &[OsString]) -> bool {
     let third = tail.get(2).and_then(|arg| arg.to_str());
 
     match first {
-        Some("check" | "install" | "register") => true,
+        Some("check" | "install") => true,
         Some("authority") => matches!(second, Some("check" | "evidence" | "receipt" | "report")),
         Some("external") => matches!(
             second,
@@ -202,7 +202,6 @@ fn deploy_leaf_accepts_global_environment(tail: &[OsString]) -> bool {
             Some("diff" | "inventory" | "plan" | "report" | "resume-report") => true,
             _ => false,
         },
-        Some("root") => second == Some("verify"),
         _ => false,
     }
 }

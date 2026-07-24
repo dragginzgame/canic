@@ -585,7 +585,7 @@ pub(super) fn check_root_canister_id(state: &InstallState) -> MedicCheck {
             "root_canister_id_missing",
             "root",
             "installed deployment state does not record a root canister id",
-            "re-register the deployment target or reinstall from the owning fleet template",
+            "reinstall the Fleet with canic install <app> <fleet>",
             MedicSource::InstalledDeployment,
         )
     } else {

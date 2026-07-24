@@ -1,4 +1,3 @@
-use crate::durable_io::write_bytes;
 use std::{fs, io, path::Path, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -51,20 +50,6 @@ pub enum InstallStateError {
         path: PathBuf,
         #[source]
         source: serde_json::Error,
-    },
-
-    #[error("failed to encode deployment state {}: {source}", path.display())]
-    Encode {
-        path: PathBuf,
-        #[source]
-        source: serde_json::Error,
-    },
-
-    #[error("failed to write deployment state {}: {source}", path.display())]
-    Write {
-        path: PathBuf,
-        #[source]
-        source: io::Error,
     },
 }
 
@@ -163,33 +148,6 @@ fn deployments_dir(icp_root: &Path, environment: &str) -> PathBuf {
         .join(".canic")
         .join(environment)
         .join("deployments")
-}
-
-// Persist the completed install state under the project-local `.canic` directory.
-pub(super) fn write_install_state(
-    icp_root: &Path,
-    environment: &str,
-    state: &InstallState,
-) -> Result<PathBuf, InstallStateError> {
-    validate_environment_name(environment)?;
-    validate_state_name(&state.deployment_name)?;
-    validate_schema_version(state.schema_version)?;
-    if state.environment != environment {
-        return Err(InstallStateError::EnvironmentMismatch {
-            state_environment: state.environment.clone(),
-            requested_environment: environment.to_string(),
-        });
-    }
-    let path = deployment_install_state_path(icp_root, environment, &state.deployment_name);
-    let bytes = serde_json::to_vec_pretty(state).map_err(|source| InstallStateError::Encode {
-        path: path.clone(),
-        source,
-    })?;
-    write_bytes(&path, &bytes).map_err(|source| InstallStateError::Write {
-        path: path.clone(),
-        source,
-    })?;
-    Ok(path)
 }
 
 // Reject state that does not belong to the requested canonical path.

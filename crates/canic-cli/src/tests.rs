@@ -69,7 +69,7 @@ fn usage_lists_command_families() {
     assert!(plain.contains("    build"));
     assert!(plain.contains("    deploy"));
     assert!(plain.contains("Manage Canic source apps and roles"));
-    assert!(plain.contains("Check, inspect, register, and install deployments"));
+    assert!(plain.contains("Check, inspect, plan, and install deployments"));
     assert!(plain.contains("Plan, inspect, and verify backups"));
     assert!(!plain.contains("Check deployment truth before mutation"));
     assert!(!plain.contains("    environment"));
@@ -136,10 +136,7 @@ fn command_family_help_returns_ok() {
         &["deploy", "inspect", "catalog", "--help"],
         &["deploy", "inspect", "catalog", "list", "--help"],
         &["deploy", "inspect", "catalog", "inspect", "--help"],
-        &["deploy", "inspect", "root", "--help"],
         &["deploy", "inspect", "resume-report", "--help"],
-        &["deploy", "root", "--help"],
-        &["deploy", "root", "verify", "--help"],
         &["info", "--help"],
         &["info", "list", "--help"],
         &["info", "cycles", "--help"],
@@ -657,7 +654,6 @@ fn global_environment_is_forwarded_to_deploy() {
         &["install", "demo"],
         &["inspect", "inventory", "demo"],
         &["inspect", "plan", "demo"],
-        &["register", "demo"],
         &["inspect", "report", "demo"],
         &["inspect", "resume-report", "demo"],
     ] {
@@ -699,7 +695,6 @@ fn global_environment_is_forwarded_to_nested_deploy_environment_leaves() {
         &["external", "proposals", "demo"],
         &["inspect", "catalog", "list"],
         &["inspect", "catalog", "inspect", "demo"],
-        &["root", "verify", "demo"],
     ] {
         let mut tail = raw_tail.iter().map(OsString::from).collect::<Vec<_>>();
         apply_global_environment("deploy", &mut tail, Some("ic".to_string()));
@@ -717,7 +712,6 @@ fn global_environment_is_not_forwarded_to_request_only_deploy_leaves() {
         &[
             "inspect", "compare", "--left", "a.json", "--right", "b.json",
         ][..],
-        &["inspect", "root", "--request", "request.json"],
         &["external", "verify", "--request", "request.json"],
         &[
             "external",

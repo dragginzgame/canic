@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.22` removes the obsolete manual deployment registration and
+  root-verification command family, including its orphan report/receipt
+  contracts and operator proof.
+
 - `0.99.21` completes the runtime Prime hard cut: environment state and Candid
   use `fleet_root_pid` and `subnet_slot`, while access predicates use
   `is_fleet_root` and `is_default_subnet` with no old alias or decoder.

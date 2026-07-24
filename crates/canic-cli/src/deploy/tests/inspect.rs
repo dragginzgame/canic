@@ -56,31 +56,6 @@ fn deploy_inspect_command_dispatches_raw_artifact_leaves() {
         deploy_command(),
         [
             OsString::from("inspect"),
-            OsString::from("root"),
-            OsString::from("--request"),
-            OsString::from("root-verification.json"),
-        ],
-    )
-    .expect("parse deploy inspect root command")
-    .expect("deploy inspect command");
-    assert_eq!(parsed.0, "inspect");
-
-    let nested = parse_subcommand(deploy_inspect::command(), parsed.1)
-        .expect("parse deploy inspect root leaf")
-        .expect("deploy inspect root leaf command");
-    assert_eq!(nested.0, "root");
-    assert_eq!(
-        nested.1,
-        vec![
-            OsString::from("--request"),
-            OsString::from("root-verification.json")
-        ]
-    );
-
-    let parsed = parse_subcommand(
-        deploy_command(),
-        [
-            OsString::from("inspect"),
             OsString::from("catalog"),
             OsString::from("list"),
         ],
@@ -106,7 +81,6 @@ fn deploy_inspect_help_uses_canonical_paths() {
         "canic deploy inspect compare --left staging-check.json --right prod-check.json"
     ));
     assert!(help.contains("canic deploy inspect catalog list"));
-    assert!(help.contains("canic deploy inspect root --request root-verification.json"));
     assert!(help.contains("canic deploy inspect resume-report --receipt receipt.json demo"));
     assert!(help.contains("Use `canic inspect` for live runtime-observed"));
 }

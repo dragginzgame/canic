@@ -2,17 +2,14 @@ use canic_host::deployment_truth::{
     ArtifactDigestSourceV1, ArtifactPromotionPlanRequest, ArtifactPromotionPlanV1,
     ArtifactSourceV1, AuthorityProfileV1, CanisterControlClassV1, DEPLOYMENT_TRUTH_SCHEMA_VERSION,
     DeploymentCheckV1, DeploymentDiffV1, DeploymentIdentityV1, DeploymentInventoryV1,
-    DeploymentPlanV1, DeploymentRootObservationSourceV1, DeploymentRootObservationV1,
-    DeploymentRootVerificationRequestV1, DeploymentRootVerificationSourceV1,
-    DeploymentRootVerificationStateV1, ExpectedCanisterV1, LocalDeploymentConfigV1,
-    ObservationStatusV1, ObservedArtifactV1, ObservedCanisterV1, PreviousArtifactReceiptKindV1,
-    PromotionArtifactIdentityReportRequest, PromotionArtifactLevelV1,
-    PromotionPlanTransformRequest, ResumeSafetyV1, RoleArtifactSourceKindV1, RoleArtifactSourceV1,
-    RoleArtifactV1, RolePromotionInputV1, SafetyReportV1, SafetyStatusV1, TrustDomainV1,
-    VerifierReadinessExpectationV1, VerifierReadinessObservationV1, artifact_promotion_plan,
-    compare_plan_to_inventory, promoted_deployment_plan_transform_from_inputs,
-    promotion_artifact_identity_report_from_inputs, promotion_readiness_from_inputs,
-    safety_report_from_diff,
+    DeploymentPlanV1, ExpectedCanisterV1, LocalDeploymentConfigV1, ObservationStatusV1,
+    ObservedCanisterV1, PreviousArtifactReceiptKindV1, PromotionArtifactIdentityReportRequest,
+    PromotionArtifactLevelV1, PromotionPlanTransformRequest, ResumeSafetyV1,
+    RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1, RolePromotionInputV1,
+    SafetyReportV1, SafetyStatusV1, TrustDomainV1, VerifierReadinessExpectationV1,
+    VerifierReadinessObservationV1, artifact_promotion_plan,
+    promoted_deployment_plan_transform_from_inputs, promotion_artifact_identity_report_from_inputs,
+    promotion_readiness_from_inputs,
 };
 use std::{
     path::PathBuf,
@@ -33,53 +30,6 @@ pub(super) fn sample_authority_check() -> DeploymentCheckV1 {
         inventory,
         diff,
         report,
-    }
-}
-
-pub(super) fn sample_root_verification_request() -> DeploymentRootVerificationRequestV1 {
-    let mut check = sample_authority_check();
-    check.inventory.observed_root = Some(DeploymentRootObservationV1 {
-        deployment_name: "demo".to_string(),
-        environment: "local".to_string(),
-        fleet_template: "demo".to_string(),
-        root_principal: "aaaaa-aa".to_string(),
-        observed_canister_id: "aaaaa-aa".to_string(),
-        observation_source: DeploymentRootObservationSourceV1::IcpCanisterStatus,
-        control_class: CanisterControlClassV1::DeploymentControlled,
-        controllers: vec!["aaaaa-aa".to_string()],
-        module_hash: None,
-        status: Some("running".to_string()),
-        role_assignment_source: Some("icp_canister_status".to_string()),
-    });
-    check.inventory.observed_artifacts = vec![ObservedArtifactV1 {
-        role: "root".to_string(),
-        artifact_path: "artifacts/root.wasm.gz".to_string(),
-        file_sha256: Some(sample_sha256("a")),
-        file_sha256_source: Some(ArtifactDigestSourceV1::ObservedFileDigest),
-        payload_sha256: None,
-        payload_size_bytes: Some(123),
-        source: ArtifactSourceV1::LocalBuild,
-    }];
-    if let Some(root) = check.inventory.observed_canisters.first_mut() {
-        root.module_hash = Some("module".to_string());
-        root.canonical_embedded_config_digest = Some(sample_sha256("c"));
-    }
-    check.diff = compare_plan_to_inventory(&check.plan, &check.inventory);
-    check.report = safety_report_from_diff(
-        &check.report.report_id,
-        check.report.diff_id.clone(),
-        &check.diff,
-    );
-    DeploymentRootVerificationRequestV1 {
-        report_id: "root-verification-report-1".to_string(),
-        requested_at: "2026-05-27T00:00:00Z".to_string(),
-        deployment_name: "demo".to_string(),
-        environment: "local".to_string(),
-        expected_fleet_template: "demo".to_string(),
-        expected_root_principal: "aaaaa-aa".to_string(),
-        current_root_verification: DeploymentRootVerificationStateV1::NotVerified,
-        source: DeploymentRootVerificationSourceV1::DeploymentTruthCheck,
-        deployment_check: check,
     }
 }
 

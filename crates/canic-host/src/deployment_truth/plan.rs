@@ -198,7 +198,7 @@ fn local_root_canister_id(
             assumptions.push(assumption(
                 DeploymentAssumptionKindV1::LocalStateMissing.key(),
                 format!(
-                    "no local deployment state exists for {}; root identity is unknown until install or explicit deploy register with --allow-unverified",
+                    "no local deployment state exists for {}; root identity is unknown until install",
                     request.deployment_name
                 ),
             ));

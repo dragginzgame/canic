@@ -5,14 +5,12 @@ mod comparison;
 mod execution_preflight;
 mod lifecycle;
 mod promotion;
-mod root_verification;
 
 pub use authority::*;
 pub use comparison::*;
 pub use execution_preflight::*;
 pub use lifecycle::*;
 pub use promotion::*;
-pub use root_verification::*;
 
 fn append_hard_failure_items(lines: &mut Vec<String>, label: &str, failures: &[SafetyFindingV1]) {
     if failures.is_empty() {

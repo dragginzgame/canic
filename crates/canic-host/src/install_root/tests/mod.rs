@@ -32,21 +32,17 @@ use super::receipt_io::{
     install_deployment_truth_receipt_path, write_install_deployment_truth_receipt,
 };
 use super::root_cycles::add_local_root_create_cycles_arg;
-use super::root_verification::write_verified_root_state_if_unchanged;
 use super::state::{
     INSTALL_STATE_SCHEMA_VERSION, InstallStateError, deployment_install_state_path,
     read_deployment_install_state, validate_environment_name, validate_state_name,
-    write_install_state,
 };
 use super::timing::InstallTimingSummary;
 use super::truth_check::{current_install_deployment_truth_check_at, validate_expected_app_id};
 use super::{
     FleetActivationContinuationRequired, InstallRootBlockKind, InstallRootBlockedError,
-    InstallRootError, InstallRootOptions, InstallRootPhase, InstallState,
-    RegisterDeploymentStateOptions, RootVerificationStatus, VerifyDeploymentRootOptions,
+    InstallRootError, InstallRootOptions, InstallRootPhase, InstallState, RootVerificationStatus,
     check_install_deployment_truth, check_install_execution_preflight,
-    latest_deployment_truth_receipt_path_from_root, register_deployment_state,
-    verify_registered_deployment_root,
+    latest_deployment_truth_receipt_path_from_root,
 };
 use crate::canister_build::{
     CanisterArtifactBuildSpec, CanisterBuildProfile, WorkspaceBuildContext,
@@ -54,10 +50,9 @@ use crate::canister_build::{
 use crate::deployment_truth::{
     CanisterControlClassV1, DeploymentCheckV1, DeploymentExecutionContextV1,
     DeploymentExecutionPreflightStatusV1, DeploymentExecutionStatusV1, DeploymentExecutorBackendV1,
-    DeploymentExecutorCapabilityV1, DeploymentReceiptV1, DeploymentRootObservationSourceV1,
-    ObservationStatusV1, ObservedCanisterV1, SafetyFindingV1, SafetySeverityV1, SafetyStatusV1,
-    artifact_gate_phase_receipt, artifact_gate_role_phase_receipts, compare_plan_to_inventory,
-    safety_report_from_diff, validate_deployment_root_verification_receipt,
+    DeploymentExecutorCapabilityV1, DeploymentReceiptV1, ObservationStatusV1, ObservedCanisterV1,
+    SafetyFindingV1, SafetySeverityV1, SafetyStatusV1, artifact_gate_phase_receipt,
+    artifact_gate_role_phase_receipts, compare_plan_to_inventory, safety_report_from_diff,
 };
 use crate::icp::LocalReplicaTarget;
 use crate::release_set::RootReleaseSetBuildSnapshot;
@@ -185,6 +180,17 @@ fn sample_install_state(root: &Path, deployment_name: &str, fleet_template: &str
             .display()
             .to_string(),
     }
+}
+
+fn write_install_state(
+    icp_root: &Path,
+    environment: &str,
+    state: &InstallState,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let path = deployment_install_state_path(icp_root, environment, &state.deployment_name);
+    fs::create_dir_all(path.parent().expect("deployment state parent"))?;
+    fs::write(&path, serde_json::to_vec_pretty(state)?)?;
+    Ok(path)
 }
 
 fn write_temp_workspace_config(config_source: &str) -> PathBuf {
@@ -385,119 +391,6 @@ kind = "root"
     )
     .expect("deployment truth check");
     (root, check)
-}
-
-fn demo_unverified_registered_root_check(root_name: &str) -> (PathBuf, DeploymentCheckV1) {
-    let root = temp_dir(root_name);
-    let config_path = root.join("apps/demo/canic.toml");
-    fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
-    fs::write(
-        &config_path,
-        r#"
-controllers = []
-[services.fleet]
-roles = []
-
-[app]
-name = "demo"
-init_mode = "enabled"
-
-
-[roles.root]
-kind = "root"
-package = "root"
-
-[roles.app]
-kind = "canister"
-package = "app"
-
-[roles.project_registry]
-kind = "canister"
-package = "project_registry"
-
-[roles.oracle_pokemon]
-kind = "canister"
-package = "oracle_pokemon"
-
-[roles.user_hub]
-kind = "canister"
-package = "user_hub"
-
-[roles.user_shard]
-kind = "canister"
-package = "user_shard"
-
-[roles.scale_hub]
-kind = "canister"
-package = "scale_hub"
-
-[roles.scale_replica]
-kind = "canister"
-package = "scale"
-
-[roles.role_baseline]
-kind = "canister"
-package = "role_baseline"
-
-[roles.worker]
-kind = "canister"
-package = "worker"
-[app.whitelist]
-
-[subnets.default.canisters.root]
-kind = "root"
-"#,
-    )
-    .expect("write config");
-    write_wasm_gz_artifact(&root, "root", b"root-artifact");
-    write_wasm_gz_artifact(&root, "wasm_store", b"wasm-store-artifact");
-    let mut state = sample_install_state(&root, "demo-local", "demo");
-    state.root_verification = RootVerificationStatus::NotVerified;
-    write_install_state(&root, "local", &state).expect("write unverified state");
-
-    let check = demo_registered_root_check_from_state(&root);
-    (root, check)
-}
-
-fn demo_registered_root_check_from_state(root: &Path) -> DeploymentCheckV1 {
-    let config_path = root.join("apps/demo/canic.toml");
-    let options = InstallRootOptions {
-        root_canister: "root".to_string(),
-        root_build_target: "root".to_string(),
-        environment: "local".to_string(),
-        fleet_name: "demo-local".to_string(),
-        icp_root: Some(root.to_path_buf()),
-        build_profile: Some(CanisterBuildProfile::Fast),
-        config_path: Some("apps/demo/canic.toml".to_string()),
-        expected_app: Some("demo".to_string()),
-        interactive_config_selection: false,
-        deployment_plan_override: None,
-    };
-    let mut check = current_install_deployment_truth_check_at(
-        &options,
-        root,
-        root,
-        &config_path,
-        "demo-local",
-        "2026-05-27T00:00:00Z".to_string(),
-    )
-    .expect("deployment truth check");
-    let observed_root = check
-        .inventory
-        .observed_root
-        .as_mut()
-        .expect("observed root");
-    observed_root.observation_source = DeploymentRootObservationSourceV1::IcpCanisterStatus;
-    observed_root.control_class = CanisterControlClassV1::DeploymentControlled;
-    observed_root.role_assignment_source = Some("icp_canister_status".to_string());
-    for observed_canister in &mut check.inventory.observed_canisters {
-        if observed_canister.role.as_deref() == Some("root") {
-            observed_canister.control_class = CanisterControlClassV1::DeploymentControlled;
-        }
-    }
-    check.diff = compare_plan_to_inventory(&check.plan, &check.inventory);
-    check.report = safety_report_from_diff("report-1", Some("diff-1".to_string()), &check.diff);
-    check
 }
 
 fn sample_fleet_activation_identity() -> FleetActivationIdentity {

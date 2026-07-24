@@ -1464,7 +1464,7 @@ fn wraps_long_medic_report_fields() {
             "deployment_target_missing",
             "deployment",
             "this is a deliberately long diagnostic message that should wrap across multiple indented lines instead of widening a terminal table",
-            "run canic install <app> <fleet> or canic deploy register <deployment> --fleet-template <fleet-template> --root <principal> --allow-unverified",
+            "run canic install <app> <fleet>",
             MedicSource::InstalledDeployment,
         )],
     ));
