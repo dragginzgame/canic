@@ -14,12 +14,15 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.9`.
-- The latest published release is `v0.99.9` at
-  `0f9443840725a7f79190d1f323d72a21fdd01d58`.
-- The `v0.99.9` source tree is
-  `502c0df3dd3342a068e343a557e7612cb3ed979a`. Its Cargo.lock SHA-256 is
-  `c966d3e1d764d5d26dbad1efe7fd04ac5199e843f2d00c0b0d223d6011cdb002`.
+- The workspace package version is `0.99.10`.
+- The latest published release is `v0.99.10` at
+  `df3effd486095237c872946c408452c9e209c5e0`.
+- The `v0.99.10` source tree is
+  `1763f155fc09869e9ee2d3324f50081c32d82984`. Its Cargo.lock SHA-256 is
+  `05ca80f6b475e643acdbfc320c6d9ed29c299672e657076d89173671acb3d1d7`.
+- Released `0.99.10` makes root installation depend on an independently
+  observed exact module match and persists the canonical verified receipt
+  required by fresh-install recovery.
 - Released `0.99.9` establishes the protected Canister-side activation owner,
   embeds the exact release-build identity in qualified Wasms and assigns
   stable ID 21 to every managed runtime without switching the live root
@@ -1178,20 +1181,26 @@ the supplied ID against the embedded Wasm identity and can commit one
 empty-evidence `Prepared` record. There is no `Unbound` sentinel, overwrite
 path or second Fleet binding.
 
-The open `0.99.10` batch closes the root-install observation prerequisite.
-Command success is followed by the maintained ICP status query and an exact
+Released `0.99.10` closes the root-install observation prerequisite. Command
+success is followed by the maintained ICP status query and an exact
 expected/observed module-hash match. The one receipt owner returns its durable
 canonical path, records the exact root principal and postcondition, and passes
-that file through the existing strict journal admission before bootstrap can
-continue. Missing, malformed or mismatched live evidence fails with a typed
-cause; attempted evidence is not mislabeled observed.
+that file through the existing strict journal admission.
 
-The next bounded batch connects the protected Canister owner to host recovery
-without creating a contradictory half-cut. It must publish `Planned` before
+The open `0.99.11` batch establishes the one controller-only
+`canic_fleet_activation_status` query on every managed runtime. It reads the
+sole protected ID-21 record, projects only role-valid identity, phase and
+evidence, and fails closed on absent or contradictory state. This observation
+surface is deliberately non-mutating: it does not initialize ID 21, activate,
+start timers or make `Prepared` operational.
+
+The next bounded batch can connect the protected Canister owner to host
+recovery without an unobservable half-cut. It must publish `Planned` before
 root resolution, replace `PrimeWithModuleHash` on both sides, install the root
-into `Prepared`, advance the exact receipt to `RootInstalled`, and ensure the
-existing completion path cannot publish `Prepared` as operational. The current
-macro and installer remain paired on their old root input until that complete
+into `Prepared`, use the activation-status query to reconcile a lost response,
+advance the exact receipt to `RootInstalled`, and ensure the existing
+completion path cannot publish `Prepared` as operational. The current macro
+and installer remain paired on their old root input until that complete
 handoff is ready. Supplied deployment-plan release-build admission, later
 activation phases, installed Fleet state and final catalog commitment remain
 after that prerequisite.

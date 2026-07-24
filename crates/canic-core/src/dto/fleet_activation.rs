@@ -25,7 +25,7 @@ pub struct CurrentRootInstallIdentity {
 /// FleetCascadeManifestEntry
 ///
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct FleetCascadeManifestEntry {
     pub principal: Principal,
     pub state_snapshot_hash: [u8; 32],
@@ -33,10 +33,25 @@ pub struct FleetCascadeManifestEntry {
 }
 
 ///
+/// FleetCascadeActivationEvidence
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub enum FleetCascadeActivationEvidence {
+    Source {
+        cascade_manifest_hash: [u8; 32],
+    },
+    Applied {
+        state_snapshot_hash: [u8; 32],
+        topology_snapshot_hash: [u8; 32],
+    },
+}
+
+///
 /// FleetCredentialGenerationRef
 ///
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub struct FleetCredentialGenerationRef {
     pub generation: u64,
     pub manifest_hash: [u8; 32],
@@ -46,7 +61,7 @@ pub struct FleetCredentialGenerationRef {
 /// FleetCredentialManifestEntry
 ///
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct FleetCredentialManifestEntry {
     pub root_issuer: Principal,
     pub subject_canister: Principal,
@@ -62,7 +77,7 @@ pub struct FleetCredentialManifestEntry {
 /// FleetCredentialManifest
 ///
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct FleetCredentialManifest {
     pub fleet: FleetKey,
     pub activation_id: [u8; 32],
@@ -76,11 +91,36 @@ pub struct FleetCredentialManifest {
 /// FleetActivationIdentity
 ///
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct FleetActivationIdentity {
     pub fleet: FleetBinding,
     pub operation_id: [u8; 32],
     pub release_build_id: ReleaseBuildId,
+}
+
+///
+/// FleetActivationPhase
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub enum FleetActivationPhase {
+    Prepared,
+    Active,
+}
+
+///
+/// FleetActivationStatusResponse
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct FleetActivationStatusResponse {
+    pub phase: FleetActivationPhase,
+    pub identity: FleetActivationIdentity,
+    pub cascade: Option<FleetCascadeActivationEvidence>,
+    pub cascade_manifest: Option<Vec<FleetCascadeManifestEntry>>,
+    pub credential: Option<FleetCredentialGenerationRef>,
+    pub credential_manifest: Option<FleetCredentialManifest>,
+    pub activated_at_ns: Option<u64>,
 }
 
 ///
@@ -111,16 +151,20 @@ mod tests {
     use super::*;
     use crate::ids::{AppId, CanonicalNetworkId, FleetId, FleetKey, ReleaseBuildNonce};
 
+    fn fleet_binding() -> FleetBinding {
+        FleetBinding {
+            fleet: FleetKey {
+                network: CanonicalNetworkId::public_ic(),
+                fleet_id: FleetId::from_generated_bytes([7; 32]),
+            },
+            app: AppId::from("toko"),
+        }
+    }
+
     #[test]
     fn current_root_install_identity_roundtrips_with_text_ids() {
         let input = CurrentRootInstallIdentity {
-            fleet: FleetBinding {
-                fleet: FleetKey {
-                    network: CanonicalNetworkId::public_ic(),
-                    fleet_id: FleetId::from_generated_bytes([7; 32]),
-                },
-                app: AppId::from("toko"),
-            },
+            fleet: fleet_binding(),
             install_id: [8; 32],
             release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
                 [9; 32],
@@ -131,6 +175,37 @@ mod tests {
         let bytes = candid::encode_one(&input).expect("encode current root install identity");
         let decoded: CurrentRootInstallIdentity =
             candid::decode_one(&bytes).expect("decode current root install identity");
+
+        assert_eq!(decoded, input);
+    }
+
+    #[test]
+    fn fleet_activation_status_roundtrips_as_named_candid_shapes() {
+        let input = FleetActivationStatusResponse {
+            phase: FleetActivationPhase::Prepared,
+            identity: FleetActivationIdentity {
+                fleet: fleet_binding(),
+                operation_id: [11; 32],
+                release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
+                    [12; 32],
+                )),
+            },
+            cascade: Some(FleetCascadeActivationEvidence::Source {
+                cascade_manifest_hash: [13; 32],
+            }),
+            cascade_manifest: Some(vec![FleetCascadeManifestEntry {
+                principal: Principal::from_slice(&[14; 29]),
+                state_snapshot_hash: [15; 32],
+                topology_snapshot_hash: [16; 32],
+            }]),
+            credential: None,
+            credential_manifest: None,
+            activated_at_ns: None,
+        };
+
+        let bytes = candid::encode_one(&input).expect("encode activation status");
+        let decoded: FleetActivationStatusResponse =
+            candid::decode_one(&bytes).expect("decode activation status");
 
         assert_eq!(decoded, input);
     }

@@ -79,6 +79,57 @@ type ErrorCode = variant {
   WasmStoreHashMismatch;
   WasmStoreManifestMissing;
 };
+type FleetActivationIdentity = record {
+  fleet : FleetBinding;
+  release_build_id : text;
+  operation_id : blob;
+};
+type FleetActivationPhase = variant { Active; Prepared };
+type FleetActivationStatusResponse = record {
+  credential_manifest : opt FleetCredentialManifest;
+  phase : FleetActivationPhase;
+  cascade_manifest : opt vec FleetCascadeManifestEntry;
+  credential : opt FleetCredentialGenerationRef;
+  activated_at_ns : opt nat64;
+  identity : FleetActivationIdentity;
+  cascade : opt FleetCascadeActivationEvidence;
+};
+type FleetBinding = record { app : text; fleet : FleetKey };
+type FleetCascadeActivationEvidence = variant {
+  Applied : record {
+    state_snapshot_hash : blob;
+    topology_snapshot_hash : blob;
+  };
+  Source : record { cascade_manifest_hash : blob };
+};
+type FleetCascadeManifestEntry = record {
+  "principal" : principal;
+  state_snapshot_hash : blob;
+  topology_snapshot_hash : blob;
+};
+type FleetCredentialGenerationRef = record {
+  manifest_hash : blob;
+  generation : nat64;
+};
+type FleetCredentialManifest = record {
+  fleet : FleetKey;
+  entries : vec FleetCredentialManifestEntry;
+  renewal_template_set_hash : blob;
+  generation : nat64;
+  activation_id : blob;
+  root_policy_set_hash : blob;
+};
+type FleetCredentialManifestEntry = record {
+  subject_canister : principal;
+  root_issuer : principal;
+  proof_hash : blob;
+  cert_hash : blob;
+  expires_at_ns : nat64;
+  key_identity_hash : blob;
+  bundle_hash : blob;
+  not_before_ns : nat64;
+};
+type FleetKey = record { network : text; fleet_id : text };
 type IndexEntryInput = record { pid : principal; role : text };
 type NonrootCyclesCapabilityEnvelopeV1 = record {
   "service" : CapabilityService;
@@ -100,6 +151,7 @@ type Result_5 = variant { Ok : vec WasmStoreCatalogEntryResponse; Err : Error };
 type Result_6 = variant { Ok : TemplateChunkResponse; Err : Error };
 type Result_7 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
 type Result_8 = variant { Ok : WasmStoreStatusResponse; Err : Error };
+type Result_9 = variant { Ok : FleetActivationStatusResponse; Err : Error };
 type RootRequestMetadata = record { request_id : blob; ttl_ns : nat64 };
 type StateSnapshotInput = record {
   app_state : opt AppStateInput;
@@ -197,6 +249,7 @@ type WasmStoreTemplateStatusResponse = record {
 service : (CanisterInitPayload, opt blob) -> {
   canic_bootstrap_status : () -> (BootstrapStatusResponse) query;
   canic_cycle_balance : () -> (Result) query;
+  canic_fleet_activation_status : () -> (Result_9) query;
   canic_cycle_topups : (PageRequest) -> (Result_1) query;
   canic_cycle_tracker : (PageRequest) -> (Result_2) query;
   canic_metadata : () -> (CanicMetadataResponse) query;

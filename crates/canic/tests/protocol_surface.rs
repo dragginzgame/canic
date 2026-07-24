@@ -32,6 +32,7 @@ use canic::{
     },
     dto::blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
     dto::cycles::Cycles,
+    dto::fleet_activation::FleetActivationStatusResponse,
     dto::icp_refill::{IcpRefillDryRun, IcpRefillRequest},
     dto::icrc21::{
         ConsentInfo, ConsentMessage, ConsentMessageMetadata, ConsentMessageRequest,
@@ -218,6 +219,36 @@ fn wasm_store_canonical_did_parses() {
             .iter()
             .all(|(name, _)| name != "canic_memory_ledger"),
         "parsed default wasm_store service must not include canic_memory_ledger"
+    );
+    assert!(
+        service
+            .iter()
+            .any(|(name, _)| name == canic::protocol::CANIC_FLEET_ACTIVATION_STATUS),
+        "parsed default wasm_store service must include the canonical Fleet activation status query"
+    );
+
+    let status_env = candid_type_env::<FleetActivationStatusResponse>();
+    assert!(status_env.contains("FleetActivationStatusResponse"));
+    assert!(status_env.contains("FleetActivationIdentity"));
+    assert!(status_env.contains("FleetCascadeActivationEvidence"));
+    assert!(status_env.contains("FleetCredentialManifest"));
+}
+
+#[test]
+fn fleet_activation_status_is_a_controller_query_on_the_shared_runtime_surface() {
+    assert_eq!(
+        canic::protocol::CANIC_FLEET_ACTIVATION_STATUS,
+        "canic_fleet_activation_status"
+    );
+
+    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/shared.rs");
+    let source = read_text(&macro_path);
+    let attribute =
+        preceding_attribute_context(&source, "async fn canic_fleet_activation_status()");
+
+    assert!(
+        attribute.contains("canic_query(requires(caller::is_controller()))"),
+        "Fleet activation status must remain a controller-guarded query"
     );
 }
 
