@@ -6,7 +6,6 @@ mod inventory;
 mod lifecycle;
 mod plan;
 mod promotion;
-mod root_verification;
 mod safety;
 
 pub use artifact::{
@@ -78,12 +77,6 @@ pub use promotion::{
     RolePromotionPolicyDecisionV1, RolePromotionPolicyV1, RolePromotionProvenanceV1,
     RolePromotionReadinessV1, RolePromotionWasmStoreCatalogVerificationV1,
     RolePromotionWasmStoreIdentityV1, StagingReceiptV1,
-};
-pub use root_verification::{
-    DeploymentRootVerificationCheckV1, DeploymentRootVerificationEvidenceStatusV1,
-    DeploymentRootVerificationReceiptV1, DeploymentRootVerificationReportV1,
-    DeploymentRootVerificationRequestV1, DeploymentRootVerificationSourceV1,
-    DeploymentRootVerificationStateTransitionV1, DeploymentRootVerificationStateV1,
 };
 pub use safety::{
     DeploymentCheckV1, DeploymentDiffV1, DiffItemV1, ResumeSafetyV1, SafetyFindingV1,

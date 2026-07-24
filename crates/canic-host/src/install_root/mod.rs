@@ -20,7 +20,6 @@ mod clock;
 mod commands;
 mod config_selection;
 mod current_execution;
-mod deployment_registration;
 mod deployment_truth_gate;
 mod execution_preflight;
 mod fleet_activation_journal;
@@ -34,7 +33,6 @@ mod preparation;
 mod receipt_io;
 mod root_canister;
 mod root_cycles;
-mod root_verification;
 mod state;
 mod timing;
 mod truth_check;
@@ -49,10 +47,6 @@ pub use config_selection::{
     select_discovered_app_config_path,
 };
 use current_execution::current_install_execution_context;
-pub use deployment_registration::{
-    RegisterDeploymentStateOptions, VerifyDeploymentRootOptions, register_deployment_state,
-    verify_registered_deployment_root,
-};
 use identity::resolve_install_identity;
 pub use operations::{
     InstallRootActivationStatusError, InstallRootExecutionReconciliationError,

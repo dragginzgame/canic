@@ -9,9 +9,7 @@ mod install;
 mod output_format;
 mod plan;
 mod promote;
-mod register;
 mod resume_report;
-mod root;
 mod truth;
 
 pub use crate::cli::clap::value_arg;
@@ -122,10 +120,8 @@ where
             "external" => external::run(args),
             "inspect" => inspect::run(args),
             "promote" => promote::run(args),
-            "root" => root::run(args),
             "plan" => plan::run(args),
             "install" => install::run(args),
-            "register" => register::run(args),
             "check" => check::run(args),
             _ => unreachable!("deploy dispatch command only defines known commands"),
         },

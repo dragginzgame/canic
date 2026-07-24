@@ -258,22 +258,6 @@ const DEPLOYMENT_TRUTH_AUTHORITY_DRY_RUN_SOURCES: &[(&str, &str)] = &[
         "text/promotion/wasm_store/mod.rs",
         include_str!("../../../text/promotion/wasm_store/mod.rs"),
     ),
-    (
-        "text/root_verification/mod.rs",
-        include_str!("../../../text/root_verification/mod.rs"),
-    ),
-    (
-        "text/root_verification/receipt/mod.rs",
-        include_str!("../../../text/root_verification/receipt/mod.rs"),
-    ),
-    (
-        "text/root_verification/report/mod.rs",
-        include_str!("../../../text/root_verification/report/mod.rs"),
-    ),
-    (
-        "text/root_verification/shared/mod.rs",
-        include_str!("../../../text/root_verification/shared/mod.rs"),
-    ),
 ];
 
 const CONTROLLER_MUTATION_PRIMITIVES: &[&str] = &[

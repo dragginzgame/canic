@@ -9,8 +9,6 @@ mod inspect;
 mod install;
 mod plan;
 mod promote;
-mod register;
-mod root;
 mod truth;
 
 use super::*;

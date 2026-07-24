@@ -14,13 +14,16 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.20`.
-- The latest published release is `v0.99.20` at
-  `a2200c7a60accaaa656618ec01dd7105d63f55e3`.
-- The `v0.99.20` source tree is
-  `ffd6fceccd2f2e5439c555c69fde4309bc6eceec`. Its Cargo.lock SHA-256 is
-  `96111ffc59e1ef9f686b774f1ba52deed16f24afe447507e4ff342fd0483b450`.
-- The open `0.99.21` draft completes the runtime Prime hard cut:
+- The workspace package version is `0.99.21`.
+- The latest published release is `v0.99.21` at
+  `69bc6c0be3c71d77eb182f839c9cc44c42755ec3`.
+- The `v0.99.21` source tree is
+  `d7921e249da62c00bbf214740635ef99694e6aa7`. Its Cargo.lock SHA-256 is
+  `1ddd7db9779a11c4de0e55165f4b66abf2d61436bb398b5cb9276416b2949e6f`.
+- The open `0.99.22` draft deletes manual deployment registration and its
+  paired root-verification command family, public host API, report/receipt
+  contracts and obsolete operator proof.
+- Released `0.99.21` completes the runtime Prime hard cut:
   environment/stable/Candid state uses `fleet_root_pid` and `subnet_slot`,
   and the sole access predicates use `is_fleet_root` and
   `is_default_subnet` without aliases or a legacy decoder.
@@ -1289,13 +1292,14 @@ one-Subnet cascade-correctness slice with convergent retry, atomic local
 acceptance, structural topology validation and raw inter-Canister payload
 bounds.
 
-The open `0.99.21` begins closeout with the confirmed remaining runtime
-terminology defect. Stable environment allocation 16, public DTOs, lifecycle
-payloads, access expressions, macro predicates and active documentation use
-only `fleet_root_pid`, `subnet_slot`, `is_fleet_root` and
-`is_default_subnet`. The removed Prime/subnet-role spellings have no alias or
-decoder. Final CLI disposition inventory and the remaining bounded stale-path
-search follow within Slice 8.
+Released `0.99.21` begins closeout by removing the confirmed runtime
+terminology defect. The open `0.99.22` removes the obsolete manual deployment
+registration/root-promotion command pair and its dead report/receipt
+surfaces. Consumer tracing also removes the passive root-verification report
+path because no maintained operation consumes it. The recursive CLI
+disposition inventory and remaining bounded stale-path search continue within
+Slice 8; the legacy environment-scoped install-state readers remain the next
+explicit overlap to resolve.
 
 Do not inspect or edit the stale local Toko repository, change Cargo package
 versions outside the maintainer-owned release flow, or commit, tag, publish

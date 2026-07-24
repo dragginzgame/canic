@@ -1,4 +1,4 @@
-use super::{DeployCommandError, catalog, compare, resume_report, root, truth};
+use super::{DeployCommandError, catalog, compare, resume_report, truth};
 use crate::{
     cli::{
         clap::{parse_subcommand, passthrough_subcommand, render_usage},
@@ -17,7 +17,6 @@ Examples:
   canic deploy inspect report demo
   canic deploy inspect compare --left staging-check.json --right prod-check.json
   canic deploy inspect catalog list
-  canic deploy inspect root --request root-verification.json
   canic deploy inspect resume-report --receipt receipt.json demo
 
 These commands print raw deployment-truth JSON artifacts without installing,
@@ -46,7 +45,6 @@ where
             "report" => truth::run_report(args),
             "compare" => compare::run(args),
             "catalog" => catalog::run(args),
-            "root" => root::run_inspect(args),
             "resume-report" => resume_report::run(args),
             _ => unreachable!("deploy inspect dispatch only defines known commands"),
         },
@@ -61,7 +59,6 @@ pub(super) fn command() -> ClapCommand {
         "report",
         "compare",
         "catalog",
-        "root",
         "resume-report",
     ]
     .into_iter()

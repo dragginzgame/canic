@@ -165,7 +165,7 @@ fn run_deployment_checks(
                 "no installed deployment found",
                 deploy_plan_then(
                     options.deployment_name(),
-                    "then run canic install <app> <fleet> or canic deploy register <deployment> --fleet-template <fleet-template> --root <principal> --allow-unverified",
+                    "then run canic install <app> <fleet>",
                 ),
                 MedicSource::InstalledDeployment,
             ));
@@ -189,7 +189,7 @@ fn run_deployment_checks(
                 detail,
                 deploy_plan_then(
                     options.deployment_name(),
-                    "then reinstall from the owning fleet template or re-register the deployment target with --allow-unverified",
+                    "then reinstall the Fleet with canic install <app> <fleet>",
                 ),
                 MedicSource::InstalledDeployment,
             ));

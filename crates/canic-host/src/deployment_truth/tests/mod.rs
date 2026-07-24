@@ -24,4 +24,3 @@ mod execution_receipts;
 mod lifecycle;
 mod local_observation_plan;
 mod promotion;
-mod root_verification;

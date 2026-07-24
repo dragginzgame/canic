@@ -133,7 +133,7 @@ fn blocking_assumption_next(key: &str) -> String {
     if is_unsupported_plan_assumption(key) {
         "change the desired deployment shape to one supported by canic deploy plan".to_string()
     } else if key == ASSUMPTION_KEY_LOCAL_STATE_UNVERIFIED_ROOT_CANISTER_ID {
-        "run canic deploy check and verify the registered root before planning apply".to_string()
+        "reinstall the Fleet with canic install <app> <fleet> before planning apply".to_string()
     } else {
         "repair the local fleet config before planning apply".to_string()
     }

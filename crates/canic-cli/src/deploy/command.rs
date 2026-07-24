@@ -29,20 +29,12 @@ const DEPLOY_COMMANDS: &[DeploySubcommand] = &[
         about: "Build passive artifact promotion reports",
     },
     DeploySubcommand {
-        name: "root",
-        about: "Inspect or verify deployment-root evidence",
-    },
-    DeploySubcommand {
         name: "plan",
         about: "Explain the deterministic deployment plan without mutation",
     },
     DeploySubcommand {
         name: "install",
         about: "Install through the current runner using a supplied deployment plan",
-    },
-    DeploySubcommand {
-        name: "register",
-        about: "Register minimal deployment-target state",
     },
     DeploySubcommand {
         name: "check",
@@ -63,22 +55,19 @@ Examples:
   canic deploy inspect plan demo
   canic deploy inspect compare --left staging-check.json --right prod-check.json
   canic deploy inspect catalog list
-  canic deploy inspect root --request root-verification.json
   canic deploy inspect resume-report --receipt receipt.json demo
-  canic deploy register demo --fleet-template demo --root aaaaa-aa --allow-unverified
   canic deploy install demo-local --plan promoted-plan.json
   canic deploy authority check demo
   canic deploy external plan demo
   canic deploy promote plan --request promotion-plan.json
-  canic deploy root verify demo-local --from-check deployment-check.json
 
 Use `canic deploy inspect --help` for raw plan, inventory, diff, report,
-comparison, local catalog, root-verification, and resume-safety JSON artifacts.
+comparison, local catalog, and resume-safety JSON artifacts.
 Use `canic deploy plan <deployment>` for the operator planning report.
 Use `canic inspect` for live runtime-observed canister status.
 Plan-mediated deployment-target mutation flows through `canic deploy install
 <deployment> --plan <file>`. `canic install <app> <fleet>` remains the
-bootstrap entrypoint.";
+bootstrap and Fleet-registration entrypoint.";
 
 pub fn deploy_command() -> ClapCommand {
     DEPLOY_COMMANDS
