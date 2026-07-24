@@ -10,6 +10,7 @@ pub mod icp_refill;
 pub mod known;
 pub mod mgmt;
 pub mod nns;
+pub mod release_build;
 
 use crate::cdk::candid::Error as CandidError;
 use ic_cdk::call::{CallFailed, CandidDecodeFailed, Error as CdkCallError};
@@ -24,6 +25,9 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum IcInfraError {
+    #[error(transparent)]
+    EmbeddedReleaseBuild(#[from] release_build::EmbeddedReleaseBuildError),
+
     #[error(transparent)]
     IcpRefillInfra(#[from] icp_refill::IcpRefillInfraError),
 

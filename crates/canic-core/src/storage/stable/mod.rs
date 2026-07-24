@@ -4,6 +4,7 @@ pub mod children;
 pub mod cycles;
 pub mod directory;
 pub mod env;
+pub mod fleet_activation;
 pub mod icp_refill;
 pub mod index;
 pub mod intent;

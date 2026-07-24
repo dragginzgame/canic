@@ -219,6 +219,10 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
     ),
     capability_allocation(
         RoleCapabilityKey::Runtime,
+        StateAllocationKey::CoreFleetActivation,
+    ),
+    capability_allocation(
+        RoleCapabilityKey::Runtime,
         StateAllocationKey::CoreRuntimeObservability,
     ),
     capability_allocation(

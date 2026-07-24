@@ -77,6 +77,7 @@ pub enum StateAllocationKey {
     CanisterPool,
     ControlPlaneSubnetState,
     CoreAuthState,
+    CoreFleetActivation,
     CoreIcpRefillRecords,
     CoreReplayReceipts,
     CoreRuntimeEnvironment,

@@ -14,12 +14,15 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.7`.
-- The latest published release is `v0.99.7` at
-  `491615ed8e6d486a63de2b7646edcc3441a3de80`.
-- The `v0.99.7` source tree is
-  `81804cc86d4fed208061aa71de625be80132a70f`. Its Cargo.lock SHA-256 is
-  `8540dc88a4507008c9de48802027bb9830a915d9e109a9d143b5fc9cccb55717`.
+- The workspace package version is `0.99.8`.
+- The latest published release is `v0.99.8` at
+  `87f8cc12222abcd3e81add57ce8205277d6ebefc`.
+- The `v0.99.8` source tree is
+  `3bdfee09151ea3d39ba80f36f21bbbd22ef203c8`. Its Cargo.lock SHA-256 is
+  `bb8f43634a3f1b1b105cb6bdbac908eb09cb382a0c92ed95f6293f63747f8ace`.
+- Released `0.99.8` admits only canonical verified root-install receipts and
+  advances the fresh-install journal monotonically from `Planned` to
+  `RootInstalled`; the live installer remains deliberately unwired.
 - Released `0.99.7` serializes activation planning per canonical network and
   Fleet name and deterministically discovers the one journal authority.
   Exact retries resume; unsafe or competing authority fails closed.
@@ -1162,23 +1165,24 @@ command family, and discovery fallback do not survive. Live
 install/deployment behavior and runtime topology authorities remain for their
 explicit later slices.
 
-The open `0.99.8` batch implements the exact sequence-one `RootInstalled`
-journal boundary without falsely wiring the pre-cut installer. A transition
-revalidates `Planned` under the existing lock, atomically publishes and
-re-reads the next record, and resumes idempotently only from the same receipt.
-Receipt admission requires canonical durable JSON, one completed successful
-root-install phase, an exact valid root principal and matching canonical
-expected/observed module hashes. Command success alone is insufficient.
+The open `0.99.9` batch establishes the protected Canister-side activation
+owner without switching the live root boundary prematurely. Qualified builds
+now embed their exact non-circular `ReleaseBuildId`; every managed runtime
+selects stable ID 21; and one absent-or-present store owns the bounded
+`FleetActivationRecord`. Exact `CurrentRootInstallIdentity` admission checks
+the supplied ID against the embedded Wasm identity and can commit one
+empty-evidence `Prepared` record. There is no `Unbound` sentinel, overwrite
+path or second Fleet binding.
 
-The next bounded work is the root init hard cut: replace
-`PrimeWithModuleHash` with the exact Fleet activation input, install protected
-`FleetBinding`, operation and release-build identity atomically as
-`Prepared`, and make verified module observation produce the receipt admitted
-above. Only then may live install publish `Planned` before root resolution and
-advance `RootInstalled`. Supplied deployment-plan release-build admission,
-later activation phases, installed Fleet state and final catalog commitment
-remain after that prerequisite. No standalone Fleet-ID generator, catalog
-writer or second durable active pointer is exposed.
+The next bounded batch connects this owner to root lifecycle and host recovery
+atomically: replace `PrimeWithModuleHash` on both sides, publish `Planned`
+before root resolution, install the root directly into `Prepared`, observe
+the exact installed module hash, persist its canonical receipt and advance
+`RootInstalled`. The current macro and maintained installer remain paired on
+their old input until that complete handoff is ready, so `0.99.9` does not
+publish an uninstallable intermediate Wasm. Supplied deployment-plan
+release-build admission, later activation phases, installed Fleet state and
+final catalog commitment remain after that prerequisite.
 
 Do not inspect or edit the stale local Toko repository, change Cargo package
 versions outside the maintainer-owned release flow, or commit, tag, publish

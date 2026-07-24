@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.9` establishes the Canister-side Fleet-activation authority: qualified
+  builds embed their non-circular release identity, every managed runtime owns
+  stable allocation 21, and exact root input can initialize one protected
+  `Prepared` record without an `Unbound` sentinel.
+
 - `0.99.8` implements the monotonic `Planned → RootInstalled` journal
   transition and admits only canonical durable root-install receipts whose
   exact root identity and expected/observed module hashes agree.

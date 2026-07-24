@@ -4,6 +4,7 @@
 //! Does not own: live Fleet identity, deployment labels, or filesystem paths.
 //! Boundary: configuration validation admits the wrapped source name before use.
 
+use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -38,6 +39,19 @@ impl AsRef<str> for AppId {
 impl fmt::Display for AppId {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.as_str())
+    }
+}
+
+impl CandidType for AppId {
+    fn _ty() -> candid::types::Type {
+        candid::types::TypeInner::Text.into()
+    }
+
+    fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
+    where
+        S: candid::types::Serializer,
+    {
+        serializer.serialize_text(self.as_str())
     }
 }
 

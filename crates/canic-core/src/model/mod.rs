@@ -9,6 +9,7 @@ pub mod auth;
 pub mod blob_storage;
 pub mod cycles_funding;
 pub mod env;
+pub mod fleet_activation;
 pub mod intent;
 pub mod placement;
 pub mod replay;
