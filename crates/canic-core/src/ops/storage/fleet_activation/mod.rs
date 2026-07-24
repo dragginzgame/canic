@@ -358,13 +358,10 @@ impl FleetActivationOps {
     }
 
     #[cfg(test)]
-    pub(crate) fn prepared_snapshot_hashes_for_tests()
-    -> Option<(Option<[u8; 32]>, Option<[u8; 32]>)> {
-        FleetActivation::get().map(|record| {
-            (
-                record.prepared_state_snapshot_hash,
-                record.prepared_topology_snapshot_hash,
-            )
+    pub(crate) fn has_partial_snapshot_evidence_for_tests() -> bool {
+        FleetActivation::get().is_some_and(|record| {
+            record.prepared_state_snapshot_hash.is_some()
+                || record.prepared_topology_snapshot_hash.is_some()
         })
     }
 }
