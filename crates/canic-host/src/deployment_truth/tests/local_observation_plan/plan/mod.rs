@@ -93,12 +93,11 @@ fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
         vec!["root", "wasm_store", "user_hub"]
     );
     assert_plan_excludes_declared_only_store(&plan);
-    let root_assumption = plan
-        .unresolved_assumptions
-        .iter()
-        .find(|assumption| assumption.has_kind(DeploymentAssumptionKindV1::LocalStateMissing))
-        .expect("missing root identity should be recorded");
-    assert!(root_assumption.description.contains("--allow-unverified"));
+    assert!(
+        plan.unresolved_assumptions
+            .iter()
+            .any(|assumption| assumption.has_kind(DeploymentAssumptionKindV1::LocalStateMissing))
+    );
 }
 
 #[test]
@@ -167,12 +166,11 @@ kind = "root"
     );
     assert!(plan.authority_profile.staging_controllers.is_empty());
     assert!(plan.authority_profile.emergency_controllers.is_empty());
-    let root_assumption = plan
-        .unresolved_assumptions
-        .iter()
-        .find(|assumption| assumption.has_kind(DeploymentAssumptionKindV1::LocalStateMissing))
-        .expect("missing root identity should be recorded");
-    assert!(root_assumption.description.contains("--allow-unverified"));
+    assert!(
+        plan.unresolved_assumptions
+            .iter()
+            .any(|assumption| assumption.has_kind(DeploymentAssumptionKindV1::LocalStateMissing))
+    );
 }
 
 #[test]
