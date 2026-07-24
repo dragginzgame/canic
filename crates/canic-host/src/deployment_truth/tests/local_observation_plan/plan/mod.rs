@@ -8,6 +8,7 @@ fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
     let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
+    write_local_network_authority(&icp_root, "local");
     write_artifact(&icp_root, "root", b"root-artifact");
     write_artifact(&icp_root, "wasm_store", b"wasm-store-artifact");
     write_artifact(&icp_root, "user_hub", b"user-hub-artifact");
@@ -96,7 +97,7 @@ fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
     assert!(
         plan.unresolved_assumptions
             .iter()
-            .any(|assumption| assumption.has_kind(DeploymentAssumptionKindV1::LocalStateMissing))
+            .any(|assumption| assumption.has_kind(DeploymentAssumptionKindV1::FleetCatalogMissing))
     );
 }
 
@@ -144,6 +145,7 @@ kind = "root"
 "#,
     )
     .expect("write config");
+    write_local_network_authority(&icp_root, "local");
     write_artifact(&icp_root, "root", b"root-artifact");
 
     let plan = build_local_deployment_plan(&LocalDeploymentPlanRequest {
@@ -169,12 +171,12 @@ kind = "root"
     assert!(
         plan.unresolved_assumptions
             .iter()
-            .any(|assumption| assumption.has_kind(DeploymentAssumptionKindV1::LocalStateMissing))
+            .any(|assumption| assumption.has_kind(DeploymentAssumptionKindV1::FleetCatalogMissing))
     );
 }
 
 #[test]
-fn local_plan_uses_install_state_root_as_expected_canister() {
+fn local_plan_uses_fleet_catalog_root_as_expected_canister() {
     let temp = TempWorkspace::new("canic-host-local-plan-root-state");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
@@ -185,14 +187,11 @@ fn local_plan_uses_install_state_root_as_expected_canister() {
     write_artifact(&icp_root, "wasm_store", b"wasm-store-artifact");
     write_artifact(&icp_root, "user_hub", b"user-hub-artifact");
     write_release_set_manifest(&icp_root);
-    let state_path = icp_root.join(".canic/local/deployments/demo-local.json");
-    fs::create_dir_all(state_path.parent().expect("state parent")).expect("create state dir");
-    fs::write(
-        state_path,
-        serde_json::to_vec_pretty(&sample_install_state("demo-local", "aaaaa-aa"))
-            .expect("encode state"),
-    )
-    .expect("write install state");
+    write_fleet_catalog_json(
+        &icp_root,
+        "local",
+        sample_fleet_catalog_entry("demo-local", "aaaaa-aa"),
+    );
 
     let plan = build_local_deployment_plan(&LocalDeploymentPlanRequest {
         deployment_name: "demo-local".to_string(),

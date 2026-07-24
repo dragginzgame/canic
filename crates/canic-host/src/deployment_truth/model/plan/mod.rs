@@ -81,25 +81,21 @@ impl DeploymentAssumptionV1 {
 ///
 /// DeploymentAssumptionKindV1
 ///
-/// Machine-readable owner for local deployment-state assumption distinctions.
+/// Machine-readable owner for Fleet-catalog assumption distinctions.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DeploymentAssumptionKindV1 {
-    LocalStateMissing,
-    LocalStateEnvironmentMismatch,
-    LocalStateReadFailed,
+    FleetCatalogMissing,
+    FleetCatalogReadFailed,
 }
 
 impl DeploymentAssumptionKindV1 {
     #[must_use]
     pub const fn key(self) -> &'static str {
         match self {
-            Self::LocalStateMissing => "local_state.root_canister_id.missing",
-            Self::LocalStateEnvironmentMismatch => {
-                "local_state.root_canister_id.environment_mismatch"
-            }
-            Self::LocalStateReadFailed => "local_state.root_canister_id.read_failed",
+            Self::FleetCatalogMissing => "fleet_catalog.root_principal.missing",
+            Self::FleetCatalogReadFailed => "fleet_catalog.root_principal.read_failed",
         }
     }
 }

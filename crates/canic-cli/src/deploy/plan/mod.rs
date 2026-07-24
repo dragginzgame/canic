@@ -39,13 +39,11 @@ use report::{DeploymentPlanReport, REPORT_SCHEMA_VERSION};
 
 const ASSUMPTION_PREFIX_LOCAL_ARTIFACTS: &str = "local_artifacts.";
 const ASSUMPTION_PREFIX_LOCAL_CONFIG: &str = "local_config.";
-const ASSUMPTION_PREFIX_LOCAL_STATE: &str = "local_state.";
+const ASSUMPTION_PREFIX_FLEET_CATALOG: &str = "fleet_catalog.";
 const ASSUMPTION_PREFIX_UNSUPPORTED: &str = "unsupported.";
 const ASSUMPTION_KEY_LOCAL_CONFIG_CONTROLLERS: &str = "local_config.controllers";
 const ASSUMPTION_KEY_LOCAL_CONFIG_POOLS: &str = "local_config.pools";
 const ASSUMPTION_KEY_LOCAL_CONFIG_ROLES: &str = "local_config.roles";
-const ASSUMPTION_KEY_LOCAL_STATE_UNVERIFIED_ROOT_CANISTER_ID: &str =
-    "local_state.unverified_root_canister_id";
 pub(super) fn run<I>(args: I) -> Result<(), DeployCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -460,7 +458,7 @@ mod tests {
             "deployment_config" => SOURCE_DEPLOYMENT_CONFIG,
             "deployment_plan_builder" => SOURCE_DEPLOYMENT_PLAN_BUILDER,
             "app_config" => SOURCE_APP_CONFIG,
-            "installed_deployment" => SOURCE_INSTALLED_DEPLOYMENT,
+            "fleet_catalog" => SOURCE_FLEET_CATALOG,
             "local_observation" => SOURCE_LOCAL_OBSERVATION,
             _ => panic!("unknown diagnostic source fixture {value}"),
         }

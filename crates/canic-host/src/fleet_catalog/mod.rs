@@ -70,19 +70,6 @@ pub struct FleetCatalogEntryV1 {
     pub environment: String,
     pub deployed_at_unix_secs: u64,
     pub root_principal: String,
-    pub root_verification: FleetCatalogRootVerificationV1,
-}
-
-///
-/// FleetCatalogRootVerificationV1
-///
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum FleetCatalogRootVerificationV1 {
-    #[serde(rename = "not_verified")]
-    NotVerified,
-    #[serde(rename = "verified")]
-    Verified,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -163,9 +150,37 @@ pub fn inspect_fleet_catalog_report(
     request: &FleetCatalogRequest,
     fleet_name: &str,
 ) -> Result<FleetCatalogReportV1, FleetCatalogError> {
-    let fleet_name = fleet_name.parse::<FleetName>()?;
     let mut report = build_fleet_catalog_report(request)?;
-    let entry = report
+    let entry = require_fleet_catalog_entry(&report, fleet_name)?;
+    report.entries = vec![entry];
+    Ok(report)
+}
+
+/// Resolve one exact installed Fleet from the catalog selected by canonical
+/// network identity.
+pub fn read_fleet_catalog_entry_from_root(
+    project_root: &Path,
+    environment: &str,
+    fleet_name: &str,
+) -> Result<Option<FleetCatalogEntryV1>, FleetCatalogError> {
+    let fleet_name = fleet_name.parse::<FleetName>()?;
+    let report = build_fleet_catalog_report(&FleetCatalogRequest {
+        project_root: project_root.to_path_buf(),
+        environment: environment.to_string(),
+        generated_at: String::new(),
+    })?;
+    Ok(report
+        .entries
+        .into_iter()
+        .find(|entry| entry.fleet_name == fleet_name))
+}
+
+fn require_fleet_catalog_entry(
+    report: &FleetCatalogReportV1,
+    fleet_name: &str,
+) -> Result<FleetCatalogEntryV1, FleetCatalogError> {
+    let fleet_name = fleet_name.parse::<FleetName>()?;
+    report
         .entries
         .iter()
         .find(|entry| entry.fleet_name == fleet_name)
@@ -173,9 +188,7 @@ pub fn inspect_fleet_catalog_report(
         .ok_or(FleetCatalogError::UnknownFleet {
             canonical_network_id: report.canonical_network_id,
             fleet_name,
-        })?;
-    report.entries = vec![entry];
-    Ok(report)
+        })
 }
 
 #[must_use]
@@ -202,10 +215,6 @@ pub fn fleet_catalog_report_text(report: &FleetCatalogReportV1) -> String {
         lines.push(format!("    app: {}", entry.app));
         lines.push(format!("    environment: {}", entry.environment));
         lines.push(format!("    root_principal: {}", entry.root_principal));
-        lines.push(format!(
-            "    root_verification: {}",
-            root_verification_label(entry.root_verification)
-        ));
     }
     lines.join("\n")
 }
@@ -338,11 +347,4 @@ fn fleet_catalog_path(project_root: &Path, canonical_network_id: CanonicalNetwor
         .join("networks")
         .join(canonical_network_id.to_string())
         .join(FLEET_CATALOG_RELATIVE_PATH)
-}
-
-const fn root_verification_label(status: FleetCatalogRootVerificationV1) -> &'static str {
-    match status {
-        FleetCatalogRootVerificationV1::NotVerified => "not_verified",
-        FleetCatalogRootVerificationV1::Verified => "verified",
-    }
 }

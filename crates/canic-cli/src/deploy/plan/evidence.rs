@@ -13,7 +13,7 @@ use crate::deploy::plan::{
         CATEGORY_INVENTORY, CATEGORY_OBSERVATION, CATEGORY_TOPOLOGY, CATEGORY_TRUST_DOMAIN,
         CATEGORY_VERIFIER_READINESS, PlanDiagnostic, PlanDiagnosticCategory, PlanDiagnosticSource,
         SEVERITY_INFO, SOURCE_APP_CONFIG, SOURCE_BUILD_PROFILE, SOURCE_DEPLOYMENT_CONFIG,
-        SOURCE_DEPLOYMENT_PLAN_BUILDER, SOURCE_INSTALLED_DEPLOYMENT, SOURCE_LOCAL_OBSERVATION,
+        SOURCE_DEPLOYMENT_PLAN_BUILDER, SOURCE_FLEET_CATALOG, SOURCE_LOCAL_OBSERVATION,
     },
 };
 use std::path::Path;
@@ -69,9 +69,9 @@ pub(super) fn verified_facts(
             code: "installed_root_canister_id_resolved".to_string(),
             severity: SEVERITY_INFO,
             subject: options.deployment.clone(),
-            detail: format!("installed deployment state resolves root canister {root}"),
+            detail: format!("Fleet catalog resolves root canister {root}"),
             next: None,
-            source: SOURCE_INSTALLED_DEPLOYMENT,
+            source: SOURCE_FLEET_CATALOG,
         });
     }
 
@@ -379,7 +379,7 @@ fn trust_domain_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
             subject: subject.clone(),
             detail: format!("root trust anchor resolved: {root}"),
             next: None,
-            source: SOURCE_INSTALLED_DEPLOYMENT,
+            source: SOURCE_FLEET_CATALOG,
         });
     }
 

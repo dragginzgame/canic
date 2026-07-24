@@ -104,8 +104,6 @@ pub(super) use verifier_readiness::{
 pub(in crate::deployment_truth) const DEPLOYMENT_MANIFEST_MISMATCH_CODE: &str =
     "deployment_manifest_mismatch";
 pub(in crate::deployment_truth) const OBSERVATION_GAP_CODE: &str = "observation_gap";
-pub(in crate::deployment_truth) const UNVERIFIED_DEPLOYMENT_ROOT_CODE: &str =
-    "unverified_deployment_root";
 pub(in crate::deployment_truth) const PLAN_ASSUMPTION_CODE: &str = "plan_assumption";
 pub(in crate::deployment_truth) const IDENTITY_UNOBSERVED_CODE: &str = "identity_unobserved";
 pub(in crate::deployment_truth) const ENVIRONMENT_MISMATCH_CODE: &str = "environment_mismatch";
@@ -292,7 +290,7 @@ pub fn compare_plan_to_inventory(
         &mut hard_failures,
         &mut warnings,
     );
-    record_plan_assumptions(plan, &mut hard_failures, &mut warnings);
+    record_plan_assumptions(plan, &mut warnings);
     for gap in &inventory.unresolved_observations {
         warnings.push(SafetyFindingV1 {
             code: OBSERVATION_GAP_CODE.to_string(),
@@ -323,27 +321,14 @@ pub fn compare_plan_to_inventory(
     }
 }
 
-fn record_plan_assumptions(
-    plan: &DeploymentPlanV1,
-    hard_failures: &mut Vec<SafetyFindingV1>,
-    warnings: &mut Vec<SafetyFindingV1>,
-) {
+fn record_plan_assumptions(plan: &DeploymentPlanV1, warnings: &mut Vec<SafetyFindingV1>) {
     for assumption in &plan.unresolved_assumptions {
-        if assumption.key == "local_state.unverified_root_canister_id" {
-            hard_failures.push(SafetyFindingV1 {
-                code: UNVERIFIED_DEPLOYMENT_ROOT_CODE.to_string(),
-                message: assumption.description.clone(),
-                severity: SafetySeverityV1::HardFailure,
-                subject: Some(assumption.key.clone()),
-            });
-        } else {
-            warnings.push(SafetyFindingV1 {
-                code: PLAN_ASSUMPTION_CODE.to_string(),
-                message: assumption.description.clone(),
-                severity: SafetySeverityV1::Warning,
-                subject: Some(assumption.key.clone()),
-            });
-        }
+        warnings.push(SafetyFindingV1 {
+            code: PLAN_ASSUMPTION_CODE.to_string(),
+            message: assumption.description.clone(),
+            severity: SafetySeverityV1::Warning,
+            subject: Some(assumption.key.clone()),
+        });
     }
 }
 

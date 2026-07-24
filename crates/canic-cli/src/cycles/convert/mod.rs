@@ -40,7 +40,7 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
     let root = resolve_current_canic_icp_root().map_err(CyclesCommandError::IcpRoot)?;
     let installed = resolve_deployment(&options.target, &root, &options.deployment)?;
     let root_target = ResolvedCanisterTarget {
-        canister_id: installed.state.root_canister_id,
+        canister_id: installed.fleet.root_principal,
         role: Some("root".to_string()),
     };
     let icp = IcpCli::new(

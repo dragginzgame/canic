@@ -62,11 +62,8 @@ fn environment_aliases_read_the_same_canonical_network_catalog() {
 }
 
 #[test]
-fn missing_catalog_is_empty_and_never_reads_legacy_deployment_state() {
-    let root = fixture("no-legacy-fallback");
-    let legacy = root.join(".canic/staging/deployments/shop.json");
-    fs::create_dir_all(legacy.parent().expect("legacy parent")).expect("legacy directory");
-    fs::write(&legacy, b"{\"deployment_name\":\"shop\"}").expect("legacy state");
+fn missing_catalog_has_no_fleet_entries() {
+    let root = fixture("missing");
 
     let report = build_fleet_catalog_report(&request(&root, "staging")).expect("empty catalog");
 
@@ -312,6 +309,5 @@ fn entry(
         environment: environment.to_string(),
         deployed_at_unix_secs: 54,
         root_principal: root_principal.to_string(),
-        root_verification: FleetCatalogRootVerificationV1::Verified,
     }
 }

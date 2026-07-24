@@ -233,7 +233,7 @@ fn supplied_artifact_rejects_unpinned_and_duplicate_roles() {
     );
     unpinned.role_artifacts[0].installed_module_hash = Some(wasm_hash_hex(MINIMAL_WASM));
     let pin_error = PreparedPlanArtifacts::materialize(&unpinned, &root, "local")
-        .expect_err("installed deployment state must not substitute for an artifact pin");
+        .expect_err("an observed module hash must not substitute for an artifact pin");
     std::assert_matches!(
         pin_error,
         PlanArtifactError::MissingDigestPin { role, kind: "raw Wasm" } if role == "root"

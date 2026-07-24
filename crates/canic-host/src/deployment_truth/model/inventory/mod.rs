@@ -44,7 +44,7 @@ pub struct DeploymentRootObservationV1 {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum DeploymentRootObservationSourceV1 {
     IcpCanisterStatus,
-    LocalDeploymentState,
+    FleetCatalog,
 }
 
 impl DeploymentRootObservationSourceV1 {
@@ -52,7 +52,7 @@ impl DeploymentRootObservationSourceV1 {
     pub const fn label(self) -> &'static str {
         match self {
             Self::IcpCanisterStatus => "IcpCanisterStatus",
-            Self::LocalDeploymentState => "LocalDeploymentState",
+            Self::FleetCatalog => "FleetCatalog",
         }
     }
 }
@@ -92,7 +92,7 @@ pub struct ObservedCanisterV1 {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RoleAssignmentSourceV1 {
     IcpCanisterStatus,
-    LocalInstallState,
+    FleetCatalog,
     SubnetRegistry,
     SubnetRegistryAndIcpCanisterStatus,
 }
@@ -102,7 +102,7 @@ impl RoleAssignmentSourceV1 {
     pub const fn label(self) -> &'static str {
         match self {
             Self::IcpCanisterStatus => "icp_canister_status",
-            Self::LocalInstallState => "local_install_state",
+            Self::FleetCatalog => "fleet_catalog",
             Self::SubnetRegistry => "subnet_registry",
             Self::SubnetRegistryAndIcpCanisterStatus => "subnet_registry+icp_canister_status",
         }
@@ -253,8 +253,8 @@ mod tests {
             "IcpCanisterStatus"
         );
         assert_eq!(
-            DeploymentRootObservationSourceV1::LocalDeploymentState.label(),
-            "LocalDeploymentState"
+            DeploymentRootObservationSourceV1::FleetCatalog.label(),
+            "FleetCatalog"
         );
     }
 
@@ -265,10 +265,7 @@ mod tests {
                 RoleAssignmentSourceV1::IcpCanisterStatus,
                 "icp_canister_status",
             ),
-            (
-                RoleAssignmentSourceV1::LocalInstallState,
-                "local_install_state",
-            ),
+            (RoleAssignmentSourceV1::FleetCatalog, "fleet_catalog"),
             (RoleAssignmentSourceV1::SubnetRegistry, "subnet_registry"),
             (
                 RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus,

@@ -24,11 +24,7 @@ fn artifact_gate_receipt_records_materialized_artifact_evidence() {
             status: None,
             root_trust_anchor: Some("aaaaa-aa".to_string()),
             canonical_embedded_config_digest: None,
-            role_assignment_source: Some(
-                RoleAssignmentSourceV1::LocalInstallState
-                    .label()
-                    .to_string(),
-            ),
+            role_assignment_source: Some(RoleAssignmentSourceV1::FleetCatalog.label().to_string()),
         }],
         observed_pool: Vec::new(),
         observed_artifacts: vec![ObservedArtifactV1 {
@@ -181,6 +177,7 @@ fn artifact_gate_receipt_records_missing_artifact_postcondition() {
     let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
+    write_local_network_authority(&icp_root, "local");
     write_artifact(&icp_root, "root", b"root-artifact");
 
     let check = check_local_deployment(&LocalDeploymentCheckRequest {

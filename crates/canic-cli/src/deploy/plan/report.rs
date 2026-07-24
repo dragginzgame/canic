@@ -34,8 +34,7 @@ pub(super) const SOURCE_DEPLOYMENT_CONFIG: PlanDiagnosticSource =
 pub(super) const SOURCE_DEPLOYMENT_PLAN_BUILDER: PlanDiagnosticSource =
     PlanDiagnosticSource::DeploymentPlanBuilder;
 pub(super) const SOURCE_APP_CONFIG: PlanDiagnosticSource = PlanDiagnosticSource::AppConfig;
-pub(super) const SOURCE_INSTALLED_DEPLOYMENT: PlanDiagnosticSource =
-    PlanDiagnosticSource::InstalledDeployment;
+pub(super) const SOURCE_FLEET_CATALOG: PlanDiagnosticSource = PlanDiagnosticSource::FleetCatalog;
 pub(super) const SOURCE_LOCAL_OBSERVATION: PlanDiagnosticSource =
     PlanDiagnosticSource::LocalObservation;
 pub(super) const FUTURE_APPLY_PREVIEW_PHASE: ProposedOperationPhase =
@@ -89,7 +88,6 @@ pub(super) enum ComparisonStatus {
     NotAvailable,
     Compared,
     ComparedWithWarnings,
-    ComparedWithDrift,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -172,7 +170,7 @@ pub(super) enum PlanDiagnosticSource {
     DeploymentConfig,
     DeploymentPlanBuilder,
     AppConfig,
-    InstalledDeployment,
+    FleetCatalog,
     LocalObservation,
 }
 
@@ -184,7 +182,7 @@ impl PlanDiagnosticSource {
             Self::DeploymentConfig => "deployment_config",
             Self::DeploymentPlanBuilder => "deployment_plan_builder",
             Self::AppConfig => "app_config",
-            Self::InstalledDeployment => "installed_deployment",
+            Self::FleetCatalog => "fleet_catalog",
             Self::LocalObservation => "local_observation",
         }
     }
@@ -276,7 +274,6 @@ impl ComparisonStatus {
             Self::NotAvailable => "not_available",
             Self::Compared => "compared",
             Self::ComparedWithWarnings => "compared_with_warnings",
-            Self::ComparedWithDrift => "compared_with_drift",
         }
     }
 }

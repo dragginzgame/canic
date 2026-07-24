@@ -2,6 +2,7 @@ use super::super::*;
 use super::inventory::LocalInventoryRequest;
 use super::shared::{normalize_module_hash, observation_gap, read_live_canister_status};
 use crate::{
+    fleet_catalog::FleetCatalogEntryV1,
     icp::IcpCanisterStatusReport,
     installed_deployment::{InstalledDeploymentRequest, resolve_installed_deployment_from_root},
     registry::RegistryEntry,
@@ -12,8 +13,8 @@ use std::{
     path::Path,
 };
 
-pub(super) fn install_state_registry_observations(
-    state: &crate::install_root::InstallState,
+pub(super) fn fleet_catalog_registry_observations(
+    fleet: &FleetCatalogEntryV1,
     request: &LocalInventoryRequest,
     pool_expectations: &[ConfiguredPoolExpectation],
     observed_canisters: &mut Vec<ObservedCanisterV1>,
@@ -30,7 +31,7 @@ pub(super) fn install_state_registry_observations(
     ) {
         Ok(resolution) => {
             let mut registry_canisters = registry_entries_to_observed_canisters(
-                &state.root_canister_id,
+                &fleet.root_principal,
                 &resolution.registry.entries,
             );
             enrich_registry_observed_canisters(
@@ -40,7 +41,7 @@ pub(super) fn install_state_registry_observations(
                 gaps,
             );
             let mut observed_pool = registry_entries_to_observed_pool(
-                &state.root_canister_id,
+                &fleet.root_principal,
                 &resolution.registry.entries,
                 pool_expectations,
                 gaps,
@@ -54,7 +55,7 @@ pub(super) fn install_state_registry_observations(
                 "live_subnet_registry",
                 format!(
                     "could not observe live subnet registry for root {}: {err}",
-                    state.root_canister_id
+                    fleet.root_principal
                 ),
             ));
             Vec::new()

@@ -138,7 +138,7 @@ impl BlobStorageCommandError {
             | Self::InstalledDeployment(
                 InstalledDeploymentError::Icp(IcpCommandError::Io(_))
                 | InstalledDeploymentError::NoInstalledDeployment { .. }
-                | InstalledDeploymentError::InstallState(_)
+                | InstalledDeploymentError::FleetCatalog(_)
                 | InstalledDeploymentError::Registry(_)
                 | InstalledDeploymentError::Io(_),
             )
@@ -181,7 +181,7 @@ impl BlobStorageCommandError {
             | Self::IcpRoot(_)
             | Self::InstalledDeployment(
                 InstalledDeploymentError::NoInstalledDeployment { .. }
-                | InstalledDeploymentError::InstallState(_)
+                | InstalledDeploymentError::FleetCatalog(_)
                 | InstalledDeploymentError::Registry(_)
                 | InstalledDeploymentError::Io(_)
                 | InstalledDeploymentError::Icp(IcpCommandError::Io(_)),

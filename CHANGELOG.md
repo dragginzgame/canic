@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.23` makes the canonical-network Fleet catalog the sole installed-Fleet
+  authority across live CLI resolution, deployment truth and status/medic,
+  deleting the environment-scoped install-state model and its redundant
+  root-verification flag.
+
 - `0.99.22` removes the obsolete manual deployment registration and
   root-verification command family, including its orphan report/receipt
   contracts and operator proof.

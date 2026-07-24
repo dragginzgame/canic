@@ -53,7 +53,6 @@ fn current_install_check_paths_do_not_write_or_mutate_state() {
     );
 
     for forbidden in [
-        "write_install_state(",
         "write_install_deployment_truth_receipt(",
         "write_current_install_execution_preflight_receipt(",
         "install_root(",

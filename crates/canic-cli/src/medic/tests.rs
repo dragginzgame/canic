@@ -7,10 +7,10 @@ use super::{
     },
     command::{medic_subcommand_help_requested, usage},
     deployment::{
-        check_deployment_environment, check_deployment_registry_not_evaluated,
-        check_deployment_truth_receipt, check_root_canister_id, check_root_readiness_not_evaluated,
-        deployment_environment_selection, deployment_name_conflation_checks,
-        deployment_registry_observed_check, root_readiness_source,
+        check_deployment_registry_not_evaluated, check_root_canister_id,
+        check_root_readiness_not_evaluated, deployment_environment_selection,
+        deployment_name_conflation_checks, deployment_registry_observed_check,
+        root_readiness_source,
     },
     project::project_environment_selection_check,
     render::{MEDIC_REPORT_WIDTH, render_medic_ci_text, render_medic_json, render_medic_text},
@@ -26,13 +26,10 @@ use crate::{
 };
 use std::{ffi::OsString, fs};
 
-use canic_core::ids::CanisterRole;
+use canic_core::ids::{AppId, CanisterRole, CanonicalNetworkId, FleetId};
 use canic_host::{
-    deployment_truth::{
-        DeploymentCommandResultV1, DeploymentExecutionStatusV1, DeploymentReceiptV1,
-    },
+    fleet_catalog::{FleetCatalogEntryV1, FleetCatalogError},
     icp::local_canister_candid_path,
-    install_root::{InstallState, InstallStateError},
     installed_deployment::{
         InstalledDeploymentError, InstalledDeploymentResolution, InstalledDeploymentSource,
     },
@@ -459,48 +456,9 @@ fn deployment_report_includes_effective_environment() {
     assert_eq!(report.deployment.as_deref(), Some("demo"));
 }
 
-// Ensure deployment medic uses a unique installed deployment record environment when
-// the operator does not pass an explicit environment.
-#[test]
-fn deployment_environment_selection_uses_recorded_environment_before_local_default() {
-    let root = temp_dir("canic-cli-medic-recorded-environment");
-    let mut state = sample_install_state();
-    state.environment = "ic".to_string();
-    write_medic_install_state(&root, "ic", &state);
-    let options = MedicOptions {
-        scope: MedicScope::Deployment,
-        deployment: Some("demo".to_string()),
-        blob_storage: None,
-        auth_renewal: None,
-        json: false,
-        ci: false,
-        environment: None,
-        icp: "icp".to_string(),
-    };
-
-    let (environment, check) = deployment_environment_selection(&options, Some(&root));
-    let report = MedicReport::with_environment(
-        &options,
-        Some(environment.clone()),
-        vec![sample_check(MedicStatus::Pass)],
-    );
-
-    assert_eq!(environment, "ic");
-    assert_eq!(check.code, "deployment_environment_from_record");
-    assert_eq!(check.source, MedicSource::InstalledDeployment);
-    assert_eq!(report.environment.as_deref(), Some("ic"));
-
-    fs::remove_dir_all(root).expect("remove temp root");
-}
-
-// Ensure an explicit operator environment still wins over discovered deployment
-// records.
+// Ensure an explicit operator environment wins over the local default.
 #[test]
 fn deployment_environment_selection_prefers_explicit_environment() {
-    let root = temp_dir("canic-cli-medic-explicit-environment");
-    let mut state = sample_install_state();
-    state.environment = "ic".to_string();
-    write_medic_install_state(&root, "ic", &state);
     let options = MedicOptions {
         scope: MedicScope::Deployment,
         deployment: Some("demo".to_string()),
@@ -512,13 +470,11 @@ fn deployment_environment_selection_prefers_explicit_environment() {
         icp: "icp".to_string(),
     };
 
-    let (environment, check) = deployment_environment_selection(&options, Some(&root));
+    let (environment, check) = deployment_environment_selection(&options);
 
     assert_eq!(environment, "local");
     assert_eq!(check.code, "local_environment_explicit");
     assert_eq!(check.source, MedicSource::Command);
-
-    fs::remove_dir_all(root).expect("remove temp root");
 }
 
 // Ensure missing installed targets point operators at the no-mutation planner.
@@ -585,65 +541,32 @@ fn project_environment_selection_check_is_project_only() {
     assert!(project_environment_selection_check(&deployment).is_none());
 }
 
-// Ensure deployment-state environment drift is classified before live readiness probes.
-#[test]
-fn deployment_environment_check_classifies_match_and_mismatch() {
-    let mut state = sample_install_state();
-    let matched = check_deployment_environment(&state, "local");
-
-    assert_eq!(matched.status, MedicStatus::Pass);
-    assert_eq!(matched.code, "deployment_environment_match");
-    assert_eq!(matched.category, MedicCategory::DeploymentState);
-
-    state.environment = "ic".to_string();
-    let mismatched = check_deployment_environment(&state, "local");
-
-    assert_eq!(mismatched.status, MedicStatus::Fail);
-    assert_eq!(mismatched.code, "deployment_environment_mismatch");
-    assert!(mismatched.detail.contains("scoped to ic"));
-    assert!(mismatched.detail.contains("selected local"));
-}
-
 // Ensure missing root IDs are caught before medic attempts a live readiness query.
 #[test]
 fn root_canister_id_check_classifies_present_and_missing_ids() {
-    let mut state = sample_install_state();
-    let present = check_root_canister_id(&state);
+    let mut fleet = sample_fleet_catalog_entry();
+    let present = check_root_canister_id(&fleet);
 
     assert_eq!(present.status, MedicStatus::Pass);
     assert_eq!(present.code, "root_canister_id_present");
     assert_eq!(present.detail, "aaaaa-aa");
 
-    state.root_canister_id = "  ".to_string();
-    let missing = check_root_canister_id(&state);
+    fleet.root_principal = "  ".to_string();
+    let missing = check_root_canister_id(&fleet);
 
     assert_eq!(missing.status, MedicStatus::Fail);
     assert_eq!(missing.code, "root_canister_id_missing");
-    assert!(
-        missing
-            .detail
-            .contains("does not record a root canister id")
-    );
+    assert!(missing.detail.contains("does not record a root principal"));
 }
 
-// Ensure skipped root readiness is explicit when local deployment-state gates fail.
+// Ensure skipped root readiness is explicit when the catalog root is missing.
 #[test]
 fn root_readiness_not_evaluated_explains_skipped_live_query() {
-    let environment_mismatch = check_root_readiness_not_evaluated(false, true);
-
-    assert_eq!(environment_mismatch.status, MedicStatus::NotEvaluated);
-    assert_eq!(environment_mismatch.code, "root_readiness_not_evaluated");
-    assert!(
-        environment_mismatch
-            .detail
-            .contains("environment does not match")
-    );
-
-    let missing_root = check_root_readiness_not_evaluated(true, false);
+    let missing_root = check_root_readiness_not_evaluated(false);
 
     assert_eq!(missing_root.status, MedicStatus::NotEvaluated);
     assert_eq!(missing_root.code, "root_readiness_not_evaluated");
-    assert!(missing_root.detail.contains("no root canister id"));
+    assert!(missing_root.detail.contains("no root principal"));
 }
 
 // Ensure readiness diagnostics identify local replica versus ICP CLI sources.
@@ -653,27 +576,14 @@ fn root_readiness_source_tracks_selected_environment() {
     assert_eq!(root_readiness_source("ic"), MedicSource::IcpCli);
 }
 
-// Ensure deployment registry smoke checks are skipped behind local state gates.
+// Ensure deployment registry smoke checks are skipped behind the catalog root gate.
 #[test]
 fn deployment_registry_not_evaluated_explains_skipped_live_query() {
-    let environment_mismatch = check_deployment_registry_not_evaluated(false, true);
-
-    assert_eq!(environment_mismatch.status, MedicStatus::NotEvaluated);
-    assert_eq!(
-        environment_mismatch.code,
-        "deployment_registry_not_evaluated"
-    );
-    assert!(
-        environment_mismatch
-            .detail
-            .contains("environment does not match")
-    );
-
-    let missing_root = check_deployment_registry_not_evaluated(true, false);
+    let missing_root = check_deployment_registry_not_evaluated(false);
 
     assert_eq!(missing_root.status, MedicStatus::NotEvaluated);
     assert_eq!(missing_root.code, "deployment_registry_not_evaluated");
-    assert!(missing_root.detail.contains("no root canister id"));
+    assert!(missing_root.detail.contains("no root principal"));
 }
 
 // Ensure successful deployment registry observation reports the live entry and role counts.
@@ -724,87 +634,6 @@ fn deployment_registry_runtime_next_falls_back_to_direct_canister() {
     assert_eq!(check.code, "deployment_registry_observed");
     assert!(check.next.contains("canic inspect canister cccccc-cc"));
     assert!(check.next.contains("one explicit canister"));
-}
-
-// Ensure deployment-truth receipt diagnostics classify missing and complete local receipts.
-#[test]
-fn deployment_truth_receipt_check_classifies_missing_and_complete_receipts() {
-    let root = temp_dir("canic-cli-medic-deployment-truth-complete");
-    let state = sample_install_state();
-    let missing = check_deployment_truth_receipt(Some(&root), &state, "local");
-
-    assert_eq!(missing.status, MedicStatus::Warn);
-    assert_eq!(missing.code, "deployment_truth_incomplete");
-    assert!(missing.detail.contains("no deployment-truth receipt found"));
-    assert!(missing.next.contains("canic deploy plan demo"));
-    assert!(missing.next.contains("canic deploy check demo"));
-
-    write_medic_deployment_receipt(
-        &root,
-        "local",
-        "demo",
-        sample_deployment_receipt(
-            DeploymentExecutionStatusV1::Complete,
-            DeploymentCommandResultV1::Succeeded,
-            Some("inventory-1"),
-        ),
-    );
-    let complete = check_deployment_truth_receipt(Some(&root), &state, "local");
-
-    assert_eq!(complete.status, MedicStatus::Pass);
-    assert_eq!(complete.code, "deployment_truth_complete");
-    assert!(complete.detail.contains("status=complete"));
-    assert!(complete.detail.contains("result=succeeded"));
-
-    fs::remove_dir_all(root).expect("remove temp root");
-}
-
-// Ensure partial deployment-truth receipts are blocking medic diagnostics.
-#[test]
-fn deployment_truth_receipt_check_fails_on_partial_receipts() {
-    let root = temp_dir("canic-cli-medic-deployment-truth-partial");
-    let state = sample_install_state();
-    write_medic_deployment_receipt(
-        &root,
-        "local",
-        "demo",
-        sample_deployment_receipt(
-            DeploymentExecutionStatusV1::PartiallyApplied,
-            DeploymentCommandResultV1::Failed {
-                code: "install_failed".to_string(),
-                message: "install failed".to_string(),
-            },
-            None,
-        ),
-    );
-
-    let check = check_deployment_truth_receipt(Some(&root), &state, "local");
-
-    assert_eq!(check.status, MedicStatus::Fail);
-    assert_eq!(check.code, "deployment_truth_incomplete");
-    assert!(check.detail.contains("status=partially_applied"));
-    assert!(check.detail.contains("result=failed:install_failed"));
-    assert!(check.next.contains("deploy inspect resume-report demo"));
-
-    fs::remove_dir_all(root).expect("remove temp root");
-}
-
-// Ensure malformed deployment-truth receipt files fail closed.
-#[test]
-fn deployment_truth_receipt_check_fails_on_invalid_receipt_json() {
-    let root = temp_dir("canic-cli-medic-deployment-truth-invalid");
-    let state = sample_install_state();
-    let receipt_dir = root.join(".canic/local/deployment-receipts/demo");
-    fs::create_dir_all(&receipt_dir).expect("create receipt dir");
-    fs::write(receipt_dir.join("unix_100-invalid.json"), "{").expect("write bad receipt");
-
-    let check = check_deployment_truth_receipt(Some(&root), &state, "local");
-
-    assert_eq!(check.status, MedicStatus::Fail);
-    assert_eq!(check.code, "deployment_truth_incomplete");
-    assert!(check.detail.contains("invalid"));
-
-    fs::remove_dir_all(root).expect("remove temp root");
 }
 
 // Ensure missing deployment targets get exact-match hints when they are likely fleet or role names.
@@ -1359,10 +1188,8 @@ fn auth_renewal_medic_error_check_classifies_invalid_issuer() {
         "not a principal",
     );
     let generic = auth_renewal_medic_error_check(
-        AuthCommandError::InstalledDeployment(InstalledDeploymentError::InstallState(
-            InstallStateError::InvalidStateName {
-                name: "missing state".to_string(),
-            },
+        AuthCommandError::InstalledDeployment(InstalledDeploymentError::FleetCatalog(
+            FleetCatalogError::UnsupportedPlatform("test"),
         )),
         "demo",
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
@@ -1529,23 +1356,15 @@ fn sample_check(status: MedicStatus) -> MedicCheck {
     )
 }
 
-fn sample_install_state() -> InstallState {
-    InstallState {
-        schema_version: 1,
-        deployment_name: "demo".to_string(),
-        fleet_template: "demo".to_string(),
-        created_at_unix_secs: 1,
-        updated_at_unix_secs: 1,
+fn sample_fleet_catalog_entry() -> FleetCatalogEntryV1 {
+    FleetCatalogEntryV1 {
+        canonical_network_id: CanonicalNetworkId::public_ic(),
+        fleet_id: FleetId::from_generated_bytes([5; 32]),
+        fleet_name: "demo".parse().expect("Fleet name"),
+        app: AppId::from("demo"),
         environment: "local".to_string(),
-        root_target: "root".to_string(),
-        root_canister_id: "aaaaa-aa".to_string(),
-        root_verification: canic_host::install_root::RootVerificationStatus::Verified,
-        root_build_target: "root".to_string(),
-        workspace_root: "/workspace".to_string(),
-        icp_root: "/workspace".to_string(),
-        config_path: "/workspace/apps/demo/canic.toml".to_string(),
-        release_set_manifest_path: "/workspace/.icp/local/canisters/root/root.release-set.json"
-            .to_string(),
+        deployed_at_unix_secs: 1,
+        root_principal: "aaaaa-aa".to_string(),
     }
 }
 
@@ -1561,7 +1380,7 @@ fn sample_installed_deployment_resolution(
 
     InstalledDeploymentResolution {
         source: InstalledDeploymentSource::LocalReplica,
-        state: sample_install_state(),
+        fleet: sample_fleet_catalog_entry(),
         registry: canic_host::installed_deployment::InstalledDeploymentRegistry {
             root_canister_id: "aaaaa-aa".to_string(),
             entries,
@@ -1760,56 +1579,4 @@ fn generate_medic_fixture_lockfile(root: &std::path::Path) {
         "failed to generate medic fixture lockfile: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-}
-
-fn write_medic_deployment_receipt(
-    root: &std::path::Path,
-    environment: &str,
-    deployment: &str,
-    receipt: DeploymentReceiptV1,
-) {
-    let receipt_dir = root
-        .join(".canic")
-        .join(environment)
-        .join("deployment-receipts")
-        .join(deployment);
-    fs::create_dir_all(&receipt_dir).expect("create receipt dir");
-    fs::write(
-        receipt_dir.join("unix_100-medic.json"),
-        serde_json::to_vec_pretty(&receipt).expect("serialize receipt"),
-    )
-    .expect("write receipt");
-}
-
-fn write_medic_install_state(root: &std::path::Path, environment: &str, state: &InstallState) {
-    let state_dir = root.join(".canic").join(environment).join("deployments");
-    fs::create_dir_all(&state_dir).expect("create state dir");
-    fs::write(
-        state_dir.join(format!("{}.json", state.deployment_name)),
-        serde_json::to_vec_pretty(state).expect("serialize install state"),
-    )
-    .expect("write install state");
-}
-
-fn sample_deployment_receipt(
-    status: DeploymentExecutionStatusV1,
-    result: DeploymentCommandResultV1,
-    final_inventory: Option<&str>,
-) -> DeploymentReceiptV1 {
-    DeploymentReceiptV1 {
-        schema_version: 1,
-        operation_id: "op-1".to_string(),
-        plan_id: "plan-1".to_string(),
-        execution_context: None,
-        operation_status: status,
-        started_at: "2026-07-01T00:00:00Z".to_string(),
-        finished_at: Some("2026-07-01T00:00:01Z".to_string()),
-        operator_principal: None,
-        root_principal: Some("aaaaa-aa".to_string()),
-        previous_observed_deployment_epoch: None,
-        phase_receipts: Vec::new(),
-        role_phase_receipts: Vec::new(),
-        final_inventory_id: final_inventory.map(str::to_string),
-        command_result: result,
-    }
 }

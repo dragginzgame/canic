@@ -494,7 +494,7 @@ fn allow_initial_install_unknown_authority(check: &DeploymentCheckV1) -> bool {
         .plan
         .unresolved_assumptions
         .iter()
-        .any(|assumption| assumption.has_kind(DeploymentAssumptionKindV1::LocalStateMissing))
+        .any(|assumption| assumption.has_kind(DeploymentAssumptionKindV1::FleetCatalogMissing))
 }
 
 fn ensure_preflight_field(

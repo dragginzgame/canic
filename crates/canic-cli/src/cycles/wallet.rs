@@ -399,7 +399,7 @@ fn run_topup(options: &TopupOptions) -> Result<(), CyclesCommandError> {
     let target = resolve_canister_target(
         &options.deployment,
         &options.canister_or_role,
-        &installed.state.root_canister_id,
+        &installed.fleet.root_principal,
         &installed.registry.entries,
     )?;
     let icp = IcpCli::new(
@@ -452,7 +452,7 @@ fn transfer_receiver(
     resolve_canister_or_role(
         deployment,
         canister_or_role,
-        &installed.state.root_canister_id,
+        &installed.fleet.root_principal,
         &installed.registry.entries,
     )
 }

@@ -22,8 +22,8 @@ use canic_host::{
     },
     install_root::{ConfigDiscoveryError, discover_project_canic_config_choices},
     installed_deployment::{
-        InstalledDeploymentError, InstalledDeploymentRequest,
-        read_installed_deployment_state_from_root, resolve_installed_deployment_from_root,
+        InstalledDeploymentError, InstalledDeploymentRequest, read_installed_fleet_from_root,
+        resolve_installed_deployment_from_root,
     },
     registry::RegistryEntry,
     release_set::{AppConfigSnapshot, display_workspace_path},
@@ -229,22 +229,22 @@ fn status_deployment_row(
         };
     };
     let deployment = config.app_id().to_string();
-    let install_state =
-        read_installed_deployment_state_from_root(&options.environment, &deployment, icp_root);
+    let installed_fleet =
+        read_installed_fleet_from_root(&options.environment, &deployment, icp_root);
     let configured_roles = config.deployable_roles();
     let bootstrap_roles = config.bootstrap_roles();
-    let (deployed, root) = match install_state {
-        Ok(state) => (
+    let (deployed, root) = match installed_fleet {
+        Ok(fleet) => (
             deployed_label(
                 &deployment,
                 &options.environment,
                 &options.icp,
                 icp_root,
-                &state.root_canister_id,
+                &fleet.root_principal,
                 verify_local_root,
                 &bootstrap_roles,
             ),
-            state.root_canister_id,
+            fleet.root_principal,
         ),
         Err(InstalledDeploymentError::NoInstalledDeployment { .. }) => {
             ("no".to_string(), "-".to_string())
@@ -286,7 +286,7 @@ fn deployed_label(
         },
         icp_root,
     ) {
-        Ok(resolution) if resolution.state.root_canister_id == root => {
+        Ok(resolution) if resolution.fleet.root_principal == root => {
             classify_local_deployment(configured_roles, &resolution.registry.entries).to_string()
         }
         Err(InstalledDeploymentError::LostLocalDeployment { .. }) => {

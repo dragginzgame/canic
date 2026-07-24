@@ -199,7 +199,7 @@ pub(super) fn sample_sha256(seed: &str) -> String {
 
 pub(super) fn sample_catalog_report() -> canic_host::fleet_catalog::FleetCatalogReportV1 {
     use canic_core::ids::{AppId, CanonicalNetworkId, FleetId};
-    use canic_host::fleet_catalog::{FleetCatalogEntryV1, FleetCatalogRootVerificationV1};
+    use canic_host::fleet_catalog::FleetCatalogEntryV1;
 
     let canonical_network_id = "01"
         .repeat(32)
@@ -219,7 +219,6 @@ pub(super) fn sample_catalog_report() -> canic_host::fleet_catalog::FleetCatalog
             environment: "local".to_string(),
             deployed_at_unix_secs: 54,
             root_principal: "aaaaa-aa".to_string(),
-            root_verification: FleetCatalogRootVerificationV1::Verified,
         }],
     }
 }

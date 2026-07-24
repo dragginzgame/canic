@@ -9,7 +9,8 @@ use crate::{
         ArtifactDigestSourceV1, DEPLOYMENT_TRUTH_SCHEMA_VERSION, DeploymentPlanV1, RoleArtifactV1,
     },
     durable_io::write_bytes,
-    install_root::{plan_artifacts::error::PlanArtifactError, validate_environment_name},
+    install_root::plan_artifacts::error::PlanArtifactError,
+    network::validate_environment_name,
     release_set::{
         GZIP_MAGIC, ReleaseSetEntry, RootReleaseSetManifest, WASM_MAGIC, artifact_root_path,
         root_release_set_manifest_path, validate_root_release_set_manifest,

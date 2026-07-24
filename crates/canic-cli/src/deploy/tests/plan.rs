@@ -1,8 +1,12 @@
 use super::super::plan as deploy_plan;
 use super::*;
 use crate::test_support::TempDir;
-use canic_core::{CANIC_WASM_CHUNK_BYTES, cdk::utils::hash::wasm_hash_hex};
-use canic_host::install_root::{InstallState, RootVerificationStatus};
+use canic_core::{
+    CANIC_WASM_CHUNK_BYTES,
+    cdk::utils::hash::{sha256_hex, wasm_hash_hex},
+    ids::{AppId, CanonicalNetworkId, FleetId},
+};
+use canic_host::fleet_catalog::FleetCatalogEntryV1;
 use serde_json::Value as JsonValue;
 use std::{ffi::OsString, fs, path::PathBuf};
 
@@ -172,7 +176,7 @@ fn deploy_plan_options_parse_supported_surface() {
 }
 
 #[test]
-fn deploy_plan_report_builds_from_config_without_installed_state() {
+fn deploy_plan_report_builds_from_config_without_fleet_catalog_entry() {
     let (_temp, workspace_root, icp_root) = temp_plan_workspace("canic-deploy-plan-report");
     write_artifact(&icp_root, "root", b"root-artifact");
     let options = deploy_plan::DeployPlanOptions::parse([
@@ -236,18 +240,18 @@ fn deploy_plan_report_builds_from_config_without_installed_state() {
             .as_array()
             .expect("assumptions")
             .iter()
-            .all(|item| item["code"] != "local_state_root_canister_id")
+            .all(|item| item["code"] != "fleet_catalog_root_principal")
     );
 }
 
 #[test]
-fn deploy_plan_report_records_verified_installed_root_fact() {
+fn deploy_plan_report_records_fleet_catalog_root_fact() {
     let (_temp, workspace_root, icp_root) = temp_plan_workspace("canic-deploy-plan-root-fact");
     write_artifact(&icp_root, "root", b"root-artifact");
-    write_install_state(
+    write_fleet_catalog(
         &icp_root,
         "local",
-        sample_install_state("demo-local", "aaaaa-aa"),
+        sample_fleet_catalog_entry("demo-local", "aaaaa-aa"),
     );
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
@@ -276,13 +280,13 @@ fn deploy_plan_report_records_verified_installed_root_fact() {
             .expect("verified facts")
             .iter()
             .any(|item| item["code"] == "installed_root_canister_id_resolved"
-                && item["source"] == "installed_deployment")
+                && item["source"] == "fleet_catalog")
     );
     assert_verified_fact(
         &json,
         "root_trust_anchor_resolved",
         "demo-local",
-        "installed_deployment",
+        "fleet_catalog",
     );
     assert!(
         json["warnings"]
@@ -301,13 +305,13 @@ fn deploy_plan_report_records_verified_installed_root_fact() {
 }
 
 #[test]
-fn deploy_plan_report_marks_complete_installed_state_as_compared() {
+fn deploy_plan_report_marks_complete_catalog_inputs_as_compared() {
     let (_temp, workspace_root, icp_root) = temp_plan_workspace("canic-deploy-plan-compared");
     write_complete_local_plan_inputs(&icp_root);
-    write_install_state(
+    write_fleet_catalog(
         &icp_root,
         "local",
-        sample_install_state("demo-local", "aaaaa-aa"),
+        sample_fleet_catalog_entry("demo-local", "aaaaa-aa"),
     );
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
@@ -429,98 +433,6 @@ fn deploy_plan_report_previews_controller_reconciliation() {
     );
     assert_proposed_operation(&json, "apply_policy", "demo-local");
     assert_proposed_operation(&json, "set_controllers", "demo-local");
-}
-
-#[test]
-fn deploy_plan_report_blocks_unverified_installed_root_state() {
-    let (_temp, workspace_root, icp_root) =
-        temp_plan_workspace("canic-deploy-plan-unverified-root");
-    let mut state = sample_install_state("demo-local", "aaaaa-aa");
-    state.root_verification = RootVerificationStatus::NotVerified;
-    write_install_state(&icp_root, "local", state);
-    let options = deploy_plan::DeployPlanOptions::parse([
-        OsString::from("demo-local"),
-        OsString::from("--config"),
-        OsString::from("apps/demo/canic.toml"),
-    ])
-    .expect("parse deploy plan options");
-
-    let report = deploy_plan::build_report(
-        &options,
-        &deploy_plan::DeployPlanRoots {
-            workspace_root,
-            icp_root,
-        },
-    );
-    let json = serde_json::to_value(&report).expect("report should serialize");
-
-    assert_eq!(json["status"], "blocked");
-    assert_eq!(json["comparison_status"], "not_requested");
-    assert!(
-        json["blockers"]
-            .as_array()
-            .expect("blockers")
-            .iter()
-            .any(
-                |item| item["code"] == "local_state_unverified_root_canister_id"
-                    && item["category"] == "observation"
-            )
-    );
-    assert!(
-        json["verified_facts"]
-            .as_array()
-            .expect("verified facts")
-            .iter()
-            .all(|item| item["code"] != "installed_root_canister_id_resolved")
-    );
-    assert!(
-        json["warnings"]
-            .as_array()
-            .expect("warnings")
-            .iter()
-            .all(|item| item["code"] != "local_state_unverified_root_canister_id")
-    );
-}
-
-#[test]
-fn deploy_plan_report_marks_installed_environment_mismatch_as_drift() {
-    let (_temp, workspace_root, icp_root) =
-        temp_plan_workspace("canic-deploy-plan-environment-drift");
-    let mut state = sample_install_state("demo-local", "aaaaa-aa");
-    state.environment = "mainnet".to_string();
-    write_install_state(&icp_root, "local", state);
-    let options = deploy_plan::DeployPlanOptions::parse([
-        OsString::from("demo-local"),
-        OsString::from("--config"),
-        OsString::from("apps/demo/canic.toml"),
-    ])
-    .expect("parse deploy plan options");
-
-    let report = deploy_plan::build_report(
-        &options,
-        &deploy_plan::DeployPlanRoots {
-            workspace_root,
-            icp_root,
-        },
-    );
-    let json = serde_json::to_value(&report).expect("report should serialize");
-
-    assert_eq!(json["status"], "warning");
-    assert_eq!(json["comparison_status"], "compared_with_drift");
-    assert!(
-        json["warnings"]
-            .as_array()
-            .expect("warnings")
-            .iter()
-            .any(|item| item["code"] == "observed_inventory_drift")
-    );
-    assert!(
-        json["warnings"]
-            .as_array()
-            .expect("warnings")
-            .iter()
-            .all(|item| item["code"] != "observed_inventory_unavailable")
-    );
 }
 
 #[test]
@@ -807,7 +719,7 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
     assert!(text.contains("run canic build or provide a build profile with resolved artifacts"));
     assert!(text.contains("source: app_config"));
     assert!(text.contains("source: deployment_plan_builder"));
-    assert!(text.contains("source: installed_deployment"));
+    assert!(text.contains("source: fleet_catalog"));
     assert_no_deploy_plan_safety_claims(&text);
 }
 
@@ -826,18 +738,71 @@ fn temp_plan_workspace_with_config(prefix: &str, config: &str) -> (TempDir, Path
     (temp, workspace_root, icp_root)
 }
 
-fn write_install_state(icp_root: &std::path::Path, environment: &str, state: InstallState) {
+fn write_fleet_catalog(
+    icp_root: &std::path::Path,
+    environment: &str,
+    mut fleet: FleetCatalogEntryV1,
+) {
+    let root_key = test_local_root_key();
+    let network = CanonicalNetworkId::from_der_root_trust_anchor(&root_key)
+        .expect("canonical local network ID");
+    fleet.canonical_network_id = network;
+    let authority = icp_root
+        .join(".canic")
+        .join("networks")
+        .join(network.to_string());
+    fs::create_dir_all(authority.join("trust")).expect("create network authority");
+    fs::write(authority.join("trust/root-key.der"), &root_key).expect("write root key");
+    fs::write(
+        authority.join("enrollment.json"),
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "root_key_digest": sha256_hex(&root_key),
+            "enrolled_at": 1,
+            "source_profile": environment,
+        }))
+        .expect("encode enrollment"),
+    )
+    .expect("write enrollment");
+    let profile = icp_root
+        .join(".canic")
+        .join("environment-profiles")
+        .join(environment)
+        .join("network.json");
+    fs::create_dir_all(profile.parent().expect("profile parent")).expect("create profile dir");
+    fs::write(
+        profile,
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "canonical_network_id": network,
+        }))
+        .expect("encode profile"),
+    )
+    .expect("write profile");
     let path = icp_root
         .join(".canic")
-        .join(environment)
-        .join("deployments")
-        .join(format!("{}.json", state.deployment_name));
-    fs::create_dir_all(path.parent().expect("state parent")).expect("create state dir");
+        .join("networks")
+        .join(network.to_string())
+        .join("fleets/catalog.json");
+    fs::create_dir_all(path.parent().expect("catalog parent")).expect("create catalog dir");
     fs::write(
         path,
-        serde_json::to_vec_pretty(&state).expect("encode install state"),
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "schema_version": 1,
+            "canonical_network_id": network,
+            "entries": [fleet],
+        }))
+        .expect("encode Fleet catalog"),
     )
-    .expect("write install state");
+    .expect("write Fleet catalog");
+}
+
+fn test_local_root_key() -> Vec<u8> {
+    let mut root_key = vec![
+        0x30, 0x81, 0x82, 0x30, 0x1d, 0x06, 0x0d, 0x2b, 0x06, 0x01, 0x04, 0x01, 0x82, 0xdc, 0x7c,
+        0x05, 0x03, 0x01, 0x02, 0x01, 0x06, 0x0c, 0x2b, 0x06, 0x01, 0x04, 0x01, 0x82, 0xdc, 0x7c,
+        0x05, 0x03, 0x02, 0x01, 0x03, 0x61, 0x00,
+    ];
+    root_key.extend_from_slice(&[9; 96]);
+    root_key
 }
 
 fn write_artifact(icp_root: &std::path::Path, role: &str, bytes: &[u8]) {
@@ -886,22 +851,15 @@ fn write_release_set_manifest(icp_root: &std::path::Path) {
     .expect("write manifest");
 }
 
-fn sample_install_state(deployment_name: &str, root_canister_id: &str) -> InstallState {
-    InstallState {
-        schema_version: 1,
-        deployment_name: deployment_name.to_string(),
-        fleet_template: "demo".to_string(),
-        created_at_unix_secs: 1,
-        updated_at_unix_secs: 1,
+fn sample_fleet_catalog_entry(fleet_name: &str, root_principal: &str) -> FleetCatalogEntryV1 {
+    FleetCatalogEntryV1 {
+        canonical_network_id: CanonicalNetworkId::public_ic(),
+        fleet_id: FleetId::from_generated_bytes([9; 32]),
+        fleet_name: fleet_name.parse().expect("Fleet name"),
+        app: AppId::from("demo"),
         environment: "local".to_string(),
-        root_target: "root".to_string(),
-        root_canister_id: root_canister_id.to_string(),
-        root_verification: RootVerificationStatus::Verified,
-        root_build_target: "root".to_string(),
-        workspace_root: "/workspace".to_string(),
-        icp_root: "/workspace".to_string(),
-        config_path: "apps/demo/canic.toml".to_string(),
-        release_set_manifest_path: ".icp/local/canisters/root/release-set.json".to_string(),
+        deployed_at_unix_secs: 1,
+        root_principal: root_principal.to_string(),
     }
 }
 

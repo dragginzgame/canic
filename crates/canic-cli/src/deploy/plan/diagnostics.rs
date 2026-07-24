@@ -6,15 +6,15 @@
 
 use crate::deploy::plan::{
     ASSUMPTION_KEY_LOCAL_CONFIG_CONTROLLERS, ASSUMPTION_KEY_LOCAL_CONFIG_POOLS,
-    ASSUMPTION_KEY_LOCAL_STATE_UNVERIFIED_ROOT_CANISTER_ID, ASSUMPTION_PREFIX_LOCAL_ARTIFACTS,
-    ASSUMPTION_PREFIX_LOCAL_CONFIG, ASSUMPTION_PREFIX_LOCAL_STATE, ASSUMPTION_PREFIX_UNSUPPORTED,
+    ASSUMPTION_PREFIX_FLEET_CATALOG, ASSUMPTION_PREFIX_LOCAL_ARTIFACTS,
+    ASSUMPTION_PREFIX_LOCAL_CONFIG, ASSUMPTION_PREFIX_UNSUPPORTED,
     command::DeployPlanOptions,
     report::{
         CATEGORY_ARTIFACT, CATEGORY_AUTHORITY, CATEGORY_CONFIG, CATEGORY_DEPLOYMENT_IDENTITY,
         CATEGORY_OBSERVATION, CATEGORY_TOPOLOGY, CATEGORY_UNSUPPORTED_SHAPE, PlanDiagnostic,
         PlanDiagnosticCategory, SEVERITY_BLOCKED, SEVERITY_UNSUPPORTED, SEVERITY_WARNING,
         SOURCE_CLI_ARG, SOURCE_DEPLOYMENT_CONFIG, SOURCE_DEPLOYMENT_PLAN_BUILDER,
-        SOURCE_INSTALLED_DEPLOYMENT,
+        SOURCE_FLEET_CATALOG,
     },
 };
 use std::path::Path;
@@ -101,11 +101,10 @@ fn is_unsupported_plan_assumption(key: &str) -> bool {
 
 fn is_blocking_plan_assumption(key: &str) -> bool {
     key.starts_with(ASSUMPTION_PREFIX_LOCAL_CONFIG)
-        || key == ASSUMPTION_KEY_LOCAL_STATE_UNVERIFIED_ROOT_CANISTER_ID
 }
 
 fn is_warning_plan_assumption(key: &str) -> bool {
-    key.starts_with(ASSUMPTION_PREFIX_LOCAL_STATE) && !is_blocking_plan_assumption(key)
+    key.starts_with(ASSUMPTION_PREFIX_FLEET_CATALOG)
 }
 
 fn blocking_assumption_diagnostic(assumption: &DeploymentAssumptionV1) -> PlanDiagnostic {
@@ -132,8 +131,6 @@ fn blocking_assumption_diagnostic(assumption: &DeploymentAssumptionV1) -> PlanDi
 fn blocking_assumption_next(key: &str) -> String {
     if is_unsupported_plan_assumption(key) {
         "change the desired deployment shape to one supported by canic deploy plan".to_string()
-    } else if key == ASSUMPTION_KEY_LOCAL_STATE_UNVERIFIED_ROOT_CANISTER_ID {
-        "reinstall the Fleet with canic install <app> <fleet> before planning apply".to_string()
     } else {
         "repair the local fleet config before planning apply".to_string()
     }
@@ -145,23 +142,21 @@ pub(super) fn plan_warnings(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
         .filter(|assumption| is_warning_plan_assumption(&assumption.key))
         .map(|assumption| PlanDiagnostic {
             category: CATEGORY_OBSERVATION,
-            code: local_state_warning_code(assumption),
+            code: fleet_catalog_warning_code(assumption),
             severity: SEVERITY_WARNING,
             subject: plan.deployment_identity.deployment_name.clone(),
             detail: assumption.description.clone(),
             next: Some(
                 "run canic deploy check after installation or provide saved evidence".to_string(),
             ),
-            source: SOURCE_INSTALLED_DEPLOYMENT,
+            source: SOURCE_FLEET_CATALOG,
         })
         .collect()
 }
 
-fn local_state_warning_code(assumption: &DeploymentAssumptionV1) -> String {
-    if is_observed_state_drift_assumption(assumption) {
-        "observed_inventory_drift".to_string()
-    } else if assumption.has_kind(DeploymentAssumptionKindV1::LocalStateMissing)
-        || assumption.has_kind(DeploymentAssumptionKindV1::LocalStateReadFailed)
+fn fleet_catalog_warning_code(assumption: &DeploymentAssumptionV1) -> String {
+    if assumption.has_kind(DeploymentAssumptionKindV1::FleetCatalogMissing)
+        || assumption.has_kind(DeploymentAssumptionKindV1::FleetCatalogReadFailed)
     {
         "observed_inventory_unavailable".to_string()
     } else {
@@ -184,7 +179,7 @@ fn assumption_diagnostic(assumption: &DeploymentAssumptionV1) -> PlanDiagnostic 
 fn assumption_category(key: &str) -> PlanDiagnosticCategory {
     if key.starts_with(ASSUMPTION_PREFIX_LOCAL_ARTIFACTS) {
         CATEGORY_ARTIFACT
-    } else if key.starts_with(ASSUMPTION_PREFIX_LOCAL_STATE) {
+    } else if key.starts_with(ASSUMPTION_PREFIX_FLEET_CATALOG) {
         CATEGORY_OBSERVATION
     } else if key == ASSUMPTION_KEY_LOCAL_CONFIG_CONTROLLERS {
         CATEGORY_AUTHORITY
@@ -198,7 +193,7 @@ fn assumption_category(key: &str) -> PlanDiagnosticCategory {
 fn assumption_next(key: &str) -> Option<String> {
     if key.starts_with(ASSUMPTION_PREFIX_LOCAL_ARTIFACTS) {
         Some("run canic build or provide a build profile with resolved artifacts".to_string())
-    } else if key.starts_with(ASSUMPTION_PREFIX_LOCAL_STATE) {
+    } else if key.starts_with(ASSUMPTION_PREFIX_FLEET_CATALOG) {
         Some("compare after first deployment or provide deployment-check evidence".to_string())
     } else {
         None
@@ -215,8 +210,4 @@ fn diagnostic_code(key: &str) -> String {
         }
     }
     code.trim_matches('_').to_string()
-}
-
-pub(super) fn is_observed_state_drift_assumption(assumption: &DeploymentAssumptionV1) -> bool {
-    assumption.has_kind(DeploymentAssumptionKindV1::LocalStateEnvironmentMismatch)
 }

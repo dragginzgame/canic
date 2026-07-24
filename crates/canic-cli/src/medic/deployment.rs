@@ -1,6 +1,6 @@
 //! Module: canic_cli::medic::deployment
 //!
-//! Responsibility: construct installed-deployment, registry, receipt, and root checks.
+//! Responsibility: construct installed-Fleet, registry, and root checks.
 //! Does not own: deployment mutation, check ordering, or report rendering.
 //! Boundary: maps local and runtime deployment evidence into Medic checks.
 
@@ -13,22 +13,14 @@ use crate::{
     },
     support::candid::role_candid_path,
 };
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use canic_host::{
     canister_ready::query_canister_ready,
-    deployment_truth::{
-        DeploymentCommandResultV1, DeploymentExecutionStatusV1, DeploymentReceiptV1,
-    },
+    fleet_catalog::FleetCatalogEntryV1,
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
-    install_root::{
-        InstallState, discover_project_canic_config_choices,
-        latest_deployment_truth_receipt_path_from_root,
-    },
+    install_root::discover_project_canic_config_choices,
     installed_deployment::{
         InstalledDeploymentError, InstalledDeploymentRequest, InstalledDeploymentResolution,
         InstalledDeploymentSource, resolve_installed_deployment_from_root,
@@ -48,8 +40,7 @@ pub(super) struct DeploymentMedicContext {
 
 pub(super) fn deployment_medic_context(options: &MedicOptions) -> DeploymentMedicContext {
     let icp_root = resolve_current_canic_icp_root().ok();
-    let (environment, environment_check) =
-        deployment_environment_selection(options, icp_root.as_deref());
+    let (environment, environment_check) = deployment_environment_selection(options);
     DeploymentMedicContext {
         icp_root,
         environment,
@@ -57,10 +48,7 @@ pub(super) fn deployment_medic_context(options: &MedicOptions) -> DeploymentMedi
     }
 }
 
-pub(super) fn deployment_environment_selection(
-    options: &MedicOptions,
-    icp_root: Option<&Path>,
-) -> (String, MedicCheck) {
+pub(super) fn deployment_environment_selection(options: &MedicOptions) -> (String, MedicCheck) {
     if let Some(environment) = &options.environment {
         return (
             environment.clone(),
@@ -71,22 +59,6 @@ pub(super) fn deployment_environment_selection(
                 environment.clone(),
                 "none",
                 MedicSource::Command,
-            ),
-        );
-    }
-
-    if let Some(environment) =
-        icp_root.and_then(|root| recorded_deployment_environment(root, options.deployment_name()))
-    {
-        return (
-            environment.clone(),
-            MedicCheck::pass(
-                MedicCategory::TargetEnvironment,
-                "deployment_environment_from_record",
-                "environment",
-                environment,
-                "override with top-level --environment <name>",
-                MedicSource::InstalledDeployment,
             ),
         );
     }
@@ -103,30 +75,6 @@ pub(super) fn deployment_environment_selection(
             MedicSource::Command,
         ),
     )
-}
-
-fn recorded_deployment_environment(icp_root: &Path, deployment: &str) -> Option<String> {
-    let canic_dir = icp_root.join(".canic");
-    let mut environments = fs::read_dir(canic_dir)
-        .ok()?
-        .filter_map(Result::ok)
-        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
-        .filter_map(|entry| entry.file_name().into_string().ok())
-        .filter(|environment| {
-            icp_root
-                .join(".canic")
-                .join(environment)
-                .join("deployments")
-                .join(format!("{deployment}.json"))
-                .is_file()
-        })
-        .collect::<Vec<_>>();
-    environments.sort();
-    environments.dedup();
-    match environments.as_slice() {
-        [environment] => Some(environment.clone()),
-        _ => None,
-    }
 }
 
 pub(super) fn deployment_name_conflation_checks(root: &Path, deployment: &str) -> Vec<MedicCheck> {
@@ -181,215 +129,79 @@ pub(super) fn deployment_name_conflation_checks(root: &Path, deployment: &str) -
     checks
 }
 
-pub(super) fn installed_deployment_state_checks(
+pub(super) fn installed_fleet_checks(
     options: &MedicOptions,
     icp_root: Option<&Path>,
-    state: &InstallState,
+    fleet: &FleetCatalogEntryV1,
     environment: &str,
 ) -> Vec<MedicCheck> {
-    let deployment_environment = check_deployment_environment(state, environment);
-    let deployment_environment_matches = deployment_environment.status != MedicStatus::Fail;
-    let root_canister = check_root_canister_id(state);
+    let root_canister = check_root_canister_id(fleet);
     let root_canister_present = root_canister.status != MedicStatus::Fail;
-    let root_readiness = if deployment_environment_matches && root_canister_present {
-        check_root_ready(options, icp_root, state, environment)
+    let root_readiness = if root_canister_present {
+        check_root_ready(options, icp_root, fleet, environment)
     } else {
-        check_root_readiness_not_evaluated(deployment_environment_matches, root_canister_present)
+        check_root_readiness_not_evaluated(root_canister_present)
     };
 
     vec![
-        deployment_environment,
-        check_config_path(state),
-        check_deployment_truth_receipt(icp_root, state, environment),
+        check_config_path(icp_root, fleet),
         root_canister,
         check_deployment_registry_observation(
             options,
             icp_root,
-            state,
+            fleet,
             environment,
-            deployment_environment_matches,
             root_canister_present,
         ),
         root_readiness,
     ]
 }
 
-fn check_config_path(state: &InstallState) -> MedicCheck {
-    if fs::metadata(&state.config_path).is_ok_and(|metadata| metadata.is_file()) {
-        MedicCheck::pass(
-            MedicCategory::DeploymentState,
-            "recorded_config_path_found",
+fn check_config_path(icp_root: Option<&Path>, fleet: &FleetCatalogEntryV1) -> MedicCheck {
+    let Some(root) = icp_root else {
+        return MedicCheck::not_evaluated(
+            MedicCategory::ProjectConfig,
+            "app_config_not_evaluated",
             "config",
-            state.config_path.clone(),
+            "App config lookup skipped because the project root was not resolved",
+            "run from a Canic project root",
+            MedicSource::AppConfig,
+        );
+    };
+    let config_path = root
+        .join("apps")
+        .join(fleet.app.as_str())
+        .join("canic.toml");
+    if config_path.is_file() {
+        MedicCheck::pass(
+            MedicCategory::ProjectConfig,
+            "app_config_found",
+            "config",
+            display_medic_path(root, &config_path),
             "none",
-            MedicSource::InstalledDeployment,
+            MedicSource::AppConfig,
         )
     } else {
         MedicCheck::fail(
-            MedicCategory::DeploymentState,
-            "recorded_config_path_missing",
+            MedicCategory::ProjectConfig,
+            "app_config_missing",
             "config",
-            format!("missing {}", state.config_path),
-            "restore the config or reinstall the fleet",
-            MedicSource::InstalledDeployment,
+            format!("missing {}", display_medic_path(root, &config_path)),
+            "restore the source App config",
+            MedicSource::AppConfig,
         )
-    }
-}
-
-pub(super) fn check_deployment_truth_receipt(
-    icp_root: Option<&Path>,
-    state: &InstallState,
-    environment: &str,
-) -> MedicCheck {
-    let Some(root) = icp_root else {
-        return MedicCheck::not_evaluated(
-            MedicCategory::DeploymentState,
-            "deployment_truth_incomplete",
-            "deployment_truth",
-            "deployment truth receipt lookup skipped because the project root was not resolved",
-            "run from a Canic project root",
-            MedicSource::DeploymentTruth,
-        );
-    };
-
-    let receipt_path = match latest_deployment_truth_receipt_path_from_root(
-        root,
-        environment,
-        &state.deployment_name,
-    ) {
-        Ok(Some(path)) => path,
-        Ok(None) => {
-            return MedicCheck::warn(
-                MedicCategory::DeploymentState,
-                "deployment_truth_incomplete",
-                "deployment_truth",
-                format!(
-                    "no deployment-truth receipt found for {} on {environment}",
-                    state.deployment_name
-                ),
-                format!(
-                    "{}; then run canic deploy check {} before mutating the deployment",
-                    deploy_plan_next(&state.deployment_name),
-                    state.deployment_name
-                ),
-                MedicSource::DeploymentTruth,
-            );
-        }
-        Err(err) => {
-            return MedicCheck::fail(
-                MedicCategory::DeploymentState,
-                "deployment_truth_incomplete",
-                "deployment_truth",
-                err.to_string(),
-                "repair deployment-truth receipt state, then rerun canic medic deployment <deployment>",
-                MedicSource::DeploymentTruth,
-            );
-        }
-    };
-
-    let receipt = match fs::read(&receipt_path)
-        .map_err(|err| format!("failed to read {}: {err}", receipt_path.display()))
-        .and_then(|bytes| {
-            serde_json::from_slice::<DeploymentReceiptV1>(&bytes)
-                .map_err(|err| format!("invalid {}: {err}", receipt_path.display()))
-        }) {
-        Ok(receipt) => receipt,
-        Err(err) => {
-            return MedicCheck::fail(
-                MedicCategory::DeploymentState,
-                "deployment_truth_incomplete",
-                "deployment_truth",
-                err,
-                "repair or remove the invalid deployment-truth receipt",
-                MedicSource::DeploymentTruth,
-            );
-        }
-    };
-
-    deployment_truth_receipt_check(root, &receipt_path, &receipt, &state.deployment_name)
-}
-
-fn deployment_truth_receipt_check(
-    root: &Path,
-    receipt_path: &Path,
-    receipt: &DeploymentReceiptV1,
-    deployment: &str,
-) -> MedicCheck {
-    let detail = format!(
-        "{}; status={}; result={}; final_inventory={}",
-        display_medic_path(root, receipt_path),
-        receipt.operation_status.label(),
-        deployment_command_result_label(&receipt.command_result),
-        receipt.final_inventory_id.as_deref().unwrap_or("<missing>")
-    );
-
-    if receipt.operation_status == DeploymentExecutionStatusV1::Complete
-        && receipt.command_result == DeploymentCommandResultV1::Succeeded
-        && receipt.final_inventory_id.is_some()
-    {
-        return MedicCheck::pass(
-            MedicCategory::DeploymentState,
-            "deployment_truth_complete",
-            "deployment_truth",
-            detail,
-            "none",
-            MedicSource::DeploymentTruth,
-        );
-    }
-
-    let next = format!("run canic deploy inspect resume-report {deployment}");
-    match receipt.operation_status {
-        DeploymentExecutionStatusV1::PartiallyApplied
-        | DeploymentExecutionStatusV1::FailedAfterMutation => MedicCheck::fail(
-            MedicCategory::DeploymentState,
-            "deployment_truth_incomplete",
-            "deployment_truth",
-            detail,
-            next,
-            MedicSource::DeploymentTruth,
-        ),
-        DeploymentExecutionStatusV1::Complete => MedicCheck::fail(
-            MedicCategory::DeploymentState,
-            "deployment_truth_incomplete",
-            "deployment_truth",
-            detail,
-            "repair the inconsistent deployment-truth receipt before mutating the deployment",
-            MedicSource::DeploymentTruth,
-        ),
-        DeploymentExecutionStatusV1::NotStarted
-        | DeploymentExecutionStatusV1::InProgress
-        | DeploymentExecutionStatusV1::FailedBeforeMutation => MedicCheck::warn(
-            MedicCategory::DeploymentState,
-            "deployment_truth_incomplete",
-            "deployment_truth",
-            detail,
-            next,
-            MedicSource::DeploymentTruth,
-        ),
-    }
-}
-
-fn deployment_command_result_label(result: &DeploymentCommandResultV1) -> String {
-    match result {
-        DeploymentCommandResultV1::NotFinished => "not_finished".to_string(),
-        DeploymentCommandResultV1::Succeeded => "succeeded".to_string(),
-        DeploymentCommandResultV1::Failed { code, .. } => format!("failed:{code}"),
     }
 }
 
 fn check_deployment_registry_observation(
     options: &MedicOptions,
     icp_root: Option<&Path>,
-    state: &InstallState,
+    fleet: &FleetCatalogEntryV1,
     environment: &str,
-    deployment_environment_matches: bool,
     root_canister_present: bool,
 ) -> MedicCheck {
-    if !deployment_environment_matches || !root_canister_present {
-        return check_deployment_registry_not_evaluated(
-            deployment_environment_matches,
-            root_canister_present,
-        );
+    if !root_canister_present {
+        return check_deployment_registry_not_evaluated(root_canister_present);
     }
 
     let Some(root) = icp_root else {
@@ -404,7 +216,7 @@ fn check_deployment_registry_observation(
     };
 
     let request = InstalledDeploymentRequest {
-        deployment: state.deployment_name.clone(),
+        deployment: fleet.fleet_name.to_string(),
         environment: environment.to_string(),
         icp: options.icp.clone(),
         detect_lost_local_root: true,
@@ -416,16 +228,11 @@ fn check_deployment_registry_observation(
     }
 }
 
-pub(super) fn check_deployment_registry_not_evaluated(
-    deployment_environment_matches: bool,
-    root_canister_present: bool,
-) -> MedicCheck {
-    let detail = if !deployment_environment_matches {
-        "deployment registry observation skipped because the deployment record environment does not match the selected environment"
-    } else if !root_canister_present {
-        "deployment registry observation skipped because the deployment record has no root canister id"
-    } else {
+pub(super) fn check_deployment_registry_not_evaluated(root_canister_present: bool) -> MedicCheck {
+    let detail = if root_canister_present {
         "deployment registry observation was not evaluated"
+    } else {
+        "deployment registry observation skipped because the Fleet catalog row has no root principal"
     };
 
     MedicCheck::not_evaluated(
@@ -457,8 +264,8 @@ pub(super) fn deployment_registry_observed_check(
             detail,
             format!(
                 "{}; then run canic deploy check {}",
-                deploy_plan_next(&resolution.state.deployment_name),
-                resolution.state.deployment_name
+                deploy_plan_next(resolution.fleet.fleet_name.as_str()),
+                resolution.fleet.fleet_name
             ),
             source,
         );
@@ -479,7 +286,7 @@ fn deploy_plan_next(deployment: &str) -> String {
 }
 
 fn runtime_inspection_next(resolution: &InstalledDeploymentResolution) -> String {
-    let deployment = &resolution.state.deployment_name;
+    let deployment = &resolution.fleet.fleet_name;
     let mut roles = resolution
         .topology
         .roles_by_canister
@@ -535,7 +342,7 @@ fn deployment_registry_error_check(error: InstalledDeploymentError) -> MedicChec
         | InstalledDeploymentError::LostLocalDeployment { .. } => MedicSource::LocalReplica,
         InstalledDeploymentError::Icp(_) => MedicSource::IcpCli,
         InstalledDeploymentError::NoInstalledDeployment { .. }
-        | InstalledDeploymentError::InstallState(_)
+        | InstalledDeploymentError::FleetCatalog(_)
         | InstalledDeploymentError::Registry(_)
         | InstalledDeploymentError::Io(_) => MedicSource::InstalledDeployment,
     };
@@ -550,41 +357,13 @@ fn deployment_registry_error_check(error: InstalledDeploymentError) -> MedicChec
     )
 }
 
-pub(super) fn check_deployment_environment(
-    state: &InstallState,
-    selected_environment: &str,
-) -> MedicCheck {
-    if state.environment == selected_environment {
-        MedicCheck::pass(
-            MedicCategory::DeploymentState,
-            "deployment_environment_match",
-            "environment",
-            format!("deployment record is scoped to {selected_environment}"),
-            "none",
-            MedicSource::InstalledDeployment,
-        )
-    } else {
-        MedicCheck::fail(
-            MedicCategory::DeploymentState,
-            "deployment_environment_mismatch",
-            "environment",
-            format!(
-                "deployment record is scoped to {}, but medic selected {selected_environment}",
-                state.environment
-            ),
-            "select the deployment record environment or repair the installed deployment state",
-            MedicSource::InstalledDeployment,
-        )
-    }
-}
-
-pub(super) fn check_root_canister_id(state: &InstallState) -> MedicCheck {
-    if state.root_canister_id.trim().is_empty() {
+pub(super) fn check_root_canister_id(fleet: &FleetCatalogEntryV1) -> MedicCheck {
+    if fleet.root_principal.trim().is_empty() {
         MedicCheck::fail(
             MedicCategory::Topology,
             "root_canister_id_missing",
             "root",
-            "installed deployment state does not record a root canister id",
+            "Fleet catalog row does not record a root principal",
             "reinstall the Fleet with canic install <app> <fleet>",
             MedicSource::InstalledDeployment,
         )
@@ -593,23 +372,18 @@ pub(super) fn check_root_canister_id(state: &InstallState) -> MedicCheck {
             MedicCategory::Topology,
             "root_canister_id_present",
             "root",
-            state.root_canister_id.clone(),
+            fleet.root_principal.clone(),
             "none",
             MedicSource::InstalledDeployment,
         )
     }
 }
 
-pub(super) fn check_root_readiness_not_evaluated(
-    deployment_environment_matches: bool,
-    root_canister_present: bool,
-) -> MedicCheck {
-    let detail = if !deployment_environment_matches {
-        "root readiness skipped because the deployment record environment does not match the selected environment"
-    } else if !root_canister_present {
-        "root readiness skipped because the deployment record has no root canister id"
-    } else {
+pub(super) fn check_root_readiness_not_evaluated(root_canister_present: bool) -> MedicCheck {
+    let detail = if root_canister_present {
         "root readiness was not evaluated"
+    } else {
+        "root readiness skipped because the Fleet catalog row has no root principal"
     };
 
     MedicCheck::not_evaluated(
@@ -625,7 +399,7 @@ pub(super) fn check_root_readiness_not_evaluated(
 fn check_root_ready(
     options: &MedicOptions,
     icp_root: Option<&Path>,
-    state: &InstallState,
+    fleet: &FleetCatalogEntryV1,
     environment: &str,
 ) -> MedicCheck {
     let source = root_readiness_source(environment);
@@ -636,7 +410,7 @@ fn check_root_ready(
     let candid_path = role_candid_path(icp_root, environment, "root");
     let ready = query_canister_ready(
         &icp,
-        &state.root_canister_id,
+        &fleet.root_principal,
         environment,
         icp_root,
         candid_path.as_deref(),

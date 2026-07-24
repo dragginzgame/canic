@@ -1,8 +1,6 @@
 use crate::{
+    fleet_catalog::{FleetCatalogEntryV1, FleetCatalogError, read_fleet_catalog_entry_from_root},
     icp::{IcpCli, IcpCommandError, existing_local_canister_candid_path},
-    install_root::{
-        InstallState, InstallStateError, read_named_deployment_install_state_from_root,
-    },
     registry::{RegistryEntry, RegistryParseError},
     replica_query::ReplicaQueryError,
     subnet_registry::{SubnetRegistryQueryError, SubnetRegistryQuerySource, query_subnet_registry},
@@ -31,7 +29,7 @@ pub struct InstalledDeploymentRequest {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InstalledDeploymentResolution {
     pub source: InstalledDeploymentSource,
-    pub state: InstallState,
+    pub fleet: FleetCatalogEntryV1,
     pub registry: InstalledDeploymentRegistry,
     pub topology: ResolvedDeploymentTopology,
 }
@@ -79,8 +77,8 @@ pub enum InstalledDeploymentError {
         deployment: String,
     },
 
-    #[error("failed to read canic deployment state: {0}")]
-    InstallState(#[from] InstallStateError),
+    #[error("failed to read the canonical-network Fleet catalog: {0}")]
+    FleetCatalog(#[from] FleetCatalogError),
 
     #[error("local replica query failed: {0}")]
     ReplicaQuery(#[source] ReplicaQueryError),
@@ -108,40 +106,37 @@ pub fn resolve_installed_deployment_from_root(
     request: &InstalledDeploymentRequest,
     icp_root: &Path,
 ) -> Result<InstalledDeploymentResolution, InstalledDeploymentError> {
-    let state = read_installed_deployment_state_from_root(
-        &request.environment,
-        &request.deployment,
-        icp_root,
-    )?;
-    let (source, entries) = query_registry_from_root(request, &state.root_canister_id, icp_root)?;
-    Ok(installed_deployment_resolution(state, source, entries))
+    let fleet =
+        read_installed_fleet_from_root(&request.environment, &request.deployment, icp_root)?;
+    let (source, entries) = query_registry_from_root(request, &fleet.root_principal, icp_root)?;
+    Ok(installed_deployment_resolution(fleet, source, entries))
 }
 
 fn installed_deployment_resolution(
-    state: InstallState,
+    fleet: FleetCatalogEntryV1,
     source: InstalledDeploymentSource,
     entries: Vec<RegistryEntry>,
 ) -> InstalledDeploymentResolution {
     let registry = InstalledDeploymentRegistry {
-        root_canister_id: state.root_canister_id.clone(),
+        root_canister_id: fleet.root_principal.clone(),
         entries,
     };
     let topology = ResolvedDeploymentTopology::from_registry(&registry);
     InstalledDeploymentResolution {
         source,
-        state,
+        fleet,
         registry,
         topology,
     }
 }
 
-pub fn read_installed_deployment_state_from_root(
+pub fn read_installed_fleet_from_root(
     environment: &str,
     deployment: &str,
     icp_root: &Path,
-) -> Result<InstallState, InstalledDeploymentError> {
-    read_named_deployment_install_state_from_root(icp_root, environment, deployment)
-        .map_err(InstalledDeploymentError::InstallState)?
+) -> Result<FleetCatalogEntryV1, InstalledDeploymentError> {
+    read_fleet_catalog_entry_from_root(icp_root, environment, deployment)
+        .map_err(InstalledDeploymentError::FleetCatalog)?
         .ok_or_else(|| InstalledDeploymentError::NoInstalledDeployment {
             environment: environment.to_string(),
             deployment: deployment.to_string(),
