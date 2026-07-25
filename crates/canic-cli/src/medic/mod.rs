@@ -1,15 +1,15 @@
 //! Module: canic_cli::medic
 //!
-//! Responsibility: diagnose Canic project and installed-deployment readiness.
+//! Responsibility: diagnose Canic project and installed-Fleet readiness.
 //! Does not own: deployment mutation, recovery, Fleet catalog persistence, or
 //! canister control-plane changes.
-//! Boundary: reads local project/deployment state and renders diagnostic-only
+//! Boundary: reads local project/Fleet state and renders diagnostic-only
 //! medic reports.
 
 mod auth;
 mod blob_storage;
 mod command;
-mod deployment;
+mod fleet;
 mod package;
 mod project;
 mod render;
@@ -33,29 +33,22 @@ use auth::check_auth_renewal;
 use blob_storage::{check_blob_storage_billing, check_blob_storage_not_selected};
 use command::MedicOptions;
 pub use command::{MedicCommandError, run};
-use deployment::{
-    DeploymentMedicContext, deploy_plan_then, deployment_medic_context,
-    deployment_name_conflation_checks, installed_fleet_checks,
-};
+use fleet::{FleetMedicContext, deploy_plan_then, fleet_medic_context, installed_fleet_checks};
 use project::{project_config_checks, state_audit_project_check};
 use report::{MedicCategory, MedicCheck, MedicReport, MedicScope, MedicSource};
 
 const ICP_SESSION_DETAIL: &str = "password-protected PEM identities can cache sessions";
 const ICP_SESSION_NEXT: &str =
     "icp settings session-length 1h; icp identity reauth <name> --duration 1h";
-const DEPLOYMENT_NOT_SELECTED_CHECK_CODE: &str = "deployment_not_selected";
+const FLEET_NOT_SELECTED_CHECK_CODE: &str = "fleet_not_selected";
 
 fn build_medic_report(options: &MedicOptions) -> MedicReport {
     match options.scope {
         MedicScope::Project => MedicReport::new(options, run_project_checks(options)),
-        MedicScope::Deployment => {
-            let context = deployment_medic_context(options);
+        MedicScope::Fleet => {
+            let context = fleet_medic_context(options);
             let environment = Some(context.environment.clone());
-            MedicReport::with_environment(
-                options,
-                environment,
-                run_deployment_checks(options, &context),
-            )
+            MedicReport::with_environment(options, environment, run_fleet_checks(options, &context))
         }
     }
 }
@@ -108,11 +101,11 @@ fn run_project_checks(options: &MedicOptions) -> Vec<MedicCheck> {
     }
 
     checks.push(MedicCheck::not_evaluated(
-        MedicCategory::DeploymentState,
-        DEPLOYMENT_NOT_SELECTED_CHECK_CODE,
-        "deployment",
-        "no deployment target was selected",
-        "run canic medic deployment <deployment>",
+        MedicCategory::FleetState,
+        FLEET_NOT_SELECTED_CHECK_CODE,
+        "fleet",
+        "no Fleet was selected",
+        "run canic medic fleet <fleet>",
         MedicSource::Command,
     ));
     checks
@@ -125,13 +118,10 @@ fn display_medic_path(root: &Path, path: &Path) -> String {
         .to_string()
 }
 
-fn run_deployment_checks(
-    options: &MedicOptions,
-    context: &DeploymentMedicContext,
-) -> Vec<MedicCheck> {
+fn run_fleet_checks(options: &MedicOptions, context: &FleetMedicContext) -> Vec<MedicCheck> {
     let mut checks = run_project_checks(options)
         .into_iter()
-        .filter(|check| check.code != DEPLOYMENT_NOT_SELECTED_CHECK_CODE)
+        .filter(|check| check.code != FLEET_NOT_SELECTED_CHECK_CODE)
         .collect::<Vec<_>>();
     let environment = &context.environment;
     let icp_root = context.icp_root.as_deref();
@@ -139,40 +129,32 @@ fn run_deployment_checks(
     checks.push(context.environment_check.clone());
 
     let state_result = match icp_root {
-        Some(root) => read_installed_fleet_from_root(environment, options.deployment_name(), root)
-            .map_err(Some),
+        Some(root) => {
+            read_installed_fleet_from_root(environment, options.fleet_name(), root).map_err(Some)
+        }
         None => Err(None),
     };
     let state = match state_result {
         Ok(state) => {
             checks.push(MedicCheck::pass(
-                MedicCategory::DeploymentState,
-                "deployment_target_found",
-                "deployment",
+                MedicCategory::FleetState,
+                "fleet_found",
+                "fleet",
                 format!("{} installed", state.fleet_name),
                 "run canic info list",
-                MedicSource::InstalledDeployment,
+                MedicSource::InstalledFleet,
             ));
             Some(state)
         }
         Err(Some(InstalledDeploymentError::NoInstalledDeployment { .. })) => {
             checks.push(MedicCheck::fail(
-                MedicCategory::DeploymentState,
-                "deployment_target_missing",
-                "deployment",
-                "no installed deployment found",
-                deploy_plan_then(
-                    options.deployment_name(),
-                    "then run canic install <app> <fleet>",
-                ),
-                MedicSource::InstalledDeployment,
+                MedicCategory::FleetState,
+                "fleet_missing",
+                "fleet",
+                "no installed Fleet found",
+                deploy_plan_then(options.fleet_name(), "then run canic install <app> <fleet>"),
+                MedicSource::InstalledFleet,
             ));
-            if let Some(root) = icp_root {
-                checks.extend(deployment_name_conflation_checks(
-                    root,
-                    options.deployment_name(),
-                ));
-            }
             None
         }
         Err(err) => {
@@ -181,15 +163,15 @@ fn run_deployment_checks(
                 |err| err.to_string(),
             );
             checks.push(MedicCheck::fail(
-                MedicCategory::DeploymentState,
-                "deployment_target_missing",
-                "deployment",
+                MedicCategory::FleetState,
+                "fleet_missing",
+                "fleet",
                 detail,
                 deploy_plan_then(
-                    options.deployment_name(),
+                    options.fleet_name(),
                     "then reinstall the Fleet with canic install <app> <fleet>",
                 ),
-                MedicSource::InstalledDeployment,
+                MedicSource::InstalledFleet,
             ));
             None
         }
@@ -222,7 +204,7 @@ fn run_deployment_checks(
             "auth_renewal_not_selected",
             "auth_renewal",
             "no auth-renewal issuer was selected",
-            "run canic medic deployment <deployment> --auth-renewal <issuer-principal>",
+            "run canic medic fleet <fleet> --auth-renewal <issuer-principal>",
             MedicSource::Command,
         ));
     }

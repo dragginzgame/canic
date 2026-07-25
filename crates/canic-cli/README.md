@@ -212,7 +212,7 @@ Diagnose project-level setup, or explicitly diagnose one installed Fleet:
 
 ```bash
 canic medic
-canic medic deployment test
+canic medic fleet test
 ```
 
 For downstream projects that combine Canic commands with raw `icp` calls on a

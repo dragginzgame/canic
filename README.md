@@ -93,7 +93,7 @@ canic replica start --background
 canic install --profile fast test
 canic info list test
 canic info env test
-canic medic deployment test
+canic medic fleet test
 ```
 
 For ad hoc public IC NNS inspection outside Canic, install the optional

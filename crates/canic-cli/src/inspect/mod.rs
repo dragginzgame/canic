@@ -1,6 +1,6 @@
 //! Module: canic_cli::inspect
 //!
-//! Responsibility: inspect one deployed canister's runtime-observed Canic status.
+//! Responsibility: inspect one Fleet canister's runtime-observed Canic status.
 //! Does not own: deployment planning, runtime endpoint DTOs, or broad topology fanout.
 //! Boundary: resolves one explicit target, queries `canic_runtime_status`, and renders a report.
 
@@ -39,11 +39,11 @@ const INSPECT_HELP_AFTER: &str = "\
 Examples:
   canic inspect canister aaaaa-aa
   canic inspect canister aaaaa-aa --json
-  canic inspect deployment demo-local --role root
-  canic inspect deployment demo-local --role root --json
+  canic inspect fleet demo-local --role root
+  canic inspect fleet demo-local --role root --json
 
 Inspect is read-only. It queries the guarded canic_runtime_status endpoint for
-one explicit target and does not fan out across deployment roles. Use
+one explicit target and does not fan out across Fleet roles. Use
 `canic deploy inspect` for local deployment-truth artifacts and saved reports.";
 
 #[derive(Debug, ThisError)]
@@ -109,8 +109,8 @@ enum InspectOptions {
         icp: String,
         json: bool,
     },
-    Deployment {
-        deployment: String,
+    Fleet {
+        fleet: String,
         role: String,
         environment: String,
         icp: String,
@@ -121,7 +121,7 @@ enum InspectOptions {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ResolvedInspectTarget {
     command: InspectCommandKind,
-    deployment: Option<String>,
+    fleet: Option<String>,
     role: Option<String>,
     canister_id: String,
     environment: String,
@@ -136,31 +136,32 @@ struct ResolvedInspectTarget {
 enum InspectCommandKind {
     #[serde(rename = "canic inspect canister")]
     Canister,
-    #[serde(rename = "canic inspect deployment")]
-    Deployment,
+    #[serde(rename = "canic inspect fleet")]
+    Fleet,
 }
 
 impl InspectCommandKind {
     const fn label(self) -> &'static str {
         match self {
             Self::Canister => "canic inspect canister",
-            Self::Deployment => "canic inspect deployment",
+            Self::Fleet => "canic inspect fleet",
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
 enum InspectSource {
+    #[serde(rename = "cli_arg")]
     CliArg,
-    DeploymentRecord,
+    #[serde(rename = "fleet_registry")]
+    FleetRegistry,
 }
 
 impl InspectSource {
     const fn label(self) -> &'static str {
         match self {
             Self::CliArg => "cli_arg",
-            Self::DeploymentRecord => "deployment_record",
+            Self::FleetRegistry => "fleet_registry",
         }
     }
 }
@@ -177,7 +178,7 @@ struct InspectReport {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct TargetResolution {
-    deployment: Option<String>,
+    fleet: Option<String>,
     role: Option<String>,
     canister_id: String,
     environment: String,
@@ -233,8 +234,8 @@ impl InspectOptions {
                     json: matches.get_flag("json"),
                 })
             }
-            Some(("deployment", matches)) => Ok(Self::Deployment {
-                deployment: required_string(matches, "deployment"),
+            Some(("fleet", matches)) => Ok(Self::Fleet {
+                fleet: required_string(matches, "fleet"),
                 role: required_string(matches, "role"),
                 environment: string_option_or_else(matches, "environment", local_environment),
                 icp: string_option_or_else(matches, "icp", default_icp),
@@ -254,7 +255,7 @@ fn resolve_target(options: &InspectOptions) -> Result<ResolvedInspectTarget, Ins
             json,
         } => Ok(ResolvedInspectTarget {
             command: InspectCommandKind::Canister,
-            deployment: None,
+            fleet: None,
             role: None,
             canister_id: canister.clone(),
             environment: environment.clone(),
@@ -264,18 +265,18 @@ fn resolve_target(options: &InspectOptions) -> Result<ResolvedInspectTarget, Ins
             icp_root: resolve_current_canic_icp_root().ok(),
             json: *json,
         }),
-        InspectOptions::Deployment {
-            deployment,
+        InspectOptions::Fleet {
+            fleet,
             role,
             environment,
             icp,
             json,
-        } => resolve_deployment_target(deployment, role, environment, icp, *json),
+        } => resolve_fleet_target(fleet, role, environment, icp, *json),
     }
 }
 
-fn resolve_deployment_target(
-    deployment: &str,
+fn resolve_fleet_target(
+    fleet: &str,
     role: &str,
     environment: &str,
     icp: &str,
@@ -284,7 +285,7 @@ fn resolve_deployment_target(
     let root = resolve_current_canic_icp_root().map_err(InspectCommandError::IcpRoot)?;
     let installed = resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
-            deployment: deployment.to_string(),
+            deployment: fleet.to_string(),
             environment: environment.to_string(),
             icp: icp.to_string(),
             detect_lost_local_root: false,
@@ -302,26 +303,26 @@ fn resolve_deployment_target(
     let entry = match matches.as_slice() {
         [] => {
             return Err(InspectCommandError::Target(format!(
-                "role {role} was not found in deployment target {deployment}"
+                "role {role} was not found in Fleet {fleet}"
             )));
         }
         [entry] => *entry,
         _ => {
             return Err(InspectCommandError::Target(format!(
-                "role {role} resolves to multiple canisters in deployment target {deployment}; explicit disambiguation is not supported by canic inspect deployment"
+                "role {role} resolves to multiple canisters in Fleet {fleet}; explicit disambiguation is not supported by canic inspect fleet"
             )));
         }
     };
     validate_principal(&entry.pid)?;
 
     Ok(ResolvedInspectTarget {
-        command: InspectCommandKind::Deployment,
-        deployment: Some(deployment.to_string()),
+        command: InspectCommandKind::Fleet,
+        fleet: Some(fleet.to_string()),
         role: Some(role.to_string()),
         canister_id: entry.pid.clone(),
         environment: environment.to_string(),
         icp: icp.to_string(),
-        source: InspectSource::DeploymentRecord,
+        source: InspectSource::FleetRegistry,
         candid_path: registry_entry_candid_path(Some(root.as_path()), environment, entry),
         icp_root: Some(root),
         json,
@@ -346,7 +347,7 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
         schema_version: INSPECT_SCHEMA_VERSION,
         command: target.command,
         target_resolution: TargetResolution {
-            deployment: target.deployment.clone(),
+            fleet: target.fleet.clone(),
             role: target.role.clone(),
             canister_id: target.canister_id.clone(),
             environment: target.environment.clone(),
@@ -387,8 +388,8 @@ fn render_text_report(report: &InspectReport) -> String {
         format!("environment: {}", report.target_resolution.environment),
         format!("source: {}", report.target_resolution.source.label()),
     ];
-    if let Some(deployment) = &report.target_resolution.deployment {
-        lines.push(format!("deployment: {deployment}"));
+    if let Some(fleet) = &report.target_resolution.fleet {
+        lines.push(format!("fleet: {fleet}"));
     }
     if let Some(role) = &report.target_resolution.role {
         lines.push(format!("role: {role}"));
@@ -520,7 +521,7 @@ fn command() -> ClapCommand {
         .disable_help_flag(true)
         .subcommand_required(true)
         .subcommand(canister_command())
-        .subcommand(deployment_command())
+        .subcommand(fleet_command())
         .after_help(INSPECT_HELP_AFTER)
 }
 
@@ -539,13 +540,13 @@ fn canister_command() -> ClapCommand {
         .arg(flag_arg("json").long("json").help("Print JSON output"))
 }
 
-fn deployment_command() -> ClapCommand {
-    ClapCommand::new("deployment")
-        .about("Inspect one role in an installed deployment target")
+fn fleet_command() -> ClapCommand {
+    ClapCommand::new("fleet")
+        .about("Inspect one role in an installed Fleet")
         .disable_help_flag(true)
         .arg(
-            Arg::new("deployment")
-                .value_name("deployment")
+            Arg::new("fleet")
+                .value_name("fleet")
                 .num_args(1)
                 .required(true),
         )
@@ -569,8 +570,8 @@ fn canister_usage() -> String {
     render_usage(canister_command)
 }
 
-fn deployment_usage() -> String {
-    render_usage(deployment_command)
+fn fleet_usage() -> String {
+    render_usage(fleet_command)
 }
 
 fn print_leaf_help_or_version(args: &[OsString]) -> bool {
@@ -579,7 +580,7 @@ fn print_leaf_help_or_version(args: &[OsString]) -> bool {
         .and_then(|arg| arg.to_str())
         .and_then(|leaf| match leaf {
             "canister" => Some(canister_usage as fn() -> String),
-            "deployment" => Some(deployment_usage as fn() -> String),
+            "fleet" => Some(fleet_usage as fn() -> String),
             _ => None,
         })
     else {
@@ -628,19 +629,19 @@ mod tests {
     }
 
     #[test]
-    fn parses_deployment_role_target() {
+    fn parses_fleet_role_target() {
         let options = InspectOptions::parse([
-            OsString::from("deployment"),
+            OsString::from("fleet"),
             OsString::from("demo-local"),
             OsString::from("--role"),
             OsString::from("root"),
         ])
-        .expect("parse deployment inspect");
+        .expect("parse Fleet inspect");
 
         assert_eq!(
             options,
-            InspectOptions::Deployment {
-                deployment: "demo-local".to_string(),
+            InspectOptions::Fleet {
+                fleet: "demo-local".to_string(),
                 role: "root".to_string(),
                 environment: local_environment(),
                 icp: default_icp(),
@@ -655,18 +656,17 @@ mod tests {
     }
 
     #[test]
-    fn rejects_deployment_without_role() {
+    fn rejects_fleet_without_role() {
         assert!(
-            InspectOptions::parse([OsString::from("deployment"), OsString::from("demo-local")])
-                .is_err()
+            InspectOptions::parse([OsString::from("fleet"), OsString::from("demo-local")]).is_err()
         );
     }
 
     #[test]
-    fn rejects_broad_deployment_fanout() {
+    fn rejects_broad_fleet_fanout() {
         assert!(
             InspectOptions::parse([
-                OsString::from("deployment"),
+                OsString::from("fleet"),
                 OsString::from("demo-local"),
                 OsString::from("--all"),
             ])
@@ -826,6 +826,22 @@ mod tests {
     }
 
     #[test]
+    fn fleet_json_report_uses_fleet_identity() {
+        let mut report = sample_inspect_report();
+        report.command = InspectCommandKind::Fleet;
+        report.target_resolution.fleet = Some("demo".to_string());
+        report.target_resolution.role = Some("root".to_string());
+        report.target_resolution.source = InspectSource::FleetRegistry;
+
+        let value = serde_json::to_value(report).expect("serialize Fleet report");
+
+        assert_eq!(value["command"], "canic inspect fleet");
+        assert_eq!(value["target_resolution"]["fleet"], "demo");
+        assert_eq!(value["target_resolution"]["role"], "root");
+        assert_eq!(value["target_resolution"]["source"], "fleet_registry");
+    }
+
+    #[test]
     fn failing_runtime_status_maps_to_status_exit() {
         let mut report = sample_inspect_report();
         report.runtime_status.status = sample_runtime_status(RuntimeStatus::Failing);
@@ -843,7 +859,7 @@ mod tests {
             schema_version: INSPECT_SCHEMA_VERSION,
             command: InspectCommandKind::Canister,
             target_resolution: TargetResolution {
-                deployment: None,
+                fleet: None,
                 role: None,
                 canister_id: "aaaaa-aa".to_string(),
                 environment: "local".to_string(),

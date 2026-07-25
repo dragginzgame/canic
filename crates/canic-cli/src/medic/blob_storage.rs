@@ -1,6 +1,6 @@
 //! Module: canic_cli::medic::blob_storage
 //!
-//! Responsibility: classify blob-storage billing readiness for deployment Medic reports.
+//! Responsibility: classify blob-storage billing readiness for Fleet Medic reports.
 //! Does not own: blob-storage mutation, target resolution, or report rendering.
 //! Boundary: maps Candid capability and command readiness evidence into Medic checks.
 
@@ -30,14 +30,10 @@ pub(super) fn check_blob_storage_billing(
     canister: &str,
     environment: &str,
 ) -> MedicCheck {
-    match blob_storage_api::medic_summary(
-        options.deployment_name(),
-        canister,
-        environment,
-        &options.icp,
-    ) {
+    match blob_storage_api::medic_summary(options.fleet_name(), canister, environment, &options.icp)
+    {
         Ok(summary) => blob_storage_medic_check_from_summary(summary),
-        Err(err) => blob_storage_medic_error_check(err, options.deployment_name(), canister),
+        Err(err) => blob_storage_medic_error_check(err, options.fleet_name(), canister),
     }
 }
 
@@ -53,14 +49,11 @@ pub(super) fn check_blob_storage_not_selected(
                 .next()
         })
         .map_or_else(
-            || {
-                "run canic medic deployment <deployment> --blob-storage <canister-or-role>"
-                    .to_string()
-            },
+            || "run canic medic fleet <fleet> --blob-storage <canister-or-role>".to_string(),
             |first| {
                 format!(
-                    "run canic medic deployment {} --blob-storage {first}",
-                    options.deployment_name()
+                    "run canic medic fleet {} --blob-storage {first}",
+                    options.fleet_name()
                 )
             },
         );
@@ -148,15 +141,13 @@ pub(super) fn blob_storage_medic_check_from_summary(
 
 pub(super) fn blob_storage_medic_error_check(
     error: BlobStorageCommandError,
-    deployment: &str,
+    fleet: &str,
     canister: &str,
 ) -> MedicCheck {
     let (code, next) = match &error {
         BlobStorageCommandError::UnknownTarget { .. } => (
             "blob_storage_target_missing",
-            format!(
-                "choose a registered blob-storage role or canister for deployment {deployment}"
-            ),
+            format!("choose a registered blob-storage role or canister for Fleet {fleet}"),
         ),
         BlobStorageCommandError::AmbiguousRole { .. } => (
             "blob_storage_target_ambiguous",
@@ -169,7 +160,7 @@ pub(super) fn blob_storage_medic_error_check(
         ),
         _ => (
             "blob_storage_billing_unready",
-            format!("run canic blob-storage status {deployment} {canister}"),
+            format!("run canic blob-storage status {fleet} {canister}"),
         ),
     };
 

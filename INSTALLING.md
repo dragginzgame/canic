@@ -269,7 +269,7 @@ canic replica start --background
 canic install --profile fast test
 canic info list test
 canic info env test
-canic medic deployment test
+canic medic fleet test
 ```
 
 Build one artifact without installing:
@@ -324,11 +324,11 @@ deployment does not look right:
 
 ```bash
 canic medic
-canic medic deployment test
+canic medic fleet test
 ```
 
 Use `canic info list <deployment>`, `canic info env <deployment>`, and
-`canic medic deployment <deployment>` before changing fleet topology when local
+`canic medic fleet <fleet>` before changing Fleet topology when local
 state looks wrong. `info list` shows the deployed root registry, `info env`
 prints sourceable `CANIC_<ROLE>` canister ID exports, and `app config` shows
 configured source intent.
@@ -421,7 +421,7 @@ Canic-owned methods.
   `[package.metadata.canic] app = "<app>"` and `role = "<role>"`.
 - If `canic info list <fleet>` only shows `root`, the managed children were not
   fully installed or the local replica lost state. Run
-  `canic medic deployment <fleet>` and reinstall the local fleet.
+  `canic medic fleet <fleet>` and reinstall the local Fleet.
 - If a test manually installs root and child canisters, it is not validating the
   managed fleet path. A managed-fleet test should let root create/register
   children and then resolve them from `canic_subnet_registry`.

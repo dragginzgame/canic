@@ -26,8 +26,8 @@ use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
 const PROJECT_COMMAND: &str = "project";
-const DEPLOYMENT_COMMAND: &str = "deployment";
-const DEPLOYMENT_ARG: &str = "deployment";
+const FLEET_COMMAND: &str = "fleet";
+const FLEET_ARG: &str = "fleet";
 const JSON_ARG: &str = "json";
 const CI_ARG: &str = "ci";
 const BLOB_STORAGE_ARG: &str = "blob-storage";
@@ -37,10 +37,10 @@ Examples:
   canic medic
   canic medic project
   canic medic project --ci
-  canic medic deployment test
-  canic medic deployment test --blob-storage backend
-  canic medic deployment test --auth-renewal rrkah-fqaaa-aaaaa-aaaaq-cai
-  canic medic deployment test --json";
+  canic medic fleet test
+  canic medic fleet test --blob-storage backend
+  canic medic fleet test --auth-renewal rrkah-fqaaa-aaaaa-aaaaq-cai
+  canic medic fleet test --json";
 
 /// An error while parsing, running, or rendering the medic command.
 #[derive(Debug, ThisError)]
@@ -72,7 +72,7 @@ impl MedicCommandError {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct MedicOptions {
     pub(super) scope: MedicScope,
-    pub(super) deployment: Option<String>,
+    pub(super) fleet: Option<String>,
     pub(super) blob_storage: Option<String>,
     pub(super) auth_renewal: Option<String>,
     pub(super) json: bool,
@@ -95,9 +95,9 @@ impl MedicOptions {
 
         match matches.subcommand() {
             None | Some((PROJECT_COMMAND, _)) => Ok(Self::project(json, ci, environment, icp)),
-            Some((DEPLOYMENT_COMMAND, matches)) => Ok(Self {
-                scope: MedicScope::Deployment,
-                deployment: Some(required_string(matches, DEPLOYMENT_ARG)),
+            Some((FLEET_COMMAND, matches)) => Ok(Self {
+                scope: MedicScope::Fleet,
+                fleet: Some(required_string(matches, FLEET_ARG)),
                 blob_storage: string_option(matches, BLOB_STORAGE_ARG),
                 auth_renewal: string_option(matches, AUTH_RENEWAL_ARG),
                 json,
@@ -117,7 +117,7 @@ impl MedicOptions {
     ) -> Self {
         Self {
             scope: MedicScope::Project,
-            deployment: None,
+            fleet: None,
             blob_storage: None,
             auth_renewal: None,
             json,
@@ -128,22 +128,22 @@ impl MedicOptions {
     }
 
     pub(super) fn command_label(&self) -> String {
-        match (&self.scope, &self.deployment) {
+        match (&self.scope, &self.fleet) {
             (MedicScope::Project, _) => "canic medic project".to_string(),
-            (MedicScope::Deployment, Some(deployment)) => {
-                format!("canic medic deployment {deployment}")
+            (MedicScope::Fleet, Some(fleet)) => {
+                format!("canic medic fleet {fleet}")
             }
-            (MedicScope::Deployment, None) => "canic medic deployment".to_string(),
+            (MedicScope::Fleet, None) => "canic medic fleet".to_string(),
         }
     }
 
-    pub(super) fn deployment_name(&self) -> &str {
-        self.deployment
+    pub(super) fn fleet_name(&self) -> &str {
+        self.fleet
             .as_deref()
-            .expect("deployment scope requires deployment name")
+            .expect("Fleet scope requires Fleet name")
     }
 
-    pub(super) fn deployment_environment(&self) -> String {
+    pub(super) fn fleet_environment(&self) -> String {
         self.environment.clone().unwrap_or_else(local_environment)
     }
 }
@@ -178,8 +178,7 @@ where
 
 pub(super) fn medic_subcommand_help_requested(args: &[OsString]) -> bool {
     let mut index = skip_medic_options(args, 0);
-    let Some(PROJECT_COMMAND | DEPLOYMENT_COMMAND) = args.get(index).and_then(|arg| arg.to_str())
-    else {
+    let Some(PROJECT_COMMAND | FLEET_COMMAND) = args.get(index).and_then(|arg| arg.to_str()) else {
         return false;
     };
     index = skip_medic_options(args, index + 1);
@@ -205,7 +204,7 @@ fn medic_command() -> ClapCommand {
     ClapCommand::new("medic")
         .bin_name("canic medic")
         .disable_help_flag(true)
-        .about("Diagnose Canic project and deployment preflight readiness")
+        .about("Diagnose Canic project and Fleet preflight readiness")
         .arg(
             flag_arg(JSON_ARG)
                 .long(JSON_ARG)
@@ -221,7 +220,7 @@ fn medic_command() -> ClapCommand {
         .arg(internal_environment_arg().global(true))
         .arg(internal_icp_arg().global(true))
         .subcommand(project_command())
-        .subcommand(deployment_command())
+        .subcommand(fleet_command())
         .after_help(MEDIC_HELP_AFTER)
 }
 
@@ -231,15 +230,15 @@ fn project_command() -> ClapCommand {
         .about("Run project-level medic checks")
 }
 
-fn deployment_command() -> ClapCommand {
-    ClapCommand::new(DEPLOYMENT_COMMAND)
+fn fleet_command() -> ClapCommand {
+    ClapCommand::new(FLEET_COMMAND)
         .disable_help_flag(true)
-        .about("Run deployment-level medic checks")
+        .about("Run Fleet-level medic checks")
         .arg(
-            value_arg(DEPLOYMENT_ARG)
-                .value_name(DEPLOYMENT_ARG)
+            value_arg(FLEET_ARG)
+                .value_name(FLEET_ARG)
                 .required(true)
-                .help("Installed deployment target name"),
+                .help("Installed Fleet name"),
         )
         .arg(
             value_arg(BLOB_STORAGE_ARG)

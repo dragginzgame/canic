@@ -39,7 +39,7 @@ Examples:
 canic install uses apps/<app>/canic.toml.
 Use it for fresh local creation or recreating local state after the ICP CLI
 replica lost canisters. For an existing canister that only needs new Wasm,
-inspect with canic info list and canic medic deployment, then use the
+inspect with canic info list and canic medic fleet, then use the
 project upgrade flow.
 
 Install removes its transient target/canic-wasm Cargo cache after canonical
@@ -191,7 +191,7 @@ fn install_error_with_context(
         return InstallCommandError::InstallHint {
             source: err,
             hint: format!(
-                "If this deployment or canister already exists, run `canic --environment {environment} info list {fleet}` and `canic --environment {environment} medic deployment {fleet}` before retrying. For code-only changes, use the project upgrade flow instead of another fresh install."
+                "If this Fleet or canister already exists, run `canic --environment {environment} info list {fleet}` and `canic --environment {environment} medic fleet {fleet}` before retrying. For code-only changes, use the project upgrade flow instead of another fresh install."
             ),
         };
     }

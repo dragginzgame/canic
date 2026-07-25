@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.29` hard-cuts runtime inspection and Medic targeting from
+  `deployment` to `fleet`, including their JSON diagnostics and maintained
+  guidance, and removes invalid same-name conflation warnings.
+
 - `0.99.28` makes `canic status` discover source Apps and installed Fleets
   independently, rendering the catalog's explicit App and canonical-network
   identity without inferring Fleet ownership from equal display names.
