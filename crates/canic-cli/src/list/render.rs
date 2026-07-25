@@ -75,7 +75,7 @@ pub(super) struct ListTitle {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ListTitleSource {
-    Deployment,
+    Fleet,
     App,
 }
 
@@ -124,7 +124,7 @@ pub(super) fn render_registry_tree(
     Ok(render_registry_table(&rows, columns))
 }
 
-/// Render a named list view with a deployment/source title above the registry table.
+/// Render a named list view with a Fleet/source title above the registry table.
 pub(super) fn render_list_output(
     title: &ListTitle,
     registry: &[RegistryEntry],
@@ -159,7 +159,7 @@ pub(super) fn render_config_output(
 
 fn render_list_title(title: &ListTitle) -> String {
     let label = match title.source {
-        ListTitleSource::Deployment => "Deployment",
+        ListTitleSource::Fleet => "Fleet",
         ListTitleSource::App => "App",
     };
     format!(

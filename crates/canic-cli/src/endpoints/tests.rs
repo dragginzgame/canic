@@ -69,7 +69,7 @@ fn parses_endpoint_options() {
     ])
     .expect("parse options");
 
-    assert_eq!(options.deployment, "test");
+    assert_eq!(options.fleet, "test");
     assert_eq!(options.canister, "app");
     assert_eq!(options.environment.as_deref(), Some("local"));
     assert_eq!(options.icp, "/bin/icp");

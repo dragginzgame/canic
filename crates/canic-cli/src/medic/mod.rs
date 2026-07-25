@@ -25,7 +25,7 @@ use canic_host::{
     icp::{IcpCli, IcpCommandError},
     icp_config::resolve_current_canic_icp_root,
     install_root::discover_project_canic_config_choices,
-    installed_deployment::{InstalledDeploymentError, read_installed_fleet_from_root},
+    installed_fleet::{InstalledFleetError, read_installed_fleet_from_root},
     state_manifest::{StateManifestResolution, resolve_project_state_manifest},
 };
 
@@ -146,7 +146,7 @@ fn run_fleet_checks(options: &MedicOptions, context: &FleetMedicContext) -> Vec<
             ));
             Some(state)
         }
-        Err(Some(InstalledDeploymentError::NoInstalledDeployment { .. })) => {
+        Err(Some(InstalledFleetError::NoInstalledFleet { .. })) => {
             checks.push(MedicCheck::fail(
                 MedicCategory::FleetState,
                 "fleet_missing",

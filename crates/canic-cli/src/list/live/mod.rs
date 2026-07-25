@@ -9,9 +9,9 @@ use canic_host::{
     format::{cycles_tc, wasm_size_label},
     icp::{IcpCli, IcpDiagnostic, classify_icp_diagnostic},
     icp_config::resolve_current_canic_icp_root,
-    installed_deployment::{
-        InstalledDeploymentError, InstalledDeploymentRequest, InstalledDeploymentResolution,
-        resolve_installed_deployment_from_root,
+    installed_fleet::{
+        InstalledFleetError, InstalledFleetRequest, InstalledFleetResolution,
+        resolve_installed_fleet_from_root,
     },
     registry::RegistryEntry,
     release_set::artifact_root_path,
@@ -33,7 +33,7 @@ pub(super) fn load_registry_entries(
     options: &ListOptions,
 ) -> Result<Vec<RegistryEntry>, ListCommandError> {
     let registry = match options.source {
-        ListSource::RootRegistry => resolve_list_deployment(options)?.registry.entries,
+        ListSource::RootRegistry => resolve_list_fleet(options)?.registry.entries,
         ListSource::Config => {
             unreachable!("config source does not use registry entries")
         }
@@ -257,13 +257,11 @@ fn resolve_icp_artifact_root(_options: &ListOptions) -> Result<PathBuf, ListComm
     resolve_live_icp_root()
 }
 
-fn resolve_list_deployment(
-    options: &ListOptions,
-) -> Result<InstalledDeploymentResolution, ListCommandError> {
+fn resolve_list_fleet(options: &ListOptions) -> Result<InstalledFleetResolution, ListCommandError> {
     let icp_root = resolve_live_icp_root()?;
-    resolve_installed_deployment_from_root(
-        &InstalledDeploymentRequest {
-            deployment: options.target.clone(),
+    resolve_installed_fleet_from_root(
+        &InstalledFleetRequest {
+            fleet: options.target.clone(),
             environment: state_environment(options),
             icp: options.icp.clone(),
             detect_lost_local_root: true,
@@ -286,14 +284,12 @@ fn add_root_registry_hint(error: ListCommandError) -> ListCommandError {
             };
             ListCommandError::IcpHint { source, hint }
         }
-        ListCommandError::InstalledDeployment(InstalledDeploymentError::Icp(source)) => {
+        ListCommandError::InstalledFleet(InstalledFleetError::Icp(source)) => {
             let Some(hint) = source.external_output().and_then(root_registry_hint) else {
-                return ListCommandError::InstalledDeployment(InstalledDeploymentError::Icp(
-                    source,
-                ));
+                return ListCommandError::InstalledFleet(InstalledFleetError::Icp(source));
             };
-            ListCommandError::InstalledDeploymentHint {
-                source: InstalledDeploymentError::Icp(source),
+            ListCommandError::InstalledFleetHint {
+                source: InstalledFleetError::Icp(source),
                 hint,
             }
         }

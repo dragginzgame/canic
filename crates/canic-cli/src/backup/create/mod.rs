@@ -12,7 +12,7 @@ use canic_backup::{
 };
 use canic_host::{
     icp_config::resolve_current_canic_icp_root,
-    installed_deployment::{InstalledDeploymentRequest, resolve_installed_deployment_from_root},
+    installed_fleet::{InstalledFleetRequest, resolve_installed_fleet_from_root},
 };
 #[cfg(test)]
 use std::path::Path;
@@ -32,9 +32,9 @@ pub(super) fn backup_create(
     options: &BackupCreateOptions,
 ) -> Result<BackupCreateReport, BackupCommandError> {
     let icp_root = resolve_current_canic_icp_root().map_err(BackupCommandError::IcpRoot)?;
-    let installed = resolve_installed_deployment_from_root(
-        &InstalledDeploymentRequest {
-            deployment: options.deployment.clone(),
+    let installed = resolve_installed_fleet_from_root(
+        &InstalledFleetRequest {
+            fleet: options.fleet.clone(),
             environment: options.environment.clone(),
             icp: options.icp.clone(),
             detect_lost_local_root: true,
@@ -44,12 +44,12 @@ pub(super) fn backup_create(
     .map_err(BackupCommandError::from)?;
     let registry = backup_registry_entries(&installed.registry.entries);
     let topology_hash = registry_topology_hash(&registry)?;
-    let plan_id = backup_plan_id(&options.deployment);
+    let plan_id = backup_plan_id(&options.fleet);
     let run_id = plan_id.replace("plan-", "run-");
     let out = options
         .out
         .clone()
-        .unwrap_or_else(|| default_backup_output_path(&options.deployment));
+        .unwrap_or_else(|| default_backup_output_path(&options.fleet));
     let selected_canister_id = options
         .subtree
         .as_deref()
@@ -63,7 +63,7 @@ pub(super) fn backup_create(
     let planned = build_backup_plan(BackupPlanBuildInput {
         plan_id,
         run_id,
-        fleet: options.deployment.clone(),
+        fleet: options.fleet.clone(),
         environment: options.environment.clone(),
         root_canister_id: installed.fleet.root_principal,
         selected_canister_id,

@@ -2,7 +2,7 @@
 //!
 //! Responsibility: resolve blob-storage CLI targets and local method metadata.
 //! Does not own: transport execution, endpoint policy, or canister DTO parsing.
-//! Boundary: maps deployment metadata plus Candid sidecars into call targets.
+//! Boundary: maps Fleet metadata plus Candid sidecars into call targets.
 
 use crate::{
     blob_storage::{
@@ -16,7 +16,7 @@ use candid::Principal;
 use canic_host::{
     candid_endpoints::{EndpointMode, parse_candid_service_endpoints},
     icp_config::resolve_current_canic_icp_root,
-    installed_deployment::{InstalledDeploymentRequest, resolve_installed_deployment_from_root},
+    installed_fleet::{InstalledFleetRequest, resolve_installed_fleet_from_root},
     registry::RegistryEntry,
 };
 use std::{
@@ -48,14 +48,14 @@ struct ResolvedBlobStorageTarget {
 
 pub(super) fn resolve_blob_storage_call_target(
     options: &CommonOptions,
-    deployment: &str,
+    fleet: &str,
     selector: &str,
     method: &str,
 ) -> Result<BlobStorageCallTarget, BlobStorageCommandError> {
     let icp_root = resolve_current_canic_icp_root().map_err(BlobStorageCommandError::IcpRoot)?;
-    let installed = resolve_installed_deployment_from_root(
-        &InstalledDeploymentRequest {
-            deployment: deployment.to_string(),
+    let installed = resolve_installed_fleet_from_root(
+        &InstalledFleetRequest {
+            fleet: fleet.to_string(),
             environment: options.environment.clone(),
             icp: options.icp.clone(),
             detect_lost_local_root: true,
@@ -64,7 +64,7 @@ pub(super) fn resolve_blob_storage_call_target(
     )
     .map_err(BlobStorageCommandError::from)?;
     let resolved = resolve_blob_storage_target(
-        deployment,
+        fleet,
         selector,
         &installed.fleet.root_principal,
         &installed.registry.entries,
@@ -74,7 +74,7 @@ pub(super) fn resolve_blob_storage_call_target(
         .as_deref()
         .and_then(|role| role_candid_path(Some(&icp_root), &options.environment, role))
         .ok_or_else(|| BlobStorageCommandError::CandidUnavailable {
-            deployment: deployment.to_string(),
+            fleet: fleet.to_string(),
             target: selector.to_string(),
         })?;
     let candid =
@@ -85,7 +85,7 @@ pub(super) fn resolve_blob_storage_call_target(
     let method_mode = blob_storage_method_mode(&candid_path, &candid, method)?;
 
     Ok(BlobStorageCallTarget {
-        target: BlobStorageTarget::from_installed_deployment(
+        target: BlobStorageTarget::from_installed_fleet(
             &resolved.input,
             resolved.role,
             &resolved.canister_id,
@@ -97,7 +97,7 @@ pub(super) fn resolve_blob_storage_call_target(
 }
 
 fn resolve_blob_storage_target(
-    deployment: &str,
+    fleet: &str,
     selector: &str,
     root_canister_id: &str,
     registry: &[RegistryEntry],
@@ -130,7 +130,7 @@ fn resolve_blob_storage_target(
         [] => {}
         _ => {
             return Err(BlobStorageCommandError::AmbiguousRole {
-                deployment: deployment.to_string(),
+                fleet: fleet.to_string(),
                 role: selector.to_string(),
             });
         }
@@ -140,7 +140,7 @@ fn resolve_blob_storage_target(
         return Ok(resolved_from_entry(selector, entry));
     }
     Err(BlobStorageCommandError::UnknownTarget {
-        deployment: deployment.to_string(),
+        fleet: fleet.to_string(),
         target: selector.to_string(),
     })
 }

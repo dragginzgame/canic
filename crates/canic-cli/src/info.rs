@@ -1,7 +1,7 @@
 //! Module: canic_cli::info
 //!
-//! Responsibility: dispatch read-only installed-deployment information subcommands.
-//! Does not own: deployment state, registry state, canister lifecycle, or output formats.
+//! Responsibility: dispatch read-only installed-Fleet information subcommands.
+//! Does not own: Fleet state, registry state, canister lifecycle, or output formats.
 //! Boundary: parses the `canic info` group and delegates to leaf command modules.
 
 use crate::{
@@ -16,13 +16,13 @@ use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
 const INFO_USAGE: &str = "\
-Group read-only installed-deployment information commands
+Group read-only installed-Fleet information commands
 
 Usage: canic info <command> [OPTIONS]
 
 Commands:
-  list       List installed deployment canisters
-  cycles     Summarize deployment cycle history
+  list       List installed Fleet canisters
+  cycles     Summarize Fleet cycle history
   metrics    Query Canic runtime telemetry
   endpoints  List callable Candid endpoints
   env        Print sourceable canister ID exports
@@ -77,7 +77,7 @@ impl InfoCommandError {
     }
 }
 
-/// Run the installed-deployment information command group.
+/// Run the installed-Fleet information command group.
 pub fn run<I>(args: I) -> Result<(), InfoCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -107,7 +107,7 @@ fn parse_info_command(args: Vec<OsString>) -> Result<(String, Vec<OsString>), In
 fn command() -> ClapCommand {
     let command = ClapCommand::new("info")
         .bin_name("canic info")
-        .about("Group read-only installed-deployment information commands")
+        .about("Group read-only installed-Fleet information commands")
         .disable_help_flag(true);
     INFO_SUBCOMMANDS.iter().fold(command, |command, name| {
         command.subcommand(passthrough_subcommand(ClapCommand::new(*name)))

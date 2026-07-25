@@ -22,9 +22,8 @@ use canic_core::{
 use canic_host::{
     icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response},
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
-    installed_deployment::{
-        InstalledDeploymentError, InstalledDeploymentRequest,
-        resolve_installed_deployment_from_root,
+    installed_fleet::{
+        InstalledFleetError, InstalledFleetRequest, resolve_installed_fleet_from_root,
     },
 };
 use clap::{Arg, Command as ClapCommand};
@@ -61,7 +60,7 @@ pub enum InspectCommandError {
     Target(String),
 
     #[error(transparent)]
-    InstalledDeployment(#[from] InstalledDeploymentError),
+    InstalledFleet(#[from] InstalledFleetError),
 
     #[error("icp command failed: {0}")]
     Icp(#[from] IcpCommandError),
@@ -86,7 +85,7 @@ impl InspectCommandError {
             Self::Usage(_)
             | Self::InvalidPrincipal { .. }
             | Self::Target(_)
-            | Self::InstalledDeployment(_)
+            | Self::InstalledFleet(_)
             | Self::Icp(_)
             | Self::InvalidResponse(_)
             | Self::IcpRoot(_)
@@ -283,9 +282,9 @@ fn resolve_fleet_target(
     json: bool,
 ) -> Result<ResolvedInspectTarget, InspectCommandError> {
     let root = resolve_current_canic_icp_root().map_err(InspectCommandError::IcpRoot)?;
-    let installed = resolve_installed_deployment_from_root(
-        &InstalledDeploymentRequest {
-            deployment: fleet.to_string(),
+    let installed = resolve_installed_fleet_from_root(
+        &InstalledFleetRequest {
+            fleet: fleet.to_string(),
             environment: environment.to_string(),
             icp: icp.to_string(),
             detect_lost_local_root: false,

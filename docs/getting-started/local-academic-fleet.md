@@ -16,13 +16,13 @@ installed registry and medic checks:
 
 ```bash
 canic status
-canic --environment academic info list <deployment>
-canic --environment academic info env <deployment>
+canic --environment academic info list <fleet>
+canic --environment academic info env <fleet>
 canic --environment academic medic fleet <fleet>
 ```
 
 Use `canic app config <app>` to inspect what is configured and
-`canic info list <deployment>` to inspect what is deployed. If those disagree,
+`canic info list <fleet>` to inspect what is deployed. If those disagree,
 treat the deployed root registry as the source for current canister IDs and
 the App config as the source for intended roles, metrics profiles, and
 topology.
@@ -65,7 +65,7 @@ Use role-scoped names:
 
 ```bash
 mkdir -p scripts
-canic --environment academic info env <deployment> > scripts/canister_ids.sh
+canic --environment academic info env <fleet> > scripts/canister_ids.sh
 source scripts/canister_ids.sh
 ```
 
@@ -107,10 +107,10 @@ run `canic info list` plus `canic medic fleet` before and after the
 upgrade.
 
 ```bash
-canic --environment academic info list <deployment>
+canic --environment academic info list <fleet>
 canic --environment academic medic fleet <fleet>
 env -u ICP_NETWORK icp canister install <canister> --mode=upgrade --wasm <path> -e academic
-canic --environment academic info list <deployment>
+canic --environment academic info list <fleet>
 ```
 
 If `canic install` is blocked on an existing local deployment, do not keep
@@ -146,7 +146,7 @@ scripts or tests.
 ## Metrics And Deployed Wasm
 
 `canic app config <app> --verbose` shows configured or inferred metrics
-profiles. `canic info metrics <deployment> --kind <tier>` queries what the
+profiles. `canic info metrics <fleet> --kind <tier>` queries what the
 deployed canister actually exposes.
 
 If a metrics tier reports `empty` or `canic_metrics` is unavailable, check all
@@ -154,8 +154,8 @@ three states before changing code:
 
 ```bash
 canic app config <app> --verbose
-canic --environment academic info list <deployment> --verbose
-canic --environment academic info metrics <deployment> --kind core
+canic --environment academic info list <fleet> --verbose
+canic --environment academic info metrics <fleet> --kind core
 ```
 
 The likely causes are: the role profile does not enable that tier, the deployed
@@ -170,10 +170,10 @@ code:
 ```bash
 canic status
 canic app config <app> --verbose
-canic --environment academic info list <deployment> --verbose
-canic --environment academic info env <deployment>
+canic --environment academic info list <fleet> --verbose
+canic --environment academic info env <fleet>
 canic --environment academic medic fleet <fleet>
-canic --environment academic info metrics <deployment> --kind core --nonzero
+canic --environment academic info metrics <fleet> --kind core --nonzero
 ```
 
 This separates configured intent, deployed registry state, replica health,

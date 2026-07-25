@@ -53,16 +53,16 @@ pub(super) enum BlobStorageParseError {
 }
 
 pub(super) fn parse_status_result(
-    deployment: &str,
+    fleet: &str,
     target: BlobStorageTarget,
     output: &str,
 ) -> Result<BlobStorageStatusResult, BlobStorageParseError> {
     let response = decode_json_result_response::<BlobStorageStatusResponse>(output)?;
-    status_result(deployment, target, response)
+    status_result(fleet, target, response)
 }
 
 fn status_result(
-    deployment: &str,
+    fleet: &str,
     target: BlobStorageTarget,
     response: BlobStorageStatusResponse,
 ) -> Result<BlobStorageStatusResult, BlobStorageParseError> {
@@ -90,8 +90,8 @@ fn status_result(
     Ok(BlobStorageStatusResult {
         schema_version: BLOB_STORAGE_JSON_SCHEMA_VERSION,
         kind: BlobStorageReportKind::Status,
-        deployment: deployment.to_string(),
-        next: next_actions(deployment, &target, &readiness, &funding),
+        fleet: fleet.to_string(),
+        next: next_actions(fleet, &target, &readiness, &funding),
         target,
         configured,
         cashier: BlobStorageCashierStatus {
@@ -234,7 +234,7 @@ const fn readiness_status(
 }
 
 fn next_actions(
-    deployment: &str,
+    fleet: &str,
     target: &BlobStorageTarget,
     readiness: &BlobStorageReadinessStatus,
     funding: &BlobStorageFundingStatus,
@@ -249,7 +249,7 @@ fn next_actions(
             action: BlobStorageActionName::SyncGateways.label().to_string(),
             reason: BLOB_STORAGE_CODE_GATEWAY_PRINCIPALS_EMPTY.to_string(),
             command: Some(format!(
-                "canic blob-storage sync-gateways {deployment} {}",
+                "canic blob-storage sync-gateways {fleet} {}",
                 target.input
             )),
         });
@@ -261,7 +261,7 @@ fn next_actions(
             action: BlobStorageActionName::Fund.label().to_string(),
             reason: BLOB_STORAGE_CODE_FUNDING_NEEDED.to_string(),
             command: Some(format!(
-                "canic blob-storage fund {deployment} {} --cycles {requested_cycles}",
+                "canic blob-storage fund {fleet} {} --cycles {requested_cycles}",
                 target.input
             )),
         });

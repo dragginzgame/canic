@@ -53,26 +53,21 @@ fn parses_duration_selectors() {
 }
 
 #[test]
-fn missing_cycles_deployment_preserves_canonical_typed_error() {
-    let error = CyclesCommandError::from(InstalledDeploymentError::NoInstalledDeployment {
+fn missing_cycles_fleet_preserves_canonical_typed_error() {
+    let error = CyclesCommandError::from(InstalledFleetError::NoInstalledFleet {
         environment: "local".to_string(),
-        deployment: "demo-local".to_string(),
+        fleet: "demo-local".to_string(),
     });
-    let message = error.to_string();
-
-    assert_eq!(
-        message,
-        "deployment target demo-local is not installed on environment local"
-    );
     std::assert_matches!(
         error,
-        CyclesCommandError::InstalledDeployment(
-            InstalledDeploymentError::NoInstalledDeployment { .. }
-        )
+        CyclesCommandError::InstalledFleet(InstalledFleetError::NoInstalledFleet {
+            environment,
+            fleet,
+        }) if environment == "local" && fleet == "demo-local"
     );
 }
 
-// Ensure cycle summaries can target one installed deployment subtree by role or principal.
+// Ensure cycle summaries can target one installed Fleet subtree by role or principal.
 #[test]
 fn parses_cycles_subtree_option() {
     let options = options::CyclesOptions::parse_info([
@@ -86,7 +81,7 @@ fn parses_cycles_subtree_option() {
     ])
     .expect("parse cycles subtree options");
 
-    assert_eq!(options.deployment, "test");
+    assert_eq!(options.fleet, "test");
     assert_eq!(options.subtree.as_deref(), Some("scale_hub"));
     assert_eq!(options.since_seconds, 21_600);
     assert_eq!(options.limit, 12);
@@ -94,20 +89,18 @@ fn parses_cycles_subtree_option() {
 }
 
 #[test]
-fn cycles_usage_uses_deployment_target_wording() {
+fn cycles_usage_uses_fleet_wording() {
     let text = options::info_usage();
 
-    assert!(text.contains("Usage: canic info cycles [OPTIONS] <deployment>"));
-    assert!(text.contains("Summarize installed deployment cycle history"));
-    assert!(text.contains("Installed deployment target name to inspect"));
-    assert!(!text.contains("<fleet>"));
-    assert!(!text.contains("Installed fleet"));
+    assert!(text.contains("Usage: canic info cycles [OPTIONS] <fleet>"));
+    assert!(text.contains("Summarize installed Fleet cycle history"));
+    assert!(text.contains("Installed Fleet name to inspect"));
 }
 
 #[test]
-fn cycles_report_json_uses_deployment_identity_field() {
+fn cycles_report_json_uses_fleet_identity_field() {
     let value = serde_json::to_value(CyclesReport {
-        deployment: "demo-local".to_string(),
+        fleet: "demo-local".to_string(),
         environment: "local".to_string(),
         since_seconds: 86_400,
         generated_at_secs: 1_777_000_000,
@@ -115,8 +108,7 @@ fn cycles_report_json_uses_deployment_identity_field() {
     })
     .expect("serialize cycles report");
 
-    assert_eq!(value["deployment"], "demo-local");
-    assert!(value.get("fleet").is_none());
+    assert_eq!(value["fleet"], "demo-local");
 }
 
 // Ensure verbose cycles output is an explicit opt-in for wider diagnostics.

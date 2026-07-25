@@ -10,9 +10,8 @@ use canic_backup::{
     persistence::PersistenceError, plan::BackupPlanError, runner::BackupRunnerError,
 };
 use canic_host::{
-    icp::IcpCommandError, icp_config::IcpConfigError,
-    installed_deployment::InstalledDeploymentError, registry::RegistryParseError,
-    replica_query::ReplicaQueryError,
+    icp::IcpCommandError, icp_config::IcpConfigError, installed_fleet::InstalledFleetError,
+    registry::RegistryParseError, replica_query::ReplicaQueryError,
 };
 use thiserror::Error as ThisError;
 
@@ -59,12 +58,12 @@ pub enum BackupCommandError {
     BackupLayoutIncomplete { missing: &'static str },
 
     #[error(transparent)]
-    InstalledDeployment(#[from] InstalledDeploymentError),
+    InstalledFleet(#[from] InstalledFleetError),
 
     #[error("local replica query failed: {0}")]
     ReplicaQuery(#[source] ReplicaQueryError),
 
-    #[error("failed to read canic deployment state: {0}")]
+    #[error("failed to read Canic Fleet state: {0}")]
     IcpRoot(#[source] IcpConfigError),
 
     #[error(transparent)]

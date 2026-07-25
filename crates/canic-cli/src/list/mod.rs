@@ -7,7 +7,7 @@ mod render;
 use canic_backup::discovery::DiscoveryError;
 use canic_host::{
     icp::IcpCommandError, icp_config::IcpConfigError, install_root::ConfigDiscoveryError,
-    installed_deployment::InstalledDeploymentError, registry::RegistryParseError,
+    installed_fleet::InstalledFleetError, registry::RegistryParseError,
     release_set::AppConfigError,
 };
 use config::{load_config_role_rows, missing_config_roles};
@@ -50,11 +50,11 @@ pub enum ListCommandError {
     },
 
     #[error(transparent)]
-    InstalledDeployment(#[from] InstalledDeploymentError),
+    InstalledFleet(#[from] InstalledFleetError),
 
     #[error("{source}\nHint: {hint}")]
-    InstalledDeploymentHint {
-        source: InstalledDeploymentError,
+    InstalledFleetHint {
+        source: InstalledFleetError,
         hint: &'static str,
     },
 
@@ -149,7 +149,7 @@ where
 fn list_title(options: &ListOptions) -> ListTitle {
     let source = match options.source {
         options::ListSource::Config => ListTitleSource::App,
-        options::ListSource::RootRegistry => ListTitleSource::Deployment,
+        options::ListSource::RootRegistry => ListTitleSource::Fleet,
     };
     ListTitle {
         source,

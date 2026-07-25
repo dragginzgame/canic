@@ -27,8 +27,8 @@ pub(super) fn write_metrics_report(
 fn render_metrics_report(report: &MetricsReport, verbose: bool) -> String {
     [
         format!(
-            "Deployment: {} (environment {}, metrics {})",
-            report.deployment,
+            "Fleet: {} (environment {}, metrics {})",
+            report.fleet,
             report.environment,
             metrics_kind_label(report.kind)
         ),
@@ -266,7 +266,7 @@ mod tests {
 
     fn report() -> MetricsReport {
         MetricsReport {
-            deployment: "demo-local".to_string(),
+            fleet: "demo-local".to_string(),
             environment: "local".to_string(),
             kind: MetricsKind::Runtime,
             canisters: vec![MetricsCanisterReport {

@@ -25,7 +25,7 @@ const STATUS_PENDING_SEND: &str = "pending_send";
 pub(super) struct PendingIcpRefillOperationInput<'a> {
     pub(super) icp_root: &'a Path,
     pub(super) environment: &'a str,
-    pub(super) deployment: &'a str,
+    pub(super) fleet: &'a str,
     pub(super) root_canister_id: &'a str,
     pub(super) source_subaccount: Option<[u8; 32]>,
     pub(super) amount_e8s: u64,
@@ -99,7 +99,7 @@ struct PendingOperationRecord {
     status: String,
     cli_command: String,
     environment: String,
-    deployment: String,
+    fleet: String,
     root_canister_id: String,
     source_subaccount: Option<String>,
     amount_e8s: u64,
@@ -181,7 +181,7 @@ pub(super) fn reserve_pending_icp_refill_operation(
         status: STATUS_PENDING_SEND.to_string(),
         cli_command: CYCLES_CONVERT_COMMAND.to_string(),
         environment: input.environment.to_string(),
-        deployment: input.deployment.to_string(),
+        fleet: input.fleet.to_string(),
         root_canister_id: input.root_canister_id.to_string(),
         source_subaccount: input.source_subaccount.map(hex_bytes),
         amount_e8s: input.amount_e8s,
@@ -367,7 +367,7 @@ fn icp_refill_operation_key(input: &PendingIcpRefillOperationInput<'_>) -> Strin
     let mut bytes = Vec::new();
     extend_key_part(&mut bytes, b"canic:pending-operation:icp-refill:v1");
     extend_key_part(&mut bytes, input.environment.as_bytes());
-    extend_key_part(&mut bytes, input.deployment.as_bytes());
+    extend_key_part(&mut bytes, input.fleet.as_bytes());
     extend_key_part(&mut bytes, input.root_canister_id.as_bytes());
     extend_optional_key_part(
         &mut bytes,
@@ -434,7 +434,7 @@ mod tests {
         assert_eq!(record.status, STATUS_PENDING_SEND);
         assert_eq!(record.cli_command, CYCLES_CONVERT_COMMAND);
         assert_eq!(record.environment, "ic");
-        assert_eq!(record.deployment, "demo");
+        assert_eq!(record.fleet, "demo");
         assert_eq!(record.root_canister_id, "root-canister");
         assert_eq!(record.amount_e8s, 100_000_000);
     }
@@ -524,7 +524,7 @@ mod tests {
         PendingIcpRefillOperationInput {
             icp_root: root,
             environment: "ic",
-            deployment: "demo",
+            fleet: "demo",
             root_canister_id: "root-canister",
             source_subaccount: None,
             amount_e8s: 100_000_000,

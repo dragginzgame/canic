@@ -13,7 +13,7 @@ use canic_host::{
     format::cycles_tc,
     icp::{IcpCli, command_display, run_output_with_stderr},
     icp_config::resolve_current_canic_icp_root,
-    installed_deployment::{InstalledDeploymentRequest, resolve_installed_deployment_from_root},
+    installed_fleet::{InstalledFleetRequest, resolve_installed_fleet_from_root},
     registry::RegistryEntry,
 };
 use clap::Command as ClapCommand;
@@ -81,7 +81,7 @@ const WALLET_COMMANDS: &[WalletCommand] = &[
 const AMOUNT_ARG: &str = "amount";
 const CANISTER_OR_ROLE_ARG: &str = "canister-or-role";
 const CYCLES_AMOUNT_ARG: &str = "cycles-amount";
-const DEPLOYMENT_ARG: &str = "deployment";
+const FLEET_ARG: &str = "fleet";
 const DRY_RUN_ARG: &str = "dry-run";
 const FROM_SUBACCOUNT_ARG: &str = "from-subaccount";
 const ICP_AMOUNT_ARG: &str = "icp-amount";
@@ -93,16 +93,16 @@ const SUBACCOUNT_ARG: &str = "subaccount";
 const TO_SUBACCOUNT_ARG: &str = "to-subaccount";
 
 const CYCLES_USAGE: &str = "\
-Wrap ICP cycles commands with Canic deployment-target resolution
+Wrap ICP cycles commands with Canic Fleet resolution
 
 Usage: canic cycles <command> [OPTIONS]
 
 Commands:
   balance   Display the selected identity cycles balance
-  convert   Convert ICP held by an installed deployment root to cycles for that root
+  convert   Convert ICP held by an installed Fleet root to cycles for that root
   mint      Convert ICP to cycles
-  transfer  Transfer cycles to a principal or Canic deployment target
-  topup     Top up an installed deployment canister
+  transfer  Transfer cycles to a principal or Canic Fleet target
+  topup     Top up an installed Fleet canister
   help      Print this message or the help of the given subcommand(s)
 
 Examples:
@@ -173,7 +173,7 @@ struct TransferOptions {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct TopupOptions {
     target: IcpTargetOptions,
-    deployment: String,
+    fleet: String,
     canister_or_role: String,
     amount_cycles: u128,
     json: bool,
@@ -324,7 +324,7 @@ impl TopupOptions {
             .map_err(|_| CyclesCommandError::Usage(topup_usage()))?;
         Ok(Self {
             target: IcpTargetOptions::parse(&matches),
-            deployment: required_string(&matches, DEPLOYMENT_ARG),
+            fleet: required_string(&matches, FLEET_ARG),
             canister_or_role: required_string(&matches, CANISTER_OR_ROLE_ARG),
             amount_cycles: required_typed(&matches, AMOUNT_ARG),
             json: matches.get_flag(JSON_ARG),
@@ -395,9 +395,9 @@ fn run_transfer(options: &TransferOptions) -> Result<(), CyclesCommandError> {
 
 fn run_topup(options: &TopupOptions) -> Result<(), CyclesCommandError> {
     let root = resolve_current_canic_icp_root().map_err(CyclesCommandError::IcpRoot)?;
-    let installed = resolve_deployment(&options.target, &root, &options.deployment)?;
+    let installed = resolve_fleet(&options.target, &root, &options.fleet)?;
     let target = resolve_canister_target(
-        &options.deployment,
+        &options.fleet,
         &options.canister_or_role,
         &installed.fleet.root_principal,
         &installed.registry.entries,
@@ -422,7 +422,7 @@ fn run_topup(options: &TopupOptions) -> Result<(), CyclesCommandError> {
         println!(
             "{}",
             serde_json::json!({
-                "deployment": options.deployment,
+                "fleet": options.fleet,
                 "role": target.role,
                 "canister_id": target.canister_id,
                 "amount_cycles": options.amount_cycles.to_string(),
@@ -445,30 +445,30 @@ fn transfer_receiver(
     root: &Path,
     receiver: &str,
 ) -> Result<String, CyclesCommandError> {
-    let Some((deployment, canister_or_role)) = split_deployment_target(receiver)? else {
+    let Some((fleet, canister_or_role)) = split_fleet_target(receiver)? else {
         return Ok(receiver.to_string());
     };
-    let installed = resolve_deployment(target, root, deployment)?;
+    let installed = resolve_fleet(target, root, fleet)?;
     resolve_canister_or_role(
-        deployment,
+        fleet,
         canister_or_role,
         &installed.fleet.root_principal,
         &installed.registry.entries,
     )
 }
 
-fn split_deployment_target(receiver: &str) -> Result<Option<(&str, &str)>, CyclesCommandError> {
-    let Some((deployment, canister_or_role)) = receiver.split_once('/') else {
+fn split_fleet_target(receiver: &str) -> Result<Option<(&str, &str)>, CyclesCommandError> {
+    let Some((fleet, canister_or_role)) = receiver.split_once('/') else {
         return Ok(None);
     };
-    if deployment.is_empty() || canister_or_role.is_empty() || canister_or_role.contains('/') {
+    if fleet.is_empty() || canister_or_role.is_empty() || canister_or_role.contains('/') {
         return Err(CyclesCommandError::InvalidRecipient);
     }
-    Ok(Some((deployment, canister_or_role)))
+    Ok(Some((fleet, canister_or_role)))
 }
 
 fn resolve_canister_or_role(
-    deployment: &str,
+    fleet: &str,
     target: &str,
     root_canister_id: &str,
     registry: &[RegistryEntry],
@@ -479,17 +479,17 @@ fn resolve_canister_or_role(
     if registry.iter().any(|entry| entry.pid == target) {
         return Ok(target.to_string());
     }
-    resolve_role_principal(deployment, target, registry)
+    resolve_role_principal(fleet, target, registry)
 }
 
-pub(super) fn resolve_deployment(
+pub(super) fn resolve_fleet(
     target: &IcpTargetOptions,
     root: &Path,
-    deployment: &str,
-) -> Result<canic_host::installed_deployment::InstalledDeploymentResolution, CyclesCommandError> {
-    resolve_installed_deployment_from_root(
-        &InstalledDeploymentRequest {
-            deployment: deployment.to_string(),
+    fleet: &str,
+) -> Result<canic_host::installed_fleet::InstalledFleetResolution, CyclesCommandError> {
+    resolve_installed_fleet_from_root(
+        &InstalledFleetRequest {
+            fleet: fleet.to_string(),
             environment: target.environment.clone(),
             icp: target.icp.clone(),
             detect_lost_local_root: true,
@@ -500,15 +500,15 @@ pub(super) fn resolve_deployment(
 }
 
 fn resolve_role_principal(
-    deployment: &str,
+    fleet: &str,
     role: &str,
     registry: &[RegistryEntry],
 ) -> Result<String, CyclesCommandError> {
-    resolve_role_entry(deployment, role, registry).map(|entry| entry.pid.clone())
+    resolve_role_entry(fleet, role, registry).map(|entry| entry.pid.clone())
 }
 
 fn resolve_role_entry<'a>(
-    deployment: &str,
+    fleet: &str,
     role: &str,
     registry: &'a [RegistryEntry],
 ) -> Result<&'a RegistryEntry, CyclesCommandError> {
@@ -519,18 +519,18 @@ fn resolve_role_entry<'a>(
     match matches.as_slice() {
         [entry] => Ok(entry),
         [] => Err(CyclesCommandError::UnknownTarget {
-            deployment: deployment.to_string(),
+            fleet: fleet.to_string(),
             target: role.to_string(),
         }),
         _ => Err(CyclesCommandError::AmbiguousRole {
-            deployment: deployment.to_string(),
+            fleet: fleet.to_string(),
             role: role.to_string(),
         }),
     }
 }
 
 pub(super) fn resolve_canister_target(
-    deployment: &str,
+    fleet: &str,
     target: &str,
     root_canister_id: &str,
     registry: &[RegistryEntry],
@@ -544,7 +544,7 @@ pub(super) fn resolve_canister_target(
     if let Some(entry) = registry.iter().find(|entry| entry.pid == target) {
         return Ok(resolved_target_from_entry(entry));
     }
-    let entry = resolve_role_entry(deployment, target, registry)?;
+    let entry = resolve_role_entry(fleet, target, registry)?;
     Ok(resolved_target_from_entry(entry))
 }
 
@@ -682,7 +682,7 @@ fn mint_command() -> ClapCommand {
 fn transfer_command() -> ClapCommand {
     ClapCommand::new(WalletCommandKind::Transfer.label())
         .bin_name("canic cycles transfer")
-        .about("Transfer cycles to a principal or Canic deployment target")
+        .about("Transfer cycles to a principal or Canic Fleet target")
         .disable_help_flag(true)
         .arg(
             value_arg(AMOUNT_ARG)
@@ -692,9 +692,9 @@ fn transfer_command() -> ClapCommand {
         )
         .arg(
             value_arg(RECEIVER_ARG)
-                .value_name("receiver-or-deployment-target")
+                .value_name("receiver-or-fleet-target")
                 .required(true)
-                .help("Raw principal, or Canic selector like <deployment>/<role-or-canister>"),
+                .help("Raw principal, or Canic selector like <fleet>/<role-or-canister>"),
         )
         .arg(
             value_arg(TO_SUBACCOUNT_ARG)
@@ -716,13 +716,9 @@ fn transfer_command() -> ClapCommand {
 fn topup_command() -> ClapCommand {
     ClapCommand::new(WalletCommandKind::Topup.label())
         .bin_name("canic cycles topup")
-        .about("Top up cycles for one installed deployment canister")
+        .about("Top up cycles for one installed Fleet canister")
         .disable_help_flag(true)
-        .arg(
-            value_arg(DEPLOYMENT_ARG)
-                .value_name(DEPLOYMENT_ARG)
-                .required(true),
-        )
+        .arg(value_arg(FLEET_ARG).value_name(FLEET_ARG).required(true))
         .arg(
             value_arg(CANISTER_OR_ROLE_ARG)
                 .value_name(CANISTER_OR_ROLE_ARG)
@@ -762,7 +758,7 @@ mod tests {
 
     // Keep the public cycles namespace ICP-shaped while adding Canic target selectors.
     #[test]
-    fn parses_cycles_transfer_to_deployment_target() {
+    fn parses_cycles_transfer_to_fleet_target() {
         let options = TransferOptions::parse([
             OsString::from("4T"),
             OsString::from("demo/app"),
@@ -775,7 +771,7 @@ mod tests {
         assert!(options.dry_run);
     }
 
-    // Avoid guessing between raw principals and Canic deployment names.
+    // Avoid guessing between raw principals and Canic Fleet names.
     #[test]
     fn transfer_requires_receiver() {
         std::assert_matches!(
@@ -785,23 +781,23 @@ mod tests {
     }
 
     #[test]
-    fn parses_compact_deployment_target_receiver() {
+    fn parses_compact_fleet_target_receiver() {
         assert_eq!(
-            split_deployment_target("demo/app").expect("split target"),
+            split_fleet_target("demo/app").expect("split target"),
             Some(("demo", "app"))
         );
         assert_eq!(
-            split_deployment_target("aaaaa-aa").expect("split raw receiver"),
+            split_fleet_target("aaaaa-aa").expect("split raw receiver"),
             None
         );
         std::assert_matches!(
-            split_deployment_target("demo/app/extra"),
+            split_fleet_target("demo/app/extra"),
             Err(CyclesCommandError::InvalidRecipient)
         );
     }
 
     #[test]
-    fn resolves_compact_deployment_target_receiver() {
+    fn resolves_compact_fleet_target_receiver() {
         let registry = vec![registry_entry("child-principal", "app")];
 
         assert_eq!(
@@ -849,7 +845,7 @@ mod tests {
         ])
         .expect("parse topup");
 
-        assert_eq!(options.deployment, "demo");
+        assert_eq!(options.fleet, "demo");
         assert_eq!(options.canister_or_role, "app");
         assert_eq!(options.amount_cycles, 4_000_000_000_000);
         assert!(options.dry_run);

@@ -15,8 +15,8 @@ use crate::{
 };
 use canic_backup::discovery::DiscoveryError;
 use canic_host::{
-    icp::IcpCommandError, icp_config::IcpConfigError,
-    installed_deployment::InstalledDeploymentError, registry::RegistryParseError,
+    icp::IcpCommandError, icp_config::IcpConfigError, installed_fleet::InstalledFleetError,
+    registry::RegistryParseError,
 };
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
@@ -32,11 +32,11 @@ pub enum MetricsCommandError {
     #[error("{0}")]
     Usage(String),
 
-    #[error("failed to read canic deployment state: {0}")]
+    #[error("failed to read Canic Fleet state: {0}")]
     IcpRoot(#[source] IcpConfigError),
 
     #[error(transparent)]
-    InstalledDeployment(#[from] InstalledDeploymentError),
+    InstalledFleet(#[from] InstalledFleetError),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),

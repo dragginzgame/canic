@@ -30,7 +30,7 @@ diagnostic wrapper.
 Inspect the billing host endpoint surface:
 
 ```text
-canic info endpoints <deployment> <canister-or-role>
+canic info endpoints <fleet> <canister-or-role>
 ```
 
 Run targeted medic diagnostics:
@@ -52,7 +52,7 @@ fund Cashier.
 Check billing status:
 
 ```text
-canic blob-storage status <deployment> <canister-or-role>
+canic blob-storage status <fleet> <canister-or-role>
 ```
 
 Use `--json` for automation. Parsed blob-storage command failures emit a
@@ -61,7 +61,7 @@ Use `--json` for automation. Parsed blob-storage command failures emit a
 Use `--check-ready` when a script should fail if uploads are not ready:
 
 ```text
-canic blob-storage status <deployment> <canister-or-role> --check-ready
+canic blob-storage status <fleet> <canister-or-role> --check-ready
 ```
 
 The check remains read-only. It renders normal status output, then exits `4`
@@ -72,32 +72,32 @@ the parsed readiness state and blocker/warning codes.
 If gateway principals are missing, sync them explicitly:
 
 ```text
-canic blob-storage sync-gateways <deployment> <canister-or-role>
+canic blob-storage sync-gateways <fleet> <canister-or-role>
 ```
 
 Preview the sync call without executing it:
 
 ```text
-canic blob-storage sync-gateways <deployment> <canister-or-role> --dry-run
+canic blob-storage sync-gateways <fleet> <canister-or-role> --dry-run
 ```
 
 If funding is needed, use the status `next` command or pass an explicit
 unsigned base-10 cycle amount:
 
 ```text
-canic blob-storage fund <deployment> <canister-or-role> --cycles <amount>
+canic blob-storage fund <fleet> <canister-or-role> --cycles <amount>
 ```
 
 Preview the funding call without executing it:
 
 ```text
-canic blob-storage fund <deployment> <canister-or-role> --cycles <amount> --dry-run
+canic blob-storage fund <fleet> <canister-or-role> --cycles <amount> --dry-run
 ```
 
 Re-check status:
 
 ```text
-canic blob-storage status <deployment> <canister-or-role>
+canic blob-storage status <fleet> <canister-or-role>
 ```
 
 Expected ready state:
@@ -129,7 +129,7 @@ use mock Cashier fixtures.
 After upgrading the target canister, re-run:
 
 ```text
-canic blob-storage status <deployment> <canister-or-role>
+canic blob-storage status <fleet> <canister-or-role>
 ```
 
 Confirm billing configuration, last gateway sync timestamp, gateway principal

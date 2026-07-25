@@ -44,7 +44,7 @@ fn parses_renewal_status_options() {
     ])
     .expect("parse auth renewal status options");
 
-    assert_eq!(options.deployment, "local");
+    assert_eq!(options.fleet, "local");
     assert_eq!(options.issuer, "rrkah-fqaaa-aaaaa-aaaaq-cai");
     assert_eq!(options.common.environment, "local");
     assert_eq!(options.common.icp, "/bin/icp");
@@ -99,7 +99,7 @@ fn renewal_status_queries_root_status_endpoint() {
     let result = renewal_status_result_with_runtime(
         &runtime,
         &RenewalStatusOptions {
-            deployment: "local".to_string(),
+            fleet: "local".to_string(),
             issuer: issuer.to_string(),
             json: true,
             common: CommonOptions {
@@ -129,7 +129,7 @@ fn renewal_status_queries_root_status_endpoint() {
     );
     let json = serde_json::to_value(&result).expect("serialize auth renewal result");
     assert_eq!(json["kind"], "auth_renewal_status");
-    assert_eq!(json["target"]["candid_source"], "installed_deployment");
+    assert_eq!(json["target"]["candid_source"], "installed_fleet");
     assert_eq!(json["status"], "issuer_unregistered");
     assert_eq!(json["issuer_observation"]["status"], "unavailable");
     assert_eq!(
@@ -251,7 +251,7 @@ fn renewal_status_rejects_invalid_issuer_principal() {
     let err = renewal_status_result_with_runtime(
         &runtime,
         &RenewalStatusOptions {
-            deployment: "local".to_string(),
+            fleet: "local".to_string(),
             issuer: "not a principal".to_string(),
             json: false,
             common: CommonOptions {
@@ -379,7 +379,7 @@ fn issuer_missing_status_response_json() -> String {
 
 fn renewal_status_options(issuer: &str) -> RenewalStatusOptions {
     RenewalStatusOptions {
-        deployment: "local".to_string(),
+        fleet: "local".to_string(),
         issuer: issuer.to_string(),
         json: true,
         common: CommonOptions {
@@ -466,7 +466,7 @@ impl AuthRenewalRuntime for ScriptedAuthRenewalRuntime {
     fn resolve_root_target(
         &self,
         _options: &CommonOptions,
-        _deployment: &str,
+        _fleet: &str,
         _method: &str,
     ) -> Result<AuthRootCallTarget, AuthCommandError> {
         Ok(AuthRootCallTarget {
@@ -474,7 +474,7 @@ impl AuthRenewalRuntime for ScriptedAuthRenewalRuntime {
                 input: ROOT_ROLE.to_string(),
                 role: ROOT_ROLE.to_string(),
                 canister_id: "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
-                candid_source: AuthRenewalCandidSource::InstalledDeployment,
+                candid_source: AuthRenewalCandidSource::InstalledFleet,
             },
             candid_path: PathBuf::from(".icp/local/canisters/root/root.did"),
             icp_root: PathBuf::from("."),
@@ -519,7 +519,7 @@ impl AuthRenewalRuntime for ScriptedAuthRenewalRuntime {
                     input: issuer_pid.to_string(),
                     role: Some("issuer".to_string()),
                     canister_id: issuer_pid.to_string(),
-                    candid_source: AuthRenewalCandidSource::InstalledDeployment,
+                    candid_source: AuthRenewalCandidSource::InstalledFleet,
                 },
                 candid_path: PathBuf::from(".icp/local/canisters/issuer/issuer.did"),
                 icp_root: PathBuf::from("."),

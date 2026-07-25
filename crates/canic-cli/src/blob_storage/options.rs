@@ -22,7 +22,7 @@ const COMMAND_NAME: &str = "blob-storage";
 const STATUS_COMMAND: &str = "status";
 const SYNC_GATEWAYS_COMMAND: &str = "sync-gateways";
 const FUND_COMMAND: &str = "fund";
-const DEPLOYMENT_ARG: &str = "deployment";
+const FLEET_ARG: &str = "fleet";
 const CANISTER_ARG: &str = "canister";
 const CYCLES_ARG: &str = "cycles";
 const CHECK_READY_ARG: &str = "check-ready";
@@ -65,7 +65,7 @@ pub(super) struct CommonOptions {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct StatusOptions {
-    pub(super) deployment: String,
+    pub(super) fleet: String,
     pub(super) canister: String,
     pub(super) json: bool,
     pub(super) check_ready: bool,
@@ -78,7 +78,7 @@ pub(super) struct StatusOptions {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct SyncGatewaysOptions {
-    pub(super) deployment: String,
+    pub(super) fleet: String,
     pub(super) canister: String,
     pub(super) json: bool,
     pub(super) dry_run: bool,
@@ -91,7 +91,7 @@ pub(super) struct SyncGatewaysOptions {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct FundOptions {
-    pub(super) deployment: String,
+    pub(super) fleet: String,
     pub(super) canister: String,
     pub(super) cycles: u128,
     pub(super) json: bool,
@@ -114,7 +114,7 @@ impl BlobStorageOptions {
             .map_err(|_| BlobStorageCommandError::Usage(usage()))?;
         match matches.subcommand() {
             Some((STATUS_COMMAND, matches)) => Ok(BlobStorageCommand::Status(StatusOptions {
-                deployment: required_string(matches, DEPLOYMENT_ARG),
+                fleet: required_string(matches, FLEET_ARG),
                 canister: required_string(matches, CANISTER_ARG),
                 json: matches.get_flag(JSON_ARG),
                 check_ready: matches.get_flag(CHECK_READY_ARG),
@@ -122,7 +122,7 @@ impl BlobStorageOptions {
             })),
             Some((SYNC_GATEWAYS_COMMAND, matches)) => {
                 Ok(BlobStorageCommand::SyncGateways(SyncGatewaysOptions {
-                    deployment: required_string(matches, DEPLOYMENT_ARG),
+                    fleet: required_string(matches, FLEET_ARG),
                     canister: required_string(matches, CANISTER_ARG),
                     json: matches.get_flag(JSON_ARG),
                     dry_run: matches.get_flag(DRY_RUN_ARG),
@@ -130,7 +130,7 @@ impl BlobStorageOptions {
                 }))
             }
             Some((FUND_COMMAND, matches)) => Ok(BlobStorageCommand::Fund(FundOptions {
-                deployment: required_string(matches, DEPLOYMENT_ARG),
+                fleet: required_string(matches, FLEET_ARG),
                 canister: required_string(matches, CANISTER_ARG),
                 cycles: parse_cycles(&required_string(matches, CYCLES_ARG))
                     .map_err(BlobStorageCommandError::InvalidCycles)?,
@@ -212,10 +212,10 @@ fn command_with_target(name: &'static str, about: &'static str) -> ClapCommand {
         .disable_help_flag(true)
         .about(about)
         .arg(
-            value_arg(DEPLOYMENT_ARG)
-                .value_name(DEPLOYMENT_ARG)
+            value_arg(FLEET_ARG)
+                .value_name(FLEET_ARG)
                 .required(true)
-                .help("Installed deployment target name"),
+                .help("Installed Fleet name"),
         )
         .arg(
             value_arg(CANISTER_ARG)

@@ -3,10 +3,10 @@ use crate::{registry::RegistryEntry, test_support::temp_dir};
 use canic_core::ids::CanonicalNetworkId;
 use std::fs;
 
-// Ensure installed-deployment lookup retains the Fleet-catalog path and JSON source.
+// Ensure installed-Fleet lookup retains the Fleet-catalog path and JSON source.
 #[test]
 fn retains_fleet_catalog_decode_error() {
-    let root = temp_dir("canic-installed-deployment-decode");
+    let root = temp_dir("canic-installed-fleet-decode");
     fs::create_dir_all(&root).expect("create project root");
     let path = root
         .join(".canic")
@@ -21,14 +21,14 @@ fn retains_fleet_catalog_decode_error() {
         .expect_err("malformed Fleet catalog must fail");
 
     match error {
-        InstalledDeploymentError::FleetCatalog(FleetCatalogError::Decode {
+        InstalledFleetError::FleetCatalog(FleetCatalogError::Decode {
             path: error_path,
             source,
         }) => {
             assert_eq!(error_path, path);
             assert!(source.is_eof());
         }
-        other => panic!("unexpected installed-deployment error: {other:?}"),
+        other => panic!("unexpected installed-Fleet error: {other:?}"),
     }
 
     fs::remove_dir_all(root).expect("remove test directory");
@@ -37,8 +37,8 @@ fn retains_fleet_catalog_decode_error() {
 // Ensure ordinary local-registry rejection remains concrete through classification.
 #[test]
 fn retains_replica_query_error() {
-    let request = InstalledDeploymentRequest {
-        deployment: "demo".to_string(),
+    let request = InstalledFleetRequest {
+        fleet: "demo".to_string(),
         environment: "local".to_string(),
         icp: "icp".to_string(),
         detect_lost_local_root: false,
@@ -55,7 +55,7 @@ fn retains_replica_query_error() {
 
     assert!(matches!(
         error,
-        InstalledDeploymentError::ReplicaQuery(ReplicaQueryError::Rejected {
+        InstalledFleetError::ReplicaQuery(ReplicaQueryError::Rejected {
             code: 5,
             message,
         }) if message == "query failed"
@@ -65,7 +65,7 @@ fn retains_replica_query_error() {
 // Ensure the resolved topology gives command code parent/role projections without reparsing.
 #[test]
 fn topology_projects_registry_entries() {
-    let registry = InstalledDeploymentRegistry {
+    let registry = InstalledFleetRegistry {
         root_canister_id: "root-id".to_string(),
         entries: vec![
             RegistryEntry {
@@ -89,7 +89,7 @@ fn topology_projects_registry_entries() {
         ],
     };
 
-    let topology = ResolvedDeploymentTopology::from_registry(&registry);
+    let topology = ResolvedFleetTopology::from_registry(&registry);
 
     assert_eq!(
         topology

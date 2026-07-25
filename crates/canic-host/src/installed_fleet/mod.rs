@@ -11,71 +11,68 @@ use thiserror::Error as ThisError;
 const IC_REJECT_CODE_DESTINATION_INVALID: u64 = 3;
 
 ///
-/// InstalledDeploymentRequest
+/// InstalledFleetRequest
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct InstalledDeploymentRequest {
-    pub deployment: String,
+pub struct InstalledFleetRequest {
+    pub fleet: String,
     pub environment: String,
     pub icp: String,
     pub detect_lost_local_root: bool,
 }
 
 ///
-/// InstalledDeploymentResolution
+/// InstalledFleetResolution
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct InstalledDeploymentResolution {
-    pub source: InstalledDeploymentSource,
+pub struct InstalledFleetResolution {
+    pub source: InstalledFleetSource,
     pub fleet: FleetCatalogEntryV1,
-    pub registry: InstalledDeploymentRegistry,
-    pub topology: ResolvedDeploymentTopology,
+    pub registry: InstalledFleetRegistry,
+    pub topology: ResolvedFleetTopology,
 }
 
 ///
-/// InstalledDeploymentSource
+/// InstalledFleetSource
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum InstalledDeploymentSource {
+pub enum InstalledFleetSource {
     LocalReplica,
     IcpCli,
 }
 
 ///
-/// InstalledDeploymentRegistry
+/// InstalledFleetRegistry
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct InstalledDeploymentRegistry {
+pub struct InstalledFleetRegistry {
     pub root_canister_id: String,
     pub entries: Vec<RegistryEntry>,
 }
 
 ///
-/// ResolvedDeploymentTopology
+/// ResolvedFleetTopology
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ResolvedDeploymentTopology {
+pub struct ResolvedFleetTopology {
     pub root_canister_id: String,
     pub children_by_parent: BTreeMap<Option<String>, Vec<String>>,
     pub roles_by_canister: BTreeMap<String, String>,
 }
 
 ///
-/// InstalledDeploymentError
+/// InstalledFleetError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum InstalledDeploymentError {
-    #[error("deployment target {deployment} is not installed on environment {environment}")]
-    NoInstalledDeployment {
-        environment: String,
-        deployment: String,
-    },
+pub enum InstalledFleetError {
+    #[error("Fleet {fleet} is not installed on environment {environment}")]
+    NoInstalledFleet { environment: String, fleet: String },
 
     #[error("failed to read the canonical-network Fleet catalog: {0}")]
     FleetCatalog(#[from] FleetCatalogError),
@@ -87,10 +84,10 @@ pub enum InstalledDeploymentError {
     Icp(#[from] IcpCommandError),
 
     #[error(
-        "deployment target {deployment} points to root {root}, but that canister is not present on environment {environment}"
+        "Fleet {fleet} points to root {root}, but that canister is not present on environment {environment}"
     )]
-    LostLocalDeployment {
-        deployment: String,
+    LostLocalFleet {
+        fleet: String,
         environment: String,
         root: String,
     },
@@ -102,27 +99,26 @@ pub enum InstalledDeploymentError {
     Io(#[from] std::io::Error),
 }
 
-pub fn resolve_installed_deployment_from_root(
-    request: &InstalledDeploymentRequest,
+pub fn resolve_installed_fleet_from_root(
+    request: &InstalledFleetRequest,
     icp_root: &Path,
-) -> Result<InstalledDeploymentResolution, InstalledDeploymentError> {
-    let fleet =
-        read_installed_fleet_from_root(&request.environment, &request.deployment, icp_root)?;
+) -> Result<InstalledFleetResolution, InstalledFleetError> {
+    let fleet = read_installed_fleet_from_root(&request.environment, &request.fleet, icp_root)?;
     let (source, entries) = query_registry_from_root(request, &fleet.root_principal, icp_root)?;
-    Ok(installed_deployment_resolution(fleet, source, entries))
+    Ok(installed_fleet_resolution(fleet, source, entries))
 }
 
-fn installed_deployment_resolution(
+fn installed_fleet_resolution(
     fleet: FleetCatalogEntryV1,
-    source: InstalledDeploymentSource,
+    source: InstalledFleetSource,
     entries: Vec<RegistryEntry>,
-) -> InstalledDeploymentResolution {
-    let registry = InstalledDeploymentRegistry {
+) -> InstalledFleetResolution {
+    let registry = InstalledFleetRegistry {
         root_canister_id: fleet.root_principal.clone(),
         entries,
     };
-    let topology = ResolvedDeploymentTopology::from_registry(&registry);
-    InstalledDeploymentResolution {
+    let topology = ResolvedFleetTopology::from_registry(&registry);
+    InstalledFleetResolution {
         source,
         fleet,
         registry,
@@ -132,19 +128,19 @@ fn installed_deployment_resolution(
 
 pub fn read_installed_fleet_from_root(
     environment: &str,
-    deployment: &str,
+    fleet: &str,
     icp_root: &Path,
-) -> Result<FleetCatalogEntryV1, InstalledDeploymentError> {
-    read_fleet_catalog_entry_from_root(icp_root, environment, deployment)
-        .map_err(InstalledDeploymentError::FleetCatalog)?
-        .ok_or_else(|| InstalledDeploymentError::NoInstalledDeployment {
+) -> Result<FleetCatalogEntryV1, InstalledFleetError> {
+    read_fleet_catalog_entry_from_root(icp_root, environment, fleet)
+        .map_err(InstalledFleetError::FleetCatalog)?
+        .ok_or_else(|| InstalledFleetError::NoInstalledFleet {
             environment: environment.to_string(),
-            deployment: deployment.to_string(),
+            fleet: fleet.to_string(),
         })
 }
 
-impl ResolvedDeploymentTopology {
-    fn from_registry(registry: &InstalledDeploymentRegistry) -> Self {
+impl ResolvedFleetTopology {
+    fn from_registry(registry: &InstalledFleetRegistry) -> Self {
         let mut children_by_parent = BTreeMap::<Option<String>, Vec<String>>::new();
         let mut roles_by_canister = BTreeMap::new();
         for entry in &registry.entries {
@@ -168,10 +164,10 @@ impl ResolvedDeploymentTopology {
 }
 
 fn query_registry_from_root(
-    request: &InstalledDeploymentRequest,
+    request: &InstalledFleetRequest,
     root: &str,
     icp_root: &Path,
-) -> Result<(InstalledDeploymentSource, Vec<RegistryEntry>), InstalledDeploymentError> {
+) -> Result<(InstalledFleetSource, Vec<RegistryEntry>), InstalledFleetError> {
     let icp = IcpCli::new(&request.icp, Some(request.environment.clone())).with_cwd(icp_root);
     let candid_path = existing_local_canister_candid_path(icp_root, &request.environment, "root");
     let query = query_subnet_registry(
@@ -181,44 +177,42 @@ fn query_registry_from_root(
         Some(icp_root),
         candid_path.as_deref(),
     )
-    .map_err(|err| installed_deployment_registry_error(request, root, err))?;
-    Ok((installed_deployment_source(query.source), query.entries))
+    .map_err(|err| installed_fleet_registry_error(request, root, err))?;
+    Ok((installed_fleet_source(query.source), query.entries))
 }
 
-const fn installed_deployment_source(
-    source: SubnetRegistryQuerySource,
-) -> InstalledDeploymentSource {
+const fn installed_fleet_source(source: SubnetRegistryQuerySource) -> InstalledFleetSource {
     match source {
-        SubnetRegistryQuerySource::LocalReplica => InstalledDeploymentSource::LocalReplica,
-        SubnetRegistryQuerySource::IcpCli => InstalledDeploymentSource::IcpCli,
+        SubnetRegistryQuerySource::LocalReplica => InstalledFleetSource::LocalReplica,
+        SubnetRegistryQuerySource::IcpCli => InstalledFleetSource::IcpCli,
     }
 }
 
-fn installed_deployment_registry_error(
-    request: &InstalledDeploymentRequest,
+fn installed_fleet_registry_error(
+    request: &InstalledFleetRequest,
     root: &str,
     error: SubnetRegistryQueryError,
-) -> InstalledDeploymentError {
+) -> InstalledFleetError {
     match error {
         SubnetRegistryQueryError::Replica(err) => local_registry_error(request, root, err),
-        SubnetRegistryQueryError::Icp(err) => InstalledDeploymentError::Icp(err),
-        SubnetRegistryQueryError::Registry(err) => InstalledDeploymentError::Registry(err),
+        SubnetRegistryQueryError::Icp(err) => InstalledFleetError::Icp(err),
+        SubnetRegistryQueryError::Registry(err) => InstalledFleetError::Registry(err),
     }
 }
 
 fn local_registry_error(
-    request: &InstalledDeploymentRequest,
+    request: &InstalledFleetRequest,
     root: &str,
     error: ReplicaQueryError,
-) -> InstalledDeploymentError {
+) -> InstalledFleetError {
     if request.detect_lost_local_root && is_missing_destination_error(&error) {
-        return InstalledDeploymentError::LostLocalDeployment {
-            deployment: request.deployment.clone(),
+        return InstalledFleetError::LostLocalFleet {
+            fleet: request.fleet.clone(),
             environment: request.environment.clone(),
             root: root.to_string(),
         };
     }
-    InstalledDeploymentError::ReplicaQuery(error)
+    InstalledFleetError::ReplicaQuery(error)
 }
 
 const fn is_missing_destination_error(error: &ReplicaQueryError) -> bool {

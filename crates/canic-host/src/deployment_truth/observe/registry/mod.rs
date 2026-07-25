@@ -4,7 +4,7 @@ use super::shared::{normalize_module_hash, observation_gap, read_live_canister_s
 use crate::{
     fleet_catalog::FleetCatalogEntryV1,
     icp::IcpCanisterStatusReport,
-    installed_deployment::{InstalledDeploymentRequest, resolve_installed_deployment_from_root},
+    installed_fleet::{InstalledFleetRequest, resolve_installed_fleet_from_root},
     registry::RegistryEntry,
     release_set::ConfiguredPoolExpectation,
 };
@@ -20,9 +20,9 @@ pub(super) fn fleet_catalog_registry_observations(
     observed_canisters: &mut Vec<ObservedCanisterV1>,
     gaps: &mut Vec<DeploymentObservationGapV1>,
 ) -> Vec<ObservedPoolCanisterV1> {
-    match resolve_installed_deployment_from_root(
-        &InstalledDeploymentRequest {
-            deployment: request.deployment_name.clone(),
+    match resolve_installed_fleet_from_root(
+        &InstalledFleetRequest {
+            fleet: request.deployment_name.clone(),
             environment: request.environment.clone(),
             icp: "icp".to_string(),
             detect_lost_local_root: false,

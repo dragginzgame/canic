@@ -21,8 +21,8 @@ use crate::{
 use canic_backup::discovery::DiscoveryError;
 use canic_core::{cdk::utils::hash::DecodeHexError, dto::error::ErrorCode};
 use canic_host::{
-    icp::IcpCommandError, icp_config::IcpConfigError,
-    installed_deployment::InstalledDeploymentError, registry::RegistryParseError,
+    icp::IcpCommandError, icp_config::IcpConfigError, installed_fleet::InstalledFleetError,
+    registry::RegistryParseError,
 };
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
@@ -36,25 +36,23 @@ pub enum CyclesCommandError {
     #[error("{0}")]
     Usage(String),
 
-    #[error("failed to read canic deployment state: {0}")]
+    #[error("failed to read Canic Fleet state: {0}")]
     IcpRoot(#[source] IcpConfigError),
 
     #[error(transparent)]
-    InstalledDeployment(#[from] InstalledDeploymentError),
+    InstalledFleet(#[from] InstalledFleetError),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
 
-    #[error("recipient must be a principal or <deployment>/<role-or-canister>")]
+    #[error("recipient must be a principal or <fleet>/<role-or-canister>")]
     InvalidRecipient,
 
-    #[error("deployment target {deployment} has no canister or role named {target}")]
-    UnknownTarget { deployment: String, target: String },
+    #[error("Fleet {fleet} has no canister or role named {target}")]
+    UnknownTarget { fleet: String, target: String },
 
-    #[error(
-        "role {role} is ambiguous in deployment target {deployment}; use one canister principal"
-    )]
-    AmbiguousRole { deployment: String, role: String },
+    #[error("role {role} is ambiguous in Fleet {fleet}; use one canister principal")]
+    AmbiguousRole { fleet: String, role: String },
 
     #[error("failed to update pending operation log: {0}")]
     PendingOperationLog(String),

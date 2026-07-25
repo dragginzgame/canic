@@ -13,7 +13,7 @@ pub(super) fn render_action_result(result: &BlobStorageActionResult) -> String {
             result.action.name.label(),
             action_status_label(result.action.dry_run)
         ),
-        format!("Deployment: {}", result.deployment),
+        format!("Fleet: {}", result.fleet),
         format!("Target: {}", result.target.input),
         format!("Method: {}", result.action.method),
         format!("Mode: {}", result.action.mode.label()),
@@ -59,7 +59,7 @@ const fn action_status_label(dry_run: bool) -> &'static str {
 pub(super) fn render_status_result(result: &BlobStorageStatusResult) -> String {
     let mut lines = vec![
         format!("Blob storage status: {}", result.target.input),
-        format!("Deployment: {}", result.deployment),
+        format!("Fleet: {}", result.fleet),
         format!("Target: {}", result.target.canister_id),
         format!("Configured: {}", yes_no(result.configured)),
         format!(
