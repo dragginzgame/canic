@@ -29,9 +29,12 @@ Historical detail is archived at:
   Tree and many project-focused Trees may use different topology templates.
   Each Canister Tree has its own `TreeId` and Tree Root; physical `SubnetId`
   is repeatable placement metadata, so Trees may be co-located without merging
-  authority. The default workload spec remains distinct from Authority Subnet
-  placement, and application routing remains outside Canic. This is a design
-  amendment, not additional 0.99 runtime scope.
+  authority. The default workload spec remains distinct from Coordinator
+  Subnet placement, and application routing remains outside Canic. The
+  Coordinator is not part of any Tree. Fleet-authoritative services instead
+  remain under ordinary singleton service Trees whose Tree Roots retain local
+  lifecycle authority; the Coordinator publishes their Fleet-wide bindings.
+  This is a design amendment, not additional 0.99 runtime scope.
 - Released `0.99.28` makes `canic status` read App configs and the
   canonical-network Fleet catalog as independent authorities. Its separate
   tables project the catalog's explicit App binding and never infer Fleet
