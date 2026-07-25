@@ -364,7 +364,13 @@ fn icp_config_preserves_workspace_discovery_cause() {
 
 fn write_test_config(path: &Path, app: &str, roles: &[&str]) {
     fs::create_dir_all(path.parent().expect("config parent")).expect("create config parent");
-    let mut source = format!("[app]\nname = \"{app}\"\n");
+    let mut source = format!(
+        "[app]\nname = \"{app}\"\n\
+         \n[tree_groups.default]\n\
+         tree_spec = \"default\"\n\
+         initial_trees = 1\n\
+         maximum_trees = 1\n"
+    );
     for role in roles {
         let kind = if *role == "root" { "root" } else { "canister" };
         write!(
