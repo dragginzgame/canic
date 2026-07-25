@@ -24,7 +24,10 @@ Historical detail is archived at:
   active 0.99, 0.100 and 0.101 designs: every step is a fresh reinstall.
   Cross-release extraction, authority handoff, fencing, mixed-version
   recovery and existing-service adoption are deleted from the proposed
-  architecture rather than retained as rejected alternatives.
+  architecture rather than retained as rejected alternatives. The compact
+  designs retain their exact current-schema Coordinator/Registry/bootstrap
+  bindings, independent Coordinator and Tree placement, runtime activation
+  barrier and terminal Fleet-catalog evidence.
 - The proposed 0.100/0.101 follow-on designs now model heterogeneous,
   independently scaled Tree Groups backed by App Tree Specs: one user-focused
   Tree and many project-focused Trees may use different topology templates.
@@ -38,7 +41,10 @@ Historical detail is archived at:
   publishes their Fleet-wide `(role, TreeId, canister_id)` bindings. This is a
   design amendment, not additional 0.99 runtime scope. A fresh 0.100 install
   creates the first Coordinator and empty Registry directly; a fresh 0.101
-  install provisions every declared service and publishes the complete set.
+  install provisions every declared service through one aggregate operation
+  per selected Tree, publishes the complete set, synchronizes required
+  Directories, cascades them to prepared services and activates the prepared
+  runtimes before terminal catalog publication.
   Neither design consumes an installation from its predecessor. The proposed
   0.102 diagnostic and 0.103 transport lines use the same reinstall-only
   release boundary.

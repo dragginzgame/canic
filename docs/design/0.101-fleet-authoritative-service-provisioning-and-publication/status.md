@@ -6,7 +6,8 @@
 - Release boundary: reinstall only.
 - Implementation started: no.
 - Dependency: 0.100 architecture and qualification.
-- Open blockers: none in this design.
+- Open design blockers: none. Implementation remains gated on completed 0.100
+  contracts and qualification.
 
 0.101 creates a fresh Fleet and provisions its declared services. It does not
 consume a 0.100 installation or preserve existing service Canisters.
@@ -21,7 +22,8 @@ consume a 0.100 installation or preserve existing service Canisters.
 
 - [ ] Prepare one exact operation per selected Tree Root.
 - [ ] Reuse the canonical local creation lifecycle.
-- [ ] Persist and reconcile external effects and receipts.
+- [ ] Persist and reconcile external effects and one aggregate per-Tree
+  receipt.
 
 ## Slice 3 — Coordinator Orchestration
 
@@ -32,8 +34,10 @@ consume a 0.100 installation or preserve existing service Canisters.
 ## Slice 4 — Atomic Publication
 
 - [ ] Commit the complete service set in one Registry revision.
-- [ ] Synchronize mirrors and Fleet Directories.
-- [ ] Confirm Tree-local publication.
+- [ ] Synchronize every required mirror and Fleet Directory.
+- [ ] Cascade the exact Directory to provisioned services and confirm selected
+  roots' Tree-local publication.
+- [ ] Activate prepared services, then Tree Roots.
 
 ## Slice 5 — Recovery and Qualification
 

@@ -233,7 +233,7 @@ fn icp_backed_command_rejects_unparseable_icp_cli_before_running_subcommand() {
 
     assert!(text.contains("unsupported icp-cli version"));
     assert!(text.contains("found: icp development build"));
-    assert!(text.contains("required: icp-cli >=1.1.0, <2.0.0"));
+    assert!(text.contains("required: icp-cli >=1.2.0, <2.0.0"));
     assert!(!text.contains("unsupported replica command ran"));
 }
 

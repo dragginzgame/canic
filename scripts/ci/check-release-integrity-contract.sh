@@ -5,9 +5,15 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CI="$ROOT/.github/workflows/ci.yml"
 MAKEFILE="$ROOT/Makefile"
 TOOLS="$ROOT/tool-versions.env"
+RUST_TOOLCHAIN="$ROOT/rust-toolchain.toml"
 MATRIX="$ROOT/docs/governance/supported-platforms.md"
 VERIFY="$ROOT/scripts/ci/verify-file-checksum.sh"
 ICP_REQUIRE="$ROOT/scripts/ci/require_icp.sh"
+ICP_MODEL="$ROOT/crates/canic-host/src/icp/model.rs"
+ICP_PROOF="$ROOT/scripts/ci/blob-storage-cli-proof-lib.sh"
+DEV_INSTALL="$ROOT/scripts/dev/install_dev.sh"
+INSTALLING="$ROOT/INSTALLING.md"
+README="$ROOT/README.md"
 SECRET_SCAN="$ROOT/scripts/ci/run-secret-scan.sh"
 GITLEAKS_IGNORE="$ROOT/.gitleaksignore"
 DEPENDENCY_RISK_GATE="$ROOT/scripts/ci/check-dependency-risk-inventory.sh"
@@ -28,7 +34,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$MAKEFILE" "$TOOLS" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION"; do
+for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -106,6 +112,29 @@ done < <(rg '^[[:space:]]*cargo install ' "$CI")
 
 # shellcheck source=/dev/null
 source "$TOOLS"
+
+rust_toolchain="$(
+    sed -n 's/^channel = "\([^"]*\)"$/\1/p' "$RUST_TOOLCHAIN"
+)"
+[ -n "$rust_toolchain" ] || fail "rust-toolchain.toml does not declare a channel"
+rg -F "CANIC_INTERNAL_TOOLCHAIN: $rust_toolchain" "$CI" >/dev/null ||
+    fail "CI internal Rust does not match rust-toolchain.toml"
+rg -F "CANIC_RUST_TOOLCHAIN=\"\${CANIC_RUST_TOOLCHAIN:-$rust_toolchain}\"" "$DEV_INSTALL" >/dev/null ||
+    fail "developer bootstrap Rust does not match rust-toolchain.toml"
+rg -F "internal%20rust-$rust_toolchain-orange.svg" "$README" >/dev/null ||
+    fail "README internal Rust badge does not match rust-toolchain.toml"
+rg -F 'pins internal Rust `'"$rust_toolchain"'`' "$README" >/dev/null ||
+    fail "README internal Rust text does not match rust-toolchain.toml"
+
+icp_cli_minor_floor="${CANIC_ICP_CLI_VERSION%.*}.0"
+rg -F "REQUIRED_ICP_CLI_VERSION: &str = \"$icp_cli_minor_floor\"" "$ICP_MODEL" >/dev/null ||
+    fail "host ICP CLI minimum does not match the pinned minor line"
+rg -F "ICP_CLI_SUPPORTED_VERSION_RANGE: &str = \">=$icp_cli_minor_floor, <2.0.0\"" "$ICP_MODEL" >/dev/null ||
+    fail "host ICP CLI range does not match the pinned minor line"
+rg -F "echo \"icp-cli $CANIC_ICP_CLI_VERSION\"" "$ICP_PROOF" >/dev/null ||
+    fail "CLI proof fixture does not report the pinned ICP CLI version"
+rg -F 'maintainer toolchain currently pins `'"$CANIC_ICP_CLI_VERSION"'`' "$INSTALLING" >/dev/null ||
+    fail "installation guidance does not report the pinned ICP CLI version"
 
 mapfile -t version_vars < <(
     sed -n 's/^export \(CANIC_[A-Z0-9_]*_VERSION\)=.*/\1/p' "$TOOLS"

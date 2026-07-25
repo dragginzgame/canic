@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 pub(super) const LOCAL_ICP_TARGET: &str = "local";
-pub(super) const REQUIRED_ICP_CLI_VERSION: &str = "1.1.0";
-pub(super) const ICP_CLI_SUPPORTED_VERSION_RANGE: &str = ">=1.1.0, <2.0.0";
+pub(super) const REQUIRED_ICP_CLI_VERSION: &str = "1.2.0";
+pub(super) const ICP_CLI_SUPPORTED_VERSION_RANGE: &str = ">=1.2.0, <2.0.0";
 
 /// Direct local replica endpoint used when ICP project state is unavailable.
 ///

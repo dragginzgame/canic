@@ -12,9 +12,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.33` moves the maintained operator baseline to checksum-pinned ICP CLI
+  1.2.0 and aligns repository builds, CI and developer bootstrap on Rust
+  1.97.1 without changing Canic's command or data contracts.
+
 - `0.99.32` hard-cuts every follow-on release step to fresh reinstall,
   deleting proposed cross-release handoff and service-adoption machinery from
-  the active 0.99–0.103 designs.
+  the active 0.99–0.103 designs while retaining the current placement,
+  topology and activation contracts required for implementation.
 
 - `0.99.31` completes the recursive CLI hard cut: one installation command
   and the maintained deployment-truth leaves survive, while orphan authority,

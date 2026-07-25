@@ -25,7 +25,7 @@ pub(super) fn parse_icp_cli_version(output: &str) -> Option<IcpCliVersion> {
 /// Return whether an ICP CLI version is supported by this Canic release.
 #[must_use]
 pub(super) const fn is_supported_icp_cli_version(version: IcpCliVersion) -> bool {
-    version.major == 1 && version.minor >= 1
+    version.major == 1 && version.minor >= 2
 }
 
 pub(super) fn compatible_version_output(

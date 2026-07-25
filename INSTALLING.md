@@ -25,9 +25,9 @@ make install-dev
 
 Canic shells out to the installed `icp` binary for local replica and canister
 operations. Canic releases that support the ICP CLI stable line require
-`icp-cli >=1.1.0, <2.0.0`; the maintainer toolchain currently pins `1.1.0`.
+`icp-cli >=1.2.0, <2.0.0`; the maintainer toolchain currently pins `1.2.0`.
 
-ICP CLI 1.1 requires custom connected-network definitions to declare an
+ICP CLI requires custom connected-network definitions to declare an
 explicit `root-key`. Canic's maintained project configuration uses the managed
 local network and the built-in `ic` network, so no repository configuration
 change is required. Downstream projects with custom connected networks must add
