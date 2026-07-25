@@ -8,7 +8,7 @@
 [![Docs.rs](https://docs.rs/canic/badge.svg)](https://docs.rs/canic)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![MSRV](https://img.shields.io/badge/MSRV-1.91.0-blue.svg)](Cargo.toml)
-[![Internal Rust](https://img.shields.io/badge/internal%20rust-1.97.0-orange.svg)](rust-toolchain.toml)
+[![Internal Rust](https://img.shields.io/badge/internal%20rust-1.97.1-orange.svg)](rust-toolchain.toml)
 
 Canic is a Rust toolkit and operator CLI for Internet Computer canister fleets.
 It gives canister crates metadata-driven lifecycle macros, validated topology
@@ -190,7 +190,7 @@ make test-cli
 make test-runtime-fast
 ```
 
-[rust-toolchain.toml](rust-toolchain.toml) pins internal Rust `1.97.0` so CI and
+[rust-toolchain.toml](rust-toolchain.toml) pins internal Rust `1.97.1` so CI and
 local builds stay in sync. Published crates declare MSRV `1.91.0` in
 [Cargo.toml](Cargo.toml).
 

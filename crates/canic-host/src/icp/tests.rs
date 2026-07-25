@@ -27,7 +27,7 @@ fn parses_icp_cli_versions_from_common_output() {
 }
 
 #[test]
-fn icp_cli_version_range_requires_1_1_or_newer_within_major_one() {
+fn icp_cli_version_range_requires_1_2_or_newer_within_major_one() {
     assert!(!is_supported_icp_cli_version(IcpCliVersion {
         major: 0,
         minor: 0,
@@ -38,9 +38,14 @@ fn icp_cli_version_range_requires_1_1_or_newer_within_major_one() {
         minor: 0,
         patch: 0
     }));
-    assert!(is_supported_icp_cli_version(IcpCliVersion {
+    assert!(!is_supported_icp_cli_version(IcpCliVersion {
         major: 1,
         minor: 1,
+        patch: 0
+    }));
+    assert!(is_supported_icp_cli_version(IcpCliVersion {
+        major: 1,
+        minor: 2,
         patch: 0
     }));
     assert!(is_supported_icp_cli_version(IcpCliVersion {
@@ -83,7 +88,7 @@ fn command_runner_rejects_unparseable_icp_cli_before_running_command() {
     assert!(err.to_string().contains("found: icp development build"));
     assert!(
         err.to_string()
-            .contains("required: icp-cli >=1.1.0, <2.0.0")
+            .contains("required: icp-cli >=1.2.0, <2.0.0")
     );
     assert!(
         err.to_string()

@@ -58,10 +58,10 @@ emit_response_bytes() {
 }
 
 # Exact current Candid responses for the maintained fixture DTOs. Both CLI
-# proofs decode these bytes through the same ICP 1.1 boundary as real calls.
+# proofs decode these bytes through the same ICP 1.2 boundary as real calls.
 for arg in "$@"; do
     if [ "$arg" = "--version" ]; then
-        echo "icp-cli 1.1.0"
+        echo "icp-cli 1.2.0"
         exit 0
     fi
 done
