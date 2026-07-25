@@ -7,123 +7,104 @@ Last updated: 2026-07-25
 - Design state: proposed.
 - Implementation state: not started.
 - Dependency: 0.99 and 0.100 must be implemented and qualified before Slice 1.
-- Scope: in-place authority-service adoption, missing-service provisioning,
-  one-way ownership handoff and complete Fleet Directory publication.
-- 0.100 input: preserve its canonical heterogeneous Tree Group vector,
-  group-bound `trees` and group-aware Directory projection unchanged.
-- Excluded: relocation, replacement, replication, promotion, failover and
-  application-data migration.
+- Scope: Tree-owned Fleet service adoption/provisioning and complete
+  Coordinator publication.
+- 0.100 input: preserve the exact Tree Groups, group-bound Trees,
+  Coordinator-outside-Trees model and empty `authority_services` field.
+- Excluded: ownership transfer to the Coordinator, relocation, replacement,
+  replication, promotion, failover and application-data migration.
 
 No item below is complete until its implementation and focused validation
 evidence exist.
 
-## Slice 1 — Contracts, Declaration and Current Registry Schema
+## Slice 1 — Contracts and Target Compilation
 
-- [ ] Activate the existing `[services.fleet]` declaration and extend its
-  singleton/eligibility validation for authority-service planning.
-- [ ] Compile one canonical host declaration and install its protected
-  prepared/committed bytes and hash in the Coordinator.
-- [ ] Freeze and implement the declaration/plan encodings, domains and bounds.
-- [ ] Reuse the 0.100 `FleetRegistry` and
-  `FleetAuthorityServiceBinding` without another schema or Fleet binding,
-  including the exact `tree_groups` and group-bound `trees` fields.
-- [ ] Perform only required one-time local stable-state migrations.
-- [ ] Remove any Directory-owned authority declaration.
+- [ ] Hard-cut the declaration to `[services.fleet.targets]`.
+- [ ] Compile every role to one singleton `TreeGroupId`, active `TreeId`, Tree
+  Root, Tree Spec hash and physical `SubnetId`.
+- [ ] Require the selected role in exactly the target Tree Spec.
+- [ ] Add `TreeId` to the existing Registry and Directory service binding.
+- [ ] Freeze canonical declaration/plan encodings, domains and bounds.
+- [ ] Preserve the 0.100 `tree_groups` and `trees` fields unchanged.
 
-## Slice 2 — Service-Local Authority State and Deployment Fence
+## Slice 2 — Tree Root Preparation
 
-- [ ] Add `Local`, `Preparing`, `Provisioning` and `Fleet` protected states.
-- [ ] Migrate existing Fleet-bound services to `Local`.
-- [ ] Add exact structural prepare/commit endpoints.
-- [ ] Fence Canic control-plane mutation while preparing or provisioning.
-- [ ] Qualify the root-first/Coordinator-last current-schema upgrade and
-  `AwaitingCoordinatorUpgrade` state.
+- [ ] Add local `Preparing` and `FleetPublished` publication states without
+  changing local Registry ownership.
+- [ ] Add exact authenticated prepare/status endpoints.
+- [ ] Fence duplicate local creation, removal, role reassignment and
+  controller-policy mutation while preparing.
+- [ ] Qualify an existing candidate without moving it, releasing it or
+  changing its controllers.
+- [ ] Qualify the root-first/Coordinator-last current-schema upgrade.
 
 ## Slice 3 — Complete Planning and Inventory Qualification
 
-- [ ] Collect current inventory from every `Joining`, `Active` and `Draining`
-  Tree Root.
-- [ ] Bind every live and removed inventory to its exact `TreeId`,
-  `TreeGroupId`, Tree Spec hash and placement `SubnetId`.
-- [ ] Load and verify qualified final inventory/fence evidence for every
-  `Removed` Tree.
-- [ ] Fail closed on unqualified removal or a selected unresolved
-  removed-tree candidate.
-- [ ] Build one canonical bounded `Adopt`/`Provision` activation plan.
-- [ ] Validate qualified placement, package, controller, registry and binding
-  evidence before mutation.
-- [ ] Persist the plan and Tree lifecycle-mutation fence.
+- [ ] Collect inventory from every `Joining`, `Active` and `Draining` Tree
+  Root.
+- [ ] Load every qualified removed-Tree final inventory and fail closed on
+  unqualified removal.
+- [ ] Bind evidence to the exact Tree, group, Tree Spec hash, root and
+  placement.
+- [ ] Resolve the complete sorted target set to exact `Adopt` or `Provision`
+  work before mutation.
+- [ ] Reject wrong-Tree, duplicate or possibly live removed-Tree candidates.
+- [ ] Persist one bounded activation plan and Tree-lifecycle mutation fence.
 
-## Slice 4 — Missing-Service Provisioning
+## Slice 4 — Tree-Local Provisioning
 
-- [ ] Reuse the existing allocation/pool and installer path.
-- [ ] Require a durably known Canister principal.
-- [ ] Journal an explicitly Authority-Subnet-targeted creation request and
-  successful result.
-- [ ] Verify protected installation and qualified placement evidence.
-- [ ] Commit unpublished authority-registry ownership.
+- [ ] Reuse the target Tree Root's existing allocation and installer path.
+- [ ] Journal one exact principal-returning create request.
+- [ ] Never repeat an unknown create without recovering the exact principal.
+- [ ] Verify protected runtime binding, package/module and controller policy.
+- [ ] Commit one normal local Registry row and canonical ready receipt.
 
-## Slice 5 — Existing-Service Ownership Handoff
+## Slice 5 — Atomic Registry and Directory Publication
 
-- [ ] Add source `MovingOut` and `Released` records.
-- [ ] Add destination `PreparedIn` and `Committed` records.
-- [ ] Implement exact controller-set transfer and unknown-outcome
-  reconciliation.
-- [ ] Retain source tombstones and all committed per-role evidence.
-- [ ] Make every phase idempotent or explicitly outcome-unknown.
-
-## Slice 6 — Canonical Publication and Directory Cascade
-
-- [ ] Verify that the complete committed service set equals the declaration.
-- [ ] Publish a non-empty complete set in one checked Registry revision.
-- [ ] Commit an empty declaration idempotently without a revision.
-- [ ] Populate existing Directory `entries` from `authority_services`.
-- [ ] Preserve the exact `groups`, `trees` and `DirectoryProvenance`
-  projections.
-- [ ] Preserve every Tree's ID, group, spec hash, placement and root in that
-  projection.
-- [ ] Set `synchronized_at` only on atomic mirror-and-Directory activation.
+- [ ] Verify that the complete ready set equals the declaration.
+- [ ] Publish one non-empty complete set in one checked Registry revision.
+- [ ] Treat an empty declaration and empty Registry as idempotently current.
+- [ ] Populate Directory entries as `(role, TreeId, canister_id)`.
+- [ ] Preserve the exact group, Tree and provenance projections.
+- [ ] Confirm target-root `FleetPublished` state through normal Registry
+  synchronization.
 - [ ] Resume Fleet Tree lifecycle mutation after publication.
 
-## Slice 7 — Recovery, Backup and Operational Qualification
+## Slice 6 — Recovery, Backup and Operational Qualification
 
-- [ ] Resume from every durable boundary.
-- [ ] Prove old source backups cannot resurrect ownership.
-- [ ] Prove old Coordinator backups cannot lower canonical state.
-- [ ] Prove removed-tree evidence cannot be omitted or treated as empty.
-- [ ] Prove declaration drift cannot start a second activation.
+- [ ] Resume from every durable activation boundary.
+- [ ] Reconcile lost preparation, ready, create and publication responses.
+- [ ] Prove old Coordinator state cannot lower Registry authority.
+- [ ] Prove old Tree Root state cannot clear publication fences.
 - [ ] Add bounded inspection, metrics and typed reports.
-- [ ] Record raw/compressed release-Wasm evidence for adopted/provisioned
-  authority services and prove unrelated ordinary Canisters retain no 0.101
-  authority workflow.
+- [ ] Record raw/compressed release-Wasm evidence for host, Coordinator,
+  Tree-Root and service artifacts.
 - [ ] Complete focused PocketIC or disposable-environment qualification.
 
 ## Completion Criteria
 
-- [ ] Service authority is declared only through `[services.fleet]`.
-- [ ] Every selected role is eligible and singleton.
+- [ ] The Coordinator has no Tree identity and is not a service parent,
+  local Registry owner or controller.
+- [ ] `[services.fleet.targets]` is the sole Fleet service declaration.
+- [ ] Every target role resolves to one active Tree in one singleton group.
 - [ ] The complete service set is resolved before mutation.
-- [ ] Every removed Tree is qualified and has no selected unresolved
-  candidate.
-- [ ] Existing mutable services retain their principals and application data.
-- [ ] Missing services have complete qualified Authority-Subnet placement
-  evidence.
-- [ ] The Coordinator owns one separate authority-service registry.
-- [ ] Every handoff is durable, one-way and restart-safe.
-- [ ] No execution trace admits two committed owners.
-- [ ] Unknown management outcomes reconcile or fail closed.
-- [ ] A complete non-empty set is published in one checked revision; an empty
-  set is idempotently already current.
-- [ ] The one current 0.100 Registry schema, Tree Group contract and public
-  binding type are reused.
-- [ ] Fleet Directory `entries`, `groups`, `trees`, provenance and
-  `synchronized_at` match the design exactly.
+- [ ] Existing services retain principal, data, local Registry row and Tree
+  Root authority.
+- [ ] Missing services are created only by the selected Tree Root.
+- [ ] Live and removed Tree evidence prevents duplicate candidates.
+- [ ] A complete non-empty set is published in one checked revision.
+- [ ] Registry and Directory entries retain `(role, TreeId, canister_id)`.
+- [ ] The one current 0.100 Registry schema and Tree topology are reused.
 - [ ] Tree lifecycle mutation resumes after publication.
-- [ ] Old backups cannot roll authority backward.
-- [ ] Per-role Wasm evidence attributes authority-service growth without
-  ordinary-Canister authority-workflow growth.
-- [ ] No relocation, replacement, replication, promotion, failover or
-  application-data migration code is added.
+- [ ] Co-locating a Primary Data Tree with the Coordinator changes no logical
+  authority and is reported as a shared capacity/outage trade-off.
+- [ ] A Primary Data Tree on another Subnet has the same publication
+  semantics.
+- [ ] Unknown management outcomes reconcile or fail closed.
+- [ ] Old backups cannot roll authority or publication backward.
+- [ ] Writable-primary replication, promotion and failover remain absent.
+- [ ] Per-role Wasm evidence attributes growth without adding 0.101 workflows
+  to unrelated ordinary Canisters.
 - [ ] Existing-Fleet and fresh-Fleet journeys pass.
-- [ ] Closeout finds no second declaration, ownership, publication or
-  Directory authority.
+- [ ] Closeout finds no Coordinator-owned service Registry, ownership-transfer
+  machinery or superseded distinguished-Subnet terminology.
