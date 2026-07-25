@@ -38,7 +38,7 @@ mod timing;
 mod truth_check;
 
 use crate::release_build::{ReleaseBuildPlanError, plan_release_build};
-use activation::{ActivatedRootInstall, install_root_activated};
+use activation::install_root_committed;
 use build_network::resolve_install_build_context;
 use build_snapshot::resolve_install_snapshot;
 pub use config_selection::{
@@ -139,49 +139,6 @@ pub struct InstallRootError {
     phase: InstallRootPhase,
     #[source]
     source: Box<dyn std::error::Error>,
-}
-
-/// Typed terminal outcome while the next activation phase is not yet admitted.
-#[derive(Debug, ThisError)]
-#[error(
-    "root {root_canister_id} and its managed Canisters are durably Active at activation journal {} sequence {sequence}; no operational Fleet state was published",
-    journal_path.display()
-)]
-pub struct FleetActivationContinuationRequired {
-    root_canister_id: String,
-    journal_path: PathBuf,
-    sequence: u64,
-}
-
-impl FleetActivationContinuationRequired {
-    #[must_use]
-    pub fn root_canister_id(&self) -> &str {
-        &self.root_canister_id
-    }
-
-    #[must_use]
-    pub fn journal_path(&self) -> &Path {
-        &self.journal_path
-    }
-
-    #[must_use]
-    pub const fn sequence(&self) -> u64 {
-        self.sequence
-    }
-}
-
-fn continuation_required(
-    root_canister_id: String,
-    activated_root: &ActivatedRootInstall,
-) -> InstallRootError {
-    InstallRootError::new(
-        InstallRootPhase::Activation,
-        FleetActivationContinuationRequired {
-            root_canister_id,
-            journal_path: activated_root.activation.path.clone(),
-            sequence: activated_root.activation.journal.sequence,
-        },
-    )
 }
 
 impl InstallRootError {
@@ -315,7 +272,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
     timings.create_canisters = create_duration;
-    let activated_root = install_root_activated(
+    let committed_root = install_root_committed(
         receipt_scope,
         &options,
         &root_canister_id,
@@ -324,10 +281,10 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         &activation,
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
-    timings.record_activation(activated_root.timings);
+    timings.record_activation(committed_root.timings);
 
     print_install_timing_summary(&timings, total_started_at.elapsed());
-    Err(continuation_required(root_canister_id, &activated_root))
+    Ok(())
 }
 
 fn plan_current_fleet_activation(

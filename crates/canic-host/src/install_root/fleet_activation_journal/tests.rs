@@ -186,6 +186,60 @@ fn refresh_active_evidence(record: &mut FleetActivationHostRecord, root_canister
     }
 }
 
+fn activated_install(
+    root: &Path,
+    receipt_directory: &Path,
+    module_hash_seed: u8,
+) -> (
+    FinalizedReleaseBuild,
+    RootInstallReceiptEvidence,
+    CanistersActivatedFleetInstallActivation,
+) {
+    let finalized = finalized_release(root, b"manifest");
+    let planned =
+        plan_fleet_install_activation(request(root, &finalized)).expect("plan activation");
+    let (receipt_path, _) = write_root_install_receipt(
+        receipt_directory,
+        [module_hash_seed; 32],
+        &planned.journal.activation.identity,
+    );
+    let receipt = admit_root_install_receipt(&receipt_path).expect("admit root-install receipt");
+    let installed = record_root_installed(root, &planned, &receipt).expect("record RootInstalled");
+    let prepared_status = prepared_root_status(&installed.journal.activation.identity, 30);
+    let prepared_evidence = admit_canisters_prepared(
+        receipt.root_canister,
+        &installed.journal.activation.identity,
+        &prepared_status,
+    )
+    .expect("admit Prepared status");
+    let prepared = record_canisters_prepared(root, &installed, &prepared_evidence)
+        .expect("record CanistersPrepared");
+    let active_evidence = admit_canisters_activated(
+        receipt.root_canister,
+        &prepared,
+        &active_root_status(&prepared_status),
+    )
+    .expect("admit Active status");
+    let activated = record_canisters_activated(root, &prepared, &active_evidence)
+        .expect("record CanistersActivated");
+    (finalized, receipt, activated)
+}
+
+fn catalog_entry(
+    activated: &CanistersActivatedFleetInstallActivation,
+    root_canister: Principal,
+) -> FleetCatalogEntryV1 {
+    FleetCatalogEntryV1 {
+        canonical_network_id: activated.journal.activation.identity.fleet.fleet.network,
+        fleet_id: activated.journal.activation.identity.fleet.fleet.fleet_id,
+        fleet_name: activated.journal.fleet_name.clone(),
+        app: activated.journal.activation.identity.fleet.app.clone(),
+        environment: "staging".to_string(),
+        deployed_at_unix_secs: 54,
+        root_principal: root_canister.to_text(),
+    }
+}
+
 #[test]
 fn planned_journal_is_canonical_durable_and_bound_to_every_path_identity() {
     let root = temp_dir("fleet-install-activation-plan");
@@ -471,6 +525,114 @@ fn canisters_activated_transition_is_canonical_monotonic_and_idempotent() {
     );
 
     fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn host_authority_commit_is_terminal_durable_and_exactly_idempotent() {
+    let root = temp_dir("fleet-install-activation-host-authority");
+    let receipt_directory = root.join("receipts");
+    let (finalized, receipt, activated) = activated_install(&root, &receipt_directory, 25);
+    let catalog = crate::fleet_catalog::commit_fleet_catalog_entry(
+        &root,
+        catalog_entry(&activated, receipt.root_canister),
+    )
+    .expect("commit Fleet catalog");
+
+    let committed =
+        record_host_authority_committed(&root, &activated, &receipt_directory, &catalog)
+            .expect("record HostAuthorityCommitted");
+    assert!(committed.advanced);
+    assert_eq!(committed.journal.sequence, 4);
+    assert_eq!(
+        committed.journal.phase,
+        FleetInstallActivationPhase::HostAuthorityCommitted
+    );
+    assert_eq!(
+        committed.journal.committed_fleet_catalog_hash,
+        Some(catalog.catalog_hash())
+    );
+    assert_eq!(
+        load_fleet_install_activation_journal(
+            &root,
+            committed.journal.activation.identity.fleet.fleet.network,
+            committed.journal.activation.identity.fleet.fleet.fleet_id,
+            committed.journal.activation.identity.operation_id,
+        )
+        .expect("load terminal journal"),
+        committed.journal
+    );
+
+    let repeated = record_host_authority_committed(&root, &activated, &receipt_directory, &catalog)
+        .expect("repeat terminal transition");
+    assert!(!repeated.advanced);
+    assert_eq!(repeated.journal, committed.journal);
+    let discovery = discover_fleet_install_activation(
+        &root,
+        committed.journal.activation.identity.fleet.fleet.network,
+        &committed.journal.fleet_name,
+    )
+    .expect("discover terminal evidence");
+    assert!(discovery.active.is_none());
+    assert_eq!(discovery.completed.len(), 1);
+    let rediscovered = plan_fleet_install_activation(request(&root, &finalized))
+        .expect("observe terminal install");
+    let observed =
+        observe_host_authority_committed(&rediscovered, &receipt_directory, catalog.entry())
+            .expect("observe terminal authority");
+    assert!(!observed.advanced);
+    assert_eq!(observed.journal, committed.journal);
+    assert_eq!(
+        recover_activation_root_canister(&rediscovered, &receipt_directory)
+            .expect("recover terminal root"),
+        Some(receipt.root_canister)
+    );
+    let mut wrong_entry = catalog.entry().clone();
+    wrong_entry.root_principal = Principal::anonymous().to_text();
+    std::assert_matches!(
+        observe_host_authority_committed(&rediscovered, &receipt_directory, &wrong_entry),
+        Err(FleetInstallActivationJournalError::CommittedFleetCatalogMismatch)
+    );
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn host_authority_commit_requires_exact_catalog_and_root_receipt_evidence() {
+    let root = temp_dir("fleet-install-activation-host-authority-reject");
+    let receipt_directory = root.join("receipts");
+    let (_, receipt, activated) = activated_install(&root, &receipt_directory, 26);
+    let catalog = crate::fleet_catalog::commit_fleet_catalog_entry(
+        &root,
+        catalog_entry(&activated, receipt.root_canister),
+    )
+    .expect("commit Fleet catalog");
+    let journal_before = fs::read(&activated.path).expect("read active journal");
+
+    let missing_receipts = root.join("missing-receipts");
+    std::assert_matches!(
+        record_host_authority_committed(&root, &activated, &missing_receipts, &catalog),
+        Err(FleetInstallActivationJournalError::MissingRootInstallReceipt { .. })
+    );
+    assert_eq!(
+        fs::read(&activated.path).expect("read unchanged journal"),
+        journal_before
+    );
+
+    let other_root = temp_dir("fleet-install-activation-host-authority-other-catalog");
+    let wrong_catalog =
+        crate::fleet_catalog::commit_fleet_catalog_entry(&other_root, catalog.entry().clone())
+            .expect("commit same row under another project root");
+    std::assert_matches!(
+        record_host_authority_committed(&root, &activated, &receipt_directory, &wrong_catalog),
+        Err(FleetInstallActivationJournalError::CommittedFleetCatalogMismatch)
+    );
+    assert_eq!(
+        fs::read(&activated.path).expect("read unchanged journal"),
+        journal_before
+    );
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    fs::remove_dir_all(other_root).expect("remove other temp root");
 }
 
 #[test]
@@ -801,7 +963,7 @@ fn planning_rejects_active_app_and_release_build_contradictions() {
             app: AppId::from("other"),
             ..request(&root, &first_release)
         }),
-        Err(FleetInstallActivationJournalError::ActiveAppMismatch {
+        Err(FleetInstallActivationJournalError::ExistingAppMismatch {
             path,
             ..
         }) if path == first.path
@@ -811,7 +973,7 @@ fn planning_rejects_active_app_and_release_build_contradictions() {
     std::assert_matches!(
         plan_fleet_install_activation(request(&root, &second_release)),
         Err(
-            FleetInstallActivationJournalError::ActiveReleaseBuildMismatch {
+            FleetInstallActivationJournalError::ExistingReleaseBuildMismatch {
                 path,
                 ..
             }

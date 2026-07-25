@@ -1,6 +1,6 @@
 # Canic 0.101 Implementation Status
 
-Last updated: 2026-07-23
+Last updated: 2026-07-25
 
 ## Status
 
@@ -9,6 +9,8 @@ Last updated: 2026-07-23
 - Dependency: 0.99 and 0.100 must be implemented and qualified before Slice 1.
 - Scope: in-place authority-service adoption, missing-service provisioning,
   one-way ownership handoff and complete Fleet Directory publication.
+- 0.100 input: preserve its canonical heterogeneous Tree Group vector,
+  group-bound `trees` and group-aware Directory projection unchanged.
 - Excluded: relocation, replacement, replication, promotion, failover and
   application-data migration.
 
@@ -17,12 +19,14 @@ evidence exist.
 
 ## Slice 1 — Contracts, Declaration and Current Registry Schema
 
-- [ ] Add `[services.fleet]` singleton/eligibility validation.
+- [ ] Activate the existing `[services.fleet]` declaration and extend its
+  singleton/eligibility validation for authority-service planning.
 - [ ] Compile one canonical host declaration and install its protected
   prepared/committed bytes and hash in the Coordinator.
 - [ ] Freeze and implement the declaration/plan encodings, domains and bounds.
 - [ ] Reuse the 0.100 `FleetRegistry` and
-  `FleetAuthorityServiceBinding` without another schema or Fleet binding.
+  `FleetAuthorityServiceBinding` without another schema or Fleet binding,
+  including the exact `tree_groups` and group-bound `trees` fields.
 - [ ] Perform only required one-time local stable-state migrations.
 - [ ] Remove any Directory-owned authority declaration.
 
@@ -38,15 +42,17 @@ evidence exist.
 ## Slice 3 — Complete Planning and Inventory Qualification
 
 - [ ] Collect current inventory from every `Joining`, `Active` and `Draining`
-  root.
+  Tree Root.
+- [ ] Bind every live and removed inventory to its exact `TreeId`,
+  `TreeGroupId`, Tree Spec hash and placement `SubnetId`.
 - [ ] Load and verify qualified final inventory/fence evidence for every
-  `Removed` member.
+  `Removed` Tree.
 - [ ] Fail closed on unqualified removal or a selected unresolved
-  removed-member candidate.
+  removed-tree candidate.
 - [ ] Build one canonical bounded `Adopt`/`Provision` activation plan.
 - [ ] Validate qualified placement, package, controller, registry and binding
   evidence before mutation.
-- [ ] Persist the plan and membership-mutation fence.
+- [ ] Persist the plan and Tree lifecycle-mutation fence.
 
 ## Slice 4 — Missing-Service Provisioning
 
@@ -72,16 +78,19 @@ evidence exist.
 - [ ] Publish a non-empty complete set in one checked Registry revision.
 - [ ] Commit an empty declaration idempotently without a revision.
 - [ ] Populate existing Directory `entries` from `authority_services`.
-- [ ] Preserve the exact `subnets` projection and `DirectoryProvenance`.
+- [ ] Preserve the exact `groups`, `trees` and `DirectoryProvenance`
+  projections.
+- [ ] Preserve every Tree's ID, group, spec hash, placement and root in that
+  projection.
 - [ ] Set `synchronized_at` only on atomic mirror-and-Directory activation.
-- [ ] Resume Fleet membership mutation after publication.
+- [ ] Resume Fleet Tree lifecycle mutation after publication.
 
 ## Slice 7 — Recovery, Backup and Operational Qualification
 
 - [ ] Resume from every durable boundary.
 - [ ] Prove old source backups cannot resurrect ownership.
 - [ ] Prove old Coordinator backups cannot lower canonical state.
-- [ ] Prove removed-member evidence cannot be omitted or treated as empty.
+- [ ] Prove removed-tree evidence cannot be omitted or treated as empty.
 - [ ] Prove declaration drift cannot start a second activation.
 - [ ] Add bounded inspection, metrics and typed reports.
 - [ ] Complete focused PocketIC or disposable-environment qualification.
@@ -91,7 +100,7 @@ evidence exist.
 - [ ] Service authority is declared only through `[services.fleet]`.
 - [ ] Every selected role is eligible and singleton.
 - [ ] The complete service set is resolved before mutation.
-- [ ] Every removed member is qualified and has no selected unresolved
+- [ ] Every removed Tree is qualified and has no selected unresolved
   candidate.
 - [ ] Existing mutable services retain their principals and application data.
 - [ ] Missing services have complete qualified Authority-Subnet placement
@@ -102,10 +111,11 @@ evidence exist.
 - [ ] Unknown management outcomes reconcile or fail closed.
 - [ ] A complete non-empty set is published in one checked revision; an empty
   set is idempotently already current.
-- [ ] The one current 0.100 Registry schema and public binding type are reused.
-- [ ] Fleet Directory `entries`, `subnets`, provenance and `synchronized_at`
-  match the design exactly.
-- [ ] Membership mutation resumes after publication.
+- [ ] The one current 0.100 Registry schema, Tree Group contract and public
+  binding type are reused.
+- [ ] Fleet Directory `entries`, `groups`, `trees`, provenance and
+  `synchronized_at` match the design exactly.
+- [ ] Tree lifecycle mutation resumes after publication.
 - [ ] Old backups cannot roll authority backward.
 - [ ] No relocation, replacement, replication, promotion, failover or
   application-data migration code is added.

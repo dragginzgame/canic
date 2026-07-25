@@ -1,10 +1,12 @@
+use super::clock::current_unix_secs;
 use super::fleet_activation_journal::{
     ActivatedFleetActivationEvidence, CanistersActivatedFleetInstallActivation,
     CanistersPreparedFleetInstallActivation, FleetInstallActivationJournalError,
     FleetInstallActivationPhase, ResolvedFleetInstallActivation, admit_canisters_activated,
     admit_canisters_prepared, admit_root_install_receipt, canisters_prepared_resume_request,
-    record_canisters_activated, record_canisters_prepared, record_root_installed,
-    recover_root_install_receipt, resume_canisters_activated, resume_canisters_prepared,
+    observe_host_authority_committed, record_canisters_activated, record_canisters_prepared,
+    record_host_authority_committed, record_root_installed, recover_root_install_receipt,
+    resume_canisters_activated, resume_canisters_prepared,
 };
 use super::operations::InstallRootWasmOperation;
 use super::options::InstallRootOptions;
@@ -14,6 +16,10 @@ use super::receipt_io::install_deployment_truth_receipts_dir;
 use super::timing::InstallTimingSummary;
 use crate::{
     canister_build::WorkspaceBuildContext,
+    fleet_catalog::{
+        FleetCatalogEntryV1, FleetCatalogError, commit_fleet_catalog_entry,
+        read_fleet_catalog_entry_for_network,
+    },
     icp::{IcpCli, decode_json_result_response},
 };
 use candid::IDLValue;
@@ -29,6 +35,10 @@ pub(super) struct ActivatedRootInstall {
     pub(super) activation: CanistersActivatedFleetInstallActivation,
 }
 
+pub(super) struct CommittedRootInstall {
+    pub(super) timings: InstallTimingSummary,
+}
+
 #[derive(Debug, ThisError)]
 #[error(
     "root Fleet activation {operation_name} failed and its exact status could not be reconciled: operation={operation}; reconciliation={reconciliation}"
@@ -38,6 +48,70 @@ struct FleetActivationCallReconciliationError {
     #[source]
     operation: Box<dyn std::error::Error>,
     reconciliation: Box<dyn std::error::Error>,
+}
+
+pub(super) fn install_root_committed(
+    receipt_scope: InstallReceiptScope<'_>,
+    options: &InstallRootOptions,
+    root_canister_id: &str,
+    build_context: &WorkspaceBuildContext,
+    plan_artifacts: Option<&PreparedPlanArtifacts>,
+    activation: &ResolvedFleetInstallActivation,
+) -> Result<CommittedRootInstall, Box<dyn std::error::Error>> {
+    let receipt_directory =
+        install_deployment_truth_receipts_dir(receipt_scope.icp_root, receipt_scope.fleet);
+    if activation.journal.phase == FleetInstallActivationPhase::HostAuthorityCommitted {
+        let catalog_entry = read_fleet_catalog_entry_for_network(
+            receipt_scope.icp_root,
+            receipt_scope.fleet.network,
+            &activation.journal.fleet_name,
+        )?
+        .ok_or_else(|| FleetCatalogError::UnknownFleet {
+            canonical_network_id: receipt_scope.fleet.network,
+            fleet_name: activation.journal.fleet_name.clone(),
+        })?;
+        observe_host_authority_committed(activation, &receipt_directory, &catalog_entry)?;
+        return Ok(CommittedRootInstall {
+            timings: InstallTimingSummary::default(),
+        });
+    }
+
+    let activated = install_root_activated(
+        receipt_scope,
+        options,
+        root_canister_id,
+        build_context,
+        plan_artifacts,
+        activation,
+    )?;
+    let catalog = commit_fleet_catalog_entry(
+        receipt_scope.icp_root,
+        FleetCatalogEntryV1 {
+            canonical_network_id: receipt_scope.fleet.network,
+            fleet_id: receipt_scope.fleet.fleet_id,
+            fleet_name: activated.activation.journal.fleet_name.clone(),
+            app: activated
+                .activation
+                .journal
+                .activation
+                .identity
+                .fleet
+                .app
+                .clone(),
+            environment: receipt_scope.environment.to_string(),
+            deployed_at_unix_secs: current_unix_secs()?,
+            root_principal: root_canister_id.to_string(),
+        },
+    )?;
+    record_host_authority_committed(
+        receipt_scope.icp_root,
+        &activated.activation,
+        &receipt_directory,
+        &catalog,
+    )?;
+    Ok(CommittedRootInstall {
+        timings: activated.timings,
+    })
 }
 
 pub(super) fn install_root_activated(

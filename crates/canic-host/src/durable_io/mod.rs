@@ -7,13 +7,21 @@
 #[cfg(test)]
 mod tests;
 
-use std::{io, path::Path};
+use std::{fs, io, path::Path};
 
 #[derive(Debug)]
 pub(crate) enum RegularFileReadError {
     NotRegular,
     Io(io::Error),
     #[cfg(not(unix))]
+    UnsupportedPlatform,
+}
+
+#[derive(Debug)]
+pub(crate) enum RegularFileLockError {
+    NotRegular,
+    Io(io::Error),
+    #[cfg(windows)]
     UnsupportedPlatform,
 }
 
@@ -60,6 +68,56 @@ pub fn create_new_bytes(path: &Path, bytes: &[u8]) -> io::Result<()> {
 /// an existing destination.
 pub fn create_new_bytes_with_parents(path: &Path, bytes: &[u8]) -> io::Result<()> {
     commit_bytes(path, bytes, FileCommitMode::CreateNewWithParents)
+}
+
+/// Open and exclusively lock one durable regular no-follow file.
+///
+/// The lock file and missing parent hierarchy are durably created first. The
+/// returned descriptor owns the kernel lock and is close-on-exec.
+pub(crate) fn lock_regular_file_with_parents(
+    path: &Path,
+) -> Result<fs::File, RegularFileLockError> {
+    match create_new_bytes_with_parents(path, &[]) {
+        Ok(()) => {}
+        Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {}
+        Err(source) => return Err(RegularFileLockError::Io(source)),
+    }
+    let metadata = fs::symlink_metadata(path).map_err(RegularFileLockError::Io)?;
+    if !metadata.file_type().is_file() {
+        return Err(RegularFileLockError::NotRegular);
+    }
+
+    #[cfg(not(windows))]
+    {
+        use rustix::{
+            fd::OwnedFd,
+            fs::{FileType, FlockOperation, Mode, OFlags, flock, fstat, open},
+        };
+
+        let fd: OwnedFd = open(
+            path,
+            OFlags::RDWR | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
+            Mode::empty(),
+        )
+        .map_err(errno_to_lock_error)?;
+        let metadata = fstat(&fd).map_err(errno_to_lock_error)?;
+        if FileType::from_raw_mode(metadata.st_mode) != FileType::RegularFile {
+            return Err(RegularFileLockError::NotRegular);
+        }
+        let file = fs::File::from(fd);
+        flock(&file, FlockOperation::LockExclusive).map_err(errno_to_lock_error)?;
+        Ok(file)
+    }
+
+    #[cfg(windows)]
+    {
+        Err(RegularFileLockError::UnsupportedPlatform)
+    }
+}
+
+#[cfg(not(windows))]
+fn errno_to_lock_error(source: rustix::io::Errno) -> RegularFileLockError {
+    RegularFileLockError::Io(io::Error::from_raw_os_error(source.raw_os_error()))
 }
 
 fn commit_bytes(path: &Path, bytes: &[u8], mode: FileCommitMode) -> io::Result<()> {

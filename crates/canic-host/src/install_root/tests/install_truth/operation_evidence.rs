@@ -160,6 +160,22 @@ fn current_install_activation_records_verified_evidence_before_each_journal_tran
         "record_canisters_activated(receipt_scope.icp_root, &prepared.activation, &evidence)",
     );
 
+    let commit = source_section(
+        activation,
+        "pub(super) fn install_root_committed(",
+        "pub(super) fn install_root_activated(",
+    );
+    assert_before(
+        commit,
+        "install_root_activated(",
+        "commit_fleet_catalog_entry(",
+    );
+    assert_before(
+        commit,
+        "commit_fleet_catalog_entry(",
+        "record_host_authority_committed(",
+    );
+
     let resume = source_section(
         activation,
         "fn resume_and_admit_activation(",

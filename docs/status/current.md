@@ -14,17 +14,29 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.25`.
-- The latest published release is `v0.99.25` at
-  `72d28ca038e59942367f690b189697d832a28960`.
-- The `v0.99.25` source tree is
-  `d4eaa5a9a129922132c5d5e3a9f79d531e711423`. Its Cargo.lock SHA-256 is
-  `1dd2e441b3e854dbe29bc9782debb057df8b94a41be5b732d6822c873212183a`.
-- The open `0.99.26` draft makes the sequence-three
-  `CanistersActivated` recovery authority real: the root activates every exact
-  journalled child before itself, uncertain outcomes reconcile through status
-  and the host stores complete canonical activation hashes before any Fleet
-  catalog publication.
+- The workspace package version is `0.99.26`.
+- The latest published release is `v0.99.26` at
+  `6f54b034c9df6fa39e826fd8fcd2efd88158462f`.
+- The `v0.99.26` source tree is
+  `f8f74fe53d1ffc4bc57cf2509333c19f4ac6f53f`. Its Cargo.lock SHA-256 is
+  `2c184e94da08376081635cfe42d077738e95f19abf9023bf853f92726d66b4e1`.
+- The open `0.99.27` draft completes fresh-install host authority: the one
+  canonical-network Fleet catalog publishes only after exact Active evidence,
+  sequence four records `HostAuthorityCommitted`, terminal observation
+  revalidates its catalog row and root receipt without external effects, and
+  install returns success only after that authority is durable.
+- The proposed 0.100/0.101 follow-on designs now model heterogeneous,
+  independently scaled Tree Groups backed by App Tree Specs: one user-focused
+  Tree and many project-focused Trees may use different topology templates.
+  Each Canister Tree has its own `TreeId` and Tree Root; physical `SubnetId`
+  is repeatable placement metadata, so Trees may be co-located without merging
+  authority. The default workload spec remains distinct from Authority Subnet
+  placement, and application routing remains outside Canic. This is a design
+  amendment, not additional 0.99.27 runtime scope.
+- Released `0.99.26` makes the sequence-three `CanistersActivated` recovery
+  authority real: the root activates every exact journalled child before
+  itself, uncertain outcomes reconcile through status and the host stores
+  complete canonical activation hashes before any Fleet catalog publication.
 - Released `0.99.25` makes the sequence-two `CanistersPrepared` activation
   journal real: the host prepares and verifies the complete bounded root/child
   inventory, stores exact canonical evidence and recovers `RootInstalled`
