@@ -222,9 +222,6 @@ Create `apps/<app>/canic.toml`:
 ```toml
 controllers = []
 
-[services.fleet]
-roles = ["app"]
-
 [app]
 name = "test"
 
@@ -236,17 +233,22 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.app]
+[tree_specs.default.canisters.app]
 kind = "service"
 topup = {}
 ```
 
 Every role named in package metadata must exist in this App config.
 Declared-only ordinary roles may compile before topology placement, but only
-attached roles under `[subnets.*.canisters.*]` can be built as deploy artifacts
+attached roles under `[tree_specs.*.canisters.*]` can be built as deploy artifacts
 or enter deployment truth. `role = "root"` selects the root lifecycle and root
 endpoint bundle; all other roles select the ordinary Fleet lifecycle and
 non-root endpoint bundle.
@@ -404,7 +406,9 @@ Canic-owned methods.
 ## First Install Troubleshooting
 
 - If `canic.toml` uses `[[canisters]]`, rewrite it under
-  `[subnets.<name>.canisters.<role>]`; Canic validates the subnet-shaped schema.
+  `[tree_specs.<name>.canisters.<role>]` and declare a matching
+  `[tree_groups.<name>]`; Canic validates the rooted Tree shape and scaling
+  bounds.
 - If a lifecycle macro reports
   `__canic_missing_finish_macro_add_canic_finish_at_end_after_all_endpoints`,
   add `canic::finish!()` at the end of the canister crate root after custom

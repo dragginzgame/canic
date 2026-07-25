@@ -7,9 +7,6 @@ use std::{
 
 const CONFIG: &str = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 
@@ -21,7 +18,12 @@ package = "root"
 kind = "canister"
 package = "store"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 "#;
 
@@ -87,7 +89,8 @@ fn public_projection_preserves_typed_nested_unknown_field() {
     let root = temp_root("typed-unknown-field");
     fs::create_dir_all(&root).expect("create temp root");
     let config_path = root.join("canic.toml");
-    let source = format!("{CONFIG}\n[subnets.default.canisters.root.randomness]\nenabled = true\n");
+    let source =
+        format!("{CONFIG}\n[tree_specs.default.canisters.root.randomness]\nenabled = true\n");
     fs::write(&config_path, source).expect("write invalid config");
 
     let error = AppConfigSnapshot::load(&config_path).expect_err("unknown field must fail");
@@ -105,7 +108,7 @@ fn public_projection_preserves_typed_nested_unknown_field() {
     assert_eq!(
         issue,
         ConfigTomlIssue::UnknownField {
-            logical_path: "subnets.default.canisters.root.randomness".to_string(),
+            logical_path: "tree_specs.default.canisters.root.randomness".to_string(),
             unknown_field: "randomness".to_string(),
         }
     );
@@ -146,6 +149,35 @@ fn loaded_snapshot_keeps_one_validated_file_state_across_projections() {
             .app_id(),
         "changed"
     );
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn current_root_install_fails_closed_for_multiple_initial_trees() {
+    let root = temp_root("multiple-initial-trees");
+    fs::create_dir_all(&root).expect("create temp root");
+    let config_path = root.join("canic.toml");
+    let source = format!(
+        "{CONFIG}\n\
+         [tree_groups.secondary]\n\
+         tree_spec = \"secondary\"\n\
+         initial_trees = 1\n\
+         maximum_trees = 1\n\n\
+         [tree_specs.secondary.canisters.root]\n\
+         kind = \"root\"\n"
+    );
+    fs::write(&config_path, source).expect("write multi-Tree config");
+
+    let snapshot = AppConfigSnapshot::load(&config_path).expect("load multi-Tree config");
+    let error = snapshot
+        .local_root_create_cycles()
+        .expect_err("current root install must reject multiple initial Trees");
+
+    assert!(matches!(
+        error,
+        AppConfigError::UnsupportedInitialTreeTopology { initial_trees: 2 }
+    ));
 
     fs::remove_dir_all(root).expect("remove temp root");
 }

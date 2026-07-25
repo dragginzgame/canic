@@ -4,7 +4,7 @@ pub mod error {
 
 pub mod config {
     pub mod schema {
-        pub use crate::config::schema::SubnetConfig;
+        pub use crate::config::schema::TreeSpecConfig;
     }
 }
 

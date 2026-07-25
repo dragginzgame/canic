@@ -152,7 +152,7 @@ fn rename_role_header(
     let mut path = parse_toml_dotted_path(inner)?;
     let rename_roles_header = path.len() == 2 && path[0] == "roles" && path[1] == old_role;
     let rename_canister_header =
-        path.len() >= 4 && path[0] == "subnets" && path[2] == "canisters" && path[3] == old_role;
+        path.len() >= 4 && path[0] == "tree_specs" && path[2] == "canisters" && path[3] == old_role;
 
     if rename_roles_header {
         path[1] = new_role.to_string();

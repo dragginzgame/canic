@@ -213,10 +213,15 @@ package = "root"
 kind = "canister"
 package = "{role}"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.{role}]
+[tree_specs.default.canisters.{role}]
 kind = "service"
 "#
         ),

@@ -487,7 +487,7 @@ fn renders_config_output_with_app_roles() {
             topup: "4.00 TC @ 10.00 TC".to_string(),
             metrics: "hub".to_string(),
             details: vec![
-                "services.fleet".to_string(),
+                "fleet_directory".to_string(),
                 "metrics profile=hub tiers=core,placement,runtime,security (inferred)".to_string(),
                 "sharding user_shards->user_shard cap=100 initial=1 max=4".to_string(),
             ],
@@ -504,7 +504,7 @@ fn renders_config_output_with_app_roles() {
             "----   ---------   ----   --------------   -------   ------------------",
             "root   root        -      -                root      -",
             "app    singleton   yes    auth, sharding   hub       4.00 TC @ 10.00 TC",
-            "  - services.fleet",
+            "  - fleet_directory",
             "  - metrics profile=hub tiers=core,placement,runtime,security (inferred)",
             "  - sharding user_shards->user_shard cap=100 initial=1 max=4",
         ]

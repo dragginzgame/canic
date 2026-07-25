@@ -191,7 +191,7 @@ fn validate_artifact_role_attached(
     if !config.attached_roles().contains(&role) {
         let app = config.app_id().as_str();
         return Err(format!(
-            "role {app}.{canister_name} is declared but not attached to topology; run `canic app role attach {app} {canister_name} --subnet <subnet>` before building an artifact"
+            "role {app}.{canister_name} is declared but not attached to topology; run `canic app role attach {app} {canister_name} --tree-spec <tree-spec>` before building an artifact"
         )
         .into());
     }

@@ -16,7 +16,6 @@ fn topology_invariants_live_in_policy() {
     let _guard = lock();
 
     let _config = ConfigTestBuilder::new()
-        .with_fleet_service("alpha")
         .with_default_canister_kind("alpha", CanisterKind::Service)
         .install();
 

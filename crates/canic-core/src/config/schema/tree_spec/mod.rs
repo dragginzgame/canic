@@ -1,6 +1,6 @@
-//! Module: config::schema::subnet
+//! Module: config::schema::tree_spec
 //!
-//! Responsibility: define subnet, canister, placement, and refill config shapes.
+//! Responsibility: define Tree Spec, canister, placement, and refill config shapes.
 //! Does not own: topology validation, placement execution, or runtime canister state.
 //! Boundary: config schema re-exports these data shapes for validated models.
 
@@ -46,15 +46,15 @@ mod defaults {
 const IMPLICIT_WASM_STORE_ROLE: CanisterRole = CanisterRole::WASM_STORE;
 
 ///
-/// SubnetConfig
+/// TreeSpecConfig
 ///
-/// Configuration for one subnet role and its declared canisters.
+/// Configuration for one permitted rooted canister topology.
 /// Owned by config schema and validated before topology workflows use it.
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct SubnetConfig {
+pub struct TreeSpecConfig {
     #[serde(default)]
     pub canisters: BTreeMap<CanisterRole, CanisterConfig>,
 
@@ -62,7 +62,7 @@ pub struct SubnetConfig {
     pub pool: CanisterPool,
 }
 
-impl SubnetConfig {
+impl TreeSpecConfig {
     /// Get a canister configuration by role.
     #[must_use]
     pub fn get_canister(&self, role: &CanisterRole) -> Option<CanisterConfig> {
@@ -75,9 +75,9 @@ impl SubnetConfig {
         })
     }
 
-    /// Roles that root creates automatically during subnet bootstrap.
+    /// Roles that the Tree Root creates automatically during Tree bootstrap.
     ///
-    /// Configured service roles are the stable subnet services. Singletons,
+    /// Configured service roles are stable Tree-local services. Singletons,
     /// shards, replicas, and instances are created by their placement managers
     /// instead.
     #[must_use]
@@ -85,9 +85,9 @@ impl SubnetConfig {
         self.service_roles()
     }
 
-    /// Roles exposed through the local Subnet Directory.
+    /// Roles exposed through the local Tree Directory.
     #[must_use]
-    pub fn subnet_directory_roles(&self) -> BTreeSet<CanisterRole> {
+    pub fn tree_directory_roles(&self) -> BTreeSet<CanisterRole> {
         self.service_roles()
     }
 

@@ -222,7 +222,7 @@ fn log_attestation_verifier_rejection(
     log!(
         Topic::Auth,
         Warn,
-        "role attestation rejected local={} caller={} subject={} role={} audience={} subnet={} issued_at={} expires_at={} epoch={} error={}",
+        "role attestation rejected local={} caller={} subject={} role={} audience={} tree_spec={} issued_at={} expires_at={} epoch={} error={}",
         self_pid,
         caller,
         attestation.payload.subject,
@@ -237,8 +237,8 @@ fn log_attestation_verifier_rejection(
 }
 
 fn root_requires_role_attestation_proofs(cfg: &ConfigModel) -> bool {
-    cfg.subnets.values().any(|subnet| {
-        subnet
+    cfg.tree_specs.values().any(|tree_spec| {
+        tree_spec
             .canisters
             .values()
             .any(|canister| canister.auth.role_attestation_cache)

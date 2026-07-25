@@ -38,7 +38,7 @@ impl WasmStorePublicationWorkflow {
             return Ok(placement);
         }
 
-        let store_config = config::current_subnet_default_wasm_store();
+        let store_config = config::current_tree_default_wasm_store();
         if manifest.payload_size_bytes > store_config.max_store_bytes() {
             return Err(PublicationWorkflowError::CapacityExceeded {
                 release: Self::release_label(manifest),
@@ -218,7 +218,7 @@ impl WasmStorePublicationWorkflow {
         Ok(())
     }
 
-    // Publish all root-local staged releases into the current subnet's selected wasm store.
+    // Publish all root-local staged releases into the current Tree's selected wasm store.
     pub async fn publish_staged_release_set_to_current_store() -> Result<(), InternalError> {
         let cost_guard = PublicationCostGuard::reserve(PUBLICATION_BOOTSTRAP_COMMAND_KIND)?;
         let result =

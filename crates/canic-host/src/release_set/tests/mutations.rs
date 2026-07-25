@@ -5,9 +5,6 @@ use toml::Value as TomlValue;
 fn declare_app_role_adds_declared_only_canister_role() {
     let config = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 
@@ -15,7 +12,12 @@ name = "demo"
 kind = "root"
 package = "root"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 "#;
     let updated = declare_app_role_source(config, "demo", "store", "store").expect("declare role");
@@ -92,9 +94,6 @@ role = "user_hub"
 fn attach_app_role_adds_direct_topology_attachment() {
     let config = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 
@@ -106,7 +105,12 @@ package = "root"
 kind = "canister"
 package = "store"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 "#;
     let updated = attach_app_role_source(config, "demo", "store", "default", "singleton")
@@ -117,7 +121,7 @@ kind = "root"
     assert!(
         updated
             .source
-            .contains("[subnets.\"default\".canisters.\"store\"]")
+            .contains("[tree_specs.\"default\".canisters.\"store\"]")
     );
     assert!(updated.source.contains("kind = \"singleton\""));
 
@@ -134,9 +138,6 @@ kind = "root"
 fn attach_app_role_preserves_explicit_supported_kind() {
     let config = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 
@@ -148,7 +149,12 @@ package = "root"
 kind = "canister"
 package = "worker"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 "#;
     let updated = attach_app_role_source(config, "demo", "worker", "default", "replica")
@@ -163,9 +169,6 @@ kind = "root"
 fn attach_app_role_accepts_service_kind() {
     let config = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 
@@ -177,7 +180,12 @@ package = "root"
 kind = "canister"
 package = "worker"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 "#;
     let updated = attach_app_role_source(config, "demo", "worker", "default", "service")
@@ -223,9 +231,6 @@ role = "hub"
     .expect("write manifest");
     let config = r#"
 controllers = []
-[services.fleet]
-roles = ["hub"]
-
 [app]
 name = "demo"
 
@@ -241,16 +246,21 @@ package = "hub"
 kind = "canister"
 package = "worker"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.hub]
+[tree_specs.default.canisters.hub]
 kind = "service"
 
-[subnets.default.canisters.hub.sharding.pools.primary]
+[tree_specs.default.canisters.hub.sharding.pools.primary]
 canister_role = "worker"
 
-[subnets.default.canisters.worker]
+[tree_specs.default.canisters.worker]
 kind = "shard"
 "#;
     let updated =
@@ -271,12 +281,11 @@ kind = "shard"
     assert!(
         updated
             .source
-            .contains("[\"subnets\".\"default\".\"canisters\".\"router\"]")
+            .contains("[\"tree_specs\".\"default\".\"canisters\".\"router\"]")
     );
     assert!(updated.source.contains(
-        "[\"subnets\".\"default\".\"canisters\".\"router\".\"sharding\".\"pools\".\"primary\"]"
+        "[\"tree_specs\".\"default\".\"canisters\".\"router\".\"sharding\".\"pools\".\"primary\"]"
     ));
-    assert!(updated.source.contains("roles = [\"router\"]"));
     assert!(!updated.source.contains("[roles.hub]"));
     assert!(
         updated
@@ -313,9 +322,6 @@ kind = "shard"
 fn rename_app_role_updates_role_bearing_references() {
     let config = r#"
 controllers = []
-[services.fleet]
-roles = ["hub"]
-
 [app]
 name = "demo"
 
@@ -331,16 +337,21 @@ package = "hub"
 kind = "canister"
 package = "worker"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.hub]
+[tree_specs.default.canisters.hub]
 kind = "service"
 
-[subnets.default.canisters.hub.sharding.pools.primary]
+[tree_specs.default.canisters.hub.sharding.pools.primary]
 canister_role = "worker"
 
-[subnets.default.canisters.worker]
+[tree_specs.default.canisters.worker]
 kind = "shard"
 "#;
     let config_path = Path::new("canic.toml");
@@ -352,7 +363,7 @@ kind = "shard"
     assert!(
         updated
             .source
-            .contains("[\"subnets\".\"default\".\"canisters\".\"worker_v2\"]")
+            .contains("[\"tree_specs\".\"default\".\"canisters\".\"worker_v2\"]")
     );
 }
 

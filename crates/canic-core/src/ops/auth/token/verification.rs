@@ -46,7 +46,7 @@ pub(super) fn require_current_canister_delegated_token_verifier() -> Result<(), 
 
     DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::InvalidState);
     Err(AuthValidationError::Auth(
-        "delegated token verifier disabled for this canister; set subnets.<subnet>.canisters.<role>.auth.delegated_token_verifier=true in canic.toml"
+        "delegated token verifier disabled for this canister; set tree_specs.<tree-spec>.canisters.<role>.auth.delegated_token_verifier=true in canic.toml"
             .to_string(),
     )
     .into())

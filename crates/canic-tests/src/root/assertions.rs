@@ -18,7 +18,7 @@ use canic::{
         },
         state::FleetStateResponse,
     },
-    ids::{CanisterRole, SubnetSlotId},
+    ids::{CanisterRole, TreeSpecId},
     protocol,
 };
 use ic_testkit::pic::Pic;
@@ -93,9 +93,9 @@ pub fn assert_child_env(
         "env Fleet root for {role}"
     );
     assert_eq!(
-        env.subnet_slot,
-        Some(SubnetSlotId::DEFAULT),
-        "env Subnet Slot for {role}"
+        env.tree_spec,
+        Some(TreeSpecId::try_from(String::from("default")).expect("default Tree Spec ID")),
+        "env Tree Spec for {role}"
     );
     assert!(
         env.subnet_pid.is_some(),

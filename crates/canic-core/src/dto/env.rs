@@ -9,8 +9,8 @@ pub struct EnvBootstrapArgs {
     // fleet
     pub fleet_root_pid: Option<Principal>,
 
-    // subnet
-    pub subnet_slot: Option<SubnetSlotId>,
+    // Tree identity and physical Subnet placement
+    pub tree_spec: Option<TreeSpecId>,
     pub subnet_pid: Option<Principal>,
     pub root_pid: Option<Principal>,
 
@@ -28,8 +28,8 @@ pub struct EnvSnapshotResponse {
     // fleet
     pub fleet_root_pid: Option<Principal>,
 
-    // subnet
-    pub subnet_slot: Option<SubnetSlotId>,
+    // Tree identity and physical Subnet placement
+    pub tree_spec: Option<TreeSpecId>,
     pub subnet_pid: Option<Principal>,
     pub root_pid: Option<Principal>,
 

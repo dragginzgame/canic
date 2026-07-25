@@ -186,8 +186,8 @@ macro_rules! __canic_build_internal {
             println!("cargo:rustc-cfg=canic_role_declared_only");
         }
 
-        for subnet in $cfg.subnets.values() {
-            if let Some(canister_cfg) = subnet.get_canister(&role_id) {
+        for tree_spec in $cfg.tree_specs.values() {
+            if let Some(canister_cfg) = tree_spec.get_canister(&role_id) {
                 memory_ledger |= canister_cfg.diagnostics.memory_ledger;
                 let profile = canister_cfg.resolved_metrics_profile(&role_id);
                 let tier_mask = $crate::__build::metrics_profile_tier_mask(profile);

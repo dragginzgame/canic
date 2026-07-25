@@ -9,16 +9,16 @@
 
 mod log;
 mod role;
-mod subnet;
+mod tree_spec;
 
 pub use log::*;
 pub use role::*;
-pub use subnet::*;
+pub use tree_spec::*;
 
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::candid::Principal,
-    ids::{AppId, BuildNetwork, CanisterRole, SubnetSlotId},
+    ids::{AppId, BuildNetwork, CanisterRole, TreeGroupId, TreeSpecId},
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 use std::collections::{BTreeMap, BTreeSet};
@@ -54,6 +54,9 @@ pub enum ConfigSchemaError {
 ///
 
 pub const NAME_MAX_BYTES: usize = 40;
+
+/// Maximum concrete Trees admitted by one Fleet declaration.
+pub const MAX_FLEET_TREES: u32 = 4_096;
 
 ///
 /// AppNameIssue
@@ -124,10 +127,9 @@ pub trait Validate {
 /// Top-level configuration object.
 ///
 /// Invariants enforced here:
-/// - A default Subnet Slot MUST exist
-/// - Exactly one ROOT canister MUST exist globally
-/// - ROOT canister MUST be in the default Subnet Slot
-/// - Fleet service roles must be SERVICEs in the default Subnet Slot
+/// - Every Tree Spec contains exactly one root
+/// - Every Tree Group references one declared Tree Spec
+/// - Tree Group initial and maximum counts are positive and bounded
 /// - Canister role names follow the canonical deployment identity rule
 /// - Delegated token TTL is sane
 /// - Whitelist principals are valid
@@ -153,25 +155,37 @@ pub struct ConfigModel {
     /// App source identity, startup mode and whitelist.
     pub app: AppConfig,
 
-    /// App-declared services consumed at Fleet scope.
-    #[serde(default)]
-    pub services: ServicesConfig,
-
-    /// Fleet-scoped role declarations. Topology attachment is derived from
-    /// `subnets`; this table declares which package-backed roles exist.
+    /// App-scoped role declarations. Topology attachment is derived from
+    /// `tree_specs`; this table declares which package-backed roles exist.
     #[serde(default)]
     pub roles: BTreeMap<CanisterRole, RoleDeclaration>,
 
-    /// App-declared logical Subnet Slots.
+    /// App-declared permitted rooted topology templates.
     #[serde(default)]
-    pub subnets: BTreeMap<SubnetSlotId, SubnetConfig>,
+    pub tree_specs: BTreeMap<TreeSpecId, TreeSpecConfig>,
+
+    /// App-declared independently scaled Tree collections.
+    #[serde(default)]
+    pub tree_groups: BTreeMap<TreeGroupId, TreeGroupConfig>,
 }
 
 impl ConfigModel {
-    /// Get a subnet configuration by logical slot.
+    /// Get a Tree Spec configuration by its declared identity.
     #[must_use]
-    pub fn get_subnet(&self, slot: &SubnetSlotId) -> Option<SubnetConfig> {
-        self.subnets.get(slot).cloned()
+    pub fn get_tree_spec(&self, tree_spec: &TreeSpecId) -> Option<TreeSpecConfig> {
+        self.tree_specs.get(tree_spec).cloned()
+    }
+
+    /// Return the sole initial Tree Spec while the single-Tree bootstrap is active.
+    ///
+    /// This temporary operational query fails closed once configuration asks
+    /// for more than one initial Tree. Coordinator installation replaces it.
+    #[must_use]
+    pub fn sole_initial_tree_spec_id(&self) -> Option<&TreeSpecId> {
+        let mut groups = self.tree_groups.values();
+        let group = groups.next()?;
+
+        (group.initial_trees == 1 && groups.next().is_none()).then_some(&group.tree_spec)
     }
 
     /// Return the configured App identity.
@@ -198,8 +212,8 @@ impl ConfigModel {
         let mut attached = BTreeSet::new();
         let mut pending = Vec::new();
 
-        for subnet in self.subnets.values() {
-            for role in subnet.canisters.keys() {
+        for tree_spec in self.tree_specs.values() {
+            for role in tree_spec.canisters.keys() {
                 if attached.insert(role.clone()) {
                     pending.push(role.clone());
                 }
@@ -207,8 +221,8 @@ impl ConfigModel {
         }
 
         while let Some(role) = pending.pop() {
-            for subnet in self.subnets.values() {
-                let Some(canister) = subnet.canisters.get(&role) else {
+            for tree_spec in self.tree_specs.values() {
+                let Some(canister) = tree_spec.canisters.get(&role) else {
                     continue;
                 };
 
@@ -232,20 +246,43 @@ impl ConfigModel {
             .collect()
     }
 
+    /// Return the currently projected Fleet Directory role set.
+    ///
+    /// The Tree-aware Fleet Registry projection replaces this transitional
+    /// role union in the dedicated Directory slice.
+    #[must_use]
+    pub fn fleet_directory_roles(&self) -> BTreeSet<CanisterRole> {
+        self.tree_specs
+            .values()
+            .flat_map(TreeSpecConfig::tree_directory_roles)
+            .collect()
+    }
+
     /// Test-only helper: produces a minimally valid config.
     ///
     /// Includes:
-    /// - default Subnet Slot
+    /// - one default Tree Spec and Tree Group
     /// - ROOT canister of correct kind
     ///
     /// This avoids tests accidentally relying on invalid configs.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if Canic's canonical `"default"` Tree Spec or Tree Group
+    /// identifier stops satisfying its declared ID admission.
     #[cfg(test)]
     #[must_use]
     pub fn test_default() -> Self {
         let mut cfg = Self::default();
-        let mut default_slot = SubnetConfig::default();
+        let default_tree_spec_id = "default"
+            .parse::<TreeSpecId>()
+            .expect("valid default Tree Spec ID");
+        let default_tree_group_id = "default"
+            .parse::<TreeGroupId>()
+            .expect("valid default Tree Group ID");
+        let mut default_tree_spec = TreeSpecConfig::default();
 
-        default_slot.canisters.insert(
+        default_tree_spec.canisters.insert(
             CanisterRole::ROOT,
             CanisterConfig {
                 kind: CanisterKind::Root,
@@ -312,7 +349,16 @@ impl ConfigModel {
                 package: "root".to_string(),
             },
         );
-        cfg.subnets.insert(SubnetSlotId::DEFAULT, default_slot);
+        cfg.tree_specs
+            .insert(default_tree_spec_id.clone(), default_tree_spec);
+        cfg.tree_groups.insert(
+            default_tree_group_id,
+            TreeGroupConfig {
+                tree_spec: default_tree_spec_id,
+                initial_trees: 1,
+                maximum_trees: 1,
+            },
+        );
         cfg
     }
 
@@ -365,31 +411,17 @@ impl Default for AppConfig {
 }
 
 ///
-/// ServicesConfig
+/// TreeGroupConfig
 ///
-/// App-declared service selections grouped by their eventual authority scope.
-/// Owned by config schema and consumed by topology bootstrap.
+/// Scaling bounds for one App-declared Tree Group.
 ///
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct ServicesConfig {
-    #[serde(default)]
-    pub fleet: FleetServicesConfig,
-}
-
-///
-/// FleetServicesConfig
-///
-/// Roles selected for the Fleet-wide service directory.
-/// In 0.99 the current one-member root retains their existing placement.
-///
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct FleetServicesConfig {
-    #[serde(default)]
-    pub roles: BTreeSet<CanisterRole>,
+pub struct TreeGroupConfig {
+    pub tree_spec: TreeSpecId,
+    pub initial_trees: u16,
+    pub maximum_trees: u16,
 }
 
 ///

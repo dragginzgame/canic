@@ -2,9 +2,6 @@ use super::*;
 
 pub(in crate::deployment_truth::tests) const SAMPLE_CONFIG: &str = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -23,10 +20,15 @@ kind = "canister"
 package = "user_shard"
 [app.whitelist]
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.user_hub]
+[tree_specs.default.canisters.user_hub]
 kind = "service"
 "#;
 

@@ -1,12 +1,9 @@
 use super::super::*;
 
 #[test]
-fn configured_pool_expectations_lists_root_subnet_pools() {
+fn configured_pool_expectations_lists_initial_tree_pools() {
     let config = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -45,34 +42,39 @@ kind = "canister"
 package = "role_baseline"
 [app.whitelist]
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.user_hub]
+[tree_specs.default.canisters.user_hub]
 kind = "service"
 
-[subnets.default.canisters.user_hub.sharding.pools.user_shards]
+[tree_specs.default.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
 policy.max_shards = 4
 
-[subnets.default.canisters.user_hub.binding.pools.projects]
+[tree_specs.default.canisters.user_hub.binding.pools.projects]
 canister_role = "project_instance"
 key_name = "project_id"
 
-[subnets.default.canisters.user_shard]
+[tree_specs.default.canisters.user_shard]
 kind = "shard"
 
-[subnets.default.canisters.project_instance]
+[tree_specs.default.canisters.project_instance]
 kind = "instance"
 
-[subnets.default.canisters.scale_hub]
+[tree_specs.default.canisters.scale_hub]
 kind = "service"
 
-[subnets.default.canisters.scale_hub.scaling.pools.scales]
+[tree_specs.default.canisters.scale_hub.scaling.pools.scales]
 canister_role = "scale_replica"
 
-[subnets.default.canisters.scale_replica]
+[tree_specs.default.canisters.scale_replica]
 kind = "replica"
 "#;
     let pools = configured_pool_expectations_from_config(&parsed_config(config));
@@ -99,9 +101,6 @@ kind = "replica"
 fn configured_local_root_create_cycles_estimates_bootstrap_funding() {
     let config = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 
@@ -137,32 +136,34 @@ package = "scale"
 kind = "canister"
 package = "role_baseline"
 
-[subnets.default]
+[tree_specs.default]
 pool.minimum_size = 2
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.app]
+[tree_specs.default.canisters.app]
 kind = "service"
 initial_cycles = "7T"
 
-[subnets.default.canisters.user_hub]
+[tree_specs.default.canisters.user_hub]
 kind = "service"
 "#;
 
     let cycles = configured_local_root_create_cycles_from_config(&parsed_config(config));
 
-    assert_eq!(cycles, 127_000_000_000_000);
+    assert_eq!(cycles, Some(127_000_000_000_000));
 }
 
 #[test]
 fn configured_role_auto_create_lists_derived_service_roles() {
     let config = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -201,13 +202,18 @@ kind = "canister"
 package = "role_baseline"
 [app.whitelist]
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.app]
+[tree_specs.default.canisters.app]
 kind = "service"
 
-[subnets.default.canisters.user_hub]
+[tree_specs.default.canisters.user_hub]
 kind = "service"
 "#;
     let auto_create = configured_role_auto_create_from_config(&parsed_config(config));
@@ -221,9 +227,6 @@ kind = "service"
 fn configured_bootstrap_roles_include_only_bootstrap_obligations() {
     let config = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -262,25 +265,30 @@ kind = "canister"
 package = "role_baseline"
 [app.whitelist]
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.app]
+[tree_specs.default.canisters.app]
 kind = "service"
 
-[subnets.default.canisters.user_hub]
+[tree_specs.default.canisters.user_hub]
 kind = "service"
 
-[subnets.default.canisters.user_hub.sharding.pools.user_shards]
+[tree_specs.default.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
 policy.initial_shards = 1
 policy.max_shards = 4
 
-[subnets.default.canisters.user_shard]
+[tree_specs.default.canisters.user_shard]
 kind = "shard"
 
-[subnets.default.canisters.role_baseline]
+[tree_specs.default.canisters.role_baseline]
 kind = "replica"
 "#;
     let roles = configured_bootstrap_roles_from_config(&parsed_config(config));

@@ -205,11 +205,11 @@ fn declared_canic_roles(root: &Path) -> BTreeMap<(String, String), CanicConfigRo
                         .join("Cargo.toml")
                 });
             let attached = config
-                .get("subnets")
+                .get("tree_specs")
                 .and_then(Value::as_table)
-                .is_some_and(|subnets| {
-                    subnets.values().any(|subnet| {
-                        subnet
+                .is_some_and(|tree_specs| {
+                    tree_specs.values().any(|tree_spec| {
+                        tree_spec
                             .get("canisters")
                             .and_then(Value::as_table)
                             .is_some_and(|canisters| canisters.contains_key(role))

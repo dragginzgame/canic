@@ -46,7 +46,7 @@ pub struct AttachedAppRole {
     pub app: String,
     pub role: String,
     pub display: String,
-    pub subnet: String,
+    pub tree_spec: String,
     pub kind: String,
     pub topology: String,
 }

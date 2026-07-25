@@ -69,7 +69,7 @@ impl WasmStorePublicationWorkflow {
                 )
             })?;
 
-        fleet.push_store(record, config::current_subnet_default_wasm_store());
+        fleet.push_store(record, config::current_tree_default_wasm_store());
         if fleet.preferred_binding.is_none() {
             fleet.preferred_binding = Some(binding.clone());
         }

@@ -87,7 +87,7 @@ pub(super) fn attach_later_recommendation(app: &str, role: &str) -> AdoptionReco
         severity: AdoptionRecommendationSeverityV1::Info,
         description: format!("attach {app}.{role} explicitly only when topology is ready"),
         suggested_action: Some(format!(
-            "canic app role attach {app} {role} --subnet <subnet>"
+            "canic app role attach {app} {role} --tree-spec <tree-spec>"
         )),
         suggested_action_effect: AdoptionSuggestedActionEffectV1::MutatesState,
         suggested_action_support: AdoptionSuggestedActionSupportV1::UnsupportedByAdoption,

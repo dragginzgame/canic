@@ -8,7 +8,7 @@ use canic::{
             DirectoryEntryInput, DirectoryProvenance, FleetDirectoryInput, SubnetDirectoryInput,
         },
     },
-    ids::{CanisterRole, SubnetSlotId},
+    ids::{CanisterRole, TreeSpecId},
 };
 use ic_testkit::{
     Fake,
@@ -135,7 +135,7 @@ pub fn invalid_init_args() -> Vec<u8> {
         release_build_id: identity.release_build_id,
         env: EnvBootstrapArgs {
             fleet_root_pid: None,
-            subnet_slot: None,
+            tree_spec: None,
             subnet_pid: None,
             root_pid: None,
             canister_role: None,
@@ -190,7 +190,9 @@ fn init_payload(canister_id: Principal) -> CanisterInitPayload {
 
     let env = EnvBootstrapArgs {
         fleet_root_pid: Some(root_pid),
-        subnet_slot: Some(SubnetSlotId::DEFAULT),
+        tree_spec: Some(
+            TreeSpecId::try_from(String::from("default")).expect("default Tree Spec ID"),
+        ),
         subnet_pid: Some(Fake::principal(2)),
         root_pid: Some(root_pid),
         canister_role: Some(TEST),

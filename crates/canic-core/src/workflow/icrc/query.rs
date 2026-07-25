@@ -23,10 +23,10 @@ impl Icrc10Query {
     pub fn supported_standards() -> Vec<(String, String)> {
         let icrc21_enabled = Config::try_get().is_some_and(|cfg| {
             let global_standards = cfg.standards.as_ref();
-            let canister_standards = EnvOps::subnet_slot().ok().and_then(|subnet_slot| {
+            let canister_standards = EnvOps::tree_spec().ok().and_then(|tree_spec| {
                 EnvOps::canister_role().ok().and_then(|canister_role| {
-                    cfg.subnets
-                        .get(&subnet_slot)?
+                    cfg.tree_specs
+                        .get(&tree_spec)?
                         .canisters
                         .get(&canister_role)
                         .map(|canister_cfg| &canister_cfg.standards)

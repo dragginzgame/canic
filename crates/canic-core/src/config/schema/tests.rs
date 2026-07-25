@@ -25,6 +25,18 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
+fn tree_spec_id(value: &str) -> TreeSpecId {
+    value.parse().expect("valid Tree Spec ID")
+}
+
+fn tree_group_id(value: &str) -> TreeGroupId {
+    value.parse().expect("valid Tree Group ID")
+}
+
+fn default_tree_spec_id() -> TreeSpecId {
+    tree_spec_id("default")
+}
+
 fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
     CanisterConfig {
         kind,
@@ -43,18 +55,13 @@ fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
 }
 
 #[test]
-fn root_canister_must_exist_in_default_subnet_slot() {
-    let mut cfg = ConfigModel::default();
-    cfg.app.name = AppId::from("test");
-    cfg.roles.insert(
-        CanisterRole::ROOT,
-        RoleDeclaration {
-            kind: RoleDeclarationKind::Root,
-            package: "root".to_string(),
-        },
-    );
-    cfg.subnets
-        .insert(SubnetSlotId::DEFAULT, SubnetConfig::default());
+fn root_canister_must_exist_in_each_tree_spec() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.tree_specs
+        .get_mut(&default_tree_spec_id())
+        .expect("default Tree Spec")
+        .canisters
+        .clear();
 
     cfg.validate()
         .expect_err("expected missing root canister to fail validation");
@@ -277,8 +284,8 @@ fn checked_in_active_configs_parse_and_validate() {
 #[test]
 fn topology_roles_must_be_declared() {
     let mut cfg = ConfigModel::test_default();
-    cfg.subnets
-        .get_mut(&SubnetSlotId::DEFAULT)
+    cfg.tree_specs
+        .get_mut(&default_tree_spec_id())
         .unwrap()
         .canisters
         .insert(
@@ -335,7 +342,8 @@ fn role_declaration_package_paths_must_not_be_empty() {
 #[test]
 fn topology_less_config_may_declare_only_non_root_roles() {
     let mut cfg = ConfigModel::test_default();
-    cfg.subnets.clear();
+    cfg.tree_specs.clear();
+    cfg.tree_groups.clear();
     cfg.roles.remove(&CanisterRole::ROOT);
     cfg.roles.insert(
         CanisterRole::from("store"),
@@ -353,9 +361,10 @@ fn topology_less_config_may_declare_only_non_root_roles() {
 }
 
 #[test]
-fn topology_less_config_rejects_root_and_fleet_services() {
+fn topology_less_config_rejects_root() {
     let mut root_cfg = ConfigModel::test_default();
-    root_cfg.subnets.clear();
+    root_cfg.tree_specs.clear();
+    root_cfg.tree_groups.clear();
     root_cfg.roles.insert(
         CanisterRole::ROOT,
         RoleDeclaration {
@@ -373,70 +382,68 @@ fn topology_less_config_rejects_root_and_fleet_services() {
             .contains("topology-less configs cannot declare role 'root'"),
         "expected root error, got: {root_err}"
     );
-
-    let mut services_cfg = ConfigModel::test_default();
-    services_cfg.subnets.clear();
-    services_cfg.roles.remove(&CanisterRole::ROOT);
-    services_cfg
-        .services
-        .fleet
-        .roles
-        .insert(CanisterRole::from("store"));
-    services_cfg.roles.insert(
-        CanisterRole::from("store"),
-        RoleDeclaration {
-            kind: RoleDeclarationKind::Canister,
-            package: "store".to_string(),
-        },
-    );
-
-    let services_err = services_cfg
-        .validate()
-        .expect_err("topology-less Fleet services should fail");
-    assert!(
-        services_err
-            .to_string()
-            .contains("topology-less configs cannot define services.fleet.roles entries"),
-        "expected Fleet services error, got: {services_err}"
-    );
 }
 
 #[test]
-fn fleet_services_require_default_slot_service_roles() {
+fn tree_specs_and_tree_groups_are_both_required() {
     let mut cfg = ConfigModel::test_default();
-    cfg.services
-        .fleet
-        .roles
-        .insert(CanisterRole::from("project_hub"));
-    cfg.roles.insert(
-        CanisterRole::from("project_hub"),
-        RoleDeclaration {
-            kind: RoleDeclarationKind::Canister,
-            package: "project_hub".to_string(),
-        },
-    );
-    cfg.subnets
-        .get_mut(&SubnetSlotId::DEFAULT)
-        .unwrap()
-        .canisters
-        .insert(
-            CanisterRole::from("project_hub"),
-            base_canister_config(CanisterKind::Singleton),
-        );
+    cfg.tree_groups.clear();
+    cfg.validate()
+        .expect_err("Tree Specs without a Tree Group must reject");
+
+    let mut cfg = ConfigModel::test_default();
+    cfg.tree_specs.clear();
+    cfg.validate()
+        .expect_err("Tree Groups without a Tree Spec must reject");
+}
+
+#[test]
+fn tree_group_must_reference_an_existing_tree_spec() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.tree_groups
+        .get_mut(&tree_group_id("default"))
+        .expect("default Tree Group")
+        .tree_spec = tree_spec_id("missing");
 
     cfg.validate()
-        .expect_err("Fleet service singleton roles should be rejected");
+        .expect_err("unknown Tree Spec reference must reject");
+}
 
-    cfg.subnets
-        .get_mut(&SubnetSlotId::DEFAULT)
-        .unwrap()
-        .canisters
-        .insert(
-            CanisterRole::from("project_hub"),
-            base_canister_config(CanisterKind::Service),
-        );
+#[test]
+fn tree_group_counts_are_positive_ordered_and_fleet_bounded() {
+    let mut cfg = ConfigModel::test_default();
+    let group = cfg
+        .tree_groups
+        .get_mut(&tree_group_id("default"))
+        .expect("default Tree Group");
+    group.initial_trees = 0;
+    cfg.validate().expect_err("zero initial Trees must reject");
 
-    cfg.validate().expect("Fleet service role should validate");
+    let mut cfg = ConfigModel::test_default();
+    let group = cfg
+        .tree_groups
+        .get_mut(&tree_group_id("default"))
+        .expect("default Tree Group");
+    group.initial_trees = 2;
+    group.maximum_trees = 1;
+    cfg.validate()
+        .expect_err("initial Trees above maximum must reject");
+
+    let mut cfg = ConfigModel::test_default();
+    cfg.tree_groups
+        .get_mut(&tree_group_id("default"))
+        .expect("default Tree Group")
+        .maximum_trees = 3_000;
+    cfg.tree_groups.insert(
+        tree_group_id("secondary"),
+        TreeGroupConfig {
+            tree_spec: default_tree_spec_id(),
+            initial_trees: 1,
+            maximum_trees: 3_000,
+        },
+    );
+    cfg.validate()
+        .expect_err("Fleet maximum Tree bound must reject");
 }
 
 #[test]
@@ -453,11 +460,11 @@ fn attached_app_roles_include_role_bearing_pool_targets() {
     );
     hub.sharding = Some(sharding);
 
-    let default_slot = cfg.subnets.get_mut(&SubnetSlotId::DEFAULT).unwrap();
-    default_slot
+    let default_tree_spec = cfg.tree_specs.get_mut(&default_tree_spec_id()).unwrap();
+    default_tree_spec
         .canisters
         .insert(CanisterRole::from("user_hub"), hub);
-    default_slot.canisters.insert(
+    default_tree_spec.canisters.insert(
         CanisterRole::from("user_shard"),
         base_canister_config(CanisterKind::Shard),
     );
@@ -501,8 +508,8 @@ fn root_canister_must_be_kind_root() {
         base_canister_config(CanisterKind::Singleton),
     );
 
-    cfg.subnets
-        .get_mut(&SubnetSlotId::DEFAULT)
+    cfg.tree_specs
+        .get_mut(&default_tree_spec_id())
         .unwrap()
         .canisters = canisters;
 
@@ -510,12 +517,14 @@ fn root_canister_must_be_kind_root() {
 }
 
 #[test]
-fn multiple_root_canisters_are_rejected() {
+fn every_tree_spec_may_have_its_own_root() {
     let mut cfg = ConfigModel::test_default();
 
-    cfg.subnets.insert(
-        SubnetSlotId::new("aux"),
-        SubnetConfig {
+    cfg.tree_specs.insert(
+        "aux"
+            .parse::<TreeSpecId>()
+            .expect("valid auxiliary Tree Spec ID"),
+        TreeSpecConfig {
             canisters: {
                 let mut m = BTreeMap::new();
                 m.insert(CanisterRole::ROOT, base_canister_config(CanisterKind::Root));
@@ -524,8 +533,17 @@ fn multiple_root_canisters_are_rejected() {
             ..Default::default()
         },
     );
+    cfg.tree_groups.insert(
+        tree_group_id("aux"),
+        TreeGroupConfig {
+            tree_spec: tree_spec_id("aux"),
+            initial_trees: 1,
+            maximum_trees: 2,
+        },
+    );
 
-    cfg.validate().expect_err("expected multiple roots to fail");
+    cfg.validate()
+        .expect("one root in each Tree Spec should validate");
 }
 
 #[test]

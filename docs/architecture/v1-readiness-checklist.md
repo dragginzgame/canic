@@ -15,6 +15,7 @@ docs/architecture/v1-operator-walkthrough.md
 
 - `app`: the source definition identified by `[app].name` in `canic.toml`;
 - `role`: the package-backed canister role declared for that App;
+- `tree spec`: one permitted rooted canister topology declared by the App;
 - `fleet`: one live installed App identified within a canonical network.
 
 An App source identity is not a live Fleet identity.
@@ -51,7 +52,7 @@ package = "<path>"
 Only attached roles can be built as deployment artifacts:
 
 ```toml
-[subnets.<subnet>.canisters.<role>]
+[tree_specs.<tree-spec>.canisters.<role>]
 kind = "service"
 ```
 
@@ -72,7 +73,7 @@ canic scaffold canister <app> <role>
 Attach the role when placement is known:
 
 ```text
-canic app role attach <app> <role> --subnet <subnet>
+canic app role attach <app> <role> --tree-spec <tree-spec>
 ```
 
 Build an attached role and write stable build provenance:

@@ -11,10 +11,15 @@ fn install_truth_preflight_uses_current_install_inputs_without_mutation() {
         root.join("apps/demo/canic.toml"),
         demo_config_source(
             r#"
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.user_hub]
+[tree_specs.default.canisters.user_hub]
 kind = "service"
 "#,
         ),

@@ -1,7 +1,7 @@
 use super::{
     AttachedAppRoleSource,
     support::{
-        admit_canister_role_name, toml_string_literal, validate_attach_kind, validate_subnet_name,
+        admit_canister_role_name, toml_string_literal, validate_attach_kind, validate_tree_spec_id,
     },
 };
 use crate::release_set::config::{
@@ -14,14 +14,14 @@ pub(in crate::release_set) fn attach_app_role_source(
     config_source: &str,
     expected_app: &str,
     role: &str,
-    subnet: &str,
+    tree_spec: &str,
     kind: &str,
 ) -> Result<AttachedAppRoleSource, AppConfigError> {
     let role = role.trim();
-    let subnet = subnet.trim();
+    let tree_spec = tree_spec.trim();
     let kind = kind.trim();
     admit_canister_role_name(role)?;
-    validate_subnet_name(subnet)?;
+    validate_tree_spec_id(tree_spec)?;
     validate_attach_kind(kind)?;
     if role == "root" {
         return Err(AppConfigError::MutationConflict {
@@ -62,8 +62,8 @@ pub(in crate::release_set) fn attach_app_role_source(
     }
 
     let mut source = config_source.trim_end().to_string();
-    source.push_str("\n\n[subnets.");
-    source.push_str(&toml_string_literal(subnet));
+    source.push_str("\n\n[tree_specs.");
+    source.push_str(&toml_string_literal(tree_spec));
     source.push_str(".canisters.");
     source.push_str(&toml_string_literal(role));
     source.push_str("]\nkind = ");
@@ -81,9 +81,9 @@ pub(in crate::release_set) fn attach_app_role_source(
             app: expected_app.to_string(),
             role: role.to_string(),
             display: format!("{expected_app}.{role}"),
-            subnet: subnet.to_string(),
+            tree_spec: tree_spec.to_string(),
             kind: kind.to_string(),
-            topology: format!("{subnet}/{role}"),
+            topology: format!("{tree_spec}/{role}"),
         },
     })
 }

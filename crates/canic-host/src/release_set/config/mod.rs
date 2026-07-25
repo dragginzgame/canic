@@ -80,9 +80,32 @@ impl AppConfigSnapshot {
         configured_bootstrap_roles_from_config(&self.config)
     }
 
-    #[must_use]
-    pub fn local_root_create_cycles(&self) -> u128 {
-        configured_local_root_create_cycles_from_config(&self.config)
+    pub(crate) fn require_supported_initial_tree_topology(&self) -> Result<(), AppConfigError> {
+        let initial_trees = self
+            .config
+            .tree_groups
+            .values()
+            .map(|group| u32::from(group.initial_trees))
+            .sum();
+        if initial_trees == 1 && self.config.sole_initial_tree_spec_id().is_some() {
+            return Ok(());
+        }
+
+        Err(AppConfigError::UnsupportedInitialTreeTopology { initial_trees })
+    }
+
+    pub fn local_root_create_cycles(&self) -> Result<u128, AppConfigError> {
+        self.require_supported_initial_tree_topology()?;
+        configured_local_root_create_cycles_from_config(&self.config).ok_or_else(|| {
+            AppConfigError::UnsupportedInitialTreeTopology {
+                initial_trees: self
+                    .config
+                    .tree_groups
+                    .values()
+                    .map(|group| u32::from(group.initial_trees))
+                    .sum(),
+            }
+        })
     }
 
     #[must_use]
@@ -178,11 +201,11 @@ pub fn plan_attach_app_role(
     config_path: &Path,
     expected_app: &str,
     role: &str,
-    subnet: &str,
+    tree_spec: &str,
     kind: &str,
 ) -> Result<AttachedAppRole, AppConfigError> {
     let source = read_config_source(config_path)?;
-    let updated = attach_app_role_source(&source, expected_app, role, subnet, kind)
+    let updated = attach_app_role_source(&source, expected_app, role, tree_spec, kind)
         .map_err(|error| error.at_config_path(config_path))?;
     Ok(updated.role)
 }
@@ -216,16 +239,16 @@ pub fn declare_app_role(
     Ok(updated.role)
 }
 
-// Attach a declared package-backed role directly to subnet topology.
+// Attach a declared package-backed role directly to a Tree Spec.
 pub fn attach_app_role(
     config_path: &Path,
     expected_app: &str,
     role: &str,
-    subnet: &str,
+    tree_spec: &str,
     kind: &str,
 ) -> Result<AttachedAppRole, AppConfigError> {
     let source = read_config_source(config_path)?;
-    let updated = attach_app_role_source(&source, expected_app, role, subnet, kind)
+    let updated = attach_app_role_source(&source, expected_app, role, tree_spec, kind)
         .map_err(|error| error.at_config_path(config_path))?;
     write_bytes(config_path, updated.source.as_bytes()).map_err(|source| {
         AppConfigError::io(AppConfigIoOperation::WriteConfig, config_path, source)

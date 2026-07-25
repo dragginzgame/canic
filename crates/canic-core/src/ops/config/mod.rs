@@ -10,10 +10,10 @@ use crate::{
         Config, ConfigError, ConfigModel,
         schema::{
             BindingConfig, CanisterConfig, DelegatedTokenConfig, FleetInitMode, LogConfig,
-            RoleAttestationConfig, ScalingConfig, SubnetConfig,
+            RoleAttestationConfig, ScalingConfig, TreeSpecConfig,
         },
     },
-    ids::{CanisterRole, SubnetSlotId},
+    ids::{CanisterRole, TreeSpecId},
     model::cycles_funding::FundingLimits,
     ops::{OpsError, prelude::*, runtime::env::EnvOps},
     storage::stable::state::fleet::FleetMode,
@@ -32,11 +32,16 @@ pub enum ConfigOpsError {
     #[error(transparent)]
     Config(#[from] ConfigError),
 
-    #[error("subnet {0} not found in configuration")]
-    SubnetNotFound(String),
+    #[error("Tree Spec {0} not found in configuration")]
+    TreeSpecNotFound(String),
 
-    #[error("canister {0} not defined in subnet {1}")]
+    #[error("canister {0} not defined in Tree Spec {1}")]
     CanisterNotFound(String, String),
+
+    #[error(
+        "current single-Tree bootstrap requires exactly one initial Tree; Coordinator installation is not active"
+    )]
+    InitialTreeAmbiguous,
 }
 
 impl From<ConfigOpsError> for InternalError {
@@ -66,25 +71,35 @@ impl ConfigOps {
     // Explicit / fallible lookups
     // ---------------------------------------------------------------------
 
-    /// Fetch a Subnet configuration by logical slot.
-    pub(crate) fn try_get_subnet(slot: &SubnetSlotId) -> Result<SubnetConfig, InternalError> {
+    /// Fetch a Tree Spec configuration by declared identity.
+    pub(crate) fn try_get_tree_spec(
+        tree_spec: &TreeSpecId,
+    ) -> Result<TreeSpecConfig, InternalError> {
         let cfg = Config::get()?;
 
-        cfg.get_subnet(slot)
-            .ok_or_else(|| ConfigOpsError::SubnetNotFound(slot.to_string()).into())
+        cfg.get_tree_spec(tree_spec)
+            .ok_or_else(|| ConfigOpsError::TreeSpecNotFound(tree_spec.to_string()).into())
     }
 
-    /// Fetch a canister configuration within a specific subnet.
+    /// Fetch a canister configuration within a specific Tree Spec.
     pub(crate) fn try_get_canister(
-        subnet_slot: &SubnetSlotId,
+        tree_spec: &TreeSpecId,
         canister_role: &CanisterRole,
     ) -> Result<CanisterConfig, InternalError> {
-        let subnet_cfg = Self::try_get_subnet(subnet_slot)?;
+        let tree_spec_cfg = Self::try_get_tree_spec(tree_spec)?;
 
-        subnet_cfg.get_canister(canister_role).ok_or_else(|| {
-            ConfigOpsError::CanisterNotFound(canister_role.to_string(), subnet_slot.to_string())
+        tree_spec_cfg.get_canister(canister_role).ok_or_else(|| {
+            ConfigOpsError::CanisterNotFound(canister_role.to_string(), tree_spec.to_string())
                 .into()
         })
+    }
+
+    /// Return the only initial Tree Spec admitted by the current bootstrap path.
+    pub(crate) fn sole_initial_tree_spec_id() -> Result<TreeSpecId, InternalError> {
+        Config::get()?
+            .sole_initial_tree_spec_id()
+            .cloned()
+            .ok_or_else(|| ConfigOpsError::InitialTreeAmbiguous.into())
     }
 
     // ---------------------------------------------------------------------
@@ -127,21 +142,21 @@ impl ConfigOps {
         Ok(mode)
     }
 
-    /// Fetch the configuration record for the *current* subnet.
+    /// Fetch the configuration record for the current Tree.
     ///
     /// Requires that environment initialization has completed.
-    pub fn current_subnet() -> Result<SubnetConfig, InternalError> {
-        let subnet_slot = EnvOps::subnet_slot()?;
+    pub fn current_tree_spec() -> Result<TreeSpecConfig, InternalError> {
+        let tree_spec = EnvOps::tree_spec()?;
 
-        Self::try_get_subnet(&subnet_slot)
+        Self::try_get_tree_spec(&tree_spec)
     }
 
     /// Fetch the configuration record for the *current* canister.
     pub(crate) fn current_canister() -> Result<CanisterConfig, InternalError> {
-        let subnet_slot = EnvOps::subnet_slot()?;
+        let tree_spec = EnvOps::tree_spec()?;
         let canister_role = EnvOps::canister_role()?;
 
-        Self::try_get_canister(&subnet_slot, &canister_role)
+        Self::try_get_canister(&tree_spec, &canister_role)
     }
 
     /// Fetch the scaling configuration for the *current* canister.
@@ -154,20 +169,20 @@ impl ConfigOps {
         Ok(Self::current_canister()?.binding)
     }
 
-    /// Fetch the configuration for a specific canister in the *current* subnet.
-    pub(crate) fn current_subnet_canister(
+    /// Fetch the configuration for a specific canister in the current Tree.
+    pub(crate) fn current_tree_canister(
         canister_role: &CanisterRole,
     ) -> Result<CanisterConfig, InternalError> {
-        let subnet_slot = EnvOps::subnet_slot()?;
+        let tree_spec = EnvOps::tree_spec()?;
 
-        Self::try_get_canister(&subnet_slot, canister_role)
+        Self::try_get_canister(&tree_spec, canister_role)
     }
 
-    /// Resolve parent funding limits for a child role in the current subnet.
+    /// Resolve parent funding limits for a child role in the current Tree.
     pub(crate) fn cycles_funding_limits_for_child_role(
         child_role: &CanisterRole,
     ) -> Result<FundingLimits, InternalError> {
-        let cfg = Self::current_subnet_canister(child_role)?;
+        let cfg = Self::current_tree_canister(child_role)?;
         let policy = cfg.cycles_funding;
 
         Ok(FundingLimits {

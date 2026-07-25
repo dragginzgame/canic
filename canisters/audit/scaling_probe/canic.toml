@@ -1,7 +1,4 @@
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "scaling_probe"
 
@@ -20,18 +17,23 @@ package = "../../../apps/test/scale"
 [auth.delegated_tokens]
 enabled = false
 
-[subnets.default]
+[tree_specs.default]
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.scale_hub]
+[tree_specs.default.canisters.scale_hub]
 kind = "service"
 
-[subnets.default.canisters.scale_hub.scaling.pools.scales]
+[tree_specs.default.canisters.scale_hub.scaling.pools.scales]
 canister_role = "scale_replica"
 policy.initial_workers = 0
 policy.min_workers = 2
 
-[subnets.default.canisters.scale_replica]
+[tree_specs.default.canisters.scale_replica]
 kind = "replica"

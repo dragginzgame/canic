@@ -1,5 +1,5 @@
 use super::build_network::resolve_install_build_context;
-use super::build_snapshot::InstallBuildTarget;
+use super::build_snapshot::{InstallBuildTarget, resolve_install_snapshot};
 use super::commands::{
     add_create_root_target, add_icp_environment_target, icp_canister_command, root_init_args,
 };
@@ -113,6 +113,66 @@ fn named_ic_environment_is_explicit_for_cargo_builds() {
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
+#[test]
+fn install_snapshot_rejects_multiple_initial_trees_before_plan_admission() {
+    let root = temp_dir("canic-install-multiple-initial-trees");
+    let config_path = root.join("canic.toml");
+    fs::create_dir_all(&root).expect("create root");
+    fs::write(
+        &config_path,
+        r#"
+controllers = []
+[app]
+name = "demo"
+init_mode = "enabled"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_groups.secondary]
+tree_spec = "secondary"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
+kind = "root"
+
+[tree_specs.secondary.canisters.root]
+kind = "root"
+"#,
+    )
+    .expect("write config");
+    let context = WorkspaceBuildContext {
+        role: "root".to_string(),
+        profile: CanisterBuildProfile::Fast,
+        environment: "ic".to_string(),
+        build_network: BuildNetwork::Ic,
+        workspace_root: root.clone(),
+        icp_root: root.clone(),
+        config_path,
+        local_replica: None,
+        refresh_canonical_wasm_store_did: false,
+        release_build_id: None,
+    };
+
+    let error = resolve_install_snapshot(&context, "root", true)
+        .expect_err("deployment-plan install must reject multiple initial Trees")
+        .downcast::<crate::release_set::AppConfigError>()
+        .expect("configuration error must retain its concrete type");
+    assert!(matches!(
+        error.as_ref(),
+        crate::release_set::AppConfigError::UnsupportedInitialTreeTopology { initial_trees: 2 }
+    ));
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
 fn source_section<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     let start_index = source.find(start).expect("source section start exists");
     let end_index = source[start_index..]
@@ -143,9 +203,6 @@ fn demo_config_source(attached: &str) -> String {
     format!(
         r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -215,9 +272,6 @@ fn write_demo_root_only_config(config_path: &Path) {
         config_path,
         r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -228,7 +282,12 @@ kind = "root"
 package = "root"
 [app.whitelist]
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 "#,
     )
@@ -253,9 +312,6 @@ fn demo_install_deployment_truth_check(root_name: &str) -> (PathBuf, DeploymentC
         &config_path,
         r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -302,7 +358,12 @@ kind = "canister"
 package = "worker"
 [app.whitelist]
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 "#,
     )

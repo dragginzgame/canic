@@ -10,12 +10,12 @@ use crate::{
         AppConfig, AuthConfig, BindingConfig, BindingPool, CanisterAuthConfig, CanisterConfig,
         CanisterKind, CanisterPool, ChainKeyRootProofConfig, ConfigModel,
         CyclesFundingPolicyConfig, DelegatedTokenConfig, DiagnosticsCanisterConfig, FleetInitMode,
-        FleetServicesConfig, IcpRefillPolicy, LogConfig, MetricsCanisterConfig, MetricsProfile,
-        PoolImport, RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool,
-        ScalePoolPolicy, ScalingConfig, ServicesConfig, ShardPool, ShardPoolPolicy, ShardingConfig,
-        Standards, StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
+        IcpRefillPolicy, LogConfig, MetricsCanisterConfig, MetricsProfile, PoolImport,
+        RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool, ScalePoolPolicy,
+        ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
+        StandardsCanisterConfig, TopupPolicy, TreeGroupConfig, TreeSpecConfig, Whitelist,
     },
-    ids::{AppId, BuildNetwork, CanisterRole, SubnetSlotId},
+    ids::{AppId, BuildNetwork, CanisterRole, TreeGroupId, TreeSpecId},
 };
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -36,16 +36,20 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
     let log = render_log_config(&config.log);
     let auth = render_auth_config(&config.auth);
     let app = render_app_config(&config.app);
-    let services = render_services_config(&config.services);
     let roles = render_btree_map(
         config.roles.iter(),
         render_canister_role,
         render_role_declaration,
     );
-    let subnets = render_btree_map(
-        config.subnets.iter(),
-        render_subnet_slot_id,
-        render_subnet_config,
+    let tree_specs = render_btree_map(
+        config.tree_specs.iter(),
+        render_tree_spec_id,
+        render_tree_spec_config,
+    );
+    let tree_groups = render_btree_map(
+        config.tree_groups.iter(),
+        render_tree_group_id,
+        render_tree_group_config,
     );
 
     quote! {
@@ -55,29 +59,9 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
             log: #log,
             auth: #auth,
             app: #app,
-            services: #services,
             roles: #roles,
-            subnets: #subnets,
-        }
-    }
-}
-
-// Render App-declared service selections.
-fn render_services_config(config: &ServicesConfig) -> TokenStream {
-    let fleet = render_fleet_services_config(&config.fleet);
-    quote! {
-        ::canic::__internal::core::bootstrap::compiled::ServicesConfig {
-            fleet: #fleet,
-        }
-    }
-}
-
-// Render Fleet-scoped service-role selections.
-fn render_fleet_services_config(config: &FleetServicesConfig) -> TokenStream {
-    let roles = render_btree_set(config.roles.iter(), render_canister_role);
-    quote! {
-        ::canic::__internal::core::bootstrap::compiled::FleetServicesConfig {
-            roles: #roles,
+            tree_specs: #tree_specs,
+            tree_groups: #tree_groups,
         }
     }
 }
@@ -126,11 +110,23 @@ fn render_canister_role(role: &CanisterRole) -> TokenStream {
     }
 }
 
-// Render a subnet role using constants where possible and literals otherwise.
-fn render_subnet_slot_id(slot: &SubnetSlotId) -> TokenStream {
-    match slot.as_str() {
-        "default" => quote!(::canic::__internal::core::bootstrap::compiled::SubnetSlotId::DEFAULT),
-        value => quote!(::canic::__internal::core::bootstrap::compiled::SubnetSlotId::from(#value)),
+// Render one validated Tree Spec identifier.
+fn render_tree_spec_id(tree_spec: &TreeSpecId) -> TokenStream {
+    let value = tree_spec.as_str();
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::TreeSpecId::try_from(
+            ::std::string::String::from(#value)
+        ).expect("embedded Tree Spec ID was validated at build time")
+    }
+}
+
+// Render one validated Tree Group identifier.
+fn render_tree_group_id(tree_group: &TreeGroupId) -> TokenStream {
+    let value = tree_group.as_str();
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::TreeGroupId::try_from(
+            ::std::string::String::from(#value)
+        ).expect("embedded Tree Group ID was validated at build time")
     }
 }
 
@@ -410,8 +406,8 @@ fn render_whitelist(whitelist: &Whitelist) -> TokenStream {
     }
 }
 
-// Render a subnet configuration and its canister graph.
-fn render_subnet_config(config: &SubnetConfig) -> TokenStream {
+// Render a Tree Spec configuration and its canister graph.
+fn render_tree_spec_config(config: &TreeSpecConfig) -> TokenStream {
     let canisters = render_btree_map(
         config.canisters.iter(),
         render_canister_role,
@@ -420,9 +416,24 @@ fn render_subnet_config(config: &SubnetConfig) -> TokenStream {
     let pool = render_canister_pool(&config.pool);
 
     quote! {
-        ::canic::__internal::core::bootstrap::compiled::SubnetConfig {
+        ::canic::__internal::core::bootstrap::compiled::TreeSpecConfig {
             canisters: #canisters,
             pool: #pool,
+        }
+    }
+}
+
+// Render one Tree Group declaration.
+fn render_tree_group_config(config: &TreeGroupConfig) -> TokenStream {
+    let tree_spec = render_tree_spec_id(&config.tree_spec);
+    let initial_trees = config.initial_trees;
+    let maximum_trees = config.maximum_trees;
+
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::TreeGroupConfig {
+            tree_spec: #tree_spec,
+            initial_trees: #initial_trees,
+            maximum_trees: #maximum_trees,
         }
     }
 }

@@ -130,10 +130,15 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.app]
+[tree_specs.default.canisters.app]
 kind = "service"
 "#,
     )
@@ -185,7 +190,12 @@ name = "toko"
 kind = "root"
 package = "root"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 "#,
     )
@@ -220,10 +230,15 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.app]
+[tree_specs.default.canisters.app]
 kind = "service"
 "#,
     )
@@ -362,7 +377,7 @@ fn write_test_config(path: &Path, app: &str, roles: &[&str]) {
         let kind = if *role == "root" { "root" } else { "service" };
         write!(
             source,
-            "\n[subnets.default.canisters.{role}]\nkind = \"{kind}\"\n"
+            "\n[tree_specs.default.canisters.{role}]\nkind = \"{kind}\"\n"
         )
         .expect("write config source");
     }

@@ -8,7 +8,7 @@ use crate::{
         StandardsCanisterConfig,
     },
     config::{Config, ConfigModel},
-    ids::{CanisterRole, SubnetSlotId},
+    ids::{CanisterRole, TreeSpecId},
 };
 use std::sync::Arc;
 
@@ -30,12 +30,6 @@ impl ConfigTestBuilder {
     }
 
     #[must_use]
-    pub fn with_fleet_service(mut self, role: impl Into<CanisterRole>) -> Self {
-        self.model.services.fleet.roles.insert(role.into());
-        self
-    }
-
-    #[must_use]
     pub fn with_default_canister_kind(
         self,
         role: impl Into<CanisterRole>,
@@ -44,29 +38,38 @@ impl ConfigTestBuilder {
         self.with_default_canister(role, Self::canister_config(kind))
     }
 
+    /// Add one canister configuration to the canonical default Tree Spec.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if Canic's canonical `"default"` Tree Spec identifier stops
+    /// satisfying `TreeSpecId` admission.
     #[must_use]
     pub fn with_default_canister(
         self,
         role: impl Into<CanisterRole>,
         config: CanisterConfig,
     ) -> Self {
-        self.with_subnet_canister(SubnetSlotId::DEFAULT, role, config)
+        self.with_tree_spec_canister(
+            "default".parse().expect("default Tree Spec ID"),
+            role,
+            config,
+        )
     }
 
     #[must_use]
-    pub fn with_subnet_canister(
+    pub fn with_tree_spec_canister(
         mut self,
-        subnet: impl Into<SubnetSlotId>,
+        tree_spec: TreeSpecId,
         role: impl Into<CanisterRole>,
         config: CanisterConfig,
     ) -> Self {
-        let subnet = subnet.into();
         let role = role.into();
         let declaration_kind = match config.kind {
             CanisterKind::Root => RoleDeclarationKind::Root,
             _ => RoleDeclarationKind::Canister,
         };
-        let entry = self.model.subnets.entry(subnet).or_default();
+        let entry = self.model.tree_specs.entry(tree_spec).or_default();
 
         self.model.roles.insert(
             role.clone(),

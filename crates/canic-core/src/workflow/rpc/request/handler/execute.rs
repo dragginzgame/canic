@@ -240,7 +240,7 @@ fn preflight_provision_parent_registered(parent_pid: Principal) -> Result<(), In
 fn root_provision_cycle_reservation_cycles(
     req: &CreateCanisterRequest,
 ) -> Result<u128, InternalError> {
-    Ok(ConfigOps::current_subnet_canister(&req.canister_role)?
+    Ok(ConfigOps::current_tree_canister(&req.canister_role)?
         .initial_cycles
         .to_u128())
 }

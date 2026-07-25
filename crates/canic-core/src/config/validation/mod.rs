@@ -6,14 +6,14 @@
 
 mod app;
 mod auth;
-mod subnet;
+mod tree_spec;
 
 use crate::{
     config::schema::{
-        CanisterKind, ConfigModel, ConfigSchemaError, NAME_MAX_BYTES, RoleDeclarationKind,
+        CanisterKind, ConfigModel, ConfigSchemaError, MAX_FLEET_TREES, RoleDeclarationKind,
         Validate, validate_canister_role_name,
     },
-    ids::{CanisterRole, SubnetSlotId},
+    ids::CanisterRole,
 };
 
 fn validate_canister_role(
@@ -29,98 +29,89 @@ fn validate_canister_role(
     })
 }
 
-fn validate_subnet_slot_id_len(
-    slot: &SubnetSlotId,
-    context: &str,
-) -> Result<(), ConfigSchemaError> {
-    if slot.as_ref().len() > NAME_MAX_BYTES {
-        return Err(ConfigSchemaError::ValidationError(format!(
-            "{context} '{slot}' exceeds {NAME_MAX_BYTES} bytes",
-        )));
-    }
-    Ok(())
-}
-
 impl Validate for ConfigModel {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
         // Validation order is intentional to surface the most meaningful
         // errors first and avoid cascaded failures.
-        for subnet_slot in self.subnets.keys() {
-            validate_subnet_slot_id_len(subnet_slot, "Subnet Slot")?;
-        }
-
         self.log.validate()?;
         self.auth.validate()?;
         self.app.validate()?;
 
         validate_role_declarations(self)?;
 
-        if self.subnets.is_empty() {
+        if self.tree_specs.is_empty() && self.tree_groups.is_empty() {
             if self.roles.contains_key(&CanisterRole::ROOT) {
                 return Err(ConfigSchemaError::ValidationError(
                     "topology-less configs cannot declare role 'root'".into(),
                 ));
             }
-            if !self.services.fleet.roles.is_empty() {
-                return Err(ConfigSchemaError::ValidationError(
-                    "topology-less configs cannot define services.fleet.roles entries".into(),
-                ));
-            }
             return Ok(());
         }
 
-        let default_slot = SubnetSlotId::DEFAULT;
-        let default_subnet = self.subnets.get(&default_slot).ok_or_else(|| {
-            ConfigSchemaError::ValidationError("default Subnet Slot not found".into())
-        })?;
-
-        let root_role = CanisterRole::ROOT;
-        let root_cfg = default_subnet.canisters.get(&root_role).ok_or_else(|| {
-            ConfigSchemaError::ValidationError(
-                "root canister not defined in default Subnet Slot".into(),
-            )
-        })?;
-
-        if root_cfg.kind != CanisterKind::Root {
+        if self.tree_specs.is_empty() {
             return Err(ConfigSchemaError::ValidationError(
-                "root canister must have kind = \"root\"".into(),
+                "Tree Groups require at least one [tree_specs.<id>] declaration".into(),
+            ));
+        }
+        if self.tree_groups.is_empty() {
+            return Err(ConfigSchemaError::ValidationError(
+                "Tree Specs require at least one [tree_groups.<id>] declaration".into(),
             ));
         }
 
-        for canister_role in &self.services.fleet.roles {
-            validate_canister_role(canister_role, "Fleet service role")?;
-
-            let canister_cfg = default_subnet.canisters.get(canister_role).ok_or_else(|| {
-                ConfigSchemaError::ValidationError(format!(
-                    "Fleet service role '{canister_role}' is not in default Subnet Slot",
-                ))
-            })?;
-
-            if canister_cfg.kind != CanisterKind::Service {
+        for (tree_spec_id, tree_spec) in &self.tree_specs {
+            let roots = tree_spec
+                .canisters
+                .iter()
+                .filter(|(_role, canister)| canister.kind == CanisterKind::Root)
+                .map(|(role, _canister)| role.to_string())
+                .collect::<Vec<_>>();
+            if roots.len() != 1 {
                 return Err(ConfigSchemaError::ValidationError(format!(
-                    "Fleet service role '{canister_role}' must have kind = \"service\"",
+                    "Tree Spec '{tree_spec_id}' must contain exactly one root role (found {})",
+                    roots.len(),
                 )));
             }
+
+            tree_spec.validate()?;
         }
 
-        let mut root_roles = Vec::new();
-        for (subnet_slot, subnet) in &self.subnets {
-            for (canister_role, canister_cfg) in &subnet.canisters {
-                if canister_cfg.kind == CanisterKind::Root {
-                    root_roles.push(format!("{subnet_slot}:{canister_role}"));
-                }
+        let mut maximum_trees = 0_u32;
+        for (tree_group_id, tree_group) in &self.tree_groups {
+            if !self.tree_specs.contains_key(&tree_group.tree_spec) {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "Tree Group '{tree_group_id}' references unknown Tree Spec '{}'",
+                    tree_group.tree_spec,
+                )));
             }
-        }
+            if tree_group.initial_trees == 0 {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "Tree Group '{tree_group_id}' initial_trees must be > 0",
+                )));
+            }
+            if tree_group.maximum_trees == 0 {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "Tree Group '{tree_group_id}' maximum_trees must be > 0",
+                )));
+            }
+            if tree_group.initial_trees > tree_group.maximum_trees {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "Tree Group '{tree_group_id}' initial_trees must be <= maximum_trees",
+                )));
+            }
 
-        if root_roles.len() > 1 {
+            maximum_trees = maximum_trees
+                .checked_add(u32::from(tree_group.maximum_trees))
+                .ok_or_else(|| {
+                    ConfigSchemaError::ValidationError(
+                        "Tree Group maximum_trees sum overflowed".into(),
+                    )
+                })?;
+        }
+        if maximum_trees > MAX_FLEET_TREES {
             return Err(ConfigSchemaError::ValidationError(format!(
-                "root kind must be unique globally (found {})",
-                root_roles.join(", "),
+                "Tree Group maximum_trees sum {maximum_trees} exceeds Fleet bound {MAX_FLEET_TREES}",
             )));
-        }
-
-        for subnet in self.subnets.values() {
-            subnet.validate()?;
         }
 
         validate_topology_roles_are_declared(self)?;
@@ -158,7 +149,7 @@ fn validate_role_declarations(config: &ConfigModel) -> Result<(), ConfigSchemaEr
         }
     }
 
-    if !config.subnets.is_empty() && !config.roles.contains_key(&CanisterRole::ROOT) {
+    if !config.tree_specs.is_empty() && !config.roles.contains_key(&CanisterRole::ROOT) {
         return Err(ConfigSchemaError::ValidationError(
             "root role declaration missing; add [roles.root] kind = \"root\"".into(),
         ));
@@ -187,8 +178,8 @@ fn validate_topology_roles_are_declared(config: &ConfigModel) -> Result<(), Conf
         }
     }
 
-    for subnet in config.subnets.values() {
-        for (role, canister) in &subnet.canisters {
+    for tree_spec in config.tree_specs.values() {
+        for (role, canister) in &tree_spec.canisters {
             let declaration = config.roles.get(role).ok_or_else(|| {
                 ConfigSchemaError::ValidationError(format!(
                     "topology role '{role}' is not declared; add [roles.{role}]",

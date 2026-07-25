@@ -121,20 +121,20 @@ fn parses_role_declare_dry_run_option() {
     assert!(options.dry_run);
 }
 
-// Ensure role attachment requires app, role, and subnet and defaults to singleton.
+// Ensure role attachment requires App, role, and Tree Spec and defaults to singleton.
 #[test]
-fn parses_role_attach_app_role_and_subnet() {
+fn parses_role_attach_app_role_and_tree_spec() {
     let options = RoleAttachOptions::parse_test([
         OsString::from("demo"),
         OsString::from("store"),
-        OsString::from("--subnet"),
+        OsString::from("--tree-spec"),
         OsString::from("default"),
     ])
     .expect("parse role attach options");
 
     assert_eq!(options.app, "demo");
     assert_eq!(options.role, "store");
-    assert_eq!(options.subnet, "default");
+    assert_eq!(options.tree_spec, "default");
     assert_eq!(options.kind, "singleton");
     assert!(!options.dry_run);
 }
@@ -145,7 +145,7 @@ fn parses_role_attach_kind() {
     let options = RoleAttachOptions::parse_test([
         OsString::from("demo"),
         OsString::from("worker"),
-        OsString::from("--subnet"),
+        OsString::from("--tree-spec"),
         OsString::from("default"),
         OsString::from("--kind"),
         OsString::from("replica"),
@@ -161,7 +161,7 @@ fn parses_role_attach_dry_run_option() {
     let options = RoleAttachOptions::parse_test([
         OsString::from("demo"),
         OsString::from("store"),
-        OsString::from("--subnet"),
+        OsString::from("--tree-spec"),
         OsString::from("default"),
         OsString::from("--dry-run"),
     ])
@@ -513,7 +513,7 @@ fn renders_declared_only_role_inspection() {
     assert!(output.contains("role: demo.store"));
     assert!(output.contains("cargo check: allowed"));
     assert!(output.contains("deploy artifact: blocked: role is declared-only"));
-    assert!(output.contains("canic app role attach demo store --subnet <subnet>"));
+    assert!(output.contains("canic app role attach demo store --tree-spec <tree-spec>"));
 }
 
 // Ensure declaration output stays explicit about config-only state.
@@ -537,7 +537,7 @@ fn renders_declared_role_output() {
     assert!(output.contains("package: store"));
     assert!(output.contains("config: apps/demo/canic.toml"));
     assert!(output.contains("state: declared"));
-    assert!(output.contains("canic app role attach demo store --subnet <subnet>"));
+    assert!(output.contains("canic app role attach demo store --tree-spec <tree-spec>"));
 }
 
 // Ensure declaration dry-run output is explicit about no writes.
@@ -573,7 +573,7 @@ fn renders_attached_role_output() {
             app: "demo".to_string(),
             role: "store".to_string(),
             display: "demo.store".to_string(),
-            subnet: "default".to_string(),
+            tree_spec: "default".to_string(),
             kind: "singleton".to_string(),
             topology: "default/store".to_string(),
         },
@@ -600,7 +600,7 @@ fn renders_planned_attached_role_output() {
             app: "demo".to_string(),
             role: "store".to_string(),
             display: "demo.store".to_string(),
-            subnet: "default".to_string(),
+            tree_spec: "default".to_string(),
             kind: "singleton".to_string(),
             topology: "default/store".to_string(),
         },
@@ -719,11 +719,9 @@ fn renders_adoption_report_text_for_declared_only_roles() {
     );
     assert!(text.contains("mutating_actions_performed: 0"));
     assert!(text.contains("Recommendations (report-only; not executed):"));
-    assert!(
-        text.contains(
-            "suggested_action_preview: canic app role attach demo store --subnet <subnet>"
-        )
-    );
+    assert!(text.contains(
+        "suggested_action_preview: canic app role attach demo store --tree-spec <tree-spec>"
+    ));
     assert!(text.contains("status: not executed by adoption report"));
     assert!(text.contains("support: unsupported-by-adoption"));
     assert!(!text.contains("suggested_action:"));
@@ -1383,15 +1381,15 @@ fn role_declare_usage_lists_required_package() {
     assert!(text.contains("Examples:"));
 }
 
-// Ensure role attach help takes explicit app, role, and subnet.
+// Ensure role attach help takes explicit App, role, and Tree Spec.
 #[test]
-fn role_attach_usage_lists_required_subnet() {
+fn role_attach_usage_lists_required_tree_spec() {
     let text = role_attach_usage();
 
     assert!(text.contains("Usage: canic app role attach"));
     assert!(text.contains("<app>"));
     assert!(text.contains("<role>"));
-    assert!(text.contains("--subnet <subnet>"));
+    assert!(text.contains("--tree-spec <tree-spec>"));
     assert!(text.contains("--kind <kind>"));
     assert!(text.contains("--dry-run"));
     assert!(text.contains("Examples:"));
@@ -1458,7 +1456,12 @@ package = "store"
 [auth.delegated_tokens]
 enabled = false
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 "#
         ),

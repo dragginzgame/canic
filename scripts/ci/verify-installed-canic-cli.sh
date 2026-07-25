@@ -75,9 +75,6 @@ EOF
 
     cat > "$DOWNSTREAM_ROOT/apps/downstream/canic.toml" <<'EOF'
 controllers = []
-[services.fleet]
-roles = ["app"]
-
 [app]
 name = "downstream"
 
@@ -89,10 +86,15 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.app]
+[tree_specs.default.canisters.app]
 kind = "service"
 EOF
 

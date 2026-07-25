@@ -1,24 +1,24 @@
-//! Module: config::validation::subnet
+//! Module: config::validation::tree_spec
 //!
-//! Responsibility: validate subnet topology, placement, and refill configuration.
+//! Responsibility: validate Tree Spec topology, placement, and refill configuration.
 //! Does not own: topology workflow, placement policy execution, or schema definitions.
 //! Boundary: config validation calls this before runtime installation.
 
 use crate::{
     config::schema::{
         CanisterConfig, CanisterKind, ConfigSchemaError, CyclesFundingPolicyConfig,
-        IcpRefillPolicy, NAME_MAX_BYTES, SubnetConfig, Validate,
+        IcpRefillPolicy, NAME_MAX_BYTES, TreeSpecConfig, Validate,
     },
     config::validation::validate_canister_role,
     ids::CanisterRole,
 };
 use std::collections::BTreeMap;
 
-impl Validate for SubnetConfig {
+impl Validate for TreeSpecConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
         if self.canisters.contains_key(&CanisterRole::WASM_STORE) {
             return Err(ConfigSchemaError::ValidationError(format!(
-                "{} is implicit and must not be configured under subnets.<name>.canisters",
+                "{} is implicit and must not be configured under tree_specs.<id>.canisters",
                 CanisterRole::WASM_STORE
             )));
         }

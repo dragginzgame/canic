@@ -42,7 +42,7 @@ walkthrough.
 
 * **Lifecycle and build macros:** `canic::start!()` and `canic::build!(...)`
   wire IC hooks, endpoint bundles, and compile-time config validation from
-  `[package.metadata.canic] fleet = "..."` and `role = "..."`.
+  `[package.metadata.canic] app = "..."` and `role = "..."`.
 * **Application timers:** `timer!` schedules one asynchronous invocation, while
   `timer_interval!` rearms only after the current future completes. Both return
   opaque handles consumed by cancellation. See the
@@ -51,8 +51,8 @@ walkthrough.
   topology placement, then explicitly attached before artifact builds or
   deployment truth.
 * **Topology-aware config:** [CONFIG.md](CONFIG.md) covers `canic.toml`
-  subnets, roles, singleton/replica/shard/instance placement, warm pools,
-  scaling pools, sharding pools, and directory pools.
+  Tree Specs, Tree Groups, roles, singleton/replica/shard/instance placement,
+  warm pools, scaling pools, sharding pools, and directory pools.
 * **Delegated auth:** Root renews chain-key batch delegation proofs, issuer
   canisters sign reusable delegated tokens, and endpoint verifiers check the
   self-contained token, embedded root proof, issuer proof, audience, subject,

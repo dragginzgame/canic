@@ -11,8 +11,8 @@ pub(in crate::release_set) fn configured_role_kinds_from_config(
 ) -> BTreeMap<String, String> {
     let mut kinds = BTreeMap::<String, String>::new();
 
-    for subnet in config.subnets.values() {
-        for (role, canister) in &subnet.canisters {
+    for tree_spec in config.tree_specs.values() {
+        for (role, canister) in &tree_spec.canisters {
             let role = role.as_str().to_string();
             let kind = canister.kind.to_string();
             match kinds.get(&role) {
@@ -38,19 +38,19 @@ pub(in crate::release_set) fn configured_role_lifecycle_from_config(
     let attached_roles = config.attached_roles();
     let mut topology = BTreeMap::<CanisterRole, Vec<String>>::new();
 
-    for (subnet_slot, subnet) in &config.subnets {
-        for (role, canister) in &subnet.canisters {
+    for (tree_spec_id, tree_spec) in &config.tree_specs {
+        for (role, canister) in &tree_spec.canisters {
             topology
                 .entry(role.clone())
                 .or_default()
-                .push(format!("{subnet_slot}/{role}"));
+                .push(format!("{tree_spec_id}/{role}"));
 
             if let Some(scaling) = &canister.scaling {
                 for (pool, scale_pool) in &scaling.pools {
                     topology
                         .entry(scale_pool.canister_role.clone())
                         .or_default()
-                        .push(format!("{subnet_slot}/{role}/scaling/{pool}"));
+                        .push(format!("{tree_spec_id}/{role}/scaling/{pool}"));
                 }
             }
 
@@ -59,7 +59,7 @@ pub(in crate::release_set) fn configured_role_lifecycle_from_config(
                     topology
                         .entry(shard_pool.canister_role.clone())
                         .or_default()
-                        .push(format!("{subnet_slot}/{role}/sharding/{pool}"));
+                        .push(format!("{tree_spec_id}/{role}/sharding/{pool}"));
                 }
             }
 
@@ -68,7 +68,7 @@ pub(in crate::release_set) fn configured_role_lifecycle_from_config(
                     topology
                         .entry(binding_pool.canister_role.clone())
                         .or_default()
-                        .push(format!("{subnet_slot}/{role}/binding/{pool}"));
+                        .push(format!("{tree_spec_id}/{role}/binding/{pool}"));
                 }
             }
         }
@@ -100,9 +100,9 @@ pub(in crate::release_set) fn configured_role_auto_create_from_config(
 ) -> BTreeSet<String> {
     let mut auto_create = BTreeSet::<String>::new();
 
-    for subnet in config.subnets.values() {
+    for tree_spec in config.tree_specs.values() {
         auto_create.extend(
-            subnet
+            tree_spec
                 .auto_create_roles()
                 .iter()
                 .map(|role| role.as_str().to_string()),
@@ -118,8 +118,8 @@ pub(in crate::release_set) fn configured_role_topups_from_config(
 ) -> BTreeMap<String, String> {
     let mut topups = BTreeMap::<String, String>::new();
 
-    for subnet in config.subnets.values() {
-        for (role, canister) in &subnet.canisters {
+    for tree_spec in config.tree_specs.values() {
+        for (role, canister) in &tree_spec.canisters {
             if let Some(policy) = &canister.topup {
                 topups.insert(
                     role.as_str().to_string(),
@@ -142,8 +142,8 @@ pub(in crate::release_set) fn configured_role_metrics_profiles_from_config(
 ) -> BTreeMap<String, String> {
     let mut profiles = BTreeMap::<String, String>::new();
 
-    for subnet in config.subnets.values() {
-        for (role, canister) in &subnet.canisters {
+    for tree_spec in config.tree_specs.values() {
+        for (role, canister) in &tree_spec.canisters {
             let role_name = role.as_str().to_string();
             let profile = metrics_profile_label(canister.resolved_metrics_profile(role));
             match profiles.get(&role_name) {
