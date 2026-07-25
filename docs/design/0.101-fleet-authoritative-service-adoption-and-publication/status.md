@@ -93,6 +93,9 @@ evidence exist.
 - [ ] Prove removed-tree evidence cannot be omitted or treated as empty.
 - [ ] Prove declaration drift cannot start a second activation.
 - [ ] Add bounded inspection, metrics and typed reports.
+- [ ] Record raw/compressed release-Wasm evidence for adopted/provisioned
+  authority services and prove unrelated ordinary Canisters retain no 0.101
+  authority workflow.
 - [ ] Complete focused PocketIC or disposable-environment qualification.
 
 ## Completion Criteria
@@ -117,6 +120,8 @@ evidence exist.
   `synchronized_at` match the design exactly.
 - [ ] Tree lifecycle mutation resumes after publication.
 - [ ] Old backups cannot roll authority backward.
+- [ ] Per-role Wasm evidence attributes authority-service growth without
+  ordinary-Canister authority-workflow growth.
 - [ ] No relocation, replacement, replication, promotion, failover or
   application-data migration code is added.
 - [ ] Existing-Fleet and fresh-Fleet journeys pass.

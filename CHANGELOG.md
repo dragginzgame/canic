@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.28` makes `canic status` discover source Apps and installed Fleets
+  independently, rendering the catalog's explicit App and canonical-network
+  identity without inferring Fleet ownership from equal display names.
+
 - `0.99.27` completes fresh Fleet installation: the host atomically publishes
   the canonical-network catalog only after exact Active evidence, records
   terminal `HostAuthorityCommitted` recovery authority and returns success
