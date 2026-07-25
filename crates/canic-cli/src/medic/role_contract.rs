@@ -305,7 +305,7 @@ fn check_declared_role_not_deployable(
             display_medic_path(root, config)
         ),
         format!(
-            "run canic app role attach {} {} --subnet <subnet>, or remove the declaration",
+            "run canic app role attach {} {} --tree-spec <tree-spec>, or remove the declaration",
             role.app, role.role
         ),
         MedicSource::AppConfig,

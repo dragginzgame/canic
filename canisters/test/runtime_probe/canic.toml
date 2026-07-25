@@ -1,7 +1,4 @@
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "runtime_probe"
 init_mode = "enabled"
@@ -37,14 +34,19 @@ max_revocation_latency_ns = 60000000000
 [standards]
 icrc21 = true
 
-[subnets.default]
+[tree_specs.default]
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.test]
+[tree_specs.default.canisters.test]
 kind = "service"
 
-[subnets.default.canisters.test.auth]
+[tree_specs.default.canisters.test.auth]
 delegated_token_verifier = true
 role_attestation_cache = true

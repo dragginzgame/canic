@@ -8,7 +8,7 @@ use crate::{
         DiagnosticsCanisterConfig, MetricsCanisterConfig, ShardPool, ShardPoolPolicy,
         ShardingConfig, StandardsCanisterConfig,
     },
-    ids::{CanisterRole, CanonicalNetworkId, FleetId, FleetKey, SubnetSlotId},
+    ids::{CanisterRole, CanonicalNetworkId, FleetId, FleetKey, TreeSpecId},
     ops::runtime::env::EnvOps,
     storage::stable::env::{EnvData, EnvRecord},
     test::config::ConfigTestBuilder,
@@ -22,6 +22,12 @@ pub fn fleet_key(byte: u8) -> FleetKey {
     }
 }
 
+/// Install the canonical sharding test configuration.
+///
+/// # Panics
+///
+/// Panics only if Canic's canonical `"default"` Tree Spec identifier stops
+/// satisfying `TreeSpecId` admission.
 pub fn init_sharding_test_config() {
     let mut sharding = ShardingConfig::default();
     sharding.pools.insert(
@@ -89,7 +95,11 @@ pub fn init_sharding_test_config() {
 
     // Single synthetic principal for root/subnet/parent roles in tests.
     let root_pid = Principal::from_slice(&[1; 29]);
-    import_test_env("manager", SubnetSlotId::DEFAULT, root_pid);
+    import_test_env(
+        "manager",
+        TreeSpecId::try_from(String::from("default")).expect("default Tree Spec ID"),
+        root_pid,
+    );
 }
 
 /// Imports a synthetic runtime env for unit tests.
@@ -99,12 +109,12 @@ pub fn init_sharding_test_config() {
 /// Panics if the synthetic environment snapshot fails runtime import.
 pub fn import_test_env(
     canister_role: impl Into<CanisterRole>,
-    subnet_slot: impl Into<SubnetSlotId>,
+    tree_spec: impl Into<TreeSpecId>,
     root_pid: Principal,
 ) {
     let snapshot = EnvRecord {
         canister_role: Some(canister_role.into()),
-        subnet_slot: Some(subnet_slot.into()),
+        tree_spec: Some(tree_spec.into()),
         root_pid: Some(root_pid),
         fleet_root_pid: Some(root_pid),
         subnet_pid: Some(root_pid),

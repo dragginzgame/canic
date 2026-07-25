@@ -14,18 +14,21 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.34`.
-- The latest published release is `v0.99.34` at
-  `9871af5db56e115923ac9b8961275b4ad264809f`.
-- The `v0.99.34` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `ca1af60f4e90dba6890887057d1850db9a4661b7a294e71a384d90dff8e431c0`.
-- The open 0.100 implementation starts from immutable `v0.99.34` under the
-  reinstall-only boundary. Its first batch freezes distinct bounded
-  `TreeSpecId` and `TreeGroupId` declaration identities and generated
-  32-byte `TreeId`; no package-version change has been made. The remaining
-  0.99 Subnet Slot, Fleet Root and local Registry/Directory authorities are
-  explicitly not a releasable 0.100 surface and remain scheduled for hard
-  removal in Slice 1.
+- The workspace package version is `0.100.0`.
+- The latest published release is `v0.100.0` at
+  `b100e83c2dcfcd2f807597d7906578315a620fec`.
+- The `v0.100.0` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `f45b8feb33fcc8537145a7f9b4d1592e74ad42df3a54b5b83920bd73f4d070e7`.
+- Released `0.100.0` starts the reinstall-only implementation by freezing
+  bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
+- The open `0.100.1` batch hard-cuts App configuration, compiled bootstrap
+  input, host projections, CLI role attachment, scaffolding and active
+  fixtures to `[tree_specs.*]` and `[tree_groups.*]`. It records the exact
+  live topology authority inventory and makes the existing installer reject
+  declarations larger than its sole-initial-Tree capability. The temporary
+  environment `TreeSpecId` selector is not final protected identity;
+  `TreeBinding`, `SubnetId`, Coordinator/Tree Root separation and the
+  Registry/Directory cuts remain open.
 - The proposed 0.100/0.101 follow-on designs now model heterogeneous,
   independently scaled Tree Groups backed by App Tree Specs: one user-focused
   Tree and many project-focused Trees may use different topology templates.
@@ -1248,11 +1251,11 @@ First primary results:
 
 Continue 0.100 Slice 1 from the
 [implementation tracker](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md).
-Record the exact live topology authority map, then hard-cut configuration from
-`[subnets.*]` and `[services.fleet]` to `[tree_specs.*]` and
-`[tree_groups.*]` as one coherent parser, validation, bootstrap,
-host-mutation, fixture and active-document batch. Do not introduce aliases or
-attempt to consume a 0.99 installation.
+Freeze `SubnetId`, `FleetCoordinatorBinding` and protected `TreeBinding`, then
+hard-cut Fleet Root and the remaining environment contract to distinct
+Coordinator and Tree Root authority. Do not preserve the temporary Tree Spec
+selector as runtime identity, introduce aliases or attempt to consume an
+earlier installation.
 
 ## Historical Release Detail
 

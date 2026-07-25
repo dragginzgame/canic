@@ -34,8 +34,8 @@ pub struct EnvRecord {
     // fleet
     pub fleet_root_pid: Option<Principal>,
 
-    // subnet
-    pub subnet_slot: Option<SubnetSlotId>,
+    // Tree and physical Subnet placement
+    pub tree_spec: Option<TreeSpecId>,
     pub subnet_pid: Option<Principal>,
     pub root_pid: Option<Principal>,
 
@@ -78,8 +78,8 @@ impl Env {
     }
 
     #[must_use]
-    pub(crate) fn get_subnet_slot() -> Option<SubnetSlotId> {
-        ENV.with_borrow(|cell| cell.get().subnet_slot.clone())
+    pub(crate) fn get_tree_spec() -> Option<TreeSpecId> {
+        ENV.with_borrow(|cell| cell.get().tree_spec.clone())
     }
 
     #[must_use]

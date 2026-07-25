@@ -342,7 +342,7 @@ fn config_choice_table(workspace_root: &Path, choices: &[PathBuf]) -> Vec<String
     .collect()
 }
 
-// Summarize the root-subnet deployable roles for one install config choice.
+// Summarize the Tree Spec deployable roles for one install config choice.
 fn config_choice_row(workspace_root: &Path, option: usize, path: &Path) -> ConfigChoiceRow {
     let config = display_workspace_path(workspace_root, path);
     match AppConfigSnapshot::load(path) {
@@ -359,7 +359,7 @@ fn config_choice_row(workspace_root: &Path, option: usize, path: &Path) -> Confi
     }
 }
 
-// Format the root-subnet canister count with a bounded role preview.
+// Format the configured canister count with a bounded role preview.
 fn format_canister_summary(roles: &[String]) -> String {
     if roles.is_empty() {
         return "0".to_string();

@@ -14,9 +14,6 @@ mod serialization;
 
 const CONFIG: &str = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 
@@ -32,18 +29,20 @@ package = "api"
 kind = "canister"
 package = "store"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.api]
+[tree_specs.default.canisters.api]
 kind = "service"
 "#;
 
 const BROWNFIELD_CONFIG: &str = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 
@@ -51,15 +50,17 @@ name = "demo"
 kind = "root"
 package = "root"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 "#;
 
 const STANDALONE_CONFIG: &str = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 
@@ -70,9 +71,6 @@ package = "worker"
 
 const LEAF_ONLY_CONFIG: &str = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 
@@ -84,10 +82,15 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[subnets.default.canisters.app]
+[tree_specs.default.canisters.app]
 kind = "service"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 "#;
 

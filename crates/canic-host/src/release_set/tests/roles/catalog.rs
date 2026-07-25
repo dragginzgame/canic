@@ -13,9 +13,6 @@ fn configured_role_kinds_lists_configured_roles() {
 fn configured_role_lifecycle_lists_declared_and_attached_roles() {
     let config = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 
@@ -35,16 +32,21 @@ package = "canisters/user_shard"
 kind = "canister"
 package = "canisters/store"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.user_hub]
+[tree_specs.default.canisters.user_hub]
 kind = "service"
 
-[subnets.default.canisters.user_hub.sharding.pools.users]
+[tree_specs.default.canisters.user_hub.sharding.pools.users]
 canister_role = "user_shard"
 
-[subnets.default.canisters.user_shard]
+[tree_specs.default.canisters.user_shard]
 kind = "shard"
 "#;
     let lifecycle = configured_role_lifecycle_from_config(&parsed_config(config));
@@ -80,9 +82,6 @@ kind = "shard"
 fn configured_role_details_lists_verbose_config_features() {
     let config = r#"
 controllers = []
-[services.fleet]
-roles = ["user_hub", "scale_hub"]
-
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -121,38 +120,43 @@ kind = "canister"
 package = "role_baseline"
 [app.whitelist]
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.user_hub]
+[tree_specs.default.canisters.user_hub]
 kind = "service"
 topup.threshold = "10T"
 topup.amount = "4T"
 
-[subnets.default.canisters.user_hub.sharding.pools.user_shards]
+[tree_specs.default.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
 policy.max_shards = 4
 
-[subnets.default.canisters.user_shard]
+[tree_specs.default.canisters.user_shard]
 kind = "shard"
 
-[subnets.default.canisters.user_shard.auth]
+[tree_specs.default.canisters.user_shard.auth]
 delegated_token_issuer = true
 role_attestation_cache = true
 
-[subnets.default.canisters.scale_hub]
+[tree_specs.default.canisters.scale_hub]
 kind = "service"
 
-[subnets.default.canisters.scale_hub.scaling.pools.scales]
+[tree_specs.default.canisters.scale_hub.scaling.pools.scales]
 canister_role = "scale_replica"
 policy.initial_workers = 2
 policy.min_workers = 2
 
-[subnets.default.canisters.scale_replica]
+[tree_specs.default.canisters.scale_replica]
 kind = "replica"
 
-[subnets.default.canisters.scale_replica.metrics]
+[tree_specs.default.canisters.scale_replica.metrics]
 profile = "full"
 "#;
     let details = configured_role_details_from_config(&parsed_config(config));
@@ -160,7 +164,7 @@ profile = "full"
     assert!(
         details
             .get("user_hub")
-            .is_some_and(|details| details.contains(&"services.fleet".to_string()))
+            .is_some_and(|details| details.contains(&"fleet_directory".to_string()))
     );
     assert!(details.get("user_hub").is_some_and(|details| {
         details

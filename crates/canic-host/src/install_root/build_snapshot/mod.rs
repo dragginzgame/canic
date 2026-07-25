@@ -44,6 +44,7 @@ pub(super) fn resolve_install_snapshot(
     uses_deployment_plan: bool,
 ) -> Result<ValidatedInstallSnapshot, Box<dyn std::error::Error>> {
     let config = AppConfigSnapshot::load(&context.config_path)?;
+    config.require_supported_initial_tree_topology()?;
     let app_id = config.app_id().to_string();
 
     if uses_deployment_plan {

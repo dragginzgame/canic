@@ -1,7 +1,4 @@
 controllers = []
-[services.fleet]
-roles = ["user_hub"]
-
 [app]
 name = "test"
 init_mode = "enabled"
@@ -45,34 +42,37 @@ max_revocation_latency_ns = 60000000000
 [standards]
 icrc21 = true
 
-[subnets.default]
+[tree_specs.default]
 pool.minimum_size = 3
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.user_hub]
+[tree_specs.default.canisters.user_hub]
 kind = "service"
 topup = {}
 
-[subnets.default.canisters.user_hub.sharding.pools.user_shards]
+[tree_specs.default.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
 policy.max_shards = 4
 
-[subnets.default.canisters.user_shard]
+[tree_specs.default.canisters.user_shard]
 kind = "shard"
 topup = {}
 
-[subnets.default.canisters.user_shard.auth]
+[tree_specs.default.canisters.user_shard.auth]
 delegated_token_issuer = true
 role_attestation_cache = true
 
-[subnets.default.canisters.test]
+[tree_specs.default.canisters.test]
 kind = "service"
 
-[subnets.default.canisters.test.auth]
+[tree_specs.default.canisters.test.auth]
 delegated_token_verifier = true
 role_attestation_cache = true
-
-[subnets.general]

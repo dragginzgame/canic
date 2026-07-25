@@ -34,9 +34,6 @@ fn parsed_config(source: &str) -> ConfigModel {
 
 const REAL_CONFIG: &str = r#"
 controllers = []
-[services.fleet]
-roles = ["user_hub", "scale_hub"]
-
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -81,21 +78,23 @@ enabled = false
 [standards]
 icrc21 = true
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.user_hub]
+[tree_specs.default.canisters.user_hub]
 kind = "service"
 
-[subnets.default.canisters.scale_hub]
+[tree_specs.default.canisters.scale_hub]
 kind = "service"
 "#;
 
 const MULTI_ROOT_CONFIG: &str = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -106,18 +105,25 @@ kind = "root"
 package = "root"
 [app.whitelist]
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.secondary.canisters.root]
+[tree_groups.secondary]
+tree_spec = "secondary"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.secondary.canisters.root]
 kind = "root"
 "#;
 
 const NO_ROOT_CONFIG: &str = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -128,7 +134,7 @@ kind = "canister"
 package = "user_hub"
 [app.whitelist]
 
-[subnets.default.canisters.user_hub]
+[tree_specs.default.canisters.user_hub]
 kind = "service"
 "#;
 

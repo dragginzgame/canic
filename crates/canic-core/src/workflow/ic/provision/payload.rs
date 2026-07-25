@@ -28,7 +28,7 @@ impl ProvisionWorkflow {
     ) -> Result<CanisterInitPayload, InternalError> {
         let env = EnvBootstrapArgs {
             fleet_root_pid: Some(EnvOps::fleet_root_pid()?),
-            subnet_slot: Some(EnvOps::subnet_slot()?),
+            tree_spec: Some(EnvOps::tree_spec()?),
             subnet_pid: Some(EnvOps::subnet_pid()?),
             root_pid: Some(EnvOps::root_pid()?),
             canister_role: Some(role.clone()),

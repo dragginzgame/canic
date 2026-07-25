@@ -27,19 +27,21 @@ impl ProvisionWorkflow {
         updated_role: Option<&CanisterRole>,
     ) -> Result<StateSnapshotBuilder, InternalError> {
         let cfg = ConfigOps::get()?;
-        let subnet_cfg = ConfigOps::current_subnet()?;
+        let tree_spec = ConfigOps::current_tree_spec()?;
         let registry = SubnetRegistryOps::data();
         let allow_incomplete = updated_role.is_some();
-        let subnet_directory_roles = subnet_cfg.subnet_directory_roles();
+        let tree_directory_roles = tree_spec.tree_directory_roles();
 
-        let include_fleet = updated_role.is_none_or(|role| cfg.services.fleet.roles.contains(role));
-        let include_subnet = updated_role.is_none_or(|role| subnet_directory_roles.contains(role));
+        let include_fleet =
+            updated_role.is_none_or(|role| cfg.fleet_directory_roles().contains(role));
+        let include_tree_directory =
+            updated_role.is_none_or(|role| tree_directory_roles.contains(role));
 
         let mut builder = StateSnapshotBuilder::new()?;
 
         if include_fleet {
             let fleet_data =
-                RootFleetDirectoryBuilder::build(&registry, &cfg.services.fleet.roles)?;
+                RootFleetDirectoryBuilder::build(&registry, &cfg.fleet_directory_roles())?;
 
             if allow_incomplete {
                 FleetDirectoryOps::import_trusted_partial(fleet_data)?;
@@ -49,9 +51,8 @@ impl ProvisionWorkflow {
             builder = builder.with_fleet_directory()?;
         }
 
-        if include_subnet {
-            let subnet_data =
-                RootSubnetDirectoryBuilder::build(&registry, &subnet_directory_roles)?;
+        if include_tree_directory {
+            let subnet_data = RootSubnetDirectoryBuilder::build(&registry, &tree_directory_roles)?;
 
             if allow_incomplete {
                 SubnetDirectoryOps::import_trusted_partial(subnet_data)?;

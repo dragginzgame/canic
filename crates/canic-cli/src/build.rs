@@ -223,7 +223,7 @@ fn validate_attached_role(
     };
     if !row.attached {
         return Err(BuildCommandError::Usage(format!(
-            "role {}.{} is declared but not attached to topology; run `canic app role attach {} {} --subnet <subnet>` before building an artifact",
+            "role {}.{} is declared but not attached to topology; run `canic app role attach {} {} --tree-spec <tree-spec>` before building an artifact",
             options.app, options.role, options.app, options.role
         )));
     }
@@ -627,9 +627,6 @@ mod tests {
             .expect("write workspace manifest");
         let mut config = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 
@@ -644,14 +641,19 @@ package = "app"
 [auth.delegated_tokens]
 enabled = false
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 "#
         .to_string();
         if attach_app {
             config.push_str(
                 r#"
-[subnets.default.canisters.app]
+[tree_specs.default.canisters.app]
 kind = "service"
 "#,
             );

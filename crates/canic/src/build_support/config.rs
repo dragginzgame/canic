@@ -152,9 +152,6 @@ pub fn standalone_config_source(role: &str) -> String {
 
     format!(
         r#"controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "standalone"
 init_mode = "enabled"
@@ -201,7 +198,7 @@ mod tests {
         assert_eq!(cfg.app_id().as_str(), "standalone");
         assert!(cfg.roles.contains_key("sandbox_blank"));
         assert!(!cfg.roles.contains_key("root"));
-        assert!(cfg.subnets.is_empty());
+        assert!(cfg.tree_specs.is_empty());
         assert!(!cfg.auth.delegated_tokens.enabled);
         assert!(!config_attaches_role(&cfg, "standalone", "sandbox_blank"));
     }
@@ -214,7 +211,7 @@ mod tests {
         assert_eq!(cfg.app_id().as_str(), "standalone");
         assert!(source.contains("[roles.demo_role]"));
         assert!(cfg.roles.contains_key("demo_role"));
-        assert!(cfg.subnets.is_empty());
+        assert!(cfg.tree_specs.is_empty());
     }
 
     #[test]
@@ -238,7 +235,7 @@ mod tests {
 
         assert!(generated);
         assert!(source.contains("[roles.test]"));
-        assert!(!source.contains("[subnets."));
+        assert!(!source.contains("[tree_specs."));
     }
 
     #[test]
@@ -299,7 +296,12 @@ edition = "2024"
     fn config_contains_role_accepts_exact_metadata_role() {
         let cfg = parse_config_model(
             r#"
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
 [app]
@@ -316,7 +318,7 @@ package = "app"
 [auth.delegated_tokens]
 enabled = false
 
-[subnets.default.canisters.app]
+[tree_specs.default.canisters.app]
 kind = "service"
 "#,
         )
@@ -330,7 +332,12 @@ kind = "service"
     fn config_contains_role_rejects_role_typos() {
         let cfg = parse_config_model(
             r#"
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
 [app]
@@ -347,7 +354,7 @@ package = "app"
 [auth.delegated_tokens]
 enabled = false
 
-[subnets.default.canisters.app]
+[tree_specs.default.canisters.app]
 kind = "service"
 "#,
         )

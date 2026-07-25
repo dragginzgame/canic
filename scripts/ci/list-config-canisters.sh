@@ -32,7 +32,7 @@ done
 }
 
 mapfile -t ROLES < <(
-    sed -n 's/^\[subnets\.[^.]*\.canisters\.\([^].]*\)\]$/\1/p' "$CONFIG" |
+    sed -n 's/^\[tree_specs\.[^.]*\.canisters\.\([^].]*\)\]$/\1/p' "$CONFIG" |
         awk '!seen[$0]++'
 )
 

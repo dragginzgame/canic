@@ -26,7 +26,7 @@ mod tests {
         dto::topology::{DirectoryEntryInput, DirectoryProvenance},
         ids::{
             AppId, CanisterRole, CanonicalNetworkId, FleetId, FleetKey, ReleaseBuildNonce,
-            SubnetSlotId,
+            TreeSpecId,
         },
     };
 
@@ -48,7 +48,9 @@ mod tests {
             release_build_id,
             env: EnvBootstrapArgs {
                 fleet_root_pid: Some(principal),
-                subnet_slot: Some(SubnetSlotId::DEFAULT),
+                tree_spec: Some(
+                    TreeSpecId::try_from(String::from("default")).expect("default Tree Spec ID"),
+                ),
                 subnet_pid: Some(principal),
                 root_pid: Some(principal),
                 canister_role: Some(CanisterRole::new("app")),

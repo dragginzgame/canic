@@ -208,10 +208,15 @@ package = "role_baseline"
 kind = "canister"
 package = "worker"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.app]
+[tree_specs.default.canisters.app]
 kind = "service"
 "#,
     );
@@ -287,7 +292,12 @@ package = "role_baseline"
 kind = "canister"
 package = "worker"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 "#,
     );

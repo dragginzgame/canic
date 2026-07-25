@@ -1,6 +1,6 @@
 use crate::{
     domain::value::Principal,
-    ids::{CanisterRole, SubnetSlotId},
+    ids::{CanisterRole, TreeSpecId},
     model::env::ValidatedEnv,
 };
 use thiserror::Error as ThisError;
@@ -12,7 +12,7 @@ use thiserror::Error as ThisError;
 #[derive(Clone, Debug)]
 pub struct EnvInput {
     pub fleet_root_pid: Option<Principal>,
-    pub subnet_slot: Option<SubnetSlotId>,
+    pub tree_spec: Option<TreeSpecId>,
     pub subnet_pid: Option<Principal>,
     pub root_pid: Option<Principal>,
     pub canister_role: Option<CanisterRole>,
@@ -34,8 +34,8 @@ pub fn validate_or_default(raw_env: EnvInput) -> Result<ValidatedEnv, EnvPolicyE
     if raw_env.fleet_root_pid.is_none() {
         missing.push("fleet_root_pid");
     }
-    if raw_env.subnet_slot.is_none() {
-        missing.push("subnet_slot");
+    if raw_env.tree_spec.is_none() {
+        missing.push("tree_spec");
     }
     if raw_env.subnet_pid.is_none() {
         missing.push("subnet_pid");
@@ -57,9 +57,9 @@ pub fn validate_or_default(raw_env: EnvInput) -> Result<ValidatedEnv, EnvPolicyE
     let fleet_root_pid = raw_env
         .fleet_root_pid
         .ok_or_else(|| EnvPolicyError::MissingEnvFields("fleet_root_pid".to_string()))?;
-    let subnet_slot = raw_env
-        .subnet_slot
-        .ok_or_else(|| EnvPolicyError::MissingEnvFields("subnet_slot".to_string()))?;
+    let tree_spec = raw_env
+        .tree_spec
+        .ok_or_else(|| EnvPolicyError::MissingEnvFields("tree_spec".to_string()))?;
     let subnet_pid = raw_env
         .subnet_pid
         .ok_or_else(|| EnvPolicyError::MissingEnvFields("subnet_pid".to_string()))?;
@@ -75,7 +75,7 @@ pub fn validate_or_default(raw_env: EnvInput) -> Result<ValidatedEnv, EnvPolicyE
 
     Ok(ValidatedEnv {
         fleet_root_pid,
-        subnet_slot,
+        tree_spec,
         subnet_pid,
         root_pid,
         canister_role,

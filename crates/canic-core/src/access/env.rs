@@ -27,19 +27,6 @@ pub fn is_fleet_root() -> Result<(), AccessError> {
     }
 }
 
-/// is_default_subnet
-///
-/// Permit access only from a canister in the configured default Subnet Slot.
-pub fn is_default_subnet() -> Result<(), AccessError> {
-    if EnvOps::is_default_subnet() {
-        Ok(())
-    } else {
-        Err(AccessError::Denied(
-            "this endpoint is only available in the default Subnet Slot".to_string(),
-        ))
-    }
-}
-
 /// build_network_ic
 ///
 /// Permits access only when `ICP_ENVIRONMENT=ic` was set at build time.

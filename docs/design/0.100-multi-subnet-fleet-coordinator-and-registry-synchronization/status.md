@@ -4,9 +4,10 @@
 
 - State: implementation in progress.
 - Release boundary: reinstall only.
-- Implementation started: yes, from immutable `v0.99.34`.
-- Workspace package version: `0.99.34`; no 0.100 package-version change has
-  been authorized.
+- Implementation started: yes; foundational identities are released in
+  immutable `v0.100.0`.
+- Workspace package version: `0.100.0`.
+- Open patch draft: `0.100.1`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The working tree may contain staged 0.99 and 0.100 terminology while a coherent
@@ -18,10 +19,14 @@ alias, decoder or fallback for the removed topology model.
 - [x] Freeze distinct bounded `TreeSpecId` and `TreeGroupId` declaration
   identities.
 - [x] Freeze generated 32-byte `TreeId` and its canonical boundary encoding.
-- [ ] Record the complete live Registry, Directory, cascade, lifecycle,
-  bootstrap and role-package authority inventory.
-- [ ] Hard-cut `SubnetSlotId` and `subnet_slot` to Tree declaration, identity
-  and physical placement.
+- [x] Record the complete live Registry, Directory, cascade, lifecycle,
+  bootstrap and role-package
+  [authority inventory](0.100-authority-inventory.md).
+- [x] Hard-cut App configuration, compiled bootstrap input, host projections,
+  CLI mutation and active fixtures from `SubnetSlotId`, `[subnets.*]` and
+  `[services.fleet]` to Tree Specs and Tree Groups.
+- [ ] Replace the temporary environment `TreeSpecId` selector with protected
+  `TreeBinding`, concrete `TreeId`, Tree Root and physical `SubnetId`.
 - [ ] Hard-cut Fleet Root to Tree Root.
 - [ ] Hard-cut local `SubnetRegistry` and `SubnetDirectory` to `TreeRegistry`
   and `TreeDirectory`.
@@ -31,7 +36,8 @@ alias, decoder or fallback for the removed topology model.
 
 ## Slice 2 — Fresh Coordinator Installation
 
-- [ ] Compile Tree Specs and Tree Groups.
+- [x] Parse, validate and embed bounded Tree Specs and Tree Groups.
+- [ ] Canonicalize each Tree Spec and freeze its binding hash.
 - [ ] Resolve and journal independent Coordinator and initial Tree placement.
 - [ ] Freeze exact creation funding before each external effect.
 - [ ] Install the Coordinator from empty state.
@@ -62,13 +68,20 @@ alias, decoder or fallback for the removed topology model.
 
 ## Current Batch
 
-The first batch adds only invariant-preserving Tree identity contracts. It does
-not yet introduce `TreeBinding`, `SubnetId`, Tree-aware configuration,
-Coordinator state or a partial runtime rename.
+The open 0.100.1 batch hard-cuts the App configuration language to
+`[tree_specs.*]` and `[tree_groups.*]`. Every Spec has one root, group counts
+are positive and ordered, and total declared capacity is bounded at 4,096
+Trees. Compiled bootstrap config, active fixtures, host projections,
+scaffolding and `canic app role attach --tree-spec` use the same surface.
+
+The existing installer still supports only one initial Tree and now fails
+closed for a larger declaration. This is an explicit staging boundary:
+Coordinator installation, concrete Tree identity, placement and Registry
+authority are not implemented by this batch.
 
 ## Next Action
 
-Record the exact 0.99 topology authority map, then hard-cut App configuration
-from `[subnets.*]` and `[services.fleet]` to `[tree_specs.*]` and
-`[tree_groups.*]` as one coherent parser, validation, bootstrap, host-mutation,
-fixture and active-document batch.
+Freeze `SubnetId`, `FleetCoordinatorBinding` and protected `TreeBinding`, then
+hard-cut Fleet Root and the remaining environment contract to distinct
+Coordinator and Tree Root authority. Do not let the temporary Tree Spec
+selector become runtime identity.

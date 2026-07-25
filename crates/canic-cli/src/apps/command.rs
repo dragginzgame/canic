@@ -18,7 +18,7 @@ Examples:
   canic app list
   canic app adoption report demo --profile brownfield
   canic app role declare demo store --package store
-  canic app role attach demo store --subnet default
+  canic app role attach demo store --tree-spec default
   canic app role rename demo hub router
   canic app role list demo
   canic app role inspect demo app
@@ -53,7 +53,7 @@ prompting or deleting files.";
 const APP_ROLE_HELP_AFTER: &str = "\
 Examples:
   canic app role declare demo store --package store
-  canic app role attach demo store --subnet default
+  canic app role attach demo store --tree-spec default
   canic app role rename demo hub router
   canic app role list demo
   canic app role inspect demo app
@@ -75,9 +75,9 @@ Examples:
   canic app role declare demo store --package store --dry-run";
 const APP_ROLE_ATTACH_HELP_AFTER: &str = "\
 Examples:
-  canic app role attach demo store --subnet default
-  canic app role attach demo worker --subnet default --kind replica
-  canic app role attach demo store --subnet default --dry-run";
+  canic app role attach demo store --tree-spec default
+  canic app role attach demo worker --tree-spec default --kind replica
+  canic app role attach demo store --tree-spec default --dry-run";
 const APP_ROLE_RENAME_HELP_AFTER: &str = "\
 Examples:
   canic app role rename demo hub router
@@ -331,11 +331,11 @@ pub(super) fn app_role_attach_command() -> ClapCommand {
                 .help("Local role name"),
         )
         .arg(
-            clap::Arg::new("subnet")
-                .long("subnet")
-                .value_name("subnet")
+            clap::Arg::new("tree-spec")
+                .long("tree-spec")
+                .value_name("tree-spec")
                 .required(true)
-                .help("Subnet to attach the role under"),
+                .help("Tree Spec to attach the role under"),
         )
         .arg(
             clap::Arg::new("kind")

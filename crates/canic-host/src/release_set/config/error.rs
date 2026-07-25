@@ -64,7 +64,7 @@ impl Display for AppConfigIoOperation {
 pub enum AppConfigNameField {
     Package,
     Role,
-    Subnet,
+    TreeSpec,
 }
 
 impl Display for AppConfigNameField {
@@ -72,7 +72,7 @@ impl Display for AppConfigNameField {
         formatter.write_str(match self {
             Self::Package => "package",
             Self::Role => "role",
-            Self::Subnet => "subnet",
+            Self::TreeSpec => "Tree Spec",
         })
     }
 }
@@ -241,6 +241,11 @@ pub enum AppConfigError {
 
     #[error("kind must be one of: service, singleton, shard, replica, instance")]
     InvalidKind { kind: String },
+
+    #[error(
+        "current root installation requires exactly one initial Tree; configuration declares {initial_trees}"
+    )]
+    UnsupportedInitialTreeTopology { initial_trees: u32 },
 
     #[error("{field} {issue}")]
     InvalidName {

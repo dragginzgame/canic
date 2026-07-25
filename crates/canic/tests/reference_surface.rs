@@ -42,39 +42,39 @@ fn icp_canister_keys() -> Vec<String> {
     names
 }
 
-// Read the root-subnet canister keys from the checked-in test Canic config.
-fn test_root_subnet_canister_keys() -> Vec<String> {
+// Read the default Tree Spec canister keys from the checked-in test Canic config.
+fn test_default_tree_spec_canister_keys() -> Vec<String> {
     let path = workspace_root().join("apps/test/canic.toml");
     let source = read_text(&path);
     let parsed: toml::Value = toml::from_str(&source)
         .unwrap_or_else(|err| panic!("failed to parse {}: {err}", path.display()));
 
-    parsed["subnets"]["default"]["canisters"]
+    parsed["tree_specs"]["default"]["canisters"]
         .as_table()
-        .expect("test root subnet canisters must be a table")
+        .expect("test default Tree Spec canisters must be a table")
         .keys()
         .cloned()
         .collect()
 }
 
-// Keep the visible ICP canister list aligned with the test root subnet.
+// Keep the visible ICP canister list aligned with the test default Tree Spec.
 #[test]
-fn icp_visible_canisters_match_test_root_subnet() {
+fn icp_visible_canisters_match_test_default_tree_spec() {
     let icp_keys = icp_canister_keys().into_iter().collect::<BTreeSet<_>>();
-    let test_root_subnet = test_root_subnet_canister_keys()
+    let test_default_tree_spec = test_default_tree_spec_canister_keys()
         .into_iter()
         .collect::<BTreeSet<_>>();
 
     assert_eq!(
-        icp_keys, test_root_subnet,
-        "icp.yaml canister keys must stay aligned with apps/test/canic.toml root subnet"
+        icp_keys, test_default_tree_spec,
+        "icp.yaml canister keys must stay aligned with apps/test/canic.toml default Tree Spec"
     );
 }
 
-// Keep the staged root release set derivable from the test root subnet.
+// Keep the staged root release set derivable from the test default Tree Spec.
 #[test]
-fn test_root_subnet_has_derivable_release_set() {
-    let release_set = test_root_subnet_canister_keys()
+fn test_default_tree_spec_has_derivable_release_set() {
+    let release_set = test_default_tree_spec_canister_keys()
         .into_iter()
         .filter(|name| name != "root")
         .collect::<BTreeSet<_>>();

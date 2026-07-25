@@ -1,6 +1,10 @@
 use super::*;
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "the inline App config keeps this install-truth fixture self-contained"
+)]
 fn install_truth_gate_lines_include_warning_codes() {
     let root = temp_dir("canic-install-truth-warning-lines");
     let config_path = root.join("apps/demo/canic.toml");
@@ -9,13 +13,9 @@ fn install_truth_gate_lines_include_warning_codes() {
         &config_path,
         r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 init_mode = "enabled"
-
 
 [roles.root]
 kind = "root"
@@ -57,8 +57,12 @@ package = "role_baseline"
 kind = "canister"
 package = "worker"
 [app.whitelist]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
 
-[subnets.default.canisters.root]
+[tree_specs.default.canisters.root]
 kind = "root"
 "#,
     )
@@ -130,9 +134,6 @@ fn install_truth_gate_lines_distinguish_plan_assumptions() {
         &config_path,
         r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -179,7 +180,12 @@ kind = "canister"
 package = "worker"
 [app.whitelist]
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 "#,
     )

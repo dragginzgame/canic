@@ -6,7 +6,7 @@ use crate::{
         CyclesFundingPolicyConfig, DiagnosticsCanisterConfig, MetricsCanisterConfig,
         StandardsCanisterConfig,
     },
-    ids::{CanisterRole, SubnetSlotId},
+    ids::{CanisterRole, TreeSpecId},
     ops::{
         storage::children::CanisterChildrenOps,
         storage::intent::IntentStoreOps,
@@ -73,7 +73,7 @@ fn install_binding_test_context(child_role: &CanisterRole, child_pid: Principal)
 
     import_test_env(
         CanisterRole::new("project_hub"),
-        SubnetSlotId::DEFAULT,
+        TreeSpecId::try_from(String::from("default")).expect("default Tree Spec ID"),
         root_pid,
     );
 

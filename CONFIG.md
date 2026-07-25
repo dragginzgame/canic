@@ -5,9 +5,10 @@ This guide documents the canonical shape of `canic.toml`, the configuration file
 At a high level the file describes:
 
 - App identity and package-backed roles (`app`, `roles`).
-- Global settings (`controllers`, `services`, `standards`, `app`, `auth`, `log`).
-- Subnet-specific behaviour under `subnets.<name>` (including per-subnet pool settings).
-- Per-canister policies inside each subnet, with optional scaling, sharding,
+- Global settings (`controllers`, `standards`, `app`, `auth`, `log`).
+- Permitted rooted topologies under `tree_specs.<name>`.
+- Independently scaled Tree collections under `tree_groups.<name>`.
+- Per-canister policies inside each Tree Spec, with optional scaling, sharding,
   and keyed placement bindings.
 - The implicit wasm-store behavior used by chunk-store-backed installs.
 
@@ -36,7 +37,8 @@ Canic treats config/env identity as startup invariants. Missing env data is a fa
 - Init/post-upgrade: generated lifecycle code loads the embedded TOML and parsed config model; `ConfigOps::current_*` is infallible.
 - Root env: fresh root installation sets base fields from
   `CurrentRootInstallIdentity` without a registry lookup.
-  - `default` is the App-declared workload slot used by the current one-member Fleet.
+  - `default` is an ordinary App-declared Tree Spec name.
+  - The current staged installer requires exactly one initial Tree.
   - `fleet_root_pid` identifies that Fleet's current root.
 - Non-root env: children must receive a complete `EnvBootstrapArgs` in `CanisterInitPayload` from root.
   - Missing env fields always trap (no local fallback).
@@ -47,7 +49,7 @@ Canic treats config/env identity as startup invariants. Missing env data is a fa
 
 ### `[roles.<role>]`
 
-Required package declaration for every role attached through `subnets`. The
+Required package declaration for every role attached through `tree_specs`. The
 `root` declaration is also required whenever topology is present.
 
 - `kind = "root" | "canister"` – package role class. Only `[roles.root]` may
@@ -56,17 +58,22 @@ Required package declaration for every role attached through `subnets`. The
   `canic.toml`.
 
 Role declarations own package identity. The matching
-`subnets.<name>.canisters.<role>` entry owns topology and placement policy.
+`tree_specs.<name>.canisters.<role>` entry owns permitted topology and
+Tree-local policy.
 
 ### `controllers = ["aaaaa-aa", ...]`
 
 Optional list of controller principals appended to every provisioned canister.
 
-### `[services.fleet]`
+### `[tree_groups.<name>]`
 
-- `roles = ["role_a", "role_b", ...]` – App-declared Fleet service roles that
-  appear in the current root directory export. Every entry must also exist
-  under `subnets.default.canisters` and have `kind = "service"`.
+- `tree_spec: string` – required exact ID of an existing Tree Spec.
+- `initial_trees: u16` – required positive number of initial concrete Trees.
+- `maximum_trees: u16` – required positive capacity, no smaller than
+  `initial_trees`.
+
+The sum of `maximum_trees` across all groups must not exceed 4,096. Tree
+Groups contain no physical Subnet placement; the host resolves that separately.
 
 ### `[app]`
 
@@ -84,16 +91,16 @@ Optional allow-list for privileged operations.
   - If `[app.whitelist]` or `principals` is omitted, whitelist checks deny all
     principals. An empty table is also deny-all.
 
-### `[subnets.<name>.pool]`
+### `[tree_specs.<name>.pool]`
 
-Controls the warm canister pool for a subnet.
+Controls the warm canister pool for a Tree.
 
 - `minimum_size: u8` – minimum number of spare canisters to keep on hand (default `0` when the table is omitted; required when the table is present).
 - `import.initial: u16` – number of canisters to import immediately before queuing the rest (defaults to `minimum_size`).
 - `import.local = ["aaaaa-aa", ...]` – canister IDs to import when built with `ICP_ENVIRONMENT=local` (also used when unset).
 - `import.ic = ["aaaaa-aa", ...]` – canister IDs to import when built with `ICP_ENVIRONMENT=ic`.
   Import is destructive (controllers reset, code uninstalled); failures are logged and skipped.
-If `pool.import.initial` is `0` and the subnet declares service roles, root
+If `pool.import.initial` is `0` and the Tree Spec declares service roles, root
 bootstrap may create new service canisters before queued imports are ready.
 
 ### `[log]`
@@ -155,26 +162,27 @@ Feature toggles tied to public standards.
 
 ---
 
-## Subnets
+## Tree Specs
 
-Declare each logical Subnet Slot under `[subnets.<name>]`. `default` is the
-required current workload slot for a managed topology.
-Canisters are declared as nested subnet canister tables such as
-`[subnets.default.canisters.app]`; Canic does not use a flat `[[canisters]]`
-array.
+Declare each permitted rooted topology under `[tree_specs.<name>]`.
+`default` has no special placement or authority meaning. Canisters are
+declared as nested Tree Spec tables such as
+`[tree_specs.default.canisters.app]`; Canic does not use a flat
+`[[canisters]]` array.
 
-### `[subnets.<name>]`
+### `[tree_specs.<name>]`
 
 - `canisters.*` – nested tables describing per-role policies (see below).
 
-Configured `kind = "service"` roles are derived as the stable subnet services.
-Root ensures those service roles exist during bootstrap and exposes them through
-`canic_subnet_index()`. Singletons, shards, replicas, and instances are created
-through their explicit placement flows instead.
+Each Tree Spec contains exactly one `kind = "root"` role. Configured
+`kind = "service"` roles are derived as stable Tree-local services. The
+current Tree Root ensures those roles exist during bootstrap. Singletons,
+shards, replicas, and instances are created through their explicit placement
+flows instead.
 
 ### Implicit `wasm_store`
 
-Every subnet always has one mandatory same-subnet `wasm_store`.
+Every Tree always has one mandatory same-Tree `wasm_store`.
 It is bootstrapped implicitly and must not be declared in `canic.toml`.
 
 Fixed `0.18` preset:
@@ -188,23 +196,24 @@ Fixed `0.18` preset:
 
 Rules:
 
-- do not define `subnets.<name>.wasm_stores.*`
-- do not define `subnets.<name>.canisters.wasm_store`
+- do not define `tree_specs.<name>.wasm_stores.*`
+- do not define `tree_specs.<name>.canisters.wasm_store`
 - ordinary deployable roles install from published chunked manifests in this store
 - inline install is reserved for bootstrapping `wasm_store` itself
 
-### `[subnets.<name>.canisters.<role>]`
+### `[tree_specs.<name>.canisters.<role>]`
 
-Each child table configures a logical canister role within the subnet. The role is derived
-from the table key (`subnets.<name>.canisters.<role>`); do not declare `role`, `type`, or
+Each child table configures a logical canister role permitted in that Tree
+Spec. The role is derived from the table key
+(`tree_specs.<name>.canisters.<role>`); do not declare `role`, `type`, or
 `sharding.role` fields.
 
 - `kind = "root" | "service" | "singleton" | "replica" | "shard" | "instance"` – required; declares how this role attaches in the topology.
   - `root` cannot define placement pools, canister-local authentication roles,
     or canister-local standards.
-  - `root` must be unique across all subnets.
-  - `subnets.default.canisters.root` must exist and set `kind = "root"`.
-  - `service` is root-created, appears in the subnet index, and may own
+  - every Tree Spec must contain exactly one `root`;
+    `[tree_specs.<name>.canisters.root]` is the conventional declaration.
+  - `service` is Tree Root-created, appears in the current local Directory, and may own
     scaling, sharding, or keyed placement binding pools.
   - `singleton`, `replica`, `shard`, and `instance` cannot own placement pools.
 - `initial_cycles = "5T"` – cycles to allocate when provisioning (defaults to 5T).
@@ -264,7 +273,7 @@ Do not add it under `canisters.*`.
 Scaling pools model interchangeable replicas with simple bounds on how many to keep alive.
 
 ```toml
-[subnets.<name>.canisters.<role>.scaling.pools.<pool>]
+[tree_specs.<name>.canisters.<role>.scaling.pools.<pool>]
 canister_role = "replica_role"
 policy.initial_workers = 1
 policy.min_workers = 2
@@ -273,7 +282,7 @@ policy.max_workers = 16
 
 Fields:
 
-- `canister_role` – canister role that represents replicas in this pool (must exist in the same subnet).
+- `canister_role` – canister role that represents replicas in this pool (must exist in the same Tree Spec).
 - `policy.initial_workers` – workers to create during canister startup warmup (default `1`).
 - `policy.min_workers` – minimum workers to keep alive (default `1`).
 - `policy.max_workers` – hard cap on workers (default `32`, set to `0` for no max).
@@ -283,12 +292,12 @@ Fields:
 Placement binding pools place keyed stateful instances.
 
 ```toml
-[subnets.<name>.canisters.<role>.binding.pools.<pool>]
+[tree_specs.<name>.canisters.<role>.binding.pools.<pool>]
 canister_role = "instance_role"
 key_name = "project"
 ```
 
-- `canister_role` – same-subnet role implementing the instance; it must have
+- `canister_role` – same-Tree-Spec role implementing the instance; it must have
   `kind = "instance"`.
 - `key_name` – non-empty logical key name used by keyed placement admission.
 
@@ -297,7 +306,7 @@ key_name = "project"
 Sharding pools manage stateful shards that own capacity-bounded partitions.
 
 ```toml
-[subnets.<name>.canisters.<role>.sharding.pools.<pool>]
+[tree_specs.<name>.canisters.<role>.sharding.pools.<pool>]
 canister_role = "shard_role"
 policy.capacity = 1000
 policy.max_shards = 64
@@ -305,7 +314,7 @@ policy.max_shards = 64
 
 Fields:
 
-- `canister_role` – canister role that implements the shard (must exist in the same subnet).
+- `canister_role` – canister role that implements the shard (must exist in the same Tree Spec).
 - `policy.capacity` – per-shard capacity (default `1000`, must be > 0).
 - `policy.initial_shards` – shards created by initial warmup (default `1`; may
   be `0`, but cannot exceed `max_shards`).
@@ -318,9 +327,6 @@ Fields:
 ```toml
 # CANIC_CONFIG_EXAMPLE_START
 controllers = ["aaaaa-aa"]
-
-[services.fleet]
-roles = ["user_hub", "scale_hub"]
 
 [app]
 name = "example"
@@ -349,10 +355,6 @@ package = "scale_hub"
 kind = "canister"
 package = "scale"
 
-[roles.minimal]
-kind = "canister"
-package = "minimal"
-
 [auth.delegated_tokens]
 enabled = false
 # root_canister_id = "..."
@@ -376,56 +378,56 @@ build_network = "local"
 [standards]
 icrc21 = true
 
-[subnets.default]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default]
 pool.minimum_size = 3
 pool.import.initial = 3
 pool.import.local = ["aaaaa-aa"]
 pool.import.ic = ["aaaaa-aa"]
 
-[subnets.default.canisters.root]
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.app]
+[tree_specs.default.canisters.app]
 kind = "service"
 
-[subnets.default.canisters.user_hub]
+[tree_specs.default.canisters.user_hub]
 kind = "service"
 topup.threshold = "10T"
 topup.amount = "5T"
 
-[subnets.default.canisters.user_hub.sharding.pools.user_shards]
+[tree_specs.default.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
 policy.initial_shards = 1
 policy.max_shards = 4
 
-[subnets.default.canisters.scale_hub]
+[tree_specs.default.canisters.scale_hub]
 kind = "service"
 topup.threshold = "10T"
 topup.amount = "5T"
 
-[subnets.default.canisters.scale_hub.scaling.pools.scales]
+[tree_specs.default.canisters.scale_hub.scaling.pools.scales]
 canister_role = "scale"
 policy.initial_workers = 1
 policy.min_workers = 2
 
-[subnets.default.canisters.scale]
+[tree_specs.default.canisters.scale]
 kind = "replica"
 
-[subnets.default.canisters.user_shard]
+[tree_specs.default.canisters.user_shard]
 kind = "shard"
-
-[subnets.general]
-
-[subnets.general.canisters.minimal]
-kind = "replica"
-initial_cycles = "3T"
 # CANIC_CONFIG_EXAMPLE_END
 ```
 
-This example defines two Subnet Slots (`default` and `general`), enables the
-pool, enables ICRC-21, and configures sharding on `user_hub` plus scaling on
-`scale_hub`. Each slot also gets one implicit `wasm_store` automatically.
+This example defines one initial Tree in the `default` Tree Group, enables the
+pool and ICRC-21, and configures sharding on `user_hub` plus scaling on
+`scale_hub`. The concrete Tree also gets one implicit `wasm_store`
+automatically. Physical Subnet placement is separate deployment input.
 
 ---
 
@@ -437,8 +439,8 @@ It does not enumerate every published template release.
 Static config owns:
 
 - user-defined canister roles and policies
-- configured service roles that root bootstraps and exposes through the subnet index
-- the Fleet service directory exported by the current Fleet root
+- Tree Specs and Tree Group scaling bounds
+- configured service roles that the current Tree Root bootstraps locally
 
 Root-authoritative runtime state owns:
 

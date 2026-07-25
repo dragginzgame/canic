@@ -78,7 +78,7 @@ fn reserve_control_plane_deployment_cost_guard(
     quota_subject: Principal,
     payer: Principal,
 ) -> Result<CostGuardPermit, InternalError> {
-    let cycle_reservation_cycles = ConfigOps::current_subnet()?
+    let cycle_reservation_cycles = ConfigOps::current_tree_spec()?
         .get_canister(role)
         .ok_or_else(|| {
             InternalError::workflow(

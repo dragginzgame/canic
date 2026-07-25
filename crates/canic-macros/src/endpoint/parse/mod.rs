@@ -37,7 +37,6 @@ pub enum AuthScopeArg {
 pub enum BuiltinPredicate {
     FleetAllowsUpdates,
     FleetIsQueryable,
-    SelfIsDefaultSubnet,
     SelfIsFleetRoot,
     CallerIsController,
     CallerIsParent,
@@ -539,7 +538,6 @@ fn builtin_from_path_tail(path: &Path) -> Option<BuiltinPredicate> {
     match (module.as_str(), last.as_str()) {
         ("fleet", "allows_updates") => Some(BuiltinPredicate::FleetAllowsUpdates),
         ("fleet", "is_queryable") => Some(BuiltinPredicate::FleetIsQueryable),
-        ("env", "is_default_subnet") => Some(BuiltinPredicate::SelfIsDefaultSubnet),
         ("env", "is_fleet_root") => Some(BuiltinPredicate::SelfIsFleetRoot),
         ("caller", "is_controller") => Some(BuiltinPredicate::CallerIsController),
         ("caller", "is_parent") => Some(BuiltinPredicate::CallerIsParent),

@@ -159,7 +159,6 @@ pub enum CallerPredicate {
 
 #[derive(Clone, Copy, Debug)]
 pub enum EnvironmentPredicate {
-    SelfIsDefaultSubnet,
     SelfIsFleetRoot,
     BuildIcOnly,
     BuildLocalOnly,
@@ -272,13 +271,6 @@ pub mod caller {
 
 pub mod env {
     use super::{AccessExpr, BuiltinPredicate, EnvironmentPredicate, builtin};
-
-    #[must_use]
-    pub const fn is_default_subnet() -> AccessExpr {
-        builtin(BuiltinPredicate::Environment(
-            EnvironmentPredicate::SelfIsDefaultSubnet,
-        ))
-    }
 
     #[must_use]
     pub const fn is_fleet_root() -> AccessExpr {

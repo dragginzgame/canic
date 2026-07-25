@@ -9,7 +9,7 @@ pub mod mapper;
 use crate::{
     InternalError,
     dto::env::EnvSnapshotResponse,
-    ids::SubnetSlotId,
+    ids::TreeSpecId,
     memory::runtime::is_memory_bootstrap_ready,
     model::env::ValidatedEnv,
     ops::runtime::env::mapper::EnvRecordMapper,
@@ -42,8 +42,8 @@ pub enum EnvOpsError {
     #[error("failed to determine current subnet principal")]
     SubnetPidUnavailable,
 
-    #[error("failed to determine current Subnet Slot")]
-    SubnetSlotUnavailable,
+    #[error("failed to determine current Tree Spec")]
+    TreeSpecUnavailable,
 
     #[error("failed to determine current parent principal")]
     ParentPidUnavailable,
@@ -96,11 +96,6 @@ impl EnvOps {
     }
 
     #[must_use]
-    pub fn is_default_subnet() -> bool {
-        Env::get_subnet_slot().is_some_and(|slot| slot.is_default())
-    }
-
-    #[must_use]
     pub fn is_root() -> bool {
         Env::get_root_pid().is_some_and(|pid| pid == canister_self())
     }
@@ -131,8 +126,8 @@ impl EnvOps {
     // ---------------------------------------------------------------------
 
     /// SAFETY: Env must be initialized; do not call during init/post_upgrade.
-    pub fn subnet_slot() -> Result<SubnetSlotId, InternalError> {
-        Env::get_subnet_slot().ok_or_else(|| EnvOpsError::SubnetSlotUnavailable.into())
+    pub fn tree_spec() -> Result<TreeSpecId, InternalError> {
+        Env::get_tree_spec().ok_or_else(|| EnvOpsError::TreeSpecUnavailable.into())
     }
 
     pub fn canister_role() -> Result<CanisterRole, InternalError> {
@@ -270,8 +265,8 @@ impl EnvOps {
         if Env::get_fleet_root_pid().is_none() {
             missing.push("fleet_root_pid");
         }
-        if Env::get_subnet_slot().is_none() {
-            missing.push("subnet_slot");
+        if Env::get_tree_spec().is_none() {
+            missing.push("tree_spec");
         }
         if Env::get_parent_pid().is_none() {
             missing.push("parent_pid");
@@ -308,8 +303,8 @@ fn required_fields_missing(data: &EnvRecord) -> Vec<&'static str> {
     if data.fleet_root_pid.is_none() {
         missing.push("fleet_root_pid");
     }
-    if data.subnet_slot.is_none() {
-        missing.push("subnet_slot");
+    if data.tree_spec.is_none() {
+        missing.push("tree_spec");
     }
     if data.subnet_pid.is_none() {
         missing.push("subnet_pid");
@@ -343,11 +338,7 @@ fn ensure_root_pid_immutable(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        ids::{CanisterRole, SubnetSlotId},
-        storage::stable::env::Env,
-        test::seams,
-    };
+    use crate::{ids::CanisterRole, storage::stable::env::Env, test::seams};
 
     ///
     /// EnvRestore
@@ -365,7 +356,7 @@ mod tests {
         EnvData {
             record: EnvRecord {
                 fleet_root_pid: Some(root_pid),
-                subnet_slot: Some(SubnetSlotId::DEFAULT),
+                tree_spec: Some("default".parse().expect("default Tree Spec ID")),
                 subnet_pid: Some(root_pid),
                 root_pid: Some(root_pid),
                 canister_role: Some(CanisterRole::ROOT),

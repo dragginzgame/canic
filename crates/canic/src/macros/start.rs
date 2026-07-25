@@ -124,12 +124,13 @@ macro_rules! __canic_start_local_lifecycle_core {
         #[doc(hidden)]
         fn __canic_local_env(
             role: $crate::__internal::core::ids::CanisterRole,
+            tree_spec: $crate::__internal::core::ids::TreeSpecId,
         ) -> ::canic::dto::env::EnvBootstrapArgs {
             let root_pid = __canic_local_principal(1);
             let subnet_pid = __canic_local_principal(2);
             ::canic::dto::env::EnvBootstrapArgs {
                 fleet_root_pid: Some(root_pid),
-                subnet_slot: Some($crate::__internal::core::ids::SubnetSlotId::DEFAULT),
+                tree_spec: Some(tree_spec),
                 subnet_pid: Some(subnet_pid),
                 root_pid: Some(root_pid),
                 canister_role: Some(role),
@@ -141,7 +142,11 @@ macro_rules! __canic_start_local_lifecycle_core {
         fn init(args: Option<Vec<u8>>) {
             let (config, config_source, config_path) = __canic_compiled_config();
             let role = $canister_role;
-            let env = __canic_local_env(role.clone());
+            let tree_spec = config
+                .sole_initial_tree_spec_id()
+                .cloned()
+                .expect("local bootstrap requires exactly one initial Tree");
+            let env = __canic_local_env(role.clone(), tree_spec);
 
             $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_local_nonroot_canister_before_bootstrap(
                 role,
@@ -459,7 +464,7 @@ macro_rules! start_local {
     };
 }
 
-/// Configure lifecycle hooks and the canonical endpoint bundle for a subnet-local
+/// Configure lifecycle hooks and the canonical endpoint bundle for a Tree-local
 /// `wasm_store` canister.
 ///
 /// This specialized macro exists so downstreams can use the built-in Canic

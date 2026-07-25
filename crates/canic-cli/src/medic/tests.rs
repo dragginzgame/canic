@@ -636,9 +636,6 @@ fn project_config_quality_checks_validate_role_package_metadata() {
         &root,
         r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 
@@ -654,10 +651,15 @@ package = "app"
 kind = "canister"
 package = "store"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.app]
+[tree_specs.default.canisters.app]
 kind = "service"
 "#,
     );
@@ -690,9 +692,6 @@ fn project_config_quality_checks_fail_on_missing_or_mismatched_package_metadata(
         &root,
         r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 
@@ -708,13 +707,18 @@ package = "app"
 kind = "canister"
 package = "store"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.app]
+[tree_specs.default.canisters.app]
 kind = "service"
 
-[subnets.default.canisters.store]
+[tree_specs.default.canisters.store]
 kind = "service"
 "#,
     );
@@ -750,9 +754,6 @@ fn project_config_quality_checks_report_missing_required_canic_features() {
         &root,
         r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 
@@ -764,13 +765,18 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.app]
+[tree_specs.default.canisters.app]
 kind = "service"
 
-[subnets.default.canisters.app.auth]
+[tree_specs.default.canisters.app.auth]
 role_attestation_cache = true
 "#,
     );
@@ -820,9 +826,6 @@ fn project_config_quality_checks_accept_required_canic_features() {
         &root,
         r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 
@@ -834,13 +837,18 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.app]
+[tree_specs.default.canisters.app]
 kind = "service"
 
-[subnets.default.canisters.app.auth]
+[tree_specs.default.canisters.app.auth]
 role_attestation_cache = true
 "#,
     );
@@ -881,9 +889,6 @@ fn project_config_quality_checks_reject_workspace_canic_features() {
         &root,
         r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 
@@ -895,13 +900,18 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.app]
+[tree_specs.default.canisters.app]
 kind = "service"
 
-[subnets.default.canisters.app.auth]
+[tree_specs.default.canisters.app.auth]
 role_attestation_cache = true
 "#,
     );
@@ -941,9 +951,6 @@ fn project_config_quality_checks_reject_package_feature_forwarding() {
         &root,
         r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 
@@ -955,10 +962,15 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.app]
+[tree_specs.default.canisters.app]
 kind = "service"
 "#,
     );

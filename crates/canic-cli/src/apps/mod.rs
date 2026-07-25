@@ -246,7 +246,7 @@ where
             &config_path,
             &options.app,
             &options.role,
-            &options.subnet,
+            &options.tree_spec,
             &options.kind,
         )?;
         println!(
@@ -258,7 +258,7 @@ where
             &config_path,
             &options.app,
             &options.role,
-            &options.subnet,
+            &options.tree_spec,
             &options.kind,
         )?;
         println!(

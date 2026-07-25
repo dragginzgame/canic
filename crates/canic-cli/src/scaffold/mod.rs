@@ -245,7 +245,7 @@ where
     println!("  cargo check -p {}", result.package_name);
     println!("  canic medic project --ci");
     println!(
-        "  canic app role attach {} {} --subnet <subnet>",
+        "  canic app role attach {} {} --tree-spec <tree-spec>",
         result.app, result.role
     );
     println!(
@@ -972,9 +972,6 @@ fn canic_toml(name: &str) -> String {
         r#"# Minimal Canic App config.
 
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "{name}"
 
@@ -989,10 +986,15 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.app]
+[tree_specs.default.canisters.app]
 kind = "service"
 "#
     )

@@ -1,8 +1,8 @@
-//! Module: config::schema::subnet::tests
+//! Module: config::schema::tree_spec::tests
 //!
-//! Responsibility: verify subnet schema defaults, parsing, and validation behavior.
-//! Does not own: production subnet schemas or placement workflows.
-//! Boundary: test-only checks over subnet config data shapes.
+//! Responsibility: verify tree_spec schema defaults, parsing, and validation behavior.
+//! Does not own: production tree_spec schemas or placement workflows.
+//! Boundary: test-only checks over tree_spec config data shapes.
 
 use super::*;
 use crate::cdk::types::TC;
@@ -164,7 +164,7 @@ max_refill_e8s_per_call = 100000000
 max_refill_e8s_per_day = 1000000000
 "#,
     )
-    .expect_err("follow-up treasury knobs should not parse in the current subnet config");
+    .expect_err("follow-up treasury knobs should not parse in the current tree_spec config");
 }
 
 #[test]
@@ -196,7 +196,7 @@ fn nonroot_icp_refill_policy_is_rejected() {
     };
     canisters.insert(CanisterRole::from("app"), cfg);
 
-    SubnetConfig {
+    TreeSpecConfig {
         canisters,
         ..Default::default()
     }
@@ -279,16 +279,16 @@ fn root_canister_rejects_configured_auth_roles() {
         role_attestation_cache: true,
     };
 
-    let mut subnet = SubnetConfig::default();
-    subnet.canisters.insert(CanisterRole::ROOT, cfg);
+    let mut tree_spec = TreeSpecConfig::default();
+    tree_spec.canisters.insert(CanisterRole::ROOT, cfg);
 
-    subnet.validate().expect_err(
+    tree_spec.validate().expect_err(
         "root delegated auth verifier/issuer/cache roles must be implicit services, not config toggles",
     );
 }
 
 #[test]
-fn sharding_pool_references_must_exist_in_subnet() {
+fn sharding_pool_references_must_exist_in_tree_spec() {
     let managing_role: CanisterRole = "shard_hub".into();
     let mut canisters = BTreeMap::new();
 
@@ -308,39 +308,39 @@ fn sharding_pool_references_must_exist_in_subnet() {
 
     canisters.insert(managing_role, manager_cfg);
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect_err("expected missing replica role to fail");
 }
 
 #[test]
-fn service_roles_are_derived_for_auto_create_and_subnet_directory() {
-    let mut subnet = SubnetConfig::default();
-    subnet.canisters.insert(
+fn service_roles_are_derived_for_auto_create_and_tree_directory() {
+    let mut tree_spec = TreeSpecConfig::default();
+    tree_spec.canisters.insert(
         CanisterRole::from("app"),
         base_canister_config(CanisterKind::Service),
     );
-    subnet.canisters.insert(
+    tree_spec.canisters.insert(
         CanisterRole::from("ledger"),
         base_canister_config(CanisterKind::Singleton),
     );
-    subnet.canisters.insert(
+    tree_spec.canisters.insert(
         CanisterRole::from("worker"),
         base_canister_config(CanisterKind::Replica),
     );
 
-    let auto_create = subnet.auto_create_roles();
-    let subnet_directory = subnet.subnet_directory_roles();
+    let auto_create = tree_spec.auto_create_roles();
+    let tree_directory = tree_spec.tree_directory_roles();
 
     assert!(auto_create.contains("app"));
     assert!(!auto_create.contains("ledger"));
     assert!(!auto_create.contains("worker"));
-    assert_eq!(auto_create, subnet_directory);
+    assert_eq!(auto_create, tree_directory);
 }
 
 #[test]
@@ -371,12 +371,12 @@ fn sharding_pool_policy_requires_positive_capacity_and_shards() {
         },
     );
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect_err("expected invalid sharding policy to fail");
 }
@@ -417,12 +417,12 @@ fn sharding_pool_policy_rejects_initial_shards_above_max() {
         },
     );
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect_err("expected oversized initial_shards to fail");
 }
@@ -436,12 +436,12 @@ fn canister_role_name_must_fit_bound() {
         base_canister_config(CanisterKind::Singleton),
     );
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect_err("expected canister role length to fail");
 }
@@ -468,12 +468,12 @@ fn sharding_pool_name_must_fit_bound() {
         },
     );
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect_err("expected sharding pool name length to fail");
 }
@@ -506,12 +506,12 @@ fn scaling_pool_policy_requires_max_ge_min_when_bounded() {
 
     canisters.insert(CanisterRole::from("manager"), manager_cfg);
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect_err("expected invalid scaling policy to fail");
 }
@@ -552,12 +552,12 @@ fn scaling_pool_policy_rejects_initial_workers_above_bounded_max() {
 
     canisters.insert(CanisterRole::from("manager"), manager_cfg);
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect_err("expected oversized initial_workers to fail");
 }
@@ -586,18 +586,18 @@ fn scaling_pool_name_must_fit_bound() {
 
     canisters.insert(CanisterRole::from("manager"), manager_cfg);
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect_err("expected scaling pool name length to fail");
 }
 
 #[test]
-fn binding_pool_references_must_exist_in_subnet() {
+fn binding_pool_references_must_exist_in_tree_spec() {
     let managing_role: CanisterRole = "project_hub".into();
     let mut canisters = BTreeMap::new();
 
@@ -617,12 +617,12 @@ fn binding_pool_references_must_exist_in_subnet() {
 
     canisters.insert(managing_role, manager_cfg);
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect_err("expected missing binding target role to fail");
 }
@@ -653,12 +653,12 @@ fn binding_pool_target_must_be_instance_kind() {
         },
     );
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect_err("expected non-instance binding target role to fail");
 }
@@ -689,12 +689,12 @@ fn binding_pool_requires_non_empty_key_name() {
         },
     );
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect_err("expected empty binding key name to fail");
 }
@@ -725,12 +725,12 @@ fn service_kind_can_own_binding_pool() {
         },
     );
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect("service manager should accept binding pools");
 }
@@ -760,20 +760,20 @@ fn singleton_kind_cannot_own_manager_pools() {
         },
     );
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect_err("singleton manager pools should be rejected");
 }
 
 #[test]
 fn wasm_store_canister_config_is_implicit() {
-    let subnet = SubnetConfig::default();
-    let cfg = subnet
+    let tree_spec = TreeSpecConfig::default();
+    let cfg = tree_spec
         .get_canister(&CanisterRole::WASM_STORE)
         .expect("expected implicit wasm_store canister");
 
@@ -789,12 +789,12 @@ fn explicit_wasm_store_canister_config_is_rejected() {
         base_canister_config(CanisterKind::Singleton),
     );
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect_err("expected explicit wasm_store config to fail");
 }
@@ -813,12 +813,12 @@ fn topup_amount_above_half_threshold_fails() {
 
     canisters.insert(CanisterRole::from("app"), cfg);
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect_err("expected topup amount above half threshold to fail");
 }
@@ -837,12 +837,12 @@ fn topup_amount_equal_half_threshold_is_valid() {
 
     canisters.insert(CanisterRole::from("app"), cfg);
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect("expected topup amount equal to half threshold to validate");
 }
@@ -861,12 +861,12 @@ fn topup_amount_below_half_threshold_is_valid() {
 
     canisters.insert(CanisterRole::from("app"), cfg);
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect("expected topup amount below half threshold to validate");
 }
@@ -882,12 +882,12 @@ fn default_topup_satisfies_half_threshold_invariant() {
 
     canisters.insert(CanisterRole::from("app"), cfg);
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect("expected default topup to satisfy half-threshold invariant");
 }
@@ -906,12 +906,12 @@ fn cycles_funding_zero_max_per_request_fails() {
 
     canisters.insert(CanisterRole::from("app"), cfg);
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect_err("expected zero max_per_request to fail");
 }
@@ -930,12 +930,12 @@ fn cycles_funding_zero_max_per_child_fails() {
 
     canisters.insert(CanisterRole::from("app"), cfg);
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect_err("expected zero max_per_child to fail");
 }
@@ -954,12 +954,12 @@ fn cycles_funding_zero_cooldown_fails() {
 
     canisters.insert(CanisterRole::from("app"), cfg);
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect_err("expected zero cooldown to fail");
 }
@@ -979,12 +979,12 @@ fn cycles_funding_request_limit_cannot_exceed_child_budget() {
 
     canisters.insert(CanisterRole::from("app"), cfg);
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect_err("expected request limit above child budget to fail");
 }
@@ -1006,12 +1006,12 @@ fn root_icp_refill_zero_max_refill_fails() {
 
     canisters.insert(CanisterRole::ROOT, cfg);
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect_err("expected zero icp refill max refill to fail");
 }
@@ -1033,12 +1033,12 @@ fn root_icp_refill_zero_rate_gate_fails() {
 
     canisters.insert(CanisterRole::ROOT, cfg);
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect_err("expected zero icp refill rate gate to fail");
 }
@@ -1051,19 +1051,19 @@ fn shard_kind_allows_missing_sharding_config() {
         base_canister_config(CanisterKind::Shard),
     );
 
-    let subnet = SubnetConfig {
+    let tree_spec = TreeSpecConfig {
         canisters,
         ..Default::default()
     };
 
-    subnet
+    tree_spec
         .validate()
         .expect("expected shard config without sharding to validate");
 }
 
 #[test]
 fn explicit_canister_role_is_rejected() {
-    toml::from_str::<SubnetConfig>(
+    toml::from_str::<TreeSpecConfig>(
         r#"
 [canisters.app]
 role = "app"
@@ -1075,7 +1075,7 @@ kind = "singleton"
 
 #[test]
 fn explicit_canister_type_is_rejected() {
-    toml::from_str::<SubnetConfig>(
+    toml::from_str::<TreeSpecConfig>(
         r#"
 [canisters.app]
 kind = "singleton"
@@ -1087,7 +1087,7 @@ type = "singleton"
 
 #[test]
 fn explicit_sharding_role_is_rejected() {
-    toml::from_str::<SubnetConfig>(
+    toml::from_str::<TreeSpecConfig>(
         r#"
 [canisters.manager]
 kind = "singleton"
@@ -1101,7 +1101,7 @@ role = "shard"
 
 #[test]
 fn instance_kind_parses() {
-    let subnet = toml::from_str::<SubnetConfig>(
+    let tree_spec = toml::from_str::<TreeSpecConfig>(
         r#"
 [canisters.instance_role]
 kind = "instance"
@@ -1109,7 +1109,7 @@ kind = "instance"
     )
     .expect("expected instance kind to parse");
 
-    let cfg = subnet
+    let cfg = tree_spec
         .canisters
         .get(&CanisterRole::from("instance_role"))
         .expect("instance role config should exist");

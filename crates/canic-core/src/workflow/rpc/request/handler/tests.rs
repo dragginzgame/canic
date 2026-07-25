@@ -107,7 +107,10 @@ fn configure_root_env(root_pid: Principal) -> EnvRestore {
     Env::import(EnvData {
         record: EnvRecord {
             root_pid: Some(root_pid),
-            subnet_slot: Some(crate::ids::SubnetSlotId::DEFAULT),
+            tree_spec: Some(
+                crate::ids::TreeSpecId::try_from(String::from("default"))
+                    .expect("default Tree Spec ID"),
+            ),
             ..EnvRecord::default()
         },
     });

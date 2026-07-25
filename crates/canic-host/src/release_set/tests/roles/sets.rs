@@ -5,9 +5,6 @@ use canic_core::bootstrap::{ConfigError, parse_config_model};
 fn configured_release_roles_filters_root_and_wasm_store() {
     let config = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -26,13 +23,18 @@ kind = "canister"
 package = "scale_hub"
 [app.whitelist]
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.user_hub]
+[tree_specs.default.canisters.user_hub]
 kind = "service"
 
-[subnets.default.canisters.scale_hub]
+[tree_specs.default.canisters.scale_hub]
 kind = "service"
 "#;
 
@@ -46,9 +48,6 @@ kind = "service"
 fn configured_deployable_surfaces_exclude_declared_only_roles() {
     let config = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 
@@ -64,10 +63,15 @@ package = "user_hub"
 kind = "canister"
 package = "store"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.user_hub]
+[tree_specs.default.canisters.user_hub]
 kind = "service"
 "#;
 
@@ -91,10 +95,11 @@ fn configured_deployable_roles_include_root_first() {
 }
 
 #[test]
-fn configured_release_roles_rejects_multiple_root_subnets() {
-    let error = parse_config_model(MULTI_ROOT_CONFIG).expect_err("multiple root roles must reject");
+fn configured_release_roles_supports_multiple_tree_specs() {
+    let config = parse_config_model(MULTI_ROOT_CONFIG).expect("multiple Tree Specs");
+    let roles = configured_release_roles_from_config(&config);
 
-    assert!(matches!(error, ConfigError::ConfigSchema(_)));
+    assert!(roles.is_empty());
 }
 
 #[test]

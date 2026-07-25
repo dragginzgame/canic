@@ -41,9 +41,6 @@ fn configured_role_capabilities_resolves_exact_role_package_contracts() {
 fn configured_role_metrics_profiles_lists_resolved_profiles() {
     let config = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 
@@ -79,22 +76,27 @@ package = "scale"
 kind = "canister"
 package = "role_baseline"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.user_hub]
+[tree_specs.default.canisters.user_hub]
 kind = "service"
 
-[subnets.default.canisters.user_hub.sharding.pools.user_shards]
+[tree_specs.default.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
 
-[subnets.default.canisters.user_shard]
+[tree_specs.default.canisters.user_shard]
 kind = "shard"
 
-[subnets.default.canisters.scale_replica]
+[tree_specs.default.canisters.scale_replica]
 kind = "replica"
 
-[subnets.default.canisters.scale_replica.metrics]
+[tree_specs.default.canisters.scale_replica.metrics]
 profile = "full"
 "#;
     let profiles = configured_role_metrics_profiles_from_config(&parsed_config(config));
@@ -112,9 +114,6 @@ profile = "full"
 fn configured_role_topups_lists_configured_policy_summaries() {
     let config = r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -153,10 +152,15 @@ kind = "canister"
 package = "role_baseline"
 [app.whitelist]
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.scale_hub]
+[tree_specs.default.canisters.scale_hub]
 kind = "service"
 topup.threshold = "10T"
 topup.amount = "4T"

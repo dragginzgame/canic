@@ -14,14 +14,16 @@ fn configured_app_name_rejects_missing_config_identity() {
     let error = canic_core::bootstrap::parse_config_model(
         r#"
 controllers = []
-[services.fleet]
-roles = []
-
 [app]
 init_mode = "enabled"
 [app.whitelist]
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 "#,
     )
@@ -45,9 +47,6 @@ controllers = [
   "aaaaa-aa",
   "aaaaa-aa",
 ]
-[services.fleet]
-roles = []
-
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -86,7 +85,12 @@ kind = "canister"
 package = "role_baseline"
 [app.whitelist]
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 "#,
     );

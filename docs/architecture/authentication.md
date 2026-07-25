@@ -637,11 +637,11 @@ project_instance = 1
 Per-canister auth roles:
 
 ```toml
-[subnets.default.canisters.user_shard.auth]
+[tree_specs.default.canisters.user_shard.auth]
 delegated_token_issuer = true
 delegated_token_verifier = true
 
-[subnets.default.canisters.project_instance.auth]
+[tree_specs.default.canisters.project_instance.auth]
 delegated_token_verifier = true
 ```
 

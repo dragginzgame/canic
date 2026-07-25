@@ -58,7 +58,7 @@ pub(super) async fn allocate_canister(
         ProvisioningMetricOutcome::Started,
         ProvisioningMetricReason::Ok,
     );
-    let cfg = match ConfigOps::current_subnet_canister(role) {
+    let cfg = match ConfigOps::current_tree_canister(role) {
         Ok(cfg) => cfg,
         Err(err) => {
             record_provisioning_failure(role, ProvisioningMetricOperation::Allocate, &err);

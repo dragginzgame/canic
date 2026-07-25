@@ -71,7 +71,7 @@ impl FleetDirectoryOps {
     pub(crate) fn filter_args_for_local_config(
         args: FleetDirectoryInput,
     ) -> Result<FleetDirectoryInput, InternalError> {
-        let allowed = ConfigOps::get()?.services.fleet.roles.clone();
+        let allowed = ConfigOps::get()?.fleet_directory_roles();
         Ok(FleetDirectoryInput {
             provenance: args.provenance,
             entries: args
@@ -96,7 +96,7 @@ impl FleetDirectoryOps {
     ) -> Result<PreparedFleetDirectoryImport, InternalError> {
         let data = FleetDirectoryDataMapper::input_to_data(args);
         ensure_unique_roles(&data.entries, "Fleet")?;
-        let allowed = ConfigOps::get()?.services.fleet.roles.clone();
+        let allowed = ConfigOps::get()?.fleet_directory_roles();
         ensure_allowed_roles(&data.entries, "Fleet", &allowed)?;
 
         Ok(PreparedFleetDirectoryImport(data))
@@ -108,7 +108,7 @@ impl FleetDirectoryOps {
 
     pub(crate) fn import(data: FleetDirectoryData) -> Result<(), InternalError> {
         ensure_unique_roles(&data.entries, "Fleet")?;
-        let required = ConfigOps::get()?.services.fleet.roles.clone();
+        let required = ConfigOps::get()?.fleet_directory_roles();
         ensure_allowed_roles(&data.entries, "Fleet", &required)?;
         ensure_required_roles(&data.entries, "Fleet", &required)?;
         FleetDirectory::import(data);

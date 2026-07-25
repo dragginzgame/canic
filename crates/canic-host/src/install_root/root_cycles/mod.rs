@@ -10,7 +10,7 @@ pub(super) fn add_local_root_create_cycles_arg(
         return Ok(());
     }
 
-    let cycles = AppConfigSnapshot::load(config_path)?.local_root_create_cycles();
+    let cycles = AppConfigSnapshot::load(config_path)?.local_root_create_cycles()?;
     command.args(["--cycles", &cycles.to_string()]);
     Ok(())
 }

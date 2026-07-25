@@ -6,9 +6,6 @@
 # Global Settings
 # ----------------------------------------------------------------
 controllers = []
-[services.fleet]
-roles = ["user_hub", "scale_hub"]
-
 [app]
 name = "test"
 init_mode = "enabled"
@@ -70,65 +67,65 @@ max_revocation_latency_ns = 60000000000
 icrc21 = true # Enable ICRC-21 capability
 
 # ----------------------------------------------------------------
-# Subnet Definitions
+# Tree Definitions
 # ----------------------------------------------------------------
-# Each subnet defines how its canisters behave and when they top up.
+# Each Tree Spec defines its permitted canisters and local policies.
 # ----------------------------------------------------------------
 
 # ================================================================
-#  DEFAULT SUBNET SLOT
+#  DEFAULT TREE SPEC
 # ================================================================
-[subnets.default]
+[tree_specs.default]
 pool.minimum_size = 3
 
 # --- Root ---
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
 # --- App ---
-[subnets.default.canisters.app]
+[tree_specs.default.canisters.app]
 kind = "service"
 topup = {}
 
 # --- User Hub ---
-[subnets.default.canisters.user_hub]
+[tree_specs.default.canisters.user_hub]
 kind = "service"
 topup = {}
 
 # --- User Hub Pools ---
-[subnets.default.canisters.user_hub.sharding.pools.user_shards]
+[tree_specs.default.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
 policy.initial_shards = 1
 policy.max_shards = 4
 
 # --- User Shard ---
-[subnets.default.canisters.user_shard]
+[tree_specs.default.canisters.user_shard]
 kind = "shard"
 topup = {}
 
-[subnets.default.canisters.user_shard.auth]
+[tree_specs.default.canisters.user_shard.auth]
 delegated_token_issuer = true
 delegated_token_verifier = true
 role_attestation_cache = true
 
 # --- Scale Hub ---
-[subnets.default.canisters.scale_hub]
+[tree_specs.default.canisters.scale_hub]
 kind = "service"
 topup = {}
 
 # --- Scale Hub Pools ---
-[subnets.default.canisters.scale_hub.scaling.pools.scales]
+[tree_specs.default.canisters.scale_hub.scaling.pools.scales]
 canister_role = "scale_replica"
 policy.initial_workers = 1
 policy.min_workers = 2
 
 # --- Scale Replica ---
-[subnets.default.canisters.scale_replica]
+[tree_specs.default.canisters.scale_replica]
 kind = "replica"
 topup = {}
-
-# ================================================================
-#  GENERAL SUBNET
-# ================================================================
-[subnets.general]

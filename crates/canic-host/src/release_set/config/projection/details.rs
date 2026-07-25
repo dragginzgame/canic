@@ -9,28 +9,28 @@ pub(in crate::release_set) fn configured_role_details_from_config(
 ) -> BTreeMap<String, Vec<String>> {
     let mut details = BTreeMap::<String, BTreeSet<String>>::new();
 
-    for role in &config.services.fleet.roles {
+    for role in config.fleet_directory_roles() {
         details
             .entry(role.as_str().to_string())
             .or_default()
-            .insert("services.fleet".to_string());
+            .insert("fleet_directory".to_string());
     }
 
-    for subnet in config.subnets.values() {
-        for role in subnet.auto_create_roles() {
+    for (tree_spec_id, tree_spec) in &config.tree_specs {
+        for role in tree_spec.auto_create_roles() {
             details
                 .entry(role.as_str().to_string())
                 .or_default()
-                .insert("auto_create".to_string());
+                .insert(format!("tree_specs.{tree_spec_id}:auto_create"));
         }
-        for role in subnet.subnet_directory_roles() {
+        for role in tree_spec.tree_directory_roles() {
             details
                 .entry(role.as_str().to_string())
                 .or_default()
-                .insert("subnet_directory".to_string());
+                .insert(format!("tree_specs.{tree_spec_id}:tree_directory"));
         }
 
-        for (role, canister) in &subnet.canisters {
+        for (role, canister) in &tree_spec.canisters {
             let role_details = details.entry(role.as_str().to_string()).or_default();
             let profile = canister.resolved_metrics_profile(role);
             let profile_source = if canister.metrics.profile.is_some() {

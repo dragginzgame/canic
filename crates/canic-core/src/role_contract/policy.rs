@@ -123,8 +123,8 @@ pub fn derive_role_capabilities(
         capabilities.insert(RoleCapabilityKey::RootControlPlane);
     }
 
-    for subnet in config.subnets.values() {
-        let Some(canister) = subnet.canisters.get(role) else {
+    for tree_spec in config.tree_specs.values() {
+        let Some(canister) = tree_spec.canisters.get(role) else {
             continue;
         };
 
@@ -152,8 +152,8 @@ pub fn derive_role_capabilities(
     }
 
     if capabilities.contains(&RoleCapabilityKey::Root)
-        && config.subnets.values().any(|subnet| {
-            subnet
+        && config.tree_specs.values().any(|tree_spec| {
+            tree_spec
                 .canisters
                 .values()
                 .any(|canister| canister.auth.role_attestation_cache)

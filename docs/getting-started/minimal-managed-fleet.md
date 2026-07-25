@@ -7,8 +7,7 @@ canisters. Use this as the reference before adapting a product canister layout.
 This guide tracks the current Canic scaffold shape. For new fleets, prefer
 `canic app create <name>` and keep all `canic` dependencies on the same
 release as the installed `canic` CLI. The current schema uses
-`[services.fleet].roles`, `[app].name`, subnet canister tables, `topup`, and
-`canic::finish!()`.
+`[app].name`, Tree Specs, Tree Groups, `topup`, and `canic::finish!()`.
 
 The root manages lifecycle, topology, and artifact staging. It does not proxy
 ordinary application methods. After install, callers resolve child canister IDs
@@ -99,13 +98,11 @@ environments:
 
 ## Fleet Config
 
-Declare canisters under subnet tables. Do not use a flat `[[canisters]]` list.
+Declare permitted rooted topologies as Tree Specs and their scaling bounds as
+Tree Groups. Do not use a flat `[[canisters]]` list.
 
 ```toml
 controllers = []
-
-[services.fleet]
-roles = []
 
 [app]
 name = "example"
@@ -122,14 +119,19 @@ package = "hub"
 kind = "canister"
 package = "registry"
 
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 
-[subnets.default.canisters.hub]
+[tree_specs.default.canisters.hub]
 kind = "service"
 topup = {}
 
-[subnets.default.canisters.registry]
+[tree_specs.default.canisters.registry]
 kind = "service"
 topup = {}
 ```

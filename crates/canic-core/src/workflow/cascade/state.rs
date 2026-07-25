@@ -387,7 +387,7 @@ mod state_apply_tests {
         },
         ids::{
             AppId, CanisterRole, CanonicalNetworkId, FleetBinding, FleetId, FleetKey,
-            ReleaseBuildId, ReleaseBuildNonce, SubnetSlotId,
+            ReleaseBuildId, ReleaseBuildNonce, TreeSpecId,
         },
         ops::storage::{
             directory::{fleet::FleetDirectoryOps, subnet::SubnetDirectoryOps},
@@ -408,7 +408,9 @@ mod state_apply_tests {
         let root = p(1);
         let original = p(2);
         let replacement = p(3);
-        let missing_subnet = SubnetSlotId::from("missing");
+        let missing_tree_spec = "missing"
+            .parse::<TreeSpecId>()
+            .expect("missing Tree Spec ID");
         let fleet = FleetBinding {
             fleet: FleetKey {
                 canonical_network_id: CanonicalNetworkId::public_ic(),
@@ -419,9 +421,12 @@ mod state_apply_tests {
 
         let _config = ConfigTestBuilder::new()
             .with_default_canister_kind(service.clone(), CanisterKind::Service)
-            .with_fleet_service(service.clone())
             .install();
-        import_test_env(service.clone(), SubnetSlotId::DEFAULT, root);
+        import_test_env(
+            service.clone(),
+            TreeSpecId::try_from(String::from("default")).expect("default Tree Spec ID"),
+            root,
+        );
 
         FleetActivationOps::reset_for_tests();
         let release = ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([5; 32]));
@@ -459,7 +464,7 @@ mod state_apply_tests {
             }],
         })
         .expect("seed Subnet Directory");
-        import_test_env(service.clone(), missing_subnet, root);
+        import_test_env(service.clone(), missing_tree_spec, root);
         let snapshot = StateSnapshot {
             fleet_state: Some(FleetStateInput {
                 mode: FleetMode::Enabled,
@@ -479,7 +484,7 @@ mod state_apply_tests {
         };
 
         StateCascadeWorkflow::apply_state_with_activation(&snapshot, Some([7; 32]))
-            .expect_err("unknown local Subnet Slot must reject the complete snapshot");
+            .expect_err("unknown local Tree Spec must reject the complete snapshot");
 
         assert_eq!(FleetStateOps::snapshot_input(), original_state);
         assert_eq!(FleetDirectoryOps::get(&service), Some(original));

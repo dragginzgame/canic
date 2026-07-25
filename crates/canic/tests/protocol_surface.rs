@@ -133,15 +133,14 @@ fn fleet_state_and_cascade_candid_shapes_use_the_current_contract() {
 }
 
 #[test]
-fn environment_candid_shapes_use_fleet_root_and_subnet_slot() {
+fn environment_candid_shapes_use_fleet_root_and_tree_spec() {
     for env in [
         candid_type_env::<EnvBootstrapArgs>(),
         candid_type_env::<EnvSnapshotResponse>(),
     ] {
         assert!(
-            env.contains("fleet_root_pid : opt principal")
-                && env.contains("subnet_slot : opt text"),
-            "environment Candid must expose Fleet root and Subnet Slot identity:\n{env}"
+            env.contains("fleet_root_pid : opt principal") && env.contains("tree_spec : opt text"),
+            "environment Candid must expose Fleet root and Tree Spec identity:\n{env}"
         );
     }
 }

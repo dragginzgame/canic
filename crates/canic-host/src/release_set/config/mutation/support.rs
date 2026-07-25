@@ -1,5 +1,6 @@
 use crate::release_set::config::{AppConfigError, AppConfigNameField, AppConfigNameIssue};
 use canic_core::bootstrap::compiled::{CanisterRoleNameIssue, validate_canister_role_name};
+use canic_core::ids::{TreeSpecId, TreeSpecIdParseError};
 
 pub(super) fn admit_canister_role_name(role: &str) -> Result<(), AppConfigError> {
     validate_canister_role_name(role).map_err(|issue| AppConfigError::InvalidName {
@@ -17,25 +18,21 @@ const fn map_canister_role_name_issue(issue: CanisterRoleNameIssue) -> AppConfig
     }
 }
 
-pub(super) fn validate_subnet_name(subnet: &str) -> Result<(), AppConfigError> {
-    if subnet.is_empty() {
-        return Err(AppConfigError::InvalidName {
-            field: AppConfigNameField::Subnet,
-            issue: AppConfigNameIssue::Empty,
-            value: subnet.to_string(),
-        });
-    }
-    if !subnet
-        .bytes()
-        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
-    {
-        return Err(AppConfigError::InvalidName {
-            field: AppConfigNameField::Subnet,
-            issue: AppConfigNameIssue::InvalidCharacters,
-            value: subnet.to_string(),
-        });
-    }
-    Ok(())
+pub(super) fn validate_tree_spec_id(tree_spec: &str) -> Result<(), AppConfigError> {
+    tree_spec
+        .parse::<TreeSpecId>()
+        .map(|_| ())
+        .map_err(|error| AppConfigError::InvalidName {
+            field: AppConfigNameField::TreeSpec,
+            issue: match error {
+                TreeSpecIdParseError::Empty => AppConfigNameIssue::Empty,
+                TreeSpecIdParseError::TooLong { max_bytes, .. } => {
+                    AppConfigNameIssue::TooLong { max_bytes }
+                }
+                TreeSpecIdParseError::InvalidCharacters => AppConfigNameIssue::InvalidCharacters,
+            },
+            value: tree_spec.to_string(),
+        })
 }
 
 pub(super) fn validate_attach_kind(kind: &str) -> Result<(), AppConfigError> {

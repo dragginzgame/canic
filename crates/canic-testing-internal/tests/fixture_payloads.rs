@@ -1,7 +1,7 @@
 use candid::{decode_args, decode_one};
 use canic::{
     dto::abi::v1::CanisterInitPayload,
-    ids::{CanisterRole, SubnetSlotId},
+    ids::{CanisterRole, TreeSpecId},
 };
 use canic_testing_internal::{
     canister::{APP, SCALE_HUB, SCALE_REPLICA, TEST, USER_HUB, USER_SHARD, WASM_STORE},
@@ -38,7 +38,7 @@ fn invalid_init_args_encode_missing_env_fields() {
     assert_eq!(payload.install_id, identity.install_id);
     assert_eq!(payload.release_build_id, identity.release_build_id);
     assert!(payload.env.fleet_root_pid.is_none());
-    assert!(payload.env.subnet_slot.is_none());
+    assert!(payload.env.tree_spec.is_none());
     assert!(payload.env.subnet_pid.is_none());
     assert!(payload.env.root_pid.is_none());
     assert!(payload.env.canister_role.is_none());
@@ -58,5 +58,10 @@ fn upgrade_args_encode_empty_tuple() {
 fn role_constants_match_core_role_helpers() {
     assert_eq!(CanisterRole::WASM_STORE, WASM_STORE);
     assert!(WASM_STORE.is_wasm_store());
-    assert_eq!(SubnetSlotId::DEFAULT.as_str(), "default");
+    assert_eq!(
+        TreeSpecId::try_from(String::from("default"))
+            .expect("default Tree Spec ID")
+            .as_str(),
+        "default"
+    );
 }

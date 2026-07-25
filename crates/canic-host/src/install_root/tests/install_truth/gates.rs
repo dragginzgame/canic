@@ -60,7 +60,12 @@ fn install_truth_artifact_gate_blocks_materialized_digest_drift() {
         &config_path,
         demo_config_source(
             r#"
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 "#,
         ),
@@ -194,7 +199,12 @@ fn install_truth_gate_blocks_missing_expected_root_canister() {
         &config_path,
         demo_config_source(
             r#"
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 "#,
         ),
@@ -269,7 +279,12 @@ fn install_truth_gate_blocks_all_safety_report_hard_failures() {
         &config_path,
         demo_config_source(
             r#"
-[subnets.default.canisters.root]
+[tree_groups.default]
+tree_spec = "default"
+initial_trees = 1
+maximum_trees = 1
+
+[tree_specs.default.canisters.root]
 kind = "root"
 "#,
         ),
