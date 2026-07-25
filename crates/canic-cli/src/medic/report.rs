@@ -2,7 +2,7 @@
 //!
 //! Responsibility: own the stable medic report model, ordering, and aggregate status.
 //! Does not own: diagnostic collection, command parsing, or text/JSON rendering.
-//! Boundary: project and deployment checks construct this private CLI report model.
+//! Boundary: project and Fleet checks construct this private CLI report model.
 
 use super::MedicOptions;
 use serde::Serialize;
@@ -19,7 +19,7 @@ pub(super) struct MedicReport {
     pub(super) command: String,
     pub(super) scope: MedicScope,
     pub(super) environment: Option<String>,
-    pub(super) deployment: Option<String>,
+    pub(super) fleet: Option<String>,
     pub(super) status: MedicStatus,
     pub(super) checks: Vec<MedicCheck>,
 }
@@ -28,7 +28,7 @@ impl MedicReport {
     pub(super) fn new(options: &MedicOptions, checks: Vec<MedicCheck>) -> Self {
         let environment = match options.scope {
             MedicScope::Project => options.environment.clone(),
-            MedicScope::Deployment => Some(options.deployment_environment()),
+            MedicScope::Fleet => Some(options.fleet_environment()),
         };
         Self::with_environment(options, environment, checks)
     }
@@ -44,7 +44,7 @@ impl MedicReport {
             command: options.command_label(),
             scope: options.scope,
             environment,
-            deployment: options.deployment.clone(),
+            fleet: options.fleet.clone(),
             status,
             checks: ordered_checks(&checks).into_iter().cloned().collect(),
         }
@@ -192,10 +192,11 @@ impl MedicCheck {
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
 pub(super) enum MedicScope {
+    #[serde(rename = "project")]
     Project,
-    Deployment,
+    #[serde(rename = "fleet")]
+    Fleet,
 }
 
 ///
@@ -203,11 +204,14 @@ pub(super) enum MedicScope {
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
 pub(super) enum MedicStatus {
+    #[serde(rename = "pass")]
     Pass,
+    #[serde(rename = "warn")]
     Warn,
+    #[serde(rename = "fail")]
     Fail,
+    #[serde(rename = "not_evaluated")]
     NotEvaluated,
 }
 
@@ -227,15 +231,22 @@ impl MedicStatus {
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
 pub(super) enum MedicCategory {
+    #[serde(rename = "environment")]
     Environment,
+    #[serde(rename = "project_config")]
     ProjectConfig,
+    #[serde(rename = "target_environment")]
     TargetEnvironment,
-    DeploymentState,
+    #[serde(rename = "fleet_state")]
+    FleetState,
+    #[serde(rename = "topology")]
     Topology,
+    #[serde(rename = "auth")]
     Auth,
+    #[serde(rename = "blob_storage")]
     BlobStorage,
+    #[serde(rename = "runtime")]
     Runtime,
 }
 
@@ -245,7 +256,7 @@ impl MedicCategory {
             Self::Environment => "environment",
             Self::ProjectConfig => "project_config",
             Self::TargetEnvironment => "target_environment",
-            Self::DeploymentState => "deployment_state",
+            Self::FleetState => "fleet_state",
             Self::Topology => "topology",
             Self::Auth => "auth",
             Self::BlobStorage => "blob_storage",
@@ -258,7 +269,7 @@ impl MedicCategory {
             Self::Environment => 0,
             Self::ProjectConfig => 1,
             Self::TargetEnvironment => 2,
-            Self::DeploymentState => 3,
+            Self::FleetState => 3,
             Self::Topology => 4,
             Self::Auth => 5,
             Self::BlobStorage => 6,
@@ -272,16 +283,24 @@ impl MedicCategory {
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
 pub(super) enum MedicSource {
+    #[serde(rename = "command")]
     Command,
+    #[serde(rename = "icp_cli")]
     IcpCli,
+    #[serde(rename = "icp_config")]
     IcpConfig,
+    #[serde(rename = "app_config")]
     AppConfig,
-    InstalledDeployment,
+    #[serde(rename = "installed_fleet")]
+    InstalledFleet,
+    #[serde(rename = "local_replica")]
     LocalReplica,
+    #[serde(rename = "blob_storage_readiness")]
     BlobStorageReadiness,
+    #[serde(rename = "auth_renewal")]
     AuthRenewal,
+    #[serde(rename = "state_manifest")]
     StateManifest,
 }
 
@@ -292,7 +311,7 @@ impl MedicSource {
             Self::IcpCli => "icp_cli",
             Self::IcpConfig => "icp_config",
             Self::AppConfig => "app_config",
-            Self::InstalledDeployment => "installed_deployment",
+            Self::InstalledFleet => "installed_fleet",
             Self::LocalReplica => "local_replica",
             Self::BlobStorageReadiness => "blob_storage_readiness",
             Self::AuthRenewal => "auth_renewal",

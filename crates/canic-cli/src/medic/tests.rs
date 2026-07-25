@@ -6,11 +6,10 @@ use super::{
         blob_storage_medic_error_check, candid_declares_blob_storage_billing,
     },
     command::{medic_subcommand_help_requested, usage},
-    deployment::{
-        check_deployment_registry_not_evaluated, check_root_canister_id,
-        check_root_readiness_not_evaluated, deployment_environment_selection,
-        deployment_name_conflation_checks, deployment_registry_observed_check,
-        root_readiness_source,
+    fleet::{
+        check_fleet_registry_not_evaluated, check_root_canister_id,
+        check_root_readiness_not_evaluated, fleet_environment_selection,
+        fleet_registry_observed_check, root_readiness_source,
     },
     project::project_environment_selection_check,
     render::{MEDIC_REPORT_WIDTH, render_medic_ci_text, render_medic_json, render_medic_text},
@@ -37,7 +36,7 @@ use canic_host::{
 };
 use serde_json::Value as JsonValue;
 
-// Ensure bare top-level medic selects the project scope without inventing a deployment.
+// Ensure bare top-level medic selects the project scope without inventing a Fleet.
 #[test]
 fn parses_bare_project_medic_options() {
     let options = MedicOptions::parse([
@@ -47,7 +46,7 @@ fn parses_bare_project_medic_options() {
     .expect("parse medic options");
 
     assert_eq!(options.scope, MedicScope::Project);
-    assert_eq!(options.deployment, None);
+    assert_eq!(options.fleet, None);
     assert_eq!(options.environment, None);
     assert_eq!(options.icp, "/tmp/icp");
     assert!(!options.ci);
@@ -62,7 +61,7 @@ fn parses_project_medic_options() {
     assert_eq!(options.scope, MedicScope::Project);
     assert!(options.json);
     assert!(!options.ci);
-    assert_eq!(options.deployment, None);
+    assert_eq!(options.fleet, None);
 }
 
 // Ensure project medic accepts the concise CI renderer flag.
@@ -74,56 +73,56 @@ fn parses_project_medic_ci_options() {
     assert_eq!(options.scope, MedicScope::Project);
     assert!(options.ci);
     assert!(!options.json);
-    assert_eq!(options.deployment, None);
+    assert_eq!(options.fleet, None);
 }
 
-// Ensure deployment medic parses target, environment, and ICP selectors.
+// Ensure Fleet medic parses target, environment, and ICP selectors.
 #[test]
-fn parses_deployment_medic_options() {
+fn parses_fleet_medic_options() {
     let options = MedicOptions::parse([
-        OsString::from("deployment"),
+        OsString::from("fleet"),
         OsString::from("demo"),
         OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
         OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
         OsString::from("/tmp/icp"),
     ])
-    .expect("parse medic deployment options");
+    .expect("parse medic Fleet options");
 
-    assert_eq!(options.scope, MedicScope::Deployment);
-    assert_eq!(options.deployment.as_deref(), Some("demo"));
+    assert_eq!(options.scope, MedicScope::Fleet);
+    assert_eq!(options.fleet.as_deref(), Some("demo"));
     assert_eq!(options.environment.as_deref(), Some("local"));
     assert_eq!(options.icp, "/tmp/icp");
     assert!(!options.ci);
 }
 
-// Ensure targeted blob-storage medic diagnostics are deployment-only.
+// Ensure targeted blob-storage medic diagnostics are Fleet-only.
 #[test]
-fn parses_deployment_blob_storage_medic_target() {
+fn parses_fleet_blob_storage_medic_target() {
     let options = MedicOptions::parse([
-        OsString::from("deployment"),
+        OsString::from("fleet"),
         OsString::from("demo"),
         OsString::from("--blob-storage"),
         OsString::from("backend"),
     ])
     .expect("parse medic options");
 
-    assert_eq!(options.deployment.as_deref(), Some("demo"));
+    assert_eq!(options.fleet.as_deref(), Some("demo"));
     assert_eq!(options.blob_storage.as_deref(), Some("backend"));
 }
 
-// Ensure targeted auth-renewal medic diagnostics are deployment-only.
+// Ensure targeted auth-renewal medic diagnostics are Fleet-only.
 #[test]
-fn parses_deployment_auth_renewal_medic_target() {
+fn parses_fleet_auth_renewal_medic_target() {
     let options = MedicOptions::parse([
-        OsString::from("deployment"),
+        OsString::from("fleet"),
         OsString::from("demo"),
         OsString::from("--auth-renewal"),
         OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
     ])
     .expect("parse medic options");
 
-    assert_eq!(options.deployment.as_deref(), Some("demo"));
+    assert_eq!(options.fleet.as_deref(), Some("demo"));
     assert_eq!(
         options.auth_renewal.as_deref(),
         Some("rrkah-fqaaa-aaaaa-aaaaq-cai")
@@ -135,17 +134,17 @@ fn parses_deployment_auth_renewal_medic_target() {
 fn medic_usage_includes_top_level_examples() {
     let text = usage();
 
-    assert!(text.contains("Diagnose Canic project and deployment preflight readiness"));
+    assert!(text.contains("Diagnose Canic project and Fleet preflight readiness"));
     assert!(text.contains("Usage: canic medic"));
     assert!(text.contains("canic medic project"));
     assert!(text.contains("canic medic project --ci"));
-    assert!(text.contains("canic medic deployment test"));
-    assert!(text.contains("canic medic deployment test --blob-storage backend"));
-    assert!(text.contains("canic medic deployment test --auth-renewal"));
+    assert!(text.contains("canic medic fleet test"));
+    assert!(text.contains("canic medic fleet test --blob-storage backend"));
+    assert!(text.contains("canic medic fleet test --auth-renewal"));
     assert!(text.contains("--json"));
 }
 
-// Ensure subcommand help requests stop before project or deployment checks run.
+// Ensure subcommand help requests stop before project or Fleet checks run.
 #[test]
 fn medic_subcommand_help_requests_are_not_targets() {
     assert!(medic_subcommand_help_requested(&[
@@ -162,20 +161,20 @@ fn medic_subcommand_help_requests_are_not_targets() {
         OsString::from("--help")
     ]));
     assert!(medic_subcommand_help_requested(&[
-        OsString::from("deployment"),
+        OsString::from("fleet"),
         OsString::from("--help")
     ]));
     assert!(medic_subcommand_help_requested(&[
-        OsString::from("deployment"),
+        OsString::from("fleet"),
         OsString::from("-h")
     ]));
     assert!(medic_subcommand_help_requested(&[
         OsString::from("--json"),
-        OsString::from("deployment"),
+        OsString::from("fleet"),
         OsString::from("--help")
     ]));
     assert!(medic_subcommand_help_requested(&[
-        OsString::from("deployment"),
+        OsString::from("fleet"),
         OsString::from("--json"),
         OsString::from("--help")
     ]));
@@ -187,7 +186,7 @@ fn medic_subcommand_help_requests_are_not_targets() {
     assert!(medic_subcommand_help_requested(&[
         OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
-        OsString::from("deployment"),
+        OsString::from("fleet"),
         OsString::from("--help")
     ]));
     assert!(medic_subcommand_help_requested(&[
@@ -197,22 +196,22 @@ fn medic_subcommand_help_requests_are_not_targets() {
         OsString::from("--help")
     ]));
     assert!(medic_subcommand_help_requested(&[
-        OsString::from("deployment"),
+        OsString::from("fleet"),
         OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
         OsString::from("--help")
     ]));
     assert!(!medic_subcommand_help_requested(&[
-        OsString::from("deployment"),
+        OsString::from("fleet"),
         OsString::from("demo")
     ]));
     assert!(!medic_subcommand_help_requested(&[
         OsString::from("--json"),
-        OsString::from("deployment"),
+        OsString::from("fleet"),
         OsString::from("demo")
     ]));
     assert!(!medic_subcommand_help_requested(&[
-        OsString::from("deployment"),
+        OsString::from("fleet"),
         OsString::from("demo"),
         OsString::from("--help")
     ]));
@@ -224,9 +223,9 @@ fn aggregate_status_follows_report_contract() {
     assert_eq!(aggregate_status(&[]), MedicStatus::NotEvaluated);
     assert_eq!(
         aggregate_status(&[MedicCheck::not_evaluated(
-            MedicCategory::DeploymentState,
-            "deployment_not_selected",
-            "deployment",
+            MedicCategory::FleetState,
+            "fleet_not_selected",
+            "fleet",
             "none",
             "none",
             MedicSource::Command,
@@ -267,7 +266,7 @@ fn renders_medic_text_report() {
                 "local_environment_implicit",
                 "environment",
                 "no environment was selected",
-                "select an explicit environment before deployment checks",
+                "select an explicit environment before Fleet checks",
                 MedicSource::IcpConfig,
             ),
             MedicCheck::pass(
@@ -309,7 +308,7 @@ fn renders_medic_json_report() {
     assert_eq!(value["command"], "canic medic project");
     assert_eq!(value["scope"], "project");
     assert_eq!(value["environment"], JsonValue::Null);
-    assert_eq!(value["deployment"], JsonValue::Null);
+    assert_eq!(value["fleet"], JsonValue::Null);
     assert_eq!(value["status"], "pass");
     assert!(value["checks"].is_array());
 }
@@ -361,7 +360,7 @@ fn renders_medic_ci_report_with_fail_only_rows() {
                 "local_environment_implicit",
                 "environment",
                 "no environment was selected",
-                "select an explicit environment before deployment checks",
+                "select an explicit environment before Fleet checks",
                 MedicSource::IcpConfig,
             ),
             MedicCheck::fail(
@@ -435,13 +434,13 @@ fn medic_usage_and_internal_errors_render_cli_stderr() {
     assert!(render_cli_error(&json).contains("medic: failed to render medic JSON output"));
 }
 
-// Ensure deployment reports include the effective environment while project reports may omit it.
+// Ensure Fleet reports include the effective environment while project reports may omit it.
 #[test]
-fn deployment_report_includes_effective_environment() {
+fn fleet_report_includes_effective_environment() {
     let report = MedicReport::new(
         &MedicOptions {
-            scope: MedicScope::Deployment,
-            deployment: Some("demo".to_string()),
+            scope: MedicScope::Fleet,
+            fleet: Some("demo".to_string()),
             blob_storage: None,
             auth_renewal: None,
             json: false,
@@ -453,15 +452,15 @@ fn deployment_report_includes_effective_environment() {
     );
 
     assert_eq!(report.environment.as_deref(), Some("local"));
-    assert_eq!(report.deployment.as_deref(), Some("demo"));
+    assert_eq!(report.fleet.as_deref(), Some("demo"));
 }
 
 // Ensure an explicit operator environment wins over the local default.
 #[test]
-fn deployment_environment_selection_prefers_explicit_environment() {
+fn fleet_environment_selection_prefers_explicit_environment() {
     let options = MedicOptions {
-        scope: MedicScope::Deployment,
-        deployment: Some("demo".to_string()),
+        scope: MedicScope::Fleet,
+        fleet: Some("demo".to_string()),
         blob_storage: None,
         auth_renewal: None,
         json: false,
@@ -470,7 +469,7 @@ fn deployment_environment_selection_prefers_explicit_environment() {
         icp: "icp".to_string(),
     };
 
-    let (environment, check) = deployment_environment_selection(&options);
+    let (environment, check) = fleet_environment_selection(&options);
 
     assert_eq!(environment, "local");
     assert_eq!(check.code, "local_environment_explicit");
@@ -479,12 +478,12 @@ fn deployment_environment_selection_prefers_explicit_environment() {
 
 // Ensure missing installed targets point operators at the no-mutation planner.
 #[test]
-fn deployment_target_missing_points_to_deploy_plan() {
+fn fleet_missing_points_to_deploy_plan() {
     let root = temp_dir("canic-cli-medic-missing-target-plan");
     fs::create_dir_all(&root).expect("create temp root");
     let options = MedicOptions {
-        scope: MedicScope::Deployment,
-        deployment: Some("demo".to_string()),
+        scope: MedicScope::Fleet,
+        fleet: Some("demo".to_string()),
         blob_storage: None,
         auth_renewal: None,
         json: false,
@@ -492,7 +491,7 @@ fn deployment_target_missing_points_to_deploy_plan() {
         environment: Some("local".to_string()),
         icp: "icp".to_string(),
     };
-    let context = DeploymentMedicContext {
+    let context = FleetMedicContext {
         icp_root: Some(root.clone()),
         environment: "local".to_string(),
         environment_check: MedicCheck::pass(
@@ -505,11 +504,11 @@ fn deployment_target_missing_points_to_deploy_plan() {
         ),
     };
 
-    let checks = run_deployment_checks(&options, &context);
+    let checks = run_fleet_checks(&options, &context);
     let missing = checks
         .iter()
-        .find(|check| check.code == "deployment_target_missing")
-        .expect("missing deployment check");
+        .find(|check| check.code == "fleet_missing")
+        .expect("missing Fleet check");
 
     assert_eq!(missing.status, MedicStatus::Fail);
     assert!(missing.next.contains("canic deploy plan demo"));
@@ -518,13 +517,13 @@ fn deployment_target_missing_points_to_deploy_plan() {
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
-// Ensure project-only environment warnings do not duplicate deployment-scoped environment checks.
+// Ensure project-only environment warnings do not duplicate Fleet-scoped environment checks.
 #[test]
 fn project_environment_selection_check_is_project_only() {
     let project = MedicOptions::project(false, false, None, "icp".to_string());
-    let deployment = MedicOptions {
-        scope: MedicScope::Deployment,
-        deployment: Some("demo".to_string()),
+    let fleet = MedicOptions {
+        scope: MedicScope::Fleet,
+        fleet: Some("demo".to_string()),
         blob_storage: None,
         auth_renewal: None,
         json: false,
@@ -538,7 +537,7 @@ fn project_environment_selection_check_is_project_only() {
 
     assert_eq!(project_check.code, "local_environment_implicit");
     assert_eq!(project_check.status, MedicStatus::Warn);
-    assert!(project_environment_selection_check(&deployment).is_none());
+    assert!(project_environment_selection_check(&fleet).is_none());
 }
 
 // Ensure missing root IDs are caught before medic attempts a live readiness query.
@@ -576,116 +575,59 @@ fn root_readiness_source_tracks_selected_environment() {
     assert_eq!(root_readiness_source("ic"), MedicSource::IcpCli);
 }
 
-// Ensure deployment registry smoke checks are skipped behind the catalog root gate.
+// Ensure Fleet registry smoke checks are skipped behind the catalog root gate.
 #[test]
-fn deployment_registry_not_evaluated_explains_skipped_live_query() {
-    let missing_root = check_deployment_registry_not_evaluated(false);
+fn fleet_registry_not_evaluated_explains_skipped_live_query() {
+    let missing_root = check_fleet_registry_not_evaluated(false);
 
     assert_eq!(missing_root.status, MedicStatus::NotEvaluated);
-    assert_eq!(missing_root.code, "deployment_registry_not_evaluated");
+    assert_eq!(missing_root.code, "fleet_registry_not_evaluated");
     assert!(missing_root.detail.contains("no root principal"));
 }
 
-// Ensure successful deployment registry observation reports the live entry and role counts.
+// Ensure successful Fleet registry observation reports the live entry and role counts.
 #[test]
-fn deployment_registry_observed_check_reports_entry_count() {
-    let resolution = sample_installed_deployment_resolution(vec![
+fn fleet_registry_observed_check_reports_entry_count() {
+    let resolution = sample_installed_fleet_resolution(vec![
         registry_entry("aaaaa-aa", Some("root")),
         registry_entry("bbbbbb-bb", Some("app")),
     ]);
 
-    let check = deployment_registry_observed_check(&resolution);
+    let check = fleet_registry_observed_check(&resolution);
 
     assert_eq!(check.status, MedicStatus::Pass);
-    assert_eq!(check.code, "deployment_registry_observed");
+    assert_eq!(check.code, "fleet_registry_observed");
     assert_eq!(check.source, MedicSource::LocalReplica);
     assert!(check.detail.contains("entries=2"));
     assert!(check.detail.contains("roles=2"));
-    assert!(
-        check
-            .next
-            .contains("canic inspect deployment demo --role root")
-    );
+    assert!(check.next.contains("canic inspect fleet demo --role root"));
     assert!(check.next.contains("one explicit role"));
 }
 
 // Ensure an empty observed registry remains visible as a warning.
 #[test]
-fn deployment_registry_observed_check_warns_on_empty_registry() {
-    let resolution = sample_installed_deployment_resolution(Vec::new());
+fn fleet_registry_observed_check_warns_on_empty_registry() {
+    let resolution = sample_installed_fleet_resolution(Vec::new());
 
-    let check = deployment_registry_observed_check(&resolution);
+    let check = fleet_registry_observed_check(&resolution);
 
     assert_eq!(check.status, MedicStatus::Warn);
-    assert_eq!(check.code, "deployment_registry_empty");
+    assert_eq!(check.code, "fleet_registry_empty");
     assert!(check.next.contains("canic deploy plan demo"));
     assert!(check.next.contains("canic deploy check demo"));
 }
 
 // Ensure medic can still point at runtime inspection when registry entries have no roles.
 #[test]
-fn deployment_registry_runtime_next_falls_back_to_direct_canister() {
-    let resolution =
-        sample_installed_deployment_resolution(vec![registry_entry("cccccc-cc", None)]);
+fn fleet_registry_runtime_next_falls_back_to_direct_canister() {
+    let resolution = sample_installed_fleet_resolution(vec![registry_entry("cccccc-cc", None)]);
 
-    let check = deployment_registry_observed_check(&resolution);
+    let check = fleet_registry_observed_check(&resolution);
 
     assert_eq!(check.status, MedicStatus::Pass);
-    assert_eq!(check.code, "deployment_registry_observed");
+    assert_eq!(check.code, "fleet_registry_observed");
     assert!(check.next.contains("canic inspect canister cccccc-cc"));
     assert!(check.next.contains("one explicit canister"));
-}
-
-// Ensure missing deployment targets get exact-match hints when they are likely fleet or role names.
-#[test]
-fn deployment_name_conflation_checks_find_fleet_and_role_names() {
-    let root = temp_dir("canic-cli-medic-deployment-name-conflation");
-    write_medic_config(
-        &root,
-        r#"
-controllers = []
-[services.fleet]
-roles = []
-
-[app]
-name = "demo"
-
-[roles.root]
-kind = "root"
-package = "root"
-
-[roles.app]
-kind = "canister"
-package = "app"
-
-[subnets.default.canisters.root]
-kind = "root"
-
-[subnets.default.canisters.app]
-kind = "service"
-"#,
-    );
-    write_medic_package(&root, "root", "demo", "root");
-    write_medic_package(&root, "app", "demo", "app");
-
-    let fleet = deployment_name_conflation_checks(&root, "demo");
-    let role = deployment_name_conflation_checks(&root, "app");
-    let none = deployment_name_conflation_checks(&root, "demo-local");
-
-    assert!(fleet.iter().any(|check| {
-        check.status == MedicStatus::Warn && check.code == "fleet_name_deployment_name_conflated"
-    }));
-    assert!(
-        fleet
-            .iter()
-            .any(|check| check.next.contains("canic deploy plan demo"))
-    );
-    assert!(role.iter().any(|check| {
-        check.status == MedicStatus::Warn && check.code == "role_name_deployment_name_conflated"
-    }));
-    assert!(none.is_empty());
-
-    fs::remove_dir_all(root).expect("remove temp root");
 }
 
 // Ensure project medic validates package-role metadata without spawning Cargo.
@@ -1201,7 +1143,7 @@ fn auth_renewal_medic_error_check_classifies_invalid_issuer() {
     assert_eq!(generic.code, "auth_renewal_drift_fail");
 }
 
-// Ensure default deployment medic can discover blob-storage-capable local Candid sidecars passively.
+// Ensure default Fleet medic can discover blob-storage-capable local Candid sidecars passively.
 #[test]
 fn passive_blob_storage_hint_uses_local_candid_only() {
     let root = temp_dir("canic-cli-medic-blob-storage-passive");
@@ -1230,8 +1172,8 @@ fn passive_blob_storage_hint_uses_local_candid_only() {
 
     let roles = blob_storage_billing_roles_from_candid_dir(&root, "local");
     let options = MedicOptions {
-        scope: MedicScope::Deployment,
-        deployment: Some("demo".to_string()),
+        scope: MedicScope::Fleet,
+        fleet: Some("demo".to_string()),
         blob_storage: None,
         auth_renewal: None,
         json: false,
@@ -1246,7 +1188,7 @@ fn passive_blob_storage_hint_uses_local_candid_only() {
     assert_eq!(check.code, "blob_storage_not_selected");
     assert_eq!(
         check.next,
-        "run canic medic deployment demo --blob-storage backend"
+        "run canic medic fleet demo --blob-storage backend"
     );
 
     fs::remove_dir_all(root).expect("remove temp root");
@@ -1287,16 +1229,16 @@ fn wraps_long_medic_report_fields() {
     let report = render_medic_text(&MedicReport::new(
         &MedicOptions::project(false, false, None, "icp".to_string()),
         vec![MedicCheck::warn(
-            MedicCategory::DeploymentState,
-            "deployment_target_missing",
-            "deployment",
+            MedicCategory::FleetState,
+            "fleet_missing",
+            "fleet",
             "this is a deliberately long diagnostic message that should wrap across multiple indented lines instead of widening a terminal table",
             "run canic install <app> <fleet>",
-            MedicSource::InstalledDeployment,
+            MedicSource::InstalledFleet,
         )],
     ));
 
-    assert!(report.contains("deployment_state [warn] deployment_target_missing"));
+    assert!(report.contains("fleet_state [warn] fleet_missing"));
     assert!(
         report
             .lines()
@@ -1315,12 +1257,12 @@ fn wraps_unbroken_long_medic_report_fields() {
     let report = render_medic_text(&MedicReport::new(
         &MedicOptions::project(false, false, None, "icp".to_string()),
         vec![MedicCheck::warn(
-            MedicCategory::DeploymentState,
-            "deployment_target_missing",
-            "deployment",
+            MedicCategory::FleetState,
+            "fleet_missing",
+            "fleet",
             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            MedicSource::InstalledDeployment,
+            MedicSource::InstalledFleet,
         )],
     ));
 
@@ -1368,7 +1310,7 @@ fn sample_fleet_catalog_entry() -> FleetCatalogEntryV1 {
     }
 }
 
-fn sample_installed_deployment_resolution(
+fn sample_installed_fleet_resolution(
     entries: Vec<canic_host::registry::RegistryEntry>,
 ) -> InstalledDeploymentResolution {
     let mut roles_by_canister = std::collections::BTreeMap::new();

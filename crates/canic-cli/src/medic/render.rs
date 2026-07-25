@@ -24,8 +24,8 @@ pub(super) fn render_medic_text(report: &MedicReport) -> String {
             report.environment.as_deref().unwrap_or("not selected")
         ),
         format!(
-            "deployment: {}",
-            report.deployment.as_deref().unwrap_or("not selected")
+            "fleet: {}",
+            report.fleet.as_deref().unwrap_or("not selected")
         ),
     ];
 

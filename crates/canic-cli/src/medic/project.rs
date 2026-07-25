@@ -147,7 +147,7 @@ pub(super) fn project_environment_selection_check(options: &MedicOptions) -> Opt
             "local_environment_implicit",
             "environment",
             "no environment was selected for project-level checks",
-            "select an explicit environment before deployment checks",
+            "select an explicit environment before Fleet checks",
             MedicSource::IcpConfig,
         )
     })

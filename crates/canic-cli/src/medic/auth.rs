@@ -1,6 +1,6 @@
 //! Module: canic_cli::medic::auth
 //!
-//! Responsibility: classify auth-renewal readiness for deployment Medic reports.
+//! Responsibility: classify auth-renewal readiness for Fleet Medic reports.
 //! Does not own: auth mutation, issuer resolution, or report rendering.
 //! Boundary: maps the auth command summary and typed failures into Medic checks.
 
@@ -17,20 +17,15 @@ pub(super) fn check_auth_renewal(
     issuer: &str,
     environment: &str,
 ) -> MedicCheck {
-    match auth_api::renewal_medic_summary(
-        options.deployment_name(),
-        issuer,
-        environment,
-        &options.icp,
-    ) {
+    match auth_api::renewal_medic_summary(options.fleet_name(), issuer, environment, &options.icp) {
         Ok(summary) => auth_renewal_medic_check_from_summary(summary),
-        Err(err) => auth_renewal_medic_error_check(err, options.deployment_name(), issuer),
+        Err(err) => auth_renewal_medic_error_check(err, options.fleet_name(), issuer),
     }
 }
 
 pub(super) fn auth_renewal_medic_error_check(
     error: AuthCommandError,
-    deployment: &str,
+    fleet: &str,
     issuer: &str,
 ) -> MedicCheck {
     let (code, next, source) = match &error {
@@ -41,7 +36,7 @@ pub(super) fn auth_renewal_medic_error_check(
         ),
         _ => (
             "auth_renewal_drift_fail",
-            format!("run canic auth renewal status {deployment} --issuer {issuer}"),
+            format!("run canic auth renewal status {fleet} --issuer {issuer}"),
             MedicSource::AuthRenewal,
         ),
     };

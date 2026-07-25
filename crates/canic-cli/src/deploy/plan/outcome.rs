@@ -134,7 +134,7 @@ pub(super) fn next_actions(
             .push("run canic build or provide a build profile with resolved artifacts".to_string());
     }
     actions.push(format!(
-        "run canic medic deployment {} if operator readiness is uncertain",
+        "run canic medic fleet {} if operator readiness is uncertain",
         options.deployment
     ));
     actions

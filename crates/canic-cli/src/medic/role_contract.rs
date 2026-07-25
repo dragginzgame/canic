@@ -50,7 +50,7 @@ fn app_config_quality_checks(root: &Path, config: &Path) -> Vec<MedicCheck> {
                 "app_config_missing",
                 config_display,
                 err.to_string(),
-                "repair the app config before running deployment checks",
+                "repair the App config before running Fleet checks",
                 MedicSource::AppConfig,
             )];
         }

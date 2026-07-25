@@ -44,7 +44,7 @@ Before mutation, run:
 
 ```bash
 canic --environment <environment> deploy check <deployment>
-canic --environment <environment> medic deployment <deployment>
+canic --environment <environment> medic fleet <fleet>
 ```
 
 For an existing verified deployment, `subnet_registry_role_missing` is a hard

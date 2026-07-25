@@ -1,8 +1,8 @@
-//! Module: canic_cli::medic::deployment
+//! Module: canic_cli::medic::fleet
 //!
 //! Responsibility: construct installed-Fleet, registry, and root checks.
 //! Does not own: deployment mutation, check ordering, or report rendering.
-//! Boundary: maps local and runtime deployment evidence into Medic checks.
+//! Boundary: maps local and runtime Fleet evidence into Medic checks.
 
 use crate::{
     cli::defaults::local_environment,
@@ -20,35 +20,33 @@ use canic_host::{
     fleet_catalog::FleetCatalogEntryV1,
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
-    install_root::discover_project_canic_config_choices,
     installed_deployment::{
         InstalledDeploymentError, InstalledDeploymentRequest, InstalledDeploymentResolution,
         InstalledDeploymentSource, resolve_installed_deployment_from_root,
     },
-    release_set::AppConfigSnapshot,
 };
 
 ///
-/// DeploymentMedicContext
+/// FleetMedicContext
 ///
 
-pub(super) struct DeploymentMedicContext {
+pub(super) struct FleetMedicContext {
     pub(super) icp_root: Option<PathBuf>,
     pub(super) environment: String,
     pub(super) environment_check: MedicCheck,
 }
 
-pub(super) fn deployment_medic_context(options: &MedicOptions) -> DeploymentMedicContext {
+pub(super) fn fleet_medic_context(options: &MedicOptions) -> FleetMedicContext {
     let icp_root = resolve_current_canic_icp_root().ok();
-    let (environment, environment_check) = deployment_environment_selection(options);
-    DeploymentMedicContext {
+    let (environment, environment_check) = fleet_environment_selection(options);
+    FleetMedicContext {
         icp_root,
         environment,
         environment_check,
     }
 }
 
-pub(super) fn deployment_environment_selection(options: &MedicOptions) -> (String, MedicCheck) {
+pub(super) fn fleet_environment_selection(options: &MedicOptions) -> (String, MedicCheck) {
     if let Some(environment) = &options.environment {
         return (
             environment.clone(),
@@ -77,58 +75,6 @@ pub(super) fn deployment_environment_selection(options: &MedicOptions) -> (Strin
     )
 }
 
-pub(super) fn deployment_name_conflation_checks(root: &Path, deployment: &str) -> Vec<MedicCheck> {
-    let Ok(configs) = discover_project_canic_config_choices(root) else {
-        return Vec::new();
-    };
-
-    let mut checks = Vec::new();
-    for config in configs {
-        let Ok(snapshot) = AppConfigSnapshot::load(&config) else {
-            continue;
-        };
-        let fleet = snapshot.app_id();
-        if fleet == deployment {
-            checks.push(MedicCheck::warn(
-                MedicCategory::ProjectConfig,
-                "fleet_name_deployment_name_conflated",
-                deployment,
-                format!(
-                    "selected deployment target matches fleet template {} in {}",
-                    fleet,
-                    display_medic_path(root, &config)
-                ),
-                deploy_plan_then(
-                    deployment,
-                    format!(
-                        "then run canic install {fleet}, or choose an installed deployment target"
-                    ),
-                ),
-                MedicSource::AppConfig,
-            ));
-        }
-
-        checks.extend(snapshot.role_lifecycle().into_iter().filter_map(|role| {
-            (role.role == deployment).then(|| {
-                MedicCheck::warn(
-                    MedicCategory::ProjectConfig,
-                    "role_name_deployment_name_conflated",
-                    deployment,
-                    format!(
-                        "selected deployment target matches role {} in {}",
-                        role.display,
-                        display_medic_path(root, &config)
-                    ),
-                    "pass an installed deployment target, not a role name",
-                    MedicSource::AppConfig,
-                )
-            })
-        }));
-    }
-
-    checks
-}
-
 pub(super) fn installed_fleet_checks(
     options: &MedicOptions,
     icp_root: Option<&Path>,
@@ -146,7 +92,7 @@ pub(super) fn installed_fleet_checks(
     vec![
         check_config_path(icp_root, fleet),
         root_canister,
-        check_deployment_registry_observation(
+        check_fleet_registry_observation(
             options,
             icp_root,
             fleet,
@@ -193,7 +139,7 @@ fn check_config_path(icp_root: Option<&Path>, fleet: &FleetCatalogEntryV1) -> Me
     }
 }
 
-fn check_deployment_registry_observation(
+fn check_fleet_registry_observation(
     options: &MedicOptions,
     icp_root: Option<&Path>,
     fleet: &FleetCatalogEntryV1,
@@ -201,17 +147,17 @@ fn check_deployment_registry_observation(
     root_canister_present: bool,
 ) -> MedicCheck {
     if !root_canister_present {
-        return check_deployment_registry_not_evaluated(root_canister_present);
+        return check_fleet_registry_not_evaluated(root_canister_present);
     }
 
     let Some(root) = icp_root else {
         return MedicCheck::not_evaluated(
             MedicCategory::Topology,
-            "deployment_registry_not_evaluated",
+            "fleet_registry_not_evaluated",
             "registry",
-            "deployment registry observation skipped because the project root was not resolved",
+            "Fleet registry observation skipped because the project root was not resolved",
             "run from a Canic project root",
-            MedicSource::InstalledDeployment,
+            MedicSource::InstalledFleet,
         );
     };
 
@@ -223,29 +169,29 @@ fn check_deployment_registry_observation(
     };
 
     match resolve_installed_deployment_from_root(&request, root) {
-        Ok(resolution) => deployment_registry_observed_check(&resolution),
-        Err(err) => deployment_registry_error_check(err),
+        Ok(resolution) => fleet_registry_observed_check(&resolution),
+        Err(err) => fleet_registry_error_check(err),
     }
 }
 
-pub(super) fn check_deployment_registry_not_evaluated(root_canister_present: bool) -> MedicCheck {
+pub(super) fn check_fleet_registry_not_evaluated(root_canister_present: bool) -> MedicCheck {
     let detail = if root_canister_present {
-        "deployment registry observation was not evaluated"
+        "Fleet registry observation was not evaluated"
     } else {
-        "deployment registry observation skipped because the Fleet catalog row has no root principal"
+        "Fleet registry observation skipped because the Fleet catalog row has no root principal"
     };
 
     MedicCheck::not_evaluated(
         MedicCategory::Topology,
-        "deployment_registry_not_evaluated",
+        "fleet_registry_not_evaluated",
         "registry",
         detail,
-        "repair the blocking deployment-state check, then rerun canic medic deployment <deployment>",
-        MedicSource::InstalledDeployment,
+        "repair the blocking Fleet-state check, then rerun canic medic fleet <fleet>",
+        MedicSource::InstalledFleet,
     )
 }
 
-pub(super) fn deployment_registry_observed_check(
+pub(super) fn fleet_registry_observed_check(
     resolution: &InstalledDeploymentResolution,
 ) -> MedicCheck {
     let entries = resolution.registry.entries.len();
@@ -254,12 +200,12 @@ pub(super) fn deployment_registry_observed_check(
         "root={}; entries={entries}; roles={roles}",
         resolution.registry.root_canister_id
     );
-    let source = installed_deployment_source_for_medic(resolution.source);
+    let source = installed_fleet_source_for_medic(resolution.source);
 
     if entries == 0 {
         return MedicCheck::warn(
             MedicCategory::Topology,
-            "deployment_registry_empty",
+            "fleet_registry_empty",
             "registry",
             detail,
             format!(
@@ -273,7 +219,7 @@ pub(super) fn deployment_registry_observed_check(
 
     MedicCheck::pass(
         MedicCategory::Topology,
-        "deployment_registry_observed",
+        "fleet_registry_observed",
         "registry",
         detail,
         runtime_inspection_next(resolution),
@@ -281,12 +227,12 @@ pub(super) fn deployment_registry_observed_check(
     )
 }
 
-fn deploy_plan_next(deployment: &str) -> String {
-    format!("run canic deploy plan {deployment} to inspect desired deployment shape")
+fn deploy_plan_next(fleet: &str) -> String {
+    format!("run canic deploy plan {fleet} to inspect desired Fleet shape")
 }
 
 fn runtime_inspection_next(resolution: &InstalledDeploymentResolution) -> String {
-    let deployment = &resolution.fleet.fleet_name;
+    let fleet = &resolution.fleet.fleet_name;
     let mut roles = resolution
         .topology
         .roles_by_canister
@@ -302,7 +248,7 @@ fn runtime_inspection_next(resolution: &InstalledDeploymentResolution) -> String
         .or_else(|| roles.first())
     {
         return format!(
-            "run canic inspect deployment {deployment} --role {role} to inspect runtime-observed status for one explicit role"
+            "run canic inspect fleet {fleet} --role {role} to inspect runtime-observed status for one explicit role"
         );
     }
 
@@ -325,18 +271,18 @@ fn runtime_inspection_next(resolution: &InstalledDeploymentResolution) -> String
     )
 }
 
-pub(super) fn deploy_plan_then(deployment: &str, next: impl AsRef<str>) -> String {
-    format!("{}; {}", deploy_plan_next(deployment), next.as_ref())
+pub(super) fn deploy_plan_then(fleet: &str, next: impl AsRef<str>) -> String {
+    format!("{}; {}", deploy_plan_next(fleet), next.as_ref())
 }
 
-const fn installed_deployment_source_for_medic(source: InstalledDeploymentSource) -> MedicSource {
+const fn installed_fleet_source_for_medic(source: InstalledDeploymentSource) -> MedicSource {
     match source {
         InstalledDeploymentSource::LocalReplica => MedicSource::LocalReplica,
         InstalledDeploymentSource::IcpCli => MedicSource::IcpCli,
     }
 }
 
-fn deployment_registry_error_check(error: InstalledDeploymentError) -> MedicCheck {
+fn fleet_registry_error_check(error: InstalledDeploymentError) -> MedicCheck {
     let source = match error {
         InstalledDeploymentError::ReplicaQuery(_)
         | InstalledDeploymentError::LostLocalDeployment { .. } => MedicSource::LocalReplica,
@@ -344,15 +290,15 @@ fn deployment_registry_error_check(error: InstalledDeploymentError) -> MedicChec
         InstalledDeploymentError::NoInstalledDeployment { .. }
         | InstalledDeploymentError::FleetCatalog(_)
         | InstalledDeploymentError::Registry(_)
-        | InstalledDeploymentError::Io(_) => MedicSource::InstalledDeployment,
+        | InstalledDeploymentError::Io(_) => MedicSource::InstalledFleet,
     };
 
     MedicCheck::fail(
         MedicCategory::Topology,
-        "deployment_registry_unavailable",
+        "fleet_registry_unavailable",
         "registry",
         error.to_string(),
-        "run canic status, then rerun canic medic deployment <deployment>",
+        "run canic status, then rerun canic medic fleet <fleet>",
         source,
     )
 }
@@ -365,7 +311,7 @@ pub(super) fn check_root_canister_id(fleet: &FleetCatalogEntryV1) -> MedicCheck 
             "root",
             "Fleet catalog row does not record a root principal",
             "reinstall the Fleet with canic install <app> <fleet>",
-            MedicSource::InstalledDeployment,
+            MedicSource::InstalledFleet,
         )
     } else {
         MedicCheck::pass(
@@ -374,7 +320,7 @@ pub(super) fn check_root_canister_id(fleet: &FleetCatalogEntryV1) -> MedicCheck 
             "root",
             fleet.root_principal.clone(),
             "none",
-            MedicSource::InstalledDeployment,
+            MedicSource::InstalledFleet,
         )
     }
 }
@@ -391,8 +337,8 @@ pub(super) fn check_root_readiness_not_evaluated(root_canister_present: bool) ->
         "root_readiness_not_evaluated",
         "root",
         detail,
-        "repair the blocking deployment-state check, then rerun canic medic deployment <deployment>",
-        MedicSource::InstalledDeployment,
+        "repair the blocking Fleet-state check, then rerun canic medic fleet <fleet>",
+        MedicSource::InstalledFleet,
     )
 }
 
@@ -431,7 +377,7 @@ fn check_root_ready(
             "root_readiness_fail",
             "root",
             "canic_ready=false",
-            "wait briefly, then run canic medic deployment <deployment>",
+            "wait briefly, then run canic medic fleet <fleet>",
             source,
         ),
         Err(err) => MedicCheck::fail(

@@ -14,16 +14,16 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.27`.
-- The latest published release is `v0.99.27` at
-  `960d2a1d74ab630337063ec7a9b69643d8a9046e`.
-- The `v0.99.27` source tree is
-  `2e76fb87473fb7770873890ac6b0a0bb3cf42075`. Its Cargo.lock SHA-256 is
-  `57ce816cfb7020cef2e446690edf27d870208575eb0635b9ebcf1be394cb73f7`.
-- The open `0.99.28` draft makes `canic status` read App configs and the
-  canonical-network Fleet catalog as independent authorities. Its separate
-  tables project the catalog's explicit App binding and never infer Fleet
-  ownership from equal App/Fleet display names.
+- The workspace package version is `0.99.28`.
+- The latest published release is `v0.99.28` at
+  `61b0e2f2731b6c1f6d48fce21e9e16779bf6621b`.
+- The `v0.99.28` source tree is
+  `12235ee6404d99b4a5dd65947b8dcfc6e3c8baf8`. Its Cargo.lock SHA-256 is
+  `07af64015152e42552893e6ec62bd2eb146e12cb2284909f33e0a7d7825dfc09`.
+- The open `0.99.29` draft hard-cuts live runtime inspection and Medic
+  targeting to `inspect fleet` and `medic fleet`, including their JSON
+  projections and active guidance. The obsolete diagnostic that treated
+  equal App/role/Fleet display names as conflation is removed.
 - The proposed 0.100/0.101 follow-on designs now model heterogeneous,
   independently scaled Tree Groups backed by App Tree Specs: one user-focused
   Tree and many project-focused Trees may use different topology templates.
@@ -32,6 +32,10 @@ Historical detail is archived at:
   authority. The default workload spec remains distinct from Authority Subnet
   placement, and application routing remains outside Canic. This is a design
   amendment, not additional 0.99 runtime scope.
+- Released `0.99.28` makes `canic status` read App configs and the
+  canonical-network Fleet catalog as independent authorities. Its separate
+  tables project the catalog's explicit App binding and never infer Fleet
+  ownership from equal App/Fleet display names.
 - Released `0.99.27` makes terminal fresh install publish the exact
   canonical-network Fleet catalog row only after complete Active evidence and
   records `HostAuthorityCommitted` before returning success.

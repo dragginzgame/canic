@@ -126,7 +126,7 @@ run_auth_renewal_cli_surface_probe_commands() {
         > "$proof_root/auth-renewal-status-drift.json"
     set +e
     "$runner" --environment fixture --icp "$fake_icp" \
-        medic deployment downstream --auth-renewal "$AUTH_RENEWAL_PROOF_ISSUER" \
+        medic fleet downstream --auth-renewal "$AUTH_RENEWAL_PROOF_ISSUER" \
         > "$proof_root/auth-renewal-medic-drift.out"
     medic_exit=$?
     set -e
