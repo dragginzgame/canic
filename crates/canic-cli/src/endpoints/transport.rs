@@ -9,7 +9,7 @@ use canic_host::{
     candid_endpoints::parse_candid_service_endpoints,
     icp::{IcpCli, local_canister_candid_path},
     icp_config::resolve_current_canic_icp_root,
-    installed_deployment::{InstalledDeploymentRequest, resolve_installed_deployment_from_root},
+    installed_fleet::{InstalledFleetRequest, resolve_installed_fleet_from_root},
     registry::RegistryEntry,
 };
 use std::{
@@ -36,7 +36,7 @@ pub(super) fn endpoint_report(
         .or_else(|| (!is_principal_like(&options.canister)).then(|| options.canister.clone()));
     let Some(role) = role else {
         return Err(EndpointsCommandError::NoInterfaceArtifact {
-            deployment: options.deployment.clone(),
+            fleet: options.fleet.clone(),
             canister: options.canister.clone(),
         });
     };
@@ -80,8 +80,8 @@ fn resolve_endpoint_target(
         .find(|entry| entry.role.as_deref() == Some(options.canister.as_str()))
         .ok_or_else(|| -> Box<dyn std::error::Error> {
             format!(
-                "role {} was not found in deployment target {}",
-                options.canister, options.deployment
+                "role {} was not found in Fleet {}",
+                options.canister, options.fleet
             )
             .into()
         })?;
@@ -94,14 +94,14 @@ fn resolve_endpoint_target(
 fn load_fleet_registry(
     options: &EndpointsOptions,
 ) -> Result<Vec<RegistryEntry>, Box<dyn std::error::Error>> {
-    let request = InstalledDeploymentRequest {
-        deployment: options.deployment.clone(),
+    let request = InstalledFleetRequest {
+        fleet: options.fleet.clone(),
         environment: state_environment(options),
         icp: options.icp.clone(),
         detect_lost_local_root: false,
     };
     let root = resolve_endpoint_icp_root()?;
-    Ok(resolve_installed_deployment_from_root(&request, &root)?
+    Ok(resolve_installed_fleet_from_root(&request, &root)?
         .registry
         .entries)
 }

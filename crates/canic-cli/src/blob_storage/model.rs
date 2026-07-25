@@ -9,7 +9,7 @@ use serde::{Serialize, Serializer};
 pub(super) const BLOB_STORAGE_JSON_SCHEMA_VERSION: u16 = 1;
 pub(super) const BLOB_STORAGE_STATUS_KIND: &str = "blob_storage_status";
 pub(super) const BLOB_STORAGE_ERROR_KIND: &str = "blob_storage_error";
-pub(super) const BLOB_STORAGE_CANDID_SOURCE_INSTALLED_DEPLOYMENT: &str = "installed_deployment";
+pub(super) const BLOB_STORAGE_CANDID_SOURCE_INSTALLED_FLEET: &str = "installed_fleet";
 pub(super) const BLOB_STORAGE_READINESS_BLOCKED: &str = "blocked";
 pub(super) const BLOB_STORAGE_READINESS_READY: &str = "ready";
 pub(super) const BLOB_STORAGE_READINESS_WARNING: &str = "warning";
@@ -52,7 +52,7 @@ pub(super) struct BlobStorageTarget {
 }
 
 impl BlobStorageTarget {
-    pub(super) fn from_installed_deployment(
+    pub(super) fn from_installed_fleet(
         input: &str,
         role: Option<String>,
         canister_id: &str,
@@ -61,7 +61,7 @@ impl BlobStorageTarget {
             input: input.to_string(),
             role,
             canister_id: canister_id.to_string(),
-            candid_source: Some(BlobStorageCandidSource::InstalledDeployment),
+            candid_source: Some(BlobStorageCandidSource::InstalledFleet),
         }
     }
 }
@@ -92,13 +92,13 @@ impl BlobStorageMethodMode {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum BlobStorageCandidSource {
-    InstalledDeployment,
+    InstalledFleet,
 }
 
 impl BlobStorageCandidSource {
     pub(super) const fn label(self) -> &'static str {
         match self {
-            Self::InstalledDeployment => BLOB_STORAGE_CANDID_SOURCE_INSTALLED_DEPLOYMENT,
+            Self::InstalledFleet => BLOB_STORAGE_CANDID_SOURCE_INSTALLED_FLEET,
         }
     }
 }
@@ -143,14 +143,14 @@ impl BlobStorageErrorTarget {
 pub(super) struct BlobStorageErrorResult {
     pub(super) schema_version: u16,
     pub(super) kind: BlobStorageReportKind,
-    pub(super) deployment: String,
+    pub(super) fleet: String,
     pub(super) target: BlobStorageErrorTarget,
     pub(super) error: BlobStorageErrorBody,
 }
 
 impl BlobStorageErrorResult {
     pub(super) fn new(
-        deployment: &str,
+        fleet: &str,
         target: &str,
         code: &str,
         message: String,
@@ -159,7 +159,7 @@ impl BlobStorageErrorResult {
         Self {
             schema_version: BLOB_STORAGE_JSON_SCHEMA_VERSION,
             kind: BlobStorageReportKind::Error,
-            deployment: deployment.to_string(),
+            fleet: fleet.to_string(),
             target: BlobStorageErrorTarget::unresolved(target),
             error: BlobStorageErrorBody {
                 code: code.to_string(),
@@ -288,7 +288,7 @@ pub(super) struct BlobStorageAction {
 pub(super) struct BlobStorageActionResult {
     pub(super) schema_version: u16,
     pub(super) kind: BlobStorageActionResultKind,
-    pub(super) deployment: String,
+    pub(super) fleet: String,
     pub(super) target: BlobStorageTarget,
     pub(super) action: BlobStorageAction,
     pub(super) funding_report: Option<BlobStorageFundingReport>,
@@ -298,7 +298,7 @@ pub(super) struct BlobStorageActionResult {
 
 impl BlobStorageActionResult {
     pub(super) fn dry_run(
-        deployment: &str,
+        fleet: &str,
         action_name: BlobStorageActionName,
         target: BlobStorageTarget,
         method: &str,
@@ -307,7 +307,7 @@ impl BlobStorageActionResult {
         requested_cycles: Option<u128>,
     ) -> Self {
         Self::new(
-            deployment,
+            fleet,
             action_name,
             target,
             (method, mode),
@@ -318,7 +318,7 @@ impl BlobStorageActionResult {
     }
 
     pub(super) fn completed(
-        deployment: &str,
+        fleet: &str,
         action_name: BlobStorageActionName,
         target: BlobStorageTarget,
         method: &str,
@@ -327,7 +327,7 @@ impl BlobStorageActionResult {
         requested_cycles: Option<u128>,
     ) -> Self {
         Self::new(
-            deployment,
+            fleet,
             action_name,
             target,
             (method, mode),
@@ -338,7 +338,7 @@ impl BlobStorageActionResult {
     }
 
     fn new(
-        deployment: &str,
+        fleet: &str,
         action_name: BlobStorageActionName,
         target: BlobStorageTarget,
         method_mode: (&str, BlobStorageMethodMode),
@@ -350,7 +350,7 @@ impl BlobStorageActionResult {
         Self {
             schema_version: BLOB_STORAGE_JSON_SCHEMA_VERSION,
             kind: action_name.result_kind(),
-            deployment: deployment.to_string(),
+            fleet: fleet.to_string(),
             target,
             action: BlobStorageAction {
                 name: action_name,
@@ -406,7 +406,7 @@ pub(super) struct BlobStorageFundingReport {
 pub(super) struct BlobStorageStatusResult {
     pub(super) schema_version: u16,
     pub(super) kind: BlobStorageReportKind,
-    pub(super) deployment: String,
+    pub(super) fleet: String,
     pub(super) target: BlobStorageTarget,
     pub(super) configured: bool,
     pub(super) cashier: BlobStorageCashierStatus,

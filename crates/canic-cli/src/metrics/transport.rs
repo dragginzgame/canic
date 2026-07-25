@@ -1,7 +1,7 @@
 //! Module: metrics::transport
 //!
-//! Responsibility: collect typed metric observations for installed deployment canisters.
-//! Does not own: metric DTOs, report rendering, or deployment registry authority.
+//! Responsibility: collect typed metric observations for installed Fleet canisters.
+//! Does not own: metric DTOs, report rendering, or Fleet registry authority.
 //! Boundary: preserves query causes until projecting per-canister report diagnostics.
 
 use crate::metrics::{
@@ -17,9 +17,8 @@ use crate::support::candid::registry_entry_candid_path;
 use canic_host::{
     icp::{IcpCli, IcpCommandError, IcpDiagnostic, IcpJsonResponseError},
     icp_config::resolve_current_canic_icp_root,
-    installed_deployment::{
-        InstalledDeploymentRequest, InstalledDeploymentResolution,
-        resolve_installed_deployment_from_root,
+    installed_fleet::{
+        InstalledFleetRequest, InstalledFleetResolution, resolve_installed_fleet_from_root,
     },
     registry::RegistryEntry,
 };
@@ -50,7 +49,7 @@ pub(super) fn metrics_report(
     let canisters = collect_metrics_reports(options, &registry);
 
     Ok(MetricsReport {
-        deployment: options.deployment.clone(),
+        fleet: options.fleet.clone(),
         environment: options.environment.clone(),
         kind: options.kind,
         canisters,
@@ -58,7 +57,7 @@ pub(super) fn metrics_report(
 }
 
 fn load_registry(options: &MetricsOptions) -> Result<Vec<RegistryEntry>, MetricsCommandError> {
-    let mut registry = resolve_metrics_deployment(options)?.registry.entries;
+    let mut registry = resolve_metrics_fleet(options)?.registry.entries;
     registry.retain(|entry| matches_metrics_filter(options, entry));
     Ok(registry)
 }
@@ -241,13 +240,13 @@ fn query_metrics(
     parse_metrics_page(&output).map_err(MetricsQueryError::Response)
 }
 
-fn resolve_metrics_deployment(
+fn resolve_metrics_fleet(
     options: &MetricsOptions,
-) -> Result<InstalledDeploymentResolution, MetricsCommandError> {
+) -> Result<InstalledFleetResolution, MetricsCommandError> {
     let root = resolve_current_canic_icp_root().map_err(MetricsCommandError::IcpRoot)?;
-    resolve_installed_deployment_from_root(
-        &InstalledDeploymentRequest {
-            deployment: options.deployment.clone(),
+    resolve_installed_fleet_from_root(
+        &InstalledFleetRequest {
+            fleet: options.fleet.clone(),
             environment: options.environment.clone(),
             icp: options.icp.clone(),
             detect_lost_local_root: false,

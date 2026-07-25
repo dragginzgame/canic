@@ -20,9 +20,9 @@ use canic_host::{
     fleet_catalog::FleetCatalogEntryV1,
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
-    installed_deployment::{
-        InstalledDeploymentError, InstalledDeploymentRequest, InstalledDeploymentResolution,
-        InstalledDeploymentSource, resolve_installed_deployment_from_root,
+    installed_fleet::{
+        InstalledFleetError, InstalledFleetRequest, InstalledFleetResolution, InstalledFleetSource,
+        resolve_installed_fleet_from_root,
     },
 };
 
@@ -161,14 +161,14 @@ fn check_fleet_registry_observation(
         );
     };
 
-    let request = InstalledDeploymentRequest {
-        deployment: fleet.fleet_name.to_string(),
+    let request = InstalledFleetRequest {
+        fleet: fleet.fleet_name.to_string(),
         environment: environment.to_string(),
         icp: options.icp.clone(),
         detect_lost_local_root: true,
     };
 
-    match resolve_installed_deployment_from_root(&request, root) {
+    match resolve_installed_fleet_from_root(&request, root) {
         Ok(resolution) => fleet_registry_observed_check(&resolution),
         Err(err) => fleet_registry_error_check(err),
     }
@@ -191,9 +191,7 @@ pub(super) fn check_fleet_registry_not_evaluated(root_canister_present: bool) ->
     )
 }
 
-pub(super) fn fleet_registry_observed_check(
-    resolution: &InstalledDeploymentResolution,
-) -> MedicCheck {
+pub(super) fn fleet_registry_observed_check(resolution: &InstalledFleetResolution) -> MedicCheck {
     let entries = resolution.registry.entries.len();
     let roles = resolution.topology.roles_by_canister.len();
     let detail = format!(
@@ -231,7 +229,7 @@ fn deploy_plan_next(fleet: &str) -> String {
     format!("run canic deploy plan {fleet} to inspect desired Fleet shape")
 }
 
-fn runtime_inspection_next(resolution: &InstalledDeploymentResolution) -> String {
+fn runtime_inspection_next(resolution: &InstalledFleetResolution) -> String {
     let fleet = &resolution.fleet.fleet_name;
     let mut roles = resolution
         .topology
@@ -275,22 +273,23 @@ pub(super) fn deploy_plan_then(fleet: &str, next: impl AsRef<str>) -> String {
     format!("{}; {}", deploy_plan_next(fleet), next.as_ref())
 }
 
-const fn installed_fleet_source_for_medic(source: InstalledDeploymentSource) -> MedicSource {
+const fn installed_fleet_source_for_medic(source: InstalledFleetSource) -> MedicSource {
     match source {
-        InstalledDeploymentSource::LocalReplica => MedicSource::LocalReplica,
-        InstalledDeploymentSource::IcpCli => MedicSource::IcpCli,
+        InstalledFleetSource::LocalReplica => MedicSource::LocalReplica,
+        InstalledFleetSource::IcpCli => MedicSource::IcpCli,
     }
 }
 
-fn fleet_registry_error_check(error: InstalledDeploymentError) -> MedicCheck {
+fn fleet_registry_error_check(error: InstalledFleetError) -> MedicCheck {
     let source = match error {
-        InstalledDeploymentError::ReplicaQuery(_)
-        | InstalledDeploymentError::LostLocalDeployment { .. } => MedicSource::LocalReplica,
-        InstalledDeploymentError::Icp(_) => MedicSource::IcpCli,
-        InstalledDeploymentError::NoInstalledDeployment { .. }
-        | InstalledDeploymentError::FleetCatalog(_)
-        | InstalledDeploymentError::Registry(_)
-        | InstalledDeploymentError::Io(_) => MedicSource::InstalledFleet,
+        InstalledFleetError::ReplicaQuery(_) | InstalledFleetError::LostLocalFleet { .. } => {
+            MedicSource::LocalReplica
+        }
+        InstalledFleetError::Icp(_) => MedicSource::IcpCli,
+        InstalledFleetError::NoInstalledFleet { .. }
+        | InstalledFleetError::FleetCatalog(_)
+        | InstalledFleetError::Registry(_)
+        | InstalledFleetError::Io(_) => MedicSource::InstalledFleet,
     };
 
     MedicCheck::fail(

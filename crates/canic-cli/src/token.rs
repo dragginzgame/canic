@@ -1,6 +1,6 @@
 //! Module: canic_cli::token
 //!
-//! Responsibility: wrap ICP token commands with Canic deployment-target recipient resolution.
+//! Responsibility: wrap ICP token commands with Canic Fleet-target recipient resolution.
 //! Does not own: ledger semantics, ICP CLI execution, registry persistence, or token accounting.
 //! Boundary: parses token command options and delegates resolved commands to the configured ICP CLI.
 
@@ -17,9 +17,8 @@ use crate::{
 use canic_host::{
     icp::{IcpCli, IcpCommandError, command_display, run_output_with_stderr},
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
-    installed_deployment::{
-        InstalledDeploymentError, InstalledDeploymentRequest,
-        resolve_installed_deployment_from_root,
+    installed_fleet::{
+        InstalledFleetError, InstalledFleetRequest, resolve_installed_fleet_from_root,
     },
     registry::{RegistryEntry, RegistryParseError},
 };
@@ -28,13 +27,13 @@ use std::{ffi::OsString, path::Path};
 use thiserror::Error as ThisError;
 
 const TOKEN_USAGE: &str = "\
-Wrap ICP token commands with Canic deployment-target resolution
+Wrap ICP token commands with Canic Fleet-target resolution
 
 Usage: canic token [token-or-ledger-id] <command> [OPTIONS]
 
 Commands:
   balance   Display the selected identity token balance
-  transfer  Transfer tokens to an account, principal, or Canic deployment target
+  transfer  Transfer tokens to an account, principal, or Canic Fleet target
   help      Print this message or the help of the given subcommand(s)
 
 Examples:
@@ -47,7 +46,7 @@ Examples:
 ///
 /// TokenCommandError
 ///
-/// CLI boundary error for token command parsing, deployment target lookup, and
+/// CLI boundary error for token command parsing, Fleet target lookup, and
 /// delegated ICP CLI execution.
 ///
 
@@ -56,25 +55,23 @@ pub enum TokenCommandError {
     #[error("{0}")]
     Usage(String),
 
-    #[error("failed to read canic deployment state: {0}")]
+    #[error("failed to read Canic Fleet state: {0}")]
     IcpRoot(#[source] IcpConfigError),
 
     #[error(transparent)]
-    InstalledDeployment(#[from] InstalledDeploymentError),
+    InstalledFleet(#[from] InstalledFleetError),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
 
-    #[error("recipient must be a principal/account or <deployment>/<role-or-canister>")]
+    #[error("recipient must be a principal/account or <fleet>/<role-or-canister>")]
     InvalidRecipient,
 
-    #[error("deployment target {deployment} has no canister or role named {target}")]
-    UnknownTarget { deployment: String, target: String },
+    #[error("Fleet target {fleet} has no canister or role named {target}")]
+    UnknownTarget { fleet: String, target: String },
 
-    #[error(
-        "role {role} is ambiguous in deployment target {deployment}; use one canister principal"
-    )]
-    AmbiguousRole { deployment: String, role: String },
+    #[error("role {role} is ambiguous in Fleet target {fleet}; use one canister principal")]
+    AmbiguousRole { fleet: String, role: String },
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -292,12 +289,12 @@ fn transfer_receiver(
     root: &Path,
     receiver: &str,
 ) -> Result<String, TokenCommandError> {
-    let Some((deployment, canister_or_role)) = split_deployment_target(receiver)? else {
+    let Some((fleet, canister_or_role)) = split_fleet_target(receiver)? else {
         return Ok(receiver.to_string());
     };
-    let installed = resolve_installed_deployment_from_root(
-        &InstalledDeploymentRequest {
-            deployment: deployment.to_string(),
+    let installed = resolve_installed_fleet_from_root(
+        &InstalledFleetRequest {
+            fleet: fleet.to_string(),
             environment: target.environment.clone(),
             icp: target.icp.clone(),
             detect_lost_local_root: true,
@@ -306,25 +303,25 @@ fn transfer_receiver(
     )
     .map_err(TokenCommandError::from)?;
     resolve_canister_or_role(
-        deployment,
+        fleet,
         canister_or_role,
         &installed.fleet.root_principal,
         &installed.registry.entries,
     )
 }
 
-fn split_deployment_target(receiver: &str) -> Result<Option<(&str, &str)>, TokenCommandError> {
-    let Some((deployment, canister_or_role)) = receiver.split_once('/') else {
+fn split_fleet_target(receiver: &str) -> Result<Option<(&str, &str)>, TokenCommandError> {
+    let Some((fleet, canister_or_role)) = receiver.split_once('/') else {
         return Ok(None);
     };
-    if deployment.is_empty() || canister_or_role.is_empty() || canister_or_role.contains('/') {
+    if fleet.is_empty() || canister_or_role.is_empty() || canister_or_role.contains('/') {
         return Err(TokenCommandError::InvalidRecipient);
     }
-    Ok(Some((deployment, canister_or_role)))
+    Ok(Some((fleet, canister_or_role)))
 }
 
 fn resolve_canister_or_role(
-    deployment: &str,
+    fleet: &str,
     target: &str,
     root_canister_id: &str,
     registry: &[RegistryEntry],
@@ -335,11 +332,11 @@ fn resolve_canister_or_role(
     if registry.iter().any(|entry| entry.pid == target) {
         return Ok(target.to_string());
     }
-    resolve_role_principal(deployment, target, registry)
+    resolve_role_principal(fleet, target, registry)
 }
 
 fn resolve_role_principal(
-    deployment: &str,
+    fleet: &str,
     role: &str,
     registry: &[RegistryEntry],
 ) -> Result<String, TokenCommandError> {
@@ -350,11 +347,11 @@ fn resolve_role_principal(
     match matches.as_slice() {
         [entry] => Ok(entry.pid.clone()),
         [] => Err(TokenCommandError::UnknownTarget {
-            deployment: deployment.to_string(),
+            fleet: fleet.to_string(),
             target: role.to_string(),
         }),
         _ => Err(TokenCommandError::AmbiguousRole {
-            deployment: deployment.to_string(),
+            fleet: fleet.to_string(),
             role: role.to_string(),
         }),
     }
@@ -420,7 +417,7 @@ fn balance_command() -> ClapCommand {
 fn transfer_command() -> ClapCommand {
     ClapCommand::new("transfer")
         .bin_name("canic token transfer")
-        .about("Transfer tokens to an account, principal, or Canic deployment target")
+        .about("Transfer tokens to an account, principal, or Canic Fleet target")
         .disable_help_flag(true)
         .arg(
             value_arg("amount")
@@ -430,9 +427,9 @@ fn transfer_command() -> ClapCommand {
         )
         .arg(
             value_arg("receiver")
-                .value_name("receiver-or-deployment-target")
+                .value_name("receiver-or-fleet-target")
                 .required(true)
-                .help("Raw receiver, or Canic selector like <deployment>/<role-or-canister>"),
+                .help("Raw receiver, or Canic selector like <fleet>/<role-or-canister>"),
         )
         .arg(
             value_arg("to-subaccount")
@@ -488,7 +485,7 @@ mod tests {
         assert_eq!(explicit.args, vec![OsString::from("1")]);
     }
 
-    // Avoid guessing between raw accounts and Canic deployment names.
+    // Avoid guessing between raw accounts and Canic Fleet names.
     #[test]
     fn transfer_requires_receiver() {
         std::assert_matches!(
@@ -498,23 +495,23 @@ mod tests {
     }
 
     #[test]
-    fn parses_compact_deployment_target_receiver() {
+    fn parses_compact_fleet_target_receiver() {
         assert_eq!(
-            split_deployment_target("demo/app").expect("split target"),
+            split_fleet_target("demo/app").expect("split target"),
             Some(("demo", "app"))
         );
         assert_eq!(
-            split_deployment_target("aaaaa-aa").expect("split raw receiver"),
+            split_fleet_target("aaaaa-aa").expect("split raw receiver"),
             None
         );
         std::assert_matches!(
-            split_deployment_target("demo/app/extra"),
+            split_fleet_target("demo/app/extra"),
             Err(TokenCommandError::InvalidRecipient)
         );
     }
 
     #[test]
-    fn resolves_compact_deployment_target_receiver() {
+    fn resolves_compact_fleet_target_receiver() {
         let registry = vec![registry_entry("child-principal", "app")];
 
         assert_eq!(

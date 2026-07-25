@@ -1,8 +1,8 @@
 //! Module: canic_cli::info_env
 //!
-//! Responsibility: render sourceable installed-deployment canister ID exports.
-//! Does not own: deployment state persistence, registry authority, or canister lifecycle changes.
-//! Boundary: reads installed deployment state and renders shell or JSON output.
+//! Responsibility: render sourceable installed-Fleet canister ID exports.
+//! Does not own: Fleet state persistence, registry authority, or canister lifecycle changes.
+//! Boundary: reads installed Fleet state and renders shell or JSON output.
 
 use crate::{
     cli::{
@@ -19,9 +19,9 @@ use crate::{
 use canic_host::{
     icp::IcpCommandError,
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
-    installed_deployment::{
-        InstalledDeploymentError, InstalledDeploymentRequest, InstalledDeploymentResolution,
-        resolve_installed_deployment_from_root,
+    installed_fleet::{
+        InstalledFleetError, InstalledFleetRequest, InstalledFleetResolution,
+        resolve_installed_fleet_from_root,
     },
     registry::{RegistryEntry, RegistryParseError},
 };
@@ -43,7 +43,7 @@ Examples:
 ///
 /// InfoEnvCommandError
 ///
-/// CLI boundary error for resolving installed deployment state and rendering
+/// CLI boundary error for resolving installed Fleet state and rendering
 /// `canic info env` output.
 ///
 
@@ -56,7 +56,7 @@ pub enum InfoEnvCommandError {
     IcpRoot(#[source] IcpConfigError),
 
     #[error(transparent)]
-    InstalledDeployment(#[from] InstalledDeploymentError),
+    InstalledFleet(#[from] InstalledFleetError),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
@@ -71,11 +71,11 @@ pub enum InfoEnvCommandError {
     Registry(#[from] RegistryParseError),
 }
 
-/// Renderable installed-deployment canister ID export payload.
+/// Renderable installed-Fleet canister ID export payload.
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct InfoEnvReport {
-    deployment: String,
+    fleet: String,
     environment: String,
     bindings: Vec<InfoEnvBinding>,
 }
@@ -95,7 +95,7 @@ struct InfoEnvBinding {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct InfoEnvOptions {
-    deployment: String,
+    fleet: String,
     json: bool,
     out: Option<PathBuf>,
     environment: String,
@@ -111,7 +111,7 @@ impl InfoEnvOptions {
             .map_err(|_| InfoEnvCommandError::Usage(usage()))?;
 
         Ok(Self {
-            deployment: required_string(&matches, "deployment"),
+            fleet: required_string(&matches, "fleet"),
             json: matches.get_flag("json"),
             out: path_option(&matches, "out"),
             environment: string_option_or_else(&matches, "environment", local_environment),
@@ -120,7 +120,7 @@ impl InfoEnvOptions {
     }
 }
 
-/// Run the sourceable installed-deployment canister ID export command.
+/// Run the sourceable installed-Fleet canister ID export command.
 pub fn run<I>(args: I) -> Result<(), InfoEnvCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -137,17 +137,17 @@ where
 
 fn load_env_report(options: &InfoEnvOptions) -> Result<InfoEnvReport, InfoEnvCommandError> {
     let root = resolve_current_canic_icp_root().map_err(InfoEnvCommandError::IcpRoot)?;
-    let resolution = resolve_info_env_deployment(options, &root)?;
+    let resolution = resolve_info_env_fleet(options, &root)?;
     Ok(env_report(options, &resolution))
 }
 
-fn resolve_info_env_deployment(
+fn resolve_info_env_fleet(
     options: &InfoEnvOptions,
     icp_root: &Path,
-) -> Result<InstalledDeploymentResolution, InfoEnvCommandError> {
-    resolve_installed_deployment_from_root(
-        &InstalledDeploymentRequest {
-            deployment: options.deployment.clone(),
+) -> Result<InstalledFleetResolution, InfoEnvCommandError> {
+    resolve_installed_fleet_from_root(
+        &InstalledFleetRequest {
+            fleet: options.fleet.clone(),
             environment: options.environment.clone(),
             icp: options.icp.clone(),
             detect_lost_local_root: false,
@@ -157,12 +157,9 @@ fn resolve_info_env_deployment(
     .map_err(InfoEnvCommandError::from)
 }
 
-fn env_report(
-    options: &InfoEnvOptions,
-    resolution: &InstalledDeploymentResolution,
-) -> InfoEnvReport {
+fn env_report(options: &InfoEnvOptions, resolution: &InstalledFleetResolution) -> InfoEnvReport {
     InfoEnvReport {
-        deployment: options.deployment.clone(),
+        fleet: options.fleet.clone(),
         environment: options.environment.clone(),
         bindings: env_bindings(
             &resolution.registry.root_canister_id,
@@ -288,7 +285,7 @@ fn write_env_report(
 
 fn render_shell_exports(report: &InfoEnvReport) -> String {
     let mut lines = vec![
-        format!("# canic info env {}", report.deployment),
+        format!("# canic info env {}", report.fleet),
         format!("# environment: {}", report.environment),
     ];
     lines.extend(report.bindings.iter().map(|binding| {
@@ -312,13 +309,13 @@ fn usage() -> String {
 fn info_env_command() -> ClapCommand {
     ClapCommand::new("env")
         .bin_name("canic info env")
-        .about("Print sourceable installed deployment canister ID exports")
+        .about("Print sourceable installed Fleet canister ID exports")
         .disable_help_flag(true)
         .arg(
-            value_arg("deployment")
-                .value_name("deployment")
+            value_arg("fleet")
+                .value_name("fleet")
                 .required(true)
-                .help("Installed deployment target name to inspect"),
+                .help("Installed Fleet name to inspect"),
         )
         .arg(flag_arg("json").long("json"))
         .arg(value_arg("out").long("out").value_name("file"))
@@ -362,7 +359,7 @@ mod tests {
         ])
         .expect("parse info env options");
 
-        assert_eq!(options.deployment, "demo-local");
+        assert_eq!(options.fleet, "demo-local");
         assert!(options.json);
         assert_eq!(options.out, Some(PathBuf::from("ids.json")));
         assert_eq!(options.environment, "academic");
@@ -370,13 +367,12 @@ mod tests {
     }
 
     #[test]
-    fn usage_uses_deployment_target_wording() {
+    fn usage_uses_fleet_wording() {
         let text = usage();
 
-        assert!(text.contains("Usage: canic info env [OPTIONS] <deployment>"));
-        assert!(text.contains("Installed deployment target name to inspect"));
-        assert!(text.contains("sourceable installed deployment canister ID exports"));
-        assert!(!text.contains("<fleet>"));
+        assert!(text.contains("Usage: canic info env [OPTIONS] <fleet>"));
+        assert!(text.contains("Installed Fleet name to inspect"));
+        assert!(text.contains("sourceable installed Fleet canister ID exports"));
     }
 
     #[test]
@@ -423,7 +419,7 @@ mod tests {
     #[test]
     fn render_shell_exports_is_sourceable() {
         let report = InfoEnvReport {
-            deployment: "demo-local".to_string(),
+            fleet: "demo-local".to_string(),
             environment: "academic".to_string(),
             bindings: vec![InfoEnvBinding {
                 variable: "CANIC_ROOT".to_string(),

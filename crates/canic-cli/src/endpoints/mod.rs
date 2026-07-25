@@ -42,12 +42,9 @@ pub enum EndpointsCommandError {
     CandidEndpoint(#[from] CandidEndpointError),
 
     #[error(
-        "live metadata was unavailable for {canister} in deployment target {deployment} and no local Candid artifact could be resolved"
+        "live metadata was unavailable for {canister} in Fleet {fleet} and no local Candid artifact could be resolved"
     )]
-    NoInterfaceArtifact {
-        deployment: String,
-        canister: String,
-    },
+    NoInterfaceArtifact { fleet: String, canister: String },
 
     #[error("local Candid artifact not found for role {role}: {path}")]
     MissingRoleArtifact { role: String, path: String },
@@ -71,7 +68,7 @@ pub enum EndpointsCommandError {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct EndpointsOptions {
-    deployment: String,
+    fleet: String,
     canister: String,
     environment: Option<String>,
     icp: String,
@@ -83,7 +80,7 @@ impl EndpointsOptions {
     where
         I: IntoIterator<Item = OsString>,
     {
-        Self::parse_with(args, info_command, info_usage, "deployment")
+        Self::parse_with(args, info_command, info_usage, "fleet")
     }
 
     fn parse_with<I>(
@@ -98,7 +95,7 @@ impl EndpointsOptions {
         let matches =
             parse_matches(command(), args).map_err(|_| EndpointsCommandError::Usage(usage()))?;
         Ok(Self {
-            deployment: required_string(&matches, target_arg),
+            fleet: required_string(&matches, target_arg),
             canister: required_string(&matches, "canister"),
             environment: string_option(&matches, "environment"),
             icp: string_option_or_else(&matches, "icp", default_icp),
@@ -107,7 +104,7 @@ impl EndpointsOptions {
     }
 }
 
-/// Run the installed-deployment endpoint listing command.
+/// Run the installed-Fleet endpoint listing command.
 pub fn run_info<I>(args: I) -> Result<(), EndpointsCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -134,8 +131,8 @@ fn run_options(options: &EndpointsOptions) -> Result<(), EndpointsCommandError> 
 fn info_command() -> ClapCommand {
     endpoint_command(
         "canic info endpoints",
-        "deployment",
-        "Installed deployment target name to inspect",
+        "fleet",
+        "Installed Fleet name to inspect",
         INFO_HELP_AFTER,
     )
 }

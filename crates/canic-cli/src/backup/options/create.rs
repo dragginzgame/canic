@@ -24,7 +24,7 @@ use std::{ffi::OsString, path::PathBuf};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::backup) struct BackupCreateOptions {
-    pub(in crate::backup) deployment: String,
+    pub(in crate::backup) fleet: String,
     pub(in crate::backup) subtree: Option<String>,
     pub(in crate::backup) out: Option<PathBuf>,
     pub(in crate::backup) dry_run: bool,
@@ -40,7 +40,7 @@ impl BackupCreateOptions {
         let matches = parse_backup_options(backup_create_command(), create_usage, args)?;
 
         Ok(Self {
-            deployment: required_string(&matches, "deployment"),
+            fleet: required_string(&matches, "fleet"),
             subtree: string_option(&matches, "subtree"),
             out: path_option(&matches, "out"),
             dry_run: matches.get_flag("dry-run"),
@@ -56,10 +56,10 @@ pub(in crate::backup) fn backup_create_command() -> ClapCommand {
         .about("Create a topology-aware deployment backup")
         .disable_help_flag(true)
         .arg(
-            value_arg("deployment")
-                .value_name("deployment")
+            value_arg("fleet")
+                .value_name("fleet")
                 .required(true)
-                .help("Installed deployment target name to back up"),
+                .help("Installed Fleet name to back up"),
         )
         .arg(
             value_arg("subtree")

@@ -1,6 +1,6 @@
 //! Module: cycles::transport
 //!
-//! Responsibility: collect cycle history and supplemental observations for deployment canisters.
+//! Responsibility: collect cycle history and supplemental observations for Fleet canisters.
 //! Does not own: cycle accounting, endpoint DTOs, or report rendering.
 //! Boundary: preserves query causes until projecting per-canister report diagnostics.
 
@@ -24,9 +24,8 @@ use canic_host::{
     cycle_balance::{CycleBalanceQueryError, query_cycle_balance},
     icp::{IcpCli, IcpCommandError, IcpJsonResponseError},
     icp_config::resolve_current_canic_icp_root,
-    installed_deployment::{
-        InstalledDeploymentRequest, InstalledDeploymentResolution,
-        resolve_installed_deployment_from_root,
+    installed_fleet::{
+        InstalledFleetRequest, InstalledFleetResolution, resolve_installed_fleet_from_root,
     },
     registry::RegistryEntry,
 };
@@ -78,7 +77,7 @@ pub(super) fn cycles_report(options: &CyclesOptions) -> Result<CyclesReport, Cyc
         collect_cycle_tracker_reports(options, &registry, requested_since_secs, generated_at_secs)?;
 
     Ok(CyclesReport {
-        deployment: options.deployment.clone(),
+        fleet: options.fleet.clone(),
         environment: options.environment.clone(),
         since_seconds: options.since_seconds,
         generated_at_secs,
@@ -87,7 +86,7 @@ pub(super) fn cycles_report(options: &CyclesOptions) -> Result<CyclesReport, Cyc
 }
 
 fn load_registry(options: &CyclesOptions) -> Result<Vec<RegistryEntry>, CyclesCommandError> {
-    Ok(resolve_cycles_deployment(options)?.registry.entries)
+    Ok(resolve_cycles_fleet(options)?.registry.entries)
 }
 
 fn collect_cycle_tracker_reports(
@@ -514,13 +513,13 @@ fn current_unix_seconds() -> u64 {
         .map_or(0, |duration| duration.as_secs())
 }
 
-fn resolve_cycles_deployment(
+fn resolve_cycles_fleet(
     options: &CyclesOptions,
-) -> Result<InstalledDeploymentResolution, CyclesCommandError> {
+) -> Result<InstalledFleetResolution, CyclesCommandError> {
     let root = resolve_current_canic_icp_root().map_err(CyclesCommandError::IcpRoot)?;
-    resolve_installed_deployment_from_root(
-        &InstalledDeploymentRequest {
-            deployment: options.deployment.clone(),
+    resolve_installed_fleet_from_root(
+        &InstalledFleetRequest {
+            fleet: options.fleet.clone(),
             environment: options.environment.clone(),
             icp: options.icp.clone(),
             detect_lost_local_root: false,

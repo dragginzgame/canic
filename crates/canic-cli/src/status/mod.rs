@@ -22,9 +22,8 @@ use canic_host::{
         inspect_canic_icp_yaml_from_root, resolve_current_canic_icp_root,
     },
     install_root::{ConfigDiscoveryError, discover_project_canic_config_choices},
-    installed_deployment::{
-        InstalledDeploymentError, InstalledDeploymentRequest,
-        resolve_installed_deployment_from_root,
+    installed_fleet::{
+        InstalledFleetError, InstalledFleetRequest, resolve_installed_fleet_from_root,
     },
     registry::RegistryEntry,
     release_set::{AppConfigSnapshot, display_workspace_path},
@@ -322,9 +321,9 @@ fn deployed_label(
         return "unknown".to_string();
     }
 
-    match resolve_installed_deployment_from_root(
-        &InstalledDeploymentRequest {
-            deployment: fleet.fleet_name.to_string(),
+    match resolve_installed_fleet_from_root(
+        &InstalledFleetRequest {
+            fleet: fleet.fleet_name.to_string(),
             environment: options.environment.clone(),
             icp: options.icp.clone(),
             detect_lost_local_root: true,
@@ -337,7 +336,7 @@ fn deployed_label(
                 |roles| classify_local_fleet(roles, &resolution.registry.entries).to_string(),
             )
         }
-        Err(InstalledDeploymentError::LostLocalDeployment { .. }) => LOCAL_LOST_FLEET.to_string(),
+        Err(InstalledFleetError::LostLocalFleet { .. }) => LOCAL_LOST_FLEET.to_string(),
         Ok(_) | Err(_) => "error".to_string(),
     }
 }

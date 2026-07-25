@@ -192,20 +192,18 @@ fn command_family_help_returns_ok() {
 }
 
 #[test]
-fn info_help_uses_deployment_target_wording() {
+fn info_help_uses_fleet_target_wording() {
     let err = run([OsString::from("info")]).expect_err("info needs a subcommand");
     let CliError::Info(InfoCommandError::Usage(text)) = err else {
         panic!("expected info usage error");
     };
 
-    assert!(text.contains("installed-deployment information commands"));
-    assert!(text.contains("List installed deployment canisters"));
-    assert!(text.contains("Summarize deployment cycle history"));
+    assert!(text.contains("installed-Fleet information commands"));
+    assert!(text.contains("List installed Fleet canisters"));
+    assert!(text.contains("Summarize Fleet cycle history"));
     assert!(text.contains("Query Canic runtime telemetry"));
     assert!(text.contains("List callable Candid endpoints"));
     assert!(text.contains("Print sourceable canister ID exports"));
-    assert!(!text.contains("deployed-fleet"));
-    assert!(!text.contains("deployed fleet"));
 }
 
 #[cfg(unix)]

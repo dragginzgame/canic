@@ -23,7 +23,7 @@ pub(super) fn write_renewal_status_result(
 pub(super) fn render_renewal_status_result(result: &AuthRenewalStatusResult) -> String {
     let mut lines = vec![
         format!("Auth renewal status: {}", result.issuer_pid),
-        format!("Deployment: {}", result.deployment),
+        format!("Fleet: {}", result.fleet),
         format!("Root: {}", result.target.canister_id),
         format!("Status: {}", result.status.label()),
         format!(

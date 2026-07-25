@@ -24,7 +24,7 @@ fn parses_backup_create_options() {
     ])
     .expect("parse options");
 
-    assert_eq!(options.deployment, "demo");
+    assert_eq!(options.fleet, "demo");
     assert_eq!(options.subtree, Some("app".to_string()));
     assert_eq!(options.out, Some(PathBuf::from("backups/plan")));
     assert!(options.dry_run);

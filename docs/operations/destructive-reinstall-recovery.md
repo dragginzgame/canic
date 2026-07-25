@@ -55,7 +55,7 @@ instead of claiming corruption.
 For delegated-auth issuers, also run:
 
 ```bash
-canic --environment <environment> auth renewal status <deployment> \
+canic --environment <environment> auth renewal status <fleet> \
   --issuer <principal>
 ```
 

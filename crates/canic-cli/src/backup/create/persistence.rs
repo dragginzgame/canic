@@ -45,7 +45,7 @@ fn ensure_resume_plan_compatible(
     existing: &BackupPlan,
     requested: &BackupPlan,
 ) -> Result<(), BackupCommandError> {
-    compare_resume_field("deployment", &existing.fleet, &requested.fleet)?;
+    compare_resume_field("fleet", &existing.fleet, &requested.fleet)?;
     compare_resume_field("environment", &existing.environment, &requested.environment)?;
     compare_resume_field(
         "root_canister_id",

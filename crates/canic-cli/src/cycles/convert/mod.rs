@@ -7,7 +7,7 @@ mod response;
 use crate::{
     cycles::{
         CyclesCommandError,
-        wallet::{ResolvedCanisterTarget, resolve_deployment},
+        wallet::{ResolvedCanisterTarget, resolve_fleet},
     },
     support::candid::role_candid_path,
 };
@@ -38,7 +38,7 @@ pub(super) fn usage() -> String {
 
 fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
     let root = resolve_current_canic_icp_root().map_err(CyclesCommandError::IcpRoot)?;
-    let installed = resolve_deployment(&options.target, &root, &options.deployment)?;
+    let installed = resolve_fleet(&options.target, &root, &options.fleet)?;
     let root_target = ResolvedCanisterTarget {
         canister_id: installed.fleet.root_principal,
         role: Some("root".to_string()),
@@ -124,7 +124,7 @@ fn write_dry_run(
         println!(
             "{}",
             serde_json::json!({
-                "deployment": options.deployment,
+                "fleet": options.fleet,
                 "root_canister_id": root.canister_id,
                 "source_subaccount": options.source_subaccount.map(hex_bytes),
                 "amount_e8s": options.amount_e8s,

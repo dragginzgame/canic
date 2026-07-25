@@ -2,7 +2,7 @@
 //!
 //! Responsibility: build backup create planning inputs and topology hashes.
 //! Does not own: CLI option parsing, persistence, or runner execution.
-//! Boundary: deterministic conversion from installed deployment rows to backup plan inputs.
+//! Boundary: deterministic conversion from installed Fleet rows to backup plan inputs.
 
 use super::super::BackupCommandError;
 use crate::support::path_stamp::{current_backup_directory_stamp, file_safe_component};
@@ -57,18 +57,18 @@ pub(super) fn registry_topology_hash(
     Ok(TopologyHasher::hash(&records).hash)
 }
 
-pub(super) fn backup_plan_id(deployment: &str) -> String {
+pub(super) fn backup_plan_id(fleet: &str) -> String {
     format!(
         "plan-{}-{}",
-        file_safe_component(deployment),
+        file_safe_component(fleet),
         current_backup_directory_stamp()
     )
 }
 
-pub(super) fn default_backup_output_path(deployment: &str) -> PathBuf {
+pub(super) fn default_backup_output_path(fleet: &str) -> PathBuf {
     PathBuf::from("backups").join(format!(
         "deployment-{}-{}",
-        file_safe_component(deployment),
+        file_safe_component(fleet),
         current_backup_directory_stamp()
     ))
 }
@@ -113,9 +113,9 @@ mod tests {
         assert!(!rendered.contains("fleet-demo"));
     }
 
-    // Ensure generated plan ids are derived from the deployment target.
+    // Ensure generated plan ids are derived from the selected Fleet.
     #[test]
-    fn backup_plan_id_uses_deployment_target() {
+    fn backup_plan_id_uses_fleet() {
         let plan_id = backup_plan_id("demo local");
 
         assert!(plan_id.starts_with("plan-demo-local-"));

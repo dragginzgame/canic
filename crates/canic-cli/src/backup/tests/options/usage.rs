@@ -6,7 +6,7 @@
 
 use super::super::super::*;
 use crate::backup::manifest::ManifestCommandError;
-use canic_host::installed_deployment::InstalledDeploymentError;
+use canic_host::installed_fleet::InstalledFleetError;
 use std::ffi::OsString;
 
 // Ensure backup help stays at command-family level.
@@ -24,34 +24,29 @@ fn backup_usage_lists_commands_without_nested_flag_dump() {
 }
 
 #[test]
-fn backup_create_usage_uses_deployment_target_wording() {
+fn backup_create_usage_uses_fleet_target_wording() {
     let text = create_usage();
 
-    assert!(text.contains("Usage: canic backup create [OPTIONS] <deployment>"));
+    assert!(text.contains("Usage: canic backup create [OPTIONS] <fleet>"));
     assert!(text.contains("Create a topology-aware deployment backup"));
-    assert!(text.contains("Installed deployment target name to back up"));
+    assert!(text.contains("Installed Fleet name to back up"));
     assert!(text.contains("backups/deployment-<name>-YYYYMMDD-HHMMSS"));
     assert!(!text.contains("backups/fleet-<name>"));
-    assert!(!text.contains("Installed fleet"));
 }
 
 #[test]
-fn missing_backup_deployment_preserves_canonical_typed_error() {
-    let error = BackupCommandError::from(InstalledDeploymentError::NoInstalledDeployment {
+fn missing_backup_fleet_preserves_canonical_typed_error() {
+    let error = BackupCommandError::from(InstalledFleetError::NoInstalledFleet {
         environment: "local".to_string(),
-        deployment: "demo-local".to_string(),
+        fleet: "demo-local".to_string(),
     });
-    let message = error.to_string();
 
-    assert_eq!(
-        message,
-        "deployment target demo-local is not installed on environment local"
-    );
     std::assert_matches!(
         error,
-        BackupCommandError::InstalledDeployment(
-            InstalledDeploymentError::NoInstalledDeployment { .. }
-        )
+        BackupCommandError::InstalledFleet(InstalledFleetError::NoInstalledFleet {
+            environment,
+            fleet,
+        }) if environment == "local" && fleet == "demo-local"
     );
 }
 

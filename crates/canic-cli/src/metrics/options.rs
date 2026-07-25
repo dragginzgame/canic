@@ -19,7 +19,7 @@ const DEFAULT_LIMIT: &str = "1000";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct MetricsOptions {
-    pub(super) deployment: String,
+    pub(super) fleet: String,
     pub(super) kind: MetricsKind,
     pub(super) role: Option<String>,
     pub(super) canister: Option<String>,
@@ -51,7 +51,7 @@ impl MetricsOptions {
         let matches =
             parse_matches(command(), args).map_err(|_| MetricsCommandError::Usage(usage()))?;
         Ok(Self {
-            deployment: required_string(&matches, "deployment"),
+            fleet: required_string(&matches, "fleet"),
             kind: required_typed(&matches, "kind"),
             role: string_option(&matches, "role"),
             canister: string_option(&matches, "canister"),
@@ -80,10 +80,10 @@ fn metrics_command_with_bin_name(bin_name: &'static str) -> ClapCommand {
         .about("Query Canic runtime telemetry")
         .disable_help_flag(true)
         .arg(
-            value_arg("deployment")
-                .value_name("deployment")
+            value_arg("fleet")
+                .value_name("fleet")
                 .required(true)
-                .help("Installed deployment target name to inspect"),
+                .help("Installed Fleet name to inspect"),
         )
         .arg(
             value_arg("kind")

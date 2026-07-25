@@ -73,8 +73,8 @@ not accept caller-supplied proof bytes.
 The retained operator command is status-only:
 
 ```bash
-canic auth renewal status <deployment> --issuer <principal>
-canic auth renewal status <deployment> --issuer <principal> --json
+canic auth renewal status <fleet> --issuer <principal>
+canic auth renewal status <fleet> --issuer <principal> --json
 canic medic fleet <fleet> --auth-renewal <principal>
 ```
 
@@ -124,7 +124,7 @@ same issuer.
 Use status before escalating a delegated-auth liveness issue:
 
 ```bash
-canic auth renewal status <deployment> --issuer <principal> --json
+canic auth renewal status <fleet> --issuer <principal> --json
 ```
 
 Important status outcomes:

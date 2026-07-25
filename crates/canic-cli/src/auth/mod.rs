@@ -29,9 +29,8 @@ use canic_host::{
     candid_endpoints::{CandidEndpointError, EndpointMode, parse_candid_service_endpoints},
     icp::{IcpCli, IcpCommandError, IcpJsonResponseError},
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
-    installed_deployment::{
-        InstalledDeploymentError, InstalledDeploymentRequest,
-        resolve_installed_deployment_from_root,
+    installed_fleet::{
+        InstalledFleetError, InstalledFleetRequest, resolve_installed_fleet_from_root,
     },
     registry::RegistryEntry,
 };
@@ -53,7 +52,7 @@ use render::{render_issuer_observation, write_renewal_status_result};
 const COMMAND_NAME: &str = "auth";
 const RENEWAL_COMMAND: &str = "renewal";
 const STATUS_COMMAND: &str = "status";
-const DEPLOYMENT_ARG: &str = "deployment";
+const FLEET_ARG: &str = "fleet";
 const ISSUER_ARG: &str = "issuer";
 const JSON_ARG: &str = "json";
 const ROOT_ROLE: &str = "root";
@@ -77,19 +76,19 @@ pub enum AuthCommandError {
     #[error("failed to render JSON output: {0}")]
     Json(#[from] serde_json::Error),
 
-    #[error("failed to read canic deployment state: {0}")]
+    #[error("failed to read Canic Fleet state: {0}")]
     IcpRoot(#[source] IcpConfigError),
 
     #[error(transparent)]
-    InstalledDeployment(#[from] InstalledDeploymentError),
+    InstalledFleet(#[from] InstalledFleetError),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
 
     #[error(
-        "root target in deployment {deployment} has no local Candid sidecar; rebuild or register local metadata before using auth renewal commands"
+        "root target in Fleet {fleet} has no local Candid sidecar; rebuild or register local metadata before using auth renewal commands"
     )]
-    CandidUnavailable { deployment: String },
+    CandidUnavailable { fleet: String },
 
     #[error("issuer must be a valid principal: {issuer}")]
     InvalidIssuerPrincipal { issuer: String },
@@ -121,12 +120,12 @@ impl AuthCommandError {
             Self::Icp(IcpCommandError::Io(_))
             | Self::Usage(_)
             | Self::Json(_)
-            | Self::InstalledDeployment(
-                InstalledDeploymentError::Icp(IcpCommandError::Io(_))
-                | InstalledDeploymentError::NoInstalledDeployment { .. }
-                | InstalledDeploymentError::FleetCatalog(_)
-                | InstalledDeploymentError::Registry(_)
-                | InstalledDeploymentError::Io(_),
+            | Self::InstalledFleet(
+                InstalledFleetError::Icp(IcpCommandError::Io(_))
+                | InstalledFleetError::NoInstalledFleet { .. }
+                | InstalledFleetError::FleetCatalog(_)
+                | InstalledFleetError::Registry(_)
+                | InstalledFleetError::Io(_),
             )
             | Self::IcpRoot(_)
             | Self::CandidUnavailable { .. }
@@ -135,10 +134,10 @@ impl AuthCommandError {
             | Self::CandidParse { .. }
             | Self::MethodUnavailable { .. }
             | Self::MethodModeMismatch { .. } => 1,
-            Self::InstalledDeployment(
-                InstalledDeploymentError::ReplicaQuery(_)
-                | InstalledDeploymentError::LostLocalDeployment { .. }
-                | InstalledDeploymentError::Icp(_),
+            Self::InstalledFleet(
+                InstalledFleetError::ReplicaQuery(_)
+                | InstalledFleetError::LostLocalFleet { .. }
+                | InstalledFleetError::Icp(_),
             )
             | Self::Icp(_) => 2,
             Self::ResponseParse(_) => 3,
@@ -162,7 +161,7 @@ struct CommonOptions {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct RenewalStatusOptions {
-    deployment: String,
+    fleet: String,
     issuer: String,
     json: bool,
     common: CommonOptions,
@@ -184,7 +183,7 @@ impl AuthOptions {
         match matches.subcommand() {
             Some((RENEWAL_COMMAND, matches)) => match matches.subcommand() {
                 Some((STATUS_COMMAND, matches)) => Ok(RenewalStatusOptions {
-                    deployment: required_string(matches, DEPLOYMENT_ARG),
+                    fleet: required_string(matches, FLEET_ARG),
                     issuer: required_string(matches, ISSUER_ARG),
                     json: matches.get_flag(JSON_ARG),
                     common: common_options(matches),
@@ -244,10 +243,10 @@ fn status_command() -> ClapCommand {
         .disable_help_flag(true)
         .about("Show chain-key delegation proof renewal state for one issuer")
         .arg(
-            value_arg(DEPLOYMENT_ARG)
-                .value_name(DEPLOYMENT_ARG)
+            value_arg(FLEET_ARG)
+                .value_name(FLEET_ARG)
                 .required(true)
-                .help("Installed deployment target name"),
+                .help("Installed Fleet name"),
         )
         .arg(
             value_arg(ISSUER_ARG)
@@ -268,7 +267,7 @@ fn run_renewal_status(options: &RenewalStatusOptions) -> Result<(), AuthCommandE
 }
 
 pub fn renewal_medic_summary(
-    deployment: &str,
+    fleet: &str,
     issuer: &str,
     environment: &str,
     icp: &str,
@@ -277,7 +276,7 @@ pub fn renewal_medic_summary(
     let result = renewal_status_result_with_runtime(
         &runtime,
         &RenewalStatusOptions {
-            deployment: deployment.to_string(),
+            fleet: fleet.to_string(),
             issuer: issuer.to_string(),
             json: true,
             common: CommonOptions {
@@ -293,7 +292,7 @@ trait AuthRenewalRuntime {
     fn resolve_root_target(
         &self,
         options: &CommonOptions,
-        deployment: &str,
+        fleet: &str,
         method: &str,
     ) -> Result<AuthRootCallTarget, AuthCommandError>;
 
@@ -330,7 +329,7 @@ fn renewal_status_result_with_runtime(
     let issuer_pid = parse_issuer_principal(&options.issuer)?;
     let target = runtime.resolve_root_target(
         &options.common,
-        &options.deployment,
+        &options.fleet,
         CANIC_ROOT_ISSUER_RENEWAL_STATUS,
     )?;
     let output = runtime.query_output(
@@ -347,7 +346,7 @@ fn renewal_status_result_with_runtime(
     Ok(AuthRenewalStatusResult {
         schema_version: AUTH_RENEWAL_STATUS_SCHEMA_VERSION,
         kind: AuthRenewalReportKind::Status,
-        deployment: options.deployment.clone(),
+        fleet: options.fleet.clone(),
         environment: options.common.environment.clone(),
         target: target.target,
         issuer_pid,
@@ -363,10 +362,10 @@ impl AuthRenewalRuntime for LiveAuthRenewalRuntime {
     fn resolve_root_target(
         &self,
         options: &CommonOptions,
-        deployment: &str,
+        fleet: &str,
         method: &str,
     ) -> Result<AuthRootCallTarget, AuthCommandError> {
-        resolve_auth_root_call_target(options, deployment, method)
+        resolve_auth_root_call_target(options, fleet, method)
     }
 
     fn query_output(
@@ -416,9 +415,9 @@ enum AuthRenewalReportKind {
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
 enum AuthRenewalCandidSource {
-    InstalledDeployment,
+    #[serde(rename = "installed_fleet")]
+    InstalledFleet,
 }
 
 ///
@@ -577,7 +576,7 @@ struct AuthIssuerObservation {
 struct AuthRenewalStatusResult {
     schema_version: u16,
     kind: AuthRenewalReportKind,
-    deployment: String,
+    fleet: String,
     environment: String,
     target: AuthRootTarget,
     issuer_pid: String,
@@ -609,13 +608,13 @@ pub struct AuthRenewalMedicSummary {
 
 fn resolve_auth_root_call_target(
     options: &CommonOptions,
-    deployment: &str,
+    fleet: &str,
     method: &str,
 ) -> Result<AuthRootCallTarget, AuthCommandError> {
     let icp_root = resolve_current_canic_icp_root().map_err(AuthCommandError::IcpRoot)?;
-    let installed = resolve_installed_deployment_from_root(
-        &InstalledDeploymentRequest {
-            deployment: deployment.to_string(),
+    let installed = resolve_installed_fleet_from_root(
+        &InstalledFleetRequest {
+            fleet: fleet.to_string(),
             environment: options.environment.clone(),
             icp: options.icp.clone(),
             detect_lost_local_root: true,
@@ -625,7 +624,7 @@ fn resolve_auth_root_call_target(
     .map_err(AuthCommandError::from)?;
     let candid_path = role_candid_path(Some(&icp_root), &options.environment, ROOT_ROLE)
         .ok_or_else(|| AuthCommandError::CandidUnavailable {
-            deployment: deployment.to_string(),
+            fleet: fleet.to_string(),
         })?;
     let candid =
         fs::read_to_string(&candid_path).map_err(|source| AuthCommandError::CandidRead {
@@ -639,7 +638,7 @@ fn resolve_auth_root_call_target(
             input: ROOT_ROLE.to_string(),
             role: ROOT_ROLE.to_string(),
             canister_id: installed.fleet.root_principal,
-            candid_source: AuthRenewalCandidSource::InstalledDeployment,
+            candid_source: AuthRenewalCandidSource::InstalledFleet,
         },
         candid_path,
         icp_root,
@@ -680,7 +679,7 @@ fn resolve_auth_issuer_call_target(
             input: issuer_pid.to_string(),
             role: entry.role.clone(),
             canister_id: issuer_pid.to_string(),
-            candid_source: AuthRenewalCandidSource::InstalledDeployment,
+            candid_source: AuthRenewalCandidSource::InstalledFleet,
         },
         candid_path,
         icp_root: root_target.icp_root.clone(),
@@ -916,7 +915,7 @@ fn auth_renewal_medic_summary_from_result(
     } else if observation.drift_detected {
         format!(
             "run canic auth renewal status {} --issuer {}; if drift persists, wait for root chain-key renewal or retry an issuer login/update so lazy repair can run",
-            result.deployment, result.issuer_pid
+            result.fleet, result.issuer_pid
         )
     } else if result.status == AuthRenewalStatusCode::BatchFailed {
         format!(
@@ -938,7 +937,7 @@ fn auth_renewal_medic_summary_from_result(
     } else {
         format!(
             "run canic auth renewal status {} --issuer {}",
-            result.deployment, result.issuer_pid
+            result.fleet, result.issuer_pid
         )
     };
 

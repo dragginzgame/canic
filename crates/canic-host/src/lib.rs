@@ -22,7 +22,7 @@ pub mod format;
 pub mod icp;
 pub mod icp_config;
 pub mod install_root;
-pub mod installed_deployment;
+pub mod installed_fleet;
 pub mod network;
 pub mod policy_gate;
 pub mod registry;

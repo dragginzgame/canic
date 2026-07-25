@@ -29,9 +29,7 @@ use canic_core::ids::{AppId, CanisterRole, CanonicalNetworkId, FleetId};
 use canic_host::{
     fleet_catalog::{FleetCatalogEntryV1, FleetCatalogError},
     icp::local_canister_candid_path,
-    installed_deployment::{
-        InstalledDeploymentError, InstalledDeploymentResolution, InstalledDeploymentSource,
-    },
+    installed_fleet::{InstalledFleetError, InstalledFleetResolution, InstalledFleetSource},
     state_manifest::{StateAuditStatus, build_state_audit_report},
 };
 use serde_json::Value as JsonValue;
@@ -1060,7 +1058,7 @@ fn renders_blob_storage_medic_summary() {
 fn blob_storage_medic_error_check_classifies_target_errors() {
     let missing = blob_storage_medic_error_check(
         BlobStorageCommandError::UnknownTarget {
-            deployment: "demo".to_string(),
+            fleet: "demo".to_string(),
             target: "store".to_string(),
         },
         "demo",
@@ -1068,7 +1066,7 @@ fn blob_storage_medic_error_check_classifies_target_errors() {
     );
     let ambiguous = blob_storage_medic_error_check(
         BlobStorageCommandError::AmbiguousRole {
-            deployment: "demo".to_string(),
+            fleet: "demo".to_string(),
             role: "store".to_string(),
         },
         "demo",
@@ -1076,7 +1074,7 @@ fn blob_storage_medic_error_check_classifies_target_errors() {
     );
     let not_blob_storage = blob_storage_medic_error_check(
         BlobStorageCommandError::CandidUnavailable {
-            deployment: "demo".to_string(),
+            fleet: "demo".to_string(),
             target: "store".to_string(),
         },
         "demo",
@@ -1130,7 +1128,7 @@ fn auth_renewal_medic_error_check_classifies_invalid_issuer() {
         "not a principal",
     );
     let generic = auth_renewal_medic_error_check(
-        AuthCommandError::InstalledDeployment(InstalledDeploymentError::FleetCatalog(
+        AuthCommandError::InstalledFleet(InstalledFleetError::FleetCatalog(
             FleetCatalogError::UnsupportedPlatform("test"),
         )),
         "demo",
@@ -1312,7 +1310,7 @@ fn sample_fleet_catalog_entry() -> FleetCatalogEntryV1 {
 
 fn sample_installed_fleet_resolution(
     entries: Vec<canic_host::registry::RegistryEntry>,
-) -> InstalledDeploymentResolution {
+) -> InstalledFleetResolution {
     let mut roles_by_canister = std::collections::BTreeMap::new();
     for entry in &entries {
         if let Some(role) = &entry.role {
@@ -1320,14 +1318,14 @@ fn sample_installed_fleet_resolution(
         }
     }
 
-    InstalledDeploymentResolution {
-        source: InstalledDeploymentSource::LocalReplica,
+    InstalledFleetResolution {
+        source: InstalledFleetSource::LocalReplica,
         fleet: sample_fleet_catalog_entry(),
-        registry: canic_host::installed_deployment::InstalledDeploymentRegistry {
+        registry: canic_host::installed_fleet::InstalledFleetRegistry {
             root_canister_id: "aaaaa-aa".to_string(),
             entries,
         },
-        topology: canic_host::installed_deployment::ResolvedDeploymentTopology {
+        topology: canic_host::installed_fleet::ResolvedFleetTopology {
             root_canister_id: "aaaaa-aa".to_string(),
             children_by_parent: std::collections::BTreeMap::new(),
             roles_by_canister,

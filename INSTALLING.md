@@ -327,7 +327,7 @@ canic medic
 canic medic fleet test
 ```
 
-Use `canic info list <deployment>`, `canic info env <deployment>`, and
+Use `canic info list <fleet>`, `canic info env <fleet>`, and
 `canic medic fleet <fleet>` before changing Fleet topology when local
 state looks wrong. `info list` shows the deployed root registry, `info env`
 prints sourceable `CANIC_<ROLE>` canister ID exports, and `app config` shows

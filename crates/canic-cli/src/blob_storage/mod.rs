@@ -41,7 +41,7 @@ use canic_core::protocol::{
 use canic_host::icp::{IcpCli, IcpJsonResponseError};
 use canic_host::{
     candid_endpoints::CandidEndpointError, icp::IcpCommandError, icp_config::IcpConfigError,
-    installed_deployment::InstalledDeploymentError,
+    installed_fleet::InstalledFleetError,
 };
 use std::{ffi::OsString, io, path::PathBuf};
 use thiserror::Error as ThisError;
@@ -61,27 +61,25 @@ pub enum BlobStorageCommandError {
     #[error("failed to render JSON output: {0}")]
     Json(#[from] serde_json::Error),
 
-    #[error("failed to read canic deployment state: {0}")]
+    #[error("failed to read Canic Fleet state: {0}")]
     IcpRoot(#[source] IcpConfigError),
 
     #[error(transparent)]
-    InstalledDeployment(#[from] InstalledDeploymentError),
+    InstalledFleet(#[from] InstalledFleetError),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
 
-    #[error("deployment target {deployment} has no canister or role named {target}")]
-    UnknownTarget { deployment: String, target: String },
+    #[error("Fleet {fleet} has no canister or role named {target}")]
+    UnknownTarget { fleet: String, target: String },
+
+    #[error("role {role} is ambiguous in Fleet {fleet}; use one canister principal")]
+    AmbiguousRole { fleet: String, role: String },
 
     #[error(
-        "role {role} is ambiguous in deployment target {deployment}; use one canister principal"
+        "blob-storage target {target} in Fleet {fleet} has no local Candid sidecar; use a role/registered canister with local metadata"
     )]
-    AmbiguousRole { deployment: String, role: String },
-
-    #[error(
-        "blob-storage target {target} in deployment {deployment} has no local Candid sidecar; use a role/registered canister with local metadata"
-    )]
-    CandidUnavailable { deployment: String, target: String },
+    CandidUnavailable { fleet: String, target: String },
 
     #[error("failed to read local Candid sidecar {path}: {source}")]
     CandidRead { path: PathBuf, source: io::Error },
@@ -135,12 +133,12 @@ impl BlobStorageCommandError {
             | Self::Usage(_)
             | Self::InvalidCycles(_)
             | Self::Json(_)
-            | Self::InstalledDeployment(
-                InstalledDeploymentError::Icp(IcpCommandError::Io(_))
-                | InstalledDeploymentError::NoInstalledDeployment { .. }
-                | InstalledDeploymentError::FleetCatalog(_)
-                | InstalledDeploymentError::Registry(_)
-                | InstalledDeploymentError::Io(_),
+            | Self::InstalledFleet(
+                InstalledFleetError::Icp(IcpCommandError::Io(_))
+                | InstalledFleetError::NoInstalledFleet { .. }
+                | InstalledFleetError::FleetCatalog(_)
+                | InstalledFleetError::Registry(_)
+                | InstalledFleetError::Io(_),
             )
             | Self::IcpRoot(_)
             | Self::UnknownTarget { .. }
@@ -149,10 +147,10 @@ impl BlobStorageCommandError {
             | Self::CandidRead { .. }
             | Self::CandidParse { .. }
             | Self::MethodUnavailable { .. } => 1,
-            Self::InstalledDeployment(
-                InstalledDeploymentError::ReplicaQuery(_)
-                | InstalledDeploymentError::LostLocalDeployment { .. }
-                | InstalledDeploymentError::Icp(_),
+            Self::InstalledFleet(
+                InstalledFleetError::ReplicaQuery(_)
+                | InstalledFleetError::LostLocalFleet { .. }
+                | InstalledFleetError::Icp(_),
             )
             | Self::Icp(_) => 2,
             Self::Response(_) | Self::ResponseValueOutOfRange { .. } => 3,
@@ -160,11 +158,11 @@ impl BlobStorageCommandError {
         }
     }
 
-    fn with_json_report(self, deployment: &str, target: &str) -> Self {
+    fn with_json_report(self, fleet: &str, target: &str) -> Self {
         let code = self.command_error_code();
         let exit_code = self.exit_code();
         let message = self.to_string();
-        let report = BlobStorageErrorResult::new(deployment, target, code, message, exit_code);
+        let report = BlobStorageErrorResult::new(fleet, target, code, message, exit_code);
         Self::JsonReported {
             source: Box::new(self),
             report_json: serde_json::to_string_pretty(&report)
@@ -179,12 +177,12 @@ impl BlobStorageCommandError {
             Self::Usage(_)
             | Self::Json(_)
             | Self::IcpRoot(_)
-            | Self::InstalledDeployment(
-                InstalledDeploymentError::NoInstalledDeployment { .. }
-                | InstalledDeploymentError::FleetCatalog(_)
-                | InstalledDeploymentError::Registry(_)
-                | InstalledDeploymentError::Io(_)
-                | InstalledDeploymentError::Icp(IcpCommandError::Io(_)),
+            | Self::InstalledFleet(
+                InstalledFleetError::NoInstalledFleet { .. }
+                | InstalledFleetError::FleetCatalog(_)
+                | InstalledFleetError::Registry(_)
+                | InstalledFleetError::Io(_)
+                | InstalledFleetError::Icp(IcpCommandError::Io(_)),
             )
             | Self::UnknownTarget { .. }
             | Self::AmbiguousRole { .. }
@@ -193,10 +191,10 @@ impl BlobStorageCommandError {
                 BLOB_STORAGE_ERROR_CODE_CANDID_UNAVAILABLE
             }
             Self::MethodUnavailable { .. } => BLOB_STORAGE_ERROR_CODE_METHOD_UNAVAILABLE,
-            Self::InstalledDeployment(
-                InstalledDeploymentError::ReplicaQuery(_)
-                | InstalledDeploymentError::LostLocalDeployment { .. }
-                | InstalledDeploymentError::Icp(_),
+            Self::InstalledFleet(
+                InstalledFleetError::ReplicaQuery(_)
+                | InstalledFleetError::LostLocalFleet { .. }
+                | InstalledFleetError::Icp(_),
             )
             | Self::Icp(_) => BLOB_STORAGE_ERROR_CODE_TRANSPORT_FAILED,
             Self::Response(_) | Self::ResponseValueOutOfRange { .. } => {
@@ -290,7 +288,7 @@ impl BlobStorageMedicSummary {
                 } else {
                     format!(
                         "canic blob-storage status {} {}",
-                        result.deployment, result.target.input
+                        result.fleet, result.target.input
                     )
                 }
             });
@@ -304,7 +302,7 @@ impl BlobStorageMedicSummary {
 }
 
 pub fn medic_summary(
-    deployment: &str,
+    fleet: &str,
     canister: &str,
     environment: &str,
     icp: &str,
@@ -313,7 +311,7 @@ pub fn medic_summary(
         environment: environment.to_string(),
         icp: icp.to_string(),
     };
-    live_status_result(&options, deployment, canister)
+    live_status_result(&options, fleet, canister)
         .map(|status| BlobStorageMedicSummary::from_status(&status))
 }
 
@@ -329,7 +327,7 @@ trait BlobStorageRuntime {
     fn resolve_call_target(
         &self,
         options: &options::CommonOptions,
-        deployment: &str,
+        fleet: &str,
         canister: &str,
         method: &str,
     ) -> Result<target::BlobStorageCallTarget, BlobStorageCommandError>;
@@ -350,11 +348,11 @@ impl BlobStorageRuntime for LiveBlobStorageRuntime {
     fn resolve_call_target(
         &self,
         options: &options::CommonOptions,
-        deployment: &str,
+        fleet: &str,
         canister: &str,
         method: &str,
     ) -> Result<target::BlobStorageCallTarget, BlobStorageCommandError> {
-        resolve_blob_storage_call_target(options, deployment, canister, method)
+        resolve_blob_storage_call_target(options, fleet, canister, method)
     }
 
     fn call_output(
@@ -377,8 +375,8 @@ fn run_command_with_json_errors(
         Ok(()) => Ok(()),
         Err(err @ BlobStorageCommandError::ReadinessCheckFailed { .. }) => Err(err),
         Err(err) => {
-            if let Some((deployment, target)) = context {
-                Err(err.with_json_report(&deployment, &target))
+            if let Some((fleet, target)) = context {
+                Err(err.with_json_report(&fleet, &target))
             } else {
                 Err(err)
             }
@@ -389,20 +387,20 @@ fn run_command_with_json_errors(
 fn json_error_context(command: &BlobStorageCommand) -> Option<(String, String)> {
     match command {
         BlobStorageCommand::Status(options) if options.json => {
-            Some((options.deployment.clone(), options.canister.clone()))
+            Some((options.fleet.clone(), options.canister.clone()))
         }
         BlobStorageCommand::SyncGateways(options) if options.json => {
-            Some((options.deployment.clone(), options.canister.clone()))
+            Some((options.fleet.clone(), options.canister.clone()))
         }
         BlobStorageCommand::Fund(options) if options.json => {
-            Some((options.deployment.clone(), options.canister.clone()))
+            Some((options.fleet.clone(), options.canister.clone()))
         }
         _ => None,
     }
 }
 
 fn run_status(options: &options::StatusOptions) -> Result<(), BlobStorageCommandError> {
-    let result = live_status_result(&options.common, &options.deployment, &options.canister)?;
+    let result = live_status_result(&options.common, &options.fleet, &options.canister)?;
     write_status_result(options.json, &result)?;
     if options.check_ready {
         check_status_ready_for_upload(&result)?;
@@ -412,20 +410,20 @@ fn run_status(options: &options::StatusOptions) -> Result<(), BlobStorageCommand
 
 fn live_status_result(
     options: &options::CommonOptions,
-    deployment: &str,
+    fleet: &str,
     canister: &str,
 ) -> Result<model::BlobStorageStatusResult, BlobStorageCommandError> {
     let runtime = LiveBlobStorageRuntime;
-    status_result_with_runtime(&runtime, options, deployment, canister)
+    status_result_with_runtime(&runtime, options, fleet, canister)
 }
 
 fn status_result_with_runtime(
     runtime: &impl BlobStorageRuntime,
     options: &options::CommonOptions,
-    deployment: &str,
+    fleet: &str,
     canister: &str,
 ) -> Result<model::BlobStorageStatusResult, BlobStorageCommandError> {
-    let target = runtime.resolve_call_target(options, deployment, canister, BLOB_STORAGE_STATUS)?;
+    let target = runtime.resolve_call_target(options, fleet, canister, BLOB_STORAGE_STATUS)?;
     let output = runtime.call_output(
         options,
         &target,
@@ -433,7 +431,7 @@ fn status_result_with_runtime(
         "(record { sync_gateway_principals = false })",
         Some("json"),
     )?;
-    parse_status_result(deployment, target.target, &output).map_err(Into::into)
+    parse_status_result(fleet, target.target, &output).map_err(Into::into)
 }
 
 fn check_status_ready_for_upload(
@@ -478,7 +476,7 @@ fn sync_gateways_result_with_runtime(
 ) -> Result<BlobStorageActionResult, BlobStorageCommandError> {
     let target = runtime.resolve_call_target(
         &options.common,
-        &options.deployment,
+        &options.fleet,
         &options.canister,
         BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
     )?;
@@ -492,7 +490,7 @@ fn sync_gateways_result_with_runtime(
     );
     let result = if options.dry_run {
         BlobStorageActionResult::dry_run(
-            &options.deployment,
+            &options.fleet,
             BlobStorageActionName::SyncGateways,
             target.target,
             BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
@@ -509,7 +507,7 @@ fn sync_gateways_result_with_runtime(
             output,
         )?;
         let result = BlobStorageActionResult::completed(
-            &options.deployment,
+            &options.fleet,
             BlobStorageActionName::SyncGateways,
             target.target,
             BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
@@ -520,7 +518,7 @@ fn sync_gateways_result_with_runtime(
         with_post_status_diagnostic(
             runtime,
             &options.common,
-            &options.deployment,
+            &options.fleet,
             &options.canister,
             result,
         )
@@ -540,7 +538,7 @@ fn fund_result_with_runtime(
 ) -> Result<BlobStorageActionResult, BlobStorageCommandError> {
     let target = runtime.resolve_call_target(
         &options.common,
-        &options.deployment,
+        &options.fleet,
         &options.canister,
         BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
     )?;
@@ -559,7 +557,7 @@ fn fund_result_with_runtime(
     );
     let result = if options.dry_run {
         BlobStorageActionResult::dry_run(
-            &options.deployment,
+            &options.fleet,
             BlobStorageActionName::Fund,
             target.target,
             BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
@@ -577,7 +575,7 @@ fn fund_result_with_runtime(
         )?;
         let report = parse_funding_report(&call_output)?;
         let result = BlobStorageActionResult::completed(
-            &options.deployment,
+            &options.fleet,
             BlobStorageActionName::Fund,
             target.target,
             BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
@@ -589,7 +587,7 @@ fn fund_result_with_runtime(
         with_post_status_diagnostic(
             runtime,
             &options.common,
-            &options.deployment,
+            &options.fleet,
             &options.canister,
             result,
         )
@@ -600,11 +598,11 @@ fn fund_result_with_runtime(
 fn with_post_status_diagnostic(
     runtime: &impl BlobStorageRuntime,
     options: &options::CommonOptions,
-    deployment: &str,
+    fleet: &str,
     canister: &str,
     result: BlobStorageActionResult,
 ) -> BlobStorageActionResult {
-    match status_result_with_runtime(runtime, options, deployment, canister) {
+    match status_result_with_runtime(runtime, options, fleet, canister) {
         Ok(status) => result.with_post_status(status),
         Err(_) => result.with_warning(BLOB_STORAGE_WARNING_POST_STATUS_UNAVAILABLE),
     }

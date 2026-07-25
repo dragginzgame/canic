@@ -9,7 +9,7 @@ use canic_core::cdk::utils::hash::decode_hex;
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
 
-const DEPLOYMENT_ARG: &str = "deployment";
+const FLEET_ARG: &str = "fleet";
 const DRY_RUN_ARG: &str = "dry-run";
 const FROM_SUBACCOUNT_ARG: &str = "from-subaccount";
 const ICP_E8S_ARG: &str = "icp-e8s";
@@ -23,7 +23,7 @@ const OPERATION_ID_ARG: &str = "operation-id";
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct ConvertOptions {
     pub(super) target: IcpTargetOptions,
-    pub(super) deployment: String,
+    pub(super) fleet: String,
     pub(super) amount_e8s: u64,
     pub(super) source_subaccount: Option<[u8; 32]>,
     pub(super) operation_id: Option<[u8; 32]>,
@@ -40,7 +40,7 @@ impl ConvertOptions {
             parse_matches(command(), args).map_err(|_| CyclesCommandError::Usage(usage()))?;
         Ok(Self {
             target: IcpTargetOptions::parse(&matches),
-            deployment: required_string(&matches, DEPLOYMENT_ARG),
+            fleet: required_string(&matches, FLEET_ARG),
             amount_e8s: typed_option(&matches, ICP_E8S_ARG)
                 .expect("required ICP amount is present after Clap validation"),
             source_subaccount: typed_option(&matches, FROM_SUBACCOUNT_ARG),
@@ -78,13 +78,9 @@ fn parse_fixed_32_hex(field: &'static str, value: &str) -> Result<[u8; 32], Stri
 fn command() -> ClapCommand {
     ClapCommand::new("convert")
         .bin_name("canic cycles convert")
-        .about("Convert ICP held by an installed deployment root to cycles for that root")
+        .about("Convert ICP held by an installed Fleet root to cycles for that root")
         .disable_help_flag(true)
-        .arg(
-            value_arg(DEPLOYMENT_ARG)
-                .value_name(DEPLOYMENT_ARG)
-                .required(true),
-        )
+        .arg(value_arg(FLEET_ARG).value_name(FLEET_ARG).required(true))
         .arg(
             value_arg(ICP_E8S_ARG)
                 .long(ICP_E8S_ARG)
@@ -137,7 +133,7 @@ mod tests {
         ])
         .expect("parse convert");
 
-        assert_eq!(options.deployment, "demo");
+        assert_eq!(options.fleet, "demo");
         assert_eq!(options.amount_e8s, 100_000_000);
         assert_eq!(
             options.operation_id.map(hex_bytes).as_deref(),

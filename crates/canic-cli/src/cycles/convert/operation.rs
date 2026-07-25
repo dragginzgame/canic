@@ -45,7 +45,7 @@ pub(super) fn pending_operation_input<'a>(
     PendingIcpRefillOperationInput {
         icp_root: root,
         environment: &options.target.environment,
-        deployment: &options.deployment,
+        fleet: &options.fleet,
         root_canister_id: &root_target.canister_id,
         source_subaccount: options.source_subaccount,
         amount_e8s: options.amount_e8s,
@@ -80,7 +80,7 @@ pub(super) fn resolve_operation_id(
         return Ok((operation_id, OperationIdSource::Provided, None));
     }
     let generated = generated_operation_id(
-        pending_input.deployment,
+        pending_input.fleet,
         pending_input.root_canister_id,
         pending_input.amount_e8s,
         now_nanos,
@@ -118,14 +118,14 @@ pub(super) fn current_unix_nanos() -> u128 {
 }
 
 fn generated_operation_id(
-    deployment: &str,
+    fleet: &str,
     root_canister: &str,
     amount_e8s: u64,
     now_nanos: u128,
 ) -> [u8; 32] {
     let mut bytes = Vec::new();
     bytes.extend_from_slice(b"canic:cycles-convert:icp-refill:v1");
-    extend_operation_id_part(&mut bytes, deployment.as_bytes());
+    extend_operation_id_part(&mut bytes, fleet.as_bytes());
     extend_operation_id_part(&mut bytes, root_canister.as_bytes());
     extend_operation_id_part(&mut bytes, &amount_e8s.to_be_bytes());
     extend_operation_id_part(&mut bytes, &now_nanos.to_be_bytes());
@@ -244,7 +244,7 @@ mod tests {
         PendingIcpRefillOperationInput {
             icp_root: root,
             environment: "ic",
-            deployment: "demo",
+            fleet: "demo",
             root_canister_id: "root",
             source_subaccount: None,
             amount_e8s: 1,

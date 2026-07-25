@@ -14,7 +14,7 @@ const DEFAULT_SINCE: &str = "24h";
 const DEFAULT_LIMIT: &str = "1000";
 
 const COMMAND_NAME: &str = "cycles";
-const DEPLOYMENT_ARG: &str = "deployment";
+const FLEET_ARG: &str = "fleet";
 const JSON_ARG: &str = "json";
 const LIMIT_ARG: &str = "limit";
 const OUT_ARG: &str = "out";
@@ -28,7 +28,7 @@ const VERBOSE_ARG: &str = "verbose";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct CyclesOptions {
-    pub(super) deployment: String,
+    pub(super) fleet: String,
     pub(super) subtree: Option<String>,
     pub(super) since_seconds: u64,
     pub(super) limit: u64,
@@ -62,7 +62,7 @@ impl CyclesOptions {
 
     fn from_matches(matches: &clap::ArgMatches) -> Self {
         Self {
-            deployment: required_string(matches, DEPLOYMENT_ARG),
+            fleet: required_string(matches, FLEET_ARG),
             subtree: string_option(matches, SUBTREE_ARG),
             since_seconds: required_typed(matches, SINCE_ARG),
             limit: required_typed(matches, LIMIT_ARG),
@@ -111,13 +111,13 @@ fn info_cycles_command() -> ClapCommand {
 fn cycles_command_with_bin_name(bin_name: &'static str) -> ClapCommand {
     ClapCommand::new(COMMAND_NAME)
         .bin_name(bin_name)
-        .about("Summarize installed deployment cycle history")
+        .about("Summarize installed Fleet cycle history")
         .disable_help_flag(true)
         .arg(
-            value_arg(DEPLOYMENT_ARG)
-                .value_name(DEPLOYMENT_ARG)
+            value_arg(FLEET_ARG)
+                .value_name(FLEET_ARG)
                 .required(true)
-                .help("Installed deployment target name to inspect"),
+                .help("Installed Fleet name to inspect"),
         )
         .arg(
             value_arg(SINCE_ARG)

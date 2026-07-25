@@ -69,22 +69,17 @@ fn parses_live_list_options() {
 }
 
 #[test]
-fn missing_list_deployment_preserves_canonical_typed_error() {
-    let error = ListCommandError::from(InstalledDeploymentError::NoInstalledDeployment {
+fn missing_list_fleet_preserves_canonical_typed_error() {
+    let error = ListCommandError::from(InstalledFleetError::NoInstalledFleet {
         environment: "local".to_string(),
-        deployment: "demo-local".to_string(),
+        fleet: "demo-local".to_string(),
     });
-    let message = error.to_string();
-
-    assert_eq!(
-        message,
-        "deployment target demo-local is not installed on environment local"
-    );
     std::assert_matches!(
         error,
-        ListCommandError::InstalledDeployment(
-            InstalledDeploymentError::NoInstalledDeployment { .. }
-        )
+        ListCommandError::InstalledFleet(InstalledFleetError::NoInstalledFleet {
+            environment,
+            fleet,
+        }) if environment == "local" && fleet == "demo-local"
     );
 }
 
@@ -146,16 +141,16 @@ fn config_rejects_subtree_option() {
     std::assert_matches!(err, ListCommandError::Usage(_));
 }
 
-// Ensure list and config help keep deployment-target and App selection separate.
+// Ensure list and config help keep Fleet and App selection separate.
 #[test]
 fn list_and_config_usage_explain_app_and_subtree_options() {
     let list = info_usage();
     let config = config_usage();
 
-    assert!(list.contains("List canisters registered by an installed deployment root"));
-    assert!(list.contains("Usage: canic info list [OPTIONS] <deployment>"));
-    assert!(list.contains("<deployment>"));
-    assert!(list.contains("Installed deployment target name to inspect"));
+    assert!(list.contains("List canisters registered by an installed Fleet root"));
+    assert!(list.contains("Usage: canic info list [OPTIONS] <fleet>"));
+    assert!(list.contains("<fleet>"));
+    assert!(list.contains("Installed Fleet name to inspect"));
     assert!(list.contains("--subtree <name-or-principal>"));
     assert!(list.contains("--verbose"));
     assert!(config.contains("Usage: canic app config [OPTIONS] <app>"));
@@ -404,12 +399,12 @@ fn selected_subtree_rejects_ambiguous_role_name() {
     );
 }
 
-// Ensure the full list output names the selected deployment before the tree table.
+// Ensure the full list output names the selected Fleet before the tree table.
 #[test]
-fn renders_list_output_with_deployment_title() {
+fn renders_list_output_with_fleet_title() {
     let registry = parse_registry_entries(&registry_json()).expect("parse registry");
     let title = ListTitle {
-        source: ListTitleSource::Deployment,
+        source: ListTitleSource::Fleet,
         name: "demo".to_string(),
         environment: "local".to_string(),
     };
@@ -428,7 +423,7 @@ fn renders_list_output_with_deployment_title() {
     let output = render_list_output(&title, &registry, Some(APP), &columns, &[])
         .expect("render list output");
 
-    assert!(output.starts_with("Deployment: demo (environment local)\n\nROLE"));
+    assert!(output.starts_with("Fleet: demo (environment local)\n\nROLE"));
     assert!(output.contains("CANISTER_ID"));
 }
 
@@ -436,7 +431,7 @@ fn renders_list_output_with_deployment_title() {
 fn renders_list_output_with_wasm_size_and_missing_roles() {
     let registry = parse_registry_entries(&registry_json()).expect("parse registry");
     let title = ListTitle {
-        source: ListTitleSource::Deployment,
+        source: ListTitleSource::Fleet,
         name: "demo".to_string(),
         environment: "local".to_string(),
     };

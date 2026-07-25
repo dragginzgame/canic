@@ -44,7 +44,7 @@ impl ListOptions {
         Ok(Self::from_matches(
             &matches,
             ListSource::RootRegistry,
-            "deployment",
+            "fleet",
         ))
     }
 
@@ -81,12 +81,12 @@ pub(super) enum ListSource {
 
 fn list_command(bin_name: &'static str, help_after: &'static str) -> ClapCommand {
     base_list_options(ClapCommand::new("list").bin_name(bin_name))
-        .about("List canisters registered by an installed deployment root")
+        .about("List canisters registered by an installed Fleet root")
         .arg(
-            value_arg("deployment")
-                .value_name("deployment")
+            value_arg("fleet")
+                .value_name("fleet")
                 .required(true)
-                .help("Installed deployment target name to inspect"),
+                .help("Installed Fleet name to inspect"),
         )
         .arg(
             value_arg("subtree")
