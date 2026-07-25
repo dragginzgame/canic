@@ -6,9 +6,7 @@
 use crate::{
     cdk::types::Principal,
     ids::FleetKey,
-    model::auth::{
-        RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerRenewalTemplate,
-    },
+    model::auth::{RootDelegatedRoleGrantPolicy, RootIssuerRenewalTemplate},
 };
 use sha2::{Digest, Sha256};
 
@@ -28,15 +26,13 @@ pub(in crate::ops::auth::delegation) fn renewal_template_fingerprint(
     hasher.finalize().into()
 }
 
-fn hash_renewal_policy_audience(hasher: &mut Sha256, audience: &RootDelegationAudiencePolicy) {
-    match audience {
-        RootDelegationAudiencePolicy::Fleet(fleet) => hash_renewal_fleet(hasher, *fleet),
-    }
+fn hash_renewal_policy_audience(hasher: &mut Sha256, fleet: &FleetKey) {
+    hash_renewal_fleet(hasher, *fleet);
 }
 
 fn hash_renewal_fleet(hasher: &mut Sha256, fleet: FleetKey) {
     hash_renewal_bytes(hasher, b"fleet");
-    hash_renewal_bytes(hasher, fleet.network.as_bytes());
+    hash_renewal_bytes(hasher, fleet.canonical_network_id.as_bytes());
     hash_renewal_bytes(hasher, fleet.fleet_id.as_bytes());
 }
 

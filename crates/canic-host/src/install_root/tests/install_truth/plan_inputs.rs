@@ -161,10 +161,10 @@ fn install_truth_check_rejects_supplied_plan_environment_mismatch() {
 }
 
 #[test]
-fn install_truth_check_rejects_supplied_plan_deployment_target_mismatch() {
+fn install_truth_check_rejects_supplied_plan_fleet_name_mismatch() {
     let (root, mut check) =
         demo_install_deployment_truth_check("canic-install-truth-plan-target-mismatch");
-    check.plan.deployment_identity.deployment_name = "prod".to_string();
+    check.plan.deployment_identity.fleet_name = "prod".to_string();
     let config_path = root.join("apps/demo/canic.toml");
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
@@ -187,7 +187,7 @@ fn install_truth_check_rejects_supplied_plan_deployment_target_mismatch() {
         "demo",
         "2026-05-22T00:00:00Z".to_string(),
     )
-    .expect_err("deployment target mismatch should fail");
+    .expect_err("Fleet name mismatch should fail");
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }

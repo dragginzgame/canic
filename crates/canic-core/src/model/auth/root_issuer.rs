@@ -8,12 +8,6 @@ use crate::{
     ids::{CanisterRole, FleetKey},
 };
 
-/// Audience admitted by one root issuer policy.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum RootDelegationAudiencePolicy {
-    Fleet(FleetKey),
-}
-
 /// Role and scopes admitted by one root issuer policy.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootDelegatedRoleGrantPolicy {
@@ -26,7 +20,7 @@ pub struct RootDelegatedRoleGrantPolicy {
 pub struct RootIssuerPolicy {
     pub issuer_pid: Principal,
     pub enabled: bool,
-    pub allowed_audiences: Vec<RootDelegationAudiencePolicy>,
+    pub allowed_audiences: Vec<FleetKey>,
     pub allowed_grants: Vec<RootDelegatedRoleGrantPolicy>,
     pub max_cert_ttl_ns: u64,
     pub refresh_after_ratio_bps: u16,
@@ -37,7 +31,7 @@ pub struct RootIssuerPolicy {
 pub struct RootIssuerRenewalTemplate {
     pub issuer_pid: Principal,
     pub enabled: bool,
-    pub audience: RootDelegationAudiencePolicy,
+    pub audience: FleetKey,
     pub grants: Vec<RootDelegatedRoleGrantPolicy>,
     pub cert_ttl_ns: u64,
 }

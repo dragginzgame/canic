@@ -277,7 +277,7 @@ fn run_scaffold(options: ScaffoldOptions) -> Result<(), ScaffoldCommandError> {
     println!("  edit icp.yaml");
     println!("  canic medic project --ci");
     println!("  canic status");
-    println!("  canic install {}", options.name);
+    println!("  canic install {} <fleet>", options.name);
     Ok(())
 }
 
@@ -863,7 +863,7 @@ where
     writeln!(writer, "Create Canic app?")?;
     writeln!(writer, "  project: {}", options.name)?;
     writeln!(writer, "  target:  {}", project_dir.display())?;
-    writeln!(writer, "  install: canic install {}", options.name)?;
+    writeln!(writer, "  install: canic install {} <fleet>", options.name)?;
     write!(writer, "Continue? [y/N] ")?;
     writer.flush()?;
 

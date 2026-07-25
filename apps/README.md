@@ -44,7 +44,7 @@ host artifact builder used by `canic install` directly.
 
 The demo App is intentionally small but includes a sharding walkthrough. Use
 `canic app config demo --verbose` to inspect the pool shape before install.
-After `canic install demo`, call `demo_user_hub_plan("alice")`, then call
+After `canic install demo demo-local`, call `demo_user_hub_plan("alice")`, then call
 `demo_user_hub_assign("alice")` and use the returned shard id with
 `demo_user_shard_describe("alice")`. Isolated test probes and PocketIC fixtures
 live under `canisters/test/`.

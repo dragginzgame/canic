@@ -188,7 +188,8 @@ run_probe() {
     run_packaged_canic app list > "$TMP_ROOT/app-list.out"
     run_packaged_canic app role list downstream > "$TMP_ROOT/role-list.out"
     run_packaged_canic app role inspect downstream app > "$TMP_ROOT/app-inspect.out"
-    run_packaged_canic deploy inspect catalog list --json --output "$TMP_ROOT/catalog.json"
+    run_packaged_canic --environment ic deploy inspect catalog list --json \
+        --output "$TMP_ROOT/catalog.json"
     run_packaged_canic blob-storage --help > "$TMP_ROOT/blob-storage-help.out"
     if run_packaged_canic blob-storage status downstream app --json \
         > "$TMP_ROOT/blob-storage-status-json.out" \
@@ -235,12 +236,7 @@ assert_probe_outputs() {
         exit 1
     }
     grep -q '"entries": \[\]' "$TMP_ROOT/catalog.json" || {
-        echo "expected packaged canic CLI catalog to stay empty without deployment state" >&2
-        sed -n '1,160p' "$TMP_ROOT/catalog.json" >&2
-        exit 1
-    }
-    grep -q 'catalog.no_deployment_state' "$TMP_ROOT/catalog.json" || {
-        echo "expected packaged canic CLI catalog to report no deployment state" >&2
+        echo "expected packaged canic CLI catalog to stay empty without installed Fleet state" >&2
         sed -n '1,160p' "$TMP_ROOT/catalog.json" >&2
         exit 1
     }

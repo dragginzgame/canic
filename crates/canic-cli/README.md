@@ -52,7 +52,7 @@ canic app create <app>
 canic scaffold canister <app> <role>
 canic app role attach <app> <role> --subnet <subnet>
 canic build <app> <role> --provenance artifacts/<role>-provenance.json
-canic deploy check <deployment> --evidence-envelope
+canic deploy check <fleet> --evidence-envelope
 canic evidence gate --policy policy.toml --envelope evidence.json
 canic evidence gate --policy policy.toml --manifest evidence-manifest.json
 canic deploy inspect catalog list

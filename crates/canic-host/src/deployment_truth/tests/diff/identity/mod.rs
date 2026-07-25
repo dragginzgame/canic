@@ -1,10 +1,58 @@
 use super::super::*;
 use crate::deployment_truth::report::{
-    DEPLOYMENT_MANIFEST_MISMATCH_CODE, INSTALLED_MODULE_HASH_AMBIGUOUS_CODE,
-    INSTALLED_MODULE_HASH_AMBIGUOUS_DIFF_CATEGORY, INSTALLED_MODULE_HASH_DIFF_CATEGORY,
-    INSTALLED_MODULE_HASH_MISMATCH_CODE, RAW_CONFIG_DIGEST_MISMATCH_CODE,
-    RAW_CONFIG_SHA256_DIFF_CATEGORY,
+    DEPLOYMENT_MANIFEST_MISMATCH_CODE, FLEET_IDENTITY_MISMATCH_CODE,
+    INSTALLED_MODULE_HASH_AMBIGUOUS_CODE, INSTALLED_MODULE_HASH_AMBIGUOUS_DIFF_CATEGORY,
+    INSTALLED_MODULE_HASH_DIFF_CATEGORY, INSTALLED_MODULE_HASH_MISMATCH_CODE,
+    RAW_CONFIG_DIGEST_MISMATCH_CODE, RAW_CONFIG_SHA256_DIFF_CATEGORY,
 };
+
+#[test]
+fn deployment_diff_blocks_exact_fleet_identity_mismatch() {
+    let plan = sample_plan();
+    let mut inventory = sample_matching_inventory();
+    let observed = inventory
+        .observed_identity
+        .as_mut()
+        .expect("observed identity");
+    observed.canonical_network_id = Some("08".repeat(32).parse().expect("canonical network ID"));
+    observed.fleet_id = Some(FleetId::from_generated_bytes([8; 32]));
+    observed.fleet_name = "another-fleet".to_string();
+    observed.app = "another-app".to_string();
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    for field in ["canonical_network_id", "fleet_id", "fleet_name", "app"] {
+        let subject = format!("deployment_identity.{field}");
+        assert!(diff.hard_failures.iter().any(|finding| {
+            finding.code == FLEET_IDENTITY_MISMATCH_CODE
+                && finding.subject.as_deref() == Some(subject.as_str())
+        }));
+    }
+}
+
+#[test]
+fn deployment_diff_blocks_missing_planned_fleet_identity() {
+    let plan = sample_plan();
+    let mut inventory = sample_matching_inventory();
+    let observed = inventory
+        .observed_identity
+        .as_mut()
+        .expect("observed identity");
+    observed.canonical_network_id = None;
+    observed.fleet_id = None;
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    for field in ["canonical_network_id", "fleet_id"] {
+        let subject = format!("deployment_identity.{field}");
+        assert!(diff.hard_failures.iter().any(|finding| {
+            finding.code == FLEET_IDENTITY_MISMATCH_CODE
+                && finding.subject.as_deref() == Some(subject.as_str())
+        }));
+    }
+}
 
 #[test]
 fn deployment_diff_blocks_deployment_manifest_mismatch() {

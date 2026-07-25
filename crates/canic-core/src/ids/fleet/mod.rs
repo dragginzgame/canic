@@ -168,7 +168,7 @@ impl<'de> Deserialize<'de> for FleetName {
 )]
 #[serde(deny_unknown_fields)]
 pub struct FleetKey {
-    pub network: CanonicalNetworkId,
+    pub canonical_network_id: CanonicalNetworkId,
     pub fleet_id: FleetId,
 }
 
@@ -289,15 +289,78 @@ mod tests {
     }
 
     #[test]
+    fn fleet_key_wire_shape_uses_canonical_network_id_only() {
+        #[derive(Debug, Deserialize, Eq, PartialEq)]
+        #[serde(deny_unknown_fields)]
+        struct FleetKeyWire {
+            canonical_network_id: CanonicalNetworkId,
+            fleet_id: FleetId,
+        }
+
+        #[derive(CandidType, Serialize)]
+        struct RemovedFleetKeyWire {
+            network: CanonicalNetworkId,
+            fleet_id: FleetId,
+        }
+
+        let canonical_network_id = CanonicalNetworkId::public_ic();
+        let fleet_id = FleetId::from_generated_bytes([7; 32]);
+        let fleet = FleetKey {
+            canonical_network_id,
+            fleet_id,
+        };
+        let mut current_bytes = Vec::new();
+        ciborium::ser::into_writer(&fleet, &mut current_bytes).expect("serialize Fleet key");
+        let current: FleetKeyWire =
+            ciborium::de::from_reader(current_bytes.as_slice()).expect("decode current Fleet key");
+
+        assert_eq!(
+            current,
+            FleetKeyWire {
+                canonical_network_id,
+                fleet_id,
+            }
+        );
+
+        let mut removed_bytes = Vec::new();
+        ciborium::ser::into_writer(
+            &RemovedFleetKeyWire {
+                network: canonical_network_id,
+                fleet_id,
+            },
+            &mut removed_bytes,
+        )
+        .expect("serialize removed Fleet key");
+        let removed = ciborium::de::from_reader::<FleetKey, _>(removed_bytes.as_slice());
+
+        assert!(removed.is_err());
+
+        let current_candid = candid::encode_one(fleet).expect("encode current Candid Fleet key");
+        let decoded_candid: FleetKey =
+            candid::decode_one(&current_candid).expect("decode current Candid Fleet key");
+        assert_eq!(decoded_candid, fleet);
+
+        let removed_candid = candid::encode_one(RemovedFleetKeyWire {
+            network: canonical_network_id,
+            fleet_id,
+        })
+        .expect("encode removed Candid Fleet key");
+        assert!(candid::decode_one::<FleetKey>(&removed_candid).is_err());
+    }
+
+    #[test]
     fn fleet_binding_keeps_app_and_network_separate_from_the_label() {
-        let network = CanonicalNetworkId::public_ic();
+        let canonical_network_id = CanonicalNetworkId::public_ic();
         let fleet_id = FleetId::from_generated_bytes([7; 32]);
         let binding = FleetBinding {
-            fleet: FleetKey { network, fleet_id },
+            fleet: FleetKey {
+                canonical_network_id,
+                fleet_id,
+            },
             app: AppId::from("toko"),
         };
 
-        assert_eq!(binding.fleet.network, network);
+        assert_eq!(binding.fleet.canonical_network_id, canonical_network_id);
         assert_eq!(binding.fleet.fleet_id, fleet_id);
         assert_eq!(binding.app.as_str(), "toko");
     }

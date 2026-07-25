@@ -181,7 +181,8 @@ fn artifact_gate_receipt_records_missing_artifact_postcondition() {
     write_artifact(&icp_root, "root", b"root-artifact");
 
     let check = check_local_deployment(&LocalDeploymentCheckRequest {
-        deployment_name: "demo".to_string(),
+        fleet_name: "demo".to_string(),
+        app: "demo".to_string(),
         environment: "local".to_string(),
         artifact_environment: "local".to_string(),
         workspace_root,

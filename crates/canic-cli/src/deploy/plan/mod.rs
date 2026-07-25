@@ -90,7 +90,8 @@ pub(super) fn build_report(
     DeploymentPlanReport {
         schema_version: REPORT_SCHEMA_VERSION,
         command: REPORT_COMMAND,
-        target: options.deployment.clone(),
+        fleet: options.fleet.clone(),
+        app: options.app.clone(),
         environment: options.environment.clone(),
         build_profile: build_profile_name(options),
         config_path: display_path(&config_path),
@@ -112,7 +113,8 @@ fn build_plan(
     config_path: &Path,
 ) -> DeploymentPlanV1 {
     canic_host::deployment_truth::build_local_deployment_plan(&LocalDeploymentPlanRequest {
-        deployment_name: options.deployment.clone(),
+        fleet_name: options.fleet.clone(),
+        app: options.app.clone(),
         environment: options.environment.clone(),
         artifact_environment: options.environment.clone(),
         workspace_root: roots.workspace_root.clone(),
@@ -124,11 +126,10 @@ fn build_plan(
 }
 
 fn plan_config_path(workspace_root: &Path, options: &DeployPlanOptions) -> PathBuf {
-    let config = options.config.clone().unwrap_or_else(|| {
-        PathBuf::from("apps")
-            .join(&options.deployment)
-            .join("canic.toml")
-    });
+    let config = options
+        .config
+        .clone()
+        .unwrap_or_else(|| PathBuf::from("apps").join(&options.app).join("canic.toml"));
     if config.is_absolute() {
         config
     } else {
@@ -468,7 +469,8 @@ mod tests {
         DeploymentPlanReport {
             schema_version: REPORT_SCHEMA_VERSION,
             command: REPORT_COMMAND,
-            target: "demo-local".to_string(),
+            fleet: "demo-local".to_string(),
+            app: "demo".to_string(),
             environment: "local".to_string(),
             build_profile: "debug".to_string(),
             config_path: "apps/demo/canic.toml".to_string(),
@@ -491,7 +493,10 @@ mod tests {
             schema_version: 1,
             plan_id: "local:demo-local:plan".to_string(),
             deployment_identity: DeploymentIdentityV1 {
-                deployment_name: "demo-local".to_string(),
+                canonical_network_id: None,
+                fleet_id: None,
+                fleet_name: "demo-local".to_string(),
+                app: "demo".to_string(),
                 environment: "local".to_string(),
                 root_principal: None,
                 authority_profile_hash: None,
@@ -506,9 +511,7 @@ mod tests {
             },
             trust_domain: TrustDomainV1 {
                 root_trust_anchor: None,
-                migration_from: None,
             },
-            fleet_template: "demo".to_string(),
             runtime_variant: "local".to_string(),
             authority_profile: AuthorityProfileV1 {
                 profile_id: "local:demo-local:authority".to_string(),

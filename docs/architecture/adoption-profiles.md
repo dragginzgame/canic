@@ -10,9 +10,8 @@ The command is:
 canic app adoption report <app> --profile <profile>
 ```
 
-The report is App-scoped. It does not operate on live Fleet or deployment target
-identity, install Wasm, update controllers, attach topology, import pools, or
-edit manifests.
+The report is App-scoped. It does not operate on live Fleet identity, install
+Wasm, update controllers, attach topology, import pools, or edit manifests.
 
 ## Profiles
 
@@ -191,7 +190,7 @@ evidence details when present:
 ```text
 Observed canisters:
   - aaaaa-aa: role=store, confidence=candidate, classifications=observed-only
-    deployment_target_evidence: inventory-1
+    fleet_evidence: inventory-1
 ```
 
 Name similarity alone is not enough for Canic to treat an observed canister as

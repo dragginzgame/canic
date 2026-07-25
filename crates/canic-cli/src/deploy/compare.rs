@@ -78,9 +78,8 @@ pub(super) fn build_report_from_checks(
     left_label: Option<&str>,
     right_label: Option<&str>,
 ) -> Result<DeploymentComparisonReportV1, DeployCommandError> {
-    let left_label = left_label.unwrap_or(left.plan.deployment_identity.deployment_name.as_str());
-    let right_label =
-        right_label.unwrap_or(right.plan.deployment_identity.deployment_name.as_str());
+    let left_label = left_label.unwrap_or(left.plan.deployment_identity.fleet_name.as_str());
+    let right_label = right_label.unwrap_or(right.plan.deployment_identity.fleet_name.as_str());
     let report = deployment_comparison_report_from_checks(
         local_report_id(left_label, right_label),
         current_observed_at()?,

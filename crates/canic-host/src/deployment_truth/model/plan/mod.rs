@@ -2,18 +2,19 @@ use super::artifact::RoleArtifactV1;
 use super::inventory::{
     ExpectedCanisterV1, ExpectedPoolCanisterV1, VerifierReadinessExpectationV1,
 };
+use canic_core::ids::{CanonicalNetworkId, FleetId};
 use serde::{Deserialize, Serialize};
 
 ///
 /// DeploymentPlanV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DeploymentPlanV1 {
     pub schema_version: u32,
     pub plan_id: String,
     pub deployment_identity: DeploymentIdentityV1,
     pub trust_domain: TrustDomainV1,
-    pub fleet_template: String,
     pub runtime_variant: String,
     pub authority_profile: AuthorityProfileV1,
     pub role_artifacts: Vec<RoleArtifactV1>,
@@ -27,8 +28,13 @@ pub struct DeploymentPlanV1 {
 /// DeploymentIdentityV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DeploymentIdentityV1 {
-    pub deployment_name: String,
+    pub canonical_network_id: Option<CanonicalNetworkId>,
+    pub fleet_id: Option<FleetId>,
+    pub fleet_name: String,
+    pub app: String,
+    /// Non-authoritative environment-profile provenance.
     pub environment: String,
     pub root_principal: Option<String>,
     pub authority_profile_hash: Option<String>,
@@ -46,9 +52,9 @@ pub struct DeploymentIdentityV1 {
 /// TrustDomainV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct TrustDomainV1 {
     pub root_trust_anchor: Option<String>,
-    pub migration_from: Option<String>,
 }
 
 ///

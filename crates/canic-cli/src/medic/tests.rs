@@ -509,7 +509,7 @@ fn fleet_missing_points_to_deploy_plan() {
         .expect("missing Fleet check");
 
     assert_eq!(missing.status, MedicStatus::Fail);
-    assert!(missing.next.contains("canic deploy plan demo"));
+    assert!(missing.next.contains("canic deploy plan demo --app <app>"));
     assert!(missing.next.contains("canic install <app> <fleet>"));
 
     fs::remove_dir_all(root).expect("remove temp root");
@@ -611,7 +611,7 @@ fn fleet_registry_observed_check_warns_on_empty_registry() {
 
     assert_eq!(check.status, MedicStatus::Warn);
     assert_eq!(check.code, "fleet_registry_empty");
-    assert!(check.next.contains("canic deploy plan demo"));
+    assert!(check.next.contains("canic deploy plan demo --app demo"));
     assert!(check.next.contains("canic deploy check demo"));
 }
 

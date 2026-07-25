@@ -525,7 +525,7 @@ mod tests {
             identity: crate::dto::fleet_activation::FleetActivationIdentity {
                 fleet: FleetBinding {
                     fleet: FleetKey {
-                        network: CanonicalNetworkId::public_ic(),
+                        canonical_network_id: CanonicalNetworkId::public_ic(),
                         fleet_id: FleetId::from_generated_bytes([1; 32]),
                     },
                     app: AppId::from("toko"),
@@ -545,7 +545,7 @@ mod tests {
             }),
             credential_manifest: Some(FleetCredentialManifest {
                 fleet: FleetKey {
-                    network: CanonicalNetworkId::public_ic(),
+                    canonical_network_id: CanonicalNetworkId::public_ic(),
                     fleet_id: FleetId::from_generated_bytes([1; 32]),
                 },
                 activation_id: [2; 32],

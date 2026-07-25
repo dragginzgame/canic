@@ -141,7 +141,7 @@ type FleetCredentialManifestEntry = record {
   bundle_hash : blob;
   not_before_ns : nat64;
 };
-type FleetKey = record { network : text; fleet_id : text };
+type FleetKey = record { canonical_network_id : text; fleet_id : text };
 type DirectoryEntryInput = record { pid : principal; role : text };
 type DirectoryProvenance = record {
   fleet : FleetBinding;

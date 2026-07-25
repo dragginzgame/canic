@@ -32,12 +32,13 @@ pub(super) fn verified_facts(
 
     let mut facts = vec![PlanDiagnostic {
         category: CATEGORY_CONFIG,
-        code: "deployment_target_resolved".to_string(),
+        code: "fleet_app_resolved".to_string(),
         severity: SEVERITY_INFO,
-        subject: options.deployment.clone(),
+        subject: options.fleet.clone(),
         detail: format!(
-            "deployment target {} resolved from {}",
-            options.deployment,
+            "Fleet {} and App {} resolved from {}",
+            options.fleet,
+            options.app,
             config_path.display()
         ),
         next: None,
@@ -46,10 +47,10 @@ pub(super) fn verified_facts(
 
     facts.push(PlanDiagnostic {
         category: CATEGORY_CONFIG,
-        code: "fleet_template_resolved".to_string(),
+        code: "app_resolved".to_string(),
         severity: SEVERITY_INFO,
-        subject: plan.deployment_identity.deployment_name.clone(),
-        detail: format!("fleet template resolved: {}", plan.fleet_template),
+        subject: plan.deployment_identity.app.clone(),
+        detail: format!("App resolved: {}", plan.deployment_identity.app),
         next: None,
         source: SOURCE_APP_CONFIG,
     });
@@ -68,7 +69,7 @@ pub(super) fn verified_facts(
             category: CATEGORY_OBSERVATION,
             code: "installed_root_canister_id_resolved".to_string(),
             severity: SEVERITY_INFO,
-            subject: options.deployment.clone(),
+            subject: options.fleet.clone(),
             detail: format!("Fleet catalog resolves root canister {root}"),
             next: None,
             source: SOURCE_FLEET_CATALOG,
@@ -83,7 +84,7 @@ fn plan_context_facts(
     config_path: &Path,
     plan: &DeploymentPlanV1,
 ) -> Vec<PlanDiagnostic> {
-    let subject = plan.deployment_identity.deployment_name.clone();
+    let subject = plan.deployment_identity.fleet_name.clone();
     let mut facts = vec![
         PlanDiagnostic {
             category: CATEGORY_ARTIFACT,
@@ -152,7 +153,7 @@ fn plan_context_facts(
 
 fn plan_identity_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
     let identity = &plan.deployment_identity;
-    let subject = &identity.deployment_name;
+    let subject = &identity.fleet_name;
     let mut facts = Vec::new();
 
     if !has_plan_assumption_prefix(plan, ASSUMPTION_PREFIX_LOCAL_ARTIFACTS)
@@ -280,7 +281,7 @@ fn authority_profile_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
         category: CATEGORY_AUTHORITY,
         code: "expected_controller_set_resolved".to_string(),
         severity: SEVERITY_INFO,
-        subject: plan.deployment_identity.deployment_name.clone(),
+        subject: plan.deployment_identity.fleet_name.clone(),
         detail: format!("expected controller set resolved: {expected_count} controller(s)"),
         next: None,
         source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
@@ -297,7 +298,7 @@ fn expected_role_artifact_inventory_facts(plan: &DeploymentPlanV1) -> Vec<PlanDi
         category: CATEGORY_ARTIFACT,
         code: "expected_role_artifact_inventory_resolved".to_string(),
         severity: SEVERITY_INFO,
-        subject: plan.deployment_identity.deployment_name.clone(),
+        subject: plan.deployment_identity.fleet_name.clone(),
         detail: format!("expected role artifact inventory resolved: {expected_count} role(s)"),
         next: None,
         source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
@@ -314,7 +315,7 @@ fn expected_canister_inventory_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnos
         category: CATEGORY_INVENTORY,
         code: "expected_canister_inventory_resolved".to_string(),
         severity: SEVERITY_INFO,
-        subject: plan.deployment_identity.deployment_name.clone(),
+        subject: plan.deployment_identity.fleet_name.clone(),
         detail: format!("expected canister inventory resolved: {expected_count} canister role(s)"),
         next: None,
         source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
@@ -331,7 +332,7 @@ fn expected_pool_inventory_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic>
         category: CATEGORY_INVENTORY,
         code: "expected_pool_inventory_resolved".to_string(),
         severity: SEVERITY_INFO,
-        subject: plan.deployment_identity.deployment_name.clone(),
+        subject: plan.deployment_identity.fleet_name.clone(),
         detail: format!(
             "expected pool inventory resolved: {expected_count} pool canister expectation(s)"
         ),
@@ -368,34 +369,20 @@ fn role_artifact_fact_detail(artifact: &RoleArtifactV1, digest: &str) -> String 
 }
 
 fn trust_domain_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
-    let mut facts = Vec::new();
-    let subject = plan.deployment_identity.deployment_name.clone();
-
-    if let Some(root) = &plan.trust_domain.root_trust_anchor {
-        facts.push(PlanDiagnostic {
+    plan.trust_domain
+        .root_trust_anchor
+        .as_ref()
+        .map(|root| PlanDiagnostic {
             category: CATEGORY_TRUST_DOMAIN,
             code: "root_trust_anchor_resolved".to_string(),
             severity: SEVERITY_INFO,
-            subject: subject.clone(),
+            subject: plan.deployment_identity.fleet_name.clone(),
             detail: format!("root trust anchor resolved: {root}"),
             next: None,
             source: SOURCE_FLEET_CATALOG,
-        });
-    }
-
-    if let Some(migration_from) = &plan.trust_domain.migration_from {
-        facts.push(PlanDiagnostic {
-            category: CATEGORY_TRUST_DOMAIN,
-            code: "migration_trust_anchor_resolved".to_string(),
-            severity: SEVERITY_INFO,
-            subject,
-            detail: format!("migration trust anchor resolved: {migration_from}"),
-            next: None,
-            source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
-        });
-    }
-
-    facts
+        })
+        .into_iter()
+        .collect()
 }
 
 pub(super) fn verifier_readiness_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
@@ -414,7 +401,7 @@ pub(super) fn verifier_readiness_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagn
         category: CATEGORY_VERIFIER_READINESS,
         code: "verifier_readiness_expectation_resolved".to_string(),
         severity: SEVERITY_INFO,
-        subject: plan.deployment_identity.deployment_name.clone(),
+        subject: plan.deployment_identity.fleet_name.clone(),
         detail,
         next: None,
         source: SOURCE_DEPLOYMENT_PLAN_BUILDER,

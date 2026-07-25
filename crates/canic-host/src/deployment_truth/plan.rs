@@ -1,8 +1,10 @@
 use super::*;
 use crate::{
-    fleet_catalog::read_fleet_catalog_entry_from_root,
+    fleet_catalog::{FleetCatalogEntryV1, read_fleet_catalog_entry_from_root},
+    network::resolve_canonical_network_id_from_root,
     release_set::{AppConfigSnapshot, ConfiguredPoolExpectation},
 };
+use canic_core::ids::CanonicalNetworkId;
 use std::path::PathBuf;
 
 ///
@@ -10,7 +12,8 @@ use std::path::PathBuf;
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalDeploymentPlanRequest {
-    pub deployment_name: String,
+    pub fleet_name: String,
+    pub app: String,
     pub environment: String,
     pub artifact_environment: String,
     pub workspace_root: PathBuf,
@@ -26,38 +29,48 @@ pub struct LocalDeploymentPlanRequest {
 pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> DeploymentPlanV1 {
     let config = deployment_config_path(&request.workspace_root, request.config_path.as_deref());
     let mut unresolved_assumptions = Vec::new();
-    let (fleet_template, roles, expected_controllers, expected_pool) =
-        match AppConfigSnapshot::load(&config) {
-            Ok(snapshot) => (
-                snapshot.app_id().to_string(),
+    let (roles, expected_controllers, expected_pool) = match AppConfigSnapshot::load(&config) {
+        Ok(snapshot) => {
+            if snapshot.app_id() != request.app {
+                unresolved_assumptions.push(assumption(
+                    "local_config.app",
+                    format!(
+                        "{} declares App {}, not requested App {}",
+                        config.display(),
+                        snapshot.app_id(),
+                        request.app
+                    ),
+                ));
+            }
+            (
                 deployment_truth_roles_with_implicit_wasm_store(snapshot.bootstrap_roles()),
                 snapshot.controllers(),
                 local_expected_pool(snapshot.pool_expectations()),
-            ),
-            Err(err) => {
-                for (code, subject) in [
-                    ("local_config.fleet_name", "fleet template name"),
-                    ("local_config.roles", "configured roles"),
-                    ("local_config.controllers", "configured controllers"),
-                    ("local_config.pools", "configured pool expectations"),
-                ] {
-                    unresolved_assumptions.push(assumption(
-                        code,
-                        format!(
-                            "could not resolve {subject} from {}: {err}",
-                            config.display()
-                        ),
-                    ));
-                }
-                (
-                    request.deployment_name.clone(),
-                    Vec::new(),
-                    Vec::new(),
-                    Vec::new(),
-                )
+            )
+        }
+        Err(err) => {
+            for (code, subject) in [
+                ("local_config.app", "App identity"),
+                ("local_config.roles", "configured roles"),
+                ("local_config.controllers", "configured controllers"),
+                ("local_config.pools", "configured pool expectations"),
+            ] {
+                unresolved_assumptions.push(assumption(
+                    code,
+                    format!(
+                        "could not resolve {subject} from {}: {err}",
+                        config.display()
+                    ),
+                ));
             }
-        };
-    let root_canister_id = local_root_canister_id(request, &mut unresolved_assumptions);
+            (Vec::new(), Vec::new(), Vec::new())
+        }
+    };
+    let resolved_fleet = local_fleet_identity(request, &mut unresolved_assumptions);
+    let root_canister_id = resolved_fleet
+        .catalog
+        .as_ref()
+        .map(|fleet| fleet.root_principal.clone());
     let raw_config_sha256 = config_sha256_assumption(&config, &mut unresolved_assumptions);
     let canonical_runtime_config_digest =
         canonical_runtime_config_assumption(&config, &mut unresolved_assumptions);
@@ -79,6 +92,7 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
         request,
         PlanIdentityFacts {
             root_canister_id: root_canister_id.clone(),
+            resolved_fleet: &resolved_fleet,
             deployment_manifest_digest,
             canonical_runtime_config_digest,
             authority_profile: &authority_profile,
@@ -93,9 +107,7 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
         deployment_identity: identity,
         trust_domain: TrustDomainV1 {
             root_trust_anchor: root_canister_id,
-            migration_from: None,
         },
-        fleet_template,
         runtime_variant: request.runtime_variant.clone(),
         authority_profile,
         role_artifacts,
@@ -110,14 +122,12 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
 }
 
 fn local_plan_id(request: &LocalDeploymentPlanRequest) -> String {
-    format!(
-        "local:{}:{}:plan",
-        request.environment, request.deployment_name
-    )
+    format!("local:{}:{}:plan", request.environment, request.fleet_name)
 }
 
 struct PlanIdentityFacts<'a> {
     root_canister_id: Option<String>,
+    resolved_fleet: &'a ResolvedPlanFleet,
     deployment_manifest_digest: Option<String>,
     canonical_runtime_config_digest: Option<String>,
     authority_profile: &'a AuthorityProfileV1,
@@ -147,6 +157,12 @@ fn local_plan_identity(
         request,
         PlanIdentityInput {
             root_canister_id: facts.root_canister_id,
+            canonical_network_id: facts.resolved_fleet.canonical_network_id,
+            fleet_id: facts
+                .resolved_fleet
+                .catalog
+                .as_ref()
+                .map(|fleet| fleet.fleet_id),
             deployment_manifest_digest: facts.deployment_manifest_digest,
             canonical_runtime_config_digest: facts.canonical_runtime_config_digest,
             authority_profile_hash: Some(stable_json_sha256_hex(facts.authority_profile)),
@@ -157,40 +173,69 @@ fn local_plan_identity(
     )
 }
 
-fn local_root_canister_id(
+struct ResolvedPlanFleet {
+    canonical_network_id: Option<CanonicalNetworkId>,
+    catalog: Option<FleetCatalogEntryV1>,
+}
+
+fn local_fleet_identity(
     request: &LocalDeploymentPlanRequest,
     assumptions: &mut Vec<DeploymentAssumptionV1>,
-) -> Option<String> {
-    match read_fleet_catalog_entry_from_root(
-        &request.icp_root,
-        &request.environment,
-        &request.deployment_name,
-    ) {
-        Ok(Some(fleet)) => Some(fleet.root_principal),
-        Ok(None) => {
-            assumptions.push(assumption(
+) -> ResolvedPlanFleet {
+    let canonical_network_id =
+        match resolve_canonical_network_id_from_root(&request.icp_root, &request.environment) {
+            Ok(network) => Some(network),
+            Err(error) => {
+                assumptions.push(assumption(
+                    DeploymentAssumptionKindV1::FleetCatalogReadFailed.key(),
+                    format!(
+                        "could not resolve canonical network identity for {}: {error}",
+                        request.environment
+                    ),
+                ));
+                None
+            }
+        };
+    let catalog = if canonical_network_id.is_none() {
+        None
+    } else {
+        match read_fleet_catalog_entry_from_root(
+            &request.icp_root,
+            &request.environment,
+            &request.fleet_name,
+        ) {
+            Ok(Some(fleet)) => Some(fleet),
+            Ok(None) => {
+                assumptions.push(assumption(
                 DeploymentAssumptionKindV1::FleetCatalogMissing.key(),
                 format!(
                     "no installed Fleet catalog entry exists for {}; root identity is unknown until installation completes",
-                    request.deployment_name
+                    request.fleet_name
                 ),
             ));
-            None
+                None
+            }
+            Err(error) => {
+                assumptions.push(assumption(
+                    DeploymentAssumptionKindV1::FleetCatalogReadFailed.key(),
+                    format!(
+                        "could not read Fleet catalog for {}: {error}",
+                        request.fleet_name,
+                    ),
+                ));
+                None
+            }
         }
-        Err(error) => {
-            assumptions.push(assumption(
-                DeploymentAssumptionKindV1::FleetCatalogReadFailed.key(),
-                format!(
-                    "could not read Fleet catalog for {}: {error}",
-                    request.deployment_name,
-                ),
-            ));
-            None
-        }
+    };
+    ResolvedPlanFleet {
+        canonical_network_id,
+        catalog,
     }
 }
 
 struct PlanIdentityInput {
+    canonical_network_id: Option<CanonicalNetworkId>,
+    fleet_id: Option<canic_core::ids::FleetId>,
     root_canister_id: Option<String>,
     deployment_manifest_digest: Option<String>,
     canonical_runtime_config_digest: Option<String>,
@@ -205,7 +250,10 @@ fn local_deployment_identity(
     input: PlanIdentityInput,
 ) -> DeploymentIdentityV1 {
     DeploymentIdentityV1 {
-        deployment_name: request.deployment_name.clone(),
+        canonical_network_id: input.canonical_network_id,
+        fleet_id: input.fleet_id,
+        fleet_name: request.fleet_name.clone(),
+        app: request.app.clone(),
         environment: request.environment.clone(),
         root_principal: input.root_canister_id,
         authority_profile_hash: input.authority_profile_hash,
@@ -227,7 +275,7 @@ fn local_authority_profile(
     AuthorityProfileV1 {
         profile_id: format!(
             "local:{}:{}:authority",
-            request.environment, request.deployment_name
+            request.environment, request.fleet_name
         ),
         expected_controllers,
         staging_controllers: Vec::new(),

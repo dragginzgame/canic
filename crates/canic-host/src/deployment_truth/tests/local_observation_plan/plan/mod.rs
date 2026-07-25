@@ -15,7 +15,8 @@ fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
     write_release_set_manifest(&icp_root);
 
     let plan = build_local_deployment_plan(&LocalDeploymentPlanRequest {
-        deployment_name: "demo-local".to_string(),
+        fleet_name: "demo-local".to_string(),
+        app: "demo".to_string(),
         environment: "local".to_string(),
         artifact_environment: "local".to_string(),
         workspace_root,
@@ -26,7 +27,7 @@ fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
     });
 
     assert_eq!(plan.plan_id, "local:local:demo-local:plan");
-    assert_eq!(plan.deployment_identity.deployment_name, "demo-local");
+    assert_eq!(plan.deployment_identity.fleet_name, "demo-local");
     assert_eq!(
         plan.deployment_identity
             .deployment_manifest_digest
@@ -76,7 +77,7 @@ fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
             .map(String::len),
         Some(64)
     );
-    assert_eq!(plan.fleet_template, "demo");
+    assert_eq!(plan.deployment_identity.app, "demo");
     assert_eq!(plan.runtime_variant, "local");
     assert_eq!(plan.role_artifacts.len(), 3);
     assert!(
@@ -149,7 +150,8 @@ kind = "root"
     write_artifact(&icp_root, "root", b"root-artifact");
 
     let plan = build_local_deployment_plan(&LocalDeploymentPlanRequest {
-        deployment_name: "demo-local".to_string(),
+        fleet_name: "demo-local".to_string(),
+        app: "demo".to_string(),
         environment: "local".to_string(),
         artifact_environment: "local".to_string(),
         workspace_root,
@@ -194,7 +196,8 @@ fn local_plan_uses_fleet_catalog_root_as_expected_canister() {
     );
 
     let plan = build_local_deployment_plan(&LocalDeploymentPlanRequest {
-        deployment_name: "demo-local".to_string(),
+        fleet_name: "demo-local".to_string(),
+        app: "demo".to_string(),
         environment: "local".to_string(),
         artifact_environment: "local".to_string(),
         workspace_root,
@@ -274,7 +277,8 @@ kind = "shard"
     write_artifact(&icp_root, "user_shard", b"user-shard-artifact");
 
     let plan = build_local_deployment_plan(&LocalDeploymentPlanRequest {
-        deployment_name: "demo-local".to_string(),
+        fleet_name: "demo-local".to_string(),
+        app: "demo".to_string(),
         environment: "local".to_string(),
         artifact_environment: "local".to_string(),
         workspace_root,

@@ -53,7 +53,7 @@ use canic::{
 
 fn test_fleet() -> FleetKey {
     FleetKey {
-        network: CanonicalNetworkId::public_ic(),
+        canonical_network_id: CanonicalNetworkId::public_ic(),
         fleet_id: FleetId::from_generated_bytes([1; 32]),
     }
 }
@@ -273,6 +273,11 @@ fn wasm_store_excludes_default_memory_diagnostics() {
 fn wasm_store_canonical_did_parses() {
     let did_path = workspace_root().join("crates/canic-wasm-store/wasm_store.did");
     let did = read_text(&did_path);
+    assert!(
+        did.contains("type FleetKey = record { canonical_network_id : text; fleet_id : text };")
+            && !did.contains("type FleetKey = record { network : text;"),
+        "canonical Wasm-store DID must expose the exact FleetKey member names"
+    );
     let (env, actor) = CandidSource::Text(&did)
         .load()
         .unwrap_or_else(|err| panic!("failed to parse {}: {err}", did_path.display()));

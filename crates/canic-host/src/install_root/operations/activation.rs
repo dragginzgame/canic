@@ -148,7 +148,7 @@ impl<'a> InstallRootWasmOperation<'a> {
         evidence.extend([
             format!(
                 "canonical_network_id:{}",
-                status.identity.fleet.fleet.network
+                status.identity.fleet.fleet.canonical_network_id
             ),
             format!("app:{}", status.identity.fleet.app),
             format!("fleet_id:{}", status.identity.fleet.fleet.fleet_id),
@@ -358,7 +358,7 @@ mod tests {
         CurrentRootInstallIdentity {
             fleet: FleetBinding {
                 fleet: FleetKey {
-                    network: CanonicalNetworkId::public_ic(),
+                    canonical_network_id: CanonicalNetworkId::public_ic(),
                     fleet_id: FleetId::from_generated_bytes([1; 32]),
                 },
                 app: AppId::from("demo"),

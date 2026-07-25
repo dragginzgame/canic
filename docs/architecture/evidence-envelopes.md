@@ -26,7 +26,7 @@ The current envelope emitters are:
 
 ```text
 canic app adoption report <app> --profile <profile> --evidence-envelope
-canic deploy check <deployment> --evidence-envelope
+canic deploy check <fleet> --evidence-envelope
 canic build <app> <role> --provenance <path>
 ```
 
@@ -48,7 +48,7 @@ Existing raw JSON output remains available:
 
 ```text
 canic app adoption report <app> --profile <profile> --json
-canic deploy check <deployment> --json
+canic deploy check <fleet> --json
 ```
 
 Raw adoption report JSON remains experimental. Raw deployment-check JSON is
@@ -174,7 +174,7 @@ envelopes as input evidence:
 ```text
 canic app adoption report <app> --profile <profile> --evidence-envelope \
   --build-provenance <path>
-canic deploy check <deployment> --evidence-envelope \
+canic deploy check <fleet> --evidence-envelope \
   --build-provenance <path>
 ```
 

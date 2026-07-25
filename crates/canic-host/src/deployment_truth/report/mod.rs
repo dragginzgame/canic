@@ -107,6 +107,8 @@ pub(in crate::deployment_truth) const OBSERVATION_GAP_CODE: &str = "observation_
 pub(in crate::deployment_truth) const PLAN_ASSUMPTION_CODE: &str = "plan_assumption";
 pub(in crate::deployment_truth) const IDENTITY_UNOBSERVED_CODE: &str = "identity_unobserved";
 pub(in crate::deployment_truth) const ENVIRONMENT_MISMATCH_CODE: &str = "environment_mismatch";
+pub(in crate::deployment_truth) const FLEET_IDENTITY_MISMATCH_CODE: &str =
+    "fleet_identity_mismatch";
 pub(in crate::deployment_truth) const ROOT_TRUST_ANCHOR_MISMATCH_CODE: &str =
     "root_trust_anchor_mismatch";
 pub(in crate::deployment_truth) const DEPLOYMENT_MANIFEST_UNOBSERVED_CODE: &str =
@@ -147,7 +149,8 @@ struct DuplicateEvidenceGroup {
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalDeploymentCheckRequest {
-    pub deployment_name: String,
+    pub fleet_name: String,
+    pub app: String,
     pub environment: String,
     pub artifact_environment: String,
     pub workspace_root: std::path::PathBuf,
@@ -163,7 +166,8 @@ pub fn check_local_deployment(
     request: &LocalDeploymentCheckRequest,
 ) -> Result<DeploymentCheckV1, DeploymentTruthError> {
     let plan = build_local_deployment_plan(&LocalDeploymentPlanRequest {
-        deployment_name: request.deployment_name.clone(),
+        fleet_name: request.fleet_name.clone(),
+        app: request.app.clone(),
         environment: request.environment.clone(),
         artifact_environment: request.artifact_environment.clone(),
         workspace_root: request.workspace_root.clone(),
@@ -173,7 +177,7 @@ pub fn check_local_deployment(
         build_profile: request.build_profile.clone(),
     });
     let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
-        deployment_name: request.deployment_name.clone(),
+        fleet_name: request.fleet_name.clone(),
         environment: request.environment.clone(),
         artifact_environment: request.artifact_environment.clone(),
         workspace_root: request.workspace_root.clone(),
@@ -191,21 +195,18 @@ pub fn check_local_deployment(
     let report = safety_report_from_diff(
         format!(
             "local:{}:{}:report",
-            request.environment, request.deployment_name
+            request.environment, request.fleet_name
         ),
         Some(format!(
             "local:{}:{}:diff",
-            request.environment, request.deployment_name
+            request.environment, request.fleet_name
         )),
         &diff,
     );
 
     Ok(DeploymentCheckV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        check_id: format!(
-            "local:{}:{}:check",
-            request.environment, request.deployment_name
-        ),
+        check_id: format!("local:{}:{}:check", request.environment, request.fleet_name),
         plan,
         inventory,
         diff,
@@ -357,6 +358,52 @@ fn compare_identity(
             SafetySeverityV1::HardFailure,
             Some("deployment_identity.environment".to_string()),
         ));
+    }
+    for (field, expected, actual) in [
+        (
+            "fleet_name",
+            Some(plan.deployment_identity.fleet_name.clone()),
+            Some(observed.fleet_name.clone()),
+        ),
+        (
+            "app",
+            Some(plan.deployment_identity.app.clone()),
+            Some(observed.app.clone()),
+        ),
+        (
+            "canonical_network_id",
+            plan.deployment_identity
+                .canonical_network_id
+                .map(|value| value.to_string()),
+            observed.canonical_network_id.map(|value| value.to_string()),
+        ),
+        (
+            "fleet_id",
+            plan.deployment_identity
+                .fleet_id
+                .map(|value| value.to_string()),
+            observed.fleet_id.map(|value| value.to_string()),
+        ),
+    ] {
+        match (expected, actual) {
+            (Some(expected), Some(actual)) if expected != actual => {
+                hard_failures.push(finding(
+                    FLEET_IDENTITY_MISMATCH_CODE,
+                    format!("plan {field} {expected} differs from observed {field} {actual}"),
+                    SafetySeverityV1::HardFailure,
+                    Some(format!("deployment_identity.{field}")),
+                ));
+            }
+            (Some(expected), None) => {
+                hard_failures.push(finding(
+                    FLEET_IDENTITY_MISMATCH_CODE,
+                    format!("plan {field} {expected} was not observed"),
+                    SafetySeverityV1::HardFailure,
+                    Some(format!("deployment_identity.{field}")),
+                ));
+            }
+            _ => {}
+        }
     }
     if let (Some(expected), Some(actual)) = (
         plan.deployment_identity.root_principal.as_ref(),

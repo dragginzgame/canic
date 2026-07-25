@@ -9,7 +9,7 @@ mod resume_report;
 mod truth;
 
 pub use crate::cli::clap::value_arg;
-use command::{DEPLOYMENT_ARG, PROFILE_ARG};
+use command::{FLEET_ARG, PROFILE_ARG};
 pub use command::{deploy_command, deploy_truth_leaf_command, usage};
 use output_format::JsonTextOutputFormat;
 
@@ -26,6 +26,7 @@ use crate::{
 use canic_host::{
     canister_build::CanisterBuildProfile,
     deployment_truth::DeploymentCheckV1,
+    fleet_catalog::read_fleet_catalog_entry_from_root,
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
     install_root::{InstallRootError, InstallRootOptions, check_install_deployment_truth},
     release_set::WorkspaceDiscoveryError,
@@ -90,7 +91,7 @@ impl DeployCommandError {
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DeployTruthOptions {
-    pub deployment: String,
+    pub fleet: String,
     pub environment: String,
     pub profile: Option<CanisterBuildProfile>,
 }
@@ -123,9 +124,18 @@ where
 pub fn load_deployment_check(
     options: DeployTruthOptions,
 ) -> Result<DeploymentCheckV1, DeployCommandError> {
-    let icp_root = Some(resolve_current_canic_icp_root()?);
+    let icp_root = resolve_current_canic_icp_root()?;
+    let fleet = read_fleet_catalog_entry_from_root(&icp_root, &options.environment, &options.fleet)
+        .map_err(|error| DeployCommandError::Check(Box::new(error)))?
+        .ok_or_else(|| {
+            DeployCommandError::Usage(format!(
+                "Fleet {} is not installed for environment profile {}",
+                options.fleet, options.environment
+            ))
+        })?;
+    let app = fleet.app.to_string();
     check_install_deployment_truth(
-        &options.into_install_root_options_with_icp_root(icp_root),
+        &options.into_install_root_options_with_icp_root(Some(icp_root), app),
         current_observed_at()?,
     )
     .map_err(DeployCommandError::from)
@@ -183,7 +193,7 @@ impl DeployTruthOptions {
 
     pub(super) fn from_matches(matches: &clap::ArgMatches) -> Self {
         Self {
-            deployment: required_string(matches, DEPLOYMENT_ARG),
+            fleet: required_string(matches, FLEET_ARG),
             environment: string_option_or_else(matches, "environment", local_environment),
             profile: typed_option(matches, PROFILE_ARG),
         }
@@ -192,16 +202,17 @@ impl DeployTruthOptions {
     fn into_install_root_options_with_icp_root(
         self,
         icp_root: Option<std::path::PathBuf>,
+        app: String,
     ) -> InstallRootOptions {
         InstallRootOptions {
             root_canister: DEFAULT_ROOT_TARGET.to_string(),
             root_build_target: DEFAULT_ROOT_TARGET.to_string(),
             environment: self.environment,
-            fleet_name: self.deployment,
+            fleet_name: self.fleet,
             icp_root,
             build_profile: self.profile,
-            config_path: None,
-            expected_app: None,
+            config_path: Some(format!("apps/{app}/canic.toml")),
+            expected_app: Some(app),
             interactive_config_selection: false,
             deployment_plan_override: None,
         }

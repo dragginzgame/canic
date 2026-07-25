@@ -56,6 +56,43 @@ pub enum ConfigSchemaError {
 pub const NAME_MAX_BYTES: usize = 40;
 
 ///
+/// AppNameIssue
+///
+/// Typed reason that an App name cannot be used as source or path identity.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ThisError)]
+pub enum AppNameIssue {
+    #[error("must not be empty")]
+    Empty,
+
+    #[error("must use only ASCII letters, numbers, '-' or '_'")]
+    InvalidCharacters,
+
+    #[error("must not exceed {max_bytes} bytes")]
+    TooLong { max_bytes: usize },
+}
+
+/// Validate the canonical App-name shape before it is used as identity or in a path.
+pub fn validate_app_name(value: &str) -> Result<(), AppNameIssue> {
+    if value.is_empty() {
+        return Err(AppNameIssue::Empty);
+    }
+    if value.len() > NAME_MAX_BYTES {
+        return Err(AppNameIssue::TooLong {
+            max_bytes: NAME_MAX_BYTES,
+        });
+    }
+    if !value
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    {
+        return Err(AppNameIssue::InvalidCharacters);
+    }
+    Ok(())
+}
+
+///
 /// Config schema errors are internal configuration failures.
 /// They are surfaced as InternalError with origin = Config.
 ///

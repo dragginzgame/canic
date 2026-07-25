@@ -346,7 +346,7 @@ fn sample_fleet_activation_identity() -> FleetActivationIdentity {
 
 fn sample_fleet_key() -> FleetKey {
     FleetKey {
-        network: CanonicalNetworkId::public_ic(),
+        canonical_network_id: CanonicalNetworkId::public_ic(),
         fleet_id: FleetId::from_generated_bytes([7; 32]),
     }
 }
@@ -355,7 +355,7 @@ fn sample_fleet_receipt_dir(root: &Path) -> PathBuf {
     let fleet = sample_fleet_key();
     root.join(".canic")
         .join("networks")
-        .join(fleet.network.to_string())
+        .join(fleet.canonical_network_id.to_string())
         .join("fleets")
         .join(fleet.fleet_id.to_string())
         .join("deployment-receipts")

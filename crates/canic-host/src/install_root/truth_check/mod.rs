@@ -17,7 +17,7 @@ struct CurrentInstallTruthInputs {
     workspace_root: PathBuf,
     icp_root: PathBuf,
     config_path: PathBuf,
-    deployment_name: String,
+    fleet_name: String,
 }
 
 /// Build the same read-only deployment truth check that can be used as a
@@ -32,7 +32,7 @@ pub fn check_install_deployment_truth(
         &inputs.workspace_root,
         &inputs.icp_root,
         &inputs.config_path,
-        &inputs.deployment_name,
+        &inputs.fleet_name,
         observed_at.into(),
     )
 }
@@ -52,7 +52,7 @@ pub fn check_install_execution_preflight(
         &inputs.workspace_root,
         &inputs.icp_root,
         &inputs.config_path,
-        &inputs.deployment_name,
+        &inputs.fleet_name,
         observed_at.into(),
     )?;
     let execution_context = current_install_execution_context(
@@ -79,7 +79,7 @@ pub(super) fn current_install_deployment_truth_check_at(
     workspace_root: &Path,
     icp_root: &Path,
     config_path: &Path,
-    deployment_name: &str,
+    fleet_name: &str,
     observed_at: String,
 ) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
     current_install_deployment_truth_check_at_with_plan(
@@ -87,7 +87,7 @@ pub(super) fn current_install_deployment_truth_check_at(
         workspace_root,
         icp_root,
         config_path,
-        deployment_name,
+        fleet_name,
         observed_at,
         None,
     )
@@ -98,18 +98,19 @@ pub(super) fn current_install_deployment_truth_check_at_with_plan(
     workspace_root: &Path,
     icp_root: &Path,
     config_path: &Path,
-    deployment_name: &str,
+    fleet_name: &str,
     observed_at: String,
     prepared_plan: Option<&DeploymentPlanV1>,
 ) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
+    let app = AppConfigSnapshot::load(config_path)?.app_id().to_string();
     if let Some(plan) = prepared_plan.or(options.deployment_plan_override.as_ref()) {
-        validate_current_install_plan_override(plan, &options.environment, deployment_name)?;
+        validate_current_install_plan_override(plan, &options.environment, fleet_name, &app)?;
         return current_install_deployment_truth_check_for_plan(
             plan,
             workspace_root,
             icp_root,
             config_path,
-            deployment_name,
+            fleet_name,
             observed_at,
             &options.environment,
         );
@@ -122,7 +123,8 @@ pub(super) fn current_install_deployment_truth_check_at_with_plan(
         .to_string();
 
     check_local_deployment(&LocalDeploymentCheckRequest {
-        deployment_name: deployment_name.to_string(),
+        fleet_name: fleet_name.to_string(),
+        app,
         environment: options.environment.clone(),
         artifact_environment: options.artifact_environment().to_string(),
         workspace_root: workspace_root.to_path_buf(),
@@ -181,7 +183,7 @@ fn resolve_current_install_truth_inputs(
         workspace_root,
         icp_root,
         config_path,
-        deployment_name: options.fleet_name.clone(),
+        fleet_name: options.fleet_name.clone(),
     })
 }
 
@@ -194,12 +196,12 @@ fn current_install_deployment_truth_check_for_plan(
     workspace_root: &Path,
     icp_root: &Path,
     config_path: &Path,
-    deployment_name: &str,
+    fleet_name: &str,
     observed_at: String,
     environment: &str,
 ) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
     let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
-        deployment_name: deployment_name.to_string(),
+        fleet_name: fleet_name.to_string(),
         environment: environment.to_string(),
         artifact_environment: environment.to_string(),
         workspace_root: workspace_root.to_path_buf(),
@@ -209,14 +211,14 @@ fn current_install_deployment_truth_check_for_plan(
     })?;
     let diff = compare_plan_to_inventory(plan, &inventory);
     let report = safety_report_from_diff(
-        format!("local:{environment}:{deployment_name}:report"),
-        Some(format!("local:{environment}:{deployment_name}:diff")),
+        format!("local:{environment}:{fleet_name}:report"),
+        Some(format!("local:{environment}:{fleet_name}:diff")),
         &diff,
     );
 
     Ok(DeploymentCheckV1 {
         schema_version: crate::deployment_truth::DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        check_id: format!("local:{environment}:{deployment_name}:check"),
+        check_id: format!("local:{environment}:{fleet_name}:check"),
         plan: plan.clone(),
         inventory,
         diff,
@@ -227,7 +229,8 @@ fn current_install_deployment_truth_check_for_plan(
 fn validate_current_install_plan_override(
     plan: &DeploymentPlanV1,
     environment: &str,
-    deployment_name: &str,
+    fleet_name: &str,
+    app: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if plan.schema_version != crate::deployment_truth::DEPLOYMENT_TRUTH_SCHEMA_VERSION {
         return Err(format!(
@@ -244,10 +247,17 @@ fn validate_current_install_plan_override(
         )
         .into());
     }
-    if plan.deployment_identity.deployment_name != deployment_name {
+    if plan.deployment_identity.fleet_name != fleet_name {
         return Err(format!(
-            "deployment plan target mismatch: install deployment {deployment_name}, plan deployment {}",
-            plan.deployment_identity.deployment_name
+            "deployment plan Fleet mismatch: install Fleet {fleet_name}, plan Fleet {}",
+            plan.deployment_identity.fleet_name
+        )
+        .into());
+    }
+    if plan.deployment_identity.app != app {
+        return Err(format!(
+            "deployment plan App mismatch: install App {app}, plan App {}",
+            plan.deployment_identity.app
         )
         .into());
     }

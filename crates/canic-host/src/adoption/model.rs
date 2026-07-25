@@ -126,6 +126,7 @@ pub struct AdoptionRoleFindingV1 {
 /// AdoptionObservedCanisterFindingV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct AdoptionObservedCanisterFindingV1 {
     pub canister_id: String,
     pub matched_app: Option<String>,
@@ -134,7 +135,7 @@ pub struct AdoptionObservedCanisterFindingV1 {
     pub classifications: Vec<AdoptionClassificationV1>,
     pub controllers: Vec<String>,
     pub wasm_evidence: Option<String>,
-    pub deployment_target_evidence: Option<String>,
+    pub fleet_evidence: Option<String>,
     pub recommendations: Vec<AdoptionRecommendationV1>,
     pub warnings: Vec<String>,
 }

@@ -14,7 +14,8 @@ fn local_check_builds_plan_inventory_diff_and_report() {
     write_release_set_manifest(&icp_root);
 
     let check = check_local_deployment(&LocalDeploymentCheckRequest {
-        deployment_name: "demo".to_string(),
+        fleet_name: "demo".to_string(),
+        app: "demo".to_string(),
         environment: "local".to_string(),
         artifact_environment: "local".to_string(),
         workspace_root,
@@ -63,7 +64,7 @@ fn local_inventory_collects_configured_roles_and_artifacts_without_live_queries(
     write_release_set_manifest(&icp_root);
 
     let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
-        deployment_name: "demo".to_string(),
+        fleet_name: "demo".to_string(),
         environment: "local".to_string(),
         artifact_environment: "local".to_string(),
         workspace_root,
@@ -131,7 +132,7 @@ fn local_inventory_records_explicit_root_evidence_for_deployment_target() {
     );
 
     let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
-        deployment_name: "prod".to_string(),
+        fleet_name: "prod".to_string(),
         environment: "local".to_string(),
         artifact_environment: "local".to_string(),
         workspace_root,
@@ -142,16 +143,16 @@ fn local_inventory_records_explicit_root_evidence_for_deployment_target() {
     .expect("collect inventory");
 
     let observed_identity = inventory.observed_identity.as_ref().expect("identity");
-    assert_eq!(observed_identity.deployment_name, "prod");
+    assert_eq!(observed_identity.fleet_name, "prod");
     assert_eq!(
         observed_identity.root_principal.as_deref(),
         Some("aaaaa-aa")
     );
 
     let observed_root = inventory.observed_root.as_ref().expect("root evidence");
-    assert_eq!(observed_root.deployment_name, "prod");
+    assert_eq!(observed_root.fleet_name, "prod");
     assert_eq!(observed_root.environment, "local");
-    assert_eq!(observed_root.fleet_template, "demo");
+    assert_eq!(observed_root.app, "demo");
     assert_eq!(observed_root.root_principal, "aaaaa-aa");
     assert_eq!(observed_root.observed_canister_id, "aaaaa-aa");
     assert_eq!(
@@ -169,7 +170,7 @@ fn local_inventory_records_explicit_root_evidence_for_deployment_target() {
 }
 
 #[test]
-fn local_inventory_does_not_use_deployment_name_as_missing_fleet_template() {
+fn local_inventory_uses_catalog_app_when_local_config_is_missing() {
     let temp = TempWorkspace::new("canic-host-local-root-evidence-missing-config");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
@@ -180,7 +181,7 @@ fn local_inventory_does_not_use_deployment_name_as_missing_fleet_template() {
     );
 
     let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
-        deployment_name: "prod".to_string(),
+        fleet_name: "prod".to_string(),
         environment: "local".to_string(),
         artifact_environment: "local".to_string(),
         workspace_root,
@@ -194,11 +195,11 @@ fn local_inventory_does_not_use_deployment_name_as_missing_fleet_template() {
         inventory
             .unresolved_observations
             .iter()
-            .any(|gap| gap.key == "local_config.fleet_name")
+            .any(|gap| gap.key == "local_config.app")
     );
     let observed_root = inventory.observed_root.as_ref().expect("root evidence");
-    assert_eq!(observed_root.deployment_name, "prod");
-    assert_eq!(observed_root.fleet_template, "unknown");
+    assert_eq!(observed_root.fleet_name, "prod");
+    assert_eq!(observed_root.app, "demo");
 }
 
 #[test]
@@ -216,7 +217,7 @@ fn local_inventory_retains_fleet_catalog_decode_source() {
     fs::write(&catalog_path, b"not-json").expect("write malformed catalog");
 
     let error = collect_local_deployment_inventory(&LocalInventoryRequest {
-        deployment_name: "demo".to_string(),
+        fleet_name: "demo".to_string(),
         environment: "local".to_string(),
         artifact_environment: "local".to_string(),
         workspace_root,

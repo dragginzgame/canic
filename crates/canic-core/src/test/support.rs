@@ -17,7 +17,7 @@ use crate::{
 #[must_use]
 pub fn fleet_key(byte: u8) -> FleetKey {
     FleetKey {
-        network: CanonicalNetworkId::public_ic(),
+        canonical_network_id: CanonicalNetworkId::public_ic(),
         fleet_id: FleetId::from_generated_bytes([byte.saturating_add(1); 32]),
     }
 }

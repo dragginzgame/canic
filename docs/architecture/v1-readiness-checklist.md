@@ -84,9 +84,9 @@ canic build <app> <role> --provenance <path>
 Inspect the desired deployment shape without mutation:
 
 ```text
-canic deploy plan <fleet>
-canic deploy plan <fleet> --json
-canic deploy plan <fleet> --out <path>
+canic deploy plan <fleet> --app <app>
+canic deploy plan <fleet> --app <app> --json
+canic deploy plan <fleet> --app <app> --out <path>
 ```
 
 `canic deploy plan` emits a no-mutation `DeploymentPlanReport` with

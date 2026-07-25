@@ -66,7 +66,7 @@ fn write_root_install_receipt(
                     format!("observed_module_hash:{hash}"),
                     format!(
                         "canonical_network_id:{}",
-                        activation_identity.fleet.fleet.network
+                        activation_identity.fleet.fleet.canonical_network_id
                     ),
                     format!("app:{}", activation_identity.fleet.app),
                     format!("fleet_id:{}", activation_identity.fleet.fleet.fleet_id),
@@ -94,7 +94,7 @@ fn sample_activation_identity() -> FleetActivationIdentity {
     FleetActivationIdentity {
         fleet: FleetBinding {
             fleet: FleetKey {
-                network: CanonicalNetworkId::public_ic(),
+                canonical_network_id: CanonicalNetworkId::public_ic(),
                 fleet_id: FleetId::from_generated_bytes([3; 32]),
             },
             app: AppId::from("toko"),
@@ -230,7 +230,13 @@ fn catalog_entry(
     root_canister: Principal,
 ) -> FleetCatalogEntryV1 {
     FleetCatalogEntryV1 {
-        canonical_network_id: activated.journal.activation.identity.fleet.fleet.network,
+        canonical_network_id: activated
+            .journal
+            .activation
+            .identity
+            .fleet
+            .fleet
+            .canonical_network_id,
         fleet_id: activated.journal.activation.identity.fleet.fleet.fleet_id,
         fleet_name: activated.journal.fleet_name.clone(),
         app: activated.journal.activation.identity.fleet.app.clone(),
@@ -249,7 +255,7 @@ fn planned_journal_is_canonical_durable_and_bound_to_every_path_identity() {
     let identity = &planned.journal.activation.identity;
     let expected_path = fleet_install_activation_journal_path(
         &root,
-        identity.fleet.fleet.network,
+        identity.fleet.fleet.canonical_network_id,
         identity.fleet.fleet.fleet_id,
         identity.operation_id,
     );
@@ -278,7 +284,7 @@ fn planned_journal_is_canonical_durable_and_bound_to_every_path_identity() {
     assert_eq!(
         load_fleet_install_activation_journal(
             &root,
-            identity.fleet.fleet.network,
+            identity.fleet.fleet.canonical_network_id,
             identity.fleet.fleet.fleet_id,
             identity.operation_id,
         )
@@ -348,7 +354,13 @@ fn root_installed_transition_is_canonical_monotonic_and_idempotent() {
     assert_eq!(
         load_fleet_install_activation_journal(
             &root,
-            installed.journal.activation.identity.fleet.fleet.network,
+            installed
+                .journal
+                .activation
+                .identity
+                .fleet
+                .fleet
+                .canonical_network_id,
             installed.journal.activation.identity.fleet.fleet.fleet_id,
             installed.journal.activation.identity.operation_id,
         )
@@ -414,7 +426,13 @@ fn canisters_prepared_transition_is_canonical_monotonic_and_idempotent() {
     assert_eq!(
         load_fleet_install_activation_journal(
             &root,
-            prepared.journal.activation.identity.fleet.fleet.network,
+            prepared
+                .journal
+                .activation
+                .identity
+                .fleet
+                .fleet
+                .canonical_network_id,
             prepared.journal.activation.identity.fleet.fleet.fleet_id,
             prepared.journal.activation.identity.operation_id,
         )
@@ -500,7 +518,13 @@ fn canisters_activated_transition_is_canonical_monotonic_and_idempotent() {
     assert_eq!(
         load_fleet_install_activation_journal(
             &root,
-            activated.journal.activation.identity.fleet.fleet.network,
+            activated
+                .journal
+                .activation
+                .identity
+                .fleet
+                .fleet
+                .canonical_network_id,
             activated.journal.activation.identity.fleet.fleet.fleet_id,
             activated.journal.activation.identity.operation_id,
         )
@@ -554,7 +578,13 @@ fn host_authority_commit_is_terminal_durable_and_exactly_idempotent() {
     assert_eq!(
         load_fleet_install_activation_journal(
             &root,
-            committed.journal.activation.identity.fleet.fleet.network,
+            committed
+                .journal
+                .activation
+                .identity
+                .fleet
+                .fleet
+                .canonical_network_id,
             committed.journal.activation.identity.fleet.fleet.fleet_id,
             committed.journal.activation.identity.operation_id,
         )
@@ -568,7 +598,13 @@ fn host_authority_commit_is_terminal_durable_and_exactly_idempotent() {
     assert_eq!(repeated.journal, committed.journal);
     let discovery = discover_fleet_install_activation(
         &root,
-        committed.journal.activation.identity.fleet.fleet.network,
+        committed
+            .journal
+            .activation
+            .identity
+            .fleet
+            .fleet
+            .canonical_network_id,
         &committed.journal.fleet_name,
     )
     .expect("discover terminal evidence");
@@ -1249,7 +1285,7 @@ fn corrupt_noncanonical_and_path_mismatched_journals_fail_closed() {
     std::assert_matches!(
         load_fleet_install_activation_journal(
             &root,
-            identity.fleet.fleet.network,
+            identity.fleet.fleet.canonical_network_id,
             identity.fleet.fleet.fleet_id,
             identity.operation_id,
         ),
@@ -1267,12 +1303,12 @@ fn corrupt_noncanonical_and_path_mismatched_journals_fail_closed() {
             identity.operation_id,
         ),
         (
-            identity.fleet.fleet.network,
+            identity.fleet.fleet.canonical_network_id,
             other_fleet,
             identity.operation_id,
         ),
         (
-            identity.fleet.fleet.network,
+            identity.fleet.fleet.canonical_network_id,
             identity.fleet.fleet.fleet_id,
             other_operation,
         ),
@@ -1293,7 +1329,7 @@ fn corrupt_noncanonical_and_path_mismatched_journals_fail_closed() {
     std::assert_matches!(
         load_fleet_install_activation_journal(
             &root,
-            identity.fleet.fleet.network,
+            identity.fleet.fleet.canonical_network_id,
             identity.fleet.fleet.fleet_id,
             identity.operation_id,
         ),
@@ -1362,7 +1398,7 @@ fn journal_symlinks_are_rejected() {
     std::assert_matches!(
         load_fleet_install_activation_journal(
             &root,
-            identity.fleet.fleet.network,
+            identity.fleet.fleet.canonical_network_id,
             identity.fleet.fleet.fleet_id,
             identity.operation_id,
         ),

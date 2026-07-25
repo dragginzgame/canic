@@ -40,7 +40,7 @@ pub(super) fn prepare_install_deployment_truth(
     options: &InstallRootOptions,
     icp_root: &Path,
     config_path: &Path,
-    deployment_name: &str,
+    fleet_name: &str,
     execution_context: &DeploymentExecutionContextV1,
     build_context: &WorkspaceBuildContext,
     install_snapshot: &ValidatedInstallSnapshot,
@@ -57,7 +57,7 @@ pub(super) fn prepare_install_deployment_truth(
         &build_context.workspace_root,
         icp_root,
         config_path,
-        deployment_name,
+        fleet_name,
         execution_context,
         build
             .plan_artifacts

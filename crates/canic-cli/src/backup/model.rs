@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackupCreateReport {
-    pub deployment: String,
+    pub fleet: String,
     pub environment: String,
     pub out: PathBuf,
     pub plan_id: String,
@@ -192,7 +192,7 @@ pub struct BackupDryRunStatusReport {
     pub layout_status: BackupExecutionLayoutStatus,
     pub plan_id: String,
     pub run_id: String,
-    pub deployment: String,
+    pub fleet: String,
     pub environment: String,
     pub targets: usize,
     pub operations: usize,
@@ -240,7 +240,7 @@ pub struct BackupInspectReport {
     pub layout_status: BackupExecutionLayoutStatus,
     pub plan_id: String,
     pub run_id: String,
-    pub deployment: String,
+    pub fleet: String,
     pub environment: String,
     pub scope: String,
     pub targets: Vec<BackupInspectTarget>,

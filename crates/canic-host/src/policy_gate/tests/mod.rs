@@ -118,7 +118,6 @@ fn sample_envelope_with_payload(payload: serde_json::Value) -> EvidenceEnvelopeV
         },
         target: EvidenceTargetV1 {
             kind: EvidenceTargetKindV1::Artifact,
-            deployment: None,
             app: Some("demo".to_string()),
             fleet: None,
             role: Some("app".to_string()),

@@ -369,7 +369,6 @@ fn sample_envelope() -> EvidenceEnvelopeV1 {
         },
         target: EvidenceTargetV1 {
             kind: EvidenceTargetKindV1::AppAdoption,
-            deployment: None,
             app: Some("demo".to_string()),
             fleet: None,
             role: None,

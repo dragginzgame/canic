@@ -1,5 +1,6 @@
 use super::artifact::ObservedArtifactV1;
 use super::plan::DeploymentIdentityV1;
+use canic_core::ids::{CanonicalNetworkId, FleetId};
 use serde::{Deserialize, Serialize};
 
 ///
@@ -24,10 +25,14 @@ pub struct DeploymentInventoryV1 {
 /// DeploymentRootObservationV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DeploymentRootObservationV1 {
-    pub deployment_name: String,
+    pub canonical_network_id: CanonicalNetworkId,
+    pub fleet_id: FleetId,
+    pub fleet_name: String,
+    pub app: String,
+    /// Non-authoritative environment-profile provenance.
     pub environment: String,
-    pub fleet_template: String,
     pub root_principal: String,
     pub observed_canister_id: String,
     pub observation_source: DeploymentRootObservationSourceV1,

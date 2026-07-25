@@ -2,6 +2,9 @@ use super::super::*;
 use super::inventory::LocalInventoryRequest;
 
 pub(super) struct InventoryIdentityFacts<'a> {
+    pub(super) canonical_network_id: canic_core::ids::CanonicalNetworkId,
+    pub(super) fleet_id: Option<canic_core::ids::FleetId>,
+    pub(super) app: String,
     pub(super) root_principal: Option<String>,
     pub(super) deployment_manifest_digest: Option<String>,
     pub(super) canonical_runtime_config_digest: Option<String>,
@@ -17,6 +20,9 @@ pub(super) fn local_inventory_identity(
     local_deployment_identity(
         request,
         InventoryIdentityInput {
+            canonical_network_id: facts.canonical_network_id,
+            fleet_id: facts.fleet_id,
+            app: facts.app,
             root_principal: facts.root_principal,
             deployment_manifest_digest: facts.deployment_manifest_digest,
             canonical_runtime_config_digest: facts.canonical_runtime_config_digest,
@@ -27,6 +33,9 @@ pub(super) fn local_inventory_identity(
     )
 }
 struct InventoryIdentityInput {
+    canonical_network_id: canic_core::ids::CanonicalNetworkId,
+    fleet_id: Option<canic_core::ids::FleetId>,
+    app: String,
     root_principal: Option<String>,
     deployment_manifest_digest: Option<String>,
     canonical_runtime_config_digest: Option<String>,
@@ -40,7 +49,10 @@ fn local_deployment_identity(
     input: InventoryIdentityInput,
 ) -> DeploymentIdentityV1 {
     DeploymentIdentityV1 {
-        deployment_name: request.deployment_name.clone(),
+        canonical_network_id: Some(input.canonical_network_id),
+        fleet_id: input.fleet_id,
+        fleet_name: request.fleet_name.clone(),
+        app: input.app,
         environment: request.environment.clone(),
         root_principal: input.root_principal,
         authority_profile_hash: None,

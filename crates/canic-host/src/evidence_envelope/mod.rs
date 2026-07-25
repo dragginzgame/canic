@@ -42,9 +42,9 @@ pub struct CommandProvenanceV1 {
 /// EvidenceTargetV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct EvidenceTargetV1 {
     pub kind: EvidenceTargetKindV1,
-    pub deployment: Option<String>,
     pub app: Option<String>,
     pub fleet: Option<String>,
     pub role: Option<String>,

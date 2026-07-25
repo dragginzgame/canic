@@ -338,7 +338,7 @@ fn encode_fleet_binding(value: &FleetBinding) -> Value {
 
 fn encode_fleet_key(value: &FleetKey) -> Value {
     Value::Array(vec![
-        digest(*value.network.as_bytes()),
+        digest(*value.canonical_network_id.as_bytes()),
         digest(*value.fleet_id.as_bytes()),
     ])
 }
@@ -410,7 +410,7 @@ mod tests {
         FleetActivationIdentity {
             fleet: FleetBinding {
                 fleet: FleetKey {
-                    network: CanonicalNetworkId::public_ic(),
+                    canonical_network_id: CanonicalNetworkId::public_ic(),
                     fleet_id: FleetId::from_generated_bytes([1; 32]),
                 },
                 app: AppId::from("app"),

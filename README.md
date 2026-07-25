@@ -85,15 +85,15 @@ For a copyable root-plus-two-children managed fleet, start with
 [minimal-managed-fleet.md](docs/getting-started/minimal-managed-fleet.md).
 For the compact setup checklist, use [INSTALLING.md](INSTALLING.md).
 
-The short local loop from this checkout, using the checked-in `test` fleet, is:
+The short local loop from this checkout, using the checked-in `test` App, is:
 
 ```bash
 canic status
 canic replica start --background
-canic install --profile fast test
-canic info list test
-canic info env test
-canic medic fleet test
+canic install --profile fast test test-local
+canic info list test-local
+canic info env test-local
+canic medic fleet test-local
 ```
 
 For ad hoc public IC NNS inspection outside Canic, install the optional

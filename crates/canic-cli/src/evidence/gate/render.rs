@@ -164,10 +164,6 @@ const fn exit_class_label(exit_class: ExitClassV1) -> &'static str {
 
 fn render_target(target: &EvidenceTargetV1) -> String {
     [
-        target
-            .deployment
-            .as_ref()
-            .map(|value| format!("deployment={value}")),
         target.app.as_ref().map(|value| format!("app={value}")),
         target.fleet.as_ref().map(|value| format!("fleet={value}")),
         target.role.as_ref().map(|value| format!("role={value}")),

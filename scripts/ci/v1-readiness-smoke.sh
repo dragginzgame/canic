@@ -49,17 +49,17 @@ EOF
   "canic_version": "0.55.0",
   "command": {
     "name": "canic app adoption report",
-    "argv_normalized": ["canic", "fleet", "adoption", "report", "demo"],
+    "argv_normalized": ["canic", "app", "adoption", "report", "demo"],
     "argv_redactions": [],
     "format": "envelope-json"
   },
   "target": {
-    "kind": "fleet_adoption",
-    "deployment": null,
+    "kind": "app_adoption",
+    "app": "demo",
     "fleet": "demo",
     "role": null,
     "profile": "minimal",
-    "network": null
+    "environment": null
   },
   "generated_at": "2026-06-01T00:00:00Z",
   "source_config": null,
@@ -107,7 +107,7 @@ main() {
     "$CANIC_BIN" app role inspect demo store > inspect-declared.txt
     "$CANIC_BIN" app role attach demo store --subnet default > attach-store.txt
     "$CANIC_BIN" app role inspect demo store > inspect-attached.txt
-    "$CANIC_BIN" deploy inspect catalog list --json --output catalog.json
+    "$CANIC_BIN" --environment ic deploy inspect catalog list --json --output catalog.json
     "$CANIC_BIN" evidence gate \
         --policy policy.toml \
         --envelope envelope.json \
@@ -122,7 +122,6 @@ main() {
     assert_contains inspect-attached.txt "state: attached"
     assert_contains inspect-attached.txt "deploy artifact: eligible"
     assert_contains catalog.json "\"entries\": []"
-    assert_contains catalog.json "catalog.no_deployment_state"
     assert_contains gate.json "\"policy_status\": \"passed\""
     assert_contains gate.json "\"gate_exit_class\": \"success\""
 

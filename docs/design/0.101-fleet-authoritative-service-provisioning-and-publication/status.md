@@ -14,13 +14,14 @@ consume a 0.100 installation or preserve existing service Canisters.
 
 ## Slice 1 — Contracts and Planning
 
-- [ ] Freeze protected target, activation-plan, binding and typed-error shapes.
+- [ ] Freeze protected target, provisioning-plan, binding and typed-error
+  shapes.
 - [ ] Compile targets during fresh installation.
 - [ ] Reject pre-existing local service rows.
 
 ## Slice 2 — Tree-Local Provisioning
 
-- [ ] Prepare one exact operation per selected Tree Root.
+- [ ] Accept one exact provisioning operation per selected Tree Root.
 - [ ] Reuse the canonical local creation lifecycle.
 - [ ] Persist and reconcile external effects and one aggregate per-Tree
   receipt.
@@ -28,15 +29,16 @@ consume a 0.100 installation or preserve existing service Canisters.
 ## Slice 3 — Coordinator Orchestration
 
 - [ ] Resolve and persist the complete plan before mutation.
-- [ ] Drive every selected root and verify the complete ready set.
+- [ ] Drive every selected Tree Root and verify the complete ready set.
 - [ ] Make exact retry deterministic and idempotent.
 
 ## Slice 4 — Atomic Publication
 
-- [ ] Commit the complete service set in one Registry revision.
-- [ ] Synchronize every required mirror and Fleet Directory.
-- [ ] Cascade the exact Directory to provisioned services and confirm selected
-  roots' Tree-local publication.
+- [ ] Commit the complete service set in one Fleet Registry revision.
+- [ ] Synchronize every required Fleet Registry Mirror and Fleet Directory.
+- [ ] Derive each selected Tree's exact Tree Directory, cascade both
+  Directories to provisioned services and confirm each selected Tree Root's
+  publication.
 - [ ] Activate prepared services, then Tree Roots.
 
 ## Slice 5 — Recovery and Qualification

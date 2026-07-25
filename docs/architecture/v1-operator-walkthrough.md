@@ -94,9 +94,9 @@ Before checking live deployment evidence, inspect the desired deployment shape
 that Canic can derive from local config:
 
 ```text
-canic deploy plan demo-staging
-canic deploy plan demo-staging --json
-canic deploy plan demo-staging --out artifacts/canic/deployment-plan.json
+canic deploy plan demo-staging --app demo
+canic deploy plan demo-staging --app demo --json
+canic deploy plan demo-staging --app demo --out artifacts/canic/deployment-plan.json
 ```
 
 `canic deploy plan` emits a `DeploymentPlanReport` with `schema_version = 1`

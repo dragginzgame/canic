@@ -31,7 +31,7 @@ kind = "service"
         .expect("install execution preflight");
 
     assert_eq!(check.check_id, "local:local:demo:check");
-    assert_eq!(check.plan.fleet_template, "demo");
+    assert_eq!(check.plan.deployment_identity.app, "demo");
     assert_eq!(
         check
             .plan

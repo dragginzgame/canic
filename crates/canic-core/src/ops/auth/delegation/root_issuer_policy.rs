@@ -8,7 +8,8 @@ use crate::{
         DelegatedRoleGrant, DelegationAudience, RootIssuerPolicyResponse,
         RootIssuerPolicyUpsertRequest, RootIssuerPolicyView,
     },
-    model::auth::{RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy},
+    ids::FleetKey,
+    model::auth::{RootDelegatedRoleGrantPolicy, RootIssuerPolicy},
     ops::storage::auth::AuthStateOps,
 };
 
@@ -21,9 +22,9 @@ pub(super) fn commit_root_issuer_policy(policy: RootIssuerPolicy) -> RootIssuerP
     }
 }
 
-pub(super) const fn audience_policy(audience: &DelegationAudience) -> RootDelegationAudiencePolicy {
+pub(super) const fn audience_policy(audience: &DelegationAudience) -> FleetKey {
     match audience {
-        DelegationAudience::Fleet(fleet) => RootDelegationAudiencePolicy::Fleet(*fleet),
+        DelegationAudience::Fleet(fleet) => *fleet,
     }
 }
 
@@ -31,12 +32,8 @@ pub(super) fn grant_policies(grants: &[DelegatedRoleGrant]) -> Vec<RootDelegated
     grants.iter().map(grant_policy).collect()
 }
 
-pub(super) const fn delegation_audience_view(
-    policy: &RootDelegationAudiencePolicy,
-) -> DelegationAudience {
-    match policy {
-        RootDelegationAudiencePolicy::Fleet(fleet) => DelegationAudience::Fleet(*fleet),
-    }
+pub(super) const fn delegation_audience_view(fleet: &FleetKey) -> DelegationAudience {
+    DelegationAudience::Fleet(*fleet)
 }
 
 pub(super) fn delegated_role_grant_views(

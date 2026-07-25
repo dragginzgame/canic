@@ -103,15 +103,12 @@ pub(super) fn deployment_check_text(check: &DeploymentCheckV1) -> String {
         format!("plan_id: {}", check.plan.plan_id),
         format!("inventory_id: {}", check.inventory.inventory_id),
         format!("report_id: {}", check.report.report_id),
-        format!(
-            "deployment: {}",
-            check.plan.deployment_identity.deployment_name
-        ),
+        format!("fleet: {}", check.plan.deployment_identity.fleet_name),
         format!(
             "environment: {}",
             check.plan.deployment_identity.environment
         ),
-        format!("fleet_template: {}", check.plan.fleet_template),
+        format!("app: {}", check.plan.deployment_identity.app),
         String::new(),
         "counts:".to_string(),
         format!(
@@ -191,9 +188,8 @@ pub(super) fn build_deployment_check_envelope(
         command: deployment_check_command_provenance(options, &config_root),
         target: EvidenceTargetV1 {
             kind: EvidenceTargetKindV1::Deployment,
-            deployment: Some(check.plan.deployment_identity.deployment_name.clone()),
-            app: Some(check.plan.fleet_template.clone()),
-            fleet: None,
+            app: Some(check.plan.deployment_identity.app.clone()),
+            fleet: Some(check.plan.deployment_identity.fleet_name.clone()),
             role: None,
             profile: options
                 .truth
@@ -220,7 +216,7 @@ fn deployment_check_command_provenance(
         "canic".to_string(),
         "deploy".to_string(),
         "check".to_string(),
-        options.truth.deployment.clone(),
+        options.truth.fleet.clone(),
         EVIDENCE_ENVELOPE_FLAG.to_string(),
     ];
     if let Some(profile) = options.truth.profile {

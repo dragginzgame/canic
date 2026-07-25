@@ -56,22 +56,22 @@ pub(super) fn proposed_operations(plan: &DeploymentPlanV1) -> Vec<ProposedOperat
     if !plan.authority_profile.expected_controllers.is_empty() {
         operations.push(operation(
             OP_APPLY_POLICY,
-            &plan.deployment_identity.deployment_name,
+            &plan.deployment_identity.fleet_name,
         ));
         operations.push(operation(
             OP_SET_CONTROLLERS,
-            &plan.deployment_identity.deployment_name,
+            &plan.deployment_identity.fleet_name,
         ));
     }
     if verifier_readiness_required(plan) {
         operations.push(operation(
             OP_VERIFY_READINESS,
-            &plan.deployment_identity.deployment_name,
+            &plan.deployment_identity.fleet_name,
         ));
     }
     operations.push(operation(
         OP_VERIFY_TOPOLOGY,
-        &plan.deployment_identity.deployment_name,
+        &plan.deployment_identity.fleet_name,
     ));
     sort_proposed_operations(&mut operations);
     operations
@@ -135,7 +135,7 @@ pub(super) fn next_actions(
     }
     actions.push(format!(
         "run canic medic fleet {} if operator readiness is uncertain",
-        options.deployment
+        options.fleet
     ));
     actions
 }

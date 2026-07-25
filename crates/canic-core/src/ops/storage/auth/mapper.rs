@@ -16,19 +16,20 @@ use crate::{
         DelegationCert, DelegationProof, IcChainKeyBatchSignatureProofV1, IssuerProofAlgorithm,
         IssuerProofBinding, RootProof,
     },
+    ids::FleetKey,
     model::auth::{
-        RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
-        RootIssuerRenewalState, RootIssuerRenewalTemplate,
+        RootDelegatedRoleGrantPolicy, RootIssuerPolicy, RootIssuerRenewalState,
+        RootIssuerRenewalTemplate,
     },
     storage::stable::auth::{
         ActiveDelegationProofRecord, ChainKeyAlgorithmRecord, ChainKeyBatchHeaderRecord,
         ChainKeyBatchWitnessRecord, ChainKeyBatchWitnessStepRecord, ChainKeyDelegationCertRecord,
         ChainKeyKeyIdRecord, ChainKeyRootDelegationBatchIssuerRecord,
         ChainKeyRootDelegationBatchRecord, ChainKeyRootDelegationBatchStatusRecord,
-        ChainKeyRootSignatureRecord, DelegatedRoleGrantRecord, DelegationAudienceRecord,
-        DelegationCertRecord, DelegationProofRecord, IcChainKeyBatchSignatureProofRecord,
-        IssuerProofAlgorithmRecord, IssuerProofBindingRecord, RootIssuerRecord,
-        RootIssuerRenewalStateRecord, RootIssuerRenewalTemplateRecord, RootProofRecord,
+        ChainKeyRootSignatureRecord, DelegatedRoleGrantRecord, DelegationCertRecord,
+        DelegationProofRecord, IcChainKeyBatchSignatureProofRecord, IssuerProofAlgorithmRecord,
+        IssuerProofBindingRecord, RootIssuerRecord, RootIssuerRenewalStateRecord,
+        RootIssuerRenewalTemplateRecord, RootProofRecord,
     },
 };
 
@@ -590,16 +591,14 @@ fn chain_key_key_id_record_to_dto(record: ChainKeyKeyIdRecord) -> ChainKeyKeyId 
     ChainKeyKeyId { name: record.name }
 }
 
-const fn audience_to_record(audience: DelegationAudience) -> DelegationAudienceRecord {
+const fn audience_to_record(audience: DelegationAudience) -> FleetKey {
     match audience {
-        DelegationAudience::Fleet(fleet) => DelegationAudienceRecord::Fleet(fleet),
+        DelegationAudience::Fleet(fleet) => fleet,
     }
 }
 
-const fn audience_record_to_dto(record: DelegationAudienceRecord) -> DelegationAudience {
-    match record {
-        DelegationAudienceRecord::Fleet(fleet) => DelegationAudience::Fleet(fleet),
-    }
+const fn audience_record_to_dto(fleet: FleetKey) -> DelegationAudience {
+    DelegationAudience::Fleet(fleet)
 }
 
 fn grant_to_record(grant: DelegatedRoleGrant) -> DelegatedRoleGrantRecord {
@@ -616,20 +615,12 @@ fn grant_record_to_dto(record: DelegatedRoleGrantRecord) -> DelegatedRoleGrant {
     }
 }
 
-const fn audience_record_to_policy(
-    record: DelegationAudienceRecord,
-) -> RootDelegationAudiencePolicy {
-    match record {
-        DelegationAudienceRecord::Fleet(fleet) => RootDelegationAudiencePolicy::Fleet(fleet),
-    }
+const fn audience_record_to_policy(fleet: FleetKey) -> FleetKey {
+    fleet
 }
 
-const fn audience_policy_to_record(
-    policy: RootDelegationAudiencePolicy,
-) -> DelegationAudienceRecord {
-    match policy {
-        RootDelegationAudiencePolicy::Fleet(fleet) => DelegationAudienceRecord::Fleet(fleet),
-    }
+const fn audience_policy_to_record(fleet: FleetKey) -> FleetKey {
+    fleet
 }
 
 fn grant_record_to_policy(record: DelegatedRoleGrantRecord) -> RootDelegatedRoleGrantPolicy {

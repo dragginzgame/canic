@@ -33,7 +33,6 @@ pub(super) fn fleet_catalog_observations(
 pub(super) fn observed_root_observation(
     installed_fleet: Option<&FleetCatalogEntryV1>,
     request: &LocalInventoryRequest,
-    fleet_name: &str,
     observed_canisters: &[ObservedCanisterV1],
 ) -> Option<DeploymentRootObservationV1> {
     let fleet = installed_fleet?;
@@ -41,9 +40,11 @@ pub(super) fn observed_root_observation(
         .iter()
         .find(|canister| canister.canister_id == fleet.root_principal)?;
     Some(DeploymentRootObservationV1 {
-        deployment_name: request.deployment_name.clone(),
+        canonical_network_id: fleet.canonical_network_id,
+        fleet_id: fleet.fleet_id,
+        fleet_name: fleet.fleet_name.to_string(),
+        app: fleet.app.to_string(),
         environment: request.environment.clone(),
-        fleet_template: fleet_name.to_string(),
         root_principal: fleet.root_principal.clone(),
         observed_canister_id: observed.canister_id.clone(),
         observation_source: root_observation_source(observed),
