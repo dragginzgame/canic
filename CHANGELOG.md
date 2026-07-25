@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.26` drives the exact journalled Fleet generation through
+  children-first activation, reconciles uncertain outcomes and durably records
+  complete canonical `CanistersActivated` evidence before host publication.
+
 - `0.99.25` advances fresh installation through one complete, bounded and
   canonically journalled `CanistersPrepared` authority, with exact
   root-receipt recovery and no duplicate install work on restart.
