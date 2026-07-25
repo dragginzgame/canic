@@ -20,6 +20,8 @@ evidence exist.
 ## Slice 1 — Contracts and Target Compilation
 
 - [ ] Hard-cut the declaration to `[services.fleet.targets]`.
+- [ ] Load only the exact protected 0.100 declaration bytes/hash and reject
+  mutable source-configuration drift.
 - [ ] Compile every role to one singleton `TreeGroupId`, active `TreeId`, Tree
   Root, Tree Spec hash and physical `SubnetId`.
 - [ ] Require the selected role in exactly the target Tree Spec.
@@ -86,6 +88,7 @@ evidence exist.
 - [ ] The Coordinator has no Tree identity and is not a service parent,
   local Registry owner or controller.
 - [ ] `[services.fleet.targets]` is the sole Fleet service declaration.
+- [ ] The protected 0.100 declaration is the sole activation authority.
 - [ ] Every target role resolves to one active Tree in one singleton group.
 - [ ] The complete service set is resolved before mutation.
 - [ ] Existing services retain principal, data, local Registry row and Tree

@@ -14,16 +14,15 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.28`.
-- The latest published release is `v0.99.28` at
-  `61b0e2f2731b6c1f6d48fce21e9e16779bf6621b`.
-- The `v0.99.28` source tree is
-  `12235ee6404d99b4a5dd65947b8dcfc6e3c8baf8`. Its Cargo.lock SHA-256 is
-  `07af64015152e42552893e6ec62bd2eb146e12cb2284909f33e0a7d7825dfc09`.
-- The open `0.99.29` draft hard-cuts live runtime inspection and Medic
-  targeting to `inspect fleet` and `medic fleet`, including their JSON
-  projections and active guidance. The obsolete diagnostic that treated
-  equal App/role/Fleet display names as conflation is removed.
+- The workspace package version is `0.99.29`.
+- The latest published release is `v0.99.29` at
+  `0bb56137d43aa89da866f4c9e7e4d0f1beb904c6`.
+- The `v0.99.29` source tree is
+  `08c7f61126f9694050e8e7df6ed6681d6efc2884`. Its Cargo.lock SHA-256 is
+  `b9b0012d29cc840680121764ed90e9af6938a8f83fd16f9319ce80fbb091dcbd`.
+- The open `0.99.30` draft hardens the proposed 0.100/0.101 service design
+  with one protected, bounded Fleet service-target declaration. 0.101 resolves
+  those exact bytes and rejects later source-configuration drift.
 - The proposed 0.100/0.101 follow-on designs now model heterogeneous,
   independently scaled Tree Groups backed by App Tree Specs: one user-focused
   Tree and many project-focused Trees may use different topology templates.
@@ -33,8 +32,12 @@ Historical detail is archived at:
   Subnet placement, and application routing remains outside Canic. The
   Coordinator is not part of any Tree. Fleet-authoritative services instead
   remain under ordinary singleton service Trees whose Tree Roots retain local
-  lifecycle authority; the Coordinator publishes their Fleet-wide bindings.
-  This is a design amendment, not additional 0.99 runtime scope.
+  lifecycle authority; the Coordinator protects the target declaration and
+  publishes their Fleet-wide `(role, TreeId, canister_id)` bindings. This is a
+  design amendment, not additional 0.99 runtime scope.
+- Released `0.99.29` hard-cuts live runtime inspection and Medic targeting to
+  `inspect fleet` and `medic fleet`, including their JSON projections and
+  active guidance, and removes invalid same-name conflation warnings.
 - Released `0.99.28` makes `canic status` read App configs and the
   canonical-network Fleet catalog as independent authorities. Its separate
   tables project the catalog's explicit App binding and never infer Fleet
