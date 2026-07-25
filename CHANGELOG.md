@@ -12,9 +12,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.27` completes fresh Fleet installation: the host atomically publishes
+  the canonical-network catalog only after exact Active evidence, records
+  terminal `HostAuthorityCommitted` recovery authority and returns success
+  only while the catalog row and root-install receipt remain valid.
+
 - `0.99.26` drives the exact journalled Fleet generation through
   children-first activation, reconciles uncertain outcomes and durably records
-  complete canonical `CanistersActivated` evidence before host publication.
+  complete canonical `CanistersActivated` evidence before host publication;
+  the proposed 0.100/0.101 follow-on now models heterogeneous, independently
+  scaled Tree Groups keyed by App Tree Specs.
 
 - `0.99.25` advances fresh installation through one complete, bounded and
   canonically journalled `CanistersPrepared` authority, with exact

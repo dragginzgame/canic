@@ -14,10 +14,11 @@ use crate::{
         ObservationStatusV1,
     },
     durable_io::{
-        RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
-        write_bytes,
+        RegularFileLockError, RegularFileReadError, create_new_bytes_with_parents,
+        lock_regular_file_with_parents, read_optional_regular_bytes, write_bytes,
     },
     entropy::{EntropyError, random_bytes_32},
+    fleet_catalog::{CommittedFleetCatalog, FleetCatalogEntryV1},
     release_build::{
         FinalizedReleaseBuild, ReleaseBuildPlanError, ReleaseBuildPlanState,
         load_finalized_release_build,
@@ -121,6 +122,18 @@ pub(super) struct CanistersPreparedFleetInstallActivation {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct CanistersActivatedFleetInstallActivation {
+    pub journal: FleetInstallActivationJournal,
+    pub journal_hash: [u8; 32],
+    pub path: PathBuf,
+    pub advanced: bool,
+}
+
+///
+/// HostAuthorityCommittedFleetInstallActivation
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct HostAuthorityCommittedFleetInstallActivation {
     pub journal: FleetInstallActivationJournal,
     pub journal_hash: [u8; 32],
     pub path: PathBuf,
@@ -255,10 +268,21 @@ pub(super) enum FleetInstallActivationJournalError {
     )]
     InvalidCanistersActivatedTransition { phase: FleetInstallActivationPhase },
 
+    #[error("committed Fleet catalog row differs from the activated journal authority")]
+    CommittedFleetCatalogMismatch,
+
+    #[error("committed Fleet catalog hash is absent")]
+    MissingCommittedFleetCatalogHash,
+
     #[error(
-        "active Fleet {fleet_name} at {path} belongs to App {existing_app}, not requested App {requested_app}"
+        "Fleet install activation journal cannot transition from {phase:?} to HostAuthorityCommitted"
     )]
-    ActiveAppMismatch {
+    InvalidHostAuthorityCommittedTransition { phase: FleetInstallActivationPhase },
+
+    #[error(
+        "existing Fleet activation {fleet_name} at {path} belongs to App {existing_app}, not requested App {requested_app}"
+    )]
+    ExistingAppMismatch {
         fleet_name: FleetName,
         existing_app: AppId,
         requested_app: AppId,
@@ -266,11 +290,20 @@ pub(super) enum FleetInstallActivationJournalError {
     },
 
     #[error(
-        "active Fleet {fleet_name} at {path} belongs to different finalized release-build evidence"
+        "existing Fleet activation {fleet_name} at {path} belongs to different finalized release-build evidence"
     )]
-    ActiveReleaseBuildMismatch {
+    ExistingReleaseBuildMismatch {
         fleet_name: FleetName,
         path: PathBuf,
+    },
+
+    #[error(
+        "Fleet {fleet_name} has competing exact completed-install observations at {first} and {second}"
+    )]
+    CompetingCompletedObservations {
+        fleet_name: FleetName,
+        first: PathBuf,
+        second: PathBuf,
     },
 
     #[error("Fleet {fleet_name} has competing active activation journals at {first} and {second}")]
@@ -331,37 +364,54 @@ pub(super) fn plan_fleet_install_activation(
         unreachable!("load_finalized_release_build admits only finalized records");
     };
 
-    if let Some(existing) = discover_fleet_install_activation(
+    let mut discovered = discover_fleet_install_activation(
         request.root,
         request.canonical_network_id,
         &request.fleet_name,
-    )? {
-        let identity = &existing.journal.activation.identity;
-        if identity.fleet.app != request.app {
-            return Err(FleetInstallActivationJournalError::ActiveAppMismatch {
+    )?;
+    if let Some(active) = discovered.active {
+        return resolve_discovered_activation(
+            &request,
+            &finalized,
+            release_set_manifest_digest,
+            active,
+        );
+    }
+    let matching_completed = discovered
+        .completed
+        .iter()
+        .enumerate()
+        .filter(|completed| {
+            discovered_activation_matches(
+                completed.1,
+                &request,
+                &finalized,
+                release_set_manifest_digest,
+            )
+        })
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    if let [first, second, ..] = matching_completed.as_slice() {
+        return Err(
+            FleetInstallActivationJournalError::CompetingCompletedObservations {
                 fleet_name: request.fleet_name,
-                existing_app: identity.fleet.app.clone(),
-                requested_app: request.app,
-                path: existing.path,
-            });
-        }
-        if identity.release_build_id != finalized.record.release_build_id
-            || existing.journal.release_build_plan_hash != finalized.plan_hash
-            || existing.journal.release_set_manifest_digest != release_set_manifest_digest
-        {
-            return Err(
-                FleetInstallActivationJournalError::ActiveReleaseBuildMismatch {
-                    fleet_name: request.fleet_name,
-                    path: existing.path,
-                },
-            );
-        }
-        return Ok(ResolvedFleetInstallActivation {
-            journal_hash: fleet_install_activation_journal_hash(&existing.journal),
-            journal: existing.journal,
-            path: existing.path,
-            created: false,
-        });
+                first: discovered.completed[*first].path.clone(),
+                second: discovered.completed[*second].path.clone(),
+            },
+        );
+    }
+    if let Some(index) = matching_completed.first() {
+        return Ok(resolved_discovered_activation(
+            discovered.completed.swap_remove(*index),
+        ));
+    }
+    if let Some(completed) = discovered.completed.pop() {
+        return resolve_discovered_activation(
+            &request,
+            &finalized,
+            release_set_manifest_digest,
+            completed,
+        );
     }
 
     for _ in 0..RANDOM_ATTEMPTS {
@@ -621,13 +671,11 @@ pub(super) fn recover_activation_root_canister(
                 .map(Some)
                 .map_err(invalid_prepared)
         }
-        FleetInstallActivationPhase::CanistersActivated => {
+        FleetInstallActivationPhase::CanistersActivated
+        | FleetInstallActivationPhase::HostAuthorityCommitted => {
             validate_activated_activation_record(&resolved.journal.activation)
                 .map(Some)
                 .map_err(invalid_active)
-        }
-        phase @ FleetInstallActivationPhase::HostAuthorityCommitted => {
-            Err(FleetInstallActivationJournalError::InvalidCanistersActivatedTransition { phase })
         }
     }
 }
@@ -1275,6 +1323,191 @@ pub(super) fn resume_canisters_activated(
     ))
 }
 
+/// Advance one exact active journal after the canonical Fleet catalog is durable.
+pub(super) fn record_host_authority_committed(
+    root: &Path,
+    activated: &CanistersActivatedFleetInstallActivation,
+    receipt_directory: &Path,
+    committed_catalog: &CommittedFleetCatalog,
+) -> Result<HostAuthorityCommittedFleetInstallActivation, FleetInstallActivationJournalError> {
+    if !committed_catalog.belongs_to(root) {
+        return Err(FleetInstallActivationJournalError::CommittedFleetCatalogMismatch);
+    }
+    validate_committed_catalog(&activated.journal, committed_catalog.entry())?;
+    require_root_install_receipt(
+        &activated.journal,
+        receipt_directory,
+        committed_catalog.entry(),
+    )?;
+    let identity = &activated.journal.activation.identity;
+    let expected_path = fleet_install_activation_journal_path(
+        root,
+        identity.fleet.fleet.network,
+        identity.fleet.fleet.fleet_id,
+        identity.operation_id,
+    );
+    if activated.path != expected_path {
+        return Err(invalid(
+            &activated.path,
+            "active journal path is not canonical for its activation identity",
+        ));
+    }
+
+    let _lock = lock_fleet_install_activation(
+        root,
+        identity.fleet.fleet.network,
+        &activated.journal.fleet_name,
+    )?;
+    let observed = load_fleet_install_activation_journal(
+        root,
+        identity.fleet.fleet.network,
+        identity.fleet.fleet.fleet_id,
+        identity.operation_id,
+    )?;
+    if observed.phase == FleetInstallActivationPhase::HostAuthorityCommitted {
+        if observed.committed_fleet_catalog_hash == Some(committed_catalog.catalog_hash()) {
+            return Ok(host_authority_committed_result(
+                observed,
+                activated.path.clone(),
+                false,
+            ));
+        }
+        return Err(FleetInstallActivationJournalError::CommittedFleetCatalogMismatch);
+    }
+    if observed.phase != FleetInstallActivationPhase::CanistersActivated {
+        return Err(
+            FleetInstallActivationJournalError::InvalidHostAuthorityCommittedTransition {
+                phase: observed.phase,
+            },
+        );
+    }
+    let observed_hash = fleet_install_activation_journal_hash(&observed);
+    if observed_hash != activated.journal_hash || observed != activated.journal {
+        return Err(FleetInstallActivationJournalError::JournalChanged {
+            expected: hex_digest(activated.journal_hash),
+            observed: hex_digest(observed_hash),
+        });
+    }
+
+    let next = next_host_authority_committed_journal(observed, committed_catalog.catalog_hash());
+    let bytes = encode_journal(&next)?;
+    if let Err(source) = write_bytes(&activated.path, &bytes) {
+        match load_fleet_install_activation_journal(
+            root,
+            identity.fleet.fleet.network,
+            identity.fleet.fleet.fleet_id,
+            identity.operation_id,
+        ) {
+            Ok(observed) if observed == next => {
+                return Ok(host_authority_committed_result(
+                    next,
+                    activated.path.clone(),
+                    true,
+                ));
+            }
+            _ => {
+                return Err(FleetInstallActivationJournalError::Io {
+                    path: activated.path.clone(),
+                    source,
+                });
+            }
+        }
+    }
+    let durable = load_fleet_install_activation_journal(
+        root,
+        identity.fleet.fleet.network,
+        identity.fleet.fleet.fleet_id,
+        identity.operation_id,
+    )?;
+    if durable != next {
+        return Err(invalid(
+            &activated.path,
+            "published HostAuthorityCommitted journal differs from the transition record",
+        ));
+    }
+    Ok(host_authority_committed_result(
+        next,
+        activated.path.clone(),
+        true,
+    ))
+}
+
+/// Observe one terminal journal only after its catalog row and receipt remain valid.
+pub(super) fn observe_host_authority_committed(
+    resolved: &ResolvedFleetInstallActivation,
+    receipt_directory: &Path,
+    catalog_entry: &FleetCatalogEntryV1,
+) -> Result<HostAuthorityCommittedFleetInstallActivation, FleetInstallActivationJournalError> {
+    if resolved.journal.phase != FleetInstallActivationPhase::HostAuthorityCommitted {
+        return Err(
+            FleetInstallActivationJournalError::InvalidHostAuthorityCommittedTransition {
+                phase: resolved.journal.phase,
+            },
+        );
+    }
+    resolved
+        .journal
+        .committed_fleet_catalog_hash
+        .ok_or(FleetInstallActivationJournalError::MissingCommittedFleetCatalogHash)?;
+    validate_committed_catalog(&resolved.journal, catalog_entry)?;
+    require_root_install_receipt(&resolved.journal, receipt_directory, catalog_entry)?;
+    Ok(host_authority_committed_result(
+        resolved.journal.clone(),
+        resolved.path.clone(),
+        false,
+    ))
+}
+
+fn validate_committed_catalog(
+    journal: &FleetInstallActivationJournal,
+    entry: &FleetCatalogEntryV1,
+) -> Result<(), FleetInstallActivationJournalError> {
+    let root_canister =
+        validate_activated_activation_record(&journal.activation).map_err(invalid_active)?;
+    let identity = &journal.activation.identity;
+    if entry.canonical_network_id != identity.fleet.fleet.network
+        || entry.fleet_id != identity.fleet.fleet.fleet_id
+        || entry.fleet_name != journal.fleet_name
+        || entry.app != identity.fleet.app
+        || entry.root_principal != root_canister.to_text()
+    {
+        return Err(FleetInstallActivationJournalError::CommittedFleetCatalogMismatch);
+    }
+    Ok(())
+}
+
+fn require_root_install_receipt(
+    journal: &FleetInstallActivationJournal,
+    receipt_directory: &Path,
+    catalog_entry: &FleetCatalogEntryV1,
+) -> Result<(), FleetInstallActivationJournalError> {
+    let receipt = recover_root_install_receipt(
+        receipt_directory,
+        journal
+            .root_install_receipt_hash
+            .expect("validated active journal retains its root-install receipt hash"),
+    )?;
+    if receipt.activation_identity != journal.activation.identity
+        || receipt.root_canister.to_text() != catalog_entry.root_principal
+    {
+        return Err(FleetInstallActivationJournalError::RootInstallReceiptIdentityMismatch);
+    }
+    Ok(())
+}
+
+const fn next_host_authority_committed_journal(
+    mut activated: FleetInstallActivationJournal,
+    catalog_hash: [u8; 32],
+) -> FleetInstallActivationJournal {
+    activated.sequence = activated
+        .sequence
+        .checked_add(1)
+        .expect("validated CanistersActivated sequence three advances to four");
+    activated.phase = FleetInstallActivationPhase::HostAuthorityCommitted;
+    activated.committed_fleet_catalog_hash = Some(catalog_hash);
+    activated
+}
+
 fn plan_fleet_install_activation_with_ids(
     request: &PlanFleetInstallActivationRequest<'_>,
     finalized_release_build: &FinalizedReleaseBuild,
@@ -1348,14 +1581,21 @@ struct DiscoveredFleetInstallActivation {
     path: PathBuf,
 }
 
+#[derive(Default)]
+struct FleetInstallActivationDiscovery {
+    active: Option<DiscoveredFleetInstallActivation>,
+    completed: Vec<DiscoveredFleetInstallActivation>,
+}
+
 fn discover_fleet_install_activation(
     root: &Path,
     canonical_network_id: CanonicalNetworkId,
     fleet_name: &FleetName,
-) -> Result<Option<DiscoveredFleetInstallActivation>, FleetInstallActivationJournalError> {
+) -> Result<FleetInstallActivationDiscovery, FleetInstallActivationJournalError> {
     let network_directory = fleet_install_activation_network_directory(root, canonical_network_id);
     let mut fleet_ids = BTreeMap::new();
-    let mut matching = Vec::new();
+    let mut matching_active = Vec::new();
+    let mut completed = Vec::new();
 
     for fleet_entry in canonical_directory_entries(&network_directory, true)? {
         let fleet_path = fleet_entry.path();
@@ -1394,6 +1634,15 @@ fn discover_fleet_install_activation(
                 fleet_id,
                 operation_id,
             );
+            if journal.phase == FleetInstallActivationPhase::HostAuthorityCommitted {
+                if journal.fleet_name == *fleet_name {
+                    completed.push(DiscoveredFleetInstallActivation {
+                        journal,
+                        path: journal_path,
+                    });
+                }
+                continue;
+            }
             if let Some(first) = fleet_ids.insert(fleet_id, journal_path.clone()) {
                 return Err(
                     FleetInstallActivationJournalError::CompetingFleetIdAuthorities {
@@ -1404,7 +1653,7 @@ fn discover_fleet_install_activation(
                 );
             }
             if journal.fleet_name == *fleet_name {
-                matching.push(DiscoveredFleetInstallActivation {
+                matching_active.push(DiscoveredFleetInstallActivation {
                     journal,
                     path: journal_path,
                 });
@@ -1412,16 +1661,67 @@ fn discover_fleet_install_activation(
         }
     }
 
-    match matching.as_slice() {
-        [] => Ok(None),
-        [_] => Ok(matching.pop()),
+    let active = match matching_active.as_slice() {
+        [] => None,
+        [_] => matching_active.pop(),
         [first, second, ..] => Err(
             FleetInstallActivationJournalError::CompetingFleetNameAuthorities {
                 fleet_name: fleet_name.clone(),
                 first: first.path.clone(),
                 second: second.path.clone(),
             },
-        ),
+        )?,
+    };
+    Ok(FleetInstallActivationDiscovery { active, completed })
+}
+
+fn resolve_discovered_activation(
+    request: &PlanFleetInstallActivationRequest<'_>,
+    finalized: &FinalizedReleaseBuild,
+    release_set_manifest_digest: [u8; 32],
+    existing: DiscoveredFleetInstallActivation,
+) -> Result<ResolvedFleetInstallActivation, FleetInstallActivationJournalError> {
+    let identity = &existing.journal.activation.identity;
+    if identity.fleet.app != request.app {
+        return Err(FleetInstallActivationJournalError::ExistingAppMismatch {
+            fleet_name: request.fleet_name.clone(),
+            existing_app: identity.fleet.app.clone(),
+            requested_app: request.app.clone(),
+            path: existing.path,
+        });
+    }
+    if !discovered_activation_matches(&existing, request, finalized, release_set_manifest_digest) {
+        return Err(
+            FleetInstallActivationJournalError::ExistingReleaseBuildMismatch {
+                fleet_name: request.fleet_name.clone(),
+                path: existing.path,
+            },
+        );
+    }
+    Ok(resolved_discovered_activation(existing))
+}
+
+fn discovered_activation_matches(
+    existing: &DiscoveredFleetInstallActivation,
+    request: &PlanFleetInstallActivationRequest<'_>,
+    finalized: &FinalizedReleaseBuild,
+    release_set_manifest_digest: [u8; 32],
+) -> bool {
+    let identity = &existing.journal.activation.identity;
+    identity.fleet.app == request.app
+        && identity.release_build_id == finalized.record.release_build_id
+        && existing.journal.release_build_plan_hash == finalized.plan_hash
+        && existing.journal.release_set_manifest_digest == release_set_manifest_digest
+}
+
+fn resolved_discovered_activation(
+    existing: DiscoveredFleetInstallActivation,
+) -> ResolvedFleetInstallActivation {
+    ResolvedFleetInstallActivation {
+        journal_hash: fleet_install_activation_journal_hash(&existing.journal),
+        journal: existing.journal,
+        path: existing.path,
+        created: false,
     }
 }
 
@@ -1453,68 +1753,23 @@ fn lock_fleet_install_activation(
     fleet_name: &FleetName,
 ) -> Result<fs::File, FleetInstallActivationJournalError> {
     let path = fleet_install_activation_lock_path(root, canonical_network_id, fleet_name);
-    match create_new_bytes_with_parents(&path, &[]) {
-        Ok(()) => {}
-        Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {}
-        Err(source) => {
-            return Err(FleetInstallActivationJournalError::Io {
-                path: path.clone(),
-                source,
-            });
+    lock_regular_file_with_parents(&path).map_err(|error| match error {
+        RegularFileLockError::NotRegular => {
+            FleetInstallActivationJournalError::UnsafeFile { path: path.clone() }
         }
-    }
-    let metadata =
-        fs::symlink_metadata(&path).map_err(|source| FleetInstallActivationJournalError::Io {
+        RegularFileLockError::Io(source) => FleetInstallActivationJournalError::Io {
             path: path.clone(),
             source,
-        })?;
-    if !metadata.file_type().is_file() {
-        return Err(FleetInstallActivationJournalError::UnsafeFile { path });
-    }
-
-    #[cfg(not(windows))]
-    {
-        use rustix::{
-            fd::OwnedFd,
-            fs::{FileType, FlockOperation, Mode, OFlags, flock, fstat, open},
-        };
-
-        let fd: OwnedFd = open(
-            &path,
-            OFlags::RDWR | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
-            Mode::empty(),
-        )
-        .map_err(|source| FleetInstallActivationJournalError::Io {
-            path: path.clone(),
-            source: io::Error::from_raw_os_error(source.raw_os_error()),
-        })?;
-        let metadata = fstat(&fd).map_err(|source| FleetInstallActivationJournalError::Io {
-            path: path.clone(),
-            source: io::Error::from_raw_os_error(source.raw_os_error()),
-        })?;
-        if FileType::from_raw_mode(metadata.st_mode) != FileType::RegularFile {
-            return Err(FleetInstallActivationJournalError::UnsafeFile { path });
-        }
-        let file = fs::File::from(fd);
-        flock(&file, FlockOperation::LockExclusive).map_err(|source| {
-            FleetInstallActivationJournalError::Io {
-                path,
-                source: io::Error::from_raw_os_error(source.raw_os_error()),
-            }
-        })?;
-        Ok(file)
-    }
-
-    #[cfg(windows)]
-    {
-        Err(FleetInstallActivationJournalError::Io {
+        },
+        #[cfg(windows)]
+        RegularFileLockError::UnsupportedPlatform => FleetInstallActivationJournalError::Io {
             path,
             source: io::Error::new(
                 io::ErrorKind::Unsupported,
                 "Fleet install activation locking is unsupported on Windows",
             ),
-        })
-    }
+        },
+    })
 }
 
 fn canonical_directory_entries(
@@ -1705,6 +1960,15 @@ fn validate_journal(
                 .map(|_| ())
                 .map_err(|reason| invalid(path, reason))
         }
+        FleetInstallActivationPhase::HostAuthorityCommitted
+            if journal.sequence == 4
+                && journal.root_install_receipt_hash.is_some()
+                && journal.committed_fleet_catalog_hash.is_some() =>
+        {
+            validate_activated_activation_record(&journal.activation)
+                .map(|_| ())
+                .map_err(|reason| invalid(path, reason))
+        }
         FleetInstallActivationPhase::Planned => Err(invalid(
             path,
             "Planned requires sequence 0 and no later-phase evidence",
@@ -1721,9 +1985,9 @@ fn validate_journal(
             path,
             "CanistersActivated requires sequence 3, one root-install receipt, complete Active evidence and no catalog hash",
         )),
-        phase @ FleetInstallActivationPhase::HostAuthorityCommitted => Err(invalid(
+        FleetInstallActivationPhase::HostAuthorityCommitted => Err(invalid(
             path,
-            format!("{phase:?} is reserved until its transition is implemented"),
+            "HostAuthorityCommitted requires sequence 4, one root-install receipt, complete Active evidence and a catalog hash",
         )),
     }
 }
@@ -2439,6 +2703,19 @@ fn canisters_activated_result(
     advanced: bool,
 ) -> CanistersActivatedFleetInstallActivation {
     CanistersActivatedFleetInstallActivation {
+        journal_hash: fleet_install_activation_journal_hash(&journal),
+        journal,
+        path,
+        advanced,
+    }
+}
+
+fn host_authority_committed_result(
+    journal: FleetInstallActivationJournal,
+    path: PathBuf,
+    advanced: bool,
+) -> HostAuthorityCommittedFleetInstallActivation {
+    HostAuthorityCommittedFleetInstallActivation {
         journal_hash: fleet_install_activation_journal_hash(&journal),
         journal,
         path,

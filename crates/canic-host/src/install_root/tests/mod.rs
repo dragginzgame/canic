@@ -34,9 +34,9 @@ use super::root_cycles::add_local_root_create_cycles_arg;
 use super::timing::InstallTimingSummary;
 use super::truth_check::current_install_deployment_truth_check_at;
 use super::{
-    FleetActivationContinuationRequired, InstallRootBlockKind, InstallRootBlockedError,
-    InstallRootError, InstallRootOptions, InstallRootPhase, check_install_deployment_truth,
-    check_install_execution_preflight, latest_deployment_truth_receipt_path_from_root,
+    InstallRootBlockKind, InstallRootBlockedError, InstallRootError, InstallRootOptions,
+    InstallRootPhase, check_install_deployment_truth, check_install_execution_preflight,
+    latest_deployment_truth_receipt_path_from_root,
 };
 use crate::canister_build::{
     CanisterArtifactBuildSpec, CanisterBuildProfile, WorkspaceBuildContext,
@@ -81,25 +81,6 @@ fn public_install_error_preserves_phase_and_typed_source() {
             .and_then(|source| source.downcast_ref::<std::io::Error>())
             .is_some()
     );
-}
-
-#[test]
-fn activation_continuation_exposes_typed_recovery_identity() {
-    let continuation = FleetActivationContinuationRequired {
-        root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
-        journal_path: PathBuf::from("/tmp/fleet-activation.json"),
-        sequence: 3,
-    };
-
-    assert_eq!(
-        continuation.root_canister_id(),
-        "uxrrr-q7777-77774-qaaaq-cai"
-    );
-    assert_eq!(
-        continuation.journal_path(),
-        Path::new("/tmp/fleet-activation.json")
-    );
-    assert_eq!(continuation.sequence(), 3);
 }
 
 #[test]
