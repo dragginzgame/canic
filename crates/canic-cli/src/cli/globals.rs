@@ -191,12 +191,7 @@ fn deploy_leaf_accepts_global_environment(tail: &[OsString]) -> bool {
     let third = tail.get(2).and_then(|arg| arg.to_str());
 
     match first {
-        Some("check" | "install") => true,
-        Some("authority") => matches!(second, Some("check" | "evidence" | "receipt" | "report")),
-        Some("external") => matches!(
-            second,
-            Some("check" | "critical-fix" | "handoff" | "pending" | "plan" | "proposals")
-        ),
+        Some("check") => true,
         Some("inspect") => match second {
             Some("catalog") => matches!(third, Some("inspect" | "list")),
             Some("diff" | "inventory" | "plan" | "report" | "resume-report") => true,

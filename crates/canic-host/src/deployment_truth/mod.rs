@@ -12,23 +12,17 @@ use std::{
 
 mod authority;
 mod executor;
-mod lifecycle;
 mod model;
 mod multi;
 mod observe;
 mod plan;
-mod promotion;
 mod receipt;
 mod report;
 #[cfg(test)]
 mod tests;
 mod text;
 
-pub use authority::{
-    authority_report_from_check, authority_report_from_check_with_local_id,
-    authority_report_from_plan, authority_report_from_plan_with_check_id,
-    build_authority_reconciliation_plan,
-};
+pub use authority::build_authority_reconciliation_plan;
 pub use executor::{
     CURRENT_CLI_EXECUTOR_CAPABILITIES, CurrentCliDeploymentExecutor,
     DeploymentExecutionPreflightError, DeploymentExecutor, TESTKIT_PREFLIGHT_CAPABILITIES,
@@ -37,97 +31,23 @@ pub use executor::{
     missing_executor_capabilities, testkit_execution_context,
     validate_deployment_execution_preflight, validate_deployment_execution_preflight_for_check,
 };
-pub use lifecycle::{
-    CriticalExternalFixReportError, ExternalLifecycleCheckError, ExternalLifecycleHandoffError,
-    ExternalLifecyclePendingReportError, ExternalLifecyclePlanError,
-    ExternalUpgradeCompletionReportError, ExternalUpgradeConsentEvidenceError,
-    ExternalUpgradeProposalReportError, ExternalUpgradeReceiptError,
-    ExternalUpgradeVerificationCheckError, ExternalUpgradeVerificationPolicyError,
-    ExternalUpgradeVerificationReportError, LifecycleAuthorityReportError,
-};
-pub use lifecycle::{
-    critical_external_fix_report_from_pending, external_lifecycle_check_from_reports,
-    external_lifecycle_handoff_from_reports, external_lifecycle_pending_report_from_plan,
-    external_lifecycle_plan_from_check, external_upgrade_completion_report_from_evidence,
-    external_upgrade_consent_evidence_from_receipt,
-    external_upgrade_proposal_report_from_lifecycle_plan,
-    external_upgrade_receipt_from_observation, external_upgrade_verification_check_from_policy,
-    external_upgrade_verification_observation_from_check,
-    external_upgrade_verification_policy_from_proposal,
-    external_upgrade_verification_report_from_receipt, lifecycle_authority_report_from_check,
-    validate_critical_external_fix_report, validate_critical_external_fix_report_for_pending,
-    validate_external_lifecycle_check, validate_external_lifecycle_check_for_reports,
-    validate_external_lifecycle_handoff, validate_external_lifecycle_handoff_for_reports,
-    validate_external_lifecycle_pending_report,
-    validate_external_lifecycle_pending_report_for_plan, validate_external_lifecycle_plan,
-    validate_external_lifecycle_plan_for_check, validate_external_upgrade_completion_report,
-    validate_external_upgrade_completion_report_for_evidence,
-    validate_external_upgrade_consent_evidence,
-    validate_external_upgrade_consent_evidence_for_receipt,
-    validate_external_upgrade_proposal_report,
-    validate_external_upgrade_proposal_report_for_lifecycle_plan,
-    validate_external_upgrade_receipt, validate_external_upgrade_receipt_for_proposal,
-    validate_external_upgrade_verification_check,
-    validate_external_upgrade_verification_check_for_deployment_check,
-    validate_external_upgrade_verification_check_for_policy,
-    validate_external_upgrade_verification_policy,
-    validate_external_upgrade_verification_policy_for_proposal,
-    validate_external_upgrade_verification_report,
-    validate_external_upgrade_verification_report_for_receipt, validate_lifecycle_authority_report,
-};
 pub use model::{
-    ArtifactDigestSourceV1, ArtifactPromotionExecutionReceiptV1, ArtifactPromotionPlanV1,
-    ArtifactPromotionProvenanceReportV1, ArtifactSourceV1, ArtifactTransportV1,
-    AuthorityActionCountV1, AuthorityActionV1, AuthorityApplyBlockerV1, AuthorityApplyReadinessV1,
-    AuthorityAttemptedActionV1, AuthorityAutomaticActionV1, AuthorityControlClassCountV1,
-    AuthorityControllerDeltaV1, AuthorityControllerObservationV1, AuthorityDryRunEvidenceV1,
-    AuthorityExternalActionV1, AuthorityProfileV1, AuthorityReceiptV1,
-    AuthorityReconciliationPlanV1, AuthorityReconciliationStateV1, AuthorityReportCountsV1,
-    AuthorityReportV1, BuildMaterializationEvidenceV1, BuildMaterializationInputV1,
-    BuildMaterializationResultV1, BuildRecipeIdentityV1, CanisterAuthorityActionV1,
-    CanisterControlClassV1, ConsentChannelKindV1, ConsentRequirementV1, ConsentSubjectKindV1,
-    CriticalExternalFixReportV1, DeploymentAssumptionKindV1, DeploymentAssumptionV1,
-    DeploymentCheckV1, DeploymentCommandResultV1, DeploymentComparisonCategoryV1,
-    DeploymentComparisonDiffV1, DeploymentComparisonReportV1, DeploymentComparisonTargetV1,
-    DeploymentDiffV1, DeploymentExecutionContextV1, DeploymentExecutionPreflightStatusV1,
+    ArtifactDigestSourceV1, ArtifactSourceV1, AuthorityActionV1, AuthorityAutomaticActionV1,
+    AuthorityControllerDeltaV1, AuthorityExternalActionV1, AuthorityProfileV1,
+    AuthorityReconciliationPlanV1, AuthorityReconciliationStateV1, CanisterAuthorityActionV1,
+    CanisterControlClassV1, DeploymentAssumptionKindV1, DeploymentAssumptionV1, DeploymentCheckV1,
+    DeploymentCommandResultV1, DeploymentComparisonCategoryV1, DeploymentComparisonDiffV1,
+    DeploymentComparisonReportV1, DeploymentComparisonTargetV1, DeploymentDiffV1,
+    DeploymentExecutionContextV1, DeploymentExecutionPreflightStatusV1,
     DeploymentExecutionPreflightV1, DeploymentExecutionStatusV1, DeploymentExecutorBackendV1,
     DeploymentExecutorCapabilityV1, DeploymentIdentityV1, DeploymentInventoryV1,
     DeploymentObservationGapV1, DeploymentPlanV1, DeploymentReceiptV1,
     DeploymentRootObservationSourceV1, DeploymentRootObservationV1, DiffItemV1, ExpectedCanisterV1,
-    ExpectedPoolCanisterV1, ExternalLifecycleCheckV1, ExternalLifecycleHandoffActionV1,
-    ExternalLifecycleHandoffV1, ExternalLifecyclePendingActionV1, ExternalLifecyclePendingReportV1,
-    ExternalLifecyclePlanStatusV1, ExternalLifecyclePlanV1, ExternalLifecycleRoleUpgradeV1,
-    ExternalUpgradeAuthorizationModeV1, ExternalUpgradeCompletionReportRequest,
-    ExternalUpgradeCompletionReportV1, ExternalUpgradeCompletionStatusV1,
-    ExternalUpgradeConsentEvidenceRequest, ExternalUpgradeConsentEvidenceV1,
-    ExternalUpgradeConsentStateV1, ExternalUpgradeProposalReportV1, ExternalUpgradeProposalV1,
-    ExternalUpgradeReceiptV1, ExternalUpgradeVerificationCheckRequest,
-    ExternalUpgradeVerificationCheckRequirementV1, ExternalUpgradeVerificationCheckV1,
-    ExternalUpgradeVerificationObservationV1, ExternalUpgradeVerificationPolicyRequest,
-    ExternalUpgradeVerificationPolicyRequirementV1, ExternalUpgradeVerificationPolicyV1,
-    ExternalUpgradeVerificationReportRequest, ExternalUpgradeVerificationReportV1,
-    ExternalUpgradeVerificationRequirementStatusV1, ExternalUpgradeVerificationResultV1,
-    ExternalVerificationObservationSourceV1, LifecycleAuthorityReportV1, LifecycleAuthorityV1,
-    LifecycleModeV1, LifecycleUpgradeModeV1, LifecycleVerificationRequirementV1,
-    LocalDeploymentConfigV1, ObservationStatusV1, ObservedArtifactV1, ObservedCanisterV1,
-    ObservedPoolCanisterV1, PhaseReceiptV1, PreviousArtifactReceiptKindV1,
-    PromotionArtifactIdentityGroupV1, PromotionArtifactIdentityKindV1,
-    PromotionArtifactIdentityReportV1, PromotionArtifactIdentitySummaryV1,
-    PromotionArtifactLevelV1, PromotionMaterializationIdentityReportV1,
-    PromotionMaterializationOutputGroupV1, PromotionPlanTransformEvidenceV1,
-    PromotionPlanTransformV1, PromotionPolicyCheckV1, PromotionPolicyClaimV1,
-    PromotionPolicyRequirementV1, PromotionReadinessStatusV1, PromotionReadinessV1,
-    PromotionTargetExecutionLineageV1, PromotionWasmStoreCatalogEntryV1,
-    PromotionWasmStoreCatalogVerificationV1, PromotionWasmStoreIdentityReportV1, ResumeSafetyV1,
-    RoleArtifactManifestV1, RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1,
-    RoleAssignmentSourceV1, RoleEpochExpectationV1, RoleEpochObservationV1, RolePhaseReceiptV1,
-    RolePhaseResultV1, RolePromotionArtifactIdentityV1, RolePromotionExecutionReceiptV1,
-    RolePromotionInputV1, RolePromotionMaterializationIdentityV1,
-    RolePromotionMaterializationLinkV1, RolePromotionPlanTransformV1,
-    RolePromotionPolicyDecisionV1, RolePromotionPolicyV1, RolePromotionProvenanceV1,
-    RolePromotionReadinessV1, RolePromotionWasmStoreCatalogVerificationV1,
-    RolePromotionWasmStoreIdentityV1, SafetyFindingV1, SafetyReportV1, SafetySeverityV1,
-    SafetyStatusV1, StagingReceiptV1, TrustDomainV1, VerifiedPostconditionV1,
+    ExpectedPoolCanisterV1, LocalDeploymentConfigV1, ObservationStatusV1, ObservedArtifactV1,
+    ObservedCanisterV1, ObservedPoolCanisterV1, PhaseReceiptV1, ResumeSafetyV1,
+    RoleArtifactManifestV1, RoleArtifactV1, RoleAssignmentSourceV1, RoleEpochExpectationV1,
+    RoleEpochObservationV1, RolePhaseReceiptV1, RolePhaseResultV1, SafetyFindingV1, SafetyReportV1,
+    SafetySeverityV1, SafetyStatusV1, TrustDomainV1, VerifiedPostconditionV1,
     VerifierReadinessExpectationV1, VerifierReadinessObservationV1,
 };
 pub use multi::{
@@ -139,82 +59,17 @@ pub use observe::{
     collect_local_deployment_inventory, collect_local_role_artifact_manifest,
 };
 pub use plan::{LocalDeploymentPlanRequest, build_local_deployment_plan};
-pub use promotion::{
-    ArtifactPromotionExecutionReceiptError, ArtifactPromotionPlanError,
-    ArtifactPromotionProvenanceReportError, PromotionArtifactIdentityReportError,
-    PromotionArtifactSourceError, PromotionMaterializationIdentityError,
-    PromotionMaterializationIdentityReportError, PromotionPlanTransformError,
-    PromotionPlanTransformEvidenceError, PromotionPolicyCheckError, PromotionReadinessError,
-    PromotionTargetExecutionLineageError, PromotionWasmStoreCatalogVerificationError,
-    PromotionWasmStoreIdentityReportError,
-};
-pub use promotion::{
-    ArtifactPromotionExecutionReceiptRequest, ArtifactPromotionPlanRequest,
-    ArtifactPromotionProvenanceReportRequest, BuildMaterializationEvidenceRequest,
-    PromotionArtifactIdentityReportRequest, PromotionMaterializationIdentityReportRequest,
-    PromotionPlanTransformEvidenceRequest, PromotionPlanTransformRequest,
-    PromotionPlanTransformWithMaterializationRequest, PromotionPolicyCheckRequest,
-    PromotionReadinessRequest, PromotionReadinessWithPolicyRequest,
-    PromotionTargetExecutionLineageRequest, PromotionWasmStoreCatalogVerificationRequest,
-    PromotionWasmStoreIdentityReportRequest,
-};
-pub use promotion::{
-    artifact_promotion_execution_receipt, artifact_promotion_plan,
-    artifact_promotion_provenance_report, build_materialization_evidence, check_promotion_policy,
-    check_promotion_readiness, check_promotion_readiness_with_policy,
-    promoted_deployment_plan_from_inputs, promoted_deployment_plan_transform_from_inputs,
-    promoted_deployment_plan_transform_from_inputs_with_materialization,
-    promotion_artifact_identity_report, promotion_artifact_identity_report_from_inputs,
-    promotion_materialization_identity_report,
-    promotion_materialization_identity_report_from_evidence, promotion_plan_transform_evidence,
-    promotion_policy_check_from_inputs, promotion_readiness_from_inputs,
-    promotion_readiness_from_inputs_with_policy, promotion_target_execution_lineage,
-    promotion_wasm_store_catalog_verification, promotion_wasm_store_identity_report,
-    promotion_wasm_store_identity_report_from_staging,
-    validate_artifact_promotion_execution_receipt, validate_artifact_promotion_plan,
-    validate_artifact_promotion_plan_for_check, validate_artifact_promotion_provenance_report,
-    validate_build_materialization_evidence, validate_build_materialization_input,
-    validate_build_materialization_result, validate_build_recipe_identity,
-    validate_promotion_artifact_identity_report,
-    validate_promotion_materialization_identity_report, validate_promotion_plan_transform,
-    validate_promotion_plan_transform_evidence, validate_promotion_policy_check,
-    validate_promotion_readiness, validate_promotion_target_execution_lineage,
-    validate_promotion_wasm_store_catalog_verification,
-    validate_promotion_wasm_store_identity_report, validate_role_artifact_source,
-    validate_role_promotion_policy,
-};
-pub use promotion::{
-    build_materialization_input_digest, promotion_plan_lineage_digest,
-    promotion_target_execution_lineage_digest,
-};
 pub use receipt::{
-    AuthorityEvidenceError, artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
-    authority_dry_run_evidence_from_check, authority_dry_run_evidence_from_check_with_local_ids,
-    authority_dry_run_receipt_from_check, authority_dry_run_receipt_from_check_with_local_id,
-    authority_dry_run_receipt_from_plan, deployment_execution_status_for_receipt_parts,
-    deployment_receipt_from_check, deployment_receipt_from_check_with_status, phase_receipt,
-    staging_receipt_evidence, validate_authority_dry_run_evidence,
+    artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
+    deployment_execution_status_for_receipt_parts, deployment_receipt_from_check,
+    deployment_receipt_from_check_with_status, phase_receipt,
 };
 pub use report::{
     LocalDeploymentCheckRequest, check_local_deployment, compare_plan_inventory_and_receipt,
     compare_plan_to_inventory, is_evidence_conflict_finding_code, safety_report_from_diff,
 };
 pub use text::{
-    artifact_promotion_execution_receipt_text, artifact_promotion_plan_text,
-    artifact_promotion_provenance_report_text, authority_evidence_text, authority_plan_text,
-    authority_receipt_text, authority_report_text, build_materialization_evidence_text,
-    critical_external_fix_report_text, deployment_comparison_report_text,
-    deployment_execution_preflight_text, external_lifecycle_check_text,
-    external_lifecycle_handoff_text, external_lifecycle_pending_report_text,
-    external_lifecycle_plan_text, external_upgrade_completion_report_text,
-    external_upgrade_consent_evidence_text, external_upgrade_proposal_report_text,
-    external_upgrade_receipt_text, external_upgrade_verification_check_text,
-    external_upgrade_verification_policy_text, external_upgrade_verification_report_text,
-    lifecycle_authority_report_text, promotion_artifact_identity_report_text,
-    promotion_materialization_identity_report_text, promotion_plan_transform_evidence_text,
-    promotion_plan_transform_text, promotion_policy_check_text, promotion_readiness_text,
-    promotion_target_execution_lineage_text, promotion_wasm_store_catalog_verification_text,
-    promotion_wasm_store_identity_report_text,
+    authority_plan_text, deployment_comparison_report_text, deployment_execution_preflight_text,
 };
 
 pub const DEPLOYMENT_TRUTH_SCHEMA_VERSION: u32 = 1;
@@ -285,12 +140,5 @@ fn stable_json_sha256_hex<T: Serialize>(value: &T) -> String {
     sha256_hex(
         &serde_json::to_vec(value)
             .expect("deployment truth identity inputs must JSON-encode deterministically"),
-    )
-}
-
-fn local_authority_artifact_id(check: &DeploymentCheckV1, suffix: &str) -> String {
-    format!(
-        "local:{}:{}:{suffix}",
-        check.plan.runtime_variant, check.plan.deployment_identity.deployment_name
     )
 }

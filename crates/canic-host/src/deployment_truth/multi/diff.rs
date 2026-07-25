@@ -286,16 +286,16 @@ pub(super) fn compare_verifier_readiness_evidence(
     );
 }
 
-pub(super) fn compare_external_lifecycle_evidence(
+pub(super) fn compare_control_class_evidence(
     left: &DeploymentCheckV1,
     right: &DeploymentCheckV1,
     diffs: &mut Vec<DeploymentComparisonDiffV1>,
 ) {
     compare_maps(
-        DeploymentComparisonCategoryV1::ExternalLifecycle,
+        DeploymentComparisonCategoryV1::ControlClass,
         &control_class_counts(&left.inventory),
         &control_class_counts(&right.inventory),
-        "external lifecycle control-class evidence differs",
+        "control-class evidence differs",
         diffs,
     );
 }

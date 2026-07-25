@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.31` completes the recursive CLI hard cut: one installation command
+  and the maintained deployment-truth leaves survive, while orphan authority,
+  external-lifecycle and artifact-promotion command/report stacks are deleted.
+
 - `0.99.30` makes installed-Fleet resolution and live CLI targeting use one
   Fleet-named authority, while hardening the proposed service declaration and
   service-to-Tree route designs.

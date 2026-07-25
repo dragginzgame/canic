@@ -1,8 +1,8 @@
 use super::super::stable_json_sha256_hex;
 use super::{
     diff::{
-        compare_artifact_evidence, compare_authority_evidence, compare_embedded_config_evidence,
-        compare_external_lifecycle_evidence, compare_identity, compare_observed_module_hashes,
+        compare_artifact_evidence, compare_authority_evidence, compare_control_class_evidence,
+        compare_embedded_config_evidence, compare_identity, compare_observed_module_hashes,
         compare_pool_evidence, compare_verifier_readiness_evidence,
     },
     digest::deployment_comparison_report_digest,
@@ -37,7 +37,7 @@ pub fn deployment_comparison_report_from_checks(
     let mut authority_diff = Vec::new();
     let mut pool_diff = Vec::new();
     let mut verifier_readiness_diff = Vec::new();
-    let mut external_lifecycle_diff = Vec::new();
+    let mut control_class_diff = Vec::new();
 
     compare_identity(left, right, &mut identity_diff);
     compare_artifact_evidence(left, right, &mut artifact_diff);
@@ -46,7 +46,7 @@ pub fn deployment_comparison_report_from_checks(
     compare_authority_evidence(left, right, &mut authority_diff);
     compare_pool_evidence(left, right, &mut pool_diff);
     compare_verifier_readiness_evidence(left, right, &mut verifier_readiness_diff);
-    compare_external_lifecycle_evidence(left, right, &mut external_lifecycle_diff);
+    compare_control_class_evidence(left, right, &mut control_class_diff);
 
     let mut hard_failures = Vec::new();
     let mut warnings = Vec::new();
@@ -67,7 +67,7 @@ pub fn deployment_comparison_report_from_checks(
         authority_diff.as_slice(),
         pool_diff.as_slice(),
         verifier_readiness_diff.as_slice(),
-        external_lifecycle_diff.as_slice(),
+        control_class_diff.as_slice(),
     ];
     warnings.extend(comparison_warnings(&diff_groups));
     let status = comparison_status(&hard_failures, &warnings);
@@ -88,7 +88,7 @@ pub fn deployment_comparison_report_from_checks(
         authority_diff,
         pool_diff,
         verifier_readiness_diff,
-        external_lifecycle_diff,
+        control_class_diff,
         hard_failures,
         warnings,
         next_actions,

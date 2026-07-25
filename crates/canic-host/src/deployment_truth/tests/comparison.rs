@@ -44,7 +44,7 @@ fn deployment_comparison_report_detects_cross_deployment_drift() {
     assert!(!report.module_hash_diff.is_empty());
     assert!(!report.embedded_config_diff.is_empty());
     assert!(!report.authority_diff.is_empty());
-    assert!(!report.external_lifecycle_diff.is_empty());
+    assert!(!report.control_class_diff.is_empty());
     assert!(
         report
             .hard_failures
@@ -262,7 +262,7 @@ fn deployment_comparison_report_text_is_passive() {
     assert!(text.contains("Deployment comparison report"));
     assert!(text.contains("mode: passive"));
     assert!(text.contains("execution: none"));
-    assert!(text.contains("external_lifecycle: 0"));
+    assert!(text.contains("control_class: 0"));
     assert!(text.contains("hard_failures:"));
     assert!(text.contains(DEPLOYMENT_COMPARISON_INPUT_REPORT_STALE_CODE));
     assert!(text.contains("next_actions:"));
