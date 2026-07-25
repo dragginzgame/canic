@@ -15,6 +15,7 @@ mod metrics;
 mod network;
 mod release_build;
 mod subnet;
+mod tree;
 
 pub use app::AppId;
 pub use build_network::BuildNetwork;
@@ -33,3 +34,6 @@ pub use release_build::{
     RELEASE_BUILD_ID_ENV, ReleaseBuildId, ReleaseBuildIdParseError, ReleaseBuildNonce,
 };
 pub use subnet::SubnetSlotId;
+pub use tree::{
+    TreeGroupId, TreeGroupIdParseError, TreeId, TreeIdParseError, TreeSpecId, TreeSpecIdParseError,
+};
