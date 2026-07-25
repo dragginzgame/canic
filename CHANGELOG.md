@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.32` hard-cuts every follow-on release step to fresh reinstall,
+  deleting proposed cross-release handoff and service-adoption machinery from
+  the active 0.99–0.103 designs.
+
 - `0.99.31` completes the recursive CLI hard cut: one installation command
   and the maintained deployment-truth leaves survive, while orphan authority,
   external-lifecycle and artifact-promotion command/report stacks are deleted.
