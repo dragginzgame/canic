@@ -10,7 +10,7 @@ use canic_host::table::{ColumnAlign, render_table};
 pub(super) fn render_inspect_report(report: &BackupInspectReport) -> String {
     let summary_rows = [[
         report.layout_status.label().to_string(),
-        report.deployment.clone(),
+        report.fleet.clone(),
         report.environment.clone(),
         report.scope.clone(),
         report.targets.len().to_string(),
@@ -56,7 +56,7 @@ pub(super) fn render_inspect_report(report: &BackupInspectReport) -> String {
         render_table(
             &[
                 "STATUS",
-                "DEPLOYMENT",
+                "FLEET",
                 "ENVIRONMENT",
                 "SCOPE",
                 "TARGETS",
@@ -110,8 +110,7 @@ mod tests {
 
         let rendered = render_inspect_report(&report);
 
-        assert!(rendered.contains("DEPLOYMENT"));
-        assert!(!rendered.contains("FLEET"));
+        assert!(rendered.contains("FLEET"));
         assert!(rendered.contains("Plan: plan-test"));
         assert!(rendered.contains("Targets"));
         assert!(rendered.contains("Operations"));
@@ -120,14 +119,14 @@ mod tests {
         assert!(rendered.contains("hash-test"));
     }
 
-    // Ensure backup inspect JSON exposes deployment identity, not stale fleet identity.
+    // Ensure backup inspect JSON exposes the live Fleet target.
     #[test]
-    fn backup_inspect_report_json_uses_deployment_identity_field() {
+    fn backup_inspect_report_json_uses_fleet_identity_field() {
         let value = serde_json::to_value(inspect_report()).expect("serialize inspect report");
 
         assert_eq!(value["layout_status"], "dry-run");
-        assert_eq!(value["deployment"], "demo");
-        assert!(value.get("fleet").is_none());
+        assert_eq!(value["fleet"], "demo");
+        assert!(value.get("deployment").is_none());
     }
 
     fn inspect_report() -> BackupInspectReport {
@@ -135,7 +134,7 @@ mod tests {
             layout_status: crate::backup::BackupExecutionLayoutStatus::DryRun,
             plan_id: "plan-test".to_string(),
             run_id: "run-test".to_string(),
-            deployment: "demo".to_string(),
+            fleet: "demo".to_string(),
             environment: "local".to_string(),
             scope: "non-root-deployment".to_string(),
             targets: vec![BackupInspectTarget {

@@ -445,7 +445,7 @@ pub(super) fn load_fleet_install_activation_journal(
         fleet_install_activation_journal_path(root, canonical_network_id, fleet_id, operation_id);
     let bytes = read_journal_bytes(&path)?;
     let journal = decode_journal(&path, &bytes)?;
-    if journal.activation.identity.fleet.fleet.network != canonical_network_id {
+    if journal.activation.identity.fleet.fleet.canonical_network_id != canonical_network_id {
         return Err(invalid(
             &path,
             "path canonical network does not match activation identity",
@@ -689,7 +689,7 @@ pub(super) fn record_root_installed(
     let identity = &resolved.journal.activation.identity;
     let expected_path = fleet_install_activation_journal_path(
         root,
-        identity.fleet.fleet.network,
+        identity.fleet.fleet.canonical_network_id,
         identity.fleet.fleet.fleet_id,
         identity.operation_id,
     );
@@ -704,12 +704,12 @@ pub(super) fn record_root_installed(
     }
     let _lock = lock_fleet_install_activation(
         root,
-        identity.fleet.fleet.network,
+        identity.fleet.fleet.canonical_network_id,
         &resolved.journal.fleet_name,
     )?;
     let observed = load_fleet_install_activation_journal(
         root,
-        identity.fleet.fleet.network,
+        identity.fleet.fleet.canonical_network_id,
         identity.fleet.fleet.fleet_id,
         identity.operation_id,
     )?;
@@ -750,7 +750,7 @@ pub(super) fn record_root_installed(
     if let Err(source) = write_bytes(&resolved.path, &bytes) {
         match load_fleet_install_activation_journal(
             root,
-            identity.fleet.fleet.network,
+            identity.fleet.fleet.canonical_network_id,
             identity.fleet.fleet.fleet_id,
             identity.operation_id,
         ) {
@@ -767,7 +767,7 @@ pub(super) fn record_root_installed(
     }
     let durable = load_fleet_install_activation_journal(
         root,
-        identity.fleet.fleet.network,
+        identity.fleet.fleet.canonical_network_id,
         identity.fleet.fleet.fleet_id,
         identity.operation_id,
     )?;
@@ -940,7 +940,7 @@ pub(super) fn record_canisters_prepared(
     let identity = &resolved.journal.activation.identity;
     let expected_path = fleet_install_activation_journal_path(
         root,
-        identity.fleet.fleet.network,
+        identity.fleet.fleet.canonical_network_id,
         identity.fleet.fleet.fleet_id,
         identity.operation_id,
     );
@@ -963,12 +963,12 @@ pub(super) fn record_canisters_prepared(
 
     let _lock = lock_fleet_install_activation(
         root,
-        identity.fleet.fleet.network,
+        identity.fleet.fleet.canonical_network_id,
         &resolved.journal.fleet_name,
     )?;
     let observed = load_fleet_install_activation_journal(
         root,
-        identity.fleet.fleet.network,
+        identity.fleet.fleet.canonical_network_id,
         identity.fleet.fleet.fleet_id,
         identity.operation_id,
     )?;
@@ -1008,7 +1008,7 @@ pub(super) fn record_canisters_prepared(
     if let Err(source) = write_bytes(&resolved.path, &bytes) {
         match load_fleet_install_activation_journal(
             root,
-            identity.fleet.fleet.network,
+            identity.fleet.fleet.canonical_network_id,
             identity.fleet.fleet.fleet_id,
             identity.operation_id,
         ) {
@@ -1025,7 +1025,7 @@ pub(super) fn record_canisters_prepared(
     }
     let durable = load_fleet_install_activation_journal(
         root,
-        identity.fleet.fleet.network,
+        identity.fleet.fleet.canonical_network_id,
         identity.fleet.fleet.fleet_id,
         identity.operation_id,
     )?;
@@ -1171,7 +1171,7 @@ pub(super) fn record_canisters_activated(
     let identity = &prepared.journal.activation.identity;
     let expected_path = fleet_install_activation_journal_path(
         root,
-        identity.fleet.fleet.network,
+        identity.fleet.fleet.canonical_network_id,
         identity.fleet.fleet.fleet_id,
         identity.operation_id,
     );
@@ -1194,12 +1194,12 @@ pub(super) fn record_canisters_activated(
 
     let _lock = lock_fleet_install_activation(
         root,
-        identity.fleet.fleet.network,
+        identity.fleet.fleet.canonical_network_id,
         &prepared.journal.fleet_name,
     )?;
     let observed = load_fleet_install_activation_journal(
         root,
-        identity.fleet.fleet.network,
+        identity.fleet.fleet.canonical_network_id,
         identity.fleet.fleet.fleet_id,
         identity.operation_id,
     )?;
@@ -1233,7 +1233,7 @@ pub(super) fn record_canisters_activated(
     if let Err(source) = write_bytes(&prepared.path, &bytes) {
         match load_fleet_install_activation_journal(
             root,
-            identity.fleet.fleet.network,
+            identity.fleet.fleet.canonical_network_id,
             identity.fleet.fleet.fleet_id,
             identity.operation_id,
         ) {
@@ -1254,7 +1254,7 @@ pub(super) fn record_canisters_activated(
     }
     let durable = load_fleet_install_activation_journal(
         root,
-        identity.fleet.fleet.network,
+        identity.fleet.fleet.canonical_network_id,
         identity.fleet.fleet.fleet_id,
         identity.operation_id,
     )?;
@@ -1342,7 +1342,7 @@ pub(super) fn record_host_authority_committed(
     let identity = &activated.journal.activation.identity;
     let expected_path = fleet_install_activation_journal_path(
         root,
-        identity.fleet.fleet.network,
+        identity.fleet.fleet.canonical_network_id,
         identity.fleet.fleet.fleet_id,
         identity.operation_id,
     );
@@ -1355,12 +1355,12 @@ pub(super) fn record_host_authority_committed(
 
     let _lock = lock_fleet_install_activation(
         root,
-        identity.fleet.fleet.network,
+        identity.fleet.fleet.canonical_network_id,
         &activated.journal.fleet_name,
     )?;
     let observed = load_fleet_install_activation_journal(
         root,
-        identity.fleet.fleet.network,
+        identity.fleet.fleet.canonical_network_id,
         identity.fleet.fleet.fleet_id,
         identity.operation_id,
     )?;
@@ -1394,7 +1394,7 @@ pub(super) fn record_host_authority_committed(
     if let Err(source) = write_bytes(&activated.path, &bytes) {
         match load_fleet_install_activation_journal(
             root,
-            identity.fleet.fleet.network,
+            identity.fleet.fleet.canonical_network_id,
             identity.fleet.fleet.fleet_id,
             identity.operation_id,
         ) {
@@ -1415,7 +1415,7 @@ pub(super) fn record_host_authority_committed(
     }
     let durable = load_fleet_install_activation_journal(
         root,
-        identity.fleet.fleet.network,
+        identity.fleet.fleet.canonical_network_id,
         identity.fleet.fleet.fleet_id,
         identity.operation_id,
     )?;
@@ -1465,7 +1465,7 @@ fn validate_committed_catalog(
     let root_canister =
         validate_activated_activation_record(&journal.activation).map_err(invalid_active)?;
     let identity = &journal.activation.identity;
-    if entry.canonical_network_id != identity.fleet.fleet.network
+    if entry.canonical_network_id != identity.fleet.fleet.canonical_network_id
         || entry.fleet_id != identity.fleet.fleet.fleet_id
         || entry.fleet_name != journal.fleet_name
         || entry.app != identity.fleet.app
@@ -1527,7 +1527,7 @@ fn plan_fleet_install_activation_with_ids(
             identity: FleetActivationIdentity {
                 fleet: FleetBinding {
                     fleet: FleetKey {
-                        network: canonical_network_id,
+                        canonical_network_id,
                         fleet_id,
                     },
                     app: request.app.clone(),
@@ -2478,7 +2478,7 @@ fn decode_activation_identity(
 
 fn encode_fleet_key(value: FleetKey) -> Value {
     Value::Array(vec![
-        digest(*value.network.as_bytes()),
+        digest(*value.canonical_network_id.as_bytes()),
         digest(*value.fleet_id.as_bytes()),
     ])
 }
@@ -2496,7 +2496,7 @@ fn decode_fleet_key_fields(
     fields: &[Value],
 ) -> Result<FleetKey, FleetInstallActivationJournalError> {
     Ok(FleetKey {
-        network: id_from_digest(
+        canonical_network_id: id_from_digest(
             exact_digest(path, &fields[0], "canonical_network_id")?,
             "canonical_network_id",
             path,
@@ -2648,7 +2648,7 @@ fn root_install_activation_identity(
     Ok(FleetActivationIdentity {
         fleet: FleetBinding {
             fleet: FleetKey {
-                network: canonical_network_id,
+                canonical_network_id,
                 fleet_id,
             },
             app,

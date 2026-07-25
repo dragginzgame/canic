@@ -8,9 +8,7 @@ fn plan_round_trips_through_json() {
         deployment_identity: sample_identity(),
         trust_domain: TrustDomainV1 {
             root_trust_anchor: Some("aaaaa-aa".to_string()),
-            migration_from: None,
         },
-        fleet_template: "root".to_string(),
         runtime_variant: "local".to_string(),
         authority_profile: AuthorityProfileV1 {
             profile_id: "local-default".to_string(),
@@ -49,9 +47,11 @@ fn inventory_round_trips_through_json() {
         observed_at: "2026-05-21T00:00:00Z".to_string(),
         observed_identity: Some(sample_identity()),
         observed_root: Some(DeploymentRootObservationV1 {
-            deployment_name: "demo".to_string(),
+            canonical_network_id: CanonicalNetworkId::public_ic(),
+            fleet_id: FleetId::from_generated_bytes([7; 32]),
+            fleet_name: "demo".to_string(),
             environment: "local".to_string(),
-            fleet_template: "root".to_string(),
+            app: "root".to_string(),
             root_principal: "aaaaa-aa".to_string(),
             observed_canister_id: "aaaaa-aa".to_string(),
             observation_source: DeploymentRootObservationSourceV1::IcpCanisterStatus,

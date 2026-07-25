@@ -8,10 +8,7 @@ use crate::{
         RootIssuerRenewalStatusRequest,
     },
     ids::CanisterRole,
-    model::auth::{
-        RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
-        RootIssuerRenewalState,
-    },
+    model::auth::{RootDelegatedRoleGrantPolicy, RootIssuerPolicy, RootIssuerRenewalState},
     ops::storage::auth::{
         AuthStateOps, ChainKeyRootDelegationBatch, ChainKeyRootDelegationBatchIssuer,
         ChainKeyRootDelegationBatchStatus,
@@ -33,9 +30,7 @@ fn policy(issuer_pid: Principal) -> RootIssuerPolicy {
     RootIssuerPolicy {
         issuer_pid,
         enabled: true,
-        allowed_audiences: vec![RootDelegationAudiencePolicy::Fleet(
-            crate::test::support::fleet_key(1),
-        )],
+        allowed_audiences: vec![crate::test::support::fleet_key(1)],
         allowed_grants: vec![RootDelegatedRoleGrantPolicy {
             target: CanisterRole::owned("project_instance".to_string()),
             scopes: vec!["canic.issue".to_string()],

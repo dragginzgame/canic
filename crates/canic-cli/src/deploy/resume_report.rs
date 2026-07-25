@@ -94,17 +94,17 @@ impl DeployResumeReportOptions {
         let fleet = read_fleet_catalog_entry_from_root(
             icp_root,
             &self.truth.environment,
-            &self.truth.deployment,
+            &self.truth.fleet,
         )
         .map_err(|error| DeployCommandError::Check(Box::new(error)))?
         .ok_or_else(|| {
             DeployCommandError::Usage(format!(
                 "Fleet {} is not present in the canonical catalog for environment profile {}; pass --receipt <file>",
-                self.truth.deployment, self.truth.environment
+                self.truth.fleet, self.truth.environment
             ))
         })?;
         let fleet = FleetKey {
-            network: fleet.canonical_network_id,
+            canonical_network_id: fleet.canonical_network_id,
             fleet_id: fleet.fleet_id,
         };
 
@@ -116,12 +116,12 @@ impl DeployResumeReportOptions {
                     icp_root
                         .join(".canic")
                         .join("networks")
-                        .join(fleet.network.to_string())
+                        .join(fleet.canonical_network_id.to_string())
                         .join("fleets")
                         .join(fleet.fleet_id.to_string())
                         .join("deployment-receipts")
                         .display(),
-                    self.truth.deployment
+                    self.truth.fleet
                 ))
             })
     }

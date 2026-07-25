@@ -9,6 +9,6 @@ mod root_issuer;
 
 pub use chain_key_root_delegation::ChainKeyRootDelegationInstallFailure;
 pub use root_issuer::{
-    RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
-    RootIssuerRenewalState, RootIssuerRenewalTemplate,
+    RootDelegatedRoleGrantPolicy, RootIssuerPolicy, RootIssuerRenewalState,
+    RootIssuerRenewalTemplate,
 };

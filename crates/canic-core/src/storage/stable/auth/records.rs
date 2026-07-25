@@ -28,15 +28,6 @@ pub struct DelegatedSessionBootstrapBindingRecord {
 }
 
 ///
-/// DelegationAudienceRecord
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum DelegationAudienceRecord {
-    Fleet(FleetKey),
-}
-
-///
 /// DelegatedRoleGrantRecord
 ///
 
@@ -79,7 +70,7 @@ pub struct DelegationCertRecord {
     pub not_before_ns: u64,
     pub expires_at_ns: u64,
     pub max_token_ttl_ns: u64,
-    pub aud: DelegationAudienceRecord,
+    pub aud: FleetKey,
     pub grants: Vec<DelegatedRoleGrantRecord>,
 }
 
@@ -135,7 +126,7 @@ pub struct ChainKeyDelegationCertRecord {
     pub issuer_proof_binding_hash: [u8; 32],
     pub issuer_proof_binding: IssuerProofBindingRecord,
     pub max_token_ttl_ns: u64,
-    pub audience: DelegationAudienceRecord,
+    pub audience: FleetKey,
     pub grants: Vec<DelegatedRoleGrantRecord>,
     pub not_before_ns: u64,
     pub expires_at_ns: u64,
@@ -279,7 +270,7 @@ pub struct ActiveDelegationProofRecord {
 pub struct RootIssuerRecord {
     pub issuer_pid: Principal,
     pub enabled: bool,
-    pub allowed_audiences: Vec<DelegationAudienceRecord>,
+    pub allowed_audiences: Vec<FleetKey>,
     pub allowed_grants: Vec<DelegatedRoleGrantRecord>,
     pub max_cert_ttl_ns: u64,
     pub refresh_after_ratio_bps: u16,
@@ -293,7 +284,7 @@ pub struct RootIssuerRecord {
 pub struct RootIssuerRenewalTemplateRecord {
     pub issuer_pid: Principal,
     pub enabled: bool,
-    pub aud: DelegationAudienceRecord,
+    pub aud: FleetKey,
     pub grants: Vec<DelegatedRoleGrantRecord>,
     pub cert_ttl_ns: u64,
 }

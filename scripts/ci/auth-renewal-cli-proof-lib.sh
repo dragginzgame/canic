@@ -8,7 +8,6 @@ prepare_auth_renewal_cli_surface_fixture() {
     local downstream_root="$1"
 
     mkdir -p \
-        "$downstream_root/.canic/fixture/deployments" \
         "$downstream_root/.icp/fixture/canisters/app" \
         "$downstream_root/.icp/fixture/canisters/root" \
         "$downstream_root/apps/downstream/app" \
@@ -19,16 +18,9 @@ canisters:
   - name: root
   - name: app
 
-networks:
-  - name: local
-    mode: managed
-    gateway:
-      bind: 127.0.0.1
-      port: 8001
-
 environments:
-  - name: downstream
-    network: local
+  - name: fixture
+    network: ic
     canisters: [root, app]
 EOF
 
@@ -53,25 +45,6 @@ kind = "root"
 
 [subnets.default.canisters.app]
 kind = "service"
-EOF
-
-    cat > "$downstream_root/.canic/fixture/deployments/downstream.json" <<EOF
-{
-  "schema_version": 1,
-  "deployment_name": "downstream",
-  "fleet_template": "downstream",
-  "created_at_unix_secs": 1,
-  "updated_at_unix_secs": 1,
-  "environment": "fixture",
-  "root_target": "root",
-  "root_canister_id": "ryjl3-tyaaa-aaaaa-aaaba-cai",
-  "root_verification": "not_verified",
-  "root_build_target": "root",
-  "workspace_root": "$downstream_root",
-  "icp_root": "$downstream_root",
-  "config_path": "$downstream_root/apps/downstream/canic.toml",
-  "release_set_manifest_path": "$downstream_root/.icp/fixture/canisters/root/release-set.json"
-}
 EOF
 
     cat > "$downstream_root/apps/downstream/root/Cargo.toml" <<'EOF'

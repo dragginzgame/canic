@@ -22,7 +22,7 @@ pub(super) fn fleet_catalog_registry_observations(
 ) -> Vec<ObservedPoolCanisterV1> {
     match resolve_installed_fleet_from_root(
         &InstalledFleetRequest {
-            fleet: request.deployment_name.clone(),
+            fleet: request.fleet_name.clone(),
             environment: request.environment.clone(),
             icp: "icp".to_string(),
             detect_lost_local_root: false,

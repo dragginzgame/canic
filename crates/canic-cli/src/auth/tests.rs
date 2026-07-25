@@ -16,7 +16,7 @@ use std::{cell::RefCell, collections::VecDeque};
 
 fn fleet() -> FleetKey {
     FleetKey {
-        network: CanonicalNetworkId::public_ic(),
+        canonical_network_id: CanonicalNetworkId::public_ic(),
         fleet_id: FleetId::from_generated_bytes([1; 32]),
     }
 }

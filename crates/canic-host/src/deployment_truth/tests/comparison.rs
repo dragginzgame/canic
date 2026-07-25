@@ -10,7 +10,8 @@ fn deployment_comparison_report_detects_cross_deployment_drift() {
     let left = sample_check(sample_plan(), sample_matching_inventory());
     let mut right_plan = sample_plan();
     right_plan.plan_id = "plan-prod-root".to_string();
-    right_plan.deployment_identity.deployment_name = "prod".to_string();
+    right_plan.deployment_identity.fleet_name = "prod".to_string();
+    right_plan.deployment_identity.app = "prod-app".to_string();
     right_plan.deployment_identity.environment = "ic".to_string();
     right_plan.trust_domain.root_trust_anchor = Some("prod-root".to_string());
     right_plan.role_artifacts[0].wasm_sha256 = Some(sample_sha256("b"));
@@ -40,6 +41,21 @@ fn deployment_comparison_report_detects_cross_deployment_drift() {
     assert_eq!(report.right.label, "prod");
     assert_eq!(report.status, SafetyStatusV1::Blocked);
     assert!(!report.identity_diff.is_empty());
+    assert!(
+        report
+            .identity_diff
+            .iter()
+            .any(|item| item.subject == "app")
+    );
+    assert_eq!(
+        report
+            .identity_diff
+            .iter()
+            .filter(|item| item.subject == "app")
+            .count(),
+        1,
+        "App identity drift must be reported exactly once"
+    );
     assert!(!report.artifact_diff.is_empty());
     assert!(!report.module_hash_diff.is_empty());
     assert!(!report.embedded_config_diff.is_empty());
@@ -98,14 +114,14 @@ fn deployment_comparison_report_requires_target_deployment_identity() {
         &right,
     );
 
-    report.left.deployment_identity.deployment_name.clear();
+    report.left.deployment_identity.fleet_name.clear();
 
     let err = validate_deployment_comparison_report(&report)
-        .expect_err("missing comparison target deployment name should fail");
+        .expect_err("missing comparison target Fleet name should fail");
     assert_eq!(
         err,
         DeploymentComparisonReportError::MissingRequiredField {
-            field: "left.deployment_identity.deployment_name"
+            field: "left.deployment_identity.fleet_name"
         }
     );
 }

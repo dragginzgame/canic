@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.34` closes the remaining App/Fleet terminology across runtime, CLI,
+  evidence and active documentation. It hard-cuts `FleetKey.network` to
+  `canonical_network_id` and aligns the proposed 0.100–0.103 arc on exact
+  Tree, Directory, service-provisioning and transport-authority terms.
+
 - `0.99.33` moves the maintained operator baseline to checksum-pinned ICP CLI
   1.2.0 and aligns repository builds, CI and developer bootstrap on Rust
   1.97.1, while freezing explicit restricted-Subnet creation funding for the

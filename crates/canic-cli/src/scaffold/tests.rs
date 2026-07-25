@@ -71,7 +71,7 @@ fn confirm_scaffold_accepts_yes() {
     let output = String::from_utf8(output).expect("utf8 prompt");
     assert!(output.contains("target:"));
     assert!(output.contains("apps/my_app"));
-    assert!(output.contains("install: canic install my_app"));
+    assert!(output.contains("install: canic install my_app <fleet>"));
 }
 
 // Ensure confirmation defaults to no on empty input.

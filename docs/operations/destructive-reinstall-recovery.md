@@ -43,7 +43,7 @@ Restoring the old stable-memory image also restores the incompatible ledger.
 Before mutation, run:
 
 ```bash
-canic --environment <environment> deploy check <deployment>
+canic --environment <environment> deploy check <fleet>
 canic --environment <environment> medic fleet <fleet>
 ```
 

@@ -137,7 +137,7 @@ required = true
 payload_schema = "canic.deployment_check.v1"
 
 [evidence.target]
-deployment = "demo-staging"
+fleet = "demo-staging"
 "#;
 
     let error = parse_project_evidence_manifest_v1(manifest_source)

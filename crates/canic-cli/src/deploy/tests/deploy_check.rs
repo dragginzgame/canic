@@ -35,7 +35,7 @@ fn deploy_check_parses_required_deployment() {
     )
     .expect("parse deploy check");
 
-    assert_eq!(options.deployment, "demo");
+    assert_eq!(options.fleet, "demo");
     assert_eq!(options.environment, "local");
     assert_eq!(options.profile, None);
 }
@@ -117,7 +117,7 @@ fn deploy_check_parses_evidence_envelope_output() {
     let options = deploy_check::DeployCheckOptions::parse(evidence_envelope_args())
         .expect("parse deploy check");
 
-    assert_eq!(options.truth.deployment, "demo");
+    assert_eq!(options.truth.fleet, "demo");
     assert_eq!(options.format, CheckOutputFormat::EnvelopeJson);
     assert_eq!(options.build_provenance, None);
 }
@@ -127,7 +127,7 @@ fn deploy_check_defaults_to_text_output() {
     let options = deploy_check::DeployCheckOptions::parse([check_deployment_arg()])
         .expect("parse deploy check");
 
-    assert_eq!(options.truth.deployment, "demo");
+    assert_eq!(options.truth.fleet, "demo");
     assert_eq!(options.format, CheckOutputFormat::Text);
     assert_eq!(options.build_provenance, None);
 }
@@ -183,7 +183,7 @@ fn deployment_check_text_renders_operator_summary() {
     assert!(text.contains("Deployment check"));
     assert!(text.contains("mode: passive"));
     assert!(text.contains("status: Warning"));
-    assert!(text.contains("deployment: demo"));
+    assert!(text.contains("fleet: demo"));
     assert!(text.contains("counts:"));
     assert!(text.contains("warnings:"));
     assert!(text.contains("code=test_warning"));
@@ -212,7 +212,7 @@ fn deployment_check_envelope_wraps_raw_payload() {
     check.report.status = SafetyStatusV1::Warning;
     let options = deploy_check::DeployCheckOptions {
         truth: DeployTruthOptions {
-            deployment: "demo".to_string(),
+            fleet: "demo".to_string(),
             environment: "local".to_string(),
             profile: Some(CanisterBuildProfile::Fast),
         },
@@ -230,9 +230,9 @@ fn deployment_check_envelope_wraps_raw_payload() {
     assert_eq!(value["payload_schema"]["id"], "canic.deployment_check.v1");
     assert_eq!(value["payload_schema"]["stability"], "internal");
     assert_eq!(value["target"]["kind"], "deployment");
-    assert_eq!(value["target"]["deployment"], "demo");
     assert_eq!(value["target"]["app"], "demo");
-    assert!(value["target"]["fleet"].is_null());
+    assert_eq!(value["target"]["fleet"], "demo");
+    assert!(value["target"].get("deployment").is_none());
     assert_eq!(value["target"]["profile"], "fast");
     assert_eq!(value["command"]["name"], "canic deploy check");
     assert_eq!(value["command"]["format"], "envelope-json");
@@ -286,7 +286,7 @@ fn deployment_check_envelope_prefers_evidence_conflict_exit_class() {
     });
     let options = deploy_check::DeployCheckOptions {
         truth: DeployTruthOptions {
-            deployment: "demo".to_string(),
+            fleet: "demo".to_string(),
             environment: "local".to_string(),
             profile: None,
         },
@@ -311,17 +311,20 @@ fn deployment_check_envelope_prefers_evidence_conflict_exit_class() {
 #[test]
 fn deploy_check_builds_current_install_options() {
     let options = DeployTruthOptions {
-        deployment: "demo".to_string(),
+        fleet: "demo".to_string(),
         environment: "local".to_string(),
         profile: Some(CanisterBuildProfile::Fast),
     }
-    .into_install_root_options_with_icp_root(Some(std::path::PathBuf::from("/tmp/icp")));
+    .into_install_root_options_with_icp_root(
+        Some(std::path::PathBuf::from("/tmp/icp")),
+        "demo".to_string(),
+    );
 
     assert_eq!(options.root_canister, "root");
     assert_eq!(options.root_build_target, "root");
     assert_eq!(options.environment, "local");
     assert_eq!(options.build_profile, Some(CanisterBuildProfile::Fast));
     assert_eq!(options.fleet_name, "demo");
-    assert_eq!(options.config_path, None);
-    assert_eq!(options.expected_app, None);
+    assert_eq!(options.config_path.as_deref(), Some("apps/demo/canic.toml"));
+    assert_eq!(options.expected_app.as_deref(), Some("demo"));
 }

@@ -54,7 +54,6 @@ pub fn build_provenance_envelope(
         command: request.command.clone(),
         target: EvidenceTargetV1 {
             kind: EvidenceTargetKindV1::Artifact,
-            deployment: None,
             app: Some(request.app.clone()),
             fleet: None,
             role: Some(request.role.clone()),

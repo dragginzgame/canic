@@ -266,10 +266,10 @@ CLI replica, install the fleet, then query the deployed root registry:
 ```bash
 canic status
 canic replica start --background
-canic install --profile fast test
-canic info list test
-canic info env test
-canic medic fleet test
+canic install --profile fast test test-local
+canic info list test-local
+canic info env test-local
+canic medic fleet test-local
 ```
 
 Build one artifact without installing:

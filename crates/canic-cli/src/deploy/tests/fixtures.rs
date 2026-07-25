@@ -1,3 +1,4 @@
+use canic_core::ids::{CanonicalNetworkId, FleetId};
 use canic_host::deployment_truth::{
     ArtifactDigestSourceV1, ArtifactSourceV1, AuthorityProfileV1, CanisterControlClassV1,
     DEPLOYMENT_TRUTH_SCHEMA_VERSION, DeploymentCheckV1, DeploymentDiffV1, DeploymentIdentityV1,
@@ -29,7 +30,10 @@ pub(super) fn sample_authority_check() -> DeploymentCheckV1 {
 
 pub(super) fn sample_deployment_identity() -> DeploymentIdentityV1 {
     DeploymentIdentityV1 {
-        deployment_name: "demo".to_string(),
+        canonical_network_id: Some(CanonicalNetworkId::public_ic()),
+        fleet_id: Some(FleetId::from_generated_bytes([2; 32])),
+        fleet_name: "demo".to_string(),
+        app: "demo".to_string(),
         environment: "local".to_string(),
         root_principal: Some("aaaaa-aa".to_string()),
         authority_profile_hash: Some("authority".to_string()),
@@ -51,9 +55,7 @@ pub(super) fn sample_deployment_plan(identity: DeploymentIdentityV1) -> Deployme
         deployment_identity: identity,
         trust_domain: TrustDomainV1 {
             root_trust_anchor: Some("aaaaa-aa".to_string()),
-            migration_from: None,
         },
-        fleet_template: "demo".to_string(),
         runtime_variant: "local".to_string(),
         authority_profile: AuthorityProfileV1 {
             profile_id: "authority-profile-1".to_string(),

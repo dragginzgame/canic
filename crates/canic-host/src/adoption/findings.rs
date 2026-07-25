@@ -280,7 +280,7 @@ pub(super) fn observed_canister_findings(
                 .module_hash
                 .as_ref()
                 .map(|hash| format!("module_hash={hash}")),
-            deployment_target_evidence: Some(inventory.inventory_id.clone()),
+            fleet_evidence: Some(inventory.inventory_id.clone()),
             recommendations: match (role, declared) {
                 (Some(role), false) => observed_only_recommendations(
                     profile,
@@ -305,7 +305,7 @@ pub(super) fn observed_canister_findings(
             classifications: vec![AdoptionClassificationV1::ImportedPoolCandidate],
             controllers: Vec::new(),
             wasm_evidence: None,
-            deployment_target_evidence: Some(format!("pool={}", pool.pool)),
+            fleet_evidence: Some(format!("pool={}", pool.pool)),
             recommendations: Vec::new(),
             warnings: vec!["pool import is outside the current adoption workflow".to_string()],
         });

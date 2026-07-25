@@ -537,7 +537,7 @@ mod tests {
         CurrentRootInstallIdentity {
             fleet: FleetBinding {
                 fleet: FleetKey {
-                    network: CanonicalNetworkId::public_ic(),
+                    canonical_network_id: CanonicalNetworkId::public_ic(),
                     fleet_id: FleetId::from_generated_bytes([11; 32]),
                 },
                 app: AppId::from("toko"),
@@ -717,7 +717,7 @@ mod tests {
             .credential_manifests
             .push(FleetCredentialManifestRecord {
                 fleet: FleetKey {
-                    network: CanonicalNetworkId::public_ic(),
+                    canonical_network_id: CanonicalNetworkId::public_ic(),
                     fleet_id: FleetId::from_generated_bytes([11; 32]),
                 },
                 activation_id: [12; 32],

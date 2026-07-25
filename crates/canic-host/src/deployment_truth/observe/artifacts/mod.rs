@@ -29,14 +29,14 @@ pub fn collect_local_role_artifact_manifest(
 ) -> RoleArtifactManifestV1 {
     let config = deployment_config_path(&request.workspace_root, request.config_path.as_deref());
     let mut unresolved_artifacts = Vec::new();
-    let (fleet_name, roles) = match AppConfigSnapshot::load(&config) {
+    let (app, roles) = match AppConfigSnapshot::load(&config) {
         Ok(snapshot) => (
             snapshot.app_id().to_string(),
             deployment_truth_roles_with_implicit_wasm_store(snapshot.deployable_roles()),
         ),
         Err(err) => {
             for (code, subject) in [
-                ("local_config.fleet_name", "fleet name"),
+                ("local_config.app", "App identity"),
                 ("local_config.roles", "configured roles"),
             ] {
                 unresolved_artifacts.push(observation_gap(
@@ -83,7 +83,7 @@ pub fn collect_local_role_artifact_manifest(
 
     RoleArtifactManifestV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        manifest_id: format!("local:{}:{fleet_name}:artifacts", request.environment),
+        manifest_id: format!("local:{}:{app}:artifacts", request.environment),
         environment: request.environment.clone(),
         artifact_root: artifact_root.map(|root| root.display().to_string()),
         role_artifacts,

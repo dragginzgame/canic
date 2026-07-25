@@ -63,11 +63,11 @@ pub(super) fn install_root_committed(
     if activation.journal.phase == FleetInstallActivationPhase::HostAuthorityCommitted {
         let catalog_entry = read_fleet_catalog_entry_for_network(
             receipt_scope.icp_root,
-            receipt_scope.fleet.network,
+            receipt_scope.fleet.canonical_network_id,
             &activation.journal.fleet_name,
         )?
         .ok_or_else(|| FleetCatalogError::UnknownFleet {
-            canonical_network_id: receipt_scope.fleet.network,
+            canonical_network_id: receipt_scope.fleet.canonical_network_id,
             fleet_name: activation.journal.fleet_name.clone(),
         })?;
         observe_host_authority_committed(activation, &receipt_directory, &catalog_entry)?;
@@ -87,7 +87,7 @@ pub(super) fn install_root_committed(
     let catalog = commit_fleet_catalog_entry(
         receipt_scope.icp_root,
         FleetCatalogEntryV1 {
-            canonical_network_id: receipt_scope.fleet.network,
+            canonical_network_id: receipt_scope.fleet.canonical_network_id,
             fleet_id: receipt_scope.fleet.fleet_id,
             fleet_name: activated.activation.journal.fleet_name.clone(),
             app: activated

@@ -1021,7 +1021,7 @@ fn renders_adoption_report_text_with_observed_canister_evidence() {
     assert!(text.contains("aaaaa-aa: role=store, confidence=candidate"));
     assert!(text.contains("controllers: controller-a"));
     assert!(text.contains("wasm_evidence: module_hash=hash-a"));
-    assert!(text.contains("deployment_target_evidence: inventory-1"));
+    assert!(text.contains("fleet_evidence: inventory-1"));
 }
 
 // Ensure cargo metadata evidence can supply package role metadata without live Cargo.

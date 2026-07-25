@@ -75,3 +75,27 @@ fn adoption_recommendation_rejects_unknown_json_fields() {
 
     assert!(serde_json::from_value::<AdoptionRecommendationV1>(value).is_err());
 }
+
+#[test]
+fn adoption_observed_canister_rejects_removed_deployment_target_evidence() {
+    let finding = AdoptionObservedCanisterFindingV1 {
+        canister_id: "aaaaa-aa".to_string(),
+        matched_app: Some("demo".to_string()),
+        matched_role: Some("store".to_string()),
+        confidence: AdoptionMatchConfidenceV1::ExplicitEvidence,
+        classifications: vec![AdoptionClassificationV1::Managed],
+        controllers: Vec::new(),
+        wasm_evidence: None,
+        fleet_evidence: Some("inventory-1".to_string()),
+        recommendations: Vec::new(),
+        warnings: Vec::new(),
+    };
+    let mut value = serde_json::to_value(finding).expect("encode observed Canister finding");
+    let object = value.as_object_mut().expect("observed finding object");
+    let fleet_evidence = object
+        .remove("fleet_evidence")
+        .expect("Fleet evidence field");
+    object.insert("deployment_target_evidence".to_string(), fleet_evidence);
+
+    assert!(serde_json::from_value::<AdoptionObservedCanisterFindingV1>(value).is_err());
+}

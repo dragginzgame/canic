@@ -2,7 +2,10 @@ use super::*;
 
 pub(in crate::deployment_truth::tests) fn sample_identity() -> DeploymentIdentityV1 {
     DeploymentIdentityV1 {
-        deployment_name: "local-root".to_string(),
+        canonical_network_id: Some(CanonicalNetworkId::public_ic()),
+        fleet_id: Some(FleetId::from_generated_bytes([7; 32])),
+        fleet_name: "local-root".to_string(),
+        app: "root".to_string(),
         environment: "local".to_string(),
         root_principal: Some("aaaaa-aa".to_string()),
         authority_profile_hash: Some("authority".to_string()),
@@ -52,9 +55,7 @@ pub(in crate::deployment_truth::tests) fn sample_plan() -> DeploymentPlanV1 {
         deployment_identity: sample_identity(),
         trust_domain: TrustDomainV1 {
             root_trust_anchor: Some("aaaaa-aa".to_string()),
-            migration_from: None,
         },
-        fleet_template: "root".to_string(),
         runtime_variant: "local".to_string(),
         authority_profile: AuthorityProfileV1 {
             profile_id: "local-default".to_string(),
@@ -131,9 +132,11 @@ pub(in crate::deployment_truth::tests) fn sample_matching_inventory() -> Deploym
 
 pub(in crate::deployment_truth::tests) fn sample_root_observation() -> DeploymentRootObservationV1 {
     DeploymentRootObservationV1 {
-        deployment_name: "demo".to_string(),
+        canonical_network_id: CanonicalNetworkId::public_ic(),
+        fleet_id: FleetId::from_generated_bytes([7; 32]),
+        fleet_name: "demo".to_string(),
         environment: "local".to_string(),
-        fleet_template: "root".to_string(),
+        app: "root".to_string(),
         root_principal: "aaaaa-aa".to_string(),
         observed_canister_id: "aaaaa-aa".to_string(),
         observation_source: DeploymentRootObservationSourceV1::IcpCanisterStatus,

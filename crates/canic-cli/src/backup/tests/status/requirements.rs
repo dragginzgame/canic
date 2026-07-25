@@ -90,7 +90,7 @@ fn require_complete_rejects_dry_run_status() {
         layout_status: BackupExecutionLayoutStatus::DryRun,
         plan_id: plan.plan_id.clone(),
         run_id: plan.run_id.clone(),
-        deployment: plan.fleet.clone(),
+        fleet: plan.fleet.clone(),
         environment: plan.environment.clone(),
         targets: plan.targets.len(),
         operations: plan.phases.len(),

@@ -242,8 +242,8 @@ Build and install the fleet locally:
 ```bash
 canic status
 canic replica start --background
-canic install --profile fast example
-canic info list example
+canic install --profile fast example example-local
+canic info list example-local
 ```
 
 Build one role without installing:

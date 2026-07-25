@@ -118,7 +118,7 @@ fn audience_sort_key(audience: &DelegationAudience) -> Vec<u8> {
     match audience {
         DelegationAudience::Fleet(fleet) => {
             out.push(1);
-            encode_sort_bytes(&mut out, fleet.network.as_bytes());
+            encode_sort_bytes(&mut out, fleet.canonical_network_id.as_bytes());
             encode_sort_bytes(&mut out, fleet.fleet_id.as_bytes());
         }
     }
@@ -164,10 +164,7 @@ mod tests {
         cdk::types::Principal,
         dto::auth::{ChainKeyAlgorithm, ChainKeyKeyId},
         ids::{BuildNetwork, CanisterRole},
-        model::auth::{
-            RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
-            RootIssuerRenewalTemplate,
-        },
+        model::auth::{RootDelegatedRoleGrantPolicy, RootIssuerPolicy, RootIssuerRenewalTemplate},
     };
 
     fn p(id: u8) -> Principal {
@@ -199,8 +196,8 @@ mod tests {
             issuer_pid,
             enabled: true,
             allowed_audiences: vec![
-                RootDelegationAudiencePolicy::Fleet(crate::test::support::fleet_key(2)),
-                RootDelegationAudiencePolicy::Fleet(crate::test::support::fleet_key(1)),
+                crate::test::support::fleet_key(2),
+                crate::test::support::fleet_key(1),
             ],
             allowed_grants: vec![RootDelegatedRoleGrantPolicy {
                 target: CanisterRole::owned("project_instance".to_string()),
@@ -215,7 +212,7 @@ mod tests {
         RootIssuerRenewalTemplate {
             issuer_pid,
             enabled: true,
-            audience: RootDelegationAudiencePolicy::Fleet(crate::test::support::fleet_key(1)),
+            audience: crate::test::support::fleet_key(1),
             grants: vec![RootDelegatedRoleGrantPolicy {
                 target: CanisterRole::owned("project_instance".to_string()),
                 scopes: vec!["read".to_string()],

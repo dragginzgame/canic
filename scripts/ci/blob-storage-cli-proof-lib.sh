@@ -2,28 +2,27 @@
 
 prepare_blob_storage_cli_fixture() {
     local downstream_root="$1"
+    local canonical_network_id="402b3681453fb9cfa356b6ea7abde2de53cc4c665caaf438535bddc1e1679f60"
+    local fleet_id="0707070707070707070707070707070707070707070707070707070707070707"
 
     mkdir -p \
-        "$downstream_root/.canic/fixture/deployments" \
+        "$downstream_root/.canic/networks/$canonical_network_id/fleets" \
         "$downstream_root/.icp/fixture/canisters/app" \
         "$downstream_root/.icp/fixture/canisters/root"
 
-    cat > "$downstream_root/.canic/fixture/deployments/downstream.json" <<'EOF'
+    cat > "$downstream_root/.canic/networks/$canonical_network_id/fleets/catalog.json" <<EOF
 {
   "schema_version": 1,
-  "deployment_name": "downstream",
-  "fleet_template": "downstream",
-  "created_at_unix_secs": 1,
-  "updated_at_unix_secs": 1,
-  "environment": "fixture",
-  "root_target": "root",
-  "root_canister_id": "ryjl3-tyaaa-aaaaa-aaaba-cai",
-  "root_verification": "not_verified",
-  "root_build_target": "root",
-  "workspace_root": ".",
-  "icp_root": ".",
-  "config_path": "apps/downstream/canic.toml",
-  "release_set_manifest_path": ".icp/fixture/canisters/root/release-set.json"
+  "canonical_network_id": "$canonical_network_id",
+  "entries": [{
+    "canonical_network_id": "$canonical_network_id",
+    "fleet_id": "$fleet_id",
+    "fleet_name": "downstream",
+    "app": "downstream",
+    "environment": "fixture",
+    "deployed_at_unix_secs": 1,
+    "root_principal": "ryjl3-tyaaa-aaaaa-aaaba-cai"
+  }]
 }
 EOF
 

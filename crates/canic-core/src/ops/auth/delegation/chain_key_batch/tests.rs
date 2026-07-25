@@ -6,9 +6,8 @@ use crate::{
     dto::auth::{ChainKeyAlgorithm, ChainKeyBatchWitnessStepV1, ChainKeyKeyId},
     ids::{BuildNetwork, CanisterRole},
     model::auth::{
-        ChainKeyRootDelegationInstallFailure, RootDelegatedRoleGrantPolicy,
-        RootDelegationAudiencePolicy, RootIssuerPolicy, RootIssuerRenewalState,
-        RootIssuerRenewalTemplate,
+        ChainKeyRootDelegationInstallFailure, RootDelegatedRoleGrantPolicy, RootIssuerPolicy,
+        RootIssuerRenewalState, RootIssuerRenewalTemplate,
     },
     ops::auth::delegated::chain_key::{
         ChainKeyRootVerifierPolicy, ChainKeySignatureVerificationInput,
@@ -57,9 +56,7 @@ fn policy(issuer_pid: Principal) -> RootIssuerPolicy {
     RootIssuerPolicy {
         issuer_pid,
         enabled: true,
-        allowed_audiences: vec![RootDelegationAudiencePolicy::Fleet(
-            crate::test::support::fleet_key(1),
-        )],
+        allowed_audiences: vec![crate::test::support::fleet_key(1)],
         allowed_grants: vec![RootDelegatedRoleGrantPolicy {
             target: CanisterRole::owned("project_instance".to_string()),
             scopes: vec!["read".to_string()],
@@ -73,7 +70,7 @@ fn template(issuer_pid: Principal, cert_ttl_ns: u64) -> RootIssuerRenewalTemplat
     RootIssuerRenewalTemplate {
         issuer_pid,
         enabled: true,
-        audience: RootDelegationAudiencePolicy::Fleet(crate::test::support::fleet_key(1)),
+        audience: crate::test::support::fleet_key(1),
         grants: vec![RootDelegatedRoleGrantPolicy {
             target: CanisterRole::owned("project_instance".to_string()),
             scopes: vec!["read".to_string()],

@@ -135,7 +135,7 @@ fn hash_delegation_audience(hasher: &mut ReplayPayloadHasher, aud: &DelegationAu
     match aud {
         DelegationAudience::Fleet(fleet) => {
             hasher.hash_str("fleet");
-            hasher.hash_bytes(fleet.network.as_bytes());
+            hasher.hash_bytes(fleet.canonical_network_id.as_bytes());
             hasher.hash_bytes(fleet.fleet_id.as_bytes());
         }
     }

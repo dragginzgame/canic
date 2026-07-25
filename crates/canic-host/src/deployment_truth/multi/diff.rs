@@ -22,12 +22,56 @@ fn compare_identity_names(
     right: &DeploymentCheckV1,
     diffs: &mut Vec<DeploymentComparisonDiffV1>,
 ) {
+    let left_network = left
+        .plan
+        .deployment_identity
+        .canonical_network_id
+        .map(|value| value.to_string());
+    let right_network = right
+        .plan
+        .deployment_identity
+        .canonical_network_id
+        .map(|value| value.to_string());
+    compare_optional(
+        DeploymentComparisonCategoryV1::Identity,
+        "canonical_network_id",
+        left_network.as_deref(),
+        right_network.as_deref(),
+        "canonical network IDs differ",
+        diffs,
+    );
+    let left_fleet_id = left
+        .plan
+        .deployment_identity
+        .fleet_id
+        .map(|value| value.to_string());
+    let right_fleet_id = right
+        .plan
+        .deployment_identity
+        .fleet_id
+        .map(|value| value.to_string());
+    compare_optional(
+        DeploymentComparisonCategoryV1::Identity,
+        "fleet_id",
+        left_fleet_id.as_deref(),
+        right_fleet_id.as_deref(),
+        "Fleet IDs differ",
+        diffs,
+    );
     compare_value(
         DeploymentComparisonCategoryV1::Identity,
-        "deployment_name",
-        Some(left.plan.deployment_identity.deployment_name.as_str()),
-        Some(right.plan.deployment_identity.deployment_name.as_str()),
-        "deployment names differ",
+        "fleet_name",
+        Some(left.plan.deployment_identity.fleet_name.as_str()),
+        Some(right.plan.deployment_identity.fleet_name.as_str()),
+        "Fleet names differ",
+        diffs,
+    );
+    compare_value(
+        DeploymentComparisonCategoryV1::Identity,
+        "app",
+        Some(left.plan.deployment_identity.app.as_str()),
+        Some(right.plan.deployment_identity.app.as_str()),
+        "Apps differ",
         diffs,
     );
     compare_value(
@@ -35,7 +79,7 @@ fn compare_identity_names(
         "environment",
         Some(left.plan.deployment_identity.environment.as_str()),
         Some(right.plan.deployment_identity.environment.as_str()),
-        "deployment networks differ",
+        "environment-profile provenance differs",
         diffs,
     );
     compare_optional(
@@ -142,14 +186,6 @@ fn compare_identity_plan_shape(
 ) {
     compare_value(
         DeploymentComparisonCategoryV1::Identity,
-        "fleet_template",
-        Some(left.plan.fleet_template.as_str()),
-        Some(right.plan.fleet_template.as_str()),
-        "fleet templates differ",
-        diffs,
-    );
-    compare_value(
-        DeploymentComparisonCategoryV1::Identity,
         "runtime_variant",
         Some(left.plan.runtime_variant.as_str()),
         Some(right.plan.runtime_variant.as_str()),
@@ -169,14 +205,6 @@ fn compare_identity_trust_domain(
         left.plan.trust_domain.root_trust_anchor.as_deref(),
         right.plan.trust_domain.root_trust_anchor.as_deref(),
         "root trust anchors differ",
-        diffs,
-    );
-    compare_optional(
-        DeploymentComparisonCategoryV1::TrustDomain,
-        "migration_from",
-        left.plan.trust_domain.migration_from.as_deref(),
-        right.plan.trust_domain.migration_from.as_deref(),
-        "migration sources differ",
         diffs,
     );
 }

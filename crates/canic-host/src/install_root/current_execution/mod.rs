@@ -67,7 +67,7 @@ pub(super) fn run_install_deployment_truth_safety_gate(
     workspace_root: &Path,
     icp_root: &Path,
     config_path: &Path,
-    deployment_name: &str,
+    fleet_name: &str,
     execution_context: &DeploymentExecutionContextV1,
     prepared_plan: Option<&crate::deployment_truth::DeploymentPlanV1>,
 ) -> Result<PreparedInstallSafetyGate, Box<dyn std::error::Error>> {
@@ -78,7 +78,7 @@ pub(super) fn run_install_deployment_truth_safety_gate(
             workspace_root,
             icp_root,
             config_path,
-            deployment_name,
+            fleet_name,
             truth_gate_started_at.clone(),
             prepared_plan,
         )?;

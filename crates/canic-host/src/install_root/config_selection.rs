@@ -265,7 +265,7 @@ pub(super) fn config_selection_error(
         lines.push(String::new());
         lines.extend(config_choice_table(workspace_root, choices));
         lines.push(String::new());
-        lines.push(format!("run: canic install <fleet> --app {app}"));
+        lines.push(format!("run: canic install {app} <fleet>"));
         return lines.join("\n");
     }
 

@@ -28,50 +28,53 @@ pub(super) fn target_resolution_blockers(
     options: &DeployPlanOptions,
     config_path: &Path,
 ) -> Vec<PlanDiagnostic> {
-    if let Err(err) = validate_deployment_target_name(&options.deployment) {
+    if let Err(err) = validate_fleet_name(&options.fleet) {
         return vec![PlanDiagnostic {
             category: CATEGORY_DEPLOYMENT_IDENTITY,
-            code: "deployment_target_invalid".to_string(),
+            code: "fleet_name_invalid".to_string(),
             severity: SEVERITY_BLOCKED,
-            subject: options.deployment.clone(),
+            subject: options.fleet.clone(),
             detail: err,
-            next: Some("use letters, numbers, '-' or '_' for deployment target names".to_string()),
+            next: Some("use a canonical Fleet name".to_string()),
             source: SOURCE_CLI_ARG,
         }];
     }
 
     match read_app_config_identity(config_path) {
-        Ok(_) => Vec::new(),
+        Ok(app) if app == options.app => Vec::new(),
+        Ok(app) => vec![PlanDiagnostic {
+            category: CATEGORY_CONFIG,
+            code: "app_identity_mismatch".to_string(),
+            severity: SEVERITY_BLOCKED,
+            subject: options.app.clone(),
+            detail: format!(
+                "{} declares App {app}, not requested App {}",
+                config_path.display(),
+                options.app
+            ),
+            next: Some("select the matching --app or --config".to_string()),
+            source: SOURCE_DEPLOYMENT_CONFIG,
+        }],
         Err(err) => vec![PlanDiagnostic {
             category: CATEGORY_CONFIG,
-            code: "deployment_target_unresolved".to_string(),
+            code: "app_unresolved".to_string(),
             severity: SEVERITY_BLOCKED,
-            subject: options.deployment.clone(),
+            subject: options.app.clone(),
             detail: format!(
-                "deployment target {} could not be resolved from {}: {err}",
-                options.deployment,
+                "App {} could not be resolved from {}: {err}",
+                options.app,
                 config_path.display()
             ),
-            next: Some(
-                "provide --config with a readable fleet config for this deployment".to_string(),
-            ),
+            next: Some("provide --config with a readable config for the requested App".to_string()),
             source: SOURCE_DEPLOYMENT_CONFIG,
         }],
     }
 }
 
-fn validate_deployment_target_name(name: &str) -> Result<(), String> {
-    let valid = !name.is_empty()
-        && name
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'));
-    if valid {
-        Ok(())
-    } else {
-        Err(format!(
-            "invalid deployment target name {name:?}; use letters, numbers, '-' or '_'"
-        ))
-    }
+fn validate_fleet_name(name: &str) -> Result<(), String> {
+    name.parse::<canic_core::ids::FleetName>()
+        .map(|_| ())
+        .map_err(|error| format!("invalid Fleet name {name:?}: {error}"))
 }
 
 pub(super) fn plan_assumptions(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
@@ -132,7 +135,7 @@ fn blocking_assumption_next(key: &str) -> String {
     if is_unsupported_plan_assumption(key) {
         "change the desired deployment shape to one supported by canic deploy plan".to_string()
     } else {
-        "repair the local fleet config before planning apply".to_string()
+        "repair the local App config before planning apply".to_string()
     }
 }
 
@@ -144,7 +147,7 @@ pub(super) fn plan_warnings(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
             category: CATEGORY_OBSERVATION,
             code: fleet_catalog_warning_code(assumption),
             severity: SEVERITY_WARNING,
-            subject: plan.deployment_identity.deployment_name.clone(),
+            subject: plan.deployment_identity.fleet_name.clone(),
             detail: assumption.description.clone(),
             next: Some(
                 "run canic deploy check after installation or provide saved evidence".to_string(),
@@ -194,7 +197,10 @@ fn assumption_next(key: &str) -> Option<String> {
     if key.starts_with(ASSUMPTION_PREFIX_LOCAL_ARTIFACTS) {
         Some("run canic build or provide a build profile with resolved artifacts".to_string())
     } else if key.starts_with(ASSUMPTION_PREFIX_FLEET_CATALOG) {
-        Some("compare after first deployment or provide deployment-check evidence".to_string())
+        Some(
+            "compare after the first Fleet install or provide deployment-check evidence"
+                .to_string(),
+        )
     } else {
         None
     }

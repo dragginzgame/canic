@@ -101,7 +101,7 @@ pub(super) fn backup_create(
     };
 
     Ok(BackupCreateReport {
-        deployment: plan.fleet.clone(),
+        fleet: plan.fleet.clone(),
         environment: plan.environment.clone(),
         out,
         plan_id: plan.plan_id.clone(),

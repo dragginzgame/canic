@@ -218,7 +218,7 @@ fn encode_audience(out: &mut Vec<u8>, audience: &DelegationAudience) {
 }
 
 fn encode_fleet_key(out: &mut Vec<u8>, fleet: FleetKey) {
-    encode_fixed_32(out, *fleet.network.as_bytes());
+    encode_fixed_32(out, *fleet.canonical_network_id.as_bytes());
     encode_fixed_32(out, *fleet.fleet_id.as_bytes());
 }
 

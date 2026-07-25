@@ -16,14 +16,14 @@ fn deploy_leaf_commands_parse_like_check() {
         let options = DeployTruthOptions::parse([OsString::from("demo")], command, usage)
             .unwrap_or_else(|_| panic!("parse deploy {name}"));
 
-        assert_eq!(options.deployment, "demo");
+        assert_eq!(options.fleet, "demo");
     }
 
     let resume_report =
         deploy_resume_report::DeployResumeReportOptions::parse(resume_report_receipt_args())
             .expect("parse deploy resume-report");
 
-    assert_eq!(resume_report.truth.deployment, "demo");
+    assert_eq!(resume_report.truth.fleet, "demo");
     assert_eq!(resume_report.receipt, Some(PathBuf::from("receipt.json")));
 }
 
@@ -33,7 +33,7 @@ fn deploy_resume_report_allows_catalog_resolved_receipt_lookup() {
         deploy_resume_report::DeployResumeReportOptions::parse([OsString::from("demo")])
             .expect("parse deploy resume-report");
 
-    assert_eq!(resume_report.truth.deployment, "demo");
+    assert_eq!(resume_report.truth.fleet, "demo");
     assert_eq!(resume_report.receipt, None);
 }
 
@@ -83,7 +83,7 @@ fn deploy_resume_report_resolves_latest_receipt_by_canonical_fleet_identity() {
 
     let options = deploy_resume_report::DeployResumeReportOptions {
         truth: DeployTruthOptions {
-            deployment: "demo".to_string(),
+            fleet: "demo".to_string(),
             environment: "ic".to_string(),
             profile: None,
         },

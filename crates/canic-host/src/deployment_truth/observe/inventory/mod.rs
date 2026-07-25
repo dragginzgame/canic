@@ -7,6 +7,7 @@ use super::config::observe_local_config_facts;
 use super::identity::{InventoryIdentityFacts, local_inventory_identity};
 use super::root::{fleet_catalog_observations, observed_root_observation};
 use crate::fleet_catalog::{FleetCatalogError, read_fleet_catalog_entry_from_root};
+use crate::network::resolve_canonical_network_id_from_root;
 use std::path::PathBuf;
 use thiserror::Error as ThisError;
 
@@ -15,7 +16,7 @@ use thiserror::Error as ThisError;
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalInventoryRequest {
-    pub deployment_name: String,
+    pub fleet_name: String,
     pub environment: String,
     pub artifact_environment: String,
     pub workspace_root: PathBuf,
@@ -44,9 +45,13 @@ pub fn collect_local_deployment_inventory(
     let installed_fleet = read_fleet_catalog_entry_from_root(
         &request.icp_root,
         &request.environment,
-        &request.deployment_name,
+        &request.fleet_name,
     )
     .map_err(DeploymentTruthError::FleetCatalog)?;
+    let canonical_network_id =
+        resolve_canonical_network_id_from_root(&request.icp_root, &request.environment)
+            .map_err(FleetCatalogError::from)
+            .map_err(DeploymentTruthError::FleetCatalog)?;
     let raw_config_sha256 = observe_config_sha256(&config, &mut unresolved_observations);
     let canonical_runtime_config_digest =
         observe_canonical_runtime_config_digest(&config, &mut unresolved_observations);
@@ -67,15 +72,17 @@ pub fn collect_local_deployment_inventory(
         &local_config_facts.pool_expectations,
         &mut unresolved_observations,
     );
-    let observed_root = observed_root_observation(
-        installed_fleet.as_ref(),
-        request,
-        &local_config_facts.fleet_name,
-        &observed_canisters,
-    );
+    let observed_root =
+        observed_root_observation(installed_fleet.as_ref(), request, &observed_canisters);
     let observed_identity = Some(local_inventory_identity(
         request,
         InventoryIdentityFacts {
+            canonical_network_id,
+            fleet_id: installed_fleet.as_ref().map(|fleet| fleet.fleet_id),
+            app: installed_fleet.as_ref().map_or_else(
+                || local_config_facts.app.clone(),
+                |fleet| fleet.app.to_string(),
+            ),
             root_principal: installed_fleet
                 .as_ref()
                 .map(|fleet| fleet.root_principal.clone()),
@@ -89,7 +96,7 @@ pub fn collect_local_deployment_inventory(
 
     Ok(DeploymentInventoryV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        inventory_id: format!("local:{}:{}", request.environment, request.deployment_name),
+        inventory_id: format!("local:{}:{}", request.environment, request.fleet_name),
         observed_at: request.observed_at.clone(),
         observed_identity,
         observed_root,

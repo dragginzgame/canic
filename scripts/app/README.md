@@ -45,7 +45,7 @@ profile. Prefer CLI selectors for direct commands:
 If you want to force release wasm artifacts for the same flow, run:
 
 ```bash
-canic install --profile release test
+canic install --profile release test test-local
 ```
 
 If you want the raw debug wasm lane instead, run:

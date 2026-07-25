@@ -25,7 +25,7 @@ pub(super) fn backup_status(
             layout_status: execution_layout_status(&journal, layout.manifest_path().is_file()),
             plan_id: plan.plan_id.clone(),
             run_id: plan.run_id.clone(),
-            deployment: plan.fleet,
+            fleet: plan.fleet,
             environment: plan.environment,
             targets: plan.targets.len(),
             operations: plan.phases.len(),

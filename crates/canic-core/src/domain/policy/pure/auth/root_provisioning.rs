@@ -2,10 +2,7 @@ use super::AuthPolicyError;
 use crate::{
     domain::value::Principal,
     ids::{CanisterRole, FleetKey},
-    model::auth::{
-        RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
-        RootIssuerRenewalTemplate,
-    },
+    model::auth::{RootDelegatedRoleGrantPolicy, RootIssuerPolicy, RootIssuerRenewalTemplate},
 };
 
 ///
@@ -15,7 +12,7 @@ use crate::{
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootDelegationProofPreparePolicyInput<'a> {
     pub issuer_pid: Principal,
-    pub audience: &'a RootDelegationAudiencePolicy,
+    pub audience: &'a FleetKey,
     pub grants: &'a [RootDelegatedRoleGrantPolicy],
     pub cert_ttl_ns: u64,
     pub issued_at_ns: u64,
@@ -146,11 +143,10 @@ pub fn validate_root_issuer_renewal_template_fleet_binding(
 }
 
 fn validate_root_issuer_audience_fleet_binding(
-    audience: &RootDelegationAudiencePolicy,
+    audience: &FleetKey,
     protected_fleet: FleetKey,
 ) -> Result<(), AuthPolicyError> {
-    let RootDelegationAudiencePolicy::Fleet(audience_fleet) = audience;
-    if *audience_fleet != protected_fleet {
+    if *audience != protected_fleet {
         return Err(AuthPolicyError::RootIssuerFleetMismatch);
     }
     Ok(())
@@ -239,9 +235,7 @@ mod tests {
         RootIssuerPolicy {
             issuer_pid: p(2),
             enabled: true,
-            allowed_audiences: vec![RootDelegationAudiencePolicy::Fleet(
-                crate::test::support::fleet_key(1),
-            )],
+            allowed_audiences: vec![crate::test::support::fleet_key(1)],
             allowed_grants: vec![
                 root_grant("user_shard", &[cap::SESSION, cap::VERIFY]),
                 root_grant("project_instance", &[cap::READ]),
@@ -259,7 +253,7 @@ mod tests {
     }
 
     fn prepare_input<'a>(
-        audience: &'a RootDelegationAudiencePolicy,
+        audience: &'a FleetKey,
         grants: &'a [RootDelegatedRoleGrantPolicy],
     ) -> RootDelegationProofPreparePolicyInput<'a> {
         RootDelegationProofPreparePolicyInput {
@@ -275,7 +269,7 @@ mod tests {
         RootIssuerRenewalTemplate {
             issuer_pid: p(2),
             enabled: true,
-            audience: RootDelegationAudiencePolicy::Fleet(crate::test::support::fleet_key(1)),
+            audience: crate::test::support::fleet_key(1),
             grants: vec![root_grant("project_instance", &[cap::READ])],
             cert_ttl_ns: 100_000_000_000,
         }
@@ -284,7 +278,7 @@ mod tests {
     #[test]
     fn root_prepare_policy_accepts_registered_enabled_issuer() {
         let policy = issuer_policy();
-        let audience = RootDelegationAudiencePolicy::Fleet(crate::test::support::fleet_key(1));
+        let audience = crate::test::support::fleet_key(1);
         let grants = vec![
             root_grant("user_shard", &[cap::SESSION]),
             root_grant("project_instance", &[cap::READ]),
@@ -307,7 +301,7 @@ mod tests {
 
     #[test]
     fn root_prepare_policy_rejects_unregistered_or_disabled_issuer() {
-        let audience = RootDelegationAudiencePolicy::Fleet(crate::test::support::fleet_key(1));
+        let audience = crate::test::support::fleet_key(1);
         let grants = vec![root_grant("user_shard", &[cap::SESSION])];
         let input = prepare_input(&audience, &grants);
 
@@ -328,7 +322,7 @@ mod tests {
     fn root_prepare_policy_rejects_policy_issuer_mismatch() {
         let mut policy = issuer_policy();
         policy.issuer_pid = p(3);
-        let audience = RootDelegationAudiencePolicy::Fleet(crate::test::support::fleet_key(1));
+        let audience = crate::test::support::fleet_key(1);
         let grants = vec![root_grant("user_shard", &[cap::SESSION])];
 
         assert_eq!(
@@ -346,8 +340,7 @@ mod tests {
     #[test]
     fn root_prepare_policy_rejects_audience_or_grant_outside_policy() {
         let policy = issuer_policy();
-        let denied_audience =
-            RootDelegationAudiencePolicy::Fleet(crate::test::support::fleet_key(2));
+        let denied_audience = crate::test::support::fleet_key(2);
         let grants = vec![root_grant("user_shard", &[cap::SESSION])];
 
         assert_eq!(
@@ -358,7 +351,7 @@ mod tests {
             Err(AuthPolicyError::RootIssuerAudienceNotAllowed { issuer_pid: p(2) })
         );
 
-        let audience = RootDelegationAudiencePolicy::Fleet(crate::test::support::fleet_key(1));
+        let audience = crate::test::support::fleet_key(1);
         let denied_grants = vec![root_grant("project_instance", &[cap::ADMIN])];
         assert_eq!(
             validate_root_delegation_proof_prepare_policy(
@@ -374,7 +367,7 @@ mod tests {
 
     #[test]
     fn root_prepare_policy_rejects_invalid_ttl_or_refresh_policy() {
-        let audience = RootDelegationAudiencePolicy::Fleet(crate::test::support::fleet_key(1));
+        let audience = crate::test::support::fleet_key(1);
         let grants = vec![root_grant("user_shard", &[cap::SESSION])];
         let mut input = prepare_input(&audience, &grants);
         input.cert_ttl_ns = 0;

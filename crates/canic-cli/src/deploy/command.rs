@@ -6,7 +6,7 @@ use crate::cli::{
 use canic_host::canister_build::CanisterBuildProfile;
 use clap::Command as ClapCommand;
 
-pub(super) const DEPLOYMENT_ARG: &str = "deployment";
+pub(super) const FLEET_ARG: &str = "fleet";
 pub(super) const PROFILE_ARG: &str = "profile";
 
 #[derive(Clone, Copy)]
@@ -34,8 +34,8 @@ const DEPLOY_HELP_AFTER: &str = "\
 Examples:
   canic deploy check demo
   canic deploy check demo --json
-  canic deploy plan demo
-  canic deploy plan demo --json
+  canic deploy plan demo --app demo
+  canic deploy plan demo --app demo --json
   canic deploy inspect plan demo
   canic deploy inspect compare --left staging-check.json --right prod-check.json
   canic deploy inspect catalog list
@@ -43,7 +43,7 @@ Examples:
 
 Use `canic deploy inspect --help` for raw plan, inventory, diff, report,
 comparison, local catalog, and resume-safety JSON artifacts.
-Use `canic deploy plan <deployment>` for the operator planning report.
+Use `canic deploy plan <fleet> --app <app>` for the operator planning report.
 Use `canic inspect` for live runtime-observed canister status.
 Fresh Fleet installation and registration have one mutation entrypoint:
 `canic install <app> <fleet>`.";
@@ -75,10 +75,10 @@ pub(super) fn deploy_truth_leaf_command_with_bin_name(
         .about(about)
         .disable_help_flag(true)
         .arg(
-            value_arg(DEPLOYMENT_ARG)
-                .value_name(DEPLOYMENT_ARG)
+            value_arg(FLEET_ARG)
+                .value_name(FLEET_ARG)
                 .required(true)
-                .help("Deployment target name to check"),
+                .help("Installed Fleet name to check"),
         )
         .arg(
             value_arg(PROFILE_ARG)

@@ -293,7 +293,6 @@ fn build_adoption_report_envelope(
         command: adoption_report_command_provenance(config_root, options),
         target: EvidenceTargetV1 {
             kind: EvidenceTargetKindV1::AppAdoption,
-            deployment: None,
             app: Some(report.app.clone()),
             fleet: None,
             role: None,
@@ -642,8 +641,8 @@ fn adoption_observed_canister_lines(report: &AdoptionReportV1) -> Vec<String> {
         if let Some(evidence) = &finding.wasm_evidence {
             lines.push(format!("    wasm_evidence: {evidence}"));
         }
-        if let Some(evidence) = &finding.deployment_target_evidence {
-            lines.push(format!("    deployment_target_evidence: {evidence}"));
+        if let Some(evidence) = &finding.fleet_evidence {
+            lines.push(format!("    fleet_evidence: {evidence}"));
         }
         lines.extend(
             finding

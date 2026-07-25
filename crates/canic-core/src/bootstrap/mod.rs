@@ -34,7 +34,7 @@ pub mod compiled {
             RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool,
             ScalePoolPolicy, ScalingConfig, ServicesConfig, ShardPool, ShardPoolPolicy,
             ShardingConfig, Standards, StandardsCanisterConfig, SubnetConfig, TopupPolicy,
-            Whitelist, validate_canister_role_name,
+            Whitelist, validate_app_name, validate_canister_role_name,
         },
         ids::{AppId, BuildNetwork, CanisterRole, SubnetSlotId},
     };

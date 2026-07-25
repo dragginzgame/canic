@@ -208,7 +208,10 @@ pub(super) fn fleet_registry_observed_check(resolution: &InstalledFleetResolutio
             detail,
             format!(
                 "{}; then run canic deploy check {}",
-                deploy_plan_next(resolution.fleet.fleet_name.as_str()),
+                deploy_plan_next(
+                    resolution.fleet.fleet_name.as_str(),
+                    resolution.fleet.app.as_str(),
+                ),
                 resolution.fleet.fleet_name
             ),
             source,
@@ -225,8 +228,8 @@ pub(super) fn fleet_registry_observed_check(resolution: &InstalledFleetResolutio
     )
 }
 
-fn deploy_plan_next(fleet: &str) -> String {
-    format!("run canic deploy plan {fleet} to inspect desired Fleet shape")
+fn deploy_plan_next(fleet: &str, app: &str) -> String {
+    format!("run canic deploy plan {fleet} --app {app} to inspect desired Fleet shape")
 }
 
 fn runtime_inspection_next(resolution: &InstalledFleetResolution) -> String {
@@ -270,7 +273,7 @@ fn runtime_inspection_next(resolution: &InstalledFleetResolution) -> String {
 }
 
 pub(super) fn deploy_plan_then(fleet: &str, next: impl AsRef<str>) -> String {
-    format!("{}; {}", deploy_plan_next(fleet), next.as_ref())
+    format!("{}; {}", deploy_plan_next(fleet, "<app>"), next.as_ref())
 }
 
 const fn installed_fleet_source_for_medic(source: InstalledFleetSource) -> MedicSource {

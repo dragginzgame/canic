@@ -133,12 +133,12 @@ fn deploy_plan_is_top_level_deploy_command() {
 fn deploy_plan_help_documents_no_mutation_contract() {
     let help = deploy_plan::usage();
 
-    assert!(help.contains("canic deploy plan <deployment>"));
-    assert!(help.contains("canic deploy plan demo-local --json"));
-    assert!(help.contains("canic deploy plan demo-local --out deployment-plan.json"));
+    assert!(help.contains("canic deploy plan <fleet> --app <app>"));
+    assert!(help.contains("canic deploy plan demo-local --app demo --json"));
+    assert!(help.contains("canic deploy plan demo-local --app demo --out deployment-plan.json"));
     assert!(help.contains("does not install, upgrade, create canisters"));
     assert!(help.contains("write deployment truth"));
-    assert!(help.contains("installed deployment records"));
+    assert!(help.contains("installed Fleet catalog records"));
     assert!(help.contains("call live IC state"));
     assert!(help.contains("proposed operation labels only"));
     assert!(help.contains("not executed"));
@@ -156,6 +156,8 @@ fn deploy_plan_help_documents_no_mutation_contract() {
 fn deploy_plan_options_parse_supported_surface() {
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
+        OsString::from("--app"),
+        OsString::from("demo"),
         OsString::from("--json"),
         OsString::from("--out"),
         OsString::from("deployment-plan.json"),
@@ -168,11 +170,24 @@ fn deploy_plan_options_parse_supported_surface() {
     ])
     .expect("parse deploy plan options");
 
-    assert_eq!(options.deployment, "demo-local");
+    assert_eq!(options.fleet, "demo-local");
     assert_eq!(options.environment, "local");
     assert!(options.json);
     assert_eq!(options.out, Some(PathBuf::from("deployment-plan.json")));
     assert_eq!(options.config, Some(PathBuf::from("apps/demo/canic.toml")));
+}
+
+#[test]
+fn deploy_plan_options_reject_invalid_app_before_path_resolution() {
+    let error = deploy_plan::DeployPlanOptions::parse([
+        OsString::from("demo-local"),
+        OsString::from("--app"),
+        OsString::from("../../sentinel"),
+    ])
+    .expect_err("invalid App path identity must reject");
+
+    assert!(matches!(error, DeployCommandError::Usage(_)));
+    assert!(error.to_string().contains("invalid App name"));
 }
 
 #[test]
@@ -181,6 +196,8 @@ fn deploy_plan_report_builds_from_config_without_fleet_catalog_entry() {
     write_artifact(&icp_root, "root", b"root-artifact");
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
+        OsString::from("--app"),
+        OsString::from("demo"),
         OsString::from("--config"),
         OsString::from("apps/demo/canic.toml"),
     ])
@@ -197,14 +214,15 @@ fn deploy_plan_report_builds_from_config_without_fleet_catalog_entry() {
 
     assert_eq!(json["schema_version"], 1);
     assert_eq!(json["command"], "canic deploy plan");
-    assert_eq!(json["target"], "demo-local");
+    assert_eq!(json["fleet"], "demo-local");
+    assert_eq!(json["app"], "demo");
     assert_eq!(json["status"], "warning");
     assert_eq!(json["comparison_status"], "not_available");
     assert_eq!(
-        json["plan"]["deployment_identity"]["deployment_name"],
+        json["plan"]["deployment_identity"]["fleet_name"],
         "demo-local"
     );
-    assert_eq!(json["plan"]["fleet_template"], "demo");
+    assert_eq!(json["plan"]["deployment_identity"]["app"], "demo");
     assert_base_plan_verified_facts(&json);
     assert!(
         json["warnings"]
@@ -255,6 +273,8 @@ fn deploy_plan_report_records_fleet_catalog_root_fact() {
     );
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
+        OsString::from("--app"),
+        OsString::from("demo"),
         OsString::from("--config"),
         OsString::from("apps/demo/canic.toml"),
     ])
@@ -315,6 +335,8 @@ fn deploy_plan_report_marks_complete_catalog_inputs_as_compared() {
     );
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
+        OsString::from("--app"),
+        OsString::from("demo"),
         OsString::from("--config"),
         OsString::from("apps/demo/canic.toml"),
     ])
@@ -370,6 +392,8 @@ fn deploy_plan_report_previews_pool_canister_creation() {
     write_artifact(&icp_root, "user_shard", b"user-shard-artifact");
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
+        OsString::from("--app"),
+        OsString::from("demo"),
         OsString::from("--config"),
         OsString::from("apps/demo/canic.toml"),
     ])
@@ -404,6 +428,8 @@ fn deploy_plan_report_previews_controller_reconciliation() {
     write_artifact(&icp_root, "user_hub", b"user-hub-artifact");
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
+        OsString::from("--app"),
+        OsString::from("demo"),
         OsString::from("--config"),
         OsString::from("apps/demo/canic.toml"),
     ])
@@ -442,8 +468,12 @@ fn deploy_plan_report_blocks_unresolved_config_target() {
     let icp_root = temp.join("icp");
     fs::create_dir_all(&workspace_root).expect("create workspace");
     fs::create_dir_all(&icp_root).expect("create icp root");
-    let options = deploy_plan::DeployPlanOptions::parse([OsString::from("missing")])
-        .expect("parse deploy plan options");
+    let options = deploy_plan::DeployPlanOptions::parse([
+        OsString::from("missing"),
+        OsString::from("--app"),
+        OsString::from("demo"),
+    ])
+    .expect("parse deploy plan options");
 
     let report = deploy_plan::build_report(
         &options,
@@ -456,7 +486,7 @@ fn deploy_plan_report_blocks_unresolved_config_target() {
 
     assert_eq!(json["status"], "blocked");
     assert_eq!(json["comparison_status"], "not_requested");
-    assert_eq!(json["blockers"][0]["code"], "deployment_target_unresolved");
+    assert_eq!(json["blockers"][0]["code"], "app_unresolved");
     assert_eq!(json["verified_facts"], JsonValue::Array(vec![]));
     assert!(matches!(
         deploy_plan::command_exit_result(&report),
@@ -465,10 +495,12 @@ fn deploy_plan_report_blocks_unresolved_config_target() {
 }
 
 #[test]
-fn deploy_plan_report_blocks_invalid_deployment_target_name() {
+fn deploy_plan_report_blocks_invalid_fleet_name() {
     let (_temp, workspace_root, icp_root) = temp_plan_workspace("canic-deploy-plan-invalid-target");
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo/local"),
+        OsString::from("--app"),
+        OsString::from("demo"),
         OsString::from("--config"),
         OsString::from("apps/demo/canic.toml"),
     ])
@@ -485,7 +517,7 @@ fn deploy_plan_report_blocks_invalid_deployment_target_name() {
 
     assert_eq!(json["status"], "blocked");
     assert_eq!(json["comparison_status"], "not_requested");
-    assert_eq!(json["blockers"][0]["code"], "deployment_target_invalid");
+    assert_eq!(json["blockers"][0]["code"], "fleet_name_invalid");
     assert_eq!(json["blockers"][0]["source"], "cli_arg");
     assert_eq!(json["verified_facts"], JsonValue::Array(vec![]));
 }
@@ -498,6 +530,8 @@ fn deploy_plan_report_blocks_malformed_desired_config() {
     );
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
+        OsString::from("--app"),
+        OsString::from("demo"),
         OsString::from("--config"),
         OsString::from("apps/demo/canic.toml"),
     ])
@@ -519,7 +553,7 @@ fn deploy_plan_report_blocks_malformed_desired_config() {
             .as_array()
             .expect("verified facts")
             .iter()
-            .any(|item| item["code"] == "deployment_target_resolved")
+            .any(|item| item["code"] == "fleet_app_resolved")
     );
     assert_no_verified_fact(&json, "authority_profile_resolved");
     assert_no_verified_fact(&json, "expected_controller_set_resolved");
@@ -556,6 +590,8 @@ fn deploy_plan_json_out_is_create_new_and_json_only() {
     fs::create_dir_all(out.parent().expect("report parent")).expect("create report parent");
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
+        OsString::from("--app"),
+        OsString::from("demo"),
         OsString::from("--config"),
         OsString::from("apps/demo/canic.toml"),
         OsString::from("--out"),
@@ -598,6 +634,8 @@ fn deploy_plan_out_does_not_create_parent_directories() {
     let out = report_dir.join("deployment-plan.json");
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
+        OsString::from("--app"),
+        OsString::from("demo"),
         OsString::from("--config"),
         OsString::from("apps/demo/canic.toml"),
         OsString::from("--out"),
@@ -624,6 +662,8 @@ fn deploy_plan_json_renderer_is_report_only() {
     let (_temp, workspace_root, icp_root) = temp_plan_workspace("canic-deploy-plan-json-render");
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
+        OsString::from("--app"),
+        OsString::from("demo"),
         OsString::from("--config"),
         OsString::from("apps/demo/canic.toml"),
     ])
@@ -651,6 +691,8 @@ fn deploy_plan_json_renderer_uses_contract_field_order() {
     let (_temp, workspace_root, icp_root) = temp_plan_workspace("canic-deploy-plan-json-order");
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
+        OsString::from("--app"),
+        OsString::from("demo"),
         OsString::from("--config"),
         OsString::from("apps/demo/canic.toml"),
     ])
@@ -670,7 +712,8 @@ fn deploy_plan_json_renderer_uses_contract_field_order() {
         &[
             "schema_version",
             "command",
-            "target",
+            "fleet",
+            "app",
             "environment",
             "build_profile",
             "config_path",
@@ -693,6 +736,8 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
     write_artifact(&icp_root, "root", b"root-artifact");
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
+        OsString::from("--app"),
+        OsString::from("demo"),
         OsString::from("--config"),
         OsString::from("apps/demo/canic.toml"),
     ])
@@ -954,7 +999,7 @@ fn assert_base_plan_verified_facts(report: &JsonValue) {
         ),
         ("build_profile_resolved", "demo-local", "build_profile"),
         ("config_path_resolved", "demo-local", "deployment_config"),
-        ("deployment_target_resolved", "demo-local", "app_config"),
+        ("fleet_app_resolved", "demo-local", "app_config"),
         (
             "expected_controller_set_resolved",
             "demo-local",
@@ -975,7 +1020,7 @@ fn assert_base_plan_verified_facts(report: &JsonValue) {
             "demo-local",
             "deployment_plan_builder",
         ),
-        ("fleet_template_resolved", "demo-local", "app_config"),
+        ("app_resolved", "demo", "app_config"),
         (
             "environment_resolved",
             "demo-local",

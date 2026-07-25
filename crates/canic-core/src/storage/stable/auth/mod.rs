@@ -16,7 +16,7 @@ pub use records::{
     ChainKeyDelegationCertRecord, ChainKeyKeyIdRecord, ChainKeyRootDelegationBatchIssuerRecord,
     ChainKeyRootDelegationBatchRecord, ChainKeyRootDelegationBatchStatusRecord,
     ChainKeyRootSignatureRecord, DelegatedRoleGrantRecord, DelegatedSessionBootstrapBindingRecord,
-    DelegatedSessionRecord, DelegationAudienceRecord, DelegationCertRecord, DelegationProofRecord,
+    DelegatedSessionRecord, DelegationCertRecord, DelegationProofRecord,
     IcChainKeyBatchSignatureProofRecord, IssuerProofAlgorithmRecord, IssuerProofBindingRecord,
     RootIssuerRecord, RootIssuerRenewalStateRecord, RootIssuerRenewalTemplateRecord,
     RootProofRecord,

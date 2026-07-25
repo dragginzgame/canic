@@ -9,7 +9,7 @@ use canic_host::table::{ColumnAlign, render_table};
 
 pub(super) fn render_create_report(report: &BackupCreateReport) -> String {
     let rows = [[
-        report.deployment.clone(),
+        report.fleet.clone(),
         report.environment.clone(),
         report.mode.label().to_string(),
         report.layout.label().to_string(),
@@ -22,7 +22,7 @@ pub(super) fn render_create_report(report: &BackupCreateReport) -> String {
     ]];
     render_table(
         &[
-            "DEPLOYMENT",
+            "FLEET",
             "ENVIRONMENT",
             "MODE",
             "LAYOUT",
@@ -47,7 +47,7 @@ mod tests {
     #[test]
     fn render_backup_create_report_shows_layout_source() {
         let report = BackupCreateReport {
-            deployment: "demo".to_string(),
+            fleet: "demo".to_string(),
             environment: "local".to_string(),
             out: PathBuf::from("backups/demo"),
             plan_id: "plan-demo".to_string(),
@@ -63,8 +63,7 @@ mod tests {
 
         let text = render_create_report(&report);
 
-        assert!(text.contains("DEPLOYMENT"));
-        assert!(!text.contains("FLEET"));
+        assert!(text.contains("FLEET"));
         assert!(text.contains("LAYOUT"));
         assert!(text.contains("existing"));
     }

@@ -3,10 +3,10 @@ use super::shared::observation_gap;
 use crate::release_set::{AppConfigSnapshot, ConfiguredPoolExpectation};
 use std::path::Path;
 
-const UNKNOWN_FLEET_NAME: &str = "unknown";
+const UNKNOWN_APP: &str = "unknown";
 
 pub(super) struct LocalConfigObservation {
-    pub(super) fleet_name: String,
+    pub(super) app: String,
     pub(super) roles: Vec<String>,
     pub(super) pool_expectations: Vec<ConfiguredPoolExpectation>,
 }
@@ -15,7 +15,7 @@ pub(super) fn observe_local_config_facts(
     config: &Path,
     unresolved_observations: &mut Vec<DeploymentObservationGapV1>,
 ) -> LocalConfigObservation {
-    let (fleet_name, roles, pool_expectations) = match AppConfigSnapshot::load(config) {
+    let (app, roles, pool_expectations) = match AppConfigSnapshot::load(config) {
         Ok(snapshot) => (
             snapshot.app_id().to_string(),
             deployment_truth_roles_with_implicit_wasm_store(snapshot.deployable_roles()),
@@ -23,7 +23,7 @@ pub(super) fn observe_local_config_facts(
         ),
         Err(err) => {
             for (code, subject) in [
-                ("local_config.fleet_name", "fleet name"),
+                ("local_config.app", "App identity"),
                 ("local_config.roles", "configured roles"),
                 ("local_config.pools", "configured pool expectations"),
             ] {
@@ -35,11 +35,11 @@ pub(super) fn observe_local_config_facts(
                     ),
                 ));
             }
-            (UNKNOWN_FLEET_NAME.to_string(), Vec::new(), Vec::new())
+            (UNKNOWN_APP.to_string(), Vec::new(), Vec::new())
         }
     };
     LocalConfigObservation {
-        fleet_name,
+        app,
         roles,
         pool_expectations,
     }

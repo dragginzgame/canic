@@ -34,7 +34,7 @@ mod tests {
     fn managed_nonroot_init_payload_roundtrips_the_exact_fleet_identity_and_directories() {
         let fleet = FleetBinding {
             fleet: FleetKey {
-                network: CanonicalNetworkId::public_ic(),
+                canonical_network_id: CanonicalNetworkId::public_ic(),
                 fleet_id: FleetId::from_generated_bytes([1; 32]),
             },
             app: AppId::from("toko"),

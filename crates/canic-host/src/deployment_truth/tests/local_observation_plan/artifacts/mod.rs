@@ -7,7 +7,7 @@ fn local_inventory_reports_missing_config_as_observation_gap() {
     write_local_network_authority(&icp_root, "local");
 
     let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
-        deployment_name: "demo".to_string(),
+        fleet_name: "demo".to_string(),
         environment: "local".to_string(),
         artifact_environment: "local".to_string(),
         workspace_root: temp.path().join("workspace"),
@@ -22,7 +22,7 @@ fn local_inventory_reports_missing_config_as_observation_gap() {
         inventory
             .unresolved_observations
             .iter()
-            .any(|gap| gap.key == "local_config.fleet_name")
+            .any(|gap| gap.key == "local_config.app")
     );
     assert!(
         inventory
@@ -159,7 +159,8 @@ fn local_deployment_check_rejects_missing_exact_artifact_root() {
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
 
     let check = check_local_deployment(&LocalDeploymentCheckRequest {
-        deployment_name: "demo".to_string(),
+        fleet_name: "demo".to_string(),
+        app: "demo".to_string(),
         environment: "ic".to_string(),
         artifact_environment: "ic".to_string(),
         workspace_root,
@@ -197,7 +198,8 @@ fn local_deployment_check_separates_target_environment_from_artifact_environment
     .expect("write ICP config");
 
     let check = check_local_deployment(&LocalDeploymentCheckRequest {
-        deployment_name: "demo".to_string(),
+        fleet_name: "demo".to_string(),
+        app: "demo".to_string(),
         environment: "staging".to_string(),
         artifact_environment: "local".to_string(),
         workspace_root,

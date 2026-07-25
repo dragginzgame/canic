@@ -14,40 +14,57 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.31`.
-- The latest published release is `v0.99.31` at
-  `95975b4d6c39e8b45f465fab682a679134b26193`.
-- The `v0.99.31` source tree is
-  `f4404b4d41a7a327333d6233a001718a04350ffa`. Its Cargo.lock SHA-256 is
-  `3842bedf261b73026c03f5c39e826977ed1077dc30fe3d835997a057876f0d88`.
-- The open `0.99.32` draft makes the release boundary explicit across the
-  active 0.99, 0.100 and 0.101 designs: every step is a fresh reinstall.
-  Cross-release extraction, authority handoff, fencing, mixed-version
-  recovery and existing-service adoption are deleted from the proposed
-  architecture rather than retained as rejected alternatives. The compact
-  designs retain their exact current-schema Coordinator/Registry/bootstrap
-  bindings, independent Coordinator and Tree placement, runtime activation
-  barrier and terminal Fleet-catalog evidence.
+- The workspace package version is `0.99.33`.
+- The latest published release is `v0.99.33` at
+  `d32a2d1ca34da141a64cbeaf09749c47e28ecc45`.
+- The `v0.99.33` source tree is
+  `5bfcc4ab6cf2c5345ba79f37cd4b2571c8ffd4af`. Its Cargo.lock SHA-256 is
+  `d0e664e4fe0220b63ea9fb4854f5d6b3673104cac0a3554361b03c1db69e6e75`.
+- The open `0.99.34` draft closes the remaining 0.99 terminology and proof
+  gaps. Deployment truth uses explicit `canonical_network_id`, `fleet_id`,
+  `fleet_name` and `app` identity; `canic deploy plan <fleet> --app <app>` is
+  the sole planner grammar; backup reports and App-adoption evidence use Fleet
+  target terminology; old auth audience wrappers are removed; active
+  operator/Medic guidance uses exact App/Fleet command forms; and
+  installed/package CLI fixtures use the canonical-network Fleet catalog
+  rather than deleted environment-scoped state. The platform trap boundary is
+  explicitly confined to lifecycle and the approved IC ops facade, and the
+  planner rejects invalid App names before default config-path resolution. The
+  workspace test runner no longer invokes the deleted standalone sharding
+  target whose maintained cases live in `root_suite`. `FleetKey` exposes and
+  serializes only `canonical_network_id` and `fleet_id`; the ambiguous
+  `network` member has no compatibility path.
 - The proposed 0.100/0.101 follow-on designs now model heterogeneous,
   independently scaled Tree Groups backed by App Tree Specs: one user-focused
   Tree and many project-focused Trees may use different topology templates.
   Each Canister Tree has its own `TreeId` and Tree Root; physical `SubnetId`
   is repeatable placement metadata, so Trees may be co-located without merging
-  authority. The default workload spec remains distinct from Coordinator
-  Subnet placement, and application routing remains outside Canic. The
-  Coordinator is not part of any Tree. Fleet-authoritative services instead
-  remain under ordinary singleton service Trees whose Tree Roots retain local
-  lifecycle authority; the Coordinator protects the target declaration and
-  publishes their Fleet-wide `(role, TreeId, canister_id)` bindings. This is a
-  design amendment, not additional 0.99 runtime scope. A fresh 0.100 install
-  creates the first Coordinator and empty Registry directly; a fresh 0.101
-  install provisions every declared service through one aggregate operation
-  per selected Tree, publishes the complete set, synchronizes required
-  Directories, cascades them to prepared services and activates the prepared
-  runtimes before terminal catalog publication.
+  authority. `default`, if an App uses it, is only a workload name and never
+  selects the Coordinator Subnet; application routing remains outside Canic.
+  The Coordinator is not part of any Tree. Fleet-authoritative services
+  instead remain under ordinary singleton service Trees whose Tree Roots
+  retain local lifecycle authority; the Coordinator protects the target
+  declaration and publishes their Fleet-wide
+  `(role, TreeId, canister_id)` bindings. This is a design amendment, not
+  additional 0.99 runtime scope. A fresh 0.100 install creates the first
+  Coordinator and empty Fleet Registry directly; a fresh 0.101 install
+  provisions every declared service through one aggregate operation per
+  selected Tree from one complete provisioning plan, publishes the complete
+  set, synchronizes required Fleet and Tree Directories, cascades them to
+  prepared services and activates the prepared runtimes before terminal
+  catalog publication. 0.100 hard-cuts `SubnetSlotId`, Fleet Root,
+  `SubnetRegistry` and `SubnetDirectory` to Tree identity, Tree Root,
+  `TreeRegistry` and `TreeDirectory`; it does not carry those 0.99 topology
+  names forward. The protected per-Tree identity is `TreeBinding`; Fleet and
+  Tree Directories use separate, non-interchangeable provenance contracts.
   Neither design consumes an installation from its predecessor. The proposed
   0.102 diagnostic and 0.103 transport lines use the same reinstall-only
   release boundary.
+- Released `0.99.33` pins the maintained operator toolchain to ICP CLI 1.2.0
+  and Rust 1.97.1 while preserving the published-crate MSRV.
+- Released `0.99.32` makes the active 0.99–0.103 design sequence
+  reinstall-only and removes proposed cross-release handoff and adoption
+  machinery.
 - Released `0.99.31` completes the recursive CLI command-surface closeout.
   `canic install <app> <fleet>` is the sole installation mutation; `deploy`
   retains only passive plan/check/inspect evidence. Orphan authority-dry-run,

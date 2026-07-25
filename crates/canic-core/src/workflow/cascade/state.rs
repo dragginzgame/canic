@@ -411,7 +411,7 @@ mod state_apply_tests {
         let missing_subnet = SubnetSlotId::from("missing");
         let fleet = FleetBinding {
             fleet: FleetKey {
-                network: CanonicalNetworkId::public_ic(),
+                canonical_network_id: CanonicalNetworkId::public_ic(),
                 fleet_id: FleetId::from_generated_bytes([4; 32]),
             },
             app: AppId::from("test"),

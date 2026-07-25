@@ -79,7 +79,7 @@ Saved build provenance can be supplied back to passive evidence envelopes:
 
 ```text
 canic app adoption report <app> --profile <profile> --evidence-envelope --build-provenance <path>
-canic deploy check <deployment> --evidence-envelope --build-provenance <path>
+canic deploy check <fleet> --evidence-envelope --build-provenance <path>
 ```
 
 Those commands only fingerprint the saved provenance envelope as input

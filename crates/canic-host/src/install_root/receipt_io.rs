@@ -71,7 +71,7 @@ pub(super) fn install_deployment_truth_receipts_dir(icp_root: &Path, fleet: Flee
     icp_root
         .join(".canic")
         .join("networks")
-        .join(fleet.network.to_string())
+        .join(fleet.canonical_network_id.to_string())
         .join("fleets")
         .join(fleet.fleet_id.to_string())
         .join("deployment-receipts")

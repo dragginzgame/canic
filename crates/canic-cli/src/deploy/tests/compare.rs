@@ -36,7 +36,7 @@ fn deploy_compare_parses_artifact_paths_and_text_flag() {
 fn deploy_compare_builder_uses_existing_check_artifacts() {
     let left = sample_authority_check();
     let mut right = sample_authority_check();
-    right.plan.deployment_identity.deployment_name = "prod".to_string();
+    right.plan.deployment_identity.fleet_name = "prod".to_string();
 
     let report = deploy_compare::build_report_from_checks(&left, &right, Some("stage"), None)
         .expect("comparison report should build");

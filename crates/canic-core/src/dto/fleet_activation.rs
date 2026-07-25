@@ -180,7 +180,7 @@ mod tests {
     fn fleet_binding() -> FleetBinding {
         FleetBinding {
             fleet: FleetKey {
-                network: CanonicalNetworkId::public_ic(),
+                canonical_network_id: CanonicalNetworkId::public_ic(),
                 fleet_id: FleetId::from_generated_bytes([7; 32]),
             },
             app: AppId::from("toko"),

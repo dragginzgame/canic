@@ -28,7 +28,10 @@ impl InstallPhaseOperation for VerifiedInstallOperation {
         evidence.push(format!("observed_module_hash:{}", "11".repeat(32)));
         let identity = sample_fleet_activation_identity();
         evidence.extend([
-            format!("canonical_network_id:{}", identity.fleet.fleet.network),
+            format!(
+                "canonical_network_id:{}",
+                identity.fleet.fleet.canonical_network_id
+            ),
             format!("app:{}", identity.fleet.app),
             format!("fleet_id:{}", identity.fleet.fleet.fleet_id),
             format!("activation_operation_id:{}", "08".repeat(32)),
@@ -414,7 +417,10 @@ fn install_operation_returns_exact_durable_verified_receipt() {
             "root_wasm:/tmp/root.wasm".to_string(),
             format!("expected_module_hash:{}", "11".repeat(32)),
             format!("observed_module_hash:{}", "11".repeat(32)),
-            format!("canonical_network_id:{}", sample_fleet_key().network),
+            format!(
+                "canonical_network_id:{}",
+                sample_fleet_key().canonical_network_id
+            ),
             "app:demo".to_string(),
             format!("fleet_id:{}", sample_fleet_key().fleet_id),
             format!("activation_operation_id:{}", "08".repeat(32)),
