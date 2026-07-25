@@ -14,16 +14,21 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.24`.
-- The latest published release is `v0.99.24` at
-  `0468042f8cec470fc8c39e85d26272287fee1806`.
-- The `v0.99.24` source tree is
-  `68a32fcfc14c760565a34cb5ab627ce548438153`. Its Cargo.lock SHA-256 is
-  `5cdfec361238036fbb0780396a424d4c033212a0f7dbf96d830e5ce165e3566f`.
-- The open `0.99.25` draft makes the sequence-two `CanistersPrepared`
-  activation journal real: the host prepares and verifies the complete
-  bounded root/child inventory, stores exact canonical evidence and recovers
-  `RootInstalled` without duplicate root resolution, creation or install.
+- The workspace package version is `0.99.25`.
+- The latest published release is `v0.99.25` at
+  `72d28ca038e59942367f690b189697d832a28960`.
+- The `v0.99.25` source tree is
+  `d4eaa5a9a129922132c5d5e3a9f79d531e711423`. Its Cargo.lock SHA-256 is
+  `1dd2e441b3e854dbe29bc9782debb057df8b94a41be5b732d6822c873212183a`.
+- The open `0.99.26` draft makes the sequence-three
+  `CanistersActivated` recovery authority real: the root activates every exact
+  journalled child before itself, uncertain outcomes reconcile through status
+  and the host stores complete canonical activation hashes before any Fleet
+  catalog publication.
+- Released `0.99.25` makes the sequence-two `CanistersPrepared` activation
+  journal real: the host prepares and verifies the complete bounded root/child
+  inventory, stores exact canonical evidence and recovers `RootInstalled`
+  without duplicate root resolution, creation or install.
 - Released `0.99.24` makes `(CanonicalNetworkId, FleetId)` the sole
   deployment-receipt namespace, resolves default CLI receipt lookup through
   the canonical Fleet catalog and requires a successful root-install receipt

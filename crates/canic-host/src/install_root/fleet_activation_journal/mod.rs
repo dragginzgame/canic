@@ -28,10 +28,11 @@ use canic_core::{
     cdk::types::Principal,
     dto::fleet_activation::{
         FleetActivationHostRecord, FleetActivationIdentity, FleetActivationPhase,
-        FleetActivationStatusResponse, FleetCascadeActivationEvidence, FleetCascadeManifestEntry,
-        FleetCredentialGenerationRef, FleetCredentialManifest, FleetCredentialManifestEntry,
-        FleetHostCanisterActivationEvidence, MAX_FLEET_ACTIVATION_CANISTERS,
-        MAX_FLEET_ACTIVATION_HOST_RECORD_BYTES, MAX_FLEET_CREDENTIAL_MANIFEST_ENTRIES,
+        FleetActivationResumeRequest, FleetActivationStatusResponse,
+        FleetCascadeActivationEvidence, FleetCascadeManifestEntry, FleetCredentialGenerationRef,
+        FleetCredentialManifest, FleetCredentialManifestEntry, FleetHostCanisterActivationEvidence,
+        MAX_FLEET_ACTIVATION_CANISTERS, MAX_FLEET_ACTIVATION_HOST_RECORD_BYTES,
+        MAX_FLEET_CREDENTIAL_MANIFEST_ENTRIES,
     },
     ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, FleetName, ReleaseBuildId},
 };
@@ -115,11 +116,33 @@ pub(super) struct CanistersPreparedFleetInstallActivation {
 }
 
 ///
+/// CanistersActivatedFleetInstallActivation
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct CanistersActivatedFleetInstallActivation {
+    pub journal: FleetInstallActivationJournal,
+    pub journal_hash: [u8; 32],
+    pub path: PathBuf,
+    pub advanced: bool,
+}
+
+///
 /// PreparedFleetActivationEvidence
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct PreparedFleetActivationEvidence {
+    root_canister: Principal,
+    activation: FleetActivationHostRecord,
+}
+
+///
+/// ActivatedFleetActivationEvidence
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct ActivatedFleetActivationEvidence {
     root_canister: Principal,
     activation: FleetActivationHostRecord,
 }
@@ -220,6 +243,17 @@ pub(super) enum FleetInstallActivationJournalError {
         "Fleet install activation journal cannot transition from {phase:?} to CanistersPrepared"
     )]
     InvalidCanistersPreparedTransition { phase: FleetInstallActivationPhase },
+
+    #[error("active Fleet activation evidence differs from the journalled Prepared authority")]
+    ActivatedActivationEvidenceMismatch,
+
+    #[error("invalid active Fleet activation evidence: {reason}")]
+    InvalidActivatedActivationEvidence { reason: String },
+
+    #[error(
+        "Fleet install activation journal cannot transition from {phase:?} to CanistersActivated"
+    )]
+    InvalidCanistersActivatedTransition { phase: FleetInstallActivationPhase },
 
     #[error(
         "active Fleet {fleet_name} at {path} belongs to App {existing_app}, not requested App {requested_app}"
@@ -587,8 +621,13 @@ pub(super) fn recover_activation_root_canister(
                 .map(Some)
                 .map_err(invalid_prepared)
         }
-        phase => {
-            Err(FleetInstallActivationJournalError::InvalidCanistersPreparedTransition { phase })
+        FleetInstallActivationPhase::CanistersActivated => {
+            validate_activated_activation_record(&resolved.journal.activation)
+                .map(Some)
+                .map_err(invalid_active)
+        }
+        phase @ FleetInstallActivationPhase::HostAuthorityCommitted => {
+            Err(FleetInstallActivationJournalError::InvalidCanistersActivatedTransition { phase })
         }
     }
 }
@@ -963,6 +1002,273 @@ pub(super) fn resume_canisters_prepared(
         );
     }
     Ok(canisters_prepared_result(
+        resolved.journal.clone(),
+        resolved.path.clone(),
+        false,
+    ))
+}
+
+/// Build the exact idempotent request for the journalled Prepared generation.
+pub(super) const fn canisters_prepared_resume_request(
+    prepared: &CanistersPreparedFleetInstallActivation,
+) -> FleetActivationResumeRequest {
+    FleetActivationResumeRequest {
+        operation_id: prepared.journal.activation.identity.operation_id,
+        credential: prepared
+            .journal
+            .activation
+            .credential
+            .expect("validated CanistersPrepared journal retains its credential generation"),
+    }
+}
+
+/// Admit one root `Active` observation after the root-owned resume completed.
+pub(super) fn admit_canisters_activated(
+    root_canister: Principal,
+    prepared: &CanistersPreparedFleetInstallActivation,
+    root_status: &FleetActivationStatusResponse,
+) -> Result<ActivatedFleetActivationEvidence, FleetInstallActivationJournalError> {
+    let prepared_root = validate_prepared_activation_record(&prepared.journal.activation)
+        .map_err(invalid_prepared)?;
+    if prepared_root != root_canister {
+        return Err(invalid_active(
+            "active root differs from the journalled Prepared root",
+        ));
+    }
+    admit_active_root_status(&prepared.journal.activation, root_status)?;
+
+    let mut activation = prepared.journal.activation.clone();
+    let credential = activation
+        .credential
+        .expect("validated CanistersPrepared journal retains its credential generation");
+    let cascade_manifest = activation
+        .cascade_manifest
+        .as_ref()
+        .expect("validated CanistersPrepared journal retains its cascade manifest")
+        .iter()
+        .map(|entry| (entry.principal, entry))
+        .collect::<BTreeMap<_, _>>();
+    for canister in &mut activation.canisters {
+        if canister.principal == root_canister {
+            continue;
+        }
+        let entry = cascade_manifest
+            .get(&canister.principal)
+            .expect("validated CanistersPrepared inventory exactly covers its cascade manifest");
+        let cascade = FleetCascadeActivationEvidence::Applied {
+            state_snapshot_hash: entry.state_snapshot_hash,
+            topology_snapshot_hash: entry.topology_snapshot_hash,
+        };
+        canister.activation_evidence_hash = Some(
+            FleetActivationApi::activation_evidence_hash(
+                &activation.identity,
+                &cascade,
+                credential,
+            )
+            .map_err(|error| {
+                invalid_active(format!(
+                    "invalid activation evidence for child {}: {error}",
+                    canister.principal
+                ))
+            })?,
+        );
+    }
+    let observed_root =
+        validate_activated_activation_record(&activation).map_err(invalid_active)?;
+    if observed_root != root_canister {
+        return Err(invalid_active(
+            "active activation record does not identify the journalled root",
+        ));
+    }
+    Ok(ActivatedFleetActivationEvidence {
+        root_canister,
+        activation,
+    })
+}
+
+fn admit_active_root_status(
+    prepared: &FleetActivationHostRecord,
+    root_status: &FleetActivationStatusResponse,
+) -> Result<(), FleetInstallActivationJournalError> {
+    let cascade_manifest = prepared
+        .cascade_manifest
+        .as_ref()
+        .expect("validated CanistersPrepared journal retains its cascade manifest");
+    let cascade_manifest_hash = FleetActivationApi::cascade_manifest_hash(cascade_manifest)
+        .map_err(|error| invalid_active(format!("invalid cascade manifest: {error}")))?;
+    let expected_cascade = FleetCascadeActivationEvidence::Source {
+        cascade_manifest_hash,
+    };
+    if root_status.phase != FleetActivationPhase::Active
+        || root_status.identity != prepared.identity
+        || root_status.cascade.as_ref() != Some(&expected_cascade)
+        || root_status.cascade_manifest.as_ref() != Some(cascade_manifest)
+        || root_status.credential != prepared.credential
+        || root_status.credential_manifest != prepared.credential_manifest
+        || root_status.activated_at_ns.is_none()
+    {
+        return Err(invalid_active(
+            "root status does not prove the exact journalled activation became Active",
+        ));
+    }
+    Ok(())
+}
+
+/// Advance one exact `CanistersPrepared` journal from complete active evidence.
+pub(super) fn record_canisters_activated(
+    root: &Path,
+    prepared: &CanistersPreparedFleetInstallActivation,
+    evidence: &ActivatedFleetActivationEvidence,
+) -> Result<CanistersActivatedFleetInstallActivation, FleetInstallActivationJournalError> {
+    let identity = &prepared.journal.activation.identity;
+    let expected_path = fleet_install_activation_journal_path(
+        root,
+        identity.fleet.fleet.network,
+        identity.fleet.fleet.fleet_id,
+        identity.operation_id,
+    );
+    if prepared.path != expected_path {
+        return Err(invalid(
+            &prepared.path,
+            "prepared journal path is not canonical for its activation identity",
+        ));
+    }
+    let observed_root =
+        validate_activated_activation_record(&evidence.activation).map_err(invalid_active)?;
+    if !activated_preserves_prepared_authority(&prepared.journal.activation, &evidence.activation)
+        || evidence.root_canister != observed_root
+        || evidence.root_canister
+            != validate_prepared_activation_record(&prepared.journal.activation)
+                .map_err(invalid_prepared)?
+    {
+        return Err(FleetInstallActivationJournalError::ActivatedActivationEvidenceMismatch);
+    }
+
+    let _lock = lock_fleet_install_activation(
+        root,
+        identity.fleet.fleet.network,
+        &prepared.journal.fleet_name,
+    )?;
+    let observed = load_fleet_install_activation_journal(
+        root,
+        identity.fleet.fleet.network,
+        identity.fleet.fleet.fleet_id,
+        identity.operation_id,
+    )?;
+    if observed.phase == FleetInstallActivationPhase::CanistersActivated {
+        if observed.activation == evidence.activation {
+            return Ok(canisters_activated_result(
+                observed,
+                prepared.path.clone(),
+                false,
+            ));
+        }
+        return Err(FleetInstallActivationJournalError::ActivatedActivationEvidenceMismatch);
+    }
+    if observed.phase != FleetInstallActivationPhase::CanistersPrepared {
+        return Err(
+            FleetInstallActivationJournalError::InvalidCanistersActivatedTransition {
+                phase: observed.phase,
+            },
+        );
+    }
+    let observed_hash = fleet_install_activation_journal_hash(&observed);
+    if observed_hash != prepared.journal_hash || observed != prepared.journal {
+        return Err(FleetInstallActivationJournalError::JournalChanged {
+            expected: hex_digest(prepared.journal_hash),
+            observed: hex_digest(observed_hash),
+        });
+    }
+
+    let next = next_canisters_activated_journal(observed, &evidence.activation);
+    let bytes = encode_journal(&next)?;
+    if let Err(source) = write_bytes(&prepared.path, &bytes) {
+        match load_fleet_install_activation_journal(
+            root,
+            identity.fleet.fleet.network,
+            identity.fleet.fleet.fleet_id,
+            identity.operation_id,
+        ) {
+            Ok(observed) if observed == next => {
+                return Ok(canisters_activated_result(
+                    next,
+                    prepared.path.clone(),
+                    true,
+                ));
+            }
+            _ => {
+                return Err(FleetInstallActivationJournalError::Io {
+                    path: prepared.path.clone(),
+                    source,
+                });
+            }
+        }
+    }
+    let durable = load_fleet_install_activation_journal(
+        root,
+        identity.fleet.fleet.network,
+        identity.fleet.fleet.fleet_id,
+        identity.operation_id,
+    )?;
+    if durable != next {
+        return Err(invalid(
+            &prepared.path,
+            "published CanistersActivated journal differs from the transition record",
+        ));
+    }
+    Ok(canisters_activated_result(
+        next,
+        prepared.path.clone(),
+        true,
+    ))
+}
+
+fn activated_preserves_prepared_authority(
+    prepared: &FleetActivationHostRecord,
+    activated: &FleetActivationHostRecord,
+) -> bool {
+    prepared.identity == activated.identity
+        && prepared.cascade_manifest == activated.cascade_manifest
+        && prepared.credential == activated.credential
+        && prepared.credential_manifest == activated.credential_manifest
+        && prepared.canisters.len() == activated.canisters.len()
+        && prepared
+            .canisters
+            .iter()
+            .zip(&activated.canisters)
+            .all(|(prepared, activated)| {
+                prepared.principal == activated.principal
+                    && prepared
+                        .activation_evidence_hash
+                        .is_none_or(|hash| activated.activation_evidence_hash == Some(hash))
+            })
+}
+
+fn next_canisters_activated_journal(
+    mut prepared: FleetInstallActivationJournal,
+    activation: &FleetActivationHostRecord,
+) -> FleetInstallActivationJournal {
+    prepared.sequence = prepared
+        .sequence
+        .checked_add(1)
+        .expect("validated CanistersPrepared sequence two advances to three");
+    prepared.phase = FleetInstallActivationPhase::CanistersActivated;
+    prepared.activation = activation.clone();
+    prepared
+}
+
+/// Resolve an already durable `CanistersActivated` journal without another effect.
+pub(super) fn resume_canisters_activated(
+    resolved: &ResolvedFleetInstallActivation,
+) -> Result<CanistersActivatedFleetInstallActivation, FleetInstallActivationJournalError> {
+    if resolved.journal.phase != FleetInstallActivationPhase::CanistersActivated {
+        return Err(
+            FleetInstallActivationJournalError::InvalidCanistersActivatedTransition {
+                phase: resolved.journal.phase,
+            },
+        );
+    }
+    Ok(canisters_activated_result(
         resolved.journal.clone(),
         resolved.path.clone(),
         false,
@@ -1390,6 +1696,15 @@ fn validate_journal(
                 .map(|_| ())
                 .map_err(|reason| invalid(path, reason))
         }
+        FleetInstallActivationPhase::CanistersActivated
+            if journal.sequence == 3
+                && journal.root_install_receipt_hash.is_some()
+                && journal.committed_fleet_catalog_hash.is_none() =>
+        {
+            validate_activated_activation_record(&journal.activation)
+                .map(|_| ())
+                .map_err(|reason| invalid(path, reason))
+        }
         FleetInstallActivationPhase::Planned => Err(invalid(
             path,
             "Planned requires sequence 0 and no later-phase evidence",
@@ -1402,7 +1717,11 @@ fn validate_journal(
             path,
             "CanistersPrepared requires sequence 2, one root-install receipt, complete Prepared evidence and no catalog hash",
         )),
-        phase => Err(invalid(
+        FleetInstallActivationPhase::CanistersActivated => Err(invalid(
+            path,
+            "CanistersActivated requires sequence 3, one root-install receipt, complete Active evidence and no catalog hash",
+        )),
+        phase @ FleetInstallActivationPhase::HostAuthorityCommitted => Err(invalid(
             path,
             format!("{phase:?} is reserved until its transition is implemented"),
         )),
@@ -1440,10 +1759,85 @@ fn validate_prepared_activation_record(
                 .to_string(),
         );
     }
+    for entry in authority.cascade_manifest {
+        if inventory
+            .canisters
+            .get(&entry.principal)
+            .copied()
+            .flatten()
+            .is_some()
+        {
+            return Err(format!(
+                "Prepared child {} must not claim activation evidence before resume",
+                entry.principal
+            ));
+        }
+    }
     if encode_value(&encode_activation_host_record(record)).len()
         > MAX_FLEET_ACTIVATION_HOST_RECORD_BYTES
     {
         return Err("Prepared activation host record exceeds its byte bound".to_string());
+    }
+    Ok(inventory.root_canister)
+}
+
+fn validate_activated_activation_record(
+    record: &FleetActivationHostRecord,
+) -> Result<Principal, String> {
+    validate_app(&record.identity.fleet.app).map_err(|error| error.to_string())?;
+    let authority = validate_prepared_manifest_authority(record)?;
+    let inventory = validate_prepared_canister_inventory(
+        record,
+        authority.cascade_manifest,
+        authority.credential_manifest,
+    )?;
+    let root_cascade = FleetCascadeActivationEvidence::Source {
+        cascade_manifest_hash: authority.cascade_manifest_hash,
+    };
+    let expected_root_hash = FleetActivationApi::activation_evidence_hash(
+        &record.identity,
+        &root_cascade,
+        authority.credential,
+    )
+    .map_err(|error| format!("invalid active root activation evidence: {error}"))?;
+    if inventory
+        .canisters
+        .get(&inventory.root_canister)
+        .copied()
+        .flatten()
+        != Some(expected_root_hash)
+    {
+        return Err(
+            "Active root activation evidence hash does not match the canonical record".to_string(),
+        );
+    }
+    for entry in authority.cascade_manifest {
+        let cascade = FleetCascadeActivationEvidence::Applied {
+            state_snapshot_hash: entry.state_snapshot_hash,
+            topology_snapshot_hash: entry.topology_snapshot_hash,
+        };
+        let expected_hash = FleetActivationApi::activation_evidence_hash(
+            &record.identity,
+            &cascade,
+            authority.credential,
+        )
+        .map_err(|error| {
+            format!(
+                "invalid active child activation evidence for {}: {error}",
+                entry.principal
+            )
+        })?;
+        if inventory.canisters.get(&entry.principal).copied().flatten() != Some(expected_hash) {
+            return Err(format!(
+                "Active child {} activation evidence hash does not match the canonical record",
+                entry.principal
+            ));
+        }
+    }
+    if encode_value(&encode_activation_host_record(record)).len()
+        > MAX_FLEET_ACTIVATION_HOST_RECORD_BYTES
+    {
+        return Err("Active activation host record exceeds its byte bound".to_string());
     }
     Ok(inventory.root_canister)
 }
@@ -1556,13 +1950,6 @@ fn validate_prepared_canister_inventory(
                 .to_string(),
         );
     };
-    for principal in &cascade_canisters {
-        if host_canisters.get(principal).copied().flatten().is_some() {
-            return Err(format!(
-                "Prepared child {principal} must not claim activation evidence before resume"
-            ));
-        }
-    }
     if credential_manifest
         .entries
         .iter()
@@ -2046,6 +2433,19 @@ fn canisters_prepared_result(
     }
 }
 
+fn canisters_activated_result(
+    journal: FleetInstallActivationJournal,
+    path: PathBuf,
+    advanced: bool,
+) -> CanistersActivatedFleetInstallActivation {
+    CanistersActivatedFleetInstallActivation {
+        journal_hash: fleet_install_activation_journal_hash(&journal),
+        journal,
+        path,
+        advanced,
+    }
+}
+
 fn validate_app(app: &AppId) -> Result<(), FleetInstallActivationJournalError> {
     let value = app.as_str();
     if value.is_empty()
@@ -2248,6 +2648,12 @@ fn invalid(path: &Path, reason: impl Into<String>) -> FleetInstallActivationJour
 
 fn invalid_prepared(reason: impl Into<String>) -> FleetInstallActivationJournalError {
     FleetInstallActivationJournalError::InvalidPreparedActivationEvidence {
+        reason: reason.into(),
+    }
+}
+
+fn invalid_active(reason: impl Into<String>) -> FleetInstallActivationJournalError {
+    FleetInstallActivationJournalError::InvalidActivatedActivationEvidence {
         reason: reason.into(),
     }
 }

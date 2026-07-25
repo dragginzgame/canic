@@ -1,8 +1,10 @@
 use super::fleet_activation_journal::{
+    ActivatedFleetActivationEvidence, CanistersActivatedFleetInstallActivation,
     CanistersPreparedFleetInstallActivation, FleetInstallActivationJournalError,
-    FleetInstallActivationPhase, ResolvedFleetInstallActivation, admit_canisters_prepared,
-    admit_root_install_receipt, record_canisters_prepared, record_root_installed,
-    recover_root_install_receipt, resume_canisters_prepared,
+    FleetInstallActivationPhase, ResolvedFleetInstallActivation, admit_canisters_activated,
+    admit_canisters_prepared, admit_root_install_receipt, canisters_prepared_resume_request,
+    record_canisters_activated, record_canisters_prepared, record_root_installed,
+    recover_root_install_receipt, resume_canisters_activated, resume_canisters_prepared,
 };
 use super::operations::InstallRootWasmOperation;
 use super::options::InstallRootOptions;
@@ -14,14 +16,71 @@ use crate::{
     canister_build::WorkspaceBuildContext,
     icp::{IcpCli, decode_json_result_response},
 };
-use canic_core::{dto::fleet_activation::FleetActivationStatusResponse, protocol};
+use candid::IDLValue;
+use canic_core::{
+    dto::fleet_activation::{FleetActivationResumeRequest, FleetActivationStatusResponse},
+    protocol,
+};
+use std::path::Path;
+use thiserror::Error as ThisError;
 
-pub(super) struct PreparedRootInstall {
+pub(super) struct ActivatedRootInstall {
     pub(super) timings: InstallTimingSummary,
-    pub(super) activation: CanistersPreparedFleetInstallActivation,
+    pub(super) activation: CanistersActivatedFleetInstallActivation,
 }
 
-pub(super) fn install_root_prepared(
+#[derive(Debug, ThisError)]
+#[error(
+    "root Fleet activation {operation_name} failed and its exact status could not be reconciled: operation={operation}; reconciliation={reconciliation}"
+)]
+struct FleetActivationCallReconciliationError {
+    operation_name: &'static str,
+    #[source]
+    operation: Box<dyn std::error::Error>,
+    reconciliation: Box<dyn std::error::Error>,
+}
+
+pub(super) fn install_root_activated(
+    receipt_scope: InstallReceiptScope<'_>,
+    options: &InstallRootOptions,
+    root_canister_id: &str,
+    build_context: &WorkspaceBuildContext,
+    plan_artifacts: Option<&PreparedPlanArtifacts>,
+    activation: &ResolvedFleetInstallActivation,
+) -> Result<ActivatedRootInstall, Box<dyn std::error::Error>> {
+    if activation.journal.phase == FleetInstallActivationPhase::CanistersActivated {
+        return Ok(ActivatedRootInstall {
+            timings: InstallTimingSummary::default(),
+            activation: resume_canisters_activated(activation)?,
+        });
+    }
+    let prepared = install_root_prepared(
+        receipt_scope,
+        options,
+        root_canister_id,
+        build_context,
+        plan_artifacts,
+        activation,
+    )?;
+    let root_canister = root_canister_id.parse()?;
+    let evidence = resume_and_admit_activation(
+        receipt_scope.icp_root,
+        receipt_scope.environment,
+        root_canister_id,
+        build_context,
+        root_canister,
+        &prepared.activation,
+    )?;
+    let activation =
+        record_canisters_activated(receipt_scope.icp_root, &prepared.activation, &evidence)?;
+
+    Ok(ActivatedRootInstall {
+        timings: prepared.timings,
+        activation,
+    })
+}
+
+fn install_root_prepared(
     receipt_scope: InstallReceiptScope<'_>,
     options: &InstallRootOptions,
     root_canister_id: &str,
@@ -83,6 +142,85 @@ pub(super) fn install_root_prepared(
     let icp = IcpCli::new("icp", Some(receipt_scope.environment.to_string()))
         .with_cwd(receipt_scope.icp_root)
         .with_local_replica(build_context.local_replica.clone());
+    // The root returns only after every synchronous state/topology cascade has
+    // acknowledged durable Prepared evidence. The host journals that exact
+    // root-owned manifest; it does not assume the operator controls children.
+    let evidence = match call_prepare(&icp, root_canister_id) {
+        Ok(status) => admit_canisters_prepared(
+            receipt.root_canister,
+            &root_installed.journal.activation.identity,
+            &status,
+        )?,
+        Err(operation) => {
+            let reconciled = query_status(&icp, root_canister_id).and_then(|status| {
+                admit_canisters_prepared(
+                    receipt.root_canister,
+                    &root_installed.journal.activation.identity,
+                    &status,
+                )
+                .map_err(Into::into)
+            });
+            match reconciled {
+                Ok(evidence) => evidence,
+                Err(reconciliation) => {
+                    return Err(Box::new(FleetActivationCallReconciliationError {
+                        operation_name: "preparation",
+                        operation,
+                        reconciliation,
+                    }));
+                }
+            }
+        }
+    };
+    let activation = record_canisters_prepared(receipt_scope.icp_root, &root_installed, &evidence)?;
+
+    Ok(PreparedRootInstall {
+        timings,
+        activation,
+    })
+}
+
+struct PreparedRootInstall {
+    timings: InstallTimingSummary,
+    activation: CanistersPreparedFleetInstallActivation,
+}
+
+fn resume_and_admit_activation(
+    icp_root: &Path,
+    environment: &str,
+    root_canister_id: &str,
+    build_context: &WorkspaceBuildContext,
+    root_canister: canic_core::cdk::types::Principal,
+    prepared: &CanistersPreparedFleetInstallActivation,
+) -> Result<ActivatedFleetActivationEvidence, Box<dyn std::error::Error>> {
+    let icp = IcpCli::new("icp", Some(environment.to_string()))
+        .with_cwd(icp_root)
+        .with_local_replica(build_context.local_replica.clone());
+    let request = canisters_prepared_resume_request(prepared);
+    match call_resume(&icp, root_canister_id, &request) {
+        Ok(status) => {
+            admit_canisters_activated(root_canister, prepared, &status).map_err(Into::into)
+        }
+        Err(operation) => {
+            let reconciled = query_status(&icp, root_canister_id).and_then(|status| {
+                admit_canisters_activated(root_canister, prepared, &status).map_err(Into::into)
+            });
+            match reconciled {
+                Ok(evidence) => Ok(evidence),
+                Err(reconciliation) => Err(Box::new(FleetActivationCallReconciliationError {
+                    operation_name: "resume",
+                    operation,
+                    reconciliation,
+                })),
+            }
+        }
+    }
+}
+
+fn call_prepare(
+    icp: &IcpCli,
+    root_canister_id: &str,
+) -> Result<FleetActivationStatusResponse, Box<dyn std::error::Error>> {
     let output = icp.canister_call_arg_output_with_candid(
         root_canister_id,
         protocol::CANIC_PREPARE_FLEET_ACTIVATION,
@@ -90,19 +228,68 @@ pub(super) fn install_root_prepared(
         Some("json"),
         None,
     )?;
-    let root_status = decode_json_result_response::<FleetActivationStatusResponse>(&output)?;
-    // The root returns only after every synchronous state/topology cascade has
-    // acknowledged durable Prepared evidence. The host journals that exact
-    // root-owned manifest; it does not assume the operator controls children.
-    let evidence = admit_canisters_prepared(
-        receipt.root_canister,
-        &root_installed.journal.activation.identity,
-        &root_status,
-    )?;
-    let activation = record_canisters_prepared(receipt_scope.icp_root, &root_installed, &evidence)?;
+    decode_json_result_response(&output).map_err(Into::into)
+}
 
-    Ok(PreparedRootInstall {
-        timings,
-        activation,
-    })
+fn call_resume(
+    icp: &IcpCli,
+    root_canister_id: &str,
+    request: &FleetActivationResumeRequest,
+) -> Result<FleetActivationStatusResponse, Box<dyn std::error::Error>> {
+    let output = icp.canister_call_arg_output_with_candid(
+        root_canister_id,
+        protocol::CANIC_RESUME_FLEET_ACTIVATION,
+        &fleet_activation_resume_args(request)?,
+        Some("json"),
+        None,
+    )?;
+    decode_json_result_response(&output).map_err(Into::into)
+}
+
+fn fleet_activation_resume_args(
+    request: &FleetActivationResumeRequest,
+) -> Result<String, candid::Error> {
+    let value = IDLValue::try_from_candid_type(request)?;
+    Ok(format!("({value})"))
+}
+
+fn query_status(
+    icp: &IcpCli,
+    root_canister_id: &str,
+) -> Result<FleetActivationStatusResponse, Box<dyn std::error::Error>> {
+    let output = icp.canister_query_output_with_candid(
+        root_canister_id,
+        protocol::CANIC_FLEET_ACTIVATION_STATUS,
+        Some("json"),
+        None,
+    )?;
+    decode_json_result_response(&output).map_err(Into::into)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use candid::{CandidType, TypeEnv};
+    use canic_core::dto::fleet_activation::FleetCredentialGenerationRef;
+
+    #[test]
+    fn resume_args_roundtrip_the_exact_journal_request() {
+        let request = FleetActivationResumeRequest {
+            operation_id: [7; 32],
+            credential: FleetCredentialGenerationRef {
+                generation: 8,
+                manifest_hash: [9; 32],
+            },
+        };
+
+        let args = fleet_activation_resume_args(&request).expect("build resume args");
+        let parsed = candid_parser::parse_idl_args(&args).expect("parse textual Candid");
+        let bytes = parsed
+            .to_bytes_with_types(&TypeEnv::new(), &[FleetActivationResumeRequest::ty()])
+            .expect("encode typed textual Candid");
+        let decoded: FleetActivationResumeRequest =
+            candid::decode_one(&bytes).expect("decode resume request");
+
+        assert_eq!(decoded, request);
+    }
 }

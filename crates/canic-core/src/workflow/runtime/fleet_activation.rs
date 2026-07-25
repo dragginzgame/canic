@@ -148,57 +148,8 @@ impl FleetActivationWorkflow {
             )
         })?;
 
-        for entry in manifest {
-            let generation_request = FleetCredentialGenerationRequest {
-                operation_id: request.operation_id,
-                credential: request.credential,
-            };
-            let prepared: FleetActivationStatusResponse = RpcOps::call_rpc_result(
-                entry.principal,
-                protocol::CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION,
-                generation_request,
-            )
-            .await?;
-            let expected_cascade =
-                crate::dto::fleet_activation::FleetCascadeActivationEvidence::Applied {
-                    state_snapshot_hash: entry.state_snapshot_hash,
-                    topology_snapshot_hash: entry.topology_snapshot_hash,
-                };
-            if prepared.identity.fleet != root_status.identity.fleet
-                || prepared.identity.operation_id != request.operation_id
-                || prepared.cascade.as_ref() != Some(&expected_cascade)
-                || prepared.credential != Some(request.credential)
-            {
-                return Err(InternalError::invariant(
-                    InternalErrorOrigin::Workflow,
-                    format!(
-                        "prepared child {} does not match its protected activation manifest",
-                        entry.principal
-                    ),
-                ));
-            }
-
-            let activation_evidence_hash = FleetActivationEvidenceOps::activation_evidence_hash(
-                &prepared.identity,
-                &expected_cascade,
-                request.credential,
-            )?;
-            let activated: FleetActivationStatusResponse = RpcOps::call_rpc_result(
-                entry.principal,
-                protocol::CANIC_ACTIVATE_FLEET,
-                FleetActivationRequest {
-                    operation_id: request.operation_id,
-                    credential: request.credential,
-                    activation_evidence_hash,
-                },
-            )
-            .await?;
-            if activated.phase != FleetActivationPhase::Active {
-                return Err(InternalError::invariant(
-                    InternalErrorOrigin::Workflow,
-                    format!("child {} did not activate", entry.principal),
-                ));
-            }
+        for entry in &manifest {
+            resume_nonroot_activation(entry, &root_status, request).await?;
         }
 
         let root_cascade = root_status.cascade.clone().ok_or_else(|| {
@@ -299,7 +250,7 @@ impl FleetActivationWorkflow {
         {
             Ok(status) => status,
             Err(error) => {
-                reconcile_provisioned_nonroot_status_after_call_error(
+                reconcile_nonroot_activation_status_after_call_error(
                     pid,
                     &root_status,
                     &expected_cascade,
@@ -310,7 +261,7 @@ impl FleetActivationWorkflow {
                 .await?
             }
         };
-        validate_provisioned_nonroot_status(&root_status, &prepared, &expected_cascade, None)?;
+        validate_nonroot_activation_status(&root_status, &prepared, &expected_cascade, None)?;
 
         let activation_evidence_hash = FleetActivationEvidenceOps::activation_evidence_hash(
             &prepared.identity,
@@ -326,7 +277,7 @@ impl FleetActivationWorkflow {
             match RpcOps::call_rpc_result(pid, protocol::CANIC_ACTIVATE_FLEET, request).await {
                 Ok(status) => status,
                 Err(error) => {
-                    reconcile_provisioned_nonroot_status_after_call_error(
+                    reconcile_nonroot_activation_status_after_call_error(
                         pid,
                         &root_status,
                         &expected_cascade,
@@ -337,7 +288,7 @@ impl FleetActivationWorkflow {
                     .await?
                 }
             };
-        validate_provisioned_nonroot_status(
+        validate_nonroot_activation_status(
             &root_status,
             &activated,
             &expected_cascade,
@@ -360,7 +311,78 @@ impl FleetActivationWorkflow {
     }
 }
 
-async fn reconcile_provisioned_nonroot_status_after_call_error(
+async fn resume_nonroot_activation(
+    entry: &FleetCascadeManifestEntry,
+    root_status: &FleetActivationStatusResponse,
+    request: FleetActivationResumeRequest,
+) -> Result<(), InternalError> {
+    let expected_cascade = FleetCascadeActivationEvidence::Applied {
+        state_snapshot_hash: entry.state_snapshot_hash,
+        topology_snapshot_hash: entry.topology_snapshot_hash,
+    };
+    let prepared: FleetActivationStatusResponse = match RpcOps::call_rpc_result(
+        entry.principal,
+        protocol::CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION,
+        FleetCredentialGenerationRequest {
+            operation_id: request.operation_id,
+            credential: request.credential,
+        },
+    )
+    .await
+    {
+        Ok(status) => status,
+        Err(error) => {
+            reconcile_nonroot_activation_status_after_call_error(
+                entry.principal,
+                root_status,
+                &expected_cascade,
+                None,
+                "credential-generation preparation",
+                error,
+            )
+            .await?
+        }
+    };
+    validate_nonroot_activation_status(root_status, &prepared, &expected_cascade, None)?;
+
+    let activation_evidence_hash = FleetActivationEvidenceOps::activation_evidence_hash(
+        &prepared.identity,
+        &expected_cascade,
+        request.credential,
+    )?;
+    let activated: FleetActivationStatusResponse = match RpcOps::call_rpc_result(
+        entry.principal,
+        protocol::CANIC_ACTIVATE_FLEET,
+        FleetActivationRequest {
+            operation_id: request.operation_id,
+            credential: request.credential,
+            activation_evidence_hash,
+        },
+    )
+    .await
+    {
+        Ok(status) => status,
+        Err(error) => {
+            reconcile_nonroot_activation_status_after_call_error(
+                entry.principal,
+                root_status,
+                &expected_cascade,
+                Some(FleetActivationPhase::Active),
+                "activation",
+                error,
+            )
+            .await?
+        }
+    };
+    validate_nonroot_activation_status(
+        root_status,
+        &activated,
+        &expected_cascade,
+        Some(FleetActivationPhase::Active),
+    )
+}
+
+async fn reconcile_nonroot_activation_status_after_call_error(
     pid: crate::cdk::types::Principal,
     root_status: &FleetActivationStatusResponse,
     expected_cascade: &FleetCascadeActivationEvidence,
@@ -382,12 +404,9 @@ async fn reconcile_provisioned_nonroot_status_after_call_error(
             )));
         }
     };
-    if let Err(observation_error) = validate_provisioned_nonroot_status(
-        root_status,
-        &observed,
-        expected_cascade,
-        required_phase,
-    ) {
+    if let Err(observation_error) =
+        validate_nonroot_activation_status(root_status, &observed, expected_cascade, required_phase)
+    {
         return Err(call_error.with_diagnostic_context(format!(
             "child {operation} outcome for {pid} was not established by status: {observation_error}"
         )));
@@ -395,7 +414,7 @@ async fn reconcile_provisioned_nonroot_status_after_call_error(
     Ok(observed)
 }
 
-fn validate_provisioned_nonroot_status(
+fn validate_nonroot_activation_status(
     root_status: &FleetActivationStatusResponse,
     child_status: &FleetActivationStatusResponse,
     expected_cascade: &FleetCascadeActivationEvidence,
@@ -406,6 +425,10 @@ fn validate_provisioned_nonroot_status(
         || child_status.credential != root_status.credential
         || child_status.cascade_manifest.is_some()
         || child_status.credential_manifest.is_some()
+        || match child_status.phase {
+            FleetActivationPhase::Prepared => child_status.activated_at_ns.is_some(),
+            FleetActivationPhase::Active => child_status.activated_at_ns.is_none(),
+        }
         || required_phase.is_some_and(|phase| child_status.phase != phase)
     {
         return Err(InternalError::invariant(
@@ -552,7 +575,7 @@ mod tests {
     }
 
     #[test]
-    fn provisioned_nonroot_requires_exact_root_identity_cascade_and_generation() {
+    fn nonroot_activation_requires_exact_root_identity_cascade_generation_and_phase_evidence() {
         let root = root_status();
         let expected_cascade = FleetCascadeActivationEvidence::Applied {
             state_snapshot_hash: [10; 32],
@@ -564,10 +587,10 @@ mod tests {
             expected_cascade.clone(),
         );
 
-        validate_provisioned_nonroot_status(&root, &prepared, &expected_cascade, None)
+        validate_nonroot_activation_status(&root, &prepared, &expected_cascade, None)
             .expect("exact prepared child");
         assert!(
-            validate_provisioned_nonroot_status(
+            validate_nonroot_activation_status(
                 &root,
                 &prepared,
                 &expected_cascade,
@@ -579,8 +602,24 @@ mod tests {
         let mut wrong_identity = prepared;
         wrong_identity.identity.operation_id = [12; 32];
         assert!(
-            validate_provisioned_nonroot_status(&root, &wrong_identity, &expected_cascade, None,)
+            validate_nonroot_activation_status(&root, &wrong_identity, &expected_cascade, None,)
                 .is_err()
+        );
+
+        let mut active_without_timestamp = child_status(
+            &root,
+            FleetActivationPhase::Active,
+            expected_cascade.clone(),
+        );
+        active_without_timestamp.activated_at_ns = None;
+        assert!(
+            validate_nonroot_activation_status(
+                &root,
+                &active_without_timestamp,
+                &expected_cascade,
+                Some(FleetActivationPhase::Active),
+            )
+            .is_err()
         );
     }
 }

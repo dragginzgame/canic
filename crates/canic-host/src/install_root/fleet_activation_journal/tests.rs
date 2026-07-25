@@ -144,6 +144,48 @@ fn prepared_root_status(
     }
 }
 
+fn active_root_status(prepared: &FleetActivationStatusResponse) -> FleetActivationStatusResponse {
+    FleetActivationStatusResponse {
+        phase: FleetActivationPhase::Active,
+        identity: prepared.identity.clone(),
+        cascade: prepared.cascade.clone(),
+        cascade_manifest: prepared.cascade_manifest.clone(),
+        credential: prepared.credential,
+        credential_manifest: prepared.credential_manifest.clone(),
+        activated_at_ns: Some(44),
+    }
+}
+
+fn refresh_active_evidence(record: &mut FleetActivationHostRecord, root_canister: Principal) {
+    let manifest = record
+        .cascade_manifest
+        .clone()
+        .expect("active cascade manifest");
+    let cascade_manifest_hash =
+        FleetActivationApi::cascade_manifest_hash(&manifest).expect("hash active manifest");
+    let credential = record.credential.expect("active credential");
+    for canister in &mut record.canisters {
+        let cascade = if canister.principal == root_canister {
+            FleetCascadeActivationEvidence::Source {
+                cascade_manifest_hash,
+            }
+        } else {
+            let entry = manifest
+                .iter()
+                .find(|entry| entry.principal == canister.principal)
+                .expect("active child manifest entry");
+            FleetCascadeActivationEvidence::Applied {
+                state_snapshot_hash: entry.state_snapshot_hash,
+                topology_snapshot_hash: entry.topology_snapshot_hash,
+            }
+        };
+        canister.activation_evidence_hash = Some(
+            FleetActivationApi::activation_evidence_hash(&record.identity, &cascade, credential)
+                .expect("hash active Canister evidence"),
+        );
+    }
+}
+
 #[test]
 fn planned_journal_is_canonical_durable_and_bound_to_every_path_identity() {
     let root = temp_dir("fleet-install-activation-plan");
@@ -340,6 +382,168 @@ fn canisters_prepared_transition_is_canonical_monotonic_and_idempotent() {
         recover_activation_root_canister(&rediscovered, &root)
             .expect("recover Prepared root from activation evidence"),
         Some(receipt.root_canister)
+    );
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn canisters_activated_transition_is_canonical_monotonic_and_idempotent() {
+    let root = temp_dir("fleet-install-activation-canisters-activated");
+    let finalized = finalized_release(&root, b"manifest");
+    let planned =
+        plan_fleet_install_activation(request(&root, &finalized)).expect("plan activation");
+    let (receipt_path, _) =
+        write_root_install_receipt(&root, [24; 32], &planned.journal.activation.identity);
+    let receipt = admit_root_install_receipt(&receipt_path).expect("admit root-install receipt");
+    let installed = record_root_installed(&root, &planned, &receipt).expect("record RootInstalled");
+    let prepared_status = prepared_root_status(&installed.journal.activation.identity, 30);
+    let prepared_evidence = admit_canisters_prepared(
+        receipt.root_canister,
+        &installed.journal.activation.identity,
+        &prepared_status,
+    )
+    .expect("admit Prepared status set");
+    let prepared = record_canisters_prepared(&root, &installed, &prepared_evidence)
+        .expect("record CanistersPrepared");
+
+    assert_eq!(
+        canisters_prepared_resume_request(&prepared),
+        FleetActivationResumeRequest {
+            operation_id: prepared.journal.activation.identity.operation_id,
+            credential: prepared
+                .journal
+                .activation
+                .credential
+                .expect("Prepared credential"),
+        }
+    );
+    let active_status = active_root_status(&prepared_status);
+    let active_evidence =
+        admit_canisters_activated(receipt.root_canister, &prepared, &active_status)
+            .expect("admit exact Active status");
+    assert!(
+        active_evidence
+            .activation
+            .canisters
+            .iter()
+            .all(|entry| entry.activation_evidence_hash.is_some())
+    );
+
+    let activated = record_canisters_activated(&root, &prepared, &active_evidence)
+        .expect("record CanistersActivated");
+    assert!(activated.advanced);
+    assert_eq!(activated.journal.sequence, 3);
+    assert_eq!(
+        activated.journal.phase,
+        FleetInstallActivationPhase::CanistersActivated
+    );
+    assert_eq!(activated.journal.activation, active_evidence.activation);
+    assert_eq!(
+        activated.journal_hash,
+        fleet_install_activation_journal_hash(&activated.journal)
+    );
+    assert_eq!(
+        load_fleet_install_activation_journal(
+            &root,
+            activated.journal.activation.identity.fleet.fleet.network,
+            activated.journal.activation.identity.fleet.fleet.fleet_id,
+            activated.journal.activation.identity.operation_id,
+        )
+        .expect("load CanistersActivated"),
+        activated.journal
+    );
+
+    let repeated = record_canisters_activated(&root, &prepared, &active_evidence)
+        .expect("repeat CanistersActivated");
+    assert!(!repeated.advanced);
+    assert_eq!(repeated.journal, activated.journal);
+    let rediscovered =
+        plan_fleet_install_activation(request(&root, &finalized)).expect("rediscover activation");
+    let resumed =
+        resume_canisters_activated(&rediscovered).expect("resume CanistersActivated authority");
+    assert!(!resumed.advanced);
+    assert_eq!(resumed.journal, activated.journal);
+    assert_eq!(
+        recover_activation_root_canister(&rediscovered, &root)
+            .expect("recover Active root from activation evidence"),
+        Some(receipt.root_canister)
+    );
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn canisters_activated_rejects_partial_or_conflicting_evidence_without_mutation() {
+    let root = temp_dir("fleet-install-activation-active-conflict");
+    let finalized = finalized_release(&root, b"manifest");
+    let planned =
+        plan_fleet_install_activation(request(&root, &finalized)).expect("plan activation");
+    let (receipt_path, _) =
+        write_root_install_receipt(&root, [25; 32], &planned.journal.activation.identity);
+    let receipt = admit_root_install_receipt(&receipt_path).expect("admit root-install receipt");
+    let installed = record_root_installed(&root, &planned, &receipt).expect("record RootInstalled");
+    let prepared_status = prepared_root_status(&installed.journal.activation.identity, 30);
+    let prepared_evidence = admit_canisters_prepared(
+        receipt.root_canister,
+        &installed.journal.activation.identity,
+        &prepared_status,
+    )
+    .expect("admit Prepared status set");
+    let prepared = record_canisters_prepared(&root, &installed, &prepared_evidence)
+        .expect("record CanistersPrepared");
+    let prepared_bytes = fs::read(&prepared.path).expect("read Prepared journal");
+
+    let mut incomplete_status = active_root_status(&prepared_status);
+    incomplete_status.activated_at_ns = None;
+    std::assert_matches!(
+        admit_canisters_activated(receipt.root_canister, &prepared, &incomplete_status),
+        Err(FleetInstallActivationJournalError::InvalidActivatedActivationEvidence { .. })
+    );
+    assert_eq!(
+        fs::read(&prepared.path).expect("read unchanged Prepared journal"),
+        prepared_bytes
+    );
+
+    let active_status = active_root_status(&prepared_status);
+    let mut active_evidence =
+        admit_canisters_activated(receipt.root_canister, &prepared, &active_status)
+            .expect("admit exact Active status");
+    let child = active_evidence
+        .activation
+        .canisters
+        .iter_mut()
+        .find(|entry| entry.principal != receipt.root_canister)
+        .expect("child evidence");
+    child.activation_evidence_hash = Some([0xff; 32]);
+    std::assert_matches!(
+        record_canisters_activated(&root, &prepared, &active_evidence),
+        Err(FleetInstallActivationJournalError::InvalidActivatedActivationEvidence { .. })
+    );
+    assert_eq!(
+        fs::read(&prepared.path).expect("read unchanged Prepared journal"),
+        prepared_bytes
+    );
+
+    let mut conflicting_evidence =
+        admit_canisters_activated(receipt.root_canister, &prepared, &active_status)
+            .expect("admit exact Active status");
+    conflicting_evidence
+        .activation
+        .cascade_manifest
+        .as_mut()
+        .expect("active cascade manifest")[0]
+        .state_snapshot_hash = [0xfe; 32];
+    refresh_active_evidence(&mut conflicting_evidence.activation, receipt.root_canister);
+    validate_activated_activation_record(&conflicting_evidence.activation)
+        .expect("conflicting Active evidence is internally canonical");
+    std::assert_matches!(
+        record_canisters_activated(&root, &prepared, &conflicting_evidence),
+        Err(FleetInstallActivationJournalError::ActivatedActivationEvidenceMismatch)
+    );
+    assert_eq!(
+        fs::read(&prepared.path).expect("read unchanged Prepared journal"),
+        prepared_bytes
     );
 
     fs::remove_dir_all(root).expect("remove temp root");

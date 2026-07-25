@@ -113,30 +113,61 @@ fn test_build_context() -> WorkspaceBuildContext {
 #[test]
 fn current_install_activation_records_verified_evidence_before_each_journal_transition() {
     let activation = include_str!("../../activation/mod.rs");
+    let prepare = source_section(
+        activation,
+        "fn install_root_prepared(",
+        "struct PreparedRootInstall",
+    );
 
     assert_before(
-        activation,
+        prepare,
         "run_operation_with_receipt(&install_operation, Some(root_canister_id))",
         "admit_root_install_receipt(&completed_root_install.receipt_path)",
     );
     assert_before(
-        activation,
+        prepare,
         "admit_root_install_receipt(&completed_root_install.receipt_path)",
         "record_root_installed(receipt_scope.icp_root, activation, &receipt)",
     );
     assert_before(
-        activation,
+        prepare,
         "record_root_installed(receipt_scope.icp_root, activation, &receipt)",
-        "protocol::CANIC_PREPARE_FLEET_ACTIVATION",
+        "call_prepare(&icp, root_canister_id)",
     );
     assert_before(
-        activation,
-        "protocol::CANIC_PREPARE_FLEET_ACTIVATION",
+        prepare,
+        "call_prepare(&icp, root_canister_id)",
         "admit_canisters_prepared(",
     );
     assert_before(
-        activation,
+        prepare,
         "admit_canisters_prepared(",
         "record_canisters_prepared(receipt_scope.icp_root, &root_installed, &evidence)",
+    );
+    let activate = source_section(
+        activation,
+        "pub(super) fn install_root_activated(",
+        "fn install_root_prepared(",
+    );
+    assert_before(
+        activate,
+        "install_root_prepared(",
+        "resume_and_admit_activation(",
+    );
+    assert_before(
+        activate,
+        "resume_and_admit_activation(",
+        "record_canisters_activated(receipt_scope.icp_root, &prepared.activation, &evidence)",
+    );
+
+    let resume = source_section(
+        activation,
+        "fn resume_and_admit_activation(",
+        "fn call_prepare(",
+    );
+    assert_before(
+        resume,
+        "call_resume(&icp, root_canister_id, &request)",
+        "admit_canisters_activated(root_canister, prepared, &status)",
     );
 }
