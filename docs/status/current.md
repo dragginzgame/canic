@@ -14,19 +14,17 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.30`.
-- The latest published release is `v0.99.30` at
-  `2ee462707317119048a36d6785c50e1ebff11490`.
-- The `v0.99.30` source tree is
-  `9267199eb5e2b085c1fe1adc44b68a772a4c5d36`. Its Cargo.lock SHA-256 is
-  `b60db87d786301bb3df676fab035541a1a1b16eaeb3ee7bcd9cae28040705acd`.
-- The open `0.99.31` draft completes the recursive CLI command-surface
-  closeout. `canic install <app> <fleet>` is the sole installation mutation;
-  `deploy` retains only passive plan/check/inspect evidence. Orphan
-  authority-dry-run, external-lifecycle and artifact-promotion command/public
-  host stacks are hard-cut without aliases. The deployment comparison's
-  control-class evidence now uses its exact name rather than the misleading
-  `external_lifecycle` label.
+- The workspace package version is `0.99.31`.
+- The latest published release is `v0.99.31` at
+  `95975b4d6c39e8b45f465fab682a679134b26193`.
+- The `v0.99.31` source tree is
+  `f4404b4d41a7a327333d6233a001718a04350ffa`. Its Cargo.lock SHA-256 is
+  `3842bedf261b73026c03f5c39e826977ed1077dc30fe3d835997a057876f0d88`.
+- The open `0.99.32` draft makes the release boundary explicit across the
+  active 0.99, 0.100 and 0.101 designs: every step is a fresh reinstall.
+  Cross-release extraction, authority handoff, fencing, mixed-version
+  recovery and existing-service adoption are deleted from the proposed
+  architecture rather than retained as rejected alternatives.
 - The proposed 0.100/0.101 follow-on designs now model heterogeneous,
   independently scaled Tree Groups backed by App Tree Specs: one user-focused
   Tree and many project-focused Trees may use different topology templates.
@@ -38,7 +36,17 @@ Historical detail is archived at:
   remain under ordinary singleton service Trees whose Tree Roots retain local
   lifecycle authority; the Coordinator protects the target declaration and
   publishes their Fleet-wide `(role, TreeId, canister_id)` bindings. This is a
-  design amendment, not additional 0.99 runtime scope.
+  design amendment, not additional 0.99 runtime scope. A fresh 0.100 install
+  creates the first Coordinator and empty Registry directly; a fresh 0.101
+  install provisions every declared service and publishes the complete set.
+  Neither design consumes an installation from its predecessor. The proposed
+  0.102 diagnostic and 0.103 transport lines use the same reinstall-only
+  release boundary.
+- Released `0.99.31` completes the recursive CLI command-surface closeout.
+  `canic install <app> <fleet>` is the sole installation mutation; `deploy`
+  retains only passive plan/check/inspect evidence. Orphan authority-dry-run,
+  external-lifecycle and artifact-promotion command/public host stacks are
+  hard-cut without aliases.
 - Released `0.99.29` hard-cuts live runtime inspection and Medic targeting to
   `inspect fleet` and `medic fleet`, including their JSON projections and
   active guidance, and removes invalid same-name conflation warnings.
