@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.30` hardens the proposed Fleet service design with one protected,
+  bounded `role -> TreeGroupId` declaration that 0.101 resolves without
+  trusting later source-configuration drift.
+
 - `0.99.29` hard-cuts runtime inspection and Medic targeting from
   `deployment` to `fleet`, including their JSON diagnostics and maintained
   guidance, and removes invalid same-name conflation warnings. Its design
