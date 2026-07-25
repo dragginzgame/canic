@@ -133,7 +133,7 @@ fn mix_audience(request_id: &mut [u8; 32], offset: usize, aud: &DelegationAudien
         DelegationAudience::Fleet(fleet) => {
             request_id[offset % request_id.len()] ^= 1;
             for (index, byte) in fleet
-                .network
+                .canonical_network_id
                 .as_bytes()
                 .iter()
                 .chain(fleet.fleet_id.as_bytes())
