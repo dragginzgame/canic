@@ -3,14 +3,10 @@ use super::*;
 mod authority;
 mod comparison;
 mod execution_preflight;
-mod lifecycle;
-mod promotion;
 
 pub use authority::*;
 pub use comparison::*;
 pub use execution_preflight::*;
-pub use lifecycle::*;
-pub use promotion::*;
 
 fn append_hard_failure_items(lines: &mut Vec<String>, label: &str, failures: &[SafetyFindingV1]) {
     if failures.is_empty() {
@@ -50,17 +46,5 @@ fn append_string_items(lines: &mut Vec<String>, label: &str, values: &[String]) 
     lines.push(format!("{label}:"));
     for value in values {
         lines.push(format!("  - {value}"));
-    }
-}
-
-fn optional_text(value: Option<&str>) -> &str {
-    value.unwrap_or("none")
-}
-
-const fn optional_bool_label(value: Option<bool>) -> &'static str {
-    match value {
-        Some(true) => "true",
-        Some(false) => "false",
-        None => "unknown",
     }
 }

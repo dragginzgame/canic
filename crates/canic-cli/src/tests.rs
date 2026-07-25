@@ -69,9 +69,9 @@ fn usage_lists_command_families() {
     assert!(plain.contains("    build"));
     assert!(plain.contains("    deploy"));
     assert!(plain.contains("Manage Canic source apps and roles"));
-    assert!(plain.contains("Check, inspect, plan, and install deployments"));
+    assert!(plain.contains("Plan and check deployment truth before mutation"));
     assert!(plain.contains("Plan, inspect, and verify backups"));
-    assert!(!plain.contains("Check deployment truth before mutation"));
+    assert!(!plain.contains("Check, inspect, plan, and install deployments"));
     assert!(!plain.contains("    environment"));
     assert!(!plain.contains("    defaults"));
     assert!(plain.contains("    status"));
@@ -649,7 +649,6 @@ fn global_environment_is_forwarded_to_deploy() {
     for raw_tail in [
         &["check", "demo"][..],
         &["inspect", "diff", "demo"],
-        &["install", "demo"],
         &["inspect", "inventory", "demo"],
         &["inspect", "plan", "demo"],
         &["inspect", "report", "demo"],
@@ -681,17 +680,7 @@ fn assert_global_environment_forwarded_to_deploy_tail(raw_tail: &[&str]) {
 #[test]
 fn global_environment_is_forwarded_to_nested_deploy_environment_leaves() {
     for raw_tail in [
-        &["authority", "check", "demo"][..],
-        &["authority", "evidence", "demo"],
-        &["authority", "receipt", "demo"],
-        &["authority", "report", "demo"],
-        &["external", "check", "demo"],
-        &["external", "critical-fix", "demo"],
-        &["external", "handoff", "demo"],
-        &["external", "pending", "demo"],
-        &["external", "plan", "demo"],
-        &["external", "proposals", "demo"],
-        &["inspect", "catalog", "list"],
+        &["inspect", "catalog", "list"][..],
         &["inspect", "catalog", "inspect", "demo"],
     ] {
         let mut tail = raw_tail.iter().map(OsString::from).collect::<Vec<_>>();
@@ -706,26 +695,15 @@ fn global_environment_is_forwarded_to_nested_deploy_environment_leaves() {
 
 #[test]
 fn global_environment_is_not_forwarded_to_request_only_deploy_leaves() {
-    for raw_tail in [
-        &[
-            "inspect", "compare", "--left", "a.json", "--right", "b.json",
-        ][..],
-        &["external", "verify", "--request", "request.json"],
-        &[
-            "external",
-            "inspect",
-            "consent",
-            "--request",
-            "request.json",
-        ],
-        &["promote", "plan", "--request", "request.json"],
-    ] {
-        let mut tail = raw_tail.iter().map(OsString::from).collect::<Vec<_>>();
-        let original = tail.clone();
-        apply_global_environment("deploy", &mut tail, Some("ic".to_string()));
+    let mut tail = [
+        "inspect", "compare", "--left", "a.json", "--right", "b.json",
+    ]
+    .map(OsString::from)
+    .to_vec();
+    let original = tail.clone();
+    apply_global_environment("deploy", &mut tail, Some("ic".to_string()));
 
-        assert_eq!(tail, original);
-    }
+    assert_eq!(tail, original);
 }
 
 #[test]

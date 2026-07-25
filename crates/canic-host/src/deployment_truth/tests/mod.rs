@@ -17,11 +17,8 @@ use std::fs;
 mod support;
 use support::*;
 
-mod authority;
 mod comparison;
 mod core;
 mod diff;
 mod execution_receipts;
-mod lifecycle;
 mod local_observation_plan;
-mod promotion;

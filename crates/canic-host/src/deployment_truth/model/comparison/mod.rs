@@ -20,7 +20,7 @@ pub struct DeploymentComparisonReportV1 {
     pub authority_diff: Vec<DeploymentComparisonDiffV1>,
     pub pool_diff: Vec<DeploymentComparisonDiffV1>,
     pub verifier_readiness_diff: Vec<DeploymentComparisonDiffV1>,
-    pub external_lifecycle_diff: Vec<DeploymentComparisonDiffV1>,
+    pub control_class_diff: Vec<DeploymentComparisonDiffV1>,
     pub hard_failures: Vec<SafetyFindingV1>,
     pub warnings: Vec<SafetyFindingV1>,
     pub next_actions: Vec<String>,
@@ -67,5 +67,5 @@ pub enum DeploymentComparisonCategoryV1 {
     Authority,
     Pool,
     VerifierReadiness,
-    ExternalLifecycle,
+    ControlClass,
 }

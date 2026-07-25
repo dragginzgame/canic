@@ -15,8 +15,8 @@ impl DeploymentComparisonTextLabel {
     const EMBEDDED_CONFIG: Self = Self("embedded_config");
     const EMBEDDED_CONFIG_DIFF: Self = Self("embedded_config_diff");
     const EXECUTION_NONE: Self = Self("execution: none");
-    const EXTERNAL_LIFECYCLE: Self = Self("external_lifecycle");
-    const EXTERNAL_LIFECYCLE_DIFF: Self = Self("external_lifecycle_diff");
+    const CONTROL_CLASS: Self = Self("control_class");
+    const CONTROL_CLASS_DIFF: Self = Self("control_class_diff");
     const HARD_FAILURES: Self = Self("hard_failures");
     const IDENTITY: Self = Self("identity");
     const IDENTITY_DIFF: Self = Self("identity_diff");
@@ -149,8 +149,8 @@ fn comparison_count_lines(report: &DeploymentComparisonReportV1) -> Vec<String> 
         ),
         format!(
             "  {}: {}",
-            DeploymentComparisonTextLabel::EXTERNAL_LIFECYCLE.as_str(),
-            report.external_lifecycle_diff.len()
+            DeploymentComparisonTextLabel::CONTROL_CLASS.as_str(),
+            report.control_class_diff.len()
         ),
         format!(
             "  {}: {}",
@@ -203,8 +203,8 @@ fn append_comparison_sections(lines: &mut Vec<String>, report: &DeploymentCompar
     );
     append_comparison_diff_items(
         lines,
-        DeploymentComparisonTextLabel::EXTERNAL_LIFECYCLE_DIFF,
-        &report.external_lifecycle_diff,
+        DeploymentComparisonTextLabel::CONTROL_CLASS_DIFF,
+        &report.control_class_diff,
     );
     append_hard_failure_items(
         lines,

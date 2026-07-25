@@ -1,15 +1,9 @@
 use canic_host::deployment_truth::{
-    ArtifactDigestSourceV1, ArtifactPromotionPlanRequest, ArtifactPromotionPlanV1,
-    ArtifactSourceV1, AuthorityProfileV1, CanisterControlClassV1, DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-    DeploymentCheckV1, DeploymentDiffV1, DeploymentIdentityV1, DeploymentInventoryV1,
-    DeploymentPlanV1, ExpectedCanisterV1, LocalDeploymentConfigV1, ObservationStatusV1,
-    ObservedCanisterV1, PreviousArtifactReceiptKindV1, PromotionArtifactIdentityReportRequest,
-    PromotionArtifactLevelV1, PromotionPlanTransformRequest, ResumeSafetyV1,
-    RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1, RolePromotionInputV1,
-    SafetyReportV1, SafetyStatusV1, TrustDomainV1, VerifierReadinessExpectationV1,
-    VerifierReadinessObservationV1, artifact_promotion_plan,
-    promoted_deployment_plan_transform_from_inputs, promotion_artifact_identity_report_from_inputs,
-    promotion_readiness_from_inputs,
+    ArtifactDigestSourceV1, ArtifactSourceV1, AuthorityProfileV1, CanisterControlClassV1,
+    DEPLOYMENT_TRUTH_SCHEMA_VERSION, DeploymentCheckV1, DeploymentDiffV1, DeploymentIdentityV1,
+    DeploymentInventoryV1, DeploymentPlanV1, ExpectedCanisterV1, LocalDeploymentConfigV1,
+    ObservationStatusV1, ObservedCanisterV1, ResumeSafetyV1, RoleArtifactV1, SafetyReportV1,
+    SafetyStatusV1, TrustDomainV1, VerifierReadinessExpectationV1, VerifierReadinessObservationV1,
 };
 use std::{
     path::PathBuf,
@@ -79,92 +73,6 @@ pub(super) fn sample_deployment_plan(identity: DeploymentIdentityV1) -> Deployme
             expected_role_epochs: Vec::new(),
         },
         unresolved_assumptions: Vec::new(),
-    }
-}
-
-pub(super) fn sample_artifact_promotion_plan() -> ArtifactPromotionPlanV1 {
-    sample_artifact_promotion_plan_for_input(sample_role_promotion_input(
-        PromotionArtifactLevelV1::SealedWasm,
-    ))
-}
-
-pub(super) fn sample_blocked_artifact_promotion_plan() -> ArtifactPromotionPlanV1 {
-    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
-    input.source.expected_canonical_embedded_config_sha256 = Some(sample_sha256("e"));
-    sample_artifact_promotion_plan_for_inputs(
-        input,
-        sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm),
-    )
-}
-
-pub(super) fn sample_artifact_promotion_plan_for_input(
-    input: RolePromotionInputV1,
-) -> ArtifactPromotionPlanV1 {
-    sample_artifact_promotion_plan_for_inputs(input.clone(), input)
-}
-
-pub(super) fn sample_artifact_promotion_plan_for_inputs(
-    report_input: RolePromotionInputV1,
-    transform_input: RolePromotionInputV1,
-) -> ArtifactPromotionPlanV1 {
-    let target_plan = sample_deployment_plan(sample_deployment_identity());
-    let readiness = promotion_readiness_from_inputs(
-        "promotion-readiness-1",
-        &target_plan,
-        std::slice::from_ref(&report_input),
-    );
-    let artifact_identity_report =
-        promotion_artifact_identity_report_from_inputs(PromotionArtifactIdentityReportRequest {
-            report_id: "promotion-artifact-identity-1".to_string(),
-            inputs: vec![report_input],
-        })
-        .expect("sample artifact identity report");
-    let transform =
-        promoted_deployment_plan_transform_from_inputs(&PromotionPlanTransformRequest {
-            promoted_plan_id: "promoted-plan-1".to_string(),
-            target_plan,
-            inputs: vec![transform_input],
-        })
-        .expect("sample transform");
-
-    artifact_promotion_plan(ArtifactPromotionPlanRequest {
-        plan_id: "artifact-promotion-plan-1".to_string(),
-        generated_at: "2026-05-26T00:00:00Z".to_string(),
-        readiness,
-        artifact_identity_report,
-        transform,
-        target_execution_lineage: None,
-    })
-    .expect("sample artifact promotion plan")
-}
-
-pub(super) fn sample_role_promotion_input(
-    promotion_level: PromotionArtifactLevelV1,
-) -> RolePromotionInputV1 {
-    RolePromotionInputV1 {
-        role: "root".to_string(),
-        promotion_level,
-        source: sample_role_artifact_source(RoleArtifactSourceKindV1::LocalWasmGz),
-        require_byte_identical_wasm: promotion_level == PromotionArtifactLevelV1::SealedWasm,
-        require_target_embedded_config: true,
-        target_store_has_artifact: Some(true),
-    }
-}
-
-pub(super) fn sample_role_artifact_source(kind: RoleArtifactSourceKindV1) -> RoleArtifactSourceV1 {
-    RoleArtifactSourceV1 {
-        role: "root".to_string(),
-        kind,
-        locator: Some("artifacts/root.wasm.gz".to_string()),
-        previous_receipt_kind: (kind == RoleArtifactSourceKindV1::PreviousReceiptArtifact)
-            .then_some(PreviousArtifactReceiptKindV1::DeploymentReceipt),
-        previous_receipt_lineage_digest: (kind
-            == RoleArtifactSourceKindV1::PreviousReceiptArtifact)
-            .then(|| sample_sha256("9")),
-        expected_wasm_sha256: Some(sample_sha256("d")),
-        expected_wasm_gz_sha256: Some(sample_sha256("a")),
-        expected_candid_sha256: Some(sample_sha256("b")),
-        expected_canonical_embedded_config_sha256: Some(sample_sha256("c")),
     }
 }
 

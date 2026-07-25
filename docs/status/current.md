@@ -14,20 +14,19 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.29`.
-- The latest published release is `v0.99.29` at
-  `0bb56137d43aa89da866f4c9e7e4d0f1beb904c6`.
-- The `v0.99.29` source tree is
-  `08c7f61126f9694050e8e7df6ed6681d6efc2884`. Its Cargo.lock SHA-256 is
-  `b9b0012d29cc840680121764ed90e9af6938a8f83fd16f9319ce80fbb091dcbd`.
-- The open `0.99.30` draft makes `canic_host::installed_fleet` the sole live
-  installed-Fleet resolver and propagates `fleet` through the remaining
-  information, auth, blob-storage, cycles, token and backup selector surfaces.
-  The old host module and names have no alias, and pre-cut pending
-  ICP-conversion files have no compatibility reader. The same draft hardens
-  the proposed 0.100/0.101 service declaration and makes 0.103 service routing
-  follow the published `TreeId` and active Tree placement rather than the
-  Coordinator Subnet.
+- The workspace package version is `0.99.30`.
+- The latest published release is `v0.99.30` at
+  `2ee462707317119048a36d6785c50e1ebff11490`.
+- The `v0.99.30` source tree is
+  `9267199eb5e2b085c1fe1adc44b68a772a4c5d36`. Its Cargo.lock SHA-256 is
+  `b60db87d786301bb3df676fab035541a1a1b16eaeb3ee7bcd9cae28040705acd`.
+- The open `0.99.31` draft completes the recursive CLI command-surface
+  closeout. `canic install <app> <fleet>` is the sole installation mutation;
+  `deploy` retains only passive plan/check/inspect evidence. Orphan
+  authority-dry-run, external-lifecycle and artifact-promotion command/public
+  host stacks are hard-cut without aliases. The deployment comparison's
+  control-class evidence now uses its exact name rather than the misleading
+  `external_lifecycle` label.
 - The proposed 0.100/0.101 follow-on designs now model heterogeneous,
   independently scaled Tree Groups backed by App Tree Specs: one user-focused
   Tree and many project-focused Trees may use different topology templates.

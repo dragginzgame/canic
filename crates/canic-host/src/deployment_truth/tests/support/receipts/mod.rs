@@ -44,22 +44,6 @@ pub(in crate::deployment_truth::tests) fn sample_receipt_with_phase(
     }
 }
 
-pub(in crate::deployment_truth::tests) fn sample_wasm_store_staging_receipt() -> StagingReceiptV1 {
-    StagingReceiptV1 {
-        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        role: "root".to_string(),
-        artifact_identity: "embedded:root:0.44.0:abc123".to_string(),
-        transport: ArtifactTransportV1::WasmStore,
-        wasm_store_locator: Some("root:aaaaa-aa:bootstrap".to_string()),
-        prepared_chunk_hashes: vec!["chunk-a".to_string(), "chunk-b".to_string()],
-        published_chunk_count: 2,
-        verified_postcondition: VerifiedPostconditionV1 {
-            status: ObservationStatusV1::Observed,
-            evidence: vec!["payload_sha256:abc123".to_string()],
-        },
-    }
-}
-
 pub(in crate::deployment_truth::tests) fn sample_role_phase_receipt(
     result: RolePhaseResultV1,
 ) -> RolePhaseReceiptV1 {
