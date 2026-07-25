@@ -45,6 +45,13 @@ with this file, the code is wrong.
 - Before 1.0, removed surfaces are hard-cut. Do not add aliases, shims,
   compatibility wrappers, legacy fallback paths, or backwards-compatibility
   layers unless the maintainer explicitly asks.
+- Every pre-1.0 release transition is reinstall-only. Active designs must not
+  specify cross-release upgrades, state migration or import, authority
+  handoff, existing-installation adoption, mixed-version operation, rollback,
+  or compatibility recovery unless the maintainer explicitly asks for an
+  exception.
+- Same-release interruption recovery, retry, idempotency, backup, and restore
+  remain required. They are operational safety, not compatibility behavior.
 - Do not add anti-resurrection tests for removed legacy behavior or command
   forms. Current behavior tests should cover the maintained surface only.
 - When deleting stale code, remove the old path completely and update active
