@@ -14,7 +14,8 @@ Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
 - `0.99.33` moves the maintained operator baseline to checksum-pinned ICP CLI
   1.2.0 and aligns repository builds, CI and developer bootstrap on Rust
-  1.97.1 without changing Canic's command or data contracts.
+  1.97.1, while freezing explicit restricted-Subnet creation funding for the
+  proposed 0.100 design.
 
 - `0.99.32` hard-cuts every follow-on release step to fresh reinstall,
   deleting proposed cross-release handoff and service-adoption machinery from
