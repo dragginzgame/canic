@@ -6,8 +6,8 @@ Date: 2026-07-26
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.3`.
-- Open patch draft: `0.100.4`; no package-version change has been authorized.
+- Workspace package version: `0.100.4`.
+- Open patch draft: `0.100.5`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -83,7 +83,7 @@ Registry slices replace the 0.99 root model.
 - [x] Freeze the exact qualified application artifact-union model, compiler
   and canonical digest under one release-build and Fleet-wide topology
   identity.
-- [ ] Populate and persist that application artifact union once from the
+- [x] Populate and persist that application artifact union once from the
   qualified complete-build outputs.
 - [x] Freeze exact Spec-scoped Fleet Subnet Root Release-Set Manifest
   projection and canonical digests.
@@ -173,7 +173,7 @@ conflicting evidence, unsafe artifact paths and first publication after
 finalization fail closed. A normal complete install build now requires its
 durable release-build identity before Cargo execution.
 
-The open 0.100.4 batch freezes the separate application artifact-union
+Released 0.100.4 freezes the separate application artifact-union
 compiler. It requires the exact topology role set in both pre-build targets
 and qualified build outputs, binds canonical evidence to one
 `ReleaseBuildId` and the Fleet-wide Component Topology digest, and rejects
@@ -183,11 +183,18 @@ authorization edge. Repeated or byte-identical artifacts count only once
 against the root's Wasm Store byte limit without deduplicating those
 authorization entries.
 
+The open 0.100.5 batch derives the exact application targets from the
+validated complete-build snapshot, qualifies the current raw/gzip outputs
+against them and immutably persists the canonical union under its durable
+`ReleaseBuildId` before finalization. Loading revalidates canonical bytes,
+release-build path identity and the Fleet-wide topology. Exact retry remains
+idempotent before or after finalization, while conflicts, unsafe artifact
+paths and first publication after finalization fail closed.
+
 The current installer does not yet produce all three concrete infrastructure
-outputs or invoke the infrastructure persistence boundary. It also does not
-yet derive application targets from its validated build snapshot, persist the
-compiled application union, materialize projected manifests from journalled
-root bindings, or install planned Coordinator/root bindings. The repository
+outputs or invoke the infrastructure persistence boundary. It does not yet
+materialize projected manifests from journalled root bindings or install
+planned Coordinator/root bindings. The repository
 does not yet contain a genuine Fleet Coordinator runtime/export authority, so
 a correctly qualified Coordinator artifact cannot be produced by relabelling
 the Fleet Subnet Root runtime. Protected environment binding, Fleet Subnet
@@ -198,11 +205,10 @@ binding.
 
 ## Next Action
 
-Derive application artifact targets directly from the validated complete-build
-snapshot, qualify its current outputs and durably publish the canonical
-application union once before release-build finalization. After root bindings
-are journalled, materialize and persist each exact projected root manifest
-without rebuilding shared artifacts.
+Freeze resolved Coordinator/root placement, root admissions, configured
+limits and creation funding in the installation journal. Then project and
+immutably persist each exact root release-set manifest from the already
+durable application union without rebuilding shared artifacts.
 
 Add the genuine Fleet Coordinator runtime and export authority before
 producing the Fleet Coordinator, Fleet Subnet Root and Wasm Store as three

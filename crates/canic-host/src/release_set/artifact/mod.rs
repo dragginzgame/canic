@@ -4,15 +4,31 @@
 //! Does not own: manifest persistence or build orchestration.
 //! Boundary: keeps every artifact read within the canonical ICP project root.
 
-use crate::release_set::{GZIP_MAGIC, ReleaseSetEntry, WASM_MAGIC};
+use crate::{
+    durable_io::{RegularFileReadError, read_optional_regular_bytes},
+    release_set::{GZIP_MAGIC, ReleaseSetEntry, WASM_MAGIC},
+};
 use std::{
     fs,
-    io::Read,
+    io::{self, Read},
     path::{Component, Path, PathBuf},
 };
 
 use canic_core::{CANIC_WASM_CHUNK_BYTES, cdk::utils::hash::wasm_hash_hex};
 use flate2::read::GzDecoder;
+
+pub(in crate::release_set) struct MaterializedReleaseArtifact {
+    pub relative_path: String,
+    pub bytes: Vec<u8>,
+}
+
+pub(in crate::release_set) enum ReleaseArtifactMaterializationError {
+    InvalidPath,
+    NonUtf8Path,
+    OutsideRoot,
+    Read(io::Error),
+    UnsafeFile,
+}
 
 // Build one release-set entry from one built ordinary role artifact.
 pub(in crate::release_set) fn build_release_set_entry(
@@ -52,7 +68,7 @@ pub(in crate::release_set) fn build_release_set_entry(
 
 /// Validate the lexical path contract shared by manifest admission and
 /// filesystem resolution.
-pub(in crate::release_set) fn validate_release_artifact_relative_path(
+pub fn validate_release_artifact_relative_path(
     artifact_relative_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let relative_path = Path::new(artifact_relative_path);
@@ -68,6 +84,60 @@ pub(in crate::release_set) fn validate_release_artifact_relative_path(
     }
 
     Ok(())
+}
+
+/// Read one exact regular no-follow artifact beneath the canonical project root.
+pub(in crate::release_set) fn materialize_qualified_release_artifact(
+    root: &Path,
+    path: &Path,
+) -> Result<MaterializedReleaseArtifact, ReleaseArtifactMaterializationError> {
+    let relative = path
+        .strip_prefix(root)
+        .map_err(|_| ReleaseArtifactMaterializationError::OutsideRoot)?;
+    let relative = relative
+        .to_str()
+        .ok_or(ReleaseArtifactMaterializationError::NonUtf8Path)?;
+    validate_release_artifact_relative_path(relative)
+        .map_err(|_| ReleaseArtifactMaterializationError::InvalidPath)?;
+
+    let canonical_root =
+        fs::canonicalize(root).map_err(ReleaseArtifactMaterializationError::Read)?;
+    let parent = path
+        .parent()
+        .ok_or(ReleaseArtifactMaterializationError::InvalidPath)?;
+    let canonical_parent =
+        fs::canonicalize(parent).map_err(ReleaseArtifactMaterializationError::Read)?;
+    if !canonical_parent.starts_with(canonical_root) {
+        return Err(ReleaseArtifactMaterializationError::OutsideRoot);
+    }
+
+    let bytes = match read_optional_regular_bytes(path) {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => {
+            return Err(ReleaseArtifactMaterializationError::Read(io::Error::new(
+                io::ErrorKind::NotFound,
+                "artifact is missing",
+            )));
+        }
+        Err(RegularFileReadError::NotRegular) => {
+            return Err(ReleaseArtifactMaterializationError::UnsafeFile);
+        }
+        Err(RegularFileReadError::Io(source)) => {
+            return Err(ReleaseArtifactMaterializationError::Read(source));
+        }
+        #[cfg(not(unix))]
+        Err(RegularFileReadError::UnsupportedPlatform) => {
+            return Err(ReleaseArtifactMaterializationError::Read(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "regular no-follow artifact reads are unsupported",
+            )));
+        }
+    };
+
+    Ok(MaterializedReleaseArtifact {
+        relative_path: relative.to_string(),
+        bytes,
+    })
 }
 
 /// Resolve one manifest artifact path and prove that its canonical target is

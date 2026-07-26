@@ -12,10 +12,12 @@ use crate::{
         RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
     },
     release_build::{ReleaseBuildPlanError, ReleaseBuildPlanState, load_release_build_plan},
-    release_set::validate_release_artifact_relative_path,
+    release_set::artifact::{
+        ReleaseArtifactMaterializationError, materialize_qualified_release_artifact,
+    },
 };
 use std::{
-    fs, io,
+    io,
     path::{Path, PathBuf},
 };
 
@@ -254,128 +256,67 @@ fn materialize_build_output(
         );
     }
 
-    let wasm_relative_path = artifact_relative_path(root, role, "raw Wasm", &output.wasm_path)?;
-    let wasm_gz_relative_path =
-        artifact_relative_path(root, role, "gzip Wasm", &output.wasm_gz_path)?;
-    let wasm = read_artifact(role, "raw Wasm", &output.wasm_path)?;
-    let wasm_gz = read_artifact(role, "gzip Wasm", &output.wasm_gz_path)?;
+    let wasm = materialize_artifact(root, role, "raw Wasm", &output.wasm_path)?;
+    let wasm_gz = materialize_artifact(root, role, "gzip Wasm", &output.wasm_gz_path)?;
 
     Ok(MaterializedBuildOutput {
         role,
         package: output.package.clone(),
         release_build_id: output.release_build_id,
-        wasm_relative_path,
-        wasm,
-        wasm_gz_relative_path,
-        wasm_gz,
+        wasm_relative_path: wasm.relative_path,
+        wasm: wasm.bytes,
+        wasm_gz_relative_path: wasm_gz.relative_path,
+        wasm_gz: wasm_gz.bytes,
     })
 }
 
-fn artifact_relative_path(
+fn materialize_artifact(
     root: &Path,
     role: CanicInfrastructureRole,
     kind: &'static str,
     path: &Path,
-) -> Result<String, CanicInfrastructureArtifactPersistenceError> {
-    let relative = path.strip_prefix(root).map_err(|_| {
-        CanicInfrastructureArtifactPersistenceError::ArtifactOutsideRoot {
-            role,
-            kind,
-            path: path.to_path_buf(),
+) -> Result<
+    crate::release_set::artifact::MaterializedReleaseArtifact,
+    CanicInfrastructureArtifactPersistenceError,
+> {
+    materialize_qualified_release_artifact(root, path).map_err(|error| match error {
+        ReleaseArtifactMaterializationError::InvalidPath => {
+            CanicInfrastructureArtifactPersistenceError::InvalidArtifactPath {
+                role,
+                kind,
+                path: path.to_path_buf(),
+            }
         }
-    })?;
-    let relative = relative.to_str().ok_or_else(|| {
-        CanicInfrastructureArtifactPersistenceError::NonUtf8ArtifactPath {
-            role,
-            kind,
-            path: path.to_path_buf(),
+        ReleaseArtifactMaterializationError::NonUtf8Path => {
+            CanicInfrastructureArtifactPersistenceError::NonUtf8ArtifactPath {
+                role,
+                kind,
+                path: path.to_path_buf(),
+            }
         }
-    })?;
-    validate_release_artifact_relative_path(relative).map_err(|_| {
-        CanicInfrastructureArtifactPersistenceError::InvalidArtifactPath {
-            role,
-            kind,
-            path: path.to_path_buf(),
-        }
-    })?;
-
-    let canonical_root = fs::canonicalize(root).map_err(|source| {
-        CanicInfrastructureArtifactPersistenceError::ArtifactRead {
-            role,
-            kind,
-            path: path.to_path_buf(),
-            source,
-        }
-    })?;
-    let parent = path.parent().ok_or_else(|| {
-        CanicInfrastructureArtifactPersistenceError::InvalidArtifactPath {
-            role,
-            kind,
-            path: path.to_path_buf(),
-        }
-    })?;
-    let canonical_parent = fs::canonicalize(parent).map_err(|source| {
-        CanicInfrastructureArtifactPersistenceError::ArtifactRead {
-            role,
-            kind,
-            path: path.to_path_buf(),
-            source,
-        }
-    })?;
-    if !canonical_parent.starts_with(canonical_root) {
-        return Err(
+        ReleaseArtifactMaterializationError::OutsideRoot => {
             CanicInfrastructureArtifactPersistenceError::ArtifactOutsideRoot {
                 role,
                 kind,
                 path: path.to_path_buf(),
-            },
-        );
-    }
-
-    Ok(relative.to_string())
-}
-
-fn read_artifact(
-    role: CanicInfrastructureRole,
-    kind: &'static str,
-    path: &Path,
-) -> Result<Vec<u8>, CanicInfrastructureArtifactPersistenceError> {
-    match read_optional_regular_bytes(path) {
-        Ok(Some(bytes)) => Ok(bytes),
-        Ok(None) => Err(CanicInfrastructureArtifactPersistenceError::ArtifactRead {
-            role,
-            kind,
-            path: path.to_path_buf(),
-            source: io::Error::new(io::ErrorKind::NotFound, "artifact is missing"),
-        }),
-        Err(RegularFileReadError::NotRegular) => Err(
-            CanicInfrastructureArtifactPersistenceError::UnsafeArtifact {
-                role,
-                kind,
-                path: path.to_path_buf(),
-            },
-        ),
-        Err(RegularFileReadError::Io(source)) => {
-            Err(CanicInfrastructureArtifactPersistenceError::ArtifactRead {
+            }
+        }
+        ReleaseArtifactMaterializationError::Read(source) => {
+            CanicInfrastructureArtifactPersistenceError::ArtifactRead {
                 role,
                 kind,
                 path: path.to_path_buf(),
                 source,
-            })
+            }
         }
-        #[cfg(not(unix))]
-        Err(RegularFileReadError::UnsupportedPlatform) => {
-            Err(CanicInfrastructureArtifactPersistenceError::ArtifactRead {
+        ReleaseArtifactMaterializationError::UnsafeFile => {
+            CanicInfrastructureArtifactPersistenceError::UnsafeArtifact {
                 role,
                 kind,
                 path: path.to_path_buf(),
-                source: io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    "regular no-follow artifact reads are unsupported",
-                ),
-            })
+            }
         }
-    }
+    })
 }
 
 fn persisted_manifest(

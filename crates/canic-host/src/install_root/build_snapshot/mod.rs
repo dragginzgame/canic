@@ -10,11 +10,15 @@ use crate::{
     },
     release_build::PlannedReleaseBuild,
     release_set::{
-        AppConfigSnapshot, RootReleaseSetBuildSnapshot, RootReleaseSetBuildTarget,
-        artifact_root_path, configured_release_roles_from_config, load_root_package_version,
-        root_release_set_manifest_path, workspace_manifest_path,
+        AppConfigSnapshot, ApplicationArtifactBuildTarget, RootReleaseSetBuildSnapshot,
+        RootReleaseSetBuildTarget, artifact_root_path, configured_release_roles_from_config,
+        load_root_package_version, root_release_set_manifest_path,
+        validate_release_artifact_relative_path, workspace_manifest_path,
     },
 };
+use std::path::Path;
+
+use canic_core::{bootstrap::compiled::ComponentTopology, ids::CanisterRole};
 
 /// One target whose package and output paths were admitted from the install snapshot.
 #[derive(Clone, Debug)]
@@ -28,6 +32,8 @@ pub(super) struct InstallBuildTarget {
 pub(super) struct CompleteInstallBuildSnapshot {
     pub(super) targets: Vec<InstallBuildTarget>,
     pub(super) manifest: RootReleaseSetBuildSnapshot,
+    pub(super) component_topology: ComponentTopology,
+    pub(super) application_artifact_targets: Vec<ApplicationArtifactBuildTarget>,
 }
 
 /// Configuration identity plus optional normal-build inputs for one install command.
@@ -55,6 +61,7 @@ pub(super) fn resolve_install_snapshot(
     }
 
     let release_roles = configured_release_roles_from_config(config.model());
+    let component_topology = config.model().compile_component_topology()?;
     let mut roles = Vec::with_capacity(release_roles.len() + 1);
     roles.push(root_build_target.to_string());
     roles.extend(release_roles.iter().cloned());
@@ -83,6 +90,11 @@ pub(super) fn resolve_install_snapshot(
             publish_entry: release_roles.iter().any(|role| role == &target.role),
         })
         .collect();
+    let application_artifact_targets = targets
+        .iter()
+        .filter(|target| release_roles.iter().any(|role| role == &target.role))
+        .map(|target| application_artifact_target(&context.icp_root, target))
+        .collect::<Result<Vec<_>, _>>()?;
 
     Ok(ValidatedInstallSnapshot {
         app_id,
@@ -94,7 +106,42 @@ pub(super) fn resolve_install_snapshot(
                 release_version,
                 targets: manifest_targets,
             },
+            component_topology,
+            application_artifact_targets,
         }),
         release_build: None,
     })
+}
+
+fn application_artifact_target(
+    icp_root: &Path,
+    target: &InstallBuildTarget,
+) -> Result<ApplicationArtifactBuildTarget, Box<dyn std::error::Error>> {
+    Ok(ApplicationArtifactBuildTarget {
+        role: CanisterRole::owned(target.role.clone()),
+        package: target.spec.package_name.clone(),
+        wasm_relative_path: artifact_relative_path(icp_root, &target.spec.wasm_path)?,
+        wasm_gz_relative_path: artifact_relative_path(icp_root, &target.spec.wasm_gz_path)?,
+    })
+}
+
+fn artifact_relative_path(
+    icp_root: &Path,
+    path: &Path,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let relative = path.strip_prefix(icp_root).map_err(|_| {
+        format!(
+            "planned application artifact {} is outside ICP root {}",
+            path.display(),
+            icp_root.display()
+        )
+    })?;
+    let relative = relative.to_str().ok_or_else(|| {
+        format!(
+            "planned application artifact path is not UTF-8: {}",
+            path.display()
+        )
+    })?;
+    validate_release_artifact_relative_path(relative)?;
+    Ok(relative.to_string())
 }

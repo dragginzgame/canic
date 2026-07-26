@@ -24,6 +24,17 @@ fn current_install_records_gates_before_activation_mutation() {
         "emit_manifest_with_phase(",
         "plan_fleet_install_activation(",
     );
+    let manifest_emission = include_str!("../../plan_artifacts/mod.rs");
+    let manifest_emission = source_section(
+        manifest_emission,
+        "pub(super) fn emit_manifest_with_phase(",
+        "fn application_file_build_outputs(",
+    );
+    assert_before(
+        manifest_emission,
+        "compile_and_persist_application_artifact_union(",
+        "finalize_release_build_from_manifest(",
+    );
     assert_before(
         install,
         "plan_fleet_install_activation(",

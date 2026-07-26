@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.5` derives the exact topology-qualified application build from the
+  validated install snapshot and immutably publishes its canonical artifact
+  union before release-build finalization.
+
 - `0.100.4` freezes one build-bound, topology-complete application artifact
   union and exact Spec-scoped release-set projection for every Fleet Subnet
   Root while preserving shared-artifact authorization.
