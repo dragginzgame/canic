@@ -223,7 +223,7 @@ fn validate_attached_role(
     };
     if !row.attached {
         return Err(BuildCommandError::Usage(format!(
-            "role {}.{} is declared but not attached to topology; run `canic app role attach {} {} --tree-spec <tree-spec>` before building an artifact",
+            "role {}.{} is declared but not attached to topology; run `canic app role attach {} {} --component-spec <component-spec>` before building an artifact",
             options.app, options.role, options.app, options.role
         )));
     }
@@ -641,20 +641,15 @@ package = "app"
 [auth.delegated_tokens]
 enabled = false
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 "#
         .to_string();
         if attach_app {
             config.push_str(
                 r#"
-[tree_specs.default.canisters.app]
-kind = "service"
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
 "#,
             );
         }

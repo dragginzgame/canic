@@ -233,25 +233,18 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
-
-[tree_specs.default.canisters.root]
-kind = "root"
-
-[tree_specs.default.canisters.app]
-kind = "service"
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
 topup = {}
 ```
 
 Every role named in package metadata must exist in this App config.
 Declared-only ordinary roles may compile before topology placement, but only
-attached roles under `[tree_specs.*.canisters.*]` can be built as deploy artifacts
-or enter deployment truth. `role = "root"` selects the root lifecycle and root
-endpoint bundle; all other roles select the ordinary Fleet lifecycle and
-non-root endpoint bundle.
+Component roles and direct children under `[component_specs.*]` can be built
+as deploy artifacts or enter deployment truth. `role = "root"` selects the
+Fleet Subnet Root lifecycle and endpoint bundle; all other roles select the
+ordinary Fleet lifecycle and non-root endpoint bundle.
 
 The full schema lives in [`CONFIG.md`](CONFIG.md).
 
@@ -405,10 +398,10 @@ Canic-owned methods.
 
 ## First Install Troubleshooting
 
-- If `canic.toml` uses `[[canisters]]`, rewrite it under
-  `[tree_specs.<name>.canisters.<role>]` and declare a matching
-  `[tree_groups.<name>]`; Canic validates the rooted Tree shape and scaling
-  bounds.
+- If `canic.toml` uses `[[canisters]]`, rewrite it as one
+  `[component_specs.<name>]` Component plus any direct
+  `[component_specs.<name>.children.<role>]` tables. Canic validates the flat
+  Component shape and bounded instance ceilings.
 - If a lifecycle macro reports
   `__canic_missing_finish_macro_add_canic_finish_at_end_after_all_endpoints`,
   add `canic::finish!()` at the end of the canister crate root after custom

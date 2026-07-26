@@ -17,18 +17,9 @@ package = "."
 [auth.delegated_tokens]
 enabled = false
 
-[tree_specs.default]
+[component_specs.default]
+component_role = "minimal_metrics"
+maximum_instances = 1
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
-
-[tree_specs.default.canisters.root]
-kind = "root"
-
-[tree_specs.default.canisters.minimal_metrics]
-kind = "service"
-
-[tree_specs.default.canisters.minimal_metrics.metrics]
+[component_specs.default.metrics]
 profile = "leaf"

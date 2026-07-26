@@ -78,19 +78,15 @@ package = "role_baseline"
 kind = "canister"
 package = "worker"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.app]
-kind = "service"
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
 
-[tree_specs.default.canisters.user_hub]
-kind = "service"
+[component_specs.user_hub]
+component_role = "user_hub"
+maximum_instances = 1
 "#,
     )
     .expect("write demo config");
@@ -162,16 +158,11 @@ package = "role_baseline"
 kind = "canister"
 package = "worker"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.app]
-kind = "service"
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
 "#,
     )
     .expect("write config");
@@ -203,16 +194,11 @@ fn config_selection_error_lists_multiple_paths_with_numbered_options() {
         &demo,
         demo_config_source(
             r#"
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.app]
-kind = "service"
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
 "#,
         ),
     )
@@ -221,25 +207,23 @@ kind = "service"
         &example,
         demo_config_source(
             r#"
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.user_hub]
-kind = "service"
+[component_specs.user_hub]
+component_role = "user_hub"
+maximum_instances = 1
 
-[tree_specs.default.canisters.user_shard]
-kind = "service"
+[component_specs.user_shard]
+component_role = "user_shard"
+maximum_instances = 1
 
-[tree_specs.default.canisters.scale_replica]
-kind = "service"
+[component_specs.scale_replica]
+component_role = "scale_replica"
+maximum_instances = 1
 
-[tree_specs.default.canisters.scale_hub]
-kind = "service"
+[component_specs.scale_hub]
+component_role = "scale_hub"
+maximum_instances = 1
 "#,
         ),
     )
@@ -313,34 +297,35 @@ package = "role_baseline"
 kind = "canister"
 package = "worker"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.app]
-kind = "service"
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
 
-[tree_specs.default.canisters.role_baseline]
-kind = "service"
+[component_specs.role_baseline]
+component_role = "role_baseline"
+maximum_instances = 1
 
-[tree_specs.default.canisters.scale_replica]
-kind = "service"
+[component_specs.scale_replica]
+component_role = "scale_replica"
+maximum_instances = 1
 
-[tree_specs.default.canisters.scale_hub]
-kind = "service"
+[component_specs.scale_hub]
+component_role = "scale_hub"
+maximum_instances = 1
 
-[tree_specs.default.canisters.user_hub]
-kind = "service"
+[component_specs.user_hub]
+component_role = "user_hub"
+maximum_instances = 1
 
-[tree_specs.default.canisters.user_shard]
-kind = "service"
+[component_specs.user_shard]
+component_role = "user_shard"
+maximum_instances = 1
 
-[tree_specs.default.canisters.worker]
-kind = "service"
+[component_specs.worker]
+component_role = "worker"
+maximum_instances = 1
 "#,
     )
     .expect("write config");
@@ -483,13 +468,7 @@ package = "role_baseline"
 kind = "canister"
 package = "worker"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 "#;
     fs::write(&demo, config).expect("write demo config");
     fs::write(&copy, config).expect("write copy config");

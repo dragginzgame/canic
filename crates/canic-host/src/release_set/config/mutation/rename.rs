@@ -120,9 +120,10 @@ fn rename_config_role_references(
     for line in source.lines() {
         let mut line = rename_role_header(line, old_role, new_role)?;
         let trimmed = line.trim_start();
-        if toml_assignment_key(trimmed) == Some("canister_role")
-            || toml_assignment_key(trimmed) == Some("roles")
-        {
+        if matches!(
+            toml_assignment_key(trimmed),
+            Some("canister_role" | "component_role" | "roles")
+        ) {
             line = line.replace(&old_literal, &new_literal);
         }
         updated.push(line);
@@ -151,12 +152,14 @@ fn rename_role_header(
     let inner = &trimmed[1..trimmed.len() - 1];
     let mut path = parse_toml_dotted_path(inner)?;
     let rename_roles_header = path.len() == 2 && path[0] == "roles" && path[1] == old_role;
-    let rename_canister_header =
-        path.len() >= 4 && path[0] == "tree_specs" && path[2] == "canisters" && path[3] == old_role;
+    let rename_child_header = path.len() >= 4
+        && path[0] == "component_specs"
+        && path[2] == "children"
+        && path[3] == old_role;
 
     if rename_roles_header {
         path[1] = new_role.to_string();
-    } else if rename_canister_header {
+    } else if rename_child_header {
         path[3] = new_role.to_string();
     } else {
         return Ok(line.to_string());

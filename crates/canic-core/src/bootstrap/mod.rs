@@ -23,20 +23,26 @@ pub use crate::config::{ConfigError, ConfigTomlIssue};
 
 #[doc(hidden)]
 pub mod compiled {
+    pub use crate::config::{
+        ComponentChildFundingPolicy, ComponentChildSpec, ComponentLimits, ComponentSpec,
+        ComponentTopology, ComponentTopologyError, MAX_COMPONENT_TOPOLOGY_CANONICAL_BYTES,
+    };
     pub use crate::{
         cdk::{candid::Principal, types::Cycles},
         config::schema::{
             AppConfig, AuthConfig, BindingConfig, BindingPool, CanisterAuthConfig, CanisterConfig,
             CanisterKind, CanisterPool, CanisterRoleNameIssue, ChainKeyRootProofConfig,
-            ConfigModel, CyclesFundingPolicyConfig, DelegatedTokenConfig,
-            DiagnosticsCanisterConfig, FleetInitMode, IcpRefillPolicy, LogConfig, MAX_FLEET_TREES,
+            ComponentChildConfig, ComponentChildKind, ComponentLimitsConfig, ComponentSpecConfig,
+            ConfigModel, CyclesFundingBudgetConfig, CyclesFundingPolicyConfig,
+            DelegatedTokenConfig, DiagnosticsCanisterConfig, FleetInitMode, IcpRefillPolicy,
+            LogConfig, MAX_COMPONENT_CHILD_ROLES, MAX_FLEET_COMPONENT_INSTANCES,
             MetricsCanisterConfig, MetricsProfile, NAME_MAX_BYTES, PoolImport,
             RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool,
             ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
-            StandardsCanisterConfig, TopupPolicy, TreeGroupConfig, TreeSpecConfig, Whitelist,
-            validate_app_name, validate_canister_role_name,
+            StandardsCanisterConfig, TopupPolicy, Whitelist, validate_app_name,
+            validate_canister_role_name,
         },
-        ids::{AppId, BuildNetwork, CanisterRole, TreeGroupId, TreeSpecId},
+        ids::{AppId, BuildNetwork, CanisterRole, ComponentSpecId},
     };
 }
 
@@ -175,13 +181,13 @@ name = "probe"
 kind = "root"
 package = "root"
 
-[tree_specs.default.canisters.root]
-kind = "root"
+[roles.app]
+kind = "canister"
+package = "app"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
+[component_specs.default]
+component_role = "app"
+maximum_instances = 1
 "#;
 
     #[test]
@@ -191,9 +197,8 @@ maximum_trees = 1
 
     #[test]
     fn strict_schema_reports_typed_nested_unknown_field() {
-        let source = format!(
-            "{MINIMAL_CONFIG}\n[tree_specs.default.canisters.root.randomness]\nenabled = true\n"
-        );
+        let source =
+            format!("{MINIMAL_CONFIG}\n[component_specs.default.randomness]\nenabled = true\n");
         let error = parse_config_model(&source).expect_err("unknown field must reject");
 
         assert!(matches!(
@@ -204,7 +209,7 @@ maximum_trees = 1
                     unknown_field,
                 },
                 ..
-            } if logical_path == "tree_specs.default.canisters.root.randomness"
+            } if logical_path == "component_specs.default.randomness"
                 && unknown_field == "randomness"
         ));
     }

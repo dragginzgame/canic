@@ -18,7 +18,7 @@ impl WasmStorePublicationWorkflow {
     // Return the deterministic approved manifests that still belong to the configured managed fleet.
     pub(in crate::workflow::runtime::template::publication) fn managed_release_manifests()
     -> Result<Vec<TemplateManifestResponse>, InternalError> {
-        let roles = config::current_tree_managed_release_roles()?;
+        let roles = config::fleet_subnet_root_managed_release_roles()?;
 
         Ok(
             TemplateManifestOps::approved_manifests_for_roles_response(&roles)
@@ -30,7 +30,7 @@ impl WasmStorePublicationWorkflow {
 
     // Remove any currently approved managed release that no longer belongs to the configured fleet.
     pub fn prune_unconfigured_managed_releases() -> Result<usize, InternalError> {
-        let roles = config::current_tree_managed_release_roles()?;
+        let roles = config::fleet_subnet_root_managed_release_roles()?;
         Ok(TemplateManifestOps::prune_approved_roles_not_in(&roles))
     }
 

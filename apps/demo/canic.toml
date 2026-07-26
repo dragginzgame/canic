@@ -23,27 +23,22 @@ package = "user_shard"
 [auth.delegated_tokens]
 enabled = false
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
-
-[tree_specs.default.canisters.app]
-kind = "service"
-
-[tree_specs.default.canisters.user_hub]
-kind = "service"
+[component_specs.users]
+component_role = "user_hub"
+maximum_instances = 1
 topup = {}
 
-[tree_specs.default.canisters.user_hub.sharding.pools.user_shards]
+[component_specs.users.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
 policy.initial_shards = 1
 policy.max_shards = 4
 
-[tree_specs.default.canisters.user_shard]
+[component_specs.users.children.user_shard]
 kind = "shard"
+maximum_instances = 4
 topup = {}

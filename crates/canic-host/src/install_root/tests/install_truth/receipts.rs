@@ -71,13 +71,7 @@ fn install_truth_gate_persists_machine_readable_receipt() {
         &config_path,
         demo_config_source(
             r#"
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 "#,
         ),
     )
@@ -191,13 +185,7 @@ kind = "canister"
 package = "worker"
 [app.whitelist]
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 "#,
     )
     .expect("write config");

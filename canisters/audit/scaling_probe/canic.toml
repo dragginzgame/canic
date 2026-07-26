@@ -17,23 +17,15 @@ package = "../../../apps/test/scale"
 [auth.delegated_tokens]
 enabled = false
 
-[tree_specs.default]
+[component_specs.default]
+component_role = "scale_hub"
+maximum_instances = 1
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
-
-[tree_specs.default.canisters.root]
-kind = "root"
-
-[tree_specs.default.canisters.scale_hub]
-kind = "service"
-
-[tree_specs.default.canisters.scale_hub.scaling.pools.scales]
+[component_specs.default.scaling.pools.scales]
 canister_role = "scale_replica"
 policy.initial_workers = 0
 policy.min_workers = 2
 
-[tree_specs.default.canisters.scale_replica]
+[component_specs.default.children.scale_replica]
 kind = "replica"
+maximum_instances = 32

@@ -179,15 +179,15 @@ macro_rules! __canic_build_internal {
         println!("cargo:rustc-cfg=canic_role_declared");
 
         let __canic_role_attached =
-            $crate::__build::config_attaches_role($cfg.as_ref(), app_name, role_name);
+            $crate::__build::config_role_is_deployable($cfg.as_ref(), app_name, role_name);
         if __canic_role_attached {
             println!("cargo:rustc-cfg=canic_role_attached");
         } else {
             println!("cargo:rustc-cfg=canic_role_declared_only");
         }
 
-        for tree_spec in $cfg.tree_specs.values() {
-            if let Some(canister_cfg) = tree_spec.get_canister(&role_id) {
+        for component_spec in $cfg.component_specs.values() {
+            if let Some(canister_cfg) = component_spec.get_canister(&role_id) {
                 memory_ledger |= canister_cfg.diagnostics.memory_ledger;
                 let profile = canister_cfg.resolved_metrics_profile(&role_id);
                 let tier_mask = $crate::__build::metrics_profile_tier_mask(profile);

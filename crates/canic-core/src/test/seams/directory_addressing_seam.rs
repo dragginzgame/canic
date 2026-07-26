@@ -131,7 +131,8 @@ fn install_index_service_test_config(service_role: &CanisterRole, singleton_role
         .install();
     import_test_env(
         service_role.clone(),
-        crate::ids::TreeSpecId::try_from(String::from("default")).expect("default Tree Spec ID"),
+        crate::ids::ComponentSpecId::try_from(String::from("default"))
+            .expect("default Component Spec ID"),
         p(20),
     );
 }
@@ -168,7 +169,7 @@ fn incomplete_index_imports_reject_roles_outside_configured_service_sets() {
         role: service_role.clone(),
         pid: service_pid,
     }]))
-    .expect("configured Tree service role should import");
+    .expect("configured Component role should import");
 
     FleetDirectoryOps::import_args_allow_incomplete(fleet_input(vec![DirectoryEntryInput {
         role: singleton_role.clone(),

@@ -67,65 +67,57 @@ max_revocation_latency_ns = 60000000000
 icrc21 = true # Enable ICRC-21 capability
 
 # ----------------------------------------------------------------
-# Tree Definitions
+# Component Definitions
 # ----------------------------------------------------------------
-# Each Tree Spec defines its permitted canisters and local policies.
+# Each Component Spec defines one Component and its direct children.
 # ----------------------------------------------------------------
 
 # ================================================================
-#  DEFAULT TREE SPEC
+#  APP COMPONENT
 # ================================================================
-[tree_specs.default]
-pool.minimum_size = 3
-
-# --- Root ---
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
-
-[tree_specs.default.canisters.root]
-kind = "root"
-
-# --- App ---
-[tree_specs.default.canisters.app]
-kind = "service"
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
 topup = {}
 
 # --- User Hub ---
-[tree_specs.default.canisters.user_hub]
-kind = "service"
+[component_specs.users]
+component_role = "user_hub"
+maximum_instances = 1
 topup = {}
 
 # --- User Hub Pools ---
-[tree_specs.default.canisters.user_hub.sharding.pools.user_shards]
+[component_specs.users.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
 policy.initial_shards = 1
 policy.max_shards = 4
 
 # --- User Shard ---
-[tree_specs.default.canisters.user_shard]
+[component_specs.users.children.user_shard]
 kind = "shard"
+maximum_instances = 4
 topup = {}
 
-[tree_specs.default.canisters.user_shard.auth]
+[component_specs.users.children.user_shard.auth]
 delegated_token_issuer = true
 delegated_token_verifier = true
 role_attestation_cache = true
 
 # --- Scale Hub ---
-[tree_specs.default.canisters.scale_hub]
-kind = "service"
+[component_specs.scaling]
+component_role = "scale_hub"
+maximum_instances = 1
 topup = {}
 
 # --- Scale Hub Pools ---
-[tree_specs.default.canisters.scale_hub.scaling.pools.scales]
+[component_specs.scaling.scaling.pools.scales]
 canister_role = "scale_replica"
 policy.initial_workers = 1
 policy.min_workers = 2
 
 # --- Scale Replica ---
-[tree_specs.default.canisters.scale_replica]
+[component_specs.scaling.children.scale_replica]
 kind = "replica"
+maximum_instances = 32
 topup = {}

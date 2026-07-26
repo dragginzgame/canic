@@ -136,7 +136,7 @@ pub fn resolve_canister_artifact_build_spec(
 ) -> Result<CanisterArtifactBuildSpec, Box<dyn std::error::Error>> {
     let canister_name = context.role.as_str();
     let role = canic_core::ids::CanisterRole::owned(canister_name.to_string());
-    validate_artifact_role_attached(config, canister_name)?;
+    validate_artifact_role_deployable(config, canister_name)?;
     let evidence = match validate_declared_role_package(
         &context.config_path,
         config,
@@ -177,7 +177,7 @@ fn require_declared_role_contract(
     }
 }
 
-fn validate_artifact_role_attached(
+fn validate_artifact_role_deployable(
     config: &canic_core::bootstrap::compiled::ConfigModel,
     canister_name: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -188,10 +188,10 @@ fn validate_artifact_role_attached(
         )
         .into());
     }
-    if !config.attached_roles().contains(&role) {
+    if !config.deployable_roles().contains(&role) {
         let app = config.app_id().as_str();
         return Err(format!(
-            "role {app}.{canister_name} is declared but not attached to topology; run `canic app role attach {app} {canister_name} --tree-spec <tree-spec>` before building an artifact"
+            "role {app}.{canister_name} is declared but not attached to topology; run `canic app role attach {app} {canister_name} --component-spec <component-spec>` before building an artifact"
         )
         .into());
     }

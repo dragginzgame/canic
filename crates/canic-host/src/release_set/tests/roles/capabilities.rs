@@ -76,27 +76,28 @@ package = "scale"
 kind = "canister"
 package = "role_baseline"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.user_hub]
-kind = "service"
+[component_specs.user_hub]
+component_role = "user_hub"
+maximum_instances = 1
 
-[tree_specs.default.canisters.user_hub.sharding.pools.user_shards]
+[component_specs.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
 
-[tree_specs.default.canisters.user_shard]
+[component_specs.user_hub.children.user_shard]
 kind = "shard"
+maximum_instances = 4096
 
-[tree_specs.default.canisters.scale_replica]
+[component_specs.scale_hub]
+component_role = "scale_hub"
+maximum_instances = 1
+
+[component_specs.scale_hub.children.scale_replica]
 kind = "replica"
+maximum_instances = 4096
 
-[tree_specs.default.canisters.scale_replica.metrics]
+[component_specs.scale_hub.children.scale_replica.metrics]
 profile = "full"
 "#;
     let profiles = configured_role_metrics_profiles_from_config(&parsed_config(config));
@@ -152,16 +153,11 @@ kind = "canister"
 package = "role_baseline"
 [app.whitelist]
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.scale_hub]
-kind = "service"
+[component_specs.scale_hub]
+component_role = "scale_hub"
+maximum_instances = 1
 topup.threshold = "10T"
 topup.amount = "4T"
 "#;

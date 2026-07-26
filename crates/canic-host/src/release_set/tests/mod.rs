@@ -78,22 +78,18 @@ enabled = false
 [standards]
 icrc21 = true
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.user_hub]
-kind = "service"
+[component_specs.user_hub]
+component_role = "user_hub"
+maximum_instances = 1
 
-[tree_specs.default.canisters.scale_hub]
-kind = "service"
+[component_specs.scale_hub]
+component_role = "scale_hub"
+maximum_instances = 1
 "#;
 
-const MULTI_ROOT_CONFIG: &str = r#"
+const MULTI_COMPONENT_CONFIG: &str = r#"
 controllers = []
 [app]
 name = "demo"
@@ -103,23 +99,24 @@ init_mode = "enabled"
 [roles.root]
 kind = "root"
 package = "root"
+
+[roles.alpha]
+kind = "canister"
+package = "alpha"
+
+[roles.beta]
+kind = "canister"
+package = "beta"
+
 [app.whitelist]
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
+[component_specs.alpha]
+component_role = "alpha"
+maximum_instances = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
-
-[tree_groups.secondary]
-tree_spec = "secondary"
-initial_trees = 1
-maximum_trees = 1
-
-[tree_specs.secondary.canisters.root]
-kind = "root"
+[component_specs.beta]
+component_role = "beta"
+maximum_instances = 1
 "#;
 
 const NO_ROOT_CONFIG: &str = r#"
@@ -134,8 +131,9 @@ kind = "canister"
 package = "user_hub"
 [app.whitelist]
 
-[tree_specs.default.canisters.user_hub]
-kind = "service"
+[component_specs.user_hub]
+component_role = "user_hub"
+maximum_instances = 1
 "#;
 
 struct TempWorkspace {

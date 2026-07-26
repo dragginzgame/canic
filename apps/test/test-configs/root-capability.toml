@@ -42,27 +42,19 @@ max_revocation_latency_ns = 60000000000
 [standards]
 icrc21 = true
 
-[tree_specs.default]
-pool.minimum_size = 3
-
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
-
-[tree_specs.default.canisters.root]
-kind = "root"
-
-[tree_specs.default.canisters.app]
-kind = "service"
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
 topup = {}
 
-[tree_specs.default.canisters.scale_hub]
-kind = "service"
+[component_specs.scaling]
+component_role = "scale_hub"
+maximum_instances = 1
 topup = {}
 
-[tree_specs.default.canisters.test]
-kind = "service"
+[component_specs.test]
+component_role = "test"
+maximum_instances = 1
 
-[tree_specs.default.canisters.test.auth]
+[component_specs.test.auth]
 role_attestation_cache = true

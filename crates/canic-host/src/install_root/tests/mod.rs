@@ -114,8 +114,8 @@ fn named_ic_environment_is_explicit_for_cargo_builds() {
 }
 
 #[test]
-fn install_snapshot_rejects_multiple_initial_trees_before_plan_admission() {
-    let root = temp_dir("canic-install-multiple-initial-trees");
+fn install_snapshot_accepts_multiple_flat_component_specs() {
+    let root = temp_dir("canic-install-multiple-components");
     let config_path = root.join("canic.toml");
     fs::create_dir_all(&root).expect("create root");
     fs::write(
@@ -130,21 +130,21 @@ init_mode = "enabled"
 kind = "root"
 package = "root"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
+[roles.app]
+kind = "canister"
+package = "app"
 
-[tree_groups.secondary]
-tree_spec = "secondary"
-initial_trees = 1
-maximum_trees = 1
+[roles.worker]
+kind = "canister"
+package = "worker"
 
-[tree_specs.default.canisters.root]
-kind = "root"
+[component_specs.default]
+component_role = "app"
+maximum_instances = 1
 
-[tree_specs.secondary.canisters.root]
-kind = "root"
+[component_specs.secondary]
+component_role = "worker"
+maximum_instances = 2
 "#,
     )
     .expect("write config");
@@ -161,14 +161,9 @@ kind = "root"
         release_build_id: None,
     };
 
-    let error = resolve_install_snapshot(&context, "root", true)
-        .expect_err("deployment-plan install must reject multiple initial Trees")
-        .downcast::<crate::release_set::AppConfigError>()
-        .expect("configuration error must retain its concrete type");
-    assert!(matches!(
-        error.as_ref(),
-        crate::release_set::AppConfigError::UnsupportedInitialTreeTopology { initial_trees: 2 }
-    ));
+    let snapshot = resolve_install_snapshot(&context, "root", true)
+        .expect("deployment-plan install should accept multiple Components");
+    assert_eq!(snapshot.app_id, "demo");
 
     fs::remove_dir_all(root).expect("remove temp root");
 }
@@ -282,13 +277,7 @@ kind = "root"
 package = "root"
 [app.whitelist]
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 "#,
     )
     .expect("write config");
@@ -358,13 +347,7 @@ kind = "canister"
 package = "worker"
 [app.whitelist]
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 "#,
     )
     .expect("write config");

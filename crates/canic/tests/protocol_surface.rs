@@ -133,14 +133,15 @@ fn fleet_state_and_cascade_candid_shapes_use_the_current_contract() {
 }
 
 #[test]
-fn environment_candid_shapes_use_fleet_root_and_tree_spec() {
+fn environment_candid_shapes_use_fleet_root_and_component_spec() {
     for env in [
         candid_type_env::<EnvBootstrapArgs>(),
         candid_type_env::<EnvSnapshotResponse>(),
     ] {
         assert!(
-            env.contains("fleet_root_pid : opt principal") && env.contains("tree_spec : opt text"),
-            "environment Candid must expose Fleet root and Tree Spec identity:\n{env}"
+            env.contains("fleet_root_pid : opt principal")
+                && env.contains("component_spec : opt text"),
+            "environment Candid must expose Fleet root and Component Spec identity:\n{env}"
         );
     }
 }

@@ -123,8 +123,8 @@ pub fn derive_role_capabilities(
         capabilities.insert(RoleCapabilityKey::RootControlPlane);
     }
 
-    for tree_spec in config.tree_specs.values() {
-        let Some(canister) = tree_spec.canisters.get(role) else {
+    for component_spec in config.component_specs.values() {
+        let Some(canister) = component_spec.get_canister(role) else {
             continue;
         };
 
@@ -152,11 +152,12 @@ pub fn derive_role_capabilities(
     }
 
     if capabilities.contains(&RoleCapabilityKey::Root)
-        && config.tree_specs.values().any(|tree_spec| {
-            tree_spec
-                .canisters
-                .values()
-                .any(|canister| canister.auth.role_attestation_cache)
+        && config.component_specs.values().any(|component_spec| {
+            component_spec.auth.role_attestation_cache
+                || component_spec
+                    .children
+                    .values()
+                    .any(|child| child.auth.role_attestation_cache)
         })
     {
         capabilities.insert(RoleCapabilityKey::RoleAttestationSigner);

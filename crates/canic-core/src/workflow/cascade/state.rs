@@ -386,8 +386,8 @@ mod state_apply_tests {
             },
         },
         ids::{
-            AppId, CanisterRole, CanonicalNetworkId, FleetBinding, FleetId, FleetKey,
-            ReleaseBuildId, ReleaseBuildNonce, TreeSpecId,
+            AppId, CanisterRole, CanonicalNetworkId, ComponentSpecId, FleetBinding, FleetId,
+            FleetKey, ReleaseBuildId, ReleaseBuildNonce,
         },
         ops::storage::{
             directory::{fleet::FleetDirectoryOps, subnet::SubnetDirectoryOps},
@@ -408,9 +408,9 @@ mod state_apply_tests {
         let root = p(1);
         let original = p(2);
         let replacement = p(3);
-        let missing_tree_spec = "missing"
-            .parse::<TreeSpecId>()
-            .expect("missing Tree Spec ID");
+        let missing_component_spec = "missing"
+            .parse::<ComponentSpecId>()
+            .expect("missing Component Spec ID");
         let fleet = FleetBinding {
             fleet: FleetKey {
                 canonical_network_id: CanonicalNetworkId::public_ic(),
@@ -424,7 +424,7 @@ mod state_apply_tests {
             .install();
         import_test_env(
             service.clone(),
-            TreeSpecId::try_from(String::from("default")).expect("default Tree Spec ID"),
+            ComponentSpecId::try_from(String::from("default")).expect("default Component Spec ID"),
             root,
         );
 
@@ -464,7 +464,7 @@ mod state_apply_tests {
             }],
         })
         .expect("seed Subnet Directory");
-        import_test_env(service.clone(), missing_tree_spec, root);
+        import_test_env(service.clone(), missing_component_spec, root);
         let snapshot = StateSnapshot {
             fleet_state: Some(FleetStateInput {
                 mode: FleetMode::Enabled,
@@ -484,7 +484,7 @@ mod state_apply_tests {
         };
 
         StateCascadeWorkflow::apply_state_with_activation(&snapshot, Some([7; 32]))
-            .expect_err("unknown local Tree Spec must reject the complete snapshot");
+            .expect_err("unknown local Component Spec must reject the complete snapshot");
 
         assert_eq!(FleetStateOps::snapshot_input(), original_state);
         assert_eq!(FleetDirectoryOps::get(&service), Some(original));

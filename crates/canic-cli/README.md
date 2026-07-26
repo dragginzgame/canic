@@ -50,7 +50,7 @@ catalog inspection separate:
 ```bash
 canic app create <app>
 canic scaffold canister <app> <role>
-canic app role attach <app> <role> --tree-spec <tree-spec>
+canic app role attach <app> <role> --component-spec <component-spec>
 canic build <app> <role> --provenance artifacts/<role>-provenance.json
 canic deploy check <fleet> --evidence-envelope
 canic evidence gate --policy policy.toml --envelope evidence.json

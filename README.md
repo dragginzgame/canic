@@ -51,8 +51,8 @@ walkthrough.
   topology placement, then explicitly attached before artifact builds or
   deployment truth.
 * **Topology-aware config:** [CONFIG.md](CONFIG.md) covers `canic.toml`
-  Tree Specs, Tree Groups, roles, singleton/replica/shard/instance placement,
-  warm pools, scaling pools, sharding pools, and directory pools.
+  flat Component Specs, direct singleton/replica/shard/instance children,
+  bounded instance ceilings, scaling pools, sharding pools, and binding pools.
 * **Delegated auth:** Root renews chain-key batch delegation proofs, issuer
   canisters sign reusable delegated tokens, and endpoint verifiers check the
   self-contained token, embedded root proof, issuer proof, audience, subject,

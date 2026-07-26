@@ -12,6 +12,7 @@ pub mod canic_metadata;
 pub mod canister_build;
 pub mod canister_ready;
 mod cargo_metadata;
+pub mod component_topology;
 pub mod cycle_balance;
 pub mod deployment_truth;
 pub mod durable_io;

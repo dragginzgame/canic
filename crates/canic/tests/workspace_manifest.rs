@@ -204,17 +204,22 @@ fn declared_canic_roles(root: &Path) -> BTreeMap<(String, String), CanicConfigRo
                         .join(package)
                         .join("Cargo.toml")
                 });
-            let attached = config
-                .get("tree_specs")
-                .and_then(Value::as_table)
-                .is_some_and(|tree_specs| {
-                    tree_specs.values().any(|tree_spec| {
-                        tree_spec
-                            .get("canisters")
-                            .and_then(Value::as_table)
-                            .is_some_and(|canisters| canisters.contains_key(role))
-                    })
-                });
+            let attached = (role == "root" && kind.as_deref() == Some("root"))
+                || config
+                    .get("component_specs")
+                    .and_then(Value::as_table)
+                    .is_some_and(|component_specs| {
+                        component_specs.values().any(|component_spec| {
+                            component_spec
+                                .get("component_role")
+                                .and_then(Value::as_str)
+                                .is_some_and(|component_role| component_role == role)
+                                || component_spec
+                                    .get("children")
+                                    .and_then(Value::as_table)
+                                    .is_some_and(|children| children.contains_key(role))
+                        })
+                    });
 
             roles.insert(
                 (app.to_string(), role.clone()),
@@ -709,7 +714,7 @@ fn canic_package_metadata_resolves_to_declared_app_roles() {
             }
             if !role.attached {
                 failures.push(format!(
-                    "{}: root package metadata must resolve to attached root topology",
+                    "{}: root package metadata must resolve to Fleet Subnet Root infrastructure",
                     relative_display(&root, &manifest_path)
                 ));
             }

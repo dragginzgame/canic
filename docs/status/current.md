@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-25
+Last updated: 2026-07-26
 
 ## Purpose
 
@@ -21,40 +21,71 @@ Historical detail is archived at:
   `f45b8feb33fcc8537145a7f9b4d1592e74ad42df3a54b5b83920bd73f4d070e7`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
-- The open `0.100.1` batch hard-cuts App configuration, compiled bootstrap
-  input, host projections, CLI role attachment, scaffolding and active
-  fixtures to `[tree_specs.*]` and `[tree_groups.*]`. It records the exact
-  live topology authority inventory and makes the existing installer reject
-  declarations larger than its sole-initial-Tree capability. The temporary
-  environment `TreeSpecId` selector is not final protected identity;
-  `TreeBinding`, `SubnetId`, Coordinator/Tree Root separation and the
-  Registry/Directory cuts remain open.
-- The proposed 0.100/0.101 follow-on designs now model heterogeneous,
-  independently scaled Tree Groups backed by App Tree Specs: one user-focused
-  Tree and many project-focused Trees may use different topology templates.
-  Each Canister Tree has its own `TreeId` and Tree Root; physical `SubnetId`
-  is repeatable placement metadata, so Trees may be co-located without merging
-  authority. `default`, if an App uses it, is only a workload name and never
-  selects the Coordinator Subnet; application routing remains outside Canic.
-  The Coordinator is not part of any Tree. Fleet-authoritative services
-  instead remain under ordinary singleton service Trees whose Tree Roots
-  retain local lifecycle authority; the Coordinator protects the target
-  declaration and publishes their Fleet-wide
-  `(role, TreeId, canister_id)` bindings. This is a design amendment, not
-  additional 0.99 runtime scope. A fresh 0.100 install creates the first
-  Coordinator and empty Fleet Registry directly; a fresh 0.101 install
-  provisions every declared service through one aggregate operation per
-  selected Tree from one complete provisioning plan, publishes the complete
-  set, synchronizes required Fleet and Tree Directories, cascades them to
-  prepared services and activates the prepared runtimes before terminal
-  catalog publication. 0.100 hard-cuts `SubnetSlotId`, Fleet Root,
-  `SubnetRegistry` and `SubnetDirectory` to Tree identity, Tree Root,
-  `TreeRegistry` and `TreeDirectory`; it does not carry those 0.99 topology
-  names forward. The protected per-Tree identity is `TreeBinding`; Fleet and
-  Tree Directories use separate, non-interchangeable provenance contracts.
-  Neither design consumes an installation from its predecessor. The proposed
-  0.102 diagnostic and 0.103 transport lines use the same reinstall-only
-  release boundary.
+- The open `0.100.1` implementation hard-cuts the intermediate
+  `[tree_specs.*]`/`[tree_groups.*]` configuration and all three released Tree
+  identity types across bootstrap, host/CLI projections, scaffolding,
+  fixtures and active guidance. The maintained source now accepts only flat
+  `[component_specs.*]`, projects several Specs through one root and exposes
+  only `--component-spec`; no compatibility alias or decoder remains.
+  It also compiles a bounded canonical Component Topology with frozen
+  domain-separated Spec hashes and root-local digests, finite Component
+  aggregate limits, strong physical `SubnetId`, immutable
+  Coordinator/root/Component/child binding contracts and a host planner that
+  derives exact root admissions without accepting caller-supplied hashes.
+  Roots no longer fabricate one current Spec, so the old role-only child
+  provisioning path remains intentionally incomplete until real allocation
+  can supply protected Component bindings.
+- The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
+  occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
+  independent root on the same physical Subnet; uniqueness and every authority
+  remain Fleet-scoped. Each root receives immutable admissions for
+  non-recursive Component Specs. One Spec declares one direct Component role
+  and its direct children, with a Fleet instance ceiling distributed into
+  positive root-local ceilings. A root allocates `ComponentInstanceId` only
+  when it creates a concrete Component. There is no Tree identity, empty
+  workload partition, runtime Group Canister, nested Component or child
+  manager. The Fleet Subnet Root is the required lifecycle controller and
+  owns independent Component Registry/Directory partitions plus authoritative
+  idempotent receipts. The immutable Component Topology, root admissions,
+  active release set and observed Wasm Store Catalog are distinct
+  authorities. The host builds one qualified artifact union per
+  `ReleaseBuildId` and projects an exact release-set manifest for each root.
+  The Coordinator manages Fleet roots and publication, not ordinary
+  Component inventories.
+- A fresh 0.101 adds bounded `ComponentGroupSpec` deployment composition.
+  Groups may include groups in configuration, but compile to canonical flat
+  member paths and direct root-owned Components before planning. Inclusion
+  preserves one occurrence per path, does not trigger an independent
+  deployment and does not deduplicate equal Specs; no group is a runtime
+  parent or lifecycle authority. Every materialized copy has one stable,
+  never-reused `ComponentGroupPlacementId`, so several copies of one
+  deployment may share a root without identity or Directory ambiguity.
+  Placement policy bounds per-root density and minimum root spread, while
+  each root has an immutable aggregate group-placement ceiling.
+  Typed `Ordinary` or service-member purpose belongs to each planned
+  occurrence, while labels are inert. Bounded `FleetServiceId` is independent
+  of role. `AuthorityReplica` publishes one same-Spec Authority plus zero or
+  more Replicas; `ActivePool` publishes one or more same-Spec PoolMembers.
+  Target-level member density/spread controls availability independently of
+  deployment placement, so Toko enforces one database member per root while
+  another app may explicitly co-locate members. PoolMember purpose grants no
+  implicit leadership, health, load balancing or consistency. Root-local
+  Component Group Directories expose siblings in one exact placement without
+  granting lifecycle authority. A
+  service-sensitive direct child resolves purpose through its exact owning
+  Component and never becomes a group member or Fleet service.
+  Explicit same-release group scale-out may add exact placements on
+  already-installed, already-admitted roots—including roots that complete the
+  separate root-registration lifecycle first—up to protected deployment,
+  density, spread and root limits; assignments may pack or spread placements.
+  It cannot scale in, expand admissions, promote a Replica or claim
+  application-data readiness. Toko's one-cell-per-root choice and value ten
+  are example policy, not protocol constants. Independently scaled tiers use
+  separate deployments; dynamic high-cardinality local shards remain direct
+  Component Children. Grouped Components and their roots remain fenced from
+  ordinary removal while placement or service references exist. Neither
+  design consumes an installation from its predecessor. The proposed 0.102
+  diagnostic and 0.103 transport lines use the same reinstall-only boundary.
 - Released `0.99.33` pins the maintained operator toolchain to ICP CLI 1.2.0
   and Rust 1.97.1 while preserving the published-crate MSRV.
 - Released `0.99.32` makes the active 0.99–0.103 design sequence
@@ -1251,11 +1282,16 @@ First primary results:
 
 Continue 0.100 Slice 1 from the
 [implementation tracker](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md).
-Freeze `SubnetId`, `FleetCoordinatorBinding` and protected `TreeBinding`, then
-hard-cut Fleet Root and the remaining environment contract to distinct
-Coordinator and Tree Root authority. Do not preserve the temporary Tree Spec
-selector as runtime identity, introduce aliases or attempt to consume an
-earlier installation.
+The flat Component declaration hard cut is complete. Next, derive and freeze
+the bounded canonical Component Topology and each Spec hash, then
+distribute positive Spec ceilings through immutable root admissions and freeze
+`SubnetId`, `FleetCoordinatorBinding`, `FleetSubnetRootBinding`, root limits
+and protected Component/Component Child bindings. Build the qualified
+artifact union once and project exact Fleet Subnet Root release sets from
+those admissions before implementing durable root-local
+`ComponentInstanceId` allocation. Do not permit nested Components, merge
+roots belonging to different Fleets on one Subnet or consume an earlier
+installation.
 
 ## Historical Release Detail
 

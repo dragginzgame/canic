@@ -27,15 +27,15 @@ impl ProvisionWorkflow {
         updated_role: Option<&CanisterRole>,
     ) -> Result<StateSnapshotBuilder, InternalError> {
         let cfg = ConfigOps::get()?;
-        let tree_spec = ConfigOps::current_tree_spec()?;
+        let component_spec = ConfigOps::current_component_spec()?;
         let registry = SubnetRegistryOps::data();
         let allow_incomplete = updated_role.is_some();
-        let tree_directory_roles = tree_spec.tree_directory_roles();
+        let component_directory_roles = component_spec.component_directory_roles();
 
         let include_fleet =
             updated_role.is_none_or(|role| cfg.fleet_directory_roles().contains(role));
         let include_tree_directory =
-            updated_role.is_none_or(|role| tree_directory_roles.contains(role));
+            updated_role.is_none_or(|role| component_directory_roles.contains(role));
 
         let mut builder = StateSnapshotBuilder::new()?;
 
@@ -52,7 +52,8 @@ impl ProvisionWorkflow {
         }
 
         if include_tree_directory {
-            let subnet_data = RootSubnetDirectoryBuilder::build(&registry, &tree_directory_roles)?;
+            let subnet_data =
+                RootSubnetDirectoryBuilder::build(&registry, &component_directory_roles)?;
 
             if allow_incomplete {
                 SubnetDirectoryOps::import_trusted_partial(subnet_data)?;

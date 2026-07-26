@@ -52,8 +52,13 @@ package = "<path>"
 Only attached roles can be built as deployment artifacts:
 
 ```toml
-[tree_specs.<tree-spec>.canisters.<role>]
-kind = "service"
+[component_specs.<component-spec>]
+component_role = "<role>"
+maximum_instances = 1
+
+[component_specs.<component-spec>.children.<child-role>]
+kind = "singleton"
+maximum_instances = 1
 ```
 
 ## Command Checklist
@@ -73,8 +78,12 @@ canic scaffold canister <app> <role>
 Attach the role when placement is known:
 
 ```text
-canic app role attach <app> <role> --tree-spec <tree-spec>
+canic app role attach <app> <role> --component-spec <component-spec>
 ```
+
+The first role attached to a new Component Spec becomes its Component. A later
+role attached to that Spec becomes a direct child; use `--kind` to select
+`singleton`, `replica`, `shard`, or `instance`.
 
 Build an attached role and write stable build provenance:
 

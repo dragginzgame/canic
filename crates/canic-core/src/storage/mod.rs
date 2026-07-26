@@ -19,7 +19,7 @@ pub mod prelude {
     pub use crate::{
         cdk::types::{Cycles, Principal},
         eager_static,
-        ids::{CanisterRole, TreeSpecId},
+        ids::{CanisterRole, ComponentSpecId},
     };
     pub use serde::{Deserialize, Serialize};
 }

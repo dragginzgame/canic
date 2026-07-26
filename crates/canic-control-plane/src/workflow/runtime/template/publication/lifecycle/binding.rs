@@ -154,7 +154,7 @@ impl WasmStorePublicationWorkflow {
         retired
     }
 
-    // Persist one explicit publication binding after validating it against the Tree Spec config.
+    // Persist one explicit publication binding after validating it against the Component Spec config.
     pub fn set_current_publication_store_binding(
         binding: WasmStoreBinding,
     ) -> Result<(), InternalError> {

@@ -50,8 +50,8 @@ else
 fi
 
 # Build the ordinary reference artifacts first so the thin-root manifest path
-# can emit once the full configured Tree artifact set exists. Root itself builds
-# the implicit bootstrap `wasm_store` artifact internally.
+# can emit once the full configured Component artifact set exists. Root itself
+# builds the implicit bootstrap `wasm_store` artifact internally.
 for canister in "${BUILD_CANISTERS[@]}"; do
     BUILD_ARTIFACT_ARGS=(
         "$canister"

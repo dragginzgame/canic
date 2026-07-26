@@ -5,7 +5,7 @@
 
 use crate::{
     domain::value::Principal,
-    ids::{CanisterRole, TreeSpecId},
+    ids::{CanisterRole, ComponentSpecId},
 };
 
 ///
@@ -17,7 +17,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct ValidatedEnv {
     pub fleet_root_pid: Principal,
-    pub tree_spec: TreeSpecId,
+    pub component_spec: Option<ComponentSpecId>,
     pub subnet_pid: Principal,
     pub root_pid: Principal,
     pub canister_role: CanisterRole,

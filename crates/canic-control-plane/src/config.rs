@@ -9,25 +9,21 @@ use canic_core::control_plane_support::ops::runtime::env::EnvOps;
 #[cfg(feature = "root-control-plane")]
 use std::collections::BTreeSet;
 
-/// Return the implicit store policy used by the current Tree.
+/// Return the implicit store policy used by the Fleet Subnet Root.
 #[cfg(feature = "root-control-plane")]
 #[must_use]
-pub fn current_tree_default_wasm_store() -> WasmStoreConfig {
+pub fn fleet_subnet_root_default_wasm_store() -> WasmStoreConfig {
     WasmStoreConfig::implicit()
 }
 
-/// Return the configured managed release roles for the current Tree.
+/// Return every configured Component and Component Child release role.
 #[cfg(feature = "root-control-plane")]
-pub fn current_tree_managed_release_roles() -> Result<BTreeSet<CanisterRole>, InternalError> {
-    let tree_spec = ConfigOps::current_tree_spec()?;
+pub fn fleet_subnet_root_managed_release_roles() -> Result<BTreeSet<CanisterRole>, InternalError> {
     let mut roles = BTreeSet::new();
 
-    for role in tree_spec.canisters.keys() {
-        if role == &CanisterRole::ROOT || role == &CanisterRole::WASM_STORE {
-            continue;
-        }
-
-        roles.insert(role.clone());
+    for component_spec in ConfigOps::component_topology()?.component_specs {
+        roles.insert(component_spec.component_role);
+        roles.extend(component_spec.children.into_iter().map(|child| child.role));
     }
 
     Ok(roles)

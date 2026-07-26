@@ -18,13 +18,7 @@ controllers = []
 init_mode = "enabled"
 [app.whitelist]
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 "#,
     )
     .expect_err("missing App name must reject");
@@ -85,13 +79,7 @@ kind = "canister"
 package = "role_baseline"
 [app.whitelist]
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 "#,
     );
     let controllers = configured_controllers_from_config(&config);

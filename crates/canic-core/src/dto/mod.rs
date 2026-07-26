@@ -56,7 +56,7 @@ pub mod validation;
 ///
 
 pub mod prelude {
-    pub use crate::ids::{CanisterRole, TreeSpecId};
+    pub use crate::ids::{CanisterRole, ComponentSpecId};
     pub use candid::{CandidType, Nat, Principal};
     pub use serde::{Deserialize, Serialize};
 }

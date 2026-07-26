@@ -12,9 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
-- `0.100.1` hard-cuts App topology configuration to bounded Tree Specs and
-  Tree Groups across compiled bootstrap, host/CLI projections, scaffolding and
-  active fixtures; the existing installer fails closed beyond one initial Tree.
+- `0.100.1` hard-cuts staged Tree declarations to flat Component Specs and
+  freezes canonical topology compilation, immutable Fleet Subnet Root
+  admission and binding contracts, and the `--component-spec` CLI selector.
 
 - `0.100.0` starts the reinstall-only multi-Subnet implementation by freezing
   distinct bounded `TreeSpecId` and `TreeGroupId` declaration identities plus

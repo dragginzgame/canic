@@ -1,17 +1,21 @@
 # Minimal Managed Fleet
 
-This guide shows the smallest Canic-managed shape that exercises the real
-fleet model: one root canister creates and registers two singleton child
-canisters. Use this as the reference before adapting a product canister layout.
+This guide shows the smallest Canic-managed shape that exercises the flat
+fleet model: one Fleet Subnet Root manages a `hub` Component, and that
+Component manages one direct `registry` child through root lifecycle effects.
+Use this as the reference before adapting a product canister layout.
 
 This guide tracks the current Canic scaffold shape. For new fleets, prefer
 `canic app create <name>` and keep all `canic` dependencies on the same
 release as the installed `canic` CLI. The current schema uses
-`[app].name`, Tree Specs, Tree Groups, `topup`, and `canic::finish!()`.
+`[app].name`, flat Component Specs, bounded direct children, `topup`, and
+`canic::finish!()`.
 
-The root manages lifecycle, topology, and artifact staging. It does not proxy
-ordinary application methods. After install, callers resolve child canister IDs
-from the root registry and call the child canisters directly.
+The root executes lifecycle, topology, and artifact effects. It does not proxy
+ordinary application methods. The Component owns its direct child logically
+and asks the root to perform admitted cycle, creation, and installation
+effects. Callers resolve application Canister IDs from topology and call them
+directly.
 
 ## Layout
 
@@ -98,8 +102,8 @@ environments:
 
 ## Fleet Config
 
-Declare permitted rooted topologies as Tree Specs and their scaling bounds as
-Tree Groups. Do not use a flat `[[canisters]]` list.
+Declare one non-recursive Component Spec with one Component role and its direct
+child. Do not use a flat `[[canisters]]` list or nest another Component.
 
 ```toml
 controllers = []
@@ -119,20 +123,14 @@ package = "hub"
 kind = "canister"
 package = "registry"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
-
-[tree_specs.default.canisters.root]
-kind = "root"
-
-[tree_specs.default.canisters.hub]
-kind = "service"
+[component_specs.main]
+component_role = "hub"
+maximum_instances = 1
 topup = {}
 
-[tree_specs.default.canisters.registry]
-kind = "service"
+[component_specs.main.children.registry]
+kind = "singleton"
+maximum_instances = 1
 topup = {}
 ```
 

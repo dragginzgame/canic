@@ -5,8 +5,11 @@ fn configured_role_kinds_lists_configured_roles() {
     let kinds = configured_role_kinds_from_config(&parsed_config(REAL_CONFIG));
 
     assert_eq!(kinds.get("root").map(String::as_str), Some("root"));
-    assert_eq!(kinds.get("user_hub").map(String::as_str), Some("service"));
-    assert_eq!(kinds.get("scale_hub").map(String::as_str), Some("service"));
+    assert_eq!(kinds.get("user_hub").map(String::as_str), Some("component"));
+    assert_eq!(
+        kinds.get("scale_hub").map(String::as_str),
+        Some("component")
+    );
 }
 
 #[test]
@@ -32,22 +35,18 @@ package = "canisters/user_shard"
 kind = "canister"
 package = "canisters/store"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.user_hub]
-kind = "service"
+[component_specs.user_hub]
+component_role = "user_hub"
+maximum_instances = 1
 
-[tree_specs.default.canisters.user_hub.sharding.pools.users]
+[component_specs.user_hub.sharding.pools.users]
 canister_role = "user_shard"
 
-[tree_specs.default.canisters.user_shard]
+[component_specs.user_hub.children.user_shard]
 kind = "shard"
+maximum_instances = 4096
 "#;
     let lifecycle = configured_role_lifecycle_from_config(&parsed_config(config));
 
@@ -57,7 +56,7 @@ kind = "shard"
         .expect("root lifecycle row");
     assert_eq!(root.display, "demo.root");
     assert_eq!(root.state, "attached");
-    assert_eq!(root.topology.as_deref(), Some("default/root"));
+    assert_eq!(root.topology.as_deref(), Some("fleet-subnet-root"));
 
     let shard = lifecycle
         .iter()
@@ -66,7 +65,7 @@ kind = "shard"
     assert_eq!(shard.state, "attached");
     assert_eq!(
         shard.topology.as_deref(),
-        Some("default/user_hub/sharding/users,default/user_shard")
+        Some("user_hub/user_hub/children/user_shard,user_hub/user_hub/sharding/users")
     );
 
     let store = lifecycle
@@ -120,43 +119,41 @@ kind = "canister"
 package = "role_baseline"
 [app.whitelist]
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.user_hub]
-kind = "service"
+[component_specs.user_hub]
+component_role = "user_hub"
+maximum_instances = 1
 topup.threshold = "10T"
 topup.amount = "4T"
 
-[tree_specs.default.canisters.user_hub.sharding.pools.user_shards]
+[component_specs.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
 policy.max_shards = 4
 
-[tree_specs.default.canisters.user_shard]
+[component_specs.user_hub.children.user_shard]
 kind = "shard"
+maximum_instances = 4096
 
-[tree_specs.default.canisters.user_shard.auth]
+[component_specs.user_hub.children.user_shard.auth]
 delegated_token_issuer = true
 role_attestation_cache = true
 
-[tree_specs.default.canisters.scale_hub]
-kind = "service"
+[component_specs.scale_hub]
+component_role = "scale_hub"
+maximum_instances = 1
 
-[tree_specs.default.canisters.scale_hub.scaling.pools.scales]
+[component_specs.scale_hub.scaling.pools.scales]
 canister_role = "scale_replica"
 policy.initial_workers = 2
 policy.min_workers = 2
 
-[tree_specs.default.canisters.scale_replica]
+[component_specs.scale_hub.children.scale_replica]
 kind = "replica"
+maximum_instances = 4096
 
-[tree_specs.default.canisters.scale_replica.metrics]
+[component_specs.scale_hub.children.scale_replica.metrics]
 profile = "full"
 "#;
     let details = configured_role_details_from_config(&parsed_config(config));

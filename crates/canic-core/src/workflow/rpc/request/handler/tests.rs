@@ -107,9 +107,9 @@ fn configure_root_env(root_pid: Principal) -> EnvRestore {
     Env::import(EnvData {
         record: EnvRecord {
             root_pid: Some(root_pid),
-            tree_spec: Some(
-                crate::ids::TreeSpecId::try_from(String::from("default"))
-                    .expect("default Tree Spec ID"),
+            component_spec: Some(
+                crate::ids::ComponentSpecId::try_from(String::from("default"))
+                    .expect("default Component Spec ID"),
             ),
             ..EnvRecord::default()
         },

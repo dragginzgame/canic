@@ -34,19 +34,10 @@ max_revocation_latency_ns = 60000000000
 [standards]
 icrc21 = true
 
-[tree_specs.default]
+[component_specs.default]
+component_role = "test"
+maximum_instances = 1
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
-
-[tree_specs.default.canisters.root]
-kind = "root"
-
-[tree_specs.default.canisters.test]
-kind = "service"
-
-[tree_specs.default.canisters.test.auth]
+[component_specs.default.auth]
 delegated_token_verifier = true
 role_attestation_cache = true

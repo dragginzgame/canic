@@ -2,7 +2,7 @@ use crate::ids::CanisterRole;
 use canic_core::{
     cdk::types::{Principal, TC},
     control_plane_support::{
-        error::{InternalError, InternalErrorOrigin},
+        error::InternalError,
         model::replay::CommandKind,
         ops::{
             config::ConfigOps,
@@ -78,14 +78,7 @@ fn reserve_control_plane_deployment_cost_guard(
     quota_subject: Principal,
     payer: Principal,
 ) -> Result<CostGuardPermit, InternalError> {
-    let cycle_reservation_cycles = ConfigOps::current_tree_spec()?
-        .get_canister(role)
-        .ok_or_else(|| {
-            InternalError::workflow(
-                InternalErrorOrigin::Config,
-                format!("canister {role} not defined in current subnet"),
-            )
-        })?
+    let cycle_reservation_cycles = ConfigOps::try_get_canister_by_role(role)?
         .initial_cycles
         .to_u128();
 

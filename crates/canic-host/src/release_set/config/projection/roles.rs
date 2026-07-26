@@ -11,23 +11,38 @@ pub(in crate::release_set) fn configured_role_kinds_from_config(
 ) -> BTreeMap<String, String> {
     let mut kinds = BTreeMap::<String, String>::new();
 
-    for tree_spec in config.tree_specs.values() {
-        for (role, canister) in &tree_spec.canisters {
-            let role = role.as_str().to_string();
-            let kind = canister.kind.to_string();
-            match kinds.get(&role) {
-                Some(existing) if existing != &kind => {
-                    kinds.insert(role, "mixed".to_string());
-                }
-                Some(_) => {}
-                None => {
-                    kinds.insert(role, kind);
-                }
-            }
+    if config.roles.contains_key(&CanisterRole::ROOT) {
+        kinds.insert(CanisterRole::ROOT.as_str().to_string(), "root".to_string());
+    }
+
+    for component_spec in config.component_specs.values() {
+        merge_role_label(
+            &mut kinds,
+            component_spec.component_role.as_str().to_string(),
+            "component".to_string(),
+        );
+        for (role, child) in &component_spec.children {
+            merge_role_label(
+                &mut kinds,
+                role.as_str().to_string(),
+                child.kind.to_string(),
+            );
         }
     }
 
     kinds
+}
+
+fn merge_role_label(labels: &mut BTreeMap<String, String>, role: String, label: String) {
+    match labels.get(&role) {
+        Some(existing) if existing != &label => {
+            labels.insert(role, "mixed".to_string());
+        }
+        Some(_) => {}
+        None => {
+            labels.insert(role, label);
+        }
+    }
 }
 
 // Enumerate declared role lifecycle state from one validated snapshot.
@@ -38,38 +53,55 @@ pub(in crate::release_set) fn configured_role_lifecycle_from_config(
     let attached_roles = config.attached_roles();
     let mut topology = BTreeMap::<CanisterRole, Vec<String>>::new();
 
-    for (tree_spec_id, tree_spec) in &config.tree_specs {
-        for (role, canister) in &tree_spec.canisters {
+    if config.roles.contains_key(&CanisterRole::ROOT) {
+        topology.insert(CanisterRole::ROOT, vec!["fleet-subnet-root".to_string()]);
+    }
+
+    for (component_spec_id, component_spec) in &config.component_specs {
+        let component_role = &component_spec.component_role;
+        topology
+            .entry(component_role.clone())
+            .or_default()
+            .push(format!("{component_spec_id}/{component_role}"));
+        for child_role in component_spec.children.keys() {
             topology
-                .entry(role.clone())
+                .entry(child_role.clone())
                 .or_default()
-                .push(format!("{tree_spec_id}/{role}"));
+                .push(format!(
+                    "{component_spec_id}/{component_role}/children/{child_role}"
+                ));
+        }
 
-            if let Some(scaling) = &canister.scaling {
-                for (pool, scale_pool) in &scaling.pools {
-                    topology
-                        .entry(scale_pool.canister_role.clone())
-                        .or_default()
-                        .push(format!("{tree_spec_id}/{role}/scaling/{pool}"));
-                }
+        if let Some(scaling) = &component_spec.scaling {
+            for (pool, scale_pool) in &scaling.pools {
+                topology
+                    .entry(scale_pool.canister_role.clone())
+                    .or_default()
+                    .push(format!(
+                        "{component_spec_id}/{component_role}/scaling/{pool}"
+                    ));
             }
+        }
 
-            if let Some(sharding) = &canister.sharding {
-                for (pool, shard_pool) in &sharding.pools {
-                    topology
-                        .entry(shard_pool.canister_role.clone())
-                        .or_default()
-                        .push(format!("{tree_spec_id}/{role}/sharding/{pool}"));
-                }
+        if let Some(sharding) = &component_spec.sharding {
+            for (pool, shard_pool) in &sharding.pools {
+                topology
+                    .entry(shard_pool.canister_role.clone())
+                    .or_default()
+                    .push(format!(
+                        "{component_spec_id}/{component_role}/sharding/{pool}"
+                    ));
             }
+        }
 
-            if let Some(binding) = &canister.binding {
-                for (pool, binding_pool) in &binding.pools {
-                    topology
-                        .entry(binding_pool.canister_role.clone())
-                        .or_default()
-                        .push(format!("{tree_spec_id}/{role}/binding/{pool}"));
-                }
+        if let Some(binding) = &component_spec.binding {
+            for (pool, binding_pool) in &binding.pools {
+                topology
+                    .entry(binding_pool.canister_role.clone())
+                    .or_default()
+                    .push(format!(
+                        "{component_spec_id}/{component_role}/binding/{pool}"
+                    ));
             }
         }
     }
@@ -79,7 +111,9 @@ pub(in crate::release_set) fn configured_role_lifecycle_from_config(
         .iter()
         .map(|(role, declaration)| {
             let role_name = role.as_str().to_string();
-            let attached = attached_roles.contains(role);
+            let attached = declaration.kind
+                == canic_core::bootstrap::compiled::RoleDeclarationKind::Root
+                || attached_roles.contains(role);
             ConfiguredRoleLifecycle {
                 app: app.clone(),
                 display: format!("{app}.{role}"),
@@ -94,15 +128,15 @@ pub(in crate::release_set) fn configured_role_lifecycle_from_config(
         .collect()
 }
 
-// Enumerate derived auto-created service roles from one validated snapshot.
+// Enumerate auto-created Component roles from one validated snapshot.
 pub(in crate::release_set) fn configured_role_auto_create_from_config(
     config: &ConfigModel,
 ) -> BTreeSet<String> {
     let mut auto_create = BTreeSet::<String>::new();
 
-    for tree_spec in config.tree_specs.values() {
+    for component_spec in config.component_specs.values() {
         auto_create.extend(
-            tree_spec
+            component_spec
                 .auto_create_roles()
                 .iter()
                 .map(|role| role.as_str().to_string()),
@@ -118,8 +152,8 @@ pub(in crate::release_set) fn configured_role_topups_from_config(
 ) -> BTreeMap<String, String> {
     let mut topups = BTreeMap::<String, String>::new();
 
-    for tree_spec in config.tree_specs.values() {
-        for (role, canister) in &tree_spec.canisters {
+    for component_spec in config.component_specs.values() {
+        for (role, canister) in component_spec.canister_configs() {
             if let Some(policy) = &canister.topup {
                 topups.insert(
                     role.as_str().to_string(),
@@ -142,8 +176,12 @@ pub(in crate::release_set) fn configured_role_metrics_profiles_from_config(
 ) -> BTreeMap<String, String> {
     let mut profiles = BTreeMap::<String, String>::new();
 
-    for tree_spec in config.tree_specs.values() {
-        for (role, canister) in &tree_spec.canisters {
+    if config.roles.contains_key(&CanisterRole::ROOT) {
+        profiles.insert(CanisterRole::ROOT.as_str().to_string(), "root".to_string());
+    }
+
+    for component_spec in config.component_specs.values() {
+        for (role, canister) in component_spec.canister_configs() {
             let role_name = role.as_str().to_string();
             let profile = metrics_profile_label(canister.resolved_metrics_profile(role));
             match profiles.get(&role_name) {

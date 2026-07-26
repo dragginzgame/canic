@@ -17,7 +17,7 @@ use canic_core::api::lifecycle::metrics::{
 use canic_core::api::runtime::install::ModuleSourceRuntimeApi;
 use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{
-    config::schema::TreeSpecConfig,
+    config::{ComponentTopology, schema::CanisterPool},
     domain::pool::CanisterPoolStatus,
     error::{InternalError, InternalErrorOrigin},
     ops::{
@@ -49,26 +49,36 @@ use canic_core::{
     log,
     log::Topic,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 ///
 /// RootBootstrapContext
 ///
 
 struct RootBootstrapContext {
-    tree_spec_config: TreeSpecConfig,
+    component_topology: ComponentTopology,
+    pool: CanisterPool,
     build_network: Option<BuildNetwork>,
 }
 
 impl RootBootstrapContext {
     fn load() -> Result<Self, InternalError> {
-        let tree_spec_config = ConfigOps::current_tree_spec()?;
+        let component_topology = ConfigOps::component_topology()?;
         let build_network = BuildNetworkOps::build_network();
 
         Ok(Self {
-            tree_spec_config,
+            component_topology,
+            pool: CanisterPool::default(),
             build_network,
         })
+    }
+
+    fn auto_create_roles(&self) -> BTreeSet<CanisterRole> {
+        self.component_topology
+            .component_specs
+            .iter()
+            .map(|component_spec| component_spec.component_role.clone())
+            .collect()
     }
 }
 
@@ -137,7 +147,7 @@ fn root_missing_staged_release_roles(
 ) -> Result<Vec<CanisterRole>, InternalError> {
     let mut missing = Vec::new();
 
-    for role in data.tree_spec_config.auto_create_roles() {
+    for role in data.auto_create_roles() {
         if role.is_wasm_store() {
             continue;
         }
@@ -455,7 +465,7 @@ pub async fn root_create_canisters() -> Result<(), InternalError> {
         Topic::Init,
         Info,
         "auto_create: {:?}",
-        data.tree_spec_config.auto_create_roles()
+        data.auto_create_roles()
     );
 
     ensure_required_wasm_store_canister().await?;
@@ -494,15 +504,14 @@ pub fn root_rebuild_directories_from_registry() -> Result<(), InternalError> {
 
 async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_imports: bool) {
     let initial_cfg = data
-        .tree_spec_config
         .pool
         .import
         .initial
         .map_or_else(|| "unset".to_string(), |v| v.to_string());
 
     let import_list = match data.build_network {
-        Some(BuildNetwork::Local) => data.tree_spec_config.pool.import.local.clone(),
-        Some(BuildNetwork::Ic) => data.tree_spec_config.pool.import.ic.clone(),
+        Some(BuildNetwork::Local) => data.pool.import.local.clone(),
+        Some(BuildNetwork::Ic) => data.pool.import.ic.clone(),
         None => {
             log!(
                 Topic::CanisterPool,
@@ -514,20 +523,17 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
     };
 
     let initial_limit = data
-        .tree_spec_config
         .pool
         .import
         .initial
-        .map_or(data.tree_spec_config.pool.minimum_size as usize, |count| {
-            count as usize
-        });
+        .map_or(data.pool.minimum_size as usize, |count| count as usize);
 
     log!(
         Topic::CanisterPool,
         Info,
         "pool import cfg: net={} min={} init={} limit={} wait={}",
         data.build_network.map_or("unknown", BuildNetwork::as_str),
-        data.tree_spec_config.pool.minimum_size,
+        data.pool.minimum_size,
         initial_cfg,
         initial_limit,
         wait_for_queued_imports
@@ -543,7 +549,7 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
         );
     }
 
-    if initial_limit == 0 && !data.tree_spec_config.auto_create_roles().is_empty() {
+    if initial_limit == 0 && !data.auto_create_roles().is_empty() {
         log!(
             Topic::CanisterPool,
             Warn,
@@ -558,10 +564,7 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
             "pool import skipped: empty list for net={}",
             data.build_network.map_or("unknown", BuildNetwork::as_str)
         );
-        log_pool_stats(
-            "after-empty-import-skip",
-            data.tree_spec_config.pool.minimum_size,
-        );
+        log_pool_stats("after-empty-import-skip", data.pool.minimum_size);
         return;
     }
 
@@ -571,7 +574,7 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
     import_queued_pool_canisters(queued, wait_for_queued_imports, &mut stats).await;
 
     log_pool_import_result(&stats, wait_for_queued_imports);
-    log_pool_stats("after-import", data.tree_spec_config.pool.minimum_size);
+    log_pool_stats("after-import", data.pool.minimum_size);
 }
 
 async fn import_initial_pool_canisters(initial: &[Principal], stats: &mut PoolImportStats) {
@@ -738,7 +741,7 @@ fn log_pool_import_result(stats: &PoolImportStats, wait_for_queued_imports: bool
 }
 
 async fn ensure_required_canisters(data: &RootBootstrapContext) -> Result<(), InternalError> {
-    for role in data.tree_spec_config.auto_create_roles() {
+    for role in data.auto_create_roles() {
         // ALWAYS re-check live registry
         if SubnetRegistryOps::has_role(&role) {
             CanisterOpsMetricsApi::record(
