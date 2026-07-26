@@ -11,8 +11,8 @@ use candid::Principal;
 use canic_core::{
     bootstrap::compiled::{ComponentTopology, ConfigModel},
     ids::{
-        ComponentSpecAdmission, ComponentSpecId, FleetRegistryAuthority, FleetSubnetRootBinding,
-        FleetSubnetRootLimits, SubnetId,
+        ComponentSpecAdmission, ComponentSpecId, ComponentTopologyDigest, FleetRegistryAuthority,
+        FleetSubnetRootBinding, FleetSubnetRootLimits, SubnetId,
     },
 };
 use std::collections::BTreeSet;
@@ -42,6 +42,45 @@ pub struct FleetSubnetRootTopologyInput {
     pub fleet_subnet_root: Principal,
     pub component_admissions: Vec<RootComponentAdmissionInput>,
     pub limits: FleetSubnetRootLimits,
+}
+
+///
+/// PlannedFleetSubnetRootTopologyInput
+///
+/// Exact root placement, admissions, and limits resolved before Canister creation.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PlannedFleetSubnetRootTopologyInput {
+    pub placement_subnet: SubnetId,
+    pub component_admissions: Vec<RootComponentAdmissionInput>,
+    pub limits: FleetSubnetRootLimits,
+}
+
+///
+/// PlannedFleetSubnetRootTopology
+///
+/// Canonical pre-creation root topology with no fabricated Canister principal.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PlannedFleetSubnetRootTopology {
+    pub placement_subnet: SubnetId,
+    pub component_admissions: Vec<ComponentSpecAdmission>,
+    pub component_topology_digest: ComponentTopologyDigest,
+    pub limits: FleetSubnetRootLimits,
+}
+
+///
+/// PlannedFleetTopology
+///
+/// Canonical Component Topology and every validated pre-creation root plan.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PlannedFleetTopology {
+    pub component_topology: ComponentTopology,
+    pub fleet_subnet_roots: Vec<PlannedFleetSubnetRootTopology>,
 }
 
 ///
@@ -75,11 +114,57 @@ pub enum FleetTopologyPlanError {
     #[error("root input repeats Component Spec admission '{component_spec}'")]
     DuplicateAdmission { component_spec: ComponentSpecId },
 
+    #[error("root input repeats placement Subnet '{placement_subnet}'")]
+    DuplicatePlacementSubnet { placement_subnet: SubnetId },
+
+    #[error("root placement Subnet must not be anonymous")]
+    AnonymousPlacementSubnet,
+
     #[error(transparent)]
     Topology(#[from] canic_core::bootstrap::compiled::ComponentTopologyError),
 
     #[error("root input references unknown Component Spec '{component_spec}'")]
     UnknownComponentSpec { component_spec: ComponentSpecId },
+}
+
+/// Finalize canonical pre-creation root plans without inventing Canister principals.
+pub fn plan_initial_fleet_topology(
+    config: &ConfigModel,
+    root_inputs: Vec<PlannedFleetSubnetRootTopologyInput>,
+) -> Result<PlannedFleetTopology, FleetTopologyPlanError> {
+    let component_topology = config.compile_component_topology()?;
+    let mut fleet_subnet_roots = root_inputs
+        .into_iter()
+        .map(|input| finalize_planned_root(&component_topology, input))
+        .collect::<Result<Vec<_>, _>>()?;
+    fleet_subnet_roots.sort_by_key(|root| root.placement_subnet);
+
+    let mut placement_subnets = BTreeSet::new();
+    for root in &fleet_subnet_roots {
+        if root.placement_subnet.as_principal() == &Principal::anonymous() {
+            return Err(FleetTopologyPlanError::AnonymousPlacementSubnet);
+        }
+        if !placement_subnets.insert(root.placement_subnet) {
+            return Err(FleetTopologyPlanError::DuplicatePlacementSubnet {
+                placement_subnet: root.placement_subnet,
+            });
+        }
+        component_topology.validate_planned_root(
+            &root.component_admissions,
+            root.component_topology_digest,
+            &root.limits,
+        )?;
+    }
+    let admissions = fleet_subnet_roots
+        .iter()
+        .map(|root| root.component_admissions.as_slice())
+        .collect::<Vec<_>>();
+    component_topology.validate_fleet_admissions(&admissions)?;
+
+    Ok(PlannedFleetTopology {
+        component_topology,
+        fleet_subnet_roots,
+    })
 }
 
 /// Finalize canonical root bindings without accepting caller-supplied hashes or digests.
@@ -152,6 +237,43 @@ fn finalize_root_binding(
         authority: authority.clone(),
         placement_subnet: input.placement_subnet,
         fleet_subnet_root: input.fleet_subnet_root,
+        component_admissions,
+        component_topology_digest: projection.digest()?,
+        limits: input.limits,
+    })
+}
+
+fn finalize_planned_root(
+    component_topology: &ComponentTopology,
+    mut input: PlannedFleetSubnetRootTopologyInput,
+) -> Result<PlannedFleetSubnetRootTopology, FleetTopologyPlanError> {
+    input
+        .component_admissions
+        .sort_by(|left, right| left.component_spec.cmp(&right.component_spec));
+
+    let mut seen = BTreeSet::new();
+    let mut component_admissions = Vec::with_capacity(input.component_admissions.len());
+    for admission in input.component_admissions {
+        if !seen.insert(admission.component_spec.clone()) {
+            return Err(FleetTopologyPlanError::DuplicateAdmission {
+                component_spec: admission.component_spec,
+            });
+        }
+        let component_spec = component_topology
+            .get(&admission.component_spec)
+            .ok_or_else(|| FleetTopologyPlanError::UnknownComponentSpec {
+                component_spec: admission.component_spec.clone(),
+            })?;
+        component_admissions.push(ComponentSpecAdmission {
+            component_spec: admission.component_spec,
+            spec_hash: component_spec.spec_hash,
+            maximum_root_instances: admission.maximum_root_instances,
+        });
+    }
+
+    let projection = component_topology.project_for_admissions(&component_admissions)?;
+    Ok(PlannedFleetSubnetRootTopology {
+        placement_subnet: input.placement_subnet,
         component_admissions,
         component_topology_digest: projection.digest()?,
         limits: input.limits,

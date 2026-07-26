@@ -7,7 +7,8 @@
 use crate::{
     config::{ComponentTopology, ComponentTopologyError},
     ids::{
-        ComponentBinding, ComponentChildBinding, ComponentSpecAdmission, FleetSubnetRootBinding,
+        ComponentBinding, ComponentChildBinding, ComponentSpecAdmission, ComponentTopologyDigest,
+        FleetSubnetRootBinding, FleetSubnetRootLimits,
     },
 };
 use candid::Principal;
@@ -33,13 +34,27 @@ impl ComponentTopology {
             return Err(ComponentTopologyError::RootPrincipalConflictsWithCoordinator);
         }
 
-        validate_root_limits(binding)?;
-        let projection = self.project_for_admissions(&binding.component_admissions)?;
+        self.validate_planned_root(
+            &binding.component_admissions,
+            binding.component_topology_digest,
+            &binding.limits,
+        )
+    }
+
+    /// Validate one root's complete pre-creation topology, admission, and limit plan.
+    pub fn validate_planned_root(
+        &self,
+        admissions: &[ComponentSpecAdmission],
+        component_topology_digest: ComponentTopologyDigest,
+        limits: &FleetSubnetRootLimits,
+    ) -> Result<Self, ComponentTopologyError> {
+        validate_root_limits(limits)?;
+        let projection = self.project_for_admissions(admissions)?;
         let expected = projection.digest()?;
-        if binding.component_topology_digest != expected {
+        if component_topology_digest != expected {
             return Err(ComponentTopologyError::RootTopologyDigestMismatch {
                 expected,
-                received: binding.component_topology_digest,
+                received: component_topology_digest,
             });
         }
 
@@ -164,8 +179,7 @@ impl ComponentTopology {
     }
 }
 
-fn validate_root_limits(binding: &FleetSubnetRootBinding) -> Result<(), ComponentTopologyError> {
-    let limits = &binding.limits;
+fn validate_root_limits(limits: &FleetSubnetRootLimits) -> Result<(), ComponentTopologyError> {
     for (field, value) in [
         (
             "maximum_component_instances",

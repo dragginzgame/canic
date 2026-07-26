@@ -6,8 +6,8 @@ Date: 2026-07-26
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.4`.
-- Open patch draft: `0.100.5`; no package-version change has been authorized.
+- Workspace package version: `0.100.5`.
+- Open patch draft: `0.100.6`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -26,6 +26,17 @@ admissions, each root's active release set and the root-local Wasm Store
 Catalog. The host builds one qualified Component/Component-Child artifact
 union per `ReleaseBuildId` and projects an exact release-set manifest for each
 root.
+
+The latest design amendment adds bounded non-parent Component Provisioning
+Grants and explicit initial-child cardinality. A Project Hub may cause a peer
+Project Instance to be created, but the selected Fleet Subnet Root remains its
+direct parent, controller, Registry owner and lifecycle executor. The root
+creates the Project Instance's required Ledger before activation; the optional
+Machine remains a later request from the exact Project Instance. Every root
+admitted for that Spec stores the complete Project Instance/Ledger/Machine
+artifact closure once. This amendment hard-replaces the intermediate
+Component Spec/Topology canonical encoding with schema/domain version 2 and is
+not yet implemented.
 
 Canic infrastructure now has its own exact three-entry artifact manifest for
 the Coordinator, Fleet Subnet Root and Wasm Store. The host directly installs
@@ -60,6 +71,9 @@ Registry slices replace the 0.99 root model.
   nested Components and child-owned children.
 - [x] Add `ComponentSpecId` and the canonical `ComponentInstanceId` type.
 - [x] Derive and freeze the canonical bounded Component Topology.
+- [ ] Hard-cut the canonical Component Spec/Topology encoding to version 2
+  with initial child cardinalities and non-parent provisioning grants.
+- [ ] Validate bounded grant targets, cycles and per-requester/root ceilings.
 - [ ] Replace the temporary environment Component Spec selector with protected
   `ComponentBinding`.
 - [x] Freeze `SubnetId`, Coordinator authority, `FleetSubnetRootBinding`,
@@ -87,8 +101,10 @@ Registry slices replace the 0.99 root model.
   qualified complete-build outputs.
 - [x] Freeze exact Spec-scoped Fleet Subnet Root Release-Set Manifest
   projection and canonical digests.
-- [ ] Materialize and persist one projected release-set manifest per planned
+- [x] Materialize and persist one projected release-set manifest per planned
   root.
+- [x] Freeze one immutable pre-effect Fleet install-plan boundary from exact
+  resolved Coordinator/root placement, admissions, limits and funding input.
 - [ ] Resolve and journal independent Coordinator and Fleet Subnet Root
   placements plus configured limits.
 - [ ] Freeze exact creation funding before each external effect.
@@ -111,6 +127,9 @@ Registry slices replace the 0.99 root model.
 
 - [ ] Implement durable root-local `ComponentInstanceId` allocation.
 - [ ] Implement admitted direct Component creation through the root.
+- [ ] Materialize every configured initial child before Component activation.
+- [ ] Implement same-root grant-checked peer Component provisioning while
+  retaining causal origin without parentage.
 - [ ] Implement authenticated Component-to-root Component Child effects.
 - [ ] Make the Fleet Subnet Root the required lifecycle controller and retain
   authoritative idempotent receipts.
@@ -183,7 +202,7 @@ authorization edge. Repeated or byte-identical artifacts count only once
 against the root's Wasm Store byte limit without deduplicating those
 authorization entries.
 
-The open 0.100.5 batch derives the exact application targets from the
+Released 0.100.5 derives the exact application targets from the
 validated complete-build snapshot, qualifies the current raw/gzip outputs
 against them and immutably persists the canonical union under its durable
 `ReleaseBuildId` before finalization. Loading revalidates canonical bytes,
@@ -191,10 +210,25 @@ release-build path identity and the Fleet-wide topology. Exact retry remains
 idempotent before or after finalization, while conflicts, unsafe artifact
 paths and first publication after finalization fail closed.
 
+The open 0.100.6 batch adds the immutable pre-effect `FleetInstallPlan`.
+It accepts already-resolved Coordinator/root Subnets, positive creation
+funding, admissions and limits; derives canonical pre-creation root topology
+without fabricated Canister principals; and projects every root manifest from
+the finalized application union. Root manifests publish first and the
+Fleet/network/release-build-bound plan publishes last. Exact and interrupted
+retry is idempotent, while conflicts, noncanonical documents, unsafe files,
+identity drift and topology drift fail closed. Different Fleets retain
+independent plan paths and may use the same physical Subnets.
+
+The version-2 Component Topology amendment for peer provisioning and initial
+children is design-only. The current source still implements the previously
+released topology contract until that hard cut is completed and validated.
+
 The current installer does not yet produce all three concrete infrastructure
 outputs or invoke the infrastructure persistence boundary. It does not yet
-materialize projected manifests from journalled root bindings or install
-planned Coordinator/root bindings. The repository
+resolve placement/funding input or invoke the new Fleet install-plan boundary
+before its legacy single-root creation path. It also does not install planned
+Coordinator/root bindings. The repository
 does not yet contain a genuine Fleet Coordinator runtime/export authority, so
 a correctly qualified Coordinator artifact cannot be produced by relabelling
 the Fleet Subnet Root runtime. Protected environment binding, Fleet Subnet
@@ -205,10 +239,10 @@ binding.
 
 ## Next Action
 
-Freeze resolved Coordinator/root placement, root admissions, configured
-limits and creation funding in the installation journal. Then project and
-immutably persist each exact root release-set manifest from the already
-durable application union without rebuilding shared artifacts.
+Add the trusted/operator placement and funding input boundary, resolve it to
+exact Coordinator/root Subnets and invoke the immutable Fleet install planner
+before any creation effect. The current legacy single-root creation path must
+not bypass that authority.
 
 Add the genuine Fleet Coordinator runtime and export authority before
 producing the Fleet Coordinator, Fleet Subnet Root and Wasm Store as three

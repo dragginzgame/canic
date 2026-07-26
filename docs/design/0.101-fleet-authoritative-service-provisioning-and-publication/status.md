@@ -9,7 +9,8 @@ Date: 2026-07-26
 - Implementation started: no.
 - Dependency: completed 0.100 qualified infrastructure, Fleet Subnet Root,
   Component Spec, root-local Component identity, topology-admitted Wasm Store
-  and Registry architecture.
+  and Registry architecture, including Component Provisioning Grants and
+  initial-child materialization.
 - Open design blockers: none. Application-data replication remains a separate
   later design and is not an implementation blocker for 0.101 topology,
   purpose or discovery contracts.
@@ -35,6 +36,16 @@ authenticated administrator may monotonically add exact placements on
 pre-admitted roots, including a root that completed the separate ordinary
 root-registration lifecycle before scale-out. Toko's one-cell-per-root choice
 and maximum of ten are example policy values, not protocol limits.
+
+The design now also carries the required high-cardinality Toko path. A
+singleton published Project Hub Authority may use the exact compiled
+`project_hub -> project_instance` Component Provisioning Grant to request an
+ordinary Project Instance on the same or another eligible root. The
+Coordinator is not on this per-instance path. The selected root allocates and
+controls the Project Instance, creates its required Ledger before activation
+and retains the receipt; only the Project Instance may later create its
+optional Machine. The Hub's `project_id -> ComponentBinding` map is
+application data, not Canic parentage.
 
 0.101 does not consume a 0.100 installation, preserve existing Canisters,
 synchronize application data, choose load-balancer health, scale in, promote a
@@ -69,6 +80,8 @@ change that installation ownership.
   application policy can enforce Authority/Replica purpose.
 - [ ] Derive one semantic protected configuration digest over groups,
   deployments and service targets.
+- [ ] Resolve every cross-root provisioner to an exact Component Spec with a
+  compiled target grant and configured Fleet-service occurrence.
 - [ ] Remove singleton-Spec and sole-root-admission service assumptions.
 - [ ] Validate worst-case Spec demand, placement density/spread and the
   zero-initial/non-Authority versus singleton-Authority count rules.
@@ -85,6 +98,10 @@ change that installation ownership.
 - [ ] Enforce each root's immutable aggregate group-placement ceiling.
 - [ ] Reuse canonical root-local `ComponentInstanceId` allocation and
   platform lifecycle.
+- [ ] Accept grant-checked peer requests from exact current Fleet-service
+  Components without a Coordinator operation.
+- [ ] Materialize required initial children before activation and preserve
+  zero-initial optional roles for later exact-owner requests.
 - [ ] Keep new Components runtime `Prepared`.
 - [ ] Persist group-partitioned Component Registry evidence and one aggregate
   idempotent root receipt.
@@ -97,6 +114,8 @@ change that installation ownership.
   Fleet Registry revision.
 - [ ] Project exact service ID, mode and purpose-bearing member bindings
   through Fleet Directory.
+- [ ] Use exact current service membership as cross-root requester identity
+  without treating membership itself as a provisioning grant.
 - [ ] Derive one root-local Component Group Directory per placement without
   introducing group parentage or lifecycle authority.
 - [ ] Send exact Fleet, Component and Group Directories before activation.
@@ -141,19 +160,27 @@ change that installation ownership.
 - [ ] Prove configured Replica discovery never claims data readiness,
   promotion or failover and configured PoolMember discovery never claims
   health, load-balancer eligibility or consistency.
+- [ ] Prove cross-root Project Instance provisioning, required Ledger
+  materialization, optional Machine ownership and Coordinator-free retry.
 - [ ] Complete stale-path and design closeout checks.
 
 ## Completion
 
 - [ ] The Toko journey provisions database A, B and C Authorities on one root.
-- [ ] The same database group is reused inside a nested project-cell group to
-  provision a project hub plus same-Spec database A, B and C Replicas on at
-  least two other roots.
-- [ ] One project-cell scale-out resumes exactly across forced interruption.
+- [ ] The Toko journey provisions the singleton Project Hub Authority on a
+  separate Project-control root.
+- [ ] The same database group is reused inside a nested project-data-cell
+  group to provision same-Spec database A, B and C Replicas on at least two
+  other roots.
+- [ ] One project-data-cell scale-out resumes exactly across forced
+  interruption.
+- [ ] The Project Hub provisions at least three ordinary Project Instances
+  across project roots; each receives one Ledger and exactly one later
+  receives its optional Machine.
 - [ ] A same-Spec ActivePool packs multiple stable placements on one root,
   spans at least two roots and publishes one atomic scale-out addition.
 - [ ] All design criteria and required journeys pass.
-- [ ] No Tree identity, runtime Group Canister, nested Component, child target,
-  singleton-Spec restriction, adoption, prior-release transition or
-  compatibility path survives.
+- [ ] No Tree identity, runtime Group Canister, nested Component, Component
+  Child group/service target, singleton-Spec restriction, adoption,
+  prior-release transition or compatibility path survives.
 - [ ] Current status and changelog record the final evidence.

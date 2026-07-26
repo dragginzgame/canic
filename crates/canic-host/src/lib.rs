@@ -19,6 +19,7 @@ pub mod durable_io;
 mod entropy;
 pub mod evidence_envelope;
 pub mod fleet_catalog;
+pub mod fleet_install_plan;
 pub mod format;
 pub mod icp;
 pub mod icp_config;

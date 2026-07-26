@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.4`.
-- The latest published release is `v0.100.4` at
-  `e293d07eeac5b2764571b3c07e191d3c404dc964`.
-- The `v0.100.4` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `16f612acb4e4a217c62559c8d900eec08256832910dceced400879a37982f7dc`.
+- The workspace package version is `0.100.5`.
+- The latest published release is `v0.100.5` at
+  `f190ab69cf6f344746de928c6ad20c87b01907ba`.
+- The `v0.100.5` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `7dd51e09d88b736911d96ef63a10f1bf308a426546fcbcd867243b12db1e70c0`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -60,14 +60,22 @@ Historical detail is archived at:
   release-set manifests preserve every admitted Component Spec and child edge,
   reject build/topology/projection drift and count byte-identical Store
   payloads once without collapsing authorization.
-- The open `0.100.5` implementation derives those application build targets
+- Released `0.100.5` derives those application build targets
   from the validated complete-build snapshot, qualifies the exact current
   raw/gzip outputs and immutably persists the canonical union under its
   durable release-build identity before finalization. Loading revalidates
   canonical bytes, build/path identity and topology. Exact retry is
   idempotent before or after finalization, while conflicts, unsafe paths and
-  first publication after finalization fail closed. Journalled root placement
-  and per-root release-set materialization remain next.
+  first publication after finalization fail closed.
+- The open `0.100.6` implementation freezes an immutable pre-effect Fleet
+  install plan from exact resolved Coordinator/root Subnets, positive creation
+  funding, root admissions and limits. It derives root topology without
+  fabricated Canister principals, projects and immutably publishes every root
+  release-set manifest from the finalized application union, then publishes
+  the Fleet/network/release-build-bound plan last. Exact retry and interrupted
+  manifest-first publication recover; conflicts, noncanonical or symlinked
+  authority, identity drift and topology drift fail closed. The current
+  installer does not yet resolve those inputs or invoke the new boundary.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -75,7 +83,14 @@ Historical detail is archived at:
   non-recursive Component Specs. One Spec declares one direct Component role
   and its direct children, with a Fleet instance ceiling distributed into
   positive root-local ceilings. A root allocates `ComponentInstanceId` only
-  when it creates a concrete Component. There is no Tree identity, empty
+  when it creates a concrete Component. The amended target topology adds
+  explicit initial-child cardinality and bounded non-parent Component
+  Provisioning Grants under canonical schema/domain version 2. A grant lets an
+  exact Component request one peer Spec but never makes it the target's
+  parent, controller or Registry owner. Required children exist before
+  Component activation; zero-initial optional children remain later
+  exact-owner requests. This amendment is design-only and not yet in the
+  current 0.100 source. There is no Tree identity, empty
   workload partition, runtime Group Canister, nested Component or child
   manager. The Fleet Subnet Root is the required lifecycle controller and
   owns independent Component Registry/Directory partitions plus authoritative
@@ -117,8 +132,14 @@ Historical detail is archived at:
   It cannot scale in, expand admissions, promote a Replica or claim
   application-data readiness. Toko's one-cell-per-root choice and value ten
   are example policy, not protocol constants. Independently scaled tiers use
-  separate deployments; dynamic high-cardinality local shards remain direct
-  Component Children. Grouped Components and their roots remain fenced from
+  separate deployments. Dynamic high-cardinality leaf shards remain direct
+  Component Children. A dynamic unit that must own children is instead an
+  ordinary peer Component: an exact published Project Hub may use its compiled
+  grant to ask an eligible root for a Project Instance, whose required Ledger
+  is created before activation and whose optional Machine remains under the
+  Project Instance. The target root, not the Hub or Coordinator, owns that
+  lifecycle, and the Coordinator is not on the per-instance path. Grouped
+  Components and their roots remain fenced from
   ordinary removal while placement or service references exist. Neither
   design consumes an installation from its predecessor. The proposed 0.102
   diagnostic and 0.103 transport lines use the same reinstall-only boundary.
@@ -1325,15 +1346,14 @@ First primary results:
 
 Continue 0.100 Slice 2 from the
 [implementation tracker](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md).
-The canonical application artifact union is now durable before release-build
-finalization. Next, freeze resolved Coordinator/root placement, root
-admissions, configured limits and creation funding in the install journal,
-then immutably project each root's exact release-set manifest from that union
-without rebuilding shared artifacts. Add a genuine Fleet Coordinator runtime
-before producing or persisting the complete three-role infrastructure
-manifest; do not relabel the Fleet Subnet Root runtime or emit a placeholder.
-Do not permit nested Components, merge roots belonging to different Fleets on
-one Subnet or consume an earlier installation.
+The immutable pre-effect Fleet install plan and per-root release sets now
+exist. Next, add the trusted/operator placement and funding input boundary,
+resolve it to exact Coordinator/root Subnets and invoke the planner before any
+creation effect; the legacy single-root path must not bypass it. Add a genuine
+Fleet Coordinator runtime before producing or persisting the complete
+three-role infrastructure manifest—do not relabel the Fleet Subnet Root or
+emit a placeholder. Do not permit nested Components, merge roots belonging to
+different Fleets on one Subnet or consume an earlier installation.
 
 ## Historical Release Detail
 
