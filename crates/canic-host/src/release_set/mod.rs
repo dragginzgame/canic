@@ -17,9 +17,12 @@ pub use config::{
     plan_rename_app_role, read_app_config_identity, rename_app_role,
 };
 pub use infrastructure::{
-    CanicInfrastructureArtifactEntry, CanicInfrastructureArtifactInput,
-    CanicInfrastructureArtifactManifest, CanicInfrastructureArtifactManifestError,
-    CanicInfrastructureRole,
+    CanicInfrastructureArtifactBuildOutput, CanicInfrastructureArtifactEntry,
+    CanicInfrastructureArtifactInput, CanicInfrastructureArtifactManifest,
+    CanicInfrastructureArtifactManifestError, CanicInfrastructureArtifactPersistenceError,
+    CanicInfrastructureRole, PersistedCanicInfrastructureArtifactManifest,
+    compile_and_persist_canic_infrastructure_artifact_manifest,
+    load_persisted_canic_infrastructure_artifact_manifest,
 };
 pub use manifest::{ReleaseSetEntry, RootReleaseSetManifest, load_root_release_set_manifest};
 pub(crate) use manifest::{

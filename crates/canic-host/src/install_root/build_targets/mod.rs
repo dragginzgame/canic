@@ -16,6 +16,9 @@ pub(super) fn run_canic_build_targets(
     context: &WorkspaceBuildContext,
     targets: &[InstallBuildTarget],
 ) -> Result<Vec<CurrentCanisterArtifactBuildOutput>, Box<dyn std::error::Error>> {
+    if context.release_build_id.is_none() {
+        return Err("complete install build is missing its durable release-build identity".into());
+    }
     if workspace_build_context_once(context)? {
         for line in context.lines() {
             println!("{line}");
