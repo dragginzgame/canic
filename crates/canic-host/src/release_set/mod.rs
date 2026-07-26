@@ -2,6 +2,7 @@
 
 mod artifact;
 mod config;
+mod infrastructure;
 mod manifest;
 mod paths;
 
@@ -14,6 +15,11 @@ pub use config::{
     ConfiguredRoleLifecycle, DeclaredAppRole, LOCAL_ROOT_MIN_READY_CYCLES, RenamedAppRole,
     attach_app_role, declare_app_role, plan_attach_app_role, plan_declare_app_role,
     plan_rename_app_role, read_app_config_identity, rename_app_role,
+};
+pub use infrastructure::{
+    CanicInfrastructureArtifactEntry, CanicInfrastructureArtifactInput,
+    CanicInfrastructureArtifactManifest, CanicInfrastructureArtifactManifestError,
+    CanicInfrastructureRole,
 };
 pub use manifest::{ReleaseSetEntry, RootReleaseSetManifest, load_root_release_set_manifest};
 pub(crate) use manifest::{

@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.0`.
-- The latest published release is `v0.100.0` at
-  `b100e83c2dcfcd2f807597d7906578315a620fec`.
-- The `v0.100.0` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `f45b8feb33fcc8537145a7f9b4d1592e74ad42df3a54b5b83920bd73f4d070e7`.
+- The workspace package version is `0.100.1`.
+- The latest published release is `v0.100.1` at
+  `dd5e05c7e82a61e60738732a815308d641298bb8`.
+- The `v0.100.1` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `33c0ed6e599f1c7c023ee82b050edb0eada497149f993ab6eed4a85dadaf9843`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
-- The open `0.100.1` implementation hard-cuts the intermediate
+- Released `0.100.1` hard-cuts the intermediate
   `[tree_specs.*]`/`[tree_groups.*]` configuration and all three released Tree
   identity types across bootstrap, host/CLI projections, scaffolding,
   fixtures and active guidance. The maintained source now accepts only flat
@@ -38,6 +38,13 @@ Historical detail is archived at:
   against the same canonical Fleet topology. The current Spec environment
   selector remains transitional until real allocation supplies protected
   Component bindings.
+- The open `0.100.2` implementation freezes the separate, canonical
+  three-entry Canic Infrastructure Artifact Manifest for the Fleet
+  Coordinator, Fleet Subnet Root and Wasm Store. It binds every entry to one
+  `ReleaseBuildId`, exact package and raw/gzip path, derives byte lengths and
+  SHA-256 digests from matching artifact bytes and rejects incomplete,
+  duplicate, cross-build or noncanonical evidence. Complete-build population,
+  persistence and installation wiring remain next.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -92,6 +99,13 @@ Historical detail is archived at:
   ordinary removal while placement or service references exist. Neither
   design consumes an installation from its predecessor. The proposed 0.102
   diagnostic and 0.103 transport lines use the same reinstall-only boundary.
+- Proposed 0.104 reserves the bounded Coordinator Worker concept. A
+  Coordinator may create one or more Fleet-scoped infrastructure Workers to
+  partition high-cardinality operational work while remaining the sole Fleet
+  policy authority. Root cycles observation and top-up are the motivating
+  push-first example. Worker identity, kinds, artifact carriage, placement,
+  funding, replacement and recovery remain deliberately undecided; no Worker
+  is part of 0.100 or 0.101.
 - Released `0.99.33` pins the maintained operator toolchain to ICP CLI 1.2.0
   and Rust 1.97.1 while preserving the published-crate MSRV.
 - Released `0.99.32` makes the active 0.99–0.103 design sequence
