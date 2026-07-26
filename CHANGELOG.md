@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.2` freezes the exact three-role Canic infrastructure artifact
+  manifest and records the bounded 0.104 Coordinator Worker proposal for
+  partitioned Fleet operations outside Component topology.
+
 - `0.100.1` hard-cuts staged Tree declarations to flat Component Specs and
   freezes canonical topology compilation, immutable Fleet Subnet Root
   admission/binding contracts, qualified infrastructure installation and the

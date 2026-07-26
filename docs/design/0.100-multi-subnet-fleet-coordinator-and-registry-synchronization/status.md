@@ -6,8 +6,8 @@ Date: 2026-07-26
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.0`.
-- Open patch draft: `0.100.1`; no package-version change has been authorized.
+- Workspace package version: `0.100.1`.
+- Open patch draft: `0.100.2`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -34,7 +34,7 @@ verified infrastructure artifact.
 The Coordinator is not part of a Component hierarchy and is not installed
 through a Wasm Store.
 
-The open 0.100.1 batch has removed the staged Tree declaration layer from
+Released 0.100.1 removed the staged Tree declaration layer from
 source, generated bootstrap, host/CLI projections, scaffolding, fixtures and
 active guidance. It retains no Tree identity or compatibility alias. Runtime
 authority is still transitional until the later binding, admission and
@@ -76,7 +76,10 @@ Registry slices replace the 0.99 root model.
 - [x] Canonicalize every Component Spec and freeze its topology hash.
 - [x] Distribute positive per-root Component Spec admissions whose sum does
   not exceed the Fleet ceiling.
-- [ ] Build and freeze the exact Canic Infrastructure Artifact Manifest.
+- [x] Freeze the exact three-role Canic Infrastructure Artifact Manifest
+  model, compiler and canonical digest.
+- [ ] Populate and persist that manifest from the qualified complete-build
+  outputs.
 - [ ] Build the exact qualified artifact union once under one release-build
   identity.
 - [ ] Construct and freeze one exact Fleet Subnet Root Release-Set Manifest
@@ -127,7 +130,7 @@ Registry slices replace the 0.99 root model.
 
 ## Current Batch
 
-The open 0.100.1 implementation now parses only flat
+Released 0.100.1 parses only flat
 `[component_specs.*]`, compiles all Component roles and direct children into
 bootstrap input, builds their union through host projections and exposes
 `--component-spec` attachment with no old flag. Root is implicit
@@ -151,21 +154,32 @@ Fleets may reuse one physical Subnet. Root bootstrap and managed release-role
 projection now consume compiled topology instead of raw Component Spec
 configuration.
 
-The current installer does not yet journal or install those planned root
-bindings. Coordinator installation, protected environment binding, Fleet
-Subnet Root lifecycle, exact root release-set/Wasm Store authority and Fleet
-Registry authority remain unimplemented. A root therefore has no fabricated
-"current Spec"; the existing role-only child-provisioning path remains
-intentionally non-releasable until real allocation supplies the exact
-protected Component binding.
+The open 0.100.2 batch defines the infrastructure artifact family independently
+from application release sets. Its compiler admits exactly one Fleet
+Coordinator, Fleet Subnet Root and Wasm Store entry from one
+`ReleaseBuildId`, derives raw/gzip lengths and hashes from matching bytes,
+canonicalizes entry order and freezes deterministic manifest bytes and digest.
+It rejects missing, duplicate, cross-build, unsafe-path, invalid-package,
+corrupt, representation-mismatched and noncanonical evidence.
+
+The current installer does not yet populate or persist that manifest from
+qualified build outputs and does not journal or install planned Coordinator or
+root bindings. Protected environment binding, Fleet Subnet Root lifecycle,
+exact root release-set/Wasm Store authority and Fleet Registry authority
+remain unimplemented. The temporary Component Spec selector remains until
+real allocation supplies the exact protected Component binding.
 
 ## Next Action
 
-Build the three-entry infrastructure manifest and qualified application
-artifact union once, then project exact root-specific release-set manifests
-from the now-validated root admissions. Freeze resolved
-Coordinator/root placement and funding in the installation journal, install
-the Coordinator before the roots, and commit the genesis Fleet Registry.
+Connect the infrastructure manifest compiler to one qualified complete build,
+persist its canonical bytes under the `ReleaseBuildId` and reject any build
+that cannot supply all three exact infrastructure roles. Then build the
+qualified application artifact union once and project exact root-specific
+release-set manifests from the validated root admissions.
+
+After artifact finalization, freeze resolved Coordinator/root placement and
+funding in the installation journal, install the Coordinator before the roots,
+and commit the genesis Fleet Registry.
 
 Replace the temporary Component Spec environment selector only when root-local
 allocation and Component Registry commitment can supply a real
