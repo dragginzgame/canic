@@ -6,7 +6,7 @@
 
 use super::*;
 use crate::{cdk::types::Cycles, domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW};
-use std::{fmt::Write as _, fs, path::PathBuf};
+use std::{collections::BTreeMap, fmt::Write as _, fs, path::PathBuf};
 
 fn hex(bytes: impl AsRef<[u8]>) -> String {
     let bytes = bytes.as_ref();
@@ -48,7 +48,7 @@ fn component_spec_config(role: &str, maximum_instances: u32) -> ComponentSpecCon
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
-        children: Default::default(),
+        children: BTreeMap::default(),
     }
 }
 

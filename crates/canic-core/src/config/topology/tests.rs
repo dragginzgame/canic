@@ -289,7 +289,7 @@ fn root_projection_requires_canonical_positive_exact_admissions() {
         Err(ComponentTopologyError::ZeroRootAdmission { .. })
     );
 
-    let mut wrong_hash = projects.clone();
+    let mut wrong_hash = projects;
     wrong_hash.spec_hash[0] ^= 0xff;
     std::assert_matches!(
         topology.project_for_admissions(&[wrong_hash]),
@@ -402,7 +402,7 @@ fn protected_bindings_validate_exact_root_component_and_child_ownership() {
         .validate_component_child_binding(&root, &child)
         .expect("exact child binding");
 
-    let mut wrong_role = child.clone();
+    let mut wrong_role = child;
     wrong_role.role = CanisterRole::from("user_shard");
     std::assert_matches!(
         topology.validate_component_child_binding(&root, &wrong_role),

@@ -193,7 +193,7 @@ fn one_fleet_rejects_duplicate_subnet_but_different_fleets_may_reuse_it() {
         plan_fleet_topology(
             &config,
             authority(3),
-            vec![first.clone(), second_same_subnet],
+            vec![first, second_same_subnet],
         ),
         Err(FleetTopologyPlanError::Topology(
             canic_core::bootstrap::compiled::ComponentTopologyError::DuplicateFleetSubnetRootSubnet { .. }

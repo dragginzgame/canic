@@ -59,9 +59,9 @@ fn install_truth_artifact_gate_blocks_materialized_digest_drift() {
     fs::write(
         &config_path,
         demo_config_source(
-            r#"
+            r"
 
-"#,
+",
         ),
     )
     .expect("write config");
@@ -192,9 +192,9 @@ fn install_truth_gate_blocks_missing_expected_root_canister() {
     fs::write(
         &config_path,
         demo_config_source(
-            r#"
+            r"
 
-"#,
+",
         ),
     )
     .expect("write config");
@@ -266,9 +266,9 @@ fn install_truth_gate_blocks_all_safety_report_hard_failures() {
     fs::write(
         &config_path,
         demo_config_source(
-            r#"
+            r"
 
-"#,
+",
         ),
     )
     .expect("write config");

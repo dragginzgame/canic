@@ -70,9 +70,9 @@ fn install_truth_gate_persists_machine_readable_receipt() {
     fs::write(
         &config_path,
         demo_config_source(
-            r#"
+            r"
 
-"#,
+",
         ),
     )
     .expect("write config");
