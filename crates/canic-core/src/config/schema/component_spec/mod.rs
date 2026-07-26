@@ -9,7 +9,7 @@ use crate::{
         candid::{CandidType, Principal},
         types::Cycles,
     },
-    ids::CanisterRole,
+    ids::{CanisterRole, ComponentSpecId},
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -122,6 +122,10 @@ pub struct ComponentSpecConfig {
 
     #[serde(default)]
     pub metrics: MetricsCanisterConfig,
+
+    /// Exact peer Component Specs that instances of this Spec may request.
+    #[serde(default)]
+    pub provisions: BTreeMap<ComponentSpecId, ComponentProvisioningGrantConfig>,
 
     /// Exact direct children owned by each instance of this Component.
     #[serde(default)]
@@ -254,6 +258,11 @@ impl Default for CyclesFundingBudgetConfig {
 #[serde(deny_unknown_fields)]
 pub struct ComponentChildConfig {
     pub kind: ComponentChildKind,
+
+    /// Direct children the root materializes before activating the Component.
+    #[serde(default)]
+    pub initial_instances: u32,
+
     pub maximum_instances: u32,
 
     #[serde(
@@ -299,6 +308,18 @@ impl ComponentChildConfig {
             metrics: self.metrics,
         }
     }
+}
+
+///
+/// ComponentProvisioningGrantConfig
+///
+/// Bounded permission for one Component Spec to request one peer Component Spec.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ComponentProvisioningGrantConfig {
+    pub maximum_instances_per_requester_per_root: u32,
 }
 
 ///

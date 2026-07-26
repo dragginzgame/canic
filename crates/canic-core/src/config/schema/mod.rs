@@ -59,6 +59,8 @@ pub const NAME_MAX_BYTES: usize = 40;
 pub const MAX_FLEET_COMPONENT_INSTANCES: u32 = 4_096;
 /// Maximum distinct direct-child roles declared by one Component Spec.
 pub const MAX_COMPONENT_CHILD_ROLES: usize = 256;
+/// Maximum outbound peer-Component grants declared by one Component Spec.
+pub const MAX_COMPONENT_PROVISIONING_GRANTS: usize = 256;
 
 ///
 /// AppNameIssue
@@ -298,6 +300,7 @@ impl ConfigModel {
             standards: StandardsCanisterConfig::default(),
             diagnostics: DiagnosticsCanisterConfig::default(),
             metrics: MetricsCanisterConfig::default(),
+            provisions: BTreeMap::new(),
             children: BTreeMap::new(),
         };
 

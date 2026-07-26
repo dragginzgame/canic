@@ -107,10 +107,7 @@ fn configure_root_env(root_pid: Principal) -> EnvRestore {
     Env::import(EnvData {
         record: EnvRecord {
             root_pid: Some(root_pid),
-            component_spec: Some(
-                crate::ids::ComponentSpecId::try_from(String::from("default"))
-                    .expect("default Component Spec ID"),
-            ),
+            component_spec: None,
             ..EnvRecord::default()
         },
     });
@@ -716,7 +713,7 @@ fn authorize_request_cycles_records_kill_switch_denial_metrics() {
 }
 
 #[test]
-fn authorize_request_cycles_uses_configured_child_funding_policy() {
+fn root_cycles_funding_uses_child_role_policy_without_a_component_spec() {
     CyclesFundingMetrics::reset();
     CyclesFundingLedgerOps::reset_for_tests();
 

@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.5`.
-- The latest published release is `v0.100.5` at
-  `f190ab69cf6f344746de928c6ad20c87b01907ba`.
-- The `v0.100.5` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `7dd51e09d88b736911d96ef63a10f1bf308a426546fcbcd867243b12db1e70c0`.
+- The workspace package version is `0.100.6`.
+- The latest published release is `v0.100.6` at
+  `98b88752a380a43ebd45cd88f632a3af0e74cb32`.
+- The `v0.100.6` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `8334646025f1e75633cb01e35f80a10f14afbf76e0b7739371eaebabaf193dab`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -67,7 +67,7 @@ Historical detail is archived at:
   canonical bytes, build/path identity and topology. Exact retry is
   idempotent before or after finalization, while conflicts, unsafe paths and
   first publication after finalization fail closed.
-- The open `0.100.6` implementation freezes an immutable pre-effect Fleet
+- Released `0.100.6` freezes an immutable pre-effect Fleet
   install plan from exact resolved Coordinator/root Subnets, positive creation
   funding, root admissions and limits. It derives root topology without
   fabricated Canister principals, projects and immutably publishes every root
@@ -76,6 +76,20 @@ Historical detail is archived at:
   manifest-first publication recover; conflicts, noncanonical or symlinked
   authority, identity drift and topology drift fail closed. The current
   installer does not yet resolve those inputs or invoke the new boundary.
+- The open `0.100.7` hard-cuts the Component Spec and Component Topology
+  canonical domains to schema version 2. Source config now accepts explicit
+  direct-child `initial_instances` and bounded
+  `[component_specs.<requester>.provisions.<target>]` grants. Compilation
+  rejects missing/self/cyclic/unbounded grants, malformed cardinality and
+  noncanonical protected order. Spec hashes bind required/optional child
+  counts while grant policy remains topology-level. Each root projection
+  retains grants incoming to its admitted targets without admitting the
+  requester Spec or importing requester artifacts, and root validation proves
+  one Component plus its required children fits the managed-Canister limit.
+  Runtime initial-child materialization, provisioning origin/accounting and
+  grant-authenticated Component creation remain subsequent 0.100 slices.
+  The same open patch also restores direct-root-child cycles funding without
+  assigning infrastructure roots a Component Spec.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -85,12 +99,12 @@ Historical detail is archived at:
   positive root-local ceilings. A root allocates `ComponentInstanceId` only
   when it creates a concrete Component. The amended target topology adds
   explicit initial-child cardinality and bounded non-parent Component
-  Provisioning Grants under canonical schema/domain version 2. A grant lets an
-  exact Component request one peer Spec but never makes it the target's
-  parent, controller or Registry owner. Required children exist before
-  Component activation; zero-initial optional children remain later
-  exact-owner requests. This amendment is design-only and not yet in the
-  current 0.100 source. There is no Tree identity, empty
+  Provisioning Grants under canonical schema/domain version 2. Those
+  compile-time contracts and root projections are now implemented; lifecycle
+  execution remains pending. A grant lets an exact Component request one peer
+  Spec but never makes it the target's parent, controller or Registry owner.
+  Required children exist before Component activation; zero-initial optional
+  children remain later exact-owner requests. There is no Tree identity, empty
   workload partition, runtime Group Canister, nested Component or child
   manager. The Fleet Subnet Root is the required lifecycle controller and
   owns independent Component Registry/Directory partitions plus authoritative

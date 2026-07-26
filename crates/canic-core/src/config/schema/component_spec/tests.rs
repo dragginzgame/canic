@@ -7,7 +7,7 @@
 use super::*;
 use crate::{
     cdk::types::TC,
-    config::schema::{NAME_MAX_BYTES, Validate},
+    config::schema::{MAX_COMPONENT_PROVISIONING_GRANTS, NAME_MAX_BYTES, Validate},
 };
 
 fn component_spec(role: &str) -> ComponentSpecConfig {
@@ -25,6 +25,7 @@ fn component_spec(role: &str) -> ComponentSpecConfig {
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
+        provisions: BTreeMap::new(),
         children: BTreeMap::new(),
     }
 }
@@ -32,6 +33,7 @@ fn component_spec(role: &str) -> ComponentSpecConfig {
 fn child(kind: ComponentChildKind, maximum_instances: u32) -> ComponentChildConfig {
     ComponentChildConfig {
         kind,
+        initial_instances: 0,
         maximum_instances,
         initial_cycles: defaults::initial_cycles(),
         topup: None,
@@ -55,6 +57,7 @@ maximum_instances = 12
 
     assert_eq!(config.component_role, CanisterRole::from("user_hub"));
     assert_eq!(config.maximum_instances, 12);
+    assert!(config.provisions.is_empty());
     assert!(config.children.is_empty());
 }
 
@@ -93,6 +96,49 @@ maximum_instances = 4
     );
     assert_eq!(child.initial_cycles.to_u128(), 5 * TC);
     assert_eq!(child.cycles_funding.max_per_child.to_u128(), 100 * TC);
+    assert_eq!(child.initial_instances, 0);
+}
+
+#[test]
+fn initial_children_and_peer_grants_parse_as_bounded_explicit_policy() {
+    let config: ComponentSpecConfig = toml::from_str(
+        r#"
+component_role = "project_hub"
+maximum_instances = 1
+
+[provisions.project_instance]
+maximum_instances_per_requester_per_root = 100
+
+[children.required_ledger]
+kind = "singleton"
+initial_instances = 1
+maximum_instances = 1
+
+[children.optional_machine]
+kind = "singleton"
+initial_instances = 0
+maximum_instances = 1
+"#,
+    )
+    .expect("initial children and peer grant should parse");
+
+    assert_eq!(
+        config.provisions[&component_spec_id("project_instance")]
+            .maximum_instances_per_requester_per_root,
+        100,
+    );
+    assert_eq!(
+        config.children[&CanisterRole::from("required_ledger")].initial_instances,
+        1,
+    );
+    assert_eq!(
+        config.children[&CanisterRole::from("optional_machine")].initial_instances,
+        0,
+    );
+}
+
+fn component_spec_id(value: &str) -> ComponentSpecId {
+    value.parse().expect("valid Component Spec ID")
 }
 
 #[test]
@@ -227,6 +273,60 @@ fn singleton_child_ceiling_is_exactly_one() {
     config
         .validate()
         .expect_err("singleton multiplicity above one must reject");
+}
+
+#[test]
+fn initial_child_cardinality_is_bounded_by_role_and_component_limits() {
+    let mut config = component_spec("hub");
+    config.children.insert(
+        CanisterRole::from("worker"),
+        child(ComponentChildKind::Replica, 2),
+    );
+    config
+        .children
+        .get_mut("worker")
+        .expect("worker")
+        .initial_instances = 3;
+    config
+        .validate()
+        .expect_err("initial count above role maximum must reject");
+
+    config
+        .children
+        .get_mut("worker")
+        .expect("worker")
+        .initial_instances = 2;
+    config.limits.maximum_children = 1;
+    config
+        .validate()
+        .expect_err("aggregate initial count above Component limit must reject");
+}
+
+#[test]
+fn provisioning_grants_require_positive_bounded_outbound_policy() {
+    let mut config = component_spec("hub");
+    config.provisions.insert(
+        component_spec_id("worker"),
+        ComponentProvisioningGrantConfig {
+            maximum_instances_per_requester_per_root: 0,
+        },
+    );
+    config
+        .validate()
+        .expect_err("zero per-requester/root grant limit must reject");
+
+    config.provisions.clear();
+    for ordinal in 0..=MAX_COMPONENT_PROVISIONING_GRANTS {
+        config.provisions.insert(
+            component_spec_id(&format!("target_{ordinal}")),
+            ComponentProvisioningGrantConfig {
+                maximum_instances_per_requester_per_root: 1,
+            },
+        );
+    }
+    config
+        .validate()
+        .expect_err("outbound grant count above the bound must reject");
 }
 
 #[test]

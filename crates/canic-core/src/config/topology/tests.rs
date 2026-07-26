@@ -47,6 +47,7 @@ maximum_instances = 2
 
 [component_specs.users.children.user_shard]
 kind = "shard"
+initial_instances = 1
 maximum_instances = 8
 
 [component_specs.users.sharding.pools.user_shards]
@@ -58,6 +59,9 @@ policy.max_shards = 8
 [component_specs.projects]
 component_role = "project_hub"
 maximum_instances = 3
+
+[component_specs.projects.provisions.users]
+maximum_instances_per_requester_per_root = 2
 
 [component_specs.projects.limits]
 maximum_children = 100
@@ -179,6 +183,15 @@ fn topology_compiles_specs_and_children_in_canonical_order() {
             .collect::<Vec<_>>(),
         vec!["project_instance"],
     );
+    assert_eq!(topology.component_specs[1].children[0].initial_instances, 1);
+    assert_eq!(
+        topology.provisioning_grants,
+        vec![ComponentProvisioningGrant {
+            requester_component_spec: component_spec("projects"),
+            target_component_spec: component_spec("users"),
+            maximum_instances_per_requester_per_root: 2,
+        }]
+    );
     assert_eq!(topology.component_specs[0].limits.maximum_children, 100);
     assert_eq!(
         topology.component_specs[0]
@@ -196,15 +209,15 @@ fn canonical_spec_and_topology_hashes_match_frozen_golden_values() {
 
     assert_eq!(
         hex_bytes(topology.component_specs[0].spec_hash),
-        "b2e168a770160a4659512fc52c7199414cbf7aec2be2965914bd7a6de69f9dea",
+        "06fdb3c7a0be73e95e6f814b8f1c783a669a56fef80740fed461249e02f4005b",
     );
     assert_eq!(
         hex_bytes(topology.component_specs[1].spec_hash),
-        "0f217c753d667e93e5b2a6ecf71c82b0ca273d61a7b4a9e508eed57cc0232ab5",
+        "689d53bafafddb1fa0b15440bfb31a733765e9077d666efc23f9218e83ebd7dc",
     );
     assert_eq!(
         topology.digest().expect("topology digest").to_string(),
-        "35fa3b9f66bd647790b81cce4f7b79bce530d2006ab676ccd6ae66177f6f8faa",
+        "38583692839890198e1da67b56cfa1eb335c6dc0f55e7fbd5855a359ba07d35a",
     );
 }
 
@@ -267,6 +280,98 @@ fn spec_hash_binds_package_limits_pools_and_child_policy() {
 }
 
 #[test]
+fn provisioning_grants_are_topology_authority_not_spec_content() {
+    let config = Config::parse_toml(CONFIG).expect("valid Component config");
+    let baseline = ComponentTopology::compile(&config).expect("baseline topology");
+    let baseline_projects_hash = baseline
+        .get(&component_spec("projects"))
+        .expect("projects")
+        .spec_hash;
+
+    let mut changed = config;
+    changed
+        .component_specs
+        .get_mut("projects")
+        .expect("projects")
+        .provisions
+        .get_mut("users")
+        .expect("projects to users grant")
+        .maximum_instances_per_requester_per_root += 1;
+    let changed = ComponentTopology::compile(&changed).expect("changed topology");
+
+    assert_eq!(
+        changed
+            .get(&component_spec("projects"))
+            .expect("projects")
+            .spec_hash,
+        baseline_projects_hash,
+    );
+    assert_ne!(
+        changed.digest().expect("changed topology digest"),
+        baseline.digest().expect("baseline topology digest"),
+    );
+}
+
+#[test]
+fn provisioning_grants_reject_unknown_self_zero_and_cyclic_edges() {
+    use crate::config::schema::ComponentProvisioningGrantConfig;
+
+    let config = Config::parse_toml(CONFIG).expect("valid Component config");
+    let grant = |maximum_instances_per_requester_per_root| ComponentProvisioningGrantConfig {
+        maximum_instances_per_requester_per_root,
+    };
+
+    let mut unknown = config.clone();
+    unknown
+        .component_specs
+        .get_mut("projects")
+        .expect("projects")
+        .provisions
+        .insert(component_spec("missing"), grant(1));
+    std::assert_matches!(
+        ComponentTopology::compile(&unknown),
+        Err(ComponentTopologyError::UnknownProvisioningGrantTarget { .. })
+    );
+
+    let mut self_target = config.clone();
+    self_target
+        .component_specs
+        .get_mut("projects")
+        .expect("projects")
+        .provisions
+        .insert(component_spec("projects"), grant(1));
+    std::assert_matches!(
+        ComponentTopology::compile(&self_target),
+        Err(ComponentTopologyError::SelfProvisioningGrant { .. })
+    );
+
+    let mut zero = config.clone();
+    zero.component_specs
+        .get_mut("projects")
+        .expect("projects")
+        .provisions
+        .get_mut("users")
+        .expect("projects to users grant")
+        .maximum_instances_per_requester_per_root = 0;
+    std::assert_matches!(
+        ComponentTopology::compile(&zero),
+        Err(ComponentTopologyError::ZeroProvisioningGrantLimit { .. })
+    );
+
+    let mut cyclic = config;
+    cyclic
+        .component_specs
+        .get_mut("users")
+        .expect("users")
+        .provisions
+        .insert(component_spec("projects"), grant(1));
+    std::assert_matches!(
+        ComponentTopology::compile(&cyclic),
+        Err(ComponentTopologyError::CyclicProvisioningGrant { .. })
+    );
+}
+
+#[test]
 fn root_projection_requires_canonical_positive_exact_admissions() {
     let topology = topology();
     let projects = admission(&topology, "projects", 2);
@@ -276,6 +381,25 @@ fn root_projection_requires_canonical_positive_exact_admissions() {
         .project_for_admissions(&[projects.clone(), users.clone()])
         .expect("canonical admissions");
     assert_eq!(projected.component_specs.len(), 2);
+    assert_eq!(projected.provisioning_grants.len(), 1);
+
+    let users_only = topology
+        .project_for_admissions(std::slice::from_ref(&users))
+        .expect("target-only root projection");
+    assert_eq!(users_only.provisioning_grants.len(), 1);
+    assert_eq!(
+        users_only.provisioning_grants[0].requester_component_spec,
+        component_spec("projects"),
+    );
+    assert!(
+        users_only.get(&component_spec("projects")).is_none(),
+        "an incoming grant must not admit its requester Spec"
+    );
+
+    let projects_only = topology
+        .project_for_admissions(std::slice::from_ref(&projects))
+        .expect("requester-only root projection");
+    assert!(projects_only.provisioning_grants.is_empty());
 
     std::assert_matches!(
         topology.project_for_admissions(&[users.clone(), projects.clone()]),
@@ -382,6 +506,44 @@ fn compiled_topology_roundtrips_at_the_candid_boundary() {
 }
 
 #[test]
+fn canonical_encoding_rejects_malformed_compiled_order_and_initial_counts() {
+    let topology = topology();
+
+    let mut spec_order = topology.clone();
+    spec_order.component_specs.reverse();
+    std::assert_matches!(
+        spec_order.canonical_bytes(),
+        Err(ComponentTopologyError::NonCanonicalComponentSpecOrder { .. })
+    );
+
+    let mut grant_order = topology.clone();
+    grant_order
+        .provisioning_grants
+        .push(grant_order.provisioning_grants[0].clone());
+    std::assert_matches!(
+        grant_order.canonical_bytes(),
+        Err(ComponentTopologyError::NonCanonicalProvisioningGrantOrder { .. })
+    );
+
+    let mut initial_count = topology.clone();
+    let child = &mut initial_count.component_specs[1].children[0];
+    child.initial_instances = child.maximum_instances + 1;
+    std::assert_matches!(
+        initial_count.canonical_bytes(),
+        Err(ComponentTopologyError::InitialChildExceedsMaximum { .. })
+    );
+
+    let mut aggregate_initial_count = topology;
+    aggregate_initial_count.component_specs[1]
+        .limits
+        .maximum_children = 0;
+    std::assert_matches!(
+        aggregate_initial_count.canonical_bytes(),
+        Err(ComponentTopologyError::InitialChildrenExceedComponentLimit { .. })
+    );
+}
+
+#[test]
 fn protected_bindings_validate_exact_root_component_and_child_ownership() {
     let topology = topology();
     let root = root_binding(&topology, 4, 5, vec![admission(&topology, "projects", 2)]);
@@ -414,6 +576,24 @@ fn protected_bindings_validate_exact_root_component_and_child_ownership() {
     std::assert_matches!(
         topology.validate_component_binding(&root, &wrong_root),
         Err(ComponentTopologyError::BindingRootMismatch)
+    );
+}
+
+#[test]
+fn root_limits_must_fit_one_components_required_initial_footprint() {
+    let topology = topology();
+    let mut root = root_binding(&topology, 4, 5, vec![admission(&topology, "users", 1)]);
+    root.limits.maximum_managed_canisters = 1;
+
+    std::assert_matches!(
+        topology.validate_root_binding(&root),
+        Err(
+            ComponentTopologyError::InitialComponentFootprintExceedsRootLimit {
+                required_canisters: 2,
+                maximum_managed_canisters: 1,
+                ..
+            }
+        )
     );
 }
 

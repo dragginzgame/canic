@@ -13,8 +13,8 @@ use crate::{
     config::schema::{
         BindingConfig, CanisterAuthConfig, ComponentChildConfig, ComponentChildKind,
         ComponentSpecConfig, ConfigModel, CyclesFundingPolicyConfig, DiagnosticsCanisterConfig,
-        MetricsCanisterConfig, MetricsProfile, ScalePoolPolicy, ScalingConfig, ShardPoolPolicy,
-        ShardingConfig, StandardsCanisterConfig, TopupPolicy,
+        MAX_COMPONENT_PROVISIONING_GRANTS, MetricsCanisterConfig, MetricsProfile, ScalePoolPolicy,
+        ScalingConfig, ShardPoolPolicy, ShardingConfig, StandardsCanisterConfig, TopupPolicy,
     },
     ids::{
         CanisterRole, ComponentSpecAdmission, ComponentSpecId, ComponentTopologyDigest,
@@ -24,12 +24,12 @@ use crate::{
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use thiserror::Error as ThisError;
 
-const COMPONENT_SPEC_HASH_DOMAIN: &[u8] = b"canic/component-spec/v1";
-const COMPONENT_TOPOLOGY_HASH_DOMAIN: &[u8] = b"canic/component-topology/v1";
-const COMPONENT_TOPOLOGY_SCHEMA_VERSION: u32 = 1;
+const COMPONENT_SPEC_HASH_DOMAIN: &[u8] = b"canic/component-spec/v2";
+const COMPONENT_TOPOLOGY_HASH_DOMAIN: &[u8] = b"canic/component-topology/v2";
+const COMPONENT_TOPOLOGY_SCHEMA_VERSION: u32 = 2;
 
 /// Maximum canonical bytes accepted for one Fleet-wide Component Topology.
 pub const MAX_COMPONENT_TOPOLOGY_CANONICAL_BYTES: usize = 2_097_152;
@@ -51,6 +51,7 @@ impl ConfigModel {
 #[serde(deny_unknown_fields)]
 pub struct ComponentTopology {
     pub component_specs: Vec<ComponentSpec>,
+    pub provisioning_grants: Vec<ComponentProvisioningGrant>,
 }
 
 impl ComponentTopology {
@@ -62,7 +63,11 @@ impl ComponentTopology {
             component_specs.push(compile_component_spec(config, component_spec, source)?);
         }
 
-        let topology = Self { component_specs };
+        let provisioning_grants = compile_provisioning_grants(config)?;
+        let topology = Self {
+            component_specs,
+            provisioning_grants,
+        };
         topology.canonical_bytes()?;
         Ok(topology)
     }
@@ -76,16 +81,133 @@ impl ComponentTopology {
             .map(|index| &self.component_specs[index])
     }
 
+    /// Return one exact non-parent peer-Component authorization edge.
+    #[must_use]
+    pub fn provisioning_grant(
+        &self,
+        requester_component_spec: &ComponentSpecId,
+        target_component_spec: &ComponentSpecId,
+    ) -> Option<&ComponentProvisioningGrant> {
+        self.provisioning_grants
+            .binary_search_by(|grant| {
+                (
+                    &grant.requester_component_spec,
+                    &grant.target_component_spec,
+                )
+                    .cmp(&(requester_component_spec, target_component_spec))
+            })
+            .ok()
+            .map(|index| &self.provisioning_grants[index])
+    }
+
     /// Encode the complete topology with its frozen canonical schema.
     pub fn canonical_bytes(&self) -> Result<Vec<u8>, ComponentTopologyError> {
+        self.validate_canonical_projection()?;
+
         let mut encoder = CanonicalEncoder::new(COMPONENT_TOPOLOGY_HASH_DOMAIN);
         encoder.u64(self.component_specs.len() as u64);
 
         for component_spec in &self.component_specs {
             encode_compiled_component_spec(&mut encoder, component_spec);
         }
+        encoder.u64(self.provisioning_grants.len() as u64);
+
+        for grant in &self.provisioning_grants {
+            encode_provisioning_grant(&mut encoder, grant);
+        }
 
         encoder.finish("Component Topology")
+    }
+
+    fn validate_canonical_projection(&self) -> Result<(), ComponentTopologyError> {
+        let mut previous_component_spec: Option<&ComponentSpecId> = None;
+        for spec in &self.component_specs {
+            if previous_component_spec.is_some_and(|previous| previous >= &spec.component_spec) {
+                return Err(ComponentTopologyError::NonCanonicalComponentSpecOrder {
+                    component_spec: spec.component_spec.clone(),
+                });
+            }
+            previous_component_spec = Some(&spec.component_spec);
+
+            let mut previous_child: Option<&CanisterRole> = None;
+            let mut initial_children = 0_u64;
+            for child in &spec.children {
+                if previous_child.is_some_and(|previous| previous >= &child.role) {
+                    return Err(ComponentTopologyError::NonCanonicalComponentChildOrder {
+                        component_spec: spec.component_spec.clone(),
+                        role: child.role.clone(),
+                    });
+                }
+                previous_child = Some(&child.role);
+                if child.initial_instances > child.maximum_instances {
+                    return Err(ComponentTopologyError::InitialChildExceedsMaximum {
+                        component_spec: spec.component_spec.clone(),
+                        role: child.role.clone(),
+                        initial_instances: child.initial_instances,
+                        maximum_instances: child.maximum_instances,
+                    });
+                }
+                initial_children += u64::from(child.initial_instances);
+            }
+            if initial_children > u64::from(spec.limits.maximum_children) {
+                return Err(
+                    ComponentTopologyError::InitialChildrenExceedComponentLimit {
+                        component_spec: spec.component_spec.clone(),
+                        initial_children,
+                        maximum_children: spec.limits.maximum_children,
+                    },
+                );
+            }
+        }
+
+        let mut previous_grant: Option<(&ComponentSpecId, &ComponentSpecId)> = None;
+        let mut grant_counts = BTreeMap::<ComponentSpecId, usize>::new();
+        for grant in &self.provisioning_grants {
+            let identity = (
+                &grant.requester_component_spec,
+                &grant.target_component_spec,
+            );
+            if previous_grant.is_some_and(|previous| previous >= identity) {
+                return Err(ComponentTopologyError::NonCanonicalProvisioningGrantOrder {
+                    requester_component_spec: grant.requester_component_spec.clone(),
+                    target_component_spec: grant.target_component_spec.clone(),
+                });
+            }
+            previous_grant = Some(identity);
+
+            if grant.requester_component_spec == grant.target_component_spec {
+                return Err(ComponentTopologyError::SelfProvisioningGrant {
+                    requester_component_spec: grant.requester_component_spec.clone(),
+                    target_component_spec: grant.target_component_spec.clone(),
+                });
+            }
+            if grant.maximum_instances_per_requester_per_root == 0 {
+                return Err(ComponentTopologyError::ZeroProvisioningGrantLimit {
+                    requester_component_spec: grant.requester_component_spec.clone(),
+                    target_component_spec: grant.target_component_spec.clone(),
+                });
+            }
+            if self.get(&grant.target_component_spec).is_none() {
+                return Err(ComponentTopologyError::UnknownProvisioningGrantTarget {
+                    requester_component_spec: grant.requester_component_spec.clone(),
+                    target_component_spec: grant.target_component_spec.clone(),
+                });
+            }
+
+            let count = grant_counts
+                .entry(grant.requester_component_spec.clone())
+                .or_default();
+            *count += 1;
+            if *count > MAX_COMPONENT_PROVISIONING_GRANTS {
+                return Err(ComponentTopologyError::ProvisioningGrantBoundExceeded {
+                    requester_component_spec: grant.requester_component_spec.clone(),
+                    actual: *count,
+                    maximum: MAX_COMPONENT_PROVISIONING_GRANTS,
+                });
+            }
+        }
+
+        validate_projected_grant_cycles(self)
     }
 
     /// Compute the digest of this exact canonical topology projection.
@@ -148,7 +270,20 @@ impl ComponentTopology {
             component_specs.push(component_spec.clone());
         }
 
-        let projected = Self { component_specs };
+        let admitted_component_specs = component_specs
+            .iter()
+            .map(|spec| spec.component_spec.clone())
+            .collect::<BTreeSet<_>>();
+        let provisioning_grants = self
+            .provisioning_grants
+            .iter()
+            .filter(|grant| admitted_component_specs.contains(&grant.target_component_spec))
+            .cloned()
+            .collect();
+        let projected = Self {
+            component_specs,
+            provisioning_grants,
+        };
         projected.canonical_bytes()?;
         Ok(projected)
     }
@@ -242,8 +377,23 @@ pub struct ComponentLimits {
 pub struct ComponentChildSpec {
     pub role: CanisterRole,
     pub kind: ComponentChildKind,
+    pub initial_instances: u32,
     pub maximum_instances: u32,
     pub cycles_funding: ComponentChildFundingPolicy,
+}
+
+///
+/// ComponentProvisioningGrant
+///
+/// Non-parent authorization for one requester Spec to create one exact peer Spec.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ComponentProvisioningGrant {
+    pub requester_component_spec: ComponentSpecId,
+    pub target_component_spec: ComponentSpecId,
+    pub maximum_instances_per_requester_per_root: u32,
 }
 
 ///
@@ -343,6 +493,42 @@ pub enum ComponentTopologyError {
     #[error("Component Spec '{component_spec}' has no positive Fleet root admission")]
     MissingFleetAdmission { component_spec: ComponentSpecId },
 
+    #[error(
+        "Component Spec '{requester_component_spec}' declares {actual} provisioning grants, exceeding bound {maximum}"
+    )]
+    ProvisioningGrantBoundExceeded {
+        requester_component_spec: ComponentSpecId,
+        actual: usize,
+        maximum: usize,
+    },
+
+    #[error(
+        "Component Spec '{requester_component_spec}' cannot provision itself as peer Spec '{target_component_spec}'"
+    )]
+    SelfProvisioningGrant {
+        requester_component_spec: ComponentSpecId,
+        target_component_spec: ComponentSpecId,
+    },
+
+    #[error("Component provisioning grants contain a cycle involving Spec '{component_spec}'")]
+    CyclicProvisioningGrant { component_spec: ComponentSpecId },
+
+    #[error(
+        "Component Spec '{requester_component_spec}' provisioning grant references unknown target '{target_component_spec}'"
+    )]
+    UnknownProvisioningGrantTarget {
+        requester_component_spec: ComponentSpecId,
+        target_component_spec: ComponentSpecId,
+    },
+
+    #[error(
+        "Component Spec '{requester_component_spec}' provisioning grant to '{target_component_spec}' must have a positive per-requester/root ceiling"
+    )]
+    ZeroProvisioningGrantLimit {
+        requester_component_spec: ComponentSpecId,
+        target_component_spec: ComponentSpecId,
+    },
+
     #[error("role '{role}' has no package declaration while compiling Component Topology")]
     MissingRoleDeclaration { role: CanisterRole },
 
@@ -355,6 +541,53 @@ pub enum ComponentTopologyError {
     NonCanonicalAdmissionOrder {
         previous: ComponentSpecId,
         current: ComponentSpecId,
+    },
+
+    #[error("Component Specs are not in strict canonical order at '{component_spec}'")]
+    NonCanonicalComponentSpecOrder { component_spec: ComponentSpecId },
+
+    #[error(
+        "Component Spec '{component_spec}' children are not in strict canonical order at role '{role}'"
+    )]
+    NonCanonicalComponentChildOrder {
+        component_spec: ComponentSpecId,
+        role: CanisterRole,
+    },
+
+    #[error(
+        "Component provisioning grants are not in strict canonical order at '{requester_component_spec}' -> '{target_component_spec}'"
+    )]
+    NonCanonicalProvisioningGrantOrder {
+        requester_component_spec: ComponentSpecId,
+        target_component_spec: ComponentSpecId,
+    },
+
+    #[error(
+        "Component Spec '{component_spec}' child '{role}' initial count {initial_instances} exceeds maximum {maximum_instances}"
+    )]
+    InitialChildExceedsMaximum {
+        component_spec: ComponentSpecId,
+        role: CanisterRole,
+        initial_instances: u32,
+        maximum_instances: u32,
+    },
+
+    #[error(
+        "Component Spec '{component_spec}' initial child count {initial_children} exceeds Component limit {maximum_children}"
+    )]
+    InitialChildrenExceedComponentLimit {
+        component_spec: ComponentSpecId,
+        initial_children: u64,
+        maximum_children: u32,
+    },
+
+    #[error(
+        "Component Spec '{component_spec}' minimum footprint {required_canisters} exceeds root managed-Canister limit {maximum_managed_canisters}"
+    )]
+    InitialComponentFootprintExceedsRootLimit {
+        component_spec: ComponentSpecId,
+        required_canisters: u64,
+        maximum_managed_canisters: u32,
     },
 
     #[error(
@@ -388,6 +621,158 @@ pub enum ComponentTopologyError {
     ZeroRootAdmission { component_spec: ComponentSpecId },
 }
 
+fn compile_provisioning_grants(
+    config: &ConfigModel,
+) -> Result<Vec<ComponentProvisioningGrant>, ComponentTopologyError> {
+    let mut outgoing = config
+        .component_specs
+        .keys()
+        .cloned()
+        .map(|component_spec| (component_spec, Vec::new()))
+        .collect::<BTreeMap<ComponentSpecId, Vec<ComponentSpecId>>>();
+    let mut incoming = config
+        .component_specs
+        .keys()
+        .cloned()
+        .map(|component_spec| (component_spec, 0_u32))
+        .collect::<BTreeMap<_, _>>();
+    let mut grants = Vec::new();
+
+    for (requester_component_spec, source) in &config.component_specs {
+        if source.provisions.len() > MAX_COMPONENT_PROVISIONING_GRANTS {
+            return Err(ComponentTopologyError::ProvisioningGrantBoundExceeded {
+                requester_component_spec: requester_component_spec.clone(),
+                actual: source.provisions.len(),
+                maximum: MAX_COMPONENT_PROVISIONING_GRANTS,
+            });
+        }
+
+        for (target_component_spec, grant) in &source.provisions {
+            if requester_component_spec == target_component_spec {
+                return Err(ComponentTopologyError::SelfProvisioningGrant {
+                    requester_component_spec: requester_component_spec.clone(),
+                    target_component_spec: target_component_spec.clone(),
+                });
+            }
+            if grant.maximum_instances_per_requester_per_root == 0 {
+                return Err(ComponentTopologyError::ZeroProvisioningGrantLimit {
+                    requester_component_spec: requester_component_spec.clone(),
+                    target_component_spec: target_component_spec.clone(),
+                });
+            }
+            let Some(target_incoming) = incoming.get_mut(target_component_spec) else {
+                return Err(ComponentTopologyError::UnknownProvisioningGrantTarget {
+                    requester_component_spec: requester_component_spec.clone(),
+                    target_component_spec: target_component_spec.clone(),
+                });
+            };
+            *target_incoming = target_incoming.checked_add(1).ok_or_else(|| {
+                ComponentTopologyError::ProvisioningGrantBoundExceeded {
+                    requester_component_spec: requester_component_spec.clone(),
+                    actual: source.provisions.len(),
+                    maximum: MAX_COMPONENT_PROVISIONING_GRANTS,
+                }
+            })?;
+            outgoing
+                .get_mut(requester_component_spec)
+                .expect("requester was initialized from the same Component Spec map")
+                .push(target_component_spec.clone());
+            grants.push(ComponentProvisioningGrant {
+                requester_component_spec: requester_component_spec.clone(),
+                target_component_spec: target_component_spec.clone(),
+                maximum_instances_per_requester_per_root: grant
+                    .maximum_instances_per_requester_per_root,
+            });
+        }
+    }
+
+    let mut ready = incoming
+        .iter()
+        .filter(|(_component_spec, count)| **count == 0)
+        .map(|(component_spec, _count)| component_spec.clone())
+        .collect::<VecDeque<_>>();
+    let mut visited = 0_usize;
+
+    while let Some(requester_component_spec) = ready.pop_front() {
+        visited += 1;
+        for target_component_spec in &outgoing[&requester_component_spec] {
+            let target_incoming = incoming
+                .get_mut(target_component_spec)
+                .expect("grant targets were validated above");
+            *target_incoming -= 1;
+            if *target_incoming == 0 {
+                ready.push_back(target_component_spec.clone());
+            }
+        }
+    }
+
+    if visited != config.component_specs.len() {
+        let component_spec = incoming
+            .into_iter()
+            .find(|(_component_spec, count)| *count > 0)
+            .map(|(component_spec, _count)| component_spec)
+            .expect("an unvisited graph node must retain an incoming edge");
+        return Err(ComponentTopologyError::CyclicProvisioningGrant { component_spec });
+    }
+
+    Ok(grants)
+}
+
+fn validate_projected_grant_cycles(
+    topology: &ComponentTopology,
+) -> Result<(), ComponentTopologyError> {
+    let mut outgoing = topology
+        .component_specs
+        .iter()
+        .map(|spec| (spec.component_spec.clone(), Vec::new()))
+        .collect::<BTreeMap<ComponentSpecId, Vec<ComponentSpecId>>>();
+    let mut incoming = topology
+        .component_specs
+        .iter()
+        .map(|spec| (spec.component_spec.clone(), 0_u32))
+        .collect::<BTreeMap<_, _>>();
+
+    for grant in &topology.provisioning_grants {
+        let Some(requester_outgoing) = outgoing.get_mut(&grant.requester_component_spec) else {
+            continue;
+        };
+        requester_outgoing.push(grant.target_component_spec.clone());
+        *incoming
+            .get_mut(&grant.target_component_spec)
+            .expect("grant targets were validated before cycle detection") += 1;
+    }
+
+    let mut ready = incoming
+        .iter()
+        .filter(|(_component_spec, count)| **count == 0)
+        .map(|(component_spec, _count)| component_spec.clone())
+        .collect::<VecDeque<_>>();
+    let mut visited = 0_usize;
+    while let Some(requester_component_spec) = ready.pop_front() {
+        visited += 1;
+        for target_component_spec in &outgoing[&requester_component_spec] {
+            let target_incoming = incoming
+                .get_mut(target_component_spec)
+                .expect("grant targets were validated before cycle detection");
+            *target_incoming -= 1;
+            if *target_incoming == 0 {
+                ready.push_back(target_component_spec.clone());
+            }
+        }
+    }
+
+    if visited != topology.component_specs.len() {
+        let component_spec = incoming
+            .into_iter()
+            .find(|(_component_spec, count)| *count > 0)
+            .map(|(component_spec, _count)| component_spec)
+            .expect("an unvisited graph node must retain an incoming edge");
+        return Err(ComponentTopologyError::CyclicProvisioningGrant { component_spec });
+    }
+
+    Ok(())
+}
+
 fn compile_component_spec(
     config: &ConfigModel,
     component_spec: &ComponentSpecId,
@@ -401,6 +786,7 @@ fn compile_component_spec(
         .map(|(role, child)| ComponentChildSpec {
             role: role.clone(),
             kind: child.kind,
+            initial_instances: child.initial_instances,
             maximum_instances: child.maximum_instances,
             cycles_funding: ComponentChildFundingPolicy {
                 max_per_request: child.cycles_funding.max_per_request.clone(),
@@ -480,9 +866,16 @@ fn encode_compiled_component_spec(encoder: &mut CanonicalEncoder, spec: &Compone
     for child in &spec.children {
         encoder.string(child.role.as_str());
         encoder.u8(component_child_kind_tag(child.kind));
+        encoder.u32(child.initial_instances);
         encoder.u32(child.maximum_instances);
         encode_compiled_child_funding_policy(encoder, &child.cycles_funding);
     }
+}
+
+fn encode_provisioning_grant(encoder: &mut CanonicalEncoder, grant: &ComponentProvisioningGrant) {
+    encoder.string(grant.requester_component_spec.as_str());
+    encoder.string(grant.target_component_spec.as_str());
+    encoder.u32(grant.maximum_instances_per_requester_per_root);
 }
 
 fn encode_component_limits(encoder: &mut CanonicalEncoder, source: &ComponentSpecConfig) {
@@ -504,6 +897,7 @@ fn encode_component_runtime_policy(encoder: &mut CanonicalEncoder, source: &Comp
 
 fn encode_component_child(encoder: &mut CanonicalEncoder, child: &ComponentChildConfig) {
     encoder.u8(component_child_kind_tag(child.kind));
+    encoder.u32(child.initial_instances);
     encoder.u32(child.maximum_instances);
     encoder.u128(child.initial_cycles.to_u128());
     encode_topup(encoder, child.topup.as_ref());

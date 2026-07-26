@@ -13,9 +13,9 @@ use crate::{
         ConfigModel, ConfigSchemaError, MAX_FLEET_COMPONENT_INSTANCES, RoleDeclarationKind,
         Validate, validate_canister_role_name,
     },
-    ids::CanisterRole,
+    ids::{CanisterRole, ComponentSpecId},
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 fn validate_canister_role(
     role: &CanisterRole,
@@ -83,10 +83,83 @@ impl Validate for ConfigModel {
             )));
         }
 
+        validate_component_provisioning_grants(self)?;
         validate_topology_roles_are_declared(self)?;
 
         Ok(())
     }
+}
+
+fn validate_component_provisioning_grants(config: &ConfigModel) -> Result<(), ConfigSchemaError> {
+    let mut outgoing = config
+        .component_specs
+        .keys()
+        .cloned()
+        .map(|component_spec| (component_spec, Vec::new()))
+        .collect::<BTreeMap<ComponentSpecId, Vec<ComponentSpecId>>>();
+    let mut incoming = config
+        .component_specs
+        .keys()
+        .cloned()
+        .map(|component_spec| (component_spec, 0_u32))
+        .collect::<BTreeMap<_, _>>();
+
+    for (requester, source) in &config.component_specs {
+        for target in source.provisions.keys() {
+            if requester == target {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "Component Spec '{requester}' cannot provision itself",
+                )));
+            }
+            let Some(target_incoming) = incoming.get_mut(target) else {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "Component Spec '{requester}' provisioning grant references unknown target '{target}'",
+                )));
+            };
+            *target_incoming = target_incoming.checked_add(1).ok_or_else(|| {
+                ConfigSchemaError::ValidationError(
+                    "Component provisioning grant count overflowed".into(),
+                )
+            })?;
+            outgoing
+                .get_mut(requester)
+                .expect("requester was initialized from the same Component Spec map")
+                .push(target.clone());
+        }
+    }
+
+    let mut ready = incoming
+        .iter()
+        .filter(|(_component_spec, count)| **count == 0)
+        .map(|(component_spec, _count)| component_spec.clone())
+        .collect::<VecDeque<_>>();
+    let mut visited = 0_usize;
+
+    while let Some(requester) = ready.pop_front() {
+        visited += 1;
+        for target in &outgoing[&requester] {
+            let target_incoming = incoming
+                .get_mut(target)
+                .expect("grant targets were validated above");
+            *target_incoming -= 1;
+            if *target_incoming == 0 {
+                ready.push_back(target.clone());
+            }
+        }
+    }
+
+    if visited != config.component_specs.len() {
+        let component_spec = incoming
+            .into_iter()
+            .find(|(_component_spec, count)| *count > 0)
+            .map(|(component_spec, _count)| component_spec)
+            .expect("an unvisited graph node must retain an incoming edge");
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "Component provisioning grants contain a cycle involving Spec '{component_spec}'",
+        )));
+    }
+
+    Ok(())
 }
 
 fn validate_role_declarations(config: &ConfigModel) -> Result<(), ConfigSchemaError> {
