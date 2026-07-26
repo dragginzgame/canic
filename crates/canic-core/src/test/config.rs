@@ -11,7 +11,7 @@ use crate::{
     config::{Config, ConfigModel},
     ids::{CanisterRole, ComponentSpecId},
 };
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 ///
 /// ConfigTestBuilder
@@ -181,7 +181,7 @@ impl ConfigTestBuilder {
             standards: StandardsCanisterConfig::default(),
             diagnostics: DiagnosticsCanisterConfig::default(),
             metrics: MetricsCanisterConfig::default(),
-            children: Default::default(),
+            children: BTreeMap::default(),
         }
     }
 }

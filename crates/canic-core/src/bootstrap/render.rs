@@ -203,8 +203,8 @@ fn render_standards(standards: &Standards) -> TokenStream {
 
 // Render the log retention configuration.
 fn render_log_config(config: &LogConfig) -> TokenStream {
-    let max_entries = config.max_entries;
-    let max_entry_bytes = config.max_entry_bytes;
+    let max_entries = render_u64_literal(config.max_entries);
+    let max_entry_bytes = render_u32_literal(config.max_entry_bytes);
     let max_age_secs = render_option(config.max_age_secs.as_ref(), |value| {
         render_u64_literal(*value)
     });
@@ -327,7 +327,7 @@ fn render_chain_key_root_proof_config(config: &ChainKeyRootProofConfig) -> Token
 
 // Render the role-attestation config subtree.
 fn render_role_attestation_config(config: &RoleAttestationConfig) -> TokenStream {
-    let max_ttl_secs = config.max_ttl_secs;
+    let max_ttl_secs = render_u64_literal(config.max_ttl_secs);
     let min_accepted_epoch_by_role = render_btree_map(
         config.min_accepted_epoch_by_role.iter(),
         |role| render_owned_string(role),
@@ -394,7 +394,7 @@ fn render_whitelist(whitelist: &Whitelist) -> TokenStream {
 // Render one non-recursive Component Spec.
 fn render_component_spec_config(config: &ComponentSpecConfig) -> TokenStream {
     let component_role = render_canister_role(&config.component_role);
-    let maximum_instances = config.maximum_instances;
+    let maximum_instances = render_u32_literal(config.maximum_instances);
     let limits = render_component_limits_config(&config.limits);
     let initial_cycles = render_cycles(config.initial_cycles.to_u128());
     let topup = render_option(config.topup.as_ref(), render_topup);
@@ -434,8 +434,8 @@ fn render_component_spec_config(config: &ComponentSpecConfig) -> TokenStream {
 
 // Render aggregate limits for one concrete Component.
 fn render_component_limits_config(config: &ComponentLimitsConfig) -> TokenStream {
-    let maximum_children = config.maximum_children;
-    let maximum_registry_bytes = config.maximum_registry_bytes;
+    let maximum_children = render_u32_literal(config.maximum_children);
+    let maximum_registry_bytes = render_u64_literal(config.maximum_registry_bytes);
     let cycles_funding = render_cycles_funding_budget_config(&config.cycles_funding);
 
     quote! {
@@ -449,7 +449,7 @@ fn render_component_limits_config(config: &ComponentLimitsConfig) -> TokenStream
 
 // Render one aggregate cycles-funding budget.
 fn render_cycles_funding_budget_config(config: &CyclesFundingBudgetConfig) -> TokenStream {
-    let window_secs = config.window_secs;
+    let window_secs = render_u64_literal(config.window_secs);
     let maximum_cycles = render_cycles(config.maximum_cycles.to_u128());
 
     quote! {
@@ -463,7 +463,7 @@ fn render_cycles_funding_budget_config(config: &CyclesFundingBudgetConfig) -> To
 // Render one direct Component Child.
 fn render_component_child_config(config: &ComponentChildConfig) -> TokenStream {
     let kind = render_component_child_kind(config.kind);
-    let maximum_instances = config.maximum_instances;
+    let maximum_instances = render_u32_literal(config.maximum_instances);
     let initial_cycles = render_cycles(config.initial_cycles.to_u128());
     let topup = render_option(config.topup.as_ref(), render_topup);
     let cycles_funding = render_cycles_funding_policy(&config.cycles_funding);
@@ -491,7 +491,7 @@ fn render_component_child_config(config: &ComponentChildConfig) -> TokenStream {
 fn render_cycles_funding_policy(policy: &CyclesFundingPolicyConfig) -> TokenStream {
     let max_per_request = render_cycles(policy.max_per_request.to_u128());
     let max_per_child = render_cycles(policy.max_per_child.to_u128());
-    let cooldown_secs = policy.cooldown_secs;
+    let cooldown_secs = render_u64_literal(policy.cooldown_secs);
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::CyclesFundingPolicyConfig {
@@ -594,6 +594,27 @@ fn render_u128_literal(value: u128) -> TokenStream {
         .expect("valid u128 literal")
 }
 
+// Render a u32 literal with separators so generated code stays clippy-clean.
+fn render_u32_literal(value: u32) -> TokenStream {
+    let digits = value.to_string();
+    let grouped = digits
+        .chars()
+        .rev()
+        .enumerate()
+        .fold(String::new(), |mut acc, (index, ch)| {
+            if index > 0 && index % 3 == 0 {
+                acc.push('_');
+            }
+            acc.push(ch);
+            acc
+        })
+        .chars()
+        .rev()
+        .collect::<String>();
+
+    format!("{grouped}_u32").parse().expect("valid u32 literal")
+}
+
 // Render a u64 literal with separators so generated code stays clippy-clean.
 fn render_u64_literal(value: u64) -> TokenStream {
     let digits = value.to_string();
@@ -631,7 +652,7 @@ fn render_topup(policy: &TopupPolicy) -> TokenStream {
 // Render the optional ICP-to-cycles refill policy.
 #[cfg(test)]
 fn render_icp_refill_policy(policy: &IcpRefillPolicy) -> TokenStream {
-    let max_refill_e8s_per_call = policy.max_refill_e8s_per_call;
+    let max_refill_e8s_per_call = render_u64_literal(policy.max_refill_e8s_per_call);
     let min_xdr_permyriad_per_icp =
         render_option(policy.min_xdr_permyriad_per_icp.as_ref(), |value| {
             render_u64_literal(*value)
@@ -707,9 +728,9 @@ fn render_scale_pool(pool: &ScalePool) -> TokenStream {
 
 // Render the scaling pool worker policy.
 fn render_scale_pool_policy(policy: &ScalePoolPolicy) -> TokenStream {
-    let initial_workers = policy.initial_workers;
-    let min_workers = policy.min_workers;
-    let max_workers = policy.max_workers;
+    let initial_workers = render_u32_literal(policy.initial_workers);
+    let min_workers = render_u32_literal(policy.min_workers);
+    let max_workers = render_u32_literal(policy.max_workers);
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ScalePoolPolicy {
@@ -765,9 +786,9 @@ fn render_shard_pool(pool: &ShardPool) -> TokenStream {
 
 // Render the shard pool capacity policy.
 fn render_shard_pool_policy(policy: &ShardPoolPolicy) -> TokenStream {
-    let capacity = policy.capacity;
-    let initial_shards = policy.initial_shards;
-    let max_shards = policy.max_shards;
+    let capacity = render_u32_literal(policy.capacity);
+    let initial_shards = render_u32_literal(policy.initial_shards);
+    let max_shards = render_u32_literal(policy.max_shards);
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ShardPoolPolicy {
@@ -818,5 +839,19 @@ mod tests {
         assert!(rendered.contains("cmc_canister_id"));
         assert!(rendered.contains("allow_ic_system_canister_overrides"));
         assert!(rendered.contains("Principal :: from_slice"));
+        assert!(rendered.contains("100_000_000_u64"));
+        assert!(rendered.contains("40_000_u64"));
+    }
+
+    #[test]
+    fn render_large_config_literals_with_clippy_clean_separators() {
+        let log = render_log_config(&LogConfig::default()).to_string();
+        let component_limits =
+            render_component_limits_config(&ComponentLimitsConfig::default()).to_string();
+
+        assert!(log.contains("10_000_u64"));
+        assert!(log.contains("16_384_u32"));
+        assert!(component_limits.contains("2_097_152_u64"));
+        assert!(component_limits.contains("3_600_u64"));
     }
 }

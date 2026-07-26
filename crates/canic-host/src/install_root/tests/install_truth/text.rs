@@ -1,10 +1,6 @@
 use super::*;
 
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "the inline App config keeps this install-truth fixture self-contained"
-)]
 fn install_truth_gate_lines_include_warning_codes() {
     let root = temp_dir("canic-install-truth-warning-lines");
     let config_path = root.join("apps/demo/canic.toml");
