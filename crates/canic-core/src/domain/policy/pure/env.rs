@@ -49,7 +49,7 @@ pub fn validate_or_default(raw_env: EnvInput) -> Result<ValidatedEnv, EnvPolicyE
     if raw_env
         .canister_role
         .as_ref()
-        .is_some_and(|role| !role.is_root())
+        .is_some_and(|role| !role.is_root() && !role.is_wasm_store())
         && raw_env.component_spec.is_none()
     {
         missing.push("component_spec");
@@ -84,4 +84,36 @@ pub fn validate_or_default(raw_env: EnvInput) -> Result<ValidatedEnv, EnvPolicyE
         canister_role,
         parent_pid,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn input(role: CanisterRole, component_spec: Option<ComponentSpecId>) -> EnvInput {
+        let principal = Principal::from_slice(&[1; 29]);
+        EnvInput {
+            fleet_root_pid: Some(principal),
+            component_spec,
+            subnet_pid: Some(principal),
+            root_pid: Some(principal),
+            canister_role: Some(role),
+            parent_pid: Some(principal),
+        }
+    }
+
+    #[test]
+    fn infrastructure_does_not_require_a_component_spec() {
+        for role in [CanisterRole::ROOT, CanisterRole::WASM_STORE] {
+            let validated =
+                validate_or_default(input(role, None)).expect("infrastructure env is valid");
+            assert!(validated.component_spec.is_none());
+        }
+    }
+
+    #[test]
+    fn component_roles_still_require_a_component_spec() {
+        validate_or_default(input(CanisterRole::from("hub"), None))
+            .expect_err("Component role without Component Spec must reject");
+    }
 }

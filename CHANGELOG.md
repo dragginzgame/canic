@@ -14,7 +14,9 @@ Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
 - `0.100.1` hard-cuts staged Tree declarations to flat Component Specs and
   freezes canonical topology compilation, immutable Fleet Subnet Root
-  admission and binding contracts, and the `--component-spec` CLI selector.
+  admission/binding contracts, qualified infrastructure installation,
+  distributed root cycles stewardship and the `--component-spec` CLI
+  selector.
 
 - `0.100.0` starts the reinstall-only multi-Subnet implementation by freezing
   distinct bounded `TreeSpecId` and `TreeGroupId` declaration identities plus

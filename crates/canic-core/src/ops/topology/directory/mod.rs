@@ -69,9 +69,9 @@ impl SubnetDirectoryResolver {
     pub fn resolve() -> Result<SubnetDirectoryData, InternalError> {
         if EnvOps::is_root() {
             let registry = SubnetRegistryOps::data();
-            let cfg = ConfigOps::current_component_spec()?;
+            let roles = ConfigOps::current_subnet_directory_roles()?;
 
-            RootSubnetDirectoryBuilder::build(&registry, &cfg.component_directory_roles())
+            RootSubnetDirectoryBuilder::build(&registry, &roles)
         } else {
             Ok(SubnetDirectoryOps::data())
         }

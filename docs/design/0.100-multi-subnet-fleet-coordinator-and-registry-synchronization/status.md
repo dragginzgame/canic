@@ -27,6 +27,21 @@ Catalog. The host builds one qualified Component/Component-Child artifact
 union per `ReleaseBuildId` and projects an exact release-set manifest for each
 root.
 
+Canic infrastructure now has its own exact four-entry artifact manifest for
+the Coordinator, Fleet Cycles Steward, Fleet Subnet Root and Wasm Store. The
+host directly installs the Coordinator, initial Stewards and roots; each root
+alone bootstraps its local Store from the verified infrastructure artifact.
+The Coordinator is not part of a Component hierarchy and is not installed
+through a Wasm Store.
+
+Large Fleets distribute ongoing root funding across a pre-planned bounded
+Fleet Cycles Steward set. Roots observe their own balances and send infrequent
+jittered reports to their exact assigned Steward. Stewards own per-root
+top-up journals and send only bounded aggregate summaries to the Coordinator,
+so the Coordinator does not poll or retain live balances for every root.
+0.100 does not add dynamic Steward creation, reassignment or treasury
+automation.
+
 The open 0.100.1 batch has removed the staged Tree declaration layer from
 source, generated bootstrap, host/CLI projections, scaffolding, fixtures and
 active guidance. It retains no Tree identity or compatibility alias. Runtime
@@ -69,14 +84,16 @@ Registry slices replace the 0.99 root model.
 - [x] Canonicalize every Component Spec and freeze its topology hash.
 - [x] Distribute positive per-root Component Spec admissions whose sum does
   not exceed the Fleet ceiling.
+- [ ] Build and freeze the exact Canic Infrastructure Artifact Manifest.
 - [ ] Build the exact qualified artifact union once under one release-build
   identity.
 - [ ] Construct and freeze one exact Fleet Subnet Root Release-Set Manifest
   per root.
-- [ ] Resolve and journal independent Coordinator and Fleet Subnet Root
-  placements plus configured limits.
+- [ ] Resolve and journal independent Coordinator, Fleet Cycles Steward and
+  Fleet Subnet Root placements plus configured limits.
 - [ ] Freeze exact creation funding before each external effect.
 - [ ] Install the Coordinator from empty state.
+- [ ] Install the exact bounded initial Fleet Cycles Steward set.
 - [ ] Install each root and bootstrap its local topology-admitted Wasm Store.
 - [ ] Commit the genesis Fleet Registry.
 
@@ -84,6 +101,7 @@ Registry slices replace the 0.99 root model.
 
 - [ ] Implement canonical snapshot commits with Fleet Component Spec and root
   rows.
+- [ ] Record exact Steward inventory, limits and immutable root assignments.
 - [ ] Enforce one Fleet Subnet Root per occupied `(FleetKey, SubnetId)`.
 - [ ] Prove another Fleet may independently use the same physical Subnet.
 - [ ] Implement root `Joining`, `Active`, `Draining` and `Removed`.
@@ -109,6 +127,8 @@ Registry slices replace the 0.99 root model.
 
 ## Slice 5 — Recovery and Closeout
 
+- [ ] Implement root self-observation, per-root Steward funding journals and
+  bounded aggregate Coordinator summaries.
 - [ ] Qualify interruption and exact retry.
 - [ ] Prove one Component operation cannot block an unrelated Component.
 - [ ] Activate initial roots only after active-release-set Store and final
@@ -153,11 +173,12 @@ protected Component binding.
 
 ## Next Action
 
-Build the qualified artifact union once and project exact root-specific
-release-set manifests from the now-validated root admissions. Freeze resolved
-Coordinator/root placement and funding in the installation journal, install
-the Coordinator and roots from those exact bindings, and commit the genesis
-Fleet Registry.
+Build the four-entry infrastructure manifest and qualified application
+artifact union once, then project exact root-specific release-set manifests
+from the now-validated root admissions. Freeze resolved
+Coordinator/Steward/root placement and funding in the installation journal,
+install the Coordinator and bounded initial Steward set before the roots, and
+commit the genesis Fleet Registry with exact Steward inventory.
 
 Replace the temporary Component Spec environment selector only when root-local
 allocation and Component Registry commitment can supply a real

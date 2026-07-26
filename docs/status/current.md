@@ -50,8 +50,14 @@ Historical detail is archived at:
   active release set and observed Wasm Store Catalog are distinct
   authorities. The host builds one qualified artifact union per
   `ReleaseBuildId` and projects an exact release-set manifest for each root.
-  The Coordinator manages Fleet roots and publication, not ordinary
-  Component inventories.
+  A separate exact Canic infrastructure manifest qualifies the Coordinator,
+  Fleet Cycles Steward, Fleet Subnet Root and Wasm Store. The host installs
+  the Coordinator, planned Stewards and roots directly; each root bootstraps
+  only its own verified local Store. Roots self-observe cycles and report to
+  one bounded assigned Steward, so the Coordinator receives aggregate
+  Steward health instead of polling or journalling every root balance. The
+  Coordinator manages Fleet roots and publication, not ordinary Component
+  inventories or root funding effects.
 - A fresh 0.101 adds bounded `ComponentGroupSpec` deployment composition.
   Groups may include groups in configuration, but compile to canonical flat
   member paths and direct root-owned Components before planning. Inclusion

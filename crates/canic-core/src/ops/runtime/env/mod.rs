@@ -289,7 +289,7 @@ fn required_fields_missing(data: &EnvRecord) -> Vec<&'static str> {
     if data
         .canister_role
         .as_ref()
-        .is_some_and(|role| !role.is_root())
+        .is_some_and(|role| !role.is_root() && !role.is_wasm_store())
         && data.component_spec.is_none()
     {
         missing.push("component_spec");
