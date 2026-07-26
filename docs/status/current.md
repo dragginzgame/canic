@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.3`.
-- The latest published release is `v0.100.3` at
-  `bf1c118d2ed128284ecd8cd6946991402e847233`.
-- The `v0.100.3` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `221f73e6d2dfaee524a91194677c95898b93d1478eef039273145b15f0d9b034`.
+- The workspace package version is `0.100.4`.
+- The latest published release is `v0.100.4` at
+  `e293d07eeac5b2764571b3c07e191d3c404dc964`.
+- The `v0.100.4` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `16f612acb4e4a217c62559c8d900eec08256832910dceced400879a37982f7dc`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -53,14 +53,21 @@ Historical detail is archived at:
   path now refuses to start without a durable `ReleaseBuildId`. Producing the
   three real infrastructure outputs and invoking this boundary from
   installation remain next.
-- The open `0.100.4` implementation freezes one canonical application
+- Released `0.100.4` freezes one canonical application
   artifact union under an exact `ReleaseBuildId` and Fleet-wide Component
   Topology digest. Its compiler requires complete pre-build target and
   qualified output role sets and exact package/path agreement. Root-specific
   release-set manifests preserve every admitted Component Spec and child edge,
   reject build/topology/projection drift and count byte-identical Store
-  payloads once without collapsing authorization. Complete-build derivation,
-  durable publication and installer consumption remain next.
+  payloads once without collapsing authorization.
+- The open `0.100.5` implementation derives those application build targets
+  from the validated complete-build snapshot, qualifies the exact current
+  raw/gzip outputs and immutably persists the canonical union under its
+  durable release-build identity before finalization. Loading revalidates
+  canonical bytes, build/path identity and topology. Exact retry is
+  idempotent before or after finalization, while conflicts, unsafe paths and
+  first publication after finalization fail closed. Journalled root placement
+  and per-root release-set materialization remain next.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1316,18 +1323,17 @@ First primary results:
 
 ## Next Action
 
-Continue 0.100 Slice 1 from the
+Continue 0.100 Slice 2 from the
 [implementation tracker](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md).
-The flat Component declaration hard cut is complete. Next, derive and freeze
-the bounded canonical Component Topology and each Spec hash, then
-distribute positive Spec ceilings through immutable root admissions and freeze
-`SubnetId`, `FleetCoordinatorBinding`, `FleetSubnetRootBinding`, root limits
-and protected Component/Component Child bindings. Build the qualified
-artifact union once and project exact Fleet Subnet Root release sets from
-those admissions before implementing durable root-local
-`ComponentInstanceId` allocation. Do not permit nested Components, merge
-roots belonging to different Fleets on one Subnet or consume an earlier
-installation.
+The canonical application artifact union is now durable before release-build
+finalization. Next, freeze resolved Coordinator/root placement, root
+admissions, configured limits and creation funding in the install journal,
+then immutably project each root's exact release-set manifest from that union
+without rebuilding shared artifacts. Add a genuine Fleet Coordinator runtime
+before producing or persisting the complete three-role infrastructure
+manifest; do not relabel the Fleet Subnet Root runtime or emit a placeholder.
+Do not permit nested Components, merge roots belonging to different Fleets on
+one Subnet or consume an earlier installation.
 
 ## Historical Release Detail
 

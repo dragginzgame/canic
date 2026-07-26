@@ -4,6 +4,7 @@
 //! Does not own: Cargo execution, infrastructure Wasms, Store publication, or Registry mutation.
 //! Boundary: one qualified build is projected only through validated Component admissions.
 
+mod persistence;
 #[cfg(test)]
 mod tests;
 
@@ -25,6 +26,12 @@ use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error as ThisError;
+
+pub use persistence::{
+    ApplicationArtifactFileBuildOutput, ApplicationArtifactUnionPersistenceError,
+    PersistedApplicationArtifactUnion, compile_and_persist_application_artifact_union,
+    load_persisted_application_artifact_union,
+};
 
 const MAX_ARTIFACT_PATH_BYTES: usize = 4_096;
 const MAX_PACKAGE_BYTES: usize = 128;
@@ -103,35 +110,18 @@ impl ApplicationArtifactUnion {
         targets: &[ApplicationArtifactBuildTarget],
         outputs: &[ApplicationArtifactBuildOutput],
     ) -> Result<Self, ApplicationReleaseSetError> {
-        let expected_roles = topology_roles(topology);
-        let mut target_roles = targets
+        Self::validate_build_targets(topology, targets)?;
+        let targets = targets
             .iter()
-            .map(|target| target.role.clone())
-            .collect::<Vec<_>>();
-        target_roles.sort();
-        if target_roles != expected_roles {
-            return Err(ApplicationReleaseSetError::BuildTargetRoleSet {
-                expected: expected_roles,
-                actual: target_roles,
-            });
-        }
+            .map(|target| (&target.role, target))
+            .collect::<BTreeMap<_, _>>();
 
         let mut output_roles = outputs
             .iter()
             .map(|output| output.role.clone())
             .collect::<Vec<_>>();
-        output_roles.sort();
-        if output_roles != expected_roles {
-            return Err(ApplicationReleaseSetError::BuildOutputRoleSet {
-                expected: expected_roles,
-                actual: output_roles,
-            });
-        }
+        Self::validate_build_output_roles(topology, &mut output_roles)?;
 
-        let targets = targets
-            .iter()
-            .map(|target| (&target.role, target))
-            .collect::<BTreeMap<_, _>>();
         let mut entries = outputs
             .iter()
             .map(|output| {
@@ -151,6 +141,40 @@ impl ApplicationArtifactUnion {
         };
         union.validate_against(topology)?;
         Ok(union)
+    }
+
+    fn validate_build_targets(
+        topology: &ComponentTopology,
+        targets: &[ApplicationArtifactBuildTarget],
+    ) -> Result<(), ApplicationReleaseSetError> {
+        let expected_roles = topology_roles(topology);
+        let mut target_roles = targets
+            .iter()
+            .map(|target| target.role.clone())
+            .collect::<Vec<_>>();
+        target_roles.sort();
+        if target_roles != expected_roles {
+            return Err(ApplicationReleaseSetError::BuildTargetRoleSet {
+                expected: expected_roles,
+                actual: target_roles,
+            });
+        }
+        Ok(())
+    }
+
+    fn validate_build_output_roles(
+        topology: &ComponentTopology,
+        actual: &mut Vec<CanisterRole>,
+    ) -> Result<(), ApplicationReleaseSetError> {
+        let expected = topology_roles(topology);
+        actual.sort();
+        if *actual != expected {
+            return Err(ApplicationReleaseSetError::BuildOutputRoleSet {
+                expected,
+                actual: actual.clone(),
+            });
+        }
+        Ok(())
     }
 
     /// Validate the canonical union shape and its exact Fleet-wide topology binding.
