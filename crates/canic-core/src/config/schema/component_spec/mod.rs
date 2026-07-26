@@ -62,8 +62,6 @@ mod defaults {
     }
 }
 
-const IMPLICIT_WASM_STORE_ROLE: CanisterRole = CanisterRole::WASM_STORE;
-
 /// Default aggregate direct-child ceiling for one concrete Component.
 pub const DEFAULT_COMPONENT_MAXIMUM_CHILDREN: u32 = 4_096;
 /// Default maximum canonical Component Registry bytes for one Component.
@@ -141,13 +139,6 @@ impl ComponentSpecConfig {
         self.children
             .get(role)
             .map(ComponentChildConfig::canister_config)
-            .or_else(|| {
-                if *role == IMPLICIT_WASM_STORE_ROLE {
-                    Some(implicit_wasm_store_canister_config())
-                } else {
-                    None
-                }
-            })
     }
 
     /// The one direct Component role created from this Spec.
@@ -398,7 +389,7 @@ pub struct CanisterPool {
 ///
 
 // Build the implicit canister configuration for the mandatory store role.
-pub(crate) fn implicit_wasm_store_canister_config() -> CanisterConfig {
+pub fn implicit_wasm_store_canister_config() -> CanisterConfig {
     CanisterConfig {
         kind: CanisterKind::Singleton,
         initial_cycles: defaults::initial_cycles(),

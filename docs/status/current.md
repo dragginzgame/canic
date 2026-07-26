@@ -32,9 +32,12 @@ Historical detail is archived at:
   aggregate limits, strong physical `SubnetId`, immutable
   Coordinator/root/Component/child binding contracts and a host planner that
   derives exact root admissions without accepting caller-supplied hashes.
-  Roots no longer fabricate one current Spec, so the old role-only child
-  provisioning path remains intentionally incomplete until real allocation
-  can supply protected Component bindings.
+  Root bootstrap resolves implicit infrastructure outside Component Specs,
+  binds each unique direct Component to its admitted Spec and keeps direct
+  children inside their exact current Spec. Managed test Wasms compile
+  against the same canonical Fleet topology. The current Spec environment
+  selector remains transitional until real allocation supplies protected
+  Component bindings.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -51,13 +54,10 @@ Historical detail is archived at:
   authorities. The host builds one qualified artifact union per
   `ReleaseBuildId` and projects an exact release-set manifest for each root.
   A separate exact Canic infrastructure manifest qualifies the Coordinator,
-  Fleet Cycles Steward, Fleet Subnet Root and Wasm Store. The host installs
-  the Coordinator, planned Stewards and roots directly; each root bootstraps
-  only its own verified local Store. Roots self-observe cycles and report to
-  one bounded assigned Steward, so the Coordinator receives aggregate
-  Steward health instead of polling or journalling every root balance. The
+  Fleet Subnet Root and Wasm Store. The host installs the Coordinator and
+  roots directly; each root bootstraps only its own verified local Store. The
   Coordinator manages Fleet roots and publication, not ordinary Component
-  inventories or root funding effects.
+  inventories.
 - A fresh 0.101 adds bounded `ComponentGroupSpec` deployment composition.
   Groups may include groups in configuration, but compile to canonical flat
   member paths and direct root-owned Components before planning. Inclusion

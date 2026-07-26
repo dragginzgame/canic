@@ -246,7 +246,7 @@ impl ConfigOps {
     pub(crate) fn canister_for_provisioning(
         canister_role: &CanisterRole,
     ) -> Result<CanisterConfig, InternalError> {
-        if EnvOps::is_root() || canister_role.is_wasm_store() {
+        if EnvOps::is_root() {
             Self::try_get_canister_by_role(canister_role)
         } else {
             Self::current_component_canister(canister_role)
