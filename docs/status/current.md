@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.1`.
-- The latest published release is `v0.100.1` at
-  `dd5e05c7e82a61e60738732a815308d641298bb8`.
-- The `v0.100.1` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `33c0ed6e599f1c7c023ee82b050edb0eada497149f993ab6eed4a85dadaf9843`.
+- The workspace package version is `0.100.2`.
+- The latest published release is `v0.100.2` at
+  `353ec86b6e02ed02d5bcb060282f0f4106276533`.
+- The `v0.100.2` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `ad33218ea91995cd0092a09f09e2a44700c01c3c10563d2b1dc29698440c9fdf`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -38,13 +38,21 @@ Historical detail is archived at:
   against the same canonical Fleet topology. The current Spec environment
   selector remains transitional until real allocation supplies protected
   Component bindings.
-- The open `0.100.2` implementation freezes the separate, canonical
+- Released `0.100.2` freezes the separate, canonical
   three-entry Canic Infrastructure Artifact Manifest for the Fleet
   Coordinator, Fleet Subnet Root and Wasm Store. It binds every entry to one
   `ReleaseBuildId`, exact package and raw/gzip path, derives byte lengths and
   SHA-256 digests from matching artifact bytes and rejects incomplete,
-  duplicate, cross-build or noncanonical evidence. Complete-build population,
-  persistence and installation wiring remain next.
+  duplicate, cross-build or noncanonical evidence.
+- The open `0.100.3` implementation adds exact qualified infrastructure
+  build-output evidence and immutably persists canonical manifest bytes under
+  `.canic/release-builds/<release-build-id>/`. Loading revalidates manifest,
+  canonical-byte and path identity. Exact retry remains idempotent before or
+  after release-build finalization, while conflicts, unsafe artifact paths and
+  first publication after finalization fail closed. The normal complete-build
+  path now refuses to start without a durable `ReleaseBuildId`. Producing the
+  three real infrastructure outputs and invoking this boundary from
+  installation remain next.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority

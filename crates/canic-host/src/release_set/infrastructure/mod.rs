@@ -4,6 +4,7 @@
 //! Does not own: Cargo execution, placement, installation, or application release sets.
 //! Boundary: derives immutable artifact evidence from one qualified release build.
 
+mod persistence;
 #[cfg(test)]
 mod tests;
 
@@ -19,6 +20,13 @@ use sha2::{Digest, Sha256};
 use thiserror::Error as ThisError;
 
 use super::{GZIP_MAGIC, WASM_MAGIC, validate_release_artifact_relative_path};
+
+pub use persistence::{
+    CanicInfrastructureArtifactBuildOutput, CanicInfrastructureArtifactPersistenceError,
+    PersistedCanicInfrastructureArtifactManifest,
+    compile_and_persist_canic_infrastructure_artifact_manifest,
+    load_persisted_canic_infrastructure_artifact_manifest,
+};
 
 const SHA_256_HEX_BYTES: usize = 64;
 const MAX_ARTIFACT_PATH_BYTES: usize = 4_096;

@@ -6,8 +6,8 @@ Date: 2026-07-26
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.1`.
-- Open patch draft: `0.100.2`; no package-version change has been authorized.
+- Workspace package version: `0.100.2`.
+- Open patch draft: `0.100.3`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -154,28 +154,36 @@ Fleets may reuse one physical Subnet. Root bootstrap and managed release-role
 projection now consume compiled topology instead of raw Component Spec
 configuration.
 
-The open 0.100.2 batch defines the infrastructure artifact family independently
-from application release sets. Its compiler admits exactly one Fleet
-Coordinator, Fleet Subnet Root and Wasm Store entry from one
-`ReleaseBuildId`, derives raw/gzip lengths and hashes from matching bytes,
-canonicalizes entry order and freezes deterministic manifest bytes and digest.
-It rejects missing, duplicate, cross-build, unsafe-path, invalid-package,
-corrupt, representation-mismatched and noncanonical evidence.
+Released 0.100.2 defines the infrastructure artifact family independently from
+application release sets. Its compiler admits exactly one Fleet Coordinator,
+Fleet Subnet Root and Wasm Store entry from one `ReleaseBuildId`, derives
+raw/gzip lengths and hashes from matching bytes, canonicalizes entry order and
+freezes deterministic manifest bytes and digest.
 
-The current installer does not yet populate or persist that manifest from
-qualified build outputs and does not journal or install planned Coordinator or
-root bindings. Protected environment binding, Fleet Subnet Root lifecycle,
-exact root release-set/Wasm Store authority and Fleet Registry authority
-remain unimplemented. The temporary Component Spec selector remains until
-real allocation supplies the exact protected Component binding.
+The open 0.100.3 batch adds a qualified infrastructure build-output contract
+and immutably persists the canonical manifest under its durable
+`ReleaseBuildId`. Loading revalidates canonical bytes and path identity. Exact
+same-release retry is idempotent before or after release-build finalization;
+conflicting evidence, unsafe artifact paths and first publication after
+finalization fail closed. A normal complete install build now requires its
+durable release-build identity before Cargo execution.
+
+The current installer does not yet produce all three concrete infrastructure
+outputs or invoke the persistence boundary, and it does not journal or install
+planned Coordinator or root bindings. Protected environment binding, Fleet
+Subnet Root lifecycle, exact root release-set/Wasm Store authority and Fleet
+Registry authority remain unimplemented. The temporary Component Spec
+selector remains until real allocation supplies the exact protected Component
+binding.
 
 ## Next Action
 
-Connect the infrastructure manifest compiler to one qualified complete build,
-persist its canonical bytes under the `ReleaseBuildId` and reject any build
-that cannot supply all three exact infrastructure roles. Then build the
-qualified application artifact union once and project exact root-specific
-release-set manifests from the validated root admissions.
+Produce the Fleet Coordinator, Fleet Subnet Root and Wasm Store as three
+qualified outputs from one complete build and invoke the durable
+infrastructure-manifest boundary before release-build finalization. Reject any
+build that cannot supply all three exact roles. Then build the qualified
+application artifact union once and project exact root-specific release-set
+manifests from the validated root admissions.
 
 After artifact finalization, freeze resolved Coordinator/root placement and
 funding in the installation journal, install the Coordinator before the roots,
