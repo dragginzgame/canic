@@ -275,7 +275,7 @@ impl ConfigOps {
     }
 }
 
-fn funding_limits(cfg: &CanisterConfig) -> FundingLimits {
+const fn funding_limits(cfg: &CanisterConfig) -> FundingLimits {
     FundingLimits {
         max_per_request: cfg.cycles_funding.max_per_request.to_u128(),
         max_per_child: cfg.cycles_funding.max_per_child.to_u128(),
