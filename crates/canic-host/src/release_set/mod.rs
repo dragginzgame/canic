@@ -1,11 +1,17 @@
 //! Release-set discovery, artifact validation, and manifest emission.
 
+mod application;
 mod artifact;
 mod config;
 mod infrastructure;
 mod manifest;
 mod paths;
 
+pub use application::{
+    ApplicationArtifactBuildOutput, ApplicationArtifactBuildTarget, ApplicationArtifactEntry,
+    ApplicationArtifactUnion, ApplicationReleaseSetEntryKind, ApplicationReleaseSetError,
+    FleetSubnetRootReleaseSetEntry, FleetSubnetRootReleaseSetManifest,
+};
 use artifact::{build_release_set_entry, validate_release_artifact_relative_path};
 pub(crate) use config::configured_release_roles_from_config;
 pub use config::{

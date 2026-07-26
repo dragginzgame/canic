@@ -16,6 +16,7 @@ mod intent;
 mod metrics;
 mod network;
 mod release_build;
+mod release_set;
 mod subnet;
 
 pub use app::AppId;
@@ -42,4 +43,5 @@ pub use network::{
 pub use release_build::{
     RELEASE_BUILD_ID_ENV, ReleaseBuildId, ReleaseBuildIdParseError, ReleaseBuildNonce,
 };
+pub use release_set::ReleaseSetDigest;
 pub use subnet::SubnetId;
