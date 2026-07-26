@@ -48,7 +48,16 @@ fn component_spec_config(role: &str, maximum_instances: u32) -> ComponentSpecCon
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
+        provisions: BTreeMap::default(),
         children: BTreeMap::default(),
+    }
+}
+
+fn provisioning_grant(
+    maximum_instances_per_requester_per_root: u32,
+) -> ComponentProvisioningGrantConfig {
+    ComponentProvisioningGrantConfig {
+        maximum_instances_per_requester_per_root,
     }
 }
 
@@ -402,11 +411,55 @@ fn component_roles_cannot_occur_in_multiple_component_specs() {
 }
 
 #[test]
+fn provisioning_grant_graph_requires_existing_distinct_acyclic_specs() {
+    let mut self_target = ConfigModel::test_default();
+    self_target
+        .component_specs
+        .get_mut(&default_component_spec_id())
+        .expect("default Component Spec")
+        .provisions
+        .insert(default_component_spec_id(), provisioning_grant(1));
+    self_target.validate().expect_err("self grant must reject");
+
+    let mut missing = ConfigModel::test_default();
+    missing
+        .component_specs
+        .get_mut(&default_component_spec_id())
+        .expect("default Component Spec")
+        .provisions
+        .insert(component_spec_id("missing"), provisioning_grant(1));
+    missing
+        .validate()
+        .expect_err("missing grant target must reject");
+
+    let mut cyclic = ConfigModel::test_default();
+    cyclic.roles.insert(
+        CanisterRole::from("aux"),
+        RoleDeclaration {
+            kind: RoleDeclarationKind::Canister,
+            package: "aux".to_string(),
+        },
+    );
+    let mut aux = component_spec_config("aux", 1);
+    aux.provisions
+        .insert(default_component_spec_id(), provisioning_grant(1));
+    cyclic
+        .component_specs
+        .get_mut(&default_component_spec_id())
+        .expect("default Component Spec")
+        .provisions
+        .insert(component_spec_id("aux"), provisioning_grant(1));
+    cyclic.component_specs.insert(component_spec_id("aux"), aux);
+    cyclic.validate().expect_err("grant cycle must reject");
+}
+
+#[test]
 fn direct_child_roles_may_be_reused_across_component_specs() {
     let mut cfg = ConfigModel::test_default();
     let shared_role = CanisterRole::from("shared_worker");
     let shared_child = ComponentChildConfig {
         kind: ComponentChildKind::Replica,
+        initial_instances: 0,
         maximum_instances: 4,
         initial_cycles: Cycles::new(0),
         topup: None,
@@ -451,6 +504,7 @@ fn a_component_role_cannot_also_be_a_child_role() {
         CanisterRole::from("app"),
         ComponentChildConfig {
             kind: ComponentChildKind::Singleton,
+            initial_instances: 0,
             maximum_instances: 1,
             initial_cycles: Cycles::new(0),
             topup: None,
@@ -487,6 +541,7 @@ fn attached_app_roles_follow_structural_component_and_child_ownership() {
         CanisterRole::from("user_shard"),
         ComponentChildConfig {
             kind: ComponentChildKind::Shard,
+            initial_instances: 0,
             maximum_instances: 4,
             initial_cycles: Cycles::new(0),
             topup: None,

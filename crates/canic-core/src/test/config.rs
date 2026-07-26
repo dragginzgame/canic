@@ -113,6 +113,7 @@ impl ConfigTestBuilder {
             role,
             ComponentChildConfig {
                 kind,
+                initial_instances: 0,
                 maximum_instances: if kind == ComponentChildKind::Singleton {
                     1
                 } else {
@@ -181,6 +182,7 @@ impl ConfigTestBuilder {
             standards: StandardsCanisterConfig::default(),
             diagnostics: DiagnosticsCanisterConfig::default(),
             metrics: MetricsCanisterConfig::default(),
+            provisions: BTreeMap::default(),
             children: BTreeMap::default(),
         }
     }

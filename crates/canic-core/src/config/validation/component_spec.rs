@@ -7,8 +7,8 @@
 use crate::{
     config::schema::{
         ComponentChildConfig, ComponentChildKind, ComponentSpecConfig, ConfigSchemaError,
-        CyclesFundingPolicyConfig, MAX_COMPONENT_CHILD_ROLES, NAME_MAX_BYTES, TopupPolicy,
-        Validate,
+        CyclesFundingPolicyConfig, MAX_COMPONENT_CHILD_ROLES, MAX_COMPONENT_PROVISIONING_GRANTS,
+        NAME_MAX_BYTES, TopupPolicy, Validate,
     },
     config::validation::validate_canister_role,
     ids::CanisterRole,
@@ -35,6 +35,13 @@ impl Validate for ComponentSpecConfig {
                 "Component '{}' declares {} child roles, exceeding bound {MAX_COMPONENT_CHILD_ROLES}",
                 self.component_role,
                 self.children.len(),
+            )));
+        }
+        if self.provisions.len() > MAX_COMPONENT_PROVISIONING_GRANTS {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "Component '{}' declares {} provisioning grants, exceeding bound {MAX_COMPONENT_PROVISIONING_GRANTS}",
+                self.component_role,
+                self.provisions.len(),
             )));
         }
         if !self.children.is_empty() && self.limits.maximum_children == 0 {
@@ -65,32 +72,8 @@ impl Validate for ComponentSpecConfig {
         validate_cycles_funding(&self.cycles_funding, &self.component_role)?;
         validate_topup(self.topup.as_ref(), &self.component_role)?;
 
-        for (role, child) in &self.children {
-            validate_canister_role(role, "Component Child")?;
-            if role == &self.component_role {
-                return Err(ConfigSchemaError::ValidationError(format!(
-                    "Component '{}' cannot also be its own child",
-                    self.component_role,
-                )));
-            }
-            if role.is_root() || role.is_wasm_store() {
-                return Err(ConfigSchemaError::ValidationError(format!(
-                    "Component Child '{role}' is reserved infrastructure",
-                )));
-            }
-            if child.maximum_instances == 0 {
-                return Err(ConfigSchemaError::ValidationError(format!(
-                    "Component Child '{role}' maximum_instances must be > 0",
-                )));
-            }
-            if child.kind == ComponentChildKind::Singleton && child.maximum_instances != 1 {
-                return Err(ConfigSchemaError::ValidationError(format!(
-                    "singleton Component Child '{role}' maximum_instances must equal 1",
-                )));
-            }
-            validate_cycles_funding(&child.cycles_funding, role)?;
-            validate_topup(child.topup.as_ref(), role)?;
-        }
+        validate_component_children(self)?;
+        validate_provisioning_grant_limits(self)?;
 
         validate_scaling(self, &self.component_role, &self.children)?;
         validate_sharding(self, &self.component_role, &self.children)?;
@@ -98,6 +81,71 @@ impl Validate for ComponentSpecConfig {
 
         Ok(())
     }
+}
+
+fn validate_component_children(config: &ComponentSpecConfig) -> Result<(), ConfigSchemaError> {
+    let mut initial_children = 0_u32;
+    for (role, child) in &config.children {
+        validate_canister_role(role, "Component Child")?;
+        if role == &config.component_role {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "Component '{}' cannot also be its own child",
+                config.component_role,
+            )));
+        }
+        if role.is_root() || role.is_wasm_store() {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "Component Child '{role}' is reserved infrastructure",
+            )));
+        }
+        if child.maximum_instances == 0 {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "Component Child '{role}' maximum_instances must be > 0",
+            )));
+        }
+        if child.initial_instances > child.maximum_instances {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "Component Child '{role}' initial_instances must be <= maximum_instances",
+            )));
+        }
+        if child.kind == ComponentChildKind::Singleton && child.maximum_instances != 1 {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "singleton Component Child '{role}' maximum_instances must equal 1",
+            )));
+        }
+        initial_children = initial_children
+            .checked_add(child.initial_instances)
+            .ok_or_else(|| {
+                ConfigSchemaError::ValidationError(format!(
+                    "Component '{}' initial child count overflowed",
+                    config.component_role,
+                ))
+            })?;
+        validate_cycles_funding(&child.cycles_funding, role)?;
+        validate_topup(child.topup.as_ref(), role)?;
+    }
+    if initial_children > config.limits.maximum_children {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "Component '{}' initial child count {initial_children} exceeds limits.maximum_children {}",
+            config.component_role, config.limits.maximum_children,
+        )));
+    }
+
+    Ok(())
+}
+
+fn validate_provisioning_grant_limits(
+    config: &ComponentSpecConfig,
+) -> Result<(), ConfigSchemaError> {
+    for (target, grant) in &config.provisions {
+        if grant.maximum_instances_per_requester_per_root == 0 {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "Component provisioning grant to '{target}' maximum_instances_per_requester_per_root must be > 0",
+            )));
+        }
+    }
+
+    Ok(())
 }
 
 fn validate_cycles_funding(

@@ -48,6 +48,9 @@ package = "shared"
 component_role = "alpha"
 maximum_instances = 2
 
+[component_specs.alpha.provisions.beta]
+maximum_instances_per_requester_per_root = 2
+
 [component_specs.alpha.children.shared]
 kind = "replica"
 maximum_instances = 2
@@ -250,7 +253,7 @@ fn compiler_freezes_one_canonical_qualified_topology_union() {
     );
     assert_eq!(
         hex_bytes(union.digest(&topology).expect("frozen union digest")),
-        "d34c1e91fbcc475ac13f6f4e009d8358fcb42958da07961ada8e6a3aa51edd9a"
+        "4850c818b5196e79a8eeadb5940733589795cf679f021fbc8dc3489c1ed40c34"
     );
 }
 
@@ -383,7 +386,7 @@ fn projection_preserves_every_spec_edge_while_reusing_shared_artifact_evidence()
                 .expect("frozen manifest digest")
                 .into_bytes()
         ),
-        "ba64ce00ad46ea8460e00e166b222302e4de67efd7e086caa399744c490052b3"
+        "dc75f80a3c646ee65e0074013b8dd363fa645dd58de4393edd6aabdae99d692c"
     );
 }
 
@@ -401,6 +404,10 @@ fn separate_roots_receive_only_their_admitted_spec_closure() {
     let union = compile_union(&plan.component_topology, release_build(13));
 
     for (binding, expected_spec) in plan.fleet_subnet_roots.iter().zip(["alpha", "beta"]) {
+        let projected = plan
+            .component_topology
+            .project_for_admissions(&binding.component_admissions)
+            .expect("root-local topology projection");
         let manifest =
             FleetSubnetRootReleaseSetManifest::project(&plan.component_topology, binding, &union)
                 .expect("root-local projection");
@@ -412,6 +419,22 @@ fn separate_roots_receive_only_their_admitted_spec_closure() {
                 .all(|entry| entry.component_spec.as_str() == expected_spec)
         );
         assert_eq!(manifest.entries[1].artifact.role.as_str(), "shared");
+        if expected_spec == "beta" {
+            assert_eq!(
+                projected.provisioning_grants.len(),
+                1,
+                "target root retains the incoming grant"
+            );
+            assert!(
+                manifest
+                    .entries
+                    .iter()
+                    .all(|entry| entry.artifact.role.as_str() != "alpha"),
+                "an incoming grant must not pull requester artifacts into the root release set"
+            );
+        } else {
+            assert!(projected.provisioning_grants.is_empty());
+        }
     }
 }
 

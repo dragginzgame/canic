@@ -20,8 +20,9 @@ use schema::Validate;
 #[cfg(any(not(target_arch = "wasm32"), test))]
 use serde_path_to_error::{Path as SerdePath, Segment as SerdePathSegment};
 pub use topology::{
-    ComponentChildFundingPolicy, ComponentChildSpec, ComponentLimits, ComponentSpec,
-    ComponentTopology, ComponentTopologyError, MAX_COMPONENT_TOPOLOGY_CANONICAL_BYTES,
+    ComponentChildFundingPolicy, ComponentChildSpec, ComponentLimits, ComponentProvisioningGrant,
+    ComponentSpec, ComponentTopology, ComponentTopologyError,
+    MAX_COMPONENT_TOPOLOGY_CANONICAL_BYTES,
 };
 
 struct InstalledConfig {

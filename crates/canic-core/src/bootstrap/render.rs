@@ -11,11 +11,12 @@ use crate::{
     config::schema::{
         AppConfig, AuthConfig, BindingConfig, BindingPool, CanisterAuthConfig,
         ChainKeyRootProofConfig, ComponentChildConfig, ComponentChildKind, ComponentLimitsConfig,
-        ComponentSpecConfig, ConfigModel, CyclesFundingBudgetConfig, CyclesFundingPolicyConfig,
-        DelegatedTokenConfig, DiagnosticsCanisterConfig, FleetInitMode, LogConfig,
-        MetricsCanisterConfig, MetricsProfile, RoleAttestationConfig, RoleDeclaration,
-        RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy,
-        ShardingConfig, Standards, StandardsCanisterConfig, TopupPolicy, Whitelist,
+        ComponentProvisioningGrantConfig, ComponentSpecConfig, ConfigModel,
+        CyclesFundingBudgetConfig, CyclesFundingPolicyConfig, DelegatedTokenConfig,
+        DiagnosticsCanisterConfig, FleetInitMode, LogConfig, MetricsCanisterConfig, MetricsProfile,
+        RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool, ScalePoolPolicy,
+        ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
+        StandardsCanisterConfig, TopupPolicy, Whitelist,
     },
     ids::{AppId, BuildNetwork, CanisterRole, ComponentSpecId},
 };
@@ -406,6 +407,11 @@ fn render_component_spec_config(config: &ComponentSpecConfig) -> TokenStream {
     let standards = render_standards_canister_config(&config.standards);
     let diagnostics = render_diagnostics_canister_config(config.diagnostics);
     let metrics = render_metrics_canister_config(config.metrics);
+    let provisions = render_btree_map(
+        config.provisions.iter(),
+        render_component_spec_id,
+        render_component_provisioning_grant_config,
+    );
     let children = render_btree_map(
         config.children.iter(),
         render_canister_role,
@@ -427,6 +433,7 @@ fn render_component_spec_config(config: &ComponentSpecConfig) -> TokenStream {
             standards: #standards,
             diagnostics: #diagnostics,
             metrics: #metrics,
+            provisions: #provisions,
             children: #children,
         }
     }
@@ -463,6 +470,7 @@ fn render_cycles_funding_budget_config(config: &CyclesFundingBudgetConfig) -> To
 // Render one direct Component Child.
 fn render_component_child_config(config: &ComponentChildConfig) -> TokenStream {
     let kind = render_component_child_kind(config.kind);
+    let initial_instances = render_u32_literal(config.initial_instances);
     let maximum_instances = render_u32_literal(config.maximum_instances);
     let initial_cycles = render_cycles(config.initial_cycles.to_u128());
     let topup = render_option(config.topup.as_ref(), render_topup);
@@ -475,6 +483,7 @@ fn render_component_child_config(config: &ComponentChildConfig) -> TokenStream {
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ComponentChildConfig {
             kind: #kind,
+            initial_instances: #initial_instances,
             maximum_instances: #maximum_instances,
             initial_cycles: #initial_cycles,
             topup: #topup,
@@ -483,6 +492,21 @@ fn render_component_child_config(config: &ComponentChildConfig) -> TokenStream {
             standards: #standards,
             diagnostics: #diagnostics,
             metrics: #metrics,
+        }
+    }
+}
+
+// Render one bounded non-parent peer-Component grant.
+fn render_component_provisioning_grant_config(
+    config: &ComponentProvisioningGrantConfig,
+) -> TokenStream {
+    let maximum_instances_per_requester_per_root =
+        render_u32_literal(config.maximum_instances_per_requester_per_root);
+
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentProvisioningGrantConfig {
+            maximum_instances_per_requester_per_root:
+                #maximum_instances_per_requester_per_root,
         }
     }
 }
@@ -853,5 +877,53 @@ mod tests {
         assert!(log.contains("16_384_u32"));
         assert!(component_limits.contains("2_097_152_u64"));
         assert!(component_limits.contains("3_600_u64"));
+    }
+
+    #[test]
+    fn render_topology_v2_initial_children_and_provisioning_grants() {
+        let config = crate::config::Config::parse_toml(
+            r#"
+[app]
+name = "render_v2"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.hub]
+kind = "canister"
+package = "hub"
+
+[roles.instance]
+kind = "canister"
+package = "instance"
+
+[roles.ledger]
+kind = "canister"
+package = "ledger"
+
+[component_specs.hub]
+component_role = "hub"
+maximum_instances = 1
+
+[component_specs.hub.provisions.instance]
+maximum_instances_per_requester_per_root = 100
+
+[component_specs.instance]
+component_role = "instance"
+maximum_instances = 100
+
+[component_specs.instance.children.ledger]
+kind = "singleton"
+initial_instances = 1
+maximum_instances = 1
+"#,
+        )
+        .expect("valid topology v2 config");
+        let rendered = config_model(&config);
+
+        assert!(rendered.contains("ComponentProvisioningGrantConfig"));
+        assert!(rendered.contains("maximum_instances_per_requester_per_root : 100_u32"));
+        assert!(rendered.contains("initial_instances : 1_u32"));
     }
 }

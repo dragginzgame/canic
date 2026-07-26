@@ -253,18 +253,33 @@ impl ConfigOps {
         }
     }
 
+    /// Resolve funding limits for a direct Fleet Subnet Root child role.
+    ///
+    /// Roots are infrastructure and have no current Component Spec, so this
+    /// lookup resolves the unique topology role directly.
+    pub(crate) fn cycles_funding_limits_for_root_child_role(
+        child_role: &CanisterRole,
+    ) -> Result<FundingLimits, InternalError> {
+        let cfg = Self::try_get_canister_by_role(child_role)?;
+
+        Ok(funding_limits(&cfg))
+    }
+
     /// Resolve parent funding limits for a direct Component Child role.
-    pub(crate) fn cycles_funding_limits_for_child_role(
+    pub(crate) fn cycles_funding_limits_for_component_child_role(
         child_role: &CanisterRole,
     ) -> Result<FundingLimits, InternalError> {
         let cfg = Self::current_component_canister(child_role)?;
-        let policy = cfg.cycles_funding;
 
-        Ok(FundingLimits {
-            max_per_request: policy.max_per_request.to_u128(),
-            max_per_child: policy.max_per_child.to_u128(),
-            cooldown_secs: policy.cooldown_secs,
-        })
+        Ok(funding_limits(&cfg))
+    }
+}
+
+fn funding_limits(cfg: &CanisterConfig) -> FundingLimits {
+    FundingLimits {
+        max_per_request: cfg.cycles_funding.max_per_request.to_u128(),
+        max_per_child: cfg.cycles_funding.max_per_child.to_u128(),
+        cooldown_secs: cfg.cycles_funding.cooldown_secs,
     }
 }
 

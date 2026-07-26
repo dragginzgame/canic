@@ -50,6 +50,7 @@ impl ComponentTopology {
     ) -> Result<Self, ComponentTopologyError> {
         validate_root_limits(limits)?;
         let projection = self.project_for_admissions(admissions)?;
+        validate_initial_component_footprints(&projection, limits)?;
         let expected = projection.digest()?;
         if component_topology_digest != expected {
             return Err(ComponentTopologyError::RootTopologyDigestMismatch {
@@ -177,6 +178,28 @@ impl ComponentTopology {
 
         Ok(())
     }
+}
+
+fn validate_initial_component_footprints(
+    topology: &ComponentTopology,
+    limits: &FleetSubnetRootLimits,
+) -> Result<(), ComponentTopologyError> {
+    for spec in &topology.component_specs {
+        let required_canisters = spec.children.iter().fold(1_u64, |total, child| {
+            total + u64::from(child.initial_instances)
+        });
+        if required_canisters > u64::from(limits.maximum_managed_canisters) {
+            return Err(
+                ComponentTopologyError::InitialComponentFootprintExceedsRootLimit {
+                    component_spec: spec.component_spec.clone(),
+                    required_canisters,
+                    maximum_managed_canisters: limits.maximum_managed_canisters,
+                },
+            );
+        }
+    }
+
+    Ok(())
 }
 
 fn validate_root_limits(limits: &FleetSubnetRootLimits) -> Result<(), ComponentTopologyError> {

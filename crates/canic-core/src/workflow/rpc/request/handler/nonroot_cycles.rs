@@ -287,7 +287,11 @@ pub(super) fn authorize_request_cycles_inner(
 
     reject_competing_funding_operation(ctx, req)?;
 
-    let limits = ConfigOps::cycles_funding_limits_for_child_role(&child.role)?;
+    let limits = if ctx.is_root_env {
+        ConfigOps::cycles_funding_limits_for_root_child_role(&child.role)?
+    } else {
+        ConfigOps::cycles_funding_limits_for_component_child_role(&child.role)?
+    };
     let ledger = CyclesFundingLedgerOps::snapshot(ctx.caller);
     let decision = match evaluate(limits, ledger, req.cycles, ctx.now) {
         Ok(decision) => decision,
