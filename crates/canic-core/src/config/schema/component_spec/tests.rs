@@ -394,7 +394,7 @@ fn cycles_funding_and_topup_limits_validate_for_components_and_children() {
 }
 
 #[test]
-fn structural_role_lookup_returns_component_children_and_implicit_store() {
+fn structural_role_lookup_returns_only_the_component_and_its_children() {
     let mut config = component_spec("hub");
     config.children.insert(
         CanisterRole::from("worker"),
@@ -415,7 +415,7 @@ fn structural_role_lookup_returns_component_children_and_implicit_store() {
             .kind,
         CanisterKind::Replica,
     );
-    assert!(config.get_canister(&CanisterRole::WASM_STORE).is_some());
+    assert!(config.get_canister(&CanisterRole::WASM_STORE).is_none());
     assert!(config.get_canister(&CanisterRole::from("other")).is_none());
 }
 
