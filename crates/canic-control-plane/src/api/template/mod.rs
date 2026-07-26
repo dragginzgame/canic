@@ -327,7 +327,7 @@ async fn publication_admin(cmd: WasmStoreAdminCommand) -> Result<WasmStoreAdminR
 
 #[cfg(feature = "root-control-plane")]
 fn publication_overview() -> WasmStoreOverviewResponse {
-    let store = config::current_tree_default_wasm_store();
+    let store = config::fleet_subnet_root_default_wasm_store();
     let limits = WasmStoreLimits {
         max_store_bytes: store.max_store_bytes(),
         max_templates: store.max_templates(),

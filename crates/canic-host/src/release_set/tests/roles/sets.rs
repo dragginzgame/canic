@@ -23,19 +23,15 @@ kind = "canister"
 package = "scale_hub"
 [app.whitelist]
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.user_hub]
-kind = "service"
+[component_specs.user_hub]
+component_role = "user_hub"
+maximum_instances = 1
 
-[tree_specs.default.canisters.scale_hub]
-kind = "service"
+[component_specs.scale_hub]
+component_role = "scale_hub"
+maximum_instances = 1
 "#;
 
     let config = parse_config_model(config).expect("valid config");
@@ -63,16 +59,11 @@ package = "user_hub"
 kind = "canister"
 package = "store"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.user_hub]
-kind = "service"
+[component_specs.user_hub]
+component_role = "user_hub"
+maximum_instances = 1
 "#;
 
     let deployable = configured_deployable_roles_from_config(&parsed_config(config));
@@ -95,11 +86,11 @@ fn configured_deployable_roles_include_root_first() {
 }
 
 #[test]
-fn configured_release_roles_supports_multiple_tree_specs() {
-    let config = parse_config_model(MULTI_ROOT_CONFIG).expect("multiple Tree Specs");
+fn configured_release_roles_supports_multiple_component_specs() {
+    let config = parse_config_model(MULTI_COMPONENT_CONFIG).expect("multiple Component Specs");
     let roles = configured_release_roles_from_config(&config);
 
-    assert!(roles.is_empty());
+    assert_eq!(roles, vec!["alpha".to_string(), "beta".to_string()]);
 }
 
 #[test]

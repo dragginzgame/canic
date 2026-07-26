@@ -34,8 +34,8 @@ pub struct EnvRecord {
     // fleet
     pub fleet_root_pid: Option<Principal>,
 
-    // Tree and physical Subnet placement
-    pub tree_spec: Option<TreeSpecId>,
+    // Component declaration and physical Subnet placement
+    pub component_spec: Option<ComponentSpecId>,
     pub subnet_pid: Option<Principal>,
     pub root_pid: Option<Principal>,
 
@@ -78,8 +78,8 @@ impl Env {
     }
 
     #[must_use]
-    pub(crate) fn get_tree_spec() -> Option<TreeSpecId> {
-        ENV.with_borrow(|cell| cell.get().tree_spec.clone())
+    pub(crate) fn get_component_spec() -> Option<ComponentSpecId> {
+        ENV.with_borrow(|cell| cell.get().component_spec.clone())
     }
 
     #[must_use]

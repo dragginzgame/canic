@@ -4,18 +4,20 @@
 //! Does not own: config validation, schema definitions, or runtime config install.
 //! Boundary: host-side bootstrap tooling calls this before embedding generated source.
 
+#[cfg(test)]
+use crate::config::schema::IcpRefillPolicy;
 use crate::{
     cdk::candid::Principal,
     config::schema::{
-        AppConfig, AuthConfig, BindingConfig, BindingPool, CanisterAuthConfig, CanisterConfig,
-        CanisterKind, CanisterPool, ChainKeyRootProofConfig, ConfigModel,
-        CyclesFundingPolicyConfig, DelegatedTokenConfig, DiagnosticsCanisterConfig, FleetInitMode,
-        IcpRefillPolicy, LogConfig, MetricsCanisterConfig, MetricsProfile, PoolImport,
-        RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool, ScalePoolPolicy,
-        ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
-        StandardsCanisterConfig, TopupPolicy, TreeGroupConfig, TreeSpecConfig, Whitelist,
+        AppConfig, AuthConfig, BindingConfig, BindingPool, CanisterAuthConfig,
+        ChainKeyRootProofConfig, ComponentChildConfig, ComponentChildKind, ComponentLimitsConfig,
+        ComponentSpecConfig, ConfigModel, CyclesFundingBudgetConfig, CyclesFundingPolicyConfig,
+        DelegatedTokenConfig, DiagnosticsCanisterConfig, FleetInitMode, LogConfig,
+        MetricsCanisterConfig, MetricsProfile, RoleAttestationConfig, RoleDeclaration,
+        RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy,
+        ShardingConfig, Standards, StandardsCanisterConfig, TopupPolicy, Whitelist,
     },
-    ids::{AppId, BuildNetwork, CanisterRole, TreeGroupId, TreeSpecId},
+    ids::{AppId, BuildNetwork, CanisterRole, ComponentSpecId},
 };
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -41,17 +43,11 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
         render_canister_role,
         render_role_declaration,
     );
-    let tree_specs = render_btree_map(
-        config.tree_specs.iter(),
-        render_tree_spec_id,
-        render_tree_spec_config,
+    let component_specs = render_btree_map(
+        config.component_specs.iter(),
+        render_component_spec_id,
+        render_component_spec_config,
     );
-    let tree_groups = render_btree_map(
-        config.tree_groups.iter(),
-        render_tree_group_id,
-        render_tree_group_config,
-    );
-
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ConfigModel {
             controllers: #controllers,
@@ -60,8 +56,7 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
             auth: #auth,
             app: #app,
             roles: #roles,
-            tree_specs: #tree_specs,
-            tree_groups: #tree_groups,
+            component_specs: #component_specs,
         }
     }
 }
@@ -110,23 +105,13 @@ fn render_canister_role(role: &CanisterRole) -> TokenStream {
     }
 }
 
-// Render one validated Tree Spec identifier.
-fn render_tree_spec_id(tree_spec: &TreeSpecId) -> TokenStream {
-    let value = tree_spec.as_str();
+// Render one validated Component Spec identifier.
+fn render_component_spec_id(component_spec: &ComponentSpecId) -> TokenStream {
+    let value = component_spec.as_str();
     quote! {
-        ::canic::__internal::core::bootstrap::compiled::TreeSpecId::try_from(
+        ::canic::__internal::core::bootstrap::compiled::ComponentSpecId::try_from(
             ::std::string::String::from(#value)
-        ).expect("embedded Tree Spec ID was validated at build time")
-    }
-}
-
-// Render one validated Tree Group identifier.
-fn render_tree_group_id(tree_group: &TreeGroupId) -> TokenStream {
-    let value = tree_group.as_str();
-    quote! {
-        ::canic::__internal::core::bootstrap::compiled::TreeGroupId::try_from(
-            ::std::string::String::from(#value)
-        ).expect("embedded Tree Group ID was validated at build time")
+        ).expect("embedded Component Spec ID was validated at build time")
     }
 }
 
@@ -406,74 +391,13 @@ fn render_whitelist(whitelist: &Whitelist) -> TokenStream {
     }
 }
 
-// Render a Tree Spec configuration and its canister graph.
-fn render_tree_spec_config(config: &TreeSpecConfig) -> TokenStream {
-    let canisters = render_btree_map(
-        config.canisters.iter(),
-        render_canister_role,
-        render_canister_config,
-    );
-    let pool = render_canister_pool(&config.pool);
-
-    quote! {
-        ::canic::__internal::core::bootstrap::compiled::TreeSpecConfig {
-            canisters: #canisters,
-            pool: #pool,
-        }
-    }
-}
-
-// Render one Tree Group declaration.
-fn render_tree_group_config(config: &TreeGroupConfig) -> TokenStream {
-    let tree_spec = render_tree_spec_id(&config.tree_spec);
-    let initial_trees = config.initial_trees;
-    let maximum_trees = config.maximum_trees;
-
-    quote! {
-        ::canic::__internal::core::bootstrap::compiled::TreeGroupConfig {
-            tree_spec: #tree_spec,
-            initial_trees: #initial_trees,
-            maximum_trees: #maximum_trees,
-        }
-    }
-}
-
-// Render the pool import config for spare canister pools.
-fn render_pool_import(config: &PoolImport) -> TokenStream {
-    let initial = render_option(config.initial.as_ref(), |value| {
-        render_u64_literal(u64::from(*value))
-    });
-    let local = render_vec(config.local.iter(), render_principal);
-    let ic = render_vec(config.ic.iter(), render_principal);
-
-    quote! {
-        ::canic::__internal::core::bootstrap::compiled::PoolImport {
-            initial: #initial,
-            local: #local,
-            ic: #ic,
-        }
-    }
-}
-
-// Render the top-level canister pool config.
-fn render_canister_pool(config: &CanisterPool) -> TokenStream {
-    let minimum_size = config.minimum_size;
-    let import = render_pool_import(&config.import);
-
-    quote! {
-        ::canic::__internal::core::bootstrap::compiled::CanisterPool {
-            minimum_size: #minimum_size,
-            import: #import,
-        }
-    }
-}
-
-// Render a single canister role configuration.
-fn render_canister_config(config: &CanisterConfig) -> TokenStream {
-    let kind = render_canister_kind(config.kind);
+// Render one non-recursive Component Spec.
+fn render_component_spec_config(config: &ComponentSpecConfig) -> TokenStream {
+    let component_role = render_canister_role(&config.component_role);
+    let maximum_instances = config.maximum_instances;
+    let limits = render_component_limits_config(&config.limits);
     let initial_cycles = render_cycles(config.initial_cycles.to_u128());
     let topup = render_option(config.topup.as_ref(), render_topup);
-    let icp_refill = render_option(config.icp_refill.as_ref(), render_icp_refill_policy);
     let cycles_funding = render_cycles_funding_policy(&config.cycles_funding);
     let scaling = render_option(config.scaling.as_ref(), render_scaling_config);
     let sharding = render_option(config.sharding.as_ref(), render_sharding_config);
@@ -482,17 +406,79 @@ fn render_canister_config(config: &CanisterConfig) -> TokenStream {
     let standards = render_standards_canister_config(&config.standards);
     let diagnostics = render_diagnostics_canister_config(config.diagnostics);
     let metrics = render_metrics_canister_config(config.metrics);
+    let children = render_btree_map(
+        config.children.iter(),
+        render_canister_role,
+        render_component_child_config,
+    );
 
     quote! {
-        ::canic::__internal::core::bootstrap::compiled::CanisterConfig {
-            kind: #kind,
+        ::canic::__internal::core::bootstrap::compiled::ComponentSpecConfig {
+            component_role: #component_role,
+            maximum_instances: #maximum_instances,
+            limits: #limits,
             initial_cycles: #initial_cycles,
             topup: #topup,
-            icp_refill: #icp_refill,
             cycles_funding: #cycles_funding,
             scaling: #scaling,
             sharding: #sharding,
             binding: #binding,
+            auth: #auth,
+            standards: #standards,
+            diagnostics: #diagnostics,
+            metrics: #metrics,
+            children: #children,
+        }
+    }
+}
+
+// Render aggregate limits for one concrete Component.
+fn render_component_limits_config(config: &ComponentLimitsConfig) -> TokenStream {
+    let maximum_children = config.maximum_children;
+    let maximum_registry_bytes = config.maximum_registry_bytes;
+    let cycles_funding = render_cycles_funding_budget_config(&config.cycles_funding);
+
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentLimitsConfig {
+            maximum_children: #maximum_children,
+            maximum_registry_bytes: #maximum_registry_bytes,
+            cycles_funding: #cycles_funding,
+        }
+    }
+}
+
+// Render one aggregate cycles-funding budget.
+fn render_cycles_funding_budget_config(config: &CyclesFundingBudgetConfig) -> TokenStream {
+    let window_secs = config.window_secs;
+    let maximum_cycles = render_cycles(config.maximum_cycles.to_u128());
+
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::CyclesFundingBudgetConfig {
+            window_secs: #window_secs,
+            maximum_cycles: #maximum_cycles,
+        }
+    }
+}
+
+// Render one direct Component Child.
+fn render_component_child_config(config: &ComponentChildConfig) -> TokenStream {
+    let kind = render_component_child_kind(config.kind);
+    let maximum_instances = config.maximum_instances;
+    let initial_cycles = render_cycles(config.initial_cycles.to_u128());
+    let topup = render_option(config.topup.as_ref(), render_topup);
+    let cycles_funding = render_cycles_funding_policy(&config.cycles_funding);
+    let auth = render_canister_auth_config(&config.auth);
+    let standards = render_standards_canister_config(&config.standards);
+    let diagnostics = render_diagnostics_canister_config(config.diagnostics);
+    let metrics = render_metrics_canister_config(config.metrics);
+
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentChildConfig {
+            kind: #kind,
+            maximum_instances: #maximum_instances,
+            initial_cycles: #initial_cycles,
+            topup: #topup,
+            cycles_funding: #cycles_funding,
             auth: #auth,
             standards: #standards,
             diagnostics: #diagnostics,
@@ -562,25 +548,19 @@ fn render_metrics_profile(profile: MetricsProfile) -> TokenStream {
 }
 
 // Render the canister kind enum.
-fn render_canister_kind(kind: CanisterKind) -> TokenStream {
+fn render_component_child_kind(kind: ComponentChildKind) -> TokenStream {
     match kind {
-        CanisterKind::Root => {
-            quote!(::canic::__internal::core::bootstrap::compiled::CanisterKind::Root)
+        ComponentChildKind::Singleton => {
+            quote!(::canic::__internal::core::bootstrap::compiled::ComponentChildKind::Singleton)
         }
-        CanisterKind::Service => {
-            quote!(::canic::__internal::core::bootstrap::compiled::CanisterKind::Service)
+        ComponentChildKind::Replica => {
+            quote!(::canic::__internal::core::bootstrap::compiled::ComponentChildKind::Replica)
         }
-        CanisterKind::Singleton => {
-            quote!(::canic::__internal::core::bootstrap::compiled::CanisterKind::Singleton)
+        ComponentChildKind::Shard => {
+            quote!(::canic::__internal::core::bootstrap::compiled::ComponentChildKind::Shard)
         }
-        CanisterKind::Replica => {
-            quote!(::canic::__internal::core::bootstrap::compiled::CanisterKind::Replica)
-        }
-        CanisterKind::Shard => {
-            quote!(::canic::__internal::core::bootstrap::compiled::CanisterKind::Shard)
-        }
-        CanisterKind::Instance => {
-            quote!(::canic::__internal::core::bootstrap::compiled::CanisterKind::Instance)
+        ComponentChildKind::Instance => {
+            quote!(::canic::__internal::core::bootstrap::compiled::ComponentChildKind::Instance)
         }
     }
 }
@@ -649,6 +629,7 @@ fn render_topup(policy: &TopupPolicy) -> TokenStream {
 }
 
 // Render the optional ICP-to-cycles refill policy.
+#[cfg(test)]
 fn render_icp_refill_policy(policy: &IcpRefillPolicy) -> TokenStream {
     let max_refill_e8s_per_call = policy.max_refill_e8s_per_call;
     let min_xdr_permyriad_per_icp =

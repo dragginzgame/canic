@@ -1,7 +1,7 @@
 use super::super::*;
 
 #[test]
-fn configured_pool_expectations_lists_initial_tree_pools() {
+fn configured_pool_expectations_lists_component_pools() {
     let config = r#"
 controllers = []
 [app]
@@ -42,40 +42,39 @@ kind = "canister"
 package = "role_baseline"
 [app.whitelist]
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.user_hub]
-kind = "service"
+[component_specs.user_hub]
+component_role = "user_hub"
+maximum_instances = 1
 
-[tree_specs.default.canisters.user_hub.sharding.pools.user_shards]
+[component_specs.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
 policy.max_shards = 4
 
-[tree_specs.default.canisters.user_hub.binding.pools.projects]
+[component_specs.user_hub.binding.pools.projects]
 canister_role = "project_instance"
 key_name = "project_id"
 
-[tree_specs.default.canisters.user_shard]
+[component_specs.user_hub.children.user_shard]
 kind = "shard"
+maximum_instances = 4096
 
-[tree_specs.default.canisters.project_instance]
+[component_specs.user_hub.children.project_instance]
 kind = "instance"
+maximum_instances = 4096
 
-[tree_specs.default.canisters.scale_hub]
-kind = "service"
+[component_specs.scale_hub]
+component_role = "scale_hub"
+maximum_instances = 1
 
-[tree_specs.default.canisters.scale_hub.scaling.pools.scales]
+[component_specs.scale_hub.scaling.pools.scales]
 canister_role = "scale_replica"
 
-[tree_specs.default.canisters.scale_replica]
+[component_specs.scale_hub.children.scale_replica]
 kind = "replica"
+maximum_instances = 4096
 "#;
     let pools = configured_pool_expectations_from_config(&parsed_config(config));
 
@@ -136,32 +135,23 @@ package = "scale"
 kind = "canister"
 package = "role_baseline"
 
-[tree_specs.default]
-pool.minimum_size = 2
-
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
-
-[tree_specs.default.canisters.root]
-kind = "root"
-
-[tree_specs.default.canisters.app]
-kind = "service"
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
 initial_cycles = "7T"
 
-[tree_specs.default.canisters.user_hub]
-kind = "service"
+[component_specs.user_hub]
+component_role = "user_hub"
+maximum_instances = 1
 "#;
 
     let cycles = configured_local_root_create_cycles_from_config(&parsed_config(config));
 
-    assert_eq!(cycles, Some(127_000_000_000_000));
+    assert_eq!(cycles, Some(117_000_000_000_000));
 }
 
 #[test]
-fn configured_role_auto_create_lists_derived_service_roles() {
+fn configured_role_auto_create_lists_component_roles() {
     let config = r#"
 controllers = []
 [app]
@@ -202,19 +192,15 @@ kind = "canister"
 package = "role_baseline"
 [app.whitelist]
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.app]
-kind = "service"
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
 
-[tree_specs.default.canisters.user_hub]
-kind = "service"
+[component_specs.user_hub]
+component_role = "user_hub"
+maximum_instances = 1
 "#;
     let auto_create = configured_role_auto_create_from_config(&parsed_config(config));
 
@@ -265,31 +251,26 @@ kind = "canister"
 package = "role_baseline"
 [app.whitelist]
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.app]
-kind = "service"
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
 
-[tree_specs.default.canisters.user_hub]
-kind = "service"
+[component_specs.user_hub]
+component_role = "user_hub"
+maximum_instances = 1
 
-[tree_specs.default.canisters.user_hub.sharding.pools.user_shards]
+[component_specs.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
 policy.initial_shards = 1
 policy.max_shards = 4
 
-[tree_specs.default.canisters.user_shard]
+[component_specs.user_hub.children.user_shard]
 kind = "shard"
+maximum_instances = 4096
 
-[tree_specs.default.canisters.role_baseline]
-kind = "replica"
 "#;
     let roles = configured_bootstrap_roles_from_config(&parsed_config(config));
 

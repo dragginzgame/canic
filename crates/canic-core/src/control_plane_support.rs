@@ -4,8 +4,10 @@ pub mod error {
 
 pub mod config {
     pub mod schema {
-        pub use crate::config::schema::TreeSpecConfig;
+        pub use crate::config::schema::CanisterPool;
     }
+
+    pub use crate::config::ComponentTopology;
 }
 
 pub mod format {

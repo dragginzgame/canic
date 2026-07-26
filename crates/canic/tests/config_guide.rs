@@ -18,7 +18,6 @@ fn canonical_config_guide_example_is_accepted_by_the_current_schema() {
 
     assert_eq!(config.app_id().as_str(), "example");
     assert!(config.roles.contains_key(&canic::ids::CanisterRole::ROOT));
-    assert_eq!(config.attached_roles().len(), 6);
-    assert_eq!(config.tree_specs.len(), 1);
-    assert_eq!(config.tree_groups.len(), 1);
+    assert_eq!(config.attached_roles().len(), 5);
+    assert_eq!(config.component_specs.len(), 3);
 }

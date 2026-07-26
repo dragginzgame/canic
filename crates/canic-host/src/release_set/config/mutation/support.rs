@@ -1,6 +1,6 @@
 use crate::release_set::config::{AppConfigError, AppConfigNameField, AppConfigNameIssue};
 use canic_core::bootstrap::compiled::{CanisterRoleNameIssue, validate_canister_role_name};
-use canic_core::ids::{TreeSpecId, TreeSpecIdParseError};
+use canic_core::ids::{ComponentSpecId, ComponentSpecIdParseError};
 
 pub(super) fn admit_canister_role_name(role: &str) -> Result<(), AppConfigError> {
     validate_canister_role_name(role).map_err(|issue| AppConfigError::InvalidName {
@@ -18,28 +18,27 @@ const fn map_canister_role_name_issue(issue: CanisterRoleNameIssue) -> AppConfig
     }
 }
 
-pub(super) fn validate_tree_spec_id(tree_spec: &str) -> Result<(), AppConfigError> {
-    tree_spec
-        .parse::<TreeSpecId>()
+pub(super) fn validate_component_spec_id(component_spec: &str) -> Result<(), AppConfigError> {
+    component_spec
+        .parse::<ComponentSpecId>()
         .map(|_| ())
         .map_err(|error| AppConfigError::InvalidName {
-            field: AppConfigNameField::TreeSpec,
+            field: AppConfigNameField::ComponentSpec,
             issue: match error {
-                TreeSpecIdParseError::Empty => AppConfigNameIssue::Empty,
-                TreeSpecIdParseError::TooLong { max_bytes, .. } => {
+                ComponentSpecIdParseError::Empty => AppConfigNameIssue::Empty,
+                ComponentSpecIdParseError::TooLong { max_bytes, .. } => {
                     AppConfigNameIssue::TooLong { max_bytes }
                 }
-                TreeSpecIdParseError::InvalidCharacters => AppConfigNameIssue::InvalidCharacters,
+                ComponentSpecIdParseError::InvalidCharacters => {
+                    AppConfigNameIssue::InvalidCharacters
+                }
             },
-            value: tree_spec.to_string(),
+            value: component_spec.to_string(),
         })
 }
 
 pub(super) fn validate_attach_kind(kind: &str) -> Result<(), AppConfigError> {
-    if matches!(
-        kind,
-        "service" | "singleton" | "shard" | "replica" | "instance"
-    ) {
+    if matches!(kind, "singleton" | "shard" | "replica" | "instance") {
         return Ok(());
     }
 

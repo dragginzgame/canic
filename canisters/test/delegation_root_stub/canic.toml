@@ -35,41 +35,34 @@ valid_from_ns = 0
 accept_until_ns = 4102444800000000000
 max_revocation_latency_ns = 60000000000
 
-[tree_specs.default]
-
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
-
-[tree_specs.default.canisters.root]
-kind = "root"
-
-[tree_specs.default.canisters.issuer]
-kind = "service"
+[component_specs.issuer]
+component_role = "issuer"
+maximum_instances = 1
 initial_cycles = "1T"
 
-[tree_specs.default.canisters.issuer.auth]
+[component_specs.issuer.auth]
 delegated_token_issuer = true
 delegated_token_verifier = true
 role_attestation_cache = true
 
-[tree_specs.default.canisters.project_hub]
-kind = "service"
+[component_specs.projects]
+component_role = "project_hub"
+maximum_instances = 1
 initial_cycles = "1T"
 
-[tree_specs.default.canisters.project_hub.binding.pools.projects]
+[component_specs.projects.binding.pools.projects]
 canister_role = "project_instance"
 key_name = "project"
 
-[tree_specs.default.canisters.project_hub.auth]
+[component_specs.projects.auth]
 delegated_token_verifier = true
 role_attestation_cache = true
 
-[tree_specs.default.canisters.project_instance]
+[component_specs.projects.children.project_instance]
 kind = "instance"
+maximum_instances = 4096
 initial_cycles = "1T"
 
-[tree_specs.default.canisters.project_instance.auth]
+[component_specs.projects.children.project_instance.auth]
 delegated_token_verifier = true
 role_attestation_cache = true

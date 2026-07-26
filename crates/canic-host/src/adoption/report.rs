@@ -29,7 +29,7 @@ pub fn adoption_report_from_config_source(
     let config = parse_config_model(request.config_source)
         .map_err(|err| AdoptionReportError::InvalidConfig(err.to_string()))?;
     let app = config.app_id().to_string();
-    let attached_roles = config.attached_roles();
+    let attached_roles = config.deployable_roles();
     let observed_by_role = observed_canisters_by_role(request.inventory);
     let observed_duplicate_roles = duplicate_observed_roles(&observed_by_role);
     let packages_by_path = package_metadata_by_path(request.package_metadata);

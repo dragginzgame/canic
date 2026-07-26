@@ -58,7 +58,7 @@ The install flow:
 - creates the reference canisters in `icp`
 - builds the local canister artifacts
 - emits the build-produced root staging manifest from the configured ordinary `.wasm.gz` artifacts
-- reinstalls `root` for the sole initial Tree Spec
+- reinstalls the Fleet Subnet Root for the configured flat Component topology
 - stages the configured ordinary fleet artifacts into `root` through the install flow
 - resumes bootstrap so `root` can create the internal `wasm_store` and publish the staged artifacts
 - waits for `root` to report `READY`
@@ -142,7 +142,7 @@ and are staged after `root` install from the build-produced
 `.icp/local/canisters/root/root.release-set.json` manifest by `canic install`.
 
 During normal custom builds, the host builder opportunistically emits that
-manifest as soon as the full configured Tree artifact set exists, so
+manifest as soon as the full configured Component artifact set exists, so
 downstreams do not need a local copy of the manifest-emission logic just to keep
 `.icp/local/canisters/root/root.release-set.json` in sync.
 

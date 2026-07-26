@@ -8,21 +8,31 @@ mod app;
 mod build_network;
 mod canister;
 pub mod capability;
+mod component;
 mod endpoint;
 mod fleet;
+mod fleet_topology;
 mod intent;
 mod metrics;
 mod network;
 mod release_build;
-mod tree;
+mod subnet;
 
 pub use app::AppId;
 pub use build_network::BuildNetwork;
 pub use canister::CanisterRole;
 pub use capability as cap;
+pub use component::{
+    ComponentInstanceId, ComponentInstanceIdParseError, ComponentSpecId, ComponentSpecIdParseError,
+};
 pub use endpoint::{EndpointCall, EndpointCallKind, EndpointId};
 pub use fleet::{
     FleetBinding, FleetId, FleetIdParseError, FleetKey, FleetName, FleetNameParseError,
+};
+pub use fleet_topology::{
+    ComponentBinding, ComponentChildBinding, ComponentSpecAdmission, ComponentTopologyDigest,
+    CyclesFundingBudget, FleetCoordinatorBinding, FleetRegistryAuthority, FleetSubnetRootBinding,
+    FleetSubnetRootLimits,
 };
 pub use intent::{IntentId, IntentResourceKey};
 pub use metrics::{AccessMetricKind, SystemMetricKind};
@@ -32,6 +42,4 @@ pub use network::{
 pub use release_build::{
     RELEASE_BUILD_ID_ENV, ReleaseBuildId, ReleaseBuildIdParseError, ReleaseBuildNonce,
 };
-pub use tree::{
-    TreeGroupId, TreeGroupIdParseError, TreeId, TreeIdParseError, TreeSpecId, TreeSpecIdParseError,
-};
+pub use subnet::SubnetId;

@@ -6,15 +6,16 @@
 
 mod app;
 mod auth;
-mod tree_spec;
+mod component_spec;
 
 use crate::{
     config::schema::{
-        CanisterKind, ConfigModel, ConfigSchemaError, MAX_FLEET_TREES, RoleDeclarationKind,
+        ConfigModel, ConfigSchemaError, MAX_FLEET_COMPONENT_INSTANCES, RoleDeclarationKind,
         Validate, validate_canister_role_name,
     },
     ids::CanisterRole,
 };
+use std::collections::{BTreeMap, BTreeSet};
 
 fn validate_canister_role(
     role: &CanisterRole,
@@ -39,78 +40,46 @@ impl Validate for ConfigModel {
 
         validate_role_declarations(self)?;
 
-        if self.tree_specs.is_empty() && self.tree_groups.is_empty() {
-            if self.roles.contains_key(&CanisterRole::ROOT) {
-                return Err(ConfigSchemaError::ValidationError(
-                    "topology-less configs cannot declare role 'root'".into(),
-                ));
-            }
+        if self.component_specs.is_empty() {
             return Ok(());
         }
 
-        if self.tree_specs.is_empty() {
-            return Err(ConfigSchemaError::ValidationError(
-                "Tree Groups require at least one [tree_specs.<id>] declaration".into(),
-            ));
-        }
-        if self.tree_groups.is_empty() {
-            return Err(ConfigSchemaError::ValidationError(
-                "Tree Specs require at least one [tree_groups.<id>] declaration".into(),
-            ));
-        }
+        let mut maximum_component_instances = 0_u32;
+        let mut component_owners = BTreeMap::<CanisterRole, String>::new();
+        let mut child_roles = BTreeSet::<CanisterRole>::new();
+        for (component_spec_id, component_spec) in &self.component_specs {
+            component_spec.validate()?;
 
-        for (tree_spec_id, tree_spec) in &self.tree_specs {
-            let roots = tree_spec
-                .canisters
-                .iter()
-                .filter(|(_role, canister)| canister.kind == CanisterKind::Root)
-                .map(|(role, _canister)| role.to_string())
-                .collect::<Vec<_>>();
-            if roots.len() != 1 {
-                return Err(ConfigSchemaError::ValidationError(format!(
-                    "Tree Spec '{tree_spec_id}' must contain exactly one root role (found {})",
-                    roots.len(),
-                )));
-            }
-
-            tree_spec.validate()?;
-        }
-
-        let mut maximum_trees = 0_u32;
-        for (tree_group_id, tree_group) in &self.tree_groups {
-            if !self.tree_specs.contains_key(&tree_group.tree_spec) {
-                return Err(ConfigSchemaError::ValidationError(format!(
-                    "Tree Group '{tree_group_id}' references unknown Tree Spec '{}'",
-                    tree_group.tree_spec,
-                )));
-            }
-            if tree_group.initial_trees == 0 {
-                return Err(ConfigSchemaError::ValidationError(format!(
-                    "Tree Group '{tree_group_id}' initial_trees must be > 0",
-                )));
-            }
-            if tree_group.maximum_trees == 0 {
-                return Err(ConfigSchemaError::ValidationError(format!(
-                    "Tree Group '{tree_group_id}' maximum_trees must be > 0",
-                )));
-            }
-            if tree_group.initial_trees > tree_group.maximum_trees {
-                return Err(ConfigSchemaError::ValidationError(format!(
-                    "Tree Group '{tree_group_id}' initial_trees must be <= maximum_trees",
-                )));
-            }
-
-            maximum_trees = maximum_trees
-                .checked_add(u32::from(tree_group.maximum_trees))
+            maximum_component_instances = maximum_component_instances
+                .checked_add(component_spec.maximum_instances)
                 .ok_or_else(|| {
                     ConfigSchemaError::ValidationError(
-                        "Tree Group maximum_trees sum overflowed".into(),
+                        "Component Spec maximum_instances sum overflowed".into(),
                     )
                 })?;
+
+            if let Some(existing) = component_owners.insert(
+                component_spec.component_role.clone(),
+                component_spec_id.to_string(),
+            ) {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "Component role '{}' occurs in both Component Specs '{existing}' and '{component_spec_id}'",
+                    component_spec.component_role,
+                )));
+            }
+            child_roles.extend(component_spec.children.keys().cloned());
         }
-        if maximum_trees > MAX_FLEET_TREES {
+        if let Some(role) = child_roles
+            .iter()
+            .find(|role| component_owners.contains_key(*role))
+        {
             return Err(ConfigSchemaError::ValidationError(format!(
-                "Tree Group maximum_trees sum {maximum_trees} exceeds Fleet bound {MAX_FLEET_TREES}",
+                "role '{role}' cannot be both a Component and a Component Child",
+            )));
+        }
+        if maximum_component_instances > MAX_FLEET_COMPONENT_INSTANCES {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "Component Spec maximum_instances sum {maximum_component_instances} exceeds Fleet bound {MAX_FLEET_COMPONENT_INSTANCES}",
             )));
         }
 
@@ -149,7 +118,7 @@ fn validate_role_declarations(config: &ConfigModel) -> Result<(), ConfigSchemaEr
         }
     }
 
-    if !config.tree_specs.is_empty() && !config.roles.contains_key(&CanisterRole::ROOT) {
+    if !config.component_specs.is_empty() && !config.roles.contains_key(&CanisterRole::ROOT) {
         return Err(ConfigSchemaError::ValidationError(
             "root role declaration missing; add [roles.root] kind = \"root\"".into(),
         ));
@@ -170,28 +139,12 @@ fn validate_topology_roles_are_declared(config: &ConfigModel) -> Result<(), Conf
         }
     }
 
-    for (role, declaration) in &config.roles {
-        if declaration.kind == RoleDeclarationKind::Root && !attached_roles.contains(role) {
+    for role in attached_roles {
+        let declaration = &config.roles[&role];
+        if declaration.kind != RoleDeclarationKind::Canister {
             return Err(ConfigSchemaError::ValidationError(format!(
-                "root role declaration '{role}' must be attached to topology",
+                "Component topology role '{role}' must use [roles.{role}] kind = \"canister\"",
             )));
-        }
-    }
-
-    for tree_spec in config.tree_specs.values() {
-        for (role, canister) in &tree_spec.canisters {
-            let declaration = config.roles.get(role).ok_or_else(|| {
-                ConfigSchemaError::ValidationError(format!(
-                    "topology role '{role}' is not declared; add [roles.{role}]",
-                ))
-            })?;
-
-            if canister.kind == CanisterKind::Root && declaration.kind != RoleDeclarationKind::Root
-            {
-                return Err(ConfigSchemaError::ValidationError(format!(
-                    "topology role '{role}' has kind = \"root\" but [roles.{role}] is not kind = \"root\"",
-                )));
-            }
         }
     }
 

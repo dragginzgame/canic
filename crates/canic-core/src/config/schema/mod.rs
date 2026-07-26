@@ -7,18 +7,18 @@
 //! All configuration must deserialize into these types and pass validation.
 //! Invariants enforced here are assumed everywhere else in the system.
 
+mod component_spec;
 mod log;
 mod role;
-mod tree_spec;
 
+pub use component_spec::*;
 pub use log::*;
 pub use role::*;
-pub use tree_spec::*;
 
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::candid::Principal,
-    ids::{AppId, BuildNetwork, CanisterRole, TreeGroupId, TreeSpecId},
+    ids::{AppId, BuildNetwork, CanisterRole, ComponentSpecId},
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 use std::collections::{BTreeMap, BTreeSet};
@@ -55,8 +55,10 @@ pub enum ConfigSchemaError {
 
 pub const NAME_MAX_BYTES: usize = 40;
 
-/// Maximum concrete Trees admitted by one Fleet declaration.
-pub const MAX_FLEET_TREES: u32 = 4_096;
+/// Maximum concrete Component instances admitted by one Fleet declaration.
+pub const MAX_FLEET_COMPONENT_INSTANCES: u32 = 4_096;
+/// Maximum distinct direct-child roles declared by one Component Spec.
+pub const MAX_COMPONENT_CHILD_ROLES: usize = 256;
 
 ///
 /// AppNameIssue
@@ -127,9 +129,9 @@ pub trait Validate {
 /// Top-level configuration object.
 ///
 /// Invariants enforced here:
-/// - Every Tree Spec contains exactly one root
-/// - Every Tree Group references one declared Tree Spec
-/// - Tree Group initial and maximum counts are positive and bounded
+/// - Every Component Spec contains exactly one direct Component role
+/// - Component roles and direct child roles are structurally disjoint
+/// - Component Spec instance ceilings are positive and Fleet-bounded
 /// - Canister role names follow the canonical deployment identity rule
 /// - Delegated token TTL is sane
 /// - Whitelist principals are valid
@@ -156,36 +158,51 @@ pub struct ConfigModel {
     pub app: AppConfig,
 
     /// App-scoped role declarations. Topology attachment is derived from
-    /// `tree_specs`; this table declares which package-backed roles exist.
+    /// `component_specs`; this table declares which package-backed roles exist.
     #[serde(default)]
     pub roles: BTreeMap<CanisterRole, RoleDeclaration>,
 
-    /// App-declared permitted rooted topology templates.
+    /// App-declared non-recursive Component topology templates.
     #[serde(default)]
-    pub tree_specs: BTreeMap<TreeSpecId, TreeSpecConfig>,
-
-    /// App-declared independently scaled Tree collections.
-    #[serde(default)]
-    pub tree_groups: BTreeMap<TreeGroupId, TreeGroupConfig>,
+    pub component_specs: BTreeMap<ComponentSpecId, ComponentSpecConfig>,
 }
 
 impl ConfigModel {
-    /// Get a Tree Spec configuration by its declared identity.
+    /// Get a Component Spec configuration by its declared identity.
     #[must_use]
-    pub fn get_tree_spec(&self, tree_spec: &TreeSpecId) -> Option<TreeSpecConfig> {
-        self.tree_specs.get(tree_spec).cloned()
+    pub fn get_component_spec(
+        &self,
+        component_spec: &ComponentSpecId,
+    ) -> Option<ComponentSpecConfig> {
+        self.component_specs.get(component_spec).cloned()
     }
 
-    /// Return the sole initial Tree Spec while the single-Tree bootstrap is active.
-    ///
-    /// This temporary operational query fails closed once configuration asks
-    /// for more than one initial Tree. Coordinator installation replaces it.
-    #[must_use]
-    pub fn sole_initial_tree_spec_id(&self) -> Option<&TreeSpecId> {
-        let mut groups = self.tree_groups.values();
-        let group = groups.next()?;
+    /// Iterate Component Specs that structurally contain a role.
+    pub fn component_specs_for_role<'a>(
+        &'a self,
+        role: &CanisterRole,
+    ) -> impl Iterator<Item = (&'a ComponentSpecId, &'a ComponentSpecConfig)> + 'a {
+        let role = role.clone();
+        self.component_specs
+            .iter()
+            .filter(move |(_component_spec, config)| {
+                config.roles().any(|candidate| candidate == &role)
+            })
+    }
 
-        (group.initial_trees == 1 && groups.next().is_none()).then_some(&group.tree_spec)
+    /// Resolve a role only when exactly one Component Spec contains it.
+    ///
+    /// Component roles are always unique. A direct child role may be reused by
+    /// several Specs, in which case callers need an explicit Component Spec
+    /// binding and this role-only helper returns `None`.
+    #[must_use]
+    pub fn component_spec_for_role(
+        &self,
+        role: &CanisterRole,
+    ) -> Option<(&ComponentSpecId, &ComponentSpecConfig)> {
+        let mut matches = self.component_specs_for_role(role);
+        let one = matches.next()?;
+        matches.next().is_none().then_some(one)
     }
 
     /// Return the configured App identity.
@@ -209,32 +226,24 @@ impl ConfigModel {
     /// Return the local canister roles attached to topology.
     #[must_use]
     pub fn attached_roles(&self) -> BTreeSet<CanisterRole> {
-        let mut attached = BTreeSet::new();
-        let mut pending = Vec::new();
+        self.component_specs
+            .values()
+            .flat_map(ComponentSpecConfig::roles)
+            .cloned()
+            .collect()
+    }
 
-        for tree_spec in self.tree_specs.values() {
-            for role in tree_spec.canisters.keys() {
-                if attached.insert(role.clone()) {
-                    pending.push(role.clone());
-                }
-            }
+    /// Return every role eligible for a deployment artifact.
+    ///
+    /// The Fleet Subnet Root is deployable infrastructure outside Component
+    /// topology; all other deployable roles come from Component Specs.
+    #[must_use]
+    pub fn deployable_roles(&self) -> BTreeSet<CanisterRole> {
+        let mut roles = self.attached_roles();
+        if self.roles.contains_key(&CanisterRole::ROOT) {
+            roles.insert(CanisterRole::ROOT);
         }
-
-        while let Some(role) = pending.pop() {
-            for tree_spec in self.tree_specs.values() {
-                let Some(canister) = tree_spec.canisters.get(&role) else {
-                    continue;
-                };
-
-                for child in canister.role_bearing_child_roles() {
-                    if attached.insert(child.clone()) {
-                        pending.push(child.clone());
-                    }
-                }
-            }
-        }
-
-        attached
+        roles
     }
 
     /// Return the App-scoped roles attached to topology.
@@ -248,57 +257,49 @@ impl ConfigModel {
 
     /// Return the currently projected Fleet Directory role set.
     ///
-    /// The Tree-aware Fleet Registry projection replaces this transitional
+    /// The Component-aware Fleet Registry projection replaces this transitional
     /// role union in the dedicated Directory slice.
     #[must_use]
     pub fn fleet_directory_roles(&self) -> BTreeSet<CanisterRole> {
-        self.tree_specs
+        self.component_specs
             .values()
-            .flat_map(TreeSpecConfig::tree_directory_roles)
+            .flat_map(ComponentSpecConfig::component_directory_roles)
             .collect()
     }
 
     /// Test-only helper: produces a minimally valid config.
     ///
-    /// Includes:
-    /// - one default Tree Spec and Tree Group
-    /// - ROOT canister of correct kind
+    /// Includes one default Component Spec plus declared root and Component roles.
     ///
     /// This avoids tests accidentally relying on invalid configs.
     ///
     /// # Panics
     ///
-    /// Panics only if Canic's canonical `"default"` Tree Spec or Tree Group
-    /// identifier stops satisfying its declared ID admission.
+    /// Panics only if Canic's canonical `"default"` Component Spec identifier
+    /// stops satisfying its declared ID admission.
     #[cfg(test)]
     #[must_use]
     pub fn test_default() -> Self {
         let mut cfg = Self::default();
-        let default_tree_spec_id = "default"
-            .parse::<TreeSpecId>()
-            .expect("valid default Tree Spec ID");
-        let default_tree_group_id = "default"
-            .parse::<TreeGroupId>()
-            .expect("valid default Tree Group ID");
-        let mut default_tree_spec = TreeSpecConfig::default();
-
-        default_tree_spec.canisters.insert(
-            CanisterRole::ROOT,
-            CanisterConfig {
-                kind: CanisterKind::Root,
-                initial_cycles: crate::cdk::types::Cycles::new(0),
-                topup: None,
-                icp_refill: None,
-                cycles_funding: CyclesFundingPolicyConfig::default(),
-                scaling: None,
-                sharding: None,
-                binding: None,
-                auth: CanisterAuthConfig::default(),
-                standards: StandardsCanisterConfig::default(),
-                diagnostics: DiagnosticsCanisterConfig::default(),
-                metrics: MetricsCanisterConfig::default(),
-            },
-        );
+        let default_component_spec_id = "default"
+            .parse::<ComponentSpecId>()
+            .expect("valid default Component Spec ID");
+        let default_component_spec = ComponentSpecConfig {
+            component_role: CanisterRole::from("app"),
+            maximum_instances: 1,
+            limits: ComponentLimitsConfig::default(),
+            initial_cycles: crate::cdk::types::Cycles::new(0),
+            topup: None,
+            cycles_funding: CyclesFundingPolicyConfig::default(),
+            scaling: None,
+            sharding: None,
+            binding: None,
+            auth: CanisterAuthConfig::default(),
+            standards: StandardsCanisterConfig::default(),
+            diagnostics: DiagnosticsCanisterConfig::default(),
+            metrics: MetricsCanisterConfig::default(),
+            children: BTreeMap::new(),
+        };
 
         cfg.app.name = AppId::from("test");
         cfg.auth.delegated_tokens.enabled = true;
@@ -349,16 +350,15 @@ impl ConfigModel {
                 package: "root".to_string(),
             },
         );
-        cfg.tree_specs
-            .insert(default_tree_spec_id.clone(), default_tree_spec);
-        cfg.tree_groups.insert(
-            default_tree_group_id,
-            TreeGroupConfig {
-                tree_spec: default_tree_spec_id,
-                initial_trees: 1,
-                maximum_trees: 1,
+        cfg.roles.insert(
+            CanisterRole::from("app"),
+            RoleDeclaration {
+                kind: RoleDeclarationKind::Canister,
+                package: "app".to_string(),
             },
         );
+        cfg.component_specs
+            .insert(default_component_spec_id, default_component_spec);
         cfg
     }
 
@@ -408,20 +408,6 @@ impl Default for AppConfig {
             whitelist: None,
         }
     }
-}
-
-///
-/// TreeGroupConfig
-///
-/// Scaling bounds for one App-declared Tree Group.
-///
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct TreeGroupConfig {
-    pub tree_spec: TreeSpecId,
-    pub initial_trees: u16,
-    pub maximum_trees: u16,
 }
 
 ///

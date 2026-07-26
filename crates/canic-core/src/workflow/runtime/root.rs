@@ -61,13 +61,12 @@ pub fn init_root_canister(identity: CurrentRootInstallIdentity) -> Result<(), In
 
     let self_pid = IcOps::canister_self();
     let subnet_pid = self_pid;
-    let tree_spec = ConfigOps::sole_initial_tree_spec_id()?;
     let fleet_root_pid = self_pid;
     let module_hash = identity.expected_module_hash.map(|hash| hash.to_vec());
 
     let input = EnvInput {
         fleet_root_pid: Some(fleet_root_pid),
-        tree_spec: Some(tree_spec),
+        component_spec: None,
         subnet_pid: Some(subnet_pid),
         root_pid: Some(self_pid),
         canister_role: Some(CanisterRole::ROOT),

@@ -88,7 +88,7 @@ pub(super) struct RoleDeclareOptions {
 pub(super) struct RoleAttachOptions {
     pub(super) app: String,
     pub(super) role: String,
-    pub(super) tree_spec: String,
+    pub(super) component_spec: String,
     pub(super) kind: String,
     pub(super) dry_run: bool,
 }
@@ -274,7 +274,7 @@ impl RoleAttachOptions {
         Ok(Self {
             app: required_string(&matches, "app"),
             role: required_string(&matches, "role"),
-            tree_spec: required_string(&matches, "tree-spec"),
+            component_spec: required_string(&matches, "component-spec"),
             kind: required_string(&matches, "kind"),
             dry_run: matches.get_flag("dry-run"),
         })

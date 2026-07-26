@@ -130,16 +130,11 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.app]
-kind = "service"
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
 "#,
     )
     .expect("write config");
@@ -190,13 +185,7 @@ name = "toko"
 kind = "root"
 package = "root"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 "#,
     )
     .expect("write config");
@@ -230,16 +219,11 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.app]
-kind = "service"
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
 "#,
     )
     .expect("write config");
@@ -364,13 +348,7 @@ fn icp_config_preserves_workspace_discovery_cause() {
 
 fn write_test_config(path: &Path, app: &str, roles: &[&str]) {
     fs::create_dir_all(path.parent().expect("config parent")).expect("create config parent");
-    let mut source = format!(
-        "[app]\nname = \"{app}\"\n\
-         \n[tree_groups.default]\n\
-         tree_spec = \"default\"\n\
-         initial_trees = 1\n\
-         maximum_trees = 1\n"
-    );
+    let mut source = format!("[app]\nname = \"{app}\"\n");
     for role in roles {
         let kind = if *role == "root" { "root" } else { "canister" };
         write!(
@@ -380,10 +358,14 @@ fn write_test_config(path: &Path, app: &str, roles: &[&str]) {
         .expect("write role declaration");
     }
     for role in roles {
-        let kind = if *role == "root" { "root" } else { "service" };
+        if *role == "root" {
+            continue;
+        }
         write!(
             source,
-            "\n[tree_specs.default.canisters.{role}]\nkind = \"{kind}\"\n"
+            "\n[component_specs.{role}]\n\
+             component_role = \"{role}\"\n\
+             maximum_instances = 1\n"
         )
         .expect("write config source");
     }

@@ -18,13 +18,7 @@ package = "root"
 kind = "canister"
 package = "store"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 "#;
 
 #[test]
@@ -89,8 +83,14 @@ fn public_projection_preserves_typed_nested_unknown_field() {
     let root = temp_root("typed-unknown-field");
     fs::create_dir_all(&root).expect("create temp root");
     let config_path = root.join("canic.toml");
-    let source =
-        format!("{CONFIG}\n[tree_specs.default.canisters.root.randomness]\nenabled = true\n");
+    let source = format!(
+        "{CONFIG}\n\
+         [component_specs.default]\n\
+         component_role = \"store\"\n\
+         maximum_instances = 1\n\n\
+         [component_specs.default.randomness]\n\
+         enabled = true\n"
+    );
     fs::write(&config_path, source).expect("write invalid config");
 
     let error = AppConfigSnapshot::load(&config_path).expect_err("unknown field must fail");
@@ -108,7 +108,7 @@ fn public_projection_preserves_typed_nested_unknown_field() {
     assert_eq!(
         issue,
         ConfigTomlIssue::UnknownField {
-            logical_path: "tree_specs.default.canisters.root.randomness".to_string(),
+            logical_path: "component_specs.default.randomness".to_string(),
             unknown_field: "randomness".to_string(),
         }
     );
@@ -154,30 +154,28 @@ fn loaded_snapshot_keeps_one_validated_file_state_across_projections() {
 }
 
 #[test]
-fn current_root_install_fails_closed_for_multiple_initial_trees() {
-    let root = temp_root("multiple-initial-trees");
+fn root_cycle_projection_includes_multiple_components() {
+    let root = temp_root("multiple-components");
     fs::create_dir_all(&root).expect("create temp root");
     let config_path = root.join("canic.toml");
     let source = format!(
         "{CONFIG}\n\
-         [tree_groups.secondary]\n\
-         tree_spec = \"secondary\"\n\
-         initial_trees = 1\n\
-         maximum_trees = 1\n\n\
-         [tree_specs.secondary.canisters.root]\n\
-         kind = \"root\"\n"
+         [roles.worker]\n\
+         kind = \"canister\"\n\
+         package = \"worker\"\n\n\
+         [component_specs.secondary]\n\
+         component_role = \"worker\"\n\
+         maximum_instances = 1\n\
+         initial_cycles = \"2T\"\n"
     );
-    fs::write(&config_path, source).expect("write multi-Tree config");
+    fs::write(&config_path, source).expect("write multi-Component config");
 
-    let snapshot = AppConfigSnapshot::load(&config_path).expect("load multi-Tree config");
-    let error = snapshot
+    let snapshot = AppConfigSnapshot::load(&config_path).expect("load multi-Component config");
+    assert_eq!(snapshot.component_topology().component_specs.len(), 1);
+    let cycles = snapshot
         .local_root_create_cycles()
-        .expect_err("current root install must reject multiple initial Trees");
-
-    assert!(matches!(
-        error,
-        AppConfigError::UnsupportedInitialTreeTopology { initial_trees: 2 }
-    ));
+        .expect("all Components should contribute to root funding");
+    assert!(cycles >= 2_000_000_000_000);
 
     fs::remove_dir_all(root).expect("remove temp root");
 }
@@ -204,7 +202,7 @@ fn app_mutation_failures_are_classified_without_rendered_text() {
         AppConfigError::AppMismatch { .. }
     ));
     assert!(matches!(
-        attach_app_role_source(CONFIG, "demo", "missing", "default", "service")
+        attach_app_role_source(CONFIG, "demo", "missing", "default", "singleton")
             .expect_err("missing role must fail"),
         AppConfigError::DeclarationMissing {
             declaration: AppConfigDeclaration::Role { .. }

@@ -208,16 +208,11 @@ package = "role_baseline"
 kind = "canister"
 package = "worker"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.app]
-kind = "service"
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
 "#,
     );
     let mut command = std::process::Command::new("icp");
@@ -292,13 +287,7 @@ package = "role_baseline"
 kind = "canister"
 package = "worker"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 "#,
     );
     let mut command = std::process::Command::new("icp");

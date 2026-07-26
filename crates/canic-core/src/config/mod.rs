@@ -5,6 +5,7 @@
 //! Boundary: bootstrap installs validated config here before ops/workflow reads it.
 
 pub mod schema;
+mod topology;
 #[cfg(any(not(target_arch = "wasm32"), test))]
 mod validation;
 
@@ -18,6 +19,10 @@ pub use schema::ConfigModel;
 use schema::Validate;
 #[cfg(any(not(target_arch = "wasm32"), test))]
 use serde_path_to_error::{Path as SerdePath, Segment as SerdePathSegment};
+pub use topology::{
+    ComponentChildFundingPolicy, ComponentChildSpec, ComponentLimits, ComponentSpec,
+    ComponentTopology, ComponentTopologyError, MAX_COMPONENT_TOPOLOGY_CANONICAL_BYTES,
+};
 
 struct InstalledConfig {
     model: Arc<ConfigModel>,
@@ -53,6 +58,10 @@ pub enum ConfigError {
     /// Wrapper for data schema-level errors.
     #[error(transparent)]
     ConfigSchema(#[from] ConfigSchemaError),
+
+    /// Validated declarations could not compile into canonical topology.
+    #[error(transparent)]
+    ComponentTopology(#[from] ComponentTopologyError),
 
     /// Runtime root-key injection failed during local/test bootstrap.
     #[error("runtime IC root key error: {0}")]
@@ -149,6 +158,7 @@ impl Config {
             })?;
 
         config.validate().map_err(ConfigError::from)?;
+        config.compile_component_topology()?;
         Ok(config)
     }
 
@@ -157,6 +167,7 @@ impl Config {
         config: ConfigModel,
         source_toml: &str,
     ) -> Result<Arc<ConfigModel>, ConfigError> {
+        config.compile_component_topology()?;
         CONFIG.with(|cfg| {
             let mut borrow = cfg.borrow_mut();
             if borrow.is_some() {

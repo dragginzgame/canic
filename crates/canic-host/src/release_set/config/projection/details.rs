@@ -16,21 +16,23 @@ pub(in crate::release_set) fn configured_role_details_from_config(
             .insert("fleet_directory".to_string());
     }
 
-    for (tree_spec_id, tree_spec) in &config.tree_specs {
-        for role in tree_spec.auto_create_roles() {
+    for (component_spec_id, component_spec) in &config.component_specs {
+        for role in component_spec.auto_create_roles() {
             details
                 .entry(role.as_str().to_string())
                 .or_default()
-                .insert(format!("tree_specs.{tree_spec_id}:auto_create"));
+                .insert(format!("component_specs.{component_spec_id}:auto_create"));
         }
-        for role in tree_spec.tree_directory_roles() {
+        for role in component_spec.component_directory_roles() {
             details
                 .entry(role.as_str().to_string())
                 .or_default()
-                .insert(format!("tree_specs.{tree_spec_id}:tree_directory"));
+                .insert(format!(
+                    "component_specs.{component_spec_id}:component_directory"
+                ));
         }
 
-        for (role, canister) in &tree_spec.canisters {
+        for (role, canister) in component_spec.canister_configs() {
             let role_details = details.entry(role.as_str().to_string()).or_default();
             let profile = canister.resolved_metrics_profile(role);
             let profile_source = if canister.metrics.profile.is_some() {

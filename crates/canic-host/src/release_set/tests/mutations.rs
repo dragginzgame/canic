@@ -1,4 +1,6 @@
 use super::*;
+use crate::release_set::AppConfigError;
+use canic_core::ids::CanisterRole;
 use toml::Value as TomlValue;
 
 #[test]
@@ -12,13 +14,7 @@ name = "demo"
 kind = "root"
 package = "root"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 "#;
     let updated = declare_app_role_source(config, "demo", "store", "store").expect("declare role");
 
@@ -70,14 +66,22 @@ role = "user_hub"
 
     let declared =
         plan_declare_app_role(&config_path, "demo", "store", "store").expect("plan declare");
-    let attached =
-        plan_attach_app_role(&config_path, "demo", "role_baseline", "default", "service")
-            .expect("plan attach");
+    let attached = plan_attach_app_role(
+        &config_path,
+        "demo",
+        "role_baseline",
+        "user_hub",
+        "singleton",
+    )
+    .expect("plan attach");
     let renamed =
         plan_rename_app_role(&config_path, "demo", "user_hub", "user_router").expect("plan rename");
 
     assert_eq!(declared.display, "demo.store");
-    assert_eq!(attached.topology, "default/role_baseline");
+    assert_eq!(
+        attached.topology,
+        "user_hub/user_hub/children/role_baseline"
+    );
     assert_eq!(renamed.new_display, "demo.user_router");
     assert!(renamed.package_manifest.is_some());
     assert_eq!(
@@ -91,7 +95,7 @@ role = "user_hub"
 }
 
 #[test]
-fn attach_app_role_adds_direct_topology_attachment() {
+fn attach_app_role_creates_component_spec_for_first_attachment() {
     let config = r#"
 controllers = []
 [app]
@@ -105,25 +109,17 @@ package = "root"
 kind = "canister"
 package = "store"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 "#;
     let updated = attach_app_role_source(config, "demo", "store", "default", "singleton")
         .expect("attach role");
 
     assert_eq!(updated.role.display, "demo.store");
     assert_eq!(updated.role.topology, "default/store");
-    assert!(
-        updated
-            .source
-            .contains("[tree_specs.\"default\".canisters.\"store\"]")
-    );
-    assert!(updated.source.contains("kind = \"singleton\""));
+    assert_eq!(updated.role.kind, "component");
+    assert!(updated.source.contains("[component_specs.\"default\"]"));
+    assert!(updated.source.contains("component_role = \"store\""));
+    assert!(updated.source.contains("maximum_instances = 1"));
 
     let lifecycle = configured_role_lifecycle_from_config(&parsed_config(&updated.source));
     let store = lifecycle
@@ -149,24 +145,25 @@ package = "root"
 kind = "canister"
 package = "worker"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
+[roles.hub]
+kind = "canister"
+package = "hub"
 
-[tree_specs.default.canisters.root]
-kind = "root"
+[component_specs.default]
+component_role = "hub"
+maximum_instances = 1
+
 "#;
     let updated = attach_app_role_source(config, "demo", "worker", "default", "replica")
         .expect("attach role");
 
     assert_eq!(updated.role.kind, "replica");
-    assert_eq!(updated.role.topology, "default/worker");
+    assert_eq!(updated.role.topology, "default/hub/children/worker");
     assert!(updated.source.contains("kind = \"replica\""));
 }
 
 #[test]
-fn attach_app_role_accepts_service_kind() {
+fn attach_app_role_rejects_removed_service_kind() {
     let config = r#"
 controllers = []
 [app]
@@ -180,20 +177,13 @@ package = "root"
 kind = "canister"
 package = "worker"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 "#;
-    let updated = attach_app_role_source(config, "demo", "worker", "default", "service")
-        .expect("attach service role");
-
-    assert_eq!(updated.role.kind, "service");
-    assert_eq!(updated.role.topology, "default/worker");
-    assert!(updated.source.contains("kind = \"service\""));
+    assert!(matches!(
+        attach_app_role_source(config, "demo", "worker", "default", "service")
+            .expect_err("removed service kind must reject"),
+        AppConfigError::InvalidKind { .. }
+    ));
 }
 
 #[test]
@@ -209,6 +199,67 @@ fn attach_app_role_rejects_missing_duplicate_root_and_unknown_kind() {
 
     attach_app_role_source(REAL_CONFIG, "demo", "minimal", "default", "worker")
         .expect_err("unknown kind should fail");
+}
+
+#[test]
+fn attach_app_role_allows_one_child_artifact_in_multiple_component_specs() {
+    let config = r#"
+controllers = []
+[app]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.alpha]
+kind = "canister"
+package = "alpha"
+
+[roles.beta]
+kind = "canister"
+package = "beta"
+
+[roles.worker]
+kind = "canister"
+package = "worker"
+
+[component_specs.alpha]
+component_role = "alpha"
+maximum_instances = 1
+
+[component_specs.alpha.children.worker]
+kind = "replica"
+maximum_instances = 4
+
+[component_specs.beta]
+component_role = "beta"
+maximum_instances = 1
+"#;
+
+    let updated = attach_app_role_source(config, "demo", "worker", "beta", "singleton")
+        .expect("same declared child artifact may be attached to another Component Spec");
+
+    assert!(
+        updated
+            .source
+            .contains("[component_specs.\"beta\".children.\"worker\"]")
+    );
+    let parsed = parsed_config(&updated.source);
+    assert_eq!(
+        parsed
+            .component_specs
+            .values()
+            .filter(|spec| spec.children.contains_key(&CanisterRole::from("worker")))
+            .count(),
+        2
+    );
+    assert_eq!(
+        configured_role_kinds_from_config(&parsed)
+            .get("worker")
+            .map(String::as_str),
+        Some("mixed")
+    );
 }
 
 #[test]
@@ -246,22 +297,18 @@ package = "hub"
 kind = "canister"
 package = "worker"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.hub]
-kind = "service"
+[component_specs.hub]
+component_role = "hub"
+maximum_instances = 1
 
-[tree_specs.default.canisters.hub.sharding.pools.primary]
+[component_specs.hub.sharding.pools.primary]
 canister_role = "worker"
 
-[tree_specs.default.canisters.worker]
+[component_specs.hub.children.worker]
 kind = "shard"
+maximum_instances = 4
 "#;
     let updated =
         rename_app_role_source(config, &config_path, "demo", "hub", "router").expect("rename role");
@@ -278,14 +325,12 @@ kind = "shard"
         Some("Cargo.toml")
     );
     assert!(updated.source.contains("[\"roles\".\"router\"]"));
+    assert!(updated.source.contains("component_role = \"router\""));
     assert!(
         updated
             .source
-            .contains("[\"tree_specs\".\"default\".\"canisters\".\"router\"]")
+            .contains("[component_specs.hub.children.worker]")
     );
-    assert!(updated.source.contains(
-        "[\"tree_specs\".\"default\".\"canisters\".\"router\".\"sharding\".\"pools\".\"primary\"]"
-    ));
     assert!(!updated.source.contains("[roles.hub]"));
     assert!(
         updated
@@ -337,22 +382,18 @@ package = "hub"
 kind = "canister"
 package = "worker"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.hub]
-kind = "service"
+[component_specs.hub]
+component_role = "hub"
+maximum_instances = 1
 
-[tree_specs.default.canisters.hub.sharding.pools.primary]
+[component_specs.hub.sharding.pools.primary]
 canister_role = "worker"
 
-[tree_specs.default.canisters.worker]
+[component_specs.hub.children.worker]
 kind = "shard"
+maximum_instances = 4
 "#;
     let config_path = Path::new("canic.toml");
     let updated = rename_app_role_source(config, config_path, "demo", "worker", "worker_v2")
@@ -363,7 +404,7 @@ kind = "shard"
     assert!(
         updated
             .source
-            .contains("[\"tree_specs\".\"default\".\"canisters\".\"worker_v2\"]")
+            .contains("[\"component_specs\".\"hub\".\"children\".\"worker_v2\"]")
     );
 }
 

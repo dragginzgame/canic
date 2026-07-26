@@ -42,39 +42,52 @@ fn icp_canister_keys() -> Vec<String> {
     names
 }
 
-// Read the default Tree Spec canister keys from the checked-in test Canic config.
-fn test_default_tree_spec_canister_keys() -> Vec<String> {
+// Read the deployable flat Component topology from the checked-in test config.
+fn test_component_topology_canister_keys() -> Vec<String> {
     let path = workspace_root().join("apps/test/canic.toml");
     let source = read_text(&path);
     let parsed: toml::Value = toml::from_str(&source)
         .unwrap_or_else(|err| panic!("failed to parse {}: {err}", path.display()));
 
-    parsed["tree_specs"]["default"]["canisters"]
+    let mut roles = vec!["root".to_string()];
+    let component_specs = parsed["component_specs"]
         .as_table()
-        .expect("test default Tree Spec canisters must be a table")
-        .keys()
-        .cloned()
-        .collect()
+        .expect("test Component Specs must be a table");
+    for component_spec in component_specs.values() {
+        roles.push(
+            component_spec["component_role"]
+                .as_str()
+                .expect("Component Spec role")
+                .to_string(),
+        );
+        if let Some(children) = component_spec
+            .get("children")
+            .and_then(toml::Value::as_table)
+        {
+            roles.extend(children.keys().cloned());
+        }
+    }
+    roles
 }
 
-// Keep the visible ICP canister list aligned with the test default Tree Spec.
+// Keep the visible ICP canister list aligned with the test Component topology.
 #[test]
-fn icp_visible_canisters_match_test_default_tree_spec() {
+fn icp_visible_canisters_match_test_component_topology() {
     let icp_keys = icp_canister_keys().into_iter().collect::<BTreeSet<_>>();
-    let test_default_tree_spec = test_default_tree_spec_canister_keys()
+    let test_component_topology = test_component_topology_canister_keys()
         .into_iter()
         .collect::<BTreeSet<_>>();
 
     assert_eq!(
-        icp_keys, test_default_tree_spec,
-        "icp.yaml canister keys must stay aligned with apps/test/canic.toml default Tree Spec"
+        icp_keys, test_component_topology,
+        "icp.yaml canister keys must stay aligned with apps/test/canic.toml Component topology"
     );
 }
 
-// Keep the staged root release set derivable from the test default Tree Spec.
+// Keep the staged root release set derivable from the test Component topology.
 #[test]
-fn test_default_tree_spec_has_derivable_release_set() {
-    let release_set = test_default_tree_spec_canister_keys()
+fn test_component_topology_has_derivable_release_set() {
+    let release_set = test_component_topology_canister_keys()
         .into_iter()
         .filter(|name| name != "root")
         .collect::<BTreeSet<_>>();

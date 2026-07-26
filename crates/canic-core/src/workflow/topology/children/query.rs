@@ -35,7 +35,7 @@ impl CanisterChildrenQuery {
     /// Valid only for kind = Singleton.
     #[must_use]
     pub fn get_singleton_child(role: &CanisterRole) -> Option<CanisterInfo> {
-        let kind = match ConfigOps::current_tree_canister(role) {
+        let kind = match ConfigOps::current_component_canister(role) {
             Ok(cfg) => cfg.kind,
             Err(err) => {
                 log!(

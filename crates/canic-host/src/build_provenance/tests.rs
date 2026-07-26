@@ -213,16 +213,11 @@ package = "root"
 kind = "canister"
 package = "{role}"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.{role}]
-kind = "service"
+[component_specs.default]
+component_role = "{role}"
+maximum_instances = 1
 "#
         ),
     )

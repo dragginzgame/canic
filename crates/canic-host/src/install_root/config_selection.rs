@@ -342,7 +342,7 @@ fn config_choice_table(workspace_root: &Path, choices: &[PathBuf]) -> Vec<String
     .collect()
 }
 
-// Summarize the Tree Spec deployable roles for one install config choice.
+// Summarize the Component Spec deployable roles for one install config choice.
 fn config_choice_row(workspace_root: &Path, option: usize, path: &Path) -> ConfigChoiceRow {
     let config = display_workspace_path(workspace_root, path);
     match AppConfigSnapshot::load(path) {

@@ -56,7 +56,7 @@ macro_rules! canic_bundle_local_nonroot_only_endpoints {
     };
 }
 
-/// Emit the canonical Tree-local wasm-store runtime endpoint surface.
+/// Emit the canonical Fleet Subnet Root-local wasm-store endpoint surface.
 #[macro_export]
 macro_rules! canic_bundle_wasm_store_runtime_endpoints {
     () => {

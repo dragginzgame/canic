@@ -131,7 +131,7 @@ pub(super) fn render_role_inspection(row: &ConfiguredRoleLifecycle) -> String {
         format!("canic build {} {}", row.app, row.role)
     } else {
         format!(
-            "canic app role attach {} {} --tree-spec <tree-spec>",
+            "canic app role attach {} {} --component-spec <component-spec>",
             row.app, row.role
         )
     };
@@ -165,7 +165,7 @@ pub(super) fn render_declared_role(
         ),
         "  state: declared".to_string(),
         format!(
-            "  next action: canic app role attach {} {} --tree-spec <tree-spec>",
+            "  next action: canic app role attach {} {} --component-spec <component-spec>",
             role.app, role.role
         ),
     ]

@@ -6,11 +6,12 @@ At a high level the file describes:
 
 - App identity and package-backed roles (`app`, `roles`).
 - Global settings (`controllers`, `standards`, `app`, `auth`, `log`).
-- Permitted rooted topologies under `tree_specs.<name>`.
-- Independently scaled Tree collections under `tree_groups.<name>`.
-- Per-canister policies inside each Tree Spec, with optional scaling, sharding,
-  and keyed placement bindings.
-- The implicit wasm-store behavior used by chunk-store-backed installs.
+- Flat Component topology under `component_specs.<name>`.
+- One Component role and its direct children per Component Spec.
+- Per-Component and per-child instance ceilings, cycles policy, and optional
+  Component-owned scaling, sharding, and keyed binding pools.
+- The implicit Fleet Subnet Root-local wasm-store behavior used by
+  chunk-store-backed installs.
 
 All fields are validated when `canic::build!` runs, so configuration drift fails
 fast at compile time. Every canister crate also declares the App and role it
@@ -37,10 +38,13 @@ Canic treats config/env identity as startup invariants. Missing env data is a fa
 - Init/post-upgrade: generated lifecycle code loads the embedded TOML and parsed config model; `ConfigOps::current_*` is infallible.
 - Root env: fresh root installation sets base fields from
   `CurrentRootInstallIdentity` without a registry lookup.
-  - `default` is an ordinary App-declared Tree Spec name.
-  - The current staged installer requires exactly one initial Tree.
-  - `fleet_root_pid` identifies that Fleet's current root.
+  - The Fleet Subnet Root sits outside every Component Spec.
+  - One root may manage several admitted Component Specs.
+  - `fleet_root_pid` identifies that Fleet's current root authority.
 - Non-root env: children must receive a complete `EnvBootstrapArgs` in `CanisterInitPayload` from root.
+  - The current transitional selector names the exact owning Component Spec;
+    the frozen protected `ComponentBinding` replaces it when root-local
+    allocation can supply a real concrete Component identity.
   - Missing env fields always trap (no local fallback).
 
 ---
@@ -49,8 +53,9 @@ Canic treats config/env identity as startup invariants. Missing env data is a fa
 
 ### `[roles.<role>]`
 
-Required package declaration for every role attached through `tree_specs`. The
-`root` declaration is also required whenever topology is present.
+Required package declaration for every Component or direct child attached
+through `component_specs`. The `root` declaration is also required whenever
+Component topology is present.
 
 - `kind = "root" | "canister"` – package role class. Only `[roles.root]` may
   use `root`.
@@ -58,22 +63,13 @@ Required package declaration for every role attached through `tree_specs`. The
   `canic.toml`.
 
 Role declarations own package identity. The matching
-`tree_specs.<name>.canisters.<role>` entry owns permitted topology and
-Tree-local policy.
+`component_specs.<name>` or
+`component_specs.<name>.children.<role>` entry owns permitted topology and
+Component-local policy.
 
 ### `controllers = ["aaaaa-aa", ...]`
 
 Optional list of controller principals appended to every provisioned canister.
-
-### `[tree_groups.<name>]`
-
-- `tree_spec: string` – required exact ID of an existing Tree Spec.
-- `initial_trees: u16` – required positive number of initial concrete Trees.
-- `maximum_trees: u16` – required positive capacity, no smaller than
-  `initial_trees`.
-
-The sum of `maximum_trees` across all groups must not exceed 4,096. Tree
-Groups contain no physical Subnet placement; the host resolves that separately.
 
 ### `[app]`
 
@@ -90,18 +86,6 @@ Optional allow-list for privileged operations.
 - `principals = ["aaaaa-aa", ...]` – principal text strings authorised for whitelist checks.
   - If `[app.whitelist]` or `principals` is omitted, whitelist checks deny all
     principals. An empty table is also deny-all.
-
-### `[tree_specs.<name>.pool]`
-
-Controls the warm canister pool for a Tree.
-
-- `minimum_size: u8` – minimum number of spare canisters to keep on hand (default `0` when the table is omitted; required when the table is present).
-- `import.initial: u16` – number of canisters to import immediately before queuing the rest (defaults to `minimum_size`).
-- `import.local = ["aaaaa-aa", ...]` – canister IDs to import when built with `ICP_ENVIRONMENT=local` (also used when unset).
-- `import.ic = ["aaaaa-aa", ...]` – canister IDs to import when built with `ICP_ENVIRONMENT=ic`.
-  Import is destructive (controllers reset, code uninstalled); failures are logged and skipped.
-If `pool.import.initial` is `0` and the Tree Spec declares service roles, root
-bootstrap may create new service canisters before queued imports are ready.
 
 ### `[log]`
 
@@ -162,28 +146,46 @@ Feature toggles tied to public standards.
 
 ---
 
-## Tree Specs
+## Component Specs
 
-Declare each permitted rooted topology under `[tree_specs.<name>]`.
-`default` has no special placement or authority meaning. Canisters are
-declared as nested Tree Spec tables such as
-`[tree_specs.default.canisters.app]`; Canic does not use a flat
-`[[canisters]]` array.
+Declare each permitted flat topology under `[component_specs.<name>]`.
+The name is a bounded `ComponentSpecId` and has no physical placement or
+runtime-parent meaning.
 
-### `[tree_specs.<name>]`
+Each Component Spec declares exactly one Component directly below a Fleet
+Subnet Root:
 
-- `canisters.*` – nested tables describing per-role policies (see below).
+```toml
+[component_specs.users]
+component_role = "user_hub"
+maximum_instances = 10
+```
 
-Each Tree Spec contains exactly one `kind = "root"` role. Configured
-`kind = "service"` roles are derived as stable Tree-local services. The
-current Tree Root ensures those roles exist during bootstrap. Singletons,
-shards, replicas, and instances are created through their explicit placement
-flows instead.
+- `component_role` – required role of the Component Canister.
+- `maximum_instances` – required positive Fleet-wide ceiling for concrete
+  instances of this Spec.
+- Component policy fields (`initial_cycles`, `topup`, `cycles_funding`,
+  `scaling`, `sharding`, `binding`, `auth`, `standards`, `diagnostics`, and
+  `metrics`) configure that Component.
+- `limits` compiles finite aggregate child, Registry, and cycles-funding
+  quotas into every concrete Component binding.
+- `children.<role>` – optional direct Component Child tables.
+
+The sum of all Component Spec `maximum_instances` values must not exceed
+4,096. A Component role occurs in exactly one Spec and cannot also be a child.
+A direct child role may be reused by several Specs because the one global
+`[roles.<role>]` declaration fixes its package/artifact identity; ownership
+still resolves through the exact Spec and concrete Component instance.
+
+Component Specs cannot include one another. A child cannot declare another
+Component, child table, or child-producing pool. `root`, `service`, and
+`component` are structural roles, not accepted child `kind` values.
 
 ### Implicit `wasm_store`
 
-Every Tree always has one mandatory same-Tree `wasm_store`.
-It is bootstrapped implicitly and must not be declared in `canic.toml`.
+Every Fleet Subnet Root has one mandatory root-local `wasm_store`. It is
+bootstrapped implicitly, sits outside Component topology, and must not be
+declared in `canic.toml`.
 
 Fixed `0.18` preset:
 
@@ -196,26 +198,21 @@ Fixed `0.18` preset:
 
 Rules:
 
-- do not define `tree_specs.<name>.wasm_stores.*`
-- do not define `tree_specs.<name>.canisters.wasm_store`
+- do not define a `wasm_store` role as a Component or child
 - ordinary deployable roles install from published chunked manifests in this store
 - inline install is reserved for bootstrapping `wasm_store` itself
 
-### `[tree_specs.<name>.canisters.<role>]`
+### `[component_specs.<name>.children.<role>]`
 
-Each child table configures a logical canister role permitted in that Tree
-Spec. The role is derived from the table key
-(`tree_specs.<name>.canisters.<role>`); do not declare `role`, `type`, or
-`sharding.role` fields.
+Each child table configures one direct non-Component Canister owned by each
+concrete Component instance. The role is derived from the table key; do not
+declare `role`, `type`, `owner_component`, another Component, or another
+`children` table.
 
-- `kind = "root" | "service" | "singleton" | "replica" | "shard" | "instance"` – required; declares how this role attaches in the topology.
-  - `root` cannot define placement pools, canister-local authentication roles,
-    or canister-local standards.
-  - every Tree Spec must contain exactly one `root`;
-    `[tree_specs.<name>.canisters.root]` is the conventional declaration.
-  - `service` is Tree Root-created, appears in the current local Directory, and may own
-    scaling, sharding, or keyed placement binding pools.
-  - `singleton`, `replica`, `shard`, and `instance` cannot own placement pools.
+- `kind = "singleton" | "replica" | "shard" | "instance"` – required
+  lifecycle class for the direct child.
+- `maximum_instances` – required positive ceiling per owning Component
+  instance. A `singleton` must use exactly `1`.
 - `initial_cycles = "5T"` – cycles to allocate when provisioning (defaults to 5T).
 - `topup.threshold = "10T"` – minimum cycles before requesting a top-up
   (default `10T` when the `topup` table is present).
@@ -239,6 +236,39 @@ round, truncate, or saturate them.
 - `metrics.profile = "leaf" | "hub" | "storage" | "root" | "full"` – override
   the role-derived metrics profile.
 
+The same cycles, auth, standards, diagnostics, and metrics fields also apply
+directly to the Component Spec table. Only the Component itself may own
+`scaling`, `sharding`, or `binding` pools, and each pool target must be a
+direct child declared by that same Spec.
+
+#### Component aggregate limits
+
+Every Component has finite aggregate limits in addition to each child's own
+policy:
+
+```toml
+[component_specs.<name>.limits]
+maximum_children = 4096
+maximum_registry_bytes = 2097152
+
+[component_specs.<name>.limits.cycles_funding]
+window_secs = 3600
+maximum_cycles = "1000T"
+```
+
+- `maximum_children` bounds the total direct-child instances owned by one
+  concrete Component (default `4096`). It may be lower than the sum of
+  independent per-role ceilings to express shared aggregate capacity, but
+  must be positive when the Spec declares children.
+- `maximum_registry_bytes` bounds that Component's canonical Registry
+  (default `2097152`, and must be positive).
+- `cycles_funding.window_secs` and `maximum_cycles` form a positive aggregate
+  budget above per-child request, cumulative, and cooldown limits (defaults
+  `3600` and `"1000T"`).
+
+One Component Spec may declare at most 256 distinct direct-child roles. The
+complete canonical Fleet Component Topology is bounded to 2 MiB.
+
 #### Parent cycles funding
 
 `cycles_funding` limits cycle requests made by this role to its parent. It is
@@ -251,29 +281,15 @@ always active as policy; omitted values use finite defaults.
 `max_per_request` must not exceed `max_per_child`, and all three values must be
 positive.
 
-#### Manual root ICP refill
-
-Only the root role may define `icp_refill`. It enables an operator-triggered
-conversion of ICP held by root into cycles. It is manual and has no timer or
-automatic threshold.
-
-- `max_refill_e8s_per_call: u64` – required positive per-call spending cap.
-- `min_xdr_permyriad_per_icp: u64` – optional positive minimum conversion-rate
-  gate.
-- `ledger_canister_id` and `cmc_canister_id` – optional system-canister
-  overrides for local/test environments.
-- `allow_ic_system_canister_overrides: bool` – required opt-in before those
-  overrides may be used on the IC (default `false`).
-
 The `wasm_store` role is reserved and implicit.
-Do not add it under `canisters.*`.
+Do not add it under `component_specs.*`.
 
 #### Scaling Pools
 
 Scaling pools model interchangeable replicas with simple bounds on how many to keep alive.
 
 ```toml
-[tree_specs.<name>.canisters.<role>.scaling.pools.<pool>]
+[component_specs.<name>.scaling.pools.<pool>]
 canister_role = "replica_role"
 policy.initial_workers = 1
 policy.min_workers = 2
@@ -282,22 +298,24 @@ policy.max_workers = 16
 
 Fields:
 
-- `canister_role` – canister role that represents replicas in this pool (must exist in the same Tree Spec).
+- `canister_role` – direct child role in the same Component Spec with
+  `kind = "replica"`.
 - `policy.initial_workers` – workers to create during canister startup warmup (default `1`).
 - `policy.min_workers` – minimum workers to keep alive (default `1`).
-- `policy.max_workers` – hard cap on workers (default `32`, set to `0` for no max).
+- `policy.max_workers` – positive hard cap on workers (default `32`), no
+  greater than that child's `maximum_instances`.
 
 #### Placement Binding Pools
 
 Placement binding pools place keyed stateful instances.
 
 ```toml
-[tree_specs.<name>.canisters.<role>.binding.pools.<pool>]
+[component_specs.<name>.binding.pools.<pool>]
 canister_role = "instance_role"
 key_name = "project"
 ```
 
-- `canister_role` – same-Tree-Spec role implementing the instance; it must have
+- `canister_role` – direct child role in the same Component Spec with
   `kind = "instance"`.
 - `key_name` – non-empty logical key name used by keyed placement admission.
 
@@ -306,7 +324,7 @@ key_name = "project"
 Sharding pools manage stateful shards that own capacity-bounded partitions.
 
 ```toml
-[tree_specs.<name>.canisters.<role>.sharding.pools.<pool>]
+[component_specs.<name>.sharding.pools.<pool>]
 canister_role = "shard_role"
 policy.capacity = 1000
 policy.max_shards = 64
@@ -314,11 +332,13 @@ policy.max_shards = 64
 
 Fields:
 
-- `canister_role` – canister role that implements the shard (must exist in the same Tree Spec).
+- `canister_role` – direct child role in the same Component Spec with
+  `kind = "shard"`.
 - `policy.capacity` – per-shard capacity (default `1000`, must be > 0).
 - `policy.initial_shards` – shards created by initial warmup (default `1`; may
   be `0`, but cannot exceed `max_shards`).
-- `policy.max_shards` – maximum shard count (default `4`, must be > 0).
+- `policy.max_shards` – maximum shard count (default `4`, must be positive and
+  no greater than that child's `maximum_instances`).
 
 ---
 
@@ -378,56 +398,53 @@ build_network = "local"
 [standards]
 icrc21 = true
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
 
-[tree_specs.default]
-pool.minimum_size = 3
-pool.import.initial = 3
-pool.import.local = ["aaaaa-aa"]
-pool.import.ic = ["aaaaa-aa"]
-
-[tree_specs.default.canisters.root]
-kind = "root"
-
-[tree_specs.default.canisters.app]
-kind = "service"
-
-[tree_specs.default.canisters.user_hub]
-kind = "service"
+[component_specs.users]
+component_role = "user_hub"
+maximum_instances = 1
 topup.threshold = "10T"
 topup.amount = "5T"
 
-[tree_specs.default.canisters.user_hub.sharding.pools.user_shards]
+[component_specs.users.limits]
+maximum_children = 1000
+maximum_registry_bytes = 2097152
+
+[component_specs.users.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
 policy.initial_shards = 1
 policy.max_shards = 4
 
-[tree_specs.default.canisters.scale_hub]
-kind = "service"
+[component_specs.users.children.user_shard]
+kind = "shard"
+maximum_instances = 4
+
+[component_specs.scaling]
+component_role = "scale_hub"
+maximum_instances = 1
 topup.threshold = "10T"
 topup.amount = "5T"
 
-[tree_specs.default.canisters.scale_hub.scaling.pools.scales]
+[component_specs.scaling.scaling.pools.scales]
 canister_role = "scale"
 policy.initial_workers = 1
 policy.min_workers = 2
+policy.max_workers = 32
 
-[tree_specs.default.canisters.scale]
+[component_specs.scaling.children.scale]
 kind = "replica"
-
-[tree_specs.default.canisters.user_shard]
-kind = "shard"
+maximum_instances = 32
 # CANIC_CONFIG_EXAMPLE_END
 ```
 
-This example defines one initial Tree in the `default` Tree Group, enables the
-pool and ICRC-21, and configures sharding on `user_hub` plus scaling on
-`scale_hub`. The concrete Tree also gets one implicit `wasm_store`
-automatically. Physical Subnet placement is separate deployment input.
+This example defines three flat Component Specs, enables ICRC-21, and
+configures one direct shard child under `user_hub` plus one direct replica
+child under `scale_hub`. Each occupied Fleet/Subnet root gets one implicit
+`wasm_store`; physical Subnet placement and root-local Component admissions
+are separate deployment input.
 
 ---
 
@@ -439,8 +456,8 @@ It does not enumerate every published template release.
 Static config owns:
 
 - user-defined canister roles and policies
-- Tree Specs and Tree Group scaling bounds
-- configured service roles that the current Tree Root bootstraps locally
+- flat Component Specs and bounded Component/child ceilings
+- Component roles that a Fleet Subnet Root may create from admitted Specs
 
 Root-authoritative runtime state owns:
 
@@ -456,6 +473,6 @@ Template stores own:
 
 This separation is deliberate:
 
-- config defines the user-managed topology only
+- config defines the user-managed flat Component topology only
 - root-approved manifest/runtime state defines what is installable and which implicit store is active
 - wasm stores hold the bytes and deterministic chunk-set metadata only

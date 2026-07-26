@@ -1,11 +1,14 @@
-//! Module: config::schema::tree_spec
+//! Module: config::schema::component_spec
 //!
-//! Responsibility: define Tree Spec, canister, placement, and refill config shapes.
+//! Responsibility: define flat Component Spec, direct-child, placement, and funding shapes.
 //! Does not own: topology validation, placement execution, or runtime canister state.
 //! Boundary: config schema re-exports these data shapes for validated models.
 
 use crate::{
-    cdk::{candid::Principal, types::Cycles},
+    cdk::{
+        candid::{CandidType, Principal},
+        types::Cycles,
+    },
     ids::CanisterRole,
 };
 use serde::{Deserialize, Serialize};
@@ -41,62 +44,313 @@ mod defaults {
     pub const fn cycles_funding_cooldown_secs() -> u64 {
         crate::domain::policy::pure::cycles_funding::DEFAULT_COOLDOWN_SECS
     }
+
+    pub const fn component_maximum_children() -> u32 {
+        super::DEFAULT_COMPONENT_MAXIMUM_CHILDREN
+    }
+
+    pub const fn component_maximum_registry_bytes() -> u64 {
+        super::DEFAULT_COMPONENT_MAXIMUM_REGISTRY_BYTES
+    }
+
+    pub const fn component_cycles_funding_window_secs() -> u64 {
+        super::DEFAULT_COMPONENT_CYCLES_FUNDING_WINDOW_SECS
+    }
+
+    pub const fn component_cycles_funding_maximum_cycles() -> Cycles {
+        Cycles::new(super::DEFAULT_COMPONENT_CYCLES_FUNDING_MAXIMUM_CYCLES)
+    }
 }
 
 const IMPLICIT_WASM_STORE_ROLE: CanisterRole = CanisterRole::WASM_STORE;
 
+/// Default aggregate direct-child ceiling for one concrete Component.
+pub const DEFAULT_COMPONENT_MAXIMUM_CHILDREN: u32 = 4_096;
+/// Default maximum canonical Component Registry bytes for one Component.
+pub const DEFAULT_COMPONENT_MAXIMUM_REGISTRY_BYTES: u64 = 2_097_152;
+/// Default aggregate Component cycles-funding budget window.
+pub const DEFAULT_COMPONENT_CYCLES_FUNDING_WINDOW_SECS: u64 = 3_600;
+/// Default aggregate Component cycles-funding budget per window.
+pub const DEFAULT_COMPONENT_CYCLES_FUNDING_MAXIMUM_CYCLES: u128 = 1_000_000_000_000_000;
+
 ///
-/// TreeSpecConfig
+/// ComponentSpecConfig
 ///
-/// Configuration for one permitted rooted canister topology.
+/// Configuration for one permitted Component and its direct children.
 /// Owned by config schema and validated before topology workflows use it.
 ///
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct TreeSpecConfig {
-    #[serde(default)]
-    pub canisters: BTreeMap<CanisterRole, CanisterConfig>,
+pub struct ComponentSpecConfig {
+    /// Role of the Component directly managed by a Fleet Subnet Root.
+    pub component_role: CanisterRole,
+
+    /// Fleet-wide ceiling for concrete instances of this Component Spec.
+    pub maximum_instances: u32,
 
     #[serde(default)]
-    pub pool: CanisterPool,
+    pub limits: ComponentLimitsConfig,
+
+    #[serde(
+        default = "defaults::initial_cycles",
+        deserialize_with = "Cycles::from_config"
+    )]
+    pub initial_cycles: Cycles,
+
+    #[serde(default)]
+    pub topup: Option<TopupPolicy>,
+
+    #[serde(default)]
+    pub cycles_funding: CyclesFundingPolicyConfig,
+
+    #[serde(default)]
+    pub scaling: Option<ScalingConfig>,
+
+    #[serde(default)]
+    pub sharding: Option<ShardingConfig>,
+
+    #[serde(default)]
+    pub binding: Option<BindingConfig>,
+
+    #[serde(default)]
+    pub auth: CanisterAuthConfig,
+
+    #[serde(default)]
+    pub standards: StandardsCanisterConfig,
+
+    #[serde(default)]
+    pub diagnostics: DiagnosticsCanisterConfig,
+
+    #[serde(default)]
+    pub metrics: MetricsCanisterConfig,
+
+    /// Exact direct children owned by each instance of this Component.
+    #[serde(default)]
+    pub children: BTreeMap<CanisterRole, ComponentChildConfig>,
 }
 
-impl TreeSpecConfig {
-    /// Get a canister configuration by role.
+impl ComponentSpecConfig {
+    /// Get the runtime configuration for this Component or one direct child.
     #[must_use]
     pub fn get_canister(&self, role: &CanisterRole) -> Option<CanisterConfig> {
-        self.canisters.get(role).cloned().or_else(|| {
-            if *role == IMPLICIT_WASM_STORE_ROLE {
-                Some(implicit_wasm_store_canister_config())
-            } else {
-                None
-            }
-        })
+        if role == &self.component_role {
+            return Some(self.component_canister_config());
+        }
+
+        self.children
+            .get(role)
+            .map(ComponentChildConfig::canister_config)
+            .or_else(|| {
+                if *role == IMPLICIT_WASM_STORE_ROLE {
+                    Some(implicit_wasm_store_canister_config())
+                } else {
+                    None
+                }
+            })
     }
 
-    /// Roles that the Tree Root creates automatically during Tree bootstrap.
-    ///
-    /// Configured service roles are stable Tree-local services. Singletons,
-    /// shards, replicas, and instances are created by their placement managers
-    /// instead.
+    /// The one direct Component role created from this Spec.
     #[must_use]
     pub fn auto_create_roles(&self) -> BTreeSet<CanisterRole> {
-        self.service_roles()
+        BTreeSet::from([self.component_role.clone()])
     }
 
-    /// Roles exposed through the local Tree Directory.
+    /// The one direct Component role exposed through the root-local Directory.
     #[must_use]
-    pub fn tree_directory_roles(&self) -> BTreeSet<CanisterRole> {
-        self.service_roles()
+    pub fn component_directory_roles(&self) -> BTreeSet<CanisterRole> {
+        self.auto_create_roles()
     }
 
-    fn service_roles(&self) -> BTreeSet<CanisterRole> {
-        self.canisters
-            .iter()
-            .filter(|&(_role, canister)| canister.kind == CanisterKind::Service)
-            .map(|(role, _canister)| role.clone())
-            .collect()
+    /// All roles structurally owned by this Spec.
+    pub fn roles(&self) -> impl Iterator<Item = &CanisterRole> {
+        std::iter::once(&self.component_role).chain(self.children.keys())
+    }
+
+    /// Iterate the Component and direct children as common runtime projections.
+    pub fn canister_configs(&self) -> impl Iterator<Item = (&CanisterRole, CanisterConfig)> + '_ {
+        std::iter::once((&self.component_role, self.component_canister_config())).chain(
+            self.children
+                .iter()
+                .map(|(role, child)| (role, child.canister_config())),
+        )
+    }
+
+    /// Convert the structurally identified Component into the common runtime view.
+    #[must_use]
+    pub fn component_canister_config(&self) -> CanisterConfig {
+        CanisterConfig {
+            kind: CanisterKind::Service,
+            initial_cycles: self.initial_cycles.clone(),
+            topup: self.topup.clone(),
+            icp_refill: None,
+            cycles_funding: self.cycles_funding.clone(),
+            scaling: self.scaling.clone(),
+            sharding: self.sharding.clone(),
+            binding: self.binding.clone(),
+            auth: self.auth.clone(),
+            standards: self.standards.clone(),
+            diagnostics: self.diagnostics,
+            metrics: self.metrics,
+        }
+    }
+}
+
+///
+/// ComponentLimitsConfig
+///
+/// Configurable aggregate limits compiled into every concrete Component binding.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ComponentLimitsConfig {
+    #[serde(default = "defaults::component_maximum_children")]
+    pub maximum_children: u32,
+
+    #[serde(default = "defaults::component_maximum_registry_bytes")]
+    pub maximum_registry_bytes: u64,
+
+    #[serde(default)]
+    pub cycles_funding: CyclesFundingBudgetConfig,
+}
+
+impl Default for ComponentLimitsConfig {
+    fn default() -> Self {
+        Self {
+            maximum_children: defaults::component_maximum_children(),
+            maximum_registry_bytes: defaults::component_maximum_registry_bytes(),
+            cycles_funding: CyclesFundingBudgetConfig::default(),
+        }
+    }
+}
+
+///
+/// CyclesFundingBudgetConfig
+///
+/// Aggregate cycles-funding ceiling for one Component over one bounded window.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CyclesFundingBudgetConfig {
+    #[serde(default = "defaults::component_cycles_funding_window_secs")]
+    pub window_secs: u64,
+
+    #[serde(
+        default = "defaults::component_cycles_funding_maximum_cycles",
+        deserialize_with = "Cycles::from_config"
+    )]
+    pub maximum_cycles: Cycles,
+}
+
+impl Default for CyclesFundingBudgetConfig {
+    fn default() -> Self {
+        Self {
+            window_secs: defaults::component_cycles_funding_window_secs(),
+            maximum_cycles: defaults::component_cycles_funding_maximum_cycles(),
+        }
+    }
+}
+
+///
+/// ComponentChildConfig
+///
+/// Configuration for one direct child role owned by a Component instance.
+///
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ComponentChildConfig {
+    pub kind: ComponentChildKind,
+    pub maximum_instances: u32,
+
+    #[serde(
+        default = "defaults::initial_cycles",
+        deserialize_with = "Cycles::from_config"
+    )]
+    pub initial_cycles: Cycles,
+
+    #[serde(default)]
+    pub topup: Option<TopupPolicy>,
+
+    #[serde(default)]
+    pub cycles_funding: CyclesFundingPolicyConfig,
+
+    #[serde(default)]
+    pub auth: CanisterAuthConfig,
+
+    #[serde(default)]
+    pub standards: StandardsCanisterConfig,
+
+    #[serde(default)]
+    pub diagnostics: DiagnosticsCanisterConfig,
+
+    #[serde(default)]
+    pub metrics: MetricsCanisterConfig,
+}
+
+impl ComponentChildConfig {
+    #[must_use]
+    pub fn canister_config(&self) -> CanisterConfig {
+        CanisterConfig {
+            kind: self.kind.into(),
+            initial_cycles: self.initial_cycles.clone(),
+            topup: self.topup.clone(),
+            icp_refill: None,
+            cycles_funding: self.cycles_funding.clone(),
+            scaling: None,
+            sharding: None,
+            binding: None,
+            auth: self.auth.clone(),
+            standards: self.standards.clone(),
+            diagnostics: self.diagnostics,
+            metrics: self.metrics,
+        }
+    }
+}
+
+///
+/// ComponentChildKind
+///
+/// Lifecycle class for a direct Component Child.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum ComponentChildKind {
+    #[serde(rename = "singleton")]
+    Singleton,
+
+    #[serde(rename = "replica")]
+    Replica,
+
+    #[serde(rename = "shard")]
+    Shard,
+
+    #[serde(rename = "instance")]
+    Instance,
+}
+
+impl fmt::Display for ComponentChildKind {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let label = match self {
+            Self::Singleton => "singleton",
+            Self::Replica => "replica",
+            Self::Shard => "shard",
+            Self::Instance => "instance",
+        };
+        formatter.write_str(label)
+    }
+}
+
+impl From<ComponentChildKind> for CanisterKind {
+    fn from(kind: ComponentChildKind) -> Self {
+        match kind {
+            ComponentChildKind::Singleton => Self::Singleton,
+            ComponentChildKind::Replica => Self::Replica,
+            ComponentChildKind::Shard => Self::Shard,
+            ComponentChildKind::Instance => Self::Instance,
+        }
     }
 }
 
@@ -147,6 +401,25 @@ pub struct CanisterPool {
 fn implicit_wasm_store_canister_config() -> CanisterConfig {
     CanisterConfig {
         kind: CanisterKind::Singleton,
+        initial_cycles: defaults::initial_cycles(),
+        topup: None,
+        icp_refill: None,
+        cycles_funding: CyclesFundingPolicyConfig::default(),
+        scaling: None,
+        sharding: None,
+        binding: None,
+        auth: CanisterAuthConfig::default(),
+        standards: StandardsCanisterConfig::default(),
+        diagnostics: DiagnosticsCanisterConfig::default(),
+        metrics: MetricsCanisterConfig::default(),
+    }
+}
+
+/// Build the non-configurable Fleet Subnet Root runtime defaults.
+#[must_use]
+pub fn implicit_root_canister_config() -> CanisterConfig {
+    CanisterConfig {
+        kind: CanisterKind::Root,
         initial_cycles: defaults::initial_cycles(),
         topup: None,
         icp_refill: None,
@@ -305,7 +578,7 @@ impl CanisterConfig {
 /// Owned by config schema and consumed by cycles funding authorization.
 ///
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CyclesFundingPolicyConfig {
     #[serde(

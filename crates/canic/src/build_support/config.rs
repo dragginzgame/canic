@@ -120,15 +120,15 @@ pub const fn config_app_id(config: &ConfigModel) -> &str {
     config.app_id().as_str()
 }
 
-/// Return whether a validated config attaches the requested App role.
+/// Return whether a validated config makes the requested App role deployable.
 #[must_use]
-pub fn config_attaches_role(config: &ConfigModel, app_id: &str, role_name: &str) -> bool {
+pub fn config_role_is_deployable(config: &ConfigModel, app_id: &str, role_name: &str) -> bool {
     if config.app_id().as_str() != app_id {
         return false;
     }
 
     config
-        .attached_roles()
+        .deployable_roles()
         .contains(&CanisterRole::owned(role_name.to_string()))
 }
 
@@ -198,9 +198,13 @@ mod tests {
         assert_eq!(cfg.app_id().as_str(), "standalone");
         assert!(cfg.roles.contains_key("sandbox_blank"));
         assert!(!cfg.roles.contains_key("root"));
-        assert!(cfg.tree_specs.is_empty());
+        assert!(cfg.component_specs.is_empty());
         assert!(!cfg.auth.delegated_tokens.enabled);
-        assert!(!config_attaches_role(&cfg, "standalone", "sandbox_blank"));
+        assert!(!config_role_is_deployable(
+            &cfg,
+            "standalone",
+            "sandbox_blank"
+        ));
     }
 
     #[test]
@@ -211,7 +215,25 @@ mod tests {
         assert_eq!(cfg.app_id().as_str(), "standalone");
         assert!(source.contains("[roles.demo_role]"));
         assert!(cfg.roles.contains_key("demo_role"));
-        assert!(cfg.tree_specs.is_empty());
+        assert!(cfg.component_specs.is_empty());
+    }
+
+    #[test]
+    fn fleet_subnet_root_is_deployable_outside_component_specs() {
+        let cfg = parse_config_model(
+            r#"
+[app]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+"#,
+        )
+        .expect("root infrastructure config parses");
+
+        assert!(config_role_is_deployable(&cfg, "demo", "root"));
+        assert!(cfg.attached_roles().is_empty());
     }
 
     #[test]
@@ -235,7 +257,7 @@ mod tests {
 
         assert!(generated);
         assert!(source.contains("[roles.test]"));
-        assert!(!source.contains("[tree_specs."));
+        assert!(!source.contains("[component_specs."));
     }
 
     #[test]
@@ -296,13 +318,7 @@ edition = "2024"
     fn config_contains_role_accepts_exact_metadata_role() {
         let cfg = parse_config_model(
             r#"
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
 [app]
 name = "test"
@@ -318,8 +334,9 @@ package = "app"
 [auth.delegated_tokens]
 enabled = false
 
-[tree_specs.default.canisters.app]
-kind = "service"
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
 "#,
         )
         .expect("config parses");
@@ -332,13 +349,7 @@ kind = "service"
     fn config_contains_role_rejects_role_typos() {
         let cfg = parse_config_model(
             r#"
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
 [app]
 name = "test"
@@ -354,8 +365,9 @@ package = "app"
 [auth.delegated_tokens]
 enabled = false
 
-[tree_specs.default.canisters.app]
-kind = "service"
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
 "#,
         )
         .expect("config parses");

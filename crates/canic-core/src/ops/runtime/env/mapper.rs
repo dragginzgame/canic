@@ -21,7 +21,7 @@ impl EnvRecordMapper {
     pub fn record_to_view(record: &EnvRecord) -> EnvSnapshotResponse {
         EnvSnapshotResponse {
             fleet_root_pid: record.fleet_root_pid,
-            tree_spec: record.tree_spec.clone(),
+            component_spec: record.component_spec.clone(),
             subnet_pid: record.subnet_pid,
             root_pid: record.root_pid,
             canister_role: record.canister_role.clone(),
@@ -32,7 +32,7 @@ impl EnvRecordMapper {
     pub fn validated_to_record(validated: ValidatedEnv) -> EnvRecord {
         EnvRecord {
             fleet_root_pid: Some(validated.fleet_root_pid),
-            tree_spec: Some(validated.tree_spec),
+            component_spec: validated.component_spec,
             subnet_pid: Some(validated.subnet_pid),
             root_pid: Some(validated.root_pid),
             canister_role: Some(validated.canister_role),

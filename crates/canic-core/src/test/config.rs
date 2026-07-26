@@ -3,12 +3,13 @@
 use crate::{
     cdk::types::Cycles,
     config::schema::{
-        CanisterAuthConfig, CanisterConfig, CanisterKind, CyclesFundingPolicyConfig,
+        CanisterAuthConfig, CanisterConfig, CanisterKind, ComponentChildConfig, ComponentChildKind,
+        ComponentLimitsConfig, ComponentSpecConfig, CyclesFundingPolicyConfig,
         DiagnosticsCanisterConfig, MetricsCanisterConfig, RoleDeclaration, RoleDeclarationKind,
         StandardsCanisterConfig,
     },
     config::{Config, ConfigModel},
-    ids::{CanisterRole, TreeSpecId},
+    ids::{CanisterRole, ComponentSpecId},
 };
 use std::sync::Arc;
 
@@ -38,29 +39,29 @@ impl ConfigTestBuilder {
         self.with_default_canister(role, Self::canister_config(kind))
     }
 
-    /// Add one canister configuration to the canonical default Tree Spec.
+    /// Add one canister configuration to the canonical default Component Spec.
     ///
     /// # Panics
     ///
-    /// Panics only if Canic's canonical `"default"` Tree Spec identifier stops
-    /// satisfying `TreeSpecId` admission.
+    /// Panics only if Canic's canonical `"default"` Component Spec identifier stops
+    /// satisfying `ComponentSpecId` admission.
     #[must_use]
     pub fn with_default_canister(
         self,
         role: impl Into<CanisterRole>,
         config: CanisterConfig,
     ) -> Self {
-        self.with_tree_spec_canister(
-            "default".parse().expect("default Tree Spec ID"),
+        self.with_component_spec_canister(
+            "default".parse().expect("default Component Spec ID"),
             role,
             config,
         )
     }
 
     #[must_use]
-    pub fn with_tree_spec_canister(
+    pub fn with_component_spec_canister(
         mut self,
-        tree_spec: TreeSpecId,
+        component_spec: ComponentSpecId,
         role: impl Into<CanisterRole>,
         config: CanisterConfig,
     ) -> Self {
@@ -69,8 +70,6 @@ impl ConfigTestBuilder {
             CanisterKind::Root => RoleDeclarationKind::Root,
             _ => RoleDeclarationKind::Canister,
         };
-        let entry = self.model.tree_specs.entry(tree_spec).or_default();
-
         self.model.roles.insert(
             role.clone(),
             RoleDeclaration {
@@ -78,7 +77,56 @@ impl ConfigTestBuilder {
                 package: role.as_ref().to_string(),
             },
         );
-        entry.canisters.insert(role, config);
+
+        if config.kind == CanisterKind::Root {
+            return self;
+        }
+
+        let entry = self
+            .model
+            .component_specs
+            .entry(component_spec)
+            .or_insert_with(|| Self::component_spec_config(role.clone()));
+        if config.kind == CanisterKind::Service {
+            entry.component_role = role;
+            entry.initial_cycles = config.initial_cycles;
+            entry.topup = config.topup;
+            entry.cycles_funding = config.cycles_funding;
+            entry.scaling = config.scaling;
+            entry.sharding = config.sharding;
+            entry.binding = config.binding;
+            entry.auth = config.auth;
+            entry.standards = config.standards;
+            entry.diagnostics = config.diagnostics;
+            entry.metrics = config.metrics;
+            return self;
+        }
+
+        let kind = match config.kind {
+            CanisterKind::Singleton => ComponentChildKind::Singleton,
+            CanisterKind::Replica => ComponentChildKind::Replica,
+            CanisterKind::Shard => ComponentChildKind::Shard,
+            CanisterKind::Instance => ComponentChildKind::Instance,
+            CanisterKind::Root | CanisterKind::Service => unreachable!("handled above"),
+        };
+        entry.children.insert(
+            role,
+            ComponentChildConfig {
+                kind,
+                maximum_instances: if kind == ComponentChildKind::Singleton {
+                    1
+                } else {
+                    4_096
+                },
+                initial_cycles: config.initial_cycles,
+                topup: config.topup,
+                cycles_funding: config.cycles_funding,
+                auth: config.auth,
+                standards: config.standards,
+                diagnostics: config.diagnostics,
+                metrics: config.metrics,
+            },
+        );
 
         self
     }
@@ -115,6 +163,25 @@ impl ConfigTestBuilder {
             standards: StandardsCanisterConfig::default(),
             diagnostics: DiagnosticsCanisterConfig::default(),
             metrics: MetricsCanisterConfig::default(),
+        }
+    }
+
+    fn component_spec_config(component_role: CanisterRole) -> ComponentSpecConfig {
+        ComponentSpecConfig {
+            component_role,
+            maximum_instances: 1,
+            limits: ComponentLimitsConfig::default(),
+            initial_cycles: Cycles::new(0),
+            topup: None,
+            cycles_funding: CyclesFundingPolicyConfig::default(),
+            scaling: None,
+            sharding: None,
+            binding: None,
+            auth: CanisterAuthConfig::default(),
+            standards: StandardsCanisterConfig::default(),
+            diagnostics: DiagnosticsCanisterConfig::default(),
+            metrics: MetricsCanisterConfig::default(),
+            children: Default::default(),
         }
     }
 }

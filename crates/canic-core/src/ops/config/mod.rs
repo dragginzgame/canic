@@ -7,13 +7,14 @@
 use crate::{
     InternalError,
     config::{
-        Config, ConfigError, ConfigModel,
+        ComponentTopology, Config, ConfigError, ConfigModel,
         schema::{
-            BindingConfig, CanisterConfig, DelegatedTokenConfig, FleetInitMode, LogConfig,
-            RoleAttestationConfig, ScalingConfig, TreeSpecConfig,
+            BindingConfig, CanisterConfig, ComponentSpecConfig, DelegatedTokenConfig,
+            FleetInitMode, LogConfig, RoleAttestationConfig, ScalingConfig,
+            implicit_root_canister_config,
         },
     },
-    ids::{CanisterRole, TreeSpecId},
+    ids::{CanisterRole, ComponentSpecId},
     model::cycles_funding::FundingLimits,
     ops::{OpsError, prelude::*, runtime::env::EnvOps},
     storage::stable::state::fleet::FleetMode,
@@ -32,16 +33,16 @@ pub enum ConfigOpsError {
     #[error(transparent)]
     Config(#[from] ConfigError),
 
-    #[error("Tree Spec {0} not found in configuration")]
-    TreeSpecNotFound(String),
+    #[error("Component Spec {0} not found in configuration")]
+    ComponentSpecNotFound(String),
 
-    #[error("canister {0} not defined in Tree Spec {1}")]
+    #[error("canister {0} not defined in Component Spec {1}")]
     CanisterNotFound(String, String),
 
     #[error(
-        "current single-Tree bootstrap requires exactly one initial Tree; Coordinator installation is not active"
+        "canister role {0} belongs to multiple Component Specs; an exact Component Spec binding is required"
     )]
-    InitialTreeAmbiguous,
+    CanisterRoleAmbiguous(String),
 }
 
 impl From<ConfigOpsError> for InternalError {
@@ -71,35 +72,67 @@ impl ConfigOps {
     // Explicit / fallible lookups
     // ---------------------------------------------------------------------
 
-    /// Fetch a Tree Spec configuration by declared identity.
-    pub(crate) fn try_get_tree_spec(
-        tree_spec: &TreeSpecId,
-    ) -> Result<TreeSpecConfig, InternalError> {
+    /// Fetch a Component Spec configuration by declared identity.
+    pub(crate) fn try_get_component_spec(
+        component_spec: &ComponentSpecId,
+    ) -> Result<ComponentSpecConfig, InternalError> {
         let cfg = Config::get()?;
 
-        cfg.get_tree_spec(tree_spec)
-            .ok_or_else(|| ConfigOpsError::TreeSpecNotFound(tree_spec.to_string()).into())
+        cfg.get_component_spec(component_spec)
+            .ok_or_else(|| ConfigOpsError::ComponentSpecNotFound(component_spec.to_string()).into())
     }
 
-    /// Fetch a canister configuration within a specific Tree Spec.
+    /// Fetch a canister configuration within a specific Component Spec.
     pub(crate) fn try_get_canister(
-        tree_spec: &TreeSpecId,
+        component_spec: &ComponentSpecId,
         canister_role: &CanisterRole,
     ) -> Result<CanisterConfig, InternalError> {
-        let tree_spec_cfg = Self::try_get_tree_spec(tree_spec)?;
+        let component_spec_cfg = Self::try_get_component_spec(component_spec)?;
 
-        tree_spec_cfg.get_canister(canister_role).ok_or_else(|| {
-            ConfigOpsError::CanisterNotFound(canister_role.to_string(), tree_spec.to_string())
+        component_spec_cfg
+            .get_canister(canister_role)
+            .ok_or_else(|| {
+                ConfigOpsError::CanisterNotFound(
+                    canister_role.to_string(),
+                    component_spec.to_string(),
+                )
                 .into()
-        })
+            })
     }
 
-    /// Return the only initial Tree Spec admitted by the current bootstrap path.
-    pub(crate) fn sole_initial_tree_spec_id() -> Result<TreeSpecId, InternalError> {
+    /// Compile the exact current Component Topology and its protected Spec hashes.
+    pub fn component_topology() -> Result<ComponentTopology, InternalError> {
         Config::get()?
-            .sole_initial_tree_spec_id()
-            .cloned()
-            .ok_or_else(|| ConfigOpsError::InitialTreeAmbiguous.into())
+            .compile_component_topology()
+            .map_err(ConfigError::from)
+            .map_err(InternalError::from)
+    }
+
+    /// Resolve a role only when one Component Spec structurally contains it.
+    pub fn try_get_canister_by_role(
+        canister_role: &CanisterRole,
+    ) -> Result<CanisterConfig, InternalError> {
+        let config = Config::get()?;
+        let mut matches = config.component_specs_for_role(canister_role);
+        let (component_spec, component_spec_config) = matches.next().ok_or_else(|| {
+            ConfigOpsError::CanisterNotFound(
+                canister_role.to_string(),
+                "Component Topology".to_string(),
+            )
+        })?;
+        if matches.next().is_some() {
+            return Err(ConfigOpsError::CanisterRoleAmbiguous(canister_role.to_string()).into());
+        }
+
+        component_spec_config
+            .get_canister(canister_role)
+            .ok_or_else(|| {
+                ConfigOpsError::CanisterNotFound(
+                    canister_role.to_string(),
+                    component_spec.to_string(),
+                )
+                .into()
+            })
     }
 
     // ---------------------------------------------------------------------
@@ -142,21 +175,24 @@ impl ConfigOps {
         Ok(mode)
     }
 
-    /// Fetch the configuration record for the current Tree.
+    /// Fetch the configuration record for the current Component.
     ///
     /// Requires that environment initialization has completed.
-    pub fn current_tree_spec() -> Result<TreeSpecConfig, InternalError> {
-        let tree_spec = EnvOps::tree_spec()?;
+    pub fn current_component_spec() -> Result<ComponentSpecConfig, InternalError> {
+        let component_spec = EnvOps::component_spec()?;
 
-        Self::try_get_tree_spec(&tree_spec)
+        Self::try_get_component_spec(&component_spec)
     }
 
     /// Fetch the configuration record for the *current* canister.
     pub(crate) fn current_canister() -> Result<CanisterConfig, InternalError> {
-        let tree_spec = EnvOps::tree_spec()?;
         let canister_role = EnvOps::canister_role()?;
+        if canister_role.is_root() {
+            return Ok(implicit_root_canister_config());
+        }
+        let component_spec = EnvOps::component_spec()?;
 
-        Self::try_get_canister(&tree_spec, &canister_role)
+        Self::try_get_canister(&component_spec, &canister_role)
     }
 
     /// Fetch the scaling configuration for the *current* canister.
@@ -169,20 +205,20 @@ impl ConfigOps {
         Ok(Self::current_canister()?.binding)
     }
 
-    /// Fetch the configuration for a specific canister in the current Tree.
-    pub(crate) fn current_tree_canister(
+    /// Fetch the configuration for a role in the current Component Spec.
+    pub(crate) fn current_component_canister(
         canister_role: &CanisterRole,
     ) -> Result<CanisterConfig, InternalError> {
-        let tree_spec = EnvOps::tree_spec()?;
+        let component_spec = EnvOps::component_spec()?;
 
-        Self::try_get_canister(&tree_spec, canister_role)
+        Self::try_get_canister(&component_spec, canister_role)
     }
 
-    /// Resolve parent funding limits for a child role in the current Tree.
+    /// Resolve parent funding limits for a direct Component Child role.
     pub(crate) fn cycles_funding_limits_for_child_role(
         child_role: &CanisterRole,
     ) -> Result<FundingLimits, InternalError> {
-        let cfg = Self::current_tree_canister(child_role)?;
+        let cfg = Self::current_component_canister(child_role)?;
         let policy = cfg.cycles_funding;
 
         Ok(FundingLimits {

@@ -9,7 +9,7 @@ pub mod mapper;
 use crate::{
     InternalError,
     dto::env::EnvSnapshotResponse,
-    ids::TreeSpecId,
+    ids::ComponentSpecId,
     memory::runtime::is_memory_bootstrap_ready,
     model::env::ValidatedEnv,
     ops::runtime::env::mapper::EnvRecordMapper,
@@ -42,8 +42,8 @@ pub enum EnvOpsError {
     #[error("failed to determine current subnet principal")]
     SubnetPidUnavailable,
 
-    #[error("failed to determine current Tree Spec")]
-    TreeSpecUnavailable,
+    #[error("failed to determine current Component Spec")]
+    ComponentSpecUnavailable,
 
     #[error("failed to determine current parent principal")]
     ParentPidUnavailable,
@@ -126,8 +126,8 @@ impl EnvOps {
     // ---------------------------------------------------------------------
 
     /// SAFETY: Env must be initialized; do not call during init/post_upgrade.
-    pub fn tree_spec() -> Result<TreeSpecId, InternalError> {
-        Env::get_tree_spec().ok_or_else(|| EnvOpsError::TreeSpecUnavailable.into())
+    pub fn component_spec() -> Result<ComponentSpecId, InternalError> {
+        Env::get_component_spec().ok_or_else(|| EnvOpsError::ComponentSpecUnavailable.into())
     }
 
     pub fn canister_role() -> Result<CanisterRole, InternalError> {
@@ -255,25 +255,8 @@ impl EnvOps {
     }
 
     fn assert_initialized() -> Result<(), InternalError> {
-        let mut missing = Vec::new();
-        if Env::get_root_pid().is_none() {
-            missing.push("root_pid");
-        }
-        if Env::get_subnet_pid().is_none() {
-            missing.push("subnet_pid");
-        }
-        if Env::get_fleet_root_pid().is_none() {
-            missing.push("fleet_root_pid");
-        }
-        if Env::get_tree_spec().is_none() {
-            missing.push("tree_spec");
-        }
-        if Env::get_parent_pid().is_none() {
-            missing.push("parent_pid");
-        }
-        if Env::get_canister_role().is_none() {
-            missing.push("canister_role");
-        }
+        let data = Env::export();
+        let missing = required_fields_missing(&data.record);
 
         if missing.is_empty() {
             Ok(())
@@ -303,8 +286,13 @@ fn required_fields_missing(data: &EnvRecord) -> Vec<&'static str> {
     if data.fleet_root_pid.is_none() {
         missing.push("fleet_root_pid");
     }
-    if data.tree_spec.is_none() {
-        missing.push("tree_spec");
+    if data
+        .canister_role
+        .as_ref()
+        .is_some_and(|role| !role.is_root())
+        && data.component_spec.is_none()
+    {
+        missing.push("component_spec");
     }
     if data.subnet_pid.is_none() {
         missing.push("subnet_pid");
@@ -356,7 +344,7 @@ mod tests {
         EnvData {
             record: EnvRecord {
                 fleet_root_pid: Some(root_pid),
-                tree_spec: Some("default".parse().expect("default Tree Spec ID")),
+                component_spec: Some("default".parse().expect("default Component Spec ID")),
                 subnet_pid: Some(root_pid),
                 root_pid: Some(root_pid),
                 canister_role: Some(CanisterRole::ROOT),

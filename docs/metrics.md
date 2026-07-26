@@ -57,7 +57,7 @@ canister compiles only the tiers needed by its inferred metrics profile:
 Use an override only when a role needs more visibility than its default:
 
 ```toml
-[tree_specs.default.canisters.app.metrics]
+[component_specs.app.metrics]
 profile = "full"
 ```
 

@@ -36,8 +36,8 @@ The dependency flow is: endpoints → workflow → policy → ops → model.
 - `canic_core::access` – common auth and routing checks used by the facade macros.
 - `canic_core::api` – runtime APIs surfaced through `canic::api::*`.
 - `canic_core::dto` – candid-friendly DTOs for paging, auth, topology, metrics, and RPC.
-- `canic_core::ids` – typed identifiers (`CanisterRole`, `TreeSpecId`, `TreeGroupId`,
-  `TreeId`, etc.).
+- `canic_core::ids` – typed identifiers (`CanisterRole`, `ComponentSpecId`,
+  `ComponentInstanceId`, etc.).
 - `canic_core::log` / `canic_core::perf` – logging and perf instrumentation helpers.
 - `canic_core::protocol` – protocol constants and runtime service identifiers.
 

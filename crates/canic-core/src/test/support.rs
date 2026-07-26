@@ -8,7 +8,7 @@ use crate::{
         DiagnosticsCanisterConfig, MetricsCanisterConfig, ShardPool, ShardPoolPolicy,
         ShardingConfig, StandardsCanisterConfig,
     },
-    ids::{CanisterRole, CanonicalNetworkId, FleetId, FleetKey, TreeSpecId},
+    ids::{CanisterRole, CanonicalNetworkId, ComponentSpecId, FleetId, FleetKey},
     ops::runtime::env::EnvOps,
     storage::stable::env::{EnvData, EnvRecord},
     test::config::ConfigTestBuilder,
@@ -26,8 +26,8 @@ pub fn fleet_key(byte: u8) -> FleetKey {
 ///
 /// # Panics
 ///
-/// Panics only if Canic's canonical `"default"` Tree Spec identifier stops
-/// satisfying `TreeSpecId` admission.
+/// Panics only if Canic's canonical `"default"` Component Spec identifier stops
+/// satisfying `ComponentSpecId` admission.
 pub fn init_sharding_test_config() {
     let mut sharding = ShardingConfig::default();
     sharding.pools.insert(
@@ -97,7 +97,7 @@ pub fn init_sharding_test_config() {
     let root_pid = Principal::from_slice(&[1; 29]);
     import_test_env(
         "manager",
-        TreeSpecId::try_from(String::from("default")).expect("default Tree Spec ID"),
+        ComponentSpecId::try_from(String::from("default")).expect("default Component Spec ID"),
         root_pid,
     );
 }
@@ -109,12 +109,12 @@ pub fn init_sharding_test_config() {
 /// Panics if the synthetic environment snapshot fails runtime import.
 pub fn import_test_env(
     canister_role: impl Into<CanisterRole>,
-    tree_spec: impl Into<TreeSpecId>,
+    component_spec: impl Into<ComponentSpecId>,
     root_pid: Principal,
 ) {
     let snapshot = EnvRecord {
         canister_role: Some(canister_role.into()),
-        tree_spec: Some(tree_spec.into()),
+        component_spec: Some(component_spec.into()),
         root_pid: Some(root_pid),
         fleet_root_pid: Some(root_pid),
         subnet_pid: Some(root_pid),

@@ -25,8 +25,8 @@ mod tests {
     use crate::{
         dto::topology::{DirectoryEntryInput, DirectoryProvenance},
         ids::{
-            AppId, CanisterRole, CanonicalNetworkId, FleetId, FleetKey, ReleaseBuildNonce,
-            TreeSpecId,
+            AppId, CanisterRole, CanonicalNetworkId, ComponentSpecId, FleetId, FleetKey,
+            ReleaseBuildNonce,
         },
     };
 
@@ -48,8 +48,9 @@ mod tests {
             release_build_id,
             env: EnvBootstrapArgs {
                 fleet_root_pid: Some(principal),
-                tree_spec: Some(
-                    TreeSpecId::try_from(String::from("default")).expect("default Tree Spec ID"),
+                component_spec: Some(
+                    ComponentSpecId::try_from(String::from("default"))
+                        .expect("default Component Spec ID"),
                 ),
                 subnet_pid: Some(principal),
                 root_pid: Some(principal),

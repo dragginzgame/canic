@@ -29,16 +29,11 @@ package = "api"
 kind = "canister"
 package = "store"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 
-[tree_specs.default.canisters.api]
-kind = "service"
+[component_specs.api]
+component_role = "api"
+maximum_instances = 1
 "#;
 
 const BROWNFIELD_CONFIG: &str = r#"
@@ -50,13 +45,7 @@ name = "demo"
 kind = "root"
 package = "root"
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 "#;
 
 const STANDALONE_CONFIG: &str = r#"
@@ -82,16 +71,11 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[tree_specs.default.canisters.app]
-kind = "service"
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
 
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
 
-[tree_specs.default.canisters.root]
-kind = "root"
 "#;
 
 fn report(

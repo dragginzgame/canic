@@ -147,12 +147,9 @@ fn scaffold_project_writes_root_and_app_files() {
     assert!(config.contains("[roles.root]"));
     assert!(config.contains("[roles.app]"));
     assert!(!config.contains("auto_create"));
-    assert!(config.contains("[tree_groups.default]"));
-    assert!(config.contains("tree_spec = \"default\""));
-    assert!(config.contains("initial_trees = 1"));
-    assert!(config.contains("maximum_trees = 1"));
-    assert!(config.contains("[tree_specs.default.canisters.root]"));
-    assert!(config.contains("[tree_specs.default.canisters.app]"));
+    assert!(config.contains("[component_specs.app]"));
+    assert!(config.contains("component_role = \"app\""));
+    assert!(config.contains("maximum_instances = 1"));
     assert!(!config.contains("topup_policy"));
     assert!(!config.contains("[[canisters]]"));
     assert!(root_manifest.contains("version = \"0.1.0\""));
@@ -229,7 +226,7 @@ fn scaffold_canister_writes_declared_only_role_files() {
     assert_eq!(result.config_path, PathBuf::from("apps/demo/canic.toml"));
     assert!(config.contains("[roles.\"store\"]"));
     assert!(config.contains("package = \"store\""));
-    assert!(!config.contains("[tree_specs.default.canisters.store]"));
+    assert!(!config.contains("[component_specs.store]"));
     assert!(workspace_manifest.contains("\"apps/demo/store\""));
     assert!(manifest.contains("name = \"canister_demo_store\""));
     assert!(manifest.contains("app = \"demo\""));

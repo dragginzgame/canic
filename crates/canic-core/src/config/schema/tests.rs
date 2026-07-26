@@ -6,7 +6,7 @@
 
 use super::*;
 use crate::{cdk::types::Cycles, domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW};
-use std::{collections::BTreeMap, fmt::Write as _, fs, path::PathBuf};
+use std::{fmt::Write as _, fs, path::PathBuf};
 
 fn hex(bytes: impl AsRef<[u8]>) -> String {
     let bytes = bytes.as_ref();
@@ -25,24 +25,21 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
-fn tree_spec_id(value: &str) -> TreeSpecId {
-    value.parse().expect("valid Tree Spec ID")
+fn component_spec_id(value: &str) -> ComponentSpecId {
+    value.parse().expect("valid Component Spec ID")
 }
 
-fn tree_group_id(value: &str) -> TreeGroupId {
-    value.parse().expect("valid Tree Group ID")
+fn default_component_spec_id() -> ComponentSpecId {
+    component_spec_id("default")
 }
 
-fn default_tree_spec_id() -> TreeSpecId {
-    tree_spec_id("default")
-}
-
-fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
-    CanisterConfig {
-        kind,
+fn component_spec_config(role: &str, maximum_instances: u32) -> ComponentSpecConfig {
+    ComponentSpecConfig {
+        component_role: CanisterRole::owned(role.to_string()),
+        maximum_instances,
+        limits: ComponentLimitsConfig::default(),
         initial_cycles: Cycles::new(0),
         topup: None,
-        icp_refill: None,
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
@@ -51,20 +48,20 @@ fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
+        children: Default::default(),
     }
 }
 
 #[test]
-fn root_canister_must_exist_in_each_tree_spec() {
+fn component_role_must_be_admitted() {
     let mut cfg = ConfigModel::test_default();
-    cfg.tree_specs
-        .get_mut(&default_tree_spec_id())
-        .expect("default Tree Spec")
-        .canisters
-        .clear();
+    cfg.component_specs
+        .get_mut(&default_component_spec_id())
+        .expect("default Component Spec")
+        .component_role = CanisterRole::from("Invalid");
 
     cfg.validate()
-        .expect_err("expected missing root canister to fail validation");
+        .expect_err("invalid Component role should fail validation");
 }
 
 #[test]
@@ -284,14 +281,10 @@ fn checked_in_active_configs_parse_and_validate() {
 #[test]
 fn topology_roles_must_be_declared() {
     let mut cfg = ConfigModel::test_default();
-    cfg.tree_specs
-        .get_mut(&default_tree_spec_id())
+    cfg.component_specs
+        .get_mut(&default_component_spec_id())
         .unwrap()
-        .canisters
-        .insert(
-            CanisterRole::from("app"),
-            base_canister_config(CanisterKind::Singleton),
-        );
+        .component_role = CanisterRole::from("missing");
 
     cfg.validate()
         .expect_err("topology role should need declaration");
@@ -342,8 +335,7 @@ fn role_declaration_package_paths_must_not_be_empty() {
 #[test]
 fn topology_less_config_may_declare_only_non_root_roles() {
     let mut cfg = ConfigModel::test_default();
-    cfg.tree_specs.clear();
-    cfg.tree_groups.clear();
+    cfg.component_specs.clear();
     cfg.roles.remove(&CanisterRole::ROOT);
     cfg.roles.insert(
         CanisterRole::from("store"),
@@ -361,10 +353,9 @@ fn topology_less_config_may_declare_only_non_root_roles() {
 }
 
 #[test]
-fn topology_less_config_rejects_root() {
+fn topology_less_config_may_declare_root_infrastructure() {
     let mut root_cfg = ConfigModel::test_default();
-    root_cfg.tree_specs.clear();
-    root_cfg.tree_groups.clear();
+    root_cfg.component_specs.clear();
     root_cfg.roles.insert(
         CanisterRole::ROOT,
         RoleDeclaration {
@@ -373,100 +364,138 @@ fn topology_less_config_rejects_root() {
         },
     );
 
-    let root_err = root_cfg
+    root_cfg
         .validate()
-        .expect_err("topology-less root declaration should fail");
+        .expect("Fleet Subnet Root infrastructure sits outside Component Specs");
+}
+
+#[test]
+fn component_spec_instance_ceilings_are_fleet_bounded() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.component_specs
+        .get_mut(&default_component_spec_id())
+        .expect("default Component Spec")
+        .maximum_instances = 3_000;
+    cfg.roles.insert(
+        CanisterRole::from("aux"),
+        RoleDeclaration {
+            kind: RoleDeclarationKind::Canister,
+            package: "aux".to_string(),
+        },
+    );
+    cfg.component_specs.insert(
+        component_spec_id("aux"),
+        component_spec_config("aux", 3_000),
+    );
+    cfg.validate()
+        .expect_err("Fleet maximum Component-instance bound must reject");
+}
+
+#[test]
+fn component_roles_cannot_occur_in_multiple_component_specs() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.component_specs
+        .insert(component_spec_id("other"), component_spec_config("app", 1));
+
+    cfg.validate()
+        .expect_err("one Component role cannot belong to multiple Component Specs");
+}
+
+#[test]
+fn direct_child_roles_may_be_reused_across_component_specs() {
+    let mut cfg = ConfigModel::test_default();
+    let shared_role = CanisterRole::from("shared_worker");
+    let shared_child = ComponentChildConfig {
+        kind: ComponentChildKind::Replica,
+        maximum_instances: 4,
+        initial_cycles: Cycles::new(0),
+        topup: None,
+        cycles_funding: CyclesFundingPolicyConfig::default(),
+        auth: CanisterAuthConfig::default(),
+        standards: StandardsCanisterConfig::default(),
+        diagnostics: DiagnosticsCanisterConfig::default(),
+        metrics: MetricsCanisterConfig::default(),
+    };
+    cfg.component_specs
+        .get_mut(&default_component_spec_id())
+        .expect("default Component Spec")
+        .children
+        .insert(shared_role.clone(), shared_child.clone());
+    let mut other = component_spec_config("aux", 1);
+    other.children.insert(shared_role.clone(), shared_child);
+    cfg.component_specs
+        .insert(component_spec_id("other"), other);
+    for role in ["aux", "shared_worker"] {
+        cfg.roles.insert(
+            CanisterRole::from(role),
+            RoleDeclaration {
+                kind: RoleDeclarationKind::Canister,
+                package: role.to_string(),
+            },
+        );
+    }
+
+    cfg.validate()
+        .expect("one declared child artifact may belong to several Specs");
     assert!(
-        root_err
-            .to_string()
-            .contains("topology-less configs cannot declare role 'root'"),
-        "expected root error, got: {root_err}"
+        cfg.component_spec_for_role(&shared_role).is_none(),
+        "role-only lookup must not choose between owning Specs"
     );
 }
 
 #[test]
-fn tree_specs_and_tree_groups_are_both_required() {
+fn a_component_role_cannot_also_be_a_child_role() {
     let mut cfg = ConfigModel::test_default();
-    cfg.tree_groups.clear();
-    cfg.validate()
-        .expect_err("Tree Specs without a Tree Group must reject");
-
-    let mut cfg = ConfigModel::test_default();
-    cfg.tree_specs.clear();
-    cfg.validate()
-        .expect_err("Tree Groups without a Tree Spec must reject");
-}
-
-#[test]
-fn tree_group_must_reference_an_existing_tree_spec() {
-    let mut cfg = ConfigModel::test_default();
-    cfg.tree_groups
-        .get_mut(&tree_group_id("default"))
-        .expect("default Tree Group")
-        .tree_spec = tree_spec_id("missing");
-
-    cfg.validate()
-        .expect_err("unknown Tree Spec reference must reject");
-}
-
-#[test]
-fn tree_group_counts_are_positive_ordered_and_fleet_bounded() {
-    let mut cfg = ConfigModel::test_default();
-    let group = cfg
-        .tree_groups
-        .get_mut(&tree_group_id("default"))
-        .expect("default Tree Group");
-    group.initial_trees = 0;
-    cfg.validate().expect_err("zero initial Trees must reject");
-
-    let mut cfg = ConfigModel::test_default();
-    let group = cfg
-        .tree_groups
-        .get_mut(&tree_group_id("default"))
-        .expect("default Tree Group");
-    group.initial_trees = 2;
-    group.maximum_trees = 1;
-    cfg.validate()
-        .expect_err("initial Trees above maximum must reject");
-
-    let mut cfg = ConfigModel::test_default();
-    cfg.tree_groups
-        .get_mut(&tree_group_id("default"))
-        .expect("default Tree Group")
-        .maximum_trees = 3_000;
-    cfg.tree_groups.insert(
-        tree_group_id("secondary"),
-        TreeGroupConfig {
-            tree_spec: default_tree_spec_id(),
-            initial_trees: 1,
-            maximum_trees: 3_000,
+    let mut other = component_spec_config("aux", 1);
+    other.children.insert(
+        CanisterRole::from("app"),
+        ComponentChildConfig {
+            kind: ComponentChildKind::Singleton,
+            maximum_instances: 1,
+            initial_cycles: Cycles::new(0),
+            topup: None,
+            cycles_funding: CyclesFundingPolicyConfig::default(),
+            auth: CanisterAuthConfig::default(),
+            standards: StandardsCanisterConfig::default(),
+            diagnostics: DiagnosticsCanisterConfig::default(),
+            metrics: MetricsCanisterConfig::default(),
         },
     );
+    cfg.roles.insert(
+        CanisterRole::from("aux"),
+        RoleDeclaration {
+            kind: RoleDeclarationKind::Canister,
+            package: "aux".to_string(),
+        },
+    );
+    cfg.component_specs
+        .insert(component_spec_id("other"), other);
+
     cfg.validate()
-        .expect_err("Fleet maximum Tree bound must reject");
+        .expect_err("a Component role cannot also be a direct child");
 }
 
 #[test]
-fn attached_app_roles_include_role_bearing_pool_targets() {
+fn attached_app_roles_follow_structural_component_and_child_ownership() {
     let mut cfg = ConfigModel::test_default();
-    let mut hub = base_canister_config(CanisterKind::Service);
-    let mut sharding = ShardingConfig::default();
-    sharding.pools.insert(
-        "users".to_string(),
-        ShardPool {
-            canister_role: CanisterRole::from("user_shard"),
-            policy: ShardPoolPolicy::default(),
-        },
-    );
-    hub.sharding = Some(sharding);
-
-    let default_tree_spec = cfg.tree_specs.get_mut(&default_tree_spec_id()).unwrap();
-    default_tree_spec
-        .canisters
-        .insert(CanisterRole::from("user_hub"), hub);
-    default_tree_spec.canisters.insert(
+    let default_component_spec = cfg
+        .component_specs
+        .get_mut(&default_component_spec_id())
+        .unwrap();
+    default_component_spec.component_role = CanisterRole::from("user_hub");
+    default_component_spec.children.insert(
         CanisterRole::from("user_shard"),
-        base_canister_config(CanisterKind::Shard),
+        ComponentChildConfig {
+            kind: ComponentChildKind::Shard,
+            maximum_instances: 4,
+            initial_cycles: Cycles::new(0),
+            topup: None,
+            cycles_funding: CyclesFundingPolicyConfig::default(),
+            auth: CanisterAuthConfig::default(),
+            standards: StandardsCanisterConfig::default(),
+            diagnostics: DiagnosticsCanisterConfig::default(),
+            metrics: MetricsCanisterConfig::default(),
+        },
     );
     cfg.roles.insert(
         CanisterRole::from("user_hub"),
@@ -486,6 +515,8 @@ fn attached_app_roles_include_role_bearing_pool_targets() {
     cfg.validate().expect("config should validate");
     let attached = cfg.attached_app_roles();
 
+    assert!(!cfg.attached_roles().contains(&CanisterRole::ROOT));
+    assert!(cfg.deployable_roles().contains(&CanisterRole::ROOT));
     assert!(
         attached
             .iter()
@@ -499,51 +530,33 @@ fn attached_app_roles_include_role_bearing_pool_targets() {
 }
 
 #[test]
-fn root_canister_must_be_kind_root() {
+fn component_role_cannot_be_root() {
     let mut cfg = ConfigModel::test_default();
-    let mut canisters = BTreeMap::new();
-
-    canisters.insert(
-        CanisterRole::ROOT,
-        base_canister_config(CanisterKind::Singleton),
-    );
-
-    cfg.tree_specs
-        .get_mut(&default_tree_spec_id())
+    cfg.component_specs
+        .get_mut(&default_component_spec_id())
         .unwrap()
-        .canisters = canisters;
+        .component_role = CanisterRole::ROOT;
 
-    cfg.validate().expect_err("expected non-root kind to fail");
+    cfg.validate()
+        .expect_err("Fleet Subnet Root cannot be a Component");
 }
 
 #[test]
-fn every_tree_spec_may_have_its_own_root() {
+fn several_component_specs_may_define_distinct_components() {
     let mut cfg = ConfigModel::test_default();
+    cfg.roles.insert(
+        CanisterRole::from("aux"),
+        RoleDeclaration {
+            kind: RoleDeclarationKind::Canister,
+            package: "aux".to_string(),
+        },
+    );
 
-    cfg.tree_specs.insert(
-        "aux"
-            .parse::<TreeSpecId>()
-            .expect("valid auxiliary Tree Spec ID"),
-        TreeSpecConfig {
-            canisters: {
-                let mut m = BTreeMap::new();
-                m.insert(CanisterRole::ROOT, base_canister_config(CanisterKind::Root));
-                m
-            },
-            ..Default::default()
-        },
-    );
-    cfg.tree_groups.insert(
-        tree_group_id("aux"),
-        TreeGroupConfig {
-            tree_spec: tree_spec_id("aux"),
-            initial_trees: 1,
-            maximum_trees: 2,
-        },
-    );
+    cfg.component_specs
+        .insert(component_spec_id("aux"), component_spec_config("aux", 2));
 
     cfg.validate()
-        .expect("one root in each Tree Spec should validate");
+        .expect("distinct flat Component Specs should validate");
 }
 
 #[test]

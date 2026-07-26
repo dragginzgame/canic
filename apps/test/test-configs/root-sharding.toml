@@ -42,37 +42,29 @@ max_revocation_latency_ns = 60000000000
 [standards]
 icrc21 = true
 
-[tree_specs.default]
-pool.minimum_size = 3
-
-[tree_groups.default]
-tree_spec = "default"
-initial_trees = 1
-maximum_trees = 1
-
-[tree_specs.default.canisters.root]
-kind = "root"
-
-[tree_specs.default.canisters.user_hub]
-kind = "service"
+[component_specs.users]
+component_role = "user_hub"
+maximum_instances = 1
 topup = {}
 
-[tree_specs.default.canisters.user_hub.sharding.pools.user_shards]
+[component_specs.users.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
 policy.max_shards = 4
 
-[tree_specs.default.canisters.user_shard]
+[component_specs.users.children.user_shard]
 kind = "shard"
+maximum_instances = 4
 topup = {}
 
-[tree_specs.default.canisters.user_shard.auth]
+[component_specs.users.children.user_shard.auth]
 delegated_token_issuer = true
 role_attestation_cache = true
 
-[tree_specs.default.canisters.test]
-kind = "service"
+[component_specs.test]
+component_role = "test"
+maximum_instances = 1
 
-[tree_specs.default.canisters.test.auth]
+[component_specs.test.auth]
 delegated_token_verifier = true
 role_attestation_cache = true

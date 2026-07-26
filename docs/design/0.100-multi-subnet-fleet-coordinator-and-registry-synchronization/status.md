@@ -1,87 +1,164 @@
 # Canic 0.100 Implementation Status
 
-## Status
+Date: 2026-07-26
 
 - State: implementation in progress.
 - Release boundary: reinstall only.
-- Implementation started: yes; foundational identities are released in
+- Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
 - Workspace package version: `0.100.0`.
 - Open patch draft: `0.100.1`; no package-version change has been authorized.
 - Open design blockers: none.
 
-The working tree may contain staged 0.99 and 0.100 terminology while a coherent
-hard-cut batch is being built. A releasable 0.100 surface may not contain an
-alias, decoder or fallback for the removed topology model.
+The 2026-07-26 design amendment removes the proposed Tree layer. The target is
+exactly one Fleet Subnet Root per occupied `(FleetKey, SubnetId)`, with each
+root managing a flat collection of Component instances. A Component Spec
+declares one direct Component role and its direct children. A concrete
+Component receives a root-allocated `ComponentInstanceId` only when its
+Canister is created.
 
-## Slice 1 — Freeze Current Authorities
+Different Fleets may each own an independent Fleet Subnet Root on the same
+physical Subnet. Root uniqueness, authority, admissions, Stores and limits
+remain Fleet-scoped.
 
-- [x] Freeze distinct bounded `TreeSpecId` and `TreeGroupId` declaration
-  identities.
-- [x] Freeze generated 32-byte `TreeId` and its canonical boundary encoding.
+The amendment separates immutable Component Topology, root-local Component
+admissions, each root's active release set and the root-local Wasm Store
+Catalog. The host builds one qualified Component/Component-Child artifact
+union per `ReleaseBuildId` and projects an exact release-set manifest for each
+root.
+
+The open 0.100.1 batch has removed the staged Tree declaration layer from
+source, generated bootstrap, host/CLI projections, scaffolding, fixtures and
+active guidance. It retains no Tree identity or compatibility alias. Runtime
+authority is still transitional until the later binding, admission and
+Registry slices replace the 0.99 root model.
+
+## Slice 1 — Freeze Current Authorities and Component Topology
+
 - [x] Record the complete live Registry, Directory, cascade, lifecycle,
   bootstrap and role-package
   [authority inventory](0.100-authority-inventory.md).
-- [x] Hard-cut App configuration, compiled bootstrap input, host projections,
-  CLI mutation and active fixtures from `SubnetSlotId`, `[subnets.*]` and
-  `[services.fleet]` to Tree Specs and Tree Groups.
-- [ ] Replace the temporary environment `TreeSpecId` selector with protected
-  `TreeBinding`, concrete `TreeId`, Tree Root and physical `SubnetId`.
-- [ ] Hard-cut Fleet Root to Tree Root.
-- [ ] Hard-cut local `SubnetRegistry` and `SubnetDirectory` to `TreeRegistry`
-  and `TreeDirectory`.
-- [ ] Split Fleet and Tree Directory provenance.
-- [ ] Freeze `SubnetId`, Coordinator authority and protected `TreeBinding`.
-- [ ] Prove no 0.99 transition reader or decoder exists.
+- [x] Record the intermediate Tree declaration implementation and its bounded
+  validation.
+- [x] Remove `TreeSpecId`, `TreeGroupId`, `TreeId` and their public exports.
+- [x] Replace `[tree_specs.*]` and `[tree_groups.*]` with non-recursive
+  `[component_specs.*]`.
+- [x] Replace `canic app role attach --tree-spec` with
+  `--component-spec <component-spec>` and no alias.
+- [x] Require exactly one Component role and a direct child set per Component
+  Spec.
+- [x] Enforce positive Spec maxima and the 4,096-Component-instance Fleet
+  bound.
+- [x] Reject `root`, `service` and `component` kinds, `owner_component`,
+  nested Components and child-owned children.
+- [x] Add `ComponentSpecId` and the canonical `ComponentInstanceId` type.
+- [x] Derive and freeze the canonical bounded Component Topology.
+- [ ] Replace the temporary environment Component Spec selector with protected
+  `ComponentBinding`.
+- [x] Freeze `SubnetId`, Coordinator authority, `FleetSubnetRootBinding`,
+  Component admissions, root limits and protected Component/child bindings.
+- [ ] Hard-cut Fleet Root to Fleet Subnet Root.
+- [ ] Hard-cut local `SubnetRegistry` and `SubnetDirectory` to root-owned
+  per-Component `ComponentRegistry` and `ComponentDirectory`.
+- [ ] Split Fleet and Component Directory provenance.
+- [ ] Prove no prior-release transition reader or decoder exists.
 
-## Slice 2 — Fresh Coordinator Installation
+## Slice 2 — Topology-Admitted Artifacts and Fresh Root Installation
 
-- [x] Parse, validate and embed bounded Tree Specs and Tree Groups.
-- [ ] Canonicalize each Tree Spec and freeze its binding hash.
-- [ ] Resolve and journal independent Coordinator and initial Tree placement.
+- [x] Revise config/bootstrap/host projections to Component Specs.
+- [x] Canonicalize every Component Spec and freeze its topology hash.
+- [x] Distribute positive per-root Component Spec admissions whose sum does
+  not exceed the Fleet ceiling.
+- [ ] Build the exact qualified artifact union once under one release-build
+  identity.
+- [ ] Construct and freeze one exact Fleet Subnet Root Release-Set Manifest
+  per root.
+- [ ] Resolve and journal independent Coordinator and Fleet Subnet Root
+  placements plus configured limits.
 - [ ] Freeze exact creation funding before each external effect.
 - [ ] Install the Coordinator from empty state.
+- [ ] Install each root and bootstrap its local topology-admitted Wasm Store.
 - [ ] Commit the genesis Fleet Registry.
 
-## Slice 3 — Fleet Registry and Tree Lifecycle
+## Slice 3 — Fleet Registry and Root Lifecycle
 
-- [ ] Implement canonical snapshot commits.
-- [ ] Implement `Joining`, `Active`, `Draining` and `Removed`.
-- [ ] Install initial Tree Roots behind the runtime `Prepared` fence.
-- [ ] Enforce group capacity, identity and tombstone rules.
+- [ ] Implement canonical snapshot commits with Fleet Component Spec and root
+  rows.
+- [ ] Enforce one Fleet Subnet Root per occupied `(FleetKey, SubnetId)`.
+- [ ] Prove another Fleet may independently use the same physical Subnet.
+- [ ] Implement root `Joining`, `Active`, `Draining` and `Removed`.
+- [ ] Install initial roots behind the runtime `Prepared` fence.
+- [ ] Enforce Spec, admission, root, topology, limits, active-release-set and
+  tombstone rules.
 
-## Slice 4 — Fleet Registry Mirror and Directories
+## Slice 4 — Component Lifecycle, Mirrors and Directories
 
-- [ ] Implement bounded snapshot synchronization.
+- [ ] Implement durable root-local `ComponentInstanceId` allocation.
+- [ ] Implement admitted direct Component creation through the root.
+- [ ] Implement authenticated Component-to-root Component Child effects.
+- [ ] Make the Fleet Subnet Root the required lifecycle controller and retain
+  authoritative idempotent receipts.
+- [ ] Resolve lifecycle artifacts only through the active release set.
+- [ ] Implement bounded Fleet snapshot synchronization once per root.
 - [ ] Atomically activate the Fleet Registry Mirror and Fleet Directory.
-- [ ] Derive and cascade the separate Tree Directory.
-- [ ] Expose bounded consumer topology.
+- [ ] Store logical Component Registries in one bounded root-local collection
+  with independent per-Component heads.
+- [ ] Derive ownership-preserving Component Directories.
+- [ ] Distribute Directories directly from the root to Components and
+  Component Children.
 
 ## Slice 5 — Recovery and Closeout
 
 - [ ] Qualify interruption and exact retry.
-- [ ] Activate initial runtimes only after final topology synchronization.
+- [ ] Prove one Component operation cannot block an unrelated Component.
+- [ ] Activate initial roots only after active-release-set Store and final
+  topology synchronization.
 - [ ] Publish the Fleet catalog only after complete terminal evidence.
 - [ ] Qualify restore fencing and role-package boundaries.
 - [ ] Measure Wasm boundaries and remove stale authority.
-- [ ] Complete the 0.100 design criteria and current-surface terminology scan.
 
 ## Current Batch
 
-The open 0.100.1 batch hard-cuts the App configuration language to
-`[tree_specs.*]` and `[tree_groups.*]`. Every Spec has one root, group counts
-are positive and ordered, and total declared capacity is bounded at 4,096
-Trees. Compiled bootstrap config, active fixtures, host projections,
-scaffolding and `canic app role attach --tree-spec` use the same surface.
+The open 0.100.1 implementation now parses only flat
+`[component_specs.*]`, compiles all Component roles and direct children into
+bootstrap input, builds their union through host projections and exposes
+`--component-spec` attachment with no old flag. Root is implicit
+infrastructure outside Specs. Component roles are globally unique; the same
+declared child artifact may occur on several structural edges without a
+role-only lookup choosing an owner.
 
-The existing installer still supports only one initial Tree and now fails
-closed for a larger declaration. This is an explicit staging boundary:
-Coordinator installation, concrete Tree identity, placement and Registry
-authority are not implemented by this batch.
+This batch defines but does not yet allocate durable `ComponentInstanceId`
+values. It now compiles each validated config into a bounded canonical
+Component Topology, freezes domain-separated golden Spec hashes and root-local
+topology digests, and exposes strong `SubnetId`, Coordinator/root authority,
+root limits, admission and Component/child binding contracts. Component
+aggregate child, Registry-byte and cycles-funding limits compile from finite
+config defaults or exact overrides.
+
+The host topology planner accepts resolved root principals, physical Subnets,
+limits and positive per-Spec capacities, then derives hashes/digests itself.
+It canonicalizes root/admission order, enforces App/Fleet binding, complete
+Fleet admission coverage and one root per Fleet/Subnet pair, while independent
+Fleets may reuse one physical Subnet. Root bootstrap and managed release-role
+projection now consume compiled topology instead of raw Component Spec
+configuration.
+
+The current installer does not yet journal or install those planned root
+bindings. Coordinator installation, protected environment binding, Fleet
+Subnet Root lifecycle, exact root release-set/Wasm Store authority and Fleet
+Registry authority remain unimplemented. A root therefore has no fabricated
+"current Spec"; the existing role-only child-provisioning path remains
+intentionally non-releasable until real allocation supplies the exact
+protected Component binding.
 
 ## Next Action
 
-Freeze `SubnetId`, `FleetCoordinatorBinding` and protected `TreeBinding`, then
-hard-cut Fleet Root and the remaining environment contract to distinct
-Coordinator and Tree Root authority. Do not let the temporary Tree Spec
-selector become runtime identity.
+Build the qualified artifact union once and project exact root-specific
+release-set manifests from the now-validated root admissions. Freeze resolved
+Coordinator/root placement and funding in the installation journal, install
+the Coordinator and roots from those exact bindings, and commit the genesis
+Fleet Registry.
+
+Replace the temporary Component Spec environment selector only when root-local
+allocation and Component Registry commitment can supply a real
+`ComponentBinding`; do not fabricate one from role-only configuration.

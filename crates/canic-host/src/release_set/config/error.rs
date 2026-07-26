@@ -62,17 +62,17 @@ impl Display for AppConfigIoOperation {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AppConfigNameField {
+    ComponentSpec,
     Package,
     Role,
-    TreeSpec,
 }
 
 impl Display for AppConfigNameField {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
+            Self::ComponentSpec => "Component Spec",
             Self::Package => "package",
             Self::Role => "role",
-            Self::TreeSpec => "Tree Spec",
         })
     }
 }
@@ -239,13 +239,8 @@ pub enum AppConfigError {
     #[error("selected config declares App {actual:?}, not {expected:?}")]
     AppMismatch { actual: String, expected: String },
 
-    #[error("kind must be one of: service, singleton, shard, replica, instance")]
+    #[error("kind must be one of: singleton, shard, replica, instance")]
     InvalidKind { kind: String },
-
-    #[error(
-        "current root installation requires exactly one initial Tree; configuration declares {initial_trees}"
-    )]
-    UnsupportedInitialTreeTopology { initial_trees: u32 },
 
     #[error("{field} {issue}")]
     InvalidName {
