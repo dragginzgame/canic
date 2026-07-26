@@ -104,7 +104,10 @@ pub(super) fn activate_managed_fleet(
     let prepared: Result<FleetActivationStatusResponse, Error> = pic
         .update_call(root_id, protocol::CANIC_PREPARE_FLEET_ACTIVATION, ())
         .expect("Fleet activation preparation transport");
-    let prepared = prepared.expect("Fleet activation preparation application");
+    let prepared = prepared.unwrap_or_else(|error| {
+        pic.dump_canister_debug(root_id, "Fleet activation preparation application");
+        panic!("Fleet activation preparation application: {error:?}");
+    });
     assert_eq!(prepared.phase, FleetActivationPhase::Prepared);
     let credential = prepared
         .credential
