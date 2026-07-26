@@ -8,7 +8,10 @@ mod persistence;
 #[cfg(test)]
 mod tests;
 
-use crate::release_set::{GZIP_MAGIC, WASM_MAGIC, validate_release_artifact_relative_path};
+use crate::{
+    component_topology::PlannedFleetSubnetRootTopology,
+    release_set::{GZIP_MAGIC, WASM_MAGIC, validate_release_artifact_relative_path},
+};
 use std::{
     collections::{BTreeMap, BTreeSet},
     io::Read,
@@ -305,13 +308,44 @@ impl FleetSubnetRootReleaseSetManifest {
         binding: &FleetSubnetRootBinding,
         union: &ApplicationArtifactUnion,
     ) -> Result<Self, ApplicationReleaseSetError> {
+        Self::project_for_root(
+            topology,
+            &binding.component_admissions,
+            binding.component_topology_digest,
+            binding.limits.maximum_wasm_store_bytes,
+            union,
+        )
+    }
+
+    /// Project one pre-creation root plan without fabricating a root principal.
+    pub fn project_planned(
+        topology: &ComponentTopology,
+        root: &PlannedFleetSubnetRootTopology,
+        union: &ApplicationArtifactUnion,
+    ) -> Result<Self, ApplicationReleaseSetError> {
+        Self::project_for_root(
+            topology,
+            &root.component_admissions,
+            root.component_topology_digest,
+            root.limits.maximum_wasm_store_bytes,
+            union,
+        )
+    }
+
+    fn project_for_root(
+        topology: &ComponentTopology,
+        component_admissions: &[canic_core::ids::ComponentSpecAdmission],
+        component_topology_digest: ComponentTopologyDigest,
+        maximum_wasm_store_bytes: u64,
+        union: &ApplicationArtifactUnion,
+    ) -> Result<Self, ApplicationReleaseSetError> {
         union.validate_against(topology)?;
-        let projected = topology.project_for_admissions(&binding.component_admissions)?;
+        let projected = topology.project_for_admissions(component_admissions)?;
         let digest = projected.digest()?;
-        if digest != binding.component_topology_digest {
+        if digest != component_topology_digest {
             return Err(ApplicationReleaseSetError::RootTopologyDigestMismatch {
                 expected: digest,
-                actual: binding.component_topology_digest,
+                actual: component_topology_digest,
             });
         }
 
@@ -338,7 +372,13 @@ impl FleetSubnetRootReleaseSetManifest {
             component_topology_digest: digest,
             entries,
         };
-        manifest.validate_against(topology, binding, union)?;
+        manifest.validate_for_root(
+            topology,
+            component_admissions,
+            component_topology_digest,
+            maximum_wasm_store_bytes,
+            union,
+        )?;
         Ok(manifest)
     }
 
@@ -349,6 +389,39 @@ impl FleetSubnetRootReleaseSetManifest {
         binding: &FleetSubnetRootBinding,
         union: &ApplicationArtifactUnion,
     ) -> Result<(), ApplicationReleaseSetError> {
+        self.validate_for_root(
+            topology,
+            &binding.component_admissions,
+            binding.component_topology_digest,
+            binding.limits.maximum_wasm_store_bytes,
+            union,
+        )
+    }
+
+    /// Validate this manifest against one exact pre-creation root plan.
+    pub fn validate_against_planned(
+        &self,
+        topology: &ComponentTopology,
+        root: &PlannedFleetSubnetRootTopology,
+        union: &ApplicationArtifactUnion,
+    ) -> Result<(), ApplicationReleaseSetError> {
+        self.validate_for_root(
+            topology,
+            &root.component_admissions,
+            root.component_topology_digest,
+            root.limits.maximum_wasm_store_bytes,
+            union,
+        )
+    }
+
+    fn validate_for_root(
+        &self,
+        topology: &ComponentTopology,
+        component_admissions: &[canic_core::ids::ComponentSpecAdmission],
+        component_topology_digest: ComponentTopologyDigest,
+        maximum_wasm_store_bytes: u64,
+        union: &ApplicationArtifactUnion,
+    ) -> Result<(), ApplicationReleaseSetError> {
         union.validate_against(topology)?;
         if self.release_build_id != union.release_build_id {
             return Err(ApplicationReleaseSetError::ManifestBuildMismatch {
@@ -357,12 +430,12 @@ impl FleetSubnetRootReleaseSetManifest {
             });
         }
 
-        let projected = topology.project_for_admissions(&binding.component_admissions)?;
+        let projected = topology.project_for_admissions(component_admissions)?;
         let digest = projected.digest()?;
-        if binding.component_topology_digest != digest {
+        if component_topology_digest != digest {
             return Err(ApplicationReleaseSetError::RootTopologyDigestMismatch {
                 expected: digest,
-                actual: binding.component_topology_digest,
+                actual: component_topology_digest,
             });
         }
         if self.component_topology_digest != digest {
@@ -393,9 +466,9 @@ impl FleetSubnetRootReleaseSetManifest {
                 Ok(total)
             }
         })?;
-        if total_bytes > binding.limits.maximum_wasm_store_bytes {
+        if total_bytes > maximum_wasm_store_bytes {
             return Err(ApplicationReleaseSetError::WasmStoreLimitExceeded {
-                maximum_bytes: binding.limits.maximum_wasm_store_bytes,
+                maximum_bytes: maximum_wasm_store_bytes,
                 required_bytes: total_bytes,
             });
         }
@@ -423,6 +496,29 @@ impl FleetSubnetRootReleaseSetManifest {
     ) -> Result<ReleaseSetDigest, ApplicationReleaseSetError> {
         Ok(ReleaseSetDigest::from_bytes(
             Sha256::digest(self.canonical_bytes(topology, binding, union)?).into(),
+        ))
+    }
+
+    /// Encode one pre-creation root plan's fully validated manifest.
+    pub fn canonical_bytes_planned(
+        &self,
+        topology: &ComponentTopology,
+        root: &PlannedFleetSubnetRootTopology,
+        union: &ApplicationArtifactUnion,
+    ) -> Result<Vec<u8>, ApplicationReleaseSetError> {
+        self.validate_against_planned(topology, root, union)?;
+        serde_json::to_vec(self).map_err(ApplicationReleaseSetError::Serialization)
+    }
+
+    /// Hash one pre-creation root plan's exact canonical manifest bytes.
+    pub fn digest_planned(
+        &self,
+        topology: &ComponentTopology,
+        root: &PlannedFleetSubnetRootTopology,
+        union: &ApplicationArtifactUnion,
+    ) -> Result<ReleaseSetDigest, ApplicationReleaseSetError> {
+        Ok(ReleaseSetDigest::from_bytes(
+            Sha256::digest(self.canonical_bytes_planned(topology, root, union)?).into(),
         ))
     }
 }

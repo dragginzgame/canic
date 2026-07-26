@@ -6,6 +6,7 @@
 
 use std::fmt::{self, Display};
 
+use crate::ids::ReleaseBuildId;
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 
@@ -47,6 +48,19 @@ impl Display for ReleaseSetDigest {
     }
 }
 
+///
+/// FleetSubnetRootReleaseSet
+///
+/// Exact release-build and manifest identity admitted for one Fleet Subnet Root.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetSubnetRootReleaseSet {
+    pub release_build_id: ReleaseBuildId,
+    pub manifest_digest: ReleaseSetDigest,
+}
+
 // -----------------------------------------------------------------------------
 // Tests
 // -----------------------------------------------------------------------------
@@ -54,6 +68,7 @@ impl Display for ReleaseSetDigest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ids::ReleaseBuildNonce;
 
     #[test]
     fn digest_has_exact_bytes_text_and_candid_representation() {
@@ -67,6 +82,19 @@ mod tests {
         assert_eq!(
             candid::decode_one::<ReleaseSetDigest>(&bytes).expect("decode Release Set digest"),
             digest
+        );
+
+        let release_set = FleetSubnetRootReleaseSet {
+            release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
+                [7; 32],
+            )),
+            manifest_digest: digest,
+        };
+        let bytes = candid::encode_one(release_set).expect("encode root Release Set identity");
+        assert_eq!(
+            candid::decode_one::<FleetSubnetRootReleaseSet>(&bytes)
+                .expect("decode root Release Set identity"),
+            release_set
         );
     }
 }

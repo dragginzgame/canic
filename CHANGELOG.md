@@ -8,9 +8,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- Amends the 0.100/0.101 target design with bounded non-parent
+  Component Provisioning Grants, required-before-activation children and
+  service-authenticated cross-root Project Instance creation without a
+  Coordinator hot path.
+
 ## [0.100.x] - 2026-07-25 - Multi-Subnet Fleet Coordination
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
+
+- `0.100.6` freezes immutable pre-effect multi-root Fleet installation plans
+  and durably projects every root’s exact release set from finalized
+  topology-qualified application evidence.
 
 - `0.100.5` derives the exact topology-qualified application build from the
   validated install snapshot and immutably publishes its canonical artifact

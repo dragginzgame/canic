@@ -94,6 +94,61 @@ fn root(
     }
 }
 
+fn planned_root(
+    subnet_byte: u8,
+    component_admissions: Vec<RootComponentAdmissionInput>,
+) -> PlannedFleetSubnetRootTopologyInput {
+    PlannedFleetSubnetRootTopologyInput {
+        placement_subnet: SubnetId::from_principal(Principal::from_slice(&[subnet_byte; 29])),
+        component_admissions,
+        limits: limits(),
+    }
+}
+
+#[test]
+fn pre_creation_planner_derives_complete_topology_without_canister_principals() {
+    let plan = plan_initial_fleet_topology(
+        &config(),
+        vec![
+            planned_root(7, vec![admission("users", 2), admission("database", 1)]),
+            planned_root(5, vec![admission("users", 1), admission("database", 1)]),
+        ],
+    )
+    .expect("valid pre-creation topology plan");
+
+    assert_eq!(
+        plan.fleet_subnet_roots
+            .iter()
+            .map(|root| root.placement_subnet)
+            .collect::<Vec<_>>(),
+        vec![
+            SubnetId::from_principal(Principal::from_slice(&[5; 29])),
+            SubnetId::from_principal(Principal::from_slice(&[7; 29])),
+        ]
+    );
+    for root in &plan.fleet_subnet_roots {
+        assert_eq!(
+            root.component_topology_digest,
+            plan.component_topology
+                .project_for_admissions(&root.component_admissions)
+                .expect("project root")
+                .digest()
+                .expect("root topology digest")
+        );
+    }
+
+    std::assert_matches!(
+        plan_initial_fleet_topology(
+            &config(),
+            vec![
+                planned_root(5, vec![admission("database", 1)]),
+                planned_root(5, vec![admission("users", 1)]),
+            ],
+        ),
+        Err(FleetTopologyPlanError::DuplicatePlacementSubnet { .. })
+    );
+}
+
 #[test]
 fn planner_derives_hashes_and_root_digests_from_canonical_config() {
     let plan = plan_fleet_topology(

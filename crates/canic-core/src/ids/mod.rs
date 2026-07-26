@@ -43,5 +43,5 @@ pub use network::{
 pub use release_build::{
     RELEASE_BUILD_ID_ENV, ReleaseBuildId, ReleaseBuildIdParseError, ReleaseBuildNonce,
 };
-pub use release_set::ReleaseSetDigest;
+pub use release_set::{FleetSubnetRootReleaseSet, ReleaseSetDigest};
 pub use subnet::SubnetId;
