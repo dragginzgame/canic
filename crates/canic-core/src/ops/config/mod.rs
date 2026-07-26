@@ -11,7 +11,7 @@ use crate::{
         schema::{
             BindingConfig, CanisterConfig, ComponentSpecConfig, DelegatedTokenConfig,
             FleetInitMode, LogConfig, RoleAttestationConfig, ScalingConfig,
-            implicit_root_canister_config,
+            implicit_root_canister_config, implicit_wasm_store_canister_config,
         },
     },
     ids::{CanisterRole, ComponentSpecId},
@@ -108,10 +108,18 @@ impl ConfigOps {
             .map_err(InternalError::from)
     }
 
-    /// Resolve a role only when one Component Spec structurally contains it.
+    /// Resolve an implicit infrastructure role or a role structurally contained
+    /// by exactly one Component Spec.
     pub fn try_get_canister_by_role(
         canister_role: &CanisterRole,
     ) -> Result<CanisterConfig, InternalError> {
+        if canister_role.is_root() {
+            return Ok(implicit_root_canister_config());
+        }
+        if canister_role.is_wasm_store() {
+            return Ok(implicit_wasm_store_canister_config());
+        }
+
         let config = Config::get()?;
         let mut matches = config.component_specs_for_role(canister_role);
         let (component_spec, component_spec_config) = matches.next().ok_or_else(|| {
@@ -226,5 +234,22 @@ impl ConfigOps {
             max_per_child: policy.max_per_child.to_u128(),
             cooldown_secs: policy.cooldown_secs,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::schema::CanisterKind;
+
+    #[test]
+    fn role_lookup_resolves_implicit_infrastructure_outside_component_topology() {
+        let root =
+            ConfigOps::try_get_canister_by_role(&CanisterRole::ROOT).expect("implicit root config");
+        let wasm_store = ConfigOps::try_get_canister_by_role(&CanisterRole::WASM_STORE)
+            .expect("implicit Wasm Store config");
+
+        assert_eq!(root.kind, CanisterKind::Root);
+        assert_eq!(wasm_store.kind, CanisterKind::Singleton);
     }
 }
