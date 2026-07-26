@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.2`.
-- The latest published release is `v0.100.2` at
-  `353ec86b6e02ed02d5bcb060282f0f4106276533`.
-- The `v0.100.2` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `ad33218ea91995cd0092a09f09e2a44700c01c3c10563d2b1dc29698440c9fdf`.
+- The workspace package version is `0.100.3`.
+- The latest published release is `v0.100.3` at
+  `bf1c118d2ed128284ecd8cd6946991402e847233`.
+- The `v0.100.3` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `221f73e6d2dfaee524a91194677c95898b93d1478eef039273145b15f0d9b034`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -44,7 +44,7 @@ Historical detail is archived at:
   `ReleaseBuildId`, exact package and raw/gzip path, derives byte lengths and
   SHA-256 digests from matching artifact bytes and rejects incomplete,
   duplicate, cross-build or noncanonical evidence.
-- The open `0.100.3` implementation adds exact qualified infrastructure
+- Released `0.100.3` adds exact qualified infrastructure
   build-output evidence and immutably persists canonical manifest bytes under
   `.canic/release-builds/<release-build-id>/`. Loading revalidates manifest,
   canonical-byte and path identity. Exact retry remains idempotent before or
@@ -53,6 +53,14 @@ Historical detail is archived at:
   path now refuses to start without a durable `ReleaseBuildId`. Producing the
   three real infrastructure outputs and invoking this boundary from
   installation remain next.
+- The open `0.100.4` implementation freezes one canonical application
+  artifact union under an exact `ReleaseBuildId` and Fleet-wide Component
+  Topology digest. Its compiler requires complete pre-build target and
+  qualified output role sets and exact package/path agreement. Root-specific
+  release-set manifests preserve every admitted Component Spec and child edge,
+  reject build/topology/projection drift and count byte-identical Store
+  payloads once without collapsing authorization. Complete-build derivation,
+  durable publication and installer consumption remain next.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
