@@ -1,6 +1,6 @@
 controllers = []
 [app]
-name = "project_hub_stub"
+name = "delegation_root_stub"
 
 [roles.root]
 kind = "root"
@@ -31,18 +31,18 @@ valid_from_ns = 0
 accept_until_ns = 4102444800000000000
 max_revocation_latency_ns = 60000000000
 
-[component_specs.default]
+[component_specs.projects]
 component_role = "project_hub"
 maximum_instances = 1
 
-[component_specs.default.auth]
+[component_specs.projects.auth]
 delegated_token_verifier = true
 role_attestation_cache = true
 
-[component_specs.default.binding.pools.projects]
+[component_specs.projects.binding.pools.projects]
 canister_role = "project_instance"
 key_name = "project"
 
-[component_specs.default.children.project_instance]
+[component_specs.projects.children.project_instance]
 kind = "instance"
 maximum_instances = 4096

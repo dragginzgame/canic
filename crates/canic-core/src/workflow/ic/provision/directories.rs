@@ -27,10 +27,9 @@ impl ProvisionWorkflow {
         updated_role: Option<&CanisterRole>,
     ) -> Result<StateSnapshotBuilder, InternalError> {
         let cfg = ConfigOps::get()?;
-        let component_spec = ConfigOps::current_component_spec()?;
         let registry = SubnetRegistryOps::data();
         let allow_incomplete = updated_role.is_some();
-        let component_directory_roles = component_spec.component_directory_roles();
+        let component_directory_roles = ConfigOps::current_subnet_directory_roles()?;
 
         let include_fleet =
             updated_role.is_none_or(|role| cfg.fleet_directory_roles().contains(role));

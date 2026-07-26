@@ -10,7 +10,7 @@ use std::{
 
 use super::super::artifacts::{
     CanicWasmBuildProfile, INTERNAL_TEST_ENDPOINTS_ENV, INTERNAL_TEST_RELEASE_BUILD_ID,
-    build_internal_test_wasm_canisters, build_internal_test_wasm_canisters_with_env,
+    build_internal_test_wasm_canisters_with_env,
 };
 use super::fixture::progress;
 
@@ -89,34 +89,35 @@ fn build_canisters_once(workspace_root: &Path) {
 
     BUILD_ONCE.call_once_force(|_| {
         let target_dir = test_target_dir(workspace_root);
+        let config_path = root_canister_config_path(workspace_root);
+        let canonical_config_env = (
+            canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+            config_path.to_str().expect("config path UTF-8"),
+        );
         progress("building embedded PIC wasm artifacts");
-        build_internal_test_wasm_canisters(
+        build_internal_test_wasm_canisters_with_env(
             workspace_root,
             &target_dir,
             &EMBEDDED_CANISTER_PACKAGES,
             CanicWasmBuildProfile::Fast,
+            &[canonical_config_env],
         );
         progress("building bootstrap wasm_store artifact");
-        build_bootstrap_wasm_store(workspace_root, &target_dir);
+        build_bootstrap_wasm_store(workspace_root, &target_dir, &config_path);
         progress("building PIC root wasm artifact");
         build_internal_test_wasm_canisters_with_env(
             workspace_root,
             &target_dir,
             &[ROOT_CANISTER_PACKAGE],
             CanicWasmBuildProfile::Fast,
-            &[REQUIRE_EMBEDDED_ARTIFACTS_ENV],
+            &[canonical_config_env, REQUIRE_EMBEDDED_ARTIFACTS_ENV],
         );
         progress("finished PIC wasm build");
     });
 }
 
 // Build the root's implicit wasm_store before Cargo runs the root build script.
-fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path) {
-    let config_path = workspace_root
-        .join("canisters")
-        .join("test")
-        .join(ROOT_CANISTER_PACKAGE)
-        .join("canic.toml");
+fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path, config_path: &Path) {
     let cargo = env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
     let output = Command::new(cargo)
         .current_dir(workspace_root)
@@ -155,6 +156,15 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path) {
         "bootstrap wasm_store artifact build failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+// Resolve the one canonical Fleet config used by every managed fixture wasm.
+fn root_canister_config_path(workspace_root: &Path) -> PathBuf {
+    workspace_root
+        .join("canisters")
+        .join("test")
+        .join(ROOT_CANISTER_PACKAGE)
+        .join("canic.toml")
 }
 
 // Read one built fast-profile wasm artifact from an explicit target directory.

@@ -10,6 +10,7 @@ use crate::{
     dto::{abi::v1::CanisterInitPayload, env::EnvBootstrapArgs},
     ids::CanisterRole,
     ops::{
+        config::ConfigOps,
         runtime::env::EnvOps,
         storage::{
             StorageOpsError,
@@ -26,9 +27,16 @@ impl ProvisionWorkflow {
         role: &CanisterRole,
         parent_pid: Principal,
     ) -> Result<CanisterInitPayload, InternalError> {
+        let component_spec = if role.is_wasm_store() {
+            None
+        } else if EnvOps::is_root() {
+            Some(ConfigOps::try_get_component_spec_id_by_role(role)?)
+        } else {
+            Some(EnvOps::component_spec()?)
+        };
         let env = EnvBootstrapArgs {
             fleet_root_pid: Some(EnvOps::fleet_root_pid()?),
-            component_spec: Some(EnvOps::component_spec()?),
+            component_spec,
             subnet_pid: Some(EnvOps::subnet_pid()?),
             root_pid: Some(EnvOps::root_pid()?),
             canister_role: Some(role.clone()),

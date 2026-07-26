@@ -7,9 +7,9 @@ Date: 2026-07-26
 - State: proposed.
 - Release boundary: reinstall only.
 - Implementation started: no.
-- Dependency: completed 0.100 Fleet Subnet Root, Component Spec,
-  root-local Component identity, topology-admitted Wasm Store and Registry
-  architecture.
+- Dependency: completed 0.100 qualified infrastructure, bounded Fleet Cycles
+  Steward, Fleet Subnet Root, Component Spec, root-local Component identity,
+  topology-admitted Wasm Store and Registry architecture.
 - Open design blockers: none. Application-data replication remains a separate
   later design and is not an implementation blocker for 0.101 topology,
   purpose or discovery contracts.
@@ -41,6 +41,12 @@ synchronize application data, choose load-balancer health, scale in, promote a
 Replica or create roots during scale-out. Grouped Components and their roots
 remain fenced from the ordinary 0.100 removal paths while placement or service
 references exist.
+
+Fresh 0.101 installation inherits the 0.100 infrastructure manifest and
+host-installed Coordinator/Steward/root boundary. Every root retains one
+frozen Steward assignment and local Component/child funding authority;
+Component Group placement does not turn the Coordinator into a per-root
+cycles monitor or funding executor.
 
 ## Slice 1 — Composition and Purpose Contracts
 

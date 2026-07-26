@@ -73,7 +73,7 @@ impl SubnetDirectoryOps {
     pub(crate) fn filter_args_for_local_config(
         args: SubnetDirectoryInput,
     ) -> Result<SubnetDirectoryInput, InternalError> {
-        let allowed = ConfigOps::current_component_spec()?.component_directory_roles();
+        let allowed = ConfigOps::current_subnet_directory_roles()?;
         Ok(SubnetDirectoryInput {
             provenance: args.provenance,
             entries: args
@@ -98,12 +98,8 @@ impl SubnetDirectoryOps {
     ) -> Result<PreparedSubnetDirectoryImport, InternalError> {
         let data = SubnetDirectoryDataMapper::input_to_data(args);
         ensure_unique_roles(&data.entries, "Subnet")?;
-        let component_spec = ConfigOps::current_component_spec()?;
-        ensure_allowed_roles(
-            &data.entries,
-            "Subnet",
-            &component_spec.component_directory_roles(),
-        )?;
+        let allowed = ConfigOps::current_subnet_directory_roles()?;
+        ensure_allowed_roles(&data.entries, "Subnet", &allowed)?;
 
         Ok(PreparedSubnetDirectoryImport(data))
     }
@@ -119,8 +115,7 @@ impl SubnetDirectoryOps {
     /// Import data into stable storage.
     pub fn import(data: SubnetDirectoryData) -> Result<(), InternalError> {
         ensure_unique_roles(&data.entries, "Subnet")?;
-        let component_spec = ConfigOps::current_component_spec()?;
-        let required = component_spec.component_directory_roles();
+        let required = ConfigOps::current_subnet_directory_roles()?;
         ensure_allowed_roles(&data.entries, "Subnet", &required)?;
         ensure_required_roles(&data.entries, "Subnet", &required)?;
         SubnetDirectory::import(data);

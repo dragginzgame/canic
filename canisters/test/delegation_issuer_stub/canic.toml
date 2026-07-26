@@ -1,6 +1,6 @@
 controllers = []
 [app]
-name = "delegation_issuer_stub"
+name = "delegation_root_stub"
 
 [roles.root]
 kind = "root"
@@ -27,11 +27,11 @@ valid_from_ns = 0
 accept_until_ns = 4102444800000000000
 max_revocation_latency_ns = 60000000000
 
-[component_specs.default]
+[component_specs.issuer]
 component_role = "issuer"
 maximum_instances = 1
 
-[component_specs.default.auth]
+[component_specs.issuer.auth]
 delegated_token_issuer = true
 delegated_token_verifier = true
 role_attestation_cache = true

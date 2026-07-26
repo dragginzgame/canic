@@ -19,7 +19,7 @@ use crate::{
     ops::{OpsError, prelude::*, runtime::env::EnvOps},
     storage::stable::state::fleet::FleetMode,
 };
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 use thiserror::Error as ThisError;
 
 ///
@@ -120,9 +120,17 @@ impl ConfigOps {
             return Ok(implicit_wasm_store_canister_config());
         }
 
+        let component_spec = Self::try_get_component_spec_id_by_role(canister_role)?;
+        Self::try_get_canister(&component_spec, canister_role)
+    }
+
+    /// Resolve the unique Component Spec structurally containing one role.
+    pub(crate) fn try_get_component_spec_id_by_role(
+        canister_role: &CanisterRole,
+    ) -> Result<ComponentSpecId, InternalError> {
         let config = Config::get()?;
         let mut matches = config.component_specs_for_role(canister_role);
-        let (component_spec, component_spec_config) = matches.next().ok_or_else(|| {
+        let (component_spec, _component_spec_config) = matches.next().ok_or_else(|| {
             ConfigOpsError::CanisterNotFound(
                 canister_role.to_string(),
                 "Component Topology".to_string(),
@@ -132,15 +140,7 @@ impl ConfigOps {
             return Err(ConfigOpsError::CanisterRoleAmbiguous(canister_role.to_string()).into());
         }
 
-        component_spec_config
-            .get_canister(canister_role)
-            .ok_or_else(|| {
-                ConfigOpsError::CanisterNotFound(
-                    canister_role.to_string(),
-                    component_spec.to_string(),
-                )
-                .into()
-            })
+        Ok(component_spec.clone())
     }
 
     // ---------------------------------------------------------------------
@@ -192,11 +192,26 @@ impl ConfigOps {
         Self::try_get_component_spec(&component_spec)
     }
 
+    /// Resolve the exact role set visible through the current canister's
+    /// root-local Subnet Directory projection.
+    pub(crate) fn current_subnet_directory_roles() -> Result<BTreeSet<CanisterRole>, InternalError>
+    {
+        let canister_role = EnvOps::canister_role()?;
+        if canister_role.is_wasm_store() {
+            return Ok(BTreeSet::new());
+        }
+        if canister_role.is_root() {
+            return Ok(Config::get()?.fleet_directory_roles());
+        }
+
+        Ok(Self::current_component_spec()?.component_directory_roles())
+    }
+
     /// Fetch the configuration record for the *current* canister.
     pub(crate) fn current_canister() -> Result<CanisterConfig, InternalError> {
         let canister_role = EnvOps::canister_role()?;
-        if canister_role.is_root() {
-            return Ok(implicit_root_canister_config());
+        if canister_role.is_root() || canister_role.is_wasm_store() {
+            return Self::try_get_canister_by_role(&canister_role);
         }
         let component_spec = EnvOps::component_spec()?;
 
@@ -220,6 +235,22 @@ impl ConfigOps {
         let component_spec = EnvOps::component_spec()?;
 
         Self::try_get_canister(&component_spec, canister_role)
+    }
+
+    /// Resolve the target canister configuration for one provisioning effect.
+    ///
+    /// A Fleet Subnet Root may create implicit infrastructure or a direct
+    /// Component and therefore resolves the target globally. A Component may
+    /// create only one of its own direct children and resolves within its
+    /// protected Component Spec.
+    pub(crate) fn canister_for_provisioning(
+        canister_role: &CanisterRole,
+    ) -> Result<CanisterConfig, InternalError> {
+        if EnvOps::is_root() || canister_role.is_wasm_store() {
+            Self::try_get_canister_by_role(canister_role)
+        } else {
+            Self::current_component_canister(canister_role)
+        }
     }
 
     /// Resolve parent funding limits for a direct Component Child role.
