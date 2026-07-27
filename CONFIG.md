@@ -7,9 +7,10 @@ At a high level the file describes:
 - App identity and package-backed roles (`app`, `roles`).
 - Global settings (`controllers`, `standards`, `app`, `auth`, `log`).
 - Flat Component topology under `component_specs.<name>`.
-- One Component role and its direct children per Component Spec.
-- Per-Component and per-child instance ceilings, cycles policy, and optional
-  Component-owned scaling, sharding, and keyed binding pools.
+- One top-level Component role and a flat catalog of every potential
+  descendant role per Component Spec.
+- Per-Component-tree and role-to-role spawn-grant ceilings, cycles policy, and
+  optional scaling, sharding, and keyed index pools.
 - The implicit Fleet Subnet Root-local wasm-store behavior used by
   chunk-store-backed installs.
 
@@ -53,7 +54,7 @@ Canic treats config/env identity as startup invariants. Missing env data is a fa
 
 ### `[roles.<role>]`
 
-Required package declaration for every Component or direct child attached
+Required package declaration for every Component or potential descendant attached
 through `component_specs`. The `root` declaration is also required whenever
 Component topology is present.
 
@@ -165,21 +166,30 @@ maximum_instances = 10
 - `maximum_instances` – required positive Fleet-wide ceiling for concrete
   instances of this Spec.
 - Component policy fields (`initial_cycles`, `topup`, `cycles_funding`,
-  `scaling`, `sharding`, `binding`, `auth`, `standards`, `diagnostics`, and
+  `scaling`, `sharding`, `index`, `auth`, `standards`, `diagnostics`, and
   `metrics`) configure that Component.
-- `limits` compiles finite aggregate child, Registry, and cycles-funding
+- `limits` compiles finite aggregate descendant, Registry, and cycles-funding
   quotas into every concrete Component binding.
-- `children.<role>` – optional direct Component Child tables.
+- `children.<role>` – optional flat potential-descendant role tables. The
+  name is retained because every runtime instance is created as a direct child
+  of some registered node; table nesting does not encode runtime parentage.
+- `spawn_grants.<parent-role>.<child-role>` – explicit bounded permission for
+  a registered role to request one direct child role.
 
 The sum of all Component Spec `maximum_instances` values must not exceed
-4,096. A Component role occurs in exactly one Spec and cannot also be a child.
-A direct child role may be reused by several Specs because the one global
+4,096. A Component role occurs in exactly one Spec and may also be a potential
+descendant in another Spec. A descendant role may be reused by several Specs because the one global
 `[roles.<role>]` declaration fixes its package/artifact identity; ownership
-still resolves through the exact Spec and concrete Component instance.
+still resolves through the exact Spec, concrete Component instance, and
+runtime immediate-parent binding.
 
-Component Specs cannot include one another. A child cannot declare another
-Component, child table, or child-producing pool. `root`, `service`, and
-`component` are structural roles, not accepted child `kind` values.
+Component Specs cannot include one another and child tables cannot nest.
+That flat declaration shape is not a runtime depth limit: any exact registered
+node in the Component tree may ask its Fleet Subnet Root to create a direct
+child only when the role appears in the Spec's catalog and an exact spawn
+grant connects the requester's registered role to that child role. `root`,
+`service`, and `component` are structural roles, not accepted child `kind`
+values.
 
 ### Implicit `wasm_store`
 
@@ -204,15 +214,14 @@ Rules:
 
 ### `[component_specs.<name>.children.<role>]`
 
-Each child table configures one direct non-Component Canister owned by each
-concrete Component instance. The role is derived from the table key; do not
-declare `role`, `type`, `owner_component`, another Component, or another
-`children` table.
+Each child table configures one potential descendant role in the Component
+tree. The Fleet Subnet Root installs that role only as a direct child of the
+exact registered requester and stores the immediate parent in the protected
+binding. The role is derived from the table key; do not declare `role`, `type`,
+`owner_component`, another Component, or another `children` table.
 
 - `kind = "singleton" | "replica" | "shard" | "instance"` – required
-  lifecycle class for the direct child.
-- `maximum_instances` – required positive ceiling per owning Component
-  instance. A `singleton` must use exactly `1`.
+  lifecycle class for that role.
 - `initial_cycles = "5T"` – cycles to allocate when provisioning (defaults to 5T).
 - `topup.threshold = "10T"` – minimum cycles before requesting a top-up
   (default `10T` when the `topup` table is present).
@@ -225,6 +234,7 @@ They must resolve to a whole number of cycles within `u128`; Canic does not
 round, truncate, or saturate them.
 - `scaling` – optional table that defines stateless replica pools.
 - `sharding` – optional table that defines stateful shard pools.
+- `index` – optional table that defines keyed instance pools.
 - `auth.delegated_token_issuer = true` – mark this role as a delegated-token issuer; Canic requires local issuer canister-signature support for token issuance.
 - `auth.delegated_token_verifier = true` – mark this role as a delegated-token
   verifier; the role contract requires the matching verifier feature and the
@@ -236,10 +246,35 @@ round, truncate, or saturate them.
 - `metrics.profile = "leaf" | "hub" | "storage" | "root" | "full"` – override
   the role-derived metrics profile.
 
-The same cycles, auth, standards, diagnostics, and metrics fields also apply
-directly to the Component Spec table. Only the Component itself may own
-`scaling`, `sharding`, or `binding` pools, and each pool target must be a
-direct child declared by that same Spec.
+The same cycles, placement, auth, standards, diagnostics, and metrics fields
+also apply directly to the Component Spec table. Placement pools refer to
+roles in that Spec's flat potential-descendant catalog and require a matching
+spawn grant from the role that owns the pool. The concrete runtime parent is
+always the exact registered requester, not the declaration table or pool.
+
+#### Spawn Grants
+
+Spawn grants form a flat role-to-role capability graph. They do not nest child
+configuration and do not pre-create a hierarchy:
+
+```toml
+[component_specs.<name>.spawn_grants.project_hub.project_instance]
+maximum_instances_per_parent = 10000
+
+[component_specs.<name>.spawn_grants.project_instance.project_ledger]
+maximum_instances_per_parent = 1
+```
+
+- the parent is the Component role or one role in the same child catalog;
+- the target is one role in that child catalog;
+- `maximum_instances_per_parent` is required and positive;
+- a `singleton` target requires exactly `1`;
+- every child catalog role needs at least one incoming grant; and
+- catalog membership selects the accepted artifact, while the grant supplies
+  creation authority.
+
+Role-graph recursion is allowed, but every concrete Registry parentage graph
+is a finite tree bounded by the Component and root quotas.
 
 #### Component aggregate limits
 
@@ -248,26 +283,28 @@ policy:
 
 ```toml
 [component_specs.<name>.limits]
-maximum_children = 4096
-maximum_registry_bytes = 2097152
+maximum_descendants = 20000
+maximum_registry_bytes = 16777216
 
 [component_specs.<name>.limits.cycles_funding]
 window_secs = 3600
 maximum_cycles = "1000T"
 ```
 
-- `maximum_children` bounds the total direct-child instances owned by one
-  concrete Component (default `4096`). It may be lower than the sum of
-  independent per-role ceilings to express shared aggregate capacity, but
-  must be positive when the Spec declares children.
+- `maximum_descendants` bounds the total descendant instances in one concrete
+  Component tree at every depth (default `20000`). It is the aggregate backstop
+  above the independent spawn-grant ceilings and must be positive when the
+  Spec declares children.
 - `maximum_registry_bytes` bounds that Component's canonical Registry
-  (default `2097152`, and must be positive).
+  records, indexes, retained operations and tombstones (default `16777216`,
+  and must be positive).
 - `cycles_funding.window_secs` and `maximum_cycles` form a positive aggregate
   budget above per-child request, cumulative, and cooldown limits (defaults
   `3600` and `"1000T"`).
 
-One Component Spec may declare at most 256 distinct direct-child roles. The
-complete canonical Fleet Component Topology is bounded to 2 MiB.
+One Component Spec may declare at most 256 distinct potential-descendant roles
+and 4,096 spawn grants. The complete canonical Fleet Component Topology is
+bounded to 2 MiB.
 
 #### Parent cycles funding
 
@@ -298,26 +335,32 @@ policy.max_workers = 16
 
 Fields:
 
-- `canister_role` – direct child role in the same Component Spec with
+- `canister_role` – potential-descendant role in the same Component Spec with
   `kind = "replica"`.
 - `policy.initial_workers` – workers to create during canister startup warmup (default `1`).
 - `policy.min_workers` – minimum workers to keep alive (default `1`).
 - `policy.max_workers` – positive hard cap on workers (default `32`), no
-  greater than that child's `maximum_instances`.
+  greater than the matching spawn grant's
+  `maximum_instances_per_parent`.
 
-#### Placement Binding Pools
+#### Placement Index Pools
 
-Placement binding pools place keyed stateful instances.
+Placement Index pools place keyed stateful instances.
 
 ```toml
-[component_specs.<name>.binding.pools.<pool>]
+[component_specs.<name>.index.pools.<pool>]
 canister_role = "instance_role"
 key_name = "project"
 ```
 
-- `canister_role` – direct child role in the same Component Spec with
+- `canister_role` – potential-descendant role in the same Component Spec with
   `kind = "instance"`.
 - `key_name` – non-empty logical key name used by keyed placement admission.
+
+A Placement Index is application-owned keyed state. It is not a Canic
+Directory: Directories are read-only discovery projections derived from
+authoritative Registry state. Index entries do not prove membership or grant
+lifecycle authority.
 
 #### Sharding Pools
 
@@ -332,13 +375,14 @@ policy.max_shards = 64
 
 Fields:
 
-- `canister_role` – direct child role in the same Component Spec with
+- `canister_role` – potential-descendant role in the same Component Spec with
   `kind = "shard"`.
 - `policy.capacity` – per-shard capacity (default `1000`, must be > 0).
 - `policy.initial_shards` – shards created by initial warmup (default `1`; may
   be `0`, but cannot exceed `max_shards`).
 - `policy.max_shards` – maximum shard count (default `4`, must be positive and
-  no greater than that child's `maximum_instances`).
+  no greater than the matching spawn grant's
+  `maximum_instances_per_parent`).
 
 ---
 
@@ -409,8 +453,8 @@ topup.threshold = "10T"
 topup.amount = "5T"
 
 [component_specs.users.limits]
-maximum_children = 1000
-maximum_registry_bytes = 2097152
+maximum_descendants = 20000
+maximum_registry_bytes = 16777216
 
 [component_specs.users.sharding.pools.user_shards]
 canister_role = "user_shard"
@@ -420,7 +464,9 @@ policy.max_shards = 4
 
 [component_specs.users.children.user_shard]
 kind = "shard"
-maximum_instances = 4
+
+[component_specs.users.spawn_grants.user_hub.user_shard]
+maximum_instances_per_parent = 4
 
 [component_specs.scaling]
 component_role = "scale_hub"
@@ -436,13 +482,15 @@ policy.max_workers = 32
 
 [component_specs.scaling.children.scale]
 kind = "replica"
-maximum_instances = 32
+
+[component_specs.scaling.spawn_grants.scale_hub.scale]
+maximum_instances_per_parent = 32
 # CANIC_CONFIG_EXAMPLE_END
 ```
 
-This example defines three flat Component Specs, enables ICRC-21, and
-configures one direct shard child under `user_hub` plus one direct replica
-child under `scale_hub`. Each occupied Fleet/Subnet root gets one implicit
+This example defines three flat Component Specs, enables ICRC-21, and grants
+`user_hub` permission to create shards plus `scale_hub` permission to create
+replicas. Each occupied Fleet/Subnet root gets one implicit
 `wasm_store`; physical Subnet placement and root-local Component admissions
 are separate deployment input.
 
@@ -456,7 +504,7 @@ It does not enumerate every published template release.
 Static config owns:
 
 - user-defined canister roles and policies
-- flat Component Specs and bounded Component/child ceilings
+- flat Component Specs, potential-descendant catalogs and bounded spawn grants
 - Component roles that a Fleet Subnet Root may create from admitted Specs
 
 Root-authoritative runtime state owns:

@@ -113,9 +113,9 @@ mod tests {
                 IntentMetricOperation, IntentMetricOutcome, IntentMetricReason,
                 IntentMetricSurface, IntentMetrics,
             },
-            placement_binding::{
-                PlacementBindingMetricOperation, PlacementBindingMetricOutcome,
-                PlacementBindingMetricReason, PlacementBindingMetrics,
+            placement_index::{
+                PlacementIndexMetricOperation, PlacementIndexMetricOutcome,
+                PlacementIndexMetricReason, PlacementIndexMetrics,
             },
             platform_call::{
                 PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
@@ -270,15 +270,15 @@ mod tests {
             CascadeMetricOutcome::Failed,
             CascadeMetricReason::SendFailed,
         );
-        PlacementBindingMetrics::record(
-            PlacementBindingMetricOperation::Resolve,
-            PlacementBindingMetricOutcome::Started,
-            PlacementBindingMetricReason::Ok,
+        PlacementIndexMetrics::record(
+            PlacementIndexMetricOperation::Resolve,
+            PlacementIndexMetricOutcome::Started,
+            PlacementIndexMetricReason::Ok,
         );
-        PlacementBindingMetrics::record(
-            PlacementBindingMetricOperation::Classify,
-            PlacementBindingMetricOutcome::Completed,
-            PlacementBindingMetricReason::PendingFresh,
+        PlacementIndexMetrics::record(
+            PlacementIndexMetricOperation::Classify,
+            PlacementIndexMetricOutcome::Completed,
+            PlacementIndexMetricReason::PendingFresh,
         );
         PoolMetrics::record(
             PoolMetricOperation::ImportQueued,

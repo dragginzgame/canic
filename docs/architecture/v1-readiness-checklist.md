@@ -58,7 +58,9 @@ maximum_instances = 1
 
 [component_specs.<component-spec>.children.<child-role>]
 kind = "singleton"
-maximum_instances = 1
+
+[component_specs.<component-spec>.spawn_grants.<component-role>.<child-role>]
+maximum_instances_per_parent = 1
 ```
 
 ## Command Checklist

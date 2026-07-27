@@ -45,46 +45,48 @@ pub(in crate::release_set) fn configured_pool_expectations_from_config(
     let mut pools = BTreeMap::<String, ConfiguredPoolExpectation>::new();
 
     for (component_spec_id, component_spec) in &config.component_specs {
-        if let Some(scaling) = &component_spec.scaling {
-            for (pool_name, pool) in &scaling.pools {
-                pools.insert(
-                    format!(
-                        "{component_spec_id}:scaling:{pool_name}:{}",
-                        pool.canister_role.as_str()
-                    ),
-                    ConfiguredPoolExpectation {
-                        pool: pool_name.clone(),
-                        canister_role: pool.canister_role.as_str().to_string(),
-                    },
-                );
+        for (parent_role, canister) in component_spec.canister_configs() {
+            if let Some(scaling) = &canister.scaling {
+                for (pool_name, pool) in &scaling.pools {
+                    pools.insert(
+                        format!(
+                            "{component_spec_id}:{parent_role}:scaling:{pool_name}:{}",
+                            pool.canister_role.as_str()
+                        ),
+                        ConfiguredPoolExpectation {
+                            pool: pool_name.clone(),
+                            canister_role: pool.canister_role.as_str().to_string(),
+                        },
+                    );
+                }
             }
-        }
-        if let Some(sharding) = &component_spec.sharding {
-            for (pool_name, pool) in &sharding.pools {
-                pools.insert(
-                    format!(
-                        "{component_spec_id}:sharding:{pool_name}:{}",
-                        pool.canister_role.as_str()
-                    ),
-                    ConfiguredPoolExpectation {
-                        pool: pool_name.clone(),
-                        canister_role: pool.canister_role.as_str().to_string(),
-                    },
-                );
+            if let Some(sharding) = &canister.sharding {
+                for (pool_name, pool) in &sharding.pools {
+                    pools.insert(
+                        format!(
+                            "{component_spec_id}:{parent_role}:sharding:{pool_name}:{}",
+                            pool.canister_role.as_str()
+                        ),
+                        ConfiguredPoolExpectation {
+                            pool: pool_name.clone(),
+                            canister_role: pool.canister_role.as_str().to_string(),
+                        },
+                    );
+                }
             }
-        }
-        if let Some(binding) = &component_spec.binding {
-            for (pool_name, pool) in &binding.pools {
-                pools.insert(
-                    format!(
-                        "{component_spec_id}:binding:{pool_name}:{}",
-                        pool.canister_role.as_str()
-                    ),
-                    ConfiguredPoolExpectation {
-                        pool: pool_name.clone(),
-                        canister_role: pool.canister_role.as_str().to_string(),
-                    },
-                );
+            if let Some(index) = &canister.index {
+                for (pool_name, pool) in &index.pools {
+                    pools.insert(
+                        format!(
+                            "{component_spec_id}:{parent_role}:index:{pool_name}:{}",
+                            pool.canister_role.as_str()
+                        ),
+                        ConfiguredPoolExpectation {
+                            pool: pool_name.clone(),
+                            canister_role: pool.canister_role.as_str().to_string(),
+                        },
+                    );
+                }
             }
         }
     }

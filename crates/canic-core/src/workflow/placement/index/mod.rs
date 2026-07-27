@@ -1,8 +1,8 @@
-//! Module: workflow::placement::binding
+//! Module: workflow::placement::index
 //!
-//! Responsibility: resolve, create, repair, and recover binding-bound instances.
+//! Responsibility: resolve, create, repair, and recover index-bound instances.
 //! Does not own: storage schemas, request endpoint authorization, or pool lifecycle policy.
-//! Boundary: coordinates binding storage, child creation, and stale-claim recovery.
+//! Boundary: coordinates index storage, child creation, and stale-claim recovery.
 
 mod classification;
 mod cleanup;
@@ -11,45 +11,45 @@ mod create;
 pub mod query;
 mod state;
 
-use crate::workflow::placement::binding::state::{
-    PlacementBindingEntryClassification, validate_bind_target_with_reason,
+use crate::workflow::placement::index::state::{
+    PlacementIndexEntryClassification, validate_bind_target_with_reason,
 };
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
-    dto::placement::binding::{PlacementBindingRecoveryResponse, PlacementBindingStatusResponse},
+    dto::placement::index::{PlacementIndexRecoveryResponse, PlacementIndexStatusResponse},
     ops::{
         ic::IcOps,
         runtime::metrics::{
-            placement_binding::{
-                PlacementBindingMetricOperation as MetricOperation,
-                PlacementBindingMetricReason as MetricReason,
+            placement_index::{
+                PlacementIndexMetricOperation as MetricOperation,
+                PlacementIndexMetricReason as MetricReason,
             },
-            recording::PlacementBindingMetricEvent as MetricEvent,
+            recording::PlacementIndexMetricEvent as MetricEvent,
         },
-        storage::placement::binding::PlacementBindingRegistryOps,
+        storage::placement::index::PlacementIndexRegistryOps,
     },
 };
 
 ///
-/// PlacementBindingWorkflow
+/// PlacementIndexWorkflow
 ///
-/// Entry point for binding placement orchestration.
+/// Entry point for index placement orchestration.
 ///
-pub struct PlacementBindingWorkflow;
+pub struct PlacementIndexWorkflow;
 
-impl PlacementBindingWorkflow {
+impl PlacementIndexWorkflow {
     /// Resolve a bound instance for one key or create and bind a new one.
     #[expect(
         clippy::too_many_lines,
-        reason = "the exhaustive binding state-machine loop is clearer in one owner"
+        reason = "the exhaustive index state-machine loop is clearer in one owner"
     )]
     pub async fn resolve_or_create(
         pool: &str,
         key_value: &str,
-    ) -> Result<PlacementBindingStatusResponse, InternalError> {
+    ) -> Result<PlacementIndexStatusResponse, InternalError> {
         MetricEvent::started(MetricOperation::Resolve);
-        let pool_cfg = match Self::get_binding_pool_cfg(pool) {
+        let pool_cfg = match Self::get_index_pool_cfg(pool) {
             Ok(pool_cfg) => pool_cfg,
             Err(err) => {
                 MetricEvent::failed(MetricOperation::Resolve, &err);
@@ -62,32 +62,32 @@ impl PlacementBindingWorkflow {
             let now = IcOps::now_secs();
 
             match Self::classify_entry(pool, key_value, &pool_cfg, now) {
-                Some(PlacementBindingEntryClassification::Bound {
+                Some(PlacementIndexEntryClassification::Bound {
                     instance_pid,
                     bound_at,
                 }) => {
                     MetricEvent::completed(MetricOperation::Resolve, MetricReason::AlreadyBound);
-                    return Ok(PlacementBindingStatusResponse::Bound {
+                    return Ok(PlacementIndexStatusResponse::Bound {
                         instance_pid,
                         bound_at,
                     });
                 }
 
-                Some(PlacementBindingEntryClassification::PendingFresh {
+                Some(PlacementIndexEntryClassification::PendingFresh {
                     claim_id: _,
                     owner_pid,
                     created_at,
                     provisional_pid,
                 }) => {
                     MetricEvent::skipped(MetricOperation::Resolve, MetricReason::PendingFresh);
-                    return Ok(PlacementBindingStatusResponse::Pending {
+                    return Ok(PlacementIndexStatusResponse::Pending {
                         owner_pid,
                         created_at,
                         provisional_pid,
                     });
                 }
 
-                Some(PlacementBindingEntryClassification::Repairable {
+                Some(PlacementIndexEntryClassification::Repairable {
                     claim_id,
                     owner_pid,
                     provisional_pid,
@@ -105,7 +105,7 @@ impl PlacementBindingWorkflow {
                     return Ok(repaired);
                 }
 
-                Some(PlacementBindingEntryClassification::Resumable {
+                Some(PlacementIndexEntryClassification::Resumable {
                     claim_id,
                     owner_pid,
                     created_at,
@@ -114,7 +114,7 @@ impl PlacementBindingWorkflow {
                         pool,
                         key_value,
                         &pool_cfg,
-                        crate::ops::storage::placement::binding::PlacementBindingPendingClaim {
+                        crate::ops::storage::placement::index::PlacementIndexPendingClaim {
                             claim_id,
                             owner_pid,
                             created_at,
@@ -130,7 +130,7 @@ impl PlacementBindingWorkflow {
                     }
                 }
 
-                Some(PlacementBindingEntryClassification::NeedsCleanup {
+                Some(PlacementIndexEntryClassification::NeedsCleanup {
                     claim_id,
                     owner_pid,
                     provisional_pid,
@@ -171,18 +171,18 @@ impl PlacementBindingWorkflow {
         }
     }
 
-    /// Recover one binding entry by repairing a valid stale provisional child or
+    /// Recover one index entry by repairing a valid stale provisional child or
     /// releasing a dead pending claim.
     #[expect(
         clippy::too_many_lines,
-        reason = "the exhaustive binding recovery state machine has one orchestration owner"
+        reason = "the exhaustive index recovery state machine has one orchestration owner"
     )]
     pub async fn recover_entry(
         pool: &str,
         key_value: &str,
-    ) -> Result<PlacementBindingRecoveryResponse, InternalError> {
+    ) -> Result<PlacementIndexRecoveryResponse, InternalError> {
         MetricEvent::started(MetricOperation::Recover);
-        let pool_cfg = match Self::get_binding_pool_cfg(pool) {
+        let pool_cfg = match Self::get_index_pool_cfg(pool) {
             Ok(pool_cfg) => pool_cfg,
             Err(err) => {
                 MetricEvent::failed(MetricOperation::Recover, &err);
@@ -195,35 +195,35 @@ impl PlacementBindingWorkflow {
             match Self::classify_entry(pool, key_value, &pool_cfg, now) {
                 None => {
                     MetricEvent::skipped(MetricOperation::Recover, MetricReason::Missing);
-                    return Ok(PlacementBindingRecoveryResponse::Missing);
+                    return Ok(PlacementIndexRecoveryResponse::Missing);
                 }
 
-                Some(PlacementBindingEntryClassification::Bound {
+                Some(PlacementIndexEntryClassification::Bound {
                     instance_pid,
                     bound_at,
                 }) => {
                     MetricEvent::completed(MetricOperation::Recover, MetricReason::AlreadyBound);
-                    return Ok(PlacementBindingRecoveryResponse::Bound {
+                    return Ok(PlacementIndexRecoveryResponse::Bound {
                         instance_pid,
                         bound_at,
                     });
                 }
 
-                Some(PlacementBindingEntryClassification::PendingFresh {
+                Some(PlacementIndexEntryClassification::PendingFresh {
                     claim_id: _,
                     owner_pid,
                     created_at,
                     provisional_pid,
                 }) => {
                     MetricEvent::skipped(MetricOperation::Recover, MetricReason::PendingFresh);
-                    return Ok(PlacementBindingRecoveryResponse::FreshPending {
+                    return Ok(PlacementIndexRecoveryResponse::FreshPending {
                         owner_pid,
                         created_at,
                         provisional_pid,
                     });
                 }
 
-                Some(PlacementBindingEntryClassification::Repairable {
+                Some(PlacementIndexEntryClassification::Repairable {
                     claim_id,
                     owner_pid,
                     provisional_pid,
@@ -238,25 +238,25 @@ impl PlacementBindingWorkflow {
                         now,
                     )?;
 
-                    let PlacementBindingStatusResponse::Bound {
+                    let PlacementIndexStatusResponse::Bound {
                         instance_pid,
                         bound_at,
                     } = repaired
                     else {
                         return Err(InternalError::invariant(
                             InternalErrorOrigin::Workflow,
-                            "binding stale repair returned non-bound status",
+                            "index stale repair returned non-bound status",
                         ));
                     };
 
                     MetricEvent::completed(MetricOperation::Recover, MetricReason::StaleRepairable);
-                    return Ok(PlacementBindingRecoveryResponse::RepairedToBound {
+                    return Ok(PlacementIndexRecoveryResponse::RepairedToBound {
                         instance_pid,
                         bound_at,
                     });
                 }
 
-                Some(PlacementBindingEntryClassification::Resumable {
+                Some(PlacementIndexEntryClassification::Resumable {
                     claim_id,
                     owner_pid,
                     created_at,
@@ -265,14 +265,14 @@ impl PlacementBindingWorkflow {
                         pool,
                         key_value,
                         &pool_cfg,
-                        crate::ops::storage::placement::binding::PlacementBindingPendingClaim {
+                        crate::ops::storage::placement::index::PlacementIndexPendingClaim {
                             claim_id,
                             owner_pid,
                             created_at,
                         },
                     )
                     .await?;
-                    let Some(PlacementBindingStatusResponse::Bound {
+                    let Some(PlacementIndexStatusResponse::Bound {
                         instance_pid,
                         bound_at,
                     }) = status
@@ -280,13 +280,13 @@ impl PlacementBindingWorkflow {
                         continue;
                     };
                     MetricEvent::completed(MetricOperation::Recover, MetricReason::ResumedPending);
-                    return Ok(PlacementBindingRecoveryResponse::ResumedToBound {
+                    return Ok(PlacementIndexRecoveryResponse::ResumedToBound {
                         instance_pid,
                         bound_at,
                     });
                 }
 
-                Some(PlacementBindingEntryClassification::NeedsCleanup {
+                Some(PlacementIndexEntryClassification::NeedsCleanup {
                     claim_id,
                     owner_pid,
                     provisional_pid,
@@ -312,10 +312,10 @@ impl PlacementBindingWorkflow {
         }
     }
 
-    /// Bind one logical binding key to a validated direct child instance.
+    /// Bind one logical index key to a validated direct child instance.
     pub fn bind_instance(pool: &str, key_value: &str, pid: Principal) -> Result<(), InternalError> {
         MetricEvent::started(MetricOperation::Bind);
-        let pool_cfg = match Self::get_binding_pool_cfg(pool) {
+        let pool_cfg = match Self::get_index_pool_cfg(pool) {
             Ok(pool_cfg) => pool_cfg,
             Err(err) => {
                 MetricEvent::failed(MetricOperation::Bind, &err);
@@ -326,8 +326,7 @@ impl PlacementBindingWorkflow {
             MetricEvent::failed_reason(MetricOperation::Bind, reason);
             return Err(err);
         }
-        if let Err(err) = PlacementBindingRegistryOps::bind(pool, key_value, pid, IcOps::now_secs())
-        {
+        if let Err(err) = PlacementIndexRegistryOps::bind(pool, key_value, pid, IcOps::now_secs()) {
             MetricEvent::failed(MetricOperation::Bind, &err);
             return Err(err);
         }

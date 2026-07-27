@@ -1,37 +1,36 @@
-//! Module: ops::storage::placement::binding
+//! Module: ops::storage::placement::index
 //!
-//! Responsibility: provide deterministic binding registry claim and binding operations.
+//! Responsibility: provide deterministic index registry claim and index operations.
 //! Does not own: placement policy, provisioning workflow, or endpoint DTOs.
-//! Boundary: storage ops facade over stable binding registry records.
+//! Boundary: storage ops facade over stable index registry records.
 
 #[cfg(test)]
 mod tests;
 
 use crate::{
     InternalError,
-    dto::placement::binding::{
-        PlacementBindingRegistryEntry, PlacementBindingRegistryResponse,
-        PlacementBindingStatusResponse,
+    dto::placement::index::{
+        PlacementIndexRegistryEntry, PlacementIndexRegistryResponse, PlacementIndexStatusResponse,
     },
     ops::{prelude::*, storage::StorageOpsError},
-    storage::stable::placement_binding::{
-        PlacementBindingEntryRecord, PlacementBindingKey, PlacementBindingRegistry,
+    storage::stable::placement_index::{
+        PlacementIndexEntryRecord, PlacementIndexKey, PlacementIndexRegistry,
     },
 };
 use thiserror::Error as ThisError;
 
 ///
-/// PlacementBindingRegistryOpsError
+/// PlacementIndexRegistryOpsError
 ///
-/// Typed storage failure for binding registry claim and binding operations.
+/// Typed storage failure for index registry claim and index operations.
 ///
 
 #[derive(Debug, ThisError)]
-pub enum PlacementBindingRegistryOpsError {
-    #[error("invalid binding key: {0}")]
+pub enum PlacementIndexRegistryOpsError {
+    #[error("invalid index key: {0}")]
     InvalidKey(String),
 
-    #[error("binding key '{key_value}' in pool '{pool}' already bound to instance {pid}")]
+    #[error("index key '{key_value}' in pool '{pool}' already bound to instance {pid}")]
     KeyBound {
         pool: String,
         key_value: String,
@@ -39,7 +38,7 @@ pub enum PlacementBindingRegistryOpsError {
     },
 
     #[error(
-        "binding key '{key_value}' in pool '{pool}' is pending for provisional child {expected}, not {actual}"
+        "index key '{key_value}' in pool '{pool}' is pending for provisional child {expected}, not {actual}"
     )]
     ProvisionalPidMismatch {
         pool: String,
@@ -49,28 +48,28 @@ pub enum PlacementBindingRegistryOpsError {
     },
 }
 
-impl From<PlacementBindingRegistryOpsError> for InternalError {
-    fn from(err: PlacementBindingRegistryOpsError) -> Self {
+impl From<PlacementIndexRegistryOpsError> for InternalError {
+    fn from(err: PlacementIndexRegistryOpsError) -> Self {
         StorageOpsError::from(err).into()
     }
 }
 
 ///
-/// PlacementBindingRegistryOps
+/// PlacementIndexRegistryOps
 ///
-/// Storage-ops facade for binding registry claim and binding operations.
+/// Storage-ops facade for index registry claim and index operations.
 ///
 
-pub struct PlacementBindingRegistryOps;
+pub struct PlacementIndexRegistryOps;
 
 ///
-/// PlacementBindingEntryState
+/// PlacementIndexEntryState
 ///
-/// Internal binding registry state view used by placement workflows.
+/// Internal index registry state view used by placement workflows.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum PlacementBindingEntryState {
+pub enum PlacementIndexEntryState {
     Pending {
         claim_id: u64,
         owner_pid: Principal,
@@ -84,26 +83,26 @@ pub enum PlacementBindingEntryState {
 }
 
 ///
-/// PlacementBindingPendingClaim
+/// PlacementIndexPendingClaim
 ///
-/// Pending binding claim returned when a caller owns a logical key reservation.
+/// Pending index claim returned when a caller owns a logical key reservation.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PlacementBindingPendingClaim {
+pub struct PlacementIndexPendingClaim {
     pub claim_id: u64,
     pub owner_pid: Principal,
     pub created_at: u64,
 }
 
 ///
-/// PlacementBindingClaimResult
+/// PlacementIndexClaimResult
 ///
-/// Result of attempting to claim one logical binding key.
+/// Result of attempting to claim one logical index key.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum PlacementBindingClaimResult {
+pub enum PlacementIndexClaimResult {
     Bound {
         instance_pid: Principal,
         bound_at: u64,
@@ -114,17 +113,17 @@ pub enum PlacementBindingClaimResult {
         created_at: u64,
         provisional_pid: Option<Principal>,
     },
-    Claimed(PlacementBindingPendingClaim),
+    Claimed(PlacementIndexPendingClaim),
 }
 
 ///
-/// PlacementBindingReleaseResult
+/// PlacementIndexReleaseResult
 ///
-/// Result of attempting to release a stale pending binding claim.
+/// Result of attempting to release a stale pending index claim.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum PlacementBindingReleaseResult {
+pub enum PlacementIndexReleaseResult {
     Missing,
     Bound {
         instance_pid: Principal,
@@ -142,7 +141,7 @@ pub enum PlacementBindingReleaseResult {
     },
 }
 
-impl PlacementBindingRegistryOps {
+impl PlacementIndexRegistryOps {
     pub const PENDING_TTL_SECS: u64 = 300;
 
     // Claim one logical key for in-progress instance creation before async work begins.
@@ -152,25 +151,25 @@ impl PlacementBindingRegistryOps {
         owner_pid: Principal,
         claim_id: u64,
         created_at: u64,
-    ) -> Result<PlacementBindingClaimResult, InternalError> {
-        let key = PlacementBindingKey::try_new(pool, key_value)
-            .map_err(PlacementBindingRegistryOpsError::InvalidKey)?;
+    ) -> Result<PlacementIndexClaimResult, InternalError> {
+        let key = PlacementIndexKey::try_new(pool, key_value)
+            .map_err(PlacementIndexRegistryOpsError::InvalidKey)?;
 
-        match PlacementBindingRegistry::get(&key) {
-            Some(PlacementBindingEntryRecord::Bound {
+        match PlacementIndexRegistry::get(&key) {
+            Some(PlacementIndexEntryRecord::Bound {
                 instance_pid,
                 bound_at,
-            }) => Ok(PlacementBindingClaimResult::Bound {
+            }) => Ok(PlacementIndexClaimResult::Bound {
                 instance_pid,
                 bound_at,
             }),
 
-            Some(PlacementBindingEntryRecord::Pending {
+            Some(PlacementIndexEntryRecord::Pending {
                 claim_id,
                 owner_pid: existing_owner_pid,
                 created_at: existing_created_at,
                 provisional_pid,
-            }) => Ok(PlacementBindingClaimResult::PendingExisting {
+            }) => Ok(PlacementIndexClaimResult::PendingExisting {
                 claim_id,
                 owner_pid: existing_owner_pid,
                 created_at: existing_created_at,
@@ -178,9 +177,9 @@ impl PlacementBindingRegistryOps {
             }),
 
             None => {
-                PlacementBindingRegistry::insert(
+                PlacementIndexRegistry::insert(
                     key,
-                    PlacementBindingEntryRecord::Pending {
+                    PlacementIndexEntryRecord::Pending {
                         claim_id,
                         owner_pid,
                         created_at,
@@ -188,8 +187,8 @@ impl PlacementBindingRegistryOps {
                     },
                 );
 
-                Ok(PlacementBindingClaimResult::Claimed(
-                    PlacementBindingPendingClaim {
+                Ok(PlacementIndexClaimResult::Claimed(
+                    PlacementIndexPendingClaim {
                         claim_id,
                         owner_pid,
                         created_at,
@@ -201,9 +200,9 @@ impl PlacementBindingRegistryOps {
 
     // Read one entry with its internal claim state for workflow classification.
     #[must_use]
-    pub fn lookup_state(pool: &str, key_value: &str) -> Option<PlacementBindingEntryState> {
-        let key = PlacementBindingKey::try_new(pool, key_value).ok()?;
-        PlacementBindingRegistry::get(&key).map(entry_to_state)
+    pub fn lookup_state(pool: &str, key_value: &str) -> Option<PlacementIndexEntryState> {
+        let key = PlacementIndexKey::try_new(pool, key_value).ok()?;
+        PlacementIndexRegistry::get(&key).map(entry_to_state)
     }
 
     // Attach the created child pid only if the caller still owns the current pending claim.
@@ -213,11 +212,11 @@ impl PlacementBindingRegistryOps {
         expected_claim_id: u64,
         provisional_pid: Principal,
     ) -> Result<bool, InternalError> {
-        let key = PlacementBindingKey::try_new(pool, key_value)
-            .map_err(PlacementBindingRegistryOpsError::InvalidKey)?;
-        let entry = PlacementBindingRegistry::get(&key);
+        let key = PlacementIndexKey::try_new(pool, key_value)
+            .map_err(PlacementIndexRegistryOpsError::InvalidKey)?;
+        let entry = PlacementIndexRegistry::get(&key);
 
-        let Some(PlacementBindingEntryRecord::Pending {
+        let Some(PlacementIndexEntryRecord::Pending {
             claim_id,
             owner_pid,
             created_at,
@@ -231,9 +230,9 @@ impl PlacementBindingRegistryOps {
             return Ok(false);
         }
 
-        PlacementBindingRegistry::insert(
+        PlacementIndexRegistry::insert(
             key,
-            PlacementBindingEntryRecord::Pending {
+            PlacementIndexEntryRecord::Pending {
                 claim_id,
                 owner_pid,
                 created_at,
@@ -246,17 +245,17 @@ impl PlacementBindingRegistryOps {
 
     #[must_use]
     pub fn lookup_key(pool: &str, key_value: &str) -> Option<Principal> {
-        let key = PlacementBindingKey::try_new(pool, key_value).ok()?;
-        match PlacementBindingRegistry::get(&key) {
-            Some(PlacementBindingEntryRecord::Bound { instance_pid, .. }) => Some(instance_pid),
-            Some(PlacementBindingEntryRecord::Pending { .. }) | None => None,
+        let key = PlacementIndexKey::try_new(pool, key_value).ok()?;
+        match PlacementIndexRegistry::get(&key) {
+            Some(PlacementIndexEntryRecord::Bound { instance_pid, .. }) => Some(instance_pid),
+            Some(PlacementIndexEntryRecord::Pending { .. }) | None => None,
         }
     }
 
     #[must_use]
-    pub fn lookup_entry(pool: &str, key_value: &str) -> Option<PlacementBindingStatusResponse> {
-        let key = PlacementBindingKey::try_new(pool, key_value).ok()?;
-        PlacementBindingRegistry::get(&key).map(entry_to_response)
+    pub fn lookup_entry(pool: &str, key_value: &str) -> Option<PlacementIndexStatusResponse> {
+        let key = PlacementIndexKey::try_new(pool, key_value).ok()?;
+        PlacementIndexRegistry::get(&key).map(entry_to_response)
     }
 
     // Release one stale pending claim so recovery/admin paths can clear dead keys.
@@ -265,24 +264,24 @@ impl PlacementBindingRegistryOps {
         key_value: &str,
         expected_claim_id: u64,
         now: u64,
-    ) -> Result<PlacementBindingReleaseResult, InternalError> {
-        let key = PlacementBindingKey::try_new(pool, key_value)
-            .map_err(PlacementBindingRegistryOpsError::InvalidKey)?;
+    ) -> Result<PlacementIndexReleaseResult, InternalError> {
+        let key = PlacementIndexKey::try_new(pool, key_value)
+            .map_err(PlacementIndexRegistryOpsError::InvalidKey)?;
 
-        let Some(entry) = PlacementBindingRegistry::get(&key) else {
-            return Ok(PlacementBindingReleaseResult::Missing);
+        let Some(entry) = PlacementIndexRegistry::get(&key) else {
+            return Ok(PlacementIndexReleaseResult::Missing);
         };
 
         match entry {
-            PlacementBindingEntryRecord::Bound {
+            PlacementIndexEntryRecord::Bound {
                 instance_pid,
                 bound_at,
-            } => Ok(PlacementBindingReleaseResult::Bound {
+            } => Ok(PlacementIndexReleaseResult::Bound {
                 instance_pid,
                 bound_at,
             }),
 
-            PlacementBindingEntryRecord::Pending {
+            PlacementIndexEntryRecord::Pending {
                 claim_id,
                 owner_pid,
                 created_at,
@@ -291,22 +290,22 @@ impl PlacementBindingRegistryOps {
                 || !is_pending_stale(now, created_at)
                 || provisional_pid.is_none() =>
             {
-                Ok(PlacementBindingReleaseResult::PendingRetained {
+                Ok(PlacementIndexReleaseResult::PendingRetained {
                     owner_pid,
                     created_at,
                     provisional_pid,
                 })
             }
 
-            PlacementBindingEntryRecord::Pending {
+            PlacementIndexEntryRecord::Pending {
                 claim_id: _,
                 owner_pid,
                 created_at,
                 provisional_pid,
             } => {
-                let _ = PlacementBindingRegistry::remove(&key);
+                let _ = PlacementIndexRegistry::remove(&key);
 
-                Ok(PlacementBindingReleaseResult::ReleasedStalePending {
+                Ok(PlacementIndexReleaseResult::ReleasedStalePending {
                     owner_pid,
                     created_at,
                     provisional_pid,
@@ -322,18 +321,16 @@ impl PlacementBindingRegistryOps {
         pid: Principal,
         bound_at: u64,
     ) -> Result<(), InternalError> {
-        let key = PlacementBindingKey::try_new(pool, key_value)
-            .map_err(PlacementBindingRegistryOpsError::InvalidKey)?;
+        let key = PlacementIndexKey::try_new(pool, key_value)
+            .map_err(PlacementIndexRegistryOpsError::InvalidKey)?;
 
-        match PlacementBindingRegistry::get(&key) {
-            Some(PlacementBindingEntryRecord::Bound { instance_pid, .. })
-                if instance_pid == pid =>
-            {
+        match PlacementIndexRegistry::get(&key) {
+            Some(PlacementIndexEntryRecord::Bound { instance_pid, .. }) if instance_pid == pid => {
                 Ok(())
             }
 
-            Some(PlacementBindingEntryRecord::Bound { instance_pid, .. }) => {
-                Err(PlacementBindingRegistryOpsError::KeyBound {
+            Some(PlacementIndexEntryRecord::Bound { instance_pid, .. }) => {
+                Err(PlacementIndexRegistryOpsError::KeyBound {
                     pool: pool.to_string(),
                     key_value: key_value.to_string(),
                     pid: instance_pid,
@@ -341,11 +338,11 @@ impl PlacementBindingRegistryOps {
                 .into())
             }
 
-            Some(PlacementBindingEntryRecord::Pending {
+            Some(PlacementIndexEntryRecord::Pending {
                 provisional_pid: Some(expected_pid),
                 ..
             }) if expected_pid != pid => {
-                Err(PlacementBindingRegistryOpsError::ProvisionalPidMismatch {
+                Err(PlacementIndexRegistryOpsError::ProvisionalPidMismatch {
                     pool: pool.to_string(),
                     key_value: key_value.to_string(),
                     expected: expected_pid,
@@ -354,10 +351,10 @@ impl PlacementBindingRegistryOps {
                 .into())
             }
 
-            Some(PlacementBindingEntryRecord::Pending { .. }) | None => {
-                PlacementBindingRegistry::insert(
+            Some(PlacementIndexEntryRecord::Pending { .. }) | None => {
+                PlacementIndexRegistry::insert(
                     key,
-                    PlacementBindingEntryRecord::Bound {
+                    PlacementIndexEntryRecord::Bound {
                         instance_pid: pid,
                         bound_at,
                     },
@@ -375,16 +372,16 @@ impl PlacementBindingRegistryOps {
         pid: Principal,
         bound_at: u64,
     ) -> Result<bool, InternalError> {
-        let key = PlacementBindingKey::try_new(pool, key_value)
-            .map_err(PlacementBindingRegistryOpsError::InvalidKey)?;
+        let key = PlacementIndexKey::try_new(pool, key_value)
+            .map_err(PlacementIndexRegistryOpsError::InvalidKey)?;
 
-        match PlacementBindingRegistry::get(&key) {
-            Some(PlacementBindingEntryRecord::Pending {
+        match PlacementIndexRegistry::get(&key) {
+            Some(PlacementIndexEntryRecord::Pending {
                 claim_id,
                 provisional_pid: Some(expected_pid),
                 ..
             }) if claim_id == expected_claim_id && expected_pid != pid => {
-                Err(PlacementBindingRegistryOpsError::ProvisionalPidMismatch {
+                Err(PlacementIndexRegistryOpsError::ProvisionalPidMismatch {
                     pool: pool.to_string(),
                     key_value: key_value.to_string(),
                     expected: expected_pid,
@@ -393,16 +390,16 @@ impl PlacementBindingRegistryOps {
                 .into())
             }
 
-            Some(PlacementBindingEntryRecord::Pending { claim_id, .. })
+            Some(PlacementIndexEntryRecord::Pending { claim_id, .. })
                 if claim_id != expected_claim_id =>
             {
                 Ok(false)
             }
 
-            Some(PlacementBindingEntryRecord::Pending { .. }) => {
-                PlacementBindingRegistry::insert(
+            Some(PlacementIndexEntryRecord::Pending { .. }) => {
+                PlacementIndexRegistry::insert(
                     key,
-                    PlacementBindingEntryRecord::Bound {
+                    PlacementIndexEntryRecord::Bound {
                         instance_pid: pid,
                         bound_at,
                     },
@@ -410,76 +407,76 @@ impl PlacementBindingRegistryOps {
                 Ok(true)
             }
 
-            Some(PlacementBindingEntryRecord::Bound { .. }) | None => Ok(false),
+            Some(PlacementIndexEntryRecord::Bound { .. }) | None => Ok(false),
         }
     }
 
     #[must_use]
-    pub fn entries_response() -> PlacementBindingRegistryResponse {
-        let entries = PlacementBindingRegistry::export()
+    pub fn entries_response() -> PlacementIndexRegistryResponse {
+        let entries = PlacementIndexRegistry::export()
             .entries
             .into_iter()
-            .map(|record| PlacementBindingRegistryEntry {
+            .map(|record| PlacementIndexRegistryEntry {
                 pool: record.key.pool.to_string(),
                 key_value: record.key.key_value.to_string(),
                 status: entry_to_response(record.entry),
             })
             .collect();
 
-        PlacementBindingRegistryResponse(entries)
+        PlacementIndexRegistryResponse(entries)
     }
 
     #[cfg(test)]
     pub(crate) fn clear_for_test() {
-        PlacementBindingRegistry::clear();
+        PlacementIndexRegistry::clear();
     }
 }
 
 // Decide whether an in-progress claim can be reclaimed by a later caller.
 const fn is_pending_stale(now: u64, created_at: u64) -> bool {
-    now.saturating_sub(created_at) > PlacementBindingRegistryOps::PENDING_TTL_SECS
+    now.saturating_sub(created_at) > PlacementIndexRegistryOps::PENDING_TTL_SECS
 }
 
 // Convert the storage-owned entry state into the public placement DTO shape.
-const fn entry_to_response(entry: PlacementBindingEntryRecord) -> PlacementBindingStatusResponse {
+const fn entry_to_response(entry: PlacementIndexEntryRecord) -> PlacementIndexStatusResponse {
     match entry {
-        PlacementBindingEntryRecord::Pending {
+        PlacementIndexEntryRecord::Pending {
             claim_id: _,
             owner_pid,
             created_at,
             provisional_pid,
-        } => PlacementBindingStatusResponse::Pending {
+        } => PlacementIndexStatusResponse::Pending {
             owner_pid,
             created_at,
             provisional_pid,
         },
-        PlacementBindingEntryRecord::Bound {
+        PlacementIndexEntryRecord::Bound {
             instance_pid,
             bound_at,
-        } => PlacementBindingStatusResponse::Bound {
+        } => PlacementIndexStatusResponse::Bound {
             instance_pid,
             bound_at,
         },
     }
 }
 
-const fn entry_to_state(entry: PlacementBindingEntryRecord) -> PlacementBindingEntryState {
+const fn entry_to_state(entry: PlacementIndexEntryRecord) -> PlacementIndexEntryState {
     match entry {
-        PlacementBindingEntryRecord::Pending {
+        PlacementIndexEntryRecord::Pending {
             claim_id,
             owner_pid,
             created_at,
             provisional_pid,
-        } => PlacementBindingEntryState::Pending {
+        } => PlacementIndexEntryState::Pending {
             claim_id,
             owner_pid,
             created_at,
             provisional_pid,
         },
-        PlacementBindingEntryRecord::Bound {
+        PlacementIndexEntryRecord::Bound {
             instance_pid,
             bound_at,
-        } => PlacementBindingEntryState::Bound {
+        } => PlacementIndexEntryState::Bound {
             instance_pid,
             bound_at,
         },

@@ -1,4 +1,4 @@
-//! Minimal placement-binding hub canister for keyed instance placement tests.
+//! Minimal placement-index hub canister for keyed instance placement tests.
 
 #![expect(clippy::unused_async)]
 
@@ -6,10 +6,10 @@ use candid::Principal;
 use canic::{
     Error,
     api::auth::AuthApi,
-    api::canister::placement::PlacementBindingApi,
+    api::canister::placement::PlacementIndexApi,
     dto::{
         auth::{DelegatedToken, SignedRoleAttestation},
-        placement::binding::{PlacementBindingRecoveryResponse, PlacementBindingStatusResponse},
+        placement::index::{PlacementIndexRecoveryResponse, PlacementIndexStatusResponse},
     },
     ids::cap,
     prelude::*,
@@ -61,31 +61,28 @@ async fn verifier_verify_role_attestation(
 
 /// Resolve one logical project key to a dedicated instance, creating it when absent.
 #[canic_update(public)]
-async fn resolve_project(project_key: String) -> Result<PlacementBindingStatusResponse, Error> {
-    PlacementBindingApi::resolve_or_create(PROJECTS_POOL, project_key).await
+async fn resolve_project(project_key: String) -> Result<PlacementIndexStatusResponse, Error> {
+    PlacementIndexApi::resolve_or_create(PROJECTS_POOL, project_key).await
 }
 
-/// Repair or release one placement binding after partial failure.
+/// Repair or release one placement index after partial failure.
 #[canic_update(public)]
-async fn recover_project(project_key: String) -> Result<PlacementBindingRecoveryResponse, Error> {
-    PlacementBindingApi::recover_entry(PROJECTS_POOL, project_key).await
+async fn recover_project(project_key: String) -> Result<PlacementIndexRecoveryResponse, Error> {
+    PlacementIndexApi::recover_entry(PROJECTS_POOL, project_key).await
 }
 
 /// Look up the currently bound instance pid for one project key.
 #[canic_query(public)]
 async fn lookup_project(project_key: String) -> Result<Option<Principal>, Error> {
-    Ok(PlacementBindingApi::lookup_key(PROJECTS_POOL, &project_key))
+    Ok(PlacementIndexApi::lookup_key(PROJECTS_POOL, &project_key))
 }
 
-/// Return the full placement-binding state for one project key.
+/// Return the full placement-index state for one project key.
 #[canic_query(public)]
 async fn lookup_project_entry(
     project_key: String,
-) -> Result<Option<PlacementBindingStatusResponse>, Error> {
-    Ok(PlacementBindingApi::lookup_entry(
-        PROJECTS_POOL,
-        &project_key,
-    ))
+) -> Result<Option<PlacementIndexStatusResponse>, Error> {
+    Ok(PlacementIndexApi::lookup_entry(PROJECTS_POOL, &project_key))
 }
 
 canic::finish!();

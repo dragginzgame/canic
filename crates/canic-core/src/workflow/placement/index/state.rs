@@ -1,19 +1,19 @@
-//! Module: workflow::placement::binding::state
+//! Module: workflow::placement::index::state
 //!
-//! Responsibility: hold binding workflow errors, classifications, and validators.
-//! Does not own: binding registry mutation, child creation, or endpoint DTOs.
-//! Boundary: provides workflow-local state helpers for binding orchestration.
+//! Responsibility: hold index workflow errors, classifications, and validators.
+//! Does not own: index registry mutation, child creation, or endpoint DTOs.
+//! Boundary: provides workflow-local state helpers for index orchestration.
 
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
-    config::schema::BindingConfig,
+    config::schema::IndexConfig,
     ids::CanisterRole,
     ops::{
         ic::IcOps,
-        runtime::metrics::placement_binding::PlacementBindingMetricReason as MetricReason,
+        runtime::metrics::placement_index::PlacementIndexMetricReason as MetricReason,
         storage::{
-            children::CanisterChildrenOps, placement::binding::PlacementBindingRegistryOps,
+            children::CanisterChildrenOps, placement::index::PlacementIndexRegistryOps,
             registry::subnet::SubnetRegistryOps,
         },
     },
@@ -22,17 +22,17 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use thiserror::Error as ThisError;
 
 ///
-/// PlacementBindingWorkflowError
+/// PlacementIndexWorkflowError
 ///
-/// Workflow-local failures raised while coordinating binding placement.
+/// Workflow-local failures raised while coordinating index placement.
 ///
 
 #[derive(Debug, ThisError)]
-pub(super) enum PlacementBindingWorkflowError {
-    #[error("binding placement is not configured for the current canister")]
-    BindingDisabled,
+pub(super) enum PlacementIndexWorkflowError {
+    #[error("index placement is not configured for the current canister")]
+    IndexDisabled,
 
-    #[error("unknown binding pool '{requested}': configured pools: {available}")]
+    #[error("unknown index pool '{requested}': configured pools: {available}")]
     UnknownPool {
         requested: String,
         available: String,
@@ -41,31 +41,31 @@ pub(super) enum PlacementBindingWorkflowError {
     #[error("instance {0} is not a direct child of the current canister")]
     InstanceNotDirectChild(Principal),
 
-    #[error("binding instance {pid} has role '{actual}', expected '{expected}'")]
+    #[error("index instance {pid} has role '{actual}', expected '{expected}'")]
     InstanceRoleMismatch {
         pid: Principal,
         expected: CanisterRole,
         actual: CanisterRole,
     },
 
-    #[error("binding instance {0} is not present in the subnet registry")]
+    #[error("index instance {0} is not present in the subnet registry")]
     RegistryEntryMissing(Principal),
 }
 
-impl From<PlacementBindingWorkflowError> for InternalError {
-    fn from(err: PlacementBindingWorkflowError) -> Self {
+impl From<PlacementIndexWorkflowError> for InternalError {
+    fn from(err: PlacementIndexWorkflowError) -> Self {
         Self::domain(InternalErrorOrigin::Workflow, err.to_string())
     }
 }
 
 ///
-/// PlacementBindingEntryClassification
+/// PlacementIndexEntryClassification
 ///
-/// Snapshot classification used to choose the next binding workflow step.
+/// Snapshot classification used to choose the next index workflow step.
 ///
 
 #[derive(Debug, Eq, PartialEq)]
-pub(super) enum PlacementBindingEntryClassification {
+pub(super) enum PlacementIndexEntryClassification {
     Bound {
         instance_pid: Principal,
         bound_at: u64,
@@ -93,25 +93,25 @@ pub(super) enum PlacementBindingEntryClassification {
     },
 }
 
-static PLACEMENT_BINDING_CLAIM_NONCE: AtomicU64 = AtomicU64::new(1);
+static PLACEMENT_INDEX_CLAIM_NONCE: AtomicU64 = AtomicU64::new(1);
 
-pub(super) fn available_pool_names(binding: &BindingConfig) -> String {
-    if binding.pools.is_empty() {
+pub(super) fn available_pool_names(index: &IndexConfig) -> String {
+    if index.pools.is_empty() {
         return "none".to_string();
     }
 
-    let mut names: Vec<_> = binding.pools.keys().cloned().collect();
+    let mut names: Vec<_> = index.pools.keys().cloned().collect();
     names.sort();
     names.join(", ")
 }
 
 pub(super) fn new_claim_id() -> u64 {
-    let nonce = PLACEMENT_BINDING_CLAIM_NONCE.fetch_add(1, Ordering::Relaxed);
+    let nonce = PLACEMENT_INDEX_CLAIM_NONCE.fetch_add(1, Ordering::Relaxed);
     IcOps::now_millis().rotate_left(21) ^ nonce
 }
 
 pub(super) const fn pending_is_stale(now: u64, created_at: u64) -> bool {
-    now.saturating_sub(created_at) > PlacementBindingRegistryOps::PENDING_TTL_SECS
+    now.saturating_sub(created_at) > PlacementIndexRegistryOps::PENDING_TTL_SECS
 }
 
 // Validate a bind target while preserving a bounded metric reason for callers.
@@ -125,21 +125,21 @@ pub(super) fn validate_bind_target_with_reason(
         .any(|entry| entry.pid == pid)
     {
         return Err((
-            PlacementBindingWorkflowError::InstanceNotDirectChild(pid).into(),
+            PlacementIndexWorkflowError::InstanceNotDirectChild(pid).into(),
             MetricReason::InvalidChild,
         ));
     }
 
     let Some((actual_role, _)) = SubnetRegistryOps::role_parent(pid) else {
         return Err((
-            PlacementBindingWorkflowError::RegistryEntryMissing(pid).into(),
+            PlacementIndexWorkflowError::RegistryEntryMissing(pid).into(),
             MetricReason::RegistryMissing,
         ));
     };
 
     if actual_role != *expected_role {
         return Err((
-            PlacementBindingWorkflowError::InstanceRoleMismatch {
+            PlacementIndexWorkflowError::InstanceRoleMismatch {
                 pid,
                 expected: expected_role.clone(),
                 actual: actual_role,

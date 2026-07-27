@@ -41,14 +41,23 @@ package = "project_hub"
 kind = "canister"
 package = "project_instance"
 
+[roles.project_ledger]
+kind = "canister"
+package = "project_ledger"
+
+[roles.project_machine]
+kind = "canister"
+package = "project_machine"
+
 [component_specs.users]
 component_role = "user_hub"
 maximum_instances = 2
 
 [component_specs.users.children.user_shard]
 kind = "shard"
-initial_instances = 1
-maximum_instances = 8
+
+[component_specs.users.spawn_grants.user_hub.user_shard]
+maximum_instances_per_parent = 8
 
 [component_specs.users.sharding.pools.user_shards]
 canister_role = "user_shard"
@@ -64,7 +73,7 @@ maximum_instances = 3
 maximum_instances_per_requester_per_root = 2
 
 [component_specs.projects.limits]
-maximum_children = 100
+maximum_descendants = 300
 maximum_registry_bytes = 1048576
 
 [component_specs.projects.limits.cycles_funding]
@@ -73,9 +82,23 @@ maximum_cycles = "250T"
 
 [component_specs.projects.children.project_instance]
 kind = "instance"
-maximum_instances = 100
 
-[component_specs.projects.binding.pools.projects]
+[component_specs.projects.children.project_ledger]
+kind = "singleton"
+
+[component_specs.projects.children.project_machine]
+kind = "singleton"
+
+[component_specs.projects.spawn_grants.project_hub.project_instance]
+maximum_instances_per_parent = 100
+
+[component_specs.projects.spawn_grants.project_instance.project_ledger]
+maximum_instances_per_parent = 1
+
+[component_specs.projects.spawn_grants.project_instance.project_machine]
+maximum_instances_per_parent = 1
+
+[component_specs.projects.index.pools.projects]
 canister_role = "project_instance"
 key_name = "project_id"
 "#;
@@ -164,7 +187,7 @@ fn component_binding(root: &FleetSubnetRootBinding) -> ComponentBinding {
 }
 
 #[test]
-fn topology_compiles_specs_and_children_in_canonical_order() {
+fn topology_compiles_specs_and_potential_child_roles_in_canonical_order() {
     let topology = topology();
 
     assert_eq!(
@@ -181,9 +204,36 @@ fn topology_compiles_specs_and_children_in_canonical_order() {
             .iter()
             .map(|child| child.role.as_str())
             .collect::<Vec<_>>(),
-        vec!["project_instance"],
+        vec!["project_instance", "project_ledger", "project_machine"],
     );
-    assert_eq!(topology.component_specs[1].children[0].initial_instances, 1);
+    assert_eq!(
+        topology.component_specs[0].spawn_grants,
+        vec![
+            ComponentSpawnGrant {
+                parent_role: CanisterRole::from("project_hub"),
+                child_role: CanisterRole::from("project_instance"),
+                maximum_instances_per_parent: 100,
+            },
+            ComponentSpawnGrant {
+                parent_role: CanisterRole::from("project_instance"),
+                child_role: CanisterRole::from("project_ledger"),
+                maximum_instances_per_parent: 1,
+            },
+            ComponentSpawnGrant {
+                parent_role: CanisterRole::from("project_instance"),
+                child_role: CanisterRole::from("project_machine"),
+                maximum_instances_per_parent: 1,
+            },
+        ],
+    );
+    assert!(
+        topology.component_specs[0]
+            .spawn_grant(
+                &CanisterRole::from("project_instance"),
+                &CanisterRole::from("project_ledger"),
+            )
+            .is_some(),
+    );
     assert_eq!(
         topology.provisioning_grants,
         vec![ComponentProvisioningGrant {
@@ -192,7 +242,7 @@ fn topology_compiles_specs_and_children_in_canonical_order() {
             maximum_instances_per_requester_per_root: 2,
         }]
     );
-    assert_eq!(topology.component_specs[0].limits.maximum_children, 100);
+    assert_eq!(topology.component_specs[0].limits.maximum_descendants, 300);
     assert_eq!(
         topology.component_specs[0]
             .limits
@@ -209,15 +259,15 @@ fn canonical_spec_and_topology_hashes_match_frozen_golden_values() {
 
     assert_eq!(
         hex_bytes(topology.component_specs[0].spec_hash),
-        "06fdb3c7a0be73e95e6f814b8f1c783a669a56fef80740fed461249e02f4005b",
+        "fad2b7e4e14df581f16525cd3452848ccd3c7f683e59a28b2467a5770fb2ef10",
     );
     assert_eq!(
         hex_bytes(topology.component_specs[1].spec_hash),
-        "689d53bafafddb1fa0b15440bfb31a733765e9077d666efc23f9218e83ebd7dc",
+        "afb517c1fcfd208532b3c07e4c203896630198019679a13b06f135c88bca0ba8",
     );
     assert_eq!(
         topology.digest().expect("topology digest").to_string(),
-        "38583692839890198e1da67b56cfa1eb335c6dc0f55e7fbd5855a359ba07d35a",
+        "99004cb4862b09884e1f9de8a055a5a52ebb9a36a5cd621aaf5eed0faf224ea1",
     );
 }
 
@@ -245,14 +295,14 @@ fn spec_hash_binds_package_limits_pools_and_child_policy() {
         .limits
         .maximum_registry_bytes += 1;
 
-    let mut binding = config.clone();
-    binding
+    let mut index = config.clone();
+    index
         .component_specs
         .get_mut("projects")
         .expect("projects")
-        .binding
+        .index
         .as_mut()
-        .expect("binding")
+        .expect("index")
         .pools
         .get_mut("projects")
         .expect("projects pool")
@@ -269,7 +319,19 @@ fn spec_hash_binds_package_limits_pools_and_child_policy() {
         .cycles_funding
         .cooldown_secs += 1;
 
-    for changed in [package, limits, binding, child] {
+    let mut spawn_grant = child.clone();
+    spawn_grant
+        .component_specs
+        .get_mut("projects")
+        .expect("projects")
+        .spawn_grants
+        .get_mut("project_hub")
+        .expect("project hub grants")
+        .get_mut("project_instance")
+        .expect("project instance grant")
+        .maximum_instances_per_parent += 1;
+
+    for changed in [package, limits, index, child, spawn_grant] {
         let changed_hash = ComponentTopology::compile(&changed)
             .expect("changed topology")
             .get(&component_spec("projects"))
@@ -506,7 +568,7 @@ fn compiled_topology_roundtrips_at_the_candid_boundary() {
 }
 
 #[test]
-fn canonical_encoding_rejects_malformed_compiled_order_and_initial_counts() {
+fn canonical_encoding_rejects_malformed_compiled_order_and_spawn_grants() {
     let topology = topology();
 
     let mut spec_order = topology.clone();
@@ -525,33 +587,30 @@ fn canonical_encoding_rejects_malformed_compiled_order_and_initial_counts() {
         Err(ComponentTopologyError::NonCanonicalProvisioningGrantOrder { .. })
     );
 
-    let mut initial_count = topology.clone();
-    let child = &mut initial_count.component_specs[1].children[0];
-    child.initial_instances = child.maximum_instances + 1;
+    let mut zero_spawn_limit = topology;
+    zero_spawn_limit.component_specs[1].spawn_grants[0].maximum_instances_per_parent = 0;
     std::assert_matches!(
-        initial_count.canonical_bytes(),
-        Err(ComponentTopologyError::InitialChildExceedsMaximum { .. })
-    );
-
-    let mut aggregate_initial_count = topology;
-    aggregate_initial_count.component_specs[1]
-        .limits
-        .maximum_children = 0;
-    std::assert_matches!(
-        aggregate_initial_count.canonical_bytes(),
-        Err(ComponentTopologyError::InitialChildrenExceedComponentLimit { .. })
+        zero_spawn_limit.canonical_bytes(),
+        Err(ComponentTopologyError::ZeroSpawnGrantLimit { .. })
     );
 }
 
 #[test]
-fn protected_bindings_validate_exact_root_component_and_child_ownership() {
+fn protected_bindings_validate_exact_root_component_and_multilevel_child_shape() {
     let topology = topology();
     let root = root_binding(&topology, 4, 5, vec![admission(&topology, "projects", 2)]);
     let component = component_binding(&root);
     let child = ComponentChildBinding {
         component: component.clone(),
+        parent_canister_id: component.canister_id,
         role: CanisterRole::from("project_instance"),
         canister_id: Principal::from_slice(&[11; 29]),
+    };
+    let grandchild = ComponentChildBinding {
+        component: component.clone(),
+        parent_canister_id: child.canister_id,
+        role: CanisterRole::from("project_ledger"),
+        canister_id: Principal::from_slice(&[12; 29]),
     };
 
     topology
@@ -563,37 +622,36 @@ fn protected_bindings_validate_exact_root_component_and_child_ownership() {
     topology
         .validate_component_child_binding(&root, &child)
         .expect("exact child binding");
+    topology
+        .validate_component_child_binding(&root, &grandchild)
+        .expect("a child may own another child in the same Component tree");
 
-    let mut wrong_role = child;
+    let mut wrong_role = child.clone();
     wrong_role.role = CanisterRole::from("user_shard");
     std::assert_matches!(
         topology.validate_component_child_binding(&root, &wrong_role),
         Err(ComponentTopologyError::ChildRoleNotAdmitted { .. })
     );
 
+    let mut self_parent = child.clone();
+    self_parent.parent_canister_id = self_parent.canister_id;
+    std::assert_matches!(
+        topology.validate_component_child_binding(&root, &self_parent),
+        Err(ComponentTopologyError::ChildPrincipalConflictsWithOwner)
+    );
+
+    let mut root_parent = child;
+    root_parent.parent_canister_id = root.fleet_subnet_root;
+    std::assert_matches!(
+        topology.validate_component_child_binding(&root, &root_parent),
+        Err(ComponentTopologyError::ChildParentConflictsWithAuthority)
+    );
+
     let mut wrong_root = component;
-    wrong_root.fleet_subnet_root = Principal::from_slice(&[12; 29]);
+    wrong_root.fleet_subnet_root = Principal::from_slice(&[13; 29]);
     std::assert_matches!(
         topology.validate_component_binding(&root, &wrong_root),
         Err(ComponentTopologyError::BindingRootMismatch)
-    );
-}
-
-#[test]
-fn root_limits_must_fit_one_components_required_initial_footprint() {
-    let topology = topology();
-    let mut root = root_binding(&topology, 4, 5, vec![admission(&topology, "users", 1)]);
-    root.limits.maximum_managed_canisters = 1;
-
-    std::assert_matches!(
-        topology.validate_root_binding(&root),
-        Err(
-            ComponentTopologyError::InitialComponentFootprintExceedsRootLimit {
-                required_canisters: 2,
-                maximum_managed_canisters: 1,
-                ..
-            }
-        )
     );
 }
 
@@ -644,6 +702,7 @@ fn protected_binding_contracts_roundtrip_at_the_candid_boundary() {
     let root = root_binding(&topology, 4, 5, vec![admission(&topology, "projects", 2)]);
     let child = ComponentChildBinding {
         component: component_binding(&root),
+        parent_canister_id: Principal::from_slice(&[10; 29]),
         role: CanisterRole::from("project_instance"),
         canister_id: Principal::from_slice(&[11; 29]),
     };

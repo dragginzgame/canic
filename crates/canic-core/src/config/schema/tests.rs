@@ -43,13 +43,14 @@ fn component_spec_config(role: &str, maximum_instances: u32) -> ComponentSpecCon
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        binding: None,
+        index: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
         provisions: BTreeMap::default(),
         children: BTreeMap::default(),
+        spawn_grants: BTreeMap::default(),
     }
 }
 
@@ -454,28 +455,49 @@ fn provisioning_grant_graph_requires_existing_distinct_acyclic_specs() {
 }
 
 #[test]
-fn direct_child_roles_may_be_reused_across_component_specs() {
+fn potential_descendant_roles_may_be_reused_across_component_specs() {
     let mut cfg = ConfigModel::test_default();
     let shared_role = CanisterRole::from("shared_worker");
     let shared_child = ComponentChildConfig {
         kind: ComponentChildKind::Replica,
-        initial_instances: 0,
-        maximum_instances: 4,
         initial_cycles: Cycles::new(0),
         topup: None,
         cycles_funding: CyclesFundingPolicyConfig::default(),
+        scaling: None,
+        sharding: None,
+        index: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
     };
-    cfg.component_specs
+    let default = cfg
+        .component_specs
         .get_mut(&default_component_spec_id())
-        .expect("default Component Spec")
+        .expect("default Component Spec");
+    default
         .children
         .insert(shared_role.clone(), shared_child.clone());
+    default.spawn_grants.insert(
+        CanisterRole::from("app"),
+        BTreeMap::from([(
+            shared_role.clone(),
+            ComponentSpawnGrantConfig {
+                maximum_instances_per_parent: 4,
+            },
+        )]),
+    );
     let mut other = component_spec_config("aux", 1);
     other.children.insert(shared_role.clone(), shared_child);
+    other.spawn_grants.insert(
+        CanisterRole::from("aux"),
+        BTreeMap::from([(
+            shared_role.clone(),
+            ComponentSpawnGrantConfig {
+                maximum_instances_per_parent: 4,
+            },
+        )]),
+    );
     cfg.component_specs
         .insert(component_spec_id("other"), other);
     for role in ["aux", "shared_worker"] {
@@ -497,23 +519,33 @@ fn direct_child_roles_may_be_reused_across_component_specs() {
 }
 
 #[test]
-fn a_component_role_cannot_also_be_a_child_role() {
+fn a_component_role_may_also_be_a_potential_child_role() {
     let mut cfg = ConfigModel::test_default();
     let mut other = component_spec_config("aux", 1);
     other.children.insert(
         CanisterRole::from("app"),
         ComponentChildConfig {
             kind: ComponentChildKind::Singleton,
-            initial_instances: 0,
-            maximum_instances: 1,
             initial_cycles: Cycles::new(0),
             topup: None,
             cycles_funding: CyclesFundingPolicyConfig::default(),
+            scaling: None,
+            sharding: None,
+            index: None,
             auth: CanisterAuthConfig::default(),
             standards: StandardsCanisterConfig::default(),
             diagnostics: DiagnosticsCanisterConfig::default(),
             metrics: MetricsCanisterConfig::default(),
         },
+    );
+    other.spawn_grants.insert(
+        CanisterRole::from("aux"),
+        BTreeMap::from([(
+            CanisterRole::from("app"),
+            ComponentSpawnGrantConfig {
+                maximum_instances_per_parent: 1,
+            },
+        )]),
     );
     cfg.roles.insert(
         CanisterRole::from("aux"),
@@ -526,7 +558,7 @@ fn a_component_role_cannot_also_be_a_child_role() {
         .insert(component_spec_id("other"), other);
 
     cfg.validate()
-        .expect_err("a Component role cannot also be a direct child");
+        .expect("flat declarations may reuse a Component role in a runtime child catalog");
 }
 
 #[test]
@@ -541,16 +573,26 @@ fn attached_app_roles_follow_structural_component_and_child_ownership() {
         CanisterRole::from("user_shard"),
         ComponentChildConfig {
             kind: ComponentChildKind::Shard,
-            initial_instances: 0,
-            maximum_instances: 4,
             initial_cycles: Cycles::new(0),
             topup: None,
             cycles_funding: CyclesFundingPolicyConfig::default(),
+            scaling: None,
+            sharding: None,
+            index: None,
             auth: CanisterAuthConfig::default(),
             standards: StandardsCanisterConfig::default(),
             diagnostics: DiagnosticsCanisterConfig::default(),
             metrics: MetricsCanisterConfig::default(),
         },
+    );
+    default_component_spec.spawn_grants.insert(
+        CanisterRole::from("user_hub"),
+        BTreeMap::from([(
+            CanisterRole::from("user_shard"),
+            ComponentSpawnGrantConfig {
+                maximum_instances_per_parent: 4,
+            },
+        )]),
     );
     cfg.roles.insert(
         CanisterRole::from("user_hub"),

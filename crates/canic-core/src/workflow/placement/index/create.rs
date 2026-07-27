@@ -1,4 +1,4 @@
-//! Module: workflow::placement::binding::create
+//! Module: workflow::placement::index::create
 //!
 //! Responsibility: claim keys, create child instances, and bind successful claims.
 //! Does not own: registry schemas, canister request execution, or stale cleanup policy.
@@ -7,42 +7,42 @@
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
-    config::schema::BindingPool,
-    dto::placement::binding::PlacementBindingStatusResponse,
+    config::schema::IndexPool,
+    dto::placement::index::PlacementIndexStatusResponse,
     model::placement::allocation::PlacementAllocationIdentity,
     ops::{
         ic::IcOps,
         runtime::metrics::{
-            placement_binding::{
-                PlacementBindingMetricOperation as MetricOperation,
-                PlacementBindingMetricReason as MetricReason,
+            placement_index::{
+                PlacementIndexMetricOperation as MetricOperation,
+                PlacementIndexMetricReason as MetricReason,
             },
-            recording::PlacementBindingMetricEvent as MetricEvent,
+            recording::PlacementIndexMetricEvent as MetricEvent,
         },
-        storage::placement::binding::{
-            PlacementBindingClaimResult, PlacementBindingPendingClaim, PlacementBindingRegistryOps,
+        storage::placement::index::{
+            PlacementIndexClaimResult, PlacementIndexPendingClaim, PlacementIndexRegistryOps,
         },
     },
     workflow::placement::{
         allocation::{
             PlacementAllocationPermit, PlacementAllocationRequest, PlacementAllocationWorkflow,
         },
-        binding::{PlacementBindingWorkflow, state::new_claim_id},
+        index::{PlacementIndexWorkflow, state::new_claim_id},
     },
 };
 
-impl PlacementBindingWorkflow {
+impl PlacementIndexWorkflow {
     // Finalize one freshly created child using claim-matching writes so late async completions
     // cannot overwrite a newer claim after the key has been reclaimed.
     pub(super) async fn finalize_created_instance(
         pool: &str,
         key_value: &str,
-        claim: PlacementBindingPendingClaim,
+        claim: PlacementIndexPendingClaim,
         pid: Principal,
         permit: &PlacementAllocationPermit,
-    ) -> Result<Option<PlacementBindingStatusResponse>, InternalError> {
+    ) -> Result<Option<PlacementIndexStatusResponse>, InternalError> {
         MetricEvent::started(MetricOperation::Finalize);
-        if !PlacementBindingRegistryOps::set_provisional_pid_if_claim_matches(
+        if !PlacementIndexRegistryOps::set_provisional_pid_if_claim_matches(
             pool,
             key_value,
             claim.claim_id,
@@ -55,7 +55,7 @@ impl PlacementBindingWorkflow {
         }
 
         let bound_at = IcOps::now_secs();
-        let bound = match PlacementBindingRegistryOps::bind_if_claim_matches(
+        let bound = match PlacementIndexRegistryOps::bind_if_claim_matches(
             pool,
             key_value,
             claim.claim_id,
@@ -72,13 +72,13 @@ impl PlacementBindingWorkflow {
             MetricEvent::failed_reason(MetricOperation::Finalize, MetricReason::ClaimLost);
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Workflow,
-                "binding claim lost between provisional attach and final bind",
+                "index claim lost between provisional attach and final bind",
             ));
         }
         PlacementAllocationWorkflow::finish_registered_child(permit, pid)?;
 
         MetricEvent::completed(MetricOperation::Finalize, MetricReason::Ok);
-        Ok(Some(PlacementBindingStatusResponse::Bound {
+        Ok(Some(PlacementIndexStatusResponse::Bound {
             instance_pid: pid,
             bound_at,
         }))
@@ -88,14 +88,14 @@ impl PlacementBindingWorkflow {
     pub(super) async fn claim_and_create_instance(
         pool: &str,
         key_value: &str,
-        pool_cfg: &BindingPool,
+        pool_cfg: &IndexPool,
         owner_pid: Principal,
-    ) -> Result<Option<PlacementBindingStatusResponse>, InternalError> {
+    ) -> Result<Option<PlacementIndexStatusResponse>, InternalError> {
         let now = IcOps::now_secs();
         let claim_id = new_claim_id();
 
         MetricEvent::started(MetricOperation::Claim);
-        let claim_result = match PlacementBindingRegistryOps::claim_pending(
+        let claim_result = match PlacementIndexRegistryOps::claim_pending(
             pool, key_value, owner_pid, claim_id, now,
         ) {
             Ok(result) => result,
@@ -105,30 +105,30 @@ impl PlacementBindingWorkflow {
             }
         };
         let claim = match claim_result {
-            PlacementBindingClaimResult::Bound {
+            PlacementIndexClaimResult::Bound {
                 instance_pid,
                 bound_at,
             } => {
                 MetricEvent::skipped(MetricOperation::Claim, MetricReason::AlreadyBound);
-                return Ok(Some(PlacementBindingStatusResponse::Bound {
+                return Ok(Some(PlacementIndexStatusResponse::Bound {
                     instance_pid,
                     bound_at,
                 }));
             }
-            PlacementBindingClaimResult::PendingExisting {
+            PlacementIndexClaimResult::PendingExisting {
                 claim_id: _,
                 owner_pid,
                 created_at,
                 provisional_pid,
             } => {
                 MetricEvent::skipped(MetricOperation::Claim, MetricReason::PendingFresh);
-                return Ok(Some(PlacementBindingStatusResponse::Pending {
+                return Ok(Some(PlacementIndexStatusResponse::Pending {
                     owner_pid,
                     created_at,
                     provisional_pid,
                 }));
             }
-            PlacementBindingClaimResult::Claimed(claim) => {
+            PlacementIndexClaimResult::Claimed(claim) => {
                 MetricEvent::completed(MetricOperation::Claim, MetricReason::Claimed);
                 claim
             }
@@ -141,10 +141,10 @@ impl PlacementBindingWorkflow {
     pub(super) async fn resume_pending_instance(
         pool: &str,
         key_value: &str,
-        pool_cfg: &BindingPool,
-        claim: PlacementBindingPendingClaim,
-    ) -> Result<Option<PlacementBindingStatusResponse>, InternalError> {
-        let request = placement_binding_allocation_request(pool, key_value, pool_cfg, claim);
+        pool_cfg: &IndexPool,
+        claim: PlacementIndexPendingClaim,
+    ) -> Result<Option<PlacementIndexStatusResponse>, InternalError> {
+        let request = placement_index_allocation_request(pool, key_value, pool_cfg, claim);
 
         MetricEvent::started(MetricOperation::CreateInstance);
         let (permit, pid) = match PlacementAllocationWorkflow::recover_child(request).await {
@@ -164,10 +164,10 @@ impl PlacementBindingWorkflow {
     async fn create_and_finalize_claim(
         pool: &str,
         key_value: &str,
-        pool_cfg: &BindingPool,
-        claim: PlacementBindingPendingClaim,
-    ) -> Result<Option<PlacementBindingStatusResponse>, InternalError> {
-        let request = placement_binding_allocation_request(pool, key_value, pool_cfg, claim);
+        pool_cfg: &IndexPool,
+        claim: PlacementIndexPendingClaim,
+    ) -> Result<Option<PlacementIndexStatusResponse>, InternalError> {
+        let request = placement_index_allocation_request(pool, key_value, pool_cfg, claim);
 
         MetricEvent::started(MetricOperation::CreateInstance);
         let (permit, pid) = match PlacementAllocationWorkflow::create_child(request).await {
@@ -185,13 +185,13 @@ impl PlacementBindingWorkflow {
     }
 }
 
-pub(super) fn placement_binding_allocation_request(
+pub(super) fn placement_index_allocation_request(
     pool: &str,
     key_value: &str,
-    pool_cfg: &BindingPool,
-    claim: PlacementBindingPendingClaim,
+    pool_cfg: &IndexPool,
+    claim: PlacementIndexPendingClaim,
 ) -> PlacementAllocationRequest {
-    let identity = PlacementAllocationIdentity::binding(
+    let identity = PlacementAllocationIdentity::index(
         claim.owner_pid,
         pool,
         key_value,

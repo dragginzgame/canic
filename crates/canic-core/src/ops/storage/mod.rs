@@ -41,7 +41,7 @@ pub enum StorageOpsError {
     IcpRefillRecordOps(#[from] icp_refill::IcpRefillRecordOpsError),
 
     #[error(transparent)]
-    PlacementBindingRegistryOps(#[from] placement::binding::PlacementBindingRegistryOpsError),
+    PlacementIndexRegistryOps(#[from] placement::index::PlacementIndexRegistryOpsError),
 
     #[cfg(feature = "sharding")]
     #[error(transparent)]

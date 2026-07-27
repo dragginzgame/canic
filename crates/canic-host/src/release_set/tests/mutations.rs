@@ -160,6 +160,12 @@ maximum_instances = 1
     assert_eq!(updated.role.kind, "replica");
     assert_eq!(updated.role.topology, "default/hub/children/worker");
     assert!(updated.source.contains("kind = \"replica\""));
+    assert!(
+        updated
+            .source
+            .contains("[component_specs.\"default\".spawn_grants.\"hub\".\"worker\"]")
+    );
+    assert!(updated.source.contains("maximum_instances_per_parent = 1"));
 }
 
 #[test]
@@ -230,7 +236,9 @@ maximum_instances = 1
 
 [component_specs.alpha.children.worker]
 kind = "replica"
-maximum_instances = 4
+
+[component_specs.alpha.spawn_grants.alpha.worker]
+maximum_instances_per_parent = 4
 
 [component_specs.beta]
 component_role = "beta"
@@ -257,6 +265,59 @@ maximum_instances = 1
     assert_eq!(
         configured_role_kinds_from_config(&parsed)
             .get("worker")
+            .map(String::as_str),
+        Some("mixed")
+    );
+}
+
+#[test]
+fn attach_app_role_allows_a_component_role_as_another_specs_descendant() {
+    let config = r#"
+controllers = []
+[app]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.alpha]
+kind = "canister"
+package = "alpha"
+
+[roles.beta]
+kind = "canister"
+package = "beta"
+
+[component_specs.alpha]
+component_role = "alpha"
+maximum_instances = 1
+
+[component_specs.beta]
+component_role = "beta"
+maximum_instances = 1
+"#;
+
+    let updated = attach_app_role_source(config, "demo", "beta", "alpha", "instance")
+        .expect("a top-level Component role may be a potential descendant in another Spec");
+
+    assert!(
+        updated
+            .source
+            .contains("[component_specs.\"alpha\".children.\"beta\"]")
+    );
+    let parsed = parsed_config(&updated.source);
+    assert!(
+        parsed
+            .component_specs
+            .get("alpha")
+            .expect("alpha Component Spec")
+            .children
+            .contains_key(&CanisterRole::from("beta"))
+    );
+    assert_eq!(
+        configured_role_kinds_from_config(&parsed)
+            .get("beta")
             .map(String::as_str),
         Some("mixed")
     );
@@ -308,7 +369,9 @@ canister_role = "worker"
 
 [component_specs.hub.children.worker]
 kind = "shard"
-maximum_instances = 4
+
+[component_specs.hub.spawn_grants.hub.worker]
+maximum_instances_per_parent = 4
 "#;
     let updated =
         rename_app_role_source(config, &config_path, "demo", "hub", "router").expect("rename role");
@@ -393,7 +456,9 @@ canister_role = "worker"
 
 [component_specs.hub.children.worker]
 kind = "shard"
-maximum_instances = 4
+
+[component_specs.hub.spawn_grants.hub.worker]
+maximum_instances_per_parent = 4
 "#;
     let config_path = Path::new("canic.toml");
     let updated = rename_app_role_source(config, config_path, "demo", "worker", "worker_v2")
@@ -405,6 +470,11 @@ maximum_instances = 4
         updated
             .source
             .contains("[\"component_specs\".\"hub\".\"children\".\"worker_v2\"]")
+    );
+    assert!(
+        updated
+            .source
+            .contains("[\"component_specs\".\"hub\".\"spawn_grants\".\"hub\".\"worker_v2\"]")
     );
 }
 

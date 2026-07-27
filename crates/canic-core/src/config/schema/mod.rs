@@ -57,8 +57,10 @@ pub const NAME_MAX_BYTES: usize = 40;
 
 /// Maximum concrete Component instances admitted by one Fleet declaration.
 pub const MAX_FLEET_COMPONENT_INSTANCES: u32 = 4_096;
-/// Maximum distinct direct-child roles declared by one Component Spec.
+/// Maximum distinct potential child roles declared by one Component Spec.
 pub const MAX_COMPONENT_CHILD_ROLES: usize = 256;
+/// Maximum explicit parent-role to child-role spawn grants in one Component Spec.
+pub const MAX_COMPONENT_SPAWN_GRANTS: usize = 4_096;
 /// Maximum outbound peer-Component grants declared by one Component Spec.
 pub const MAX_COMPONENT_PROVISIONING_GRANTS: usize = 256;
 
@@ -131,8 +133,8 @@ pub trait Validate {
 /// Top-level configuration object.
 ///
 /// Invariants enforced here:
-/// - Every Component Spec contains exactly one direct Component role
-/// - Component roles and direct child roles are structurally disjoint
+/// - Every Component Spec contains exactly one root Component role
+/// - Every Component Spec carries a flat potential descendant-role catalog
 /// - Component Spec instance ceilings are positive and Fleet-bounded
 /// - Canister role names follow the canonical deployment identity rule
 /// - Delegated token TTL is sane
@@ -164,7 +166,7 @@ pub struct ConfigModel {
     #[serde(default)]
     pub roles: BTreeMap<CanisterRole, RoleDeclaration>,
 
-    /// App-declared non-recursive Component topology templates.
+    /// App-declared flat Component artifact and descendant-role templates.
     #[serde(default)]
     pub component_specs: BTreeMap<ComponentSpecId, ComponentSpecConfig>,
 }
@@ -194,7 +196,7 @@ impl ConfigModel {
 
     /// Resolve a role only when exactly one Component Spec contains it.
     ///
-    /// Component roles are always unique. A direct child role may be reused by
+    /// Component roles are always unique. A descendant role may be reused by
     /// several Specs, in which case callers need an explicit Component Spec
     /// binding and this role-only helper returns `None`.
     #[must_use]
@@ -295,13 +297,14 @@ impl ConfigModel {
             cycles_funding: CyclesFundingPolicyConfig::default(),
             scaling: None,
             sharding: None,
-            binding: None,
+            index: None,
             auth: CanisterAuthConfig::default(),
             standards: StandardsCanisterConfig::default(),
             diagnostics: DiagnosticsCanisterConfig::default(),
             metrics: MetricsCanisterConfig::default(),
             provisions: BTreeMap::new(),
             children: BTreeMap::new(),
+            spawn_grants: BTreeMap::new(),
         };
 
         cfg.app.name = AppId::from("test");

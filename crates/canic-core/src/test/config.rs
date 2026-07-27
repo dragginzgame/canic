@@ -4,9 +4,9 @@ use crate::{
     cdk::types::Cycles,
     config::schema::{
         CanisterAuthConfig, CanisterConfig, CanisterKind, ComponentChildConfig, ComponentChildKind,
-        ComponentLimitsConfig, ComponentSpecConfig, CyclesFundingPolicyConfig,
-        DiagnosticsCanisterConfig, MetricsCanisterConfig, RoleDeclaration, RoleDeclarationKind,
-        StandardsCanisterConfig,
+        ComponentLimitsConfig, ComponentSpawnGrantConfig, ComponentSpecConfig,
+        CyclesFundingPolicyConfig, DiagnosticsCanisterConfig, MetricsCanisterConfig,
+        RoleDeclaration, RoleDeclarationKind, StandardsCanisterConfig,
     },
     config::{Config, ConfigModel},
     ids::{CanisterRole, ComponentSpecId},
@@ -94,7 +94,7 @@ impl ConfigTestBuilder {
             entry.cycles_funding = config.cycles_funding;
             entry.scaling = config.scaling;
             entry.sharding = config.sharding;
-            entry.binding = config.binding;
+            entry.index = config.index;
             entry.auth = config.auth;
             entry.standards = config.standards;
             entry.diagnostics = config.diagnostics;
@@ -109,25 +109,37 @@ impl ConfigTestBuilder {
             CanisterKind::Instance => ComponentChildKind::Instance,
             CanisterKind::Root | CanisterKind::Service => unreachable!("handled above"),
         };
+        let maximum_instances_per_parent = if kind == ComponentChildKind::Singleton {
+            1
+        } else {
+            20_000
+        };
         entry.children.insert(
-            role,
+            role.clone(),
             ComponentChildConfig {
                 kind,
-                initial_instances: 0,
-                maximum_instances: if kind == ComponentChildKind::Singleton {
-                    1
-                } else {
-                    4_096
-                },
                 initial_cycles: config.initial_cycles,
                 topup: config.topup,
                 cycles_funding: config.cycles_funding,
+                scaling: config.scaling,
+                sharding: config.sharding,
+                index: config.index,
                 auth: config.auth,
                 standards: config.standards,
                 diagnostics: config.diagnostics,
                 metrics: config.metrics,
             },
         );
+        entry
+            .spawn_grants
+            .entry(entry.component_role.clone())
+            .or_default()
+            .insert(
+                role,
+                ComponentSpawnGrantConfig {
+                    maximum_instances_per_parent,
+                },
+            );
 
         self
     }
@@ -159,7 +171,7 @@ impl ConfigTestBuilder {
             cycles_funding: CyclesFundingPolicyConfig::default(),
             scaling: None,
             sharding: None,
-            binding: None,
+            index: None,
             auth: CanisterAuthConfig::default(),
             standards: StandardsCanisterConfig::default(),
             diagnostics: DiagnosticsCanisterConfig::default(),
@@ -177,13 +189,14 @@ impl ConfigTestBuilder {
             cycles_funding: CyclesFundingPolicyConfig::default(),
             scaling: None,
             sharding: None,
-            binding: None,
+            index: None,
             auth: CanisterAuthConfig::default(),
             standards: StandardsCanisterConfig::default(),
             diagnostics: DiagnosticsCanisterConfig::default(),
             metrics: MetricsCanisterConfig::default(),
             provisions: BTreeMap::default(),
             children: BTreeMap::default(),
+            spawn_grants: BTreeMap::default(),
         }
     }
 }

@@ -7,9 +7,9 @@
 use crate::{
     InternalError,
     ops::runtime::metrics::{
-        placement_binding::{
-            PlacementBindingMetricOperation, PlacementBindingMetricOutcome,
-            PlacementBindingMetricReason, PlacementBindingMetrics,
+        placement_index::{
+            PlacementIndexMetricOperation, PlacementIndexMetricOutcome, PlacementIndexMetricReason,
+            PlacementIndexMetrics,
         },
         pool::{PoolMetricOperation, PoolMetricOutcome, PoolMetricReason, PoolMetrics},
         scaling::{
@@ -24,63 +24,57 @@ use crate::ops::runtime::metrics::sharding::{
 };
 
 ///
-/// PlacementBindingMetricEvent
+/// PlacementIndexMetricEvent
 ///
-/// Typed recording adapter for binding metric events.
+/// Typed recording adapter for Placement Index metric events.
 ///
 
-pub struct PlacementBindingMetricEvent;
+pub struct PlacementIndexMetricEvent;
 
-impl PlacementBindingMetricEvent {
-    /// Record one binding metric row with an explicit outcome and reason.
+impl PlacementIndexMetricEvent {
+    /// Record one Placement Index metric row with an explicit outcome and reason.
     pub fn record(
-        operation: PlacementBindingMetricOperation,
-        outcome: PlacementBindingMetricOutcome,
-        reason: PlacementBindingMetricReason,
+        operation: PlacementIndexMetricOperation,
+        outcome: PlacementIndexMetricOutcome,
+        reason: PlacementIndexMetricReason,
     ) {
-        PlacementBindingMetrics::record(operation, outcome, reason);
+        PlacementIndexMetrics::record(operation, outcome, reason);
     }
 
-    /// Record a started binding metric row.
-    pub fn started(operation: PlacementBindingMetricOperation) {
+    /// Record a started Placement Index metric row.
+    pub fn started(operation: PlacementIndexMetricOperation) {
         Self::record(
             operation,
-            PlacementBindingMetricOutcome::Started,
-            PlacementBindingMetricReason::Ok,
+            PlacementIndexMetricOutcome::Started,
+            PlacementIndexMetricReason::Ok,
         );
     }
 
-    /// Record a completed binding metric row.
-    pub fn completed(
-        operation: PlacementBindingMetricOperation,
-        reason: PlacementBindingMetricReason,
-    ) {
-        Self::record(operation, PlacementBindingMetricOutcome::Completed, reason);
+    /// Record a completed Placement Index metric row.
+    pub fn completed(operation: PlacementIndexMetricOperation, reason: PlacementIndexMetricReason) {
+        Self::record(operation, PlacementIndexMetricOutcome::Completed, reason);
     }
 
-    /// Record a skipped binding metric row.
-    pub fn skipped(
-        operation: PlacementBindingMetricOperation,
-        reason: PlacementBindingMetricReason,
-    ) {
-        Self::record(operation, PlacementBindingMetricOutcome::Skipped, reason);
+    /// Record a skipped Placement Index metric row.
+    pub fn skipped(operation: PlacementIndexMetricOperation, reason: PlacementIndexMetricReason) {
+        Self::record(operation, PlacementIndexMetricOutcome::Skipped, reason);
     }
 
-    /// Record a failed binding metric row classified from an internal error.
-    pub fn failed(operation: PlacementBindingMetricOperation, err: &InternalError) {
+    /// Record a failed Placement Index metric row classified from an internal error.
+    pub fn failed(operation: PlacementIndexMetricOperation, err: &InternalError) {
         Self::record(
             operation,
-            PlacementBindingMetricOutcome::Failed,
-            PlacementBindingMetricReason::from_error(err),
+            PlacementIndexMetricOutcome::Failed,
+            PlacementIndexMetricReason::from_error(err),
         );
     }
 
-    /// Record a failed binding metric row with an explicit bounded reason.
+    /// Record a failed Placement Index metric row with an explicit bounded reason.
     pub fn failed_reason(
-        operation: PlacementBindingMetricOperation,
-        reason: PlacementBindingMetricReason,
+        operation: PlacementIndexMetricOperation,
+        reason: PlacementIndexMetricReason,
     ) {
-        Self::record(operation, PlacementBindingMetricOutcome::Failed, reason);
+        Self::record(operation, PlacementIndexMetricOutcome::Failed, reason);
     }
 }
 

@@ -7,7 +7,7 @@ use super::{
 };
 use crate::{
     config::schema::{
-        BindingConfig, CanisterAuthConfig, CanisterConfig, CanisterKind, ScalingConfig,
+        CanisterAuthConfig, CanisterConfig, CanisterKind, IndexConfig, ScalingConfig,
         ShardingConfig,
     },
     ids::CanisterRole,
@@ -111,7 +111,7 @@ fn canonical_allocations_match_the_active_memory_map() {
         ),
         (StateAllocationKey::CanisterPool, vec![49]),
         (StateAllocationKey::ScalingRegistry, vec![52]),
-        (StateAllocationKey::PlacementBindingRegistry, vec![55]),
+        (StateAllocationKey::PlacementIndexRegistry, vec![55]),
         (StateAllocationKey::ShardingRegistry, vec![53]),
         (StateAllocationKey::ShardingAssignments, vec![54]),
         (StateAllocationKey::ShardingActiveSet, vec![56]),
@@ -268,12 +268,10 @@ fn placement_capabilities_select_only_their_placement_state() {
         vec![49, 52]
     );
 
-    let mut directory = ConfigTestBuilder::canister_config(CanisterKind::Service);
-    directory.binding = Some(BindingConfig::default());
+    let mut index = ConfigTestBuilder::canister_config(CanisterKind::Service);
+    index.index = Some(IndexConfig::default());
     assert_eq!(
-        placement_allocation_ids(
-            &resolved_service_contract(directory, BTreeSet::new()).allocations
-        ),
+        placement_allocation_ids(&resolved_service_contract(index, BTreeSet::new()).allocations),
         vec![49, 55]
     );
 

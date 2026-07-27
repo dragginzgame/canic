@@ -9,11 +9,11 @@ use crate::config::schema::IcpRefillPolicy;
 use crate::{
     cdk::candid::Principal,
     config::schema::{
-        AppConfig, AuthConfig, BindingConfig, BindingPool, CanisterAuthConfig,
-        ChainKeyRootProofConfig, ComponentChildConfig, ComponentChildKind, ComponentLimitsConfig,
-        ComponentProvisioningGrantConfig, ComponentSpecConfig, ConfigModel,
-        CyclesFundingBudgetConfig, CyclesFundingPolicyConfig, DelegatedTokenConfig,
-        DiagnosticsCanisterConfig, FleetInitMode, LogConfig, MetricsCanisterConfig, MetricsProfile,
+        AppConfig, AuthConfig, CanisterAuthConfig, ChainKeyRootProofConfig, ComponentChildConfig,
+        ComponentChildKind, ComponentLimitsConfig, ComponentProvisioningGrantConfig,
+        ComponentSpawnGrantConfig, ComponentSpecConfig, ConfigModel, CyclesFundingBudgetConfig,
+        CyclesFundingPolicyConfig, DelegatedTokenConfig, DiagnosticsCanisterConfig, FleetInitMode,
+        IndexConfig, IndexPool, LogConfig, MetricsCanisterConfig, MetricsProfile,
         RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool, ScalePoolPolicy,
         ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
         StandardsCanisterConfig, TopupPolicy, Whitelist,
@@ -392,7 +392,7 @@ fn render_whitelist(whitelist: &Whitelist) -> TokenStream {
     }
 }
 
-// Render one non-recursive Component Spec.
+// Render one flat Component Spec and its potential child-role catalog.
 fn render_component_spec_config(config: &ComponentSpecConfig) -> TokenStream {
     let component_role = render_canister_role(&config.component_role);
     let maximum_instances = render_u32_literal(config.maximum_instances);
@@ -402,7 +402,7 @@ fn render_component_spec_config(config: &ComponentSpecConfig) -> TokenStream {
     let cycles_funding = render_cycles_funding_policy(&config.cycles_funding);
     let scaling = render_option(config.scaling.as_ref(), render_scaling_config);
     let sharding = render_option(config.sharding.as_ref(), render_sharding_config);
-    let binding = render_option(config.binding.as_ref(), render_binding_config);
+    let index = render_option(config.index.as_ref(), render_index_config);
     let auth = render_canister_auth_config(&config.auth);
     let standards = render_standards_canister_config(&config.standards);
     let diagnostics = render_diagnostics_canister_config(config.diagnostics);
@@ -417,6 +417,14 @@ fn render_component_spec_config(config: &ComponentSpecConfig) -> TokenStream {
         render_canister_role,
         render_component_child_config,
     );
+    let spawn_grants =
+        render_btree_map(config.spawn_grants.iter(), render_canister_role, |grants| {
+            render_btree_map(
+                grants.iter(),
+                render_canister_role,
+                render_component_spawn_grant_config,
+            )
+        });
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ComponentSpecConfig {
@@ -428,26 +436,27 @@ fn render_component_spec_config(config: &ComponentSpecConfig) -> TokenStream {
             cycles_funding: #cycles_funding,
             scaling: #scaling,
             sharding: #sharding,
-            binding: #binding,
+            index: #index,
             auth: #auth,
             standards: #standards,
             diagnostics: #diagnostics,
             metrics: #metrics,
             provisions: #provisions,
             children: #children,
+            spawn_grants: #spawn_grants,
         }
     }
 }
 
 // Render aggregate limits for one concrete Component.
 fn render_component_limits_config(config: &ComponentLimitsConfig) -> TokenStream {
-    let maximum_children = render_u32_literal(config.maximum_children);
+    let maximum_descendants = render_u32_literal(config.maximum_descendants);
     let maximum_registry_bytes = render_u64_literal(config.maximum_registry_bytes);
     let cycles_funding = render_cycles_funding_budget_config(&config.cycles_funding);
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ComponentLimitsConfig {
-            maximum_children: #maximum_children,
+            maximum_descendants: #maximum_descendants,
             maximum_registry_bytes: #maximum_registry_bytes,
             cycles_funding: #cycles_funding,
         }
@@ -467,14 +476,15 @@ fn render_cycles_funding_budget_config(config: &CyclesFundingBudgetConfig) -> To
     }
 }
 
-// Render one direct Component Child.
+// Render one potential Component child role.
 fn render_component_child_config(config: &ComponentChildConfig) -> TokenStream {
     let kind = render_component_child_kind(config.kind);
-    let initial_instances = render_u32_literal(config.initial_instances);
-    let maximum_instances = render_u32_literal(config.maximum_instances);
     let initial_cycles = render_cycles(config.initial_cycles.to_u128());
     let topup = render_option(config.topup.as_ref(), render_topup);
     let cycles_funding = render_cycles_funding_policy(&config.cycles_funding);
+    let scaling = render_option(config.scaling.as_ref(), render_scaling_config);
+    let sharding = render_option(config.sharding.as_ref(), render_sharding_config);
+    let index = render_option(config.index.as_ref(), render_index_config);
     let auth = render_canister_auth_config(&config.auth);
     let standards = render_standards_canister_config(&config.standards);
     let diagnostics = render_diagnostics_canister_config(config.diagnostics);
@@ -483,15 +493,27 @@ fn render_component_child_config(config: &ComponentChildConfig) -> TokenStream {
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ComponentChildConfig {
             kind: #kind,
-            initial_instances: #initial_instances,
-            maximum_instances: #maximum_instances,
             initial_cycles: #initial_cycles,
             topup: #topup,
             cycles_funding: #cycles_funding,
+            scaling: #scaling,
+            sharding: #sharding,
+            index: #index,
             auth: #auth,
             standards: #standards,
             diagnostics: #diagnostics,
             metrics: #metrics,
+        }
+    }
+}
+
+// Render one bounded parent-role to child-role spawn grant.
+fn render_component_spawn_grant_config(config: &ComponentSpawnGrantConfig) -> TokenStream {
+    let maximum_instances_per_parent = render_u32_literal(config.maximum_instances_per_parent);
+
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentSpawnGrantConfig {
+            maximum_instances_per_parent: #maximum_instances_per_parent,
         }
     }
 }
@@ -780,16 +802,16 @@ fn render_sharding_config(config: &ShardingConfig) -> TokenStream {
     }
 }
 
-// Render the keyed placement binding config subtree.
-fn render_binding_config(config: &BindingConfig) -> TokenStream {
+// Render the keyed placement index config subtree.
+fn render_index_config(config: &IndexConfig) -> TokenStream {
     let pools = render_btree_map(
         config.pools.iter(),
         |name| render_owned_string(name),
-        render_binding_pool,
+        render_index_pool,
     );
 
     quote! {
-        ::canic::__internal::core::bootstrap::compiled::BindingConfig {
+        ::canic::__internal::core::bootstrap::compiled::IndexConfig {
             pools: #pools,
         }
     }
@@ -824,12 +846,12 @@ fn render_shard_pool_policy(policy: &ShardPoolPolicy) -> TokenStream {
 }
 
 // Render one keyed-instance placement pool.
-fn render_binding_pool(pool: &BindingPool) -> TokenStream {
+fn render_index_pool(pool: &IndexPool) -> TokenStream {
     let canister_role = render_canister_role(&pool.canister_role);
     let key_name = render_owned_string(&pool.key_name);
 
     quote! {
-        ::canic::__internal::core::bootstrap::compiled::BindingPool {
+        ::canic::__internal::core::bootstrap::compiled::IndexPool {
             canister_role: #canister_role,
             key_name: #key_name,
         }
@@ -875,12 +897,12 @@ mod tests {
 
         assert!(log.contains("10_000_u64"));
         assert!(log.contains("16_384_u32"));
-        assert!(component_limits.contains("2_097_152_u64"));
+        assert!(component_limits.contains("16_777_216_u64"));
         assert!(component_limits.contains("3_600_u64"));
     }
 
     #[test]
-    fn render_topology_v2_initial_children_and_provisioning_grants() {
+    fn render_topology_v3_multilevel_children_and_provisioning_grants() {
         let config = crate::config::Config::parse_toml(
             r#"
 [app]
@@ -906,24 +928,33 @@ package = "ledger"
 component_role = "hub"
 maximum_instances = 1
 
+[component_specs.hub.children.instance]
+kind = "instance"
+
+[component_specs.hub.children.ledger]
+kind = "instance"
+
+[component_specs.hub.spawn_grants.hub.instance]
+maximum_instances_per_parent = 100
+
+[component_specs.hub.spawn_grants.instance.ledger]
+maximum_instances_per_parent = 1
+
 [component_specs.hub.provisions.instance]
 maximum_instances_per_requester_per_root = 100
 
 [component_specs.instance]
 component_role = "instance"
 maximum_instances = 100
-
-[component_specs.instance.children.ledger]
-kind = "singleton"
-initial_instances = 1
-maximum_instances = 1
 "#,
         )
-        .expect("valid topology v2 config");
+        .expect("valid topology v3 config");
         let rendered = config_model(&config);
 
         assert!(rendered.contains("ComponentProvisioningGrantConfig"));
+        assert!(rendered.contains("ComponentSpawnGrantConfig"));
         assert!(rendered.contains("maximum_instances_per_requester_per_root : 100_u32"));
-        assert!(rendered.contains("initial_instances : 1_u32"));
+        assert!(rendered.contains("maximum_instances_per_parent : 100_u32"));
+        assert!(!rendered.contains("initial_instances"));
     }
 }

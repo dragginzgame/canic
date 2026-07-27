@@ -82,10 +82,10 @@ pub(in crate::release_set) fn configured_role_details_from_config(
                     ));
                 }
             }
-            if let Some(binding) = &canister.binding {
-                for (pool_name, pool) in &binding.pools {
+            if let Some(index) = &canister.index {
+                for (pool_name, pool) in &index.pools {
                     role_details.insert(format!(
-                        "binding {pool_name}->{} key={}",
+                        "index {pool_name}->{} key={}",
                         pool.canister_role.as_str(),
                         pool.key_name
                     ));

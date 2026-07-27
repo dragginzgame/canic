@@ -44,9 +44,9 @@ pub enum RegistryPolicyError {
     },
 
     #[error(
-        "instance role {role} must be created by a service parent with directory config (parent role {parent_role})"
+        "instance role {role} must be created by a service parent with index config (parent role {parent_role})"
     )]
-    InstanceRequiresServiceWithDirectory {
+    InstanceRequiresServiceWithIndex {
         role: CanisterRole,
         parent_role: CanisterRole,
     },
@@ -87,7 +87,7 @@ pub struct RegistryCanisterShape {
     pub kind: RegistryCanisterKind,
     pub has_scaling: bool,
     pub has_sharding: bool,
-    pub has_directory: bool,
+    pub has_index: bool,
 }
 
 ///
@@ -213,9 +213,8 @@ impl RegistryPolicy {
                 }
             }
             RegistryCanisterKind::Instance => {
-                if !is_service_manager_parent_kind(parent_shape.kind) || !parent_shape.has_directory
-                {
-                    return Err(RegistryPolicyError::InstanceRequiresServiceWithDirectory {
+                if !is_service_manager_parent_kind(parent_shape.kind) || !parent_shape.has_index {
+                    return Err(RegistryPolicyError::InstanceRequiresServiceWithIndex {
                         role: role.clone(),
                         parent_role: parent_role.clone(),
                     });

@@ -251,13 +251,10 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
         StateAllocationKey::CoreIcpRefillRecords,
     ),
     capability_allocation(RoleCapabilityKey::Root, StateAllocationKey::CanisterPool),
+    capability_allocation(RoleCapabilityKey::Index, StateAllocationKey::CanisterPool),
     capability_allocation(
-        RoleCapabilityKey::Directory,
-        StateAllocationKey::CanisterPool,
-    ),
-    capability_allocation(
-        RoleCapabilityKey::Directory,
-        StateAllocationKey::PlacementBindingRegistry,
+        RoleCapabilityKey::Index,
+        StateAllocationKey::PlacementIndexRegistry,
     ),
     capability_allocation(RoleCapabilityKey::Scaling, StateAllocationKey::CanisterPool),
     capability_allocation(

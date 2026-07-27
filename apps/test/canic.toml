@@ -96,13 +96,15 @@ policy.max_shards = 4
 # --- User Shard ---
 [component_specs.users.children.user_shard]
 kind = "shard"
-maximum_instances = 4
 topup = {}
 
 [component_specs.users.children.user_shard.auth]
 delegated_token_issuer = true
 delegated_token_verifier = true
 role_attestation_cache = true
+
+[component_specs.users.spawn_grants.user_hub.user_shard]
+maximum_instances_per_parent = 4
 
 # --- Scale Hub ---
 [component_specs.scaling]
@@ -119,5 +121,7 @@ policy.min_workers = 2
 # --- Scale Replica ---
 [component_specs.scaling.children.scale_replica]
 kind = "replica"
-maximum_instances = 32
 topup = {}
+
+[component_specs.scaling.spawn_grants.scale_hub.scale_replica]
+maximum_instances_per_parent = 32

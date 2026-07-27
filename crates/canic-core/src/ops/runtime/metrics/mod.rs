@@ -16,7 +16,7 @@ pub mod intent;
 pub mod inter_canister_call;
 pub mod lifecycle;
 pub mod management_call;
-pub mod placement_binding;
+pub mod placement_index;
 pub mod platform_call;
 pub mod pool;
 pub mod provisioning;
@@ -42,9 +42,9 @@ use {
     cycles_topup::CyclesTopupMetrics, delegated_auth::DelegatedAuthMetrics,
     icp_refill::IcpRefillMetrics, intent::IntentMetrics,
     inter_canister_call::InterCanisterCallMetrics, lifecycle::LifecycleMetrics,
-    placement_binding::PlacementBindingMetrics, platform_call::PlatformCallMetrics,
-    pool::PoolMetrics, replay::ReplayMetrics, root_capability::RootCapabilityMetrics,
-    scaling::ScalingMetrics, timer::TimerMetrics, wasm_store::WasmStoreMetrics,
+    placement_index::PlacementIndexMetrics, platform_call::PlatformCallMetrics, pool::PoolMetrics,
+    replay::ReplayMetrics, root_capability::RootCapabilityMetrics, scaling::ScalingMetrics,
+    timer::TimerMetrics, wasm_store::WasmStoreMetrics,
 };
 
 #[cfg(feature = "sharding")]
@@ -81,10 +81,7 @@ pub fn core_entries() -> Vec<MetricEntry> {
 #[must_use]
 pub fn placement_entries() -> Vec<MetricEntry> {
     let mut entries = prefix_entries("cascade", cascade_entries());
-    entries.extend(prefix_entries(
-        "placement_binding",
-        placement_binding_entries(),
-    ));
+    entries.extend(prefix_entries("placement_index", placement_index_entries()));
     entries.extend(prefix_entries("pool", pool_entries()));
     entries.extend(prefix_entries("scaling", scaling_entries()));
     #[cfg(feature = "sharding")]
@@ -145,7 +142,7 @@ pub fn reset_for_tests() {
     CyclesFundingMetrics::reset();
     CyclesTopupMetrics::reset();
     DelegatedAuthMetrics::reset();
-    PlacementBindingMetrics::reset();
+    PlacementIndexMetrics::reset();
     PlatformCallMetrics::reset();
     InterCanisterCallMetrics::reset();
     IntentMetrics::reset();
@@ -235,10 +232,10 @@ fn auth_entries() -> Vec<MetricEntry> {
         .collect()
 }
 
-/// Project binding placement counters into the unified public metrics row shape.
+/// Project Placement Index counters into the unified public metrics row shape.
 #[must_use]
-fn placement_binding_entries() -> Vec<MetricEntry> {
-    PlacementBindingMetrics::snapshot()
+fn placement_index_entries() -> Vec<MetricEntry> {
+    PlacementIndexMetrics::snapshot()
         .into_iter()
         .map(|(key, count)| MetricEntry {
             labels: vec![

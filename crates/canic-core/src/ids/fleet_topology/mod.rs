@@ -159,13 +159,14 @@ pub struct ComponentBinding {
 ///
 /// ComponentChildBinding
 ///
-/// Complete immutable identity of one direct child owned by one exact Component.
+/// Complete immutable identity of one child at any depth in one exact Component tree.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentChildBinding {
     pub component: ComponentBinding,
+    pub parent_canister_id: Principal,
     pub role: CanisterRole,
     pub canister_id: Principal,
 }

@@ -1,58 +1,58 @@
-//! Module: workflow::placement::binding::classification
+//! Module: workflow::placement::index::classification
 //!
-//! Responsibility: classify binding entries for resolve and recovery flows.
+//! Responsibility: classify index entries for resolve and recovery flows.
 //! Does not own: storage mutation, child creation, or recovery side effects.
 //! Boundary: maps registry state into workflow-only classification outcomes.
 
 use crate::{
-    config::schema::BindingPool,
+    config::schema::IndexPool,
     ops::{
         runtime::metrics::{
-            placement_binding::{
-                PlacementBindingMetricOperation as MetricOperation,
-                PlacementBindingMetricReason as MetricReason,
+            placement_index::{
+                PlacementIndexMetricOperation as MetricOperation,
+                PlacementIndexMetricReason as MetricReason,
             },
-            recording::PlacementBindingMetricEvent as MetricEvent,
+            recording::PlacementIndexMetricEvent as MetricEvent,
         },
-        storage::placement::binding::{PlacementBindingEntryState, PlacementBindingRegistryOps},
+        storage::placement::index::{PlacementIndexEntryState, PlacementIndexRegistryOps},
     },
-    workflow::placement::binding::{
-        PlacementBindingWorkflow,
+    workflow::placement::index::{
+        PlacementIndexWorkflow,
         state::{
-            PlacementBindingEntryClassification, pending_is_stale, validate_bind_target_with_reason,
+            PlacementIndexEntryClassification, pending_is_stale, validate_bind_target_with_reason,
         },
     },
 };
 
-impl PlacementBindingWorkflow {
+impl PlacementIndexWorkflow {
     // Classify the current entry once so resolve and recovery follow the same stale/repair rules.
     pub(super) fn classify_entry(
         pool: &str,
         key_value: &str,
-        pool_cfg: &BindingPool,
+        pool_cfg: &IndexPool,
         now: u64,
-    ) -> Option<PlacementBindingEntryClassification> {
-        let Some(state) = PlacementBindingRegistryOps::lookup_state(pool, key_value) else {
+    ) -> Option<PlacementIndexEntryClassification> {
+        let Some(state) = PlacementIndexRegistryOps::lookup_state(pool, key_value) else {
             MetricEvent::completed(MetricOperation::Classify, MetricReason::Missing);
             return None;
         };
 
         let classification = match state {
-            PlacementBindingEntryState::Bound {
+            PlacementIndexEntryState::Bound {
                 instance_pid,
                 bound_at,
-            } => PlacementBindingEntryClassification::Bound {
+            } => PlacementIndexEntryClassification::Bound {
                 instance_pid,
                 bound_at,
             },
 
-            PlacementBindingEntryState::Pending {
+            PlacementIndexEntryState::Pending {
                 claim_id,
                 owner_pid,
                 created_at,
                 provisional_pid,
             } if !pending_is_stale(now, created_at) => {
-                PlacementBindingEntryClassification::PendingFresh {
+                PlacementIndexEntryClassification::PendingFresh {
                     claim_id,
                     owner_pid,
                     created_at,
@@ -60,36 +60,36 @@ impl PlacementBindingWorkflow {
                 }
             }
 
-            PlacementBindingEntryState::Pending {
+            PlacementIndexEntryState::Pending {
                 claim_id,
                 owner_pid,
                 created_at,
                 provisional_pid: None,
-            } => PlacementBindingEntryClassification::Resumable {
+            } => PlacementIndexEntryClassification::Resumable {
                 claim_id,
                 owner_pid,
                 created_at,
             },
 
-            PlacementBindingEntryState::Pending {
+            PlacementIndexEntryState::Pending {
                 claim_id,
                 owner_pid,
                 provisional_pid: Some(pid),
                 ..
             } if validate_bind_target_with_reason(pid, &pool_cfg.canister_role).is_ok() => {
-                PlacementBindingEntryClassification::Repairable {
+                PlacementIndexEntryClassification::Repairable {
                     claim_id,
                     owner_pid,
                     provisional_pid: pid,
                 }
             }
 
-            PlacementBindingEntryState::Pending {
+            PlacementIndexEntryState::Pending {
                 claim_id,
                 owner_pid,
                 provisional_pid: Some(provisional_pid),
                 ..
-            } => PlacementBindingEntryClassification::NeedsCleanup {
+            } => PlacementIndexEntryClassification::NeedsCleanup {
                 claim_id,
                 owner_pid,
                 provisional_pid,
@@ -103,16 +103,16 @@ impl PlacementBindingWorkflow {
         Some(classification)
     }
 
-    // Map an internal binding entry classification to the public metric reason vocabulary.
+    // Map an internal index entry classification to the public metric reason vocabulary.
     const fn classification_reason(
-        classification: &PlacementBindingEntryClassification,
+        classification: &PlacementIndexEntryClassification,
     ) -> MetricReason {
         match classification {
-            PlacementBindingEntryClassification::Bound { .. } => MetricReason::AlreadyBound,
-            PlacementBindingEntryClassification::PendingFresh { .. } => MetricReason::PendingFresh,
-            PlacementBindingEntryClassification::Repairable { .. } => MetricReason::StaleRepairable,
-            PlacementBindingEntryClassification::Resumable { .. } => MetricReason::ResumedPending,
-            PlacementBindingEntryClassification::NeedsCleanup { .. } => MetricReason::StaleCleanup,
+            PlacementIndexEntryClassification::Bound { .. } => MetricReason::AlreadyBound,
+            PlacementIndexEntryClassification::PendingFresh { .. } => MetricReason::PendingFresh,
+            PlacementIndexEntryClassification::Repairable { .. } => MetricReason::StaleRepairable,
+            PlacementIndexEntryClassification::Resumable { .. } => MetricReason::ResumedPending,
+            PlacementIndexEntryClassification::NeedsCleanup { .. } => MetricReason::StaleCleanup,
         }
     }
 }

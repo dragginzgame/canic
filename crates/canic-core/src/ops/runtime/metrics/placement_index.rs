@@ -1,6 +1,6 @@
-//! Module: ops::runtime::metrics::placement_binding
+//! Module: ops::runtime::metrics::placement_index
 //!
-//! Responsibility: record and snapshot low-cardinality runtime metrics for the binding family.
+//! Responsibility: record and snapshot low-cardinality runtime metrics for the index family.
 //! Does not own: workflow decisions, persisted records, or endpoint DTOs.
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
@@ -8,19 +8,19 @@ use crate::{InternalError, InternalErrorClass, InternalErrorOrigin};
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
-    static PLACEMENT_BINDING_METRICS: RefCell<HashMap<PlacementBindingMetricKey, u64>> =
+    static PLACEMENT_INDEX_METRICS: RefCell<HashMap<PlacementIndexMetricKey, u64>> =
         RefCell::new(HashMap::new());
 }
 
 ///
-/// PlacementBindingMetricOperation
+/// PlacementIndexMetricOperation
 ///
-/// Placement-binding operation dimension used by public metrics projection.
+/// Placement-index operation dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
-pub enum PlacementBindingMetricOperation {
+pub enum PlacementIndexMetricOperation {
     Bind,
     Claim,
     Classify,
@@ -33,7 +33,7 @@ pub enum PlacementBindingMetricOperation {
     Resolve,
 }
 
-impl PlacementBindingMetricOperation {
+impl PlacementIndexMetricOperation {
     /// Return the stable public metrics label for this operation.
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
@@ -53,21 +53,21 @@ impl PlacementBindingMetricOperation {
 }
 
 ///
-/// PlacementBindingMetricOutcome
+/// PlacementIndexMetricOutcome
 ///
-/// Placement-binding outcome dimension used by public metrics projection.
+/// Placement-index outcome dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
-pub enum PlacementBindingMetricOutcome {
+pub enum PlacementIndexMetricOutcome {
     Completed,
     Failed,
     Skipped,
     Started,
 }
 
-impl PlacementBindingMetricOutcome {
+impl PlacementIndexMetricOutcome {
     /// Return the stable public metrics label for this outcome.
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
@@ -81,14 +81,14 @@ impl PlacementBindingMetricOutcome {
 }
 
 ///
-/// PlacementBindingMetricReason
+/// PlacementIndexMetricReason
 ///
-/// Bounded binding reason dimension used by public metrics projection.
+/// Bounded index reason dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
-pub enum PlacementBindingMetricReason {
+pub enum PlacementIndexMetricReason {
     AlreadyBound,
     Claimed,
     ClaimLost,
@@ -109,7 +109,7 @@ pub enum PlacementBindingMetricReason {
     Unknown,
 }
 
-impl PlacementBindingMetricReason {
+impl PlacementIndexMetricReason {
     /// Return the stable public metrics label for this reason.
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
@@ -151,35 +151,35 @@ impl PlacementBindingMetricReason {
 }
 
 ///
-/// PlacementBindingMetricKey
+/// PlacementIndexMetricKey
 ///
-/// Composite key for one low-cardinality binding counter.
+/// Composite key for one low-cardinality index counter.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
-pub struct PlacementBindingMetricKey {
-    pub operation: PlacementBindingMetricOperation,
-    pub outcome: PlacementBindingMetricOutcome,
-    pub reason: PlacementBindingMetricReason,
+pub struct PlacementIndexMetricKey {
+    pub operation: PlacementIndexMetricOperation,
+    pub outcome: PlacementIndexMetricOutcome,
+    pub reason: PlacementIndexMetricReason,
 }
 
 ///
-/// PlacementBindingMetrics
+/// PlacementIndexMetrics
 ///
-/// Operations-layer recorder for binding placement counters.
+/// Operations-layer recorder for index placement counters.
 ///
 
-pub struct PlacementBindingMetrics;
+pub struct PlacementIndexMetrics;
 
-impl PlacementBindingMetrics {
-    /// Record one binding placement event.
+impl PlacementIndexMetrics {
+    /// Record one index placement event.
     pub fn record(
-        operation: PlacementBindingMetricOperation,
-        outcome: PlacementBindingMetricOutcome,
-        reason: PlacementBindingMetricReason,
+        operation: PlacementIndexMetricOperation,
+        outcome: PlacementIndexMetricOutcome,
+        reason: PlacementIndexMetricReason,
     ) {
-        PLACEMENT_BINDING_METRICS.with_borrow_mut(|counts| {
-            let key = PlacementBindingMetricKey {
+        PLACEMENT_INDEX_METRICS.with_borrow_mut(|counts| {
+            let key = PlacementIndexMetricKey {
                 operation,
                 outcome,
                 reason,
@@ -189,19 +189,19 @@ impl PlacementBindingMetrics {
         });
     }
 
-    /// Snapshot the current binding metric table as stable rows.
+    /// Snapshot the current index metric table as stable rows.
     #[must_use]
-    pub fn snapshot() -> Vec<(PlacementBindingMetricKey, u64)> {
-        PLACEMENT_BINDING_METRICS
+    pub fn snapshot() -> Vec<(PlacementIndexMetricKey, u64)> {
+        PLACEMENT_INDEX_METRICS
             .with_borrow(std::clone::Clone::clone)
             .into_iter()
             .collect()
     }
 
-    /// Test-only helper: clear all binding metrics.
+    /// Test-only helper: clear all index metrics.
     #[cfg(test)]
     pub fn reset() {
-        PLACEMENT_BINDING_METRICS.with_borrow_mut(HashMap::clear);
+        PLACEMENT_INDEX_METRICS.with_borrow_mut(HashMap::clear);
     }
 }
 
@@ -214,46 +214,46 @@ mod tests {
     use super::*;
 
     // Convert snapshots into a map for concise count assertions.
-    fn snapshot_map() -> HashMap<PlacementBindingMetricKey, u64> {
-        PlacementBindingMetrics::snapshot().into_iter().collect()
+    fn snapshot_map() -> HashMap<PlacementIndexMetricKey, u64> {
+        PlacementIndexMetrics::snapshot().into_iter().collect()
     }
 
-    // Verify binding metrics accumulate by operation, outcome, and reason.
+    // Verify index metrics accumulate by operation, outcome, and reason.
     #[test]
-    fn binding_metrics_accumulate_by_operation_outcome_and_reason() {
-        PlacementBindingMetrics::reset();
+    fn index_metrics_accumulate_by_operation_outcome_and_reason() {
+        PlacementIndexMetrics::reset();
 
-        PlacementBindingMetrics::record(
-            PlacementBindingMetricOperation::Resolve,
-            PlacementBindingMetricOutcome::Started,
-            PlacementBindingMetricReason::Ok,
+        PlacementIndexMetrics::record(
+            PlacementIndexMetricOperation::Resolve,
+            PlacementIndexMetricOutcome::Started,
+            PlacementIndexMetricReason::Ok,
         );
-        PlacementBindingMetrics::record(
-            PlacementBindingMetricOperation::Classify,
-            PlacementBindingMetricOutcome::Completed,
-            PlacementBindingMetricReason::PendingFresh,
+        PlacementIndexMetrics::record(
+            PlacementIndexMetricOperation::Classify,
+            PlacementIndexMetricOutcome::Completed,
+            PlacementIndexMetricReason::PendingFresh,
         );
-        PlacementBindingMetrics::record(
-            PlacementBindingMetricOperation::Classify,
-            PlacementBindingMetricOutcome::Completed,
-            PlacementBindingMetricReason::PendingFresh,
+        PlacementIndexMetrics::record(
+            PlacementIndexMetricOperation::Classify,
+            PlacementIndexMetricOutcome::Completed,
+            PlacementIndexMetricReason::PendingFresh,
         );
 
         let map = snapshot_map();
 
         assert_eq!(
-            map.get(&PlacementBindingMetricKey {
-                operation: PlacementBindingMetricOperation::Resolve,
-                outcome: PlacementBindingMetricOutcome::Started,
-                reason: PlacementBindingMetricReason::Ok,
+            map.get(&PlacementIndexMetricKey {
+                operation: PlacementIndexMetricOperation::Resolve,
+                outcome: PlacementIndexMetricOutcome::Started,
+                reason: PlacementIndexMetricReason::Ok,
             }),
             Some(&1)
         );
         assert_eq!(
-            map.get(&PlacementBindingMetricKey {
-                operation: PlacementBindingMetricOperation::Classify,
-                outcome: PlacementBindingMetricOutcome::Completed,
-                reason: PlacementBindingMetricReason::PendingFresh,
+            map.get(&PlacementIndexMetricKey {
+                operation: PlacementIndexMetricOperation::Classify,
+                outcome: PlacementIndexMetricOutcome::Completed,
+                reason: PlacementIndexMetricReason::PendingFresh,
             }),
             Some(&2)
         );

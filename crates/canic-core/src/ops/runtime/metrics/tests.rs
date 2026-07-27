@@ -35,9 +35,9 @@ use crate::{
                 ManagementCallMetricOperation, ManagementCallMetricOutcome,
                 ManagementCallMetricReason,
             },
-            placement_binding::{
-                PlacementBindingMetricOperation, PlacementBindingMetricOutcome,
-                PlacementBindingMetricReason,
+            placement_index::{
+                PlacementIndexMetricOperation, PlacementIndexMetricOutcome,
+                PlacementIndexMetricReason,
             },
             platform_call::{
                 PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
@@ -270,40 +270,35 @@ fn cascade_metrics_are_exposed_with_stable_labels() {
 }
 
 #[test]
-fn placement_binding_metrics_are_exposed_with_stable_labels() {
+fn placement_index_metrics_are_exposed_with_stable_labels() {
     reset_for_tests();
 
-    PlacementBindingMetrics::record(
-        PlacementBindingMetricOperation::Resolve,
-        PlacementBindingMetricOutcome::Started,
-        PlacementBindingMetricReason::Ok,
+    PlacementIndexMetrics::record(
+        PlacementIndexMetricOperation::Resolve,
+        PlacementIndexMetricOutcome::Started,
+        PlacementIndexMetricReason::Ok,
     );
-    PlacementBindingMetrics::record(
-        PlacementBindingMetricOperation::Classify,
-        PlacementBindingMetricOutcome::Completed,
-        PlacementBindingMetricReason::PendingFresh,
+    PlacementIndexMetrics::record(
+        PlacementIndexMetricOperation::Classify,
+        PlacementIndexMetricOutcome::Completed,
+        PlacementIndexMetricReason::PendingFresh,
     );
-    PlacementBindingMetrics::record(
-        PlacementBindingMetricOperation::Classify,
-        PlacementBindingMetricOutcome::Completed,
-        PlacementBindingMetricReason::PendingFresh,
+    PlacementIndexMetrics::record(
+        PlacementIndexMetricOperation::Classify,
+        PlacementIndexMetricOutcome::Completed,
+        PlacementIndexMetricReason::PendingFresh,
     );
 
     let entries = entries(MetricsKind::Placement);
 
     assert_metric_count(
         &entries,
-        &["placement_binding", "resolve", "started", "ok"],
+        &["placement_index", "resolve", "started", "ok"],
         1,
     );
     assert_metric_count(
         &entries,
-        &[
-            "placement_binding",
-            "classify",
-            "completed",
-            "pending_fresh",
-        ],
+        &["placement_index", "classify", "completed", "pending_fresh"],
         2,
     );
 }
@@ -908,10 +903,10 @@ fn seed_all_metric_families_for_reset_test() {
     CyclesFundingMetrics::record_denied(principal, 10, CyclesFundingDeniedReason::ChildNotFound);
     CyclesTopupMetrics::record_request_scheduled();
     DelegatedAuthMetrics::record_authority(principal);
-    PlacementBindingMetrics::record(
-        PlacementBindingMetricOperation::Resolve,
-        PlacementBindingMetricOutcome::Started,
-        PlacementBindingMetricReason::Ok,
+    PlacementIndexMetrics::record(
+        PlacementIndexMetricOperation::Resolve,
+        PlacementIndexMetricOutcome::Started,
+        PlacementIndexMetricReason::Ok,
     );
     PlatformCallMetrics::record(
         PlatformCallMetricSurface::Generic,

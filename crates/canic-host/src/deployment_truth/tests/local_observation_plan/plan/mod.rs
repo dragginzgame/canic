@@ -262,7 +262,9 @@ policy.max_shards = 4
 
 [component_specs.user_hub.children.user_shard]
 kind = "shard"
-maximum_instances = 4096
+
+[component_specs.user_hub.spawn_grants.user_hub.user_shard]
+maximum_instances_per_parent = 20_000
 "#,
     )
     .expect("write config");

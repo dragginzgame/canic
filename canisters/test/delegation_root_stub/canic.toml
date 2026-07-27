@@ -50,7 +50,7 @@ component_role = "project_hub"
 maximum_instances = 1
 initial_cycles = "1T"
 
-[component_specs.projects.binding.pools.projects]
+[component_specs.projects.index.pools.projects]
 canister_role = "project_instance"
 key_name = "project"
 
@@ -60,9 +60,11 @@ role_attestation_cache = true
 
 [component_specs.projects.children.project_instance]
 kind = "instance"
-maximum_instances = 4096
 initial_cycles = "1T"
 
 [component_specs.projects.children.project_instance.auth]
 delegated_token_verifier = true
 role_attestation_cache = true
+
+[component_specs.projects.spawn_grants.project_hub.project_instance]
+maximum_instances_per_parent = 20_000

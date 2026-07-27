@@ -46,7 +46,9 @@ canister_role = "user_shard"
 
 [component_specs.user_hub.children.user_shard]
 kind = "shard"
-maximum_instances = 4096
+
+[component_specs.user_hub.spawn_grants.user_hub.user_shard]
+maximum_instances_per_parent = 20_000
 "#;
     let lifecycle = configured_role_lifecycle_from_config(&parsed_config(config));
 
@@ -134,11 +136,13 @@ policy.max_shards = 4
 
 [component_specs.user_hub.children.user_shard]
 kind = "shard"
-maximum_instances = 4096
 
 [component_specs.user_hub.children.user_shard.auth]
 delegated_token_issuer = true
 role_attestation_cache = true
+
+[component_specs.user_hub.spawn_grants.user_hub.user_shard]
+maximum_instances_per_parent = 20_000
 
 [component_specs.scale_hub]
 component_role = "scale_hub"
@@ -151,10 +155,12 @@ policy.min_workers = 2
 
 [component_specs.scale_hub.children.scale_replica]
 kind = "replica"
-maximum_instances = 4096
 
 [component_specs.scale_hub.children.scale_replica.metrics]
 profile = "full"
+
+[component_specs.scale_hub.spawn_grants.scale_hub.scale_replica]
+maximum_instances_per_parent = 20_000
 "#;
     let details = configured_role_details_from_config(&parsed_config(config));
 

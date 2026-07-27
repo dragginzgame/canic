@@ -42,7 +42,9 @@ maximum_instances = 2
 
 [component_specs.alpha.children.shared]
 kind = "replica"
-maximum_instances = 2
+
+[component_specs.alpha.spawn_grants.alpha.shared]
+maximum_instances_per_parent = 2
 "#;
 
 fn topology() -> ComponentTopology {

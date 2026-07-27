@@ -1,21 +1,24 @@
 # Minimal Managed Fleet
 
-This guide shows the smallest Canic-managed shape that exercises the flat
-fleet model: one Fleet Subnet Root manages a `hub` Component, and that
-Component manages one direct `registry` child through root lifecycle effects.
+This guide shows the smallest Canic-managed shape that exercises the
+root-owned Component-tree model: one Fleet Subnet Root manages a `hub`
+Component, and that Component asks the root to create one direct `registry`
+child.
 Use this as the reference before adapting a product canister layout.
 
 This guide tracks the current Canic scaffold shape. For new fleets, prefer
 `canic app create <name>` and keep all `canic` dependencies on the same
 release as the installed `canic` CLI. The current schema uses
-`[app].name`, flat Component Specs, bounded direct children, `topup`, and
+`[app].name`, flat Component role catalogs, bounded descendants, `topup`, and
 `canic::finish!()`.
 
 The root executes lifecycle, topology, and artifact effects. It does not proxy
-ordinary application methods. The Component owns its direct child logically
-and asks the root to perform admitted cycle, creation, and installation
-effects. Callers resolve application Canister IDs from topology and call them
-directly.
+ordinary application methods. Each registered node owns its direct children
+logically and asks the root to perform admitted cycle, creation, and
+installation effects. Those children may make the same request in turn, so
+runtime trees may have several levels even though the Spec's potential-Wasm
+catalog is flat. Callers resolve application Canister IDs from topology and
+call them directly.
 
 ## Layout
 
@@ -102,8 +105,9 @@ environments:
 
 ## Fleet Config
 
-Declare one non-recursive Component Spec with one Component role and its direct
-child. Do not use a flat `[[canisters]]` list or nest another Component.
+Declare one Component Spec with one top-level Component role and a flat catalog
+of its potential descendant roles. Do not use a flat `[[canisters]]` list or
+nest child tables to express runtime parentage.
 
 ```toml
 controllers = []
@@ -130,8 +134,10 @@ topup = {}
 
 [component_specs.main.children.registry]
 kind = "singleton"
-maximum_instances = 1
 topup = {}
+
+[component_specs.main.spawn_grants.hub.registry]
+maximum_instances_per_parent = 1
 ```
 
 ## Build Scripts

@@ -9,9 +9,9 @@ use crate::{
     config::{
         ComponentTopology, Config, ConfigError, ConfigModel,
         schema::{
-            BindingConfig, CanisterConfig, ComponentSpecConfig, DelegatedTokenConfig,
-            FleetInitMode, LogConfig, RoleAttestationConfig, ScalingConfig,
-            implicit_root_canister_config, implicit_wasm_store_canister_config,
+            CanisterConfig, ComponentSpecConfig, DelegatedTokenConfig, FleetInitMode, IndexConfig,
+            LogConfig, RoleAttestationConfig, ScalingConfig, implicit_root_canister_config,
+            implicit_wasm_store_canister_config,
         },
     },
     ids::{CanisterRole, ComponentSpecId},
@@ -223,9 +223,9 @@ impl ConfigOps {
         Ok(Self::current_canister()?.scaling)
     }
 
-    /// Fetch the binding placement config for the *current* canister.
-    pub(crate) fn current_binding_config() -> Result<Option<BindingConfig>, InternalError> {
-        Ok(Self::current_canister()?.binding)
+    /// Fetch the keyed placement index config for the *current* canister.
+    pub(crate) fn current_index_config() -> Result<Option<IndexConfig>, InternalError> {
+        Ok(Self::current_canister()?.index)
     }
 
     /// Fetch the configuration for a role in the current Component Spec.
@@ -239,9 +239,9 @@ impl ConfigOps {
 
     /// Resolve the target canister configuration for one provisioning effect.
     ///
-    /// A Fleet Subnet Root may create implicit infrastructure or a direct
-    /// Component and therefore resolves the target globally. A Component may
-    /// create only one of its own direct children and resolves within its
+    /// A Fleet Subnet Root may create implicit infrastructure or a Component
+    /// and therefore resolves the target globally. Any registered canister in
+    /// a Component tree resolves a requested child role within that tree's
     /// protected Component Spec.
     pub(crate) fn canister_for_provisioning(
         canister_role: &CanisterRole,

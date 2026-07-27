@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.7`.
-- The latest published release is `v0.100.7` at
-  `042e6be2bbbc17715af660329d827ff18a6fe586`.
-- The `v0.100.7` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `e4348b4c1109c7eda8b2f64b61705e65706e9143a5371addf69e8ac1264cbe52`.
+- The workspace package version is `0.100.8`.
+- The latest published release is `v0.100.8` at
+  `e5ae4d56e8febf2aae6200ccb8cf7bac550b2b9c`.
+- The `v0.100.8` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `007239e6d4f6f18b7f305cadf29d6c52717b8df2f50cbaab9014c4a4d3235c59`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -90,7 +90,7 @@ Historical detail is archived at:
   grant-authenticated Component creation remain subsequent 0.100 slices.
   The same patch also restores direct-root-child cycles funding without
   assigning infrastructure roots a Component Spec.
-- The open `0.100.8` freezes passive Fleet Registry snapshot, manifest and
+- Released `0.100.8` freezes passive Fleet Registry snapshot, manifest and
   version contracts plus a bounded domain-separated canonical encoding.
   Epoch-one/revision-one genesis contains the complete immutable Component
   Spec set and zero roots. Snapshot validation admits incremental partial
@@ -99,33 +99,47 @@ Historical detail is archived at:
   principals, one active release build, each root's topology, admissions and
   limits, and aggregate Fleet admission ceilings. Durable snapshot commits,
   root transitions and synchronization remain subsequent slices.
+- The open `0.100.9` hard-cuts Component Spec and Component Topology schema
+  version 2 to version 3. A Component Spec is now a flat catalog of every
+  potential descendant role and Wasm in one root-owned Component tree, while
+  the runtime `ComponentChildBinding` records each child's immediate parent.
+  Any exact registered node may ask the Fleet Subnet Root to create a direct
+  child on the same Subnet only through an exact role-to-role spawn grant.
+  `initial_instances` and child-role `maximum_instances` are removed,
+  `maximum_children` becomes the aggregate `maximum_descendants`, and no v1
+  or v2 decoder remains. The default aggregate capacity is 20,000 descendants
+  with a 16 MiB Component Registry allowance.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
-  remain Fleet-scoped. Each root receives immutable admissions for
-  non-recursive Component Specs. One Spec declares one direct Component role
-  and its direct children, with a Fleet instance ceiling distributed into
-  positive root-local ceilings. A root allocates `ComponentInstanceId` only
-  when it creates a concrete Component. The amended target topology adds
-  explicit initial-child cardinality and bounded non-parent Component
-  Provisioning Grants under canonical schema/domain version 2. Those
-  compile-time contracts and root projections are now implemented; lifecycle
-  execution remains pending. A grant lets an exact Component request one peer
-  Spec but never makes it the target's parent, controller or Registry owner.
-  Required children exist before Component activation; zero-initial optional
-  children remain later exact-owner requests. There is no Tree identity, empty
-  workload partition, runtime Group Canister, nested Component or child
-  manager. The Fleet Subnet Root is the required lifecycle controller and
-  owns independent Component Registry/Directory partitions plus authoritative
-  idempotent receipts. The immutable Component Topology, root admissions,
-  active release set and observed Wasm Store Catalog are distinct
-  authorities. The host builds one qualified artifact union per
-  `ReleaseBuildId` and projects an exact release-set manifest for each root.
-  A separate exact Canic infrastructure manifest qualifies the Coordinator,
-  Fleet Subnet Root and Wasm Store. The host installs the Coordinator and
-  roots directly; each root bootstraps only its own verified local Store. The
-  Coordinator manages Fleet roots and publication, not ordinary Component
-  inventories.
+  remain Fleet-scoped. Each root receives immutable admissions for flat
+  Component Specs. One Spec declares one direct Component role plus the
+  complete catalog of potential descendant roles and Wasms for that
+  Component tree, with a Fleet instance ceiling distributed into positive
+  root-local ceilings. A root allocates `ComponentInstanceId` only when it
+  creates a concrete top-level Component. Any registered Component-tree node
+  may request one admitted direct child through the root; its immutable child
+  binding names the exact immediate parent, while the root remains sole
+  controller and lifecycle authority at every depth. Bounded non-parent
+  Component Provisioning Grants remain available for creating peer top-level
+  Components, but Toko Project Instances use ordinary parent-child creation
+  beneath their Project Hub. Each parent role may create only child roles
+  admitted by explicit per-parent spawn grants. Descendant roles may own their
+  own scaling, sharding and Placement Index pools. A Directory remains a
+  root-derived read-only discovery projection; a Placement Index is separate
+  application-owned keyed placement state. There is no Tree identity, empty workload
+  partition, runtime Group Canister, nested Component declaration or
+  delegated child manager. The Fleet Subnet Root owns independent Component
+  Registry/Directory partitions plus authoritative idempotent receipts. The
+  immutable Component Topology, root admissions, active release set and
+  observed Wasm Store Catalog are distinct authorities. The host builds one
+  qualified artifact union per `ReleaseBuildId` from every admitted Spec's
+  Component and potential-descendant catalog, then projects an exact
+  release-set manifest for each root. A separate exact Canic infrastructure
+  manifest qualifies the Coordinator, Fleet Subnet Root and Wasm Store. The
+  host installs the Coordinator and roots directly; each root bootstraps only
+  its own verified local Store. The Coordinator manages Fleet roots and
+  publication, not ordinary Component inventories.
 - A fresh 0.101 adds bounded `ComponentGroupSpec` deployment composition.
   Groups may include groups in configuration, but compile to canonical flat
   member paths and direct root-owned Components before planning. Inclusion
@@ -143,11 +157,18 @@ Historical detail is archived at:
   Target-level member density/spread controls availability independently of
   deployment placement, so Toko enforces one database member per root while
   another app may explicitly co-locate members. PoolMember purpose grants no
-  implicit leadership, health, load balancing or consistency. Root-local
-  Component Group Directories expose siblings in one exact placement without
-  granting lifecycle authority. A
-  service-sensitive direct child resolves purpose through its exact owning
-  Component and never becomes a group member or Fleet service.
+  implicit leadership, health, load balancing or consistency. Separate
+  deployments may reuse one Component Group with different reduction-only
+  effective limits on exact flattened members. The Component Spec remains the
+  absolute envelope; deployment policy may narrow aggregate descendants,
+  Registry bytes and existing spawn-grant ceilings but cannot raise them or
+  alter the Spec. Every placement and scale-out of one deployment inherits
+  the same protected limits, so separate deployment IDs express, for example,
+  10,000- and 2,000-instance Project Hubs on different roots/Subnets.
+  Root-local Component Group Directories expose siblings in one exact
+  placement without granting lifecycle authority. A service-sensitive
+  descendant resolves purpose through its exact owning top-level Component
+  and never becomes a group member or Fleet service.
   Explicit same-release group scale-out may add exact placements on
   already-installed, already-admitted roots—including roots that complete the
   separate root-registration lifecycle first—up to protected deployment,
@@ -155,13 +176,13 @@ Historical detail is archived at:
   It cannot scale in, expand admissions, promote a Replica or claim
   application-data readiness. Toko's one-cell-per-root choice and value ten
   are example policy, not protocol constants. Independently scaled tiers use
-  separate deployments. Dynamic high-cardinality leaf shards remain direct
-  Component Children. A dynamic unit that must own children is instead an
-  ordinary peer Component: an exact published Project Hub may use its compiled
-  grant to ask an eligible root for a Project Instance, whose required Ledger
-  is created before activation and whose optional Machine remains under the
-  Project Instance. The target root, not the Hub or Coordinator, owns that
-  lifecycle, and the Coordinator is not on the per-instance path. Grouped
+  separate deployments. Dynamic high-cardinality descendants remain
+  Component Children even when they create children of their own. Each
+  Project Hub creates its Project Instances as direct children through its own
+  root, and each Project Instance may create its Ledger and optional Machine
+  through that same root. The root, not the Hub, child or Coordinator,
+  performs every platform lifecycle effect, and the Coordinator is not on the
+  per-instance path. Grouped
   Components and their roots remain fenced from
   ordinary removal while placement or service references exist. Neither
   design consumes an installation from its predecessor. The proposed 0.102
