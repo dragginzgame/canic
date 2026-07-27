@@ -36,7 +36,7 @@ use super::truth_check::current_install_deployment_truth_check_at;
 use super::{
     InstallRootBlockKind, InstallRootBlockedError, InstallRootError, InstallRootOptions,
     InstallRootPhase, check_install_deployment_truth, check_install_execution_preflight,
-    latest_deployment_truth_receipt_path_from_root, require_coordinator_first_install_effects,
+    latest_deployment_truth_receipt_path_from_root, require_fleet_subnet_root_install_effects,
 };
 use crate::canister_build::{
     CanisterArtifactBuildSpec, CanisterBuildProfile, WorkspaceBuildContext,
@@ -84,17 +84,15 @@ fn public_install_error_preserves_phase_and_typed_source() {
 }
 
 #[test]
-fn coordinator_first_guard_blocks_the_legacy_root_effect_path() {
+fn verified_coordinator_guard_blocks_the_legacy_root_effect_path() {
     let plan_path = Path::new("/tmp/fleet-install-plan.json");
-    let error = require_coordinator_first_install_effects(plan_path)
+    let coordinator = candid::Principal::from_slice(&[42]);
+    let error = require_fleet_subnet_root_install_effects(plan_path, coordinator)
         .expect_err("legacy root effect path must remain blocked");
 
     assert_eq!(error.plan_path, plan_path);
-    assert!(
-        error
-            .to_string()
-            .contains("genuine Fleet Coordinator runtime")
-    );
+    assert_eq!(error.coordinator, coordinator);
+    assert!(error.to_string().contains("independently verified"));
 }
 
 #[test]

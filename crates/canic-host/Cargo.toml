@@ -19,7 +19,10 @@ ignored = ["serde_bytes"]
 [dependencies]
 candid = { workspace = true }
 candid_parser = { workspace = true }
-canic-control-plane = { workspace = true, features = ["root-control-plane"] }
+canic-control-plane = { workspace = true, features = [
+    "fleet-coordinator-canister",
+    "root-control-plane",
+] }
 canic-core = { workspace = true, features = ["auth-chain-key-ecdsa"] }
 ciborium = { workspace = true }
 flate2 = { workspace = true }

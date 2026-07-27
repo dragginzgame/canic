@@ -3,6 +3,9 @@
 /// Keep these synchronized with the macro-defined endpoints.
 
 pub const CANIC_RESPONSE_CAPABILITY_V1: &str = "canic_response_capability_v1";
+pub const CANIC_FLEET_REGISTRY: &str = "canic_fleet_registry";
+pub const CANIC_FLEET_REGISTRY_MANIFEST: &str = "canic_fleet_registry_manifest";
+pub const CANIC_FLEET_REGISTRY_VERSION: &str = "canic_fleet_registry_version";
 pub const CANIC_FLEET_ACTIVATION_STATUS: &str = "canic_fleet_activation_status";
 pub const CANIC_PREPARE_FLEET_ACTIVATION: &str = "canic_prepare_fleet_activation";
 pub const CANIC_RESUME_FLEET_ACTIVATION: &str = "canic_resume_fleet_activation";

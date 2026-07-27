@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.12` makes fresh installation durably create, install and independently
+  verify the exact Fleet Coordinator and Registry genesis before a post-
+  verification fence prevents any legacy root effect.
+
 - `0.100.11` adds the genuine built-in Fleet Coordinator runtime and its
   protected Registry genesis/query authority, then builds and immutably
   records the exact Coordinator, Fleet Subnet Root and Wasm Store artifacts

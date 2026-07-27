@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.10`.
-- The latest published release is `v0.100.10` at
-  `e0bd85d1beab967aeb7ae63d4813b94f02d5aee6`.
-- The `v0.100.10` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `03c17c6b014f794c33dd45b8ee57cb885d8a11b402f9ac3c3510ed676b57185b`.
+- The workspace package version is `0.100.11`.
+- The latest published release is `v0.100.11` at
+  `ec5118fbf849aa72d15f3b35285f604f5f39717a`.
+- The `v0.100.11` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `a4a10c6c719ad7e631674193b40441889ba3ac62c5ec94bb3dd7ede6c8a4338a`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -121,7 +121,7 @@ Historical detail is archived at:
   creation. It then fails closed at an explicit Coordinator-first guard, so
   the legacy single-root creation path cannot bypass the plan while the
   genuine Fleet Coordinator runtime is still absent.
-- The open `0.100.11` adds that genuine Fleet Coordinator as a dedicated
+- Released `0.100.11` adds that genuine Fleet Coordinator as a dedicated
   built-in Canic runtime, not an App role, Component or relabelled root. Its
   exact init commits protected Fleet Registry genesis from the configured App,
   Coordinator authority and canonical Component Topology, and its dedicated
@@ -133,6 +133,18 @@ Historical detail is archived at:
   Coordinator-first network-effect guard remains; the next slice must create,
   install and verify the Coordinator from this immutable authority before any
   root effect.
+- The open `0.100.12` replaces that pre-effect guard with a canonical
+  Coordinator installation journal bound to the exact Fleet plan, complete
+  Component Topology and infrastructure artifact authority. It durably
+  separates creation and install intent from their observed outcomes,
+  captures the detached creation principal for interruption recovery and
+  never blindly repeats an unresolved paid effect. The host creates on the
+  planned Subnet with exact cycles or ICP funding, installs the raw
+  Coordinator Wasm with protected epoch-one init, and requires the live module
+  hash, complete Registry genesis, manifest and version to match locally
+  recomputed authority. A new post-verification fence still prevents the old
+  single-root path from creating any root; planned multi-root creation and
+  root registration are next.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
