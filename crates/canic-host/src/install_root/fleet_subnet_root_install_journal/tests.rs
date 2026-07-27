@@ -11,10 +11,12 @@ use crate::{
     },
     install_root::fleet_subnet_root_install_journal::{
         FleetSubnetRootInstallPhase, PlanFleetSubnetRootInstallRequest, begin_registry_join,
-        begin_root_creation, begin_root_install, begin_store_bootstrap, begin_store_staging,
-        expected_root_authority, plan_fleet_subnet_root_install, record_registry_join_verified,
-        record_registry_joined, record_root_created, record_root_installed, record_root_verified,
-        record_store_bootstrapped, record_store_staged, record_store_verified,
+        begin_registry_sync, begin_root_creation, begin_root_install, begin_store_bootstrap,
+        begin_store_staging, expected_root_authority, plan_fleet_subnet_root_install,
+        record_registry_join_verified, record_registry_joined, record_registry_sync_verified,
+        record_registry_synchronized, record_root_created, record_root_installed,
+        record_root_verified, record_store_bootstrapped, record_store_staged,
+        record_store_verified,
     },
     release_set::{
         CanicInfrastructureArtifactEntry, CanicInfrastructureArtifactManifest,
@@ -30,8 +32,13 @@ use canic_core::{
     cdk::types::Cycles,
     control_plane_support::ops::fleet_registry::FleetRegistryOps,
     dto::{
-        fleet_registry::FleetSubnetRootJoinResponse,
-        root_store::{RootStoreBootstrapResponse, RootStoreCatalogEntry},
+        fleet_registry::{
+            FleetSubnetRootJoinResponse, FleetSubnetRootRegistrySyncRequest,
+            FleetSubnetRootRegistrySyncResponse, FleetSubnetRootSnapshotAcknowledgement,
+        },
+        root_store::{
+            RootStoreBootstrapRequest, RootStoreBootstrapResponse, RootStoreCatalogEntry,
+        },
     },
     ids::{
         AppId, CanisterRole, CanonicalNetworkId, ComponentSpecAdmission, CyclesFundingBudget,
@@ -137,7 +144,7 @@ fn journals_exact_store_bootstrap_and_rejects_a_catalog_outside_root_admissions(
 }
 
 #[test]
-fn journals_exact_registry_join_request_response_and_independent_verification() {
+fn journals_exact_registry_join_and_snapshot_synchronization_evidence() {
     let root = temp_dir("fleet-subnet-root-registry-join-journal");
     let fixture = fixture(&root);
     let planned = plan(&fixture).expect("plan root");
@@ -216,6 +223,44 @@ fn journals_exact_registry_join_request_response_and_independent_verification() 
     );
     assert_eq!(complete.journal.sequence, 13);
     assert_eq!(complete.journal.registry_join_response, Some(response));
+
+    assert_registry_sync_journal(&complete, root_canister, version);
+}
+
+fn assert_registry_sync_journal(
+    joined: &super::ResolvedFleetSubnetRootInstall,
+    root_canister: Principal,
+    version: canic_core::dto::fleet_registry::FleetRegistryVersion,
+) {
+    let sync_request = FleetSubnetRootRegistrySyncRequest {
+        expected_registry: version.clone(),
+        store_bootstrap: RootStoreBootstrapRequest {
+            manifest_payload_size_bytes: 1_024,
+        },
+    };
+    let synchronizing =
+        begin_registry_sync(joined, sync_request.clone()).expect("begin Registry sync");
+    let acknowledgement = FleetSubnetRootSnapshotAcknowledgement {
+        fleet_subnet_root: root_canister,
+        version: version.clone(),
+    };
+    let sync_response = FleetSubnetRootRegistrySyncResponse {
+        fleet_subnet_root: root_canister,
+        version,
+        acknowledgement,
+    };
+    let synchronized = record_registry_synchronized(&synchronizing, sync_response.clone())
+        .expect("record Registry sync");
+    let verified = record_registry_sync_verified(&synchronized, sync_response.clone())
+        .expect("verify Registry sync");
+
+    assert_eq!(
+        verified.journal.phase,
+        FleetSubnetRootInstallPhase::RegistrySyncVerified
+    );
+    assert_eq!(verified.journal.sequence, 16);
+    assert_eq!(verified.journal.registry_sync_request, Some(sync_request));
+    assert_eq!(verified.journal.registry_sync_response, Some(sync_response));
 }
 
 #[test]

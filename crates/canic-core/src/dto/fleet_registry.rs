@@ -4,6 +4,7 @@
 //! Does not own: validation, canonical encoding, persistence, or lifecycle transitions.
 //! Boundary: Coordinator and Fleet Subnet Root workflows validate these passive shapes.
 
+use crate::dto::root_store::RootStoreBootstrapRequest;
 use crate::ids::{
     CanisterRole, ComponentSpecAdmission, ComponentSpecId, ComponentTopologyDigest,
     FleetRegistryAuthority, FleetSubnetRootLimits, FleetSubnetRootReleaseSet, SubnetId,
@@ -119,4 +120,55 @@ pub struct FleetSubnetRootJoinRequest {
 pub struct FleetSubnetRootJoinResponse {
     pub entry: FleetSubnetRootEntry,
     pub version: FleetRegistryVersion,
+}
+
+///
+/// FleetRegistrySnapshotResponse
+///
+/// Complete current Coordinator snapshot supplied only to one registered root.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetRegistrySnapshotResponse {
+    pub registry: FleetRegistry,
+    pub manifest: FleetRegistryManifest,
+    pub version: FleetRegistryVersion,
+}
+
+///
+/// FleetSubnetRootSnapshotAcknowledgementRequest
+///
+/// Root-authenticated acknowledgement of one exact durably staged snapshot.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootSnapshotAcknowledgementRequest {
+    pub version: FleetRegistryVersion,
+}
+
+///
+/// FleetSubnetRootSnapshotAcknowledgement
+///
+/// Durable Coordinator receipt proving which root acknowledged which version.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootSnapshotAcknowledgement {
+    pub fleet_subnet_root: Principal,
+    pub version: FleetRegistryVersion,
+}
+
+/// Controller command asking a Prepared root to synchronize and acknowledge its Registry.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootRegistrySyncRequest {
+    pub expected_registry: FleetRegistryVersion,
+    pub store_bootstrap: RootStoreBootstrapRequest,
+}
+
+/// Exact root-local candidate and Coordinator acknowledgement evidence.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootRegistrySyncResponse {
+    pub fleet_subnet_root: Principal,
+    pub version: FleetRegistryVersion,
+    pub acknowledgement: FleetSubnetRootSnapshotAcknowledgement,
 }

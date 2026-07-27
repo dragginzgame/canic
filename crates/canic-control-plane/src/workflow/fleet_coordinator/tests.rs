@@ -162,6 +162,8 @@ fn root_join_compare_and_commit_retains_exact_response_receipts() {
         vec![second_entry.placement_subnet, first_entry.placement_subnet]
     );
 
+    assert_snapshot_acknowledgements(&registry, &first_entry, &second_entry, &second.version);
+
     let stale = FleetCoordinatorWorkflow::join_root(FleetSubnetRootJoinRequest {
         expected_registry: genesis,
         entry: joining_entry(&topology, 9, 17, 1),
@@ -196,6 +198,47 @@ fn root_join_compare_and_commit_retains_exact_response_receipts() {
     let invalid = crate::api::fleet_coordinator::FleetCoordinatorApi::registry()
         .expect_err("reject corrupted historical receipt");
     assert_eq!(invalid.code, ErrorCode::InvariantViolation);
+}
+
+fn assert_snapshot_acknowledgements(
+    registry: &FleetRegistry,
+    first_entry: &FleetSubnetRootEntry,
+    second_entry: &FleetSubnetRootEntry,
+    version: &FleetRegistryVersion,
+) {
+    let snapshot = FleetCoordinatorWorkflow::snapshot_for_root(first_entry.fleet_subnet_root)
+        .expect("registered root snapshot");
+    assert_eq!(&snapshot.registry, registry);
+    assert_eq!(&snapshot.version, version);
+    let unauthorized_snapshot = FleetCoordinatorWorkflow::snapshot_for_root(principal(99))
+        .expect_err("unregistered caller cannot fetch snapshot");
+    assert_eq!(
+        unauthorized_snapshot.public_error().map(|error| error.code),
+        Some(ErrorCode::Forbidden)
+    );
+
+    let request = canic_core::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgementRequest {
+        version: version.clone(),
+    };
+    let first_ack = FleetCoordinatorWorkflow::acknowledge_root_snapshot(
+        first_entry.fleet_subnet_root,
+        request.clone(),
+    )
+    .expect("first acknowledgement");
+    assert_eq!(
+        FleetCoordinatorWorkflow::acknowledge_root_snapshot(
+            first_entry.fleet_subnet_root,
+            request.clone(),
+        )
+        .expect("exact acknowledgement retry"),
+        first_ack
+    );
+    FleetCoordinatorWorkflow::acknowledge_root_snapshot(second_entry.fleet_subnet_root, request)
+        .expect("second acknowledgement");
+    let acknowledgements =
+        FleetCoordinatorWorkflow::root_snapshot_acknowledgements().expect("acknowledgements");
+    assert_eq!(acknowledgements.len(), 2);
+    assert!(acknowledgements.iter().all(|ack| &ack.version == version));
 }
 
 fn joining_entry(

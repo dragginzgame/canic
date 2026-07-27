@@ -1,8 +1,8 @@
 //! Module: pic::fleet_coordinator
 //!
 //! Responsibility: exercise the built-in Coordinator Registry lifecycle through PocketIC.
-//! Does not own: host installation journals or root snapshot synchronization.
-//! Boundary: builds one runtime-only Coordinator and calls its controller endpoint surface.
+//! Does not own: host installation journals or root-local snapshot staging.
+//! Boundary: builds one Coordinator and calls its controller and registered-root endpoint surfaces.
 
 #[cfg(test)]
 mod tests {
@@ -15,8 +15,10 @@ mod tests {
         dto::{
             error::{Error, ErrorCode},
             fleet_registry::{
-                FleetRegistry, FleetSubnetRootEntry, FleetSubnetRootJoinRequest,
-                FleetSubnetRootJoinResponse, FleetSubnetRootStatus,
+                FleetRegistry, FleetRegistrySnapshotResponse, FleetSubnetRootEntry,
+                FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
+                FleetSubnetRootSnapshotAcknowledgement,
+                FleetSubnetRootSnapshotAcknowledgementRequest, FleetSubnetRootStatus,
             },
         },
         ids::{
@@ -29,7 +31,7 @@ mod tests {
     };
     use ic_testkit::{
         artifacts::{read_wasm, test_target_dir, workspace_root_for},
-        pic::{PicBuilder, acquire_pic_serial_guard},
+        pic::{Pic, PicBuilder, acquire_pic_serial_guard},
     };
 
     const COORDINATOR_PACKAGE: &str = "fleet_coordinator_stub";
@@ -115,6 +117,8 @@ mod tests {
         assert_eq!(registry.revision, 3);
         assert_eq!(registry.fleet_subnet_roots.len(), 2);
 
+        assert_root_snapshot_endpoints(&pic, coordinator, &registry, &second.version);
+
         let unauthorized: Result<FleetSubnetRootJoinResponse, Error> = pic
             .update_call_as(
                 coordinator,
@@ -132,6 +136,83 @@ mod tests {
                 .code,
             ErrorCode::Unauthorized
         );
+    }
+
+    fn assert_root_snapshot_endpoints(
+        pic: &Pic,
+        coordinator: Principal,
+        registry: &FleetRegistry,
+        version: &canic_core::dto::fleet_registry::FleetRegistryVersion,
+    ) {
+        let first_root = principal(21);
+        let snapshot: Result<FleetRegistrySnapshotResponse, Error> = pic
+            .update_call_as(
+                coordinator,
+                first_root,
+                protocol::CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT,
+                (),
+            )
+            .expect("registered root snapshot transport");
+        let snapshot = snapshot.expect("registered root snapshot");
+        assert_eq!(&snapshot.registry, registry);
+        assert_eq!(&snapshot.version, version);
+
+        let unregistered_snapshot: Result<FleetRegistrySnapshotResponse, Error> = pic
+            .update_call_as(
+                coordinator,
+                principal(99),
+                protocol::CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT,
+                (),
+            )
+            .expect("unregistered snapshot transport");
+        assert_eq!(
+            unregistered_snapshot
+                .expect_err("unregistered root snapshot must fail")
+                .code,
+            ErrorCode::Forbidden
+        );
+
+        let request = FleetSubnetRootSnapshotAcknowledgementRequest {
+            version: version.clone(),
+        };
+        let first_ack: Result<FleetSubnetRootSnapshotAcknowledgement, Error> = pic
+            .update_call_as(
+                coordinator,
+                first_root,
+                protocol::CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT,
+                (request.clone(),),
+            )
+            .expect("first acknowledgement transport");
+        let first_ack = first_ack.expect("first acknowledgement");
+        let repeated: Result<FleetSubnetRootSnapshotAcknowledgement, Error> = pic
+            .update_call_as(
+                coordinator,
+                first_root,
+                protocol::CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT,
+                (request.clone(),),
+            )
+            .expect("acknowledgement retry transport");
+        assert_eq!(repeated.expect("exact acknowledgement retry"), first_ack);
+        let second_ack: Result<FleetSubnetRootSnapshotAcknowledgement, Error> = pic
+            .update_call_as(
+                coordinator,
+                principal(22),
+                protocol::CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT,
+                (request,),
+            )
+            .expect("second acknowledgement transport");
+        second_ack.expect("second acknowledgement");
+
+        let acknowledgements: Result<Vec<FleetSubnetRootSnapshotAcknowledgement>, Error> = pic
+            .query_call(
+                coordinator,
+                protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
+                (),
+            )
+            .expect("acknowledgement inventory transport");
+        let acknowledgements = acknowledgements.expect("acknowledgement inventory");
+        assert_eq!(acknowledgements.len(), 2);
+        assert!(acknowledgements.iter().all(|ack| &ack.version == version));
     }
 
     fn init_args(coordinator: Principal) -> FleetCoordinatorInitArgs {

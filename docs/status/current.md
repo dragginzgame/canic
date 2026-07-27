@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.14`.
-- The latest published release is `v0.100.14` at
-  `965836ff7e58afa3332891d6286466e3488b81b0`.
-- The `v0.100.14` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `e678b62216f7ed1b1a5b2433e2ded3da9f6c6943a8c4b6084a6f284de1a38ee8`.
+- The workspace package version is `0.100.15`.
+- The latest published release is `v0.100.15` at
+  `9091698875e9b63f5def6c44b41e642f4145642c`.
+- The `v0.100.15` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `c8c8a05d7e03d056c37806e3fbf528d7c877a5a4e57ef7bec9e7b6a3c9a3e350`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -166,7 +166,7 @@ Historical detail is archived at:
   `SubnetDirectory` authority. Current authorization, replay, cycles,
   delegated-auth, scaling, sharding and recovery properties remain required
   validation for the genuine Coordinator-anchored multi-root PocketIC journey.
-- Open `0.100.15` extends each verified root journal through exact Fleet
+- Released `0.100.15` extends each verified root journal through exact Fleet
   Registry `Joining`. The Coordinator atomically compare-and-commits one
   topology-admitted root and its durable response receipt, so a late exact
   retry returns the original revision even after other roots join. The host
@@ -174,6 +174,16 @@ Historical detail is archived at:
   all-`Joining` snapshot, manifest and version. Snapshot delivery,
   acknowledgement, Registry `Active`, final Directory activation and runtime
   activation remain fenced.
+- Open `0.100.16` hard-cuts the maintained Component Spec, Component Topology
+  and root-install journal identifiers to v1 under the pre-1.0
+  reinstall-only rule. Every prepared root now independently reverifies its
+  exact Store, fetches and validates the complete all-`Joining` Registry,
+  durably stages that private candidate before acknowledgement and stores the
+  Coordinator's exact idempotent `(root, version)` receipt. The host journals
+  and re-queries each result, then requires the Coordinator acknowledgement
+  set to equal every planned root at the exact final `Joining` version.
+  Registry `Active`, final mirror/Directory activation and runtime activation
+  remain fenced.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1467,8 +1477,9 @@ Continue 0.100 Slice 3 from the
 [implementation tracker](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md).
 Fresh installation now journals and verifies the Coordinator, every planned
 Fleet Subnet Root, each root's exact topology-admitted local Store, and every
-root's Registry `Joining` row. Next, journal exact snapshot synchronization and
-acknowledgement, then commit and distribute the final all-active Registry
+root's Registry `Joining` row, private snapshot candidate and exact
+Coordinator acknowledgement. Next, journal the `Active` Registry transition,
+then distribute and atomically activate the final all-active mirror/Directory
 evidence before runtime activation. Do not bypass Store or Registry evidence,
 permit nested Component declarations, merge roots belonging to different
 Fleets on one Subnet or consume an earlier installation.

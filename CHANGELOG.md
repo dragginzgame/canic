@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.16` hard-cuts maintained pre-1.0 topology and root-journal schemas to
+  v1, then durably stages and independently verifies every root's exact
+  all-`Joining` Registry snapshot and Coordinator acknowledgement before the
+  still-fenced `Active` transition.
+
 - `0.100.15` atomically registers every verified Fleet Subnet Root as
   `Joining`, with journalled exact-retry receipts and independently verified
   all-root Registry evidence before snapshot synchronization.

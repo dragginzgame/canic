@@ -6,8 +6,8 @@ Date: 2026-07-27
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.13`.
-- Open patch draft: `0.100.14`; no package-version change has been authorized.
+- Workspace package version: `0.100.15`.
+- Open patch draft: `0.100.16`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -35,8 +35,8 @@ and further children. Each child records its immediate parent, but the Fleet
 Subnet Root remains sole controller, Registry owner and lifecycle executor.
 Every root admitted for the Project Hub Spec stores the complete
 Hub/Instance/Ledger/Machine potential-Wasm catalog once. Released 0.100.9
-hard-cuts Component Spec/Topology canonical encoding to schema/domain version
-3 with no v2 decoder.
+hard-cuts the Component Spec/Topology canonical shape. The maintained pre-1.0
+schema/domain identifier remains v1 and has no prior-shape decoder.
 
 Canic infrastructure now has its own exact three-entry artifact manifest for
 the Coordinator, Fleet Subnet Root and Wasm Store. The host directly installs
@@ -71,11 +71,9 @@ Registry slices replace the 0.99 root model.
   `owner_component` and nested Component declarations.
 - [x] Add `ComponentSpecId` and the canonical `ComponentInstanceId` type.
 - [x] Derive and freeze the canonical bounded Component Topology.
-- [x] Hard-cut the canonical Component Spec/Topology encoding to version 2
-  with initial child cardinalities and non-parent provisioning grants.
-- [x] Hard-cut version 2 to canonical version 3, removing initial/direct-depth
-  authority and compiling the flat potential-Wasm catalog plus exact
-  role-to-role spawn grants.
+- [x] Hard-cut the canonical Component Spec/Topology v1 encoding to add then
+  remove initial/direct-depth authority, retaining only the flat
+  potential-Wasm catalog plus exact role-to-role spawn grants.
 - [x] Validate bounded spawn-grant parents, targets, completeness and
   per-parent ceilings while allowing recursive role capabilities.
 - [x] Validate bounded peer-Component provisioning-grant targets, cycles and
@@ -150,7 +148,7 @@ Registry slices replace the 0.99 root model.
 - [ ] Make the Fleet Subnet Root the required lifecycle controller and retain
   authoritative idempotent receipts.
 - [ ] Resolve lifecycle artifacts only through the active release set.
-- [ ] Implement bounded Fleet snapshot synchronization once per root.
+- [x] Implement bounded Fleet snapshot synchronization once per root.
 - [ ] Atomically activate the Fleet Registry Mirror and Fleet Directory.
 - [ ] Store logical Component Registries in one bounded root-local collection
   with independent per-Component heads.
@@ -315,25 +313,36 @@ live Store Catalog must equal the complete ordered admitted role set. Exact
 retry reuses the same Store and evidence while both root and Store remain
 `Prepared`.
 
-Open 0.100.15 extends every root journal through `RegistryJoinVerified`. The
+Released 0.100.15 extends every root journal through `RegistryJoinVerified`. The
 Coordinator atomically compare-and-commits each exact `Joining` row with a
 durable response receipt; exact retry returns the original response even after
 later Registry revisions. The host verifies every canonical pre- and post-join
 prefix and stops only after the complete all-`Joining` snapshot, manifest and
 version agree with locally recomputed authority.
 
+Open 0.100.16 hard-cuts the maintained Component Spec, Component Topology and
+root-install journal schema identifiers to v1 under the pre-1.0 reinstall-only
+rule. It extends every root journal through `RegistrySyncVerified`: a prepared
+root reverifies its exact Store, fetches and validates the complete
+all-`Joining` Coordinator snapshot, durably stages it before acknowledgement,
+then records the Coordinator's exact idempotent `(root, version)` receipt. The
+host independently re-queries every root and requires the Coordinator's
+complete canonical acknowledgement set for the planned roots and version.
+
 The current installer therefore stops only after every planned root has an
-independently verified exact local Store and `Joining` Registry row. Snapshot
-synchronization and acknowledgement, Registry `Active`, Component allocation,
+independently verified exact local Store, `Joining` Registry row, durable
+snapshot candidate and Coordinator acknowledgement. The candidate remains
+private and does not activate the Fleet Registry Mirror or Directory.
+Registry `Active`, final mirror/Directory activation, Component allocation,
 root-owned count summaries and terminal Coordinator-anchored Fleet catalog
 publication remain unimplemented. The temporary Component Spec selector
 remains until real allocation supplies the exact protected Component binding.
 
 ## Next Action
 
-Synchronize the exact all-`Joining` Registry snapshot to every root, journal
-and verify its acknowledgement, then transition every required root to
-Registry `Active`. Final mirror/Directory activation, runtime activation and
+Transition every required acknowledged root to Registry `Active`, then
+synchronize and atomically activate the exact final Fleet Registry
+Mirror/Directory pair at every root. Runtime activation and
 Coordinator-anchored Fleet catalog publication must remain behind complete
 terminal evidence.
 

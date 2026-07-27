@@ -55,8 +55,10 @@ Current 0.100 installation flow:
 - stage each root's exact release set, bootstrap one root-local Store, and
   verify its live catalog independently
 - register and independently verify every root as Registry `Joining`
-- stop at the current explicit boundary before snapshot synchronization,
-  acknowledgement, activation, Component creation, or terminal Fleet-catalog
+- stage and independently verify the exact all-`Joining` snapshot and
+  Coordinator acknowledgement at every root
+- stop at the current explicit boundary before Registry `Active`, final
+  mirror/Directory activation, Component creation, or terminal Fleet-catalog
   publication
 
 The local driver permits one clean local `icp` restart attempt when

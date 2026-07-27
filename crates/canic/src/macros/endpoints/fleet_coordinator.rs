@@ -37,5 +37,26 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
                 request,
             )
         }
+
+        #[$crate::canic_update(public)]
+        async fn canic_fleet_registry_snapshot_for_root(
+        ) -> Result<::canic::dto::fleet_registry::FleetRegistrySnapshotResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::snapshot_for_calling_root()
+        }
+
+        #[$crate::canic_update(public)]
+        async fn canic_fleet_registry_acknowledge_root(
+            request: ::canic::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgementRequest,
+        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgement, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::acknowledge_calling_root_snapshot(
+                request,
+            )
+        }
+
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_fleet_registry_root_acknowledgements(
+        ) -> Result<Vec<::canic::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgement>, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::root_snapshot_acknowledgements()
+        }
     };
 }

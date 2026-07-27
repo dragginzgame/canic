@@ -258,10 +258,11 @@ canic install example example-local --fleet-input deployments/example-local.toml
 
 The 0.100 implementation currently creates and verifies the Coordinator, the
 planned Fleet Subnet Roots, each root's exact local Store, and every root's
-Registry `Joining` row, then stops before snapshot synchronization,
-acknowledgement, activation, Component creation, and terminal Fleet-catalog
-publication. `canic info list example-local` becomes applicable only after
-that Fleet reaches the terminal catalog boundary.
+Registry `Joining` row, private snapshot candidate and Coordinator
+acknowledgement, then stops before Registry `Active`, final mirror/Directory
+activation, Component creation, and terminal Fleet-catalog publication.
+`canic info list example-local` becomes applicable only after that Fleet
+reaches the terminal catalog boundary.
 
 Build one role without installing:
 

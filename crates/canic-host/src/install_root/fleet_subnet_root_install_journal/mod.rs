@@ -27,7 +27,9 @@ use canic_core::{
     dto::{
         fleet_registry::{
             FleetRegistry, FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootEntry,
-            FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse, FleetSubnetRootStatus,
+            FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
+            FleetSubnetRootRegistrySyncRequest, FleetSubnetRootRegistrySyncResponse,
+            FleetSubnetRootStatus,
         },
         fleet_subnet_root::FleetSubnetRootAuthority,
         root_store::RootStoreBootstrapResponse,
@@ -49,7 +51,7 @@ const JOURNAL_FILE: &str = "install-journal.json";
 const JOURNAL_LOCK_FILE: &str = "install-journal.lock";
 const CREATE_RESULT_FILE: &str = "create-result.json";
 const ROOT_INSTALL_DIRECTORY: &str = "fleet-subnet-root-installs";
-const JOURNAL_SCHEMA_VERSION: u32 = 3;
+const JOURNAL_SCHEMA_VERSION: u32 = 1;
 const MAX_JOURNAL_BYTES: usize = 4_194_304;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -69,6 +71,9 @@ pub(super) enum FleetSubnetRootInstallPhase {
     RegistryJoinInFlight,
     RegistryJoined,
     RegistryJoinVerified,
+    RegistrySyncInFlight,
+    RegistrySynchronized,
+    RegistrySyncVerified,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -92,6 +97,8 @@ pub(super) struct FleetSubnetRootInstallJournal {
     pub store_bootstrap: Option<RootStoreBootstrapResponse>,
     pub registry_join_request: Option<FleetSubnetRootJoinRequest>,
     pub registry_join_response: Option<FleetSubnetRootJoinResponse>,
+    pub registry_sync_request: Option<FleetSubnetRootRegistrySyncRequest>,
+    pub registry_sync_response: Option<FleetSubnetRootRegistrySyncResponse>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -393,6 +400,50 @@ pub(super) fn record_registry_join_verified(
     )
 }
 
+pub(super) fn begin_registry_sync(
+    current: &ResolvedFleetSubnetRootInstall,
+    request: FleetSubnetRootRegistrySyncRequest,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    validate_registry_sync_request(&current.path, &current.journal, &request)?;
+    transition(
+        current,
+        FleetSubnetRootInstallPhase::RegistryJoinVerified,
+        FleetSubnetRootInstallPhase::RegistrySyncInFlight,
+        |next| next.registry_sync_request = Some(request),
+    )
+}
+
+pub(super) fn record_registry_synchronized(
+    current: &ResolvedFleetSubnetRootInstall,
+    response: FleetSubnetRootRegistrySyncResponse,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    validate_registry_sync_response(&current.path, &current.journal, &response)?;
+    transition(
+        current,
+        FleetSubnetRootInstallPhase::RegistrySyncInFlight,
+        FleetSubnetRootInstallPhase::RegistrySynchronized,
+        |next| next.registry_sync_response = Some(response),
+    )
+}
+
+pub(super) fn record_registry_sync_verified(
+    current: &ResolvedFleetSubnetRootInstall,
+    response: FleetSubnetRootRegistrySyncResponse,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    validate_registry_sync_response(&current.path, &current.journal, &response)?;
+    if current.journal.registry_sync_response.as_ref() != Some(&response) {
+        return Err(invalid(
+            &current.path,
+            "verified Registry synchronization differs from its durable result",
+        ));
+    }
+    advance_without_evidence(
+        current,
+        FleetSubnetRootInstallPhase::RegistrySynchronized,
+        FleetSubnetRootInstallPhase::RegistrySyncVerified,
+    )
+}
+
 #[must_use]
 pub(super) fn create_result_path(journal_path: &Path) -> PathBuf {
     journal_path
@@ -495,6 +546,8 @@ fn planned_journal(
         store_bootstrap: None,
         registry_join_request: None,
         registry_join_response: None,
+        registry_sync_request: None,
+        registry_sync_response: None,
     };
     validate_journal(&path, &journal)?;
     Ok(journal)
@@ -685,7 +738,40 @@ fn validate_phase_evidence(
     path: &Path,
     journal: &FleetSubnetRootInstallJournal,
 ) -> Result<(), FleetSubnetRootInstallJournalError> {
-    let expected_sequence = match journal.phase {
+    if journal.sequence != phase_sequence(journal.phase) {
+        return Err(invalid(path, "phase differs from journal sequence"));
+    }
+    let retained = [
+        journal.fleet_subnet_root.is_some(),
+        journal.installed_module_hash.is_some(),
+        journal.verified_binding.is_some(),
+        journal.store_bootstrap.is_some(),
+        journal.registry_join_request.is_some(),
+        journal.registry_join_response.is_some(),
+        journal.registry_sync_request.is_some(),
+        journal.registry_sync_response.is_some(),
+    ];
+    let expected_count = phase_evidence_count(journal.phase);
+    if retained
+        .into_iter()
+        .enumerate()
+        .any(|(index, present)| present != (index < expected_count))
+    {
+        return Err(invalid(path, "phase differs from retained root evidence"));
+    }
+    if journal.installed_module_hash.is_some()
+        && journal.installed_module_hash != Some(journal.expected_module_hash)
+    {
+        return Err(invalid(
+            path,
+            "installed module differs from artifact authority",
+        ));
+    }
+    Ok(())
+}
+
+const fn phase_sequence(phase: FleetSubnetRootInstallPhase) -> u64 {
+    match phase {
         FleetSubnetRootInstallPhase::Planned => 0,
         FleetSubnetRootInstallPhase::CreationInFlight => 1,
         FleetSubnetRootInstallPhase::Created => 2,
@@ -700,91 +786,30 @@ fn validate_phase_evidence(
         FleetSubnetRootInstallPhase::RegistryJoinInFlight => 11,
         FleetSubnetRootInstallPhase::RegistryJoined => 12,
         FleetSubnetRootInstallPhase::RegistryJoinVerified => 13,
-    };
-    if journal.sequence != expected_sequence {
-        return Err(invalid(path, "phase differs from journal sequence"));
+        FleetSubnetRootInstallPhase::RegistrySyncInFlight => 14,
+        FleetSubnetRootInstallPhase::RegistrySynchronized => 15,
+        FleetSubnetRootInstallPhase::RegistrySyncVerified => 16,
     }
-    let has_root = journal.fleet_subnet_root.is_some();
-    let has_installed = journal.installed_module_hash.is_some();
-    let has_verified = journal.verified_binding.is_some();
-    let has_store = journal.store_bootstrap.is_some();
-    let has_join_request = journal.registry_join_request.is_some();
-    let has_join_response = journal.registry_join_response.is_some();
-    let valid = match journal.phase {
-        FleetSubnetRootInstallPhase::Planned | FleetSubnetRootInstallPhase::CreationInFlight => {
-            !has_root
-                && !has_installed
-                && !has_verified
-                && !has_store
-                && !has_join_request
-                && !has_join_response
-        }
-        FleetSubnetRootInstallPhase::Created | FleetSubnetRootInstallPhase::InstallInFlight => {
-            has_root
-                && !has_installed
-                && !has_verified
-                && !has_store
-                && !has_join_request
-                && !has_join_response
-        }
-        FleetSubnetRootInstallPhase::Installed => {
-            has_root
-                && has_installed
-                && !has_verified
-                && !has_store
-                && !has_join_request
-                && !has_join_response
-        }
+}
+
+const fn phase_evidence_count(phase: FleetSubnetRootInstallPhase) -> usize {
+    match phase {
+        FleetSubnetRootInstallPhase::Planned | FleetSubnetRootInstallPhase::CreationInFlight => 0,
+        FleetSubnetRootInstallPhase::Created | FleetSubnetRootInstallPhase::InstallInFlight => 1,
+        FleetSubnetRootInstallPhase::Installed => 2,
         FleetSubnetRootInstallPhase::Verified
         | FleetSubnetRootInstallPhase::StoreStaging
         | FleetSubnetRootInstallPhase::StoreStaged
-        | FleetSubnetRootInstallPhase::StoreBootstrapInFlight => {
-            has_root
-                && has_installed
-                && has_verified
-                && !has_store
-                && !has_join_request
-                && !has_join_response
-        }
+        | FleetSubnetRootInstallPhase::StoreBootstrapInFlight => 3,
         FleetSubnetRootInstallPhase::StoreBootstrapped
-        | FleetSubnetRootInstallPhase::StoreVerified => {
-            has_root
-                && has_installed
-                && has_verified
-                && has_store
-                && !has_join_request
-                && !has_join_response
-        }
-        FleetSubnetRootInstallPhase::RegistryJoinInFlight => {
-            has_root
-                && has_installed
-                && has_verified
-                && has_store
-                && has_join_request
-                && !has_join_response
-        }
+        | FleetSubnetRootInstallPhase::StoreVerified => 4,
+        FleetSubnetRootInstallPhase::RegistryJoinInFlight => 5,
         FleetSubnetRootInstallPhase::RegistryJoined
-        | FleetSubnetRootInstallPhase::RegistryJoinVerified => {
-            has_root
-                && has_installed
-                && has_verified
-                && has_store
-                && has_join_request
-                && has_join_response
-        }
-    };
-    if !valid {
-        return Err(invalid(path, "phase differs from retained root evidence"));
+        | FleetSubnetRootInstallPhase::RegistryJoinVerified => 6,
+        FleetSubnetRootInstallPhase::RegistrySyncInFlight => 7,
+        FleetSubnetRootInstallPhase::RegistrySynchronized
+        | FleetSubnetRootInstallPhase::RegistrySyncVerified => 8,
     }
-    if journal.installed_module_hash.is_some()
-        && journal.installed_module_hash != Some(journal.expected_module_hash)
-    {
-        return Err(invalid(
-            path,
-            "installed module differs from artifact authority",
-        ));
-    }
-    Ok(())
 }
 
 fn validate_root_evidence(
@@ -815,6 +840,9 @@ fn validate_root_evidence(
             | FleetSubnetRootInstallPhase::RegistryJoinInFlight
             | FleetSubnetRootInstallPhase::RegistryJoined
             | FleetSubnetRootInstallPhase::RegistryJoinVerified
+            | FleetSubnetRootInstallPhase::RegistrySyncInFlight
+            | FleetSubnetRootInstallPhase::RegistrySynchronized
+            | FleetSubnetRootInstallPhase::RegistrySyncVerified
     ) && journal.verified_binding.as_ref() != Some(&expected.binding)
     {
         return Err(invalid(
@@ -830,6 +858,12 @@ fn validate_root_evidence(
     }
     if let Some(response) = &journal.registry_join_response {
         validate_registry_join_response(path, journal, response)?;
+    }
+    if let Some(request) = &journal.registry_sync_request {
+        validate_registry_sync_request(path, journal, request)?;
+    }
+    if let Some(response) = &journal.registry_sync_response {
+        validate_registry_sync_response(path, journal, response)?;
     }
     Ok(())
 }
@@ -927,6 +961,51 @@ fn validate_registry_join_response(
         return Err(invalid(
             path,
             "Registry join response differs from the durable request",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_registry_sync_request(
+    path: &Path,
+    journal: &FleetSubnetRootInstallJournal,
+    request: &FleetSubnetRootRegistrySyncRequest,
+) -> Result<(), FleetSubnetRootInstallJournalError> {
+    if request.expected_registry.authority != journal.authority
+        || request.expected_registry.revision == 0
+        || request.expected_registry.content_hash == [0; 32]
+        || request.store_bootstrap.manifest_payload_size_bytes == 0
+    {
+        return Err(invalid(
+            path,
+            "Registry synchronization request differs from root authority",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_registry_sync_response(
+    path: &Path,
+    journal: &FleetSubnetRootInstallJournal,
+    response: &FleetSubnetRootRegistrySyncResponse,
+) -> Result<(), FleetSubnetRootInstallJournalError> {
+    let request = journal.registry_sync_request.as_ref().ok_or_else(|| {
+        invalid(
+            path,
+            "Registry synchronization response requires a durable request",
+        )
+    })?;
+    let root = journal
+        .fleet_subnet_root
+        .ok_or_else(|| invalid(path, "Registry synchronization requires a root principal"))?;
+    if response.fleet_subnet_root != root
+        || response.version != request.expected_registry
+        || response.acknowledgement.fleet_subnet_root != root
+        || response.acknowledgement.version != request.expected_registry
+    {
+        return Err(invalid(
+            path,
+            "Registry synchronization response differs from durable authority",
         ));
     }
     Ok(())

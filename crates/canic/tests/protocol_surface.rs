@@ -376,6 +376,100 @@ fn fleet_subnet_root_join_is_a_controller_update_on_the_coordinator_surface() {
 }
 
 #[test]
+fn fleet_registry_snapshot_synchronization_protocol_and_guards_are_pinned() {
+    for (facade, core, expected) in [
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY,
+            canic_core::protocol::CANIC_FLEET_REGISTRY,
+            "canic_fleet_registry",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_MANIFEST,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_MANIFEST,
+            "canic_fleet_registry_manifest",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_VERSION,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_VERSION,
+            "canic_fleet_registry_version",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT,
+            "canic_fleet_registry_snapshot_for_root",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT,
+            "canic_fleet_registry_acknowledge_root",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
+            "canic_fleet_registry_root_acknowledgements",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_SYNCHRONIZE,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_SYNCHRONIZE,
+            "canic_fleet_registry_synchronize",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_SYNC_STATUS,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_SYNC_STATUS,
+            "canic_fleet_registry_sync_status",
+        ),
+    ] {
+        assert_eq!(facade, core);
+        assert_eq!(facade, expected);
+    }
+
+    let coordinator_path =
+        workspace_root().join("crates/canic/src/macros/endpoints/fleet_coordinator.rs");
+    let coordinator = read_text(&coordinator_path);
+    for signature in [
+        "async fn canic_fleet_registry_snapshot_for_root(",
+        "async fn canic_fleet_registry_acknowledge_root(",
+    ] {
+        assert!(
+            preceding_attribute_context(&coordinator, signature).contains("canic_update(public)"),
+            "{signature} must remain inter-canister callable"
+        );
+    }
+    assert!(
+        preceding_attribute_context(
+            &coordinator,
+            "async fn canic_fleet_registry_root_acknowledgements(",
+        )
+        .contains("canic_query(requires(caller::is_controller()))"),
+        "root acknowledgement inventory must remain controller-guarded"
+    );
+
+    let coordinator_api_path =
+        workspace_root().join("crates/canic-control-plane/src/api/fleet_coordinator.rs");
+    let coordinator_api = read_text(&coordinator_api_path);
+    assert!(
+        coordinator_api.contains("FleetCoordinatorWorkflow::snapshot_for_root(msg_caller())",)
+            && coordinator_api.contains(
+                "FleetCoordinatorWorkflow::acknowledge_root_snapshot(msg_caller(), request)",
+            ),
+        "public Coordinator transports must authenticate the exact calling root in the API facade"
+    );
+
+    let root_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
+    let root = read_text(&root_path);
+    assert!(
+        preceding_attribute_context(&root, "async fn canic_fleet_registry_synchronize(")
+            .contains("canic_update(requires(caller::is_controller()))"),
+        "root Registry synchronization must remain a controller-guarded update"
+    );
+    assert!(
+        preceding_attribute_context(&root, "async fn canic_fleet_registry_sync_status(")
+            .contains("canic_query(composite, requires(caller::is_controller()))"),
+        "root Registry synchronization status must remain a controller-guarded composite query"
+    );
+}
+
+#[test]
 fn root_store_bootstrap_protocol_and_guards_are_pinned() {
     assert_eq!(
         canic::protocol::CANIC_ROOT_STORE_BOOTSTRAP,

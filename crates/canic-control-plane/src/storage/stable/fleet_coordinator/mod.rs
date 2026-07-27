@@ -12,7 +12,10 @@ use canic_core::{
 };
 use canic_core::{
     control_plane_support::config::ComponentTopology,
-    dto::fleet_registry::{FleetRegistry, FleetRegistryVersion, FleetSubnetRootEntry},
+    dto::fleet_registry::{
+        FleetRegistry, FleetRegistryVersion, FleetSubnetRootEntry,
+        FleetSubnetRootSnapshotAcknowledgement,
+    },
     ids::{AppId, FleetRegistryAuthority},
 };
 use serde::{Deserialize, Serialize};
@@ -21,8 +24,9 @@ use std::cell::RefCell;
 
 #[cfg(feature = "fleet-coordinator-canister")]
 // The record may contain one topology, one Registry snapshot, and the
-// root-entry portion of that Registry again as immutable join receipts.
-const FLEET_COORDINATOR_STATE_MAX_BYTES: u32 = 6_500_000;
+// root-entry portion of that Registry again as immutable join receipts, plus
+// one exact acknowledgement per current root.
+const FLEET_COORDINATOR_STATE_MAX_BYTES: u32 = 8_388_608;
 
 #[cfg(feature = "fleet-coordinator-canister")]
 struct FleetCoordinatorRegistryState;
@@ -55,6 +59,7 @@ pub struct FleetCoordinatorRegistryRecord {
     pub component_topology: ComponentTopology,
     pub registry: FleetRegistry,
     pub root_join_receipts: Vec<FleetSubnetRootJoinReceiptRecord>,
+    pub root_snapshot_acknowledgements: Vec<FleetSubnetRootSnapshotAcknowledgement>,
 }
 
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]

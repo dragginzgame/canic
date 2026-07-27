@@ -28,9 +28,9 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use thiserror::Error as ThisError;
 
-const COMPONENT_SPEC_HASH_DOMAIN: &[u8] = b"canic/component-spec/v3";
-const COMPONENT_TOPOLOGY_HASH_DOMAIN: &[u8] = b"canic/component-topology/v3";
-const COMPONENT_TOPOLOGY_SCHEMA_VERSION: u32 = 3;
+const COMPONENT_SPEC_HASH_DOMAIN: &[u8] = b"canic/component-spec/v1";
+const COMPONENT_TOPOLOGY_HASH_DOMAIN: &[u8] = b"canic/component-topology/v1";
+const COMPONENT_TOPOLOGY_SCHEMA_VERSION: u32 = 1;
 
 /// Maximum canonical bytes accepted for one Fleet-wide Component Topology.
 pub const MAX_COMPONENT_TOPOLOGY_CANONICAL_BYTES: usize = 2_097_152;

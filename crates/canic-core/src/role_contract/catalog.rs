@@ -301,6 +301,10 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
         StateAllocationKey::ControlPlaneSubnetState,
     ),
     capability_allocation(
+        RoleCapabilityKey::RootControlPlane,
+        StateAllocationKey::RootFleetRegistryMirror,
+    ),
+    capability_allocation(
         RoleCapabilityKey::WasmStore,
         StateAllocationKey::TemplateManifests,
     ),

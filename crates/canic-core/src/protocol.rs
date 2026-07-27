@@ -7,7 +7,13 @@ pub const CANIC_FLEET_REGISTRY: &str = "canic_fleet_registry";
 pub const CANIC_FLEET_REGISTRY_MANIFEST: &str = "canic_fleet_registry_manifest";
 pub const CANIC_FLEET_REGISTRY_VERSION: &str = "canic_fleet_registry_version";
 pub const CANIC_FLEET_SUBNET_ROOT_JOIN: &str = "canic_fleet_subnet_root_join";
+pub const CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT: &str = "canic_fleet_registry_snapshot_for_root";
+pub const CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT: &str = "canic_fleet_registry_acknowledge_root";
+pub const CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS: &str =
+    "canic_fleet_registry_root_acknowledgements";
 pub const CANIC_FLEET_SUBNET_ROOT_AUTHORITY: &str = "canic_fleet_subnet_root_authority";
+pub const CANIC_FLEET_REGISTRY_SYNCHRONIZE: &str = "canic_fleet_registry_synchronize";
+pub const CANIC_FLEET_REGISTRY_SYNC_STATUS: &str = "canic_fleet_registry_sync_status";
 pub const CANIC_FLEET_ACTIVATION_STATUS: &str = "canic_fleet_activation_status";
 pub const CANIC_PREPARE_FLEET_ACTIVATION: &str = "canic_prepare_fleet_activation";
 pub const CANIC_RESUME_FLEET_ACTIVATION: &str = "canic_resume_fleet_activation";
