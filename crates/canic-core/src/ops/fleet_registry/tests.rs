@@ -180,7 +180,7 @@ fn canonical_registry_manifest_and_version_are_digest_stable() {
     assert_eq!(version.content_hash, manifest.content_hash);
     assert_eq!(
         crate::cdk::utils::hash::hex_bytes(manifest.content_hash),
-        "0b65da36eafc44d9a15dc4075f599423aac2595a37d24e626d00ee6bf370b995"
+        "89c9969bf4cd41b7ddff132642b375a0070b4fd79c9a7cdf6be25701f3b7a73a"
     );
 }
 
