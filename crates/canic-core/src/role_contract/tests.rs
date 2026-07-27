@@ -420,7 +420,7 @@ fn repeated_selection_merges_allocation_provenance() {
         allocation_ids(&contract.allocations),
         vec![
             11, 12, 13, 15, 16, 18, 19, 20, 21, 29, 30, 33, 34, 35, 39, 40, 41, 42, 43, 44, 45, 46,
-            47, 49, 80, 81, 82, 83, 84, 87,
+            47, 49, 80, 81, 82, 83, 84, 87, 88,
         ]
     );
 }
