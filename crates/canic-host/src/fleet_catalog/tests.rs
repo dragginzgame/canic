@@ -1,9 +1,6 @@
 use super::*;
 use crate::test_support::temp_dir;
-use std::{
-    fs,
-    sync::{Arc, Barrier},
-};
+use std::fs;
 
 #[test]
 fn catalog_reads_network_scoped_fleet_rows_in_canonical_order() {
@@ -71,127 +68,6 @@ fn missing_catalog_has_no_fleet_entries() {
     let report = build_fleet_catalog_report(&request(&root, "staging")).expect("empty catalog");
 
     assert!(report.entries.is_empty());
-    fs::remove_dir_all(root).expect("remove fixture");
-}
-
-#[test]
-fn catalog_commit_is_canonical_durable_and_exactly_idempotent() {
-    let root = fixture("commit");
-    let network = CanonicalNetworkId::public_ic();
-    let requested = entry(network, 7, "shop-staging", "shop", "staging", "aaaaa-aa");
-
-    let committed =
-        commit_fleet_catalog_entry(&root, requested.clone()).expect("commit Fleet catalog");
-    let bytes = fs::read(&committed.path).expect("read committed catalog");
-    assert!(committed.advanced);
-    assert_eq!(committed.entry, requested);
-    assert_eq!(
-        committed.catalog_hash,
-        <[u8; 32]>::from(Sha256::digest(&bytes))
-    );
-    assert_eq!(bytes.last(), Some(&b'\n'));
-
-    let mut repeated_request = requested;
-    repeated_request.environment = "production".to_string();
-    repeated_request.deployed_at_unix_secs = 999;
-    let repeated =
-        commit_fleet_catalog_entry(&root, repeated_request).expect("repeat exact Fleet authority");
-    assert!(!repeated.advanced);
-    assert_eq!(repeated.entry.environment, "staging");
-    assert_eq!(repeated.entry.deployed_at_unix_secs, 54);
-    assert_eq!(repeated.catalog_hash, committed.catalog_hash);
-    assert_eq!(
-        fs::read(&repeated.path).expect("read unchanged catalog"),
-        bytes
-    );
-
-    fs::remove_dir_all(root).expect("remove fixture");
-}
-
-#[test]
-fn catalog_commit_rejects_name_id_and_root_conflicts_without_mutation() {
-    let root = fixture("commit-conflict");
-    let network = CanonicalNetworkId::public_ic();
-    let first = entry(network, 7, "shop-staging", "shop", "staging", "aaaaa-aa");
-    let committed = commit_fleet_catalog_entry(&root, first).expect("commit first Fleet");
-    let bytes = fs::read(&committed.path).expect("read first catalog");
-
-    let conflicts = [
-        entry(network, 8, "shop-staging", "other", "staging", "2vxsx-fae"),
-        entry(network, 7, "other-staging", "other", "staging", "2vxsx-fae"),
-        entry(network, 8, "other-staging", "other", "staging", "aaaaa-aa"),
-    ];
-    for conflict in conflicts {
-        assert!(matches!(
-            commit_fleet_catalog_entry(&root, conflict),
-            Err(FleetCatalogError::Conflict { .. })
-        ));
-        assert_eq!(
-            fs::read(&committed.path).expect("read unchanged catalog"),
-            bytes
-        );
-    }
-
-    fs::remove_dir_all(root).expect("remove fixture");
-}
-
-#[test]
-fn concurrent_catalog_commits_preserve_both_fleet_rows() {
-    let root = fixture("commit-concurrent");
-    let network = CanonicalNetworkId::public_ic();
-    let barrier = Arc::new(Barrier::new(3));
-    let mut handles = Vec::new();
-    for requested in [
-        entry(network, 7, "alpha", "shop", "staging", "aaaaa-aa"),
-        entry(network, 8, "zeta", "shop", "production", "2vxsx-fae"),
-    ] {
-        let root = root.clone();
-        let barrier = Arc::clone(&barrier);
-        handles.push(std::thread::spawn(move || {
-            barrier.wait();
-            commit_fleet_catalog_entry(&root, requested).expect("commit concurrent Fleet")
-        }));
-    }
-    barrier.wait();
-    for handle in handles {
-        handle.join().expect("join catalog writer");
-    }
-
-    let report = build_fleet_catalog_report(&request(&root, "staging")).expect("read both Fleets");
-    assert_eq!(
-        report
-            .entries
-            .iter()
-            .map(|entry| entry.fleet_name.as_str())
-            .collect::<Vec<_>>(),
-        ["alpha", "zeta"]
-    );
-
-    fs::remove_dir_all(root).expect("remove fixture");
-}
-
-#[cfg(unix)]
-#[test]
-fn catalog_commit_rejects_a_symlinked_network_lock() {
-    use std::os::unix::fs::symlink;
-
-    let root = fixture("commit-lock-symlink");
-    let network = CanonicalNetworkId::public_ic();
-    let lock_path = fleet_catalog_lock_path(&root, network);
-    fs::create_dir_all(lock_path.parent().expect("lock parent")).expect("create lock parent");
-    let target = root.join("outside.lock");
-    fs::write(&target, []).expect("write lock target");
-    symlink(&target, &lock_path).expect("symlink network lock");
-
-    assert!(matches!(
-        commit_fleet_catalog_entry(
-            &root,
-            entry(network, 7, "shop-staging", "shop", "staging", "aaaaa-aa")
-        ),
-        Err(FleetCatalogError::NotRegular { path }) if path == lock_path
-    ));
-    assert!(!fleet_catalog_path(&root, network).exists());
-
     fs::remove_dir_all(root).expect("remove fixture");
 }
 

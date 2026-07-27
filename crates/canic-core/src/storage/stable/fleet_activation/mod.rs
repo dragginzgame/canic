@@ -7,7 +7,7 @@
 use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
-    ids::{FleetBinding, ReleaseBuildId},
+    ids::{FleetBinding, FleetSubnetRootBinding, FleetSubnetRootReleaseSet, ReleaseBuildId},
     role_contract::allocation::memory::activation::FLEET_ACTIVATION_ID,
     storage::prelude::*,
 };
@@ -137,12 +137,24 @@ pub struct FleetCredentialManifestRecord {
 }
 
 ///
+/// FleetSubnetRootAuthorityRecord
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootAuthorityRecord {
+    pub binding: FleetSubnetRootBinding,
+    pub initial_release_set: FleetSubnetRootReleaseSet,
+    pub expected_module_hash: [u8; 32],
+}
+
+///
 /// FleetActivationRecord
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetActivationRecord {
     pub state: FleetActivationStateRecord,
+    pub root_authority: Option<FleetSubnetRootAuthorityRecord>,
     pub prepared_state_snapshot_hash: Option<[u8; 32]>,
     pub prepared_topology_snapshot_hash: Option<[u8; 32]>,
     pub cascade_manifest: Option<Vec<FleetCascadeManifestEntryRecord>>,
@@ -253,6 +265,7 @@ mod tests {
                 },
                 application_init_args: Some(vec![4, 5, 6]),
             },
+            root_authority: None,
             prepared_state_snapshot_hash: None,
             prepared_topology_snapshot_hash: None,
             cascade_manifest: None,

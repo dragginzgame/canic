@@ -18,6 +18,7 @@ use crate::{
             FleetCascadeManifestEntry, FleetCredentialGenerationRef,
             FleetCredentialGenerationRequest, FleetCredentialManifest,
         },
+        fleet_subnet_root::FleetSubnetRootAuthority,
     },
     ids::EndpointCall,
     ops::{
@@ -57,6 +58,13 @@ impl FleetActivationWorkflow {
 
     pub fn require_active() -> Result<(), InternalError> {
         FleetActivationOps::require_active(EnvOps::is_root())
+            .map_err(StorageOpsError::from)
+            .map_err(Into::into)
+    }
+
+    pub fn root_authority() -> Result<FleetSubnetRootAuthority, InternalError> {
+        EnvOps::require_root()?;
+        FleetActivationOps::root_authority()
             .map_err(StorageOpsError::from)
             .map_err(Into::into)
     }

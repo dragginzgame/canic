@@ -1,6 +1,6 @@
-use crate::icp::{self, IcpCommandError, LocalReplicaTarget};
+use crate::icp::{self, LocalReplicaTarget};
 use candid::IDLValue;
-use canic_core::{cdk::types::Principal, dto::fleet_activation::CurrentRootInstallIdentity};
+use canic_core::{cdk::types::Principal, dto::fleet_subnet_root::FleetSubnetRootInitArgs};
 use serde_json::Value as JsonValue;
 use std::{path::Path, process::Command};
 
@@ -28,31 +28,13 @@ pub(super) fn parse_canister_id_json(value: &JsonValue) -> Option<String> {
     }
 }
 
-pub(super) fn add_create_root_target(
-    command: &mut Command,
-    root_canister: &str,
-    local_replica: Option<&LocalReplicaTarget>,
-) {
-    if local_replica.is_some() {
-        command.args(["create", "--detached", "--json"]);
-    } else {
-        command.args(["create", root_canister, "--json"]);
-    }
-}
-
-pub(super) fn root_init_args(
-    identity: &CurrentRootInstallIdentity,
-) -> Result<String, candid::Error> {
-    let value = IDLValue::try_from_candid_type(identity)?;
+pub(super) fn root_init_args(args: &FleetSubnetRootInitArgs) -> Result<String, candid::Error> {
+    let value = IDLValue::try_from_candid_type(args)?;
     Ok(format!("({value})"))
 }
 
 pub(super) fn run_command(command: &mut Command) -> Result<(), Box<dyn std::error::Error>> {
     icp::run_status(command).map_err(Into::into)
-}
-
-pub(super) fn run_command_stdout(command: &mut Command) -> Result<String, IcpCommandError> {
-    icp::run_output(command)
 }
 
 pub(super) fn icp_canister_command(icp_root: &Path) -> Command {

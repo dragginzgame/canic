@@ -1,10 +1,18 @@
 controllers = []
 [app]
-name = "root_probe"
+name = "standalone"
 
 [roles.root]
 kind = "root"
 package = "."
+
+[roles.app]
+kind = "canister"
+package = "../leaf_probe"
+
+[component_specs.default]
+component_role = "app"
+maximum_instances = 1
 
 [auth.delegated_tokens]
 enabled = false

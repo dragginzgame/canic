@@ -1,17 +1,14 @@
 //! Module: fleet_catalog
 //!
-//! Responsibility: commit, read and project the canonical network-scoped Fleet catalog.
-//! Does not own: activation recovery, Fleet ID generation, or Canister activation.
-//! Boundary: one network lock serializes atomic catalog replacement; readers fail closed.
+//! Responsibility: read and project the legacy network-scoped Fleet catalog.
+//! Does not own: Fleet installation, Registry mutation, or identity allocation.
+//! Boundary: readers fail closed; the multi-root install flow does not write this catalog.
 
 #[cfg(test)]
 mod tests;
 
 use crate::{
-    durable_io::{
-        RegularFileLockError, RegularFileReadError, lock_regular_file_with_parents,
-        read_optional_regular_bytes, write_bytes,
-    },
+    durable_io::{RegularFileReadError, read_optional_regular_bytes},
     network::{
         NetworkIdentityError, resolve_canonical_network_id_from_root, validate_environment_name,
     },
@@ -21,7 +18,6 @@ use canic_core::{
     ids::{AppId, CanonicalNetworkId, FleetId, FleetName, FleetNameParseError},
 };
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
     io,
@@ -85,32 +81,6 @@ struct FleetCatalogRecord {
 }
 
 ///
-/// CommittedFleetCatalog
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct CommittedFleetCatalog {
-    entry: FleetCatalogEntryV1,
-    catalog_hash: [u8; 32],
-    path: PathBuf,
-    advanced: bool,
-}
-
-impl CommittedFleetCatalog {
-    pub(crate) const fn entry(&self) -> &FleetCatalogEntryV1 {
-        &self.entry
-    }
-
-    pub(crate) const fn catalog_hash(&self) -> [u8; 32] {
-        self.catalog_hash
-    }
-
-    pub(crate) fn belongs_to(&self, project_root: &Path) -> bool {
-        self.path == fleet_catalog_path(project_root, self.entry.canonical_network_id)
-    }
-}
-
-///
 /// FleetCatalogError
 ///
 
@@ -141,25 +111,9 @@ pub enum FleetCatalogError {
         source: io::Error,
     },
 
-    #[error("failed to commit Fleet catalog {}: {source}", path.display())]
-    Write {
-        path: PathBuf,
-        #[source]
-        source: io::Error,
-    },
-
-    #[error("Fleet catalog commitment conflicts with existing {field} authority: {value}")]
-    Conflict { field: &'static str, value: String },
-
     #[error("failed to decode Fleet catalog {}: {source}", path.display())]
     Decode {
         path: PathBuf,
-        #[source]
-        source: serde_json::Error,
-    },
-
-    #[error("failed to encode Fleet catalog: {source}")]
-    Encode {
         #[source]
         source: serde_json::Error,
     },
@@ -221,95 +175,6 @@ pub fn read_fleet_catalog_entry_from_root(
         .find(|entry| entry.fleet_name == fleet_name))
 }
 
-/// Commit one exact Fleet row through the canonical network catalog writer.
-pub(crate) fn commit_fleet_catalog_entry(
-    project_root: &Path,
-    entry: FleetCatalogEntryV1,
-) -> Result<CommittedFleetCatalog, FleetCatalogError> {
-    let path = fleet_catalog_path(project_root, entry.canonical_network_id);
-    let lock_path = fleet_catalog_lock_path(project_root, entry.canonical_network_id);
-    let _lock = lock_regular_file_with_parents(&lock_path).map_err(|error| match error {
-        RegularFileLockError::NotRegular => FleetCatalogError::NotRegular {
-            path: lock_path.clone(),
-        },
-        RegularFileLockError::Io(source) => FleetCatalogError::Write {
-            path: lock_path.clone(),
-            source,
-        },
-        #[cfg(windows)]
-        RegularFileLockError::UnsupportedPlatform => {
-            FleetCatalogError::UnsupportedPlatform(std::env::consts::OS)
-        }
-    })?;
-
-    let existing = read_catalog_document(&path, entry.canonical_network_id)?;
-    let mut catalog = existing.as_ref().map_or_else(
-        || FleetCatalogRecord {
-            schema_version: FLEET_CATALOG_SCHEMA_VERSION,
-            canonical_network_id: entry.canonical_network_id,
-            entries: Vec::new(),
-        },
-        |document| document.record.clone(),
-    );
-    if let Some(existing_entry) = existing_authority(&catalog.entries, &entry)? {
-        let bytes = existing
-            .expect("existing authority came from an existing catalog")
-            .bytes;
-        return Ok(CommittedFleetCatalog {
-            entry: existing_entry.clone(),
-            catalog_hash: Sha256::digest(&bytes).into(),
-            path,
-            advanced: false,
-        });
-    }
-
-    catalog.entries.push(entry.clone());
-    catalog
-        .entries
-        .sort_by(|left, right| left.fleet_name.cmp(&right.fleet_name));
-    validate_catalog(&path, &catalog, entry.canonical_network_id)?;
-    let bytes = canonical_catalog_bytes(&catalog)?;
-    write_bytes(&path, &bytes).map_err(|source| FleetCatalogError::Write {
-        path: path.clone(),
-        source,
-    })?;
-    let durable = read_catalog_document(&path, entry.canonical_network_id)?.ok_or_else(|| {
-        FleetCatalogError::Invalid {
-            path: path.clone(),
-            reason: "committed Fleet catalog is missing after publication".to_string(),
-        }
-    })?;
-    if durable.record != catalog || durable.bytes != bytes {
-        return invalid(
-            &path,
-            "committed Fleet catalog differs from the exact publication bytes".to_string(),
-        );
-    }
-    Ok(CommittedFleetCatalog {
-        entry,
-        catalog_hash: Sha256::digest(&bytes).into(),
-        path,
-        advanced: true,
-    })
-}
-
-/// Read one exact Fleet-name row under an already resolved network identity.
-pub(crate) fn read_fleet_catalog_entry_for_network(
-    project_root: &Path,
-    canonical_network_id: CanonicalNetworkId,
-    fleet_name: &FleetName,
-) -> Result<Option<FleetCatalogEntryV1>, FleetCatalogError> {
-    let path = fleet_catalog_path(project_root, canonical_network_id);
-    Ok(
-        read_catalog(&path, canonical_network_id)?.and_then(|catalog| {
-            catalog
-                .entries
-                .into_iter()
-                .find(|entry| entry.fleet_name == *fleet_name)
-        }),
-    )
-}
-
 fn require_fleet_catalog_entry(
     report: &FleetCatalogReportV1,
     fleet_name: &str,
@@ -358,18 +223,13 @@ fn read_catalog(
     path: &Path,
     canonical_network_id: CanonicalNetworkId,
 ) -> Result<Option<FleetCatalogRecord>, FleetCatalogError> {
-    Ok(read_catalog_document(path, canonical_network_id)?.map(|document| document.record))
-}
-
-struct FleetCatalogDocument {
-    record: FleetCatalogRecord,
-    bytes: Vec<u8>,
+    read_catalog_document(path, canonical_network_id)
 }
 
 fn read_catalog_document(
     path: &Path,
     canonical_network_id: CanonicalNetworkId,
-) -> Result<Option<FleetCatalogDocument>, FleetCatalogError> {
+) -> Result<Option<FleetCatalogRecord>, FleetCatalogError> {
     let Some(bytes) = read_optional_regular_bytes(path).map_err(|error| match error {
         RegularFileReadError::NotRegular => FleetCatalogError::NotRegular {
             path: path.to_path_buf(),
@@ -393,10 +253,7 @@ fn read_catalog_document(
         }
     })?;
     validate_catalog(path, &catalog, canonical_network_id)?;
-    Ok(Some(FleetCatalogDocument {
-        record: catalog,
-        bytes,
-    }))
+    Ok(Some(catalog))
 }
 
 fn validate_catalog(
@@ -478,49 +335,6 @@ fn validate_catalog(
     Ok(())
 }
 
-fn existing_authority<'a>(
-    entries: &'a [FleetCatalogEntryV1],
-    requested: &FleetCatalogEntryV1,
-) -> Result<Option<&'a FleetCatalogEntryV1>, FleetCatalogError> {
-    let by_name = entries
-        .iter()
-        .find(|entry| entry.fleet_name == requested.fleet_name);
-    let by_id = entries
-        .iter()
-        .find(|entry| entry.fleet_id == requested.fleet_id);
-    let by_root = entries
-        .iter()
-        .find(|entry| entry.root_principal == requested.root_principal);
-    for (field, value, existing) in [
-        ("fleet_name", requested.fleet_name.to_string(), by_name),
-        ("fleet_id", requested.fleet_id.to_string(), by_id),
-        ("root_principal", requested.root_principal.clone(), by_root),
-    ] {
-        if let Some(existing) = existing {
-            if same_fleet_authority(existing, requested) {
-                return Ok(Some(existing));
-            }
-            return Err(FleetCatalogError::Conflict { field, value });
-        }
-    }
-    Ok(None)
-}
-
-fn same_fleet_authority(existing: &FleetCatalogEntryV1, requested: &FleetCatalogEntryV1) -> bool {
-    existing.canonical_network_id == requested.canonical_network_id
-        && existing.fleet_id == requested.fleet_id
-        && existing.fleet_name == requested.fleet_name
-        && existing.app == requested.app
-        && existing.root_principal == requested.root_principal
-}
-
-fn canonical_catalog_bytes(catalog: &FleetCatalogRecord) -> Result<Vec<u8>, FleetCatalogError> {
-    let mut bytes = serde_json::to_vec_pretty(catalog)
-        .map_err(|source| FleetCatalogError::Encode { source })?;
-    bytes.push(b'\n');
-    Ok(bytes)
-}
-
 fn validate_canonical_name(value: &str) -> Result<(), String> {
     if value.is_empty() {
         return Err("must not be empty".to_string());
@@ -550,15 +364,4 @@ fn fleet_catalog_path(project_root: &Path, canonical_network_id: CanonicalNetwor
         .join("networks")
         .join(canonical_network_id.to_string())
         .join(FLEET_CATALOG_RELATIVE_PATH)
-}
-
-fn fleet_catalog_lock_path(
-    project_root: &Path,
-    canonical_network_id: CanonicalNetworkId,
-) -> PathBuf {
-    project_root
-        .join(".canic")
-        .join("networks")
-        .join(canonical_network_id.to_string())
-        .join("fleets/catalog.lock")
 }

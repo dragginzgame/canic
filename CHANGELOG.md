@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.13` durably creates, installs and independently verifies every
+  planned Fleet Subnet Root with exact protected root authority before
+  stopping at the still-unimplemented Store-bootstrap and Registry-joining
+  boundary.
+
 - `0.100.12` makes fresh installation durably create, install and independently
   verify the exact Fleet Coordinator and Registry genesis before a post-
   verification fence prevents any legacy root effect.

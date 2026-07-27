@@ -56,7 +56,7 @@ pub fn setup_root_topology(
         progress(spec, "installing root canister");
         let root_install_started_at = Instant::now();
         let root_id = pic
-            .create_and_install_root_canister(root_wasm)
+            .create_and_install_root_canister(root_wasm, &spec.build_config_path)
             .expect("install root canister");
         progress_elapsed(spec, "root canister installed", root_install_started_at);
 

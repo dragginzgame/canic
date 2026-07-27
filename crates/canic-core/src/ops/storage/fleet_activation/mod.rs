@@ -7,22 +7,26 @@
 mod mapper;
 
 use crate::{
+    config::ComponentTopology,
     dto::fleet_activation::{
-        CurrentRootInstallIdentity, FleetActivationIdentity, FleetActivationRequest,
-        FleetActivationStatusResponse, FleetCascadeActivationEvidence, FleetCascadeManifestEntry,
-        FleetCredentialGenerationRef, FleetCredentialGenerationRequest, FleetCredentialManifest,
+        FleetActivationIdentity, FleetActivationRequest, FleetActivationStatusResponse,
+        FleetCascadeActivationEvidence, FleetCascadeManifestEntry, FleetCredentialGenerationRef,
+        FleetCredentialGenerationRequest, FleetCredentialManifest,
     },
-    ids::{FleetBinding, ReleaseBuildId},
+    dto::fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
+    ids::{AppId, FleetBinding, ReleaseBuildId},
     model::fleet_activation::{
         NonrootInstallIdentity, PrepareFleetActivationError, PreparedFleetActivation,
-        RootInstallIdentity, prepare_nonroot_install, prepare_root_install,
+        PreparedFleetSubnetRootAuthority, RootInstallIdentity, prepare_nonroot_install,
+        prepare_root_install,
     },
     storage::stable::fleet_activation::{
         FleetActivation, FleetActivationData, FleetActivationEvidenceRecord,
         FleetActivationIdentityRecord, FleetActivationRecord, FleetActivationStateRecord,
         FleetCascadeActivationEvidenceRecord, FleetCascadeManifestEntryRecord,
         FleetCredentialGenerationRefRecord, FleetCredentialManifestEntryRecord,
-        FleetCredentialManifestRecord, MAX_FLEET_ACTIVATION_RECORD_BYTES,
+        FleetCredentialManifestRecord, FleetSubnetRootAuthorityRecord,
+        MAX_FLEET_ACTIVATION_RECORD_BYTES,
     },
     view::fleet_activation::FleetActivationTransition,
 };
@@ -76,16 +80,23 @@ pub struct PreparedFleetActivationSnapshot(Option<FleetActivationRecord>);
 
 impl FleetActivationOps {
     pub(crate) fn initialize_root_prepared(
-        input: CurrentRootInstallIdentity,
+        input: FleetSubnetRootInitArgs,
         embedded_release_build_id: ReleaseBuildId,
+        configured_app: &AppId,
+        component_topology: &ComponentTopology,
+        root_canister: candid::Principal,
     ) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
         let prepared = prepare_root_install(
             RootInstallIdentity {
-                fleet: input.fleet,
+                binding: input.authority.binding,
+                initial_release_set: input.authority.initial_release_set,
                 install_id: input.install_id,
-                release_build_id: input.release_build_id,
+                expected_module_hash: input.authority.expected_module_hash,
             },
             embedded_release_build_id,
+            configured_app,
+            component_topology,
+            root_canister,
         )?;
         initialize_prepared(prepared, None)
     }
@@ -134,6 +145,17 @@ impl FleetActivationOps {
             | FleetActivationStateRecord::Active { identity, .. } => identity,
         };
         Ok(identity.fleet)
+    }
+
+    pub(crate) fn root_authority() -> Result<FleetSubnetRootAuthority, FleetActivationOpsError> {
+        let record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
+        record
+            .root_authority
+            .map(root_authority_record_to_dto)
+            .ok_or_else(|| FleetActivationOpsError::InvalidRecord {
+                reason: "protected Fleet activation record has no Fleet Subnet Root authority"
+                    .to_string(),
+            })
     }
 
     pub(crate) fn require_active(is_root: bool) -> Result<(), FleetActivationOpsError> {
@@ -370,6 +392,7 @@ fn initialize_prepared(
     prepared: PreparedFleetActivation,
     application_init_args: Option<Vec<u8>>,
 ) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
+    let root_authority = prepared.root_authority.map(root_authority_model_to_record);
     let record = FleetActivationRecord {
         state: FleetActivationStateRecord::Prepared {
             identity: FleetActivationIdentityRecord {
@@ -383,6 +406,7 @@ fn initialize_prepared(
             },
             application_init_args,
         },
+        root_authority,
         prepared_state_snapshot_hash: None,
         prepared_topology_snapshot_hash: None,
         cascade_manifest: None,
@@ -397,6 +421,26 @@ fn initialize_prepared(
         operation_id: prepared.identity.operation_id,
         release_build_id: prepared.identity.release_build_id,
     })
+}
+
+fn root_authority_model_to_record(
+    authority: PreparedFleetSubnetRootAuthority,
+) -> FleetSubnetRootAuthorityRecord {
+    FleetSubnetRootAuthorityRecord {
+        binding: authority.binding,
+        initial_release_set: authority.initial_release_set,
+        expected_module_hash: authority.expected_module_hash,
+    }
+}
+
+fn root_authority_record_to_dto(
+    authority: FleetSubnetRootAuthorityRecord,
+) -> FleetSubnetRootAuthority {
+    FleetSubnetRootAuthority {
+        binding: authority.binding,
+        initial_release_set: authority.initial_release_set,
+        expected_module_hash: authority.expected_module_hash,
+    }
 }
 
 fn validate_record_bound(record: &FleetActivationRecord) -> Result<(), FleetActivationOpsError> {
@@ -521,31 +565,131 @@ const fn cascade_record_to_dto(
 mod tests {
     use super::*;
     use crate::{
-        ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, ReleaseBuildNonce},
+        cdk::types::Cycles,
+        config::{ComponentLimits, ComponentSpec},
+        dto::fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
+        ids::{
+            AppId, CanisterRole, CanonicalNetworkId, ComponentSpecAdmission, CyclesFundingBudget,
+            FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority,
+            FleetSubnetRootBinding, FleetSubnetRootLimits, FleetSubnetRootReleaseSet,
+            ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
+        },
         storage::stable::fleet_activation::{
             FleetActivationEvidenceRecord, FleetActivationStateRecord,
             FleetCascadeActivationEvidenceRecord, FleetCredentialGenerationRefRecord,
             FleetCredentialManifestRecord,
         },
     };
+    use candid::Principal;
 
     fn release_build(byte: u8) -> ReleaseBuildId {
         ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([byte; 32]))
     }
 
-    fn input(release_build_id: ReleaseBuildId) -> CurrentRootInstallIdentity {
-        CurrentRootInstallIdentity {
-            fleet: FleetBinding {
-                fleet: FleetKey {
-                    canonical_network_id: CanonicalNetworkId::public_ic(),
-                    fleet_id: FleetId::from_generated_bytes([11; 32]),
+    fn input(release_build_id: ReleaseBuildId) -> FleetSubnetRootInitArgs {
+        let component_spec = "projects".parse().expect("Component Spec");
+        let spec_hash = [10; 32];
+        let topology = topology();
+        let admissions = vec![ComponentSpecAdmission {
+            component_spec,
+            spec_hash,
+            maximum_root_instances: 2,
+        }];
+        let projection = topology
+            .project_for_admissions(&admissions)
+            .expect("root topology projection");
+        FleetSubnetRootInitArgs {
+            authority: FleetSubnetRootAuthority {
+                binding: FleetSubnetRootBinding {
+                    authority: FleetRegistryAuthority {
+                        binding: FleetCoordinatorBinding {
+                            fleet: FleetBinding {
+                                fleet: FleetKey {
+                                    canonical_network_id: CanonicalNetworkId::public_ic(),
+                                    fleet_id: FleetId::from_generated_bytes([11; 32]),
+                                },
+                                app: AppId::from("toko"),
+                            },
+                            coordinator_subnet: SubnetId::from_principal(Principal::from_slice(
+                                &[20; 29],
+                            )),
+                            coordinator: Principal::from_slice(&[21; 29]),
+                        },
+                        epoch: 1,
+                    },
+                    placement_subnet: SubnetId::from_principal(Principal::from_slice(&[22; 29])),
+                    fleet_subnet_root: Principal::from_slice(&[23; 29]),
+                    component_admissions: admissions,
+                    component_topology_digest: projection.digest().expect("topology digest"),
+                    limits: FleetSubnetRootLimits {
+                        maximum_component_instances: 10,
+                        maximum_managed_canisters: 1_000,
+                        maximum_registry_bytes: 4_194_304,
+                        maximum_wasm_store_bytes: 40_000_000,
+                        cycles_funding: CyclesFundingBudget {
+                            window_secs: 3_600,
+                            maximum_cycles: Cycles::new(1_000_000_000_000),
+                        },
+                    },
                 },
-                app: AppId::from("toko"),
+                initial_release_set: FleetSubnetRootReleaseSet {
+                    release_build_id,
+                    manifest_digest: ReleaseSetDigest::from_bytes([24; 32]),
+                },
+                expected_module_hash: [13; 32],
             },
             install_id: [12; 32],
-            release_build_id,
-            expected_module_hash: Some([13; 32]),
         }
+    }
+
+    fn topology() -> ComponentTopology {
+        ComponentTopology {
+            component_specs: vec![ComponentSpec {
+                component_spec: "projects".parse().expect("Component Spec"),
+                spec_hash: [10; 32],
+                component_role: CanisterRole::from("project_hub"),
+                maximum_fleet_instances: 10,
+                limits: ComponentLimits {
+                    maximum_descendants: 100,
+                    maximum_registry_bytes: 1_048_576,
+                    cycles_funding: CyclesFundingBudget {
+                        window_secs: 3_600,
+                        maximum_cycles: Cycles::new(1_000_000_000_000),
+                    },
+                },
+                children: Vec::new(),
+                spawn_grants: Vec::new(),
+            }],
+            provisioning_grants: Vec::new(),
+        }
+    }
+
+    fn initialize_root(
+        input: FleetSubnetRootInitArgs,
+        embedded_release_build_id: ReleaseBuildId,
+    ) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
+        let root_canister = input.authority.binding.fleet_subnet_root;
+        FleetActivationOps::initialize_root_prepared(
+            input,
+            embedded_release_build_id,
+            &AppId::from("toko"),
+            &topology(),
+            root_canister,
+        )
+    }
+
+    fn initialize_nonroot(
+        input: FleetSubnetRootInitArgs,
+        embedded_release_build_id: ReleaseBuildId,
+        application_init_args: Option<Vec<u8>>,
+    ) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
+        FleetActivationOps::initialize_nonroot_prepared(
+            input.authority.binding.authority.binding.fleet,
+            input.install_id,
+            input.authority.initial_release_set.release_build_id,
+            embedded_release_build_id,
+            application_init_args,
+        )
     }
 
     fn record_state_snapshot(hash: [u8; 32]) {
@@ -564,9 +708,8 @@ mod tests {
     fn root_init_commits_exact_prepared_identity_once() {
         FleetActivationOps::reset_for_tests();
         let release_build_id = release_build(14);
-        let identity =
-            FleetActivationOps::initialize_root_prepared(input(release_build_id), release_build_id)
-                .expect("initialize Prepared");
+        let identity = initialize_root(input(release_build_id), release_build_id)
+            .expect("initialize Prepared");
         let stored = FleetActivationOps::snapshot()
             .record
             .expect("protected activation record");
@@ -586,11 +729,8 @@ mod tests {
         };
         assert_eq!(stored_identity.operation_id, [12; 32]);
         assert!(matches!(
-            FleetActivationOps::initialize_root_prepared(
-                input(release_build_id),
-                release_build_id,
-            )
-            .expect_err("second initialization must fail"),
+            initialize_root(input(release_build_id), release_build_id)
+                .expect_err("second initialization must fail"),
             FleetActivationOpsError::AlreadyInitialized
         ));
 
@@ -604,7 +744,7 @@ mod tests {
         let embedded = release_build(16);
 
         assert!(matches!(
-            FleetActivationOps::initialize_root_prepared(input(supplied), embedded),
+            initialize_root(input(supplied), embedded),
             Err(FleetActivationOpsError::Admission(
                 PrepareFleetActivationError::ReleaseBuildMismatch { .. }
             ))
@@ -620,14 +760,8 @@ mod tests {
         FleetActivationOps::reset_for_tests();
         let release_build_id = release_build(32);
         let root_input = input(release_build_id);
-        let identity = FleetActivationOps::initialize_nonroot_prepared(
-            root_input.fleet,
-            root_input.install_id,
-            root_input.release_build_id,
-            release_build_id,
-            Some(vec![33, 34]),
-        )
-        .expect("initialize non-root Prepared");
+        let identity = initialize_nonroot(root_input, release_build_id, Some(vec![33, 34]))
+            .expect("initialize non-root Prepared");
         let stored = FleetActivationOps::snapshot()
             .record
             .expect("protected activation record");
@@ -656,13 +790,7 @@ mod tests {
         let root_input = input(supplied);
 
         assert!(matches!(
-            FleetActivationOps::initialize_nonroot_prepared(
-                root_input.fleet,
-                root_input.install_id,
-                root_input.release_build_id,
-                embedded,
-                None,
-            ),
+            initialize_nonroot(root_input, embedded, None),
             Err(FleetActivationOpsError::Admission(
                 PrepareFleetActivationError::ReleaseBuildMismatch { .. }
             ))
@@ -677,8 +805,7 @@ mod tests {
     fn status_projects_the_exact_prepared_identity() {
         FleetActivationOps::reset_for_tests();
         let release_build_id = release_build(17);
-        FleetActivationOps::initialize_root_prepared(input(release_build_id), release_build_id)
-            .expect("initialize Prepared");
+        initialize_root(input(release_build_id), release_build_id).expect("initialize Prepared");
 
         let status = FleetActivationOps::status(true).expect("activation status");
 
@@ -708,8 +835,7 @@ mod tests {
         );
 
         let release_build_id = release_build(18);
-        FleetActivationOps::initialize_root_prepared(input(release_build_id), release_build_id)
-            .expect("initialize Prepared");
+        initialize_root(input(release_build_id), release_build_id).expect("initialize Prepared");
         let mut data = FleetActivationOps::snapshot();
         data.record
             .as_mut()
@@ -744,8 +870,7 @@ mod tests {
     fn root_status_rejects_nonroot_application_init_arguments() {
         FleetActivationOps::reset_for_tests();
         let release_build_id = release_build(20);
-        FleetActivationOps::initialize_root_prepared(input(release_build_id), release_build_id)
-            .expect("initialize Prepared");
+        initialize_root(input(release_build_id), release_build_id).expect("initialize Prepared");
         let mut data = FleetActivationOps::snapshot();
         let FleetActivationStateRecord::Prepared {
             application_init_args,
@@ -769,8 +894,7 @@ mod tests {
     fn status_projects_complete_active_root_evidence() {
         FleetActivationOps::reset_for_tests();
         let release_build_id = release_build(21);
-        FleetActivationOps::initialize_root_prepared(input(release_build_id), release_build_id)
-            .expect("initialize Prepared");
+        initialize_root(input(release_build_id), release_build_id).expect("initialize Prepared");
         let mut data = FleetActivationOps::snapshot();
         let record = data.record.as_mut().expect("record");
         let FleetActivationStateRecord::Prepared { identity, .. } = &record.state else {
@@ -825,7 +949,7 @@ mod tests {
     fn status_projects_only_nonroot_applied_evidence() {
         FleetActivationOps::reset_for_tests();
         let release_build_id = release_build(27);
-        FleetActivationOps::initialize_root_prepared(input(release_build_id), release_build_id)
+        initialize_nonroot(input(release_build_id), release_build_id, None)
             .expect("initialize Prepared");
         let mut data = FleetActivationOps::snapshot();
         let record = data.record.as_mut().expect("record");
@@ -877,14 +1001,8 @@ mod tests {
         FleetActivationOps::reset_for_tests();
         let release_build_id = release_build(35);
         let root_input = input(release_build_id);
-        FleetActivationOps::initialize_nonroot_prepared(
-            root_input.fleet,
-            root_input.install_id,
-            root_input.release_build_id,
-            release_build_id,
-            Some(vec![35, 36]),
-        )
-        .expect("initialize non-root Prepared");
+        initialize_nonroot(root_input, release_build_id, Some(vec![35, 36]))
+            .expect("initialize non-root Prepared");
         record_state_snapshot([36; 32]);
         record_topology_snapshot([37; 32]);
         let credential = FleetCredentialGenerationRef {
@@ -935,14 +1053,8 @@ mod tests {
         FleetActivationOps::reset_for_tests();
         let release_build_id = release_build(41);
         let root_input = input(release_build_id);
-        FleetActivationOps::initialize_nonroot_prepared(
-            root_input.fleet,
-            root_input.install_id,
-            root_input.release_build_id,
-            release_build_id,
-            None,
-        )
-        .expect("initialize non-root Prepared");
+        initialize_nonroot(root_input, release_build_id, None)
+            .expect("initialize non-root Prepared");
         record_state_snapshot([42; 32]);
         record_topology_snapshot([43; 32]);
         let credential = FleetCredentialGenerationRef {

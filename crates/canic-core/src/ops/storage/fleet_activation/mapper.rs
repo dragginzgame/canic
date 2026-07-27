@@ -27,11 +27,17 @@ pub(super) fn record_to_status(
 ) -> Result<FleetActivationStatusResponse, FleetActivationOpsError> {
     let FleetActivationRecord {
         state,
+        root_authority,
         prepared_state_snapshot_hash: _,
         prepared_topology_snapshot_hash: _,
         cascade_manifest,
         credential_manifests,
     } = record;
+    if is_root != root_authority.is_some() {
+        return Err(invalid(
+            "Fleet Subnet Root authority presence does not match the runtime role",
+        ));
+    }
     let (phase, identity, evidence, activated_at_ns) = match state {
         FleetActivationStateRecord::Prepared {
             identity,
@@ -68,8 +74,37 @@ pub(super) fn record_to_status(
         credential,
     } = evidence;
 
-    let cascade_manifest = if is_root {
-        match (&cascade, cascade_manifest) {
+    let cascade_manifest = status_cascade_manifest(is_root, cascade.as_ref(), cascade_manifest)?;
+
+    let credential_manifest = if is_root {
+        current_root_credential_manifest(&identity, credential.as_ref(), credential_manifests)?
+    } else {
+        if !credential_manifests.is_empty() {
+            return Err(invalid(
+                "non-root Fleet activation retains root-only credential manifests",
+            ));
+        }
+        None
+    };
+
+    Ok(FleetActivationStatusResponse {
+        phase,
+        identity: identity_record_to_dto(identity),
+        cascade: cascade.map(cascade_record_to_dto),
+        cascade_manifest,
+        credential: credential.map(credential_record_to_dto),
+        credential_manifest,
+        activated_at_ns,
+    })
+}
+
+fn status_cascade_manifest(
+    is_root: bool,
+    cascade: Option<&FleetCascadeActivationEvidenceRecord>,
+    cascade_manifest: Option<Vec<FleetCascadeManifestEntryRecord>>,
+) -> Result<Option<Vec<FleetCascadeManifestEntry>>, FleetActivationOpsError> {
+    Ok(if is_root {
+        match (cascade, cascade_manifest) {
             (None, None) => None,
             (Some(FleetCascadeActivationEvidenceRecord::Source { .. }), Some(cascade_manifest)) => {
                 Some(
@@ -97,7 +132,7 @@ pub(super) fn record_to_status(
             ));
         }
         if matches!(
-            &cascade,
+            cascade,
             Some(FleetCascadeActivationEvidenceRecord::Source { .. })
         ) {
             return Err(invalid(
@@ -105,27 +140,6 @@ pub(super) fn record_to_status(
             ));
         }
         None
-    };
-
-    let credential_manifest = if is_root {
-        current_root_credential_manifest(&identity, credential.as_ref(), credential_manifests)?
-    } else {
-        if !credential_manifests.is_empty() {
-            return Err(invalid(
-                "non-root Fleet activation retains root-only credential manifests",
-            ));
-        }
-        None
-    };
-
-    Ok(FleetActivationStatusResponse {
-        phase,
-        identity: identity_record_to_dto(identity),
-        cascade: cascade.map(cascade_record_to_dto),
-        cascade_manifest,
-        credential: credential.map(credential_record_to_dto),
-        credential_manifest,
-        activated_at_ns,
     })
 }
 

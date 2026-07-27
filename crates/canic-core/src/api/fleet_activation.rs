@@ -13,6 +13,7 @@ use crate::{
             FleetCascadeManifestEntry, FleetCredentialGenerationRef,
             FleetCredentialGenerationRequest, FleetCredentialManifest,
         },
+        fleet_subnet_root::FleetSubnetRootAuthority,
     },
     ops::fleet_activation::FleetActivationEvidenceOps,
     view::fleet_activation::FleetActivationTransition,
@@ -54,6 +55,10 @@ impl FleetActivationApi {
 
     pub fn require_active() -> Result<(), Error> {
         FleetActivationWorkflow::require_active().map_err(Error::from)
+    }
+
+    pub fn root_authority() -> Result<FleetSubnetRootAuthority, Error> {
+        FleetActivationWorkflow::root_authority().map_err(Error::from)
     }
 
     pub async fn prepare_root() -> Result<FleetActivationStatusResponse, Error> {

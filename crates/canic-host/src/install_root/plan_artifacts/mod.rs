@@ -19,16 +19,21 @@ use crate::{
     release_build::{FinalizedReleaseBuild, finalize_release_build_from_manifest},
     release_set::{
         ApplicationArtifactFileBuildOutput, CanicInfrastructureArtifactBuildOutput,
-        artifact_root_path, compile_and_persist_application_artifact_union,
+        compile_and_persist_application_artifact_union,
         compile_and_persist_canic_infrastructure_artifact_manifest,
     },
 };
 use std::{
-    path::{Path, PathBuf},
+    path::Path,
     time::{Duration, Instant},
 };
 
 use canic_core::ids::{CanisterRole, ReleaseBuildId};
+
+#[cfg(test)]
+use crate::release_set::artifact_root_path;
+#[cfg(test)]
+use std::path::PathBuf;
 
 pub(super) use prepared::PreparedPlanArtifacts;
 
@@ -174,6 +179,7 @@ fn application_file_build_outputs(
         .collect()
 }
 
+#[cfg(test)]
 pub(super) fn normal_install_root_wasm(icp_root: &Path, root_build_target: &str) -> PathBuf {
     artifact_root_path(icp_root, "local")
         .join(root_build_target)

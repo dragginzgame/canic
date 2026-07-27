@@ -60,52 +60,6 @@ fn local_canister_command_uses_http_target_when_configured() {
 }
 
 #[test]
-fn local_http_fallback_creates_detached_root() {
-    let target = LocalReplicaTarget {
-        url: "http://127.0.0.1:8000".to_string(),
-        root_key: "abcd".to_string(),
-    };
-    let mut command = icp_canister_command(Path::new("/tmp/canic-icp-root"));
-    add_create_root_target(&mut command, "root", Some(&target));
-
-    assert_eq!(
-        command
-            .get_args()
-            .map(|arg| arg.to_string_lossy().into_owned())
-            .collect::<Vec<_>>(),
-        [
-            "--project-root-override",
-            "/tmp/canic-icp-root",
-            "canister",
-            "create",
-            "--detached",
-            "--json"
-        ]
-    );
-}
-
-#[test]
-fn environment_create_uses_named_root() {
-    let mut command = icp_canister_command(Path::new("/tmp/canic-icp-root"));
-    add_create_root_target(&mut command, "root", None);
-
-    assert_eq!(
-        command
-            .get_args()
-            .map(|arg| arg.to_string_lossy().into_owned())
-            .collect::<Vec<_>>(),
-        [
-            "--project-root-override",
-            "/tmp/canic-icp-root",
-            "canister",
-            "create",
-            "root",
-            "--json"
-        ]
-    );
-}
-
-#[test]
 fn install_timing_summary_uses_standard_table_format() {
     let timings = InstallTimingSummary {
         create_canisters: Duration::from_millis(1200),
@@ -138,169 +92,64 @@ fn install_timing_summary_uses_standard_table_format() {
 }
 
 #[test]
-fn root_init_args_roundtrip_the_exact_current_identity() {
+fn root_init_args_roundtrip_the_exact_protected_authority() {
     use candid::{CandidType, TypeEnv};
-    use canic_core::dto::fleet_activation::CurrentRootInstallIdentity;
+    use canic_core::{
+        cdk::types::Cycles,
+        dto::fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
+        ids::{
+            ComponentTopologyDigest, CyclesFundingBudget, FleetCoordinatorBinding,
+            FleetRegistryAuthority, FleetSubnetRootBinding, FleetSubnetRootLimits,
+            FleetSubnetRootReleaseSet, ReleaseSetDigest, SubnetId,
+        },
+    };
 
     let activation = sample_fleet_activation_identity();
-    let identity = CurrentRootInstallIdentity {
-        fleet: activation.fleet,
+    let fleet_subnet_root = candid::Principal::from_slice(&[42]);
+    let identity = FleetSubnetRootInitArgs {
+        authority: FleetSubnetRootAuthority {
+            binding: FleetSubnetRootBinding {
+                authority: FleetRegistryAuthority {
+                    binding: FleetCoordinatorBinding {
+                        fleet: activation.fleet,
+                        coordinator_subnet: SubnetId::from_principal(
+                            candid::Principal::from_slice(&[40]),
+                        ),
+                        coordinator: candid::Principal::from_slice(&[41]),
+                    },
+                    epoch: 1,
+                },
+                placement_subnet: SubnetId::from_principal(candid::Principal::from_slice(&[43])),
+                fleet_subnet_root,
+                component_admissions: Vec::new(),
+                component_topology_digest: ComponentTopologyDigest::from_bytes([5; 32]),
+                limits: FleetSubnetRootLimits {
+                    maximum_component_instances: 10,
+                    maximum_managed_canisters: 100,
+                    maximum_registry_bytes: 1_048_576,
+                    maximum_wasm_store_bytes: 10_000_000,
+                    cycles_funding: CyclesFundingBudget {
+                        window_secs: 3_600,
+                        maximum_cycles: Cycles::new(1_000_000_000_000),
+                    },
+                },
+            },
+            initial_release_set: FleetSubnetRootReleaseSet {
+                release_build_id: activation.release_build_id,
+                manifest_digest: ReleaseSetDigest::from_bytes([6; 32]),
+            },
+            expected_module_hash: [10; 32],
+        },
         install_id: activation.operation_id,
-        release_build_id: activation.release_build_id,
-        expected_module_hash: Some([10; 32]),
     };
 
     let args = root_init_args(&identity).expect("build init args");
     let parsed = candid_parser::parse_idl_args(&args).expect("parse textual Candid");
     let bytes = parsed
-        .to_bytes_with_types(&TypeEnv::new(), &[CurrentRootInstallIdentity::ty()])
+        .to_bytes_with_types(&TypeEnv::new(), &[FleetSubnetRootInitArgs::ty()])
         .expect("encode typed textual Candid");
-    let decoded: CurrentRootInstallIdentity =
+    let decoded: FleetSubnetRootInitArgs =
         candid::decode_one(&bytes).expect("decode init identity");
 
     assert_eq!(decoded, identity);
-}
-
-#[test]
-fn local_root_create_adds_configured_cycle_funding() {
-    let workspace_root = write_temp_workspace_config(
-        r#"
-[app]
-name = "demo"
-
-[roles.root]
-kind = "root"
-package = "root"
-
-[roles.app]
-kind = "canister"
-package = "app"
-
-[roles.project_registry]
-kind = "canister"
-package = "project_registry"
-
-[roles.oracle_pokemon]
-kind = "canister"
-package = "oracle_pokemon"
-
-[roles.user_hub]
-kind = "canister"
-package = "user_hub"
-
-[roles.user_shard]
-kind = "canister"
-package = "user_shard"
-
-[roles.scale_hub]
-kind = "canister"
-package = "scale_hub"
-
-[roles.scale_replica]
-kind = "canister"
-package = "scale"
-
-[roles.role_baseline]
-kind = "canister"
-package = "role_baseline"
-
-[roles.worker]
-kind = "canister"
-package = "worker"
-
-
-
-[component_specs.app]
-component_role = "app"
-maximum_instances = 1
-"#,
-    );
-    let mut command = std::process::Command::new("icp");
-    command.args(["canister", "create", "root", "-q"]);
-
-    add_local_root_create_cycles_arg(
-        &mut command,
-        &workspace_root.join("apps/canic.toml"),
-        "local",
-    )
-    .expect("local cycles arg");
-
-    assert_eq!(
-        command
-            .get_args()
-            .map(|arg| arg.to_string_lossy().into_owned())
-            .collect::<Vec<_>>(),
-        [
-            "canister",
-            "create",
-            "root",
-            "-q",
-            "--cycles",
-            "110000000000000"
-        ]
-    );
-}
-
-#[test]
-fn nonlocal_root_create_does_not_add_cycle_funding() {
-    let workspace_root = write_temp_workspace_config(
-        r#"
-name = "demo"
-
-[roles.root]
-kind = "root"
-package = "root"
-
-[roles.app]
-kind = "canister"
-package = "app"
-
-[roles.project_registry]
-kind = "canister"
-package = "project_registry"
-
-[roles.oracle_pokemon]
-kind = "canister"
-package = "oracle_pokemon"
-
-[roles.user_hub]
-kind = "canister"
-package = "user_hub"
-
-[roles.user_shard]
-kind = "canister"
-package = "user_shard"
-
-[roles.scale_hub]
-kind = "canister"
-package = "scale_hub"
-
-[roles.scale_replica]
-kind = "canister"
-package = "scale"
-
-[roles.role_baseline]
-kind = "canister"
-package = "role_baseline"
-
-[roles.worker]
-kind = "canister"
-package = "worker"
-
-
-"#,
-    );
-    let mut command = std::process::Command::new("icp");
-    command.args(["canister", "create", "root", "-q"]);
-
-    add_local_root_create_cycles_arg(&mut command, &workspace_root.join("apps/canic.toml"), "ic")
-        .expect("nonlocal cycles arg");
-
-    assert_eq!(
-        command
-            .get_args()
-            .map(|arg| arg.to_string_lossy().into_owned())
-            .collect::<Vec<_>>(),
-        ["canister", "create", "root", "-q"]
-    );
 }

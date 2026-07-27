@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.11`.
-- The latest published release is `v0.100.11` at
-  `ec5118fbf849aa72d15f3b35285f604f5f39717a`.
-- The `v0.100.11` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `a4a10c6c719ad7e631674193b40441889ba3ac62c5ec94bb3dd7ede6c8a4338a`.
+- The workspace package version is `0.100.12`.
+- The latest published release is `v0.100.12` at
+  `ee927bf1b1e0747a50c847b0c9b69c6c1610584f`.
+- The `v0.100.12` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `4ae93652f2dbcc5d21a3bc6437c9d732c80edfb4cc03223da933a7f468407a53`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -133,7 +133,7 @@ Historical detail is archived at:
   Coordinator-first network-effect guard remains; the next slice must create,
   install and verify the Coordinator from this immutable authority before any
   root effect.
-- The open `0.100.12` replaces that pre-effect guard with a canonical
+- Released `0.100.12` replaces that pre-effect guard with a canonical
   Coordinator installation journal bound to the exact Fleet plan, complete
   Component Topology and infrastructure artifact authority. It durably
   separates creation and install intent from their observed outcomes,
@@ -145,6 +145,16 @@ Historical detail is archived at:
   recomputed authority. A new post-verification fence still prevents the old
   single-root path from creating any root; planned multi-root creation and
   root registration are next.
+- Open `0.100.13` replaces that root-effect fence with a canonical journal for
+  every planned Fleet Subnet Root. The host creates and installs roots in
+  canonical plan order with exact placement and funding, persists each root's
+  protected Fleet/Coordinator/Subnet/admission/limit/release-set authority,
+  and requires its live module hash, empty `Prepared` activation status and
+  controller-only authority query to agree before proceeding. It then
+  validates the complete observed root-binding set and stops at an explicit
+  local Store-bootstrap and Registry-registration fence. The obsolete
+  one-root activation journal and root catalog-write path are removed; package
+  versions remain `0.100.12`.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -176,6 +186,14 @@ Historical detail is archived at:
   host installs the Coordinator and roots directly; each root bootstraps only
   its own verified local Store. The Coordinator manages Fleet roots and
   publication, not ordinary Component inventories.
+- The required 0.100 closeout operator surface now includes
+  `canic info subnets <fleet> [--json]`. It resolves the Coordinator from the
+  terminal Fleet catalog, reads current root placement from the Fleet
+  Registry and consumes one compact count summary per non-removed root. The
+  result groups by physical Subnet and counts only that Fleet's
+  known-created, not-deletion-confirmed Coordinator, root, Store, Component
+  and descendant Canisters; it does not enumerate unrelated Canisters on the
+  Subnet or fabricate a partial total when live authority disagrees.
 - A fresh 0.101 adds bounded `ComponentGroupSpec` deployment composition.
   Groups may include groups in configuration, but compile to canonical flat
   member paths and direct root-owned Components before planning. Inclusion

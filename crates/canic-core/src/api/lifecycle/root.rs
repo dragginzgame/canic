@@ -1,5 +1,5 @@
 use crate::{
-    config::schema::ConfigModel, dto::fleet_activation::CurrentRootInstallIdentity, lifecycle,
+    config::schema::ConfigModel, dto::fleet_subnet_root::FleetSubnetRootInitArgs, lifecycle,
 };
 
 ///
@@ -10,13 +10,13 @@ pub struct LifecycleApi;
 
 impl LifecycleApi {
     pub fn init_root_canister_before_bootstrap(
-        identity: CurrentRootInstallIdentity,
+        args: FleetSubnetRootInitArgs,
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
     ) {
         lifecycle::init::root::init_root_canister_before_bootstrap(
-            identity,
+            args,
             config,
             config_source,
             config_path,

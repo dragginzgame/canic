@@ -159,7 +159,7 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path, config_p
 }
 
 // Resolve the one canonical Fleet config used by every managed fixture wasm.
-fn root_canister_config_path(workspace_root: &Path) -> PathBuf {
+pub(super) fn root_canister_config_path(workspace_root: &Path) -> PathBuf {
     workspace_root
         .join("canisters")
         .join("test")
