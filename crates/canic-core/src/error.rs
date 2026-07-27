@@ -1,5 +1,8 @@
 use crate::access::AccessError;
-use crate::domain::policy::pure::topology::{TopologyPolicyError, registry::RegistryPolicyError};
+use crate::domain::policy::pure::{
+    component_allocation::ComponentAllocationPolicyError,
+    topology::{TopologyPolicyError, registry::RegistryPolicyError},
+};
 use crate::dto::error::{Error as PublicError, ErrorCode as PublicErrorCode};
 use std::fmt;
 use thiserror::Error as ThisError;
@@ -195,6 +198,33 @@ impl From<TopologyPolicyError> for InternalError {
         match public_code {
             Some(code) => Self::public(PublicError::policy(code, message)),
             None => Self::domain(InternalErrorOrigin::Domain, message),
+        }
+    }
+}
+
+impl From<ComponentAllocationPolicyError> for InternalError {
+    fn from(err: ComponentAllocationPolicyError) -> Self {
+        let message = err.to_string();
+        match err {
+            ComponentAllocationPolicyError::EmptyOperationId
+            | ComponentAllocationPolicyError::ComponentSpecNotAdmitted(_)
+            | ComponentAllocationPolicyError::ComponentSpecUnknown(_) => {
+                Self::invalid_input(message)
+            }
+            ComponentAllocationPolicyError::AllocationSequenceExhausted
+            | ComponentAllocationPolicyError::ComponentCountOverflow
+            | ComponentAllocationPolicyError::ComponentCapacityExhausted
+            | ComponentAllocationPolicyError::ComponentSpecCountOverflow(_)
+            | ComponentAllocationPolicyError::ComponentSpecCapacityExhausted(_)
+            | ComponentAllocationPolicyError::ManagedCanisterCountOverflow
+            | ComponentAllocationPolicyError::ManagedCanisterCapacityExhausted => {
+                Self::resource_exhausted(message)
+            }
+            ComponentAllocationPolicyError::InvalidRootTopologyProjection
+            | ComponentAllocationPolicyError::RootTopologyDigestMismatch
+            | ComponentAllocationPolicyError::ComponentSpecHashMismatch(_) => {
+                Self::invariant(InternalErrorOrigin::Domain, message)
+            }
         }
     }
 }

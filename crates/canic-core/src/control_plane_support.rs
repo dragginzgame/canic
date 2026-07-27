@@ -26,6 +26,15 @@ pub mod model {
     }
 }
 
+pub mod policy {
+    pub mod component_allocation {
+        pub use crate::domain::policy::pure::component_allocation::{
+            ComponentAllocationPolicyError, TopLevelComponentAllocationDecision,
+            TopLevelComponentAllocationInput, reserve_top_level_component,
+        };
+    }
+}
+
 pub mod ops {
     pub mod config {
         pub use crate::ops::config::ConfigOps;

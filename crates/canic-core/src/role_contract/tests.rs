@@ -127,7 +127,7 @@ fn canonical_allocations_match_the_active_memory_map() {
         (StateAllocationKey::WasmStoreGcState, vec![85]),
         (StateAllocationKey::FleetCoordinatorRegistry, vec![86]),
         (StateAllocationKey::RootFleetRegistryMirror, vec![87]),
-        (StateAllocationKey::RootComponentRegistry, vec![88]),
+        (StateAllocationKey::RootComponentRegistry, vec![88, 89]),
     ]);
     assert_eq!(actual, expected);
 }
@@ -420,7 +420,7 @@ fn repeated_selection_merges_allocation_provenance() {
         allocation_ids(&contract.allocations),
         vec![
             11, 12, 13, 15, 16, 18, 19, 20, 21, 29, 30, 33, 34, 35, 39, 40, 41, 42, 43, 44, 45, 46,
-            47, 49, 80, 81, 82, 83, 84, 87, 88,
+            47, 49, 80, 81, 82, 83, 84, 87, 88, 89,
         ]
     );
 }

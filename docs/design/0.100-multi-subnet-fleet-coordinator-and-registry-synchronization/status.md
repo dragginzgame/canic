@@ -6,8 +6,8 @@ Date: 2026-07-27
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.18`.
-- Open patch draft: `0.100.19`; no package-version change has been authorized.
+- Workspace package version: `0.100.19`.
+- Open patch draft: `0.100.20`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -15,8 +15,9 @@ exactly one Fleet Subnet Root per occupied `(FleetKey, SubnetId)`, with each
 root managing multiple Component instances as dynamic multi-level trees. A
 Component Spec declares one direct Component role and a flat catalog of every
 potential descendant role/Wasm. Concrete parentage is root-owned Registry
-state. A Component receives a root-allocated `ComponentInstanceId` only when
-its Canister is created.
+state. A Component creation operation receives a root-allocated
+`ComponentInstanceId` only when the root durably reserves it before any paid
+Canister effect.
 
 Different Fleets may each own an independent Fleet Subnet Root on the same
 physical Subnet. Root uniqueness, authority, admissions, Stores and limits
@@ -143,7 +144,7 @@ Registry slices replace the 0.99 root model.
 
 - [x] Prepare one empty root-local Component Registry authority against the
   exact Store, active Registry Mirror and Fleet Directory.
-- [ ] Implement durable root-local `ComponentInstanceId` allocation.
+- [x] Implement durable root-local `ComponentInstanceId` allocation.
 - [ ] Implement admitted direct Component creation through the root.
 - [ ] Implement same-root grant-checked peer Component provisioning while
   retaining causal origin without parentage.
@@ -191,8 +192,8 @@ Component declarations, but a role may also appear in another Spec's flat
 potential-descendant catalog. The same declared descendant artifact may occur
 in several catalogs without a role-only lookup choosing an owner.
 
-This batch defines but does not yet allocate durable `ComponentInstanceId`
-values. It now compiles each validated config into a bounded canonical
+Released 0.100.1 defined but did not allocate durable `ComponentInstanceId`
+values. It compiles each validated config into a bounded canonical
 Component Topology, freezes domain-separated golden Spec hashes and root-local
 topology digests, and exposes strong `SubnetId`, Coordinator/root authority,
 root limits, admission and Component/child binding contracts. Component
@@ -349,7 +350,7 @@ mirror/Directory record. The host independently re-queries every root and
 accepts recovery across the Coordinator transition only when the exact
 deterministic all-`Active` state is reproduced.
 
-Open 0.100.19 extends every root journal through
+Released 0.100.19 extends every root journal through
 `ComponentRegistryPreparationVerified`. Each root independently reverifies its
 Store, active Registry Mirror, protected all-`Active` root row and matching
 Fleet Directory before committing one empty Component Registry authority.
@@ -359,22 +360,39 @@ Components, descendants and charged Registry bytes. Fresh root bootstrap no
 longer creates configured roles or rebuilds the retired role-based
 Directories, so no Component can bypass its future durable Registry binding.
 
+Open 0.100.20 adds the first admitted top-level Component operation phase.
+Under the prepared Registry authority, the root independently reverifies its
+exact Store, all-`Active` Registry Mirror, protected root row and Fleet
+Directory before reserving a nonzero operation ID. Pure policy derives the
+Spec role/hash and deterministic root-local `ComponentInstanceId`, enforces
+root, Spec, managed-Canister and Registry-byte capacity, then atomically
+commits the operation record with the advanced allocation sequence and
+reserved count. Exact retry and read-only status reproduce the same durable
+reservation; conflicting intent and capacity exhaustion fail closed.
+
+This patch intentionally performs no Canister creation, install, cycle
+transfer, `ComponentBinding` commitment or Directory publication. The
+operation remains `Reserved`, committed Component and descendant counts stay
+zero and the root remains runtime-`Prepared`.
+
 The current installer therefore stops only after the Coordinator Registry and
 every root's matching Registry Mirror/Fleet Directory are independently
 verified all-`Active` and every empty root Component Registry is independently
-prepared. Every root remains runtime-`Prepared`; Component allocation,
+prepared. Roots may now reserve admitted top-level Component identities, but
+every root remains runtime-`Prepared`; Component creation/install,
 root-owned count summaries and terminal Coordinator-anchored Fleet catalog
 publication remain unimplemented. The temporary Component Spec selector
-remains until real allocation supplies the exact protected Component binding.
+remains until creation commits the exact protected Component binding.
 
 ## Next Action
 
-Implement the admitted top-level Component allocation state machine beneath
-the prepared root-local Registry authority. Reserve the deterministic
-`ComponentInstanceId` and exact Spec/admission/capacity charge before any paid
-Canister effect, commit the resulting protected Component binding only after
-observing creation and install, and make exact same-release retry recover from
-every journalled phase without blindly repeating an unresolved effect.
+Continue the reserved top-level Component operation through exact
+release-set artifact resolution, durable create/install intents, observed
+outcomes and protected `ComponentBinding`/Registry-partition commitment. Hard
+cut the retired environment/role and `SubnetDirectory` install payload rather
+than using it for the new Component. Exact same-release retry must resume every
+journalled phase without blindly repeating an unresolved paid effect, and the
+reserved identity must never be reused.
 
 Activate root runtime only through this Registry/Store/Directory-bound
 lifecycle. Do not reintroduce role-based Directory authority, static root

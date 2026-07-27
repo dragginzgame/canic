@@ -12,7 +12,9 @@ use canic_core::{
     dto::fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
     dto::{
         component_registry::{
-            RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
+            RootComponentAllocationRequest, RootComponentAllocationResponse,
+            RootComponentAllocationStatusRequest, RootComponentRegistryPreparationRequest,
+            RootComponentRegistryStatusResponse,
         },
         fleet_activation::{FleetActivationResumeRequest, FleetActivationStatusResponse},
     },
@@ -102,6 +104,20 @@ impl LifecycleApi {
         crate::workflow::component_registry::status(request)
             .await
             .map_err(Into::into)
+    }
+
+    pub async fn reserve_component_allocation(
+        request: RootComponentAllocationRequest,
+    ) -> Result<RootComponentAllocationResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::reserve_allocation(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub fn component_allocation_status(
+        request: RootComponentAllocationStatusRequest,
+    ) -> Result<RootComponentAllocationResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::allocation_status(request).map_err(Into::into)
     }
 
     pub async fn prepare_fleet_activation()

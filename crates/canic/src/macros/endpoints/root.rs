@@ -57,6 +57,20 @@ macro_rules! canic_emit_root_admin_endpoints {
         }
 
         #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_root_component_allocate(
+            request: ::canic::dto::component_registry::RootComponentAllocationRequest,
+        ) -> Result<::canic::dto::component_registry::RootComponentAllocationResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::reserve_component_allocation(request).await
+        }
+
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_root_component_allocation_status(
+            request: ::canic::dto::component_registry::RootComponentAllocationStatusRequest,
+        ) -> Result<::canic::dto::component_registry::RootComponentAllocationResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_allocation_status(request)
+        }
+
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_prepare_fleet_activation(
         ) -> Result<::canic::dto::fleet_activation::FleetActivationStatusResponse, ::canic::Error> {
             __canic_run_prepared_root_init_block().await;

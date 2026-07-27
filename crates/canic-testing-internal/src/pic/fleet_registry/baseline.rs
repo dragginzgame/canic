@@ -16,7 +16,10 @@ mod tests {
         CANIC_WASM_CHUNK_BYTES,
         dto::{
             component_registry::{
-                RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
+                ComponentProvisioningOrigin, RootComponentAllocationPhase,
+                RootComponentAllocationRequest, RootComponentAllocationResponse,
+                RootComponentAllocationStatusRequest, RootComponentRegistryPreparationRequest,
+                RootComponentRegistryStatusResponse,
             },
             fleet_registry::{
                 FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistry,
@@ -35,7 +38,7 @@ mod tests {
                 RootStoreReleaseSetManifest,
             },
         },
-        ids::{CanisterRole, ReleaseSetDigest},
+        ids::{CanisterRole, ComponentInstanceId, ReleaseSetDigest},
     };
     use canic::{
         Error,
@@ -46,6 +49,7 @@ mod tests {
             CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS, CANIC_FLEET_REGISTRY_SYNC_STATUS,
             CANIC_FLEET_REGISTRY_SYNCHRONIZE, CANIC_FLEET_REGISTRY_VERSION,
             CANIC_FLEET_SUBNET_ROOT_AUTHORITY, CANIC_FLEET_SUBNET_ROOT_JOIN,
+            CANIC_ROOT_COMPONENT_ALLOCATE, CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
             CANIC_ROOT_COMPONENT_REGISTRY_PREPARE, CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
             CANIC_ROOT_STORE_BOOTSTRAP, CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
             CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
@@ -428,13 +432,167 @@ mod tests {
             .query_call(
                 fixture.root_id,
                 CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
-                (component_registry_request,),
+                (component_registry_request.clone(),),
             )
             .expect("query root Component Registry status transport");
         assert_eq!(
             component_registry_status.expect("root Component Registry status"),
             component_registry
         );
+
+        assert_component_allocation(pic, fixture, component_registry_request);
+    }
+
+    fn assert_component_allocation(
+        pic: &Pic,
+        fixture: &BootstrappedRootFixture,
+        component_registry_request: RootComponentRegistryPreparationRequest,
+    ) {
+        let (issuer_request, issuer) = assert_issuer_component_allocation(pic, fixture);
+        let projects_request = RootComponentAllocationRequest {
+            operation_id: [0xa2; 32],
+            component_spec: "projects".parse().expect("projects Component Spec"),
+        };
+        let projects: Result<RootComponentAllocationResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_ALLOCATE,
+                (projects_request.clone(),),
+            )
+            .expect("reserve projects Component transport");
+        let projects = projects.expect("reserve projects Component");
+        assert_eq!(projects.allocation_sequence, 2);
+        assert_ne!(projects.component, issuer.component);
+        assert_eq!(projects.role, CanisterRole::new("project_hub"));
+        assert_eq!(projects.phase, RootComponentAllocationPhase::Reserved);
+
+        let conflicting_retry: Result<RootComponentAllocationResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_ALLOCATE,
+                (RootComponentAllocationRequest {
+                    operation_id: issuer_request.operation_id,
+                    component_spec: projects_request.component_spec,
+                },),
+            )
+            .expect("conflicting Component reservation retry transport");
+        assert_eq!(
+            conflicting_retry
+                .expect_err("conflicting Component reservation retry must fail")
+                .code,
+            canic::dto::error::ErrorCode::Conflict
+        );
+
+        let exhausted: Result<RootComponentAllocationResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_ALLOCATE,
+                (RootComponentAllocationRequest {
+                    operation_id: [0xa3; 32],
+                    component_spec: issuer_request.component_spec,
+                },),
+            )
+            .expect("exhausted issuer Component reservation transport");
+        assert_eq!(
+            exhausted
+                .expect_err("issuer Component admission must be exhausted")
+                .code,
+            canic::dto::error::ErrorCode::ResourceExhausted
+        );
+
+        let component_registry: Result<RootComponentRegistryStatusResponse, Error> = pic
+            .query_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
+                (component_registry_request,),
+            )
+            .expect("query allocated root Component Registry status transport");
+        let component_registry =
+            component_registry.expect("allocated root Component Registry status");
+        assert_eq!(component_registry.next_allocation_sequence, 3);
+        assert_eq!(component_registry.reserved_component_instances, 2);
+        assert_eq!(component_registry.committed_component_instances, 0);
+        assert_eq!(component_registry.managed_descendants, 0);
+        assert!(component_registry.encoded_bytes > 0);
+        assert_prepared(pic, fixture.root_id);
+    }
+
+    fn assert_issuer_component_allocation(
+        pic: &Pic,
+        fixture: &BootstrappedRootFixture,
+    ) -> (
+        RootComponentAllocationRequest,
+        RootComponentAllocationResponse,
+    ) {
+        let issuer_request = RootComponentAllocationRequest {
+            operation_id: [0xa1; 32],
+            component_spec: "issuer".parse().expect("issuer Component Spec"),
+        };
+        let issuer: Result<RootComponentAllocationResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_ALLOCATE,
+                (issuer_request.clone(),),
+            )
+            .expect("reserve issuer Component transport");
+        let issuer = issuer.expect("reserve issuer Component");
+        assert_eq!(issuer.operation_id, issuer_request.operation_id);
+        assert_eq!(issuer.allocation_sequence, 1);
+        assert_eq!(issuer.component_spec, issuer_request.component_spec);
+        assert_eq!(issuer.role, CanisterRole::new("issuer"));
+        assert_eq!(
+            issuer.component,
+            ComponentInstanceId::from_root_allocation(
+                fixture
+                    .init_args
+                    .authority
+                    .binding
+                    .authority
+                    .binding
+                    .fleet
+                    .fleet,
+                fixture.init_args.authority.binding.authority.epoch,
+                fixture.root_id,
+                1,
+            )
+        );
+        assert_eq!(
+            issuer.provisioning_origin,
+            ComponentProvisioningOrigin::FleetAdministrator {
+                caller: Principal::anonymous(),
+            }
+        );
+        assert_eq!(
+            issuer.release_set,
+            fixture.init_args.authority.initial_release_set
+        );
+        assert_eq!(issuer.phase, RootComponentAllocationPhase::Reserved);
+
+        let issuer_retry: Result<RootComponentAllocationResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_ALLOCATE,
+                (issuer_request.clone(),),
+            )
+            .expect("retry issuer Component reservation transport");
+        assert_eq!(
+            issuer_retry.expect("retry issuer Component reservation"),
+            issuer
+        );
+        let issuer_status: Result<RootComponentAllocationResponse, Error> = pic
+            .query_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
+                (RootComponentAllocationStatusRequest {
+                    operation_id: issuer_request.operation_id,
+                },),
+            )
+            .expect("query issuer Component reservation transport");
+        assert_eq!(
+            issuer_status.expect("issuer Component reservation status"),
+            issuer
+        );
+        (issuer_request, issuer)
     }
 
     fn install_bootstrapped_root(
