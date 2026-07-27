@@ -233,6 +233,71 @@ fn registry_allows_partial_joining_admissions_but_rejects_fleet_excess() {
 }
 
 #[test]
+fn activation_atomically_transitions_one_nonempty_all_joining_snapshot() {
+    let topology = topology();
+    let authority = authority();
+    let mut joining =
+        validation::compile_genesis(&AppId::from("demo"), authority.clone(), &topology)
+            .expect("valid genesis Registry");
+    joining.fleet_subnet_roots = vec![
+        root(&topology, 5, 6, &[("alpha", 1)]),
+        root(&topology, 7, 8, &[("alpha", 2), ("beta", 2)]),
+    ];
+    joining.revision = 3;
+
+    let active = FleetRegistryOps::compile_active(&authority, &topology, &joining)
+        .expect("activate complete root set");
+
+    assert_eq!(active.revision, 4);
+    assert!(
+        active
+            .fleet_subnet_roots
+            .iter()
+            .all(|entry| entry.status == FleetSubnetRootStatus::Active)
+    );
+    for (before, after) in joining
+        .fleet_subnet_roots
+        .iter()
+        .zip(&active.fleet_subnet_roots)
+    {
+        assert_eq!(before.placement_subnet, after.placement_subnet);
+        assert_eq!(before.fleet_subnet_root, after.fleet_subnet_root);
+        assert_eq!(before.component_admissions, after.component_admissions);
+        assert_eq!(
+            before.component_topology_digest,
+            after.component_topology_digest
+        );
+        assert_eq!(before.active_release_set, after.active_release_set);
+        assert_eq!(before.limits, after.limits);
+    }
+}
+
+#[test]
+fn activation_rejects_empty_mixed_or_exhausted_registry_state() {
+    let topology = topology();
+    let authority = authority();
+    let empty = validation::compile_genesis(&AppId::from("demo"), authority.clone(), &topology)
+        .expect("valid genesis Registry");
+    assert!(FleetRegistryOps::compile_active(&authority, &topology, &empty).is_err());
+
+    let mut mixed = empty;
+    mixed.fleet_subnet_roots = vec![
+        root(&topology, 5, 6, &[("alpha", 1)]),
+        root(&topology, 7, 8, &[("beta", 1)]),
+    ];
+    mixed.fleet_subnet_roots[1].status = FleetSubnetRootStatus::Active;
+    assert!(FleetRegistryOps::compile_active(&authority, &topology, &mixed).is_err());
+
+    let mut exhausted = mixed;
+    exhausted.revision = u64::MAX;
+    exhausted
+        .fleet_subnet_roots
+        .iter_mut()
+        .for_each(|entry| entry.status = FleetSubnetRootStatus::Joining);
+    assert!(FleetRegistryOps::compile_active(&authority, &topology, &exhausted).is_err());
+}
+
+#[test]
 fn joining_compile_is_canonical_exact_idempotent_and_monotonic() {
     let topology = topology();
     let genesis = validation::compile_genesis(&AppId::from("demo"), authority(), &topology)

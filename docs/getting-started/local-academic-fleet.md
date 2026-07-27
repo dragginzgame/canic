@@ -114,11 +114,13 @@ persist canister state across stop/start.
 
 The current 0.100 installer verifies the Coordinator, all planned roots, every
 root-local Store, every root's Registry `Joining` row, private snapshot
-candidate and Coordinator acknowledgement, then deliberately stops before
-Registry `Active`, final mirror/Directory activation, Component creation, and
-terminal Fleet-catalog publication. Rerun the exact same install command for
-same-release journal reconciliation; a conflicting Fleet input or unresolved
-paid effect fails closed.
+candidate and Coordinator acknowledgement, then atomically commits and
+independently verifies the complete Coordinator Registry as `Active`. Every
+root remains runtime-`Prepared`; the installer deliberately stops before
+final all-`Active` root synchronization, mirror/Directory activation,
+Component creation, and terminal Fleet-catalog publication. Rerun the exact
+same install command for same-release journal reconciliation; a conflicting
+Fleet input or unresolved paid effect fails closed.
 
 Every pre-1.0 release transition is reinstall-only. Do not use a raw
 `icp canister install --mode=upgrade` command to carry a managed Fleet across

@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.15`.
-- The latest published release is `v0.100.15` at
-  `9091698875e9b63f5def6c44b41e642f4145642c`.
-- The `v0.100.15` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `c8c8a05d7e03d056c37806e3fbf528d7c877a5a4e57ef7bec9e7b6a3c9a3e350`.
+- The workspace package version is `0.100.16`.
+- The latest published release is `v0.100.16` at
+  `3412eebb369ee897e48394a84da8378e4bf6aad6`.
+- The `v0.100.16` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `1702329a02ca8ca6fa33c0e901d13b16401dd5e8fd970b09978f93f002322025`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -174,7 +174,7 @@ Historical detail is archived at:
   all-`Joining` snapshot, manifest and version. Snapshot delivery,
   acknowledgement, Registry `Active`, final Directory activation and runtime
   activation remain fenced.
-- Open `0.100.16` hard-cuts the maintained Component Spec, Component Topology
+- Released `0.100.16` hard-cuts the maintained Component Spec, Component Topology
   and root-install journal identifiers to v1 under the pre-1.0
   reinstall-only rule. Every prepared root now independently reverifies its
   exact Store, fetches and validates the complete all-`Joining` Registry,
@@ -184,6 +184,15 @@ Historical detail is archived at:
   set to equal every planned root at the exact final `Joining` version.
   Registry `Active`, final mirror/Directory activation and runtime activation
   remain fenced.
+- Open `0.100.17` atomically commits the complete acknowledged root set from
+  all-`Joining` to all-`Active`. The Coordinator requires the exact source
+  version and every current root acknowledgement, clears those superseded
+  acknowledgements and stores one response-idempotent activation receipt in
+  the same commit. A separate v1 host journal freezes the complete source and
+  target Registries before mutation and independently verifies the live
+  Registry, manifest and version afterward. Every root remains
+  runtime-`Prepared`; final all-`Active` synchronization and atomic
+  mirror/Directory activation remain fenced.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1478,11 +1487,12 @@ Continue 0.100 Slice 3 from the
 Fresh installation now journals and verifies the Coordinator, every planned
 Fleet Subnet Root, each root's exact topology-admitted local Store, and every
 root's Registry `Joining` row, private snapshot candidate and exact
-Coordinator acknowledgement. Next, journal the `Active` Registry transition,
-then distribute and atomically activate the final all-active mirror/Directory
-evidence before runtime activation. Do not bypass Store or Registry evidence,
-permit nested Component declarations, merge roots belonging to different
-Fleets on one Subnet or consume an earlier installation.
+Coordinator acknowledgement, then atomically commits and independently
+verifies the complete Coordinator Registry as all-`Active`. Next, distribute
+and atomically activate the exact all-`Active` mirror/Directory evidence at
+every root before runtime activation. Do not bypass Store or Registry
+evidence, permit nested Component declarations, merge roots belonging to
+different Fleets on one Subnet or consume an earlier installation.
 
 ## Historical Release Detail
 

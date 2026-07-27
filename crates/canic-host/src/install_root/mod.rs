@@ -29,6 +29,8 @@ mod current_execution;
 mod deployment_truth_gate;
 mod execution_preflight;
 mod fleet_install_session;
+mod fleet_registry_activation;
+mod fleet_registry_activation_journal;
 mod fleet_subnet_root_install;
 mod fleet_subnet_root_install_journal;
 mod fleet_subnet_root_registry_join;
@@ -55,6 +57,7 @@ pub use config_selection::{
 };
 use coordinator_install::install_and_verify_fleet_coordinator;
 use current_execution::current_install_execution_context;
+use fleet_registry_activation::{ActivateFleetRegistryRequest, activate_and_verify_fleet_registry};
 use fleet_subnet_root_install::install_and_verify_fleet_subnet_roots;
 use fleet_subnet_root_registry_join::register_and_verify_fleet_subnet_roots_joining;
 use fleet_subnet_root_registry_sync::{
@@ -179,14 +182,14 @@ impl InstallRootError {
 
 #[derive(Debug, ThisError)]
 #[error(
-    "Fleet Coordinator {coordinator} and {acknowledged_roots} planned Fleet Subnet Root(s) now have exact acknowledged Registry snapshot evidence at revision {registry_revision} from the durable plan at {}; Registry Active transition remains blocked until its journalled lifecycle is implemented",
+    "Fleet Coordinator {coordinator} now has an independently verified all-Active Registry for {active_roots} planned Fleet Subnet Root(s) at revision {active_registry_revision} from the durable plan at {}; final root mirror and Directory activation remain blocked until their journalled lifecycle is implemented",
     plan_path.display(),
 )]
-struct FleetRegistryActivationUnavailableError {
+struct FinalRegistryMirrorActivationUnavailableError {
     plan_path: PathBuf,
     coordinator: canic_core::cdk::types::Principal,
-    acknowledged_roots: usize,
-    registry_revision: u64,
+    active_roots: usize,
+    active_registry_revision: u64,
 }
 
 #[derive(Debug, ThisError)]
@@ -345,11 +348,22 @@ fn install_current_fleet_infrastructure(
         joining_version: joining_version.clone(),
     })
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
-    require_fleet_registry_activation(
+    let active_version = activate_and_verify_fleet_registry(ActivateFleetRegistryRequest {
+        icp_root,
+        environment,
+        local_replica,
+        config_path,
+        fleet_install_plan: &planned.plan,
+        coordinator: coordinator.coordinator,
+        install_operation_id: planned.session.operation_id,
+        joining_version,
+    })
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
+    require_final_registry_mirror_activation(
         &planned.plan.path,
         coordinator.coordinator,
         roots.roots.len(),
-        joining_version.revision,
+        active_version.revision,
     )
     .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))
 }
@@ -454,17 +468,17 @@ fn persist_current_fleet_install_plan(
     .map_err(Into::into)
 }
 
-fn require_fleet_registry_activation(
+fn require_final_registry_mirror_activation(
     plan_path: &Path,
     coordinator: canic_core::cdk::types::Principal,
-    acknowledged_roots: usize,
-    registry_revision: u64,
-) -> Result<(), FleetRegistryActivationUnavailableError> {
-    Err(FleetRegistryActivationUnavailableError {
+    active_roots: usize,
+    active_registry_revision: u64,
+) -> Result<(), FinalRegistryMirrorActivationUnavailableError> {
+    Err(FinalRegistryMirrorActivationUnavailableError {
         plan_path: plan_path.to_path_buf(),
         coordinator,
-        acknowledged_roots,
-        registry_revision,
+        active_roots,
+        active_registry_revision,
     })
 }
 

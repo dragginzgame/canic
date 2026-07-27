@@ -86,6 +86,9 @@ pub enum FleetRegistryOpsError {
     #[error("Fleet Registry root join requires status Joining")]
     FleetSubnetRootJoinRequiresJoining,
 
+    #[error("Fleet Registry activation requires a non-empty all-Joining root set")]
+    FleetSubnetRootActivationRequiresAllJoining,
+
     #[error("Fleet Registry genesis App '{received}' does not match configured App '{expected}'")]
     GenesisAppMismatch { expected: AppId, received: AppId },
 
@@ -147,6 +150,17 @@ impl FleetRegistryOps {
         entry: FleetSubnetRootEntry,
     ) -> Result<FleetRegistry, InternalError> {
         compile_joining(expected_authority, topology, current, entry)
+            .map_err(OpsError::from)
+            .map_err(InternalError::from)
+    }
+
+    /// Construct the next canonical snapshot with every current root atomically `Active`.
+    pub fn compile_active(
+        expected_authority: &FleetRegistryAuthority,
+        topology: &ComponentTopology,
+        current: &FleetRegistry,
+    ) -> Result<FleetRegistry, InternalError> {
+        compile_active(expected_authority, topology, current)
             .map_err(OpsError::from)
             .map_err(InternalError::from)
     }
@@ -237,6 +251,33 @@ fn compile_joining(
     next.fleet_subnet_roots.push(entry);
     next.fleet_subnet_roots
         .sort_by_key(|root| root.placement_subnet);
+    validation::validate(expected_authority, topology, &next)?;
+    Ok(next)
+}
+
+fn compile_active(
+    expected_authority: &FleetRegistryAuthority,
+    topology: &ComponentTopology,
+    current: &FleetRegistry,
+) -> Result<FleetRegistry, FleetRegistryOpsError> {
+    validation::validate(expected_authority, topology, current)?;
+    if current.fleet_subnet_roots.is_empty()
+        || current
+            .fleet_subnet_roots
+            .iter()
+            .any(|entry| entry.status != FleetSubnetRootStatus::Joining)
+    {
+        return Err(FleetRegistryOpsError::FleetSubnetRootActivationRequiresAllJoining);
+    }
+
+    let mut next = current.clone();
+    next.revision = next
+        .revision
+        .checked_add(1)
+        .ok_or(FleetRegistryOpsError::RevisionExhausted)?;
+    for root in &mut next.fleet_subnet_roots {
+        root.status = FleetSubnetRootStatus::Active;
+    }
     validation::validate(expected_authority, topology, &next)?;
     Ok(next)
 }

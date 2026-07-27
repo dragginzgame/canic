@@ -123,6 +123,29 @@ pub struct FleetSubnetRootJoinResponse {
 }
 
 ///
+/// FleetRegistryActivationRequest
+///
+/// Controller compare-and-commit command for the complete acknowledged `Joining` root set.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetRegistryActivationRequest {
+    pub expected_registry: FleetRegistryVersion,
+}
+
+///
+/// FleetRegistryActivationResponse
+///
+/// Durable response authority for one atomic all-`Active` Registry transition.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetRegistryActivationResponse {
+    pub previous_version: FleetRegistryVersion,
+    pub version: FleetRegistryVersion,
+}
+
+///
 /// FleetRegistrySnapshotResponse
 ///
 /// Complete current Coordinator snapshot supplied only to one registered root.

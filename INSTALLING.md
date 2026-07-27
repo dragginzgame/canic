@@ -274,7 +274,9 @@ The Fleet input is required. Its schema is documented in
 The in-progress 0.100 installer currently verifies the Coordinator, every
 planned Fleet Subnet Root, each root's local Store, and every root's Registry
 `Joining` row, private snapshot candidate and Coordinator acknowledgement,
-then stops before Registry `Active`, final mirror/Directory activation,
+then atomically commits and independently verifies the complete Coordinator
+Registry as `Active`. Roots remain runtime-`Prepared`; installation stops
+before final all-`Active` root synchronization, mirror/Directory activation,
 Component creation, and terminal Fleet-catalog publication.
 `canic info list`, `canic info env`, Medic's live Fleet checks, backup, and
 restore require that later terminal Fleet state.

@@ -12,7 +12,10 @@ use canic_core::{
     cdk::types::Cycles,
     dto::{
         error::ErrorCode,
-        fleet_registry::{FleetSubnetRootEntry, FleetSubnetRootJoinRequest, FleetSubnetRootStatus},
+        fleet_registry::{
+            FleetRegistryActivationRequest, FleetSubnetRootEntry, FleetSubnetRootJoinRequest,
+            FleetSubnetRootStatus,
+        },
     },
     ids::{
         AppId, CanonicalNetworkId, ComponentSpecAdmission, CyclesFundingBudget, FleetBinding,
@@ -233,12 +236,43 @@ fn assert_snapshot_acknowledgements(
         .expect("exact acknowledgement retry"),
         first_ack
     );
+    let activation_request = FleetRegistryActivationRequest {
+        expected_registry: version.clone(),
+    };
+    let incomplete = FleetCoordinatorWorkflow::activate_registry(activation_request.clone())
+        .expect_err("activation requires every root acknowledgement");
+    assert_eq!(
+        incomplete.public_error().map(|error| error.code),
+        Some(ErrorCode::Conflict)
+    );
     FleetCoordinatorWorkflow::acknowledge_root_snapshot(second_entry.fleet_subnet_root, request)
         .expect("second acknowledgement");
     let acknowledgements =
         FleetCoordinatorWorkflow::root_snapshot_acknowledgements().expect("acknowledgements");
     assert_eq!(acknowledgements.len(), 2);
     assert!(acknowledgements.iter().all(|ack| &ack.version == version));
+
+    let activated = FleetCoordinatorWorkflow::activate_registry(activation_request.clone())
+        .expect("activate complete acknowledged Registry");
+    assert_eq!(&activated.previous_version, version);
+    assert_eq!(activated.version.revision, version.revision + 1);
+    assert_eq!(
+        FleetCoordinatorWorkflow::activate_registry(activation_request)
+            .expect("exact activation retry"),
+        activated
+    );
+    let registry = FleetCoordinatorWorkflow::registry().expect("active Registry");
+    assert!(
+        registry
+            .fleet_subnet_roots
+            .iter()
+            .all(|entry| entry.status == FleetSubnetRootStatus::Active)
+    );
+    assert!(
+        FleetCoordinatorWorkflow::root_snapshot_acknowledgements()
+            .expect("cleared acknowledgements")
+            .is_empty()
+    );
 }
 
 fn joining_entry(

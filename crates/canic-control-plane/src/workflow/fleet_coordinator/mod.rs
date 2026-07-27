@@ -14,7 +14,8 @@ use candid::Principal;
 use canic_core::{
     control_plane_support::error::InternalError,
     dto::fleet_registry::{
-        FleetRegistry, FleetRegistryManifest, FleetRegistrySnapshotResponse, FleetRegistryVersion,
+        FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
+        FleetRegistryManifest, FleetRegistrySnapshotResponse, FleetRegistryVersion,
         FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
         FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
     },
@@ -75,6 +76,12 @@ impl FleetCoordinatorWorkflow {
     pub(crate) fn root_snapshot_acknowledgements()
     -> Result<Vec<FleetSubnetRootSnapshotAcknowledgement>, InternalError> {
         FleetCoordinatorOps::root_snapshot_acknowledgements()
+    }
+
+    pub(crate) fn activate_registry(
+        request: FleetRegistryActivationRequest,
+    ) -> Result<FleetRegistryActivationResponse, InternalError> {
+        FleetCoordinatorOps::activate_registry(request)
     }
 
     pub(crate) fn version() -> Result<FleetRegistryVersion, InternalError> {

@@ -105,6 +105,10 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "canic_fleet_registry_acknowledge_root",
         command_kind("fleet_registry.acknowledge_root.v1"),
     ),
+    update_response_idempotent(
+        "canic_fleet_registry_activate",
+        command_kind("fleet_registry.activate.v1"),
+    ),
     update_read_only("canic_fleet_registry_snapshot_for_root"),
     update_response_idempotent(
         "canic_fleet_registry_synchronize",
