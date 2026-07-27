@@ -239,8 +239,8 @@ mod tests {
             store
                 .matches("publication_permit: &CostGuardPermit")
                 .count(),
-            4,
-            "publication store adapters must require the publication permit"
+            3,
+            "publication store effect adapters must require the publication permit"
         );
     }
 }
