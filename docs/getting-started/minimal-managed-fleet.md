@@ -259,8 +259,11 @@ canic install example example-local --fleet-input deployments/example-local.toml
 The 0.100 implementation currently creates and verifies the Coordinator, the
 planned Fleet Subnet Roots, each root's exact local Store, and every root's
 Registry `Joining` row, private snapshot candidate and Coordinator
-acknowledgement, then stops before Registry `Active`, final mirror/Directory
-activation, Component creation, and terminal Fleet-catalog publication.
+acknowledgement, then atomically commits and independently verifies the
+complete Coordinator Registry as `Active`. Every root remains
+runtime-`Prepared`; installation stops before final all-`Active` root
+synchronization, mirror/Directory activation, Component creation, and terminal
+Fleet-catalog publication.
 `canic info list example-local` becomes applicable only after that Fleet
 reaches the terminal catalog boundary.
 

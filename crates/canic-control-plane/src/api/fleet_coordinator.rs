@@ -14,8 +14,9 @@ use canic_core::{
     dto::{
         error::Error,
         fleet_registry::{
-            FleetRegistry, FleetRegistryManifest, FleetRegistrySnapshotResponse,
-            FleetRegistryVersion, FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
+            FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
+            FleetRegistryManifest, FleetRegistrySnapshotResponse, FleetRegistryVersion,
+            FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
             FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
         },
     },
@@ -71,6 +72,12 @@ impl FleetCoordinatorApi {
     pub fn root_snapshot_acknowledgements()
     -> Result<Vec<FleetSubnetRootSnapshotAcknowledgement>, Error> {
         FleetCoordinatorWorkflow::root_snapshot_acknowledgements().map_err(Into::into)
+    }
+
+    pub fn activate_registry(
+        request: FleetRegistryActivationRequest,
+    ) -> Result<FleetRegistryActivationResponse, Error> {
+        FleetCoordinatorWorkflow::activate_registry(request).map_err(Into::into)
     }
 
     pub fn version() -> Result<FleetRegistryVersion, Error> {

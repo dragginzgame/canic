@@ -116,10 +116,12 @@ The in-progress 0.100 installer uses that immutable authority to create,
 install, and independently verify the Coordinator, every planned Fleet Subnet
 Root, one exact topology-admitted local Store per root, and every exact
 Registry `Joining` row. It currently stops after all roots reach
-`RegistrySyncVerified`, with an exact private snapshot candidate and
-Coordinator acknowledgement at every root, before Registry `Active`, final
-mirror/Directory activation, Component creation, or terminal Fleet-catalog
-publication.
+`RegistrySyncVerified` only long enough to atomically commit and independently
+verify the complete Coordinator Registry as `Active`, with an exact private
+snapshot candidate and Coordinator acknowledgement retained at every root.
+Every root remains runtime-`Prepared`; final all-`Active` root
+synchronization, mirror/Directory activation, Component creation, and
+terminal Fleet-catalog publication remain fenced.
 
 Repeating an exact input is same-release journal recovery. Changing placement,
 admissions, limits, funding, topology, or release-build authority after

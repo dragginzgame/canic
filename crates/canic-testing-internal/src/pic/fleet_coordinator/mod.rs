@@ -15,9 +15,9 @@ mod tests {
         dto::{
             error::{Error, ErrorCode},
             fleet_registry::{
-                FleetRegistry, FleetRegistrySnapshotResponse, FleetSubnetRootEntry,
-                FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
-                FleetSubnetRootSnapshotAcknowledgement,
+                FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
+                FleetRegistrySnapshotResponse, FleetSubnetRootEntry, FleetSubnetRootJoinRequest,
+                FleetSubnetRootJoinResponse, FleetSubnetRootSnapshotAcknowledgement,
                 FleetSubnetRootSnapshotAcknowledgementRequest, FleetSubnetRootStatus,
             },
         },
@@ -213,6 +213,63 @@ mod tests {
         let acknowledgements = acknowledgements.expect("acknowledgement inventory");
         assert_eq!(acknowledgements.len(), 2);
         assert!(acknowledgements.iter().all(|ack| &ack.version == version));
+
+        assert_registry_activation(pic, coordinator, version);
+    }
+
+    fn assert_registry_activation(
+        pic: &Pic,
+        coordinator: Principal,
+        version: &canic_core::dto::fleet_registry::FleetRegistryVersion,
+    ) {
+        let activation_request = FleetRegistryActivationRequest {
+            expected_registry: version.clone(),
+        };
+        let activated: Result<FleetRegistryActivationResponse, Error> = pic
+            .update_call(
+                coordinator,
+                protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
+                (activation_request.clone(),),
+            )
+            .expect("Registry activation transport");
+        let activated = activated.expect("Registry activation");
+        assert_eq!(&activated.previous_version, version);
+        assert_eq!(activated.version.revision, version.revision + 1);
+        let repeated: Result<FleetRegistryActivationResponse, Error> = pic
+            .update_call(
+                coordinator,
+                protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
+                (activation_request.clone(),),
+            )
+            .expect("Registry activation retry transport");
+        assert_eq!(
+            repeated.expect("exact Registry activation retry"),
+            activated
+        );
+        let unauthorized: Result<FleetRegistryActivationResponse, Error> = pic
+            .update_call_as(
+                coordinator,
+                principal(99),
+                protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
+                (activation_request,),
+            )
+            .expect("unauthorized Registry activation transport");
+        assert_eq!(
+            unauthorized
+                .expect_err("non-controller activation must fail")
+                .code,
+            ErrorCode::Unauthorized
+        );
+        let active: Result<FleetRegistry, Error> = pic
+            .query_call(coordinator, protocol::CANIC_FLEET_REGISTRY, ())
+            .expect("query active Registry");
+        assert!(
+            active
+                .expect("active Registry")
+                .fleet_subnet_roots
+                .iter()
+                .all(|entry| entry.status == FleetSubnetRootStatus::Active)
+        );
     }
 
     fn init_args(coordinator: Principal) -> FleetCoordinatorInitArgs {

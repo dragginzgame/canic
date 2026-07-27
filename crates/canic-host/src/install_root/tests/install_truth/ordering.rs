@@ -57,11 +57,6 @@ fn current_install_records_gates_before_activation_mutation() {
     );
     assert_before(
         install,
-        "plan_current_fleet_install(",
-        "install_current_fleet_coordinator(",
-    );
-    assert_before(
-        install,
         "install_current_fleet_coordinator(",
         "install_current_fleet_subnet_roots(",
     );
@@ -83,7 +78,12 @@ fn current_install_records_gates_before_activation_mutation() {
     assert_before(
         install,
         "synchronize_and_verify_fleet_subnet_roots(",
-        "require_fleet_registry_activation(",
+        "activate_and_verify_fleet_registry(",
+    );
+    assert_before(
+        install,
+        "activate_and_verify_fleet_registry(",
+        "require_final_registry_mirror_activation(",
     );
     let coordinator_install = source_section(
         source,

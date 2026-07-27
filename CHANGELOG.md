@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.17` atomically commits the complete acknowledged root set as Fleet
+  Registry `Active`, with durable Coordinator and host recovery receipts plus
+  independent all-`Active` verification before final root mirror/Directory
+  activation.
+
 - `0.100.16` hard-cuts maintained pre-1.0 topology and root-journal schemas to
   v1, then durably stages and independently verifies every root's exact
   all-`Joining` Registry snapshot and Coordinator acknowledgement before the

@@ -13,8 +13,8 @@ use canic_core::{
 use canic_core::{
     control_plane_support::config::ComponentTopology,
     dto::fleet_registry::{
-        FleetRegistry, FleetRegistryVersion, FleetSubnetRootEntry,
-        FleetSubnetRootSnapshotAcknowledgement,
+        FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
+        FleetRegistryVersion, FleetSubnetRootEntry, FleetSubnetRootSnapshotAcknowledgement,
     },
     ids::{AppId, FleetRegistryAuthority},
 };
@@ -60,6 +60,7 @@ pub struct FleetCoordinatorRegistryRecord {
     pub registry: FleetRegistry,
     pub root_join_receipts: Vec<FleetSubnetRootJoinReceiptRecord>,
     pub root_snapshot_acknowledgements: Vec<FleetSubnetRootSnapshotAcknowledgement>,
+    pub registry_activation_receipt: Option<FleetRegistryActivationReceiptRecord>,
 }
 
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
@@ -77,6 +78,13 @@ impl FleetCoordinatorRegistryRecord {
 pub struct FleetSubnetRootJoinReceiptRecord {
     pub entry: FleetSubnetRootEntry,
     pub version: FleetRegistryVersion,
+}
+
+/// Persisted exact response authority for the initial all-`Active` commit.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetRegistryActivationReceiptRecord {
+    pub request: FleetRegistryActivationRequest,
+    pub response: FleetRegistryActivationResponse,
 }
 
 ///

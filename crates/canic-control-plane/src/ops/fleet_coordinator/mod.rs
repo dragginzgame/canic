@@ -8,7 +8,8 @@ use crate::{
     dto::fleet_coordinator::FleetCoordinatorInitArgs,
     storage::stable::fleet_coordinator::{
         FleetCoordinatorCommitError, FleetCoordinatorCommitOutcome, FleetCoordinatorRegistryRecord,
-        FleetCoordinatorRegistryStore, FleetSubnetRootJoinReceiptRecord,
+        FleetCoordinatorRegistryStore, FleetRegistryActivationReceiptRecord,
+        FleetSubnetRootJoinReceiptRecord,
     },
 };
 use candid::Principal;
@@ -18,7 +19,8 @@ use canic_core::{
         ops::fleet_registry::FleetRegistryOps,
     },
     dto::fleet_registry::{
-        FleetRegistry, FleetRegistryManifest, FleetRegistrySnapshotResponse, FleetRegistryVersion,
+        FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
+        FleetRegistryManifest, FleetRegistrySnapshotResponse, FleetRegistryVersion,
         FleetSubnetRootEntry, FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
         FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
         FleetSubnetRootStatus,
@@ -58,6 +60,7 @@ impl FleetCoordinatorOps {
             registry,
             root_join_receipts: Vec::new(),
             root_snapshot_acknowledgements: Vec::new(),
+            registry_activation_receipt: None,
         })
     }
 
@@ -91,6 +94,11 @@ impl FleetCoordinatorOps {
             }
             return Err(InternalError::conflict(
                 "Fleet Subnet Root join identity already has different protected authority",
+            ));
+        }
+        if current.registry_activation_receipt.is_some() {
+            return Err(InternalError::conflict(
+                "initial Fleet Registry activation already committed",
             ));
         }
 
@@ -215,6 +223,57 @@ impl FleetCoordinatorOps {
         Ok(acknowledgement)
     }
 
+    pub(crate) fn activate_registry(
+        request: FleetRegistryActivationRequest,
+    ) -> Result<FleetRegistryActivationResponse, InternalError> {
+        let current = Self::current()?;
+        if let Some(receipt) = &current.registry_activation_receipt {
+            if receipt.request == request {
+                return Ok(receipt.response.clone());
+            }
+            return Err(InternalError::conflict(
+                "Fleet Registry activation already committed against different authority",
+            ));
+        }
+        require_all_roots_joining(&current)?;
+        let current_version = FleetRegistryOps::version(
+            &current.authority,
+            &current.component_topology,
+            &current.registry,
+        )?;
+        if request.expected_registry != current_version {
+            return Err(InternalError::conflict(
+                "Fleet Registry activation expected version is stale",
+            ));
+        }
+        require_complete_snapshot_acknowledgements(&current, &current_version)?;
+
+        let next_registry = FleetRegistryOps::compile_active(
+            &current.authority,
+            &current.component_topology,
+            &current.registry,
+        )?;
+        let version = FleetRegistryOps::version(
+            &current.authority,
+            &current.component_topology,
+            &next_registry,
+        )?;
+        let response = FleetRegistryActivationResponse {
+            previous_version: current_version,
+            version,
+        };
+        let mut next = current.clone();
+        next.registry = next_registry;
+        next.root_snapshot_acknowledgements.clear();
+        next.registry_activation_receipt = Some(FleetRegistryActivationReceiptRecord {
+            request,
+            response: response.clone(),
+        });
+        let next = Self::validate_current(next)?;
+        Self::commit_transition(&current, next)?;
+        Ok(response)
+    }
+
     pub(crate) fn root_snapshot_acknowledgements()
     -> Result<Vec<FleetSubnetRootSnapshotAcknowledgement>, InternalError> {
         Ok(Self::current()?.root_snapshot_acknowledgements)
@@ -260,6 +319,7 @@ impl FleetCoordinatorOps {
         )?;
         validate_root_join_receipts(&current)?;
         validate_root_snapshot_acknowledgements(&current)?;
+        validate_registry_activation_receipt(&current)?;
         Ok(current)
     }
 
@@ -357,6 +417,71 @@ fn validate_root_snapshot_acknowledgements(
     Ok(())
 }
 
+fn require_complete_snapshot_acknowledgements(
+    current: &FleetCoordinatorRegistryRecord,
+    version: &FleetRegistryVersion,
+) -> Result<(), InternalError> {
+    if current.root_snapshot_acknowledgements.len() != current.registry.fleet_subnet_roots.len()
+        || current.registry.fleet_subnet_roots.iter().any(|entry| {
+            !current
+                .root_snapshot_acknowledgements
+                .iter()
+                .any(|acknowledgement| {
+                    acknowledgement.fleet_subnet_root == entry.fleet_subnet_root
+                        && &acknowledgement.version == version
+                })
+        })
+    {
+        return Err(InternalError::conflict(
+            "Fleet Registry activation requires every current root acknowledgement",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_registry_activation_receipt(
+    current: &FleetCoordinatorRegistryRecord,
+) -> Result<(), InternalError> {
+    let Some(receipt) = &current.registry_activation_receipt else {
+        if current
+            .registry
+            .fleet_subnet_roots
+            .iter()
+            .any(|entry| entry.status != FleetSubnetRootStatus::Joining)
+        {
+            return Err(receipt_invariant(
+                "Fleet Registry contains transitioned roots without an activation receipt",
+            ));
+        }
+        return Ok(());
+    };
+    if !current.root_snapshot_acknowledgements.is_empty() {
+        return Err(receipt_invariant(
+            "active Fleet Registry retains stale Joining acknowledgements",
+        ));
+    }
+    let joining = historical_joining_registry(current)?;
+    let previous_version =
+        FleetRegistryOps::version(&current.authority, &current.component_topology, &joining)
+            .map_err(|_| receipt_invariant("activation source version cannot be derived"))?;
+    let active =
+        FleetRegistryOps::compile_active(&current.authority, &current.component_topology, &joining)
+            .map_err(|_| receipt_invariant("activation target Registry cannot be derived"))?;
+    let version =
+        FleetRegistryOps::version(&current.authority, &current.component_topology, &active)
+            .map_err(|_| receipt_invariant("activation target version cannot be derived"))?;
+    if receipt.request.expected_registry != previous_version
+        || receipt.response.previous_version != previous_version
+        || receipt.response.version != version
+        || current.registry != active
+    {
+        return Err(receipt_invariant(
+            "Fleet Registry activation receipt differs from canonical history",
+        ));
+    }
+    Ok(())
+}
+
 fn validate_root_join_receipts(
     current: &FleetCoordinatorRegistryRecord,
 ) -> Result<(), InternalError> {
@@ -366,6 +491,34 @@ fn validate_root_join_receipts(
         ));
     }
 
+    let historical_registry = historical_joining_registry(current)?;
+    for receipt in &current.root_join_receipts {
+        let matching = current
+            .registry
+            .fleet_subnet_roots
+            .iter()
+            .filter(|entry| {
+                entry.placement_subnet == receipt.entry.placement_subnet
+                    || entry.fleet_subnet_root == receipt.entry.fleet_subnet_root
+            })
+            .collect::<Vec<_>>();
+        if matching.len() != 1 || !same_root_authority(matching[0], &receipt.entry) {
+            return Err(receipt_invariant(
+                "Fleet Registry join receipt differs from the current root authority",
+            ));
+        }
+    }
+    if historical_registry.fleet_subnet_roots.len() != current.registry.fleet_subnet_roots.len() {
+        return Err(receipt_invariant(
+            "Fleet Registry join receipt history is incomplete",
+        ));
+    }
+    Ok(())
+}
+
+fn historical_joining_registry(
+    current: &FleetCoordinatorRegistryRecord,
+) -> Result<FleetRegistry, InternalError> {
     let mut historical_registry = FleetRegistryOps::compile_genesis(
         &current.configured_app,
         current.authority.clone(),
@@ -396,23 +549,8 @@ fn validate_root_join_receipts(
                 "Fleet Registry join receipt version differs from its historical snapshot",
             ));
         }
-
-        let matching = current
-            .registry
-            .fleet_subnet_roots
-            .iter()
-            .filter(|entry| {
-                entry.placement_subnet == receipt.entry.placement_subnet
-                    || entry.fleet_subnet_root == receipt.entry.fleet_subnet_root
-            })
-            .collect::<Vec<_>>();
-        if matching.len() != 1 || !same_root_authority(matching[0], &receipt.entry) {
-            return Err(receipt_invariant(
-                "Fleet Registry join receipt differs from the current root authority",
-            ));
-        }
     }
-    Ok(())
+    Ok(historical_registry)
 }
 
 fn same_root_authority(left: &FleetSubnetRootEntry, right: &FleetSubnetRootEntry) -> bool {

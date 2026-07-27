@@ -404,6 +404,11 @@ fn fleet_registry_snapshot_synchronization_protocol_and_guards_are_pinned() {
             "canic_fleet_registry_acknowledge_root",
         ),
         (
+            canic::protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
+            "canic_fleet_registry_activate",
+        ),
+        (
             canic::protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
             canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
             "canic_fleet_registry_root_acknowledgements",
@@ -442,6 +447,11 @@ fn fleet_registry_snapshot_synchronization_protocol_and_guards_are_pinned() {
         )
         .contains("canic_query(requires(caller::is_controller()))"),
         "root acknowledgement inventory must remain controller-guarded"
+    );
+    assert!(
+        preceding_attribute_context(&coordinator, "async fn canic_fleet_registry_activate(")
+            .contains("canic_update(requires(caller::is_controller()))"),
+        "Registry activation must remain a controller-guarded update"
     );
 
     let coordinator_api_path =
