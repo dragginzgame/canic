@@ -18,8 +18,8 @@ mod tests {
             component_registry::{
                 ComponentProvisioningOrigin, RootComponentAllocationPhase,
                 RootComponentAllocationRequest, RootComponentAllocationResponse,
-                RootComponentAllocationStatusRequest, RootComponentRegistryPreparationRequest,
-                RootComponentRegistryStatusResponse,
+                RootComponentAllocationStatusRequest, RootComponentCreationRequest,
+                RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
             },
             fleet_registry::{
                 FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistry,
@@ -50,10 +50,11 @@ mod tests {
             CANIC_FLEET_REGISTRY_SYNCHRONIZE, CANIC_FLEET_REGISTRY_VERSION,
             CANIC_FLEET_SUBNET_ROOT_AUTHORITY, CANIC_FLEET_SUBNET_ROOT_JOIN,
             CANIC_ROOT_COMPONENT_ALLOCATE, CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
-            CANIC_ROOT_COMPONENT_REGISTRY_PREPARE, CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
-            CANIC_ROOT_STORE_BOOTSTRAP, CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
-            CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
-            CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN, CANIC_WASM_STORE_PREPARE,
+            CANIC_ROOT_COMPONENT_CREATE, CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
+            CANIC_ROOT_COMPONENT_REGISTRY_STATUS, CANIC_ROOT_STORE_BOOTSTRAP,
+            CANIC_ROOT_STORE_BOOTSTRAP_STATUS, CANIC_TEMPLATE_PREPARE_ADMIN,
+            CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN, CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
+            CANIC_WASM_STORE_PREPARE,
         },
     };
     use canic_control_plane::{
@@ -592,7 +593,70 @@ mod tests {
             issuer_status.expect("issuer Component reservation status"),
             issuer
         );
-        (issuer_request, issuer)
+
+        let created = create_issuer_component(pic, fixture, issuer_request.operation_id);
+        (issuer_request, created)
+    }
+
+    fn create_issuer_component(
+        pic: &Pic,
+        fixture: &BootstrappedRootFixture,
+        operation_id: [u8; 32],
+    ) -> RootComponentAllocationResponse {
+        let created: Result<RootComponentAllocationResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_CREATE,
+                (RootComponentCreationRequest { operation_id },),
+            )
+            .expect("create issuer Component transport");
+        let created = created.expect("create issuer Component");
+        assert_eq!(created.phase, RootComponentAllocationPhase::Created);
+        let creation = created.creation.as_ref().expect("creation evidence");
+        let canister = creation.canister.expect("created Canister");
+        assert_eq!(creation.wasm_store, fixture.response.wasm_store);
+        assert_eq!(creation.controller, fixture.root_id);
+        assert!(creation.initial_cycles.to_u128() > 0);
+        let artifact = fixture
+            .response
+            .catalog
+            .iter()
+            .find(|entry| entry.role == created.role)
+            .expect("issuer Store artifact");
+        assert_eq!(creation.payload_hash, artifact.payload_hash);
+        assert_eq!(creation.payload_size_bytes, artifact.payload_size_bytes);
+
+        let canister_status = pic
+            .canister_status(canister, Some(fixture.root_id))
+            .expect("created Component Canister status");
+        assert_eq!(canister_status.settings.controllers, vec![fixture.root_id]);
+        assert_eq!(canister_status.module_hash, None);
+        assert!(
+            canister_status.cycles > 0_u128
+                && canister_status.cycles <= creation.initial_cycles.to_u128(),
+            "the created Canister must retain cycles from the exact frozen creation funding"
+        );
+
+        let retry: Result<RootComponentAllocationResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_CREATE,
+                (RootComponentCreationRequest { operation_id },),
+            )
+            .expect("retry issuer Component creation transport");
+        assert_eq!(retry.expect("retry issuer Component creation"), created);
+        let created_status: Result<RootComponentAllocationResponse, Error> = pic
+            .query_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
+                (RootComponentAllocationStatusRequest { operation_id },),
+            )
+            .expect("query created issuer Component transport");
+        assert_eq!(
+            created_status.expect("created issuer Component status"),
+            created
+        );
+        created
     }
 
     fn install_bootstrapped_root(

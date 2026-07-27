@@ -208,6 +208,28 @@ fn canister_upgrade_is_manifested_as_implemented_response_idempotent() {
 }
 
 #[test]
+fn root_component_creation_is_costed_and_response_idempotent() {
+    let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_root_component_create")
+        .expect("root Component creation policy entry");
+
+    assert_eq!(
+        entry.implementation_status,
+        ReplayImplementationStatus::Implemented
+    );
+    assert_eq!(
+        entry.replay_policy,
+        ReplayPolicy::ResponseIdempotent {
+            command_kind: replay_command_kind("management.control_plane.component_create.v1"),
+        }
+    );
+    assert_eq!(entry.cost_class, CostClass::ManagementDeployment);
+    assert_eq!(entry.quota_policy, Some(DEPLOYMENT_QUOTA_V1));
+    assert_eq!(entry.cycle_reserve_policy, Some(DEPLOYMENT_RESERVE_V1));
+}
+
+#[test]
 fn icp_refill_is_manifested_as_implemented_value_transfer() {
     let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()

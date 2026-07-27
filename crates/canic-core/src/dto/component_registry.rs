@@ -5,6 +5,7 @@
 //! Boundary: callers name intent and Spec while the root allocates identity under verified authority.
 
 use crate::{
+    cdk::types::Cycles,
     dto::{fleet_registry::FleetRegistryVersion, root_store::RootStoreBootstrapRequest},
     ids::{
         CanisterRole, ComponentInstanceId, ComponentSpecId, ComponentTopologyDigest,
@@ -69,6 +70,17 @@ pub struct RootComponentAllocationStatusRequest {
 }
 
 ///
+/// RootComponentCreationRequest
+///
+/// Controller command continuing one already reserved top-level Component operation.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentCreationRequest {
+    pub operation_id: [u8; 32],
+}
+
+///
 /// ComponentProvisioningOrigin
 ///
 /// Authenticated causal authority retained with one top-level Component allocation.
@@ -88,6 +100,24 @@ pub enum ComponentProvisioningOrigin {
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RootComponentAllocationPhase {
     Reserved,
+    CreationIntent,
+    Created,
+}
+
+///
+/// RootComponentCreationEvidence
+///
+/// Exact Store artifact and root-owned creation settings frozen before the paid effect.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentCreationEvidence {
+    pub wasm_store: Principal,
+    pub payload_hash: [u8; 32],
+    pub payload_size_bytes: u64,
+    pub initial_cycles: Cycles,
+    pub controller: Principal,
+    pub canister: Option<Principal>,
 }
 
 ///
@@ -107,6 +137,7 @@ pub struct RootComponentAllocationResponse {
     pub provisioning_origin: ComponentProvisioningOrigin,
     pub release_set: FleetSubnetRootReleaseSet,
     pub phase: RootComponentAllocationPhase,
+    pub creation: Option<RootComponentCreationEvidence>,
 }
 
 #[cfg(test)]
@@ -174,11 +205,30 @@ mod tests {
             },
             release_set: response.release_set,
             phase: RootComponentAllocationPhase::Reserved,
+            creation: None,
+        };
+        let creation_request = RootComponentCreationRequest {
+            operation_id: allocation.operation_id,
+        };
+        let created = RootComponentAllocationResponse {
+            phase: RootComponentAllocationPhase::Created,
+            creation: Some(RootComponentCreationEvidence {
+                wasm_store: Principal::from_slice(&[14; 29]),
+                payload_hash: [15; 32],
+                payload_size_bytes: 4_096,
+                initial_cycles: Cycles::new(5_000_000_000_000),
+                controller: Principal::from_slice(&[6; 29]),
+                canister: Some(Principal::from_slice(&[16; 29])),
+            }),
+            ..allocation.clone()
         };
 
         let request_bytes = candid::encode_one(&request).expect("encode request");
         let response_bytes = candid::encode_one(&response).expect("encode response");
         let allocation_bytes = candid::encode_one(&allocation).expect("encode allocation");
+        let creation_request_bytes =
+            candid::encode_one(&creation_request).expect("encode creation request");
+        let created_bytes = candid::encode_one(&created).expect("encode created allocation");
 
         assert_eq!(
             candid::decode_one::<RootComponentRegistryPreparationRequest>(&request_bytes)
@@ -194,6 +244,16 @@ mod tests {
             candid::decode_one::<RootComponentAllocationResponse>(&allocation_bytes)
                 .expect("decode allocation"),
             allocation
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentCreationRequest>(&creation_request_bytes)
+                .expect("decode creation request"),
+            creation_request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentAllocationResponse>(&created_bytes)
+                .expect("decode created allocation"),
+            created
         );
     }
 }

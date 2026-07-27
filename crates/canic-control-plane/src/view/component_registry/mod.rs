@@ -5,6 +5,8 @@
 //! Boundary: Component Registry ops construct these values for workflow consumption.
 
 use canic_core::{
+    cdk::types::{Cycles, Principal},
+    control_plane_support::model::replay::ReplayCostGuardSettlement,
     dto::{
         component_registry::ComponentProvisioningOrigin, fleet_registry::FleetRegistryVersion,
         root_store::RootStoreBootstrapRequest,
@@ -50,4 +52,38 @@ pub struct RootComponentAllocationView {
     pub role: CanisterRole,
     pub provisioning_origin: ComponentProvisioningOrigin,
     pub release_set: FleetSubnetRootReleaseSet,
+    pub progress: RootComponentAllocationProgressView,
+}
+
+///
+/// RootComponentAllocationProgressView
+///
+/// Read-only paid-effect state for one top-level Component allocation.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RootComponentAllocationProgressView {
+    Reserved,
+    CreationIntent(RootComponentCreationEffectView),
+    Created {
+        effect: RootComponentCreationEffectView,
+        canister: Principal,
+    },
+}
+
+///
+/// RootComponentCreationEffectView
+///
+/// Read-only exact Store artifact, creation settings and cost settlement.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentCreationEffectView {
+    pub wasm_store: Principal,
+    pub payload_hash: [u8; 32],
+    pub payload_size_bytes: u64,
+    pub initial_cycles: Cycles,
+    pub controller: Principal,
+    pub cost_guard_settlement: ReplayCostGuardSettlement,
+    pub charged_entry_bytes: u64,
 }

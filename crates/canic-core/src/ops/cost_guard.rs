@@ -240,9 +240,17 @@ impl CostGuardOps {
     ///
     /// Commit quota while releasing cycle reservation after uncertain external effects.
     pub fn recover(permit: &CostGuardPermit, now_secs: u64) -> Result<(), InternalError> {
+        Self::recover_replay_settlement(&permit.replay_settlement(), now_secs)
+    }
+
+    /// Recover a permit from intent identity persisted before an uncertain external effect.
+    pub fn recover_replay_settlement(
+        settlement: &ReplayCostGuardSettlement,
+        now_secs: u64,
+    ) -> Result<(), InternalError> {
         IntentStoreOps::commit_and_abort_pending_pair_at(
-            permit.quota_intent_id,
-            permit.reservation_id,
+            settlement.quota_intent_id,
+            settlement.reservation_intent_id,
             now_secs,
         )
     }
@@ -578,8 +586,10 @@ mod tests {
         reset();
 
         let permit = CostGuardOps::reserve(request(10)).expect("reservation");
+        let settlement = permit.replay_settlement();
 
-        CostGuardOps::recover(&permit, 10).expect("recover cost guard");
+        CostGuardOps::recover_replay_settlement(&settlement, 10).expect("recover cost guard");
+        CostGuardOps::recover_replay_settlement(&settlement, 10).expect("exact recovery retry");
 
         assert_eq!(IntentStoreOps::pending_total().expect("pending"), 0);
         IntentStoreOps::commit_at(permit.quota_intent_id, 10).expect("quota intent is committed");

@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.20`.
-- The latest published release is `v0.100.20` at
-  `23f8c21a3319ce963dcd70f392fe3f2daa521f3a`.
-- The `v0.100.20` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `3376095581e9aeeed8d1e96443bb3003f33d33d0a2c1fa4d5ee18a7caabb5452`.
+- The workspace package version is `0.100.21`.
+- The latest published release is `v0.100.21` at
+  `afa6ea4994b3b5cf15b9855a05d406e90bb697a0`.
+- The `v0.100.21` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `f579643b0594cb3f860f5c6837bc784ba62fe49719566ddf108a04cbf6ad64a4`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -229,11 +229,21 @@ Historical detail is archived at:
   capacity exhaustion fail closed. This phase creates or installs no
   Canister, spends no creation cycles, commits no `ComponentBinding` and
   leaves the root runtime `Prepared`.
-- Open `0.100.21` compacts stable-memory assignments into two small decimal
+- Released `0.100.21` compacts stable-memory assignments into two small decimal
   owner blocks: active control-plane state at 10-19 with reserve through 29,
   and active `canic-core` state at 30-62 with reserve through 99. Historical
   per-ID tombstones are removed and application memory begins consistently at
   ID 100.
+- Open `0.100.22` advances a reserved top-level Component through exact
+  Store-bound empty-Canister creation. The root independently reverifies its
+  protected authority, active Registry Mirror/Fleet Directory and local Store,
+  then freezes the exact artifact, initial cycles, sole root controller,
+  terminal Registry-byte charge and replay cost settlement before the
+  management call. Durable progress is
+  `Reserved → CreationIntent → Created`; unresolved intent is never blindly
+  repeated, while exact `Created` retry returns the original principal.
+  Creation installs no Wasm, commits no `ComponentBinding` or committed count,
+  publishes no Directory and leaves the root runtime `Prepared`.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1533,14 +1543,14 @@ Coordinator acknowledgement, then atomically commits and independently
 verifies the complete Coordinator Registry as all-`Active`. It now also
 atomically activates and independently verifies every root's exact matching
 Registry Mirror/Fleet Directory. Each root can now reserve exact admitted
-top-level Component identity and capacity without a paid effect. Next,
-continue that same operation through release-set artifact resolution,
-journalled creation/install and protected `ComponentBinding`/Registry
-partition commitment. Hard-cut the retired environment/role and
-`SubnetDirectory` install payload instead of adapting it. Do not bypass Store
-or Registry evidence, permit nested Component declarations, merge roots
-belonging to different Fleets on one Subnet or consume an earlier
-installation.
+top-level Component identity and capacity. Open 0.100.22 continues the same
+operation through exact Store-bound, journalled empty-Canister creation and
+stops at durable `Created` evidence. Next, install and attest the frozen Wasm,
+then commit the protected `ComponentBinding` and Registry partition. Hard-cut
+the retired environment/role and `SubnetDirectory` install payload instead of
+adapting it. Do not bypass Store or Registry evidence, permit nested Component
+declarations, merge roots belonging to different Fleets on one Subnet or
+consume an earlier installation.
 
 ## Historical Release Detail
 

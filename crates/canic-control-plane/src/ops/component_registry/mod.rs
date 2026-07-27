@@ -6,21 +6,27 @@
 
 use crate::{
     storage::stable::component_registry::{
-        RootComponentAllocationCommitError, RootComponentAllocationRecord,
+        RootComponentAllocationCommitError, RootComponentAllocationProgressRecord,
+        RootComponentAllocationRecord, RootComponentCreationEffectRecord,
         RootComponentRegistryCommitError, RootComponentRegistryMetaRecord,
         RootComponentRegistryStore,
     },
-    view::component_registry::{RootComponentAllocationView, RootComponentRegistryView},
+    view::component_registry::{
+        RootComponentAllocationProgressView, RootComponentAllocationView,
+        RootComponentCreationEffectView, RootComponentRegistryView,
+    },
 };
 use canic_core::{
+    cdk::types::{Cycles, Principal},
     control_plane_support::{
-        error::InternalError, policy::component_allocation::TopLevelComponentAllocationDecision,
+        error::InternalError, model::replay::ReplayCostGuardSettlement,
+        policy::component_allocation::TopLevelComponentAllocationDecision,
     },
     dto::{
         component_registry::ComponentProvisioningOrigin, fleet_registry::FleetRegistryVersion,
         root_store::RootStoreBootstrapRequest,
     },
-    ids::{ComponentSpecId, FleetSubnetRootBinding, FleetSubnetRootReleaseSet},
+    ids::{ComponentSpecId, FleetSubnetRootBinding, FleetSubnetRootReleaseSet, IntentId},
 };
 
 ///
@@ -41,6 +47,21 @@ pub struct ComponentRegistryOps;
 pub struct ComponentSpecInstanceCounts {
     pub reserved: u32,
     pub committed: u32,
+}
+
+///
+/// RootComponentCreationPlan
+///
+/// Exact artifact and root-owned settings selected before a creation effect is admitted.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentCreationPlan {
+    pub wasm_store: Principal,
+    pub payload_hash: [u8; 32],
+    pub payload_size_bytes: u64,
+    pub initial_cycles: Cycles,
+    pub controller: Principal,
 }
 
 impl ComponentRegistryOps {
@@ -109,6 +130,7 @@ impl ComponentRegistryOps {
             role: decision.role,
             provisioning_origin,
             release_set: current.release_set,
+            progress: RootComponentAllocationProgressRecord::Reserved,
         };
         if let Some(existing) = RootComponentRegistryStore::allocation(operation_id) {
             return if existing == record {
@@ -153,27 +175,121 @@ impl ComponentRegistryOps {
             })?;
         next.encoded_bytes = encoded_bytes;
 
-        RootComponentRegistryStore::reserve_allocation(&current, next, record.clone()).map_err(
-            |error| match error {
-                RootComponentAllocationCommitError::ComponentIdentityConflict => {
-                    InternalError::conflict(
-                        "derived Component identity is already reserved by another operation",
-                    )
-                }
-                RootComponentAllocationCommitError::ConflictingOperation => {
-                    InternalError::conflict(
-                        "Component allocation operation is already bound to different intent",
-                    )
-                }
-                RootComponentAllocationCommitError::ConflictingState => InternalError::conflict(
-                    "Component Registry authority changed before allocation reservation",
-                ),
-                RootComponentAllocationCommitError::Uninitialized => InternalError::unavailable(
-                    "root Component Registry authority has not been prepared",
-                ),
-            },
-        )?;
+        RootComponentRegistryStore::reserve_allocation(&current, next, record.clone())
+            .map_err(map_allocation_commit_error)?;
         Ok(allocation_record_to_view(record))
+    }
+
+    pub(crate) fn validate_creation_capacity(
+        operation_id: [u8; 32],
+        plan: &RootComponentCreationPlan,
+    ) -> Result<(), InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
+            InternalError::unavailable("Component allocation operation has not been reserved")
+        })?;
+        if !matches!(
+            record.progress,
+            RootComponentAllocationProgressRecord::Reserved
+        ) {
+            return Err(InternalError::conflict(
+                "Component allocation has already crossed its creation-intent boundary",
+            ));
+        }
+
+        let charged_entry_bytes = creation_charged_entry_bytes(&record, plan);
+        validate_creation_capacity(&current, &record, charged_entry_bytes).map(|_| ())
+    }
+
+    pub(crate) fn begin_creation(
+        operation_id: [u8; 32],
+        plan: RootComponentCreationPlan,
+        cost_guard_settlement: ReplayCostGuardSettlement,
+    ) -> Result<RootComponentAllocationView, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
+            InternalError::unavailable("Component allocation operation has not been reserved")
+        })?;
+        if !matches!(
+            record.progress,
+            RootComponentAllocationProgressRecord::Reserved
+        ) {
+            return Err(InternalError::conflict(
+                "Component allocation has already crossed its creation-intent boundary",
+            ));
+        }
+
+        let charged_entry_bytes = creation_charged_entry_bytes(&record, &plan);
+        let next_encoded_bytes =
+            validate_creation_capacity(&current, &record, charged_entry_bytes)?;
+        let mut next_record = record.clone();
+        next_record.progress = RootComponentAllocationProgressRecord::CreationIntent(
+            RootComponentCreationEffectRecord {
+                wasm_store: plan.wasm_store,
+                payload_hash: plan.payload_hash,
+                payload_size_bytes: plan.payload_size_bytes,
+                initial_cycles: plan.initial_cycles,
+                controller: plan.controller,
+                cost_guard_settlement,
+                charged_entry_bytes,
+            },
+        );
+        validate_charged_record_size(&next_record, charged_entry_bytes)?;
+
+        let mut next_meta = current.clone();
+        next_meta.encoded_bytes = next_encoded_bytes;
+        RootComponentRegistryStore::replace_allocation(
+            &current,
+            next_meta,
+            &record,
+            next_record.clone(),
+        )
+        .map_err(map_allocation_commit_error)?;
+        Ok(allocation_record_to_view(next_record))
+    }
+
+    pub(crate) fn mark_created(
+        operation_id: [u8; 32],
+        canister: Principal,
+    ) -> Result<RootComponentAllocationView, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
+            InternalError::unavailable("Component allocation operation has not been reserved")
+        })?;
+        let effect = match &record.progress {
+            RootComponentAllocationProgressRecord::CreationIntent(effect) => effect.clone(),
+            RootComponentAllocationProgressRecord::Created {
+                canister: existing, ..
+            } if existing == &canister => return Ok(allocation_record_to_view(record)),
+            RootComponentAllocationProgressRecord::Created { .. } => {
+                return Err(InternalError::conflict(
+                    "Component allocation is already bound to a different created Canister",
+                ));
+            }
+            RootComponentAllocationProgressRecord::Reserved => {
+                return Err(InternalError::conflict(
+                    "Component allocation has no durable creation intent",
+                ));
+            }
+        };
+        let charged_entry_bytes = effect.charged_entry_bytes;
+        let mut next_record = record.clone();
+        next_record.progress = RootComponentAllocationProgressRecord::Created { effect, canister };
+        validate_charged_record_size(&next_record, charged_entry_bytes)?;
+        RootComponentRegistryStore::replace_allocation(
+            &current,
+            current.clone(),
+            &record,
+            next_record.clone(),
+        )
+        .map_err(map_allocation_commit_error)?;
+        Ok(allocation_record_to_view(next_record))
     }
 }
 
@@ -201,6 +317,125 @@ fn allocation_record_to_view(record: RootComponentAllocationRecord) -> RootCompo
         role: record.role,
         provisioning_origin: record.provisioning_origin,
         release_set: record.release_set,
+        progress: match record.progress {
+            RootComponentAllocationProgressRecord::Reserved => {
+                RootComponentAllocationProgressView::Reserved
+            }
+            RootComponentAllocationProgressRecord::CreationIntent(effect) => {
+                RootComponentAllocationProgressView::CreationIntent(creation_effect_record_to_view(
+                    effect,
+                ))
+            }
+            RootComponentAllocationProgressRecord::Created { effect, canister } => {
+                RootComponentAllocationProgressView::Created {
+                    effect: creation_effect_record_to_view(effect),
+                    canister,
+                }
+            }
+        },
+    }
+}
+
+const fn creation_effect_record_to_view(
+    effect: RootComponentCreationEffectRecord,
+) -> RootComponentCreationEffectView {
+    RootComponentCreationEffectView {
+        wasm_store: effect.wasm_store,
+        payload_hash: effect.payload_hash,
+        payload_size_bytes: effect.payload_size_bytes,
+        initial_cycles: effect.initial_cycles,
+        controller: effect.controller,
+        cost_guard_settlement: effect.cost_guard_settlement,
+        charged_entry_bytes: effect.charged_entry_bytes,
+    }
+}
+
+fn creation_charged_entry_bytes(
+    record: &RootComponentAllocationRecord,
+    plan: &RootComponentCreationPlan,
+) -> u64 {
+    let mut maximum = record.clone();
+    maximum.progress = RootComponentAllocationProgressRecord::Created {
+        effect: RootComponentCreationEffectRecord {
+            wasm_store: plan.wasm_store,
+            payload_hash: plan.payload_hash,
+            payload_size_bytes: u64::MAX,
+            initial_cycles: Cycles::new(u128::MAX),
+            controller: plan.controller,
+            cost_guard_settlement: ReplayCostGuardSettlement {
+                quota_intent_id: IntentId(u64::MAX),
+                reservation_intent_id: IntentId(u64::MAX),
+            },
+            charged_entry_bytes: u64::MAX,
+        },
+        canister: Principal::from_slice(&[u8::MAX; 29]),
+    };
+    RootComponentRegistryStore::allocation_entry_bytes(&maximum)
+}
+
+fn validate_creation_capacity(
+    current: &RootComponentRegistryMetaRecord,
+    record: &RootComponentAllocationRecord,
+    charged_entry_bytes: u64,
+) -> Result<u64, InternalError> {
+    if charged_entry_bytes > RootComponentRegistryStore::allocation_record_max_bytes() + 128 {
+        return Err(InternalError::resource_exhausted(
+            "Component creation evidence exceeds its stable record bound",
+        ));
+    }
+    let current_entry_bytes = RootComponentRegistryStore::allocation_entry_bytes(record);
+    let without_current = current
+        .encoded_bytes
+        .checked_sub(current_entry_bytes)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component Registry encoded-byte accounting is below its reserved record",
+            )
+        })?;
+    let next_encoded_bytes = without_current
+        .checked_add(charged_entry_bytes)
+        .ok_or_else(|| InternalError::resource_exhausted("Component Registry bytes overflow"))?;
+    if next_encoded_bytes > current.root.limits.maximum_registry_bytes {
+        return Err(InternalError::resource_exhausted(format!(
+            "Component creation evidence requires {next_encoded_bytes} bytes, exceeding protected limit {}",
+            current.root.limits.maximum_registry_bytes
+        )));
+    }
+    Ok(next_encoded_bytes)
+}
+
+fn validate_charged_record_size(
+    record: &RootComponentAllocationRecord,
+    charged_entry_bytes: u64,
+) -> Result<(), InternalError> {
+    let entry_bytes = RootComponentRegistryStore::allocation_entry_bytes(record);
+    if entry_bytes > charged_entry_bytes {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component creation record exceeds its pre-effect Registry byte charge",
+        ));
+    }
+    Ok(())
+}
+
+fn map_allocation_commit_error(error: RootComponentAllocationCommitError) -> InternalError {
+    match error {
+        RootComponentAllocationCommitError::ComponentIdentityConflict => InternalError::conflict(
+            "derived Component identity is already reserved by another operation",
+        ),
+        RootComponentAllocationCommitError::ConflictingOperation => InternalError::conflict(
+            "Component allocation operation is already bound to different intent",
+        ),
+        RootComponentAllocationCommitError::ConflictingState => InternalError::conflict(
+            "Component Registry authority changed before allocation mutation",
+        ),
+        RootComponentAllocationCommitError::MissingOperation => {
+            InternalError::unavailable("Component allocation operation has not been reserved")
+        }
+        RootComponentAllocationCommitError::Uninitialized => {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        }
     }
 }
 
@@ -351,6 +586,139 @@ mod tests {
             .is_err()
         );
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
+    }
+
+    #[test]
+    fn creation_intent_reserves_terminal_bytes_and_created_retry_preserves_principal() {
+        RootComponentRegistryStore::import(RootComponentRegistryData::default());
+        let root = root_binding();
+        let version = FleetRegistryVersion {
+            authority: root.authority.clone(),
+            revision: 4,
+            content_hash: [5; 32],
+        };
+        ComponentRegistryOps::prepare(
+            root,
+            version,
+            FleetSubnetRootReleaseSet {
+                release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
+                    [8; 32],
+                )),
+                manifest_digest: ReleaseSetDigest::from_bytes([9; 32]),
+            },
+            RootStoreBootstrapRequest {
+                manifest_payload_size_bytes: 128,
+            },
+        )
+        .expect("prepare");
+        ComponentRegistryOps::reserve_allocation(
+            TopLevelComponentAllocationDecision {
+                allocation_sequence: 1,
+                component: ComponentInstanceId::from_generated_bytes([10; 32]),
+                component_spec: "projects".parse().expect("Component Spec"),
+                spec_hash: [6; 32],
+                role: CanisterRole::new("project_hub"),
+            },
+            [12; 32],
+            ComponentProvisioningOrigin::FleetAdministrator {
+                caller: candid::Principal::from_slice(&[11; 29]),
+            },
+        )
+        .expect("reserve");
+        let reserved_bytes = ComponentRegistryOps::current()
+            .expect("Registry status")
+            .encoded_bytes;
+        let plan = RootComponentCreationPlan {
+            wasm_store: candid::Principal::from_slice(&[13; 29]),
+            payload_hash: [14; 32],
+            payload_size_bytes: 4_096,
+            initial_cycles: Cycles::new(5_000_000_000_000),
+            controller: candid::Principal::from_slice(&[15; 29]),
+        };
+
+        assert_creation_capacity_is_reserved_before_effect(&plan, reserved_bytes);
+
+        ComponentRegistryOps::validate_creation_capacity([12; 32], &plan)
+            .expect("creation capacity");
+        let intent = ComponentRegistryOps::begin_creation(
+            [12; 32],
+            plan.clone(),
+            ReplayCostGuardSettlement {
+                quota_intent_id: IntentId(16),
+                reservation_intent_id: IntentId(17),
+            },
+        )
+        .expect("creation intent");
+        let intent_bytes = ComponentRegistryOps::current()
+            .expect("Registry status")
+            .encoded_bytes;
+        assert!(intent_bytes > reserved_bytes);
+        assert!(matches!(
+            intent.progress,
+            RootComponentAllocationProgressView::CreationIntent(_)
+        ));
+
+        let interrupted = RootComponentRegistryStore::export();
+        RootComponentRegistryStore::import(interrupted);
+        let canister = candid::Principal::from_slice(&[18; 29]);
+        let created =
+            ComponentRegistryOps::mark_created([12; 32], canister).expect("record created");
+        let repeated =
+            ComponentRegistryOps::mark_created([12; 32], canister).expect("exact created retry");
+
+        assert_eq!(created, repeated);
+        assert_eq!(
+            ComponentRegistryOps::current()
+                .expect("Registry status")
+                .encoded_bytes,
+            intent_bytes,
+            "the intent must reserve terminal record capacity before the effect"
+        );
+        assert!(matches!(
+            created.progress,
+            RootComponentAllocationProgressView::Created {
+                canister: created_canister,
+                ..
+            } if created_canister == canister
+        ));
+        assert!(
+            ComponentRegistryOps::mark_created([12; 32], candid::Principal::from_slice(&[19; 29]),)
+                .is_err()
+        );
+        RootComponentRegistryStore::import(RootComponentRegistryData::default());
+    }
+
+    fn assert_creation_capacity_is_reserved_before_effect(
+        plan: &RootComponentCreationPlan,
+        reserved_bytes: u64,
+    ) {
+        let before_creation = RootComponentRegistryStore::export();
+        let mut exhausted = before_creation.clone();
+        exhausted
+            .current
+            .as_mut()
+            .expect("Registry meta")
+            .root
+            .limits
+            .maximum_registry_bytes = reserved_bytes;
+        RootComponentRegistryStore::import(exhausted);
+
+        let capacity_error = ComponentRegistryOps::validate_creation_capacity([12; 32], plan)
+            .expect_err("terminal creation evidence must fit before the paid effect");
+        assert!(capacity_error.is_public_resource_exhausted());
+        assert!(matches!(
+            ComponentRegistryOps::allocation([12; 32])
+                .expect("reserved allocation")
+                .progress,
+            RootComponentAllocationProgressView::Reserved
+        ));
+        assert_eq!(
+            ComponentRegistryOps::current()
+                .expect("Registry status")
+                .encoded_bytes,
+            reserved_bytes
+        );
+        RootComponentRegistryStore::import(before_creation);
     }
 
     #[test]
