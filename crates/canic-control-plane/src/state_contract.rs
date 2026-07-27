@@ -8,7 +8,7 @@
 
 use crate::storage::stable::{
     fleet_coordinator::{FleetCoordinatorRegistryData, FleetCoordinatorRegistryRecord},
-    fleet_registry_mirror::{RootFleetRegistryCandidateRecord, RootFleetRegistryMirrorData},
+    fleet_registry_mirror::{RootFleetRegistryMirrorData, RootFleetRegistryMirrorStateRecord},
     state::subnet::{ControlPlaneSubnetStateData, SubnetStateRecord},
     template::{
         TemplateChunkSetRecord, TemplateChunkSetsData, TemplateManifestRecord,
@@ -49,10 +49,10 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
             StateAllocationKey::RootFleetRegistryMirror,
             "root_fleet_registry_mirror",
             ROOT_FLEET_REGISTRY_MIRROR_ID,
-            RootFleetRegistryCandidateRecord::STATE_CONTRACT_NAME,
+            RootFleetRegistryMirrorStateRecord::STATE_CONTRACT_NAME,
             RootFleetRegistryMirrorData::STATE_CONTRACT_NAME,
             195,
-            "root_fleet_registry_mirror_restores_exact_candidate_and_acknowledgement",
+            "root_fleet_registry_mirror_restores_exclusive_candidate_or_active_directory",
         ),
         descriptor(
             StateAllocationKey::TemplateManifests,
@@ -179,7 +179,7 @@ mod tests {
             ),
             (
                 StateAllocationKey::RootFleetRegistryMirror,
-                RootFleetRegistryCandidateRecord::STATE_CONTRACT_NAME,
+                RootFleetRegistryMirrorStateRecord::STATE_CONTRACT_NAME,
                 RootFleetRegistryMirrorData::STATE_CONTRACT_NAME,
             ),
             (

@@ -26,10 +26,11 @@ use canic_core::{
     control_plane_support::ops::fleet_registry::FleetRegistryOps,
     dto::{
         fleet_registry::{
-            FleetRegistry, FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootEntry,
-            FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
-            FleetSubnetRootRegistrySyncRequest, FleetSubnetRootRegistrySyncResponse,
-            FleetSubnetRootStatus,
+            FleetDirectorySnapshot, FleetRegistry, FleetRegistryManifest, FleetRegistryVersion,
+            FleetSubnetRootEntry, FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
+            FleetSubnetRootRegistryMirrorActivationRequest,
+            FleetSubnetRootRegistryMirrorActivationResponse, FleetSubnetRootRegistrySyncRequest,
+            FleetSubnetRootRegistrySyncResponse, FleetSubnetRootStatus,
         },
         fleet_subnet_root::FleetSubnetRootAuthority,
         root_store::RootStoreBootstrapResponse,
@@ -74,6 +75,9 @@ pub(super) enum FleetSubnetRootInstallPhase {
     RegistrySyncInFlight,
     RegistrySynchronized,
     RegistrySyncVerified,
+    RegistryMirrorActivationInFlight,
+    RegistryMirrorActivated,
+    RegistryMirrorActivationVerified,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -99,6 +103,9 @@ pub(super) struct FleetSubnetRootInstallJournal {
     pub registry_join_response: Option<FleetSubnetRootJoinResponse>,
     pub registry_sync_request: Option<FleetSubnetRootRegistrySyncRequest>,
     pub registry_sync_response: Option<FleetSubnetRootRegistrySyncResponse>,
+    pub registry_mirror_activation_request: Option<FleetSubnetRootRegistryMirrorActivationRequest>,
+    pub registry_mirror_activation_response:
+        Option<FleetSubnetRootRegistryMirrorActivationResponse>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -444,6 +451,50 @@ pub(super) fn record_registry_sync_verified(
     )
 }
 
+pub(super) fn begin_registry_mirror_activation(
+    current: &ResolvedFleetSubnetRootInstall,
+    request: FleetSubnetRootRegistryMirrorActivationRequest,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    validate_registry_mirror_activation_request(&current.path, &current.journal, &request)?;
+    transition(
+        current,
+        FleetSubnetRootInstallPhase::RegistrySyncVerified,
+        FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight,
+        |next| next.registry_mirror_activation_request = Some(request),
+    )
+}
+
+pub(super) fn record_registry_mirror_activated(
+    current: &ResolvedFleetSubnetRootInstall,
+    response: FleetSubnetRootRegistryMirrorActivationResponse,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    validate_registry_mirror_activation_response(&current.path, &current.journal, &response)?;
+    transition(
+        current,
+        FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight,
+        FleetSubnetRootInstallPhase::RegistryMirrorActivated,
+        |next| next.registry_mirror_activation_response = Some(response),
+    )
+}
+
+pub(super) fn record_registry_mirror_activation_verified(
+    current: &ResolvedFleetSubnetRootInstall,
+    response: FleetSubnetRootRegistryMirrorActivationResponse,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    validate_registry_mirror_activation_response(&current.path, &current.journal, &response)?;
+    if current.journal.registry_mirror_activation_response.as_ref() != Some(&response) {
+        return Err(invalid(
+            &current.path,
+            "verified Registry mirror activation differs from its durable result",
+        ));
+    }
+    advance_without_evidence(
+        current,
+        FleetSubnetRootInstallPhase::RegistryMirrorActivated,
+        FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified,
+    )
+}
+
 #[must_use]
 pub(super) fn create_result_path(journal_path: &Path) -> PathBuf {
     journal_path
@@ -548,6 +599,8 @@ fn planned_journal(
         registry_join_response: None,
         registry_sync_request: None,
         registry_sync_response: None,
+        registry_mirror_activation_request: None,
+        registry_mirror_activation_response: None,
     };
     validate_journal(&path, &journal)?;
     Ok(journal)
@@ -750,6 +803,8 @@ fn validate_phase_evidence(
         journal.registry_join_response.is_some(),
         journal.registry_sync_request.is_some(),
         journal.registry_sync_response.is_some(),
+        journal.registry_mirror_activation_request.is_some(),
+        journal.registry_mirror_activation_response.is_some(),
     ];
     let expected_count = phase_evidence_count(journal.phase);
     if retained
@@ -789,6 +844,9 @@ const fn phase_sequence(phase: FleetSubnetRootInstallPhase) -> u64 {
         FleetSubnetRootInstallPhase::RegistrySyncInFlight => 14,
         FleetSubnetRootInstallPhase::RegistrySynchronized => 15,
         FleetSubnetRootInstallPhase::RegistrySyncVerified => 16,
+        FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight => 17,
+        FleetSubnetRootInstallPhase::RegistryMirrorActivated => 18,
+        FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified => 19,
     }
 }
 
@@ -809,6 +867,9 @@ const fn phase_evidence_count(phase: FleetSubnetRootInstallPhase) -> usize {
         FleetSubnetRootInstallPhase::RegistrySyncInFlight => 7,
         FleetSubnetRootInstallPhase::RegistrySynchronized
         | FleetSubnetRootInstallPhase::RegistrySyncVerified => 8,
+        FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight => 9,
+        FleetSubnetRootInstallPhase::RegistryMirrorActivated
+        | FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified => 10,
     }
 }
 
@@ -843,6 +904,9 @@ fn validate_root_evidence(
             | FleetSubnetRootInstallPhase::RegistrySyncInFlight
             | FleetSubnetRootInstallPhase::RegistrySynchronized
             | FleetSubnetRootInstallPhase::RegistrySyncVerified
+            | FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight
+            | FleetSubnetRootInstallPhase::RegistryMirrorActivated
+            | FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified
     ) && journal.verified_binding.as_ref() != Some(&expected.binding)
     {
         return Err(invalid(
@@ -864,6 +928,12 @@ fn validate_root_evidence(
     }
     if let Some(response) = &journal.registry_sync_response {
         validate_registry_sync_response(path, journal, response)?;
+    }
+    if let Some(request) = &journal.registry_mirror_activation_request {
+        validate_registry_mirror_activation_request(path, journal, request)?;
+    }
+    if let Some(response) = &journal.registry_mirror_activation_response {
+        validate_registry_mirror_activation_response(path, journal, response)?;
     }
     Ok(())
 }
@@ -1007,6 +1077,108 @@ fn validate_registry_sync_response(
             path,
             "Registry synchronization response differs from durable authority",
         ));
+    }
+    Ok(())
+}
+
+fn validate_registry_mirror_activation_request(
+    path: &Path,
+    journal: &FleetSubnetRootInstallJournal,
+    request: &FleetSubnetRootRegistryMirrorActivationRequest,
+) -> Result<(), FleetSubnetRootInstallJournalError> {
+    let sync_request = journal.registry_sync_request.as_ref().ok_or_else(|| {
+        invalid(
+            path,
+            "Registry mirror activation requires a durable synchronization request",
+        )
+    })?;
+    let root = journal
+        .fleet_subnet_root
+        .ok_or_else(|| invalid(path, "Registry mirror activation requires a root principal"))?;
+    if request.previous_registry != sync_request.expected_registry
+        || request.expected_registry.authority != journal.authority
+        || request.previous_registry.revision.checked_add(1)
+            != Some(request.expected_registry.revision)
+        || request.expected_registry.content_hash == [0; 32]
+        || request.store_bootstrap != sync_request.store_bootstrap
+        || request.expected_directory.provenance.registry != request.expected_registry
+        || request
+            .expected_directory
+            .provenance
+            .source_fleet_subnet_root
+            != root
+    {
+        return Err(invalid(
+            path,
+            "Registry mirror activation request differs from durable root authority",
+        ));
+    }
+    validate_fleet_directory(path, &request.expected_directory)?;
+    Ok(())
+}
+
+fn validate_registry_mirror_activation_response(
+    path: &Path,
+    journal: &FleetSubnetRootInstallJournal,
+    response: &FleetSubnetRootRegistryMirrorActivationResponse,
+) -> Result<(), FleetSubnetRootInstallJournalError> {
+    let request = journal
+        .registry_mirror_activation_request
+        .as_ref()
+        .ok_or_else(|| {
+            invalid(
+                path,
+                "Registry mirror activation response requires a durable request",
+            )
+        })?;
+    let root = journal
+        .fleet_subnet_root
+        .ok_or_else(|| invalid(path, "Registry mirror activation requires a root principal"))?;
+    if response.fleet_subnet_root != root
+        || response.previous_registry != request.previous_registry
+        || response.version != request.expected_registry
+        || response.directory != request.expected_directory
+    {
+        return Err(invalid(
+            path,
+            "Registry mirror activation response differs from durable authority",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_fleet_directory(
+    path: &Path,
+    directory: &FleetDirectorySnapshot,
+) -> Result<(), FleetSubnetRootInstallJournalError> {
+    if directory.fleet_subnet_roots.is_empty()
+        || !directory
+            .fleet_subnet_roots
+            .iter()
+            .any(|entry| entry.fleet_subnet_root == directory.provenance.source_fleet_subnet_root)
+    {
+        return Err(invalid(
+            path,
+            "Fleet Directory does not contain its exact source root",
+        ));
+    }
+    let mut subnets = BTreeSet::new();
+    let mut roots = BTreeSet::new();
+    let mut previous = None;
+    for entry in &directory.fleet_subnet_roots {
+        if entry.placement_subnet.as_principal() == &Principal::anonymous()
+            || entry.fleet_subnet_root == Principal::anonymous()
+            || entry.status != FleetSubnetRootStatus::Active
+            || !subnets.insert(entry.placement_subnet)
+            || !roots.insert(entry.fleet_subnet_root)
+            || previous.is_some_and(|subnet| subnet >= entry.placement_subnet)
+        {
+            return Err(invalid(
+                path,
+                "Fleet Directory root order or identity is invalid",
+            ));
+        }
+        previous = Some(entry.placement_subnet);
     }
     Ok(())
 }

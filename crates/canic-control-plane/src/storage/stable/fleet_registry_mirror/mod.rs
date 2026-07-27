@@ -1,11 +1,12 @@
 //! Module: storage::stable::fleet_registry_mirror
 //!
-//! Responsibility: own one root's durable candidate Fleet Registry snapshot and acknowledgement.
-//! Does not own: snapshot validation, Coordinator calls, Directory activation, or lifecycle policy.
-//! Boundary: the root synchronization workflow commits only fully validated exact evidence.
+//! Responsibility: own one root's private candidate or atomic active Registry/Directory evidence.
+//! Does not own: snapshot validation, Coordinator calls, or lifecycle policy.
+//! Boundary: workflows commit only fully validated exact evidence.
 
 use canic_core::dto::fleet_registry::{
-    FleetRegistrySnapshotResponse, FleetSubnetRootSnapshotAcknowledgement,
+    FleetDirectorySnapshot, FleetRegistrySnapshotResponse, FleetRegistryVersion,
+    FleetSubnetRootSnapshotAcknowledgement,
 };
 #[cfg(feature = "root-control-plane")]
 use canic_core::{
@@ -45,14 +46,23 @@ pub struct RootFleetRegistryCandidateRecord {
     pub acknowledgement: Option<FleetSubnetRootSnapshotAcknowledgement>,
 }
 
-impl RootFleetRegistryCandidateRecord {
-    pub const STATE_CONTRACT_NAME: &'static str = "RootFleetRegistryCandidateRecord";
+/// Durable active mirror and its matching root-derived Fleet Directory.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootFleetRegistryActiveRecord {
+    pub previous_registry: FleetRegistryVersion,
+    pub snapshot: FleetRegistrySnapshotResponse,
+    pub directory: FleetDirectorySnapshot,
 }
 
-/// Stable optional wrapper before the first snapshot is staged.
+/// Stable exclusive candidate-or-active wrapper.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootFleetRegistryMirrorStateRecord {
     pub candidate: Option<RootFleetRegistryCandidateRecord>,
+    pub active: Option<RootFleetRegistryActiveRecord>,
+}
+
+impl RootFleetRegistryMirrorStateRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "RootFleetRegistryMirrorStateRecord";
 }
 
 #[cfg(feature = "root-control-plane")]
@@ -66,6 +76,7 @@ impl_storable_bounded!(
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct RootFleetRegistryMirrorData {
     pub candidate: Option<RootFleetRegistryCandidateRecord>,
+    pub active: Option<RootFleetRegistryActiveRecord>,
 }
 
 impl RootFleetRegistryMirrorData {
@@ -80,13 +91,24 @@ impl RootFleetRegistryMirrorStore {
     pub(crate) fn export() -> RootFleetRegistryMirrorData {
         ROOT_FLEET_REGISTRY_MIRROR.with_borrow(|cell| RootFleetRegistryMirrorData {
             candidate: cell.get().candidate.clone(),
+            active: cell.get().active.clone(),
         })
     }
 
-    pub(crate) fn commit(record: RootFleetRegistryCandidateRecord) {
+    pub(crate) fn commit_candidate(record: RootFleetRegistryCandidateRecord) {
         ROOT_FLEET_REGISTRY_MIRROR.with_borrow_mut(|cell| {
             cell.set(RootFleetRegistryMirrorStateRecord {
                 candidate: Some(record),
+                active: None,
+            });
+        });
+    }
+
+    pub(crate) fn commit_active(record: RootFleetRegistryActiveRecord) {
+        ROOT_FLEET_REGISTRY_MIRROR.with_borrow_mut(|cell| {
+            cell.set(RootFleetRegistryMirrorStateRecord {
+                candidate: None,
+                active: Some(record),
             });
         });
     }

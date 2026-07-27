@@ -11,12 +11,13 @@ use crate::{
     },
     install_root::fleet_subnet_root_install_journal::{
         FleetSubnetRootInstallPhase, PlanFleetSubnetRootInstallRequest, begin_registry_join,
-        begin_registry_sync, begin_root_creation, begin_root_install, begin_store_bootstrap,
-        begin_store_staging, expected_root_authority, plan_fleet_subnet_root_install,
-        record_registry_join_verified, record_registry_joined, record_registry_sync_verified,
-        record_registry_synchronized, record_root_created, record_root_installed,
-        record_root_verified, record_store_bootstrapped, record_store_staged,
-        record_store_verified,
+        begin_registry_mirror_activation, begin_registry_sync, begin_root_creation,
+        begin_root_install, begin_store_bootstrap, begin_store_staging, expected_root_authority,
+        plan_fleet_subnet_root_install, record_registry_join_verified, record_registry_joined,
+        record_registry_mirror_activated, record_registry_mirror_activation_verified,
+        record_registry_sync_verified, record_registry_synchronized, record_root_created,
+        record_root_installed, record_root_verified, record_store_bootstrapped,
+        record_store_staged, record_store_verified,
     },
     release_set::{
         CanicInfrastructureArtifactEntry, CanicInfrastructureArtifactManifest,
@@ -33,7 +34,9 @@ use canic_core::{
     control_plane_support::ops::fleet_registry::FleetRegistryOps,
     dto::{
         fleet_registry::{
-            FleetSubnetRootJoinResponse, FleetSubnetRootRegistrySyncRequest,
+            FleetDirectoryProvenance, FleetDirectorySnapshot, FleetSubnetRootDirectoryEntry,
+            FleetSubnetRootJoinResponse, FleetSubnetRootRegistryMirrorActivationRequest,
+            FleetSubnetRootRegistryMirrorActivationResponse, FleetSubnetRootRegistrySyncRequest,
             FleetSubnetRootRegistrySyncResponse, FleetSubnetRootSnapshotAcknowledgement,
         },
         root_store::{
@@ -144,7 +147,7 @@ fn journals_exact_store_bootstrap_and_rejects_a_catalog_outside_root_admissions(
 }
 
 #[test]
-fn journals_exact_registry_join_and_snapshot_synchronization_evidence() {
+fn journals_exact_registry_join_sync_and_active_mirror_evidence() {
     let root = temp_dir("fleet-subnet-root-registry-join-journal");
     let fixture = fixture(&root);
     let planned = plan(&fixture).expect("plan root");
@@ -246,7 +249,7 @@ fn assert_registry_sync_journal(
     };
     let sync_response = FleetSubnetRootRegistrySyncResponse {
         fleet_subnet_root: root_canister,
-        version,
+        version: version.clone(),
         acknowledgement,
     };
     let synchronized = record_registry_synchronized(&synchronizing, sync_response.clone())
@@ -259,8 +262,65 @@ fn assert_registry_sync_journal(
         FleetSubnetRootInstallPhase::RegistrySyncVerified
     );
     assert_eq!(verified.journal.sequence, 16);
-    assert_eq!(verified.journal.registry_sync_request, Some(sync_request));
+    assert_eq!(
+        verified.journal.registry_sync_request,
+        Some(sync_request.clone())
+    );
     assert_eq!(verified.journal.registry_sync_response, Some(sync_response));
+
+    let active_version = canic_core::dto::fleet_registry::FleetRegistryVersion {
+        authority: version.authority.clone(),
+        revision: version.revision.checked_add(1).expect("next revision"),
+        content_hash: [12; 32],
+    };
+    let directory = FleetDirectorySnapshot {
+        provenance: FleetDirectoryProvenance {
+            registry: active_version.clone(),
+            source_fleet_subnet_root: root_canister,
+        },
+        fleet_subnet_roots: vec![FleetSubnetRootDirectoryEntry {
+            placement_subnet: verified.journal.root_plan.placement_subnet,
+            fleet_subnet_root: root_canister,
+            status: canic_core::dto::fleet_registry::FleetSubnetRootStatus::Active,
+        }],
+    };
+    let activation_request = FleetSubnetRootRegistryMirrorActivationRequest {
+        previous_registry: version,
+        expected_registry: active_version.clone(),
+        expected_directory: directory.clone(),
+        store_bootstrap: sync_request.store_bootstrap,
+    };
+    let activating = begin_registry_mirror_activation(&verified, activation_request.clone())
+        .expect("begin Registry mirror activation");
+    let activation_response = FleetSubnetRootRegistryMirrorActivationResponse {
+        fleet_subnet_root: root_canister,
+        previous_registry: activation_request.previous_registry.clone(),
+        version: active_version,
+        directory,
+    };
+    let activated = record_registry_mirror_activated(&activating, activation_response.clone())
+        .expect("record Registry mirror activation");
+    let activation_verified =
+        record_registry_mirror_activation_verified(&activated, activation_response.clone())
+            .expect("verify Registry mirror activation");
+
+    assert_eq!(
+        activation_verified.journal.phase,
+        FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified
+    );
+    assert_eq!(activation_verified.journal.sequence, 19);
+    assert_eq!(
+        activation_verified
+            .journal
+            .registry_mirror_activation_request,
+        Some(activation_request)
+    );
+    assert_eq!(
+        activation_verified
+            .journal
+            .registry_mirror_activation_response,
+        Some(activation_response)
+    );
 }
 
 #[test]

@@ -32,7 +32,7 @@ use super::truth_check::current_install_deployment_truth_check_at;
 use super::{
     InstallRootBlockKind, InstallRootBlockedError, InstallRootError, InstallRootOptions,
     InstallRootPhase, check_install_deployment_truth, check_install_execution_preflight,
-    latest_deployment_truth_receipt_path_from_root, require_final_registry_mirror_activation,
+    latest_deployment_truth_receipt_path_from_root, require_component_runtime_activation,
 };
 use crate::canister_build::{
     CanisterArtifactBuildSpec, CanisterBuildProfile, WorkspaceBuildContext,
@@ -80,22 +80,18 @@ fn public_install_error_preserves_phase_and_typed_source() {
 }
 
 #[test]
-fn active_registry_guard_blocks_unimplemented_final_mirror_activation() {
+fn verified_active_mirrors_guard_unimplemented_component_runtime_activation() {
     let plan_path = Path::new("/tmp/fleet-install-plan.json");
     let coordinator = candid::Principal::from_slice(&[42]);
-    let error = require_final_registry_mirror_activation(plan_path, coordinator, 3, 4)
-        .expect_err("unimplemented final mirror activation must remain blocked");
+    let error = require_component_runtime_activation(plan_path, coordinator, 3, 4)
+        .expect_err("unimplemented Component runtime activation must remain blocked");
 
     assert_eq!(error.plan_path, plan_path);
     assert_eq!(error.coordinator, coordinator);
     assert_eq!(error.active_roots, 3);
     assert_eq!(error.active_registry_revision, 4);
-    assert!(error.to_string().contains("all-Active Registry"));
-    assert!(
-        error
-            .to_string()
-            .contains("mirror and Directory activation")
-    );
+    assert!(error.to_string().contains("all-Active Registry mirrors"));
+    assert!(error.to_string().contains("Component runtime activation"));
 }
 
 #[test]

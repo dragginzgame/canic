@@ -120,18 +120,25 @@ pub(super) fn register_and_verify_fleet_subnet_roots_joining(
         expected_registry = next_registry;
     }
 
+    let joining_version =
+        FleetRegistryOps::version(&authority, &component_topology, &expected_registry)?;
     let live = query_live_registry(
         &coordinator_icp(icp_root, environment, local_replica),
         coordinator,
     )?;
+    if exact_registry_matches(&authority, &component_topology, &expected_registry, &live)? {
+        return Ok(joining_version);
+    }
+    let active_registry =
+        FleetRegistryOps::compile_active(&authority, &component_topology, &expected_registry)?;
     require_exact_registry(
         &authority,
         &component_topology,
-        &expected_registry,
+        &active_registry,
         &live,
-        "complete all-Joining",
+        "complete all-Active recovery",
     )?;
-    Ok(live.version)
+    Ok(joining_version)
 }
 
 fn drive_registry_join(
@@ -195,7 +202,10 @@ fn drive_registry_join(
             FleetSubnetRootInstallPhase::RegistryJoinVerified
             | FleetSubnetRootInstallPhase::RegistrySyncInFlight
             | FleetSubnetRootInstallPhase::RegistrySynchronized
-            | FleetSubnetRootInstallPhase::RegistrySyncVerified => {
+            | FleetSubnetRootInstallPhase::RegistrySyncVerified
+            | FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight
+            | FleetSubnetRootInstallPhase::RegistryMirrorActivated
+            | FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified => {
                 let response = current
                     .journal
                     .registry_join_response
@@ -282,6 +292,21 @@ fn require_exact_registry(
         return Err(RootRegistryJoinError::LiveRegistryMismatch(stage).into());
     }
     Ok(())
+}
+
+fn exact_registry_matches(
+    authority: &FleetRegistryAuthority,
+    component_topology: &ComponentTopology,
+    expected_registry: &FleetRegistry,
+    live: &LiveRegistryEvidence,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let expected_manifest =
+        FleetRegistryOps::manifest(authority, component_topology, expected_registry)?;
+    let expected_version =
+        FleetRegistryOps::version(authority, component_topology, expected_registry)?;
+    Ok(live.registry == *expected_registry
+        && live.manifest == expected_manifest
+        && live.version == expected_version)
 }
 
 fn coordinator_icp(

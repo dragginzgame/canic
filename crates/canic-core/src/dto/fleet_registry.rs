@@ -195,3 +195,69 @@ pub struct FleetSubnetRootRegistrySyncResponse {
     pub version: FleetRegistryVersion,
     pub acknowledgement: FleetSubnetRootSnapshotAcknowledgement,
 }
+
+///
+/// FleetDirectoryProvenance
+///
+/// Exact Registry authority and root that published one local Fleet Directory projection.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetDirectoryProvenance {
+    pub registry: FleetRegistryVersion,
+    pub source_fleet_subnet_root: Principal,
+}
+
+///
+/// FleetSubnetRootDirectoryEntry
+///
+/// One root placement and lifecycle status projected from the complete Fleet Registry.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDirectoryEntry {
+    pub placement_subnet: SubnetId,
+    pub fleet_subnet_root: Principal,
+    pub status: FleetSubnetRootStatus,
+}
+
+///
+/// FleetDirectorySnapshot
+///
+/// Root-local read-only discovery projection derived from one exact all-Active Registry.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetDirectorySnapshot {
+    pub provenance: FleetDirectoryProvenance,
+    pub fleet_subnet_roots: Vec<FleetSubnetRootDirectoryEntry>,
+}
+
+///
+/// FleetSubnetRootRegistryMirrorActivationRequest
+///
+/// Controller command that atomically replaces a Joining candidate with its all-Active mirror
+/// and matching Fleet Directory.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootRegistryMirrorActivationRequest {
+    pub previous_registry: FleetRegistryVersion,
+    pub expected_registry: FleetRegistryVersion,
+    pub expected_directory: FleetDirectorySnapshot,
+    pub store_bootstrap: RootStoreBootstrapRequest,
+}
+
+///
+/// FleetSubnetRootRegistryMirrorActivationResponse
+///
+/// Exact durable evidence for one root's active Registry mirror and Fleet Directory.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootRegistryMirrorActivationResponse {
+    pub fleet_subnet_root: Principal,
+    pub previous_registry: FleetRegistryVersion,
+    pub version: FleetRegistryVersion,
+    pub directory: FleetDirectorySnapshot,
+}

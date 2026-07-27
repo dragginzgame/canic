@@ -191,7 +191,12 @@ pub(super) fn install_and_verify_fleet_coordinator(
                     .journal
                     .coordinator
                     .expect("validated Verified journal retains its Coordinator");
-                verify_live_coordinator(icp_root, environment, local_replica, &current.journal)?;
+                verify_live_coordinator_current(
+                    icp_root,
+                    environment,
+                    local_replica,
+                    &current.journal,
+                )?;
                 return Ok(VerifiedFleetCoordinator { coordinator });
             }
         };
@@ -319,11 +324,12 @@ fn verify_and_record_coordinator(
     local_replica: Option<&LocalReplicaTarget>,
     current: &ResolvedFleetCoordinatorInstall,
 ) -> Result<ResolvedFleetCoordinatorInstall, Box<dyn std::error::Error>> {
-    let genesis = verify_live_coordinator(icp_root, environment, local_replica, &current.journal)?;
+    let genesis =
+        verify_live_coordinator_genesis(icp_root, environment, local_replica, &current.journal)?;
     record_coordinator_verified(current, genesis.manifest, genesis.version).map_err(Into::into)
 }
 
-fn verify_live_coordinator(
+fn verify_live_coordinator_genesis(
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
@@ -368,6 +374,65 @@ fn verify_live_coordinator(
         return Err(CoordinatorInstallStateError::RegistryVersionMismatch.into());
     }
     Ok(expected)
+}
+
+fn verify_live_coordinator_current(
+    icp_root: &Path,
+    environment: &str,
+    local_replica: Option<&LocalReplicaTarget>,
+    journal: &FleetCoordinatorInstallJournal,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let coordinator = journal
+        .coordinator
+        .expect("verified Coordinator phases retain a principal");
+    match observed_module_hash(icp_root, environment, local_replica, coordinator)? {
+        Some(observed) if observed == journal.expected_module_hash => {}
+        Some(observed) => {
+            return Err(CoordinatorInstallStateError::UnexpectedModule {
+                coordinator,
+                observed: module_hash_text(observed),
+            }
+            .into());
+        }
+        None => return Err(CoordinatorInstallStateError::MissingModule { coordinator }.into()),
+    }
+
+    let expected = expected_genesis(journal)?;
+    let icp = coordinator_icp(icp_root, environment, local_replica);
+    let registry =
+        query_coordinator::<FleetRegistry>(&icp, coordinator, protocol::CANIC_FLEET_REGISTRY)?;
+    FleetRegistryOps::validate(
+        &expected.init_args.authority,
+        &journal.component_topology,
+        &registry,
+    )?;
+    let manifest = query_coordinator::<FleetRegistryManifest>(
+        &icp,
+        coordinator,
+        protocol::CANIC_FLEET_REGISTRY_MANIFEST,
+    )?;
+    let expected_manifest = FleetRegistryOps::manifest(
+        &expected.init_args.authority,
+        &journal.component_topology,
+        &registry,
+    )?;
+    if manifest != expected_manifest {
+        return Err(CoordinatorInstallStateError::RegistryManifestMismatch.into());
+    }
+    let version = query_coordinator::<FleetRegistryVersion>(
+        &icp,
+        coordinator,
+        protocol::CANIC_FLEET_REGISTRY_VERSION,
+    )?;
+    let expected_version = FleetRegistryOps::version(
+        &expected.init_args.authority,
+        &journal.component_topology,
+        &registry,
+    )?;
+    if version != expected_version {
+        return Err(CoordinatorInstallStateError::RegistryVersionMismatch.into());
+    }
+    Ok(())
 }
 
 fn query_coordinator<T>(

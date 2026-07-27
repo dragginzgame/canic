@@ -273,6 +273,56 @@ fn activation_atomically_transitions_one_nonempty_all_joining_snapshot() {
 }
 
 #[test]
+fn active_directory_is_an_exact_root_sourced_registry_projection() {
+    let topology = topology();
+    let authority = authority();
+    let mut joining =
+        validation::compile_genesis(&AppId::from("demo"), authority.clone(), &topology)
+            .expect("valid genesis Registry");
+    joining.fleet_subnet_roots = vec![
+        root(&topology, 5, 6, &[("alpha", 1)]),
+        root(&topology, 7, 8, &[("alpha", 2), ("beta", 2)]),
+    ];
+    joining.revision = 3;
+    let active =
+        FleetRegistryOps::compile_active(&authority, &topology, &joining).expect("active Registry");
+    let directory = active_directory_for_root(&authority, &topology, &active, principal(6))
+        .expect("active Fleet Directory");
+
+    assert_eq!(
+        directory.provenance.registry,
+        FleetRegistryOps::version(&authority, &topology, &active).expect("Registry version")
+    );
+    assert_eq!(directory.provenance.source_fleet_subnet_root, principal(6));
+    assert_eq!(
+        directory
+            .fleet_subnet_roots
+            .iter()
+            .map(|entry| {
+                (
+                    entry.placement_subnet,
+                    entry.fleet_subnet_root,
+                    entry.status,
+                )
+            })
+            .collect::<Vec<_>>(),
+        vec![
+            (subnet(5), principal(6), FleetSubnetRootStatus::Active),
+            (subnet(7), principal(8), FleetSubnetRootStatus::Active)
+        ]
+    );
+
+    std::assert_matches!(
+        active_directory_for_root(&authority, &topology, &joining, principal(6)),
+        Err(FleetRegistryOpsError::FleetDirectoryRequiresAllActive)
+    );
+    std::assert_matches!(
+        active_directory_for_root(&authority, &topology, &active, principal(9)),
+        Err(FleetRegistryOpsError::FleetDirectorySourceMissing)
+    );
+}
+
+#[test]
 fn activation_rejects_empty_mixed_or_exhausted_registry_state() {
     let topology = topology();
     let authority = authority();

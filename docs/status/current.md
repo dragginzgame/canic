@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.16`.
-- The latest published release is `v0.100.16` at
-  `3412eebb369ee897e48394a84da8378e4bf6aad6`.
-- The `v0.100.16` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `1702329a02ca8ca6fa33c0e901d13b16401dd5e8fd970b09978f93f002322025`.
+- The workspace package version is `0.100.17`.
+- The latest published release is `v0.100.17` at
+  `75e4992b8a7d559b8849fe2e10a864c2da2a1ef3`.
+- The `v0.100.17` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `3fcd0ccc52a7eb658d94322d6bb98553b13decbb5edb0642f99e024c9f7f329e`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -184,7 +184,7 @@ Historical detail is archived at:
   set to equal every planned root at the exact final `Joining` version.
   Registry `Active`, final mirror/Directory activation and runtime activation
   remain fenced.
-- Open `0.100.17` atomically commits the complete acknowledged root set from
+- Released `0.100.17` atomically commits the complete acknowledged root set from
   all-`Joining` to all-`Active`. The Coordinator requires the exact source
   version and every current root acknowledgement, clears those superseded
   acknowledgements and stores one response-idempotent activation receipt in
@@ -193,6 +193,15 @@ Historical detail is archived at:
   Registry, manifest and version afterward. Every root remains
   runtime-`Prepared`; final all-`Active` synchronization and atomic
   mirror/Directory activation remain fenced.
+- Open `0.100.18` atomically replaces every root's private all-`Joining`
+  candidate with its exact all-`Active` Registry Mirror and matching
+  Registry-derived Fleet Directory after reverifying the local Store. The
+  root stable record is exclusively candidate or active; host journal
+  sequences 17–19 freeze intent, result and independent status verification.
+  Whole-install retry accepts a progressed Coordinator only when the exact
+  deterministic all-`Active` state is reproduced. Every root remains
+  runtime-`Prepared`; Component Registry allocation and runtime activation
+  are next.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1488,11 +1497,13 @@ Fresh installation now journals and verifies the Coordinator, every planned
 Fleet Subnet Root, each root's exact topology-admitted local Store, and every
 root's Registry `Joining` row, private snapshot candidate and exact
 Coordinator acknowledgement, then atomically commits and independently
-verifies the complete Coordinator Registry as all-`Active`. Next, distribute
-and atomically activate the exact all-`Active` mirror/Directory evidence at
-every root before runtime activation. Do not bypass Store or Registry
-evidence, permit nested Component declarations, merge roots belonging to
-different Fleets on one Subnet or consume an earlier installation.
+verifies the complete Coordinator Registry as all-`Active`. It now also
+atomically activates and independently verifies every root's exact matching
+Registry Mirror/Fleet Directory. Next, establish the root-local Component
+Registry and admitted top-level Component allocation boundary before runtime
+activation. Do not bypass Store or Registry evidence, permit nested Component
+declarations, merge roots belonging to different Fleets on one Subnet or
+consume an earlier installation.
 
 ## Historical Release Detail
 

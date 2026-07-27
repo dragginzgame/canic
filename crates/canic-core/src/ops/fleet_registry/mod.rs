@@ -12,7 +12,8 @@ use crate::{
     InternalError,
     config::{ComponentTopology, ComponentTopologyError},
     dto::fleet_registry::{
-        FleetComponentSpecEntry, FleetRegistry, FleetRegistryManifest, FleetRegistryVersion,
+        FleetComponentSpecEntry, FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistry,
+        FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootDirectoryEntry,
         FleetSubnetRootEntry, FleetSubnetRootStatus,
     },
     ids::{
@@ -88,6 +89,12 @@ pub enum FleetRegistryOpsError {
 
     #[error("Fleet Registry activation requires a non-empty all-Joining root set")]
     FleetSubnetRootActivationRequiresAllJoining,
+
+    #[error("Fleet Directory activation requires a non-empty all-Active root set")]
+    FleetDirectoryRequiresAllActive,
+
+    #[error("Fleet Directory source does not name one active Registry root")]
+    FleetDirectorySourceMissing,
 
     #[error("Fleet Registry genesis App '{received}' does not match configured App '{expected}'")]
     GenesisAppMismatch { expected: AppId, received: AppId },
@@ -217,6 +224,70 @@ impl FleetRegistryOps {
             content_hash: manifest.content_hash,
         })
     }
+
+    /// Derive one root's exact Fleet Directory from a complete all-Active Registry.
+    pub fn active_directory_for_root(
+        expected_authority: &FleetRegistryAuthority,
+        topology: &ComponentTopology,
+        registry: &FleetRegistry,
+        source_fleet_subnet_root: Principal,
+    ) -> Result<FleetDirectorySnapshot, InternalError> {
+        active_directory_for_root(
+            expected_authority,
+            topology,
+            registry,
+            source_fleet_subnet_root,
+        )
+        .map_err(OpsError::from)
+        .map_err(InternalError::from)
+    }
+}
+
+fn active_directory_for_root(
+    expected_authority: &FleetRegistryAuthority,
+    topology: &ComponentTopology,
+    registry: &FleetRegistry,
+    source_fleet_subnet_root: Principal,
+) -> Result<FleetDirectorySnapshot, FleetRegistryOpsError> {
+    validation::validate(expected_authority, topology, registry)?;
+    if registry.fleet_subnet_roots.is_empty()
+        || registry
+            .fleet_subnet_roots
+            .iter()
+            .any(|entry| entry.status != FleetSubnetRootStatus::Active)
+    {
+        return Err(FleetRegistryOpsError::FleetDirectoryRequiresAllActive);
+    }
+    if !registry
+        .fleet_subnet_roots
+        .iter()
+        .any(|entry| entry.fleet_subnet_root == source_fleet_subnet_root)
+    {
+        return Err(FleetRegistryOpsError::FleetDirectorySourceMissing);
+    }
+    let manifest = {
+        let bytes = canonical_bytes(expected_authority, topology, registry)?;
+        FleetRegistryVersion {
+            authority: registry.authority.clone(),
+            revision: registry.revision,
+            content_hash: Sha256::digest(bytes).into(),
+        }
+    };
+    Ok(FleetDirectorySnapshot {
+        provenance: FleetDirectoryProvenance {
+            registry: manifest,
+            source_fleet_subnet_root,
+        },
+        fleet_subnet_roots: registry
+            .fleet_subnet_roots
+            .iter()
+            .map(|entry| FleetSubnetRootDirectoryEntry {
+                placement_subnet: entry.placement_subnet,
+                fleet_subnet_root: entry.fleet_subnet_root,
+                status: entry.status,
+            })
+            .collect(),
+    })
 }
 
 fn compile_joining(

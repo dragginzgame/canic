@@ -7,8 +7,9 @@
 use super::{
     fleet_subnet_root_install_journal::{
         FleetSubnetRootInstallPhase, PlanFleetSubnetRootInstallRequest,
-        ResolvedFleetSubnetRootInstall, begin_registry_sync, plan_fleet_subnet_root_install,
-        record_registry_sync_verified, record_registry_synchronized,
+        ResolvedFleetSubnetRootInstall, begin_registry_sync, expected_registry_join_entry,
+        plan_fleet_subnet_root_install, record_registry_sync_verified,
+        record_registry_synchronized,
     },
     fleet_subnet_root_store_bootstrap::canonical_manifest_bytes,
 };
@@ -19,11 +20,13 @@ use crate::{
 };
 use candid::{CandidType, IDLValue, Principal};
 use canic_core::{
+    control_plane_support::ops::fleet_registry::FleetRegistryOps,
     dto::fleet_registry::{
-        FleetRegistryVersion, FleetSubnetRootRegistrySyncRequest,
-        FleetSubnetRootSnapshotAcknowledgement,
+        FleetRegistry, FleetRegistryManifest, FleetRegistryVersion,
+        FleetSubnetRootRegistrySyncRequest, FleetSubnetRootSnapshotAcknowledgement,
     },
     dto::root_store::RootStoreBootstrapRequest,
+    ids::{FleetCoordinatorBinding, FleetRegistryAuthority},
     protocol,
 };
 use std::path::Path;
@@ -77,6 +80,19 @@ pub(super) fn synchronize_and_verify_fleet_subnet_roots(
         icp_root,
         fleet_install_plan.plan.release_build_id,
     )?;
+    let authority = FleetRegistryAuthority {
+        binding: FleetCoordinatorBinding {
+            fleet: fleet_install_plan.plan.fleet.clone(),
+            coordinator_subnet: fleet_install_plan.plan.coordinator.coordinator_subnet,
+            coordinator,
+        },
+        epoch: 1,
+    };
+    let mut joining_registry = FleetRegistryOps::compile_genesis(
+        &fleet_install_plan.plan.fleet.app,
+        authority.clone(),
+        &component_topology,
+    )?;
     let mut expected = Vec::with_capacity(fleet_install_plan.plan.fleet_subnet_roots.len());
 
     for root_plan in &fleet_install_plan.plan.fleet_subnet_roots {
@@ -105,24 +121,67 @@ pub(super) fn synchronize_and_verify_fleet_subnet_roots(
                 .fleet_subnet_root
                 .ok_or(RootRegistrySyncError::AcknowledgementSetMismatch)?,
         );
+        joining_registry = FleetRegistryOps::compile_joining(
+            &authority,
+            &component_topology,
+            &joining_registry,
+            expected_registry_join_entry(&current.journal)?,
+        )?;
         drive_root_sync(icp_root, environment, local_replica, current, request)?;
     }
+    let expected_joining_version =
+        FleetRegistryOps::version(&authority, &component_topology, &joining_registry)?;
+    if expected_joining_version != joining_version {
+        return Err(RootRegistrySyncError::AcknowledgementSetMismatch.into());
+    }
 
+    let coordinator_icp = coordinator_icp(icp_root, environment, local_replica);
     let live: Vec<FleetSubnetRootSnapshotAcknowledgement> = query_no_arg(
-        &coordinator_icp(icp_root, environment, local_replica),
+        &coordinator_icp,
         coordinator,
         protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
     )?;
     expected.sort_by(|left, right| left.as_slice().cmp(right.as_slice()));
-    if live.len() != expected.len()
-        || live
+    let acknowledgements_match = live.len() == expected.len()
+        && live
             .iter()
             .zip(expected)
-            .any(|(ack, root)| ack.fleet_subnet_root != root || ack.version != joining_version)
+            .all(|(ack, root)| ack.fleet_subnet_root == root && ack.version == joining_version);
+    if acknowledgements_match {
+        return Ok(());
+    }
+    let active_registry =
+        FleetRegistryOps::compile_active(&authority, &component_topology, &joining_registry)?;
+    let live_registry = query_live_registry(&coordinator_icp, coordinator)?;
+    let expected_manifest =
+        FleetRegistryOps::manifest(&authority, &component_topology, &active_registry)?;
+    let expected_version =
+        FleetRegistryOps::version(&authority, &component_topology, &active_registry)?;
+    if live_registry.registry != active_registry
+        || live_registry.manifest != expected_manifest
+        || live_registry.version != expected_version
+        || !live.is_empty()
     {
         return Err(RootRegistrySyncError::AcknowledgementSetMismatch.into());
     }
     Ok(())
+}
+
+struct LiveRegistryEvidence {
+    registry: FleetRegistry,
+    manifest: FleetRegistryManifest,
+    version: FleetRegistryVersion,
+}
+
+fn query_live_registry(
+    icp: &IcpCli,
+    coordinator: Principal,
+) -> Result<LiveRegistryEvidence, Box<dyn std::error::Error>> {
+    Ok(LiveRegistryEvidence {
+        registry: query_no_arg(icp, coordinator, protocol::CANIC_FLEET_REGISTRY)?,
+        manifest: query_no_arg(icp, coordinator, protocol::CANIC_FLEET_REGISTRY_MANIFEST)?,
+        version: query_no_arg(icp, coordinator, protocol::CANIC_FLEET_REGISTRY_VERSION)?,
+    })
 }
 
 fn drive_root_sync(
@@ -162,7 +221,10 @@ fn drive_root_sync(
                 )?;
                 record_registry_sync_verified(&current, response)?
             }
-            FleetSubnetRootInstallPhase::RegistrySyncVerified => return Ok(()),
+            FleetSubnetRootInstallPhase::RegistrySyncVerified
+            | FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight
+            | FleetSubnetRootInstallPhase::RegistryMirrorActivated
+            | FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified => return Ok(()),
             phase => return Err(RootRegistrySyncError::UnexpectedPhase(phase).into()),
         };
     }
