@@ -12,7 +12,7 @@ use canic_core::dto::fleet_registry::{
 use canic_core::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     eager_static, impl_storable_bounded,
-    role_contract::allocation::memory::template::ROOT_FLEET_REGISTRY_MIRROR_ID,
+    role_contract::allocation::memory::control_plane::ROOT_FLEET_REGISTRY_MIRROR_ID,
 };
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "root-control-plane")]

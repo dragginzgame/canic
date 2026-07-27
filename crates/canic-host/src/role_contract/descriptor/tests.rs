@@ -64,7 +64,7 @@ fn materialization_joins_only_selected_allocations() {
         allocations: vec![ResolvedStateAllocation {
             key: StateAllocationKey::StoredBlobs,
             owner: AllocationOwner::CanicCore,
-            memory_ids: vec![MemoryId::new(62)],
+            memory_ids: vec![MemoryId::new(59)],
             selected_by: BTreeSet::from([SelectionProvenance::EffectiveFeature(
                 canic_core::role_contract::CanicFeatureKey::BlobStorage,
             )]),
@@ -120,7 +120,7 @@ fn wasm_store_materializes_template_and_gc_state() {
         .filter_map(|domain| domain.memory_id)
         .collect::<Vec<_>>();
     assert_eq!(ids.len(), 5);
-    for expected in [80, 81, 82, 83, 85] {
+    for expected in [10, 11, 12, 13, 15] {
         assert!(ids.contains(&expected));
     }
 }
@@ -151,5 +151,5 @@ fn fleet_coordinator_materializes_only_its_registry_state() {
     let manifest = materialize_state_manifest(&[contract]).expect("manifest");
     assert_eq!(manifest.roles.len(), 1);
     assert_eq!(manifest.roles[0].state.len(), 1);
-    assert_eq!(manifest.roles[0].state[0].memory_id, Some(86));
+    assert_eq!(manifest.roles[0].state[0].memory_id, Some(16));
 }

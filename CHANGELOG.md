@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.21` compacts the reinstall-only stable-memory map into consecutive,
+  subsystem-grouped core and control-plane ledgers and removes obsolete
+  per-ID tombstones.
+
 - `0.100.20` durably reserves deterministic top-level Component identities
   and exact root/Spec/Registry capacity under live Store and all-Active
   Registry authority, with exact retry and no paid Canister effect.

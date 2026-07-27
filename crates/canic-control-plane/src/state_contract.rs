@@ -25,7 +25,7 @@ use crate::storage::stable::{
 use canic_core::{
     role_contract::{
         AllocationOwner, StateAllocationKey,
-        allocation::memory::template::{
+        allocation::memory::control_plane::{
             CONTROL_PLANE_SUBNET_STATE_ID, FLEET_COORDINATOR_REGISTRY_ID,
             ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_REGISTRY_META_ID,
             ROOT_FLEET_REGISTRY_MIRROR_ID, TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID,
