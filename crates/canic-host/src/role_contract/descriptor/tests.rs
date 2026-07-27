@@ -124,3 +124,32 @@ fn wasm_store_materializes_template_and_gc_state() {
         assert!(ids.contains(&expected));
     }
 }
+
+#[test]
+fn fleet_coordinator_materializes_only_its_registry_state() {
+    let key = StateAllocationKey::FleetCoordinatorRegistry;
+    let definition = allocation_definitions()
+        .iter()
+        .find(|definition| definition.key == key)
+        .expect("definition");
+    let contract = ResolvedRoleContract {
+        role: canic_core::ids::CanisterRole::FLEET_COORDINATOR,
+        built_in: Some(BuiltInRoleKind::FleetCoordinator),
+        capabilities: BTreeSet::new(),
+        required_features: BTreeSet::new(),
+        effective_features: BTreeSet::new(),
+        allocations: vec![ResolvedStateAllocation {
+            key,
+            owner: definition.owner,
+            memory_ids: definition.memory_ids.to_vec(),
+            selected_by: BTreeSet::from([SelectionProvenance::BuiltInRole(
+                BuiltInRoleKind::FleetCoordinator,
+            )]),
+        }],
+    };
+
+    let manifest = materialize_state_manifest(&[contract]).expect("manifest");
+    assert_eq!(manifest.roles.len(), 1);
+    assert_eq!(manifest.roles[0].state.len(), 1);
+    assert_eq!(manifest.roles[0].state[0].memory_id, Some(86));
+}

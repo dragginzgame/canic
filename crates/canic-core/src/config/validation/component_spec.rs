@@ -18,7 +18,10 @@ use std::collections::BTreeMap;
 impl Validate for ComponentSpecConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
         validate_canister_role(&self.component_role, "Component role")?;
-        if self.component_role.is_root() || self.component_role.is_wasm_store() {
+        if self.component_role.is_fleet_coordinator()
+            || self.component_role.is_root()
+            || self.component_role.is_wasm_store()
+        {
             return Err(ConfigSchemaError::ValidationError(format!(
                 "Component role '{}' is reserved infrastructure",
                 self.component_role,
@@ -98,7 +101,7 @@ fn validate_component_children(config: &ComponentSpecConfig) -> Result<(), Confi
                 config.component_role,
             )));
         }
-        if role.is_root() || role.is_wasm_store() {
+        if role.is_fleet_coordinator() || role.is_root() || role.is_wasm_store() {
             return Err(ConfigSchemaError::ValidationError(format!(
                 "Component Child '{role}' is reserved infrastructure",
             )));

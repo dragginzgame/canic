@@ -11,6 +11,8 @@ const MANAGED_START_MARKERS: &[&str] = &[
     "canic::start_local!(",
     "canic::start_wasm_store!()",
     "canic::start_wasm_store!(",
+    "canic::start_fleet_coordinator!()",
+    "canic::start_fleet_coordinator!(",
 ];
 
 const RAW_ENDPOINT_MARKERS: &[&str] = &[

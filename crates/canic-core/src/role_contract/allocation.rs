@@ -85,6 +85,7 @@ pub mod memory {
         pub const TEMPLATE_CHUNK_PAYLOADS_ID: u8 = 83;
         pub const CONTROL_PLANE_SUBNET_STATE_ID: u8 = 84;
         pub const WASM_STORE_GC_STATE_ID: u8 = 85;
+        pub const FLEET_COORDINATOR_REGISTRY_ID: u8 = 86;
     }
 }
 
@@ -111,8 +112,9 @@ use memory::{
     },
     pool::CANISTER_POOL_ID,
     template::{
-        CONTROL_PLANE_SUBNET_STATE_ID, TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID,
-        TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
+        CONTROL_PLANE_SUBNET_STATE_ID, FLEET_COORDINATOR_REGISTRY_ID, TEMPLATE_CHUNK_PAYLOADS_ID,
+        TEMPLATE_CHUNK_REFS_ID, TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID,
+        WASM_STORE_GC_STATE_ID,
     },
     topology::{
         CANISTER_CHILDREN_ID, FLEET_DIRECTORY_ID, RETIRED_APP_REGISTRY_ID, SUBNET_DIRECTORY_ID,
@@ -169,6 +171,7 @@ const TEMPLATE_CHUNK_REFS_IDS: &[MemoryId] = &[MemoryId::new(TEMPLATE_CHUNK_REFS
 const TEMPLATE_CHUNK_PAYLOADS_IDS: &[MemoryId] = &[MemoryId::new(TEMPLATE_CHUNK_PAYLOADS_ID)];
 const CONTROL_PLANE_SUBNET_STATE_IDS: &[MemoryId] = &[MemoryId::new(CONTROL_PLANE_SUBNET_STATE_ID)];
 const WASM_STORE_GC_STATE_IDS: &[MemoryId] = &[MemoryId::new(WASM_STORE_GC_STATE_ID)];
+const FLEET_COORDINATOR_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(FLEET_COORDINATOR_REGISTRY_ID)];
 
 const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
     definition(
@@ -290,6 +293,11 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         StateAllocationKey::WasmStoreGcState,
         AllocationOwner::CanicControlPlane,
         WASM_STORE_GC_STATE_IDS,
+    ),
+    definition(
+        StateAllocationKey::FleetCoordinatorRegistry,
+        AllocationOwner::CanicControlPlane,
+        FLEET_COORDINATOR_REGISTRY_IDS,
     ),
 ];
 

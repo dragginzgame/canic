@@ -14,7 +14,8 @@ categories = { workspace = true }
 publish = true
 
 [features]
-default = ["root-control-plane", "wasm-store-canister"]
+default = ["fleet-coordinator-canister", "root-control-plane", "wasm-store-canister"]
+fleet-coordinator-canister = []
 root-control-plane = ["wasm-store-canister"]
 wasm-store-canister = []
 

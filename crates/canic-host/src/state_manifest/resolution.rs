@@ -10,8 +10,8 @@
 use crate::role_contract::{
     PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation,
     materialize_state_manifest, resolve_built_in_wasm_store_contract,
-    resolve_declared_role_package_contract, validate_built_in_wasm_store_package,
-    validate_declared_role_package,
+    resolve_declared_role_package_contract, resolve_host_generated_fleet_coordinator_contract,
+    validate_built_in_wasm_store_package, validate_declared_role_package,
 };
 use canic_core::{
     bootstrap::parse_config_model,
@@ -47,7 +47,11 @@ pub fn resolve_project_state_manifest(
     let mut errors = Vec::new();
     let mut matched_declared_role = false;
 
-    if role_filter != Some(CanisterRole::WASM_STORE.as_str()) {
+    let filters_to_built_in = role_filter.is_some_and(|role| {
+        role == CanisterRole::FLEET_COORDINATOR.as_str()
+            || role == CanisterRole::WASM_STORE.as_str()
+    });
+    if !filters_to_built_in {
         for config_path in config_paths {
             let Ok(source) = fs::read_to_string(config_path) else {
                 errors.push(RoleContractFinding::DependencyShapeUnsupported {
@@ -86,12 +90,21 @@ pub fn resolve_project_state_manifest(
     }
 
     if let Some(role) = role_filter
-        && role != CanisterRole::WASM_STORE.as_str()
+        && !filters_to_built_in
         && !matched_declared_role
     {
         errors.push(RoleContractFinding::RoleUnknown {
             role: CanisterRole::owned(role.to_string()),
         });
+    }
+
+    if role_filter.is_none() || role_filter == Some(CanisterRole::FLEET_COORDINATOR.as_str()) {
+        collect_contract(
+            &CanisterRole::FLEET_COORDINATOR,
+            resolve_host_generated_fleet_coordinator_contract(),
+            &mut contracts,
+            &mut errors,
+        );
     }
 
     if role_filter.is_none() || role_filter == Some(CanisterRole::WASM_STORE.as_str()) {

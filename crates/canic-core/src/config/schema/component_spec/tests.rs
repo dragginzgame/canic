@@ -422,7 +422,11 @@ fn provisioning_grants_require_positive_bounded_outbound_policy() {
 
 #[test]
 fn infrastructure_and_self_roles_are_rejected() {
-    for role in [CanisterRole::ROOT, CanisterRole::WASM_STORE] {
+    for role in [
+        CanisterRole::FLEET_COORDINATOR,
+        CanisterRole::ROOT,
+        CanisterRole::WASM_STORE,
+    ] {
         component_spec(role.as_str())
             .validate()
             .expect_err("infrastructure cannot be a Component role");

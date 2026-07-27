@@ -162,6 +162,12 @@ fn validate_role_declarations(config: &ConfigModel) -> Result<(), ConfigSchemaEr
     for (role, declaration) in &config.roles {
         validate_canister_role(role, "role declaration")?;
 
+        if role.is_fleet_coordinator() {
+            return Err(ConfigSchemaError::ValidationError(
+                "role declaration 'fleet_coordinator' is reserved Canic infrastructure".into(),
+            ));
+        }
+
         if role.is_root() && declaration.kind != RoleDeclarationKind::Root {
             return Err(ConfigSchemaError::ValidationError(
                 "role declaration 'root' must have kind = \"root\"".into(),

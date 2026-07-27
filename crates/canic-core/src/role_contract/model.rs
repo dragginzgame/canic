@@ -25,6 +25,7 @@ pub enum CanicFeatureKey {
     BlobStorage,
     BlobStorageBilling,
     ControlPlane,
+    FleetCoordinatorCanister,
     Metrics,
     Sharding,
     WasmStoreCanister,
@@ -52,6 +53,7 @@ pub enum CanicFeatureEffect {
 pub enum RoleCapabilityKey {
     DelegatedTokenIssuer,
     DelegatedTokenVerifier,
+    FleetCoordinator,
     Index,
     Icrc21,
     RoleAttestationSigner,
@@ -84,6 +86,7 @@ pub enum StateAllocationKey {
     CoreRuntimeIntent,
     CoreRuntimeObservability,
     CoreRuntimeTopology,
+    FleetCoordinatorRegistry,
     PlacementIndexRegistry,
     ScalingRegistry,
     ShardingActiveSet,
@@ -162,6 +165,7 @@ pub struct AllocationDefinition {
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum BuiltInRoleKind {
+    FleetCoordinator,
     WasmStore,
 }
 

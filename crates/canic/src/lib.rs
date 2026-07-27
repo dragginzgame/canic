@@ -4,7 +4,8 @@
 //! re-exports the public Canic runtime surface and provides the common macro entry points:
 //!
 //! - `build!` for configured canisters and generated local sandbox/probe config
-//! - `start!` for `lib.rs` (wire lifecycle hooks and export endpoints)
+//! - `start!` for configured canister lifecycle hooks and endpoints
+//! - `start_fleet_coordinator!` for Canic's host-generated Coordinator
 //!
 //! For lower-level access, use the `api`, `dto`, and `memory` modules.
 //! These surfaces are for configured canister role packages. Shared runtime
@@ -28,7 +29,11 @@ pub mod __internal {
     // NOTE:
     // This module exists ONLY for macro expansion.
     // Do NOT re-export canic_core publicly.
-    #[cfg(any(feature = "control-plane", feature = "wasm-store-canister"))]
+    #[cfg(any(
+        feature = "control-plane",
+        feature = "fleet-coordinator-canister",
+        feature = "wasm-store-canister"
+    ))]
     pub use canic_control_plane as control_plane;
     pub use canic_core as core;
 

@@ -59,16 +59,24 @@ pub struct BootstrapWasmStoreBuildOutput {
 }
 
 #[derive(Clone, Debug)]
+pub struct QualifiedBootstrapWasmStoreOutput {
+    pub(crate) package_name: String,
+    pub(crate) wasm_path: PathBuf,
+    pub(crate) wasm_gz_path: PathBuf,
+}
+
+#[derive(Clone, Debug)]
 struct BootstrapWasmStoreSource {
     manifest_path: PathBuf,
+    package_name: String,
     source_root: PathBuf,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct GeneratedWrapperDependencies {
-    canic_version: String,
-    candid_version: String,
-    ic_cdk_version: String,
+pub struct GeneratedWrapperDependencies {
+    pub(crate) canic_version: String,
+    pub(crate) candid_version: String,
+    pub(crate) ic_cdk_version: String,
 }
 
 // Build the implicit bootstrap `wasm_store` artifact and populate the canonical
@@ -116,6 +124,27 @@ pub fn build_bootstrap_wasm_store_artifact(
     })
 }
 
+/// Qualify the store artifact emitted by the immediately preceding root build.
+pub fn qualify_built_bootstrap_wasm_store_artifact(
+    context: &WorkspaceBuildContext,
+) -> Result<QualifiedBootstrapWasmStoreOutput, Box<dyn std::error::Error>> {
+    let source = resolve_bootstrap_wasm_store_source(&context.workspace_root, &context.icp_root)?;
+    require_built_in_wasm_store_contract(&source.manifest_path)?;
+    let artifact_root = artifact_root_path(&context.icp_root, "local").join(WASM_STORE_ROLE);
+    let wasm_path = artifact_root.join(format!("{WASM_STORE_ROLE}.wasm"));
+    let wasm_gz_path = artifact_root.join(format!("{WASM_STORE_ROLE}.wasm.gz"));
+    if !wasm_path.is_file() || !wasm_gz_path.is_file() {
+        return Err(
+            "root build did not emit the exact built-in wasm_store raw and gzip artifacts".into(),
+        );
+    }
+    Ok(QualifiedBootstrapWasmStoreOutput {
+        package_name: source.package_name,
+        wasm_path,
+        wasm_gz_path,
+    })
+}
+
 fn require_built_in_wasm_store_contract(
     manifest_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -159,11 +188,12 @@ fn resolve_bootstrap_wasm_store_source(
     )?;
     Ok(BootstrapWasmStoreSource {
         manifest_path: wrapper_root.join("Cargo.toml"),
+        package_name: GENERATED_WRAPPER_PACKAGE_NAME.to_string(),
         source_root: wrapper_root.clone(),
     })
 }
 
-fn resolved_canic_package(
+pub fn resolved_canic_package(
     metadata: &CargoMetadata,
 ) -> Result<&CargoMetadataPackage, Box<dyn std::error::Error>> {
     let matches = metadata
@@ -210,6 +240,7 @@ fn resolve_canonical_bootstrap_wasm_store_source(
             .to_path_buf();
         return Ok(Some(BootstrapWasmStoreSource {
             manifest_path: package.manifest_path.clone(),
+            package_name: package.name.clone(),
             source_root,
         }));
     }
@@ -238,6 +269,7 @@ fn resolve_canonical_bootstrap_wasm_store_source(
             .to_path_buf();
         return Ok(Some(BootstrapWasmStoreSource {
             manifest_path: sibling_manifest,
+            package_name: "canic-wasm-store".to_string(),
             source_root,
         }));
     }
@@ -245,7 +277,7 @@ fn resolve_canonical_bootstrap_wasm_store_source(
     Ok(None)
 }
 
-fn resolved_wrapper_dependencies(
+pub fn resolved_wrapper_dependencies(
     metadata: &CargoMetadata,
     canic_package: &CargoMetadataPackage,
 ) -> Result<GeneratedWrapperDependencies, Box<dyn std::error::Error>> {
@@ -373,7 +405,7 @@ canic = {{ path = \"{}\", default-features = false, features = [] }}\n",
 }
 
 // Generate the `[patch.crates-io]` table for sibling packaged Canic crates.
-fn generated_wasm_store_wrapper_patch_table(
+pub fn generated_wasm_store_wrapper_patch_table(
     canic_manifest_path: &Path,
     canic_version: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
@@ -459,7 +491,7 @@ fn registry_package_version_suffix<'a>(
     parent_name.strip_prefix(&format!("{crate_name}-"))
 }
 
-fn render_profile(output: &mut String, profile: &str, settings: &[(&str, &str)]) {
+pub fn render_profile(output: &mut String, profile: &str, settings: &[(&str, &str)]) {
     let _ = writeln!(output, "\n[profile.{profile}]");
     for (key, value) in settings {
         let _ = writeln!(output, "{key} = {value}");
@@ -515,7 +547,7 @@ fn append_wasm_store_profile_config_args(command: &mut Command, profile: Caniste
     }
 }
 
-fn append_profile_config_args(command: &mut Command, profile: &str, settings: &[(&str, &str)]) {
+pub fn append_profile_config_args(command: &mut Command, profile: &str, settings: &[(&str, &str)]) {
     for (key, value) in settings {
         command
             .arg("--config")

@@ -48,7 +48,7 @@ const PROTECTED_CANIC_PACKAGES: &[ProtectedCanicPackage] = &[
     },
     ProtectedCanicPackage {
         name: "canic-control-plane",
-        reason: "root and Wasm-store runtime implementation",
+        reason: "Coordinator, root, and Wasm-store runtime implementation",
     },
     ProtectedCanicPackage {
         name: "canic-macros",
@@ -60,6 +60,12 @@ struct ValidatedRoleDeclaration<'a> {
     package: &'a CargoMetadataPackage,
     direct_dependency: &'a CargoMetadataDependency,
     dependency_key: String,
+}
+
+#[derive(Clone, Copy)]
+enum PackageBuildContract {
+    CompiledConfig,
+    RuntimeOnly,
 }
 
 ///
@@ -151,7 +157,29 @@ pub fn validate_declared_role_package(
         });
     }
 
-    validate_package_manifest(&manifest_path, app, role, mode, false)
+    validate_package_manifest(&manifest_path, app, role, mode, None)
+}
+
+#[must_use]
+pub fn validate_built_in_fleet_coordinator_package(
+    manifest_path: &Path,
+    mode: PackageValidationMode,
+) -> RolePackageValidation {
+    if !manifest_path.is_file() {
+        return RolePackageValidation::Unsupported(
+            RoleContractFinding::BuiltInPackageUnavailable {
+                role: BuiltInRoleKind::FleetCoordinator,
+            },
+        );
+    }
+
+    validate_package_manifest(
+        manifest_path,
+        "fleet_coordinator",
+        &CanisterRole::FLEET_COORDINATOR,
+        mode,
+        Some(BuiltInRoleKind::FleetCoordinator),
+    )
 }
 
 #[must_use]
@@ -172,7 +200,7 @@ pub fn validate_built_in_wasm_store_package(
         "wasm_store",
         &CanisterRole::WASM_STORE,
         mode,
-        true,
+        Some(BuiltInRoleKind::WasmStore),
     )
 }
 
@@ -306,15 +334,13 @@ fn validate_package_manifest(
     expected_app: &str,
     expected_role: &CanisterRole,
     mode: PackageValidationMode,
-    built_in: bool,
+    built_in: Option<BuiltInRoleKind>,
 ) -> RolePackageValidation {
     let Ok(metadata) =
         cargo_metadata_for_manifest(manifest_path, WASM_TARGET, mode.locked(), mode.offline())
     else {
-        let finding = if built_in {
-            RoleContractFinding::BuiltInPackageUnavailable {
-                role: BuiltInRoleKind::WasmStore,
-            }
+        let finding = if let Some(role) = built_in {
+            RoleContractFinding::BuiltInPackageUnavailable { role }
         } else {
             RoleContractFinding::DependencyShapeUnsupported {
                 reason:
@@ -329,11 +355,21 @@ fn validate_package_manifest(
         Ok(selected) => selected,
         Err(finding) => return RolePackageValidation::Unsupported(finding),
     };
-    let declaration =
-        match validate_role_declaration(&metadata, selected, expected_app, expected_role) {
-            Ok(declaration) => declaration,
-            Err(finding) => return RolePackageValidation::Unsupported(finding),
-        };
+    let build_contract = if matches!(built_in, Some(BuiltInRoleKind::FleetCoordinator)) {
+        PackageBuildContract::RuntimeOnly
+    } else {
+        PackageBuildContract::CompiledConfig
+    };
+    let declaration = match validate_role_declaration(
+        &metadata,
+        selected,
+        expected_app,
+        expected_role,
+        build_contract,
+    ) {
+        Ok(declaration) => declaration,
+        Err(finding) => return RolePackageValidation::Unsupported(finding),
+    };
     if let Err(finding) = validate_catalog() {
         return RolePackageValidation::Unsupported(finding);
     }
@@ -373,6 +409,7 @@ fn validate_role_declaration<'a>(
     package: &'a CargoMetadataPackage,
     expected_app: &str,
     expected_role: &CanisterRole,
+    build_contract: PackageBuildContract,
 ) -> Result<ValidatedRoleDeclaration<'a>, RoleContractFinding> {
     validate_package_metadata(package, expected_app, expected_role)?;
 
@@ -383,7 +420,7 @@ fn validate_role_declaration<'a>(
         .unwrap_or(CANIC_PACKAGE)
         .to_string();
     reject_package_feature_forwarding(package, &dependency_key)?;
-    validate_cargo_declarations(metadata, package, direct_dependency)?;
+    validate_cargo_declarations(metadata, package, direct_dependency, build_contract)?;
 
     Ok(ValidatedRoleDeclaration {
         package,
@@ -650,6 +687,7 @@ fn validate_cargo_declarations(
     metadata: &CargoMetadata,
     package: &CargoMetadataPackage,
     normal_dependency: &CargoMetadataDependency,
+    build_contract: PackageBuildContract,
 ) -> Result<(), RoleContractFinding> {
     let workspace_manifest = metadata.workspace_root.join("Cargo.toml");
     let workspace_document = read_cargo_document(&workspace_manifest)?;
@@ -699,12 +737,6 @@ fn validate_cargo_declarations(
             "the role manifest Canic features do not match Cargo dependency evidence",
         ));
     }
-    let build_dependencies = package
-        .dependencies
-        .iter()
-        .filter(|dependency| dependency.name == CANIC_PACKAGE)
-        .filter(|dependency| dependency.kind.as_deref() == Some("build"))
-        .collect::<Vec<_>>();
     if let Some(dependency) = package.dependencies.iter().find(|dependency| {
         dependency.kind.as_deref() == Some("build")
             && dependency.name != CANIC_PACKAGE
@@ -715,6 +747,24 @@ fn validate_cargo_declarations(
             dependency.name
         )));
     }
+    if matches!(build_contract, PackageBuildContract::RuntimeOnly) {
+        return validate_runtime_only_build_contract(package);
+    }
+
+    validate_compiled_config_build_contract(package, &role_document, &workspace_document)
+}
+
+fn validate_compiled_config_build_contract(
+    package: &CargoMetadataPackage,
+    role_document: &toml::Value,
+    workspace_document: &toml::Value,
+) -> Result<(), RoleContractFinding> {
+    let build_dependencies = package
+        .dependencies
+        .iter()
+        .filter(|dependency| dependency.name == CANIC_PACKAGE)
+        .filter(|dependency| dependency.kind.as_deref() == Some("build"))
+        .collect::<Vec<_>>();
     let [build_dependency] = build_dependencies.as_slice() else {
         return Err(unsupported_finding(
             "the role package must declare exactly one build dependency on `canic`",
@@ -729,10 +779,8 @@ fn validate_cargo_declarations(
             "the Canic build dependency must be canonical, unconditional, non-optional, and feature-empty",
         ));
     }
-    let build_value = cargo_dependency_value(&role_document, "build-dependencies", CANIC_PACKAGE)
-        .ok_or_else(|| {
-        unsupported_finding("the role manifest omits its Canic build dependency")
-    })?;
+    let build_value = cargo_dependency_value(role_document, "build-dependencies", CANIC_PACKAGE)
+        .ok_or_else(|| unsupported_finding("the role manifest omits its Canic build dependency"))?;
     let build_table = dependency_table(build_value, "Canic build dependency")?;
     if let Some(features) = build_table.get("features") {
         let features = features.as_array().ok_or_else(|| {
@@ -746,12 +794,36 @@ fn validate_cargo_declarations(
     }
     validate_dependency_source(
         build_table,
-        &workspace_document,
+        workspace_document,
         build_dependency,
         "Canic build dependency",
     )?;
     validate_build_script_purpose(package)?;
 
+    Ok(())
+}
+
+fn validate_runtime_only_build_contract(
+    package: &CargoMetadataPackage,
+) -> Result<(), RoleContractFinding> {
+    if package
+        .dependencies
+        .iter()
+        .any(|dependency| dependency.kind.as_deref() == Some("build"))
+    {
+        return Err(unsupported_finding(
+            "the built-in Fleet Coordinator package must not declare build dependencies",
+        ));
+    }
+    if package
+        .targets
+        .iter()
+        .any(|target| target.kind.iter().any(|kind| kind == "custom-build"))
+    {
+        return Err(unsupported_finding(
+            "the built-in Fleet Coordinator package must not declare a build script",
+        ));
+    }
     Ok(())
 }
 

@@ -1,6 +1,7 @@
 # canic-control-plane
 
-Lower-level root and `wasm_store` control-plane support crate for Canic.
+Lower-level Fleet Coordinator, Fleet Subnet Root and `wasm_store`
+control-plane support crate for Canic.
 
 Most downstream canister projects should use `canic` unless they are working
 directly on root/bootstrap/store behavior and need the lower-level control-plane
@@ -9,16 +10,18 @@ types and helpers explicitly.
 This crate exists to hold the shared control-plane runtime pieces used by:
 
 - the `canic` facade when `control-plane` is enabled
+- the built-in Fleet Coordinator runtime
 - the canonical `canic-wasm-store` crate
 - internal root/bootstrap orchestration support
 
 ## Feature Contract
 
-Both published features are enabled by default because the ordinary package
-supports the complete root/store control-plane contract.
+All published features are enabled by default because the ordinary package
+supports the complete Coordinator/root/store control-plane contract.
 
 | Feature | Default | Enables |
 | --- | --- | --- |
+| `fleet-coordinator-canister` | Yes | Dedicated Fleet Coordinator lifecycle, canonical Fleet Registry state, and query APIs without root or Wasm Store runtime behavior. |
 | `root-control-plane` | Yes | Root-side runtime, workflow, view, bootstrap, publication, and template-management support; also enables `wasm-store-canister`. |
 | `wasm-store-canister` | Yes | Store-side template upload, manifest, chunking, garbage-collection, and install APIs without the root runtime/workflow modules. |
 
@@ -29,6 +32,10 @@ feature instead of depending on this crate directly. The canonical standalone
 ```toml
 canic-control-plane = { version = "<version>", default-features = false, features = ["wasm-store-canister"] }
 ```
+
+The host-generated Fleet Coordinator selects only
+`fleet-coordinator-canister`; it does not compile App configuration or root
+runtime behavior.
 
 Selecting `root-control-plane` with default features disabled still enables
 `wasm-store-canister`; there is no root-only feature combination that omits the

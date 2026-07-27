@@ -1,6 +1,12 @@
 //! Control-plane workflows for bootstrap, publication runtime, and state queries.
 
+#[cfg(feature = "root-control-plane")]
 pub mod bootstrap;
+#[cfg(feature = "root-control-plane")]
 pub mod deployment;
+#[cfg(feature = "fleet-coordinator-canister")]
+pub mod fleet_coordinator;
+#[cfg(feature = "root-control-plane")]
 pub mod runtime;
+#[cfg(feature = "root-control-plane")]
 pub mod state;

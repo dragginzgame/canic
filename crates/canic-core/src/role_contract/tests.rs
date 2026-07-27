@@ -125,6 +125,7 @@ fn canonical_allocations_match_the_active_memory_map() {
         (StateAllocationKey::TemplateChunkPayloads, vec![83]),
         (StateAllocationKey::ControlPlaneSubnetState, vec![84]),
         (StateAllocationKey::WasmStoreGcState, vec![85]),
+        (StateAllocationKey::FleetCoordinatorRegistry, vec![86]),
     ]);
     assert_eq!(actual, expected);
 }
@@ -443,6 +444,24 @@ fn built_in_wasm_store_keeps_template_and_gc_ids() {
     assert_eq!(
         contract.required_features,
         BTreeSet::from([CanicFeatureKey::WasmStoreCanister])
+    );
+}
+
+#[test]
+fn built_in_fleet_coordinator_selects_only_its_registry() {
+    let resolution = resolve_role_contract(RoleContractInput {
+        source: RoleContractSource::BuiltIn(BuiltInRoleKind::FleetCoordinator),
+        declared_features: BTreeSet::from([CanicFeatureKey::FleetCoordinatorCanister]),
+        default_features_enabled: false,
+    });
+    let RoleContractResolution::Resolved { contract } = resolution else {
+        panic!("built-in Fleet Coordinator contract should resolve");
+    };
+
+    assert_eq!(allocation_ids(&contract.allocations), vec![86]);
+    assert_eq!(
+        contract.required_features,
+        BTreeSet::from([CanicFeatureKey::FleetCoordinatorCanister])
     );
 }
 

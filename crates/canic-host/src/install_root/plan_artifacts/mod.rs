@@ -18,8 +18,9 @@ use crate::{
     },
     release_build::{FinalizedReleaseBuild, finalize_release_build_from_manifest},
     release_set::{
-        ApplicationArtifactFileBuildOutput, artifact_root_path,
-        compile_and_persist_application_artifact_union,
+        ApplicationArtifactFileBuildOutput, CanicInfrastructureArtifactBuildOutput,
+        artifact_root_path, compile_and_persist_application_artifact_union,
+        compile_and_persist_canic_infrastructure_artifact_manifest,
     },
 };
 use std::{
@@ -70,37 +71,47 @@ pub(super) fn emit_manifest_with_phase(
     icp_root: &Path,
     install_snapshot: &ValidatedInstallSnapshot,
     build_outputs: &[CurrentCanisterArtifactBuildOutput],
+    infrastructure_build_outputs: &[CanicInfrastructureArtifactBuildOutput],
     plan_artifacts: Option<&PreparedPlanArtifacts>,
 ) -> Result<EmittedInstallManifest, Box<dyn std::error::Error>> {
     let emit_manifest_started_at_label = current_unix_timestamp_label()?;
     let emit_manifest_started_at = Instant::now();
-    let (manifest_path, application_union_path) = if let Some(plan_artifacts) = plan_artifacts {
-        (plan_artifacts.emit_release_set_manifest()?, None)
-    } else {
-        let complete_build = install_snapshot
-            .complete_build
-            .as_ref()
-            .ok_or_else(|| "normal install is missing its complete-build snapshot".to_string())?;
-        let operation = EmitRootManifestOperation::new(&complete_build.manifest, build_outputs);
-        let manifest_path = operation.execute()?;
-        let release_build = install_snapshot
-            .release_build
-            .as_ref()
-            .ok_or_else(|| "normal install is missing its planned release build".to_string())?;
-        let application_outputs = application_file_build_outputs(
-            complete_build,
-            release_build.record.release_build_id,
-            build_outputs,
-        );
-        let persisted = compile_and_persist_application_artifact_union(
-            icp_root,
-            &complete_build.component_topology,
-            release_build.record.release_build_id,
-            &complete_build.application_artifact_targets,
-            &application_outputs,
-        )?;
-        (manifest_path, Some(persisted.path))
-    };
+    let (manifest_path, application_union_path, infrastructure_manifest_path) =
+        if let Some(plan_artifacts) = plan_artifacts {
+            (plan_artifacts.emit_release_set_manifest()?, None, None)
+        } else {
+            let complete_build = install_snapshot.complete_build.as_ref().ok_or_else(|| {
+                "normal install is missing its complete-build snapshot".to_string()
+            })?;
+            let operation = EmitRootManifestOperation::new(&complete_build.manifest, build_outputs);
+            let manifest_path = operation.execute()?;
+            let release_build = install_snapshot
+                .release_build
+                .as_ref()
+                .ok_or_else(|| "normal install is missing its planned release build".to_string())?;
+            let application_outputs = application_file_build_outputs(
+                complete_build,
+                release_build.record.release_build_id,
+                build_outputs,
+            );
+            let persisted = compile_and_persist_application_artifact_union(
+                icp_root,
+                &complete_build.component_topology,
+                release_build.record.release_build_id,
+                &complete_build.application_artifact_targets,
+                &application_outputs,
+            )?;
+            let infrastructure = compile_and_persist_canic_infrastructure_artifact_manifest(
+                icp_root,
+                release_build.record.release_build_id,
+                infrastructure_build_outputs,
+            )?;
+            (
+                manifest_path,
+                Some(persisted.path),
+                Some(infrastructure.path),
+            )
+        };
     let emit_manifest_duration = emit_manifest_started_at.elapsed();
     let finalized_release_build = install_snapshot
         .release_build
@@ -117,6 +128,12 @@ pub(super) fn emit_manifest_with_phase(
     if let Some(path) = application_union_path {
         evidence.push(format!(
             "application_artifact_union_path:{}",
+            path.display()
+        ));
+    }
+    if let Some(path) = infrastructure_manifest_path {
+        evidence.push(format!(
+            "infrastructure_artifact_manifest_path:{}",
             path.display()
         ));
     }
@@ -177,6 +194,7 @@ mod tests {
         release_set::{
             ApplicationArtifactBuildTarget, RootReleaseSetBuildSnapshot, RootReleaseSetBuildTarget,
             load_persisted_application_artifact_union,
+            load_persisted_canic_infrastructure_artifact_manifest,
         },
         test_support::temp_dir,
     };
@@ -206,6 +224,7 @@ mod tests {
         let topology = topology();
         let root_output = build_output(&root, "root");
         let app_output = build_output(&root, "app");
+        let infrastructure_outputs = infrastructure_outputs(&root, release_build_id, &root_output);
         let complete_build = complete_build_snapshot(&root, &topology, &root_output, &app_output);
         let snapshot = ValidatedInstallSnapshot {
             app_id: "demo".to_string(),
@@ -213,8 +232,14 @@ mod tests {
             release_build: Some(plan),
         };
 
-        let emitted = emit_manifest_with_phase(&root, &snapshot, &[root_output, app_output], None)
-            .expect("emit complete manifest authority");
+        let emitted = emit_manifest_with_phase(
+            &root,
+            &snapshot,
+            &[root_output, app_output],
+            &infrastructure_outputs,
+            None,
+        )
+        .expect("emit complete manifest authority");
         let finalized = emitted
             .finalized_release_build
             .expect("finalized release build");
@@ -225,6 +250,36 @@ mod tests {
         assert!(emitted.phase.evidence.contains(&format!(
             "application_artifact_union_path:{}",
             persisted.path.display()
+        )));
+        let infrastructure =
+            load_persisted_canic_infrastructure_artifact_manifest(&root, release_build_id)
+                .expect("durable infrastructure manifest");
+        assert_eq!(infrastructure.manifest.release_build_id, release_build_id);
+        assert_eq!(
+            infrastructure
+                .manifest
+                .entries
+                .iter()
+                .map(|entry| (entry.role, entry.package.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                (
+                    crate::release_set::CanicInfrastructureRole::FleetCoordinator,
+                    "canic-generated-fleet-coordinator",
+                ),
+                (
+                    crate::release_set::CanicInfrastructureRole::FleetSubnetRoot,
+                    "root-package",
+                ),
+                (
+                    crate::release_set::CanicInfrastructureRole::WasmStore,
+                    "canic-wasm-store",
+                ),
+            ]
+        );
+        assert!(emitted.phase.evidence.contains(&format!(
+            "infrastructure_artifact_manifest_path:{}",
+            infrastructure.path.display()
         )));
         assert!(matches!(
             load_release_build_plan(&root, release_build_id)
@@ -257,7 +312,8 @@ mod tests {
         };
 
         assert!(
-            emit_manifest_with_phase(&root, &snapshot, &[root_output, app_output], None).is_err(),
+            emit_manifest_with_phase(&root, &snapshot, &[root_output, app_output], &[], None,)
+                .is_err(),
             "representation mismatch must block finalization"
         );
         assert_eq!(
@@ -346,6 +402,38 @@ maximum_instances = 1
                 transforms: Vec::new(),
             },
         }
+    }
+
+    fn infrastructure_outputs(
+        root: &Path,
+        release_build_id: ReleaseBuildId,
+        root_output: &CurrentCanisterArtifactBuildOutput,
+    ) -> Vec<CanicInfrastructureArtifactBuildOutput> {
+        let coordinator = build_output(root, "fleet_coordinator");
+        let wasm_store = build_output(root, "wasm_store");
+        vec![
+            CanicInfrastructureArtifactBuildOutput {
+                role: crate::release_set::CanicInfrastructureRole::FleetCoordinator,
+                package: "canic-generated-fleet-coordinator".to_string(),
+                release_build_id,
+                wasm_path: coordinator.output.wasm_path,
+                wasm_gz_path: coordinator.output.wasm_gz_path,
+            },
+            CanicInfrastructureArtifactBuildOutput {
+                role: crate::release_set::CanicInfrastructureRole::FleetSubnetRoot,
+                package: "root-package".to_string(),
+                release_build_id,
+                wasm_path: root_output.output.wasm_path.clone(),
+                wasm_gz_path: root_output.output.wasm_gz_path.clone(),
+            },
+            CanicInfrastructureArtifactBuildOutput {
+                role: crate::release_set::CanicInfrastructureRole::WasmStore,
+                package: "canic-wasm-store".to_string(),
+                release_build_id,
+                wasm_path: wasm_store.output.wasm_path,
+                wasm_gz_path: wasm_store.output.wasm_gz_path,
+            },
+        ]
     }
 
     fn gzip(bytes: &[u8]) -> Vec<u8> {

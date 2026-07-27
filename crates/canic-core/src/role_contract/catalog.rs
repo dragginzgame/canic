@@ -116,6 +116,11 @@ const FEATURE_DEFINITIONS: &[FeatureDefinition] = &[
         CanicFeatureEffect::StateBearing,
     ),
     feature(
+        CanicFeatureKey::FleetCoordinatorCanister,
+        "fleet-coordinator-canister",
+        CanicFeatureEffect::StateBearing,
+    ),
+    feature(
         CanicFeatureKey::Metrics,
         "metrics",
         CanicFeatureEffect::NoState,
@@ -185,6 +190,12 @@ const CAPABILITY_REQUIREMENTS: &[CapabilityRequirement] = &[
         "role-attestation caches verify root canister-signature proofs locally",
     ),
     requirement(
+        RoleCapabilityKey::FleetCoordinator,
+        "built_in.fleet_coordinator",
+        CanicFeatureKey::FleetCoordinatorCanister,
+        "the built-in Fleet Coordinator owns the canonical Fleet Registry",
+    ),
+    requirement(
         RoleCapabilityKey::RootControlPlane,
         "roles.root.kind",
         CanicFeatureKey::ControlPlane,
@@ -205,6 +216,10 @@ const CAPABILITY_REQUIREMENTS: &[CapabilityRequirement] = &[
 ];
 
 const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
+    capability_allocation(
+        RoleCapabilityKey::FleetCoordinator,
+        StateAllocationKey::FleetCoordinatorRegistry,
+    ),
     capability_allocation(
         RoleCapabilityKey::Runtime,
         StateAllocationKey::CoreRuntimeTopology,
@@ -346,6 +361,10 @@ const FEATURE_ALLOCATIONS: &[FeatureAllocation] = &[
     ),
     feature_allocation(CanicFeatureKey::Sharding, StateAllocationKey::CanisterPool),
     feature_allocation(
+        CanicFeatureKey::FleetCoordinatorCanister,
+        StateAllocationKey::FleetCoordinatorRegistry,
+    ),
+    feature_allocation(
         CanicFeatureKey::Sharding,
         StateAllocationKey::ShardingRegistry,
     ),
@@ -380,6 +399,10 @@ const FEATURE_ALLOCATIONS: &[FeatureAllocation] = &[
 ];
 
 const BUILT_IN_ALLOCATIONS: &[BuiltInAllocation] = &[
+    built_in_allocation(
+        BuiltInRoleKind::FleetCoordinator,
+        StateAllocationKey::FleetCoordinatorRegistry,
+    ),
     built_in_allocation(
         BuiltInRoleKind::WasmStore,
         StateAllocationKey::TemplateManifests,
@@ -467,6 +490,7 @@ impl CanicFeatureKey {
         Self::BlobStorage,
         Self::BlobStorageBilling,
         Self::ControlPlane,
+        Self::FleetCoordinatorCanister,
         Self::Metrics,
         Self::Sharding,
         Self::WasmStoreCanister,

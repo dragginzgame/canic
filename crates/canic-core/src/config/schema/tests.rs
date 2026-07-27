@@ -639,6 +639,21 @@ fn component_role_cannot_be_root() {
 }
 
 #[test]
+fn app_cannot_declare_the_built_in_fleet_coordinator_role() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.roles.insert(
+        CanisterRole::FLEET_COORDINATOR,
+        RoleDeclaration {
+            kind: RoleDeclarationKind::Canister,
+            package: "coordinator".to_string(),
+        },
+    );
+
+    cfg.validate()
+        .expect_err("Fleet Coordinator is reserved infrastructure");
+}
+
+#[test]
 fn several_component_specs_may_define_distinct_components() {
     let mut cfg = ConfigModel::test_default();
     cfg.roles.insert(

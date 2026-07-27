@@ -12,6 +12,7 @@ use std::{
     str::FromStr,
 };
 
+const FLEET_COORDINATOR_ROLE: &str = "fleet_coordinator";
 const ROOT_ROLE: &str = "root";
 const WASM_STORE_ROLE: &str = "wasm_store";
 
@@ -29,6 +30,7 @@ const WASM_STORE_ROLE: &str = "wasm_store";
 pub struct CanisterRole(pub Cow<'static, str>);
 
 impl CanisterRole {
+    pub const FLEET_COORDINATOR: Self = Self(Cow::Borrowed(FLEET_COORDINATOR_ROLE));
     pub const ROOT: Self = Self(Cow::Borrowed(ROOT_ROLE));
     pub const WASM_STORE: Self = Self(Cow::Borrowed(WASM_STORE_ROLE));
 
@@ -54,6 +56,12 @@ impl CanisterRole {
     #[must_use]
     pub fn is_root(&self) -> bool {
         self.0.as_ref() == ROOT_ROLE
+    }
+
+    /// Return whether this role is the built-in Fleet Coordinator role.
+    #[must_use]
+    pub fn is_fleet_coordinator(&self) -> bool {
+        self.0.as_ref() == FLEET_COORDINATOR_ROLE
     }
 
     /// Return whether this role is the built-in wasm-store role.

@@ -281,6 +281,11 @@ mod tests {
                     StateAllocationKey::WasmStoreGcState,
                 ],
             )],
+            Some("fleet_coordinator") => vec![test_contract(
+                "fleet_coordinator",
+                Some(BuiltInRoleKind::FleetCoordinator),
+                &[StateAllocationKey::FleetCoordinatorRegistry],
+            )],
             Some(_) => Vec::new(),
         };
         materialize_state_manifest(&contracts).expect("test manifest")
@@ -419,6 +424,22 @@ mod tests {
     }
 
     #[test]
+    fn fleet_coordinator_role_audits_its_registry_state_cleanly() {
+        let report = build_state_audit_report(Some("fleet_coordinator"));
+
+        assert_eq!(report.status, StateAuditStatus::Pass);
+        let role = report
+            .manifest
+            .roles
+            .iter()
+            .find(|role| role.canister_role == "fleet_coordinator")
+            .expect("Fleet Coordinator role");
+        assert_eq!(role.state.len(), 1);
+        assert_eq!(role.state[0].domain, "fleet_coordinator_registry");
+        assert_eq!(role.state[0].memory_id, Some(86));
+    }
+
+    #[test]
     fn complete_descriptor_registry_satisfies_state_audit_metadata_contract() {
         let keys = canic_core::role_contract::allocation::allocation_definitions()
             .iter()
@@ -530,6 +551,30 @@ mod tests {
                 .map(|entry| entry.memory_id)
                 .collect::<Vec<_>>(),
             Vec::<u8>::new()
+        );
+    }
+
+    #[test]
+    fn exact_fleet_coordinator_resolution_materializes_only_registry_state() {
+        let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let resolution = resolve_project_state_manifest(&workspace, &[], Some("fleet_coordinator"));
+        let StateManifestResolution::Resolved {
+            manifest,
+            contracts,
+        } = resolution
+        else {
+            panic!("built-in Fleet Coordinator contract should resolve")
+        };
+
+        assert_eq!(contracts.len(), 1);
+        assert_eq!(manifest.roles.len(), 1);
+        assert_eq!(
+            manifest.roles[0]
+                .state
+                .iter()
+                .filter_map(|domain| domain.memory_id)
+                .collect::<Vec<_>>(),
+            vec![86]
         );
     }
 
