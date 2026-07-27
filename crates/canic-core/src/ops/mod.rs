@@ -21,6 +21,7 @@ pub mod cashier;
 pub mod config;
 pub mod cost_guard;
 pub mod fleet_activation;
+pub mod fleet_registry;
 pub mod ic;
 pub mod perf;
 pub mod placement;
@@ -62,6 +63,9 @@ use thiserror::Error as ThisError;
 pub enum OpsError {
     #[error(transparent)]
     ConfigOps(#[from] config::ConfigOpsError),
+
+    #[error(transparent)]
+    FleetRegistry(#[from] fleet_registry::FleetRegistryOpsError),
 
     #[error(transparent)]
     IcInfra(#[from] crate::infra::ic::IcInfraError),

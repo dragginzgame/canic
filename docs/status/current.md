@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-26
+Last updated: 2026-07-27
 
 ## Purpose
 
@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.6`.
-- The latest published release is `v0.100.6` at
-  `98b88752a380a43ebd45cd88f632a3af0e74cb32`.
-- The `v0.100.6` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `8334646025f1e75633cb01e35f80a10f14afbf76e0b7739371eaebabaf193dab`.
+- The workspace package version is `0.100.7`.
+- The latest published release is `v0.100.7` at
+  `042e6be2bbbc17715af660329d827ff18a6fe586`.
+- The `v0.100.7` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `e4348b4c1109c7eda8b2f64b61705e65706e9143a5371addf69e8ac1264cbe52`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -76,7 +76,7 @@ Historical detail is archived at:
   manifest-first publication recover; conflicts, noncanonical or symlinked
   authority, identity drift and topology drift fail closed. The current
   installer does not yet resolve those inputs or invoke the new boundary.
-- The open `0.100.7` hard-cuts the Component Spec and Component Topology
+- Released `0.100.7` hard-cuts the Component Spec and Component Topology
   canonical domains to schema version 2. Source config now accepts explicit
   direct-child `initial_instances` and bounded
   `[component_specs.<requester>.provisions.<target>]` grants. Compilation
@@ -88,8 +88,17 @@ Historical detail is archived at:
   one Component plus its required children fits the managed-Canister limit.
   Runtime initial-child materialization, provisioning origin/accounting and
   grant-authenticated Component creation remain subsequent 0.100 slices.
-  The same open patch also restores direct-root-child cycles funding without
+  The same patch also restores direct-root-child cycles funding without
   assigning infrastructure roots a Component Spec.
+- The open `0.100.8` freezes passive Fleet Registry snapshot, manifest and
+  version contracts plus a bounded domain-separated canonical encoding.
+  Epoch-one/revision-one genesis contains the complete immutable Component
+  Spec set and zero roots. Snapshot validation admits incremental partial
+  `Joining` rows while enforcing the configured App, exact protected
+  Coordinator authority, canonical physical-Subnet order, unique root
+  principals, one active release build, each root's topology, admissions and
+  limits, and aggregate Fleet admission ceilings. Durable snapshot commits,
+  root transitions and synchronization remain subsequent slices.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority

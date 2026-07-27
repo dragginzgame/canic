@@ -1,13 +1,13 @@
 # Canic 0.100 Implementation Status
 
-Date: 2026-07-26
+Date: 2026-07-27
 
 - State: implementation in progress.
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.5`.
-- Open patch draft: `0.100.6`; no package-version change has been authorized.
+- Workspace package version: `0.100.7`.
+- Open patch draft: `0.100.8`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -35,8 +35,8 @@ creates the Project Instance's required Ledger before activation; the optional
 Machine remains a later request from the exact Project Instance. Every root
 admitted for that Spec stores the complete Project Instance/Ledger/Machine
 artifact closure once. This amendment hard-replaces the intermediate
-Component Spec/Topology canonical encoding with schema/domain version 2 and is
-not yet implemented.
+Component Spec/Topology canonical encoding with schema/domain version 2 and
+was released in `v0.100.7`.
 
 Canic infrastructure now has its own exact three-entry artifact manifest for
 the Coordinator, Fleet Subnet Root and Wasm Store. The host directly installs
@@ -71,9 +71,9 @@ Registry slices replace the 0.99 root model.
   nested Components and child-owned children.
 - [x] Add `ComponentSpecId` and the canonical `ComponentInstanceId` type.
 - [x] Derive and freeze the canonical bounded Component Topology.
-- [ ] Hard-cut the canonical Component Spec/Topology encoding to version 2
+- [x] Hard-cut the canonical Component Spec/Topology encoding to version 2
   with initial child cardinalities and non-parent provisioning grants.
-- [ ] Validate bounded grant targets, cycles and per-requester/root ceilings.
+- [x] Validate bounded grant targets, cycles and per-requester/root ceilings.
 - [ ] Replace the temporary environment Component Spec selector with protected
   `ComponentBinding`.
 - [x] Freeze `SubnetId`, Coordinator authority, `FleetSubnetRootBinding`,
@@ -210,7 +210,7 @@ release-build path identity and the Fleet-wide topology. Exact retry remains
 idempotent before or after finalization, while conflicts, unsafe artifact
 paths and first publication after finalization fail closed.
 
-The open 0.100.6 batch adds the immutable pre-effect `FleetInstallPlan`.
+Released 0.100.6 adds the immutable pre-effect `FleetInstallPlan`.
 It accepts already-resolved Coordinator/root Subnets, positive creation
 funding, admissions and limits; derives canonical pre-creation root topology
 without fabricated Canister principals; and projects every root manifest from
@@ -220,9 +220,19 @@ retry is idempotent, while conflicts, noncanonical documents, unsafe files,
 identity drift and topology drift fail closed. Different Fleets retain
 independent plan paths and may use the same physical Subnets.
 
-The version-2 Component Topology amendment for peer provisioning and initial
-children is design-only. The current source still implements the previously
-released topology contract until that hard cut is completed and validated.
+Released 0.100.7 hard-cuts Component Spec and Component Topology encoding to
+version 2, compiles exact initial-child cardinality and bounded non-parent
+provisioning grants, and projects grants incoming to admitted target Specs
+without importing requester admission or artifacts.
+
+The open 0.100.8 batch freezes passive Fleet Registry snapshot, manifest and
+version contracts plus a bounded domain-separated canonical encoding.
+Epoch-one/revision-one genesis contains the complete immutable Component Spec
+set and zero roots. Snapshot validation admits incremental partial `Joining`
+rows while enforcing the configured App, exact protected Coordinator
+authority, canonical physical-Subnet order, unique root principals, one active
+release build, root topology/admissions/limits and aggregate Fleet admission
+ceilings. Durable commits and root transitions remain pending.
 
 The current installer does not yet produce all three concrete infrastructure
 outputs or invoke the infrastructure persistence boundary. It does not yet
@@ -233,9 +243,9 @@ does not yet contain a genuine Fleet Coordinator runtime/export authority, so
 a correctly qualified Coordinator artifact cannot be produced by relabelling
 the Fleet Subnet Root runtime. Protected environment binding, Fleet Subnet
 Root lifecycle, active root release-set/Wasm Store authority and Fleet
-Registry authority remain unimplemented. The temporary Component Spec
-selector remains until real allocation supplies the exact protected Component
-binding.
+Registry storage and runtime authority remain unimplemented. The temporary
+Component Spec selector remains until real allocation supplies the exact
+protected Component binding.
 
 ## Next Action
 

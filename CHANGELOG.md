@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.8` freezes canonical Fleet Registry genesis, snapshot, manifest and
+  version evidence against the exact Component Topology and root admissions.
+
 - `0.100.7` hard-cuts Component Topology to canonical v2 with required initial
   children and bounded peer-provisioning grants, while restoring structural
   cycles funding for direct Fleet Subnet Root children.
