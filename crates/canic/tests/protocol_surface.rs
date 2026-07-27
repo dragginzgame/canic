@@ -377,56 +377,7 @@ fn fleet_subnet_root_join_is_a_controller_update_on_the_coordinator_surface() {
 
 #[test]
 fn fleet_registry_snapshot_synchronization_protocol_and_guards_are_pinned() {
-    for (facade, core, expected) in [
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY,
-            canic_core::protocol::CANIC_FLEET_REGISTRY,
-            "canic_fleet_registry",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_MANIFEST,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_MANIFEST,
-            "canic_fleet_registry_manifest",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_VERSION,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_VERSION,
-            "canic_fleet_registry_version",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT,
-            "canic_fleet_registry_snapshot_for_root",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT,
-            "canic_fleet_registry_acknowledge_root",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
-            "canic_fleet_registry_activate",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
-            "canic_fleet_registry_root_acknowledgements",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_SYNCHRONIZE,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_SYNCHRONIZE,
-            "canic_fleet_registry_synchronize",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_SYNC_STATUS,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_SYNC_STATUS,
-            "canic_fleet_registry_sync_status",
-        ),
-    ] {
-        assert_eq!(facade, core);
-        assert_eq!(facade, expected);
-    }
+    assert_fleet_registry_protocol_constants();
 
     let coordinator_path =
         workspace_root().join("crates/canic/src/macros/endpoints/fleet_coordinator.rs");
@@ -476,6 +427,83 @@ fn fleet_registry_snapshot_synchronization_protocol_and_guards_are_pinned() {
         preceding_attribute_context(&root, "async fn canic_fleet_registry_sync_status(")
             .contains("canic_query(composite, requires(caller::is_controller()))"),
         "root Registry synchronization status must remain a controller-guarded composite query"
+    );
+    assert_root_registry_mirror_guards(&root);
+}
+
+fn assert_fleet_registry_protocol_constants() {
+    for (facade, core, expected) in [
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY,
+            canic_core::protocol::CANIC_FLEET_REGISTRY,
+            "canic_fleet_registry",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_MANIFEST,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_MANIFEST,
+            "canic_fleet_registry_manifest",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_VERSION,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_VERSION,
+            "canic_fleet_registry_version",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT,
+            "canic_fleet_registry_snapshot_for_root",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT,
+            "canic_fleet_registry_acknowledge_root",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
+            "canic_fleet_registry_activate",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
+            "canic_fleet_registry_root_acknowledgements",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_SYNCHRONIZE,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_SYNCHRONIZE,
+            "canic_fleet_registry_synchronize",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_SYNC_STATUS,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_SYNC_STATUS,
+            "canic_fleet_registry_sync_status",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
+            "canic_fleet_registry_activate_mirror",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_MIRROR_STATUS,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_MIRROR_STATUS,
+            "canic_fleet_registry_mirror_status",
+        ),
+    ] {
+        assert_eq!(facade, core);
+        assert_eq!(facade, expected);
+    }
+}
+
+fn assert_root_registry_mirror_guards(root: &str) {
+    assert!(
+        preceding_attribute_context(root, "async fn canic_fleet_registry_activate_mirror(")
+            .contains("canic_update(requires(caller::is_controller()))"),
+        "root Registry mirror activation must remain a controller-guarded update"
+    );
+    assert!(
+        preceding_attribute_context(root, "async fn canic_fleet_registry_mirror_status(")
+            .contains("canic_query(composite, requires(caller::is_controller()))"),
+        "root Registry mirror status must remain a controller-guarded composite query"
     );
 }
 

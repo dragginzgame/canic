@@ -119,9 +119,11 @@ Registry `Joining` row. It currently stops after all roots reach
 `RegistrySyncVerified` only long enough to atomically commit and independently
 verify the complete Coordinator Registry as `Active`, with an exact private
 snapshot candidate and Coordinator acknowledgement retained at every root.
-Every root remains runtime-`Prepared`; final all-`Active` root
-synchronization, mirror/Directory activation, Component creation, and
-terminal Fleet-catalog publication remain fenced.
+It then atomically replaces each private candidate with the exact all-`Active`
+Registry Mirror and Registry-derived Fleet Directory and independently
+reverifies every result. Every root remains runtime-`Prepared`; Component
+creation, runtime activation and terminal Fleet-catalog publication remain
+fenced.
 
 Repeating an exact input is same-release journal recovery. Changing placement,
 admissions, limits, funding, topology, or release-build authority after

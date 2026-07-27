@@ -48,10 +48,11 @@ and independently verifies the Coordinator, all planned roots, and every
 root's exact Store. It then registers and independently verifies every root as
 Fleet Registry `Joining`, durably stages that exact snapshot at every root and
 verifies every Coordinator acknowledgement before atomically committing and
-independently verifying the complete Coordinator Registry as `Active`. Every
-root remains runtime-`Prepared`; installation stops before final all-`Active`
-root synchronization, mirror/Directory activation, Component creation, or
-terminal Fleet-catalog publication.
+independently verifying the complete Coordinator Registry as `Active`. It
+then atomically activates and independently verifies every root's exact
+all-`Active` Registry Mirror and Registry-derived Fleet Directory. Every root
+remains runtime-`Prepared`; installation stops before Component creation,
+runtime activation, or terminal Fleet-catalog publication.
 
 Consequently, `canic info list`, `canic info env`, backup, and restore commands
 require a terminal installed Fleet and are not a successful next step after a

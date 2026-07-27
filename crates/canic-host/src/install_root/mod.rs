@@ -34,6 +34,7 @@ mod fleet_registry_activation_journal;
 mod fleet_subnet_root_install;
 mod fleet_subnet_root_install_journal;
 mod fleet_subnet_root_registry_join;
+mod fleet_subnet_root_registry_mirror_activation;
 mod fleet_subnet_root_registry_sync;
 mod fleet_subnet_root_store_bootstrap;
 mod identity;
@@ -60,6 +61,10 @@ use current_execution::current_install_execution_context;
 use fleet_registry_activation::{ActivateFleetRegistryRequest, activate_and_verify_fleet_registry};
 use fleet_subnet_root_install::install_and_verify_fleet_subnet_roots;
 use fleet_subnet_root_registry_join::register_and_verify_fleet_subnet_roots_joining;
+use fleet_subnet_root_registry_mirror_activation::{
+    ActivateFleetSubnetRootRegistryMirrorsRequest,
+    activate_and_verify_fleet_subnet_root_registry_mirrors,
+};
 use fleet_subnet_root_registry_sync::{
     SynchronizeFleetSubnetRootsRequest, synchronize_and_verify_fleet_subnet_roots,
 };
@@ -182,10 +187,10 @@ impl InstallRootError {
 
 #[derive(Debug, ThisError)]
 #[error(
-    "Fleet Coordinator {coordinator} now has an independently verified all-Active Registry for {active_roots} planned Fleet Subnet Root(s) at revision {active_registry_revision} from the durable plan at {}; final root mirror and Directory activation remain blocked until their journalled lifecycle is implemented",
+    "Fleet Coordinator {coordinator} and {active_roots} planned Fleet Subnet Root(s) now have independently verified all-Active Registry mirrors and matching Fleet Directories at revision {active_registry_revision} from the durable plan at {}; Component runtime activation remains blocked until its Registry-bound lifecycle is implemented",
     plan_path.display(),
 )]
-struct FinalRegistryMirrorActivationUnavailableError {
+struct ComponentRuntimeActivationUnavailableError {
     plan_path: PathBuf,
     coordinator: canic_core::cdk::types::Principal,
     active_roots: usize,
@@ -348,7 +353,7 @@ fn install_current_fleet_infrastructure(
         joining_version: joining_version.clone(),
     })
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
-    let active_version = activate_and_verify_fleet_registry(ActivateFleetRegistryRequest {
+    let active = activate_and_verify_fleet_registry(ActivateFleetRegistryRequest {
         icp_root,
         environment,
         local_replica,
@@ -356,14 +361,29 @@ fn install_current_fleet_infrastructure(
         fleet_install_plan: &planned.plan,
         coordinator: coordinator.coordinator,
         install_operation_id: planned.session.operation_id,
-        joining_version,
+        joining_version: joining_version.clone(),
     })
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
-    require_final_registry_mirror_activation(
+    activate_and_verify_fleet_subnet_root_registry_mirrors(
+        ActivateFleetSubnetRootRegistryMirrorsRequest {
+            icp_root,
+            environment,
+            local_replica,
+            config_path,
+            fleet_install_plan: &planned.plan,
+            coordinator: coordinator.coordinator,
+            install_operation_id: planned.session.operation_id,
+            joining_version,
+            active_registry: &active.registry,
+            active_version: active.version.clone(),
+        },
+    )
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
+    require_component_runtime_activation(
         &planned.plan.path,
         coordinator.coordinator,
         roots.roots.len(),
-        active_version.revision,
+        active.version.revision,
     )
     .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))
 }
@@ -468,13 +488,13 @@ fn persist_current_fleet_install_plan(
     .map_err(Into::into)
 }
 
-fn require_final_registry_mirror_activation(
+fn require_component_runtime_activation(
     plan_path: &Path,
     coordinator: canic_core::cdk::types::Principal,
     active_roots: usize,
     active_registry_revision: u64,
-) -> Result<(), FinalRegistryMirrorActivationUnavailableError> {
-    Err(FinalRegistryMirrorActivationUnavailableError {
+) -> Result<(), ComponentRuntimeActivationUnavailableError> {
+    Err(ComponentRuntimeActivationUnavailableError {
         plan_path: plan_path.to_path_buf(),
         coordinator,
         active_roots,

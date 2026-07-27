@@ -150,7 +150,7 @@ Registry slices replace the 0.99 root model.
   authoritative idempotent receipts.
 - [ ] Resolve lifecycle artifacts only through the active release set.
 - [x] Implement bounded Fleet snapshot synchronization once per root.
-- [ ] Atomically activate the Fleet Registry Mirror and Fleet Directory.
+- [x] Atomically activate the Fleet Registry Mirror and Fleet Directory.
 - [ ] Store logical Component Registries in one bounded root-local collection
   with independent per-Component heads.
 - [ ] Store normalized Component Registry rows with principal, parent/role,
@@ -330,7 +330,7 @@ then records the Coordinator's exact idempotent `(root, version)` receipt. The
 host independently re-queries every root and requires the Coordinator's
 complete canonical acknowledgement set for the planned roots and version.
 
-Open 0.100.17 atomically compare-and-commits the complete acknowledged
+Released 0.100.17 atomically compare-and-commits the complete acknowledged
 all-`Joining` Registry to all-`Active`. The Coordinator requires every current
 root's exact acknowledgement, stores a response-idempotent activation receipt
 and clears superseded acknowledgements in the same commit. A separate v1 host
@@ -338,21 +338,30 @@ journal freezes the complete source and target Registries before mutation,
 then independently verifies the live all-`Active` Registry, manifest and
 version.
 
-The current installer therefore stops only after the Coordinator Registry is
-independently verified all-`Active`. Every root remains runtime-`Prepared`;
-its all-`Joining` candidate stays private and is not an active mirror or
-Directory. Final all-`Active` root synchronization and atomic
-mirror/Directory activation, Component allocation, root-owned count summaries
-and terminal Coordinator-anchored Fleet catalog publication remain
-unimplemented. The temporary Component Spec selector remains until real
-allocation supplies the exact protected Component binding.
+Open 0.100.18 extends every root journal through
+`RegistryMirrorActivationVerified`. Each prepared root reverifies its exact
+Store, fetches and validates the final all-`Active` Coordinator snapshot,
+derives its Registry-version-bound Fleet Directory and atomically replaces
+the private all-`Joining` candidate with one exclusive active
+mirror/Directory record. The host independently re-queries every root and
+accepts recovery across the Coordinator transition only when the exact
+deterministic all-`Active` state is reproduced.
+
+The current installer therefore stops only after the Coordinator Registry and
+every root's matching Registry Mirror/Fleet Directory are independently
+verified all-`Active`. Every root remains runtime-`Prepared`; Component
+allocation, root-owned count summaries and terminal Coordinator-anchored Fleet
+catalog publication remain unimplemented. The temporary Component Spec
+selector remains until real allocation supplies the exact protected Component
+binding.
 
 ## Next Action
 
-Synchronize every root to the exact all-`Active` Registry and atomically
-activate its matching Fleet Registry Mirror/Directory pair. Runtime activation
-and Coordinator-anchored Fleet catalog publication must remain behind
-complete terminal evidence.
+Establish the root-local Component Registry and admitted top-level Component
+allocation boundary, while hard-cutting any obsolete role-based Directory or
+static root bootstrap path that would bypass it. Activate root runtime only
+through a Registry/Store/Directory-bound lifecycle that cannot create
+Components before their durable binding exists.
 
 As root-local Component Registry authority lands, maintain checked
 known-created/not-deletion-confirmed Canister counters and expose compact

@@ -60,6 +60,11 @@ struct LiveRegistryEvidence {
     version: FleetRegistryVersion,
 }
 
+pub(super) struct VerifiedFleetRegistryActivation {
+    pub registry: FleetRegistry,
+    pub version: FleetRegistryVersion,
+}
+
 pub(super) struct ActivateFleetRegistryRequest<'a> {
     pub icp_root: &'a Path,
     pub environment: &'a str,
@@ -73,7 +78,7 @@ pub(super) struct ActivateFleetRegistryRequest<'a> {
 
 pub(super) fn activate_and_verify_fleet_registry(
     request: ActivateFleetRegistryRequest<'_>,
-) -> Result<FleetRegistryVersion, Box<dyn std::error::Error>> {
+) -> Result<VerifiedFleetRegistryActivation, Box<dyn std::error::Error>> {
     let config = AppConfigSnapshot::load(request.config_path)?;
     let component_topology = config.model().compile_component_topology()?;
     let infrastructure_manifest = load_persisted_canic_infrastructure_artifact_manifest(
@@ -108,7 +113,13 @@ pub(super) fn activate_and_verify_fleet_registry(
             component_topology: component_topology.clone(),
             root_plan,
         })?;
-        if current.journal.phase != FleetSubnetRootInstallPhase::RegistrySyncVerified {
+        if !matches!(
+            current.journal.phase,
+            FleetSubnetRootInstallPhase::RegistrySyncVerified
+                | FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight
+                | FleetSubnetRootInstallPhase::RegistryMirrorActivated
+                | FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified
+        ) {
             return Err(
                 FleetRegistryActivationError::RootNotSynchronized(current.journal.phase).into(),
             );
@@ -156,7 +167,10 @@ pub(super) fn activate_and_verify_fleet_registry(
         &live,
         "verified all-Active",
     )?;
-    Ok(live.version)
+    Ok(VerifiedFleetRegistryActivation {
+        registry: live.registry,
+        version: live.version,
+    })
 }
 
 fn drive_activation(

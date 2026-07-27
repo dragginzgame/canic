@@ -59,9 +59,10 @@ Current 0.100 installation flow:
   Coordinator acknowledgement at every root
 - atomically commit and independently verify the complete Coordinator
   Registry as all-`Active`
-- keep every root runtime-`Prepared` and stop before final all-`Active` root
-  synchronization, mirror/Directory activation, Component creation, or
-  terminal Fleet-catalog publication
+- atomically activate and independently verify every root's exact all-`Active`
+  Registry Mirror and Registry-derived Fleet Directory
+- keep every root runtime-`Prepared` and stop before Component creation,
+  runtime activation, or terminal Fleet-catalog publication
 
 The local driver permits one clean local `icp` restart attempt when
 `icp ping local` fails. Exact journals own same-release interruption recovery;

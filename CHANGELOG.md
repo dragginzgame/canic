@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.18` atomically replaces every root's private Joining candidate with
+  its exact all-Active Registry mirror and Registry-derived Fleet Directory,
+  with journalled per-root verification and interruption-safe recovery while
+  Component runtime activation remains fenced.
+
 - `0.100.17` atomically commits the complete acknowledged root set as Fleet
   Registry `Active`, with durable Coordinator and host recovery receipts plus
   independent all-`Active` verification before final root mirror/Directory

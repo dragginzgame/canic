@@ -152,8 +152,11 @@ mod tests {
         CANIC_WASM_CHUNK_BYTES,
         dto::{
             fleet_registry::{
-                FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
-                FleetSubnetRootEntry, FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
+                FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistry,
+                FleetRegistryActivationRequest, FleetRegistryActivationResponse,
+                FleetSubnetRootDirectoryEntry, FleetSubnetRootEntry, FleetSubnetRootJoinRequest,
+                FleetSubnetRootJoinResponse, FleetSubnetRootRegistryMirrorActivationRequest,
+                FleetSubnetRootRegistryMirrorActivationResponse,
                 FleetSubnetRootRegistrySyncRequest, FleetSubnetRootRegistrySyncResponse,
                 FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootStatus,
             },
@@ -172,6 +175,7 @@ mod tests {
         dto::fleet_activation::{FleetActivationPhase, FleetActivationStatusResponse},
         protocol::{
             CANIC_FLEET_ACTIVATION_STATUS, CANIC_FLEET_REGISTRY, CANIC_FLEET_REGISTRY_ACTIVATE,
+            CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR, CANIC_FLEET_REGISTRY_MIRROR_STATUS,
             CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS, CANIC_FLEET_REGISTRY_SYNC_STATUS,
             CANIC_FLEET_REGISTRY_SYNCHRONIZE, CANIC_FLEET_REGISTRY_VERSION,
             CANIC_FLEET_SUBNET_ROOT_AUTHORITY, CANIC_FLEET_SUBNET_ROOT_JOIN,
@@ -363,7 +367,7 @@ mod tests {
             .expect("query root acknowledgements");
         assert_eq!(
             acknowledgements.expect("root acknowledgements"),
-            vec![synchronized.acknowledgement.clone()]
+            vec![synchronized.acknowledgement]
         );
 
         assert_registry_activation_keeps_root_prepared(
@@ -372,7 +376,6 @@ mod tests {
             &fixture,
             joined.version,
             sync_request,
-            synchronized,
         );
     }
 
@@ -415,7 +418,6 @@ mod tests {
         fixture: &BootstrappedRootFixture,
         joining_version: canic::dto::fleet_registry::FleetRegistryVersion,
         sync_request: FleetSubnetRootRegistrySyncRequest,
-        synchronized: FleetSubnetRootRegistrySyncResponse,
     ) {
         let activated: Result<FleetRegistryActivationResponse, Error> = pic
             .update_call(
@@ -431,15 +433,60 @@ mod tests {
         let active: Result<FleetRegistry, Error> = pic
             .query_call(coordinator, CANIC_FLEET_REGISTRY, ())
             .expect("query active Registry");
+        let active = active.expect("active Registry");
         assert_eq!(
-            active
-                .expect("active Registry")
-                .fleet_subnet_roots
-                .first()
-                .expect("one root")
-                .status,
+            active.fleet_subnet_roots.first().expect("one root").status,
             FleetSubnetRootStatus::Active
         );
+        let directory = FleetDirectorySnapshot {
+            provenance: FleetDirectoryProvenance {
+                registry: activated.version.clone(),
+                source_fleet_subnet_root: fixture.root_id,
+            },
+            fleet_subnet_roots: active
+                .fleet_subnet_roots
+                .iter()
+                .map(|entry| FleetSubnetRootDirectoryEntry {
+                    placement_subnet: entry.placement_subnet,
+                    fleet_subnet_root: entry.fleet_subnet_root,
+                    status: entry.status,
+                })
+                .collect(),
+        };
+        let activation_request = FleetSubnetRootRegistryMirrorActivationRequest {
+            previous_registry: activated.previous_version,
+            expected_registry: activated.version,
+            expected_directory: directory,
+            store_bootstrap: fixture.request.clone(),
+        };
+        let mirror: Result<FleetSubnetRootRegistryMirrorActivationResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
+                (activation_request.clone(),),
+            )
+            .expect("activate root Registry mirror transport");
+        let mirror = mirror.expect("activate root Registry mirror");
+        let mirror_retry: Result<FleetSubnetRootRegistryMirrorActivationResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
+                (activation_request.clone(),),
+            )
+            .expect("retry root Registry mirror activation transport");
+        assert_eq!(
+            mirror_retry.expect("retry root Registry mirror activation"),
+            mirror
+        );
+        let mirror_status: Result<FleetSubnetRootRegistryMirrorActivationResponse, Error> = pic
+            .query_call(
+                fixture.root_id,
+                CANIC_FLEET_REGISTRY_MIRROR_STATUS,
+                (activation_request,),
+            )
+            .expect("query root Registry mirror status transport");
+        assert_eq!(mirror_status.expect("root Registry mirror status"), mirror);
+
         let old_candidate: Result<FleetSubnetRootRegistrySyncResponse, Error> = pic
             .query_call(
                 fixture.root_id,
@@ -448,8 +495,10 @@ mod tests {
             )
             .expect("query private Joining candidate after Registry activation");
         assert_eq!(
-            old_candidate.expect("private Joining candidate remains durable"),
-            synchronized
+            old_candidate
+                .expect_err("Joining candidate must be replaced")
+                .code,
+            canic::dto::error::ErrorCode::Unavailable
         );
         assert_prepared(pic, fixture.root_id);
     }

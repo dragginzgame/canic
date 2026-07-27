@@ -215,7 +215,10 @@ fn drive_root_install(
             | FleetSubnetRootInstallPhase::RegistryJoinVerified
             | FleetSubnetRootInstallPhase::RegistrySyncInFlight
             | FleetSubnetRootInstallPhase::RegistrySynchronized
-            | FleetSubnetRootInstallPhase::RegistrySyncVerified => {
+            | FleetSubnetRootInstallPhase::RegistrySyncVerified
+            | FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight
+            | FleetSubnetRootInstallPhase::RegistryMirrorActivated
+            | FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified => {
                 return verify_live_root(icp_root, environment, local_replica, &current.journal);
             }
         };

@@ -261,8 +261,9 @@ planned Fleet Subnet Roots, each root's exact local Store, and every root's
 Registry `Joining` row, private snapshot candidate and Coordinator
 acknowledgement, then atomically commits and independently verifies the
 complete Coordinator Registry as `Active`. Every root remains
-runtime-`Prepared`; installation stops before final all-`Active` root
-synchronization, mirror/Directory activation, Component creation, and terminal
+runtime-`Prepared` while installation atomically activates and independently
+verifies every exact matching Registry Mirror/Fleet Directory. Installation
+then stops before Component creation, runtime activation and terminal
 Fleet-catalog publication.
 `canic info list example-local` becomes applicable only after that Fleet
 reaches the terminal catalog boundary.

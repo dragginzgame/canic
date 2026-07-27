@@ -6,7 +6,9 @@ use canic_core::{
     control_plane_support::view::fleet_activation::FleetActivationTransition,
     dto::fleet_activation::{FleetActivationResumeRequest, FleetActivationStatusResponse},
     dto::fleet_registry::{
-        FleetSubnetRootRegistrySyncRequest, FleetSubnetRootRegistrySyncResponse,
+        FleetSubnetRootRegistryMirrorActivationRequest,
+        FleetSubnetRootRegistryMirrorActivationResponse, FleetSubnetRootRegistrySyncRequest,
+        FleetSubnetRootRegistrySyncResponse,
     },
     dto::fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
 };
@@ -59,6 +61,24 @@ impl LifecycleApi {
         request: FleetSubnetRootRegistrySyncRequest,
     ) -> Result<FleetSubnetRootRegistrySyncResponse, canic_core::dto::error::Error> {
         crate::workflow::fleet_registry_mirror::status(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn activate_fleet_registry_mirror(
+        request: FleetSubnetRootRegistryMirrorActivationRequest,
+    ) -> Result<FleetSubnetRootRegistryMirrorActivationResponse, canic_core::dto::error::Error>
+    {
+        crate::workflow::fleet_registry_mirror::activate(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn fleet_registry_mirror_status(
+        request: FleetSubnetRootRegistryMirrorActivationRequest,
+    ) -> Result<FleetSubnetRootRegistryMirrorActivationResponse, canic_core::dto::error::Error>
+    {
+        crate::workflow::fleet_registry_mirror::active_status(request)
             .await
             .map_err(Into::into)
     }
