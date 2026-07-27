@@ -252,7 +252,7 @@ fn verified_root_module_evidence(
     ])
 }
 
-fn parse_module_hash(value: &str) -> Option<[u8; 32]> {
+pub(in crate::install_root) fn parse_module_hash(value: &str) -> Option<[u8; 32]> {
     let value = value
         .strip_prefix("0x")
         .or_else(|| value.strip_prefix("0X"))
@@ -276,7 +276,7 @@ const fn hex_nibble(byte: u8) -> Option<u8> {
     }
 }
 
-fn module_hash_text(bytes: [u8; 32]) -> String {
+pub(in crate::install_root) fn module_hash_text(bytes: [u8; 32]) -> String {
     digest_text(bytes)
 }
 

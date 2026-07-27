@@ -56,9 +56,28 @@ fn current_install_records_gates_before_activation_mutation() {
         "persist_current_fleet_install_plan(",
     );
     assert_before(
-        fleet_planning,
-        "persist_current_fleet_install_plan(",
-        "require_coordinator_first_install_effects(",
+        install,
+        "plan_current_fleet_install(",
+        "install_current_fleet_coordinator(",
+    );
+    assert_before(
+        install,
+        "install_current_fleet_coordinator(",
+        "require_fleet_subnet_root_install_effects(",
+    );
+    assert_before(
+        install,
+        "require_fleet_subnet_root_install_effects(",
+        "resolve_or_recover_activation_root(",
+    );
+    let coordinator_install = source_section(
+        source,
+        "fn install_current_fleet_coordinator(",
+        "fn persist_pre_root_receipts(",
+    );
+    assert!(
+        coordinator_install.contains("install_and_verify_fleet_coordinator("),
+        "Coordinator wrapper must invoke the journalled install and verification workflow"
     );
     assert_before(
         install,

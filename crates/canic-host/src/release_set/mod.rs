@@ -16,6 +16,7 @@ pub use application::{
     load_persisted_application_artifact_union,
 };
 use artifact::build_release_set_entry;
+pub(crate) use artifact::resolve_release_artifact_path;
 pub(crate) use artifact::validate_release_artifact_relative_path;
 pub(crate) use config::configured_release_roles_from_config;
 pub use config::{

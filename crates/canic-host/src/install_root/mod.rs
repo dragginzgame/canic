@@ -24,6 +24,8 @@ mod capabilities;
 mod clock;
 mod commands;
 mod config_selection;
+mod coordinator_install;
+mod coordinator_install_journal;
 mod current_execution;
 mod deployment_truth_gate;
 mod execution_preflight;
@@ -50,6 +52,7 @@ pub use config_selection::{
     discover_canic_project_root_from, discover_project_canic_config_choices, project_app_roots,
     select_discovered_app_config_path,
 };
+use coordinator_install::install_and_verify_fleet_coordinator;
 use current_execution::current_install_execution_context;
 use identity::resolve_install_identity;
 pub use operations::{
@@ -175,11 +178,12 @@ impl InstallRootError {
 
 #[derive(Debug, ThisError)]
 #[error(
-    "Fleet install plan is durable at {}; Canister creation is blocked until the genuine Fleet Coordinator runtime can be installed before Fleet Subnet Roots",
-    plan_path.display()
+    "Fleet Coordinator {coordinator} is installed and independently verified from the durable plan at {}; Fleet Subnet Root effects remain blocked until the planned multi-root lifecycle is implemented",
+    plan_path.display(),
 )]
-struct FleetInstallEffectsUnavailableError {
+struct FleetRootEffectsUnavailableError {
     plan_path: PathBuf,
+    coordinator: canic_core::cdk::types::Principal,
 }
 
 #[derive(Debug, ThisError)]
@@ -204,16 +208,8 @@ pub fn discover_current_canic_config_choices() -> Result<Vec<PathBuf>, ConfigDis
 
 // Execute fresh Fleet planning and the Coordinator-first installation workflow.
 pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError> {
-    let workspace_root = workspace_root()
-        .map_err(|source| InstallRootError::new(InstallRootPhase::WorkspaceDiscovery, source))?;
+    let (workspace_root, icp_root) = resolve_current_install_roots(&options)?;
     let _build_cache_cleanup = DefaultCanisterBuildCacheCleanup::for_install(&workspace_root);
-    let icp_root = match &options.icp_root {
-        Some(path) => path
-            .canonicalize()
-            .map_err(|source| InstallRootError::new(InstallRootPhase::ProjectDiscovery, source))?,
-        None => icp_root()
-            .map_err(|source| InstallRootError::new(InstallRootPhase::ProjectDiscovery, source))?,
-    };
     let config_path = current_install_config_path(&icp_root, &options)?;
     let (build_context, install_snapshot) =
         current_install_build_inputs(&workspace_root, &icp_root, &config_path, &options)
@@ -254,13 +250,9 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Manifest))?;
     timings.emit_manifest = emitted_manifest.duration;
-    let finalized_release_build = emitted_manifest.finalized_release_build.ok_or_else(|| {
-        InstallRootError::new(
-            InstallRootPhase::Manifest,
-            ReleaseBuildPlanError::MissingFinalizedAuthority,
-        )
-    })?;
-    let activation = plan_current_fleet_install(
+    let finalized_release_build =
+        require_finalized_release_build(emitted_manifest.finalized_release_build)?;
+    let planned_install = plan_current_fleet_install(
         &icp_root,
         environment,
         &fleet_name,
@@ -272,39 +264,63 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
     let receipt_scope = InstallReceiptScope {
         icp_root: &icp_root,
         environment,
-        fleet: activation.journal.activation.identity.fleet.fleet,
+        fleet: planned_install.fleet(),
         check: &prepared.deployment_truth_check,
         execution_context: Some(&execution_context),
     };
-    persist_pre_root_receipts(
+    persist_current_pre_root_receipts(
         receipt_scope,
         &prepared.pre_activation_receipts,
         prepared.build_phase,
         emitted_manifest.phase,
-    )
-    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
+    )?;
+    let (coordinator, coordinator_duration) = install_current_fleet_coordinator(
+        &icp_root,
+        environment,
+        build_context.local_replica.as_ref(),
+        &config_path,
+        &planned_install.plan,
+    )?;
+    timings.create_canisters = coordinator_duration;
+    require_fleet_subnet_root_install_effects(&planned_install.plan.path, coordinator.coordinator)
+        .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))?;
     let (root_canister_id, create_duration) = resolve_or_recover_activation_root(
-        &activation,
+        &planned_install.activation,
         receipt_scope,
         &options,
         &config_path,
         &build_context,
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
-    timings.create_canisters = create_duration;
+    timings.create_canisters += create_duration;
     let committed_root = install_root_committed(
         receipt_scope,
         &options,
         &root_canister_id,
         &build_context,
         prepared.plan_artifacts.as_ref(),
-        &activation,
+        &planned_install.activation,
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
     timings.record_activation(committed_root.timings);
 
     print_install_timing_summary(&timings, total_started_at.elapsed());
     Ok(())
+}
+
+fn resolve_current_install_roots(
+    options: &InstallRootOptions,
+) -> Result<(PathBuf, PathBuf), InstallRootError> {
+    let workspace_root = workspace_root()
+        .map_err(|source| InstallRootError::new(InstallRootPhase::WorkspaceDiscovery, source))?;
+    let icp_root = match &options.icp_root {
+        Some(path) => path
+            .canonicalize()
+            .map_err(|source| InstallRootError::new(InstallRootPhase::ProjectDiscovery, source))?,
+        None => icp_root()
+            .map_err(|source| InstallRootError::new(InstallRootPhase::ProjectDiscovery, source))?,
+    };
+    Ok((workspace_root, icp_root))
 }
 
 fn plan_current_fleet_install(
@@ -315,7 +331,7 @@ fn plan_current_fleet_install(
     config_path: &Path,
     finalized_release_build: &crate::release_build::FinalizedReleaseBuild,
     input: ResolvedFleetInstallInput,
-) -> Result<fleet_activation_journal::ResolvedFleetInstallActivation, InstallRootError> {
+) -> Result<PlannedCurrentFleetInstall, InstallRootError> {
     let activation = plan_current_fleet_activation(
         icp_root,
         environment,
@@ -331,9 +347,29 @@ fn plan_current_fleet_install(
         input,
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Planning))?;
-    require_coordinator_first_install_effects(&plan.path)
-        .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?;
-    Ok(activation)
+    Ok(PlannedCurrentFleetInstall { activation, plan })
+}
+
+struct PlannedCurrentFleetInstall {
+    activation: fleet_activation_journal::ResolvedFleetInstallActivation,
+    plan: PersistedFleetInstallPlan,
+}
+
+impl PlannedCurrentFleetInstall {
+    const fn fleet(&self) -> canic_core::ids::FleetKey {
+        self.activation.journal.activation.identity.fleet.fleet
+    }
+}
+
+fn require_finalized_release_build(
+    finalized: Option<crate::release_build::FinalizedReleaseBuild>,
+) -> Result<crate::release_build::FinalizedReleaseBuild, InstallRootError> {
+    finalized.ok_or_else(|| {
+        InstallRootError::new(
+            InstallRootPhase::Manifest,
+            ReleaseBuildPlanError::MissingFinalizedAuthority,
+        )
+    })
 }
 
 fn resolve_current_fleet_install_input(
@@ -372,11 +408,13 @@ fn persist_current_fleet_install_plan(
     .map_err(Into::into)
 }
 
-fn require_coordinator_first_install_effects(
+fn require_fleet_subnet_root_install_effects(
     plan_path: &Path,
-) -> Result<(), FleetInstallEffectsUnavailableError> {
-    Err(FleetInstallEffectsUnavailableError {
+    coordinator: canic_core::cdk::types::Principal,
+) -> Result<(), FleetRootEffectsUnavailableError> {
+    Err(FleetRootEffectsUnavailableError {
         plan_path: plan_path.to_path_buf(),
+        coordinator,
     })
 }
 
@@ -440,6 +478,40 @@ fn print_install_identity(app: &str, fleet_name: &str) {
     println!("Installing Fleet {fleet_name}");
     println!("Source App {app}");
     println!();
+}
+
+fn persist_current_pre_root_receipts(
+    receipt_scope: InstallReceiptScope<'_>,
+    prepared_receipts: &[DeploymentReceiptV1],
+    build_phase: CompletedInstallPhase,
+    manifest_phase: CompletedInstallPhase,
+) -> Result<(), InstallRootError> {
+    persist_pre_root_receipts(
+        receipt_scope,
+        prepared_receipts,
+        build_phase,
+        manifest_phase,
+    )
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))
+}
+
+fn install_current_fleet_coordinator(
+    icp_root: &Path,
+    environment: &str,
+    local_replica: Option<&crate::icp::LocalReplicaTarget>,
+    config_path: &Path,
+    plan: &PersistedFleetInstallPlan,
+) -> Result<(coordinator_install::VerifiedFleetCoordinator, Duration), InstallRootError> {
+    let started = Instant::now();
+    let coordinator = install_and_verify_fleet_coordinator(
+        icp_root,
+        environment,
+        local_replica,
+        config_path,
+        plan,
+    )
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
+    Ok((coordinator, started.elapsed()))
 }
 
 fn persist_pre_root_receipts(
