@@ -21,7 +21,7 @@ use schema::Validate;
 use serde_path_to_error::{Path as SerdePath, Segment as SerdePathSegment};
 pub use topology::{
     ComponentChildFundingPolicy, ComponentChildSpec, ComponentLimits, ComponentProvisioningGrant,
-    ComponentSpec, ComponentTopology, ComponentTopologyError,
+    ComponentSpawnGrant, ComponentSpec, ComponentTopology, ComponentTopologyError,
     MAX_COMPONENT_TOPOLOGY_CANONICAL_BYTES,
 };
 

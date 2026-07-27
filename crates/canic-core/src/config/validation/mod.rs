@@ -15,7 +15,7 @@ use crate::{
     },
     ids::{CanisterRole, ComponentSpecId},
 };
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, VecDeque};
 
 fn validate_canister_role(
     role: &CanisterRole,
@@ -46,7 +46,6 @@ impl Validate for ConfigModel {
 
         let mut maximum_component_instances = 0_u32;
         let mut component_owners = BTreeMap::<CanisterRole, String>::new();
-        let mut child_roles = BTreeSet::<CanisterRole>::new();
         for (component_spec_id, component_spec) in &self.component_specs {
             component_spec.validate()?;
 
@@ -67,15 +66,6 @@ impl Validate for ConfigModel {
                     component_spec.component_role,
                 )));
             }
-            child_roles.extend(component_spec.children.keys().cloned());
-        }
-        if let Some(role) = child_roles
-            .iter()
-            .find(|role| component_owners.contains_key(*role))
-        {
-            return Err(ConfigSchemaError::ValidationError(format!(
-                "role '{role}' cannot be both a Component and a Component Child",
-            )));
         }
         if maximum_component_instances > MAX_FLEET_COMPONENT_INSTANCES {
             return Err(ConfigSchemaError::ValidationError(format!(

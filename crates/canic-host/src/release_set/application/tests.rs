@@ -53,7 +53,9 @@ maximum_instances_per_requester_per_root = 2
 
 [component_specs.alpha.children.shared]
 kind = "replica"
-maximum_instances = 2
+
+[component_specs.alpha.spawn_grants.alpha.shared]
+maximum_instances_per_parent = 2
 
 [component_specs.beta]
 component_role = "beta"
@@ -61,11 +63,24 @@ maximum_instances = 2
 
 [component_specs.beta.children.shared]
 kind = "replica"
-maximum_instances = 2
+
+[component_specs.beta.spawn_grants.beta.shared]
+maximum_instances_per_parent = 2
 "#;
 
 fn config() -> ConfigModel {
     parse_config_model(CONFIG).expect("valid application topology config")
+}
+
+fn config_with_component_role_descendant() -> ConfigModel {
+    parse_config_model(&format!(
+        "{CONFIG}\n\
+         [component_specs.alpha.children.beta]\n\
+         kind = \"instance\"\n\
+         [component_specs.alpha.spawn_grants.alpha.beta]\n\
+         maximum_instances_per_parent = 2\n"
+    ))
+    .expect("Component role reused as another Spec's potential descendant")
 }
 
 fn release_build(byte: u8) -> ReleaseBuildId {
@@ -253,7 +268,7 @@ fn compiler_freezes_one_canonical_qualified_topology_union() {
     );
     assert_eq!(
         hex_bytes(union.digest(&topology).expect("frozen union digest")),
-        "4850c818b5196e79a8eeadb5940733589795cf679f021fbc8dc3489c1ed40c34"
+        "5526576a9a1475d1d842ff84946399abba5d0bb17395b6bcbdd6be1693b5e7d5"
     );
 }
 
@@ -330,7 +345,7 @@ fn compiler_rejects_outputs_outside_their_qualified_build_targets() {
 }
 
 #[test]
-fn projection_preserves_every_spec_edge_while_reusing_shared_artifact_evidence() {
+fn projection_preserves_every_spec_role_while_reusing_shared_artifact_evidence() {
     let plan = complete_plan(u64::MAX);
     let release_build_id = release_build(12);
     let union = compile_union(&plan.component_topology, release_build_id);
@@ -366,7 +381,7 @@ fn projection_preserves_every_spec_edge_while_reusing_shared_artifact_evidence()
     );
     assert_eq!(
         manifest.entries[1].artifact, manifest.entries[3].artifact,
-        "one child artifact remains authorized under both exact Spec edges"
+        "one child artifact remains authorized under both exact Spec catalogs"
     );
     manifest
         .validate_against(&plan.component_topology, binding, &union)
@@ -386,8 +401,53 @@ fn projection_preserves_every_spec_edge_while_reusing_shared_artifact_evidence()
                 .expect("frozen manifest digest")
                 .into_bytes()
         ),
-        "dc75f80a3c646ee65e0074013b8dd363fa645dd58de4393edd6aabdae99d692c"
+        "5e2ed7334a65313a095bea33b4972dead5cc18c65ddf93cf59bb37d89875111c"
     );
+}
+
+#[test]
+fn projection_stores_a_component_role_once_when_another_spec_admits_it_as_a_descendant() {
+    let config = config_with_component_role_descendant();
+    let plan = plan_fleet_topology(
+        &config,
+        authority(),
+        vec![root(6, 7, &["beta", "alpha"], u64::MAX)],
+    )
+    .expect("topology with a Component role reused as a descendant");
+    let union = compile_union(&plan.component_topology, release_build(16));
+    let manifest = FleetSubnetRootReleaseSetManifest::project(
+        &plan.component_topology,
+        &plan.fleet_subnet_roots[0],
+        &union,
+    )
+    .expect("root release-set projection");
+
+    assert_eq!(
+        union
+            .entries
+            .iter()
+            .filter(|entry| entry.role.as_str() == "beta")
+            .count(),
+        1,
+        "the artifact union carries one qualified beta Wasm"
+    );
+    let beta_uses = manifest
+        .entries
+        .iter()
+        .filter(|entry| entry.artifact.role.as_str() == "beta")
+        .collect::<Vec<_>>();
+    assert_eq!(beta_uses.len(), 2);
+    assert_eq!(
+        beta_uses
+            .iter()
+            .map(|entry| (entry.component_spec.as_str(), entry.kind))
+            .collect::<Vec<_>>(),
+        vec![
+            ("alpha", ApplicationReleaseSetEntryKind::ComponentChild),
+            ("beta", ApplicationReleaseSetEntryKind::Component),
+        ]
+    );
+    assert_eq!(beta_uses[0].artifact, beta_uses[1].artifact);
 }
 
 #[test]

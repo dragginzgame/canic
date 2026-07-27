@@ -1,6 +1,6 @@
 //! Module: config::schema::component_spec
 //!
-//! Responsibility: define flat Component Spec, direct-child, placement, and funding shapes.
+//! Responsibility: define flat Component Spec, child-role, spawn-grant, placement, and funding shapes.
 //! Does not own: topology validation, placement execution, or runtime canister state.
 //! Boundary: config schema re-exports these data shapes for validated models.
 
@@ -45,8 +45,8 @@ mod defaults {
         crate::domain::policy::pure::cycles_funding::DEFAULT_COOLDOWN_SECS
     }
 
-    pub const fn component_maximum_children() -> u32 {
-        super::DEFAULT_COMPONENT_MAXIMUM_CHILDREN
+    pub const fn component_maximum_descendants() -> u32 {
+        super::DEFAULT_COMPONENT_MAXIMUM_DESCENDANTS
     }
 
     pub const fn component_maximum_registry_bytes() -> u64 {
@@ -62,10 +62,10 @@ mod defaults {
     }
 }
 
-/// Default aggregate direct-child ceiling for one concrete Component.
-pub const DEFAULT_COMPONENT_MAXIMUM_CHILDREN: u32 = 4_096;
+/// Default aggregate descendant ceiling for one concrete Component tree.
+pub const DEFAULT_COMPONENT_MAXIMUM_DESCENDANTS: u32 = 20_000;
 /// Default maximum canonical Component Registry bytes for one Component.
-pub const DEFAULT_COMPONENT_MAXIMUM_REGISTRY_BYTES: u64 = 2_097_152;
+pub const DEFAULT_COMPONENT_MAXIMUM_REGISTRY_BYTES: u64 = 16_777_216;
 /// Default aggregate Component cycles-funding budget window.
 pub const DEFAULT_COMPONENT_CYCLES_FUNDING_WINDOW_SECS: u64 = 3_600;
 /// Default aggregate Component cycles-funding budget per window.
@@ -74,7 +74,7 @@ pub const DEFAULT_COMPONENT_CYCLES_FUNDING_MAXIMUM_CYCLES: u128 = 1_000_000_000_
 ///
 /// ComponentSpecConfig
 ///
-/// Configuration for one permitted Component and its direct children.
+/// Configuration for one permitted Component and its potential descendant roles.
 /// Owned by config schema and validated before topology workflows use it.
 ///
 
@@ -109,7 +109,7 @@ pub struct ComponentSpecConfig {
     pub sharding: Option<ShardingConfig>,
 
     #[serde(default)]
-    pub binding: Option<BindingConfig>,
+    pub index: Option<IndexConfig>,
 
     #[serde(default)]
     pub auth: CanisterAuthConfig,
@@ -127,13 +127,17 @@ pub struct ComponentSpecConfig {
     #[serde(default)]
     pub provisions: BTreeMap<ComponentSpecId, ComponentProvisioningGrantConfig>,
 
-    /// Exact direct children owned by each instance of this Component.
+    /// Flat catalog of exact roles that may occur anywhere below this Component.
     #[serde(default)]
     pub children: BTreeMap<CanisterRole, ComponentChildConfig>,
+
+    /// Explicit parent-role to child-role creation capabilities.
+    #[serde(default)]
+    pub spawn_grants: BTreeMap<CanisterRole, BTreeMap<CanisterRole, ComponentSpawnGrantConfig>>,
 }
 
 impl ComponentSpecConfig {
-    /// Get the runtime configuration for this Component or one direct child.
+    /// Get the runtime configuration for this Component or one admitted child role.
     #[must_use]
     pub fn get_canister(&self, role: &CanisterRole) -> Option<CanisterConfig> {
         if role == &self.component_role {
@@ -157,12 +161,12 @@ impl ComponentSpecConfig {
         self.auto_create_roles()
     }
 
-    /// All roles structurally owned by this Spec.
+    /// All Component and potential descendant roles admitted by this Spec.
     pub fn roles(&self) -> impl Iterator<Item = &CanisterRole> {
         std::iter::once(&self.component_role).chain(self.children.keys())
     }
 
-    /// Iterate the Component and direct children as common runtime projections.
+    /// Iterate the Component and potential descendant roles as common runtime projections.
     pub fn canister_configs(&self) -> impl Iterator<Item = (&CanisterRole, CanisterConfig)> + '_ {
         std::iter::once((&self.component_role, self.component_canister_config())).chain(
             self.children
@@ -182,7 +186,7 @@ impl ComponentSpecConfig {
             cycles_funding: self.cycles_funding.clone(),
             scaling: self.scaling.clone(),
             sharding: self.sharding.clone(),
-            binding: self.binding.clone(),
+            index: self.index.clone(),
             auth: self.auth.clone(),
             standards: self.standards.clone(),
             diagnostics: self.diagnostics,
@@ -200,8 +204,8 @@ impl ComponentSpecConfig {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentLimitsConfig {
-    #[serde(default = "defaults::component_maximum_children")]
-    pub maximum_children: u32,
+    #[serde(default = "defaults::component_maximum_descendants")]
+    pub maximum_descendants: u32,
 
     #[serde(default = "defaults::component_maximum_registry_bytes")]
     pub maximum_registry_bytes: u64,
@@ -213,7 +217,7 @@ pub struct ComponentLimitsConfig {
 impl Default for ComponentLimitsConfig {
     fn default() -> Self {
         Self {
-            maximum_children: defaults::component_maximum_children(),
+            maximum_descendants: defaults::component_maximum_descendants(),
             maximum_registry_bytes: defaults::component_maximum_registry_bytes(),
             cycles_funding: CyclesFundingBudgetConfig::default(),
         }
@@ -251,19 +255,13 @@ impl Default for CyclesFundingBudgetConfig {
 ///
 /// ComponentChildConfig
 ///
-/// Configuration for one direct child role owned by a Component instance.
+/// Configuration for one role that may occur anywhere below a Component.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentChildConfig {
     pub kind: ComponentChildKind,
-
-    /// Direct children the root materializes before activating the Component.
-    #[serde(default)]
-    pub initial_instances: u32,
-
-    pub maximum_instances: u32,
 
     #[serde(
         default = "defaults::initial_cycles",
@@ -276,6 +274,15 @@ pub struct ComponentChildConfig {
 
     #[serde(default)]
     pub cycles_funding: CyclesFundingPolicyConfig,
+
+    #[serde(default)]
+    pub scaling: Option<ScalingConfig>,
+
+    #[serde(default)]
+    pub sharding: Option<ShardingConfig>,
+
+    #[serde(default)]
+    pub index: Option<IndexConfig>,
 
     #[serde(default)]
     pub auth: CanisterAuthConfig,
@@ -299,15 +306,27 @@ impl ComponentChildConfig {
             topup: self.topup.clone(),
             icp_refill: None,
             cycles_funding: self.cycles_funding.clone(),
-            scaling: None,
-            sharding: None,
-            binding: None,
+            scaling: self.scaling.clone(),
+            sharding: self.sharding.clone(),
+            index: self.index.clone(),
             auth: self.auth.clone(),
             standards: self.standards.clone(),
             diagnostics: self.diagnostics,
             metrics: self.metrics,
         }
     }
+}
+
+///
+/// ComponentSpawnGrantConfig
+///
+/// Bounded permission for one registered parent role to create one child role.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ComponentSpawnGrantConfig {
+    pub maximum_instances_per_parent: u32,
 }
 
 ///
@@ -325,7 +344,7 @@ pub struct ComponentProvisioningGrantConfig {
 ///
 /// ComponentChildKind
 ///
-/// Lifecycle class for a direct Component Child.
+/// Lifecycle class for a managed Component child at any tree depth.
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -419,7 +438,7 @@ pub fn implicit_wasm_store_canister_config() -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        binding: None,
+        index: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -438,7 +457,7 @@ pub fn implicit_root_canister_config() -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        binding: None,
+        index: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -522,7 +541,7 @@ pub struct CanisterConfig {
     pub sharding: Option<ShardingConfig>,
 
     #[serde(default)]
-    pub binding: Option<BindingConfig>,
+    pub index: Option<IndexConfig>,
 
     #[serde(default)]
     pub auth: CanisterAuthConfig,
@@ -553,7 +572,7 @@ impl CanisterConfig {
             return MetricsProfile::Storage;
         }
 
-        if self.scaling.is_some() || self.sharding.is_some() || self.binding.is_some() {
+        if self.scaling.is_some() || self.sharding.is_some() || self.index.is_some() {
             return MetricsProfile::Hub;
         }
 
@@ -571,14 +590,14 @@ impl CanisterConfig {
             .sharding
             .iter()
             .flat_map(|sharding| sharding.pools.values().map(|pool| &pool.canister_role));
-        let binding_roles = self
-            .binding
+        let index_roles = self
+            .index
             .iter()
-            .flat_map(|binding| binding.pools.values().map(|pool| &pool.canister_role));
+            .flat_map(|index| index.pools.values().map(|pool| &pool.canister_role));
 
         scaling_roles
             .chain(sharding_roles)
-            .chain(binding_roles)
+            .chain(index_roles)
             .collect()
     }
 }
@@ -816,29 +835,29 @@ pub struct ShardingConfig {
 }
 
 ///
-/// BindingConfig
+/// IndexConfig
 ///
-/// Keyed instance placement binding configuration.
+/// Keyed instance placement index configuration.
 /// Owned by config schema and consumed by keyed placement workflows.
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct BindingConfig {
+pub struct IndexConfig {
     #[serde(default)]
-    pub pools: BTreeMap<String, BindingPool>,
+    pub pools: BTreeMap<String, IndexPool>,
 }
 
 ///
-/// BindingPool
+/// IndexPool
 ///
-/// One keyed instance placement binding pool.
+/// One keyed instance placement index pool.
 /// Owned by config schema and consumed by keyed placement workflows.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct BindingPool {
+pub struct IndexPool {
     pub canister_role: CanisterRole,
     pub key_name: String,
 }

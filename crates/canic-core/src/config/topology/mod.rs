@@ -2,7 +2,7 @@
 //!
 //! Responsibility: compile validated App configuration into canonical Component Topology.
 //! Does not own: physical placement, root admission selection, Registry state, or lifecycle.
-//! Boundary: emits bounded non-recursive topology and stable domain-separated SHA-256 identities.
+//! Boundary: emits bounded flat role catalogs, spawn grants, and stable protected identities.
 
 #[cfg(test)]
 mod tests;
@@ -11,10 +11,11 @@ mod validation;
 use crate::{
     cdk::types::Cycles,
     config::schema::{
-        BindingConfig, CanisterAuthConfig, ComponentChildConfig, ComponentChildKind,
-        ComponentSpecConfig, ConfigModel, CyclesFundingPolicyConfig, DiagnosticsCanisterConfig,
-        MAX_COMPONENT_PROVISIONING_GRANTS, MetricsCanisterConfig, MetricsProfile, ScalePoolPolicy,
-        ScalingConfig, ShardPoolPolicy, ShardingConfig, StandardsCanisterConfig, TopupPolicy,
+        CanisterAuthConfig, ComponentChildConfig, ComponentChildKind, ComponentSpecConfig,
+        ConfigModel, CyclesFundingPolicyConfig, DiagnosticsCanisterConfig, IndexConfig,
+        MAX_COMPONENT_PROVISIONING_GRANTS, MAX_COMPONENT_SPAWN_GRANTS, MetricsCanisterConfig,
+        MetricsProfile, ScalePoolPolicy, ScalingConfig, ShardPoolPolicy, ShardingConfig,
+        StandardsCanisterConfig, TopupPolicy,
     },
     ids::{
         CanisterRole, ComponentSpecAdmission, ComponentSpecId, ComponentTopologyDigest,
@@ -27,9 +28,9 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use thiserror::Error as ThisError;
 
-const COMPONENT_SPEC_HASH_DOMAIN: &[u8] = b"canic/component-spec/v2";
-const COMPONENT_TOPOLOGY_HASH_DOMAIN: &[u8] = b"canic/component-topology/v2";
-const COMPONENT_TOPOLOGY_SCHEMA_VERSION: u32 = 2;
+const COMPONENT_SPEC_HASH_DOMAIN: &[u8] = b"canic/component-spec/v3";
+const COMPONENT_TOPOLOGY_HASH_DOMAIN: &[u8] = b"canic/component-topology/v3";
+const COMPONENT_TOPOLOGY_SCHEMA_VERSION: u32 = 3;
 
 /// Maximum canonical bytes accepted for one Fleet-wide Component Topology.
 pub const MAX_COMPONENT_TOPOLOGY_CANONICAL_BYTES: usize = 2_097_152;
@@ -44,7 +45,7 @@ impl ConfigModel {
 ///
 /// ComponentTopology
 ///
-/// Canonically ordered, non-recursive Fleet Component admission graph.
+/// Canonically ordered Fleet Component admissions and flat potential child-role catalogs.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -52,6 +53,111 @@ impl ConfigModel {
 pub struct ComponentTopology {
     pub component_specs: Vec<ComponentSpec>,
     pub provisioning_grants: Vec<ComponentProvisioningGrant>,
+}
+
+fn validate_component_specs(specs: &[ComponentSpec]) -> Result<(), ComponentTopologyError> {
+    let mut previous_component_spec: Option<&ComponentSpecId> = None;
+    for spec in specs {
+        if previous_component_spec.is_some_and(|previous| previous >= &spec.component_spec) {
+            return Err(ComponentTopologyError::NonCanonicalComponentSpecOrder {
+                component_spec: spec.component_spec.clone(),
+            });
+        }
+        previous_component_spec = Some(&spec.component_spec);
+
+        let mut previous_child: Option<&CanisterRole> = None;
+        for child in &spec.children {
+            if previous_child.is_some_and(|previous| previous >= &child.role) {
+                return Err(ComponentTopologyError::NonCanonicalComponentChildOrder {
+                    component_spec: spec.component_spec.clone(),
+                    role: child.role.clone(),
+                });
+            }
+            previous_child = Some(&child.role);
+        }
+
+        validate_spawn_grants(spec)?;
+    }
+
+    Ok(())
+}
+
+fn validate_spawn_grants(spec: &ComponentSpec) -> Result<(), ComponentTopologyError> {
+    let mut previous: Option<(&CanisterRole, &CanisterRole)> = None;
+    let mut incoming = BTreeSet::new();
+    for grant in &spec.spawn_grants {
+        let identity = (&grant.parent_role, &grant.child_role);
+        if previous.is_some_and(|previous| previous >= identity) {
+            return Err(ComponentTopologyError::NonCanonicalSpawnGrantOrder {
+                component_spec: spec.component_spec.clone(),
+                parent_role: grant.parent_role.clone(),
+                child_role: grant.child_role.clone(),
+            });
+        }
+        previous = Some(identity);
+
+        validate_spawn_grant(spec, grant)?;
+        incoming.insert(&grant.child_role);
+    }
+    if spec.spawn_grants.len() > MAX_COMPONENT_SPAWN_GRANTS {
+        return Err(ComponentTopologyError::SpawnGrantBoundExceeded {
+            component_spec: spec.component_spec.clone(),
+            actual: spec.spawn_grants.len(),
+            maximum: MAX_COMPONENT_SPAWN_GRANTS,
+        });
+    }
+    for child in &spec.children {
+        if !incoming.contains(&child.role) {
+            return Err(ComponentTopologyError::ChildRoleWithoutSpawnGrant {
+                component_spec: spec.component_spec.clone(),
+                child_role: child.role.clone(),
+            });
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_spawn_grant(
+    spec: &ComponentSpec,
+    grant: &ComponentSpawnGrant,
+) -> Result<(), ComponentTopologyError> {
+    if grant.maximum_instances_per_parent == 0 {
+        return Err(ComponentTopologyError::ZeroSpawnGrantLimit {
+            component_spec: spec.component_spec.clone(),
+            parent_role: grant.parent_role.clone(),
+            child_role: grant.child_role.clone(),
+        });
+    }
+    if grant.parent_role != spec.component_role
+        && spec
+            .children
+            .binary_search_by(|child| child.role.cmp(&grant.parent_role))
+            .is_err()
+    {
+        return Err(ComponentTopologyError::UnknownSpawnGrantParent {
+            component_spec: spec.component_spec.clone(),
+            parent_role: grant.parent_role.clone(),
+        });
+    }
+    let child = spec
+        .children
+        .binary_search_by(|child| child.role.cmp(&grant.child_role))
+        .ok()
+        .map(|index| &spec.children[index])
+        .ok_or_else(|| ComponentTopologyError::UnknownSpawnGrantChild {
+            component_spec: spec.component_spec.clone(),
+            child_role: grant.child_role.clone(),
+        })?;
+    if child.kind == ComponentChildKind::Singleton && grant.maximum_instances_per_parent != 1 {
+        return Err(ComponentTopologyError::InvalidSingletonSpawnGrantLimit {
+            component_spec: spec.component_spec.clone(),
+            parent_role: grant.parent_role.clone(),
+            child_role: grant.child_role.clone(),
+        });
+    }
+
+    Ok(())
 }
 
 impl ComponentTopology {
@@ -120,45 +226,7 @@ impl ComponentTopology {
     }
 
     fn validate_canonical_projection(&self) -> Result<(), ComponentTopologyError> {
-        let mut previous_component_spec: Option<&ComponentSpecId> = None;
-        for spec in &self.component_specs {
-            if previous_component_spec.is_some_and(|previous| previous >= &spec.component_spec) {
-                return Err(ComponentTopologyError::NonCanonicalComponentSpecOrder {
-                    component_spec: spec.component_spec.clone(),
-                });
-            }
-            previous_component_spec = Some(&spec.component_spec);
-
-            let mut previous_child: Option<&CanisterRole> = None;
-            let mut initial_children = 0_u64;
-            for child in &spec.children {
-                if previous_child.is_some_and(|previous| previous >= &child.role) {
-                    return Err(ComponentTopologyError::NonCanonicalComponentChildOrder {
-                        component_spec: spec.component_spec.clone(),
-                        role: child.role.clone(),
-                    });
-                }
-                previous_child = Some(&child.role);
-                if child.initial_instances > child.maximum_instances {
-                    return Err(ComponentTopologyError::InitialChildExceedsMaximum {
-                        component_spec: spec.component_spec.clone(),
-                        role: child.role.clone(),
-                        initial_instances: child.initial_instances,
-                        maximum_instances: child.maximum_instances,
-                    });
-                }
-                initial_children += u64::from(child.initial_instances);
-            }
-            if initial_children > u64::from(spec.limits.maximum_children) {
-                return Err(
-                    ComponentTopologyError::InitialChildrenExceedComponentLimit {
-                        component_spec: spec.component_spec.clone(),
-                        initial_children,
-                        maximum_children: spec.limits.maximum_children,
-                    },
-                );
-            }
-        }
+        validate_component_specs(&self.component_specs)?;
 
         let mut previous_grant: Option<(&ComponentSpecId, &ComponentSpecId)> = None;
         let mut grant_counts = BTreeMap::<ComponentSpecId, usize>::new();
@@ -338,7 +406,7 @@ impl ComponentTopology {
 ///
 /// ComponentSpec
 ///
-/// One compiled Component role, immutable Spec hash, limits, and direct-child set.
+/// One compiled Component role, immutable Spec hash, limits, and child-role catalog.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -350,6 +418,33 @@ pub struct ComponentSpec {
     pub maximum_fleet_instances: u32,
     pub limits: ComponentLimits,
     pub children: Vec<ComponentChildSpec>,
+    pub spawn_grants: Vec<ComponentSpawnGrant>,
+}
+
+impl ComponentSpec {
+    /// Return one admitted potential descendant role.
+    #[must_use]
+    pub fn child(&self, role: &CanisterRole) -> Option<&ComponentChildSpec> {
+        self.children
+            .binary_search_by(|child| child.role.cmp(role))
+            .ok()
+            .map(|index| &self.children[index])
+    }
+
+    /// Return the exact capability for one registered parent role to create one child role.
+    #[must_use]
+    pub fn spawn_grant(
+        &self,
+        parent_role: &CanisterRole,
+        child_role: &CanisterRole,
+    ) -> Option<&ComponentSpawnGrant> {
+        self.spawn_grants
+            .binary_search_by(|grant| {
+                (&grant.parent_role, &grant.child_role).cmp(&(parent_role, child_role))
+            })
+            .ok()
+            .map(|index| &self.spawn_grants[index])
+    }
 }
 
 ///
@@ -361,7 +456,7 @@ pub struct ComponentSpec {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentLimits {
-    pub maximum_children: u32,
+    pub maximum_descendants: u32,
     pub maximum_registry_bytes: u64,
     pub cycles_funding: CyclesFundingBudget,
 }
@@ -369,7 +464,7 @@ pub struct ComponentLimits {
 ///
 /// ComponentChildSpec
 ///
-/// One canonically ordered direct structural edge owned by a Component Spec.
+/// One canonically ordered role permitted anywhere below a Component.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -377,9 +472,21 @@ pub struct ComponentLimits {
 pub struct ComponentChildSpec {
     pub role: CanisterRole,
     pub kind: ComponentChildKind,
-    pub initial_instances: u32,
-    pub maximum_instances: u32,
     pub cycles_funding: ComponentChildFundingPolicy,
+}
+
+///
+/// ComponentSpawnGrant
+///
+/// One explicit parent-role capability to create one direct child role.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ComponentSpawnGrant {
+    pub parent_role: CanisterRole,
+    pub child_role: CanisterRole,
+    pub maximum_instances_per_parent: u32,
 }
 
 ///
@@ -462,8 +569,13 @@ pub enum ComponentTopologyError {
         role: CanisterRole,
     },
 
-    #[error("protected Component Child principal must differ from its owner and root")]
+    #[error(
+        "protected Component Child principal must differ from its Component, parent, root and Coordinator"
+    )]
     ChildPrincipalConflictsWithOwner,
+
+    #[error("protected Component Child parent must differ from its Coordinator and root")]
+    ChildParentConflictsWithAuthority,
 
     #[error("protected Component principal must differ from its Coordinator and root")]
     ComponentPrincipalConflictsWithAuthority,
@@ -563,34 +675,6 @@ pub enum ComponentTopologyError {
     },
 
     #[error(
-        "Component Spec '{component_spec}' child '{role}' initial count {initial_instances} exceeds maximum {maximum_instances}"
-    )]
-    InitialChildExceedsMaximum {
-        component_spec: ComponentSpecId,
-        role: CanisterRole,
-        initial_instances: u32,
-        maximum_instances: u32,
-    },
-
-    #[error(
-        "Component Spec '{component_spec}' initial child count {initial_children} exceeds Component limit {maximum_children}"
-    )]
-    InitialChildrenExceedComponentLimit {
-        component_spec: ComponentSpecId,
-        initial_children: u64,
-        maximum_children: u32,
-    },
-
-    #[error(
-        "Component Spec '{component_spec}' minimum footprint {required_canisters} exceeds root managed-Canister limit {maximum_managed_canisters}"
-    )]
-    InitialComponentFootprintExceedsRootLimit {
-        component_spec: ComponentSpecId,
-        required_canisters: u64,
-        maximum_managed_canisters: u32,
-    },
-
-    #[error(
         "Component Spec '{component_spec}' root admission {maximum_root_instances} exceeds Fleet maximum {maximum_fleet_instances}"
     )]
     RootAdmissionExceedsFleetMaximum {
@@ -619,6 +703,66 @@ pub enum ComponentTopologyError {
 
     #[error("Component Spec '{component_spec}' root admission must be positive")]
     ZeroRootAdmission { component_spec: ComponentSpecId },
+
+    #[error(
+        "Component Spec '{component_spec}' spawn grant '{parent_role}' -> '{child_role}' must have a positive per-parent ceiling"
+    )]
+    ZeroSpawnGrantLimit {
+        component_spec: ComponentSpecId,
+        parent_role: CanisterRole,
+        child_role: CanisterRole,
+    },
+
+    #[error(
+        "Component Spec '{component_spec}' singleton spawn grant '{parent_role}' -> '{child_role}' must have a per-parent ceiling of one"
+    )]
+    InvalidSingletonSpawnGrantLimit {
+        component_spec: ComponentSpecId,
+        parent_role: CanisterRole,
+        child_role: CanisterRole,
+    },
+
+    #[error(
+        "Component Spec '{component_spec}' spawn grant references undeclared parent role '{parent_role}'"
+    )]
+    UnknownSpawnGrantParent {
+        component_spec: ComponentSpecId,
+        parent_role: CanisterRole,
+    },
+
+    #[error(
+        "Component Spec '{component_spec}' spawn grant references undeclared child role '{child_role}'"
+    )]
+    UnknownSpawnGrantChild {
+        component_spec: ComponentSpecId,
+        child_role: CanisterRole,
+    },
+
+    #[error(
+        "Component Spec '{component_spec}' child role '{child_role}' has no incoming spawn grant"
+    )]
+    ChildRoleWithoutSpawnGrant {
+        component_spec: ComponentSpecId,
+        child_role: CanisterRole,
+    },
+
+    #[error(
+        "Component Spec '{component_spec}' declares {actual} spawn grants, exceeding bound {maximum}"
+    )]
+    SpawnGrantBoundExceeded {
+        component_spec: ComponentSpecId,
+        actual: usize,
+        maximum: usize,
+    },
+
+    #[error(
+        "Component Spec '{component_spec}' spawn grants are not in strict canonical order at '{parent_role}' -> '{child_role}'"
+    )]
+    NonCanonicalSpawnGrantOrder {
+        component_spec: ComponentSpecId,
+        parent_role: CanisterRole,
+        child_role: CanisterRole,
+    },
 }
 
 fn compile_provisioning_grants(
@@ -786,13 +930,24 @@ fn compile_component_spec(
         .map(|(role, child)| ComponentChildSpec {
             role: role.clone(),
             kind: child.kind,
-            initial_instances: child.initial_instances,
-            maximum_instances: child.maximum_instances,
             cycles_funding: ComponentChildFundingPolicy {
                 max_per_request: child.cycles_funding.max_per_request.clone(),
                 max_per_child: child.cycles_funding.max_per_child.clone(),
                 cooldown_secs: child.cycles_funding.cooldown_secs,
             },
+        })
+        .collect();
+    let spawn_grants = source
+        .spawn_grants
+        .iter()
+        .flat_map(|(parent_role, grants)| {
+            grants
+                .iter()
+                .map(move |(child_role, grant)| ComponentSpawnGrant {
+                    parent_role: parent_role.clone(),
+                    child_role: child_role.clone(),
+                    maximum_instances_per_parent: grant.maximum_instances_per_parent,
+                })
         })
         .collect();
 
@@ -802,7 +957,7 @@ fn compile_component_spec(
         component_role: source.component_role.clone(),
         maximum_fleet_instances: source.maximum_instances,
         limits: ComponentLimits {
-            maximum_children: source.limits.maximum_children,
+            maximum_descendants: source.limits.maximum_descendants,
             maximum_registry_bytes: source.limits.maximum_registry_bytes,
             cycles_funding: CyclesFundingBudget {
                 window_secs: source.limits.cycles_funding.window_secs,
@@ -810,6 +965,7 @@ fn compile_component_spec(
             },
         },
         children,
+        spawn_grants,
     })
 }
 
@@ -820,8 +976,6 @@ fn component_spec_hash(
 ) -> Result<[u8; 32], ComponentTopologyError> {
     let mut encoder = CanonicalEncoder::new(COMPONENT_SPEC_HASH_DOMAIN);
 
-    // The fixed depth marker makes the non-recursive authority shape explicit.
-    encoder.u8(1);
     encoder.string(source.component_role.as_str());
     encoder.string(component_package);
     encoder.u32(source.maximum_instances);
@@ -829,7 +983,7 @@ fn component_spec_hash(
     encode_component_runtime_policy(&mut encoder, source);
     encode_scaling(&mut encoder, source.scaling.as_ref());
     encode_sharding(&mut encoder, source.sharding.as_ref());
-    encode_binding(&mut encoder, source.binding.as_ref());
+    encode_index(&mut encoder, source.index.as_ref());
     encoder.u64(source.children.len() as u64);
 
     for (role, child) in &source.children {
@@ -837,6 +991,7 @@ fn component_spec_hash(
         encoder.string(role_package(config, role)?);
         encode_component_child(&mut encoder, child);
     }
+    encode_source_spawn_grants(&mut encoder, source);
 
     let bytes = encoder.finish("Component Spec")?;
     Ok(Sha256::digest(bytes).into())
@@ -858,7 +1013,7 @@ fn encode_compiled_component_spec(encoder: &mut CanonicalEncoder, spec: &Compone
     encoder.bytes(&spec.spec_hash);
     encoder.string(spec.component_role.as_str());
     encoder.u32(spec.maximum_fleet_instances);
-    encoder.u32(spec.limits.maximum_children);
+    encoder.u32(spec.limits.maximum_descendants);
     encoder.u64(spec.limits.maximum_registry_bytes);
     encode_cycles_budget(encoder, &spec.limits.cycles_funding);
     encoder.u64(spec.children.len() as u64);
@@ -866,9 +1021,13 @@ fn encode_compiled_component_spec(encoder: &mut CanonicalEncoder, spec: &Compone
     for child in &spec.children {
         encoder.string(child.role.as_str());
         encoder.u8(component_child_kind_tag(child.kind));
-        encoder.u32(child.initial_instances);
-        encoder.u32(child.maximum_instances);
         encode_compiled_child_funding_policy(encoder, &child.cycles_funding);
+    }
+    encoder.u64(spec.spawn_grants.len() as u64);
+    for grant in &spec.spawn_grants {
+        encoder.string(grant.parent_role.as_str());
+        encoder.string(grant.child_role.as_str());
+        encoder.u32(grant.maximum_instances_per_parent);
     }
 }
 
@@ -879,7 +1038,7 @@ fn encode_provisioning_grant(encoder: &mut CanonicalEncoder, grant: &ComponentPr
 }
 
 fn encode_component_limits(encoder: &mut CanonicalEncoder, source: &ComponentSpecConfig) {
-    encoder.u32(source.limits.maximum_children);
+    encoder.u32(source.limits.maximum_descendants);
     encoder.u64(source.limits.maximum_registry_bytes);
     encoder.u64(source.limits.cycles_funding.window_secs);
     encoder.u128(source.limits.cycles_funding.maximum_cycles.to_u128());
@@ -897,15 +1056,32 @@ fn encode_component_runtime_policy(encoder: &mut CanonicalEncoder, source: &Comp
 
 fn encode_component_child(encoder: &mut CanonicalEncoder, child: &ComponentChildConfig) {
     encoder.u8(component_child_kind_tag(child.kind));
-    encoder.u32(child.initial_instances);
-    encoder.u32(child.maximum_instances);
     encoder.u128(child.initial_cycles.to_u128());
     encode_topup(encoder, child.topup.as_ref());
     encode_cycles_funding_policy(encoder, &child.cycles_funding);
+    encode_scaling(encoder, child.scaling.as_ref());
+    encode_sharding(encoder, child.sharding.as_ref());
+    encode_index(encoder, child.index.as_ref());
     encode_auth(encoder, &child.auth);
     encode_standards(encoder, &child.standards);
     encode_diagnostics(encoder, child.diagnostics);
     encode_metrics(encoder, child.metrics);
+}
+
+fn encode_source_spawn_grants(encoder: &mut CanonicalEncoder, source: &ComponentSpecConfig) {
+    let grant_count = source
+        .spawn_grants
+        .values()
+        .map(BTreeMap::len)
+        .sum::<usize>();
+    encoder.u64(grant_count as u64);
+    for (parent_role, grants) in &source.spawn_grants {
+        for (child_role, grant) in grants {
+            encoder.string(parent_role.as_str());
+            encoder.string(child_role.as_str());
+            encoder.u32(grant.maximum_instances_per_parent);
+        }
+    }
 }
 
 fn encode_cycles_budget(encoder: &mut CanonicalEncoder, budget: &CyclesFundingBudget) {
@@ -980,12 +1156,12 @@ fn encode_shard_pool_policy(encoder: &mut CanonicalEncoder, policy: &ShardPoolPo
     encoder.u32(policy.max_shards);
 }
 
-fn encode_binding(encoder: &mut CanonicalEncoder, binding: Option<&BindingConfig>) {
-    let pools = binding.map_or(0, |config| config.pools.len());
+fn encode_index(encoder: &mut CanonicalEncoder, index: Option<&IndexConfig>) {
+    let pools = index.map_or(0, |config| config.pools.len());
     encoder.u64(pools as u64);
 
-    if let Some(binding) = binding {
-        for (name, pool) in &binding.pools {
+    if let Some(index) = index {
+        for (name, pool) in &index.pools {
             encoder.string(name);
             encoder.string(pool.canister_role.as_str());
             encoder.string(&pool.key_name);

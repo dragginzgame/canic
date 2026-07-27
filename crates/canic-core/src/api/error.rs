@@ -124,11 +124,11 @@ mod tests {
                 ErrorCode::PolicyShardRequiresServiceWithSharding,
             ),
             (
-                RegistryPolicyError::InstanceRequiresServiceWithDirectory {
+                RegistryPolicyError::InstanceRequiresServiceWithIndex {
                     role: CanisterRole::new("instance"),
                     parent_role: CanisterRole::new("plain_parent"),
                 },
-                ErrorCode::PolicyInstanceRequiresServiceWithDirectory,
+                ErrorCode::PolicyInstanceRequiresServiceWithIndex,
             ),
         ];
 

@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.9` hard-cuts Component Topology to canonical v3, replacing the
+  fixed-depth child model with root-owned multi-level Component trees backed
+  by flat potential-Wasm catalogs, explicit role-to-role spawn grants and
+  exact immediate-parent bindings, while separating Placement Index state
+  from derived Directories and raising the default tree capacity to 20,000
+  descendants; the aligned 0.101 design adds reduction-only member limits for
+  differently sized deployments of one reusable group.
+
 - `0.100.8` freezes canonical Fleet Registry genesis, snapshot, manifest and
   version evidence against the exact Component Topology and root admissions.
 

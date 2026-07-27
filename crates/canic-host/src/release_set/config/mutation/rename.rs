@@ -156,11 +156,22 @@ fn rename_role_header(
         && path[0] == "component_specs"
         && path[2] == "children"
         && path[3] == old_role;
+    let rename_spawn_grant_header = path.len() == 5
+        && path[0] == "component_specs"
+        && path[2] == "spawn_grants"
+        && (path[3] == old_role || path[4] == old_role);
 
     if rename_roles_header {
         path[1] = new_role.to_string();
     } else if rename_child_header {
         path[3] = new_role.to_string();
+    } else if rename_spawn_grant_header {
+        if path[3] == old_role {
+            path[3] = new_role.to_string();
+        }
+        if path[4] == old_role {
+            path[4] = new_role.to_string();
+        }
     } else {
         return Ok(line.to_string());
     }

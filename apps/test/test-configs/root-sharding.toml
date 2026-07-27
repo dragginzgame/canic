@@ -54,12 +54,14 @@ policy.max_shards = 4
 
 [component_specs.users.children.user_shard]
 kind = "shard"
-maximum_instances = 4
 topup = {}
 
 [component_specs.users.children.user_shard.auth]
 delegated_token_issuer = true
 role_attestation_cache = true
+
+[component_specs.users.spawn_grants.user_hub.user_shard]
+maximum_instances_per_parent = 4
 
 [component_specs.test]
 component_role = "test"

@@ -27,7 +27,7 @@ use crate::role_contract::allocation::memory::{
         LOG_ENTRIES_ID,
     },
     placement::{
-        PLACEMENT_BINDING_REGISTRY_ID, SCALING_REGISTRY_ID, SHARDING_ACTIVE_SET_ID,
+        PLACEMENT_INDEX_REGISTRY_ID, SCALING_REGISTRY_ID, SHARDING_ACTIVE_SET_ID,
         SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID,
     },
     pool::CANISTER_POOL_ID,
@@ -238,7 +238,7 @@ fn core_runtime_descriptors() -> Vec<StateAllocationDescriptor> {
 
 fn placement_capacity_descriptors() -> Vec<StateAllocationDescriptor> {
     use crate::storage::stable::{
-        placement_binding::{PlacementBindingRegistryData, PlacementBindingRegistryEntryRecord},
+        placement_index::{PlacementIndexRegistryData, PlacementIndexRegistryEntryRecord},
         pool::{CanisterPoolData, CanisterPoolEntryRecord},
         scaling::{ScalingRegistryData, ScalingRegistryEntryRecord},
     };
@@ -269,14 +269,14 @@ fn placement_capacity_descriptors() -> Vec<StateAllocationDescriptor> {
             Vec::new(),
         ),
         descriptor(
-            StateAllocationKey::PlacementBindingRegistry,
+            StateAllocationKey::PlacementIndexRegistry,
             vec![state_domain(
-                "placement_binding_registry",
-                PLACEMENT_BINDING_REGISTRY_ID,
-                PlacementBindingRegistryEntryRecord::STATE_CONTRACT_NAME,
-                PlacementBindingRegistryData::STATE_CONTRACT_NAME,
+                "placement_index_registry",
+                PLACEMENT_INDEX_REGISTRY_ID,
+                PlacementIndexRegistryEntryRecord::STATE_CONTRACT_NAME,
+                PlacementIndexRegistryData::STATE_CONTRACT_NAME,
                 150,
-                "placement_binding_registry_entries_restore_bindings",
+                "placement_index_registry_entries_restore_entries",
             )],
             Vec::new(),
         ),
@@ -762,7 +762,7 @@ mod tests {
             APPLICATION_RECEIPT_REPLAY_ID,
             CANISTER_POOL_ID,
             SCALING_REGISTRY_ID,
-            PLACEMENT_BINDING_REGISTRY_ID,
+            PLACEMENT_INDEX_REGISTRY_ID,
             SHARDING_REGISTRY_ID,
             SHARDING_ASSIGNMENT_ID,
             SHARDING_ACTIVE_SET_ID,
@@ -1059,9 +1059,7 @@ mod tests {
     #[test]
     fn placement_descriptors_reference_canonical_data_types() {
         use crate::storage::stable::{
-            placement_binding::{
-                PlacementBindingRegistryData, PlacementBindingRegistryEntryRecord,
-            },
+            placement_index::{PlacementIndexRegistryData, PlacementIndexRegistryEntryRecord},
             pool::{CanisterPoolData, CanisterPoolEntryRecord},
             scaling::{ScalingRegistryData, ScalingRegistryEntryRecord},
         };
@@ -1082,10 +1080,10 @@ mod tests {
                 ScalingRegistryData::STATE_CONTRACT_NAME,
             ),
             (
-                StateAllocationKey::PlacementBindingRegistry,
-                "placement_binding_registry",
-                PlacementBindingRegistryEntryRecord::STATE_CONTRACT_NAME,
-                PlacementBindingRegistryData::STATE_CONTRACT_NAME,
+                StateAllocationKey::PlacementIndexRegistry,
+                "placement_index_registry",
+                PlacementIndexRegistryEntryRecord::STATE_CONTRACT_NAME,
+                PlacementIndexRegistryData::STATE_CONTRACT_NAME,
             ),
         ] {
             let descriptor = descriptors

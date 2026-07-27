@@ -28,4 +28,6 @@ policy.min_workers = 2
 
 [component_specs.default.children.scale_replica]
 kind = "replica"
-maximum_instances = 32
+
+[component_specs.default.spawn_grants.scale_hub.scale_replica]
+maximum_instances_per_parent = 32

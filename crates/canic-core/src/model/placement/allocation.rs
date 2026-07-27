@@ -43,9 +43,9 @@ struct PlacementAllocationIdentityParts<'a> {
 }
 
 impl PlacementAllocationIdentity {
-    /// Derive a binding allocation identity bound to one owner, pool, and logical key.
+    /// Derive an index allocation identity bound to one owner, pool, and logical key.
     #[must_use]
-    pub fn binding(
+    pub fn index(
         owner: Principal,
         pool: &str,
         key_value: &str,
@@ -55,7 +55,7 @@ impl PlacementAllocationIdentity {
     ) -> Self {
         Self::derive(PlacementAllocationIdentityParts {
             owner,
-            placement_kind: "binding",
+            placement_kind: "index",
             pool,
             subject: key_value.as_bytes(),
             generation: claim_id,
@@ -274,9 +274,9 @@ mod tests {
         let scaling_b = PlacementAllocationIdentity::scaling(p(1), "pool", 2, &role, None);
         assert_eq!(scaling_a.resource_key, scaling_b.resource_key);
 
-        let binding_a = PlacementAllocationIdentity::binding(p(1), "pool", "a", 1, &role, None);
-        let binding_b = PlacementAllocationIdentity::binding(p(1), "pool", "b", 1, &role, None);
-        assert_ne!(binding_a.resource_key, binding_b.resource_key);
+        let index_a = PlacementAllocationIdentity::index(p(1), "pool", "a", 1, &role, None);
+        let index_b = PlacementAllocationIdentity::index(p(1), "pool", "b", 1, &role, None);
+        assert_ne!(index_a.resource_key, index_b.resource_key);
 
         #[cfg(feature = "sharding")]
         {
@@ -298,14 +298,12 @@ mod tests {
     }
 
     #[test]
-    fn binding_claims_and_shard_generations_advance_operations_not_capacity_scope() {
+    fn index_claims_and_shard_generations_advance_operations_not_capacity_scope() {
         let role = CanisterRole::new("worker");
-        let binding_first =
-            PlacementAllocationIdentity::binding(p(1), "pool", "key", 1, &role, None);
-        let binding_next =
-            PlacementAllocationIdentity::binding(p(1), "pool", "key", 2, &role, None);
-        assert_ne!(binding_first.operation_id, binding_next.operation_id);
-        assert_eq!(binding_first.resource_key, binding_next.resource_key);
+        let index_first = PlacementAllocationIdentity::index(p(1), "pool", "key", 1, &role, None);
+        let index_next = PlacementAllocationIdentity::index(p(1), "pool", "key", 2, &role, None);
+        assert_ne!(index_first.operation_id, index_next.operation_id);
+        assert_eq!(index_first.resource_key, index_next.resource_key);
 
         #[cfg(feature = "sharding")]
         {

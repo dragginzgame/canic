@@ -25,24 +25,24 @@ pub use crate::config::{ConfigError, ConfigTomlIssue};
 pub mod compiled {
     pub use crate::config::{
         ComponentChildFundingPolicy, ComponentChildSpec, ComponentLimits,
-        ComponentProvisioningGrant, ComponentSpec, ComponentTopology, ComponentTopologyError,
-        MAX_COMPONENT_TOPOLOGY_CANONICAL_BYTES,
+        ComponentProvisioningGrant, ComponentSpawnGrant, ComponentSpec, ComponentTopology,
+        ComponentTopologyError, MAX_COMPONENT_TOPOLOGY_CANONICAL_BYTES,
     };
     pub use crate::{
         cdk::{candid::Principal, types::Cycles},
         config::schema::{
-            AppConfig, AuthConfig, BindingConfig, BindingPool, CanisterAuthConfig, CanisterConfig,
-            CanisterKind, CanisterPool, CanisterRoleNameIssue, ChainKeyRootProofConfig,
-            ComponentChildConfig, ComponentChildKind, ComponentLimitsConfig,
-            ComponentProvisioningGrantConfig, ComponentSpecConfig, ConfigModel,
-            CyclesFundingBudgetConfig, CyclesFundingPolicyConfig, DelegatedTokenConfig,
-            DiagnosticsCanisterConfig, FleetInitMode, IcpRefillPolicy, LogConfig,
+            AppConfig, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind, CanisterPool,
+            CanisterRoleNameIssue, ChainKeyRootProofConfig, ComponentChildConfig,
+            ComponentChildKind, ComponentLimitsConfig, ComponentProvisioningGrantConfig,
+            ComponentSpawnGrantConfig, ComponentSpecConfig, ConfigModel, CyclesFundingBudgetConfig,
+            CyclesFundingPolicyConfig, DelegatedTokenConfig, DiagnosticsCanisterConfig,
+            FleetInitMode, IcpRefillPolicy, IndexConfig, IndexPool, LogConfig,
             MAX_COMPONENT_CHILD_ROLES, MAX_COMPONENT_PROVISIONING_GRANTS,
-            MAX_FLEET_COMPONENT_INSTANCES, MetricsCanisterConfig, MetricsProfile, NAME_MAX_BYTES,
-            PoolImport, RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool,
-            ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
-            StandardsCanisterConfig, TopupPolicy, Whitelist, validate_app_name,
-            validate_canister_role_name,
+            MAX_COMPONENT_SPAWN_GRANTS, MAX_FLEET_COMPONENT_INSTANCES, MetricsCanisterConfig,
+            MetricsProfile, NAME_MAX_BYTES, PoolImport, RoleAttestationConfig, RoleDeclaration,
+            RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool,
+            ShardPoolPolicy, ShardingConfig, Standards, StandardsCanisterConfig, TopupPolicy,
+            Whitelist, validate_app_name, validate_canister_role_name,
         },
         ids::{AppId, BuildNetwork, CanisterRole, ComponentSpecId},
     };

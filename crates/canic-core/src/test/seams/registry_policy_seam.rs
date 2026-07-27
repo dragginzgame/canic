@@ -4,8 +4,8 @@ use crate::{
     InternalError,
     cdk::types::Cycles,
     config::schema::{
-        BindingConfig, BindingPool, CanisterAuthConfig, CanisterConfig, CanisterKind,
-        CyclesFundingPolicyConfig, DiagnosticsCanisterConfig, MetricsCanisterConfig, ScalePool,
+        CanisterAuthConfig, CanisterConfig, CanisterKind, CyclesFundingPolicyConfig,
+        DiagnosticsCanisterConfig, IndexConfig, IndexPool, MetricsCanisterConfig, ScalePool,
         ScalePoolPolicy, ScalingConfig, ShardingConfig, StandardsCanisterConfig,
     },
     domain::policy::pure::topology::TopologyPolicyError,
@@ -29,7 +29,7 @@ fn root_canister_config() -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        binding: None,
+        index: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -46,7 +46,7 @@ fn service_canister_config() -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        binding: None,
+        index: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -63,7 +63,7 @@ fn singleton_canister_config() -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        binding: None,
+        index: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -89,7 +89,7 @@ fn singleton_scaling_parent_config() -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: Some(scaling),
         sharding: None,
-        binding: None,
+        index: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -113,7 +113,7 @@ fn singleton_sharding_parent_config() -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: Some(ShardingConfig::default()),
-        binding: None,
+        index: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -128,12 +128,12 @@ fn service_sharding_parent_config() -> CanisterConfig {
     }
 }
 
-// Build a singleton parent that owns one keyed placement binding for instances.
-fn singleton_directory_parent_config() -> CanisterConfig {
-    let mut directory = BindingConfig::default();
-    directory.pools.insert(
+// Build a singleton parent that owns one keyed Placement Index for instances.
+fn singleton_index_parent_config() -> CanisterConfig {
+    let mut index = IndexConfig::default();
+    index.pools.insert(
         "projects".to_string(),
-        BindingPool {
+        IndexPool {
             canister_role: CanisterRole::new("instance_child"),
             key_name: "project".to_string(),
         },
@@ -147,7 +147,7 @@ fn singleton_directory_parent_config() -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        binding: Some(directory),
+        index: Some(index),
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -155,10 +155,10 @@ fn singleton_directory_parent_config() -> CanisterConfig {
     }
 }
 
-fn service_directory_parent_config() -> CanisterConfig {
+fn service_index_parent_config() -> CanisterConfig {
     CanisterConfig {
         kind: CanisterKind::Service,
-        ..singleton_directory_parent_config()
+        ..singleton_index_parent_config()
     }
 }
 
@@ -171,7 +171,7 @@ fn replica_canister_config() -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        binding: None,
+        index: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -188,7 +188,7 @@ fn shard_canister_config() -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        binding: None,
+        index: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -205,7 +205,7 @@ fn instance_canister_config() -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        binding: None,
+        index: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -218,7 +218,7 @@ fn registry_shape(cfg: &CanisterConfig) -> RegistryCanisterShape {
         kind: registry_kind(cfg.kind),
         has_scaling: cfg.scaling.is_some(),
         has_sharding: cfg.sharding.is_some(),
-        has_directory: cfg.binding.is_some(),
+        has_index: cfg.index.is_some(),
     }
 }
 
@@ -276,7 +276,7 @@ fn registry_kind_policy_blocks_but_ops_allows() {
         | RegistryPolicyError::ServiceRequiresRootParent { .. }
         | RegistryPolicyError::ReplicaRequiresServiceWithScaling { .. }
         | RegistryPolicyError::ShardRequiresServiceWithSharding { .. }
-        | RegistryPolicyError::InstanceRequiresServiceWithDirectory { .. } => {
+        | RegistryPolicyError::InstanceRequiresServiceWithIndex { .. } => {
             panic!("expected root duplicate role error")
         }
     }
@@ -339,7 +339,7 @@ fn registry_service_policy_blocks_duplicate_role() {
         | RegistryPolicyError::ServiceRequiresRootParent { .. }
         | RegistryPolicyError::ReplicaRequiresServiceWithScaling { .. }
         | RegistryPolicyError::ShardRequiresServiceWithSharding { .. }
-        | RegistryPolicyError::InstanceRequiresServiceWithDirectory { .. } => {
+        | RegistryPolicyError::InstanceRequiresServiceWithIndex { .. } => {
             panic!("expected service duplicate role error")
         }
     }
@@ -419,7 +419,7 @@ fn registry_singleton_policy_blocks_under_parent() {
         | RegistryPolicyError::ServiceRequiresRootParent { .. }
         | RegistryPolicyError::ReplicaRequiresServiceWithScaling { .. }
         | RegistryPolicyError::ShardRequiresServiceWithSharding { .. }
-        | RegistryPolicyError::InstanceRequiresServiceWithDirectory { .. } => {
+        | RegistryPolicyError::InstanceRequiresServiceWithIndex { .. } => {
             panic!("expected duplicate singleton under parent error");
         }
     }
@@ -459,7 +459,7 @@ fn registry_wasm_store_policy_allows_multiple_under_same_parent() {
 }
 
 #[test]
-fn instance_creation_requires_service_directory_parent() {
+fn instance_creation_requires_service_index_parent() {
     let role = CanisterRole::new("instance_child");
     let parent_role = CanisterRole::new("plain_parent");
     let parent_pid = p(7);
@@ -476,7 +476,7 @@ fn instance_creation_requires_service_directory_parent() {
     .expect_err("policy should reject instance creation under non-service parent");
 
     match &err {
-        RegistryPolicyError::InstanceRequiresServiceWithDirectory {
+        RegistryPolicyError::InstanceRequiresServiceWithIndex {
             role: err_role,
             parent_role: err_parent_role,
         } => {
@@ -489,12 +489,12 @@ fn instance_creation_requires_service_directory_parent() {
     let public = Error::from(InternalError::from(TopologyPolicyError::from(err)));
     assert_eq!(
         public.code,
-        ErrorCode::PolicyInstanceRequiresServiceWithDirectory
+        ErrorCode::PolicyInstanceRequiresServiceWithIndex
     );
 }
 
 #[test]
-fn instance_creation_requires_directory_config_on_service_parent() {
+fn instance_creation_requires_index_config_on_service_parent() {
     let role = CanisterRole::new("instance_child");
     let parent_role = CanisterRole::new("project_hub");
     let parent_pid = p(9);
@@ -508,22 +508,22 @@ fn instance_creation_requires_directory_config_on_service_parent() {
         &parent_role,
         registry_shape(&service_canister_config()),
     )
-    .expect_err("policy should reject instance creation under service parent without directory");
+    .expect_err("policy should reject instance creation under service parent without an index");
 
     match &err {
-        RegistryPolicyError::InstanceRequiresServiceWithDirectory {
+        RegistryPolicyError::InstanceRequiresServiceWithIndex {
             role: err_role,
             parent_role: err_parent_role,
         } => {
             assert_eq!(err_role, &role);
             assert_eq!(err_parent_role, &parent_role);
         }
-        _ => panic!("expected instance service-directory policy error"),
+        _ => panic!("expected instance service-index policy error"),
     }
 }
 
 #[test]
-fn instance_creation_rejects_singleton_directory_parent() {
+fn instance_creation_rejects_singleton_index_parent() {
     let role = CanisterRole::new("instance_child");
     let parent_role = CanisterRole::new("project_hub");
     let parent_pid = p(10);
@@ -535,24 +535,24 @@ fn instance_creation_rejects_singleton_directory_parent() {
         &data,
         registry_shape(&instance_canister_config()),
         &parent_role,
-        registry_shape(&singleton_directory_parent_config()),
+        registry_shape(&singleton_index_parent_config()),
     )
-    .expect_err("singleton directory parents should not create instances");
+    .expect_err("singleton index parents should not create instances");
 
     match &err {
-        RegistryPolicyError::InstanceRequiresServiceWithDirectory {
+        RegistryPolicyError::InstanceRequiresServiceWithIndex {
             role: err_role,
             parent_role: err_parent_role,
         } => {
             assert_eq!(err_role, &role);
             assert_eq!(err_parent_role, &parent_role);
         }
-        _ => panic!("expected instance service-directory policy error"),
+        _ => panic!("expected instance service-index policy error"),
     }
 }
 
 #[test]
-fn instance_creation_succeeds_under_service_directory_parent() {
+fn instance_creation_succeeds_under_service_index_parent() {
     let role = CanisterRole::new("instance_child");
     let parent_role = CanisterRole::new("project_hub");
     let parent_pid = p(10);
@@ -564,9 +564,9 @@ fn instance_creation_succeeds_under_service_directory_parent() {
         &data,
         registry_shape(&instance_canister_config()),
         &parent_role,
-        registry_shape(&service_directory_parent_config()),
+        registry_shape(&service_index_parent_config()),
     )
-    .expect("instance should be allowed under service directory parent");
+    .expect("instance should be allowed under service index parent");
 }
 
 #[test]

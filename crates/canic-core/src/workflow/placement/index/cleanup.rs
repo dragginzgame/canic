@@ -1,63 +1,62 @@
-//! Module: workflow::placement::binding::cleanup
+//! Module: workflow::placement::index::cleanup
 //!
-//! Responsibility: recycle abandoned binding children and release stale claims.
+//! Responsibility: recycle abandoned index children and release stale claims.
 //! Does not own: pool lifecycle rules, registry schemas, or recovery endpoint mapping.
 //! Boundary: delegates orphan disposal and performs claim-matching cleanup writes.
 
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
-    config::schema::BindingPool,
-    dto::placement::binding::{PlacementBindingRecoveryResponse, PlacementBindingStatusResponse},
+    config::schema::IndexPool,
+    dto::placement::index::{PlacementIndexRecoveryResponse, PlacementIndexStatusResponse},
     ops::{
         ic::IcOps,
         rpc::request::RequestOps,
         runtime::metrics::{
-            placement_binding::{
-                PlacementBindingMetricOperation as MetricOperation,
-                PlacementBindingMetricReason as MetricReason,
+            placement_index::{
+                PlacementIndexMetricOperation as MetricOperation,
+                PlacementIndexMetricReason as MetricReason,
             },
-            recording::PlacementBindingMetricEvent as MetricEvent,
+            recording::PlacementIndexMetricEvent as MetricEvent,
         },
         storage::{
-            placement::binding::{
-                PlacementBindingPendingClaim, PlacementBindingRegistryOps,
-                PlacementBindingReleaseResult,
+            placement::index::{
+                PlacementIndexPendingClaim, PlacementIndexRegistryOps, PlacementIndexReleaseResult,
             },
             registry::subnet::SubnetRegistryOps,
         },
     },
     workflow::placement::{
         allocation::PlacementAllocationWorkflow,
-        binding::{PlacementBindingWorkflow, create::placement_binding_allocation_request},
+        index::{PlacementIndexWorkflow, create::placement_index_allocation_request},
     },
 };
 
-impl PlacementBindingWorkflow {
+impl PlacementIndexWorkflow {
     // Recycle any abandoned provisional child and release the stale claim so one caller can
     // re-claim the key in the same user-driven flow without background timers.
     pub(super) async fn cleanup_stale_entry(
         pool: &str,
         key_value: &str,
-        pool_cfg: &BindingPool,
+        pool_cfg: &IndexPool,
         claim_id: u64,
         owner_pid: Principal,
         provisional_pid: Principal,
     ) -> Result<(), InternalError> {
         MetricEvent::started(MetricOperation::CleanupStale);
-        let claim = PlacementBindingPendingClaim {
+        let claim = PlacementIndexPendingClaim {
             claim_id,
             owner_pid,
             created_at: 0,
         };
-        let request = placement_binding_allocation_request(pool, key_value, pool_cfg, claim);
+        let request = placement_index_allocation_request(pool, key_value, pool_cfg, claim);
         let permit = PlacementAllocationWorkflow::resume_permit(&request)?;
         if let Err(err) = Self::recycle_abandoned_child(provisional_pid).await {
             MetricEvent::failed(MetricOperation::CleanupStale, &err);
             return Err(err);
         }
 
-        if let Err(err) = PlacementBindingRegistryOps::release_stale_pending_if_claim_matches(
+        if let Err(err) = PlacementIndexRegistryOps::release_stale_pending_if_claim_matches(
             pool,
             key_value,
             claim_id,
@@ -95,18 +94,18 @@ impl PlacementBindingWorkflow {
     pub(super) async fn recover_cleanup_stale_entry(
         pool: &str,
         key_value: &str,
-        pool_cfg: &BindingPool,
+        pool_cfg: &IndexPool,
         claim_id: u64,
         owner_pid: Principal,
         provisional_pid: Principal,
-    ) -> Result<Option<PlacementBindingRecoveryResponse>, InternalError> {
+    ) -> Result<Option<PlacementIndexRecoveryResponse>, InternalError> {
         MetricEvent::started(MetricOperation::CleanupStale);
-        let claim = PlacementBindingPendingClaim {
+        let claim = PlacementIndexPendingClaim {
             claim_id,
             owner_pid,
             created_at: 0,
         };
-        let request = placement_binding_allocation_request(pool, key_value, pool_cfg, claim);
+        let request = placement_index_allocation_request(pool, key_value, pool_cfg, claim);
         let permit = PlacementAllocationWorkflow::resume_permit(&request)?;
         if let Err(err) = Self::recycle_abandoned_child(provisional_pid).await {
             MetricEvent::failed(MetricOperation::CleanupStale, &err);
@@ -114,7 +113,7 @@ impl PlacementBindingWorkflow {
         }
 
         let now = IcOps::now_secs();
-        let result = PlacementBindingRegistryOps::release_stale_pending_if_claim_matches(
+        let result = PlacementIndexRegistryOps::release_stale_pending_if_claim_matches(
             pool, key_value, claim_id, now,
         );
         let result = match result {
@@ -126,36 +125,34 @@ impl PlacementBindingWorkflow {
         };
         PlacementAllocationWorkflow::finish_disposed_child(&permit, provisional_pid)?;
         match result {
-            PlacementBindingReleaseResult::ReleasedStalePending {
+            PlacementIndexReleaseResult::ReleasedStalePending {
                 owner_pid,
                 created_at,
                 provisional_pid,
             } => {
                 MetricEvent::completed(MetricOperation::CleanupStale, MetricReason::ReleasedStale);
-                Ok(Some(
-                    PlacementBindingRecoveryResponse::ReleasedStalePending {
-                        owner_pid,
-                        created_at,
-                        provisional_pid,
-                        released_at: now,
-                    },
-                ))
+                Ok(Some(PlacementIndexRecoveryResponse::ReleasedStalePending {
+                    owner_pid,
+                    created_at,
+                    provisional_pid,
+                    released_at: now,
+                }))
             }
-            PlacementBindingReleaseResult::Missing => {
+            PlacementIndexReleaseResult::Missing => {
                 MetricEvent::skipped(MetricOperation::CleanupStale, MetricReason::Missing);
-                Ok(Some(PlacementBindingRecoveryResponse::Missing))
+                Ok(Some(PlacementIndexRecoveryResponse::Missing))
             }
-            PlacementBindingReleaseResult::Bound {
+            PlacementIndexReleaseResult::Bound {
                 instance_pid,
                 bound_at,
             } => {
                 MetricEvent::skipped(MetricOperation::CleanupStale, MetricReason::AlreadyBound);
-                Ok(Some(PlacementBindingRecoveryResponse::Bound {
+                Ok(Some(PlacementIndexRecoveryResponse::Bound {
                     instance_pid,
                     bound_at,
                 }))
             }
-            PlacementBindingReleaseResult::PendingRetained { .. } => {
+            PlacementIndexReleaseResult::PendingRetained { .. } => {
                 MetricEvent::skipped(MetricOperation::CleanupStale, MetricReason::PendingCurrent);
                 Ok(None)
             }
@@ -166,21 +163,21 @@ impl PlacementBindingWorkflow {
     pub(super) fn repair_stale_entry(
         pool: &str,
         key_value: &str,
-        pool_cfg: &BindingPool,
+        pool_cfg: &IndexPool,
         claim_id: u64,
         owner_pid: Principal,
         provisional_pid: Principal,
         now: u64,
-    ) -> Result<PlacementBindingStatusResponse, InternalError> {
+    ) -> Result<PlacementIndexStatusResponse, InternalError> {
         MetricEvent::started(MetricOperation::RepairStale);
-        let claim = PlacementBindingPendingClaim {
+        let claim = PlacementIndexPendingClaim {
             claim_id,
             owner_pid,
             created_at: 0,
         };
-        let request = placement_binding_allocation_request(pool, key_value, pool_cfg, claim);
+        let request = placement_index_allocation_request(pool, key_value, pool_cfg, claim);
         let permit = PlacementAllocationWorkflow::resume_permit(&request)?;
-        let repaired = match PlacementBindingRegistryOps::bind_if_claim_matches(
+        let repaired = match PlacementIndexRegistryOps::bind_if_claim_matches(
             pool,
             key_value,
             claim_id,
@@ -197,13 +194,13 @@ impl PlacementBindingWorkflow {
             MetricEvent::failed_reason(MetricOperation::RepairStale, MetricReason::ClaimLost);
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Workflow,
-                "binding claim lost during stale repair without an await boundary",
+                "index claim lost during stale repair without an await boundary",
             ));
         }
         PlacementAllocationWorkflow::finish_registered_child(&permit, provisional_pid)?;
 
         MetricEvent::completed(MetricOperation::RepairStale, MetricReason::Ok);
-        Ok(PlacementBindingStatusResponse::Bound {
+        Ok(PlacementIndexStatusResponse::Bound {
             instance_pid: provisional_pid,
             bound_at: now,
         })

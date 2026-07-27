@@ -1,4 +1,4 @@
-//! Minimal dedicated instance canister for placement-binding tests.
+//! Minimal dedicated instance canister for placement-index tests.
 
 #![expect(clippy::unused_async)]
 

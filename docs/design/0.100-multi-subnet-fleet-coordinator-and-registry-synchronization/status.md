@@ -6,16 +6,17 @@ Date: 2026-07-27
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.7`.
-- Open patch draft: `0.100.8`; no package-version change has been authorized.
+- Workspace package version: `0.100.8`.
+- Open patch draft: `0.100.9`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
 exactly one Fleet Subnet Root per occupied `(FleetKey, SubnetId)`, with each
-root managing a flat collection of Component instances. A Component Spec
-declares one direct Component role and its direct children. A concrete
-Component receives a root-allocated `ComponentInstanceId` only when its
-Canister is created.
+root managing multiple Component instances as dynamic multi-level trees. A
+Component Spec declares one direct Component role and a flat catalog of every
+potential descendant role/Wasm. Concrete parentage is root-owned Registry
+state. A Component receives a root-allocated `ComponentInstanceId` only when
+its Canister is created.
 
 Different Fleets may each own an independent Fleet Subnet Root on the same
 physical Subnet. Root uniqueness, authority, admissions, Stores and limits
@@ -27,16 +28,15 @@ Catalog. The host builds one qualified Component/Component-Child artifact
 union per `ReleaseBuildId` and projects an exact release-set manifest for each
 root.
 
-The latest design amendment adds bounded non-parent Component Provisioning
-Grants and explicit initial-child cardinality. A Project Hub may cause a peer
-Project Instance to be created, but the selected Fleet Subnet Root remains its
-direct parent, controller, Registry owner and lifecycle executor. The root
-creates the Project Instance's required Ledger before activation; the optional
-Machine remains a later request from the exact Project Instance. Every root
-admitted for that Spec stores the complete Project Instance/Ledger/Machine
-artifact closure once. This amendment hard-replaces the intermediate
-Component Spec/Topology canonical encoding with schema/domain version 2 and
-was released in `v0.100.7`.
+The latest design amendment separates flat artifact admission from dynamic
+runtime parentage. A Project Hub creates a Project Instance as its direct child
+on the same root/Subnet; that Project Instance may create its Ledger, Machine
+and further children. Each child records its immediate parent, but the Fleet
+Subnet Root remains sole controller, Registry owner and lifecycle executor.
+Every root admitted for the Project Hub Spec stores the complete
+Hub/Instance/Ledger/Machine potential-Wasm catalog once. The open 0.100.9
+hard-cuts Component Spec/Topology canonical encoding to schema/domain version
+3 with no v2 decoder.
 
 Canic infrastructure now has its own exact three-entry artifact manifest for
 the Coordinator, Fleet Subnet Root and Wasm Store. The host directly installs
@@ -59,25 +59,33 @@ Registry slices replace the 0.99 root model.
 - [x] Record the intermediate Tree declaration implementation and its bounded
   validation.
 - [x] Remove `TreeSpecId`, `TreeGroupId`, `TreeId` and their public exports.
-- [x] Replace `[tree_specs.*]` and `[tree_groups.*]` with non-recursive
+- [x] Replace `[tree_specs.*]` and `[tree_groups.*]` with flat
   `[component_specs.*]`.
 - [x] Replace `canic app role attach --tree-spec` with
   `--component-spec <component-spec>` and no alias.
-- [x] Require exactly one Component role and a direct child set per Component
-  Spec.
+- [x] Require exactly one Component role and a flat potential child-role/Wasm
+  catalog per Component Spec.
 - [x] Enforce positive Spec maxima and the 4,096-Component-instance Fleet
   bound.
-- [x] Reject `root`, `service` and `component` kinds, `owner_component`,
-  nested Components and child-owned children.
+- [x] Reject `root`, `service` and `component` child kinds,
+  `owner_component` and nested Component declarations.
 - [x] Add `ComponentSpecId` and the canonical `ComponentInstanceId` type.
 - [x] Derive and freeze the canonical bounded Component Topology.
 - [x] Hard-cut the canonical Component Spec/Topology encoding to version 2
   with initial child cardinalities and non-parent provisioning grants.
-- [x] Validate bounded grant targets, cycles and per-requester/root ceilings.
+- [x] Hard-cut version 2 to canonical version 3, removing initial/direct-depth
+  authority and compiling the flat potential-Wasm catalog plus exact
+  role-to-role spawn grants.
+- [x] Validate bounded spawn-grant parents, targets, completeness and
+  per-parent ceilings while allowing recursive role capabilities.
+- [x] Validate bounded peer-Component provisioning-grant targets, cycles and
+  per-requester/root ceilings.
 - [ ] Replace the temporary environment Component Spec selector with protected
   `ComponentBinding`.
 - [x] Freeze `SubnetId`, Coordinator authority, `FleetSubnetRootBinding`,
   Component admissions, root limits and protected Component/child bindings.
+- [x] Bind every Component Child to its immediate Component-tree parent so
+  protected identity can represent arbitrary runtime depth.
 - [ ] Hard-cut Fleet Root to Fleet Subnet Root.
 - [ ] Hard-cut local `SubnetRegistry` and `SubnetDirectory` to root-owned
   per-Component `ComponentRegistry` and `ComponentDirectory`.
@@ -127,10 +135,9 @@ Registry slices replace the 0.99 root model.
 
 - [ ] Implement durable root-local `ComponentInstanceId` allocation.
 - [ ] Implement admitted direct Component creation through the root.
-- [ ] Materialize every configured initial child before Component activation.
 - [ ] Implement same-root grant-checked peer Component provisioning while
   retaining causal origin without parentage.
-- [ ] Implement authenticated Component-to-root Component Child effects.
+- [ ] Implement authenticated parent-to-root child effects at arbitrary depth.
 - [ ] Make the Fleet Subnet Root the required lifecycle controller and retain
   authoritative idempotent receipts.
 - [ ] Resolve lifecycle artifacts only through the active release set.
@@ -138,7 +145,12 @@ Registry slices replace the 0.99 root model.
 - [ ] Atomically activate the Fleet Registry Mirror and Fleet Directory.
 - [ ] Store logical Component Registries in one bounded root-local collection
   with independent per-Component heads.
-- [ ] Derive ownership-preserving Component Directories.
+- [ ] Store normalized Component Registry rows with principal, parent/role,
+  count and operation-journal indexes.
+- [ ] Derive ownership-preserving Component Directories with compact heads and
+  revision-bound pagination.
+- [ ] Run subtree removal as durable post-order traversal and partition
+  mutation serialization by Component instance.
 - [ ] Distribute Directories directly from the root to Components and
   Component Children.
 
@@ -155,19 +167,20 @@ Registry slices replace the 0.99 root model.
 ## Current Batch
 
 Released 0.100.1 parses only flat
-`[component_specs.*]`, compiles all Component roles and direct children into
+`[component_specs.*]`, compiles all Component and potential child roles into
 bootstrap input, builds their union through host projections and exposes
 `--component-spec` attachment with no old flag. Root is implicit
-infrastructure outside Specs. Component roles are globally unique; the same
-declared child artifact may occur on several structural edges without a
-role-only lookup choosing an owner.
+infrastructure outside Specs. Top-level Component roles are unique as
+Component declarations, but a role may also appear in another Spec's flat
+potential-descendant catalog. The same declared descendant artifact may occur
+in several catalogs without a role-only lookup choosing an owner.
 
 This batch defines but does not yet allocate durable `ComponentInstanceId`
 values. It now compiles each validated config into a bounded canonical
 Component Topology, freezes domain-separated golden Spec hashes and root-local
 topology digests, and exposes strong `SubnetId`, Coordinator/root authority,
 root limits, admission and Component/child binding contracts. Component
-aggregate child, Registry-byte and cycles-funding limits compile from finite
+aggregate descendant, Registry-byte and cycles-funding limits compile from finite
 config defaults or exact overrides.
 
 The host topology planner accepts resolved root principals, physical Subnets,
@@ -197,8 +210,8 @@ compiler. It requires the exact topology role set in both pre-build targets
 and qualified build outputs, binds canonical evidence to one
 `ReleaseBuildId` and the Fleet-wide Component Topology digest, and rejects
 package, path, representation, build or topology drift. Exact per-root
-release-set projection retains every Component Spec and direct-child
-authorization edge. Repeated or byte-identical artifacts count only once
+release-set projection retains every Component Spec and child-role
+authorization entry. Repeated or byte-identical artifacts count only once
 against the root's Wasm Store byte limit without deduplicating those
 authorization entries.
 
@@ -225,7 +238,7 @@ version 2, compiles exact initial-child cardinality and bounded non-parent
 provisioning grants, and projects grants incoming to admitted target Specs
 without importing requester admission or artifacts.
 
-The open 0.100.8 batch freezes passive Fleet Registry snapshot, manifest and
+Released 0.100.8 freezes passive Fleet Registry snapshot, manifest and
 version contracts plus a bounded domain-separated canonical encoding.
 Epoch-one/revision-one genesis contains the complete immutable Component Spec
 set and zero roots. Snapshot validation admits incremental partial `Joining`
@@ -233,6 +246,21 @@ rows while enforcing the configured App, exact protected Coordinator
 authority, canonical physical-Subnet order, unique root principals, one active
 release build, root topology/admissions/limits and aggregate Fleet admission
 ceilings. Durable commits and root transitions remain pending.
+
+The open 0.100.9 batch hard-cuts fixed-depth Component Topology v2 to v3.
+Specs now compile one Component role plus a flat catalog of every potential
+descendant Wasm. `initial_instances` is removed, aggregate
+`maximum_children` becomes `maximum_descendants`, and every protected child
+binding records its immediate parent. Child-role `maximum_instances` is
+replaced by an explicit role-to-role spawn grant with a positive
+`maximum_instances_per_parent`; `maximum_descendants` caps the whole tree and
+defaults to 20,000. A child may request another admitted child in the same
+Component tree/Subnet only through its exact grant, while the root retains
+every controller, funding, Registry, artifact-selection and lifecycle effect.
+Descendant roles may own scaling, sharding and Placement Index pools. The
+default Registry allowance is 16 MiB, and the design requires normalized
+indexed storage, compact revision-bound Directory pages, durable post-order
+subtree removal and per-Component concurrency.
 
 The current installer does not yet produce all three concrete infrastructure
 outputs or invoke the infrastructure persistence boundary. It does not yet

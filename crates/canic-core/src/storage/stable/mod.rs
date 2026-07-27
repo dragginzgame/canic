@@ -8,7 +8,7 @@ pub mod fleet_activation;
 pub mod icp_refill;
 pub mod intent;
 pub mod log;
-pub mod placement_binding;
+pub mod placement_index;
 pub mod pool;
 pub mod registry;
 pub mod replay;

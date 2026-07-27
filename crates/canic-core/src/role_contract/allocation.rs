@@ -67,7 +67,7 @@ pub mod memory {
         pub const SCALING_REGISTRY_ID: u8 = 52;
         pub const SHARDING_REGISTRY_ID: u8 = 53;
         pub const SHARDING_ASSIGNMENT_ID: u8 = 54;
-        pub const PLACEMENT_BINDING_REGISTRY_ID: u8 = 55;
+        pub const PLACEMENT_INDEX_REGISTRY_ID: u8 = 55;
         pub const SHARDING_ACTIVE_SET_ID: u8 = 56;
     }
 
@@ -106,7 +106,7 @@ use memory::{
         LOG_ENTRIES_ID,
     },
     placement::{
-        PLACEMENT_BINDING_REGISTRY_ID, SCALING_REGISTRY_ID, SHARDING_ACTIVE_SET_ID,
+        PLACEMENT_INDEX_REGISTRY_ID, SCALING_REGISTRY_ID, SHARDING_ACTIVE_SET_ID,
         SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID,
     },
     pool::CANISTER_POOL_ID,
@@ -155,7 +155,7 @@ const CORE_RUNTIME_INTENT_IDS: &[MemoryId] = &[
 ];
 const CANISTER_POOL_IDS: &[MemoryId] = &[MemoryId::new(CANISTER_POOL_ID)];
 const SCALING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(SCALING_REGISTRY_ID)];
-const PLACEMENT_BINDING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(PLACEMENT_BINDING_REGISTRY_ID)];
+const PLACEMENT_INDEX_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(PLACEMENT_INDEX_REGISTRY_ID)];
 const SHARDING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_REGISTRY_ID)];
 const SHARDING_ASSIGNMENT_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_ASSIGNMENT_ID)];
 const SHARDING_ACTIVE_SET_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_ACTIVE_SET_ID)];
@@ -222,9 +222,9 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         SCALING_REGISTRY_IDS,
     ),
     definition(
-        StateAllocationKey::PlacementBindingRegistry,
+        StateAllocationKey::PlacementIndexRegistry,
         AllocationOwner::CanicCore,
-        PLACEMENT_BINDING_REGISTRY_IDS,
+        PLACEMENT_INDEX_REGISTRY_IDS,
     ),
     definition(
         StateAllocationKey::ShardingRegistry,

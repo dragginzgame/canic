@@ -64,7 +64,7 @@ type ErrorCode = variant {
   NotFound;
   AuthMaterialStale;
   PolicySingletonAlreadyRegisteredUnderParent;
-  PolicyInstanceRequiresServiceWithDirectory;
+  PolicyInstanceRequiresServiceWithIndex;
   Unauthorized;
   PolicyReplicaRequiresServiceWithScaling;
   AuthProofExpired;

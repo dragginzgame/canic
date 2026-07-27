@@ -1,6 +1,6 @@
 //! Module: config::topology::validation
 //!
-//! Responsibility: validate protected root, Component, and direct-child bindings.
+//! Responsibility: validate protected root, Component, and multi-level child bindings.
 //! Does not own: binding construction, Registry persistence, authorization, or allocation.
 //! Boundary: compares passive binding facts against one canonical compiled topology.
 
@@ -50,7 +50,6 @@ impl ComponentTopology {
     ) -> Result<Self, ComponentTopologyError> {
         validate_root_limits(limits)?;
         let projection = self.project_for_admissions(admissions)?;
-        validate_initial_component_footprints(&projection, limits)?;
         let expected = projection.digest()?;
         if component_topology_digest != expected {
             return Err(ComponentTopologyError::RootTopologyDigestMismatch {
@@ -145,7 +144,7 @@ impl ComponentTopology {
         Ok(())
     }
 
-    /// Validate one direct Component Child binding against its exact structural owner.
+    /// Validate one child binding against its Component tree and immediate parent.
     pub fn validate_component_child_binding(
         &self,
         root: &FleetSubnetRootBinding,
@@ -153,11 +152,22 @@ impl ComponentTopology {
     ) -> Result<(), ComponentTopologyError> {
         self.validate_component_binding(root, &binding.component)?;
         require_nonanonymous(&binding.canister_id, "component_child.canister_id")?;
+        require_nonanonymous(
+            &binding.parent_canister_id,
+            "component_child.parent_canister_id",
+        )?;
 
         if binding.canister_id == root.fleet_subnet_root
             || binding.canister_id == binding.component.canister_id
+            || binding.canister_id == binding.parent_canister_id
+            || binding.canister_id == root.authority.binding.coordinator
         {
             return Err(ComponentTopologyError::ChildPrincipalConflictsWithOwner);
+        }
+        if binding.parent_canister_id == root.fleet_subnet_root
+            || binding.parent_canister_id == root.authority.binding.coordinator
+        {
+            return Err(ComponentTopologyError::ChildParentConflictsWithAuthority);
         }
 
         let component_spec = self.get(&binding.component.component_spec).ok_or_else(|| {
@@ -178,28 +188,6 @@ impl ComponentTopology {
 
         Ok(())
     }
-}
-
-fn validate_initial_component_footprints(
-    topology: &ComponentTopology,
-    limits: &FleetSubnetRootLimits,
-) -> Result<(), ComponentTopologyError> {
-    for spec in &topology.component_specs {
-        let required_canisters = spec.children.iter().fold(1_u64, |total, child| {
-            total + u64::from(child.initial_instances)
-        });
-        if required_canisters > u64::from(limits.maximum_managed_canisters) {
-            return Err(
-                ComponentTopologyError::InitialComponentFootprintExceedsRootLimit {
-                    component_spec: spec.component_spec.clone(),
-                    required_canisters,
-                    maximum_managed_canisters: limits.maximum_managed_canisters,
-                },
-            );
-        }
-    }
-
-    Ok(())
 }
 
 fn validate_root_limits(limits: &FleetSubnetRootLimits) -> Result<(), ComponentTopologyError> {

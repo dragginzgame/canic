@@ -72,36 +72,32 @@ pub(in crate::release_set) fn configured_role_lifecycle_from_config(
                 ));
         }
 
-        if let Some(scaling) = &component_spec.scaling {
-            for (pool, scale_pool) in &scaling.pools {
-                topology
-                    .entry(scale_pool.canister_role.clone())
-                    .or_default()
-                    .push(format!(
-                        "{component_spec_id}/{component_role}/scaling/{pool}"
-                    ));
+        for (parent_role, canister) in component_spec.canister_configs() {
+            if let Some(scaling) = &canister.scaling {
+                for (pool, scale_pool) in &scaling.pools {
+                    topology
+                        .entry(scale_pool.canister_role.clone())
+                        .or_default()
+                        .push(format!("{component_spec_id}/{parent_role}/scaling/{pool}"));
+                }
             }
-        }
 
-        if let Some(sharding) = &component_spec.sharding {
-            for (pool, shard_pool) in &sharding.pools {
-                topology
-                    .entry(shard_pool.canister_role.clone())
-                    .or_default()
-                    .push(format!(
-                        "{component_spec_id}/{component_role}/sharding/{pool}"
-                    ));
+            if let Some(sharding) = &canister.sharding {
+                for (pool, shard_pool) in &sharding.pools {
+                    topology
+                        .entry(shard_pool.canister_role.clone())
+                        .or_default()
+                        .push(format!("{component_spec_id}/{parent_role}/sharding/{pool}"));
+                }
             }
-        }
 
-        if let Some(binding) = &component_spec.binding {
-            for (pool, binding_pool) in &binding.pools {
-                topology
-                    .entry(binding_pool.canister_role.clone())
-                    .or_default()
-                    .push(format!(
-                        "{component_spec_id}/{component_role}/binding/{pool}"
-                    ));
+            if let Some(index) = &canister.index {
+                for (pool, index_pool) in &index.pools {
+                    topology
+                        .entry(index_pool.canister_role.clone())
+                        .or_default()
+                        .push(format!("{component_spec_id}/{parent_role}/index/{pool}"));
+                }
             }
         }
     }

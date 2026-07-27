@@ -1,29 +1,29 @@
 use crate::dto::prelude::*;
 
 //
-// PlacementBindingRegistryEntry
+// PlacementIndexRegistryEntry
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct PlacementBindingRegistryEntry {
+pub struct PlacementIndexRegistryEntry {
     pub pool: String,
     pub key_value: String,
-    pub status: PlacementBindingStatusResponse,
+    pub status: PlacementIndexStatusResponse,
 }
 
 //
-// PlacementBindingRegistryResponse
+// PlacementIndexRegistryResponse
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct PlacementBindingRegistryResponse(pub Vec<PlacementBindingRegistryEntry>);
+pub struct PlacementIndexRegistryResponse(pub Vec<PlacementIndexRegistryEntry>);
 
 //
-// PlacementBindingStatusResponse
+// PlacementIndexStatusResponse
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub enum PlacementBindingStatusResponse {
+pub enum PlacementIndexStatusResponse {
     Pending {
         owner_pid: Principal,
         created_at: u64,
@@ -36,11 +36,11 @@ pub enum PlacementBindingStatusResponse {
 }
 
 //
-// PlacementBindingRecoveryResponse
+// PlacementIndexRecoveryResponse
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub enum PlacementBindingRecoveryResponse {
+pub enum PlacementIndexRecoveryResponse {
     Missing,
     FreshPending {
         owner_pid: Principal,

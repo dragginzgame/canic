@@ -213,8 +213,8 @@ const fn registry_policy_error_code(err: &RegistryPolicyError) -> Option<PublicE
         RegistryPolicyError::ShardRequiresServiceWithSharding { .. } => {
             Some(PublicErrorCode::PolicyShardRequiresServiceWithSharding)
         }
-        RegistryPolicyError::InstanceRequiresServiceWithDirectory { .. } => {
-            Some(PublicErrorCode::PolicyInstanceRequiresServiceWithDirectory)
+        RegistryPolicyError::InstanceRequiresServiceWithIndex { .. } => {
+            Some(PublicErrorCode::PolicyInstanceRequiresServiceWithIndex)
         }
         RegistryPolicyError::ServiceRequiresRootParent { .. } => None,
     }

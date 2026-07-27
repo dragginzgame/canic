@@ -57,7 +57,7 @@ pub mod canister {
     }
 
     pub mod placement {
-        pub use crate::__internal::core::api::placement::binding::PlacementBindingApi;
+        pub use crate::__internal::core::api::placement::index::PlacementIndexApi;
         pub use crate::__internal::core::api::placement::scaling::ScalingApi;
 
         #[cfg(feature = "sharding")]

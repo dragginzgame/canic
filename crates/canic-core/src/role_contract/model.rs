@@ -52,7 +52,7 @@ pub enum CanicFeatureEffect {
 pub enum RoleCapabilityKey {
     DelegatedTokenIssuer,
     DelegatedTokenVerifier,
-    Directory,
+    Index,
     Icrc21,
     RoleAttestationSigner,
     RoleAttestationVerifier,
@@ -84,7 +84,7 @@ pub enum StateAllocationKey {
     CoreRuntimeIntent,
     CoreRuntimeObservability,
     CoreRuntimeTopology,
-    PlacementBindingRegistry,
+    PlacementIndexRegistry,
     ScalingRegistry,
     ShardingActiveSet,
     ShardingAssignments,

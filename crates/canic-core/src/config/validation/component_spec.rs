@@ -1,14 +1,14 @@
 //! Module: config::validation::component_spec
 //!
-//! Responsibility: validate Component Spec topology, placement, and refill configuration.
+//! Responsibility: validate Component Spec catalogs, spawn grants, placement, and refill policy.
 //! Does not own: topology workflow, placement policy execution, or schema definitions.
 //! Boundary: config validation calls this before runtime installation.
 
 use crate::{
     config::schema::{
-        ComponentChildConfig, ComponentChildKind, ComponentSpecConfig, ConfigSchemaError,
+        CanisterConfig, ComponentChildKind, ComponentSpecConfig, ConfigSchemaError,
         CyclesFundingPolicyConfig, MAX_COMPONENT_CHILD_ROLES, MAX_COMPONENT_PROVISIONING_GRANTS,
-        NAME_MAX_BYTES, TopupPolicy, Validate,
+        MAX_COMPONENT_SPAWN_GRANTS, NAME_MAX_BYTES, TopupPolicy, Validate,
     },
     config::validation::validate_canister_role,
     ids::CanisterRole,
@@ -44,9 +44,9 @@ impl Validate for ComponentSpecConfig {
                 self.provisions.len(),
             )));
         }
-        if !self.children.is_empty() && self.limits.maximum_children == 0 {
+        if !self.children.is_empty() && self.limits.maximum_descendants == 0 {
             return Err(ConfigSchemaError::ValidationError(format!(
-                "Component '{}' limits.maximum_children must be > 0 when children are declared",
+                "Component '{}' limits.maximum_descendants must be > 0 when child roles are declared",
                 self.component_role,
             )));
         }
@@ -73,20 +73,25 @@ impl Validate for ComponentSpecConfig {
         validate_topup(self.topup.as_ref(), &self.component_role)?;
 
         validate_component_children(self)?;
+        validate_spawn_grants(self)?;
         validate_provisioning_grant_limits(self)?;
 
-        validate_scaling(self, &self.component_role, &self.children)?;
-        validate_sharding(self, &self.component_role, &self.children)?;
-        validate_binding(self, &self.component_role, &self.children)?;
+        validate_placement_policies(
+            self,
+            &self.component_role,
+            &self.component_canister_config(),
+        )?;
+        for (role, child) in &self.children {
+            validate_placement_policies(self, role, &child.canister_config())?;
+        }
 
         Ok(())
     }
 }
 
 fn validate_component_children(config: &ComponentSpecConfig) -> Result<(), ConfigSchemaError> {
-    let mut initial_children = 0_u32;
     for (role, child) in &config.children {
-        validate_canister_role(role, "Component Child")?;
+        validate_canister_role(role, "Component child role")?;
         if role == &config.component_role {
             return Err(ConfigSchemaError::ValidationError(format!(
                 "Component '{}' cannot also be its own child",
@@ -98,37 +103,71 @@ fn validate_component_children(config: &ComponentSpecConfig) -> Result<(), Confi
                 "Component Child '{role}' is reserved infrastructure",
             )));
         }
-        if child.maximum_instances == 0 {
-            return Err(ConfigSchemaError::ValidationError(format!(
-                "Component Child '{role}' maximum_instances must be > 0",
-            )));
-        }
-        if child.initial_instances > child.maximum_instances {
-            return Err(ConfigSchemaError::ValidationError(format!(
-                "Component Child '{role}' initial_instances must be <= maximum_instances",
-            )));
-        }
-        if child.kind == ComponentChildKind::Singleton && child.maximum_instances != 1 {
-            return Err(ConfigSchemaError::ValidationError(format!(
-                "singleton Component Child '{role}' maximum_instances must equal 1",
-            )));
-        }
-        initial_children = initial_children
-            .checked_add(child.initial_instances)
-            .ok_or_else(|| {
-                ConfigSchemaError::ValidationError(format!(
-                    "Component '{}' initial child count overflowed",
-                    config.component_role,
-                ))
-            })?;
         validate_cycles_funding(&child.cycles_funding, role)?;
         validate_topup(child.topup.as_ref(), role)?;
     }
-    if initial_children > config.limits.maximum_children {
+
+    Ok(())
+}
+
+fn validate_spawn_grants(config: &ComponentSpecConfig) -> Result<(), ConfigSchemaError> {
+    let grant_count = config
+        .spawn_grants
+        .values()
+        .try_fold(0_usize, |count, grants| count.checked_add(grants.len()));
+    let Some(grant_count) = grant_count else {
         return Err(ConfigSchemaError::ValidationError(format!(
-            "Component '{}' initial child count {initial_children} exceeds limits.maximum_children {}",
-            config.component_role, config.limits.maximum_children,
+            "Component '{}' spawn grant count overflowed",
+            config.component_role,
         )));
+    };
+    if grant_count > MAX_COMPONENT_SPAWN_GRANTS {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "Component '{}' declares {grant_count} spawn grants, exceeding bound {MAX_COMPONENT_SPAWN_GRANTS}",
+            config.component_role,
+        )));
+    }
+
+    let mut incoming = BTreeMap::<&CanisterRole, usize>::new();
+    for (parent_role, grants) in &config.spawn_grants {
+        if parent_role != &config.component_role && !config.children.contains_key(parent_role) {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "Component '{}' spawn grants reference undeclared parent role '{parent_role}'",
+                config.component_role,
+            )));
+        }
+
+        for (child_role, grant) in grants {
+            let Some(child) = config.children.get(child_role) else {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "Component '{}' spawn grant '{parent_role}' -> '{child_role}' references an undeclared child role",
+                    config.component_role,
+                )));
+            };
+            if grant.maximum_instances_per_parent == 0 {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "Component '{}' spawn grant '{parent_role}' -> '{child_role}' maximum_instances_per_parent must be > 0",
+                    config.component_role,
+                )));
+            }
+            if child.kind == ComponentChildKind::Singleton
+                && grant.maximum_instances_per_parent != 1
+            {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "singleton Component Child '{child_role}' spawn grants must set maximum_instances_per_parent = 1",
+                )));
+            }
+            *incoming.entry(child_role).or_default() += 1;
+        }
+    }
+
+    for child_role in config.children.keys() {
+        if !incoming.contains_key(child_role) {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "Component '{}' child role '{child_role}' has no incoming spawn grant",
+                config.component_role,
+            )));
+        }
     }
 
     Ok(())
@@ -202,12 +241,39 @@ fn validate_topup(
     Ok(())
 }
 
+fn validate_placement_policies(
+    cfg: &ComponentSpecConfig,
+    role: &CanisterRole,
+    canister: &CanisterConfig,
+) -> Result<(), ConfigSchemaError> {
+    validate_scaling(cfg, role, canister)?;
+    validate_sharding(cfg, role, canister)?;
+    validate_index(cfg, role, canister)
+}
+
+fn spawn_limit(
+    cfg: &ComponentSpecConfig,
+    parent_role: &CanisterRole,
+    child_role: &CanisterRole,
+) -> Result<u32, ConfigSchemaError> {
+    cfg.spawn_grants
+        .get(parent_role)
+        .and_then(|grants| grants.get(child_role))
+        .map(|grant| grant.maximum_instances_per_parent)
+        .ok_or_else(|| {
+            ConfigSchemaError::ValidationError(format!(
+                "Component '{}' placement policy for '{parent_role}' targets '{child_role}' without a matching spawn grant",
+                cfg.component_role,
+            ))
+        })
+}
+
 fn validate_sharding(
     cfg: &ComponentSpecConfig,
     role: &CanisterRole,
-    children: &BTreeMap<CanisterRole, ComponentChildConfig>,
+    canister: &CanisterConfig,
 ) -> Result<(), ConfigSchemaError> {
-    let Some(sharding) = &cfg.sharding else {
+    let Some(sharding) = &canister.sharding else {
         return Ok(());
     };
 
@@ -218,14 +284,14 @@ fn validate_sharding(
             )));
         }
 
-        if !children.contains_key(&pool.canister_role) {
+        if !cfg.children.contains_key(&pool.canister_role) {
             return Err(ConfigSchemaError::ValidationError(format!(
-                "Component '{role}' sharding pool '{pool_name}' references undeclared direct child '{}'",
+                "Component '{role}' sharding pool '{pool_name}' references undeclared child role '{}'",
                 pool.canister_role
             )));
         }
 
-        let target = &children[&pool.canister_role];
+        let target = &cfg.children[&pool.canister_role];
         if target.kind != ComponentChildKind::Shard {
             return Err(ConfigSchemaError::ValidationError(format!(
                 "Component '{role}' sharding pool '{pool_name}' references child '{}' which is not kind = \"shard\"",
@@ -245,9 +311,10 @@ fn validate_sharding(
             )));
         }
 
-        if pool.policy.max_shards > target.maximum_instances {
+        let maximum_instances_per_parent = spawn_limit(cfg, role, &pool.canister_role)?;
+        if pool.policy.max_shards > maximum_instances_per_parent {
             return Err(ConfigSchemaError::ValidationError(format!(
-                "Component '{role}' sharding pool '{pool_name}' max_shards exceeds child '{}' maximum_instances",
+                "Component '{role}' sharding pool '{pool_name}' max_shards exceeds spawn grant to '{}' maximum_instances_per_parent",
                 pool.canister_role,
             )));
         }
@@ -259,9 +326,9 @@ fn validate_sharding(
 fn validate_scaling(
     cfg: &ComponentSpecConfig,
     role: &CanisterRole,
-    children: &BTreeMap<CanisterRole, ComponentChildConfig>,
+    canister: &CanisterConfig,
 ) -> Result<(), ConfigSchemaError> {
-    let Some(scaling) = &cfg.scaling else {
+    let Some(scaling) = &canister.scaling else {
         return Ok(());
     };
 
@@ -272,14 +339,14 @@ fn validate_scaling(
             )));
         }
 
-        if !children.contains_key(&pool.canister_role) {
+        if !cfg.children.contains_key(&pool.canister_role) {
             return Err(ConfigSchemaError::ValidationError(format!(
-                "Component '{role}' scaling pool '{pool_name}' references undeclared direct child '{}'",
+                "Component '{role}' scaling pool '{pool_name}' references undeclared child role '{}'",
                 pool.canister_role
             )));
         }
 
-        let target = &children[&pool.canister_role];
+        let target = &cfg.children[&pool.canister_role];
         if target.kind != ComponentChildKind::Replica {
             return Err(ConfigSchemaError::ValidationError(format!(
                 "Component '{role}' scaling pool '{pool_name}' references child '{}' which is not kind = \"replica\"",
@@ -305,9 +372,10 @@ fn validate_scaling(
             )));
         }
 
-        if pool.policy.max_workers > target.maximum_instances {
+        let maximum_instances_per_parent = spawn_limit(cfg, role, &pool.canister_role)?;
+        if pool.policy.max_workers > maximum_instances_per_parent {
             return Err(ConfigSchemaError::ValidationError(format!(
-                "Component '{role}' scaling pool '{pool_name}' max_workers exceeds child '{}' maximum_instances",
+                "Component '{role}' scaling pool '{pool_name}' max_workers exceeds spawn grant to '{}' maximum_instances_per_parent",
                 pool.canister_role,
             )));
         }
@@ -316,49 +384,50 @@ fn validate_scaling(
     Ok(())
 }
 
-fn validate_binding(
+fn validate_index(
     cfg: &ComponentSpecConfig,
     role: &CanisterRole,
-    children: &BTreeMap<CanisterRole, ComponentChildConfig>,
+    canister: &CanisterConfig,
 ) -> Result<(), ConfigSchemaError> {
-    let Some(binding) = &cfg.binding else {
+    let Some(index) = &canister.index else {
         return Ok(());
     };
 
-    for (pool_name, pool) in &binding.pools {
+    for (pool_name, pool) in &index.pools {
         if pool_name.len() > NAME_MAX_BYTES {
             return Err(ConfigSchemaError::ValidationError(format!(
-                "canister '{role}' binding pool '{pool_name}' name exceeds {NAME_MAX_BYTES} bytes",
+                "canister '{role}' index pool '{pool_name}' name exceeds {NAME_MAX_BYTES} bytes",
             )));
         }
 
         if pool.key_name.is_empty() {
             return Err(ConfigSchemaError::ValidationError(format!(
-                "canister '{role}' binding pool '{pool_name}' must define a non-empty key_name",
+                "canister '{role}' index pool '{pool_name}' must define a non-empty key_name",
             )));
         }
 
         if pool.key_name.len() > NAME_MAX_BYTES {
             return Err(ConfigSchemaError::ValidationError(format!(
-                "canister '{role}' binding pool '{pool_name}' key_name '{}' exceeds {NAME_MAX_BYTES} bytes",
+                "canister '{role}' index pool '{pool_name}' key_name '{}' exceeds {NAME_MAX_BYTES} bytes",
                 pool.key_name
             )));
         }
 
-        if !children.contains_key(&pool.canister_role) {
+        if !cfg.children.contains_key(&pool.canister_role) {
             return Err(ConfigSchemaError::ValidationError(format!(
-                "Component '{role}' binding pool '{pool_name}' references undeclared direct child '{}'",
+                "Component '{role}' index pool '{pool_name}' references undeclared child role '{}'",
                 pool.canister_role
             )));
         }
 
-        let target = &children[&pool.canister_role];
+        let target = &cfg.children[&pool.canister_role];
         if target.kind != ComponentChildKind::Instance {
             return Err(ConfigSchemaError::ValidationError(format!(
-                "Component '{role}' binding pool '{pool_name}' references child '{}' which is not kind = \"instance\"",
+                "Component '{role}' index pool '{pool_name}' references child '{}' which is not kind = \"instance\"",
                 pool.canister_role
             )));
         }
+        let _ = spawn_limit(cfg, role, &pool.canister_role)?;
     }
 
     Ok(())

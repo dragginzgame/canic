@@ -54,14 +54,9 @@ pub(in crate::release_set) fn attach_app_role_source(
             },
         })?;
     let target_component_spec = config.component_specs.get(component_spec);
-    let role_is_component = config
-        .component_specs
-        .values()
-        .any(|spec| spec.component_role == role_id);
     let role_already_in_target = target_component_spec
         .is_some_and(|spec| spec.component_role == role_id || spec.children.contains_key(&role_id));
     if role_already_in_target
-        || role_is_component
         || (target_component_spec.is_none() && config.attached_roles().contains(&role_id))
     {
         return Err(AppConfigError::MutationConflict {
@@ -80,7 +75,15 @@ pub(in crate::release_set) fn attach_app_role_source(
         source.push_str(&toml_string_literal(role));
         source.push_str("]\nkind = ");
         source.push_str(&toml_string_literal(kind));
-        source.push_str("\nmaximum_instances = 1\n");
+        source.push_str("\n\n[component_specs.");
+        source.push_str(&toml_string_literal(component_spec));
+        source.push_str(".spawn_grants.");
+        source.push_str(&toml_string_literal(
+            component_spec_config.component_role.as_str(),
+        ));
+        source.push('.');
+        source.push_str(&toml_string_literal(role));
+        source.push_str("]\nmaximum_instances_per_parent = 1\n");
         (
             kind.to_string(),
             format!(

@@ -7,7 +7,7 @@ fn configured_role_capabilities_lists_enabled_role_features() {
 
     let capabilities = BTreeSet::from([
         RoleCapabilityKey::DelegatedTokenIssuer,
-        RoleCapabilityKey::Directory,
+        RoleCapabilityKey::Index,
         RoleCapabilityKey::Root,
         RoleCapabilityKey::RootControlPlane,
         RoleCapabilityKey::Scaling,
@@ -18,7 +18,7 @@ fn configured_role_capabilities_lists_enabled_role_features() {
         crate::release_set::config::project_role_capabilities(&capabilities),
         vec![
             "auth".to_string(),
-            "directory".to_string(),
+            "index".to_string(),
             "scaling".to_string(),
             "sharding".to_string(),
         ]
@@ -87,7 +87,9 @@ canister_role = "user_shard"
 
 [component_specs.user_hub.children.user_shard]
 kind = "shard"
-maximum_instances = 4096
+
+[component_specs.user_hub.spawn_grants.user_hub.user_shard]
+maximum_instances_per_parent = 20_000
 
 [component_specs.scale_hub]
 component_role = "scale_hub"
@@ -95,10 +97,12 @@ maximum_instances = 1
 
 [component_specs.scale_hub.children.scale_replica]
 kind = "replica"
-maximum_instances = 4096
 
 [component_specs.scale_hub.children.scale_replica.metrics]
 profile = "full"
+
+[component_specs.scale_hub.spawn_grants.scale_hub.scale_replica]
+maximum_instances_per_parent = 20_000
 "#;
     let profiles = configured_role_metrics_profiles_from_config(&parsed_config(config));
 

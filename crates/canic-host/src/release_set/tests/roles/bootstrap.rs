@@ -29,6 +29,10 @@ package = "user_shard"
 kind = "canister"
 package = "project_instance"
 
+[roles.project_worker]
+kind = "canister"
+package = "project_worker"
+
 [roles.scale_hub]
 kind = "canister"
 package = "scale_hub"
@@ -53,17 +57,31 @@ canister_role = "user_shard"
 policy.capacity = 100
 policy.max_shards = 4
 
-[component_specs.user_hub.binding.pools.projects]
+[component_specs.user_hub.index.pools.projects]
 canister_role = "project_instance"
 key_name = "project_id"
 
 [component_specs.user_hub.children.user_shard]
 kind = "shard"
-maximum_instances = 4096
 
 [component_specs.user_hub.children.project_instance]
 kind = "instance"
-maximum_instances = 4096
+
+[component_specs.user_hub.children.project_instance.scaling.pools.workers]
+canister_role = "project_worker"
+policy.max_workers = 8
+
+[component_specs.user_hub.children.project_worker]
+kind = "replica"
+
+[component_specs.user_hub.spawn_grants.user_hub.user_shard]
+maximum_instances_per_parent = 20_000
+
+[component_specs.user_hub.spawn_grants.user_hub.project_instance]
+maximum_instances_per_parent = 20_000
+
+[component_specs.user_hub.spawn_grants.project_instance.project_worker]
+maximum_instances_per_parent = 8
 
 [component_specs.scale_hub]
 component_role = "scale_hub"
@@ -74,11 +92,13 @@ canister_role = "scale_replica"
 
 [component_specs.scale_hub.children.scale_replica]
 kind = "replica"
-maximum_instances = 4096
+
+[component_specs.scale_hub.spawn_grants.scale_hub.scale_replica]
+maximum_instances_per_parent = 20_000
 "#;
     let pools = configured_pool_expectations_from_config(&parsed_config(config));
 
-    assert_eq!(pools.len(), 3);
+    assert_eq!(pools.len(), 4);
     assert!(
         pools
             .iter()
@@ -88,6 +108,11 @@ maximum_instances = 4096
         pools
             .iter()
             .any(|pool| { pool.pool == "projects" && pool.canister_role == "project_instance" })
+    );
+    assert!(
+        pools
+            .iter()
+            .any(|pool| { pool.pool == "workers" && pool.canister_role == "project_worker" })
     );
     assert!(
         pools
@@ -269,7 +294,9 @@ policy.max_shards = 4
 
 [component_specs.user_hub.children.user_shard]
 kind = "shard"
-maximum_instances = 4096
+
+[component_specs.user_hub.spawn_grants.user_hub.user_shard]
+maximum_instances_per_parent = 20_000
 
 "#;
     let roles = configured_bootstrap_roles_from_config(&parsed_config(config));

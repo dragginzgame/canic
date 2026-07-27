@@ -1,6 +1,6 @@
 # Canic 0.101 Implementation Status
 
-Date: 2026-07-26
+Date: 2026-07-27
 
 ## Status
 
@@ -9,8 +9,8 @@ Date: 2026-07-26
 - Implementation started: no.
 - Dependency: completed 0.100 qualified infrastructure, Fleet Subnet Root,
   Component Spec, root-local Component identity, topology-admitted Wasm Store
-  and Registry architecture, including Component Provisioning Grants and
-  initial-child materialization.
+  and Registry architecture, including flat potential-Wasm catalogs and
+  multi-level dynamic Component trees.
 - Open design blockers: none. Application-data replication remains a separate
   later design and is not an implementation blocker for 0.101 topology,
   purpose or discovery contracts.
@@ -37,15 +37,28 @@ pre-admitted roots, including a root that completed the separate ordinary
 root-registration lifecycle before scale-out. Toko's one-cell-per-root choice
 and maximum of ten are example policy values, not protocol limits.
 
-The design now also carries the required high-cardinality Toko path. A
-singleton published Project Hub Authority may use the exact compiled
-`project_hub -> project_instance` Component Provisioning Grant to request an
-ordinary Project Instance on the same or another eligible root. The
-Coordinator is not on this per-instance path. The selected root allocates and
-controls the Project Instance, creates its required Ledger before activation
-and retains the receipt; only the Project Instance may later create its
-optional Machine. The Hub's `project_id -> ComponentBinding` map is
-application data, not Canic parentage.
+Separate deployment IDs may reference the same Component Group while applying
+different reduction-only limits to exact flattened member paths. The
+Component Spec remains the absolute envelope. A deployment may narrow
+`maximum_descendants`, `maximum_registry_bytes` and exact role-to-role
+spawn-grant ceilings, but may not raise them, add grants or replace component
+configuration. Every placement and later scale-out of one deployment inherits
+the same protected effective limits. This permits one Project Hub deployment
+with a 10,000-instance Hub-to-Instance grant and another on a different root
+and physical Subnet with a 2,000-instance effective grant without duplicating
+its group, Spec, role or Wasm.
+
+The design now also carries the corrected high-cardinality Toko path. Every
+project-data-cell placement contains one Project Hub PoolMember beside the
+database Replicas. The Hub asks its own root to create Project Instance direct
+children, and a Project Instance asks the same root to create its Ledger and
+optional Machine children. Every child binding records the exact immediate
+parent while the root remains sole lifecycle authority. The Coordinator is not
+on this path. The Hub's `project_id -> ComponentChildBinding` map is
+an application-owned Placement Index that agrees with, but does not replace,
+protected Canic parentage or the root-derived Component Directory. The Hub and
+Project Instance use distinct explicit spawn grants for their respective
+child roles.
 
 0.101 does not consume a 0.100 installation, preserve existing Canisters,
 synchronize application data, choose load-balancer health, scale in, promote a
@@ -76,19 +89,22 @@ change that installation ownership.
 - [ ] Validate service-wide member density/spread independently of deployment
   placement policy.
 - [ ] Add bounded inert deployment labels that cannot alter authority.
+- [ ] Compile bounded reduction-only deployment-member limits against exact
+  flattened paths and immutable Component Spec envelopes.
 - [ ] Persist one plan-derived protected Component deployment context so
-  application policy can enforce Authority/Replica purpose.
+  application policy can enforce Authority/Replica purpose and the root can
+  enforce exact effective limits.
 - [ ] Derive one semantic protected configuration digest over groups,
   deployments and service targets.
-- [ ] Resolve every cross-root provisioner to an exact Component Spec with a
-  compiled target grant and configured Fleet-service occurrence.
 - [ ] Remove singleton-Spec and sole-root-admission service assumptions.
 - [ ] Validate worst-case Spec demand, placement density/spread and the
-  zero-initial/non-Authority versus singleton-Authority count rules.
+  zero-placement/non-Authority versus singleton-Authority count rules.
 
 ## Slice 2 — Root Plans and Provisioning
 
 - [ ] Freeze one canonical root/group-placement/member plan shape.
+- [ ] Carry every member's canonical effective limits through plan hashing,
+  root acceptance, protected runtime context and durable receipts.
 - [ ] Reserve monotonically increasing, never-reused placement ordinals before
   root calls.
 - [ ] Bind every placement to one exact eligible Fleet-owned root while
@@ -98,10 +114,11 @@ change that installation ownership.
 - [ ] Enforce each root's immutable aggregate group-placement ceiling.
 - [ ] Reuse canonical root-local `ComponentInstanceId` allocation and
   platform lifecycle.
-- [ ] Accept grant-checked peer requests from exact current Fleet-service
-  Components without a Coordinator operation.
-- [ ] Materialize required initial children before activation and preserve
-  zero-initial optional roles for later exact-owner requests.
+- [ ] Accept same-root child requests from any exact registered
+  Component-tree node through an exact role-to-role spawn grant and without a
+  Coordinator operation.
+- [ ] Bind every descendant to its exact immediate parent while retaining the
+  owning top-level Component binding.
 - [ ] Keep new Components runtime `Prepared`.
 - [ ] Persist group-partitioned Component Registry evidence and one aggregate
   idempotent root receipt.
@@ -114,8 +131,6 @@ change that installation ownership.
   Fleet Registry revision.
 - [ ] Project exact service ID, mode and purpose-bearing member bindings
   through Fleet Directory.
-- [ ] Use exact current service membership as cross-root requester identity
-  without treating membership itself as a provisioning grant.
 - [ ] Derive one root-local Component Group Directory per placement without
   introducing group parentage or lifecycle authority.
 - [ ] Send exact Fleet, Component and Group Directories before activation.
@@ -126,9 +141,9 @@ change that installation ownership.
   checks.
 - [ ] Require PoolMember purpose to grant no implicit leadership, health or
   consistency.
-- [ ] Preserve that write fence for service-sensitive direct children through
-  their exact owning Component without making children group members or Fleet
-  services.
+- [ ] Preserve that write fence for service-sensitive descendants through
+  their exact owning top-level Component without making descendants group
+  members or Fleet services.
 
 ## Slice 4 — Explicit Group Scale-Out
 
@@ -151,8 +166,8 @@ change that installation ownership.
   and scale-out.
 - [ ] Prove backup/restore cross-document consistency.
 - [ ] Prove Component Topology, group flattening, admission,
-  active-release-set, Wasm Store, placement, service-mode, purpose, label and
-  authority boundaries.
+  active-release-set, Wasm Store, effective member limits, placement,
+  service-mode, purpose, label and authority boundaries.
 - [ ] Prove several placements of one deployment may share a root without
   identity or Component Group Directory ambiguity.
 - [ ] Prove two Fleets remain isolated when their roots share one physical
@@ -160,27 +175,30 @@ change that installation ownership.
 - [ ] Prove configured Replica discovery never claims data readiness,
   promotion or failover and configured PoolMember discovery never claims
   health, load-balancer eligibility or consistency.
-- [ ] Prove cross-root Project Instance provisioning, required Ledger
-  materialization, optional Machine ownership and Coordinator-free retry.
+- [ ] Prove local Project Hub -> Project Instance -> Ledger/Machine
+  provisioning, exact immediate-parent bindings and Coordinator-free retry.
+- [ ] Prove two deployments reuse one Project Hub group with distinct
+  reduction-only 10,000/2,000 Hub-to-Instance ceilings on different roots.
 - [ ] Complete stale-path and design closeout checks.
 
 ## Completion
 
 - [ ] The Toko journey provisions database A, B and C Authorities on one root.
-- [ ] The Toko journey provisions the singleton Project Hub Authority on a
-  separate Project-control root.
 - [ ] The same database group is reused inside a nested project-data-cell
-  group to provision same-Spec database A, B and C Replicas on at least two
-  other roots.
+  group to provision same-Spec database A, B and C Replicas plus one Project
+  Hub PoolMember on at least two other roots.
 - [ ] One project-data-cell scale-out resumes exactly across forced
   interruption.
-- [ ] The Project Hub provisions at least three ordinary Project Instances
-  across project roots; each receives one Ledger and exactly one later
-  receives its optional Machine.
+- [ ] The local Project Hubs provision at least three Project Instance
+  children across their project roots; every Project Instance creates one
+  Ledger and exactly one creates its optional Machine.
+- [ ] Two deployments reuse one Project Hub group on different roots with
+  distinct protected effective spawn-grant ceilings and no duplicated Spec.
 - [ ] A same-Spec ActivePool packs multiple stable placements on one root,
   spans at least two roots and publishes one atomic scale-out addition.
 - [ ] All design criteria and required journeys pass.
-- [ ] No Tree identity, runtime Group Canister, nested Component, Component
-  Child group/service target, singleton-Spec restriction, adoption,
-  prior-release transition or compatibility path survives.
+- [ ] No Tree identity, runtime Group Canister, nested Component declaration,
+  Component Child group/service target, delegated lifecycle authority,
+  singleton-Spec restriction, adoption, prior-release transition or
+  compatibility path survives.
 - [ ] Current status and changelog record the final evidence.

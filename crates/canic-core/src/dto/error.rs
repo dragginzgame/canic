@@ -142,7 +142,7 @@ pub enum ErrorCode {
     InvariantViolation,
     NotFound,
     OperationIdRequired,
-    PolicyInstanceRequiresServiceWithDirectory,
+    PolicyInstanceRequiresServiceWithIndex,
     PolicyReplicaRequiresServiceWithScaling,
     PolicyRoleAlreadyRegistered,
     PolicyShardRequiresServiceWithSharding,
