@@ -92,6 +92,11 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "canic_resume_fleet_activation",
         command_kind("fleet_activation.resume.v1"),
     ),
+    update_response_idempotent(
+        "canic_root_store_bootstrap",
+        command_kind("fleet.root_store_bootstrap.v1"),
+    ),
+    query_read_only("canic_root_store_bootstrap_status"),
     update_monotonic_transition(
         "canic_prepare_fleet_credential_generation",
         command_kind("fleet_activation.prepare_credential_generation.v1"),

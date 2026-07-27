@@ -389,6 +389,45 @@ impl TemplateChunkedOps {
         })
     }
 
+    // Reconstruct one exact chunk-staged payload and verify its complete byte authority.
+    #[cfg(feature = "root-control-plane")]
+    pub fn staged_payload_bytes(
+        template_id: &TemplateId,
+        version: &TemplateVersion,
+        expected_payload_hash: &[u8],
+        expected_payload_size_bytes: u64,
+    ) -> Result<Vec<u8>, InternalError> {
+        let info = Self::chunk_set_info_response(template_id, version)?;
+        let release = TemplateReleaseKey::new(template_id.clone(), version.clone());
+        if info.chunk_hashes.is_empty() {
+            return Err(TemplateManifestOpsError::TemplateChunkSetEmpty(release).into());
+        }
+
+        let capacity = usize::try_from(expected_payload_size_bytes)
+            .map_err(|_| TemplateManifestOpsError::PayloadSizeMismatch(release.clone()))?;
+        let mut payload = Vec::with_capacity(capacity);
+        for (chunk_index, expected_hash) in info.chunk_hashes.iter().enumerate() {
+            let chunk_index = u32::try_from(chunk_index)
+                .map_err(|_| TemplateManifestOpsError::ChunkIndexOverflow(release.clone()))?;
+            let response = Self::chunk_response(template_id, version, chunk_index)?;
+            if &wasm_hash(&response.bytes) != expected_hash {
+                return Err(TemplateManifestOpsError::TemplateChunkHashMismatch(
+                    TemplateChunkKey::new(release, chunk_index),
+                )
+                .into());
+            }
+            payload.extend_from_slice(&response.bytes);
+        }
+
+        if payload.len() as u64 != expected_payload_size_bytes {
+            return Err(TemplateManifestOpsError::PayloadSizeMismatch(release).into());
+        }
+        if wasm_hash(&payload) != expected_payload_hash {
+            return Err(TemplateManifestOpsError::PayloadHashMismatch(release).into());
+        }
+        Ok(payload)
+    }
+
     // Verify that one approved chunked manifest has a complete staged payload with matching hashes.
     #[cfg(feature = "root-control-plane")]
     pub fn validate_staged_release(
@@ -834,5 +873,56 @@ mod tests {
             err.public_error().map(|error| error.code),
             Some(ErrorCode::WasmStoreChunkMissing)
         );
+    }
+
+    #[cfg(feature = "root-control-plane")]
+    #[test]
+    fn staged_payload_reconstructs_only_the_exact_prepared_byte_authority() {
+        reset_store();
+
+        let release = TemplateReleaseKey::new(
+            TemplateId::new("root-release-set:digest"),
+            TemplateVersion::new("release-build"),
+        );
+        let chunks = [vec![1_u8, 2, 3], vec![4_u8, 5]];
+        let payload = chunks.concat();
+        let payload_hash = wasm_hash(&payload);
+        TemplateChunkedOps::prepare_chunk_set_from_input(
+            TemplateChunkSetPrepareInput {
+                template_id: release.template_id.clone(),
+                version: release.version.clone(),
+                payload_hash: payload_hash.clone(),
+                payload_size_bytes: payload.len() as u64,
+                chunk_hashes: chunks.iter().map(|chunk| wasm_hash(chunk)).collect(),
+            },
+            77,
+        )
+        .expect("prepare exact payload");
+        for (chunk_index, bytes) in chunks.into_iter().enumerate() {
+            TemplateChunkedOps::publish_chunk_from_input(TemplateChunkInput {
+                template_id: release.template_id.clone(),
+                version: release.version.clone(),
+                chunk_index: u32::try_from(chunk_index).expect("bounded test index"),
+                bytes,
+            })
+            .expect("publish exact chunk");
+        }
+
+        let observed = TemplateChunkedOps::staged_payload_bytes(
+            &release.template_id,
+            &release.version,
+            &payload_hash,
+            payload.len() as u64,
+        )
+        .expect("reconstruct exact payload");
+        assert_eq!(observed, payload);
+
+        TemplateChunkedOps::staged_payload_bytes(
+            &release.template_id,
+            &release.version,
+            &payload_hash,
+            payload.len() as u64 + 1,
+        )
+        .expect_err("wrong complete size must fail");
     }
 }

@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.12`.
-- The latest published release is `v0.100.12` at
-  `ee927bf1b1e0747a50c847b0c9b69c6c1610584f`.
-- The `v0.100.12` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `4ae93652f2dbcc5d21a3bc6437c9d732c80edfb4cc03223da933a7f468407a53`.
+- The workspace package version is `0.100.13`.
+- The latest published release is `v0.100.13` at
+  `debe32f68ef6d20d68207cfa9eb7fb5c48ca588c`.
+- The `v0.100.13` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `11b97dc3f80c7533225f0b981b10e596b9ac7df0c4b180093d5f955f2c81910c`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -145,7 +145,7 @@ Historical detail is archived at:
   recomputed authority. A new post-verification fence still prevents the old
   single-root path from creating any root; planned multi-root creation and
   root registration are next.
-- Open `0.100.13` replaces that root-effect fence with a canonical journal for
+- Released `0.100.13` replaces that root-effect fence with a canonical journal for
   every planned Fleet Subnet Root. The host creates and installs roots in
   canonical plan order with exact placement and funding, persists each root's
   protected Fleet/Coordinator/Subnet/admission/limit/release-set authority,
@@ -153,8 +153,19 @@ Historical detail is archived at:
   controller-only authority query to agree before proceeding. It then
   validates the complete observed root-binding set and stops at an explicit
   local Store-bootstrap and Registry-registration fence. The obsolete
-  one-root activation journal and root catalog-write path are removed; package
-  versions remain `0.100.12`.
+  one-root activation journal and root catalog-write path are removed.
+- Open `0.100.14` extends every verified root journal through exact
+  topology-admitted local Store staging, bootstrap and independent live
+  verification. The root reconstructs its chunk-staged canonical release-set
+  manifest, checks it against protected admission/build/package/Store limits,
+  creates exactly one implicit Store and publishes only its complete admitted
+  role catalog while both Canisters remain `Prepared`; Registry `Joining`
+  remains fenced. The same patch restores build-time metrics selection for the
+  implicit Fleet Subnet Root and Wasm Store and hard-cuts the obsolete
+  single-root `root_suite` cases that asserted `SubnetRegistry`/
+  `SubnetDirectory` authority. Current authorization, replay, cycles,
+  delegated-auth, scaling, sharding and recovery properties remain required
+  validation for the genuine Coordinator-anchored multi-root PocketIC journey.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1446,15 +1457,14 @@ First primary results:
 
 Continue 0.100 Slice 2 from the
 [implementation tracker](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md).
-The strict operator placement/funding input now resolves to and immutably
-publishes the exact Fleet install plan before a fail-closed guard prevents the
-legacy root-only effect path. Next, add a genuine Fleet Coordinator runtime
-and export authority, then produce and persist the complete three-role
-infrastructure manifest—do not relabel the Fleet Subnet Root or emit a
-placeholder. Only then replace the guard with Coordinator-first journalled
-creation followed by root installation and genesis Fleet Registry commit. Do
-not permit nested Components, merge roots belonging to different Fleets on
-one Subnet or consume an earlier installation.
+Fresh installation now journals and verifies the Coordinator, every planned
+Fleet Subnet Root and each root's exact topology-admitted local Store before
+stopping at the Registry boundary. Next, register every root through
+`Joining`, journal snapshot synchronization and acknowledgement, then commit
+and distribute the final all-active Registry evidence before runtime
+activation. Do not bypass the Store evidence, permit nested Components, merge
+roots belonging to different Fleets on one Subnet or consume an earlier
+installation.
 
 ## Historical Release Detail
 

@@ -32,6 +32,8 @@ use crate::{
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 use canic_core::control_plane_support::ops::ic::IcOps;
 #[cfg(feature = "root-control-plane")]
+use canic_core::dto::root_store::{RootStoreBootstrapRequest, RootStoreBootstrapResponse};
+#[cfg(feature = "root-control-plane")]
 use canic_core::{
     api::runtime::install::ModuleSourceRuntimeApi, bootstrap::EmbeddedRootBootstrapEntry,
 };
@@ -162,6 +164,24 @@ impl WasmStoreBootstrapApi {
     // Return root-owned staged bootstrap visibility for the bootstrap role and current release buffer.
     pub fn debug_bootstrap() -> Result<WasmStoreBootstrapDebugResponse, Error> {
         bootstrap_debug(&CanisterRole::WASM_STORE)
+    }
+
+    /// Bootstrap the exact topology-admitted initial release set into this root's local Store.
+    pub async fn bootstrap_root_store(
+        request: RootStoreBootstrapRequest,
+    ) -> Result<RootStoreBootstrapResponse, Error> {
+        crate::workflow::bootstrap::root_store::bootstrap(request)
+            .await
+            .map_err(Error::from)
+    }
+
+    /// Verify this root's exact live initial Store evidence without mutation.
+    pub async fn root_store_status(
+        request: RootStoreBootstrapRequest,
+    ) -> Result<RootStoreBootstrapResponse, Error> {
+        crate::workflow::bootstrap::root_store::status(request)
+            .await
+            .map_err(Error::from)
     }
 }
 

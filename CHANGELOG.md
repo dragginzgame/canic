@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.14` journals each verified root's exact topology-admitted local Store
+  bootstrap, restores built-in root/Store metrics profiles and hard-cuts the
+  obsolete single-root PocketIC suite before Registry joining.
+
 - `0.100.13` durably creates, installs and independently verifies every
   planned Fleet Subnet Root with exact protected root authority before
   stopping at the still-unimplemented Store-bootstrap and Registry-joining

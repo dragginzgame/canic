@@ -134,7 +134,6 @@ run_pic_test "canic-tests pic_receipt_backed_intent" -p canic-tests --test pic_r
 run_pic_test "canic-tests pic_role_attestation" -p canic-tests --test pic_role_attestation
 run_pic_test "canic-tests timer_authority" -p canic-tests --test timer_authority
 run_pic_test "canic-tests lifecycle_boundary" -p canic-tests --test lifecycle_boundary
-run_pic_test "canic-tests root_suite" -p canic-tests --test root_suite
 run_pic_test "canic-tests root_wasm_store_reconcile" -p canic-tests --test root_wasm_store_reconcile
 run_pic_test "canic-tests instruction_audit" -p canic-tests --test instruction_audit
 

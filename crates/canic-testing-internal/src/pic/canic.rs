@@ -307,8 +307,27 @@ pub fn install_root_args(
     wasm: &[u8],
     config_path: &Path,
 ) -> Result<Vec<u8>, Error> {
-    encode_one(managed_test_root_init_args(root_id, wasm, config_path)?)
-        .map_err(|err| Error::internal(format!("encode_one failed: {err}")))
+    install_root_args_with_release_set_digest(
+        root_id,
+        wasm,
+        config_path,
+        ReleaseSetDigest::from_bytes([0x44; 32]),
+    )
+}
+
+pub(super) fn install_root_args_with_release_set_digest(
+    root_id: Principal,
+    wasm: &[u8],
+    config_path: &Path,
+    release_set_digest: ReleaseSetDigest,
+) -> Result<Vec<u8>, Error> {
+    encode_one(managed_test_root_init_args(
+        root_id,
+        wasm,
+        config_path,
+        release_set_digest,
+    )?)
+    .map_err(|err| Error::internal(format!("encode_one failed: {err}")))
 }
 
 fn ensure_canister_wasm_ready(
@@ -369,6 +388,7 @@ fn managed_test_root_init_args(
     root_id: Principal,
     wasm: &[u8],
     config_path: &Path,
+    release_set_digest: ReleaseSetDigest,
 ) -> Result<FleetSubnetRootInitArgs, Error> {
     let identity = managed_test_init_identity();
     let config = AppConfigSnapshot::load(config_path)
@@ -422,7 +442,7 @@ fn managed_test_root_init_args(
             },
             initial_release_set: FleetSubnetRootReleaseSet {
                 release_build_id: identity.release_build_id,
-                manifest_digest: ReleaseSetDigest::from_bytes([0x44; 32]),
+                manifest_digest: release_set_digest,
             },
             expected_module_hash,
         },

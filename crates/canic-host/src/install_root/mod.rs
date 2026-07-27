@@ -31,6 +31,7 @@ mod execution_preflight;
 mod fleet_install_session;
 mod fleet_subnet_root_install;
 mod fleet_subnet_root_install_journal;
+mod fleet_subnet_root_store_bootstrap;
 mod identity;
 mod operations;
 mod options;
@@ -53,6 +54,7 @@ pub use config_selection::{
 use coordinator_install::install_and_verify_fleet_coordinator;
 use current_execution::current_install_execution_context;
 use fleet_subnet_root_install::install_and_verify_fleet_subnet_roots;
+use fleet_subnet_root_store_bootstrap::bootstrap_and_verify_fleet_subnet_root_stores;
 use identity::resolve_install_identity;
 pub use options::InstallRootOptions;
 use output::print_install_timing_summary;
@@ -171,10 +173,10 @@ impl InstallRootError {
 
 #[derive(Debug, ThisError)]
 #[error(
-    "Fleet Coordinator {coordinator} and {verified_roots} planned Fleet Subnet Root(s) are installed and independently verified from the durable plan at {}; local Wasm Store bootstrap and Fleet Registry registration remain blocked until their journalled lifecycle is implemented",
+    "Fleet Coordinator {coordinator} and {verified_roots} planned Fleet Subnet Root(s) now have exact verified local Wasm Stores from the durable plan at {}; Fleet Registry root registration remains blocked until its journalled lifecycle is implemented",
     plan_path.display(),
 )]
-struct FleetRootBootstrapUnavailableError {
+struct FleetRegistryRegistrationUnavailableError {
     plan_path: PathBuf,
     coordinator: canic_core::cdk::types::Principal,
     verified_roots: usize,
@@ -284,7 +286,17 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         coordinator.coordinator,
     )?;
     timings.create_canisters += roots_duration;
-    require_fleet_subnet_root_bootstrap(
+    bootstrap_and_verify_fleet_subnet_root_stores(
+        &icp_root,
+        environment,
+        build_context.local_replica.as_ref(),
+        &config_path,
+        &planned_install.plan,
+        coordinator.coordinator,
+        planned_install.session.operation_id,
+    )
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
+    require_fleet_registry_registration(
         &planned_install.plan.path,
         coordinator.coordinator,
         roots.roots.len(),
@@ -395,12 +407,12 @@ fn persist_current_fleet_install_plan(
     .map_err(Into::into)
 }
 
-fn require_fleet_subnet_root_bootstrap(
+fn require_fleet_registry_registration(
     plan_path: &Path,
     coordinator: canic_core::cdk::types::Principal,
     verified_roots: usize,
-) -> Result<(), FleetRootBootstrapUnavailableError> {
-    Err(FleetRootBootstrapUnavailableError {
+) -> Result<(), FleetRegistryRegistrationUnavailableError> {
+    Err(FleetRegistryRegistrationUnavailableError {
         plan_path: plan_path.to_path_buf(),
         coordinator,
         verified_roots,

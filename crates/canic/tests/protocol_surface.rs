@@ -353,6 +353,42 @@ fn fleet_subnet_root_authority_is_a_controller_query_on_the_root_surface() {
 }
 
 #[test]
+fn root_store_bootstrap_protocol_and_guards_are_pinned() {
+    assert_eq!(
+        canic::protocol::CANIC_ROOT_STORE_BOOTSTRAP,
+        "canic_root_store_bootstrap"
+    );
+    assert_eq!(
+        canic::protocol::CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
+        "canic_root_store_bootstrap_status"
+    );
+    assert_eq!(
+        canic::protocol::CANIC_ROOT_STORE_BOOTSTRAP,
+        canic_core::protocol::CANIC_ROOT_STORE_BOOTSTRAP
+    );
+    assert_eq!(
+        canic::protocol::CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
+        canic_core::protocol::CANIC_ROOT_STORE_BOOTSTRAP_STATUS
+    );
+
+    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
+    let source = read_text(&macro_path);
+    let bootstrap_attribute =
+        preceding_attribute_context(&source, "async fn canic_root_store_bootstrap(");
+    let status_attribute =
+        preceding_attribute_context(&source, "async fn canic_root_store_bootstrap_status(");
+
+    assert!(
+        bootstrap_attribute.contains("canic_update(requires(caller::is_controller()))"),
+        "root Store bootstrap must remain a controller-guarded update"
+    );
+    assert!(
+        status_attribute.contains("canic_query(composite, requires(caller::is_controller()))"),
+        "root Store bootstrap status must remain a controller-guarded composite query"
+    );
+}
+
+#[test]
 fn nonroot_fleet_activation_mutations_are_guarded_by_the_exact_root() {
     let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/nonroot.rs");
     let source = read_text(&macro_path);

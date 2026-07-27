@@ -510,6 +510,7 @@ dependencies = [
  "canic-core",
  "ic-cdk",
  "serde",
+ "serde_json",
  "sha2 0.10.9",
  "thiserror 2.0.19",
 ]
@@ -582,6 +583,7 @@ dependencies = [
  "canic-core",
  "canic-host",
  "ic-testkit",
+ "serde_json",
 ]
 
 [[package]]

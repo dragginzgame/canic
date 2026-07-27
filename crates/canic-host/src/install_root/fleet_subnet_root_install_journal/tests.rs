@@ -11,8 +11,10 @@ use crate::{
     },
     install_root::fleet_subnet_root_install_journal::{
         FleetSubnetRootInstallPhase, PlanFleetSubnetRootInstallRequest, begin_root_creation,
-        begin_root_install, expected_root_authority, plan_fleet_subnet_root_install,
-        record_root_created, record_root_installed, record_root_verified,
+        begin_root_install, begin_store_bootstrap, begin_store_staging, expected_root_authority,
+        plan_fleet_subnet_root_install, record_root_created, record_root_installed,
+        record_root_verified, record_store_bootstrapped, record_store_staged,
+        record_store_verified,
     },
     release_set::{
         CanicInfrastructureArtifactEntry, CanicInfrastructureArtifactManifest,
@@ -26,6 +28,7 @@ use candid::Principal;
 use canic_core::{
     bootstrap::compiled::{ComponentLimits, ComponentSpec, ComponentTopology},
     cdk::types::Cycles,
+    dto::root_store::{RootStoreBootstrapResponse, RootStoreCatalogEntry},
     ids::{
         AppId, CanisterRole, CanonicalNetworkId, ComponentSpecAdmission, CyclesFundingBudget,
         FleetBinding, FleetId, FleetKey, FleetSubnetRootLimits, FleetSubnetRootReleaseSet,
@@ -74,6 +77,59 @@ fn exact_retry_recovers_in_flight_root_without_advancing_it() {
     let repeated = begin_root_creation(&recovered).expect("recover creation intent");
     assert_eq!(repeated.journal, creating.journal);
     assert!(!repeated.advanced);
+}
+
+#[test]
+fn journals_exact_store_bootstrap_and_rejects_a_catalog_outside_root_admissions() {
+    let root = temp_dir("fleet-subnet-root-store-install-journal");
+    let fixture = fixture(&root);
+    let planned = plan(&fixture).expect("plan root");
+    let creating = begin_root_creation(&planned).expect("begin creation");
+    let root_canister = Principal::from_slice(&[44]);
+    let created = record_root_created(&creating, root_canister).expect("record root");
+    let installing = begin_root_install(&created).expect("begin install");
+    let installed = record_root_installed(&installing, [7; 32]).expect("record installed module");
+    let authority = expected_root_authority(&installed.journal).expect("expected authority");
+    let verified = record_root_verified(&installed, authority).expect("record exact authority");
+    let staging = begin_store_staging(&verified).expect("begin Store staging");
+    let staged = record_store_staged(&staging).expect("record Store staging");
+    let bootstrapping = begin_store_bootstrap(&staged).expect("begin Store bootstrap");
+    let evidence = RootStoreBootstrapResponse {
+        fleet_subnet_root: root_canister,
+        wasm_store: Principal::from_slice(&[55]),
+        release_set: fixture.plan.plan.fleet_subnet_roots[0].initial_release_set,
+        catalog: vec![RootStoreCatalogEntry {
+            role: CanisterRole::from("project_hub"),
+            payload_hash: [9; 32],
+            payload_size_bytes: 1_024,
+        }],
+    };
+    let bootstrapped =
+        record_store_bootstrapped(&bootstrapping, evidence.clone()).expect("record Store");
+    let complete =
+        record_store_verified(&bootstrapped, evidence.clone()).expect("verify exact Store");
+
+    assert_eq!(
+        complete.journal.phase,
+        FleetSubnetRootInstallPhase::StoreVerified
+    );
+    assert_eq!(complete.journal.sequence, 10);
+    assert_eq!(complete.journal.store_bootstrap, Some(evidence));
+
+    let mut inadmissible = complete
+        .journal
+        .store_bootstrap
+        .clone()
+        .expect("Store evidence");
+    inadmissible.catalog.push(RootStoreCatalogEntry {
+        role: CanisterRole::from("unplanned"),
+        payload_hash: [10; 32],
+        payload_size_bytes: 1_024,
+    });
+    assert!(matches!(
+        super::validate_store_bootstrap_evidence(&complete.path, &complete.journal, &inadmissible),
+        Err(super::FleetSubnetRootInstallJournalError::InvalidDocument { .. })
+    ));
 }
 
 #[test]

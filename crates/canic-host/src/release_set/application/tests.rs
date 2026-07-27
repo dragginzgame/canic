@@ -387,6 +387,11 @@ fn projection_preserves_every_spec_role_while_reusing_shared_artifact_evidence()
         .validate_against(&plan.component_topology, binding, &union)
         .expect("valid exact projection");
     assert_eq!(
+        serde_json::to_vec(&manifest).expect("canonical host manifest"),
+        serde_json::to_vec(&manifest.root_store_manifest()).expect("canonical runtime manifest"),
+        "runtime decoding shape must preserve the exact persisted host byte authority"
+    );
+    assert_eq!(
         manifest
             .canonical_bytes(&plan.component_topology, binding, &union)
             .expect("manifest bytes"),
