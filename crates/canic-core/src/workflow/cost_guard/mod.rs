@@ -44,8 +44,32 @@ impl CostGuardWorkflow {
         result
     }
 
+    #[must_use]
+    pub fn complete_after_failure(
+        permit: &CostGuardPermit,
+        now_secs: u64,
+        error: InternalError,
+    ) -> InternalError {
+        match Self::complete(permit, now_secs) {
+            Ok(()) => error,
+            Err(completion_error) => error.with_diagnostic_context(format!(
+                "cost guard completion failed for reservation {}: {completion_error}",
+                permit.reservation_id
+            )),
+        }
+    }
+
     pub fn recover(permit: &CostGuardPermit, now_secs: u64) -> Result<(), InternalError> {
         let result = CostGuardOps::recover(permit, now_secs);
+        Self::reconcile_after_success(&result);
+        result
+    }
+
+    pub fn recover_replay_settlement(
+        settlement: &ReplayCostGuardSettlement,
+        now_secs: u64,
+    ) -> Result<(), InternalError> {
+        let result = CostGuardOps::recover_replay_settlement(settlement, now_secs);
         Self::reconcile_after_success(&result);
         result
     }

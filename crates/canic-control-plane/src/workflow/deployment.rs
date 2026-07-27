@@ -27,6 +27,7 @@ pub const BOOTSTRAP_WASM_STORE_CREATE_COMMAND_KIND: &str =
     "management.control_plane.bootstrap_wasm_store_create.v1";
 pub const PUBLICATION_WASM_STORE_CREATE_COMMAND_KIND: &str =
     "management.control_plane.publication_wasm_store_create.v1";
+pub const COMPONENT_CREATE_COMMAND_KIND: &str = "management.control_plane.component_create.v1";
 
 pub async fn create_canister_with_deployment_guard(
     command_kind: &'static str,
@@ -36,8 +37,15 @@ pub async fn create_canister_with_deployment_guard(
 ) -> Result<CanisterLifecycleResult, InternalError> {
     let quota_subject = IcOps::canister_self();
     let payer = IcOps::canister_self();
-    let cost_permit =
-        reserve_control_plane_deployment_cost_guard(command_kind, &role, quota_subject, payer)?;
+    let cycle_reservation_cycles = ConfigOps::try_get_canister_by_role(&role)?
+        .initial_cycles
+        .to_u128();
+    let cost_permit = reserve_control_plane_deployment_cost_guard(
+        command_kind,
+        quota_subject,
+        payer,
+        cycle_reservation_cycles,
+    )?;
     log!(
         Topic::CanisterLifecycle,
         Info,
@@ -70,16 +78,24 @@ pub async fn create_canister_with_deployment_guard(
     }
 }
 
+pub fn reserve_component_creation_cost_guard(
+    initial_cycles: &canic_core::cdk::types::Cycles,
+) -> Result<CostGuardPermit, InternalError> {
+    let root = IcOps::canister_self();
+    reserve_control_plane_deployment_cost_guard(
+        COMPONENT_CREATE_COMMAND_KIND,
+        root,
+        root,
+        initial_cycles.to_u128(),
+    )
+}
+
 fn reserve_control_plane_deployment_cost_guard(
     command_kind: &'static str,
-    role: &CanisterRole,
     quota_subject: Principal,
     payer: Principal,
+    cycle_reservation_cycles: u128,
 ) -> Result<CostGuardPermit, InternalError> {
-    let cycle_reservation_cycles = ConfigOps::try_get_canister_by_role(role)?
-        .initial_cycles
-        .to_u128();
-
     CostGuardWorkflow::reserve(CostGuardRequest {
         cost_class: CostClass::ManagementDeployment,
         command_kind: CommandKind::new(command_kind)

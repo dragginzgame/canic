@@ -1,33 +1,44 @@
 //! Module: workflow::component_registry
 //!
-//! Responsibility: prepare Component Registry authority and reserve top-level identities.
-//! Does not own: Canister creation, installation, Component Directories, or runtime activation.
+//! Responsibility: prepare Component Registry authority and advance top-level creation effects.
+//! Does not own: installation, Component Directories, bindings, or runtime activation.
 //! Boundary: every mutation follows exact Store and active Registry Mirror/Directory verification.
 
 use crate::{
     ops::{
-        component_registry::ComponentRegistryOps, fleet_registry_mirror::FleetRegistryMirrorOps,
+        component_registry::{ComponentRegistryOps, RootComponentCreationPlan},
+        fleet_registry_mirror::FleetRegistryMirrorOps,
     },
-    view::component_registry::{RootComponentAllocationView, RootComponentRegistryView},
-    workflow::bootstrap::root_store,
+    view::component_registry::{
+        RootComponentAllocationProgressView, RootComponentAllocationView,
+        RootComponentCreationEffectView, RootComponentRegistryView,
+    },
+    workflow::{bootstrap::root_store, deployment},
 };
 use canic_core::{
     api::fleet_activation::FleetActivationApi,
     control_plane_support::{
         error::{InternalError, InternalErrorOrigin},
-        ops::{config::ConfigOps, fleet_registry::FleetRegistryOps, ic::IcOps},
+        ops::{
+            config::ConfigOps,
+            fleet_registry::FleetRegistryOps,
+            ic::{IcOps, mgmt::MgmtOps},
+        },
         policy::component_allocation::{
             TopLevelComponentAllocationInput, reserve_top_level_component,
         },
+        workflow::cost_guard::CostGuardWorkflow,
     },
     dto::{
         component_registry::{
             ComponentProvisioningOrigin, RootComponentAllocationPhase,
             RootComponentAllocationRequest, RootComponentAllocationResponse,
-            RootComponentAllocationStatusRequest, RootComponentRegistryPreparationRequest,
+            RootComponentAllocationStatusRequest, RootComponentCreationEvidence,
+            RootComponentCreationRequest, RootComponentRegistryPreparationRequest,
             RootComponentRegistryStatusResponse,
         },
         fleet_registry::{FleetSubnetRootEntry, FleetSubnetRootStatus},
+        root_store::RootStoreBootstrapResponse,
     },
 };
 
@@ -146,6 +157,130 @@ pub fn allocation_status(
         request.operation_id,
     )?;
     allocation_response(allocation)
+}
+
+/// Advance one reserved top-level Component through a durable creation effect.
+pub async fn create_allocation(
+    request: RootComponentCreationRequest,
+) -> Result<RootComponentAllocationResponse, InternalError> {
+    let (authority, root) = root_authority()?;
+    let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let preparation_request = RootComponentRegistryPreparationRequest {
+        store_bootstrap: prepared.store_bootstrap.clone(),
+        expected_fleet_registry: prepared.prepared_against_registry.clone(),
+    };
+    let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    validate_active_authority(&authority, root, &preparation_request)?;
+
+    let topology = ConfigOps::component_topology()?;
+    let allocation = ComponentRegistryOps::allocation(request.operation_id).ok_or_else(|| {
+        InternalError::unavailable("Component allocation operation has not been reserved")
+    })?;
+    validate_allocation_caller(&allocation)?;
+    validate_allocation_record(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &allocation,
+        request.operation_id,
+    )?;
+    let plan = creation_plan(root, &store, &allocation)?;
+
+    advance_creation(request.operation_id, allocation, plan).await
+}
+
+async fn advance_creation(
+    operation_id: [u8; 32],
+    allocation: RootComponentAllocationView,
+    plan: RootComponentCreationPlan,
+) -> Result<RootComponentAllocationResponse, InternalError> {
+    match &allocation.progress {
+        RootComponentAllocationProgressView::Created { effect, .. } => {
+            validate_creation_effect(effect, &plan)?;
+            CostGuardWorkflow::complete_replay_settlement(
+                &effect.cost_guard_settlement,
+                IcOps::now_secs(),
+            )?;
+            return allocation_response(allocation);
+        }
+        RootComponentAllocationProgressView::CreationIntent(effect) => {
+            validate_creation_effect(effect, &plan)?;
+            CostGuardWorkflow::recover_replay_settlement(
+                &effect.cost_guard_settlement,
+                IcOps::now_secs(),
+            )?;
+            return allocation_response(allocation);
+        }
+        RootComponentAllocationProgressView::Reserved => {}
+    }
+
+    ComponentRegistryOps::validate_creation_capacity(operation_id, &plan)?;
+    let cost_permit = deployment::reserve_component_creation_cost_guard(&plan.initial_cycles)?;
+    let intent = match ComponentRegistryOps::begin_creation(
+        operation_id,
+        plan.clone(),
+        cost_permit.replay_settlement(),
+    ) {
+        Ok(intent) => intent,
+        Err(err) => {
+            return Err(CostGuardWorkflow::recover_after_failure(
+                &cost_permit,
+                IcOps::now_secs(),
+                err,
+            ));
+        }
+    };
+    let effect = match &intent.progress {
+        RootComponentAllocationProgressView::CreationIntent(effect) => effect,
+        RootComponentAllocationProgressView::Reserved
+        | RootComponentAllocationProgressView::Created { .. } => {
+            return Err(CostGuardWorkflow::recover_after_failure(
+                &cost_permit,
+                IcOps::now_secs(),
+                InternalError::invariant(
+                    InternalErrorOrigin::Storage,
+                    "Component creation intent commit returned an invalid phase",
+                ),
+            ));
+        }
+    };
+    if let Err(err) = validate_creation_effect(effect, &plan) {
+        return Err(CostGuardWorkflow::recover_after_failure(
+            &cost_permit,
+            IcOps::now_secs(),
+            err,
+        ));
+    }
+
+    let canister = match MgmtOps::create_canister_with_permit(
+        &cost_permit,
+        vec![plan.controller],
+        plan.initial_cycles.clone(),
+    )
+    .await
+    {
+        Ok(canister) => canister,
+        Err(err) => {
+            return Err(CostGuardWorkflow::recover_after_failure(
+                &cost_permit,
+                IcOps::now_secs(),
+                err,
+            ));
+        }
+    };
+
+    let created = match ComponentRegistryOps::mark_created(operation_id, canister) {
+        Ok(created) => created,
+        Err(err) => {
+            return Err(CostGuardWorkflow::complete_after_failure(
+                &cost_permit,
+                IcOps::now_secs(),
+                err,
+            ));
+        }
+    };
+    CostGuardWorkflow::complete(&cost_permit, IcOps::now_secs())?;
+    allocation_response(created)
 }
 
 fn prepared_registry(
@@ -274,6 +409,19 @@ fn allocation_response(
             "stored Component allocation sequence is zero",
         ));
     }
+    let (phase, creation) = match allocation.progress {
+        RootComponentAllocationProgressView::Reserved => {
+            (RootComponentAllocationPhase::Reserved, None)
+        }
+        RootComponentAllocationProgressView::CreationIntent(effect) => (
+            RootComponentAllocationPhase::CreationIntent,
+            Some(creation_evidence(effect, None)),
+        ),
+        RootComponentAllocationProgressView::Created { effect, canister } => (
+            RootComponentAllocationPhase::Created,
+            Some(creation_evidence(effect, Some(canister))),
+        ),
+    };
     Ok(RootComponentAllocationResponse {
         operation_id: allocation.operation_id,
         allocation_sequence: allocation.allocation_sequence,
@@ -283,8 +431,92 @@ fn allocation_response(
         role: allocation.role,
         provisioning_origin: allocation.provisioning_origin,
         release_set: allocation.release_set,
-        phase: RootComponentAllocationPhase::Reserved,
+        phase,
+        creation,
     })
+}
+
+fn creation_plan(
+    root: candid::Principal,
+    store: &RootStoreBootstrapResponse,
+    allocation: &RootComponentAllocationView,
+) -> Result<RootComponentCreationPlan, InternalError> {
+    if store.fleet_subnet_root != root || store.release_set != allocation.release_set {
+        return Err(InternalError::conflict(
+            "verified Store evidence differs from the reserved Component authority",
+        ));
+    }
+    let mut matching = store
+        .catalog
+        .iter()
+        .filter(|entry| entry.role == allocation.role);
+    let artifact = matching.next().ok_or_else(|| {
+        InternalError::unavailable(format!(
+            "verified Store has no artifact for reserved Component role '{}'",
+            allocation.role
+        ))
+    })?;
+    if matching.next().is_some() {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "verified Store contains duplicate artifacts for one Component role",
+        ));
+    }
+    let config = ConfigOps::try_get_canister_by_role(&allocation.role)?;
+
+    Ok(RootComponentCreationPlan {
+        wasm_store: store.wasm_store,
+        payload_hash: artifact.payload_hash,
+        payload_size_bytes: artifact.payload_size_bytes,
+        initial_cycles: config.initial_cycles,
+        controller: root,
+    })
+}
+
+fn validate_allocation_caller(
+    allocation: &RootComponentAllocationView,
+) -> Result<(), InternalError> {
+    let expected = ComponentProvisioningOrigin::FleetAdministrator {
+        caller: IcOps::msg_caller(),
+    };
+    if allocation.provisioning_origin != expected {
+        return Err(InternalError::conflict(
+            "Component creation caller differs from its reserved administrator origin",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_creation_effect(
+    effect: &RootComponentCreationEffectView,
+    expected: &RootComponentCreationPlan,
+) -> Result<(), InternalError> {
+    if effect.wasm_store != expected.wasm_store
+        || effect.payload_hash != expected.payload_hash
+        || effect.payload_size_bytes != expected.payload_size_bytes
+        || effect.initial_cycles != expected.initial_cycles
+        || effect.controller != expected.controller
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "durable Component creation intent differs from verified Store or root settings",
+        ));
+    }
+    Ok(())
+}
+
+const fn creation_evidence(
+    effect: RootComponentCreationEffectView,
+    canister: Option<candid::Principal>,
+) -> RootComponentCreationEvidence {
+    RootComponentCreationEvidence {
+        wasm_store: effect.wasm_store,
+        payload_hash: effect.payload_hash,
+        payload_size_bytes: effect.payload_size_bytes,
+        initial_cycles: effect.initial_cycles,
+        controller: effect.controller,
+        canister,
+    }
 }
 
 fn validate_allocation_record(

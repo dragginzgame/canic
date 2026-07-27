@@ -21,6 +21,7 @@ pub const CANIC_ROOT_COMPONENT_REGISTRY_PREPARE: &str = "canic_root_component_re
 pub const CANIC_ROOT_COMPONENT_REGISTRY_STATUS: &str = "canic_root_component_registry_status";
 pub const CANIC_ROOT_COMPONENT_ALLOCATE: &str = "canic_root_component_allocate";
 pub const CANIC_ROOT_COMPONENT_ALLOCATION_STATUS: &str = "canic_root_component_allocation_status";
+pub const CANIC_ROOT_COMPONENT_CREATE: &str = "canic_root_component_create";
 pub const CANIC_FLEET_ACTIVATION_STATUS: &str = "canic_fleet_activation_status";
 pub const CANIC_PREPARE_FLEET_ACTIVATION: &str = "canic_prepare_fleet_activation";
 pub const CANIC_RESUME_FLEET_ACTIVATION: &str = "canic_resume_fleet_activation";

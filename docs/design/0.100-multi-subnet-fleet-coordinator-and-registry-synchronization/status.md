@@ -1,13 +1,14 @@
 # Canic 0.100 Implementation Status
 
-Date: 2026-07-27
+Date: 2026-07-28
 
 - State: implementation in progress.
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.19`.
-- Open patch draft: `0.100.20`; no package-version change has been authorized.
+- Workspace package version: `0.100.21`.
+- Latest published release: `v0.100.21`.
+- Open patch draft: `0.100.22`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -145,7 +146,7 @@ Registry slices replace the 0.99 root model.
 - [x] Prepare one empty root-local Component Registry authority against the
   exact Store, active Registry Mirror and Fleet Directory.
 - [x] Implement durable root-local `ComponentInstanceId` allocation.
-- [ ] Implement admitted direct Component creation through the root.
+- [x] Implement admitted direct Component Canister creation through the root.
 - [ ] Implement same-root grant-checked peer Component provisioning while
   retaining causal origin without parentage.
 - [ ] Implement authenticated parent-to-root child effects at arbitrary depth.
@@ -360,7 +361,7 @@ Components, descendants and charged Registry bytes. Fresh root bootstrap no
 longer creates configured roles or rebuilds the retired role-based
 Directories, so no Component can bypass its future durable Registry binding.
 
-Open 0.100.20 adds the first admitted top-level Component operation phase.
+Released 0.100.20 adds the first admitted top-level Component operation phase.
 Under the prepared Registry authority, the root independently reverifies its
 exact Store, all-`Active` Registry Mirror, protected root row and Fleet
 Directory before reserving a nonzero operation ID. Pure policy derives the
@@ -375,24 +376,34 @@ transfer, `ComponentBinding` commitment or Directory publication. The
 operation remains `Reserved`, committed Component and descendant counts stay
 zero and the root remains runtime-`Prepared`.
 
-The current installer therefore stops only after the Coordinator Registry and
-every root's matching Registry Mirror/Fleet Directory are independently
-verified all-`Active` and every empty root Component Registry is independently
-prepared. Roots may now reserve admitted top-level Component identities, but
-every root remains runtime-`Prepared`; Component creation/install,
-root-owned count summaries and terminal Coordinator-anchored Fleet catalog
-publication remain unimplemented. The temporary Component Spec selector
-remains until creation commits the exact protected Component binding.
+Released 0.100.21 compacts the reinstall-only stable-memory assignment into
+consecutive control-plane IDs 10-19 and core IDs 30-62, with reserved growth
+through 29 and 99 respectively and application memory beginning at ID 100.
+
+Open 0.100.22 continues one reserved operation through exact Store-bound
+empty-Canister creation. The root reverifies its protected authority, active
+Registry Mirror/Fleet Directory and exact Store, resolves the reserved
+Component role artifact and configured initial cycles, then durably freezes
+that evidence, the root as sole controller, replay cost settlement and maximum
+terminal Registry-byte charge before the management call. The monotonic
+record is `Reserved → CreationIntent → Created`; an unresolved intent is never
+blindly repeated, while exact `Created` retry returns the original principal.
+
+This draft intentionally stops before Wasm installation, module attestation,
+protected `ComponentBinding` commitment, committed-count mutation, Component
+Registry partition creation, Directory publication or runtime activation.
+Every root remains runtime-`Prepared`, and the temporary Component Spec
+selector remains until installation commits the exact protected binding.
 
 ## Next Action
 
-Continue the reserved top-level Component operation through exact
-release-set artifact resolution, durable create/install intents, observed
-outcomes and protected `ComponentBinding`/Registry-partition commitment. Hard
-cut the retired environment/role and `SubnetDirectory` install payload rather
-than using it for the new Component. Exact same-release retry must resume every
-journalled phase without blindly repeating an unresolved paid effect, and the
-reserved identity must never be reused.
+Continue the created top-level Component operation through exact Store-backed
+Wasm installation, observed module-hash attestation and protected
+`ComponentBinding`/Registry-partition commitment. Hard cut the retired
+environment/role and `SubnetDirectory` install payload rather than using it
+for the new Component. Exact same-release retry must resume every journalled
+phase without blindly repeating an unresolved paid effect, and the reserved
+identity and created principal must never be reused or rebound.
 
 Activate root runtime only through this Registry/Store/Directory-bound
 lifecycle. Do not reintroduce role-based Directory authority, static root

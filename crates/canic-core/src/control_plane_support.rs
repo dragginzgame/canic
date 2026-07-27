@@ -22,7 +22,7 @@ pub mod domain {
 
 pub mod model {
     pub mod replay {
-        pub use crate::model::replay::CommandKind;
+        pub use crate::model::replay::{CommandKind, ReplayCostGuardSettlement};
     }
 }
 

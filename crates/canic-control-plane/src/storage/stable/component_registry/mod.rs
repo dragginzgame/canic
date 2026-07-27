@@ -16,6 +16,8 @@ use canic_core::{
     },
 };
 use canic_core::{
+    cdk::types::{Cycles, Principal},
+    control_plane_support::model::replay::ReplayCostGuardSettlement,
     dto::{
         component_registry::ComponentProvisioningOrigin, fleet_registry::FleetRegistryVersion,
         root_store::RootStoreBootstrapRequest,
@@ -108,6 +110,7 @@ pub struct RootComponentAllocationRecord {
     pub role: CanisterRole,
     pub provisioning_origin: ComponentProvisioningOrigin,
     pub release_set: FleetSubnetRootReleaseSet,
+    pub progress: RootComponentAllocationProgressRecord,
 }
 
 impl RootComponentAllocationRecord {
@@ -120,6 +123,39 @@ impl_storable_bounded!(
     ROOT_COMPONENT_ALLOCATION_RECORD_MAX_BYTES,
     false
 );
+
+///
+/// RootComponentAllocationProgressRecord
+///
+/// Durable paid-effect boundary for one reserved top-level Component operation.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RootComponentAllocationProgressRecord {
+    Reserved,
+    CreationIntent(RootComponentCreationEffectRecord),
+    Created {
+        effect: RootComponentCreationEffectRecord,
+        canister: Principal,
+    },
+}
+
+///
+/// RootComponentCreationEffectRecord
+///
+/// Exact artifact, settings and cost settlement frozen before Canister creation.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentCreationEffectRecord {
+    pub wasm_store: Principal,
+    pub payload_hash: [u8; 32],
+    pub payload_size_bytes: u64,
+    pub initial_cycles: Cycles,
+    pub controller: Principal,
+    pub cost_guard_settlement: ReplayCostGuardSettlement,
+    pub charged_entry_bytes: u64,
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 struct RootComponentAllocationOperationKey([u8; 32]);
@@ -205,6 +241,7 @@ pub enum RootComponentAllocationCommitError {
     ComponentIdentityConflict,
     ConflictingOperation,
     ConflictingState,
+    MissingOperation,
     Uninitialized,
 }
 
@@ -301,10 +338,51 @@ impl RootComponentRegistryStore {
         })
     }
 
+    pub(crate) fn replace_allocation(
+        expected_meta: &RootComponentRegistryMetaRecord,
+        next_meta: RootComponentRegistryMetaRecord,
+        expected_record: &RootComponentAllocationRecord,
+        next_record: RootComponentAllocationRecord,
+    ) -> Result<(), RootComponentAllocationCommitError> {
+        let key = RootComponentAllocationOperationKey::from(expected_record.operation_id);
+        if next_record.operation_id != expected_record.operation_id {
+            return Err(RootComponentAllocationCommitError::ConflictingOperation);
+        }
+
+        ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            let current_meta = state
+                .current
+                .as_ref()
+                .ok_or(RootComponentAllocationCommitError::Uninitialized)?;
+            if current_meta != expected_meta {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            let current_record = ROOT_COMPONENT_ALLOCATIONS
+                .with_borrow(|map| map.get(&key))
+                .ok_or(RootComponentAllocationCommitError::MissingOperation)?;
+            if &current_record != expected_record {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+
+            ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(|map| {
+                map.insert(key, next_record);
+            });
+            state.current = Some(next_meta);
+            cell.set(state);
+            Ok(())
+        })
+    }
+
     #[must_use]
     pub(crate) fn allocation_entry_bytes(record: &RootComponentAllocationRecord) -> u64 {
         let key = RootComponentAllocationOperationKey::from(record.operation_id);
         (key.to_bytes().len() + record.to_bytes().len()) as u64
+    }
+
+    #[must_use]
+    pub(crate) const fn allocation_record_max_bytes() -> u64 {
+        ROOT_COMPONENT_ALLOCATION_RECORD_MAX_BYTES as u64
     }
 
     #[cfg(test)]

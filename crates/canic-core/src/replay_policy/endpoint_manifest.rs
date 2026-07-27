@@ -128,6 +128,13 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         command_kind("component_registry.allocate_top_level.v1"),
     ),
     query_read_only("canic_root_component_allocation_status"),
+    update_costed_response_idempotent(
+        "canic_root_component_create",
+        command_kind("management.control_plane.component_create.v1"),
+        CostClass::ManagementDeployment,
+        Some(DEPLOYMENT_QUOTA_V1),
+        Some(DEPLOYMENT_RESERVE_V1),
+    ),
     update_monotonic_transition(
         "canic_prepare_fleet_credential_generation",
         command_kind("fleet_activation.prepare_credential_generation.v1"),
