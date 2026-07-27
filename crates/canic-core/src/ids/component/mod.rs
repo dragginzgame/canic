@@ -4,13 +4,15 @@
 //! Does not own: Component placement, Registry authority, lifecycle, or ID allocation.
 //! Boundary: declared IDs are bounded canonical names; generated IDs use lowercase hex.
 
-use crate::impl_storable_bounded;
-use candid::CandidType;
+use crate::{ids::FleetKey, impl_storable_bounded};
+use candid::{CandidType, Principal};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
+use sha2::{Digest, Sha256};
 use std::{borrow::Borrow, fmt, str::FromStr};
 use thiserror::Error as ThisError;
 
 const COMPONENT_NAME_MAX_BYTES: usize = 40;
+const COMPONENT_INSTANCE_ID_DOMAIN: &[u8] = b"canic:component-instance-id:v1\0";
 
 ///
 /// ComponentSpecId
@@ -112,6 +114,29 @@ impl ComponentInstanceId {
     #[must_use]
     pub const fn as_bytes(&self) -> &[u8; 32] {
         &self.0
+    }
+
+    /// Derive one root-local allocation identity from immutable Fleet authority.
+    ///
+    /// The owning root must durably reserve `allocation_sequence` before any
+    /// paid Component creation effect. Allocation sequences start at one and
+    /// are never reused.
+    #[must_use]
+    pub fn from_root_allocation(
+        fleet: FleetKey,
+        authority_epoch: u64,
+        fleet_subnet_root: Principal,
+        allocation_sequence: u64,
+    ) -> Self {
+        let mut hasher = Sha256::new();
+        hasher.update(COMPONENT_INSTANCE_ID_DOMAIN);
+        hasher.update(fleet.canonical_network_id.as_bytes());
+        hasher.update(fleet.fleet_id.as_bytes());
+        hasher.update(authority_epoch.to_be_bytes());
+        hasher.update((fleet_subnet_root.as_slice().len() as u64).to_be_bytes());
+        hasher.update(fleet_subnet_root.as_slice());
+        hasher.update(allocation_sequence.to_be_bytes());
+        Self(hasher.finalize().into())
     }
 }
 
@@ -351,6 +376,40 @@ mod tests {
 
         assert_eq!(decoded, component);
         assert!(candid::decode_one::<ComponentInstanceId>(&invalid_candid).is_err());
+    }
+
+    #[test]
+    fn component_instance_ids_are_domain_separated_root_allocations() {
+        use crate::ids::{CanonicalNetworkId, FleetId};
+
+        let fleet = FleetKey {
+            canonical_network_id: CanonicalNetworkId::public_ic(),
+            fleet_id: FleetId::from_generated_bytes([1; 32]),
+        };
+        let root = candid::Principal::from_slice(&[2; 29]);
+        let first = ComponentInstanceId::from_root_allocation(fleet, 1, root, 1);
+
+        assert_eq!(
+            first,
+            ComponentInstanceId::from_root_allocation(fleet, 1, root, 1)
+        );
+        assert_ne!(
+            first,
+            ComponentInstanceId::from_root_allocation(fleet, 1, root, 2)
+        );
+        assert_ne!(
+            first,
+            ComponentInstanceId::from_root_allocation(
+                fleet,
+                1,
+                candid::Principal::from_slice(&[3; 29]),
+                1,
+            )
+        );
+        assert_ne!(
+            first,
+            ComponentInstanceId::from_root_allocation(fleet, 2, root, 1)
+        );
     }
 
     #[test]

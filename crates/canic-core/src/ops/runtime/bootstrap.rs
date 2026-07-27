@@ -32,12 +32,10 @@ impl BootstrapPhaseLabel {
     pub const NONROOT_UPGRADE: Self = Self("nonroot:upgrade");
     pub const ROOT_INIT: Self = Self("root:init");
     pub const ROOT_INIT_WAITING_STAGED_RELEASES: Self = Self("root:init:waiting_staged_releases");
+    pub const ROOT_INIT_WAITING_COMPONENT_REGISTRY: Self =
+        Self("root:init:waiting_component_registry");
     pub const ROOT_INIT_SKIPPED: Self = Self("root:init:skipped");
     pub const ROOT_INIT_SET_SUBNET_ID: Self = Self("root:init:set_subnet_id");
-    pub const ROOT_INIT_IMPORT_POOL: Self = Self("root:init:import_pool");
-    pub const ROOT_INIT_CREATE_CANISTERS: Self = Self("root:init:create_canisters");
-    pub const ROOT_INIT_REBUILD_DIRECTORIES: Self = Self("root:init:rebuild_directories");
-    pub const ROOT_INIT_VALIDATE: Self = Self("root:init:validate");
     pub const ROOT_INIT_ACTIVATION_PREPARED: Self = Self("root:init:activation_prepared");
     pub const ROOT_UPGRADE_WAITING_STAGED_RELEASES: Self =
         Self("root:upgrade:waiting_staged_releases");

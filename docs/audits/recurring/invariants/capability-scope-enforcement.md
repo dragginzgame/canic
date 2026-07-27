@@ -215,11 +215,11 @@ cargo test --locked -p canic-core --lib access::auth -- --nocapture
 cargo test --locked -p canic-core --lib ops::auth::delegated::verify -- --nocapture
 cargo test --locked -p canic-core --lib workflow::rpc::capability -- --nocapture
 cargo test --locked -p canic-core --lib workflow::rpc::request::handler -- --nocapture
-cargo test --locked -p canic-tests --test pic_role_attestation capability_endpoint_policy_and_structural_paths -- --test-threads=1 --nocapture
 ```
 
 Root capability denial and replay coverage must use the real
 Coordinator-anchored multi-root journey required by the active 0.100 design.
+The retired static root/issuer fixture is not valid substitute evidence.
 
 ## Dependency Fan-In Pressure
 

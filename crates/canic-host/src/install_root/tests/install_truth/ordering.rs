@@ -110,6 +110,11 @@ fn assert_current_activation_order(install: &str) {
     assert_before(
         install,
         "activate_and_verify_fleet_subnet_root_registry_mirrors(",
+        "prepare_and_verify_fleet_subnet_root_component_registries(",
+    );
+    assert_before(
+        install,
+        "prepare_and_verify_fleet_subnet_root_component_registries(",
         "require_component_runtime_activation(",
     );
 }

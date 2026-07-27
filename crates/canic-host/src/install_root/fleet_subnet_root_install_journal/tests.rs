@@ -10,10 +10,12 @@ use crate::{
         PlannedFleetCoordinator, PlannedFleetSubnetRoot,
     },
     install_root::fleet_subnet_root_install_journal::{
-        FleetSubnetRootInstallPhase, PlanFleetSubnetRootInstallRequest, begin_registry_join,
+        FleetSubnetRootInstallPhase, PlanFleetSubnetRootInstallRequest,
+        begin_component_registry_preparation, begin_registry_join,
         begin_registry_mirror_activation, begin_registry_sync, begin_root_creation,
         begin_root_install, begin_store_bootstrap, begin_store_staging, expected_root_authority,
-        plan_fleet_subnet_root_install, record_registry_join_verified, record_registry_joined,
+        plan_fleet_subnet_root_install, record_component_registry_preparation_verified,
+        record_component_registry_prepared, record_registry_join_verified, record_registry_joined,
         record_registry_mirror_activated, record_registry_mirror_activation_verified,
         record_registry_sync_verified, record_registry_synchronized, record_root_created,
         record_root_installed, record_root_verified, record_store_bootstrapped,
@@ -33,6 +35,9 @@ use canic_core::{
     cdk::types::Cycles,
     control_plane_support::ops::fleet_registry::FleetRegistryOps,
     dto::{
+        component_registry::{
+            RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
+        },
         fleet_registry::{
             FleetDirectoryProvenance, FleetDirectorySnapshot, FleetSubnetRootDirectoryEntry,
             FleetSubnetRootJoinResponse, FleetSubnetRootRegistryMirrorActivationRequest,
@@ -268,6 +273,20 @@ fn assert_registry_sync_journal(
     );
     assert_eq!(verified.journal.registry_sync_response, Some(sync_response));
 
+    assert_registry_mirror_and_component_registry_journal(
+        &verified,
+        root_canister,
+        version,
+        sync_request,
+    );
+}
+
+fn assert_registry_mirror_and_component_registry_journal(
+    verified: &super::ResolvedFleetSubnetRootInstall,
+    root_canister: Principal,
+    version: canic_core::dto::fleet_registry::FleetRegistryVersion,
+    sync_request: FleetSubnetRootRegistrySyncRequest,
+) {
     let active_version = canic_core::dto::fleet_registry::FleetRegistryVersion {
         authority: version.authority.clone(),
         revision: version.revision.checked_add(1).expect("next revision"),
@@ -290,7 +309,7 @@ fn assert_registry_sync_journal(
         expected_directory: directory.clone(),
         store_bootstrap: sync_request.store_bootstrap,
     };
-    let activating = begin_registry_mirror_activation(&verified, activation_request.clone())
+    let activating = begin_registry_mirror_activation(verified, activation_request.clone())
         .expect("begin Registry mirror activation");
     let activation_response = FleetSubnetRootRegistryMirrorActivationResponse {
         fleet_subnet_root: root_canister,
@@ -313,13 +332,55 @@ fn assert_registry_sync_journal(
         activation_verified
             .journal
             .registry_mirror_activation_request,
-        Some(activation_request)
+        Some(activation_request.clone())
     );
     assert_eq!(
         activation_verified
             .journal
             .registry_mirror_activation_response,
-        Some(activation_response)
+        Some(activation_response.clone())
+    );
+
+    let preparation_request = RootComponentRegistryPreparationRequest {
+        store_bootstrap: activation_request.store_bootstrap,
+        expected_fleet_registry: activation_response.version.clone(),
+    };
+    let preparing =
+        begin_component_registry_preparation(&activation_verified, preparation_request.clone())
+            .expect("begin Component Registry preparation");
+    let preparation_response = RootComponentRegistryStatusResponse {
+        fleet_subnet_root: root_canister,
+        prepared_against_registry: activation_response.version,
+        release_set: preparing.journal.root_plan.initial_release_set,
+        component_topology_digest: preparing.journal.root_plan.component_topology_digest,
+        next_allocation_sequence: 1,
+        reserved_component_instances: 0,
+        committed_component_instances: 0,
+        managed_descendants: 0,
+        encoded_bytes: 0,
+    };
+    let prepared = record_component_registry_prepared(&preparing, preparation_response.clone())
+        .expect("record Component Registry preparation");
+    let preparation_verified =
+        record_component_registry_preparation_verified(&prepared, preparation_response.clone())
+            .expect("verify Component Registry preparation");
+
+    assert_eq!(
+        preparation_verified.journal.phase,
+        FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified
+    );
+    assert_eq!(preparation_verified.journal.sequence, 22);
+    assert_eq!(
+        preparation_verified
+            .journal
+            .component_registry_preparation_request,
+        Some(preparation_request)
+    );
+    assert_eq!(
+        preparation_verified
+            .journal
+            .component_registry_preparation_response,
+        Some(preparation_response)
     );
 }
 

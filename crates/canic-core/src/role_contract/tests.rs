@@ -127,6 +127,7 @@ fn canonical_allocations_match_the_active_memory_map() {
         (StateAllocationKey::WasmStoreGcState, vec![85]),
         (StateAllocationKey::FleetCoordinatorRegistry, vec![86]),
         (StateAllocationKey::RootFleetRegistryMirror, vec![87]),
+        (StateAllocationKey::RootComponentRegistry, vec![88]),
     ]);
     assert_eq!(actual, expected);
 }

@@ -1,148 +1,12 @@
+//! Prepared-root Fleet Registry and Component Registry PocketIC journey.
+
 use candid::Principal;
-use ic_testkit::pic::{CachedPicBaseline, Pic, restore_or_rebuild_cached_pic_baseline};
-use std::{
-    path::Path,
-    sync::{Mutex, OnceLock},
-};
+use ic_testkit::pic::Pic;
+use std::path::Path;
 
-use crate::pic::{
-    canic::{activate_managed_fleet, install_root_args},
-    role_pid as lookup_role_pid, wait_until_ready as wait_for_ready_canister,
-};
-
-use super::{
-    build::{build_pic, build_test_root_wasm, root_canister_config_path},
-    fixture::{CachedInstalledRoot, progress},
-};
+use super::build::{build_pic, build_test_root_wasm, root_canister_config_path};
 
 const ROOT_INSTALL_CYCLES: u128 = 80_000_000_000_000;
-static ROOT_ISSUER_BASELINE: OnceLock<
-    Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>,
-> = OnceLock::new();
-
-pub struct AttestationBaselineMetadata {
-    root_id: Principal,
-    wasm_store_id: Principal,
-    issuer_id: Principal,
-}
-
-struct InstalledRoot {
-    pic: super::build::SerialPic,
-    root_id: Principal,
-}
-
-// Restore or create the cached `root + issuer` baseline.
-#[must_use]
-pub(super) fn install_cached_root_fixture() -> CachedInstalledRoot {
-    progress("request cached root+issuer baseline");
-    let baseline_slot = ROOT_ISSUER_BASELINE.get_or_init(|| Mutex::new(None));
-    let (baseline, cache_hit) = restore_or_rebuild_cached_pic_baseline(
-        baseline_slot,
-        build_cached_baseline,
-        restore_cached_baseline,
-    );
-    if cache_hit {
-        progress("cache hit");
-    }
-    progress("cached fixture restore complete");
-
-    CachedInstalledRoot {
-        root_id: baseline.metadata().root_id,
-        issuer_id: baseline.metadata().issuer_id,
-        pic: baseline,
-    }
-}
-
-// Resolve the issuer canister from the root-managed subnet registry.
-#[must_use]
-fn issuer_pid(pic: &Pic, root_id: Principal) -> Principal {
-    lookup_role_pid(pic, root_id, "issuer", 120)
-}
-
-// Resolve the managed wasm_store canister from the root-managed subnet registry.
-#[must_use]
-fn wasm_store_pid(pic: &Pic, root_id: Principal) -> Principal {
-    lookup_role_pid(pic, root_id, "wasm_store", 120)
-}
-
-// Build one reusable baseline and capture immutable snapshot IDs inside it.
-fn build_cached_baseline() -> CachedPicBaseline<AttestationBaselineMetadata> {
-    progress("cache miss, building fresh baseline");
-    let InstalledRoot { pic, root_id } = install_test_root();
-    progress("waiting for issuer registration");
-    let issuer_id = issuer_pid(&pic, root_id);
-    wait_for_ready_canister(&pic, issuer_id, 240);
-    let wasm_store_id = wasm_store_pid(&pic, root_id);
-    wait_for_ready_canister(&pic, wasm_store_id, 240);
-    progress("issuer ready");
-
-    progress("waiting for root readiness before snapshot capture");
-    wait_for_ready_canister(&pic, root_id, 240);
-    progress("capturing baseline snapshots");
-    let controller_ids = vec![root_id, wasm_store_id, issuer_id];
-    let baseline = CachedPicBaseline::capture(
-        pic.into_pic(),
-        root_id,
-        controller_ids,
-        AttestationBaselineMetadata {
-            root_id,
-            wasm_store_id,
-            issuer_id,
-        },
-    )
-    .expect("downloaded baseline snapshots unavailable");
-    progress("fresh baseline ready");
-    baseline
-}
-
-// Restore the cached baseline snapshots into the same baseline PocketIC instance.
-fn restore_cached_baseline(baseline: &CachedPicBaseline<AttestationBaselineMetadata>) {
-    progress("restoring cached baseline snapshots");
-    baseline.restore(baseline.metadata().root_id);
-
-    baseline.pic().tick();
-
-    progress("waiting for restored root and issuer readiness");
-    wait_for_ready_canister(baseline.pic(), baseline.metadata().wasm_store_id, 240);
-    wait_for_ready_canister(baseline.pic(), baseline.metadata().issuer_id, 240);
-    wait_for_ready_canister(baseline.pic(), baseline.metadata().root_id, 240);
-}
-
-// Install the test root into a fresh PocketIC instance.
-fn install_test_root() -> InstalledRoot {
-    install_root_fixture(build_test_root_wasm())
-}
-
-// Install one root wasm into a fresh serialized PocketIC instance.
-fn install_root_fixture(root_wasm: Vec<u8>) -> InstalledRoot {
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
-    activate_test_fleet(&pic, root_id);
-
-    InstalledRoot { pic, root_id }
-}
-
-fn activate_test_fleet(pic: &Pic, root_id: Principal) {
-    progress("preparing Fleet activation");
-    progress("activating prepared Fleet");
-    activate_managed_fleet(pic, root_id);
-}
-
-// Install the root canister under PocketIC with the current exact Fleet identity.
-fn install_root_canister(pic: &Pic, wasm: Vec<u8>) -> Principal {
-    let root_id = pic.create_canister();
-    pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
-    let config_path = root_canister_config_path(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .and_then(Path::parent)
-            .expect("workspace root"),
-    );
-    let init_args =
-        install_root_args(root_id, &wasm, &config_path).expect("encode root install identity");
-    pic.install_canister(root_id, wasm, init_args, None);
-    root_id
-}
 
 #[cfg(test)]
 mod tests {
@@ -151,6 +15,9 @@ mod tests {
     use canic::{
         CANIC_WASM_CHUNK_BYTES,
         dto::{
+            component_registry::{
+                RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
+            },
             fleet_registry::{
                 FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistry,
                 FleetRegistryActivationRequest, FleetRegistryActivationResponse,
@@ -179,9 +46,10 @@ mod tests {
             CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS, CANIC_FLEET_REGISTRY_SYNC_STATUS,
             CANIC_FLEET_REGISTRY_SYNCHRONIZE, CANIC_FLEET_REGISTRY_VERSION,
             CANIC_FLEET_SUBNET_ROOT_AUTHORITY, CANIC_FLEET_SUBNET_ROOT_JOIN,
+            CANIC_ROOT_COMPONENT_REGISTRY_PREPARE, CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
             CANIC_ROOT_STORE_BOOTSTRAP, CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
             CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
-            CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
+            CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN, CANIC_WASM_STORE_PREPARE,
         },
     };
     use canic_control_plane::{
@@ -198,7 +66,6 @@ mod tests {
     use canic_core::cdk::utils::hash::{hex_bytes, wasm_hash};
     use canic_host::release_set::AppConfigSnapshot;
     use std::collections::BTreeMap;
-    use std::time::Duration;
 
     use crate::pic::{
         CanicWasmBuildProfile, build_internal_test_wasm_canisters,
@@ -216,39 +83,6 @@ mod tests {
         init_args: FleetSubnetRootInitArgs,
         request: RootStoreBootstrapRequest,
         response: RootStoreBootstrapResponse,
-    }
-
-    #[test]
-    fn prepared_root_upgrade_does_not_run_runtime_or_application_continuations() {
-        let root_wasm = build_test_root_wasm();
-        let pic = build_pic();
-        let root_id = install_root_canister(&pic, root_wasm.clone());
-        assert_prepared(&pic, root_id);
-
-        pic.wait_out_install_code_rate_limit(Duration::from_mins(5));
-        pic.upgrade_canister(
-            root_id,
-            root_wasm,
-            encode_one(()).expect("encode root upgrade"),
-            None,
-        )
-        .expect("upgrade Prepared root");
-        pic.advance_time(Duration::from_secs(1));
-        pic.tick();
-        assert_prepared(&pic, root_id);
-
-        activate_test_fleet(&pic, root_id);
-        wait_for_ready_canister(&pic, root_id, 240);
-        pic.tick();
-
-        let executions: Result<u64, Error> = pic
-            .query_call(root_id, "root_upgrade_hook_executions", ())
-            .expect("query root upgrade hook count");
-        assert_eq!(
-            executions.expect("root upgrade hook count"),
-            0,
-            "Prepared root upgrade must not run the application upgrade hook"
-        );
     }
 
     #[test]
@@ -288,6 +122,44 @@ mod tests {
             observed.expect("root Store status"),
             fixture.response,
             "composite status must independently reverify the exact live catalog"
+        );
+
+        let payload = b"direct root Store authorization";
+        let payload_hash = wasm_hash(payload);
+        let prepare = TemplateChunkSetPrepareInput {
+            template_id: TemplateId::owned("canary:direct-root-update".to_string()),
+            version: TemplateVersion::from(format!(
+                "{}-direct-root-update",
+                env!("CARGO_PKG_VERSION")
+            )),
+            payload_hash: payload_hash.clone(),
+            payload_size_bytes: payload.len() as u64,
+            chunk_hashes: vec![payload_hash],
+        };
+        let prepared: Result<TemplateChunkSetInfoResponse, Error> = pic
+            .update_call_as(
+                fixture.response.wasm_store,
+                fixture.root_id,
+                CANIC_WASM_STORE_PREPARE,
+                (prepare.clone(),),
+            )
+            .expect("direct root Store prepare transport");
+        assert_eq!(
+            prepared.expect("direct root Store prepare").chunk_hashes,
+            prepare.chunk_hashes
+        );
+
+        let denied: Result<TemplateChunkSetInfoResponse, Error> = pic
+            .update_call_as(
+                fixture.response.wasm_store,
+                Principal::anonymous(),
+                CANIC_WASM_STORE_PREPARE,
+                (prepare,),
+            )
+            .expect("anonymous Store prepare transport");
+        assert_eq!(
+            denied.expect_err("anonymous Store prepare must fail").code,
+            canic::dto::error::ErrorCode::Unauthorized
         );
         assert_prepared(&pic, fixture.root_id);
     }
@@ -482,10 +354,12 @@ mod tests {
             .query_call(
                 fixture.root_id,
                 CANIC_FLEET_REGISTRY_MIRROR_STATUS,
-                (activation_request,),
+                (activation_request.clone(),),
             )
             .expect("query root Registry mirror status transport");
         assert_eq!(mirror_status.expect("root Registry mirror status"), mirror);
+
+        assert_component_registry_preparation(pic, fixture, activation_request);
 
         let old_candidate: Result<FleetSubnetRootRegistrySyncResponse, Error> = pic
             .query_call(
@@ -501,6 +375,66 @@ mod tests {
             canic::dto::error::ErrorCode::Unavailable
         );
         assert_prepared(pic, fixture.root_id);
+    }
+
+    fn assert_component_registry_preparation(
+        pic: &Pic,
+        fixture: &BootstrappedRootFixture,
+        activation_request: FleetSubnetRootRegistryMirrorActivationRequest,
+    ) {
+        let component_registry_request = RootComponentRegistryPreparationRequest {
+            store_bootstrap: activation_request.store_bootstrap,
+            expected_fleet_registry: activation_request.expected_registry,
+        };
+        let component_registry: Result<RootComponentRegistryStatusResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
+                (component_registry_request.clone(),),
+            )
+            .expect("prepare root Component Registry transport");
+        let component_registry = component_registry.expect("prepare root Component Registry");
+        assert_eq!(component_registry.fleet_subnet_root, fixture.root_id);
+        assert_eq!(
+            component_registry.release_set,
+            fixture.init_args.authority.initial_release_set
+        );
+        assert_eq!(
+            component_registry.component_topology_digest,
+            fixture
+                .init_args
+                .authority
+                .binding
+                .component_topology_digest
+        );
+        assert_eq!(component_registry.next_allocation_sequence, 1);
+        assert_eq!(component_registry.reserved_component_instances, 0);
+        assert_eq!(component_registry.committed_component_instances, 0);
+        assert_eq!(component_registry.managed_descendants, 0);
+        assert_eq!(component_registry.encoded_bytes, 0);
+
+        let component_registry_retry: Result<RootComponentRegistryStatusResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
+                (component_registry_request.clone(),),
+            )
+            .expect("retry root Component Registry preparation transport");
+        assert_eq!(
+            component_registry_retry.expect("retry root Component Registry preparation"),
+            component_registry
+        );
+        let component_registry_status: Result<RootComponentRegistryStatusResponse, Error> = pic
+            .query_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
+                (component_registry_request,),
+            )
+            .expect("query root Component Registry status transport");
+        assert_eq!(
+            component_registry_status.expect("root Component Registry status"),
+            component_registry
+        );
     }
 
     fn install_bootstrapped_root(

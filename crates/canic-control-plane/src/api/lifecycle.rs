@@ -4,13 +4,18 @@ use canic_core::{
     },
     bootstrap::{EmbeddedRootBootstrapEntry, compiled::ConfigModel},
     control_plane_support::view::fleet_activation::FleetActivationTransition,
-    dto::fleet_activation::{FleetActivationResumeRequest, FleetActivationStatusResponse},
     dto::fleet_registry::{
         FleetSubnetRootRegistryMirrorActivationRequest,
         FleetSubnetRootRegistryMirrorActivationResponse, FleetSubnetRootRegistrySyncRequest,
         FleetSubnetRootRegistrySyncResponse,
     },
     dto::fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
+    dto::{
+        component_registry::{
+            RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
+        },
+        fleet_activation::{FleetActivationResumeRequest, FleetActivationStatusResponse},
+    },
 };
 use std::time::Duration;
 
@@ -79,6 +84,22 @@ impl LifecycleApi {
     ) -> Result<FleetSubnetRootRegistryMirrorActivationResponse, canic_core::dto::error::Error>
     {
         crate::workflow::fleet_registry_mirror::active_status(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn prepare_component_registry(
+        request: RootComponentRegistryPreparationRequest,
+    ) -> Result<RootComponentRegistryStatusResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::prepare(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn component_registry_status(
+        request: RootComponentRegistryPreparationRequest,
+    ) -> Result<RootComponentRegistryStatusResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::status(request)
             .await
             .map_err(Into::into)
     }

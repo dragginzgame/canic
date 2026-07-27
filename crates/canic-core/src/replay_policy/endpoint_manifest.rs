@@ -118,6 +118,11 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "canic_fleet_registry_activate_mirror",
         command_kind("fleet_registry.activate_root_mirror.v1"),
     ),
+    update_response_idempotent(
+        "canic_root_component_registry_prepare",
+        command_kind("component_registry.prepare_root.v1"),
+    ),
+    query_read_only("canic_root_component_registry_status"),
     update_monotonic_transition(
         "canic_prepare_fleet_credential_generation",
         command_kind("fleet_activation.prepare_credential_generation.v1"),

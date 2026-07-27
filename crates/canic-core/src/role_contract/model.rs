@@ -87,6 +87,7 @@ pub enum StateAllocationKey {
     CoreRuntimeObservability,
     CoreRuntimeTopology,
     FleetCoordinatorRegistry,
+    RootComponentRegistry,
     RootFleetRegistryMirror,
     PlacementIndexRegistry,
     ScalingRegistry,

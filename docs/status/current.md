@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.17`.
-- The latest published release is `v0.100.17` at
-  `75e4992b8a7d559b8849fe2e10a864c2da2a1ef3`.
-- The `v0.100.17` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `3fcd0ccc52a7eb658d94322d6bb98553b13decbb5edb0642f99e024c9f7f329e`.
+- The workspace package version is `0.100.18`.
+- The latest published release is `v0.100.18` at
+  `3918d6da202477603c562f51e5d3505dd57bf69b`.
+- The `v0.100.18` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `752dded4f80169419074bd985679409c8eb4c3bc63cd139499e977632ede5b3c`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -193,7 +193,7 @@ Historical detail is archived at:
   Registry, manifest and version afterward. Every root remains
   runtime-`Prepared`; final all-`Active` synchronization and atomic
   mirror/Directory activation remain fenced.
-- Open `0.100.18` atomically replaces every root's private all-`Joining`
+- Released `0.100.18` atomically replaces every root's private all-`Joining`
   candidate with its exact all-`Active` Registry Mirror and matching
   Registry-derived Fleet Directory after reverifying the local Store. The
   root stable record is exclusively candidate or active; host journal
@@ -202,6 +202,20 @@ Historical detail is archived at:
   deterministic all-`Active` state is reproduced. Every root remains
   runtime-`Prepared`; Component Registry allocation and runtime activation
   are next.
+- Open `0.100.19` prepares each root's empty durable Component Registry only
+  after independently reverifying its exact Store, all-`Active` Registry
+  Mirror, protected root row and Registry-derived Fleet Directory. Host
+  journal sequences 20–22 freeze preparation intent, result and independent
+  status verification. The stable authority starts at allocation sequence
+  one with zero reserved or committed Components, descendants and charged
+  Registry bytes. Fresh root bootstrap no longer auto-creates configured
+  roles or rebuilds the retired role-based Directories; Component allocation
+  and runtime activation remain explicitly fenced. The obsolete cached
+  root/issuer attestation fixture and its embedded application Wasms are
+  removed; equivalent cases must return through a real Registry-bound issuer
+  after Component allocation lands. The manually invoked instruction-audit
+  scenarios must likewise be rebased on real Component allocation before new
+  lifecycle measurements.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority

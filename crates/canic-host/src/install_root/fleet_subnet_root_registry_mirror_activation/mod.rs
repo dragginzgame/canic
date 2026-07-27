@@ -165,7 +165,10 @@ fn drive_root_mirror_activation(
                 )?;
                 record_registry_mirror_activation_verified(&current, response)?
             }
-            FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified => {
+            FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified
+            | FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight
+            | FleetSubnetRootInstallPhase::ComponentRegistryPrepared
+            | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified => {
                 let response = call_with_arg(
                     &icp,
                     root,

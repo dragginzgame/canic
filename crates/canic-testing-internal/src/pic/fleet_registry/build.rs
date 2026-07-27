@@ -1,3 +1,5 @@
+//! Test-Wasm and PocketIC builders for the prepared-root Registry journey.
+
 use ic_testkit::artifacts::{read_wasm, test_target_dir as artifact_test_target_dir};
 use ic_testkit::pic::{Pic, PicBuilder, PicSerialGuard, acquire_pic_serial_guard};
 use std::{
@@ -15,11 +17,6 @@ use super::super::artifacts::{
 use super::fixture::progress;
 
 const ROOT_CANISTER_PACKAGE: &str = "delegation_root_stub";
-const EMBEDDED_CANISTER_PACKAGES: [&str; 3] = [
-    "delegation_issuer_stub",
-    "project_hub_stub",
-    "project_instance_stub",
-];
 const REQUIRE_EMBEDDED_ARTIFACTS_ENV: (&str, &str) = (
     canic_core::role_contract::CANONICAL_BUILD_REQUIRE_EMBEDDED_ARTIFACTS_ENV,
     canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE,
@@ -50,13 +47,6 @@ impl DerefMut for SerialPic {
     }
 }
 
-impl SerialPic {
-    // Release the serialization guard and return the owned PocketIC instance.
-    pub(super) fn into_pic(self) -> Pic {
-        self.pic
-    }
-}
-
 // Build the test root wasm.
 pub(super) fn build_test_root_wasm() -> Vec<u8> {
     let workspace_root = workspace_root();
@@ -81,7 +71,7 @@ pub(super) fn build_pic() -> SerialPic {
     }
 }
 
-// Build the test canisters once for the shared PocketIC attestation fixtures.
+// Build the test canisters once for the shared Fleet Registry fixtures.
 fn build_canisters_once(workspace_root: &Path) {
     let _serial_guard = CANISTER_BUILD_SERIAL
         .lock()
@@ -93,14 +83,6 @@ fn build_canisters_once(workspace_root: &Path) {
         let canonical_config_env = (
             canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
             config_path.to_str().expect("config path UTF-8"),
-        );
-        progress("building embedded PIC wasm artifacts");
-        build_internal_test_wasm_canisters_with_env(
-            workspace_root,
-            &target_dir,
-            &EMBEDDED_CANISTER_PACKAGES,
-            CanicWasmBuildProfile::Fast,
-            &[canonical_config_env],
         );
         progress("building bootstrap wasm_store artifact");
         build_bootstrap_wasm_store(workspace_root, &target_dir, &config_path);

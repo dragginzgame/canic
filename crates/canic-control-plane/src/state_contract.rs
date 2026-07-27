@@ -7,6 +7,7 @@
 //! Boundary: descriptors are static metadata supplied to host-side materialization.
 
 use crate::storage::stable::{
+    component_registry::{RootComponentRegistryData, RootComponentRegistryStateRecord},
     fleet_coordinator::{FleetCoordinatorRegistryData, FleetCoordinatorRegistryRecord},
     fleet_registry_mirror::{RootFleetRegistryMirrorData, RootFleetRegistryMirrorStateRecord},
     state::subnet::{ControlPlaneSubnetStateData, SubnetStateRecord},
@@ -24,8 +25,9 @@ use canic_core::{
         AllocationOwner, StateAllocationKey,
         allocation::memory::template::{
             CONTROL_PLANE_SUBNET_STATE_ID, FLEET_COORDINATOR_REGISTRY_ID,
-            ROOT_FLEET_REGISTRY_MIRROR_ID, TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID,
-            TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
+            ROOT_COMPONENT_REGISTRY_META_ID, ROOT_FLEET_REGISTRY_MIRROR_ID,
+            TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID, TEMPLATE_CHUNK_SETS_ID,
+            TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
         },
     },
     state_contract::{
@@ -53,6 +55,15 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
             RootFleetRegistryMirrorData::STATE_CONTRACT_NAME,
             195,
             "root_fleet_registry_mirror_restores_exclusive_candidate_or_active_directory",
+        ),
+        descriptor(
+            StateAllocationKey::RootComponentRegistry,
+            "root_component_registry",
+            ROOT_COMPONENT_REGISTRY_META_ID,
+            RootComponentRegistryStateRecord::STATE_CONTRACT_NAME,
+            RootComponentRegistryData::STATE_CONTRACT_NAME,
+            196,
+            "root_component_registry_restores_exact_preparation_authority_and_allocation_sequence",
         ),
         descriptor(
             StateAllocationKey::TemplateManifests,
@@ -155,6 +166,7 @@ mod tests {
 
         for expected in [
             StateAllocationKey::FleetCoordinatorRegistry,
+            StateAllocationKey::RootComponentRegistry,
             StateAllocationKey::RootFleetRegistryMirror,
             StateAllocationKey::TemplateManifests,
             StateAllocationKey::TemplateChunkSets,
@@ -176,6 +188,11 @@ mod tests {
                 StateAllocationKey::FleetCoordinatorRegistry,
                 FleetCoordinatorRegistryRecord::STATE_CONTRACT_NAME,
                 FleetCoordinatorRegistryData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::RootComponentRegistry,
+                RootComponentRegistryStateRecord::STATE_CONTRACT_NAME,
+                RootComponentRegistryData::STATE_CONTRACT_NAME,
             ),
             (
                 StateAllocationKey::RootFleetRegistryMirror,

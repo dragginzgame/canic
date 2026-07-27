@@ -6,8 +6,8 @@ Date: 2026-07-27
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.15`.
-- Open patch draft: `0.100.16`; no package-version change has been authorized.
+- Workspace package version: `0.100.18`.
+- Open patch draft: `0.100.19`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -141,6 +141,8 @@ Registry slices replace the 0.99 root model.
 
 ## Slice 4 — Component Lifecycle, Mirrors and Directories
 
+- [x] Prepare one empty root-local Component Registry authority against the
+  exact Store, active Registry Mirror and Fleet Directory.
 - [ ] Implement durable root-local `ComponentInstanceId` allocation.
 - [ ] Implement admitted direct Component creation through the root.
 - [ ] Implement same-root grant-checked peer Component provisioning while
@@ -338,7 +340,7 @@ journal freezes the complete source and target Registries before mutation,
 then independently verifies the live all-`Active` Registry, manifest and
 version.
 
-Open 0.100.18 extends every root journal through
+Released 0.100.18 extends every root journal through
 `RegistryMirrorActivationVerified`. Each prepared root reverifies its exact
 Store, fetches and validates the final all-`Active` Coordinator snapshot,
 derives its Registry-version-bound Fleet Directory and atomically replaces
@@ -347,21 +349,41 @@ mirror/Directory record. The host independently re-queries every root and
 accepts recovery across the Coordinator transition only when the exact
 deterministic all-`Active` state is reproduced.
 
+Open 0.100.19 extends every root journal through
+`ComponentRegistryPreparationVerified`. Each root independently reverifies its
+Store, active Registry Mirror, protected all-`Active` root row and matching
+Fleet Directory before committing one empty Component Registry authority.
+Exact retry returns the same authority; conflicting preparation fails closed.
+The Registry starts at allocation sequence one with zero reserved or committed
+Components, descendants and charged Registry bytes. Fresh root bootstrap no
+longer creates configured roles or rebuilds the retired role-based
+Directories, so no Component can bypass its future durable Registry binding.
+
 The current installer therefore stops only after the Coordinator Registry and
 every root's matching Registry Mirror/Fleet Directory are independently
-verified all-`Active`. Every root remains runtime-`Prepared`; Component
-allocation, root-owned count summaries and terminal Coordinator-anchored Fleet
-catalog publication remain unimplemented. The temporary Component Spec
-selector remains until real allocation supplies the exact protected Component
-binding.
+verified all-`Active` and every empty root Component Registry is independently
+prepared. Every root remains runtime-`Prepared`; Component allocation,
+root-owned count summaries and terminal Coordinator-anchored Fleet catalog
+publication remain unimplemented. The temporary Component Spec selector
+remains until real allocation supplies the exact protected Component binding.
 
 ## Next Action
 
-Establish the root-local Component Registry and admitted top-level Component
-allocation boundary, while hard-cutting any obsolete role-based Directory or
-static root bootstrap path that would bypass it. Activate root runtime only
-through a Registry/Store/Directory-bound lifecycle that cannot create
-Components before their durable binding exists.
+Implement the admitted top-level Component allocation state machine beneath
+the prepared root-local Registry authority. Reserve the deterministic
+`ComponentInstanceId` and exact Spec/admission/capacity charge before any paid
+Canister effect, commit the resulting protected Component binding only after
+observing creation and install, and make exact same-release retry recover from
+every journalled phase without blindly repeating an unresolved effect.
+
+Activate root runtime only through this Registry/Store/Directory-bound
+lifecycle. Do not reintroduce role-based Directory authority, static root
+bootstrap creation or an unbound Canister effect.
+Restore the role-attestation PocketIC cases only after this lifecycle can
+create a Registry-bound issuer Component; do not revive the old cached
+root/issuer bootstrap fixture.
+Rebase the instruction-audit scenarios on the same real allocation boundary
+before taking new Component lifecycle measurements.
 
 As root-local Component Registry authority lands, maintain checked
 known-created/not-deletion-confirmed Canister counters and expose compact

@@ -205,7 +205,10 @@ fn drive_registry_join(
             | FleetSubnetRootInstallPhase::RegistrySyncVerified
             | FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight
             | FleetSubnetRootInstallPhase::RegistryMirrorActivated
-            | FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified => {
+            | FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified
+            | FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight
+            | FleetSubnetRootInstallPhase::ComponentRegistryPrepared
+            | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified => {
                 let response = current
                     .journal
                     .registry_join_response
