@@ -13,7 +13,10 @@ use crate::{
 use candid::Principal;
 use canic_core::{
     control_plane_support::error::InternalError,
-    dto::fleet_registry::{FleetRegistry, FleetRegistryManifest, FleetRegistryVersion},
+    dto::fleet_registry::{
+        FleetRegistry, FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootJoinRequest,
+        FleetSubnetRootJoinResponse,
+    },
 };
 
 ///
@@ -43,6 +46,12 @@ impl FleetCoordinatorWorkflow {
 
     pub(crate) fn registry() -> Result<FleetRegistry, InternalError> {
         FleetCoordinatorOps::registry()
+    }
+
+    pub(crate) fn join_root(
+        request: FleetSubnetRootJoinRequest,
+    ) -> Result<FleetSubnetRootJoinResponse, InternalError> {
+        FleetCoordinatorOps::join_root(request)
     }
 
     pub(crate) fn manifest() -> Result<FleetRegistryManifest, InternalError> {

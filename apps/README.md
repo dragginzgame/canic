@@ -15,44 +15,45 @@ from the resolved `canic` package automatically.
 
 - `test/` – local reference topology wired through `icp.yaml` and used by CI
   wasm/audit workflows.
-  - `root/` – root orchestrator canister (`canic::start!` with package
-    metadata `app = "test"` and `role = "root"`) that wires topology,
-    bootstraps the internal `wasm_store`, stages/publishes ordinary child
-    releases, and exposes root admin endpoints.
+  - `root/` – Fleet Subnet Root package (`canic::start!` with package metadata
+    `app = "test"` and `role = "root"`) used to build the root infrastructure
+    artifact and runtime endpoint bundle.
   - `app/` – minimal application canister used as a placeholder service.
   - `user_hub/` + `user_shard/` – sharding placement plus delegated signing flow.
   - `scale_hub/` + `scale/` – scaling pool demo, with the worker role exposed
     as `scale_replica`.
   - `canic.toml` – shared test topology referenced by each reference canister `build.rs`.
   - `test-configs/` – config fixtures used by local checks.
-- `demo/` – small root-plus-app and sharding App for quick experiments.
-  - `root/` – root canister for the demo topology.
-  - `app/` – simple application canister auto-created by the root.
+- `demo/` – small Component and sharding App for source/build experiments.
+  - `root/` – Fleet Subnet Root package for the demo topology.
+  - `app/` – simple Component role.
   - `user_hub/` + `user_shard/` – local sharding walkthrough roles with
     human-readable planning, assignment, and shard inspection endpoints.
   - `canic.toml` – shared demo topology referenced by each demo App canister `build.rs`.
 
 ## Local Workflow
 
-The test canisters are wired through `icp.yaml`; custom build steps invoke the
-host artifact builder used by `canic install` directly.
+The test Canisters are wired through `icp.yaml`; custom build steps invoke the
+same host artifact builder used by `canic install`.
 
-- Install the full local reference topology: `make test-fleet-install`
-- `root` stays thin: only the bootstrap `wasm_store` artifact is embedded, and the ordinary configured release set is staged after install from `.icp/local/canisters/root/root.release-set.json`.
+- Inspect the source topology: `canic app config test --verbose`
+- Build one role: `canic build test app --profile fast`
+- Exercise the current install boundary:
+  `canic install test test-local --fleet-input <path> --profile fast`
 - Create/build test canisters manually: `icp deploy -e test`
-- Run the scripted local smoke flow: `make test-canisters`
 
-The demo App is intentionally small but includes a sharding walkthrough. Use
-`canic app config demo --verbose` to inspect the pool shape before install.
-After
-`canic install demo demo-local --fleet-input deployments/demo-local.toml`,
-call `demo_user_hub_plan("alice")`, then call
-`demo_user_hub_assign("alice")` and use the returned shard id with
-`demo_user_shard_describe("alice")`. The separate Fleet input format is
-documented in
+The 0.100 installer currently verifies the Coordinator, all planned roots,
+each root-local Store, and every root's Registry `Joining` row before stopping
+at the snapshot-synchronization boundary. It does not yet create the
+configured `app`, `user_hub`, `user_shard`,
+`scale_hub`, or `scale` Components/descendants. Once the terminal
+Coordinator/Registry/Component lifecycle is implemented, the demo's intended
+sharding walkthrough is `demo_user_hub_plan("alice")`,
+`demo_user_hub_assign("alice")`, then
+`demo_user_shard_describe("alice")` on the returned shard.
+
+The separate Fleet input format is documented in
 [`fleet-install-input.md`](../docs/architecture/fleet-install-input.md).
 Isolated test probes and PocketIC fixtures live under `canisters/test/`.
 
-Note: `make test-fleet-install` and `make test-canisters` are manual local smoke
-helpers, not part of `make test`, and nonlocal targets expect their environment
-to be managed externally.
+Nonlocal targets expect their environment to be managed externally.

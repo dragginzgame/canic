@@ -1,14 +1,18 @@
 # Testing Layout Rules
 
-This file documents the canonical test layout for `canic-core` and the
-repository-wide test configuration policy.
+This file documents the canonical repository test layout and configuration
+policy.
 Follow these rules during refactors to prevent test sprawl.
 
 ## Rules
 
-- Unit tests live next to the code under `crates/canic-core/src/...` with `#[cfg(test)]`.
+- Unit tests live next to the code under `crates/<crate>/src/...` with
+  `#[cfg(test)]`.
 - Seam/workflow tests that need `crate::` internals live under `crates/canic-core/src/test/`.
-- PocketIC/system tests live under `crates/canic-core/tests/*.rs` (top-level only).
+- Crate integration tests live under `crates/<crate>/tests/`.
+- Cross-crate and managed-Fleet PocketIC tests live under
+  `crates/canic-tests/tests/`; shared harness support belongs in
+  `crates/canic-testing-internal/`.
 - Avoid `#[path = "..."]` in tests; use top-level files in `tests/`.
 - Test canister crates are not tests; keep repo-level fixtures under
   `canisters/test/` and audit probes under `canisters/audit/`.
@@ -82,13 +86,31 @@ to avoid PocketIC startup races under parallel harness execution.
 - Tests that load `.icp`-built or production-layout WASM artifacts.
 
 **Rules**
-- MUST live under `crates/canic-core/tests/` or other explicit integration locations.
+- MUST live under the owning crate's `tests/` directory or, for cross-crate
+  PocketIC journeys, under `crates/canic-tests/tests/`.
 - MUST NOT use `ConfigTestBuilder`.
 - MUST document reliance on embedded config at the top of the test file.
 
 **Notes**
 - These tests validate deployment realism, not internal logic.
 - Some system-level tests may validate core invariants without embedding config; these still fall under Category C.
+
+### Managed-Fleet PocketIC Authority
+
+- Canister creation, installation, upgrade, and inter-Canister behavior must
+  use PocketIC.
+- A current managed-Fleet journey starts from empty state with the exact Fleet
+  Coordinator, every planned Fleet Subnet Root, and one verified local Store
+  per root.
+- Tests must drive root membership through the Coordinator Fleet Registry and
+  resolve application Canisters from root-owned Component Registry/Directory
+  authority.
+- Manually installing one root and its application Canisters does not validate
+  the managed-Fleet path.
+- Do not add new tests against the removed single-root `root_suite`,
+  `SubnetRegistry`, or `SubnetDirectory` authority. Current authorization,
+  replay, cycles, delegated-auth, scaling, sharding, and recovery properties
+  remain required in the Coordinator-anchored journey.
 
 ---
 

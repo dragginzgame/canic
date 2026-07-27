@@ -109,9 +109,9 @@ For password-protected ICP CLI PEM identities, use
 password prompts during operator sessions. This affects the local ICP CLI
 identity session only.
 
-## Local Install And Registry Commands
+## Local Install And Fleet Inspection Commands
 
-For local installed-fleet workflows, the CLI also exposes install, registry,
+For local managed-Fleet workflows, the CLI also exposes install, inspection,
 replica, backup, and restore commands.
 
 Before Fleet planning can use a pre-existing local or connected ICP network,
@@ -132,39 +132,51 @@ the anchor for an existing profile is rejected. Public-IC environments such as
 `ic`, or named profiles backed by `ic`, use Canic's compiled pinned root key
 and are not enrolled.
 
-Show local test-fleet canisters that already have ids:
+Install planning requires a separate operator-owned Fleet input:
+
+```bash
+canic install test test-local \
+  --fleet-input deployments/test-local.toml \
+  --profile fast
+```
+
+The input selects exact Coordinator/root Subnets, Component admissions,
+root-local limits, and creation funding. See
+[`fleet-install-input.md`](../../docs/architecture/fleet-install-input.md) for
+the bounded schema.
+
+The 0.100 implementation is still in progress. The current command builds,
+creates, installs, and verifies the Coordinator, every planned Fleet Subnet
+Root, each root's exact local Store, and every root's Registry `Joining` row,
+then stops before snapshot synchronization, acknowledgement, activation,
+Component creation, and terminal Fleet-catalog publication. That stop is an
+explicit safety boundary rather than a partially successful Fleet.
+
+The following commands require a terminal installed Fleet:
 
 ```bash
 canic --environment local info list test
 canic --environment local info env test
 ```
 
-`canic info list <name>` reads the installed root registry for that fleet.
-Use `--subtree <name-or-principal>` to print one subtree with that node as the
-rendered root.
+`canic info list <name>` reads the selected Fleet's live registered Canisters.
+Use `--subtree <name-or-principal>` to print one application subtree with that
+node as the rendered root.
 `canic info env <name>` prints sourceable `CANIC_<ROLE>` canister ID exports
 for scripts and local shell helpers.
 Live list sources call `canic_ready` for each listed canister and include a
 `READY` column with `yes`, `no`, or `error`, plus a `CYCLES` balance column.
 
-If the list only shows the `root` row, the project has reserved a local root id
-but has not installed the tree. Run `canic install test test`, then use
-`canic --environment local info list test` to read the installed root registry.
+The required 0.100 closeout adds
+`canic info subnets <fleet> [--json]`. It will resolve the terminal
+Coordinator-anchored Fleet catalog, validate current Registry/root evidence,
+and report Fleet-owned Canister counts grouped by physical Subnet. It is not
+present in the current binary and will not infer counts from an incomplete
+install journal.
 
-Install and bootstrap the local fleet:
-
-```bash
-canic install test test
-```
-
-The current `canic install <app> <fleet>` surface keeps the source App selected
-under `apps/<app>/canic.toml` separate from the installed Fleet label. It also
-selects the conventional `root` ICP canister name and Canic's built-in
-readiness timeout:
-
-```bash
-canic install test test-local
-```
+The `canic install <app> <fleet> --fleet-input <path>` surface keeps the source
+App under `apps/<app>/canic.toml`, the installed Fleet label, and concrete
+operator deployment policy separate.
 
 The selected install config must include an App source identity:
 
@@ -173,13 +185,12 @@ The selected install config must include an App source identity:
 name = "test"
 ```
 
-Successful installs commit one Fleet row under
-`.canic/networks/<canonical-network-id>/fleets/catalog.json`. The row binds the
-generated Fleet ID, Fleet name, App, installation-environment provenance and
-verified root principal. `canic app config <name>` shows the selected App
-declaration, including opt-in role features such as auth, sharding, and
-scaling, while `canic info list <fleet>` queries that Fleet's root registry.
-Commands use environment `local` unless you pass
+At 0.100 closeout, only complete activation publishes a terminal Fleet row
+under `.canic/networks/<canonical-network-id>/fleets/catalog.json`. That row is
+Coordinator-anchored and binds the Fleet ID, Fleet name, App, canonical
+network, and verified terminal evidence. `canic app config <name>` shows
+source intent; live `canic info` commands resolve deployment truth from the
+terminal Fleet. Commands use environment `local` unless you pass
 `--environment <name>`.
 
 The local ICP CLI replica does not persist canister state across stop/start.
@@ -201,11 +212,11 @@ canic app delete demo
 canic --environment ic app list
 ```
 
-Create a new root-plus-app source App:
+Create a new Fleet source App, then provide its separate deployment input:
 
 ```bash
 canic app create my_app --yes
-canic install my_app my-local
+canic install my_app my-local --fleet-input deployments/my-local.toml
 ```
 
 Diagnose project-level setup, or explicitly diagnose one installed Fleet:

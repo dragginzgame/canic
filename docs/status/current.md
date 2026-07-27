@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.13`.
-- The latest published release is `v0.100.13` at
-  `debe32f68ef6d20d68207cfa9eb7fb5c48ca588c`.
-- The `v0.100.13` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `11b97dc3f80c7533225f0b981b10e596b9ac7df0c4b180093d5f955f2c81910c`.
+- The workspace package version is `0.100.14`.
+- The latest published release is `v0.100.14` at
+  `965836ff7e58afa3332891d6286466e3488b81b0`.
+- The `v0.100.14` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `e678b62216f7ed1b1a5b2433e2ded3da9f6c6943a8c4b6084a6f284de1a38ee8`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -154,7 +154,7 @@ Historical detail is archived at:
   validates the complete observed root-binding set and stops at an explicit
   local Store-bootstrap and Registry-registration fence. The obsolete
   one-root activation journal and root catalog-write path are removed.
-- Open `0.100.14` extends every verified root journal through exact
+- Released `0.100.14` extends every verified root journal through exact
   topology-admitted local Store staging, bootstrap and independent live
   verification. The root reconstructs its chunk-staged canonical release-set
   manifest, checks it against protected admission/build/package/Store limits,
@@ -166,6 +166,14 @@ Historical detail is archived at:
   `SubnetDirectory` authority. Current authorization, replay, cycles,
   delegated-auth, scaling, sharding and recovery properties remain required
   validation for the genuine Coordinator-anchored multi-root PocketIC journey.
+- Open `0.100.15` extends each verified root journal through exact Fleet
+  Registry `Joining`. The Coordinator atomically compare-and-commits one
+  topology-admitted root and its durable response receipt, so a late exact
+  retry returns the original revision even after other roots join. The host
+  independently verifies every canonical Registry prefix and the final
+  all-`Joining` snapshot, manifest and version. Snapshot delivery,
+  acknowledgement, Registry `Active`, final Directory activation and runtime
+  activation remain fenced.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1455,16 +1463,15 @@ First primary results:
 
 ## Next Action
 
-Continue 0.100 Slice 2 from the
+Continue 0.100 Slice 3 from the
 [implementation tracker](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md).
 Fresh installation now journals and verifies the Coordinator, every planned
-Fleet Subnet Root and each root's exact topology-admitted local Store before
-stopping at the Registry boundary. Next, register every root through
-`Joining`, journal snapshot synchronization and acknowledgement, then commit
-and distribute the final all-active Registry evidence before runtime
-activation. Do not bypass the Store evidence, permit nested Components, merge
-roots belonging to different Fleets on one Subnet or consume an earlier
-installation.
+Fleet Subnet Root, each root's exact topology-admitted local Store, and every
+root's Registry `Joining` row. Next, journal exact snapshot synchronization and
+acknowledgement, then commit and distribute the final all-active Registry
+evidence before runtime activation. Do not bypass Store or Registry evidence,
+permit nested Component declarations, merge roots belonging to different
+Fleets on one Subnet or consume an earlier installation.
 
 ## Historical Release Detail
 

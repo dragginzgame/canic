@@ -307,6 +307,9 @@ impl FleetActivationWorkflow {
 
     /// Enforce the activation phase before a managed endpoint handler runs.
     pub fn require_endpoint_allowed(call: EndpointCall) -> Result<(), InternalError> {
+        if EnvOps::is_fleet_coordinator_runtime() {
+            return Ok(());
+        }
         let is_root = EnvOps::canister_role()?.is_root();
         if !is_root && FleetActivationRuntimeOps::is_standalone_local() {
             return Ok(());

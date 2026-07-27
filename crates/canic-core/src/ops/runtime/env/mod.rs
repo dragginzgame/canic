@@ -11,7 +11,10 @@ use crate::{
     dto::env::EnvSnapshotResponse,
     ids::ComponentSpecId,
     memory::runtime::is_memory_bootstrap_ready,
-    model::env::ValidatedEnv,
+    model::{
+        env::ValidatedEnv,
+        runtime_kind::{self, CanicRuntimeKind},
+    },
     ops::runtime::env::mapper::EnvRecordMapper,
     ops::{prelude::*, runtime::RuntimeOpsError},
     storage::stable::env::{Env, EnvData, EnvRecord},
@@ -82,6 +85,17 @@ impl EnvOps {
     // ---------------------------------------------------------------------
     // Environment predicates
     // ---------------------------------------------------------------------
+
+    /// Mark this process as the dedicated built-in Fleet Coordinator runtime.
+    pub fn initialize_fleet_coordinator_runtime() {
+        runtime_kind::set(CanicRuntimeKind::FleetCoordinator);
+    }
+
+    /// Return whether the process is the dedicated built-in Fleet Coordinator.
+    #[must_use]
+    pub fn is_fleet_coordinator_runtime() -> bool {
+        runtime_kind::current() == CanicRuntimeKind::FleetCoordinator
+    }
 
     #[must_use]
     pub fn is_fleet_root() -> bool {

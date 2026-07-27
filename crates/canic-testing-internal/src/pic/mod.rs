@@ -5,6 +5,8 @@ mod attestation;
 mod audit;
 mod canic;
 mod delegation;
+#[cfg(test)]
+mod fleet_coordinator;
 mod lifecycle;
 mod root;
 

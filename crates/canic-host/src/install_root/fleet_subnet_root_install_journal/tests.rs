@@ -10,11 +10,11 @@ use crate::{
         PlannedFleetCoordinator, PlannedFleetSubnetRoot,
     },
     install_root::fleet_subnet_root_install_journal::{
-        FleetSubnetRootInstallPhase, PlanFleetSubnetRootInstallRequest, begin_root_creation,
-        begin_root_install, begin_store_bootstrap, begin_store_staging, expected_root_authority,
-        plan_fleet_subnet_root_install, record_root_created, record_root_installed,
-        record_root_verified, record_store_bootstrapped, record_store_staged,
-        record_store_verified,
+        FleetSubnetRootInstallPhase, PlanFleetSubnetRootInstallRequest, begin_registry_join,
+        begin_root_creation, begin_root_install, begin_store_bootstrap, begin_store_staging,
+        expected_root_authority, plan_fleet_subnet_root_install, record_registry_join_verified,
+        record_registry_joined, record_root_created, record_root_installed, record_root_verified,
+        record_store_bootstrapped, record_store_staged, record_store_verified,
     },
     release_set::{
         CanicInfrastructureArtifactEntry, CanicInfrastructureArtifactManifest,
@@ -28,7 +28,11 @@ use candid::Principal;
 use canic_core::{
     bootstrap::compiled::{ComponentLimits, ComponentSpec, ComponentTopology},
     cdk::types::Cycles,
-    dto::root_store::{RootStoreBootstrapResponse, RootStoreCatalogEntry},
+    control_plane_support::ops::fleet_registry::FleetRegistryOps,
+    dto::{
+        fleet_registry::FleetSubnetRootJoinResponse,
+        root_store::{RootStoreBootstrapResponse, RootStoreCatalogEntry},
+    },
     ids::{
         AppId, CanisterRole, CanonicalNetworkId, ComponentSpecAdmission, CyclesFundingBudget,
         FleetBinding, FleetId, FleetKey, FleetSubnetRootLimits, FleetSubnetRootReleaseSet,
@@ -130,6 +134,88 @@ fn journals_exact_store_bootstrap_and_rejects_a_catalog_outside_root_admissions(
         super::validate_store_bootstrap_evidence(&complete.path, &complete.journal, &inadmissible),
         Err(super::FleetSubnetRootInstallJournalError::InvalidDocument { .. })
     ));
+}
+
+#[test]
+fn journals_exact_registry_join_request_response_and_independent_verification() {
+    let root = temp_dir("fleet-subnet-root-registry-join-journal");
+    let fixture = fixture(&root);
+    let planned = plan(&fixture).expect("plan root");
+    let creating = begin_root_creation(&planned).expect("begin creation");
+    let root_canister = Principal::from_slice(&[44]);
+    let created = record_root_created(&creating, root_canister).expect("record root");
+    let installing = begin_root_install(&created).expect("begin install");
+    let installed = record_root_installed(&installing, [7; 32]).expect("record installed module");
+    let authority = expected_root_authority(&installed.journal).expect("expected authority");
+    let verified = record_root_verified(&installed, authority).expect("record exact authority");
+    let staging = begin_store_staging(&verified).expect("begin Store staging");
+    let staged = record_store_staged(&staging).expect("record Store staging");
+    let bootstrapping = begin_store_bootstrap(&staged).expect("begin Store bootstrap");
+    let store = RootStoreBootstrapResponse {
+        fleet_subnet_root: root_canister,
+        wasm_store: Principal::from_slice(&[55]),
+        release_set: fixture.plan.plan.fleet_subnet_roots[0].initial_release_set,
+        catalog: vec![RootStoreCatalogEntry {
+            role: CanisterRole::from("project_hub"),
+            payload_hash: [9; 32],
+            payload_size_bytes: 1_024,
+        }],
+    };
+    let bootstrapped =
+        record_store_bootstrapped(&bootstrapping, store.clone()).expect("record Store");
+    let store_verified = record_store_verified(&bootstrapped, store).expect("verify exact Store");
+
+    let genesis = FleetRegistryOps::compile_genesis(
+        &fixture.plan.plan.fleet.app,
+        store_verified.journal.authority.clone(),
+        &fixture.topology,
+    )
+    .expect("genesis");
+    let genesis_version = FleetRegistryOps::version(
+        &store_verified.journal.authority,
+        &fixture.topology,
+        &genesis,
+    )
+    .expect("genesis version");
+    let joining =
+        begin_registry_join(&store_verified, genesis_version).expect("begin Registry join");
+    assert_eq!(
+        joining.journal.phase,
+        FleetSubnetRootInstallPhase::RegistryJoinInFlight
+    );
+    assert_eq!(joining.journal.sequence, 11);
+    let request = joining
+        .journal
+        .registry_join_request
+        .clone()
+        .expect("durable join request");
+    let registry = FleetRegistryOps::compile_joining(
+        &joining.journal.authority,
+        &fixture.topology,
+        &genesis,
+        request.entry.clone(),
+    )
+    .expect("joined Registry");
+    let manifest =
+        FleetRegistryOps::manifest(&joining.journal.authority, &fixture.topology, &registry)
+            .expect("joined manifest");
+    let version =
+        FleetRegistryOps::version(&joining.journal.authority, &fixture.topology, &registry)
+            .expect("joined version");
+    let response = FleetSubnetRootJoinResponse {
+        entry: request.entry,
+        version: version.clone(),
+    };
+    let joined = record_registry_joined(&joining, response.clone()).expect("record Registry join");
+    let complete = record_registry_join_verified(&joined, &registry, &manifest, &version)
+        .expect("verify joined Registry");
+
+    assert_eq!(
+        complete.journal.phase,
+        FleetSubnetRootInstallPhase::RegistryJoinVerified
+    );
+    assert_eq!(complete.journal.sequence, 13);
+    assert_eq!(complete.journal.registry_join_response, Some(response));
 }
 
 #[test]

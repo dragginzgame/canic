@@ -80,6 +80,12 @@ pub enum FleetRegistryOpsError {
     #[error("Fleet Registry Component Specs are not the complete compiled topology")]
     FleetComponentSpecSetMismatch,
 
+    #[error("Fleet Registry root join conflicts with an existing Subnet or root principal")]
+    FleetSubnetRootJoinIdentityConflict,
+
+    #[error("Fleet Registry root join requires status Joining")]
+    FleetSubnetRootJoinRequiresJoining,
+
     #[error("Fleet Registry genesis App '{received}' does not match configured App '{expected}'")]
     GenesisAppMismatch { expected: AppId, received: AppId },
 
@@ -94,6 +100,9 @@ pub enum FleetRegistryOpsError {
 
     #[error("Fleet Registry revision must be positive")]
     NonPositiveRevision,
+
+    #[error("Fleet Registry revision is exhausted")]
+    RevisionExhausted,
 
     #[error("Fleet Registry root principal conflicts with its Coordinator")]
     RootPrincipalConflictsWithCoordinator,
@@ -126,6 +135,18 @@ impl FleetRegistryOps {
         topology: &ComponentTopology,
     ) -> Result<FleetRegistry, InternalError> {
         validation::compile_genesis(configured_app, authority, topology)
+            .map_err(OpsError::from)
+            .map_err(InternalError::from)
+    }
+
+    /// Construct the next canonical snapshot with one exact root added as `Joining`.
+    pub fn compile_joining(
+        expected_authority: &FleetRegistryAuthority,
+        topology: &ComponentTopology,
+        current: &FleetRegistry,
+        entry: FleetSubnetRootEntry,
+    ) -> Result<FleetRegistry, InternalError> {
+        compile_joining(expected_authority, topology, current, entry)
             .map_err(OpsError::from)
             .map_err(InternalError::from)
     }
@@ -182,6 +203,42 @@ impl FleetRegistryOps {
             content_hash: manifest.content_hash,
         })
     }
+}
+
+fn compile_joining(
+    expected_authority: &FleetRegistryAuthority,
+    topology: &ComponentTopology,
+    current: &FleetRegistry,
+    entry: FleetSubnetRootEntry,
+) -> Result<FleetRegistry, FleetRegistryOpsError> {
+    validation::validate(expected_authority, topology, current)?;
+    if entry.status != FleetSubnetRootStatus::Joining {
+        return Err(FleetRegistryOpsError::FleetSubnetRootJoinRequiresJoining);
+    }
+    if current
+        .fleet_subnet_roots
+        .iter()
+        .any(|existing| existing == &entry)
+    {
+        return Ok(current.clone());
+    }
+    if current.fleet_subnet_roots.iter().any(|existing| {
+        existing.placement_subnet == entry.placement_subnet
+            || existing.fleet_subnet_root == entry.fleet_subnet_root
+    }) {
+        return Err(FleetRegistryOpsError::FleetSubnetRootJoinIdentityConflict);
+    }
+
+    let mut next = current.clone();
+    next.revision = next
+        .revision
+        .checked_add(1)
+        .ok_or(FleetRegistryOpsError::RevisionExhausted)?;
+    next.fleet_subnet_roots.push(entry);
+    next.fleet_subnet_roots
+        .sort_by_key(|root| root.placement_subnet);
+    validation::validate(expected_authority, topology, &next)?;
+    Ok(next)
 }
 
 fn canonical_bytes(

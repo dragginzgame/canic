@@ -13,4 +13,5 @@ pub mod fleet_activation;
 pub mod intent;
 pub mod placement;
 pub mod replay;
+pub mod runtime_kind;
 pub mod topology;

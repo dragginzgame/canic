@@ -182,7 +182,10 @@ fn drive_store_bootstrap(
                 )?;
                 record_store_verified(&current, evidence)?
             }
-            FleetSubnetRootInstallPhase::StoreVerified => {
+            FleetSubnetRootInstallPhase::StoreVerified
+            | FleetSubnetRootInstallPhase::RegistryJoinInFlight
+            | FleetSubnetRootInstallPhase::RegistryJoined
+            | FleetSubnetRootInstallPhase::RegistryJoinVerified => {
                 let observed = query_store_bootstrap_status(
                     icp_root,
                     environment,

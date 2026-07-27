@@ -10,9 +10,13 @@ use crate::{
 };
 use canic_core::{
     api::runtime::MemoryRuntimeApi,
+    control_plane_support::ops::runtime::env::EnvOps,
     dto::{
         error::Error,
-        fleet_registry::{FleetRegistry, FleetRegistryManifest, FleetRegistryVersion},
+        fleet_registry::{
+            FleetRegistry, FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootJoinRequest,
+            FleetSubnetRootJoinResponse,
+        },
     },
 };
 use ic_cdk::api::{canister_self, is_controller, msg_caller};
@@ -30,6 +34,7 @@ impl FleetCoordinatorApi {
     pub fn init(args: FleetCoordinatorInitArgs) {
         MemoryRuntimeApi::bootstrap_registry()
             .unwrap_or_else(|error| ic_cdk::trap(format!("memory bootstrap failed: {error}")));
+        EnvOps::initialize_fleet_coordinator_runtime();
         let caller = msg_caller();
         FleetCoordinatorWorkflow::initialize(args, caller, is_controller(&caller), canister_self())
             .unwrap_or_else(|error| {
@@ -39,6 +44,12 @@ impl FleetCoordinatorApi {
 
     pub fn registry() -> Result<FleetRegistry, Error> {
         FleetCoordinatorWorkflow::registry().map_err(Into::into)
+    }
+
+    pub fn join_root(
+        request: FleetSubnetRootJoinRequest,
+    ) -> Result<FleetSubnetRootJoinResponse, Error> {
+        FleetCoordinatorWorkflow::join_root(request).map_err(Into::into)
     }
 
     pub fn manifest() -> Result<FleetRegistryManifest, Error> {

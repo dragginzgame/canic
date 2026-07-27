@@ -48,8 +48,8 @@ not add new release behavior.
 | Packaged downstream CLI | `make test-packaged-downstream-cli` | Can packaged Canic crates resolve and run current downstream CLI/read-only/operator commands without repository crate paths? | RC/final release when local Cargo cache/toolchain support is available. |
 | Packaged downstream wasm store | `make test-packaged-downstream-wasm-store` | Can the special packaged downstream `wasm_store` bootstrap paths build from packaged Canic crates outside the repository package graph? | RC/final release when Wasm/Cargo package support is available. |
 | Release workspace build | `cargo build --release --workspace --locked` | Does the release build shape compile with the locked resolver? | Tag CI and RC validation. |
-| Local fleet install | `make test-fleet-install` | Can the full local test/reference topology install with the configured local ICP environment? | RC validation when local ICP/PocketIC/canister build prerequisites are available. |
-| Local canister tests | `make test-canisters` | Can the local canister install/test flow run end to end? | RC validation when local ICP/PocketIC/canister build prerequisites are available. |
+| Local Fleet install | `make test-fleet-install` | Can an exact-input Coordinator-anchored multi-root Fleet reach terminal activation? | Required after the 0.100 closeout rewrite; the current stale recipe is not RC evidence. |
+| Local Canister tests | `make test-canisters` | Can the terminal Fleet create and resolve Components through current Registry/Directory authority? | Required after the 0.100 closeout rewrite; the current stale recipe is not RC evidence. |
 
 The retained probe details remain documented in:
 
@@ -131,7 +131,9 @@ commit.
 ## Required RC Gates
 
 Use these gates when validating package/install readiness before RC promotion
-or final release, assigning environment-specific gates when needed:
+or final release, assigning environment-specific gates when needed. The final
+two target names remain blocked until their Make recipes use the required
+Fleet input and complete Coordinator-anchored journey:
 
 ```text
 bash scripts/ci/check-release-package-install-validation.sh
@@ -146,7 +148,7 @@ make test-canisters
 
 The local ICP/canister gates may be assigned to CI or a dedicated RC
 environment when too expensive or environment-specific for an ordinary docs
-slice.
+slice. They must not be run or credited in their current single-root form.
 
 ## Non-Goals
 

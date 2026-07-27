@@ -97,6 +97,10 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         command_kind("fleet.root_store_bootstrap.v1"),
     ),
     query_read_only("canic_root_store_bootstrap_status"),
+    update_response_idempotent(
+        "canic_fleet_subnet_root_join",
+        command_kind("fleet_registry.root_join.v1"),
+    ),
     update_monotonic_transition(
         "canic_prepare_fleet_credential_generation",
         command_kind("fleet_activation.prepare_credential_generation.v1"),

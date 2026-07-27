@@ -1608,6 +1608,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fleet_coordinator_stub"
+version = "0.100.14"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
+]
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"

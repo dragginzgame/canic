@@ -31,6 +31,7 @@ mod execution_preflight;
 mod fleet_install_session;
 mod fleet_subnet_root_install;
 mod fleet_subnet_root_install_journal;
+mod fleet_subnet_root_registry_join;
 mod fleet_subnet_root_store_bootstrap;
 mod identity;
 mod operations;
@@ -54,6 +55,7 @@ pub use config_selection::{
 use coordinator_install::install_and_verify_fleet_coordinator;
 use current_execution::current_install_execution_context;
 use fleet_subnet_root_install::install_and_verify_fleet_subnet_roots;
+use fleet_subnet_root_registry_join::register_and_verify_fleet_subnet_roots_joining;
 use fleet_subnet_root_store_bootstrap::bootstrap_and_verify_fleet_subnet_root_stores;
 use identity::resolve_install_identity;
 pub use options::InstallRootOptions;
@@ -173,13 +175,14 @@ impl InstallRootError {
 
 #[derive(Debug, ThisError)]
 #[error(
-    "Fleet Coordinator {coordinator} and {verified_roots} planned Fleet Subnet Root(s) now have exact verified local Wasm Stores from the durable plan at {}; Fleet Registry root registration remains blocked until its journalled lifecycle is implemented",
+    "Fleet Coordinator {coordinator} and {joined_roots} planned Fleet Subnet Root(s) now have exact Registry Joining evidence at revision {joining_revision} from the durable plan at {}; Fleet Registry snapshot synchronization and acknowledgement remain blocked until their journalled lifecycle is implemented",
     plan_path.display(),
 )]
-struct FleetRegistryRegistrationUnavailableError {
+struct FleetRegistrySynchronizationUnavailableError {
     plan_path: PathBuf,
     coordinator: canic_core::cdk::types::Principal,
-    verified_roots: usize,
+    joined_roots: usize,
+    joining_revision: u64,
 }
 
 #[derive(Debug, ThisError)]
@@ -269,42 +272,71 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         prepared.build_phase,
         emitted_manifest.phase,
     )?;
-    let (coordinator, coordinator_duration) = install_current_fleet_coordinator(
-        &icp_root,
-        environment,
-        build_context.local_replica.as_ref(),
-        &config_path,
-        &planned_install.plan,
-    )?;
-    timings.create_canisters = coordinator_duration;
-    let (roots, roots_duration) = install_current_fleet_subnet_roots(
+    install_current_fleet_infrastructure(
         &icp_root,
         environment,
         build_context.local_replica.as_ref(),
         &config_path,
         &planned_install,
+        &mut timings,
+    )?;
+
+    print_install_timing_summary(&timings, total_started_at.elapsed());
+    Ok(())
+}
+
+fn install_current_fleet_infrastructure(
+    icp_root: &Path,
+    environment: &str,
+    local_replica: Option<&crate::icp::LocalReplicaTarget>,
+    config_path: &Path,
+    planned: &PlannedCurrentFleetInstall,
+    timings: &mut CurrentInstallTimingSummary,
+) -> Result<(), InstallRootError> {
+    let (coordinator, coordinator_duration) = install_current_fleet_coordinator(
+        icp_root,
+        environment,
+        local_replica,
+        config_path,
+        &planned.plan,
+    )?;
+    timings.create_canisters = coordinator_duration;
+    let (roots, roots_duration) = install_current_fleet_subnet_roots(
+        icp_root,
+        environment,
+        local_replica,
+        config_path,
+        planned,
         coordinator.coordinator,
     )?;
     timings.create_canisters += roots_duration;
     bootstrap_and_verify_fleet_subnet_root_stores(
-        &icp_root,
+        icp_root,
         environment,
-        build_context.local_replica.as_ref(),
-        &config_path,
-        &planned_install.plan,
+        local_replica,
+        config_path,
+        &planned.plan,
         coordinator.coordinator,
-        planned_install.session.operation_id,
+        planned.session.operation_id,
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
-    require_fleet_registry_registration(
-        &planned_install.plan.path,
+    let joining_version = register_and_verify_fleet_subnet_roots_joining(
+        icp_root,
+        environment,
+        local_replica,
+        config_path,
+        &planned.plan,
+        coordinator.coordinator,
+        planned.session.operation_id,
+    )
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
+    require_fleet_registry_synchronization(
+        &planned.plan.path,
         coordinator.coordinator,
         roots.roots.len(),
+        joining_version.revision,
     )
-    .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))?;
-
-    print_install_timing_summary(&timings, total_started_at.elapsed());
-    Ok(())
+    .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))
 }
 
 fn resolve_current_install_roots(
@@ -407,15 +439,17 @@ fn persist_current_fleet_install_plan(
     .map_err(Into::into)
 }
 
-fn require_fleet_registry_registration(
+fn require_fleet_registry_synchronization(
     plan_path: &Path,
     coordinator: canic_core::cdk::types::Principal,
-    verified_roots: usize,
-) -> Result<(), FleetRegistryRegistrationUnavailableError> {
-    Err(FleetRegistryRegistrationUnavailableError {
+    joined_roots: usize,
+    joining_revision: u64,
+) -> Result<(), FleetRegistrySynchronizationUnavailableError> {
+    Err(FleetRegistrySynchronizationUnavailableError {
         plan_path: plan_path.to_path_buf(),
         coordinator,
-        verified_roots,
+        joined_roots,
+        joining_revision,
     })
 }
 

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.15` atomically registers every verified Fleet Subnet Root as
+  `Joining`, with journalled exact-retry receipts and independently verified
+  all-root Registry evidence before snapshot synchronization.
+
 - `0.100.14` journals each verified root's exact topology-admitted local Store
   bootstrap, restores built-in root/Store metrics profiles and hard-cuts the
   obsolete single-root PocketIC suite before Registry joining.
