@@ -2,7 +2,7 @@
 //!
 //! Responsibility: own one root's private candidate or atomic active Registry/Directory evidence.
 //! Does not own: snapshot validation, Coordinator calls, or lifecycle policy.
-//! Boundary: workflows commit only fully validated exact evidence.
+//! Boundary: mirror ops commit only fully validated exact evidence supplied by workflow.
 
 use canic_core::dto::fleet_registry::{
     FleetDirectorySnapshot, FleetRegistrySnapshotResponse, FleetRegistryVersion,

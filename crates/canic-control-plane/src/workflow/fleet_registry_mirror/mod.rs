@@ -5,11 +5,8 @@
 //! Boundary: each commit follows exact root, topology, Store, Registry, and Directory validation.
 
 use crate::{
-    storage::stable::fleet_registry_mirror::{
-        RootFleetRegistryActiveRecord, RootFleetRegistryCandidateRecord,
-        RootFleetRegistryMirrorStore,
-    },
-    workflow::bootstrap::root_store,
+    ops::fleet_registry_mirror::FleetRegistryMirrorOps,
+    view::fleet_registry_mirror::RootFleetRegistryActiveView, workflow::bootstrap::root_store,
 };
 use canic_core::{
     api::fleet_activation::FleetActivationApi,
@@ -48,7 +45,7 @@ pub async fn synchronize(
             "Coordinator snapshot differs from the host-expected Registry version",
         ));
     }
-    let mirror = RootFleetRegistryMirrorStore::export();
+    let mirror = FleetRegistryMirrorOps::current();
     if mirror.active.is_some() {
         return Err(InternalError::conflict(
             "root already contains an active Fleet Registry mirror",
@@ -65,10 +62,7 @@ pub async fn synchronize(
             return response(root, &snapshot, acknowledgement.clone());
         }
     } else {
-        RootFleetRegistryMirrorStore::commit_candidate(RootFleetRegistryCandidateRecord {
-            snapshot: snapshot.clone(),
-            acknowledgement: None,
-        });
+        FleetRegistryMirrorOps::commit_candidate(snapshot.clone(), None);
     }
 
     let acknowledgement = acknowledge_snapshot(
@@ -81,10 +75,7 @@ pub async fn synchronize(
             "Coordinator acknowledgement differs from the staged root snapshot",
         ));
     }
-    RootFleetRegistryMirrorStore::commit_candidate(RootFleetRegistryCandidateRecord {
-        snapshot: snapshot.clone(),
-        acknowledgement: Some(acknowledgement.clone()),
-    });
+    FleetRegistryMirrorOps::commit_candidate(snapshot.clone(), Some(acknowledgement.clone()));
     response(root, &snapshot, acknowledgement)
 }
 
@@ -94,7 +85,7 @@ pub async fn status(
 ) -> Result<FleetSubnetRootRegistrySyncResponse, InternalError> {
     let (authority, root) = root_authority()?;
     root_store::status(request.store_bootstrap).await?;
-    let candidate = RootFleetRegistryMirrorStore::export()
+    let candidate = FleetRegistryMirrorOps::current()
         .candidate
         .ok_or_else(|| InternalError::unavailable("root has no staged Fleet Registry snapshot"))?;
     validate_snapshot(
@@ -121,7 +112,7 @@ pub async fn activate(
     root_store::status(request.store_bootstrap.clone()).await?;
     let snapshot = fetch_snapshot(authority.binding.authority.binding.coordinator).await?;
     let directory = validate_active_target(&authority, root, &request, &snapshot)?;
-    let mirror = RootFleetRegistryMirrorStore::export();
+    let mirror = FleetRegistryMirrorOps::current();
 
     if let Some(active) = mirror.active {
         return active_response(root, &request, &active, &snapshot, &directory);
@@ -151,12 +142,11 @@ pub async fn activate(
         ));
     }
 
-    let active = RootFleetRegistryActiveRecord {
-        previous_registry: request.previous_registry.clone(),
+    FleetRegistryMirrorOps::commit_active(
+        request.previous_registry.clone(),
         snapshot,
-        directory: directory.clone(),
-    };
-    RootFleetRegistryMirrorStore::commit_active(active);
+        directory.clone(),
+    );
     Ok(activation_response(root, &request, directory))
 }
 
@@ -166,7 +156,7 @@ pub async fn active_status(
 ) -> Result<FleetSubnetRootRegistryMirrorActivationResponse, InternalError> {
     let (authority, root) = root_authority()?;
     root_store::status(request.store_bootstrap.clone()).await?;
-    let active = RootFleetRegistryMirrorStore::export()
+    let active = FleetRegistryMirrorOps::current()
         .active
         .ok_or_else(|| InternalError::unavailable("root has no active Fleet Registry mirror"))?;
     let directory = validate_active_target(&authority, root, &request, &active.snapshot)?;
@@ -272,7 +262,7 @@ fn validate_active_target(
 fn active_response(
     root: candid::Principal,
     request: &FleetSubnetRootRegistryMirrorActivationRequest,
-    active: &RootFleetRegistryActiveRecord,
+    active: &RootFleetRegistryActiveView,
     snapshot: &FleetRegistrySnapshotResponse,
     directory: &FleetDirectorySnapshot,
 ) -> Result<FleetSubnetRootRegistryMirrorActivationResponse, InternalError> {
