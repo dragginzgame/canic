@@ -37,6 +37,12 @@ pub mod ops {
         };
     }
 
+    pub mod fleet_registry {
+        pub use crate::ops::fleet_registry::{
+            FleetRegistryOps, MAX_FLEET_REGISTRY_CANONICAL_BYTES,
+        };
+    }
+
     pub mod ic {
         pub use crate::ops::ic::IcOps;
 

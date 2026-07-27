@@ -36,6 +36,7 @@ pub mod cycles;
 pub mod env;
 pub mod error;
 pub mod fleet_activation;
+pub mod fleet_registry;
 pub mod icp_refill;
 pub mod icrc21;
 pub mod log;
