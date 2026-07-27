@@ -129,7 +129,7 @@ fn renders_lost_local_fleet_note() {
     assert!(rendered.contains("lost"));
     assert!(rendered.contains("local ICP CLI replica state is not persistent"));
     assert!(rendered.contains("lost local Fleet"));
-    assert!(rendered.contains("canic install <app> <fleet>"));
+    assert!(rendered.contains("canic install <app> <fleet> --fleet-input <path>"));
 }
 
 // Ensure status renders config paths relative to the resolved Canic project root.

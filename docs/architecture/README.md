@@ -15,6 +15,7 @@ Current architecture notes:
 - [Build Provenance CI Policy](build-provenance-ci-policy.md)
 - [CI Policy Gates](ci-policy-gates.md)
 - [Evidence Envelopes](evidence-envelopes.md)
+- [Fleet Installation Input](fleet-install-input.md)
 - [V1 Readiness Checklist](v1-readiness-checklist.md)
 - [V1 Operator Walkthrough](v1-operator-walkthrough.md)
 

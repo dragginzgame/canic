@@ -18,7 +18,7 @@ fn root_registry_hint_explains_missing_fleet_root() {
 
     assert!(hint.contains("this Fleet"));
     assert!(hint.contains("canic app config <app>"));
-    assert!(hint.contains("canic install <app> <fleet>"));
+    assert!(hint.contains("canic install <app> <fleet> --fleet-input <path>"));
 }
 
 // Ensure a panicked live-query worker cannot silently remove its canister.

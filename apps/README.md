@@ -44,10 +44,14 @@ host artifact builder used by `canic install` directly.
 
 The demo App is intentionally small but includes a sharding walkthrough. Use
 `canic app config demo --verbose` to inspect the pool shape before install.
-After `canic install demo demo-local`, call `demo_user_hub_plan("alice")`, then call
+After
+`canic install demo demo-local --fleet-input deployments/demo-local.toml`,
+call `demo_user_hub_plan("alice")`, then call
 `demo_user_hub_assign("alice")` and use the returned shard id with
-`demo_user_shard_describe("alice")`. Isolated test probes and PocketIC fixtures
-live under `canisters/test/`.
+`demo_user_shard_describe("alice")`. The separate Fleet input format is
+documented in
+[`fleet-install-input.md`](../docs/architecture/fleet-install-input.md).
+Isolated test probes and PocketIC fixtures live under `canisters/test/`.
 
 Note: `make test-fleet-install` and `make test-canisters` are manual local smoke
 helpers, not part of `make test`, and nonlocal targets expect their environment

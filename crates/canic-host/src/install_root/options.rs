@@ -14,6 +14,7 @@ pub struct InstallRootOptions {
     pub icp_root: Option<PathBuf>,
     pub build_profile: Option<CanisterBuildProfile>,
     pub config_path: Option<String>,
+    pub fleet_install_input_path: Option<PathBuf>,
     pub expected_app: Option<String>,
     pub interactive_config_selection: bool,
     pub deployment_plan_override: Option<DeploymentPlanV1>,

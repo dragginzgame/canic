@@ -36,7 +36,7 @@ use super::truth_check::current_install_deployment_truth_check_at;
 use super::{
     InstallRootBlockKind, InstallRootBlockedError, InstallRootError, InstallRootOptions,
     InstallRootPhase, check_install_deployment_truth, check_install_execution_preflight,
-    latest_deployment_truth_receipt_path_from_root,
+    latest_deployment_truth_receipt_path_from_root, require_coordinator_first_install_effects,
 };
 use crate::canister_build::{
     CanisterArtifactBuildSpec, CanisterBuildProfile, WorkspaceBuildContext,
@@ -80,6 +80,20 @@ fn public_install_error_preserves_phase_and_typed_source() {
         std::error::Error::source(&error)
             .and_then(|source| source.downcast_ref::<std::io::Error>())
             .is_some()
+    );
+}
+
+#[test]
+fn coordinator_first_guard_blocks_the_legacy_root_effect_path() {
+    let plan_path = Path::new("/tmp/fleet-install-plan.json");
+    let error = require_coordinator_first_install_effects(plan_path)
+        .expect_err("legacy root effect path must remain blocked");
+
+    assert_eq!(error.plan_path, plan_path);
+    assert!(
+        error
+            .to_string()
+            .contains("genuine Fleet Coordinator runtime")
     );
 }
 
@@ -255,6 +269,7 @@ fn local_demo_install_options(root: &Path) -> InstallRootOptions {
         icp_root: Some(root.to_path_buf()),
         build_profile: Some(CanisterBuildProfile::Fast),
         config_path: Some("apps/demo/canic.toml".to_string()),
+        fleet_install_input_path: None,
         expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
@@ -361,6 +376,7 @@ package = "worker"
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         config_path: Some("apps/demo/canic.toml".to_string()),
+        fleet_install_input_path: None,
         expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,

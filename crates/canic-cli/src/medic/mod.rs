@@ -152,7 +152,10 @@ fn run_fleet_checks(options: &MedicOptions, context: &FleetMedicContext) -> Vec<
                 "fleet_missing",
                 "fleet",
                 "no installed Fleet found",
-                deploy_plan_then(options.fleet_name(), "then run canic install <app> <fleet>"),
+                deploy_plan_then(
+                    options.fleet_name(),
+                    "then run canic install <app> <fleet> --fleet-input <path>",
+                ),
                 MedicSource::InstalledFleet,
             ));
             None
@@ -169,7 +172,7 @@ fn run_fleet_checks(options: &MedicOptions, context: &FleetMedicContext) -> Vec<
                 detail,
                 deploy_plan_then(
                     options.fleet_name(),
-                    "then reinstall the Fleet with canic install <app> <fleet>",
+                    "then reinstall the Fleet with canic install <app> <fleet> --fleet-input <path>",
                 ),
                 MedicSource::InstalledFleet,
             ));

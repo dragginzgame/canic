@@ -31,12 +31,15 @@ use std::{ffi::OsString, path::PathBuf};
 use thiserror::Error as ThisError;
 
 const DEFAULT_ROOT_TARGET: &str = "root";
+const FLEET_INPUT_ARG: &str = "fleet-input";
 const INSTALL_HELP_AFTER: &str = "\
 Examples:
-  canic install toko toko-local
-  canic install toko toko-local --profile fast
+  canic install toko toko-local --fleet-input deployments/toko-local.toml
+  canic install toko toko-local --fleet-input deployments/toko-local.toml --profile fast
 
 canic install uses apps/<app>/canic.toml.
+The required Fleet input is a separate operator-owned placement, admission,
+limit, and creation-funding document.
 Use it for fresh local creation or recreating local state after the ICP CLI
 replica lost canisters. For an existing canister that only needs new Wasm,
 inspect with canic info list and canic medic fleet, then use the
@@ -82,6 +85,7 @@ struct InstallOptions {
     fleet: String,
     environment: String,
     profile: Option<CanisterBuildProfile>,
+    fleet_input: PathBuf,
 }
 
 impl InstallOptions {
@@ -96,6 +100,7 @@ impl InstallOptions {
             fleet: required_string(&matches, "fleet"),
             environment: string_option_or_else(&matches, "environment", local_environment),
             profile: typed_option(&matches, "profile"),
+            fleet_input: PathBuf::from(required_string(&matches, FLEET_INPUT_ARG)),
         })
     }
 
@@ -119,6 +124,7 @@ impl InstallOptions {
             icp_root,
             build_profile: self.profile,
             config_path: Some(config_path),
+            fleet_install_input_path: Some(self.fleet_input),
             expected_app: Some(self.app),
             interactive_config_selection: false,
             deployment_plan_override: None,
@@ -131,7 +137,7 @@ fn install_command() -> ClapCommand {
         .bin_name("canic install")
         .about("Install and bootstrap a Canic fleet")
         .disable_help_flag(true)
-        .override_usage("canic install <app> <fleet>")
+        .override_usage("canic install <app> <fleet> --fleet-input <PATH>")
         .arg(
             value_arg("app")
                 .value_name("app")
@@ -143,6 +149,14 @@ fn install_command() -> ClapCommand {
                 .value_name("fleet")
                 .required(true)
                 .help("Operator-facing name for the installed Fleet"),
+        )
+        .arg(
+            value_arg(FLEET_INPUT_ARG)
+                .long(FLEET_INPUT_ARG)
+                .value_name("PATH")
+                .required(true)
+                .num_args(1)
+                .help("Operator-owned Fleet placement, admission, limit, and funding input TOML"),
         )
         .arg(
             value_arg("profile")

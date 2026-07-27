@@ -95,10 +95,13 @@ boring and explicit.
 
 ## Install Versus Upgrade
 
-Use `canic install <app> <fleet>` for fresh local Fleet creation or to
-recreate one after the ICP CLI replica lost state. The Fleet label and source
-App identity are independent. The local replica does not persist canister
-state across stop/start.
+Use `canic install <app> <fleet> --fleet-input <path>` for fresh local Fleet
+creation or to recreate one after the ICP CLI replica lost state. The Fleet
+input is separate operator-owned placement, admission, limit, and funding
+policy; see
+[`fleet-install-input.md`](../architecture/fleet-install-input.md). The Fleet
+label and source App identity are independent. The local replica does not
+persist canister state across stop/start.
 
 When a canister already exists and you only need new Wasm on that canister,
 treat it as an upgrade flow. Until a dedicated Canic upgrade wrapper is
