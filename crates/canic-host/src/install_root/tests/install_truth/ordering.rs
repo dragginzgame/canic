@@ -75,16 +75,7 @@ fn current_install_records_gates_before_activation_mutation() {
         "register_and_verify_fleet_subnet_roots_joining(",
         "synchronize_and_verify_fleet_subnet_roots(",
     );
-    assert_before(
-        install,
-        "synchronize_and_verify_fleet_subnet_roots(",
-        "activate_and_verify_fleet_registry(",
-    );
-    assert_before(
-        install,
-        "activate_and_verify_fleet_registry(",
-        "require_final_registry_mirror_activation(",
-    );
+    assert_current_activation_order(install);
     let coordinator_install = source_section(
         source,
         "fn install_current_fleet_coordinator(",
@@ -102,6 +93,24 @@ fn current_install_records_gates_before_activation_mutation() {
     assert!(
         root_install.contains("install_and_verify_fleet_subnet_roots("),
         "root wrapper must invoke the journalled multi-root install and verification workflow"
+    );
+}
+
+fn assert_current_activation_order(install: &str) {
+    assert_before(
+        install,
+        "synchronize_and_verify_fleet_subnet_roots(",
+        "activate_and_verify_fleet_registry(",
+    );
+    assert_before(
+        install,
+        "activate_and_verify_fleet_registry(",
+        "activate_and_verify_fleet_subnet_root_registry_mirrors(",
+    );
+    assert_before(
+        install,
+        "activate_and_verify_fleet_subnet_root_registry_mirrors(",
+        "require_component_runtime_activation(",
     );
 }
 
