@@ -6,8 +6,8 @@ Date: 2026-07-27
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.9`.
-- Open patch draft: `0.100.10`; no package-version change has been authorized.
+- Workspace package version: `0.100.12`.
+- Open patch draft: `0.100.13`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -100,7 +100,7 @@ Registry slices replace the 0.99 root model.
   not exceed the Fleet ceiling.
 - [x] Freeze the exact three-role Canic Infrastructure Artifact Manifest
   model, compiler and canonical digest.
-- [ ] Populate and persist that manifest from the qualified complete-build
+- [x] Populate and persist that manifest from the qualified complete-build
   outputs.
 - [x] Freeze the exact qualified application artifact-union model, compiler
   and canonical digest under one release-build and Fleet-wide topology
@@ -115,13 +115,18 @@ Registry slices replace the 0.99 root model.
   resolved Coordinator/root placement, admissions, limits and funding input.
 - [x] Resolve strict operator input to independent exact Coordinator and Fleet
   Subnet Root placements, admissions, configured limits and funding.
-- [ ] Record those resolved facts in the Coordinator/root creation journal.
+- [x] Record the Coordinator's resolved facts in its creation journal.
+- [x] Record every root's resolved facts in its creation journal.
 - [x] Freeze exact initial creation funding in the immutable plan before any
   external effect.
-- [ ] Bind every journalled creation intent and effect to that frozen funding.
-- [ ] Install the Coordinator from empty state.
-- [ ] Install each root and bootstrap its local topology-admitted Wasm Store.
-- [ ] Commit the genesis Fleet Registry.
+- [x] Bind every Coordinator creation intent and effect to that frozen
+  funding.
+- [x] Bind every root creation intent and effect to that frozen funding.
+- [x] Install the Coordinator from empty state.
+- [x] Install and independently verify every planned root behind its runtime
+  `Prepared` fence.
+- [ ] Bootstrap each root's local topology-admitted Wasm Store.
+- [x] Commit the genesis Fleet Registry.
 
 ## Slice 3 — Fleet Registry and Root Lifecycle
 
@@ -130,7 +135,7 @@ Registry slices replace the 0.99 root model.
 - [ ] Enforce one Fleet Subnet Root per occupied `(FleetKey, SubnetId)`.
 - [ ] Prove another Fleet may independently use the same physical Subnet.
 - [ ] Implement root `Joining`, `Active`, `Draining` and `Removed`.
-- [ ] Install initial roots behind the runtime `Prepared` fence.
+- [x] Install initial roots behind the runtime `Prepared` fence.
 - [ ] Enforce Spec, admission, root, topology, limits, active-release-set and
   tombstone rules.
 
@@ -163,7 +168,13 @@ Registry slices replace the 0.99 root model.
 - [ ] Prove one Component operation cannot block an unrelated Component.
 - [ ] Activate initial roots only after active-release-set Store and final
   topology synchronization.
-- [ ] Publish the Fleet catalog only after complete terminal evidence.
+- [ ] Hard-cut the terminal Fleet catalog from one root principal to the
+  Coordinator principal and publish it only after complete terminal evidence.
+- [ ] Expose compact root-local known-created, not-deletion-confirmed Canister
+  count summaries without enumerating every Component Registry member.
+- [ ] Add `canic info subnets <fleet> [--json]` with one canonical row per
+  occupied physical Subnet, exact Fleet-owned Canister counts and fail-closed
+  Coordinator/root evidence validation.
 - [ ] Qualify restore fencing and role-package boundaries.
 - [ ] Measure Wasm boundaries and remove stale authority.
 
@@ -265,46 +276,55 @@ default Registry allowance is 16 MiB, and the design requires normalized
 indexed storage, compact revision-bound Directory pages, durable post-order
 subtree removal and per-Component concurrency.
 
-The open 0.100.10 adds the separate strict `--fleet-input <path>` operator
+Released 0.100.10 adds the separate strict `--fleet-input <path>` operator
 document. It carries Coordinator Subnet selection, every exact root Subnet,
 root-local Component admissions, complete root limits and positive creation
-funding. Public-IC `recommended` resolves to the unique Fiduciary application
-Subnet, bounded profiles resolve by exact trusted catalog label, and explicit
-public-IC Subnets must also be present and eligible in that catalog.
-Application Subnets require cycles funding, restricted system Subnets require
-ICP funding, and non-public networks require explicit Subnets plus cycles
-funding. Unknown fields, unsafe files, ambiguous selectors, funding
-contradictions and invalid topology input fail closed.
+funding. The normal installer resolves it, freezes all root release sets and
+the multi-root Fleet install plan, then stops before effects.
 
-The normal installer resolves that document before building, then after exact
-application-artifact finalization invokes the immutable multi-root planner and
-publishes all root release sets plus the Fleet install plan. An explicit
-Coordinator-first guard then stops before receipt publication or any Canister
-creation. The legacy single-root path therefore cannot bypass the new
-authority while the Coordinator runtime and multi-root effect executor remain
-unimplemented.
+Released 0.100.11 adds the genuine built-in Fleet Coordinator runtime,
+protected Registry genesis and controller-only Registry queries. The host
+builds and immutably persists the exact Coordinator, Fleet Subnet Root and
+Wasm Store artifacts under the same release build before finalization.
 
-The current installer does not yet produce all three concrete infrastructure
-outputs or invoke the infrastructure persistence boundary. It does not yet
-install planned Coordinator/root bindings. The repository
-does not yet contain a genuine Fleet Coordinator runtime/export authority, so
-a correctly qualified Coordinator artifact cannot be produced by relabelling
-the Fleet Subnet Root runtime. Protected environment binding, Fleet Subnet
-Root lifecycle, active root release-set/Wasm Store authority and Fleet
-Registry storage and runtime authority remain unimplemented. The temporary
-Component Spec selector remains until real allocation supplies the exact
-protected Component binding.
+Released 0.100.12 replaces the pre-effect Coordinator guard with a canonical
+installation journal. The host durably records intent, creates the Coordinator
+on its exact planned Subnet with its exact funding method, installs its
+qualified Wasm and verifies the live module hash, complete Registry genesis,
+manifest and version. A post-verification fence still prevents any legacy
+root effect.
+
+Open 0.100.13 replaces that root-effect fence with one immutable journal per
+planned Fleet Subnet Root. In canonical plan order, the host durably records
+each exact placement and funding effect, creates and installs the qualified
+root Wasm, then verifies the live module hash, empty `Prepared` activation
+status and protected Fleet/Coordinator/Subnet/admission/limit/release-set
+authority. Only after all roots are verified does it validate the complete
+Fleet root-binding set and reach the next explicit fence. The obsolete
+single-root activation journal and its root creation, cycles and catalog-write
+paths are hard-cut; one small Fleet install session retains only shared
+identity and finalized release evidence.
+
+The current installer therefore stops after every planned root is installed
+and independently verified as `Prepared`. Fleet Registry root registration,
+root-local Store bootstrap, Component allocation, root-owned count summaries
+and terminal Coordinator-anchored Fleet catalog publication remain
+unimplemented. The temporary Component Spec selector remains until real
+allocation supplies the exact protected Component binding.
 
 ## Next Action
 
-Add the genuine Fleet Coordinator runtime and export authority before
-producing the Fleet Coordinator, Fleet Subnet Root and Wasm Store as three
-qualified infrastructure outputs. Do not satisfy the three-role manifest by
-relabelling an existing root runtime or emitting a placeholder.
+Replace the post-root-verification fence with journalled bootstrap of each
+root's exact local Store, then register every root through Registry `Joining`,
+synchronize final Registry evidence and publish the Coordinator-anchored Fleet
+catalog only after every required root reaches terminal evidence.
 
-Then replace the fail-closed effect guard by recording the already-resolved
-Coordinator/root placement and funding in the installation journal, installing
-the Coordinator before the roots, and committing the genesis Fleet Registry.
+As root-local Component Registry authority lands, maintain checked
+known-created/not-deletion-confirmed Canister counters and expose compact
+controller-only root summaries. Then add
+`canic info subnets <fleet> [--json]`: discover the Coordinator from the
+terminal catalog, query its current root rows, fan out only the compact
+summaries and fail closed instead of reporting a partial Fleet total.
 
 Replace the temporary Component Spec environment selector only when root-local
 allocation and Component Registry commitment can supply a real

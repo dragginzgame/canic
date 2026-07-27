@@ -8,6 +8,12 @@
 #[macro_export]
 macro_rules! canic_emit_root_admin_endpoints {
     () => {
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_fleet_subnet_root_authority(
+        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetRootAuthority, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_subnet_root_authority()
+        }
+
         #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_prepare_fleet_activation(
         ) -> Result<::canic::dto::fleet_activation::FleetActivationStatusResponse, ::canic::Error> {

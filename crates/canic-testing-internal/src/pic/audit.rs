@@ -11,7 +11,6 @@ use std::{
 
 use super::{CanicPicExt, CanicWasmBuildProfile, install_standalone_canister};
 
-const AUDIT_READY_TICK_LIMIT: usize = 60;
 static AUDIT_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
 pub struct RootAuditProbeFixture {
@@ -37,8 +36,8 @@ pub fn install_audit_scaling_probe(profile: CanicWasmBuildProfile) -> Standalone
 /// # Panics
 ///
 /// Panics if the probe wasm cannot be built/read, the PocketIC instance cannot
-/// install the root probe canister, or the probe does not become ready within
-/// the configured tick limit.
+/// install the root probe canister, or its protected Prepared authority is
+/// rejected.
 #[must_use]
 pub fn install_audit_root_probe(profile: CanicWasmBuildProfile) -> RootAuditProbeFixture {
     let workspace_root = workspace_root();
@@ -49,13 +48,11 @@ pub fn install_audit_root_probe(profile: CanicWasmBuildProfile) -> RootAuditProb
     let serial_guard = acquire_pic_serial_guard();
     let pic = pic();
     let canister_id = pic
-        .create_and_install_root_canister(wasm)
+        .create_and_install_root_canister(
+            wasm,
+            &workspace_root.join("canisters/audit/root_probe/canic.toml"),
+        )
         .expect("install audit root probe canister");
-    pic.wait_for_ready(
-        canister_id,
-        AUDIT_READY_TICK_LIMIT,
-        "audit root probe bootstrap",
-    );
 
     RootAuditProbeFixture {
         pic,

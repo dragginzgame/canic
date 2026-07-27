@@ -2,21 +2,6 @@ use super::*;
 use canic_core::ids::BuildNetwork;
 
 #[test]
-fn resolve_root_canister_operation_owns_current_install_evidence() {
-    let operation = ResolveRootCanisterOperation::new(
-        Path::new("/workspace/.icp"),
-        "local",
-        "root",
-        Path::new("/workspace/apps/demo/canic.toml"),
-        None,
-    );
-
-    let evidence = operation.evidence("aaaaa-aa");
-
-    assert_eq!(evidence, ["root_target:root", "root_canister:aaaaa-aa"]);
-}
-
-#[test]
 fn build_install_targets_operation_owns_current_install_evidence() {
     let context = test_build_context();
     let targets = [build_target("root"), build_target("wasm_store")];
@@ -67,34 +52,6 @@ fn build_target(role: &str) -> InstallBuildTarget {
     }
 }
 
-#[test]
-fn install_root_wasm_operation_owns_current_install_evidence() {
-    let root = temp_dir("canic-install-root-operation-evidence");
-    fs::create_dir_all(&root).expect("create temp root");
-    let root_wasm = root.join("root.wasm");
-    fs::write(&root_wasm, b"root wasm").expect("write root Wasm");
-    let operation = InstallRootWasmOperation::new(
-        &root,
-        "local",
-        "aaaaa-aa",
-        root_wasm.clone(),
-        &sample_fleet_activation_identity(),
-        None,
-    )
-    .expect("prepare root install operation");
-
-    let evidence = operation.evidence();
-
-    assert!(evidence.contains(&"root_canister:aaaaa-aa".to_string()));
-    assert!(evidence.contains(&format!("root_wasm:{}", root_wasm.display())));
-    assert!(evidence.iter().any(|item| {
-        item.strip_prefix("expected_module_hash:")
-            .is_some_and(|hash| hash.len() == 64)
-    }));
-
-    fs::remove_dir_all(root).expect("remove temp root");
-}
-
 fn test_build_context() -> WorkspaceBuildContext {
     WorkspaceBuildContext {
         role: "root".to_string(),
@@ -108,82 +65,4 @@ fn test_build_context() -> WorkspaceBuildContext {
         refresh_canonical_wasm_store_did: false,
         release_build_id: None,
     }
-}
-
-#[test]
-fn current_install_activation_records_verified_evidence_before_each_journal_transition() {
-    let activation = include_str!("../../activation/mod.rs");
-    let prepare = source_section(
-        activation,
-        "fn install_root_prepared(",
-        "struct PreparedRootInstall",
-    );
-
-    assert_before(
-        prepare,
-        "run_operation_with_receipt(&install_operation, Some(root_canister_id))",
-        "admit_root_install_receipt(&completed_root_install.receipt_path)",
-    );
-    assert_before(
-        prepare,
-        "admit_root_install_receipt(&completed_root_install.receipt_path)",
-        "record_root_installed(receipt_scope.icp_root, activation, &receipt)",
-    );
-    assert_before(
-        prepare,
-        "record_root_installed(receipt_scope.icp_root, activation, &receipt)",
-        "call_prepare(&icp, root_canister_id)",
-    );
-    assert_before(
-        prepare,
-        "call_prepare(&icp, root_canister_id)",
-        "admit_canisters_prepared(",
-    );
-    assert_before(
-        prepare,
-        "admit_canisters_prepared(",
-        "record_canisters_prepared(receipt_scope.icp_root, &root_installed, &evidence)",
-    );
-    let activate = source_section(
-        activation,
-        "pub(super) fn install_root_activated(",
-        "fn install_root_prepared(",
-    );
-    assert_before(
-        activate,
-        "install_root_prepared(",
-        "resume_and_admit_activation(",
-    );
-    assert_before(
-        activate,
-        "resume_and_admit_activation(",
-        "record_canisters_activated(receipt_scope.icp_root, &prepared.activation, &evidence)",
-    );
-
-    let commit = source_section(
-        activation,
-        "pub(super) fn install_root_committed(",
-        "pub(super) fn install_root_activated(",
-    );
-    assert_before(
-        commit,
-        "install_root_activated(",
-        "commit_fleet_catalog_entry(",
-    );
-    assert_before(
-        commit,
-        "commit_fleet_catalog_entry(",
-        "record_host_authority_committed(",
-    );
-
-    let resume = source_section(
-        activation,
-        "fn resume_and_admit_activation(",
-        "fn call_prepare(",
-    );
-    assert_before(
-        resume,
-        "call_resume(&icp, root_canister_id, &request)",
-        "admit_canisters_activated(root_canister, prepared, &status)",
-    );
 }

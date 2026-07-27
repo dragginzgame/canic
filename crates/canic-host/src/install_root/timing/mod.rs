@@ -27,9 +27,3 @@ pub(super) struct InstallTimingSummary {
     pub(super) emit_manifest: Duration,
     pub(super) install_root: Duration,
 }
-
-impl InstallTimingSummary {
-    pub(super) const fn record_activation(&mut self, activation: Self) {
-        self.install_root = activation.install_root;
-    }
-}

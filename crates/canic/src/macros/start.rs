@@ -272,13 +272,13 @@ macro_rules! __canic_root_lifecycle_core {
         }
 
         #[$crate::__internal::cdk::init]
-        fn init(identity: ::canic::dto::fleet_activation::CurrentRootInstallIdentity) {
+        fn init(args: ::canic::dto::fleet_subnet_root::FleetSubnetRootInitArgs) {
             let (config, config_source, config_path) = __canic_compiled_config();
             let embedded_wasm_store_bootstrap_release_set =
                 __canic_embedded_root_wasm_store_bootstrap_release_set();
 
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::init_root_canister_before_bootstrap(
-                identity,
+                args,
                 config,
                 config_source,
                 config_path,

@@ -1,5 +1,4 @@
-use super::clock::current_unix_timestamp_label;
-use super::operations::{InstallPhaseLabel, InstallPhaseOperation};
+use super::operations::InstallPhaseLabel;
 use super::receipt_io::write_install_deployment_truth_receipt;
 use crate::deployment_truth::{
     DeploymentCheckV1, DeploymentCommandResultV1, DeploymentExecutionContextV1,
@@ -7,48 +6,11 @@ use crate::deployment_truth::{
     RolePhaseResultV1, deployment_receipt_from_check_with_status, phase_receipt,
 };
 use canic_core::ids::FleetKey;
-use std::{
-    error::Error,
-    path::{Path, PathBuf},
-    time::{Duration, Instant},
-};
-use thiserror::Error as ThisError;
-
-///
-/// InstallPhaseFailureError
-///
-/// Host error preserving both the phase operation error and the independent
-/// failure-receipt persistence error. Owned by the install receipt adapter and
-/// exposed through root-install failures.
-///
-#[derive(Debug, ThisError)]
-#[error(
-    "install phase operation failed and its failure receipt could not be written: operation={operation}; receipt_write={receipt_write}"
-)]
-pub struct InstallPhaseFailureError {
-    #[source]
-    operation: Box<dyn Error>,
-    receipt_write: Box<dyn Error>,
-}
-
-impl InstallPhaseFailureError {
-    /// Return the original phase operation failure.
-    #[must_use]
-    pub fn operation_error(&self) -> &(dyn Error + 'static) {
-        self.operation.as_ref()
-    }
-
-    /// Return the independent failure-receipt persistence failure.
-    #[must_use]
-    pub fn receipt_write_error(&self) -> &(dyn Error + 'static) {
-        self.receipt_write.as_ref()
-    }
-}
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy)]
 pub(super) struct InstallReceiptScope<'a> {
     pub(super) icp_root: &'a Path,
-    pub(super) environment: &'a str,
     pub(super) fleet: FleetKey,
     pub(super) check: &'a DeploymentCheckV1,
     pub(super) execution_context: Option<&'a DeploymentExecutionContextV1>,
@@ -61,11 +23,6 @@ pub(super) struct CompletedInstallPhase {
     pub(super) finished_at: Option<String>,
     pub(super) evidence: Vec<String>,
     pub(super) role_names: Vec<String>,
-}
-
-pub(super) struct CompletedInstallOperation {
-    pub(super) duration: Duration,
-    pub(super) receipt_path: PathBuf,
 }
 
 pub(super) fn write_completed_install_phase_receipt(
@@ -139,6 +96,7 @@ pub(super) fn completed_phase_role_receipt(
     })
 }
 
+#[cfg(test)]
 pub(super) fn install_deployment_truth_phase_receipt(
     check: &DeploymentCheckV1,
     phase: InstallPhaseLabel,
@@ -208,71 +166,6 @@ struct PhaseReceiptInput<'a> {
 }
 
 impl InstallReceiptScope<'_> {
-    pub(super) fn run_operation_with_receipt(
-        self,
-        operation: &impl InstallPhaseOperation,
-        root_principal: Option<&str>,
-    ) -> Result<CompletedInstallOperation, Box<dyn std::error::Error>> {
-        let attempted_evidence = operation.evidence();
-        self.run_phase_with_receipt(
-            operation.phase(),
-            operation.attempted_action(),
-            attempted_evidence,
-            root_principal,
-            || operation.execute_and_verify(),
-        )
-    }
-
-    fn run_phase_with_receipt(
-        self,
-        phase: InstallPhaseLabel,
-        attempted_action: &str,
-        attempted_evidence: Vec<String>,
-        root_principal: Option<&str>,
-        run: impl FnOnce() -> Result<Vec<String>, Box<dyn std::error::Error>>,
-    ) -> Result<CompletedInstallOperation, Box<dyn std::error::Error>> {
-        let started_at = current_unix_timestamp_label()?;
-        let started = Instant::now();
-        match run() {
-            Ok(verified_evidence) => {
-                let duration = started.elapsed();
-                let mut receipt =
-                    self.with_execution_context(install_deployment_truth_phase_receipt(
-                        self.check,
-                        phase,
-                        started_at,
-                        Some(current_unix_timestamp_label()?),
-                        attempted_action,
-                        ObservationStatusV1::Observed,
-                        verified_evidence,
-                    ));
-                if let Some(root_principal) = root_principal {
-                    receipt.root_principal = Some(root_principal.to_string());
-                }
-                let receipt_path = self.write_receipt(&receipt)?;
-                Ok(CompletedInstallOperation {
-                    duration,
-                    receipt_path,
-                })
-            }
-            Err(err) => {
-                if let Err(receipt_write) = self.write_failed_phase_receipt(
-                    phase,
-                    started_at,
-                    attempted_action,
-                    attempted_evidence,
-                    err.as_ref(),
-                ) {
-                    return Err(Box::new(InstallPhaseFailureError {
-                        operation: err,
-                        receipt_write,
-                    }));
-                }
-                Err(err)
-            }
-        }
-    }
-
     pub(super) fn with_execution_context(
         self,
         receipt: DeploymentReceiptV1,
@@ -290,35 +183,5 @@ impl InstallReceiptScope<'_> {
         let path = write_install_deployment_truth_receipt(self.icp_root, self.fleet, receipt)?;
         println!("Deployment truth receipt JSON: {}", path.display());
         Ok(path)
-    }
-
-    fn write_failed_phase_receipt(
-        self,
-        phase: InstallPhaseLabel,
-        started_at: String,
-        attempted_action: &str,
-        evidence: Vec<String>,
-        err: &dyn std::error::Error,
-    ) -> Result<(), Box<dyn Error>> {
-        let receipt = install_deployment_truth_phase_receipt_with_result(
-            self.check,
-            PhaseReceiptInput {
-                phase,
-                started_at,
-                finished_at: Some(current_unix_timestamp_label()?),
-                attempted_action,
-                status: ObservationStatusV1::Inconclusive,
-                evidence,
-                role_phase_receipts: Vec::new(),
-                operation_status: DeploymentExecutionStatusV1::FailedAfterMutation,
-                command_result: DeploymentCommandResultV1::Failed {
-                    code: format!("{}_failed", phase.as_str()),
-                    message: err.to_string(),
-                },
-            },
-        );
-        let receipt = self.with_execution_context(receipt);
-        self.write_receipt(&receipt)?;
-        Ok(())
     }
 }

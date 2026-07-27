@@ -16,7 +16,6 @@ use std::{
 };
 use thiserror::Error as ThisError;
 
-mod activation;
 mod build_network;
 mod build_snapshot;
 mod build_targets;
@@ -29,7 +28,9 @@ mod coordinator_install_journal;
 mod current_execution;
 mod deployment_truth_gate;
 mod execution_preflight;
-mod fleet_activation_journal;
+mod fleet_install_session;
+mod fleet_subnet_root_install;
+mod fleet_subnet_root_install_journal;
 mod identity;
 mod operations;
 mod options;
@@ -38,13 +39,10 @@ mod phase_receipts;
 mod plan_artifacts;
 mod preparation;
 mod receipt_io;
-mod root_canister;
-mod root_cycles;
 mod timing;
 mod truth_check;
 
 use crate::release_build::{ReleaseBuildPlanError, plan_release_build};
-use activation::install_root_committed;
 use build_network::resolve_install_build_context;
 use build_snapshot::resolve_install_snapshot;
 pub use config_selection::{
@@ -54,20 +52,15 @@ pub use config_selection::{
 };
 use coordinator_install::install_and_verify_fleet_coordinator;
 use current_execution::current_install_execution_context;
+use fleet_subnet_root_install::install_and_verify_fleet_subnet_roots;
 use identity::resolve_install_identity;
-pub use operations::{
-    InstallRootActivationStatusError, InstallRootExecutionReconciliationError,
-    InstallRootModuleVerificationError,
-};
 pub use options::InstallRootOptions;
 use output::print_install_timing_summary;
-pub use phase_receipts::InstallPhaseFailureError;
 use phase_receipts::{
     CompletedInstallPhase, InstallReceiptScope, write_completed_install_phase_receipt,
 };
 use plan_artifacts::emit_manifest_with_phase;
-use preparation::{prepare_install_deployment_truth, resolve_root_canister_after_manifest};
-use receipt_io::install_deployment_truth_receipts_dir;
+use preparation::prepare_install_deployment_truth;
 pub use receipt_io::latest_deployment_truth_receipt_path_from_root;
 use timing::InstallTimingSummary as CurrentInstallTimingSummary;
 pub use truth_check::{check_install_deployment_truth, check_install_execution_preflight};
@@ -178,12 +171,13 @@ impl InstallRootError {
 
 #[derive(Debug, ThisError)]
 #[error(
-    "Fleet Coordinator {coordinator} is installed and independently verified from the durable plan at {}; Fleet Subnet Root effects remain blocked until the planned multi-root lifecycle is implemented",
+    "Fleet Coordinator {coordinator} and {verified_roots} planned Fleet Subnet Root(s) are installed and independently verified from the durable plan at {}; local Wasm Store bootstrap and Fleet Registry registration remain blocked until their journalled lifecycle is implemented",
     plan_path.display(),
 )]
-struct FleetRootEffectsUnavailableError {
+struct FleetRootBootstrapUnavailableError {
     plan_path: PathBuf,
     coordinator: canic_core::cdk::types::Principal,
+    verified_roots: usize,
 }
 
 #[derive(Debug, ThisError)]
@@ -263,7 +257,6 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
     )?;
     let receipt_scope = InstallReceiptScope {
         icp_root: &icp_root,
-        environment,
         fleet: planned_install.fleet(),
         check: &prepared.deployment_truth_check,
         execution_context: Some(&execution_context),
@@ -282,27 +275,21 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         &planned_install.plan,
     )?;
     timings.create_canisters = coordinator_duration;
-    require_fleet_subnet_root_install_effects(&planned_install.plan.path, coordinator.coordinator)
-        .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))?;
-    let (root_canister_id, create_duration) = resolve_or_recover_activation_root(
-        &planned_install.activation,
-        receipt_scope,
-        &options,
+    let (roots, roots_duration) = install_current_fleet_subnet_roots(
+        &icp_root,
+        environment,
+        build_context.local_replica.as_ref(),
         &config_path,
-        &build_context,
+        &planned_install,
+        coordinator.coordinator,
+    )?;
+    timings.create_canisters += roots_duration;
+    require_fleet_subnet_root_bootstrap(
+        &planned_install.plan.path,
+        coordinator.coordinator,
+        roots.roots.len(),
     )
-    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
-    timings.create_canisters += create_duration;
-    let committed_root = install_root_committed(
-        receipt_scope,
-        &options,
-        &root_canister_id,
-        &build_context,
-        prepared.plan_artifacts.as_ref(),
-        &planned_install.activation,
-    )
-    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
-    timings.record_activation(committed_root.timings);
+    .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))?;
 
     print_install_timing_summary(&timings, total_started_at.elapsed());
     Ok(())
@@ -332,7 +319,7 @@ fn plan_current_fleet_install(
     finalized_release_build: &crate::release_build::FinalizedReleaseBuild,
     input: ResolvedFleetInstallInput,
 ) -> Result<PlannedCurrentFleetInstall, InstallRootError> {
-    let activation = plan_current_fleet_activation(
+    let session = plan_current_fleet_install_session(
         icp_root,
         environment,
         fleet_name,
@@ -342,22 +329,22 @@ fn plan_current_fleet_install(
     let plan = persist_current_fleet_install_plan(
         icp_root,
         config_path,
-        activation.journal.activation.identity.fleet.clone(),
+        session.fleet.clone(),
         finalized_release_build,
         input,
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Planning))?;
-    Ok(PlannedCurrentFleetInstall { activation, plan })
+    Ok(PlannedCurrentFleetInstall { session, plan })
 }
 
 struct PlannedCurrentFleetInstall {
-    activation: fleet_activation_journal::ResolvedFleetInstallActivation,
+    session: fleet_install_session::FleetInstallSession,
     plan: PersistedFleetInstallPlan,
 }
 
 impl PlannedCurrentFleetInstall {
     const fn fleet(&self) -> canic_core::ids::FleetKey {
-        self.activation.journal.activation.identity.fleet.fleet
+        self.session.fleet.fleet
     }
 }
 
@@ -408,13 +395,15 @@ fn persist_current_fleet_install_plan(
     .map_err(Into::into)
 }
 
-fn require_fleet_subnet_root_install_effects(
+fn require_fleet_subnet_root_bootstrap(
     plan_path: &Path,
     coordinator: canic_core::cdk::types::Principal,
-) -> Result<(), FleetRootEffectsUnavailableError> {
-    Err(FleetRootEffectsUnavailableError {
+    verified_roots: usize,
+) -> Result<(), FleetRootBootstrapUnavailableError> {
+    Err(FleetRootBootstrapUnavailableError {
         plan_path: plan_path.to_path_buf(),
         coordinator,
+        verified_roots,
     })
 }
 
@@ -430,20 +419,20 @@ fn current_install_config_path(
     .map_err(InstallRootError::in_phase(InstallRootPhase::Configuration))
 }
 
-fn plan_current_fleet_activation(
+fn plan_current_fleet_install_session(
     icp_root: &Path,
     environment: &str,
     fleet_name: &str,
     app_id: &str,
     finalized_release_build: &crate::release_build::FinalizedReleaseBuild,
-) -> Result<fleet_activation_journal::ResolvedFleetInstallActivation, InstallRootError> {
+) -> Result<fleet_install_session::FleetInstallSession, InstallRootError> {
     let canonical_network_id = resolve_canonical_network_id_from_root(icp_root, environment)
         .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))?;
     let fleet_name = fleet_name
         .parse()
         .map_err(|source| InstallRootError::new(InstallRootPhase::Identity, source))?;
-    fleet_activation_journal::plan_fleet_install_activation(
-        fleet_activation_journal::PlanFleetInstallActivationRequest {
+    fleet_install_session::plan_fleet_install_session(
+        fleet_install_session::PlanFleetInstallSessionRequest {
             root: icp_root,
             canonical_network_id,
             fleet_name,
@@ -452,26 +441,6 @@ fn plan_current_fleet_activation(
         },
     )
     .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))
-}
-
-fn resolve_or_recover_activation_root(
-    activation: &fleet_activation_journal::ResolvedFleetInstallActivation,
-    receipt_scope: InstallReceiptScope<'_>,
-    options: &InstallRootOptions,
-    config_path: &Path,
-    build_context: &crate::canister_build::WorkspaceBuildContext,
-) -> Result<(String, Duration), Box<dyn std::error::Error>> {
-    let receipt_directory =
-        install_deployment_truth_receipts_dir(receipt_scope.icp_root, receipt_scope.fleet);
-    match fleet_activation_journal::recover_activation_root_canister(
-        activation,
-        &receipt_directory,
-    )? {
-        Some(root_canister) => Ok((root_canister.to_text(), Duration::ZERO)),
-        None => {
-            resolve_root_canister_after_manifest(receipt_scope, options, config_path, build_context)
-        }
-    }
 }
 
 fn print_install_identity(app: &str, fleet_name: &str) {
@@ -512,6 +481,34 @@ fn install_current_fleet_coordinator(
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
     Ok((coordinator, started.elapsed()))
+}
+
+fn install_current_fleet_subnet_roots(
+    icp_root: &Path,
+    environment: &str,
+    local_replica: Option<&crate::icp::LocalReplicaTarget>,
+    config_path: &Path,
+    planned: &PlannedCurrentFleetInstall,
+    coordinator: canic_core::cdk::types::Principal,
+) -> Result<
+    (
+        fleet_subnet_root_install::VerifiedFleetSubnetRoots,
+        Duration,
+    ),
+    InstallRootError,
+> {
+    let started = Instant::now();
+    let roots = install_and_verify_fleet_subnet_roots(
+        icp_root,
+        environment,
+        local_replica,
+        config_path,
+        &planned.plan,
+        coordinator,
+        planned.session.operation_id,
+    )
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
+    Ok((roots, started.elapsed()))
 }
 
 fn persist_pre_root_receipts(

@@ -169,6 +169,7 @@ impl PreparedPlanArtifacts {
         &self.plan
     }
 
+    #[cfg(test)]
     pub(in crate::install_root) fn verified_root_wasm_path(
         &self,
     ) -> Result<PathBuf, PlanArtifactError> {

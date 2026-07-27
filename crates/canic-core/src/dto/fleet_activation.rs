@@ -16,19 +16,6 @@ pub const MAX_FLEET_CREDENTIAL_MANIFEST_ENTRIES: usize = 64;
 pub const MAX_FLEET_ACTIVATION_HOST_RECORD_BYTES: usize = 2_097_152;
 
 ///
-/// CurrentRootInstallIdentity
-///
-
-/// Exact current-only identity accepted by a fresh or reinstalled Fleet root.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct CurrentRootInstallIdentity {
-    pub fleet: FleetBinding,
-    pub install_id: [u8; 32],
-    pub release_build_id: ReleaseBuildId,
-    pub expected_module_hash: Option<[u8; 32]>,
-}
-
-///
 /// FleetCascadeManifestEntry
 ///
 
@@ -185,24 +172,6 @@ mod tests {
             },
             app: AppId::from("toko"),
         }
-    }
-
-    #[test]
-    fn current_root_install_identity_roundtrips_with_text_ids() {
-        let input = CurrentRootInstallIdentity {
-            fleet: fleet_binding(),
-            install_id: [8; 32],
-            release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
-                [9; 32],
-            )),
-            expected_module_hash: Some([10; 32]),
-        };
-
-        let bytes = candid::encode_one(&input).expect("encode current root install identity");
-        let decoded: CurrentRootInstallIdentity =
-            candid::decode_one(&bytes).expect("decode current root install identity");
-
-        assert_eq!(decoded, input);
     }
 
     #[test]

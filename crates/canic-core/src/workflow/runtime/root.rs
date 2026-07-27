@@ -7,7 +7,7 @@
 use crate::{
     InternalError, InternalErrorOrigin, VERSION,
     domain::policy::pure::env::{EnvInput, EnvPolicyError, validate_or_default},
-    dto::fleet_activation::{CurrentRootInstallIdentity, FleetActivationPhase},
+    dto::{fleet_activation::FleetActivationPhase, fleet_subnet_root::FleetSubnetRootInitArgs},
     ids::CanisterRole,
     log::Topic,
     ops::{
@@ -32,7 +32,7 @@ use crate::{
 /// Bootstraps the root canister runtime and environment.
 ///
 
-pub fn init_root_canister(identity: CurrentRootInstallIdentity) -> Result<(), InternalError> {
+pub fn init_root_canister(args: FleetSubnetRootInitArgs) -> Result<(), InternalError> {
     // --- Phase 1: Init base systems ---
     MemoryRegistryOps::bootstrap_registry().map_err(|err| {
         InternalError::invariant(
@@ -44,8 +44,17 @@ pub fn init_root_canister(identity: CurrentRootInstallIdentity) -> Result<(), In
     FleetActivationRuntimeOps::set_managed();
     crate::log::set_ready();
     let embedded_release_build_id = ReleaseBuildOps::embedded_release_build_id()?;
-    FleetActivationOps::initialize_root_prepared(identity.clone(), embedded_release_build_id)
-        .map_err(crate::ops::storage::StorageOpsError::from)?;
+    let config = ConfigOps::get()?;
+    let component_topology = ConfigOps::component_topology()?;
+    let self_pid = IcOps::canister_self();
+    FleetActivationOps::initialize_root_prepared(
+        args.clone(),
+        embedded_release_build_id,
+        config.app_id(),
+        &component_topology,
+        self_pid,
+    )
+    .map_err(crate::ops::storage::StorageOpsError::from)?;
 
     // --- Phase 2: Runtime header and env registration ---
     IcOps::println("");
@@ -56,13 +65,12 @@ pub fn init_root_canister(identity: CurrentRootInstallIdentity) -> Result<(), In
         Info,
         "🔧 --------------------- canic v{VERSION} -----------------------",
     );
-    crate::log!(Topic::Init, Info, "🏁 init: root ({identity:?})");
+    crate::log!(Topic::Init, Info, "🏁 init: root ({args:?})");
     log_memory_summary();
 
-    let self_pid = IcOps::canister_self();
     let subnet_pid = self_pid;
     let fleet_root_pid = self_pid;
-    let module_hash = identity.expected_module_hash.map(|hash| hash.to_vec());
+    let module_hash = Some(args.authority.expected_module_hash.to_vec());
 
     let input = EnvInput {
         fleet_root_pid: Some(fleet_root_pid),

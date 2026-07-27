@@ -80,10 +80,8 @@ fn root_init_stays_prepared_without_scheduling_bootstrap_or_application_hooks() 
     let init = function_body(body, "init");
 
     assert!(
-        body.contains(
-            "fn init(identity: ::canic::dto::fleet_activation::CurrentRootInstallIdentity)"
-        ),
-        "root init must accept the exact current install identity"
+        body.contains("fn init(args: ::canic::dto::fleet_subnet_root::FleetSubnetRootInitArgs)"),
+        "root init must accept the exact Fleet Subnet Root authority"
     );
     assert!(
         body.contains("let _ = canic_install;"),

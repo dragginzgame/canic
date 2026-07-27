@@ -4,9 +4,8 @@ use canic_core::{
     },
     bootstrap::{EmbeddedRootBootstrapEntry, compiled::ConfigModel},
     control_plane_support::view::fleet_activation::FleetActivationTransition,
-    dto::fleet_activation::{
-        CurrentRootInstallIdentity, FleetActivationResumeRequest, FleetActivationStatusResponse,
-    },
+    dto::fleet_activation::{FleetActivationResumeRequest, FleetActivationStatusResponse},
+    dto::fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
 };
 use std::time::Duration;
 
@@ -19,7 +18,7 @@ pub struct LifecycleApi;
 impl LifecycleApi {
     /// Delegate root init-time runtime seeding to the current core implementation.
     pub fn init_root_canister_before_bootstrap(
-        identity: CurrentRootInstallIdentity,
+        args: FleetSubnetRootInitArgs,
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
@@ -30,7 +29,7 @@ impl LifecycleApi {
         );
         crate::runtime::install::register_template_module_source_resolver();
         canic_core::api::lifecycle::root::LifecycleApi::init_root_canister_before_bootstrap(
-            identity,
+            args,
             config,
             config_source,
             config_path,
@@ -38,6 +37,11 @@ impl LifecycleApi {
         crate::api::template::WasmStoreBootstrapApi::log_embedded_root_wasm_store_release_set(
             embedded_wasm_store_bootstrap_release_set,
         );
+    }
+
+    pub fn fleet_subnet_root_authority()
+    -> Result<FleetSubnetRootAuthority, canic_core::dto::error::Error> {
+        canic_core::api::fleet_activation::FleetActivationApi::root_authority()
     }
 
     pub async fn prepare_fleet_activation()

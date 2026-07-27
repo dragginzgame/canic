@@ -8,15 +8,23 @@ use canic::{
     Error,
     dto::{
         fleet_activation::{
-            CurrentRootInstallIdentity, FleetActivationPhase, FleetActivationResumeRequest,
-            FleetActivationStatusResponse,
+            FleetActivationPhase, FleetActivationResumeRequest, FleetActivationStatusResponse,
         },
+        fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
         topology::SubnetRegistryResponse,
     },
-    ids::CanisterRole,
+    ids::{
+        CanisterRole, ComponentSpecAdmission, CyclesFundingBudget, FleetCoordinatorBinding,
+        FleetRegistryAuthority, FleetSubnetRootBinding, FleetSubnetRootLimits,
+        FleetSubnetRootReleaseSet, ReleaseSetDigest, SubnetId,
+    },
     protocol,
 };
-use canic_core::ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, ReleaseBuildId};
+use canic_core::{
+    cdk::{types::Cycles, utils::hash::wasm_hash},
+    ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, ReleaseBuildId},
+};
+use canic_host::release_set::AppConfigSnapshot;
 use ic_testkit::{
     artifacts::{read_wasm, test_target_dir, workspace_root_for},
     pic::{InstallSpec, Pic, StandaloneCanisterFixture, install_prebuilt_canister_from_spec},
@@ -35,8 +43,12 @@ static STANDALONE_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 ///
 
 pub trait CanicPicExt {
-    /// Install a root Canic canister with the default root init arguments.
-    fn create_and_install_root_canister(&self, wasm: Vec<u8>) -> Result<Principal, Error>;
+    /// Install a root Canic canister with authority compiled from its exact build config.
+    fn create_and_install_root_canister(
+        &self,
+        wasm: Vec<u8>,
+        config_path: &Path,
+    ) -> Result<Principal, Error>;
 
     /// Wait until one Canic canister reports `canic_ready`.
     fn wait_for_ready(&self, canister_id: Principal, tick_limit: usize, context: &str);
@@ -48,11 +60,16 @@ pub trait CanicPicExt {
 }
 
 impl CanicPicExt for Pic {
-    fn create_and_install_root_canister(&self, wasm: Vec<u8>) -> Result<Principal, Error> {
-        let init_bytes = install_root_args()?;
-
-        Ok(self
-            .create_and_install(InstallSpec::new(wasm, init_bytes, INSTALL_CYCLES).label("root")))
+    fn create_and_install_root_canister(
+        &self,
+        wasm: Vec<u8>,
+        config_path: &Path,
+    ) -> Result<Principal, Error> {
+        let root_id = self.create_canister();
+        self.add_cycles(root_id, INSTALL_CYCLES);
+        let init_bytes = install_root_args(root_id, &wasm, config_path)?;
+        self.install_canister(root_id, wasm, init_bytes, None);
+        Ok(root_id)
     }
 
     fn wait_for_ready(&self, canister_id: Principal, tick_limit: usize, context: &str) {
@@ -285,8 +302,12 @@ fn fetch_ready(pic: &Pic, canister_id: Principal) -> bool {
     }
 }
 
-pub fn install_root_args() -> Result<Vec<u8>, Error> {
-    encode_one(managed_test_init_identity())
+pub fn install_root_args(
+    root_id: Principal,
+    wasm: &[u8],
+    config_path: &Path,
+) -> Result<Vec<u8>, Error> {
+    encode_one(managed_test_root_init_args(root_id, wasm, config_path)?)
         .map_err(|err| Error::internal(format!("encode_one failed: {err}")))
 }
 
@@ -307,18 +328,31 @@ fn local_init_args() -> Vec<u8> {
     encode_one(None::<Vec<u8>>).expect("encode standalone-local init args")
 }
 
+///
+/// ManagedTestIdentity
+///
+/// Deterministic non-root identity shared by internal lifecycle and authorization fixtures.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManagedTestIdentity {
+    pub fleet: FleetBinding,
+    pub install_id: [u8; 32],
+    pub release_build_id: ReleaseBuildId,
+}
+
 /// Return the deterministic Fleet activation identity embedded in internal test Wasms.
 ///
 /// # Panics
 ///
 /// Panics if the repository-owned release-build fixture is not a valid identity.
 #[must_use]
-pub fn managed_test_init_identity() -> CurrentRootInstallIdentity {
+pub fn managed_test_init_identity() -> ManagedTestIdentity {
     let release_build_id = INTERNAL_TEST_RELEASE_BUILD_ID
         .1
         .parse::<ReleaseBuildId>()
         .expect("internal test release-build ID");
-    CurrentRootInstallIdentity {
+    ManagedTestIdentity {
         fleet: FleetBinding {
             fleet: FleetKey {
                 canonical_network_id: CanonicalNetworkId::public_ic(),
@@ -328,8 +362,76 @@ pub fn managed_test_init_identity() -> CurrentRootInstallIdentity {
         },
         install_id: [0x43; 32],
         release_build_id,
-        expected_module_hash: None,
     }
+}
+
+fn managed_test_root_init_args(
+    root_id: Principal,
+    wasm: &[u8],
+    config_path: &Path,
+) -> Result<FleetSubnetRootInitArgs, Error> {
+    let identity = managed_test_init_identity();
+    let config = AppConfigSnapshot::load(config_path)
+        .map_err(|error| Error::internal(format!("load root test config failed: {error}")))?;
+    let topology = config.component_topology();
+    let component_admissions = topology
+        .component_specs
+        .iter()
+        .map(|spec| ComponentSpecAdmission {
+            component_spec: spec.component_spec.clone(),
+            spec_hash: spec.spec_hash,
+            maximum_root_instances: spec.maximum_fleet_instances,
+        })
+        .collect::<Vec<_>>();
+    let component_topology_digest = topology
+        .project_for_admissions(&component_admissions)
+        .and_then(|projection| projection.digest())
+        .map_err(|error| Error::internal(format!("compile root test authority failed: {error}")))?;
+    let expected_module_hash =
+        <[u8; 32]>::try_from(wasm_hash(wasm)).expect("SHA-256 helper must return exactly 32 bytes");
+    let authority = FleetRegistryAuthority {
+        binding: FleetCoordinatorBinding {
+            fleet: FleetBinding {
+                fleet: identity.fleet.fleet,
+                app: AppId::from(config.app_id()),
+            },
+            coordinator_subnet: test_subnet(0x40),
+            coordinator: Principal::from_slice(&[0x41; 29]),
+        },
+        epoch: 1,
+    };
+
+    Ok(FleetSubnetRootInitArgs {
+        authority: FleetSubnetRootAuthority {
+            binding: FleetSubnetRootBinding {
+                authority,
+                placement_subnet: test_subnet(0x45),
+                fleet_subnet_root: root_id,
+                component_admissions,
+                component_topology_digest,
+                limits: FleetSubnetRootLimits {
+                    maximum_component_instances: 4_096,
+                    maximum_managed_canisters: 25_000,
+                    maximum_registry_bytes: 16_777_216,
+                    maximum_wasm_store_bytes: 536_870_912,
+                    cycles_funding: CyclesFundingBudget {
+                        window_secs: 3_600,
+                        maximum_cycles: Cycles::new(1_000_000_000_000_000),
+                    },
+                },
+            },
+            initial_release_set: FleetSubnetRootReleaseSet {
+                release_build_id: identity.release_build_id,
+                manifest_digest: ReleaseSetDigest::from_bytes([0x44; 32]),
+            },
+            expected_module_hash,
+        },
+        install_id: identity.install_id,
+    })
+}
+
+const fn test_subnet(byte: u8) -> SubnetId {
+    SubnetId::from_principal(Principal::from_slice(&[byte; 29]))
 }
 
 fn workspace_root() -> PathBuf {

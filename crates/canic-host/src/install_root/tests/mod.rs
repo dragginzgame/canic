@@ -1,8 +1,6 @@
 use super::build_network::resolve_install_build_context;
 use super::build_snapshot::{InstallBuildTarget, resolve_install_snapshot};
-use super::commands::{
-    add_create_root_target, add_icp_environment_target, icp_canister_command, root_init_args,
-};
+use super::commands::{add_icp_environment_target, icp_canister_command, root_init_args};
 use super::config_selection::{
     config_selection_error, discover_canic_config_choices, discover_project_canic_config_choices,
     resolve_install_config_path, select_discovered_app_config_path,
@@ -17,7 +15,6 @@ use super::deployment_truth_gate::{
 use super::execution_preflight::current_install_execution_preflight_receipt;
 use super::operations::{
     BuildInstallTargetsOperation, EmitRootManifestOperation, InstallPhaseLabel,
-    InstallPhaseOperation, InstallRootWasmOperation, ResolveRootCanisterOperation,
 };
 use super::output::render_install_timing_summary;
 use super::phase_receipts::{
@@ -30,13 +27,12 @@ use super::plan_artifacts::{
 use super::receipt_io::{
     install_deployment_truth_receipt_path, write_install_deployment_truth_receipt,
 };
-use super::root_cycles::add_local_root_create_cycles_arg;
 use super::timing::InstallTimingSummary;
 use super::truth_check::current_install_deployment_truth_check_at;
 use super::{
     InstallRootBlockKind, InstallRootBlockedError, InstallRootError, InstallRootOptions,
     InstallRootPhase, check_install_deployment_truth, check_install_execution_preflight,
-    latest_deployment_truth_receipt_path_from_root, require_fleet_subnet_root_install_effects,
+    latest_deployment_truth_receipt_path_from_root, require_fleet_subnet_root_bootstrap,
 };
 use crate::canister_build::{
     CanisterArtifactBuildSpec, CanisterBuildProfile, WorkspaceBuildContext,
@@ -84,15 +80,16 @@ fn public_install_error_preserves_phase_and_typed_source() {
 }
 
 #[test]
-fn verified_coordinator_guard_blocks_the_legacy_root_effect_path() {
+fn verified_roots_guard_blocks_unjournalled_bootstrap_and_registration() {
     let plan_path = Path::new("/tmp/fleet-install-plan.json");
     let coordinator = candid::Principal::from_slice(&[42]);
-    let error = require_fleet_subnet_root_install_effects(plan_path, coordinator)
-        .expect_err("legacy root effect path must remain blocked");
+    let error = require_fleet_subnet_root_bootstrap(plan_path, coordinator, 3)
+        .expect_err("unjournalled bootstrap and registration must remain blocked");
 
     assert_eq!(error.plan_path, plan_path);
     assert_eq!(error.coordinator, coordinator);
-    assert!(error.to_string().contains("independently verified"));
+    assert_eq!(error.verified_roots, 3);
+    assert!(error.to_string().contains("local Wasm Store bootstrap"));
 }
 
 #[test]
@@ -196,14 +193,6 @@ fn assert_before(source: &str, before: &str, after: &str) {
         before_index < after_index,
         "`{before}` must appear before `{after}`"
     );
-}
-
-fn write_temp_workspace_config(config_source: &str) -> PathBuf {
-    let root = temp_dir("canic-install-test");
-    fs::create_dir_all(root.join("apps")).expect("temp apps dir must be created");
-    fs::write(root.join("apps/canic.toml"), config_source)
-        .expect("temp canic.toml must be written");
-    root
 }
 
 fn demo_config_source(attached: &str) -> String {

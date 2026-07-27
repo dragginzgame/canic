@@ -1,8 +1,9 @@
 use candid::Principal;
-use ic_testkit::pic::{
-    CachedPicBaseline, InstallSpec, Pic, restore_or_rebuild_cached_pic_baseline,
+use ic_testkit::pic::{CachedPicBaseline, Pic, restore_or_rebuild_cached_pic_baseline};
+use std::{
+    path::Path,
+    sync::{Mutex, OnceLock},
 };
-use std::sync::{Mutex, OnceLock};
 
 use crate::pic::{
     canic::{activate_managed_fleet, install_root_args},
@@ -10,7 +11,7 @@ use crate::pic::{
 };
 
 use super::{
-    build::{build_pic, build_test_root_wasm},
+    build::{build_pic, build_test_root_wasm, root_canister_config_path},
     fixture::{CachedInstalledRoot, progress},
 };
 
@@ -129,14 +130,18 @@ fn activate_test_fleet(pic: &Pic, root_id: Principal) {
 
 // Install the root canister under PocketIC with the current exact Fleet identity.
 fn install_root_canister(pic: &Pic, wasm: Vec<u8>) -> Principal {
-    pic.create_and_install(
-        InstallSpec::new(
-            wasm,
-            install_root_args().expect("encode root install identity"),
-            ROOT_INSTALL_CYCLES,
-        )
-        .label("role_attestation_root"),
-    )
+    let root_id = pic.create_canister();
+    pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
+    let config_path = root_canister_config_path(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("workspace root"),
+    );
+    let init_args =
+        install_root_args(root_id, &wasm, &config_path).expect("encode root install identity");
+    pic.install_canister(root_id, wasm, init_args, None);
+    root_id
 }
 
 #[cfg(test)]
@@ -146,7 +151,8 @@ mod tests {
     use canic::{
         Error,
         dto::fleet_activation::{FleetActivationPhase, FleetActivationStatusResponse},
-        protocol::CANIC_FLEET_ACTIVATION_STATUS,
+        dto::fleet_subnet_root::FleetSubnetRootAuthority,
+        protocol::{CANIC_FLEET_ACTIVATION_STATUS, CANIC_FLEET_SUBNET_ROOT_AUTHORITY},
     };
     use std::time::Duration;
 
@@ -190,6 +196,13 @@ mod tests {
         assert_eq!(
             status.expect("root activation status").phase,
             FleetActivationPhase::Prepared
+        );
+        let authority: Result<FleetSubnetRootAuthority, Error> = pic
+            .query_call(root_id, CANIC_FLEET_SUBNET_ROOT_AUTHORITY, ())
+            .expect("query root authority");
+        assert_eq!(
+            authority.expect("root authority").binding.fleet_subnet_root,
+            root_id
         );
     }
 }

@@ -335,6 +335,24 @@ fn fleet_activation_status_is_a_controller_query_on_the_shared_runtime_surface()
 }
 
 #[test]
+fn fleet_subnet_root_authority_is_a_controller_query_on_the_root_surface() {
+    assert_eq!(
+        canic::protocol::CANIC_FLEET_SUBNET_ROOT_AUTHORITY,
+        "canic_fleet_subnet_root_authority"
+    );
+
+    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
+    let source = read_text(&macro_path);
+    let attribute =
+        preceding_attribute_context(&source, "async fn canic_fleet_subnet_root_authority(");
+
+    assert!(
+        attribute.contains("canic_query(requires(caller::is_controller()))"),
+        "Fleet Subnet Root authority must remain a controller-guarded query"
+    );
+}
+
+#[test]
 fn nonroot_fleet_activation_mutations_are_guarded_by_the_exact_root() {
     let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/nonroot.rs");
     let source = read_text(&macro_path);

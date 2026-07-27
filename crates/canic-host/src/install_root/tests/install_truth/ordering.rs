@@ -15,7 +15,7 @@ fn current_install_records_gates_before_activation_mutation() {
     assert_before(
         install,
         "prepare_install_deployment_truth(",
-        "plan_fleet_install_activation(",
+        "plan_fleet_install_session(",
     );
 
     let prepare = include_str!("../../preparation/mod.rs");
@@ -27,7 +27,7 @@ fn current_install_records_gates_before_activation_mutation() {
     assert_before(
         install,
         "emit_manifest_with_phase(",
-        "plan_fleet_install_activation(",
+        "plan_fleet_install_session(",
     );
     let manifest_emission = include_str!("../../plan_artifacts/mod.rs");
     let manifest_emission = source_section(
@@ -43,7 +43,7 @@ fn current_install_records_gates_before_activation_mutation() {
     assert_before(
         install,
         "plan_current_fleet_install(",
-        "resolve_root_canister_after_manifest(",
+        "install_current_fleet_coordinator(",
     );
     let fleet_planning = source_section(
         source,
@@ -52,7 +52,7 @@ fn current_install_records_gates_before_activation_mutation() {
     );
     assert_before(
         fleet_planning,
-        "plan_current_fleet_activation(",
+        "plan_current_fleet_install_session(",
         "persist_current_fleet_install_plan(",
     );
     assert_before(
@@ -63,28 +63,40 @@ fn current_install_records_gates_before_activation_mutation() {
     assert_before(
         install,
         "install_current_fleet_coordinator(",
-        "require_fleet_subnet_root_install_effects(",
+        "install_current_fleet_subnet_roots(",
     );
     assert_before(
         install,
-        "require_fleet_subnet_root_install_effects(",
-        "resolve_or_recover_activation_root(",
+        "install_current_fleet_subnet_roots(",
+        "require_fleet_subnet_root_bootstrap(",
     );
     let coordinator_install = source_section(
         source,
         "fn install_current_fleet_coordinator(",
-        "fn persist_pre_root_receipts(",
+        "fn install_current_fleet_subnet_roots(",
     );
     assert!(
         coordinator_install.contains("install_and_verify_fleet_coordinator("),
         "Coordinator wrapper must invoke the journalled install and verification workflow"
     );
-    assert_before(
-        install,
-        "recover_activation_root_canister(",
-        "resolve_root_canister_after_manifest(",
+    let root_install = source_section(
+        source,
+        "fn install_current_fleet_subnet_roots(",
+        "fn persist_pre_root_receipts(",
     );
+    assert!(
+        root_install.contains("install_and_verify_fleet_subnet_roots("),
+        "root wrapper must invoke the journalled multi-root install and verification workflow"
+    );
+}
 
+#[test]
+fn current_install_persists_truth_only_after_session_planning() {
+    let source = include_str!("../../mod.rs");
+    let install_start = source
+        .find("pub fn install_root(")
+        .expect("install_root function exists");
+    let install = &source[install_start..];
     let gate = include_str!("../../current_execution/mod.rs");
     assert_before(
         gate,
@@ -98,7 +110,7 @@ fn current_install_records_gates_before_activation_mutation() {
     );
     assert_before(
         install,
-        "plan_fleet_install_activation(",
+        "plan_fleet_install_session(",
         ".write_receipt(receipt)",
     );
 }

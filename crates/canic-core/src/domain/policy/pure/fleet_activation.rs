@@ -7,9 +7,10 @@
 use crate::{
     ids::{EndpointCall, EndpointCallKind},
     protocol::{
-        CANIC_ACTIVATE_FLEET, CANIC_FLEET_ACTIVATION_STATUS, CANIC_PREPARE_FLEET_ACTIVATION,
-        CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION, CANIC_RESUME_FLEET_ACTIVATION, CANIC_SYNC_STATE,
-        CANIC_SYNC_TOPOLOGY, CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
+        CANIC_ACTIVATE_FLEET, CANIC_FLEET_ACTIVATION_STATUS, CANIC_FLEET_SUBNET_ROOT_AUTHORITY,
+        CANIC_PREPARE_FLEET_ACTIVATION, CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION,
+        CANIC_RESUME_FLEET_ACTIVATION, CANIC_SYNC_STATE, CANIC_SYNC_TOPOLOGY,
+        CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
         CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
     },
 };
@@ -53,6 +54,7 @@ pub fn require_prepared_root_endpoint(
     call: EndpointCall,
 ) -> Result<(), FleetActivationEndpointPolicyError> {
     if is_status_query(call)
+        || is_query(call, CANIC_FLEET_SUBNET_ROOT_AUTHORITY)
         || is_update(
             call,
             &[
@@ -70,7 +72,11 @@ pub fn require_prepared_root_endpoint(
 }
 
 fn is_status_query(call: EndpointCall) -> bool {
-    call.kind == EndpointCallKind::Query && call.endpoint.name == CANIC_FLEET_ACTIVATION_STATUS
+    is_query(call, CANIC_FLEET_ACTIVATION_STATUS)
+}
+
+fn is_query(call: EndpointCall, endpoint: &str) -> bool {
+    call.kind == EndpointCallKind::Query && call.endpoint.name == endpoint
 }
 
 fn is_update(call: EndpointCall, endpoints: &[&str]) -> bool {
@@ -100,6 +106,7 @@ mod tests {
     fn prepared_root_admits_exact_staging_and_activation_updates() {
         for (endpoint, kind) in [
             (CANIC_FLEET_ACTIVATION_STATUS, EndpointCallKind::Query),
+            (CANIC_FLEET_SUBNET_ROOT_AUTHORITY, EndpointCallKind::Query),
             (CANIC_PREPARE_FLEET_ACTIVATION, EndpointCallKind::Update),
             (CANIC_RESUME_FLEET_ACTIVATION, EndpointCallKind::Update),
             (CANIC_TEMPLATE_PREPARE_ADMIN, EndpointCallKind::Update),
@@ -120,6 +127,7 @@ mod tests {
             (CANIC_SYNC_STATE, EndpointCallKind::Update),
             ("canic_upsert_root_issuer_policy", EndpointCallKind::Update),
             (CANIC_FLEET_ACTIVATION_STATUS, EndpointCallKind::Update),
+            (CANIC_FLEET_SUBNET_ROOT_AUTHORITY, EndpointCallKind::Update),
             (
                 CANIC_FLEET_ACTIVATION_STATUS,
                 EndpointCallKind::QueryComposite,
