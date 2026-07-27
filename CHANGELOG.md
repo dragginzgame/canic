@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.10` makes a strict operator Fleet input resolve and immutably publish
+  the exact multi-root installation plan before effects, while a
+  Coordinator-first guard prevents the legacy root-only installer from
+  bypassing that authority.
+
 - `0.100.9` hard-cuts Component Topology to canonical v3, replacing the
   fixed-depth child model with root-owned multi-level Component trees backed
   by flat potential-Wasm catalogs, explicit role-to-role spawn grants and

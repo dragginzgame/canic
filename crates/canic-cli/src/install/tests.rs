@@ -4,8 +4,13 @@ use canic_host::install_root::InstallRootPhase;
 // Ensure install defaults to the conventional local root canister target.
 #[test]
 fn install_defaults_to_root_target() {
-    let options = InstallOptions::parse([OsString::from("demo"), OsString::from("demo-local")])
-        .expect("parse defaults");
+    let options = InstallOptions::parse([
+        OsString::from("demo"),
+        OsString::from("demo-local"),
+        OsString::from("--fleet-input"),
+        OsString::from("deployments/demo-local.toml"),
+    ])
+    .expect("parse defaults");
     let install = options
         .clone()
         .into_install_root_options_with_icp_root(None);
@@ -18,6 +23,10 @@ fn install_defaults_to_root_target() {
     assert_eq!(install.root_build_target, "root");
     assert_eq!(install.icp_root, None);
     assert_eq!(install.build_profile, None);
+    assert_eq!(
+        install.fleet_install_input_path,
+        Some(PathBuf::from("deployments/demo-local.toml"))
+    );
     assert_eq!(
         install.config_path,
         Some("apps/demo/canic.toml".to_string())
@@ -34,6 +43,8 @@ fn install_accepts_internal_environment() {
         OsString::from("demo"),
         OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
+        OsString::from("--fleet-input"),
+        OsString::from("deployments/demo.toml"),
     ])
     .expect("parse internal environment");
 
@@ -47,6 +58,8 @@ fn install_accepts_build_profile() {
         OsString::from("fast"),
         OsString::from("toko"),
         OsString::from("demo"),
+        OsString::from("--fleet-input"),
+        OsString::from("deployments/demo.toml"),
     ])
     .expect("parse profile");
     let install = options.into_install_root_options_with_icp_root(None);
@@ -95,6 +108,14 @@ fn install_requires_fleet_argument() {
     std::assert_matches!(err, InstallCommandError::Usage(_));
 }
 
+#[test]
+fn install_requires_fleet_input() {
+    let err = InstallOptions::parse([OsString::from("demo"), OsString::from("demo-local")])
+        .expect_err("missing Fleet input should fail");
+
+    std::assert_matches!(err, InstallCommandError::Usage(_));
+}
+
 // Ensure install help documents the App-owned source identity.
 #[test]
 fn install_usage_explains_app_config() {
@@ -102,11 +123,13 @@ fn install_usage_explains_app_config() {
     let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
 
     assert!(text.contains("Install and bootstrap a Canic fleet"));
-    assert!(text.contains("Usage: canic install <app> <fleet>"));
+    assert!(text.contains("Usage: canic install <app> <fleet> --fleet-input <PATH>"));
     assert!(text.contains("<app>"));
     assert!(text.contains("<fleet>"));
     assert!(!text.contains("--app"));
     assert!(text.contains("--profile"));
+    assert!(text.contains("--fleet-input"));
+    assert!(normalized.contains("separate operator-owned placement"));
     assert!(normalized.contains("fresh local creation"));
     assert!(normalized.contains("project upgrade flow"));
     assert!(normalized.contains("canic medic fleet"));

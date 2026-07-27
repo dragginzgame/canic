@@ -243,12 +243,16 @@ role = "registry"
 
 ## Install And Inspect
 
-Build and install the fleet locally:
+Create a separate operator Fleet input using the exact local application
+Subnet principal. The complete document shape and public-IC selectors are in
+[`fleet-install-input.md`](../architecture/fleet-install-input.md).
+
+Then build and install the fleet locally:
 
 ```bash
 canic status
 canic replica start --background
-canic install --profile fast example example-local
+canic install example example-local --fleet-input deployments/example-local.toml --profile fast
 canic info list example-local
 ```
 

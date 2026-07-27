@@ -312,7 +312,7 @@ pub(super) fn check_root_canister_id(fleet: &FleetCatalogEntryV1) -> MedicCheck 
             "root_canister_id_missing",
             "root",
             "Fleet catalog row does not record a root principal",
-            "reinstall the Fleet with canic install <app> <fleet>",
+            "reinstall the Fleet with canic install <app> <fleet> --fleet-input <path>",
             MedicSource::InstalledFleet,
         )
     } else {

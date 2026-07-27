@@ -200,6 +200,7 @@ package = "worker"
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         config_path: Some("apps/demo/canic.toml".to_string()),
+        fleet_install_input_path: None,
         expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,

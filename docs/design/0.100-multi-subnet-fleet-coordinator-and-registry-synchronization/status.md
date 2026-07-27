@@ -6,8 +6,8 @@ Date: 2026-07-27
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.8`.
-- Open patch draft: `0.100.9`; no package-version change has been authorized.
+- Workspace package version: `0.100.9`.
+- Open patch draft: `0.100.10`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -34,7 +34,7 @@ on the same root/Subnet; that Project Instance may create its Ledger, Machine
 and further children. Each child records its immediate parent, but the Fleet
 Subnet Root remains sole controller, Registry owner and lifecycle executor.
 Every root admitted for the Project Hub Spec stores the complete
-Hub/Instance/Ledger/Machine potential-Wasm catalog once. The open 0.100.9
+Hub/Instance/Ledger/Machine potential-Wasm catalog once. Released 0.100.9
 hard-cuts Component Spec/Topology canonical encoding to schema/domain version
 3 with no v2 decoder.
 
@@ -113,9 +113,12 @@ Registry slices replace the 0.99 root model.
   root.
 - [x] Freeze one immutable pre-effect Fleet install-plan boundary from exact
   resolved Coordinator/root placement, admissions, limits and funding input.
-- [ ] Resolve and journal independent Coordinator and Fleet Subnet Root
-  placements plus configured limits.
-- [ ] Freeze exact creation funding before each external effect.
+- [x] Resolve strict operator input to independent exact Coordinator and Fleet
+  Subnet Root placements, admissions, configured limits and funding.
+- [ ] Record those resolved facts in the Coordinator/root creation journal.
+- [x] Freeze exact initial creation funding in the immutable plan before any
+  external effect.
+- [ ] Bind every journalled creation intent and effect to that frozen funding.
 - [ ] Install the Coordinator from empty state.
 - [ ] Install each root and bootstrap its local topology-admitted Wasm Store.
 - [ ] Commit the genesis Fleet Registry.
@@ -247,7 +250,7 @@ authority, canonical physical-Subnet order, unique root principals, one active
 release build, root topology/admissions/limits and aggregate Fleet admission
 ceilings. Durable commits and root transitions remain pending.
 
-The open 0.100.9 batch hard-cuts fixed-depth Component Topology v2 to v3.
+Released 0.100.9 hard-cuts fixed-depth Component Topology v2 to v3.
 Specs now compile one Component role plus a flat catalog of every potential
 descendant Wasm. `initial_instances` is removed, aggregate
 `maximum_children` becomes `maximum_descendants`, and every protected child
@@ -262,11 +265,28 @@ default Registry allowance is 16 MiB, and the design requires normalized
 indexed storage, compact revision-bound Directory pages, durable post-order
 subtree removal and per-Component concurrency.
 
+The open 0.100.10 adds the separate strict `--fleet-input <path>` operator
+document. It carries Coordinator Subnet selection, every exact root Subnet,
+root-local Component admissions, complete root limits and positive creation
+funding. Public-IC `recommended` resolves to the unique Fiduciary application
+Subnet, bounded profiles resolve by exact trusted catalog label, and explicit
+public-IC Subnets must also be present and eligible in that catalog.
+Application Subnets require cycles funding, restricted system Subnets require
+ICP funding, and non-public networks require explicit Subnets plus cycles
+funding. Unknown fields, unsafe files, ambiguous selectors, funding
+contradictions and invalid topology input fail closed.
+
+The normal installer resolves that document before building, then after exact
+application-artifact finalization invokes the immutable multi-root planner and
+publishes all root release sets plus the Fleet install plan. An explicit
+Coordinator-first guard then stops before receipt publication or any Canister
+creation. The legacy single-root path therefore cannot bypass the new
+authority while the Coordinator runtime and multi-root effect executor remain
+unimplemented.
+
 The current installer does not yet produce all three concrete infrastructure
 outputs or invoke the infrastructure persistence boundary. It does not yet
-resolve placement/funding input or invoke the new Fleet install-plan boundary
-before its legacy single-root creation path. It also does not install planned
-Coordinator/root bindings. The repository
+install planned Coordinator/root bindings. The repository
 does not yet contain a genuine Fleet Coordinator runtime/export authority, so
 a correctly qualified Coordinator artifact cannot be produced by relabelling
 the Fleet Subnet Root runtime. Protected environment binding, Fleet Subnet
@@ -277,19 +297,14 @@ protected Component binding.
 
 ## Next Action
 
-Add the trusted/operator placement and funding input boundary, resolve it to
-exact Coordinator/root Subnets and invoke the immutable Fleet install planner
-before any creation effect. The current legacy single-root creation path must
-not bypass that authority.
-
 Add the genuine Fleet Coordinator runtime and export authority before
 producing the Fleet Coordinator, Fleet Subnet Root and Wasm Store as three
 qualified infrastructure outputs. Do not satisfy the three-role manifest by
 relabelling an existing root runtime or emitting a placeholder.
 
-After artifact finalization, freeze resolved Coordinator/root placement and
-funding in the installation journal, install the Coordinator before the roots,
-and commit the genesis Fleet Registry.
+Then replace the fail-closed effect guard by recording the already-resolved
+Coordinator/root placement and funding in the installation journal, installing
+the Coordinator before the roots, and committing the genesis Fleet Registry.
 
 Replace the temporary Component Spec environment selector only when root-local
 allocation and Component Registry commitment can supply a real

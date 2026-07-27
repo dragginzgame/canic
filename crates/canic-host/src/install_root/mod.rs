@@ -1,8 +1,12 @@
 use crate::{
     canister_build::cache::DefaultCanisterBuildCacheCleanup,
     deployment_truth::DeploymentReceiptV1,
+    fleet_install_input::{ResolvedFleetInstallInput, load_and_resolve_fleet_install_input},
+    fleet_install_plan::{
+        FleetInstallPlanRequest, PersistedFleetInstallPlan, compile_and_persist_fleet_install_plan,
+    },
     network::resolve_canonical_network_id_from_root,
-    release_set::{icp_root, workspace_root},
+    release_set::{AppConfigSnapshot, icp_root, workspace_root},
 };
 use config_selection::resolve_install_config_path;
 use std::{
@@ -114,6 +118,7 @@ pub enum InstallRootPhase {
     Identity,
     Preparation,
     Manifest,
+    Planning,
     Activation,
 }
 
@@ -127,6 +132,7 @@ impl fmt::Display for InstallRootPhase {
             Self::Identity => "deployment identity resolution",
             Self::Preparation => "deployment preparation",
             Self::Manifest => "manifest emission",
+            Self::Planning => "Fleet installation planning",
             Self::Activation => "root activation",
         })
     }
@@ -167,6 +173,19 @@ impl InstallRootError {
     }
 }
 
+#[derive(Debug, ThisError)]
+#[error(
+    "Fleet install plan is durable at {}; Canister creation is blocked until the genuine Fleet Coordinator runtime can be installed before Fleet Subnet Roots",
+    plan_path.display()
+)]
+struct FleetInstallEffectsUnavailableError {
+    plan_path: PathBuf,
+}
+
+#[derive(Debug, ThisError)]
+#[error("fresh Fleet installation requires --fleet-input <PATH>")]
+struct MissingFleetInstallInputError;
+
 /// Discover installable Canic config choices under the current workspace.
 pub fn discover_current_canic_config_choices() -> Result<Vec<PathBuf>, ConfigDiscoveryError> {
     let project_root = current_canic_project_root()?;
@@ -183,7 +202,7 @@ pub fn discover_current_canic_config_choices() -> Result<Vec<PathBuf>, ConfigDis
     Ok(choices)
 }
 
-// Execute the local thin-root install flow against an already running replica.
+// Execute fresh Fleet planning and the Coordinator-first installation workflow.
 pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError> {
     let workspace_root = workspace_root()
         .map_err(|source| InstallRootError::new(InstallRootPhase::WorkspaceDiscovery, source))?;
@@ -195,12 +214,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         None => icp_root()
             .map_err(|source| InstallRootError::new(InstallRootPhase::ProjectDiscovery, source))?,
     };
-    let config_path = resolve_install_config_path(
-        &icp_root,
-        options.config_path.as_deref(),
-        options.interactive_config_selection,
-    )
-    .map_err(InstallRootError::in_phase(InstallRootPhase::Configuration))?;
+    let config_path = current_install_config_path(&icp_root, &options)?;
     let (build_context, install_snapshot) =
         current_install_build_inputs(&workspace_root, &icp_root, &config_path, &options)
             .map_err(InstallRootError::in_phase(InstallRootPhase::BuildInputs))?;
@@ -215,6 +229,9 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         &icp_root,
         options.artifact_environment(),
     );
+    let resolved_fleet_install_input =
+        resolve_current_fleet_install_input(&icp_root, environment, &options)
+            .map_err(InstallRootError::in_phase(InstallRootPhase::Planning))?;
 
     print_install_identity(&app_id, &fleet_name);
     let prepared = prepare_install_deployment_truth(
@@ -242,12 +259,14 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
             ReleaseBuildPlanError::MissingFinalizedAuthority,
         )
     })?;
-    let activation = plan_current_fleet_activation(
+    let activation = plan_current_fleet_install(
         &icp_root,
         environment,
         &fleet_name,
         &app_id,
+        &config_path,
         &finalized_release_build,
+        resolved_fleet_install_input,
     )?;
     let receipt_scope = InstallReceiptScope {
         icp_root: &icp_root,
@@ -285,6 +304,91 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
 
     print_install_timing_summary(&timings, total_started_at.elapsed());
     Ok(())
+}
+
+fn plan_current_fleet_install(
+    icp_root: &Path,
+    environment: &str,
+    fleet_name: &str,
+    app_id: &str,
+    config_path: &Path,
+    finalized_release_build: &crate::release_build::FinalizedReleaseBuild,
+    input: ResolvedFleetInstallInput,
+) -> Result<fleet_activation_journal::ResolvedFleetInstallActivation, InstallRootError> {
+    let activation = plan_current_fleet_activation(
+        icp_root,
+        environment,
+        fleet_name,
+        app_id,
+        finalized_release_build,
+    )?;
+    let plan = persist_current_fleet_install_plan(
+        icp_root,
+        config_path,
+        activation.journal.activation.identity.fleet.clone(),
+        finalized_release_build,
+        input,
+    )
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Planning))?;
+    require_coordinator_first_install_effects(&plan.path)
+        .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?;
+    Ok(activation)
+}
+
+fn resolve_current_fleet_install_input(
+    icp_root: &Path,
+    environment: &str,
+    options: &InstallRootOptions,
+) -> Result<ResolvedFleetInstallInput, Box<dyn std::error::Error>> {
+    let input_path = options
+        .fleet_install_input_path
+        .as_ref()
+        .ok_or(MissingFleetInstallInputError)?;
+    let input_path = if input_path.is_absolute() {
+        input_path.clone()
+    } else {
+        icp_root.join(input_path)
+    };
+    load_and_resolve_fleet_install_input(icp_root, environment, &input_path).map_err(Into::into)
+}
+
+fn persist_current_fleet_install_plan(
+    icp_root: &Path,
+    config_path: &Path,
+    fleet: canic_core::ids::FleetBinding,
+    finalized_release_build: &crate::release_build::FinalizedReleaseBuild,
+    input: ResolvedFleetInstallInput,
+) -> Result<PersistedFleetInstallPlan, Box<dyn std::error::Error>> {
+    let config = AppConfigSnapshot::load(config_path)?;
+    compile_and_persist_fleet_install_plan(FleetInstallPlanRequest {
+        root: icp_root,
+        config: config.model(),
+        fleet,
+        release_build_id: finalized_release_build.record.release_build_id,
+        coordinator: input.coordinator,
+        fleet_subnet_roots: input.fleet_subnet_roots,
+    })
+    .map_err(Into::into)
+}
+
+fn require_coordinator_first_install_effects(
+    plan_path: &Path,
+) -> Result<(), FleetInstallEffectsUnavailableError> {
+    Err(FleetInstallEffectsUnavailableError {
+        plan_path: plan_path.to_path_buf(),
+    })
+}
+
+fn current_install_config_path(
+    icp_root: &Path,
+    options: &InstallRootOptions,
+) -> Result<PathBuf, InstallRootError> {
+    resolve_install_config_path(
+        icp_root,
+        options.config_path.as_deref(),
+        options.interactive_config_selection,
+    )
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Configuration))
 }
 
 fn plan_current_fleet_activation(

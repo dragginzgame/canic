@@ -46,7 +46,7 @@ comparison, local catalog, and resume-safety JSON artifacts.
 Use `canic deploy plan <fleet> --app <app>` for the operator planning report.
 Use `canic inspect` for live runtime-observed canister status.
 Fresh Fleet installation and registration have one mutation entrypoint:
-`canic install <app> <fleet>`.";
+`canic install <app> <fleet> --fleet-input <path>`.";
 
 pub fn deploy_command() -> ClapCommand {
     DEPLOY_COMMANDS

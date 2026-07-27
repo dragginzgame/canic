@@ -1,0 +1,366 @@
+//! Module: fleet_install_input::tests
+//!
+//! Responsibility: qualify strict document decoding and trusted placement/funding resolution.
+//! Does not own: immutable Fleet plan persistence or install workflow mutation ordering.
+
+use super::*;
+use crate::test_support::temp_dir;
+use std::fs;
+
+use ic_query::subnet_catalog::{
+    ClassificationSource, GeographicScope, RoutingRange, SubnetCatalog, SubnetInfo,
+};
+
+const FIDUCIARY_SUBNET: &str = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae";
+
+#[test]
+fn local_document_resolves_exact_explicit_placement_and_cycles() {
+    let application_subnet = subnet_text(7);
+    let document = document(CoordinatorSubnetSelector::Explicit {
+        subnet: application_subnet.clone(),
+    });
+
+    let resolved =
+        resolve_document(&document, BuildNetwork::Local, None).expect("resolve local input");
+
+    assert_eq!(
+        resolved.coordinator.coordinator_subnet,
+        subnet(&application_subnet)
+    );
+    assert_eq!(
+        resolved.coordinator.creation_funding,
+        PlannedCanisterCreationFunding::Cycles {
+            cycles: 2_000_000_000_000
+        }
+    );
+    assert_eq!(resolved.fleet_subnet_roots.len(), 1);
+    assert_eq!(
+        resolved.fleet_subnet_roots[0].component_admissions,
+        vec![RootComponentAdmissionInput {
+            component_spec: "users".parse().expect("valid Component Spec ID"),
+            maximum_root_instances: 8,
+        }]
+    );
+}
+
+#[test]
+fn public_recommended_and_profile_select_exact_unique_application_subnets() {
+    let application_subnet = subnet_text(7);
+    let catalog = catalog(vec![
+        info(
+            FIDUCIARY_SUBNET,
+            SubnetKind::Application,
+            SubnetSpecialization::Fiduciary,
+            "fiduciary",
+        ),
+        info(
+            &application_subnet,
+            SubnetKind::Application,
+            SubnetSpecialization::European,
+            "europe-west",
+        ),
+    ]);
+    let recommended = resolve_document(
+        &document(CoordinatorSubnetSelector::Recommended),
+        BuildNetwork::Ic,
+        Some(&catalog),
+    )
+    .expect("resolve recommended");
+    assert_eq!(
+        recommended.coordinator.coordinator_subnet,
+        subnet(FIDUCIARY_SUBNET)
+    );
+
+    let profile = resolve_document(
+        &document(CoordinatorSubnetSelector::Profile {
+            profile: "europe-west".to_string(),
+        }),
+        BuildNetwork::Ic,
+        Some(&catalog),
+    )
+    .expect("resolve profile");
+    assert_eq!(
+        profile.coordinator.coordinator_subnet,
+        subnet(&application_subnet)
+    );
+}
+
+#[test]
+fn public_resolution_enforces_trusted_eligibility_and_funding_method() {
+    let system_subnet = subnet_text(8);
+    let mut input = document(CoordinatorSubnetSelector::Explicit {
+        subnet: system_subnet.clone(),
+    });
+    input.coordinator.creation_funding = CreationFundingDocument::Icp { e8s: 100_000_000 };
+    input.fleet_subnet_roots[0].placement_subnet = system_subnet.clone();
+    input.fleet_subnet_roots[0].creation_funding =
+        CreationFundingDocument::Icp { e8s: 100_000_000 };
+    let system_catalog = catalog(vec![info(
+        &system_subnet,
+        SubnetKind::System,
+        SubnetSpecialization::None,
+        "system",
+    )]);
+
+    let resolved = resolve_document(&input, BuildNetwork::Ic, Some(&system_catalog))
+        .expect("resolve restricted System Subnet");
+    assert_eq!(
+        resolved.coordinator.creation_funding,
+        PlannedCanisterCreationFunding::Icp { e8s: 100_000_000 }
+    );
+
+    input.coordinator.creation_funding = CreationFundingDocument::Cycles {
+        cycles: Cycles::new(1),
+    };
+    assert!(matches!(
+        resolve_document(&input, BuildNetwork::Ic, Some(&system_catalog)),
+        Err(FleetInstallInputError::FundingMismatch { .. })
+    ));
+}
+
+#[test]
+fn nonpublic_network_rejects_derived_selectors_and_icp_funding() {
+    assert!(matches!(
+        resolve_document(
+            &document(CoordinatorSubnetSelector::Recommended),
+            BuildNetwork::Local,
+            None
+        ),
+        Err(FleetInstallInputError::TrustedMetadataRequired { .. })
+    ));
+
+    let application_subnet = subnet_text(7);
+    let mut input = document(CoordinatorSubnetSelector::Explicit {
+        subnet: application_subnet,
+    });
+    input.coordinator.creation_funding = CreationFundingDocument::Icp { e8s: 1 };
+    assert!(matches!(
+        resolve_document(&input, BuildNetwork::Local, None),
+        Err(FleetInstallInputError::NonPublicFunding { .. })
+    ));
+
+    input.coordinator.creation_funding = CreationFundingDocument::Cycles {
+        cycles: Cycles::new(0),
+    };
+    assert!(matches!(
+        resolve_document(&input, BuildNetwork::Local, None),
+        Err(FleetInstallInputError::NonPositiveCreationFunding { .. })
+    ));
+}
+
+#[test]
+fn public_resolution_rejects_ineligible_and_ambiguous_subnets() {
+    let cloud_subnet = subnet_text(9);
+    let input = document(CoordinatorSubnetSelector::Explicit {
+        subnet: cloud_subnet.clone(),
+    });
+    let cloud_catalog = catalog(vec![info(
+        &cloud_subnet,
+        SubnetKind::CloudEngine,
+        SubnetSpecialization::None,
+        "cloud",
+    )]);
+    assert!(matches!(
+        resolve_document(&input, BuildNetwork::Ic, Some(&cloud_catalog)),
+        Err(FleetInstallInputError::IneligibleSubnet { .. })
+    ));
+
+    let ambiguous_catalog = catalog(vec![
+        info(
+            FIDUCIARY_SUBNET,
+            SubnetKind::Application,
+            SubnetSpecialization::Fiduciary,
+            "fiduciary",
+        ),
+        info(
+            &subnet_text(10),
+            SubnetKind::Application,
+            SubnetSpecialization::Fiduciary,
+            "fiduciary-two",
+        ),
+    ]);
+    assert!(matches!(
+        resolve_document(
+            &document(CoordinatorSubnetSelector::Recommended),
+            BuildNetwork::Ic,
+            Some(&ambiguous_catalog)
+        ),
+        Err(FleetInstallInputError::AmbiguousSubnetSelector { matches: 2, .. })
+    ));
+}
+
+#[test]
+fn loader_rejects_unknown_fields_unsupported_schema_and_symlink() {
+    let root = temp_dir("fleet-install-input-loader");
+    fs::create_dir_all(&root).expect("create temp root");
+    let path = root.join("fleet-install.toml");
+    fs::write(
+        &path,
+        input_toml().replace("schema_version = 1", "schema_version = 2"),
+    )
+    .expect("write input");
+    assert!(matches!(
+        load_document(&path),
+        Err(FleetInstallInputError::UnsupportedSchemaVersion { actual: 2 })
+    ));
+
+    fs::write(&path, format!("{}\nunknown = true\n", input_toml())).expect("write unknown field");
+    assert!(matches!(
+        load_document(&path),
+        Err(FleetInstallInputError::Decode { .. })
+    ));
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::symlink;
+
+        fs::write(&path, input_toml()).expect("write valid input");
+        let link = root.join("linked.toml");
+        symlink(&path, &link).expect("create symlink");
+        assert!(matches!(
+            load_document(&link),
+            Err(FleetInstallInputError::NotRegular { .. })
+        ));
+    }
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn loader_decodes_the_document_shape_and_cycle_shorthand() {
+    let root = temp_dir("fleet-install-input-shape");
+    fs::create_dir_all(&root).expect("create temp root");
+    let path = root.join("fleet-install.toml");
+    fs::write(&path, input_toml()).expect("write input");
+
+    let document = load_document(&path).expect("load input");
+
+    assert_eq!(document.schema_version, 1);
+    assert_eq!(
+        document.coordinator.creation_funding,
+        CreationFundingDocument::Cycles {
+            cycles: Cycles::new(2_000_000_000_000)
+        }
+    );
+    assert_eq!(
+        document.fleet_subnet_roots[0]
+            .limits
+            .cycles_funding
+            .maximum_cycles,
+        Cycles::new(10_000_000_000_000)
+    );
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+fn document(selector: CoordinatorSubnetSelector) -> FleetInstallInputDocument {
+    let application_subnet = subnet_text(7);
+    FleetInstallInputDocument {
+        schema_version: 1,
+        coordinator: CoordinatorInputDocument {
+            subnet: selector,
+            creation_funding: CreationFundingDocument::Cycles {
+                cycles: Cycles::new(2_000_000_000_000),
+            },
+        },
+        fleet_subnet_roots: vec![FleetSubnetRootInputDocument {
+            placement_subnet: application_subnet,
+            component_admissions: BTreeMap::from([(
+                "users".parse().expect("valid Component Spec ID"),
+                8,
+            )]),
+            limits: FleetSubnetRootLimitsDocument {
+                maximum_component_instances: 8,
+                maximum_managed_canisters: 32,
+                maximum_registry_bytes: 16_777_216,
+                maximum_wasm_store_bytes: 40_000_000,
+                cycles_funding: CyclesFundingBudgetDocument {
+                    window_secs: 3_600,
+                    maximum_cycles: Cycles::new(10_000_000_000_000),
+                },
+            },
+            creation_funding: CreationFundingDocument::Cycles {
+                cycles: Cycles::new(2_000_000_000_000),
+            },
+        }],
+    }
+}
+
+fn input_toml() -> String {
+    let application_subnet = subnet_text(7);
+    format!(
+        r#"schema_version = 1
+
+[coordinator.subnet]
+kind = "explicit"
+subnet = "{application_subnet}"
+
+[coordinator.creation_funding]
+kind = "cycles"
+cycles = "2T"
+
+[[fleet_subnet_roots]]
+placement_subnet = "{application_subnet}"
+
+[fleet_subnet_roots.component_admissions]
+users = 8
+
+[fleet_subnet_roots.limits]
+maximum_component_instances = 8
+maximum_managed_canisters = 32
+maximum_registry_bytes = 16777216
+maximum_wasm_store_bytes = 40000000
+
+[fleet_subnet_roots.limits.cycles_funding]
+window_secs = 3600
+maximum_cycles = "10T"
+
+[fleet_subnet_roots.creation_funding]
+kind = "cycles"
+cycles = "2T"
+"#
+    )
+}
+
+fn subnet(text: &str) -> SubnetId {
+    SubnetId::from_principal(Principal::from_text(text).expect("valid Subnet principal"))
+}
+
+fn subnet_text(byte: u8) -> String {
+    Principal::from_slice(&[byte; 29]).to_text()
+}
+
+fn catalog(subnets: Vec<SubnetInfo>) -> SubnetCatalog {
+    SubnetCatalog {
+        catalog_schema_version: 1,
+        network: "ic".to_string(),
+        registry_canister_id: "rwlgt-iiaaa-aaaaa-aaaaa-cai".to_string(),
+        registry_version: 1,
+        fetched_at: "unix:1".to_string(),
+        fetched_by: "test".to_string(),
+        source_endpoint: "https://icp-api.io".to_string(),
+        resolver_backend: "test".to_string(),
+        subnets,
+        routing_ranges: Vec::<RoutingRange>::new(),
+    }
+}
+
+fn info(
+    subnet_principal: &str,
+    subnet_kind: SubnetKind,
+    subnet_specialization: SubnetSpecialization,
+    subnet_label: &str,
+) -> SubnetInfo {
+    SubnetInfo {
+        subnet_principal: subnet_principal.to_string(),
+        subnet_kind,
+        subnet_kind_source: ClassificationSource::Registry,
+        subnet_specialization,
+        subnet_specialization_source: ClassificationSource::Curated,
+        geographic_scope: GeographicScope::Global,
+        geographic_scope_source: ClassificationSource::Curated,
+        subnet_label: subnet_label.to_string(),
+        subnet_label_source: ClassificationSource::Curated,
+        node_count: Some(13),
+        charges_apply_by_default: subnet_kind.charges_apply_by_default(),
+    }
+}

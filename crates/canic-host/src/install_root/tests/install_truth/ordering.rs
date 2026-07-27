@@ -9,6 +9,11 @@ fn current_install_records_gates_before_activation_mutation() {
     let install = &source[install_start..];
     assert_before(
         install,
+        "resolve_current_fleet_install_input(",
+        "prepare_install_deployment_truth(",
+    );
+    assert_before(
+        install,
         "prepare_install_deployment_truth(",
         "plan_fleet_install_activation(",
     );
@@ -37,8 +42,23 @@ fn current_install_records_gates_before_activation_mutation() {
     );
     assert_before(
         install,
-        "plan_fleet_install_activation(",
+        "plan_current_fleet_install(",
         "resolve_root_canister_after_manifest(",
+    );
+    let fleet_planning = source_section(
+        source,
+        "fn plan_current_fleet_install(",
+        "fn resolve_current_fleet_install_input(",
+    );
+    assert_before(
+        fleet_planning,
+        "plan_current_fleet_activation(",
+        "persist_current_fleet_install_plan(",
+    );
+    assert_before(
+        fleet_planning,
+        "persist_current_fleet_install_plan(",
+        "require_coordinator_first_install_effects(",
     );
     assert_before(
         install,

@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.8`.
-- The latest published release is `v0.100.8` at
-  `e5ae4d56e8febf2aae6200ccb8cf7bac550b2b9c`.
-- The `v0.100.8` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `007239e6d4f6f18b7f305cadf29d6c52717b8df2f50cbaab9014c4a4d3235c59`.
+- The workspace package version is `0.100.9`.
+- The latest published release is `v0.100.9` at
+  `fd3f8b937643b21b5d1436d111595a509cd61d7f`.
+- The `v0.100.9` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `09a4d717f4d0abeeb6bfd74060b8a60fb26bfd1a2408e778e587366374d7beaa`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -99,7 +99,7 @@ Historical detail is archived at:
   principals, one active release build, each root's topology, admissions and
   limits, and aggregate Fleet admission ceilings. Durable snapshot commits,
   root transitions and synchronization remain subsequent slices.
-- The open `0.100.9` hard-cuts Component Spec and Component Topology schema
+- Released `0.100.9` hard-cuts Component Spec and Component Topology schema
   version 2 to version 3. A Component Spec is now a flat catalog of every
   potential descendant role and Wasm in one root-owned Component tree, while
   the runtime `ComponentChildBinding` records each child's immediate parent.
@@ -109,6 +109,18 @@ Historical detail is archived at:
   `maximum_children` becomes the aggregate `maximum_descendants`, and no v1
   or v2 decoder remains. The default aggregate capacity is 20,000 descendants
   with a 16 MiB Component Registry allowance.
+- The open `0.100.10` adds the strict operator-owned
+  `--fleet-input <path>` TOML boundary for Coordinator selection, exact root
+  Subnets, Component Spec admissions, immutable root limits and positive
+  creation funding. Public-IC `recommended`, profile and explicit Coordinator
+  selectors resolve only through the trusted Subnet catalog; Subnet kind must
+  agree with cycles- or ICP-funded creation. Non-public networks require exact
+  explicit Subnets and cycles funding. After application-artifact
+  finalization, the normal installer now immutably publishes the exact
+  multi-root Fleet install plan and per-root release sets before any Canister
+  creation. It then fails closed at an explicit Coordinator-first guard, so
+  the legacy single-root creation path cannot bypass the plan while the
+  genuine Fleet Coordinator runtime is still absent.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -200,7 +212,8 @@ Historical detail is archived at:
   reinstall-only and removes proposed cross-release handoff and adoption
   machinery.
 - Released `0.99.31` completes the recursive CLI command-surface closeout.
-  `canic install <app> <fleet>` is the sole installation mutation; `deploy`
+  `canic install <app> <fleet> --fleet-input <path>` is the sole installation
+  mutation; `deploy`
   retains only passive plan/check/inspect evidence. Orphan authority-dry-run,
   external-lifecycle and artifact-promotion command/public host stacks are
   hard-cut without aliases.
@@ -283,7 +296,8 @@ Historical detail is archived at:
   only from unchanged finalized release-build evidence. Live installation
   does not publish it yet.
 - Released `0.99.5` separates fresh-install source and target operands. The
-  sole command is `canic install <app> <fleet>`; the removed one-argument and
+  sole command is
+  `canic install <app> <fleet> --fleet-input <path>`; the removed one-argument and
   `--app` forms have no alias or inferred fallback.
 - Released `0.99.4` establishes one durable non-circular release-build
   identity before Wasm compilation and finalizes exact release-set manifest
@@ -1390,14 +1404,15 @@ First primary results:
 
 Continue 0.100 Slice 2 from the
 [implementation tracker](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md).
-The immutable pre-effect Fleet install plan and per-root release sets now
-exist. Next, add the trusted/operator placement and funding input boundary,
-resolve it to exact Coordinator/root Subnets and invoke the planner before any
-creation effect; the legacy single-root path must not bypass it. Add a genuine
-Fleet Coordinator runtime before producing or persisting the complete
-three-role infrastructure manifest—do not relabel the Fleet Subnet Root or
-emit a placeholder. Do not permit nested Components, merge roots belonging to
-different Fleets on one Subnet or consume an earlier installation.
+The strict operator placement/funding input now resolves to and immutably
+publishes the exact Fleet install plan before a fail-closed guard prevents the
+legacy root-only effect path. Next, add a genuine Fleet Coordinator runtime
+and export authority, then produce and persist the complete three-role
+infrastructure manifest—do not relabel the Fleet Subnet Root or emit a
+placeholder. Only then replace the guard with Coordinator-first journalled
+creation followed by root installation and genesis Fleet Registry commit. Do
+not permit nested Components, merge roots belonging to different Fleets on
+one Subnet or consume an earlier installation.
 
 ## Historical Release Detail
 
