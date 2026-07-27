@@ -80,7 +80,7 @@ fn public_install_error_preserves_phase_and_typed_source() {
 }
 
 #[test]
-fn verified_active_mirrors_guard_unimplemented_component_runtime_activation() {
+fn verified_empty_component_registries_guard_allocation_and_runtime_activation() {
     let plan_path = Path::new("/tmp/fleet-install-plan.json");
     let coordinator = candid::Principal::from_slice(&[42]);
     let error = require_component_runtime_activation(plan_path, coordinator, 3, 4)
@@ -91,7 +91,12 @@ fn verified_active_mirrors_guard_unimplemented_component_runtime_activation() {
     assert_eq!(error.active_roots, 3);
     assert_eq!(error.active_registry_revision, 4);
     assert!(error.to_string().contains("all-Active Registry mirrors"));
-    assert!(error.to_string().contains("Component runtime activation"));
+    assert!(error.to_string().contains("empty Component Registries"));
+    assert!(
+        error
+            .to_string()
+            .contains("Component allocation and runtime activation")
+    );
 }
 
 #[test]
