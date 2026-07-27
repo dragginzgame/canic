@@ -11,21 +11,30 @@ use [INSTALLING.md](../../INSTALLING.md).
 
 ## First Commands
 
-Use Canic for fleet-shaped operations and start every debugging pass with the
-installed registry and medic checks:
+Use Canic for Fleet-shaped operations. Before a Fleet reaches terminal catalog
+publication, inspect source intent, replica status, and the install command's
+journal-backed error:
 
 ```bash
 canic status
+canic app config <app> --verbose
+canic --environment academic install <app> <fleet> --fleet-input <path>
+```
+
+For a terminal installed Fleet, add live inspection and Medic:
+
+```bash
 canic --environment academic info list <fleet>
 canic --environment academic info env <fleet>
 canic --environment academic medic fleet <fleet>
 ```
 
 Use `canic app config <app>` to inspect what is configured and
-`canic info list <fleet>` to inspect what is deployed. If those disagree,
-treat the deployed root registry as the source for current canister IDs and
-the App config as the source for intended roles, metrics profiles, and
-topology.
+`canic info list <fleet>` to inspect a terminal deployment. Treat the live
+Fleet and Component Registry projections as the source for current Canister
+IDs and the App config as the source for intended roles, metrics profiles, and
+topology. Live inspection cannot reconstruct or bypass an incomplete install
+journal.
 
 ## ICP Target Hygiene
 
@@ -69,12 +78,12 @@ canic --environment academic info env <fleet> > scripts/canister_ids.sh
 source scripts/canister_ids.sh
 ```
 
-`canic info env` reads the installed root registry and prints sourceable
-`CANIC_<ROLE>` exports such as `CANIC_ROOT`, `CANIC_USER_HUB`, and
-`CANIC_USER_SHARD`. If a role appears more than once, Canic prints numbered
-exports such as `CANIC_USER_SHARD_1` and `CANIC_USER_SHARD_2`. Source the
-helper after installation and after any reinstall that changes local canister
-IDs.
+For a terminal Fleet, `canic info env` reads live registered Canisters and
+prints sourceable `CANIC_<ROLE>` exports such as `CANIC_ROOT`,
+`CANIC_USER_HUB`, and `CANIC_USER_SHARD`. If a role appears more than once,
+Canic prints numbered exports such as `CANIC_USER_SHARD_1` and
+`CANIC_USER_SHARD_2`. Source the helper only after terminal installation and
+after any reinstall that changes local Canister IDs.
 
 ## Sourced Helpers
 
@@ -93,7 +102,7 @@ canic_academic_status() {
 Executable scripts may still use strict shell options. Keep sourced helpers
 boring and explicit.
 
-## Install Versus Upgrade
+## Fresh Install And Same-Release Recovery
 
 Use `canic install <app> <fleet> --fleet-input <path>` for fresh local Fleet
 creation or to recreate one after the ICP CLI replica lost state. The Fleet
@@ -103,22 +112,17 @@ policy; see
 label and source App identity are independent. The local replica does not
 persist canister state across stop/start.
 
-When a canister already exists and you only need new Wasm on that canister,
-treat it as an upgrade flow. Until a dedicated Canic upgrade wrapper is
-available for that path, record the raw ICP command in the project runbook and
-run `canic info list` plus `canic medic fleet` before and after the
-upgrade.
+The current 0.100 installer verifies the Coordinator, all planned roots, every
+root-local Store, and every root's Registry `Joining` row, then deliberately
+stops before snapshot synchronization, acknowledgement, activation, Component
+creation, and terminal Fleet-catalog publication. Rerun the exact same install
+command for same-release journal reconciliation; a conflicting Fleet input or
+unresolved paid effect fails closed.
 
-```bash
-canic --environment academic info list <fleet>
-canic --environment academic medic fleet <fleet>
-env -u ICP_NETWORK icp canister install <canister> --mode=upgrade --wasm <path> -e academic
-canic --environment academic info list <fleet>
-```
-
-If `canic install` is blocked on an existing local deployment, do not keep
-retrying the same install. Decide whether the project needs a fresh reinstall,
-a raw ICP upgrade, or a deployment registration fix.
+Every pre-1.0 release transition is reinstall-only. Do not use a raw
+`icp canister install --mode=upgrade` command to carry a managed Fleet across
+Canic releases, adopt an older installation, or bypass the current Registry
+fence. Start the new release from empty Fleet state.
 
 ## Parent To Shard Calls
 
@@ -149,8 +153,8 @@ scripts or tests.
 ## Metrics And Deployed Wasm
 
 `canic app config <app> --verbose` shows configured or inferred metrics
-profiles. `canic info metrics <fleet> --kind <tier>` queries what the
-deployed canister actually exposes.
+profiles. For a terminal Fleet, `canic info metrics <fleet> --kind <tier>`
+queries what a deployed Canister actually exposes.
 
 If a metrics tier reports `empty` or `canic_metrics` is unavailable, check all
 three states before changing code:
@@ -167,8 +171,8 @@ after the change.
 
 ## Minimum Debug Loop
 
-When something looks wrong, run this loop before editing topology or endpoint
-code:
+When a terminal Fleet looks wrong, run this loop before editing topology or
+endpoint code:
 
 ```bash
 canic status

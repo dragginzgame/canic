@@ -1,13 +1,14 @@
 # canic-host
 
-Host-side build, install, deployment, App-source, and thin-root staging tooling for Canic workspaces.
+Host-side build, install, deployment, App-source, and multi-root staging
+tooling for Canic workspaces.
 
 ## When to use it
 
 Use this crate directly when you need:
 
 - Canic build/install backend code in CI or local automation
-- root staging from published backend APIs
+- Coordinator/root/Store staging from published backend APIs
 - the lower-level host library surface without cloning the full repo
 
 For normal local setup, prefer the root
@@ -26,8 +27,8 @@ This README documents the lower-level host library surface.
 ## What this crate is not
 
 This crate is not a general deployment framework and it is not the main Canic
-application facade. It owns host-side build/install/fleet/staging utilities
-for standard Canic root/bootstrap/store flows. For normal operator use, prefer
+application facade. It owns host-side build/install/Fleet/staging utilities
+for standard Canic Coordinator/root/Store flows. For normal operator use, prefer
 the installed `canic` CLI and the compact v1 workflow documented in
 `docs/architecture/v1-operator-walkthrough.md`; use install commands only for
 the local managed-fleet flows that document them explicitly.
@@ -40,14 +41,27 @@ It is also separate from:
   canister-runtime support. `canic-host` runs on the operator machine and may
   call Cargo, `icp`, and the local filesystem.
 
-Public thin-root flow:
+Current 0.100 installation flow:
 
-- build visible canister artifacts through the backend builder used by install
-- build the implicit bootstrap `wasm_store` through the same backend builder
-- emit the root staging manifest under `.icp/<artifact-environment>/canisters/root/`
-- stage the ordinary fleet artifacts into `root`
-- prepare and resume the exact Fleet activation
-- drive local root install, including one clean local `icp` restart attempt when `icp ping local` fails
+- compile the App's complete Component Topology and resolve the required
+  operator Fleet input before effects
+- build and freeze the exact Fleet Coordinator, Fleet Subnet Root, and Wasm
+  Store infrastructure artifacts
+- build one topology-qualified application artifact union and project an exact
+  admitted release set for every planned root
+- journal, create, install, and independently verify the Coordinator first
+- journal, create, install, and independently verify every planned Fleet
+  Subnet Root
+- stage each root's exact release set, bootstrap one root-local Store, and
+  verify its live catalog independently
+- register and independently verify every root as Registry `Joining`
+- stop at the current explicit boundary before snapshot synchronization,
+  acknowledgement, activation, Component creation, or terminal Fleet-catalog
+  publication
+
+The local driver permits one clean local `icp` restart attempt when
+`icp ping local` fails. Exact journals own same-release interruption recovery;
+the host does not fall back to the removed single-root installer.
 
 Build profile selection:
 
@@ -72,9 +86,11 @@ role = "project_ledger"
 ```
 
 For `canic install`, the implicit environment default is always `local`; use
-`--environment <name>` for one command against another environment. The public CLI
-requires the fleet name as the first positional argument and uses
-`apps/<name>/canic.toml`.
+`--environment <name>` for one command against another environment. The public
+CLI requires `canic install <app> <fleet> --fleet-input <path>`, uses
+`apps/<app>/canic.toml` for reusable App topology, and reads concrete
+placement, admission, limit, and funding policy only from the separate Fleet
+input.
 
 Canonical network identity is trust-derived rather than environment-derived.
 Public-IC profiles resolve from Canic's compiled DER root key. Pre-existing

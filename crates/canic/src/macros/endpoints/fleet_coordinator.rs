@@ -25,5 +25,17 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
         ) -> Result<::canic::dto::fleet_registry::FleetRegistryVersion, ::canic::Error> {
             $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::version()
         }
+
+        #[$crate::canic_update(
+            requires(caller::is_controller()),
+            payload(max_bytes = ::canic::__internal::core::control_plane_support::ops::fleet_registry::MAX_FLEET_REGISTRY_CANONICAL_BYTES)
+        )]
+        async fn canic_fleet_subnet_root_join(
+            request: ::canic::dto::fleet_registry::FleetSubnetRootJoinRequest,
+        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootJoinResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::join_root(
+                request,
+            )
+        }
     };
 }

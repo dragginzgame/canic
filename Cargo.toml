@@ -21,6 +21,7 @@ members = [
     "canisters/test/blob_storage_probe",
     "canisters/test/delegation_issuer_stub",
     "canisters/test/delegation_root_stub",
+    "canisters/test/fleet_coordinator_stub",
     "canisters/test/intent_authority",
     "canisters/test/payload_limit_probe",
     "canisters/test/project_hub_stub",

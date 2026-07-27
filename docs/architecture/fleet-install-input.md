@@ -109,3 +109,23 @@ document and immutably publishes one `FleetInstallPlan` plus the exact
 release-set manifest for every planned root. The durable plan contains exact
 Subnets and positive funding—not unresolved selectors—and is published before
 any Canister creation effect.
+
+## Current Implementation Boundary
+
+The in-progress 0.100 installer uses that immutable authority to create,
+install, and independently verify the Coordinator, every planned Fleet Subnet
+Root, one exact topology-admitted local Store per root, and every exact
+Registry `Joining` row. It currently stops after all roots reach
+`RegistryJoinVerified`, before snapshot synchronization, acknowledgement,
+root activation, Component creation, or terminal Fleet-catalog publication.
+
+Repeating an exact input is same-release journal recovery. Changing placement,
+admissions, limits, funding, topology, or release-build authority after
+publication is a conflict; the installer does not fall back to a single-root
+path. Every pre-1.0 release transition starts from empty Fleet state.
+
+At 0.100 closeout, successful terminal publication will be
+Coordinator-anchored. The planned `canic info subnets <fleet> [--json]`
+command will resolve that terminal authority and report exact Fleet-owned
+Canister counts by occupied physical Subnet; it is not available at the
+current Registry-join boundary.

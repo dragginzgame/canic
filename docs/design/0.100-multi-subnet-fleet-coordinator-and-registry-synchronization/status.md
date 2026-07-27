@@ -130,11 +130,12 @@ Registry slices replace the 0.99 root model.
 
 ## Slice 3 — Fleet Registry and Root Lifecycle
 
-- [ ] Implement canonical snapshot commits with Fleet Component Spec and root
+- [x] Implement canonical snapshot commits with Fleet Component Spec and root
   rows.
-- [ ] Enforce one Fleet Subnet Root per occupied `(FleetKey, SubnetId)`.
-- [ ] Prove another Fleet may independently use the same physical Subnet.
-- [ ] Implement root `Joining`, `Active`, `Draining` and `Removed`.
+- [x] Enforce one Fleet Subnet Root per occupied `(FleetKey, SubnetId)`.
+- [x] Prove another Fleet may independently use the same physical Subnet.
+- [x] Implement root `Joining`.
+- [ ] Implement root `Active`, `Draining` and `Removed`.
 - [x] Install initial roots behind the runtime `Prepared` fence.
 - [ ] Enforce Spec, admission, root, topology, limits, active-release-set and
   tombstone rules.
@@ -305,7 +306,7 @@ single-root activation journal and its root creation, cycles and catalog-write
 paths are hard-cut; one small Fleet install session retains only shared
 identity and finalized release evidence.
 
-Open 0.100.14 extends each root journal through exact release-set staging,
+Released 0.100.14 extends each root journal through exact release-set staging,
 root-owned creation of one implicit local Store, exact publication and
 independent `StoreVerified` evidence. Host and runtime canonical manifest
 shapes must serialize to identical bytes. The root binds every staged artifact
@@ -314,19 +315,27 @@ live Store Catalog must equal the complete ordered admitted role set. Exact
 retry reuses the same Store and evidence while both root and Store remain
 `Prepared`.
 
+Open 0.100.15 extends every root journal through `RegistryJoinVerified`. The
+Coordinator atomically compare-and-commits each exact `Joining` row with a
+durable response receipt; exact retry returns the original response even after
+later Registry revisions. The host verifies every canonical pre- and post-join
+prefix and stops only after the complete all-`Joining` snapshot, manifest and
+version agree with locally recomputed authority.
+
 The current installer therefore stops only after every planned root has an
-independently verified exact local Store. Fleet Registry root registration,
-Component allocation, root-owned count summaries and terminal
-Coordinator-anchored Fleet catalog publication remain unimplemented. The
-temporary Component Spec selector remains until real allocation supplies the
-exact protected Component binding.
+independently verified exact local Store and `Joining` Registry row. Snapshot
+synchronization and acknowledgement, Registry `Active`, Component allocation,
+root-owned count summaries and terminal Coordinator-anchored Fleet catalog
+publication remain unimplemented. The temporary Component Spec selector
+remains until real allocation supplies the exact protected Component binding.
 
 ## Next Action
 
-Replace the post-Store-verification fence with journalled registration of every
-root through Registry `Joining`, then synchronize final Registry evidence and
-publish the Coordinator-anchored Fleet catalog only after every required root
-reaches terminal evidence.
+Synchronize the exact all-`Joining` Registry snapshot to every root, journal
+and verify its acknowledgement, then transition every required root to
+Registry `Active`. Final mirror/Directory activation, runtime activation and
+Coordinator-anchored Fleet catalog publication must remain behind complete
+terminal evidence.
 
 As root-local Component Registry authority lands, maintain checked
 known-created/not-deletion-confirmed Canister counters and expose compact

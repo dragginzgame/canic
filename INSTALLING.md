@@ -115,12 +115,13 @@ app = "test"
 role = "app"
 ```
 
-Use `role = "root"` for the root canister. Ordinary child roles use their
-configured App role name, such as `app`, `hub`, or `registry`. The `app`
-metadata value must match the App source identity from `[app].name`; it is not
-a live Fleet name.
-Root canisters also need the `control-plane` feature on their runtime `canic`
-dependency. When delegated-token material is enabled, root issuers also need
+Use `role = "root"` for the Fleet Subnet Root package. Ordinary Component and
+potential-descendant roles use their configured App role name, such as `app`,
+`hub`, or `registry`. The `app` metadata value must match the App source
+identity from `[app].name`; it is not a live Fleet name.
+Fleet Subnet Root canisters also need the `control-plane` feature on their
+runtime `canic` dependency. When delegated-token material is enabled, root
+issuers also need
 `auth-root-canister-sig-create`; canisters that issue delegated tokens need
 `auth-issuer-canister-sig-create`; endpoint verifiers need
 `auth-delegated-token-verify`.
@@ -241,14 +242,15 @@ topup = {}
 
 Every role named in package metadata must exist in this App config.
 Declared-only ordinary roles may compile before topology placement, but only
-Component roles and direct children under `[component_specs.*]` can be built
-as deploy artifacts or enter deployment truth. `role = "root"` selects the
-Fleet Subnet Root lifecycle and endpoint bundle; all other roles select the
-ordinary Fleet lifecycle and non-root endpoint bundle.
+Component roles and potential descendants cataloged under
+`[component_specs.*]` can be built as deploy artifacts or enter deployment
+truth. `role = "root"` selects the Fleet Subnet Root lifecycle and endpoint
+bundle; all other roles select the ordinary Fleet lifecycle and non-root
+endpoint bundle.
 
 The full schema lives in [`CONFIG.md`](CONFIG.md).
 
-For a complete root-plus-two-children example, see
+For a complete Fleet Subnet Root plus two-role Component example, see
 [`docs/getting-started/minimal-managed-fleet.md`](docs/getting-started/minimal-managed-fleet.md).
 For the compact v1-candidate command and evidence checklist, see
 [`docs/architecture/v1-readiness-checklist.md`](docs/architecture/v1-readiness-checklist.md).
@@ -256,16 +258,25 @@ For the compact v1-candidate command and evidence checklist, see
 ## Build And Install Locally
 
 Check that `icp.yaml` contains the matching project config, start the local ICP
-CLI replica, install the fleet, then query the deployed root registry:
+CLI replica, and provide a separate operator-owned Fleet input with exact
+placement, admission, limit, and funding policy:
 
 ```bash
 canic status
 canic replica start --background
-canic install --profile fast test test-local
-canic info list test-local
-canic info env test-local
-canic medic fleet test-local
+canic install test test-local \
+  --fleet-input deployments/test-local.toml \
+  --profile fast
 ```
+
+The Fleet input is required. Its schema is documented in
+[`docs/architecture/fleet-install-input.md`](docs/architecture/fleet-install-input.md).
+The in-progress 0.100 installer currently verifies the Coordinator, every
+planned Fleet Subnet Root, each root's local Store, and every root's Registry
+`Joining` row, then stops before snapshot synchronization, acknowledgement,
+activation, Component creation, and terminal Fleet-catalog publication.
+`canic info list`, `canic info env`, Medic's live Fleet checks, backup, and
+restore require that later terminal Fleet state.
 
 Build one artifact without installing:
 
@@ -322,20 +333,22 @@ canic medic
 canic medic fleet test
 ```
 
-Use `canic info list <fleet>`, `canic info env <fleet>`, and
-`canic medic fleet <fleet>` before changing Fleet topology when local
-state looks wrong. `info list` shows the deployed root registry, `info env`
-prints sourceable `CANIC_<ROLE>` canister ID exports, and `app config` shows
-configured source intent.
+For a terminal installed Fleet, use `canic info list <fleet>`,
+`canic info env <fleet>`, and `canic medic fleet <fleet>` before changing
+topology when local state looks wrong. `info list` shows live registered
+Canisters, `info env` prints sourceable `CANIC_<ROLE>` canister ID exports, and
+`app config` shows configured source intent. These live commands do not
+reconstruct or bypass an incomplete 0.100 installation journal.
 
 Named-fleet commands default to the local ICP CLI environment. Pass top-level
 `--environment <name>` for one command against another configured ICP CLI
 environment. Nonlocal targets must be managed externally.
 
 The local ICP CLI replica does not persist canister state across stop/start. If
-`canic status` shows a local fleet as `lost`, the recorded root canister is
-gone from the restarted local replica; run
-`canic install <app> <fleet>` to recreate the local deployment.
+`canic status` shows a local Fleet as `lost`, its recorded Canisters are gone
+from the restarted local replica; rerun
+`canic install <app> <fleet> --fleet-input <path>` with the exact intended
+operator input to recreate it.
 
 App configs live under project-root `apps/`. Commands launched from nested
 directories discover the outer project root and keep ICP project config plus
@@ -380,11 +393,14 @@ operator guide.
 
 ## Generated State
 
-`root` embeds only the bootstrap `wasm_store.wasm.gz`; ordinary child releases
-stay outside `root` and are staged after install. Visible canister Candid files
-are generated under `.icp/local/canisters/<role>/<role>.did`. The checked-in
-exception is `crates/canic-wasm-store/wasm_store.did`, the canonical interface
-for the implicit bootstrap `wasm_store` crate.
+The Fleet Coordinator, Fleet Subnet Root, and Wasm Store are separately
+qualified infrastructure artifacts. Ordinary Component and descendant
+artifacts stay outside the root Wasm, are built once as the Fleet-wide
+application union, and are projected into an exact admitted release set for
+each root. Visible canister Candid files are generated under
+`.icp/local/canisters/<role>/<role>.did`. The checked-in exception is
+`crates/canic-wasm-store/wasm_store.did`, the canonical interface for the
+implicit root-local Store.
 
 Local builds extract Candid from a debug Wasm and may embed public
 `candid:service` metadata into the local Wasm for inspection. Builds targeting
@@ -416,9 +432,13 @@ Canic-owned methods.
   verification.
 - Each canister crate must declare its App-scoped role with
   `[package.metadata.canic] app = "<app>"` and `role = "<role>"`.
-- If `canic info list <fleet>` only shows `root`, the managed children were not
-  fully installed or the local replica lost state. Run
-  `canic medic fleet <fleet>` and reinstall the local Fleet.
-- If a test manually installs root and child canisters, it is not validating the
-  managed fleet path. A managed-fleet test should let root create/register
-  children and then resolve them from `canic_subnet_registry`.
+- If a fresh 0.100 install stops after verifying each root-local Store and
+  `Joining` Registry row, that is the current explicit
+  snapshot-synchronization boundary, not a successful terminal Fleet. Inspect
+  the install error and implementation status; do not use a legacy single-root
+  Registry path to bypass it.
+- If a test manually installs one root and its application canisters, it is not
+  validating the current managed-Fleet path. A current PocketIC journey must
+  start at the Coordinator, install all planned roots and Stores, join them
+  through the Fleet Registry, and resolve application Canisters from
+  Component Registry/Directory authority.

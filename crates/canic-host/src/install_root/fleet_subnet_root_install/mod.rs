@@ -209,7 +209,10 @@ fn drive_root_install(
             | FleetSubnetRootInstallPhase::StoreStaged
             | FleetSubnetRootInstallPhase::StoreBootstrapInFlight
             | FleetSubnetRootInstallPhase::StoreBootstrapped
-            | FleetSubnetRootInstallPhase::StoreVerified => {
+            | FleetSubnetRootInstallPhase::StoreVerified
+            | FleetSubnetRootInstallPhase::RegistryJoinInFlight
+            | FleetSubnetRootInstallPhase::RegistryJoined
+            | FleetSubnetRootInstallPhase::RegistryJoinVerified => {
                 return verify_live_root(icp_root, environment, local_replica, &current.journal);
             }
         };

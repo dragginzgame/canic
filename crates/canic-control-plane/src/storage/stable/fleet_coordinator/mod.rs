@@ -12,7 +12,7 @@ use canic_core::{
 };
 use canic_core::{
     control_plane_support::config::ComponentTopology,
-    dto::fleet_registry::FleetRegistry,
+    dto::fleet_registry::{FleetRegistry, FleetRegistryVersion, FleetSubnetRootEntry},
     ids::{AppId, FleetRegistryAuthority},
 };
 use serde::{Deserialize, Serialize};
@@ -20,7 +20,9 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 #[cfg(feature = "fleet-coordinator-canister")]
-const FLEET_COORDINATOR_STATE_MAX_BYTES: u32 = 4_300_000;
+// The record may contain one topology, one Registry snapshot, and the
+// root-entry portion of that Registry again as immutable join receipts.
+const FLEET_COORDINATOR_STATE_MAX_BYTES: u32 = 6_500_000;
 
 #[cfg(feature = "fleet-coordinator-canister")]
 struct FleetCoordinatorRegistryState;
@@ -52,11 +54,24 @@ pub struct FleetCoordinatorRegistryRecord {
     pub authority: FleetRegistryAuthority,
     pub component_topology: ComponentTopology,
     pub registry: FleetRegistry,
+    pub root_join_receipts: Vec<FleetSubnetRootJoinReceiptRecord>,
 }
 
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 impl FleetCoordinatorRegistryRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "FleetCoordinatorRegistryRecord";
+}
+
+///
+/// FleetSubnetRootJoinReceiptRecord
+///
+/// Persisted exact response authority for one root's original `Joining` commit.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootJoinReceiptRecord {
+    pub entry: FleetSubnetRootEntry,
+    pub version: FleetRegistryVersion,
 }
 
 ///
@@ -117,6 +132,7 @@ pub enum FleetCoordinatorCommitOutcome {
 #[cfg(feature = "fleet-coordinator-canister")]
 pub enum FleetCoordinatorCommitError {
     ConflictingState,
+    Uninitialized,
 }
 
 ///
@@ -145,6 +161,27 @@ impl FleetCoordinatorRegistryStore {
                     Ok(FleetCoordinatorCommitOutcome::Existing)
                 }
                 Some(_) => Err(FleetCoordinatorCommitError::ConflictingState),
+            }
+        })
+    }
+
+    pub(crate) fn commit_transition(
+        expected: &FleetCoordinatorRegistryRecord,
+        next: FleetCoordinatorRegistryRecord,
+    ) -> Result<FleetCoordinatorCommitOutcome, FleetCoordinatorCommitError> {
+        FLEET_COORDINATOR_STATE.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            match state.current.as_ref() {
+                None => Err(FleetCoordinatorCommitError::Uninitialized),
+                Some(existing) if existing == &next => Ok(FleetCoordinatorCommitOutcome::Existing),
+                Some(existing) if existing != expected => {
+                    Err(FleetCoordinatorCommitError::ConflictingState)
+                }
+                Some(_) => {
+                    state.current = Some(next);
+                    cell.set(state);
+                    Ok(FleetCoordinatorCommitOutcome::Committed)
+                }
             }
         })
     }

@@ -41,7 +41,8 @@ Canic treats config/env identity as startup invariants. Missing env data is a fa
   `CurrentRootInstallIdentity` without a registry lookup.
   - The Fleet Subnet Root sits outside every Component Spec.
   - One root may manage several admitted Component Specs.
-  - `fleet_root_pid` identifies that Fleet's current root authority.
+  - The transitional `fleet_root_pid` env field identifies the exact owning
+    Fleet Subnet Root, not a Fleet-wide singleton root.
 - Non-root env: children must receive a complete `EnvBootstrapArgs` in `CanisterInitPayload` from root.
   - The current transitional selector names the exact owning Component Spec;
     the frozen protected `ComponentBinding` replaces it when root-local
@@ -197,7 +198,7 @@ Every Fleet Subnet Root has one mandatory root-local `wasm_store`. It is
 bootstrapped implicitly, sits outside Component topology, and must not be
 declared in `canic.toml`.
 
-Fixed `0.18` preset:
+Current implicit Store preset:
 
 - canister role: `wasm_store`
 - kind: implicit `singleton`
@@ -209,7 +210,8 @@ Fixed `0.18` preset:
 Rules:
 
 - do not define a `wasm_store` role as a Component or child
-- ordinary deployable roles install from published chunked manifests in this store
+- ordinary Component and descendant roles install from published chunked
+  manifests in this Store
 - inline install is reserved for bootstrapping `wasm_store` itself
 
 ### `[component_specs.<name>.children.<role>]`

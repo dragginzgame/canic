@@ -233,6 +233,77 @@ fn registry_allows_partial_joining_admissions_but_rejects_fleet_excess() {
 }
 
 #[test]
+fn joining_compile_is_canonical_exact_idempotent_and_monotonic() {
+    let topology = topology();
+    let genesis = validation::compile_genesis(&AppId::from("demo"), authority(), &topology)
+        .expect("valid genesis Registry");
+    let later_subnet = root(&topology, 7, 8, &[("beta", 1)]);
+    let first = compile_joining(
+        &genesis.authority,
+        &topology,
+        &genesis,
+        later_subnet.clone(),
+    )
+    .expect("first root joins");
+    assert_eq!(first.revision, 2);
+
+    let repeated = compile_joining(&first.authority, &topology, &first, later_subnet.clone())
+        .expect("exact root retry");
+    assert_eq!(repeated, first);
+
+    let earlier_subnet = root(&topology, 5, 6, &[("alpha", 1)]);
+    let second = compile_joining(&first.authority, &topology, &first, earlier_subnet.clone())
+        .expect("second root joins");
+    assert_eq!(second.revision, 3);
+    assert_eq!(
+        second
+            .fleet_subnet_roots
+            .iter()
+            .map(|entry| entry.placement_subnet)
+            .collect::<Vec<_>>(),
+        vec![
+            earlier_subnet.placement_subnet,
+            later_subnet.placement_subnet
+        ]
+    );
+}
+
+#[test]
+fn joining_compile_rejects_wrong_status_identity_conflicts_and_revision_exhaustion() {
+    let topology = topology();
+    let genesis = validation::compile_genesis(&AppId::from("demo"), authority(), &topology)
+        .expect("valid genesis Registry");
+    let joining = root(&topology, 5, 6, &[("alpha", 1)]);
+
+    let mut active = joining.clone();
+    active.status = FleetSubnetRootStatus::Active;
+    std::assert_matches!(
+        compile_joining(&genesis.authority, &topology, &genesis, active),
+        Err(FleetRegistryOpsError::FleetSubnetRootJoinRequiresJoining)
+    );
+
+    let joined = compile_joining(&genesis.authority, &topology, &genesis, joining.clone())
+        .expect("root joins");
+    let same_subnet = root(&topology, 5, 7, &[("beta", 1)]);
+    std::assert_matches!(
+        compile_joining(&joined.authority, &topology, &joined, same_subnet),
+        Err(FleetRegistryOpsError::FleetSubnetRootJoinIdentityConflict)
+    );
+    let same_principal = root(&topology, 7, 6, &[("beta", 1)]);
+    std::assert_matches!(
+        compile_joining(&joined.authority, &topology, &joined, same_principal),
+        Err(FleetRegistryOpsError::FleetSubnetRootJoinIdentityConflict)
+    );
+
+    let mut exhausted = genesis;
+    exhausted.revision = u64::MAX;
+    std::assert_matches!(
+        compile_joining(&exhausted.authority, &topology, &exhausted, joining),
+        Err(FleetRegistryOpsError::RevisionExhausted)
+    );
+}
+
+#[test]
 fn registry_rejects_duplicate_root_principal_and_coordinator_collision() {
     let topology = topology();
     let mut duplicate = validation::compile_genesis(&AppId::from("demo"), authority(), &topology)

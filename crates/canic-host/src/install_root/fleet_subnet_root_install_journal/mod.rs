@@ -23,7 +23,15 @@ use candid::Principal;
 use canic_core::{
     bootstrap::compiled::ComponentTopology,
     cdk::utils::hash::decode_hex,
-    dto::{fleet_subnet_root::FleetSubnetRootAuthority, root_store::RootStoreBootstrapResponse},
+    control_plane_support::ops::fleet_registry::FleetRegistryOps,
+    dto::{
+        fleet_registry::{
+            FleetRegistry, FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootEntry,
+            FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse, FleetSubnetRootStatus,
+        },
+        fleet_subnet_root::FleetSubnetRootAuthority,
+        root_store::RootStoreBootstrapResponse,
+    },
     ids::{
         FleetCoordinatorBinding, FleetRegistryAuthority, FleetSubnetRootBinding, ReleaseBuildId,
         SubnetId,
@@ -41,7 +49,7 @@ const JOURNAL_FILE: &str = "install-journal.json";
 const JOURNAL_LOCK_FILE: &str = "install-journal.lock";
 const CREATE_RESULT_FILE: &str = "create-result.json";
 const ROOT_INSTALL_DIRECTORY: &str = "fleet-subnet-root-installs";
-const JOURNAL_SCHEMA_VERSION: u32 = 2;
+const JOURNAL_SCHEMA_VERSION: u32 = 3;
 const MAX_JOURNAL_BYTES: usize = 4_194_304;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -58,6 +66,9 @@ pub(super) enum FleetSubnetRootInstallPhase {
     StoreBootstrapInFlight,
     StoreBootstrapped,
     StoreVerified,
+    RegistryJoinInFlight,
+    RegistryJoined,
+    RegistryJoinVerified,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -79,6 +90,8 @@ pub(super) struct FleetSubnetRootInstallJournal {
     pub installed_module_hash: Option<[u8; 32]>,
     pub verified_binding: Option<FleetSubnetRootBinding>,
     pub store_bootstrap: Option<RootStoreBootstrapResponse>,
+    pub registry_join_request: Option<FleetSubnetRootJoinRequest>,
+    pub registry_join_response: Option<FleetSubnetRootJoinResponse>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -330,6 +343,56 @@ pub(super) fn record_store_verified(
     )
 }
 
+pub(super) fn begin_registry_join(
+    current: &ResolvedFleetSubnetRootInstall,
+    expected_registry: FleetRegistryVersion,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    let request = FleetSubnetRootJoinRequest {
+        expected_registry,
+        entry: expected_registry_join_entry(&current.journal)?,
+    };
+    validate_registry_join_request(&current.path, &current.journal, &request)?;
+    transition(
+        current,
+        FleetSubnetRootInstallPhase::StoreVerified,
+        FleetSubnetRootInstallPhase::RegistryJoinInFlight,
+        |next| next.registry_join_request = Some(request),
+    )
+}
+
+pub(super) fn record_registry_joined(
+    current: &ResolvedFleetSubnetRootInstall,
+    response: FleetSubnetRootJoinResponse,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    validate_registry_join_response(&current.path, &current.journal, &response)?;
+    transition(
+        current,
+        FleetSubnetRootInstallPhase::RegistryJoinInFlight,
+        FleetSubnetRootInstallPhase::RegistryJoined,
+        |next| next.registry_join_response = Some(response),
+    )
+}
+
+pub(super) fn record_registry_join_verified(
+    current: &ResolvedFleetSubnetRootInstall,
+    registry: &FleetRegistry,
+    manifest: &FleetRegistryManifest,
+    version: &FleetRegistryVersion,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    validate_joined_registry_snapshot(
+        &current.path,
+        &current.journal,
+        registry,
+        manifest,
+        version,
+    )?;
+    advance_without_evidence(
+        current,
+        FleetSubnetRootInstallPhase::RegistryJoined,
+        FleetSubnetRootInstallPhase::RegistryJoinVerified,
+    )
+}
+
 #[must_use]
 pub(super) fn create_result_path(journal_path: &Path) -> PathBuf {
     journal_path
@@ -361,6 +424,23 @@ pub(super) fn expected_root_authority(
         .validate_root_binding(&authority.binding)
         .map_err(|error| invalid(Path::new(JOURNAL_FILE), error.to_string()))?;
     Ok(authority)
+}
+
+pub(super) fn expected_registry_join_entry(
+    journal: &FleetSubnetRootInstallJournal,
+) -> Result<FleetSubnetRootEntry, FleetSubnetRootInstallJournalError> {
+    let fleet_subnet_root = journal
+        .fleet_subnet_root
+        .ok_or_else(|| invalid(Path::new(JOURNAL_FILE), "root principal is missing"))?;
+    Ok(FleetSubnetRootEntry {
+        placement_subnet: journal.root_plan.placement_subnet,
+        fleet_subnet_root,
+        component_admissions: journal.root_plan.component_admissions.clone(),
+        component_topology_digest: journal.root_plan.component_topology_digest,
+        active_release_set: journal.root_plan.initial_release_set,
+        limits: journal.root_plan.limits.clone(),
+        status: FleetSubnetRootStatus::Joining,
+    })
 }
 
 fn planned_journal(
@@ -413,6 +493,8 @@ fn planned_journal(
         installed_module_hash: None,
         verified_binding: None,
         store_bootstrap: None,
+        registry_join_request: None,
+        registry_join_response: None,
     };
     validate_journal(&path, &journal)?;
     Ok(journal)
@@ -615,6 +697,9 @@ fn validate_phase_evidence(
         FleetSubnetRootInstallPhase::StoreBootstrapInFlight => 8,
         FleetSubnetRootInstallPhase::StoreBootstrapped => 9,
         FleetSubnetRootInstallPhase::StoreVerified => 10,
+        FleetSubnetRootInstallPhase::RegistryJoinInFlight => 11,
+        FleetSubnetRootInstallPhase::RegistryJoined => 12,
+        FleetSubnetRootInstallPhase::RegistryJoinVerified => 13,
     };
     if journal.sequence != expected_sequence {
         return Err(invalid(path, "phase differs from journal sequence"));
@@ -623,25 +708,69 @@ fn validate_phase_evidence(
     let has_installed = journal.installed_module_hash.is_some();
     let has_verified = journal.verified_binding.is_some();
     let has_store = journal.store_bootstrap.is_some();
+    let has_join_request = journal.registry_join_request.is_some();
+    let has_join_response = journal.registry_join_response.is_some();
     let valid = match journal.phase {
         FleetSubnetRootInstallPhase::Planned | FleetSubnetRootInstallPhase::CreationInFlight => {
-            !has_root && !has_installed && !has_verified && !has_store
+            !has_root
+                && !has_installed
+                && !has_verified
+                && !has_store
+                && !has_join_request
+                && !has_join_response
         }
         FleetSubnetRootInstallPhase::Created | FleetSubnetRootInstallPhase::InstallInFlight => {
-            has_root && !has_installed && !has_verified && !has_store
+            has_root
+                && !has_installed
+                && !has_verified
+                && !has_store
+                && !has_join_request
+                && !has_join_response
         }
         FleetSubnetRootInstallPhase::Installed => {
-            has_root && has_installed && !has_verified && !has_store
+            has_root
+                && has_installed
+                && !has_verified
+                && !has_store
+                && !has_join_request
+                && !has_join_response
         }
         FleetSubnetRootInstallPhase::Verified
         | FleetSubnetRootInstallPhase::StoreStaging
         | FleetSubnetRootInstallPhase::StoreStaged
         | FleetSubnetRootInstallPhase::StoreBootstrapInFlight => {
-            has_root && has_installed && has_verified && !has_store
+            has_root
+                && has_installed
+                && has_verified
+                && !has_store
+                && !has_join_request
+                && !has_join_response
         }
         FleetSubnetRootInstallPhase::StoreBootstrapped
         | FleetSubnetRootInstallPhase::StoreVerified => {
-            has_root && has_installed && has_verified && has_store
+            has_root
+                && has_installed
+                && has_verified
+                && has_store
+                && !has_join_request
+                && !has_join_response
+        }
+        FleetSubnetRootInstallPhase::RegistryJoinInFlight => {
+            has_root
+                && has_installed
+                && has_verified
+                && has_store
+                && has_join_request
+                && !has_join_response
+        }
+        FleetSubnetRootInstallPhase::RegistryJoined
+        | FleetSubnetRootInstallPhase::RegistryJoinVerified => {
+            has_root
+                && has_installed
+                && has_verified
+                && has_store
+                && has_join_request
+                && has_join_response
         }
     };
     if !valid {
@@ -683,6 +812,9 @@ fn validate_root_evidence(
             | FleetSubnetRootInstallPhase::StoreBootstrapInFlight
             | FleetSubnetRootInstallPhase::StoreBootstrapped
             | FleetSubnetRootInstallPhase::StoreVerified
+            | FleetSubnetRootInstallPhase::RegistryJoinInFlight
+            | FleetSubnetRootInstallPhase::RegistryJoined
+            | FleetSubnetRootInstallPhase::RegistryJoinVerified
     ) && journal.verified_binding.as_ref() != Some(&expected.binding)
     {
         return Err(invalid(
@@ -692,6 +824,12 @@ fn validate_root_evidence(
     }
     if let Some(evidence) = &journal.store_bootstrap {
         validate_store_bootstrap_evidence(path, journal, evidence)?;
+    }
+    if let Some(request) = &journal.registry_join_request {
+        validate_registry_join_request(path, journal, request)?;
+    }
+    if let Some(response) = &journal.registry_join_response {
+        validate_registry_join_response(path, journal, response)?;
     }
     Ok(())
 }
@@ -745,6 +883,88 @@ fn validate_store_bootstrap_evidence(
             return Err(invalid(path, "Store bootstrap catalog is not canonical"));
         }
         previous = Some(entry.role.clone());
+    }
+    Ok(())
+}
+
+fn validate_registry_join_request(
+    path: &Path,
+    journal: &FleetSubnetRootInstallJournal,
+    request: &FleetSubnetRootJoinRequest,
+) -> Result<(), FleetSubnetRootInstallJournalError> {
+    if request.expected_registry.authority != journal.authority
+        || request.expected_registry.revision == 0
+        || request.expected_registry.content_hash == [0; 32]
+        || request.entry != expected_registry_join_entry(journal)?
+    {
+        return Err(invalid(
+            path,
+            "Registry join request differs from immutable root authority",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_registry_join_response(
+    path: &Path,
+    journal: &FleetSubnetRootInstallJournal,
+    response: &FleetSubnetRootJoinResponse,
+) -> Result<(), FleetSubnetRootInstallJournalError> {
+    let request = journal
+        .registry_join_request
+        .as_ref()
+        .ok_or_else(|| invalid(path, "Registry join response requires a durable request"))?;
+    let expected_revision = request
+        .expected_registry
+        .revision
+        .checked_add(1)
+        .ok_or_else(|| invalid(path, "Registry join expected revision is exhausted"))?;
+    if response.entry != request.entry
+        || response.version.authority != journal.authority
+        || response.version.revision != expected_revision
+        || response.version.content_hash == [0; 32]
+    {
+        return Err(invalid(
+            path,
+            "Registry join response differs from the durable request",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_joined_registry_snapshot(
+    path: &Path,
+    journal: &FleetSubnetRootInstallJournal,
+    registry: &FleetRegistry,
+    manifest: &FleetRegistryManifest,
+    version: &FleetRegistryVersion,
+) -> Result<(), FleetSubnetRootInstallJournalError> {
+    let response = journal.registry_join_response.as_ref().ok_or_else(|| {
+        invalid(
+            path,
+            "Registry verification requires a durable join response",
+        )
+    })?;
+    FleetRegistryOps::validate(&journal.authority, &journal.component_topology, registry)
+        .map_err(|error| invalid(path, error.to_string()))?;
+    let expected_manifest =
+        FleetRegistryOps::manifest(&journal.authority, &journal.component_topology, registry)
+            .map_err(|error| invalid(path, error.to_string()))?;
+    let expected_version =
+        FleetRegistryOps::version(&journal.authority, &journal.component_topology, registry)
+            .map_err(|error| invalid(path, error.to_string()))?;
+    if manifest != &expected_manifest
+        || version != &expected_version
+        || version != &response.version
+        || !registry
+            .fleet_subnet_roots
+            .iter()
+            .any(|entry| entry == &response.entry)
+    {
+        return Err(invalid(
+            path,
+            "live Registry evidence differs from the exact joined snapshot",
+        ));
     }
     Ok(())
 }

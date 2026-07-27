@@ -96,3 +96,27 @@ pub struct FleetRegistryVersion {
     pub revision: u64,
     pub content_hash: [u8; 32],
 }
+
+///
+/// FleetSubnetRootJoinRequest
+///
+/// Controller command that compare-and-commits one exact root as Registry `Joining`.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootJoinRequest {
+    pub expected_registry: FleetRegistryVersion,
+    pub entry: FleetSubnetRootEntry,
+}
+
+///
+/// FleetSubnetRootJoinResponse
+///
+/// Durable response receipt for one exact root's original `Joining` commit.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootJoinResponse {
+    pub entry: FleetSubnetRootEntry,
+    pub version: FleetRegistryVersion,
+}

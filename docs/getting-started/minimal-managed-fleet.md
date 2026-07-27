@@ -17,8 +17,9 @@ ordinary application methods. Each registered node owns its direct children
 logically and asks the root to perform admitted cycle, creation, and
 installation effects. Those children may make the same request in turn, so
 runtime trees may have several levels even though the Spec's potential-Wasm
-catalog is flat. Callers resolve application Canister IDs from topology and
-call them directly.
+catalog is flat. Callers resolve application Canister IDs from a
+revision-bound Component Directory or an application-owned Placement Index
+and call them directly.
 
 ## Layout
 
@@ -247,14 +248,20 @@ Create a separate operator Fleet input using the exact local application
 Subnet principal. The complete document shape and public-IC selectors are in
 [`fleet-install-input.md`](../architecture/fleet-install-input.md).
 
-Then build and install the fleet locally:
+Then exercise the current local installation boundary:
 
 ```bash
 canic status
 canic replica start --background
 canic install example example-local --fleet-input deployments/example-local.toml --profile fast
-canic info list example-local
 ```
+
+The 0.100 implementation currently creates and verifies the Coordinator, the
+planned Fleet Subnet Roots, each root's exact local Store, and every root's
+Registry `Joining` row, then stops before snapshot synchronization,
+acknowledgement, activation, Component creation, and terminal Fleet-catalog
+publication. `canic info list example-local` becomes applicable only after
+that Fleet reaches the terminal catalog boundary.
 
 Build one role without installing:
 
@@ -265,25 +272,35 @@ canic build example hub --profile fast
 If you pass `--workspace`, `--icp-root`, or `--config` explicitly, use absolute
 paths for the explicit roots and config file.
 
-`canic info list example` shows the root and managed children. If it only shows
-`root`, the root canister has been reserved but the managed tree is not fully
-installed yet; run `canic medic fleet example` and reinstall the local
-fleet if the local replica was restarted.
+For a terminal installed Fleet, `canic info list example-local` shows its
+registered application Canisters. The planned
+`canic info subnets example-local [--json]` command will instead report exact
+Fleet-owned Canister counts grouped by occupied physical Subnet. That Subnet
+inventory is a required 0.100 closeout surface and is not available in the
+current CLI.
 
 ## Testing Shape
 
 A managed-fleet PocketIC test should validate the same path as local install:
 
-1. Install the root with root init arguments.
-2. Stage the ordinary child release set.
-3. Resume root bootstrap.
-4. Wait for root and child `canic_ready`.
-5. Query `canic_subnet_registry` on root to resolve the child canister ID.
-6. Call the child method directly.
+1. Compile and freeze the complete Component Topology and Fleet install plan.
+2. Install and verify the Coordinator with exact Fleet Registry genesis.
+3. Install every planned Fleet Subnet Root with its protected authority.
+4. Stage each admitted release set and bootstrap exactly one verified local
+   Store per root.
+5. Join every root through the Coordinator Fleet Registry.
+6. Synchronize the final snapshot and activate roots only after Store, Mirror,
+   and Directory evidence agree.
+7. Create the admitted `hub` Component through root-owned Component Registry
+   authority.
+8. Have `hub` request `registry` through the exact compiled spawn grant.
+9. Resolve the child from the revision-bound Component Directory and call its
+   application method directly.
 
-Installing root, hub, and registry manually in the same PocketIC instance only
-tests individual Canic lifecycle adapters. It does not test that root creates,
-registers, and manages the fleet.
+The current implementation reaches step 5 and deliberately stops before step
+6. Installing one root, `hub`, and `registry` manually in the same PocketIC
+instance only tests individual lifecycle adapters; it does not validate the
+Coordinator-anchored managed-Fleet journey.
 
 ## Candid Surface
 

@@ -19,11 +19,17 @@ Current architecture notes:
 - [V1 Readiness Checklist](v1-readiness-checklist.md)
 - [V1 Operator Walkthrough](v1-operator-walkthrough.md)
 
+Current implementation design and handoff:
+
+- [0.100 Multi-Subnet Fleet Coordinator and Registry Synchronization](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md)
+- [0.100 Implementation Status](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md)
+- [Current Repository Status](../status/current.md)
+
 Historical/superseded notes:
 
 - [Authentication Subnet-State Addendum](authentication-subnet-state-addendum.md)
+- [0.55 V1 Local Smoke](../operations/0.55-v1-local-smoke.md)
 
 Operational runbooks:
 
 - [Root Proof Provisioning](../operations/root-proof-provisioning.md)
-- [0.55 V1 Local Smoke](../operations/0.55-v1-local-smoke.md)

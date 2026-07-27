@@ -160,9 +160,13 @@ make test-fleet-install
 make test-canisters
 ```
 
-These are maintainer-owned, environment-specific RC gates. They require the
-named local ICP environment and must never target mainnet as an incidental
-test default.
+These target names are reserved for maintainer-owned, environment-specific RC
+gates. They are not valid 0.100 evidence yet: the current Make recipes still
+invoke install without the required Fleet input and query the removed
+single-root Registry surface. Do not run or cite them until they are rewritten
+for an exact operator Fleet input and the complete Coordinator-anchored
+multi-root journey. The replacement gates must require the named local ICP
+environment and must never target mainnet as an incidental test default.
 
 ## Final Release And Artifact Gates
 

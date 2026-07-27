@@ -6,6 +6,7 @@ pub const CANIC_RESPONSE_CAPABILITY_V1: &str = "canic_response_capability_v1";
 pub const CANIC_FLEET_REGISTRY: &str = "canic_fleet_registry";
 pub const CANIC_FLEET_REGISTRY_MANIFEST: &str = "canic_fleet_registry_manifest";
 pub const CANIC_FLEET_REGISTRY_VERSION: &str = "canic_fleet_registry_version";
+pub const CANIC_FLEET_SUBNET_ROOT_JOIN: &str = "canic_fleet_subnet_root_join";
 pub const CANIC_FLEET_SUBNET_ROOT_AUTHORITY: &str = "canic_fleet_subnet_root_authority";
 pub const CANIC_FLEET_ACTIVATION_STATUS: &str = "canic_fleet_activation_status";
 pub const CANIC_PREPARE_FLEET_ACTIVATION: &str = "canic_prepare_fleet_activation";
