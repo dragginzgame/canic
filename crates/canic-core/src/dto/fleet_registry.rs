@@ -9,7 +9,7 @@ use crate::ids::{
     FleetRegistryAuthority, FleetSubnetRootLimits, FleetSubnetRootReleaseSet, SubnetId,
 };
 use candid::{CandidType, Principal};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 ///
 /// FleetSubnetRootStatus
@@ -17,7 +17,7 @@ use serde::Deserialize;
 /// Lifecycle state of one Fleet Subnet Root in the Fleet Registry snapshot.
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum FleetSubnetRootStatus {
     Joining,
     Active,
@@ -31,7 +31,7 @@ pub enum FleetSubnetRootStatus {
 /// Fleet-wide immutable Component Spec declaration projected into the Registry.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetComponentSpecEntry {
     pub component_spec: ComponentSpecId,
     pub spec_hash: [u8; 32],
@@ -45,7 +45,7 @@ pub struct FleetComponentSpecEntry {
 /// One Fleet Subnet Root's immutable placement and admission facts plus lifecycle state.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootEntry {
     pub placement_subnet: SubnetId,
     pub fleet_subnet_root: Principal,
@@ -62,7 +62,7 @@ pub struct FleetSubnetRootEntry {
 /// Complete canonical Fleet Registry snapshot distributed by one Coordinator.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetRegistry {
     pub authority: FleetRegistryAuthority,
     pub revision: u64,
@@ -76,7 +76,7 @@ pub struct FleetRegistry {
 /// Compact current-head evidence for one complete canonical Registry snapshot.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetRegistryManifest {
     pub authority: FleetRegistryAuthority,
     pub revision: u64,
@@ -90,7 +90,7 @@ pub struct FleetRegistryManifest {
 /// Compact immutable identity used by mirrors, acknowledgements, and journals.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetRegistryVersion {
     pub authority: FleetRegistryAuthority,
     pub revision: u64,

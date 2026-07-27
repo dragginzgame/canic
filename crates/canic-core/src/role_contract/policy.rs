@@ -101,6 +101,9 @@ pub fn required_features_for_role(
 pub fn built_in_role_capabilities(kind: BuiltInRoleKind) -> BTreeSet<RoleCapabilityKey> {
     let mut capabilities = BTreeSet::new();
     match kind {
+        BuiltInRoleKind::FleetCoordinator => {
+            capabilities.insert(RoleCapabilityKey::FleetCoordinator);
+        }
         BuiltInRoleKind::WasmStore => {
             capabilities.insert(RoleCapabilityKey::Runtime);
             capabilities.insert(RoleCapabilityKey::WasmStore);
@@ -275,6 +278,7 @@ fn materialize_allocations(
 
 const fn built_in_role(kind: BuiltInRoleKind) -> CanisterRole {
     match kind {
+        BuiltInRoleKind::FleetCoordinator => CanisterRole::FLEET_COORDINATOR,
         BuiltInRoleKind::WasmStore => CanisterRole::WASM_STORE,
     }
 }

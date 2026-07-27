@@ -17,8 +17,9 @@ Use the explicit module paths for the larger bundled surfaces:
 
 ## Crate Boundary
 
-Use `canic` only from configured canister role packages. Each role package
-must declare its own direct, normal runtime dependency on `canic`.
+Use `canic` from configured canister role packages and Canic's host-generated
+built-in infrastructure wrappers. Each package must declare its own direct,
+normal runtime dependency on `canic`.
 
 Shared runtime libraries must not depend on `canic`. Keep their domain logic
 framework-independent; role packages and IC adapters depend directly on
@@ -36,6 +37,7 @@ required by the role.
 | --- | --- | --- |
 | `metrics` | Yes | The standard `canic_metrics` endpoint bundle. |
 | `control-plane` | No | Root control-plane bootstrap and Wasm publication APIs; also enables `wasm-store-canister`. |
+| `fleet-coordinator-canister` | No | The dedicated host-generated Fleet Coordinator lifecycle and Fleet Registry API. Configured application roles should not enable it. |
 | `wasm-store-canister` | No | The canonical `wasm_store` canister API used by generated/bootstrap store packages. Ordinary application roles should not enable it. |
 | `blob-storage` | No | Non-billing blob-storage status and gateway-administration runtime APIs/endpoints. |
 | `blob-storage-billing` | No | Cashier-backed blob-storage billing, funding, and readiness support; also enables `blob-storage`. |
@@ -49,8 +51,9 @@ required by the role.
 | `auth-delegated-token-verify` | No | Delegated-token verification, including required chain-key and issuer-signature verification support. |
 
 The `control-plane` feature is the normal root-role selection. The narrower
-`wasm-store-canister` feature exists for the canonical store canister package;
-it is not an alternate root control-plane configuration.
+`fleet-coordinator-canister` and `wasm-store-canister` features exist for
+Canic-owned infrastructure packages; neither is an alternate application or
+root configuration.
 
 ## Config-Driven Auth Features
 

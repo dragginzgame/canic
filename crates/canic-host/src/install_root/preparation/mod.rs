@@ -11,9 +11,14 @@ use super::phase_receipts::{
 use super::plan_artifacts::{PreparedPlanArtifacts, prepare_plan_artifacts_with_phase};
 use super::timing::InstallTimingSummary;
 use super::{clock::current_unix_timestamp_label, options::InstallRootOptions};
-use crate::canister_build::{CurrentCanisterArtifactBuildOutput, WorkspaceBuildContext};
 use crate::deployment_truth::{
     DeploymentCheckV1, DeploymentExecutionContextV1, DeploymentReceiptV1,
+};
+use crate::{
+    bootstrap_coordinator::build_bootstrap_fleet_coordinator_artifact,
+    bootstrap_store::qualify_built_bootstrap_wasm_store_artifact,
+    canister_build::{CurrentCanisterArtifactBuildOutput, WorkspaceBuildContext},
+    release_set::{CanicInfrastructureArtifactBuildOutput, CanicInfrastructureRole},
 };
 use std::{
     path::Path,
@@ -26,6 +31,7 @@ pub(super) struct PreparedInstallTruth {
     pub(super) build_phase: CompletedInstallPhase,
     pub(super) timings: InstallTimingSummary,
     pub(super) build_outputs: Vec<CurrentCanisterArtifactBuildOutput>,
+    pub(super) infrastructure_build_outputs: Vec<CanicInfrastructureArtifactBuildOutput>,
     pub(super) plan_artifacts: Option<PreparedPlanArtifacts>,
 }
 
@@ -33,6 +39,7 @@ struct PreparedInstallBuild {
     phase: CompletedInstallPhase,
     duration: Duration,
     outputs: Vec<CurrentCanisterArtifactBuildOutput>,
+    infrastructure_outputs: Vec<CanicInfrastructureArtifactBuildOutput>,
     plan_artifacts: Option<PreparedPlanArtifacts>,
 }
 
@@ -70,6 +77,7 @@ pub(super) fn prepare_install_deployment_truth(
         build_phase: build.phase,
         timings,
         build_outputs: build.outputs,
+        infrastructure_build_outputs: build.infrastructure_outputs,
         plan_artifacts: build.plan_artifacts,
     })
 }
@@ -131,6 +139,7 @@ fn build_install_targets_with_phase(
             phase,
             duration,
             outputs: Vec::new(),
+            infrastructure_outputs: Vec::new(),
             plan_artifacts: Some(plan_artifacts),
         });
     }
@@ -143,6 +152,8 @@ fn build_install_targets_with_phase(
     let started_at = current_unix_timestamp_label()?;
     let started = Instant::now();
     let outputs = operation.execute()?;
+    let infrastructure_outputs =
+        qualify_infrastructure_outputs(options, build_context, complete_build, &outputs)?;
     let duration = started.elapsed();
     let phase = CompletedInstallPhase {
         phase: InstallPhaseLabel::BUILD_ARTIFACTS,
@@ -156,6 +167,54 @@ fn build_install_targets_with_phase(
         phase,
         duration,
         outputs,
+        infrastructure_outputs,
         plan_artifacts: None,
     })
+}
+
+fn qualify_infrastructure_outputs(
+    options: &InstallRootOptions,
+    build_context: &WorkspaceBuildContext,
+    complete_build: &super::build_snapshot::CompleteInstallBuildSnapshot,
+    outputs: &[CurrentCanisterArtifactBuildOutput],
+) -> Result<Vec<CanicInfrastructureArtifactBuildOutput>, Box<dyn std::error::Error>> {
+    let release_build_id = build_context
+        .release_build_id
+        .ok_or("infrastructure build is missing its durable release-build identity")?;
+    let root_target = complete_build
+        .targets
+        .iter()
+        .find(|target| target.role == options.root_canister)
+        .ok_or("complete install build has no Fleet Subnet Root target")?;
+    let root_output = outputs
+        .iter()
+        .find(|output| output.role == options.root_canister)
+        .ok_or("complete install build has no Fleet Subnet Root output")?;
+    let coordinator =
+        build_bootstrap_fleet_coordinator_artifact(&build_context.with_role("fleet_coordinator"))?;
+    let wasm_store = qualify_built_bootstrap_wasm_store_artifact(build_context)?;
+
+    Ok(vec![
+        CanicInfrastructureArtifactBuildOutput {
+            role: CanicInfrastructureRole::FleetCoordinator,
+            package: coordinator.package_name,
+            release_build_id,
+            wasm_path: coordinator.wasm_path,
+            wasm_gz_path: coordinator.wasm_gz_path,
+        },
+        CanicInfrastructureArtifactBuildOutput {
+            role: CanicInfrastructureRole::FleetSubnetRoot,
+            package: root_target.spec.package_name.clone(),
+            release_build_id,
+            wasm_path: root_output.output.wasm_path.clone(),
+            wasm_gz_path: root_output.output.wasm_gz_path.clone(),
+        },
+        CanicInfrastructureArtifactBuildOutput {
+            role: CanicInfrastructureRole::WasmStore,
+            package: wasm_store.package_name,
+            release_build_id,
+            wasm_path: wasm_store.wasm_path,
+            wasm_gz_path: wasm_store.wasm_gz_path,
+        },
+    ])
 }

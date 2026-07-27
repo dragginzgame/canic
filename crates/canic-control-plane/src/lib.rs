@@ -1,8 +1,8 @@
-//! Control-plane runtime for root and `wasm_store` orchestration.
+//! Control-plane runtime for Fleet Coordinator, root, and `wasm_store` orchestration.
 //!
-//! This crate layers the template publication and managed-store workflows on
-//! top of `canic-core` and is re-exported through the `canic` facade when the
-//! control-plane feature is enabled.
+//! This crate layers the Coordinator Registry plus template publication and
+//! managed-store workflows on top of `canic-core`. The `canic` facade
+//! re-exports each role-specific surface through its matching feature.
 
 canic_core::ic_memory_range!(
     authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
@@ -28,16 +28,20 @@ const _: () = {
 };
 
 pub mod api;
+#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 pub(crate) mod config;
 pub mod dto;
+#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 pub mod ids;
 pub(crate) mod ops;
 #[cfg(feature = "root-control-plane")]
 pub(crate) mod runtime;
+#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 pub(crate) mod schema;
+#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 pub mod state_contract;
 pub(crate) mod storage;
 #[cfg(feature = "root-control-plane")]
 pub(crate) mod view;
-#[cfg(feature = "root-control-plane")]
+#[cfg(any(feature = "fleet-coordinator-canister", feature = "root-control-plane"))]
 pub(crate) mod workflow;

@@ -191,7 +191,7 @@ fn init_payload(canister_id: Principal) -> CanisterInitPayload {
     let env = EnvBootstrapArgs {
         fleet_root_pid: Some(root_pid),
         component_spec: Some(
-            ComponentSpecId::try_from(String::from("default")).expect("default Component Spec ID"),
+            ComponentSpecId::try_from(String::from("test")).expect("test Component Spec ID"),
         ),
         subnet_pid: Some(Fake::principal(2)),
         root_pid: Some(root_pid),
@@ -271,4 +271,39 @@ fn directory_entries(
 
 fn workspace_root() -> PathBuf {
     workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use canic_core::bootstrap::parse_config_model;
+
+    const LIFECYCLE_CANISTER_CONFIG: &str =
+        include_str!("../../../../apps/test/test-configs/root-sharding.toml");
+
+    #[test]
+    fn init_payload_component_spec_matches_embedded_canister_config() {
+        let payload = init_payload(Fake::principal(3));
+        let component_spec = payload
+            .env
+            .component_spec
+            .as_ref()
+            .expect("managed lifecycle Component Spec");
+        let role = payload
+            .env
+            .canister_role
+            .as_ref()
+            .expect("managed lifecycle role");
+        let config =
+            parse_config_model(LIFECYCLE_CANISTER_CONFIG).expect("lifecycle canister config");
+        let configured_spec = config
+            .get_component_spec(component_spec)
+            .expect("lifecycle Component Spec must be declared");
+
+        assert_eq!(&configured_spec.component_role, role);
+    }
 }

@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.9`.
-- The latest published release is `v0.100.9` at
-  `fd3f8b937643b21b5d1436d111595a509cd61d7f`.
-- The `v0.100.9` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `09a4d717f4d0abeeb6bfd74060b8a60fb26bfd1a2408e778e587366374d7beaa`.
+- The workspace package version is `0.100.10`.
+- The latest published release is `v0.100.10` at
+  `e0bd85d1beab967aeb7ae63d4813b94f02d5aee6`.
+- The `v0.100.10` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `03c17c6b014f794c33dd45b8ee57cb885d8a11b402f9ac3c3510ed676b57185b`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -109,7 +109,7 @@ Historical detail is archived at:
   `maximum_children` becomes the aggregate `maximum_descendants`, and no v1
   or v2 decoder remains. The default aggregate capacity is 20,000 descendants
   with a 16 MiB Component Registry allowance.
-- The open `0.100.10` adds the strict operator-owned
+- Released `0.100.10` adds the strict operator-owned
   `--fleet-input <path>` TOML boundary for Coordinator selection, exact root
   Subnets, Component Spec admissions, immutable root limits and positive
   creation funding. Public-IC `recommended`, profile and explicit Coordinator
@@ -121,6 +121,18 @@ Historical detail is archived at:
   creation. It then fails closed at an explicit Coordinator-first guard, so
   the legacy single-root creation path cannot bypass the plan while the
   genuine Fleet Coordinator runtime is still absent.
+- The open `0.100.11` adds that genuine Fleet Coordinator as a dedicated
+  built-in Canic runtime, not an App role, Component or relabelled root. Its
+  exact init commits protected Fleet Registry genesis from the configured App,
+  Coordinator authority and canonical Component Topology, and its dedicated
+  facade exposes controller-only Registry, manifest and version queries. The
+  host generates a runtime-only Coordinator wrapper with no App-config build
+  path, records its sole stable Registry domain at memory ID 86, and builds
+  and immutably persists the exact Coordinator, Fleet Subnet Root and Wasm
+  Store artifacts under the same release build before finalization. The
+  Coordinator-first network-effect guard remains; the next slice must create,
+  install and verify the Coordinator from this immutable authority before any
+  root effect.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority

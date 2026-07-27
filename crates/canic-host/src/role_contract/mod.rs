@@ -13,18 +13,19 @@ pub use descriptor::{
 
 pub use package::{
     PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation,
-    declared_role_manifest_path, validate_built_in_wasm_store_package,
-    validate_declared_role_package, validate_internal_test_wasm_packages,
+    declared_role_manifest_path, validate_built_in_fleet_coordinator_package,
+    validate_built_in_wasm_store_package, validate_declared_role_package,
+    validate_internal_test_wasm_packages,
 };
 
 use canic_core::{
     bootstrap::compiled::ConfigModel,
     role_contract::{
-        BuiltInRoleKind, RoleContractFinding, RoleContractInput, RoleContractResolution,
-        RoleContractSource, resolve_role_contract,
+        BuiltInRoleKind, CanicFeatureKey, RoleContractFinding, RoleContractInput,
+        RoleContractResolution, RoleContractSource, resolve_role_contract,
     },
 };
-use std::path::Path;
+use std::{collections::BTreeSet, path::Path};
 
 #[must_use]
 pub(crate) fn resolve_declared_role_contract(
@@ -55,6 +56,26 @@ pub fn resolve_declared_role_package_contract(
         },
         declared_features: evidence.direct_features.clone(),
         default_features_enabled: evidence.default_features_enabled,
+    })
+}
+
+#[must_use]
+pub fn resolve_built_in_fleet_coordinator_contract(
+    evidence: &RoleCargoGraphEvidence,
+) -> RoleContractResolution {
+    resolve_role_contract(RoleContractInput {
+        source: RoleContractSource::BuiltIn(BuiltInRoleKind::FleetCoordinator),
+        declared_features: evidence.direct_features.clone(),
+        default_features_enabled: evidence.default_features_enabled,
+    })
+}
+
+#[must_use]
+pub(crate) fn resolve_host_generated_fleet_coordinator_contract() -> RoleContractResolution {
+    resolve_role_contract(RoleContractInput {
+        source: RoleContractSource::BuiltIn(BuiltInRoleKind::FleetCoordinator),
+        declared_features: BTreeSet::from([CanicFeatureKey::FleetCoordinatorCanister]),
+        default_features_enabled: false,
     })
 }
 

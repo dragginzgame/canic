@@ -1,5 +1,7 @@
 //! Public control-plane APIs for lifecycle, state, and template publication.
 
+#[cfg(feature = "fleet-coordinator-canister")]
+pub mod fleet_coordinator;
 #[cfg(feature = "root-control-plane")]
 pub mod lifecycle;
 #[cfg(feature = "root-control-plane")]

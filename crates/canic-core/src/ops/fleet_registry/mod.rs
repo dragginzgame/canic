@@ -6,18 +6,22 @@
 
 #[cfg(test)]
 mod tests;
+mod validation;
 
 use crate::{
     InternalError,
-    config::ComponentTopology,
+    config::{ComponentTopology, ComponentTopologyError},
     dto::fleet_registry::{
         FleetComponentSpecEntry, FleetRegistry, FleetRegistryManifest, FleetRegistryVersion,
         FleetSubnetRootEntry, FleetSubnetRootStatus,
     },
-    ids::{AppId, ComponentSpecAdmission, FleetRegistryAuthority, FleetSubnetRootLimits},
-    model::fleet_registry::{self, FleetRegistryModelError},
+    ids::{
+        AppId, ComponentSpecAdmission, ComponentSpecId, FleetRegistryAuthority,
+        FleetSubnetRootLimits, ReleaseBuildId,
+    },
     ops::OpsError,
 };
+use candid::Principal;
 use sha2::{Digest, Sha256};
 use thiserror::Error as ThisError;
 
@@ -30,19 +34,80 @@ pub const MAX_FLEET_REGISTRY_CANONICAL_BYTES: usize = 2_097_152;
 ///
 /// FleetRegistryOpsError
 ///
-/// Typed operations-layer failure while compiling canonical Registry evidence.
+/// Typed operations-layer failure while validating or compiling canonical Registry evidence.
 ///
 
 #[derive(Debug, ThisError)]
 pub enum FleetRegistryOpsError {
+    #[error("Fleet Registry Coordinator principal must not be anonymous")]
+    AnonymousCoordinator,
+
+    #[error("Fleet Registry Coordinator Subnet must not be anonymous")]
+    AnonymousCoordinatorSubnet,
+
+    #[error("Fleet Registry root principal must not be anonymous")]
+    AnonymousFleetSubnetRoot,
+
+    #[error("Fleet Registry authority does not match the protected expected authority")]
+    AuthorityMismatch,
+
     #[error("Fleet Registry canonical bytes exceed bound {maximum_bytes}: {actual_bytes}")]
     CanonicalBytesExceeded {
         actual_bytes: usize,
         maximum_bytes: usize,
     },
 
+    #[error("Fleet Registry contains duplicate root principal {fleet_subnet_root}")]
+    DuplicateFleetSubnetRoot { fleet_subnet_root: Principal },
+
+    #[error(
+        "Fleet Registry admissions for Component Spec '{component_spec}' exceed its Fleet maximum {maximum_fleet_instances}: {admitted}"
+    )]
+    FleetAdmissionsExceedMaximum {
+        component_spec: ComponentSpecId,
+        admitted: u32,
+        maximum_fleet_instances: u32,
+    },
+
+    #[error("Fleet Registry admission total overflowed for Component Spec '{component_spec}'")]
+    FleetAdmissionsOverflow { component_spec: ComponentSpecId },
+
+    #[error(
+        "Fleet Registry Component Spec '{component_spec}' does not match the compiled topology"
+    )]
+    FleetComponentSpecMismatch { component_spec: ComponentSpecId },
+
+    #[error("Fleet Registry Component Specs are not the complete compiled topology")]
+    FleetComponentSpecSetMismatch,
+
+    #[error("Fleet Registry genesis App '{received}' does not match configured App '{expected}'")]
+    GenesisAppMismatch { expected: AppId, received: AppId },
+
+    #[error("Fleet Registry genesis requires authority epoch 1, got {0}")]
+    GenesisAuthorityEpoch(u64),
+
+    #[error("Fleet Registry root order is not strictly ascending by physical Subnet")]
+    NonCanonicalFleetSubnetRootOrder,
+
+    #[error("Fleet Registry authority epoch must be positive")]
+    NonPositiveAuthorityEpoch,
+
+    #[error("Fleet Registry revision must be positive")]
+    NonPositiveRevision,
+
+    #[error("Fleet Registry root principal conflicts with its Coordinator")]
+    RootPrincipalConflictsWithCoordinator,
+
+    #[error(
+        "Fleet Registry roots carry different active release builds: expected {expected}, got {received}"
+    )]
+    RootReleaseBuildMismatch {
+        expected: ReleaseBuildId,
+        received: ReleaseBuildId,
+    },
+
     #[error(transparent)]
-    Model(#[from] FleetRegistryModelError),
+    Topology(#[from] ComponentTopologyError),
 }
 
 ///
@@ -60,8 +125,7 @@ impl FleetRegistryOps {
         authority: FleetRegistryAuthority,
         topology: &ComponentTopology,
     ) -> Result<FleetRegistry, InternalError> {
-        fleet_registry::compile_genesis(configured_app, authority, topology)
-            .map_err(FleetRegistryOpsError::from)
+        validation::compile_genesis(configured_app, authority, topology)
             .map_err(OpsError::from)
             .map_err(InternalError::from)
     }
@@ -72,8 +136,7 @@ impl FleetRegistryOps {
         topology: &ComponentTopology,
         registry: &FleetRegistry,
     ) -> Result<(), InternalError> {
-        fleet_registry::validate(expected_authority, topology, registry)
-            .map_err(FleetRegistryOpsError::from)
+        validation::validate(expected_authority, topology, registry)
             .map_err(OpsError::from)
             .map_err(InternalError::from)
     }
@@ -126,7 +189,7 @@ fn canonical_bytes(
     topology: &ComponentTopology,
     registry: &FleetRegistry,
 ) -> Result<Vec<u8>, FleetRegistryOpsError> {
-    fleet_registry::validate(expected_authority, topology, registry)?;
+    validation::validate(expected_authority, topology, registry)?;
 
     let mut encoder = CanonicalEncoder::new();
     encode_authority(&mut encoder, &registry.authority);

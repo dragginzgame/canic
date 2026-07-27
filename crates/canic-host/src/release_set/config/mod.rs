@@ -355,7 +355,8 @@ pub(in crate::release_set) fn project_role_capabilities(
             RoleCapabilityKey::Sharding => {
                 labels.insert("sharding");
             }
-            RoleCapabilityKey::Root
+            RoleCapabilityKey::FleetCoordinator
+            | RoleCapabilityKey::Root
             | RoleCapabilityKey::RootControlPlane
             | RoleCapabilityKey::Runtime
             | RoleCapabilityKey::WasmStore => {}

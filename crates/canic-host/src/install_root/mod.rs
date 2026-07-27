@@ -249,6 +249,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         &icp_root,
         &install_snapshot,
         &prepared.build_outputs,
+        &prepared.infrastructure_build_outputs,
         prepared.plan_artifacts.as_ref(),
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Manifest))?;

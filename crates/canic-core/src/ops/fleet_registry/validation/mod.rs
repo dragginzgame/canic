@@ -1,103 +1,31 @@
-//! Module: model::fleet_registry
+//! Module: ops::fleet_registry::validation
 //!
-//! Responsibility: own canonical Fleet Registry snapshot invariants and genesis construction.
+//! Responsibility: validate passive Fleet Registry snapshots and compile genesis.
 //! Does not own: stable storage, snapshot publication, transport, or root lifecycle effects.
-//! Boundary: ops validates passive Registry DTOs against one compiled Component Topology.
+//! Boundary: the parent ops module calls this against one compiled Component Topology.
 
 use crate::{
     config::{ComponentTopology, ComponentTopologyError},
     dto::fleet_registry::{FleetComponentSpecEntry, FleetRegistry, FleetSubnetRootEntry},
-    ids::{AppId, ComponentSpecId, FleetRegistryAuthority, ReleaseBuildId},
+    ids::{AppId, FleetRegistryAuthority},
+    ops::fleet_registry::FleetRegistryOpsError,
 };
-use candid::Principal;
 use std::collections::{BTreeMap, BTreeSet};
-use thiserror::Error as ThisError;
 
-///
-/// FleetRegistryModelError
-///
-/// Typed rejection for a malformed or contradictory Fleet Registry snapshot.
-///
+use candid::Principal;
 
-#[derive(Debug, ThisError)]
-pub enum FleetRegistryModelError {
-    #[error("Fleet Registry Coordinator principal must not be anonymous")]
-    AnonymousCoordinator,
-
-    #[error("Fleet Registry Coordinator Subnet must not be anonymous")]
-    AnonymousCoordinatorSubnet,
-
-    #[error("Fleet Registry authority does not match the protected expected authority")]
-    AuthorityMismatch,
-
-    #[error("Fleet Registry root principal must not be anonymous")]
-    AnonymousFleetSubnetRoot,
-
-    #[error("Fleet Registry genesis App '{received}' does not match configured App '{expected}'")]
-    GenesisAppMismatch { expected: AppId, received: AppId },
-
-    #[error("Fleet Registry contains duplicate root principal {fleet_subnet_root}")]
-    DuplicateFleetSubnetRoot { fleet_subnet_root: Principal },
-
-    #[error(
-        "Fleet Registry Component Spec '{component_spec}' does not match the compiled topology"
-    )]
-    FleetComponentSpecMismatch { component_spec: ComponentSpecId },
-
-    #[error("Fleet Registry Component Specs are not the complete compiled topology")]
-    FleetComponentSpecSetMismatch,
-
-    #[error(
-        "Fleet Registry admissions for Component Spec '{component_spec}' exceed its Fleet maximum {maximum_fleet_instances}: {admitted}"
-    )]
-    FleetAdmissionsExceedMaximum {
-        component_spec: ComponentSpecId,
-        admitted: u32,
-        maximum_fleet_instances: u32,
-    },
-
-    #[error("Fleet Registry admission total overflowed for Component Spec '{component_spec}'")]
-    FleetAdmissionsOverflow { component_spec: ComponentSpecId },
-
-    #[error("Fleet Registry genesis requires authority epoch 1, got {0}")]
-    GenesisAuthorityEpoch(u64),
-
-    #[error("Fleet Registry root order is not strictly ascending by physical Subnet")]
-    NonCanonicalFleetSubnetRootOrder,
-
-    #[error("Fleet Registry revision must be positive")]
-    NonPositiveRevision,
-
-    #[error("Fleet Registry authority epoch must be positive")]
-    NonPositiveAuthorityEpoch,
-
-    #[error("Fleet Registry root principal conflicts with its Coordinator")]
-    RootPrincipalConflictsWithCoordinator,
-
-    #[error(
-        "Fleet Registry roots carry different active release builds: expected {expected}, got {received}"
-    )]
-    RootReleaseBuildMismatch {
-        expected: ReleaseBuildId,
-        received: ReleaseBuildId,
-    },
-
-    #[error(transparent)]
-    Topology(#[from] ComponentTopologyError),
-}
-
-pub fn compile_genesis(
+pub(super) fn compile_genesis(
     configured_app: &AppId,
     authority: FleetRegistryAuthority,
     topology: &ComponentTopology,
-) -> Result<FleetRegistry, FleetRegistryModelError> {
+) -> Result<FleetRegistry, FleetRegistryOpsError> {
     if authority.epoch != 1 {
-        return Err(FleetRegistryModelError::GenesisAuthorityEpoch(
+        return Err(FleetRegistryOpsError::GenesisAuthorityEpoch(
             authority.epoch,
         ));
     }
     if &authority.binding.fleet.app != configured_app {
-        return Err(FleetRegistryModelError::GenesisAppMismatch {
+        return Err(FleetRegistryOpsError::GenesisAppMismatch {
             expected: configured_app.clone(),
             received: authority.binding.fleet.app,
         });
@@ -122,32 +50,32 @@ pub fn compile_genesis(
     Ok(registry)
 }
 
-pub fn validate(
+pub(super) fn validate(
     expected_authority: &FleetRegistryAuthority,
     topology: &ComponentTopology,
     registry: &FleetRegistry,
-) -> Result<(), FleetRegistryModelError> {
+) -> Result<(), FleetRegistryOpsError> {
     validate_authority(&registry.authority)?;
     if &registry.authority != expected_authority {
-        return Err(FleetRegistryModelError::AuthorityMismatch);
+        return Err(FleetRegistryOpsError::AuthorityMismatch);
     }
     if registry.revision == 0 {
-        return Err(FleetRegistryModelError::NonPositiveRevision);
+        return Err(FleetRegistryOpsError::NonPositiveRevision);
     }
 
     validate_component_specs(topology, &registry.component_specs)?;
     validate_roots(topology, registry)
 }
 
-fn validate_authority(authority: &FleetRegistryAuthority) -> Result<(), FleetRegistryModelError> {
+fn validate_authority(authority: &FleetRegistryAuthority) -> Result<(), FleetRegistryOpsError> {
     if authority.epoch == 0 {
-        return Err(FleetRegistryModelError::NonPositiveAuthorityEpoch);
+        return Err(FleetRegistryOpsError::NonPositiveAuthorityEpoch);
     }
     if authority.binding.coordinator_subnet.as_principal() == &Principal::anonymous() {
-        return Err(FleetRegistryModelError::AnonymousCoordinatorSubnet);
+        return Err(FleetRegistryOpsError::AnonymousCoordinatorSubnet);
     }
     if authority.binding.coordinator == Principal::anonymous() {
-        return Err(FleetRegistryModelError::AnonymousCoordinator);
+        return Err(FleetRegistryOpsError::AnonymousCoordinator);
     }
     Ok(())
 }
@@ -155,9 +83,9 @@ fn validate_authority(authority: &FleetRegistryAuthority) -> Result<(), FleetReg
 fn validate_component_specs(
     topology: &ComponentTopology,
     entries: &[FleetComponentSpecEntry],
-) -> Result<(), FleetRegistryModelError> {
+) -> Result<(), FleetRegistryOpsError> {
     if entries.len() != topology.component_specs.len() {
-        return Err(FleetRegistryModelError::FleetComponentSpecSetMismatch);
+        return Err(FleetRegistryOpsError::FleetComponentSpecSetMismatch);
     }
 
     for (entry, expected) in entries.iter().zip(&topology.component_specs) {
@@ -166,7 +94,7 @@ fn validate_component_specs(
             || entry.component_role != expected.component_role
             || entry.maximum_fleet_instances != expected.maximum_fleet_instances
         {
-            return Err(FleetRegistryModelError::FleetComponentSpecMismatch {
+            return Err(FleetRegistryOpsError::FleetComponentSpecMismatch {
                 component_spec: entry.component_spec.clone(),
             });
         }
@@ -178,7 +106,7 @@ fn validate_component_specs(
 fn validate_roots(
     topology: &ComponentTopology,
     registry: &FleetRegistry,
-) -> Result<(), FleetRegistryModelError> {
+) -> Result<(), FleetRegistryOpsError> {
     let mut previous_subnet = None;
     let mut release_build_id = None;
     let mut root_principals = BTreeSet::new();
@@ -190,7 +118,7 @@ fn validate_roots(
 
     for root in &registry.fleet_subnet_roots {
         if previous_subnet.is_some_and(|previous| previous >= root.placement_subnet) {
-            return Err(FleetRegistryModelError::NonCanonicalFleetSubnetRootOrder);
+            return Err(FleetRegistryOpsError::NonCanonicalFleetSubnetRootOrder);
         }
         previous_subnet = Some(root.placement_subnet);
         validate_root_identity(registry, root, &mut root_principals)?;
@@ -202,7 +130,7 @@ fn validate_roots(
         let root_release_build_id = root.active_release_set.release_build_id;
         if let Some(expected) = release_build_id {
             if root_release_build_id != expected {
-                return Err(FleetRegistryModelError::RootReleaseBuildMismatch {
+                return Err(FleetRegistryOpsError::RootReleaseBuildMismatch {
                     expected,
                     received: root_release_build_id,
                 });
@@ -217,7 +145,7 @@ fn validate_roots(
                 .expect("planned-root validation admitted only known Component Specs");
             *total = total
                 .checked_add(admission.maximum_root_instances)
-                .ok_or_else(|| FleetRegistryModelError::FleetAdmissionsOverflow {
+                .ok_or_else(|| FleetRegistryOpsError::FleetAdmissionsOverflow {
                     component_spec: admission.component_spec.clone(),
                 })?;
         }
@@ -226,7 +154,7 @@ fn validate_roots(
     for spec in &topology.component_specs {
         let admitted = admission_totals[&spec.component_spec];
         if admitted > spec.maximum_fleet_instances {
-            return Err(FleetRegistryModelError::FleetAdmissionsExceedMaximum {
+            return Err(FleetRegistryOpsError::FleetAdmissionsExceedMaximum {
                 component_spec: spec.component_spec.clone(),
                 admitted,
                 maximum_fleet_instances: spec.maximum_fleet_instances,
@@ -241,22 +169,22 @@ fn validate_root_identity(
     registry: &FleetRegistry,
     root: &FleetSubnetRootEntry,
     root_principals: &mut BTreeSet<Principal>,
-) -> Result<(), FleetRegistryModelError> {
+) -> Result<(), FleetRegistryOpsError> {
     if root.placement_subnet.as_principal() == &Principal::anonymous() {
-        return Err(FleetRegistryModelError::Topology(
+        return Err(FleetRegistryOpsError::Topology(
             ComponentTopologyError::AnonymousBindingPrincipal {
                 field: "fleet_subnet_roots.placement_subnet",
             },
         ));
     }
     if root.fleet_subnet_root == Principal::anonymous() {
-        return Err(FleetRegistryModelError::AnonymousFleetSubnetRoot);
+        return Err(FleetRegistryOpsError::AnonymousFleetSubnetRoot);
     }
     if root.fleet_subnet_root == registry.authority.binding.coordinator {
-        return Err(FleetRegistryModelError::RootPrincipalConflictsWithCoordinator);
+        return Err(FleetRegistryOpsError::RootPrincipalConflictsWithCoordinator);
     }
     if !root_principals.insert(root.fleet_subnet_root) {
-        return Err(FleetRegistryModelError::DuplicateFleetSubnetRoot {
+        return Err(FleetRegistryOpsError::DuplicateFleetSubnetRoot {
             fleet_subnet_root: root.fleet_subnet_root,
         });
     }

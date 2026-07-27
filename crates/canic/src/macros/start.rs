@@ -366,10 +366,10 @@ macro_rules! __canic_require_finish {
 /// Finish a Canic canister module.
 ///
 /// Place this macro at the end of the canister's crate root after
-/// `start!`, `start_local!`, or `start_wasm_store!` and after any extra
-/// endpoint definitions. In debug builds it exports Candid for local `.did`
-/// generation; in non-debug builds it only satisfies the required Canic finish
-/// marker.
+/// `start!`, `start_local!`, `start_wasm_store!`, or
+/// `start_fleet_coordinator!` and after any extra endpoint definitions. In
+/// debug builds it exports Candid for local `.did` generation; in non-debug
+/// builds it only satisfies the required Canic finish marker.
 #[macro_export]
 macro_rules! finish {
     () => {
@@ -500,5 +500,34 @@ macro_rules! start_wasm_store {
         );
         $crate::__canic_start_ingress_payload_inspect!();
         $crate::canic_bundle_wasm_store_runtime_endpoints!();
+    };
+}
+
+/// Configure the dedicated built-in Fleet Coordinator canister surface.
+///
+/// The Coordinator is infrastructure outside App roles and Component
+/// topology. Its init payload installs one protected Fleet authority and
+/// canonical Component Topology, and its endpoint bundle exposes only
+/// Coordinator-owned Fleet Registry state.
+#[macro_export]
+macro_rules! start_fleet_coordinator {
+    () => {
+        $crate::__canic_require_finish!();
+        #[doc(hidden)]
+        #[used]
+        static __CANIC_RELEASE_BUILD_ID: &str = match option_env!("CANIC_RELEASE_BUILD_ID") {
+            Some(value) => value,
+            None => "",
+        };
+
+        #[$crate::__internal::cdk::init]
+        fn init(args: ::canic::dto::fleet_coordinator::FleetCoordinatorInitArgs) {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::init(
+                args,
+            );
+        }
+
+        $crate::__canic_start_ingress_payload_inspect!();
+        $crate::canic_emit_fleet_coordinator_endpoints!();
     };
 }

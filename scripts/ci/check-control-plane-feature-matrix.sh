@@ -20,6 +20,9 @@ run_check \
     "control-plane minimal feature build" \
     --locked -p canic-control-plane --no-default-features
 run_check \
+    "control-plane Fleet Coordinator feature build" \
+    --locked -p canic-control-plane --no-default-features --features fleet-coordinator-canister
+run_check \
     "control-plane wasm-store feature build" \
     --locked -p canic-control-plane --no-default-features --features wasm-store-canister
 run_check \
