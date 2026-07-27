@@ -149,12 +149,43 @@ mod tests {
     use super::*;
     use candid::encode_one;
     use canic::{
+        CANIC_WASM_CHUNK_BYTES,
+        dto::root_store::{
+            ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX,
+            RootStoreArtifact, RootStoreBootstrapRequest, RootStoreBootstrapResponse,
+            RootStoreReleaseSetEntry, RootStoreReleaseSetEntryKind, RootStoreReleaseSetManifest,
+        },
+        ids::{CanisterRole, ReleaseSetDigest},
+    };
+    use canic::{
         Error,
         dto::fleet_activation::{FleetActivationPhase, FleetActivationStatusResponse},
         dto::fleet_subnet_root::FleetSubnetRootAuthority,
-        protocol::{CANIC_FLEET_ACTIVATION_STATUS, CANIC_FLEET_SUBNET_ROOT_AUTHORITY},
+        protocol::{
+            CANIC_FLEET_ACTIVATION_STATUS, CANIC_FLEET_SUBNET_ROOT_AUTHORITY,
+            CANIC_ROOT_STORE_BOOTSTRAP, CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
+            CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
+            CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
+        },
     };
+    use canic_control_plane::{
+        dto::template::{
+            TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
+            TemplateManifestInput,
+        },
+        ids::{
+            TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion,
+            WasmStoreBinding,
+        },
+    };
+    use canic_core::cdk::utils::hash::{hex_bytes, wasm_hash};
+    use canic_host::release_set::AppConfigSnapshot;
+    use std::collections::BTreeMap;
     use std::time::Duration;
+
+    use crate::pic::canic::{
+        install_root_args_with_release_set_digest, managed_test_init_identity,
+    };
 
     #[test]
     fn prepared_root_upgrade_does_not_run_runtime_or_application_continuations() {
@@ -187,6 +218,211 @@ mod tests {
             0,
             "Prepared root upgrade must not run the application upgrade hook"
         );
+    }
+
+    #[test]
+    fn prepared_root_bootstraps_and_reverifies_its_exact_local_store() {
+        let root_wasm = build_test_root_wasm();
+        let pic = build_pic();
+        let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("workspace root");
+        let config_path = root_canister_config_path(workspace_root);
+        let (manifest, artifacts) = exact_root_store_fixture(&config_path);
+        let manifest_bytes = serde_json::to_vec(&manifest).expect("canonical root release set");
+        let digest = ReleaseSetDigest::from_bytes(
+            wasm_hash(&manifest_bytes)
+                .try_into()
+                .expect("SHA-256 digest"),
+        );
+        let root_id = pic.create_canister();
+        pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
+        let init_args =
+            install_root_args_with_release_set_digest(root_id, &root_wasm, &config_path, digest)
+                .expect("encode exact root authority");
+        pic.install_canister(root_id, root_wasm, init_args, None);
+        assert_prepared(&pic, root_id);
+
+        let version = TemplateVersion::owned(manifest.release_build_id.to_string());
+        stage_chunked_payload(
+            &pic,
+            root_id,
+            TemplateId::owned(format!("{ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX}{digest}")),
+            version.clone(),
+            &manifest_bytes,
+        );
+        for (role, bytes) in artifacts {
+            let template_id =
+                TemplateId::owned(format!("{ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX}{role}"));
+            let staged: Result<(), Error> = pic
+                .update_call(
+                    root_id,
+                    CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
+                    (TemplateManifestInput {
+                        template_id: template_id.clone(),
+                        role,
+                        version: version.clone(),
+                        payload_hash: wasm_hash(&bytes),
+                        payload_size_bytes: bytes.len() as u64,
+                        store_binding: WasmStoreBinding::new("bootstrap"),
+                        chunking_mode: TemplateChunkingMode::Chunked,
+                        manifest_state: TemplateManifestState::Approved,
+                        approved_at: Some(0),
+                        created_at: 0,
+                    },),
+                )
+                .expect("stage artifact manifest transport");
+            staged.expect("stage artifact manifest");
+            stage_chunked_payload(&pic, root_id, template_id, version.clone(), &bytes);
+        }
+
+        let request = RootStoreBootstrapRequest {
+            manifest_payload_size_bytes: manifest_bytes.len() as u64,
+        };
+        let bootstrapped: Result<RootStoreBootstrapResponse, Error> = pic
+            .update_call(root_id, CANIC_ROOT_STORE_BOOTSTRAP, (request.clone(),))
+            .expect("root Store bootstrap transport");
+        let bootstrapped = bootstrapped.expect("root Store bootstrap");
+        assert_eq!(bootstrapped.fleet_subnet_root, root_id);
+        assert_eq!(bootstrapped.release_set.manifest_digest, digest);
+        assert_eq!(bootstrapped.catalog.len(), 3);
+
+        let retried: Result<RootStoreBootstrapResponse, Error> = pic
+            .update_call(root_id, CANIC_ROOT_STORE_BOOTSTRAP, (request.clone(),))
+            .expect("root Store bootstrap retry transport");
+        assert_eq!(
+            retried.expect("root Store bootstrap retry"),
+            bootstrapped,
+            "exact update retry must return the same Store evidence"
+        );
+        let observed: Result<RootStoreBootstrapResponse, Error> = pic
+            .query_call(root_id, CANIC_ROOT_STORE_BOOTSTRAP_STATUS, (request,))
+            .expect("root Store status transport");
+        assert_eq!(
+            observed.expect("root Store status"),
+            bootstrapped,
+            "composite status must independently reverify the exact live catalog"
+        );
+        assert_prepared(&pic, root_id);
+    }
+
+    fn exact_root_store_fixture(
+        config_path: &Path,
+    ) -> (RootStoreReleaseSetManifest, BTreeMap<CanisterRole, Vec<u8>>) {
+        let config = AppConfigSnapshot::load(config_path).expect("load root fixture config");
+        let topology = config.component_topology();
+        let release_build_id = managed_test_init_identity().release_build_id;
+        let mut entries = Vec::new();
+        let mut artifacts = BTreeMap::new();
+        for spec in &topology.component_specs {
+            entries.push(root_store_entry(
+                config.model(),
+                &spec.component_spec,
+                RootStoreReleaseSetEntryKind::Component,
+                &spec.component_role,
+                release_build_id,
+                &mut artifacts,
+            ));
+            entries.extend(spec.children.iter().map(|child| {
+                root_store_entry(
+                    config.model(),
+                    &spec.component_spec,
+                    RootStoreReleaseSetEntryKind::ComponentChild,
+                    &child.role,
+                    release_build_id,
+                    &mut artifacts,
+                )
+            }));
+        }
+
+        (
+            RootStoreReleaseSetManifest {
+                release_build_id,
+                component_topology_digest: topology.digest().expect("fixture topology digest"),
+                entries,
+            },
+            artifacts,
+        )
+    }
+
+    fn root_store_entry(
+        config: &canic_core::bootstrap::compiled::ConfigModel,
+        component_spec: &canic_core::ids::ComponentSpecId,
+        kind: RootStoreReleaseSetEntryKind,
+        role: &CanisterRole,
+        release_build_id: canic_core::ids::ReleaseBuildId,
+        artifacts: &mut BTreeMap<CanisterRole, Vec<u8>>,
+    ) -> RootStoreReleaseSetEntry {
+        let raw = format!("raw fixture for {role}").into_bytes();
+        let compressed = format!("compressed fixture for {role}").into_bytes();
+        let existing = artifacts.insert(role.clone(), compressed.clone());
+        assert!(
+            existing.as_ref().is_none_or(|bytes| bytes == &compressed),
+            "one role must retain one exact artifact payload"
+        );
+        RootStoreReleaseSetEntry {
+            component_spec: component_spec.clone(),
+            kind,
+            artifact: RootStoreArtifact {
+                role: role.clone(),
+                package: config
+                    .roles
+                    .get(role)
+                    .expect("fixture role declaration")
+                    .package
+                    .clone(),
+                release_build_id,
+                wasm_relative_path: format!("{role}.wasm"),
+                wasm_size_bytes: raw.len() as u64,
+                wasm_sha256_hex: hex_bytes(wasm_hash(&raw)),
+                wasm_gz_relative_path: format!("{role}.wasm.gz"),
+                wasm_gz_size_bytes: compressed.len() as u64,
+                wasm_gz_sha256_hex: hex_bytes(wasm_hash(&compressed)),
+            },
+        }
+    }
+
+    fn stage_chunked_payload(
+        pic: &Pic,
+        root_id: Principal,
+        template_id: TemplateId,
+        version: TemplateVersion,
+        payload: &[u8],
+    ) {
+        let chunks = payload
+            .chunks(CANIC_WASM_CHUNK_BYTES)
+            .map(<[u8]>::to_vec)
+            .collect::<Vec<_>>();
+        let prepared: Result<TemplateChunkSetInfoResponse, Error> = pic
+            .update_call(
+                root_id,
+                CANIC_TEMPLATE_PREPARE_ADMIN,
+                (TemplateChunkSetPrepareInput {
+                    template_id: template_id.clone(),
+                    version: version.clone(),
+                    payload_hash: wasm_hash(payload),
+                    payload_size_bytes: payload.len() as u64,
+                    chunk_hashes: chunks.iter().map(|chunk| wasm_hash(chunk)).collect(),
+                },),
+            )
+            .expect("prepare staged payload transport");
+        prepared.expect("prepare staged payload");
+        for (chunk_index, bytes) in chunks.into_iter().enumerate() {
+            let published: Result<(), Error> = pic
+                .update_call(
+                    root_id,
+                    CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
+                    (TemplateChunkInput {
+                        template_id: template_id.clone(),
+                        version: version.clone(),
+                        chunk_index: u32::try_from(chunk_index).expect("bounded chunk index"),
+                        bytes,
+                    },),
+                )
+                .expect("publish staged payload transport");
+            published.expect("publish staged payload");
+        }
     }
 
     fn assert_prepared(pic: &Pic, root_id: Principal) {

@@ -205,6 +205,13 @@ fn drive_root_install(
                     verify_live_root(icp_root, environment, local_replica, &current.journal)?;
                 return Ok(authority);
             }
+            FleetSubnetRootInstallPhase::StoreStaging
+            | FleetSubnetRootInstallPhase::StoreStaged
+            | FleetSubnetRootInstallPhase::StoreBootstrapInFlight
+            | FleetSubnetRootInstallPhase::StoreBootstrapped
+            | FleetSubnetRootInstallPhase::StoreVerified => {
+                return verify_live_root(icp_root, environment, local_replica, &current.journal);
+            }
         };
     }
     Err(RootInstallStateError::TransitionBoundExceeded.into())

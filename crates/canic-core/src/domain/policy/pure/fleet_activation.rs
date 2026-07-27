@@ -9,9 +9,11 @@ use crate::{
     protocol::{
         CANIC_ACTIVATE_FLEET, CANIC_FLEET_ACTIVATION_STATUS, CANIC_FLEET_SUBNET_ROOT_AUTHORITY,
         CANIC_PREPARE_FLEET_ACTIVATION, CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION,
-        CANIC_RESUME_FLEET_ACTIVATION, CANIC_SYNC_STATE, CANIC_SYNC_TOPOLOGY,
+        CANIC_RESUME_FLEET_ACTIVATION, CANIC_ROOT_STORE_BOOTSTRAP,
+        CANIC_ROOT_STORE_BOOTSTRAP_STATUS, CANIC_SYNC_STATE, CANIC_SYNC_TOPOLOGY,
         CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
-        CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
+        CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN, CANIC_WASM_STORE_CATALOG, CANIC_WASM_STORE_PREPARE,
+        CANIC_WASM_STORE_PUBLISH_CHUNK, CANIC_WASM_STORE_STAGE_MANIFEST, CANIC_WASM_STORE_STATUS,
     },
 };
 use thiserror::Error as ThisError;
@@ -34,6 +36,8 @@ pub fn require_prepared_nonroot_endpoint(
     call: EndpointCall,
 ) -> Result<(), FleetActivationEndpointPolicyError> {
     if is_status_query(call)
+        || is_query(call, CANIC_WASM_STORE_CATALOG)
+        || is_query(call, CANIC_WASM_STORE_STATUS)
         || is_update(
             call,
             &[
@@ -41,6 +45,9 @@ pub fn require_prepared_nonroot_endpoint(
                 CANIC_SYNC_TOPOLOGY,
                 CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION,
                 CANIC_ACTIVATE_FLEET,
+                CANIC_WASM_STORE_PREPARE,
+                CANIC_WASM_STORE_PUBLISH_CHUNK,
+                CANIC_WASM_STORE_STAGE_MANIFEST,
             ],
         )
     {
@@ -55,11 +62,13 @@ pub fn require_prepared_root_endpoint(
 ) -> Result<(), FleetActivationEndpointPolicyError> {
     if is_status_query(call)
         || is_query(call, CANIC_FLEET_SUBNET_ROOT_AUTHORITY)
+        || is_composite_query(call, CANIC_ROOT_STORE_BOOTSTRAP_STATUS)
         || is_update(
             call,
             &[
                 CANIC_PREPARE_FLEET_ACTIVATION,
                 CANIC_RESUME_FLEET_ACTIVATION,
+                CANIC_ROOT_STORE_BOOTSTRAP,
                 CANIC_TEMPLATE_PREPARE_ADMIN,
                 CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
                 CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
@@ -77,6 +86,10 @@ fn is_status_query(call: EndpointCall) -> bool {
 
 fn is_query(call: EndpointCall, endpoint: &str) -> bool {
     call.kind == EndpointCallKind::Query && call.endpoint.name == endpoint
+}
+
+fn is_composite_query(call: EndpointCall, endpoint: &str) -> bool {
+    call.kind == EndpointCallKind::QueryComposite && call.endpoint.name == endpoint
 }
 
 fn is_update(call: EndpointCall, endpoints: &[&str]) -> bool {
@@ -109,6 +122,11 @@ mod tests {
             (CANIC_FLEET_SUBNET_ROOT_AUTHORITY, EndpointCallKind::Query),
             (CANIC_PREPARE_FLEET_ACTIVATION, EndpointCallKind::Update),
             (CANIC_RESUME_FLEET_ACTIVATION, EndpointCallKind::Update),
+            (CANIC_ROOT_STORE_BOOTSTRAP, EndpointCallKind::Update),
+            (
+                CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
+                EndpointCallKind::QueryComposite,
+            ),
             (CANIC_TEMPLATE_PREPARE_ADMIN, EndpointCallKind::Update),
             (CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN, EndpointCallKind::Update),
             (
@@ -144,6 +162,8 @@ mod tests {
     fn prepared_nonroot_uses_its_own_exact_recovery_allowlist() {
         for (endpoint, kind) in [
             (CANIC_FLEET_ACTIVATION_STATUS, EndpointCallKind::Query),
+            (CANIC_WASM_STORE_CATALOG, EndpointCallKind::Query),
+            (CANIC_WASM_STORE_STATUS, EndpointCallKind::Query),
             (CANIC_SYNC_STATE, EndpointCallKind::Update),
             (CANIC_SYNC_TOPOLOGY, EndpointCallKind::Update),
             (
@@ -151,6 +171,9 @@ mod tests {
                 EndpointCallKind::Update,
             ),
             (CANIC_ACTIVATE_FLEET, EndpointCallKind::Update),
+            (CANIC_WASM_STORE_PREPARE, EndpointCallKind::Update),
+            (CANIC_WASM_STORE_PUBLISH_CHUNK, EndpointCallKind::Update),
+            (CANIC_WASM_STORE_STAGE_MANIFEST, EndpointCallKind::Update),
         ] {
             assert_eq!(
                 require_prepared_nonroot_endpoint(call(endpoint, kind)),

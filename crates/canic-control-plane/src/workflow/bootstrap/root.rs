@@ -808,7 +808,7 @@ async fn root_reconcile_wasm_store() -> Result<(), InternalError> {
     import_default_wasm_store_catalog().await
 }
 
-async fn ensure_required_wasm_store_canister() -> Result<(), InternalError> {
+pub(super) async fn ensure_required_wasm_store_canister() -> Result<(), InternalError> {
     let role = CanisterRole::WASM_STORE;
 
     let existing_bindings = WasmStorePublicationWorkflow::sync_registered_wasm_store_inventory()?;

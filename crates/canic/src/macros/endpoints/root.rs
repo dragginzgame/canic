@@ -149,6 +149,22 @@ macro_rules! canic_emit_root_wasm_store_endpoints {
         }
 
         #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_root_store_bootstrap(
+            request: ::canic::dto::root_store::RootStoreBootstrapRequest,
+        ) -> Result<::canic::dto::root_store::RootStoreBootstrapResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreBootstrapApi::bootstrap_root_store(request)
+                .await
+        }
+
+        #[$crate::canic_query(composite, requires(caller::is_controller()))]
+        async fn canic_root_store_bootstrap_status(
+            request: ::canic::dto::root_store::RootStoreBootstrapRequest,
+        ) -> Result<::canic::dto::root_store::RootStoreBootstrapResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreBootstrapApi::root_store_status(request)
+                .await
+        }
+
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_template_stage_manifest_admin(
             request: ::canic::dto::template::TemplateManifestInput,
         ) -> Result<(), ::canic::Error> {

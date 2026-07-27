@@ -68,7 +68,12 @@ fn current_install_records_gates_before_activation_mutation() {
     assert_before(
         install,
         "install_current_fleet_subnet_roots(",
-        "require_fleet_subnet_root_bootstrap(",
+        "bootstrap_and_verify_fleet_subnet_root_stores(",
+    );
+    assert_before(
+        install,
+        "bootstrap_and_verify_fleet_subnet_root_stores(",
+        "require_fleet_registry_registration(",
     );
     let coordinator_install = source_section(
         source,

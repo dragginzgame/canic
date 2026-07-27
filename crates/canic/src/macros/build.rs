@@ -152,12 +152,6 @@ macro_rules! __canic_build_internal {
 
         let role_name = __canic_role_name.as_str();
         let mut memory_ledger = false;
-        let mut metrics_core = false;
-        let mut metrics_placement = false;
-        let mut metrics_platform = false;
-        let mut metrics_runtime = false;
-        let mut metrics_security = false;
-        let mut metrics_storage = false;
         let role_id: $crate::__internal::core::ids::CanisterRole = role_name.to_string().into();
         let mut app_name = __canic_app_name.as_str();
         let __canic_wasm_store_special = role_name == "wasm_store";
@@ -186,17 +180,18 @@ macro_rules! __canic_build_internal {
             println!("cargo:rustc-cfg=canic_role_declared_only");
         }
 
+        let metrics_tier_mask =
+            $crate::__build::configured_role_metrics_tier_mask($cfg.as_ref(), &role_id);
+        let metrics_core = metrics_tier_mask & $crate::__build::METRICS_TIER_CORE != 0;
+        let metrics_placement = metrics_tier_mask & $crate::__build::METRICS_TIER_PLACEMENT != 0;
+        let metrics_platform = metrics_tier_mask & $crate::__build::METRICS_TIER_PLATFORM != 0;
+        let metrics_runtime = metrics_tier_mask & $crate::__build::METRICS_TIER_RUNTIME != 0;
+        let metrics_security = metrics_tier_mask & $crate::__build::METRICS_TIER_SECURITY != 0;
+        let metrics_storage = metrics_tier_mask & $crate::__build::METRICS_TIER_STORAGE != 0;
+
         for component_spec in $cfg.component_specs.values() {
             if let Some(canister_cfg) = component_spec.get_canister(&role_id) {
                 memory_ledger |= canister_cfg.diagnostics.memory_ledger;
-                let profile = canister_cfg.resolved_metrics_profile(&role_id);
-                let tier_mask = $crate::__build::metrics_profile_tier_mask(profile);
-                metrics_core |= tier_mask & $crate::__build::METRICS_TIER_CORE != 0;
-                metrics_placement |= tier_mask & $crate::__build::METRICS_TIER_PLACEMENT != 0;
-                metrics_platform |= tier_mask & $crate::__build::METRICS_TIER_PLATFORM != 0;
-                metrics_runtime |= tier_mask & $crate::__build::METRICS_TIER_RUNTIME != 0;
-                metrics_security |= tier_mask & $crate::__build::METRICS_TIER_SECURITY != 0;
-                metrics_storage |= tier_mask & $crate::__build::METRICS_TIER_STORAGE != 0;
             }
         }
 

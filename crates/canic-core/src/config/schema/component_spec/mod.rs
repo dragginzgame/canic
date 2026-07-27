@@ -429,6 +429,7 @@ pub struct CanisterPool {
 ///
 
 // Build the implicit canister configuration for the mandatory store role.
+#[must_use]
 pub fn implicit_wasm_store_canister_config() -> CanisterConfig {
     CanisterConfig {
         kind: CanisterKind::Singleton,

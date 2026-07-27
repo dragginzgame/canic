@@ -1,6 +1,7 @@
+use crate::ops::storage::state::subnet::SubnetStateOps;
 use crate::{
     config,
-    dto::template::TemplateManifestResponse,
+    dto::template::{TemplateManifestResponse, WasmStoreCatalogEntryResponse},
     ids::WasmStoreBinding,
     ops::storage::template::TemplateChunkedOps,
     workflow::runtime::template::publication::{
@@ -28,6 +29,88 @@ use super::super::super::WASM_STORE_BOOTSTRAP_BINDING;
 use super::metrics::record_wasm_store_metric;
 
 impl WasmStorePublicationWorkflow {
+    /// Read the live catalog from the one root-local Store without mutating publication state.
+    pub async fn single_store_catalog()
+    -> Result<(Principal, Vec<WasmStoreCatalogEntryResponse>), InternalError> {
+        let stores = SubnetStateOps::wasm_stores();
+        if stores.len() != 1 {
+            return Err(PublicationWorkflowError::InvalidState(format!(
+                "initial root bootstrap requires exactly one local wasm store, found {}",
+                stores.len()
+            ))
+            .into());
+        }
+        let store_pid = stores[0].pid;
+        Ok((store_pid, store_catalog(store_pid).await?))
+    }
+
+    /// Publish one exact initial root release set into exactly one local Store.
+    pub async fn bootstrap_exact_staged_release_set(
+        manifests: Vec<TemplateManifestResponse>,
+    ) -> Result<(Principal, Vec<WasmStoreCatalogEntryResponse>), InternalError> {
+        let cost_guard = PublicationCostGuard::reserve(PUBLICATION_BOOTSTRAP_COMMAND_KIND)?;
+        let result =
+            Self::bootstrap_exact_staged_release_set_with_permit(manifests, cost_guard.permit())
+                .await;
+        cost_guard.settle(result)
+    }
+
+    async fn bootstrap_exact_staged_release_set_with_permit(
+        manifests: Vec<TemplateManifestResponse>,
+        publication_permit: &CostGuardPermit,
+    ) -> Result<(Principal, Vec<WasmStoreCatalogEntryResponse>), InternalError> {
+        for manifest in &manifests {
+            TemplateChunkedOps::validate_staged_release(manifest)?;
+        }
+
+        let mut fleet = Self::snapshot_publication_store_fleet(publication_permit).await?;
+        if fleet.stores.len() != 1 {
+            return Err(PublicationWorkflowError::InvalidState(format!(
+                "initial root bootstrap requires exactly one local wasm store, found {}",
+                fleet.stores.len()
+            ))
+            .into());
+        }
+        let store_pid = fleet.stores[0].pid;
+
+        for manifest in manifests {
+            let store = &mut fleet.stores[0];
+            if store.has_exact_release(&manifest) {
+                Self::mirror_manifest_to_root_state(
+                    publication_permit,
+                    store.binding.clone(),
+                    &manifest,
+                );
+                continue;
+            }
+            if let Some(conflict) = store.conflicting_release(&manifest) {
+                return Err(PublicationWorkflowError::ReleaseConflict {
+                    template_id: manifest.template_id,
+                    version: manifest.version,
+                    binding: store.binding.clone(),
+                    existing_payload_hash: conflict.payload_hash.clone(),
+                    existing_payload_size_bytes: conflict.payload_size_bytes,
+                }
+                .into());
+            }
+            if !store.can_accept_release(&manifest) {
+                return Err(PublicationWorkflowError::CapacityExceeded {
+                    release: Self::release_label(&manifest),
+                    target: store.binding.to_string(),
+                    payload_size_bytes: manifest.payload_size_bytes,
+                    remaining_store_bytes: store.status.remaining_store_bytes,
+                }
+                .into());
+            }
+
+            Self::publish_manifest_to_store(store, manifest.clone(), publication_permit).await?;
+            store.record_release(&manifest);
+        }
+
+        let catalog = store_catalog(store_pid).await?;
+        Ok((store_pid, catalog))
+    }
+
     // Resolve one automatic managed placement from the live fleet snapshot.
     async fn resolve_managed_publication_placement(
         fleet: &mut PublicationStoreFleet,
@@ -255,7 +338,7 @@ impl WasmStorePublicationWorkflow {
     ) -> Result<(), InternalError> {
         let target_store_binding = store_binding_for_pid(target_store_pid)?;
         let target_status = store_status(target_store_pid).await?;
-        let target_catalog = store_catalog(publication_permit, target_store_pid).await?;
+        let target_catalog = store_catalog(target_store_pid).await?;
         let mut target_store = PublicationStoreSnapshot {
             binding: target_store_binding.clone(),
             pid: target_store_pid,

@@ -19,7 +19,7 @@ bridge-backed canister-signature flow.
 | Issuer active proof verification | `crates/canic-core/src/ops/auth/delegated/active_proof.rs` |
 | Issuer-local canister-signature proof support | `crates/canic-core/src/ops/auth/issuer_canister_sig.rs` |
 | Operator renewal CLI | `crates/canic-cli/src/auth/` |
-| PocketIC hard-cut coverage | `crates/canic-tests/tests/root_cases/delegated_auth_chain_key.rs` |
+| PocketIC acceptance contract | `docs/design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md` |
 | Active architecture contract | `docs/architecture/authentication.md` |
 | Wire/protocol contract | `docs/contracts/AUTH_DELEGATED_SIGNATURES.md` |
 
@@ -181,13 +181,6 @@ cargo test --locked -p canic-core chain_key --lib
 git diff --check
 ```
 
-PocketIC checks for end-to-end behavior:
-
-```bash
-POCKET_IC_BIN=/path/to/pocket-ic \
-  cargo test --locked -p canic-tests --test root_suite auth_076 -- \
-  --test-threads=1 --nocapture
-```
-
-PocketIC needs local port binding. In restricted sandboxes, run those tests with
-the normal local-test allowance.
+End-to-end root/issuer proof validation belongs to the Coordinator-anchored
+multi-root PocketIC journey required by the active 0.100 design. Do not
+substitute a directly installed single-root fixture.

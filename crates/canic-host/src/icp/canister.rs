@@ -8,6 +8,27 @@ use super::{
 };
 
 impl IcpCli {
+    /// Call one canister method with raw binary Candid arguments from a file.
+    pub fn canister_call_binary_args_output_with_candid(
+        &self,
+        canister: &str,
+        method: &str,
+        args_file: &Path,
+        output: Option<&str>,
+        candid_path: Option<&Path>,
+    ) -> Result<String, IcpCommandError> {
+        let mut command = self.canister_command();
+        command.args(["call", canister, method, "--args-file"]);
+        command.arg(args_file);
+        command.args(["--args-format", "bin"]);
+        add_candid_arg(&mut command, candid_path);
+        if let Some(output) = output {
+            add_output_arg(&mut command, output);
+        }
+        self.add_target_args(&mut command);
+        run_output(&mut command)
+    }
+
     /// Call one canister method with an explicit Candid argument, optional local Candid, and optional JSON output.
     pub fn canister_call_arg_output_with_candid(
         &self,

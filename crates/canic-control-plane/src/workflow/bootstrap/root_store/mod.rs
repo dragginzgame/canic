@@ -1,0 +1,436 @@
+//! Module: workflow::bootstrap::root_store
+//!
+//! Responsibility: verify and publish one root's exact initial application release set.
+//! Does not own: host staging, Fleet Registry registration, or root runtime activation.
+//! Boundary: no Store effect begins until the staged canonical manifest matches protected root
+//! authority and every admitted application artifact is complete.
+
+use crate::{
+    dto::template::{TemplateManifestResponse, WasmStoreCatalogEntryResponse},
+    ids::{CanisterRole, TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion},
+    ops::storage::{
+        state::subnet::SubnetStateOps,
+        template::{TemplateChunkedOps, TemplateManifestOps},
+    },
+    workflow::runtime::template::{WASM_STORE_BOOTSTRAP_BINDING, WasmStorePublicationWorkflow},
+};
+use canic_core::{
+    api::fleet_activation::FleetActivationApi,
+    cdk::utils::hash::wasm_hash,
+    control_plane_support::{
+        error::InternalError, ops::config::ConfigOps, workflow::topology::guard::TopologyGuard,
+    },
+    dto::root_store::{
+        ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES,
+        ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX, RootStoreBootstrapRequest,
+        RootStoreBootstrapResponse, RootStoreCatalogEntry, RootStoreReleaseSetEntryKind,
+        RootStoreReleaseSetManifest,
+    },
+};
+use std::collections::{BTreeMap, BTreeSet};
+
+/// Bootstrap and verify the exact local Store for one still-Prepared root.
+pub async fn bootstrap(
+    request: RootStoreBootstrapRequest,
+) -> Result<RootStoreBootstrapResponse, InternalError> {
+    let _guard = TopologyGuard::try_enter()?;
+    let authority = FleetActivationApi::root_authority().map_err(InternalError::public)?;
+    let root = canic_core::control_plane_support::ops::ic::IcOps::canister_self();
+    if authority.binding.fleet_subnet_root != root {
+        return Err(InternalError::invalid_input(
+            "protected Fleet Subnet Root authority does not name this Canister",
+        ));
+    }
+
+    let manifest = load_and_validate_manifest(&authority, request)?;
+    let staged = exact_staged_manifests(&manifest)?;
+
+    super::root::ensure_required_wasm_store_canister().await?;
+    let (wasm_store, live_catalog) =
+        WasmStorePublicationWorkflow::bootstrap_exact_staged_release_set(staged.clone()).await?;
+    let catalog = verify_live_catalog(&staged, live_catalog)?;
+
+    Ok(RootStoreBootstrapResponse {
+        fleet_subnet_root: root,
+        wasm_store,
+        release_set: authority.initial_release_set,
+        catalog,
+    })
+}
+
+/// Verify the exact live Store catalog without changing root or Store state.
+pub async fn status(
+    request: RootStoreBootstrapRequest,
+) -> Result<RootStoreBootstrapResponse, InternalError> {
+    let authority = FleetActivationApi::root_authority().map_err(InternalError::public)?;
+    let root = canic_core::control_plane_support::ops::ic::IcOps::canister_self();
+    if authority.binding.fleet_subnet_root != root {
+        return Err(InternalError::invalid_input(
+            "protected Fleet Subnet Root authority does not name this Canister",
+        ));
+    }
+    let manifest = load_and_validate_manifest(&authority, request)?;
+    let staged = exact_staged_manifests(&manifest)?;
+    let (wasm_store, live_catalog) = WasmStorePublicationWorkflow::single_store_catalog().await?;
+    let catalog = verify_live_catalog(&staged, live_catalog)?;
+
+    Ok(RootStoreBootstrapResponse {
+        fleet_subnet_root: root,
+        wasm_store,
+        release_set: authority.initial_release_set,
+        catalog,
+    })
+}
+
+fn load_and_validate_manifest(
+    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    request: RootStoreBootstrapRequest,
+) -> Result<RootStoreReleaseSetManifest, InternalError> {
+    if request.manifest_payload_size_bytes == 0
+        || request.manifest_payload_size_bytes > ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES
+    {
+        return Err(InternalError::invalid_input(format!(
+            "root release-set manifest bytes must be in 1..={ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES}"
+        )));
+    }
+
+    let release_set = authority.initial_release_set;
+    let template_id = release_set_template_id(release_set.manifest_digest);
+    let version = TemplateVersion::owned(release_set.release_build_id.to_string());
+    let bytes = TemplateChunkedOps::staged_payload_bytes(
+        &template_id,
+        &version,
+        release_set.manifest_digest.as_bytes(),
+        request.manifest_payload_size_bytes,
+    )?;
+    let manifest =
+        serde_json::from_slice::<RootStoreReleaseSetManifest>(&bytes).map_err(|error| {
+            InternalError::invalid_input(format!("invalid root release set: {error}"))
+        })?;
+    let canonical = serde_json::to_vec(&manifest).map_err(|error| {
+        InternalError::invalid_input(format!("could not canonicalize root release set: {error}"))
+    })?;
+    if canonical != bytes {
+        return Err(InternalError::invalid_input(
+            "root release-set manifest bytes are not canonical",
+        ));
+    }
+    if wasm_hash(&canonical) != release_set.manifest_digest.as_bytes() {
+        return Err(InternalError::invalid_input(
+            "root release-set manifest digest differs from protected authority",
+        ));
+    }
+
+    validate_manifest_projection(authority, &manifest)?;
+    Ok(manifest)
+}
+
+fn validate_manifest_projection(
+    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    manifest: &RootStoreReleaseSetManifest,
+) -> Result<(), InternalError> {
+    if manifest.release_build_id != authority.initial_release_set.release_build_id {
+        return Err(InternalError::invalid_input(
+            "root release-set build differs from protected authority",
+        ));
+    }
+    if manifest.component_topology_digest != authority.binding.component_topology_digest {
+        return Err(InternalError::invalid_input(
+            "root release-set topology differs from protected authority",
+        ));
+    }
+
+    let topology = ConfigOps::component_topology()?;
+    let projected = topology
+        .project_for_admissions(&authority.binding.component_admissions)
+        .map_err(|error| {
+            InternalError::invalid_input(format!(
+                "protected root admissions cannot project topology: {error}"
+            ))
+        })?;
+    let projected_digest = projected.digest().map_err(|error| {
+        InternalError::invalid_input(format!(
+            "protected root topology digest cannot be reproduced: {error}"
+        ))
+    })?;
+    if projected_digest != authority.binding.component_topology_digest {
+        return Err(InternalError::invalid_input(
+            "protected root admissions do not reproduce the protected topology digest",
+        ));
+    }
+
+    let mut expected = Vec::new();
+    for spec in projected.component_specs {
+        expected.push((
+            spec.component_spec.clone(),
+            RootStoreReleaseSetEntryKind::Component,
+            spec.component_role,
+        ));
+        expected.extend(spec.children.into_iter().map(|child| {
+            (
+                spec.component_spec.clone(),
+                RootStoreReleaseSetEntryKind::ComponentChild,
+                child.role,
+            )
+        }));
+    }
+    if manifest.entries.len() != expected.len() {
+        return Err(InternalError::invalid_input(
+            "root release-set entry count differs from the admitted topology projection",
+        ));
+    }
+
+    let mut unique_artifacts = BTreeMap::<CanisterRole, ([u8; 32], u64)>::new();
+    let mut unique_payloads = BTreeSet::new();
+    let mut total_bytes = 0_u64;
+    for (entry, (component_spec, kind, role)) in manifest.entries.iter().zip(expected) {
+        if entry.component_spec != component_spec
+            || entry.kind != kind
+            || entry.artifact.role != role
+            || entry.artifact.release_build_id != manifest.release_build_id
+            || entry.artifact.package != ConfigOps::role_package(&role)?
+        {
+            return Err(InternalError::invalid_input(
+                "root release-set entry differs from the admitted topology projection",
+            ));
+        }
+        validate_artifact_shape(entry)?;
+        let payload_hash = decode_sha256(&entry.artifact.wasm_gz_sha256_hex)?;
+        let payload = (payload_hash, entry.artifact.wasm_gz_size_bytes);
+        if let Some(existing) = unique_artifacts.insert(role, payload)
+            && existing != payload
+        {
+            return Err(InternalError::invalid_input(
+                "one role resolves to conflicting root release-set artifacts",
+            ));
+        }
+        if unique_payloads.insert(payload) {
+            total_bytes = total_bytes
+                .checked_add(payload.1)
+                .ok_or_else(|| InternalError::invalid_input("root release-set bytes overflow"))?;
+        }
+    }
+    if total_bytes > authority.binding.limits.maximum_wasm_store_bytes {
+        return Err(InternalError::resource_exhausted(format!(
+            "root release set requires {total_bytes} bytes, exceeding protected Store limit {}",
+            authority.binding.limits.maximum_wasm_store_bytes
+        )));
+    }
+    Ok(())
+}
+
+fn validate_artifact_shape(
+    entry: &canic_core::dto::root_store::RootStoreReleaseSetEntry,
+) -> Result<(), InternalError> {
+    let artifact = &entry.artifact;
+    if artifact.package.is_empty()
+        || artifact.wasm_relative_path.is_empty()
+        || artifact.wasm_gz_relative_path.is_empty()
+        || artifact.wasm_size_bytes == 0
+        || artifact.wasm_gz_size_bytes == 0
+    {
+        return Err(InternalError::invalid_input(
+            "root release-set artifact metadata is incomplete",
+        ));
+    }
+    let _ = decode_sha256(&artifact.wasm_sha256_hex)?;
+    let _ = decode_sha256(&artifact.wasm_gz_sha256_hex)?;
+    Ok(())
+}
+
+fn exact_staged_manifests(
+    manifest: &RootStoreReleaseSetManifest,
+) -> Result<Vec<TemplateManifestResponse>, InternalError> {
+    let mut artifacts = BTreeMap::new();
+    for entry in &manifest.entries {
+        let payload_hash = decode_sha256(&entry.artifact.wasm_gz_sha256_hex)?;
+        let payload = (payload_hash, entry.artifact.wasm_gz_size_bytes);
+        if let Some(existing) = artifacts.insert(entry.artifact.role.clone(), payload)
+            && existing != payload
+        {
+            return Err(InternalError::invalid_input(
+                "one role resolves to conflicting staged artifacts",
+            ));
+        }
+    }
+
+    let version = TemplateVersion::owned(manifest.release_build_id.to_string());
+    artifacts
+        .into_iter()
+        .map(|(role, (payload_hash, payload_size_bytes))| {
+            let observed = TemplateManifestOps::approved_for_role_response(&role)?;
+            let expected_template_id = artifact_template_id(&role);
+            if observed.template_id != expected_template_id
+                || observed.role != role
+                || observed.version != version
+                || observed.payload_hash != payload_hash
+                || observed.payload_size_bytes != payload_size_bytes
+                || !is_exact_bootstrap_source(&observed.store_binding)
+                || observed.chunking_mode != TemplateChunkingMode::Chunked
+                || observed.manifest_state != TemplateManifestState::Approved
+            {
+                return Err(InternalError::invalid_input(format!(
+                    "staged artifact for role '{role}' differs from the protected root release set"
+                )));
+            }
+            TemplateChunkedOps::validate_staged_release(&observed)?;
+            Ok(observed)
+        })
+        .collect()
+}
+
+fn is_exact_bootstrap_source(binding: &crate::ids::WasmStoreBinding) -> bool {
+    binding == &WASM_STORE_BOOTSTRAP_BINDING || SubnetStateOps::wasm_store_pid(binding).is_some()
+}
+
+fn verify_live_catalog(
+    expected: &[TemplateManifestResponse],
+    observed: Vec<WasmStoreCatalogEntryResponse>,
+) -> Result<Vec<RootStoreCatalogEntry>, InternalError> {
+    let expected = expected
+        .iter()
+        .map(|manifest| {
+            (
+                manifest.role.clone(),
+                manifest.template_id.clone(),
+                manifest.version.clone(),
+                manifest.payload_hash.clone(),
+                manifest.payload_size_bytes,
+            )
+        })
+        .collect::<Vec<_>>();
+    let actual = observed
+        .iter()
+        .map(|entry| {
+            (
+                entry.role.clone(),
+                entry.template_id.clone(),
+                entry.version.clone(),
+                entry.payload_hash.clone(),
+                entry.payload_size_bytes,
+            )
+        })
+        .collect::<Vec<_>>();
+    if actual != expected {
+        return Err(InternalError::conflict(
+            "live Wasm Store Catalog differs from the exact root release set",
+        ));
+    }
+
+    observed
+        .into_iter()
+        .map(|entry| {
+            Ok(RootStoreCatalogEntry {
+                role: entry.role,
+                payload_hash: entry.payload_hash.try_into().map_err(|_| {
+                    InternalError::invalid_input("live Store catalog contains a non-SHA-256 hash")
+                })?,
+                payload_size_bytes: entry.payload_size_bytes,
+            })
+        })
+        .collect()
+}
+
+fn release_set_template_id(digest: canic_core::ids::ReleaseSetDigest) -> TemplateId {
+    TemplateId::owned(format!("{ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX}{digest}"))
+}
+
+fn artifact_template_id(role: &CanisterRole) -> TemplateId {
+    TemplateId::owned(format!("{ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX}{role}"))
+}
+
+fn decode_sha256(value: &str) -> Result<[u8; 32], InternalError> {
+    if value.len() != 64
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(InternalError::invalid_input(
+            "root release-set artifact SHA-256 must be 64 lowercase hexadecimal characters",
+        ));
+    }
+
+    let mut bytes = [0_u8; 32];
+    for (index, pair) in value.as_bytes().chunks_exact(2).enumerate() {
+        bytes[index] = (decode_nibble(pair[0]) << 4) | decode_nibble(pair[1]);
+    }
+    Ok(bytes)
+}
+
+const fn decode_nibble(byte: u8) -> u8 {
+    match byte {
+        b'0'..=b'9' => byte - b'0',
+        b'a'..=b'f' => byte - b'a' + 10,
+        _ => unreachable!(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ids::{TemplateChunkingMode, TemplateManifestState, WasmStoreBinding};
+
+    fn manifest(role: &str, byte: u8) -> TemplateManifestResponse {
+        TemplateManifestResponse {
+            template_id: TemplateId::owned(format!("{ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX}{role}")),
+            role: CanisterRole::owned(role.to_string()),
+            version: TemplateVersion::new("release-build"),
+            payload_hash: vec![byte; 32],
+            payload_size_bytes: 1_024,
+            store_binding: WasmStoreBinding::new("bootstrap"),
+            chunking_mode: TemplateChunkingMode::Chunked,
+            manifest_state: TemplateManifestState::Approved,
+            approved_at: Some(0),
+            created_at: 0,
+        }
+    }
+
+    fn catalog(manifest: &TemplateManifestResponse) -> WasmStoreCatalogEntryResponse {
+        WasmStoreCatalogEntryResponse {
+            role: manifest.role.clone(),
+            template_id: manifest.template_id.clone(),
+            version: manifest.version.clone(),
+            payload_hash: manifest.payload_hash.clone(),
+            payload_size_bytes: manifest.payload_size_bytes,
+        }
+    }
+
+    #[test]
+    fn sha256_decoder_accepts_only_canonical_lowercase_hex() {
+        assert_eq!(
+            decode_sha256(&"0f".repeat(32)).expect("canonical digest"),
+            [15; 32]
+        );
+        assert!(decode_sha256(&"0F".repeat(32)).is_err());
+        assert!(decode_sha256("0f").is_err());
+    }
+
+    #[test]
+    fn live_catalog_must_equal_the_complete_ordered_release_set() {
+        let first = manifest("database_a", 1);
+        let second = manifest("database_b", 2);
+        let expected = vec![first.clone(), second.clone()];
+
+        let verified = verify_live_catalog(&expected, vec![catalog(&first), catalog(&second)])
+            .expect("exact live catalog");
+        assert_eq!(
+            verified
+                .into_iter()
+                .map(|entry| entry.role)
+                .collect::<Vec<_>>(),
+            vec![
+                CanisterRole::from("database_a"),
+                CanisterRole::from("database_b")
+            ]
+        );
+
+        assert!(
+            verify_live_catalog(&expected, vec![catalog(&second), catalog(&first)]).is_err(),
+            "catalog order is part of canonical evidence"
+        );
+        assert!(
+            verify_live_catalog(&expected, vec![catalog(&first)]).is_err(),
+            "a partial catalog must not verify"
+        );
+    }
+}

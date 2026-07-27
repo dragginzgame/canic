@@ -1,9 +1,9 @@
 //! Module: install_root::fleet_subnet_root_install_journal
 //!
 //! Responsibility: own canonical host recovery authority for one planned Fleet Subnet Root.
-//! Does not own: ICP commands, artifact reads, local Store bootstrap, or Registry mutation.
-//! Boundary: every paid root effect has a durable in-flight phase and exact retry never changes
-//! the Fleet plan, Coordinator authority, root placement, release set, or install operation.
+//! Does not own: ICP commands, artifact reads, Store publication effects, or Registry mutation.
+//! Boundary: every root and Store effect has a durable phase and exact retry never changes the
+//! Fleet plan, Coordinator authority, root placement, release set, or install operation.
 
 #[cfg(test)]
 mod tests;
@@ -23,7 +23,7 @@ use candid::Principal;
 use canic_core::{
     bootstrap::compiled::ComponentTopology,
     cdk::utils::hash::decode_hex,
-    dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    dto::{fleet_subnet_root::FleetSubnetRootAuthority, root_store::RootStoreBootstrapResponse},
     ids::{
         FleetCoordinatorBinding, FleetRegistryAuthority, FleetSubnetRootBinding, ReleaseBuildId,
         SubnetId,
@@ -31,6 +31,7 @@ use canic_core::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::BTreeSet,
     io,
     path::{Path, PathBuf},
 };
@@ -40,7 +41,7 @@ const JOURNAL_FILE: &str = "install-journal.json";
 const JOURNAL_LOCK_FILE: &str = "install-journal.lock";
 const CREATE_RESULT_FILE: &str = "create-result.json";
 const ROOT_INSTALL_DIRECTORY: &str = "fleet-subnet-root-installs";
-const JOURNAL_SCHEMA_VERSION: u32 = 1;
+const JOURNAL_SCHEMA_VERSION: u32 = 2;
 const MAX_JOURNAL_BYTES: usize = 4_194_304;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -52,6 +53,11 @@ pub(super) enum FleetSubnetRootInstallPhase {
     InstallInFlight,
     Installed,
     Verified,
+    StoreStaging,
+    StoreStaged,
+    StoreBootstrapInFlight,
+    StoreBootstrapped,
+    StoreVerified,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -72,6 +78,7 @@ pub(super) struct FleetSubnetRootInstallJournal {
     pub fleet_subnet_root: Option<Principal>,
     pub installed_module_hash: Option<[u8; 32]>,
     pub verified_binding: Option<FleetSubnetRootBinding>,
+    pub store_bootstrap: Option<RootStoreBootstrapResponse>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -262,6 +269,67 @@ pub(super) fn record_root_verified(
     )
 }
 
+pub(super) fn begin_store_staging(
+    current: &ResolvedFleetSubnetRootInstall,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    advance_without_evidence(
+        current,
+        FleetSubnetRootInstallPhase::Verified,
+        FleetSubnetRootInstallPhase::StoreStaging,
+    )
+}
+
+pub(super) fn record_store_staged(
+    current: &ResolvedFleetSubnetRootInstall,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    advance_without_evidence(
+        current,
+        FleetSubnetRootInstallPhase::StoreStaging,
+        FleetSubnetRootInstallPhase::StoreStaged,
+    )
+}
+
+pub(super) fn begin_store_bootstrap(
+    current: &ResolvedFleetSubnetRootInstall,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    advance_without_evidence(
+        current,
+        FleetSubnetRootInstallPhase::StoreStaged,
+        FleetSubnetRootInstallPhase::StoreBootstrapInFlight,
+    )
+}
+
+pub(super) fn record_store_bootstrapped(
+    current: &ResolvedFleetSubnetRootInstall,
+    evidence: RootStoreBootstrapResponse,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    validate_store_bootstrap_evidence(&current.path, &current.journal, &evidence)?;
+    transition(
+        current,
+        FleetSubnetRootInstallPhase::StoreBootstrapInFlight,
+        FleetSubnetRootInstallPhase::StoreBootstrapped,
+        |next| next.store_bootstrap = Some(evidence),
+    )
+}
+
+pub(super) fn record_store_verified(
+    current: &ResolvedFleetSubnetRootInstall,
+    evidence: RootStoreBootstrapResponse,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    validate_store_bootstrap_evidence(&current.path, &current.journal, &evidence)?;
+    if current.journal.store_bootstrap.as_ref() != Some(&evidence) {
+        return Err(invalid(
+            &current.path,
+            "verified Store evidence differs from bootstrap result",
+        ));
+    }
+    advance_without_evidence(
+        current,
+        FleetSubnetRootInstallPhase::StoreBootstrapped,
+        FleetSubnetRootInstallPhase::StoreVerified,
+    )
+}
+
 #[must_use]
 pub(super) fn create_result_path(journal_path: &Path) -> PathBuf {
     journal_path
@@ -344,6 +412,7 @@ fn planned_journal(
         fleet_subnet_root: None,
         installed_module_hash: None,
         verified_binding: None,
+        store_bootstrap: None,
     };
     validate_journal(&path, &journal)?;
     Ok(journal)
@@ -541,6 +610,11 @@ fn validate_phase_evidence(
         FleetSubnetRootInstallPhase::InstallInFlight => 3,
         FleetSubnetRootInstallPhase::Installed => 4,
         FleetSubnetRootInstallPhase::Verified => 5,
+        FleetSubnetRootInstallPhase::StoreStaging => 6,
+        FleetSubnetRootInstallPhase::StoreStaged => 7,
+        FleetSubnetRootInstallPhase::StoreBootstrapInFlight => 8,
+        FleetSubnetRootInstallPhase::StoreBootstrapped => 9,
+        FleetSubnetRootInstallPhase::StoreVerified => 10,
     };
     if journal.sequence != expected_sequence {
         return Err(invalid(path, "phase differs from journal sequence"));
@@ -548,15 +622,27 @@ fn validate_phase_evidence(
     let has_root = journal.fleet_subnet_root.is_some();
     let has_installed = journal.installed_module_hash.is_some();
     let has_verified = journal.verified_binding.is_some();
+    let has_store = journal.store_bootstrap.is_some();
     let valid = match journal.phase {
         FleetSubnetRootInstallPhase::Planned | FleetSubnetRootInstallPhase::CreationInFlight => {
-            !has_root && !has_installed && !has_verified
+            !has_root && !has_installed && !has_verified && !has_store
         }
         FleetSubnetRootInstallPhase::Created | FleetSubnetRootInstallPhase::InstallInFlight => {
-            has_root && !has_installed && !has_verified
+            has_root && !has_installed && !has_verified && !has_store
         }
-        FleetSubnetRootInstallPhase::Installed => has_root && has_installed && !has_verified,
-        FleetSubnetRootInstallPhase::Verified => has_root && has_installed && has_verified,
+        FleetSubnetRootInstallPhase::Installed => {
+            has_root && has_installed && !has_verified && !has_store
+        }
+        FleetSubnetRootInstallPhase::Verified
+        | FleetSubnetRootInstallPhase::StoreStaging
+        | FleetSubnetRootInstallPhase::StoreStaged
+        | FleetSubnetRootInstallPhase::StoreBootstrapInFlight => {
+            has_root && has_installed && has_verified && !has_store
+        }
+        FleetSubnetRootInstallPhase::StoreBootstrapped
+        | FleetSubnetRootInstallPhase::StoreVerified => {
+            has_root && has_installed && has_verified && has_store
+        }
     };
     if !valid {
         return Err(invalid(path, "phase differs from retained root evidence"));
@@ -589,13 +675,76 @@ fn validate_root_evidence(
     }
     let expected =
         expected_root_authority(journal).map_err(|error| invalid(path, error.to_string()))?;
-    if journal.phase == FleetSubnetRootInstallPhase::Verified
-        && journal.verified_binding.as_ref() != Some(&expected.binding)
+    if matches!(
+        journal.phase,
+        FleetSubnetRootInstallPhase::Verified
+            | FleetSubnetRootInstallPhase::StoreStaging
+            | FleetSubnetRootInstallPhase::StoreStaged
+            | FleetSubnetRootInstallPhase::StoreBootstrapInFlight
+            | FleetSubnetRootInstallPhase::StoreBootstrapped
+            | FleetSubnetRootInstallPhase::StoreVerified
+    ) && journal.verified_binding.as_ref() != Some(&expected.binding)
     {
         return Err(invalid(
             path,
             "verified root authority differs from exact planned binding",
         ));
+    }
+    if let Some(evidence) = &journal.store_bootstrap {
+        validate_store_bootstrap_evidence(path, journal, evidence)?;
+    }
+    Ok(())
+}
+
+fn validate_store_bootstrap_evidence(
+    path: &Path,
+    journal: &FleetSubnetRootInstallJournal,
+    evidence: &RootStoreBootstrapResponse,
+) -> Result<(), FleetSubnetRootInstallJournalError> {
+    let fleet_subnet_root = journal
+        .fleet_subnet_root
+        .ok_or_else(|| invalid(path, "Store evidence requires a root principal"))?;
+    if evidence.fleet_subnet_root != fleet_subnet_root
+        || evidence.wasm_store == Principal::anonymous()
+        || evidence.wasm_store == fleet_subnet_root
+        || evidence.wasm_store == journal.authority.binding.coordinator
+        || evidence.release_set != journal.root_plan.initial_release_set
+        || evidence.catalog.is_empty()
+    {
+        return Err(invalid(
+            path,
+            "Store bootstrap evidence differs from immutable root authority",
+        ));
+    }
+    let projected = journal
+        .component_topology
+        .project_for_admissions(&journal.root_plan.component_admissions)
+        .map_err(|error| invalid(path, error.to_string()))?;
+    let mut expected_roles = BTreeSet::new();
+    for spec in projected.component_specs {
+        expected_roles.insert(spec.component_role);
+        expected_roles.extend(spec.children.into_iter().map(|child| child.role));
+    }
+    let observed_roles = evidence
+        .catalog
+        .iter()
+        .map(|entry| entry.role.clone())
+        .collect::<BTreeSet<_>>();
+    if observed_roles != expected_roles {
+        return Err(invalid(
+            path,
+            "Store bootstrap catalog roles differ from root admissions",
+        ));
+    }
+    let mut previous = None;
+    for entry in &evidence.catalog {
+        if entry.payload_size_bytes == 0
+            || entry.payload_hash == [0; 32]
+            || previous.as_ref().is_some_and(|role| role >= &entry.role)
+        {
+            return Err(invalid(path, "Store bootstrap catalog is not canonical"));
+        }
+        previous = Some(entry.role.clone());
     }
     Ok(())
 }

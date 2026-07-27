@@ -14,7 +14,6 @@ use super::error::PublicationWorkflowError;
 
 // Fetch the approved embedded catalog from one wasm store.
 pub(super) async fn store_catalog(
-    _publication_permit: &CostGuardPermit,
     store_pid: Principal,
 ) -> Result<Vec<WasmStoreCatalogEntryResponse>, InternalError> {
     WasmStoreInternalClient::new(store_pid).catalog().await

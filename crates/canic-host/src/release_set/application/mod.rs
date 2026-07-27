@@ -302,6 +302,46 @@ pub struct FleetSubnetRootReleaseSetManifest {
 }
 
 impl FleetSubnetRootReleaseSetManifest {
+    /// Project this host authority into the passive runtime decoding shape.
+    #[must_use]
+    pub fn root_store_manifest(&self) -> canic_core::dto::root_store::RootStoreReleaseSetManifest {
+        use canic_core::dto::root_store::{
+            RootStoreArtifact, RootStoreReleaseSetEntry, RootStoreReleaseSetEntryKind,
+            RootStoreReleaseSetManifest,
+        };
+
+        RootStoreReleaseSetManifest {
+            release_build_id: self.release_build_id,
+            component_topology_digest: self.component_topology_digest,
+            entries: self
+                .entries
+                .iter()
+                .map(|entry| RootStoreReleaseSetEntry {
+                    component_spec: entry.component_spec.clone(),
+                    kind: match entry.kind {
+                        ApplicationReleaseSetEntryKind::Component => {
+                            RootStoreReleaseSetEntryKind::Component
+                        }
+                        ApplicationReleaseSetEntryKind::ComponentChild => {
+                            RootStoreReleaseSetEntryKind::ComponentChild
+                        }
+                    },
+                    artifact: RootStoreArtifact {
+                        role: entry.artifact.role.clone(),
+                        package: entry.artifact.package.clone(),
+                        release_build_id: entry.artifact.release_build_id,
+                        wasm_relative_path: entry.artifact.wasm_relative_path.clone(),
+                        wasm_size_bytes: entry.artifact.wasm_size_bytes,
+                        wasm_sha256_hex: entry.artifact.wasm_sha256_hex.clone(),
+                        wasm_gz_relative_path: entry.artifact.wasm_gz_relative_path.clone(),
+                        wasm_gz_size_bytes: entry.artifact.wasm_gz_size_bytes,
+                        wasm_gz_sha256_hex: entry.artifact.wasm_gz_sha256_hex.clone(),
+                    },
+                })
+                .collect(),
+        }
+    }
+
     /// Project one root's exact Spec-scoped artifact closure from the Fleet-wide union.
     pub fn project(
         topology: &ComponentTopology,

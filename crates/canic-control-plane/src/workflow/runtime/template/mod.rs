@@ -25,7 +25,7 @@ use canic_core::control_plane_support::{
 use canic_core::dto::error::{Error, ErrorCode};
 use std::collections::BTreeSet;
 
-const WASM_STORE_BOOTSTRAP_BINDING: WasmStoreBinding = WasmStoreBinding::new("bootstrap");
+pub const WASM_STORE_BOOTSTRAP_BINDING: WasmStoreBinding = WasmStoreBinding::new("bootstrap");
 
 // Build one stable release label for logs and install-source reporting.
 fn release_source_label(template_id: &TemplateId, version: &TemplateVersion) -> String {

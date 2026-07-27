@@ -108,6 +108,22 @@ impl ConfigOps {
             .map_err(InternalError::from)
     }
 
+    /// Resolve the exact configured package identity for one declared application role.
+    pub fn role_package(canister_role: &CanisterRole) -> Result<String, InternalError> {
+        let config = Config::get()?;
+        config
+            .roles
+            .get(canister_role)
+            .map(|declaration| declaration.package.clone())
+            .ok_or_else(|| {
+                ConfigOpsError::CanisterNotFound(
+                    canister_role.to_string(),
+                    "role declarations".to_string(),
+                )
+                .into()
+            })
+    }
+
     /// Resolve an implicit infrastructure role or a role structurally contained
     /// by exactly one Component Spec.
     pub fn try_get_canister_by_role(

@@ -30,7 +30,7 @@ impl WasmStorePublicationWorkflow {
 
     // Snapshot the current writable store fleet and the current preferred write hint.
     pub(in crate::workflow::runtime::template::publication) async fn snapshot_publication_store_fleet(
-        publication_permit: &CostGuardPermit,
+        _publication_permit: &CostGuardPermit,
     ) -> Result<PublicationStoreFleet, InternalError> {
         Self::sync_registered_wasm_store_inventory()?;
 
@@ -44,7 +44,7 @@ impl WasmStorePublicationWorkflow {
 
         for record in SubnetStateOps::wasm_stores() {
             let status = store_status(record.pid).await?;
-            let releases = store_catalog(publication_permit, record.pid).await?;
+            let releases = store_catalog(record.pid).await?;
             stores.push(PublicationStoreSnapshot {
                 binding: record.binding,
                 pid: record.pid,

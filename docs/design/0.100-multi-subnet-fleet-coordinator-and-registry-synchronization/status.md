@@ -6,8 +6,8 @@ Date: 2026-07-27
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.12`.
-- Open patch draft: `0.100.13`; no package-version change has been authorized.
+- Workspace package version: `0.100.13`.
+- Open patch draft: `0.100.14`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -125,7 +125,7 @@ Registry slices replace the 0.99 root model.
 - [x] Install the Coordinator from empty state.
 - [x] Install and independently verify every planned root behind its runtime
   `Prepared` fence.
-- [ ] Bootstrap each root's local topology-admitted Wasm Store.
+- [x] Bootstrap each root's local topology-admitted Wasm Store.
 - [x] Commit the genesis Fleet Registry.
 
 ## Slice 3 — Fleet Registry and Root Lifecycle
@@ -294,7 +294,7 @@ qualified Wasm and verifies the live module hash, complete Registry genesis,
 manifest and version. A post-verification fence still prevents any legacy
 root effect.
 
-Open 0.100.13 replaces that root-effect fence with one immutable journal per
+Released 0.100.13 replaces that root-effect fence with one immutable journal per
 planned Fleet Subnet Root. In canonical plan order, the host durably records
 each exact placement and funding effect, creates and installs the qualified
 root Wasm, then verifies the live module hash, empty `Prepared` activation
@@ -305,19 +305,28 @@ single-root activation journal and its root creation, cycles and catalog-write
 paths are hard-cut; one small Fleet install session retains only shared
 identity and finalized release evidence.
 
-The current installer therefore stops after every planned root is installed
-and independently verified as `Prepared`. Fleet Registry root registration,
-root-local Store bootstrap, Component allocation, root-owned count summaries
-and terminal Coordinator-anchored Fleet catalog publication remain
-unimplemented. The temporary Component Spec selector remains until real
-allocation supplies the exact protected Component binding.
+Open 0.100.14 extends each root journal through exact release-set staging,
+root-owned creation of one implicit local Store, exact publication and
+independent `StoreVerified` evidence. Host and runtime canonical manifest
+shapes must serialize to identical bytes. The root binds every staged artifact
+to its protected build, topology, admissions, package and Store limit, and the
+live Store Catalog must equal the complete ordered admitted role set. Exact
+retry reuses the same Store and evidence while both root and Store remain
+`Prepared`.
+
+The current installer therefore stops only after every planned root has an
+independently verified exact local Store. Fleet Registry root registration,
+Component allocation, root-owned count summaries and terminal
+Coordinator-anchored Fleet catalog publication remain unimplemented. The
+temporary Component Spec selector remains until real allocation supplies the
+exact protected Component binding.
 
 ## Next Action
 
-Replace the post-root-verification fence with journalled bootstrap of each
-root's exact local Store, then register every root through Registry `Joining`,
-synchronize final Registry evidence and publish the Coordinator-anchored Fleet
-catalog only after every required root reaches terminal evidence.
+Replace the post-Store-verification fence with journalled registration of every
+root through Registry `Joining`, then synchronize final Registry evidence and
+publish the Coordinator-anchored Fleet catalog only after every required root
+reaches terminal evidence.
 
 As root-local Component Registry authority lands, maintain checked
 known-created/not-deletion-confirmed Canister counters and expose compact
