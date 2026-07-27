@@ -1389,6 +1389,7 @@ edition = "2024"
 default = ["metrics"]
 metrics = []
 control-plane = []
+fleet-coordinator-canister = []
 wasm-store-canister = []
 blob-storage = ["canic-core/blob-storage"]
 blob-storage-billing = ["blob-storage", "canic-core/blob-storage-billing"]
