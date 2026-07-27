@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.18`.
-- The latest published release is `v0.100.18` at
-  `3918d6da202477603c562f51e5d3505dd57bf69b`.
-- The `v0.100.18` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `752dded4f80169419074bd985679409c8eb4c3bc63cd139499e977632ede5b3c`.
+- The workspace package version is `0.100.19`.
+- The latest published release is `v0.100.19` at
+  `9b0c51129fa3929695f68e484e03355ec836a032`.
+- The `v0.100.19` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `84d8baa32b449c39751f4a9a807ab4e3093aac4d9a8349d626a6281c74d358a0`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -202,7 +202,7 @@ Historical detail is archived at:
   deterministic all-`Active` state is reproduced. Every root remains
   runtime-`Prepared`; Component Registry allocation and runtime activation
   are next.
-- Open `0.100.19` prepares each root's empty durable Component Registry only
+- Released `0.100.19` prepares each root's empty durable Component Registry only
   after independently reverifying its exact Store, all-`Active` Registry
   Mirror, protected root row and Registry-derived Fleet Directory. Host
   journal sequences 20–22 freeze preparation intent, result and independent
@@ -216,6 +216,19 @@ Historical detail is archived at:
   after Component allocation lands. The manually invoked instruction-audit
   scenarios must likewise be rebased on real Component allocation before new
   lifecycle measurements.
+- Open `0.100.20` durably reserves admitted top-level Component identities
+  beneath that prepared Registry authority. Each controller operation names
+  only a nonzero operation ID and Component Spec; after independently
+  reverifying the exact Store, all-`Active` Registry Mirror, protected root
+  row and Fleet Directory, the root derives the role, Spec hash, release set,
+  administrator origin, root-local sequence and deterministic
+  `ComponentInstanceId`. Pure policy checks topology/admission, per-Spec,
+  aggregate Component and managed-Canister limits. The stable commit advances
+  the sequence and reserved count, charges exact encoded key/value bytes and
+  records exact retry/status evidence at memory ID 89. Conflicting intent and
+  capacity exhaustion fail closed. This phase creates or installs no
+  Canister, spends no creation cycles, commits no `ComponentBinding` and
+  leaves the root runtime `Prepared`.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -223,8 +236,9 @@ Historical detail is archived at:
   Component Specs. One Spec declares one direct Component role plus the
   complete catalog of potential descendant roles and Wasms for that
   Component tree, with a Fleet instance ceiling distributed into positive
-  root-local ceilings. A root allocates `ComponentInstanceId` only when it
-  creates a concrete top-level Component. Any registered Component-tree node
+  root-local ceilings. A root allocates `ComponentInstanceId` only when a
+  concrete top-level Component creation operation durably reserves it before
+  any paid effect. Any registered Component-tree node
   may request one admitted direct child through the root; its immutable child
   binding names the exact immediate parent, while the root remains sole
   controller and lifecycle authority at every depth. Bounded non-parent
@@ -1505,7 +1519,7 @@ First primary results:
 
 ## Next Action
 
-Continue 0.100 Slice 3 from the
+Continue 0.100 Slice 4 from the
 [implementation tracker](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md).
 Fresh installation now journals and verifies the Coordinator, every planned
 Fleet Subnet Root, each root's exact topology-admitted local Store, and every
@@ -1513,11 +1527,15 @@ root's Registry `Joining` row, private snapshot candidate and exact
 Coordinator acknowledgement, then atomically commits and independently
 verifies the complete Coordinator Registry as all-`Active`. It now also
 atomically activates and independently verifies every root's exact matching
-Registry Mirror/Fleet Directory. Next, establish the root-local Component
-Registry and admitted top-level Component allocation boundary before runtime
-activation. Do not bypass Store or Registry evidence, permit nested Component
-declarations, merge roots belonging to different Fleets on one Subnet or
-consume an earlier installation.
+Registry Mirror/Fleet Directory. Each root can now reserve exact admitted
+top-level Component identity and capacity without a paid effect. Next,
+continue that same operation through release-set artifact resolution,
+journalled creation/install and protected `ComponentBinding`/Registry
+partition commitment. Hard-cut the retired environment/role and
+`SubnetDirectory` install payload instead of adapting it. Do not bypass Store
+or Registry evidence, permit nested Component declarations, merge roots
+belonging to different Fleets on one Subnet or consume an earlier
+installation.
 
 ## Historical Release Detail
 

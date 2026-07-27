@@ -123,6 +123,11 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         command_kind("component_registry.prepare_root.v1"),
     ),
     query_read_only("canic_root_component_registry_status"),
+    update_response_idempotent(
+        "canic_root_component_allocate",
+        command_kind("component_registry.allocate_top_level.v1"),
+    ),
+    query_read_only("canic_root_component_allocation_status"),
     update_monotonic_transition(
         "canic_prepare_fleet_credential_generation",
         command_kind("fleet_activation.prepare_credential_generation.v1"),

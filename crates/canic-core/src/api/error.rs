@@ -45,7 +45,10 @@ mod tests {
     use crate::{
         access::AccessError,
         cdk::types::Principal,
-        domain::policy::pure::topology::{TopologyPolicyError, registry::RegistryPolicyError},
+        domain::policy::pure::{
+            component_allocation::ComponentAllocationPolicyError,
+            topology::{TopologyPolicyError, registry::RegistryPolicyError},
+        },
         dto::error::ErrorCode,
         ids::CanisterRole,
     };
@@ -80,6 +83,18 @@ mod tests {
         let workflow: Error =
             InternalError::workflow(InternalErrorOrigin::Workflow, "workflow fail").into();
         assert_eq!(workflow.code, ErrorCode::Internal);
+
+        let invalid_allocation: Error =
+            InternalError::from(ComponentAllocationPolicyError::EmptyOperationId).into();
+        assert_eq!(invalid_allocation.code, ErrorCode::InvalidInput);
+
+        let exhausted_allocation: Error =
+            InternalError::from(ComponentAllocationPolicyError::ComponentCapacityExhausted).into();
+        assert_eq!(exhausted_allocation.code, ErrorCode::ResourceExhausted);
+
+        let invalid_authority: Error =
+            InternalError::from(ComponentAllocationPolicyError::RootTopologyDigestMismatch).into();
+        assert_eq!(invalid_authority.code, ErrorCode::InvariantViolation);
 
         let token_expired: Error = AccessError::DelegatedAuthTokenExpired.into();
         assert_eq!(token_expired.code, ErrorCode::AuthTokenExpired);

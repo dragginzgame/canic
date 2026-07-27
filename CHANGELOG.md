@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.20` durably reserves deterministic top-level Component identities
+  and exact root/Spec/Registry capacity under live Store and all-Active
+  Registry authority, with exact retry and no paid Canister effect.
+
 - `0.100.19` prepares every root's exact empty Component Registry after active
   Store/Registry/Directory verification, hard-cuts static role bootstrap and
   restores mirror layering while runtime allocation remains fenced.

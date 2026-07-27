@@ -1,12 +1,15 @@
 //! Module: dto::component_registry
 //!
-//! Responsibility: carry root-local Component Registry preparation evidence.
-//! Does not own: admission validation, stable mutation, identity allocation, or lifecycle effects.
-//! Boundary: the host binds preparation to the already verified Store and active Fleet Registry.
+//! Responsibility: carry root-local Component Registry preparation and allocation evidence.
+//! Does not own: admission policy, stable mutation, artifact resolution, or lifecycle effects.
+//! Boundary: callers name intent and Spec while the root allocates identity under verified authority.
 
 use crate::{
     dto::{fleet_registry::FleetRegistryVersion, root_store::RootStoreBootstrapRequest},
-    ids::{ComponentTopologyDigest, FleetSubnetRootReleaseSet},
+    ids::{
+        CanisterRole, ComponentInstanceId, ComponentSpecId, ComponentTopologyDigest,
+        FleetSubnetRootReleaseSet,
+    },
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
@@ -42,6 +45,70 @@ pub struct RootComponentRegistryStatusResponse {
     pub encoded_bytes: u64,
 }
 
+///
+/// RootComponentAllocationRequest
+///
+/// Controller command naming one idempotent top-level Component reservation intent.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentAllocationRequest {
+    pub operation_id: [u8; 32],
+    pub component_spec: ComponentSpecId,
+}
+
+///
+/// RootComponentAllocationStatusRequest
+///
+/// Read-only lookup key for one durable top-level Component allocation operation.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentAllocationStatusRequest {
+    pub operation_id: [u8; 32],
+}
+
+///
+/// ComponentProvisioningOrigin
+///
+/// Authenticated causal authority retained with one top-level Component allocation.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum ComponentProvisioningOrigin {
+    FleetAdministrator { caller: Principal },
+}
+
+///
+/// RootComponentAllocationPhase
+///
+/// Durable root-local progress of one top-level Component allocation operation.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RootComponentAllocationPhase {
+    Reserved,
+}
+
+///
+/// RootComponentAllocationResponse
+///
+/// Durable identity reservation returned identically for exact operation retry.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentAllocationResponse {
+    pub operation_id: [u8; 32],
+    pub allocation_sequence: u64,
+    pub component: ComponentInstanceId,
+    pub component_spec: ComponentSpecId,
+    pub spec_hash: [u8; 32],
+    pub role: CanisterRole,
+    pub provisioning_origin: ComponentProvisioningOrigin,
+    pub release_set: FleetSubnetRootReleaseSet,
+    pub phase: RootComponentAllocationPhase,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -54,7 +121,7 @@ mod tests {
     };
 
     #[test]
-    fn component_registry_preparation_contracts_round_trip_through_candid() {
+    fn component_registry_contracts_round_trip_through_candid() {
         let authority = FleetRegistryAuthority {
             binding: FleetCoordinatorBinding {
                 fleet: crate::ids::FleetBinding {
@@ -95,9 +162,23 @@ mod tests {
             managed_descendants: 0,
             encoded_bytes: 0,
         };
+        let allocation = RootComponentAllocationResponse {
+            operation_id: [10; 32],
+            allocation_sequence: 1,
+            component: ComponentInstanceId::from_generated_bytes([11; 32]),
+            component_spec: "projects".parse().expect("Component Spec ID"),
+            spec_hash: [12; 32],
+            role: CanisterRole::new("project_hub"),
+            provisioning_origin: ComponentProvisioningOrigin::FleetAdministrator {
+                caller: Principal::from_slice(&[13; 29]),
+            },
+            release_set: response.release_set,
+            phase: RootComponentAllocationPhase::Reserved,
+        };
 
         let request_bytes = candid::encode_one(&request).expect("encode request");
         let response_bytes = candid::encode_one(&response).expect("encode response");
+        let allocation_bytes = candid::encode_one(&allocation).expect("encode allocation");
 
         assert_eq!(
             candid::decode_one::<RootComponentRegistryPreparationRequest>(&request_bytes)
@@ -108,6 +189,11 @@ mod tests {
             candid::decode_one::<RootComponentRegistryStatusResponse>(&response_bytes)
                 .expect("decode response"),
             response
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentAllocationResponse>(&allocation_bytes)
+                .expect("decode allocation"),
+            allocation
         );
     }
 }

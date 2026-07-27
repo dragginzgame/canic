@@ -498,6 +498,16 @@ fn assert_fleet_registry_protocol_constants() {
             canic_core::protocol::CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
             "canic_root_component_registry_status",
         ),
+        (
+            canic::protocol::CANIC_ROOT_COMPONENT_ALLOCATE,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_ALLOCATE,
+            "canic_root_component_allocate",
+        ),
+        (
+            canic::protocol::CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
+            "canic_root_component_allocation_status",
+        ),
     ] {
         assert_eq!(facade, core);
         assert_eq!(facade, expected);
@@ -524,6 +534,16 @@ fn assert_root_registry_mirror_guards(root: &str) {
         preceding_attribute_context(root, "async fn canic_root_component_registry_status(")
             .contains("canic_query(composite, requires(caller::is_controller()))"),
         "root Component Registry status must remain a controller-guarded composite query"
+    );
+    assert!(
+        preceding_attribute_context(root, "async fn canic_root_component_allocate(")
+            .contains("canic_update(requires(caller::is_controller()))"),
+        "root Component allocation must remain a controller-guarded update"
+    );
+    assert!(
+        preceding_attribute_context(root, "async fn canic_root_component_allocation_status(")
+            .contains("canic_query(requires(caller::is_controller()))"),
+        "root Component allocation status must remain a controller-guarded query"
     );
 }
 

@@ -43,9 +43,11 @@ pub struct RootStoreArtifact {
 #[derive(
     CandidType, Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize,
 )]
-#[serde(rename_all = "snake_case")]
 pub enum RootStoreReleaseSetEntryKind {
+    #[serde(rename = "component")]
     Component,
+
+    #[serde(rename = "component_child")]
     ComponentChild,
 }
 

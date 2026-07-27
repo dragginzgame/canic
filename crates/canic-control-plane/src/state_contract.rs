@@ -7,7 +7,9 @@
 //! Boundary: descriptors are static metadata supplied to host-side materialization.
 
 use crate::storage::stable::{
-    component_registry::{RootComponentRegistryData, RootComponentRegistryStateRecord},
+    component_registry::{
+        RootComponentAllocationRecord, RootComponentRegistryData, RootComponentRegistryStateRecord,
+    },
     fleet_coordinator::{FleetCoordinatorRegistryData, FleetCoordinatorRegistryRecord},
     fleet_registry_mirror::{RootFleetRegistryMirrorData, RootFleetRegistryMirrorStateRecord},
     state::subnet::{ControlPlaneSubnetStateData, SubnetStateRecord},
@@ -25,9 +27,9 @@ use canic_core::{
         AllocationOwner, StateAllocationKey,
         allocation::memory::template::{
             CONTROL_PLANE_SUBNET_STATE_ID, FLEET_COORDINATOR_REGISTRY_ID,
-            ROOT_COMPONENT_REGISTRY_META_ID, ROOT_FLEET_REGISTRY_MIRROR_ID,
-            TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID, TEMPLATE_CHUNK_SETS_ID,
-            TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
+            ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_REGISTRY_META_ID,
+            ROOT_FLEET_REGISTRY_MIRROR_ID, TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID,
+            TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
         },
     },
     state_contract::{
@@ -56,15 +58,7 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
             195,
             "root_fleet_registry_mirror_restores_exclusive_candidate_or_active_directory",
         ),
-        descriptor(
-            StateAllocationKey::RootComponentRegistry,
-            "root_component_registry",
-            ROOT_COMPONENT_REGISTRY_META_ID,
-            RootComponentRegistryStateRecord::STATE_CONTRACT_NAME,
-            RootComponentRegistryData::STATE_CONTRACT_NAME,
-            196,
-            "root_component_registry_restores_exact_preparation_authority_and_allocation_sequence",
-        ),
+        root_component_registry_descriptor(),
         descriptor(
             StateAllocationKey::TemplateManifests,
             "template_manifests",
@@ -120,6 +114,50 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
             "wasm_store_gc_state_restores_local_gc_mode",
         ),
     ]
+}
+
+fn root_component_registry_descriptor() -> StateAllocationDescriptor {
+    StateAllocationDescriptor {
+        allocation: StateAllocationKey::RootComponentRegistry,
+        owner: AllocationOwner::CanicControlPlane,
+        state: vec![
+            StateDomainManifest {
+                domain: "root_component_registry".to_string(),
+                version: 1,
+                storage: StateStorage::StableMemory,
+                memory_id: Some(ROOT_COMPONENT_REGISTRY_META_ID),
+                owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
+                record: RootComponentRegistryStateRecord::STATE_CONTRACT_NAME.to_string(),
+                snapshot: RootComponentRegistryData::STATE_CONTRACT_NAME.to_string(),
+                min_supported_version: 1,
+                migration_policy: MigrationPolicy::NewDomain,
+                restore_order: Some(196),
+                post_upgrade_invariant: Some(
+                    "root_component_registry_restores_exact_preparation_authority_and_allocation_sequence"
+                        .to_string(),
+                ),
+                migrations: Vec::new(),
+            },
+            StateDomainManifest {
+                domain: "root_component_allocations".to_string(),
+                version: 1,
+                storage: StateStorage::StableMemory,
+                memory_id: Some(ROOT_COMPONENT_ALLOCATIONS_ID),
+                owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
+                record: RootComponentAllocationRecord::STATE_CONTRACT_NAME.to_string(),
+                snapshot: RootComponentRegistryData::STATE_CONTRACT_NAME.to_string(),
+                min_supported_version: 1,
+                migration_policy: MigrationPolicy::NewDomain,
+                restore_order: Some(197),
+                post_upgrade_invariant: Some(
+                    "root_component_allocations_restore_exact_operation_identity_and_capacity"
+                        .to_string(),
+                ),
+                migrations: Vec::new(),
+            },
+        ],
+        reserved_memory: Vec::new(),
+    }
 }
 
 fn descriptor(
@@ -239,5 +277,42 @@ mod tests {
             assert_eq!(declaration.record, record);
             assert_eq!(declaration.snapshot, snapshot);
         }
+    }
+
+    #[test]
+    fn root_component_registry_declares_meta_and_allocation_domains() {
+        let descriptors = canic_control_plane_state_descriptors();
+        let descriptor = descriptors
+            .iter()
+            .find(|descriptor| descriptor.allocation == StateAllocationKey::RootComponentRegistry)
+            .expect("root Component Registry descriptor");
+
+        assert_eq!(descriptor.state.len(), 2);
+        assert_eq!(
+            descriptor
+                .state
+                .iter()
+                .map(|domain| (
+                    domain.domain.as_str(),
+                    domain.memory_id,
+                    domain.record.as_str(),
+                    domain.restore_order,
+                ))
+                .collect::<Vec<_>>(),
+            vec![
+                (
+                    "root_component_registry",
+                    Some(ROOT_COMPONENT_REGISTRY_META_ID),
+                    RootComponentRegistryStateRecord::STATE_CONTRACT_NAME,
+                    Some(196),
+                ),
+                (
+                    "root_component_allocations",
+                    Some(ROOT_COMPONENT_ALLOCATIONS_ID),
+                    RootComponentAllocationRecord::STATE_CONTRACT_NAME,
+                    Some(197),
+                ),
+            ]
+        );
     }
 }
