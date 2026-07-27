@@ -32,6 +32,7 @@ mod fleet_install_session;
 mod fleet_subnet_root_install;
 mod fleet_subnet_root_install_journal;
 mod fleet_subnet_root_registry_join;
+mod fleet_subnet_root_registry_sync;
 mod fleet_subnet_root_store_bootstrap;
 mod identity;
 mod operations;
@@ -56,6 +57,9 @@ use coordinator_install::install_and_verify_fleet_coordinator;
 use current_execution::current_install_execution_context;
 use fleet_subnet_root_install::install_and_verify_fleet_subnet_roots;
 use fleet_subnet_root_registry_join::register_and_verify_fleet_subnet_roots_joining;
+use fleet_subnet_root_registry_sync::{
+    SynchronizeFleetSubnetRootsRequest, synchronize_and_verify_fleet_subnet_roots,
+};
 use fleet_subnet_root_store_bootstrap::bootstrap_and_verify_fleet_subnet_root_stores;
 use identity::resolve_install_identity;
 pub use options::InstallRootOptions;
@@ -175,14 +179,14 @@ impl InstallRootError {
 
 #[derive(Debug, ThisError)]
 #[error(
-    "Fleet Coordinator {coordinator} and {joined_roots} planned Fleet Subnet Root(s) now have exact Registry Joining evidence at revision {joining_revision} from the durable plan at {}; Fleet Registry snapshot synchronization and acknowledgement remain blocked until their journalled lifecycle is implemented",
+    "Fleet Coordinator {coordinator} and {acknowledged_roots} planned Fleet Subnet Root(s) now have exact acknowledged Registry snapshot evidence at revision {registry_revision} from the durable plan at {}; Registry Active transition remains blocked until its journalled lifecycle is implemented",
     plan_path.display(),
 )]
-struct FleetRegistrySynchronizationUnavailableError {
+struct FleetRegistryActivationUnavailableError {
     plan_path: PathBuf,
     coordinator: canic_core::cdk::types::Principal,
-    joined_roots: usize,
-    joining_revision: u64,
+    acknowledged_roots: usize,
+    registry_revision: u64,
 }
 
 #[derive(Debug, ThisError)]
@@ -330,7 +334,18 @@ fn install_current_fleet_infrastructure(
         planned.session.operation_id,
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
-    require_fleet_registry_synchronization(
+    synchronize_and_verify_fleet_subnet_roots(SynchronizeFleetSubnetRootsRequest {
+        icp_root,
+        environment,
+        local_replica,
+        config_path,
+        fleet_install_plan: &planned.plan,
+        coordinator: coordinator.coordinator,
+        install_operation_id: planned.session.operation_id,
+        joining_version: joining_version.clone(),
+    })
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
+    require_fleet_registry_activation(
         &planned.plan.path,
         coordinator.coordinator,
         roots.roots.len(),
@@ -439,17 +454,17 @@ fn persist_current_fleet_install_plan(
     .map_err(Into::into)
 }
 
-fn require_fleet_registry_synchronization(
+fn require_fleet_registry_activation(
     plan_path: &Path,
     coordinator: canic_core::cdk::types::Principal,
-    joined_roots: usize,
-    joining_revision: u64,
-) -> Result<(), FleetRegistrySynchronizationUnavailableError> {
-    Err(FleetRegistrySynchronizationUnavailableError {
+    acknowledged_roots: usize,
+    registry_revision: u64,
+) -> Result<(), FleetRegistryActivationUnavailableError> {
+    Err(FleetRegistryActivationUnavailableError {
         plan_path: plan_path.to_path_buf(),
         coordinator,
-        joined_roots,
-        joining_revision,
+        acknowledged_roots,
+        registry_revision,
     })
 }
 

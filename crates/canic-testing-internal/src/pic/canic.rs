@@ -321,8 +321,25 @@ pub(super) fn install_root_args_with_release_set_digest(
     config_path: &Path,
     release_set_digest: ReleaseSetDigest,
 ) -> Result<Vec<u8>, Error> {
+    install_root_args_with_release_set_digest_and_coordinator(
+        root_id,
+        Principal::from_slice(&[0x41; 29]),
+        wasm,
+        config_path,
+        release_set_digest,
+    )
+}
+
+pub(super) fn install_root_args_with_release_set_digest_and_coordinator(
+    root_id: Principal,
+    coordinator: Principal,
+    wasm: &[u8],
+    config_path: &Path,
+    release_set_digest: ReleaseSetDigest,
+) -> Result<Vec<u8>, Error> {
     encode_one(managed_test_root_init_args(
         root_id,
+        coordinator,
         wasm,
         config_path,
         release_set_digest,
@@ -386,6 +403,7 @@ pub fn managed_test_init_identity() -> ManagedTestIdentity {
 
 fn managed_test_root_init_args(
     root_id: Principal,
+    coordinator: Principal,
     wasm: &[u8],
     config_path: &Path,
     release_set_digest: ReleaseSetDigest,
@@ -416,7 +434,7 @@ fn managed_test_root_init_args(
                 app: AppId::from(config.app_id()),
             },
             coordinator_subnet: test_subnet(0x40),
-            coordinator: Principal::from_slice(&[0x41; 29]),
+            coordinator,
         },
         epoch: 1,
     };

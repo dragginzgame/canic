@@ -259,15 +259,15 @@ fn canonical_spec_and_topology_hashes_match_frozen_golden_values() {
 
     assert_eq!(
         hex_bytes(topology.component_specs[0].spec_hash),
-        "fad2b7e4e14df581f16525cd3452848ccd3c7f683e59a28b2467a5770fb2ef10",
+        "c7c76c00e156c56f76d97601ace207a854b501d80e8acfc849c8e6cca5dd11b0",
     );
     assert_eq!(
         hex_bytes(topology.component_specs[1].spec_hash),
-        "afb517c1fcfd208532b3c07e4c203896630198019679a13b06f135c88bca0ba8",
+        "938046a0febe19bb17380024dff3f5458d84fab5f22829f1c1c381c5c7fb07b8",
     );
     assert_eq!(
         topology.digest().expect("topology digest").to_string(),
-        "99004cb4862b09884e1f9de8a055a5a52ebb9a36a5cd621aaf5eed0faf224ea1",
+        "436945fa61c71c65b079ddcd633e973ffa1114850564ebd0f28c9bfc49b20e08",
     );
 }
 

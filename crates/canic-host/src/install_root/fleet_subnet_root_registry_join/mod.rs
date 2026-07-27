@@ -192,7 +192,10 @@ fn drive_registry_join(
                     &live.version,
                 )?
             }
-            FleetSubnetRootInstallPhase::RegistryJoinVerified => {
+            FleetSubnetRootInstallPhase::RegistryJoinVerified
+            | FleetSubnetRootInstallPhase::RegistrySyncInFlight
+            | FleetSubnetRootInstallPhase::RegistrySynchronized
+            | FleetSubnetRootInstallPhase::RegistrySyncVerified => {
                 let response = current
                     .journal
                     .registry_join_response

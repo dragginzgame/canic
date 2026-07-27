@@ -15,6 +15,20 @@ macro_rules! canic_emit_root_admin_endpoints {
         }
 
         #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_fleet_registry_synchronize(
+            request: ::canic::dto::fleet_registry::FleetSubnetRootRegistrySyncRequest,
+        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootRegistrySyncResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::synchronize_fleet_registry(request).await
+        }
+
+        #[$crate::canic_query(composite, requires(caller::is_controller()))]
+        async fn canic_fleet_registry_sync_status(
+            request: ::canic::dto::fleet_registry::FleetSubnetRootRegistrySyncRequest,
+        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootRegistrySyncResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_registry_sync_status(request).await
+        }
+
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_prepare_fleet_activation(
         ) -> Result<::canic::dto::fleet_activation::FleetActivationStatusResponse, ::canic::Error> {
             __canic_run_prepared_root_init_block().await;

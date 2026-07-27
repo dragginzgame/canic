@@ -7,7 +7,8 @@
 use crate::{
     ids::{EndpointCall, EndpointCallKind},
     protocol::{
-        CANIC_ACTIVATE_FLEET, CANIC_FLEET_ACTIVATION_STATUS, CANIC_FLEET_SUBNET_ROOT_AUTHORITY,
+        CANIC_ACTIVATE_FLEET, CANIC_FLEET_ACTIVATION_STATUS, CANIC_FLEET_REGISTRY_SYNC_STATUS,
+        CANIC_FLEET_REGISTRY_SYNCHRONIZE, CANIC_FLEET_SUBNET_ROOT_AUTHORITY,
         CANIC_PREPARE_FLEET_ACTIVATION, CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION,
         CANIC_RESUME_FLEET_ACTIVATION, CANIC_ROOT_STORE_BOOTSTRAP,
         CANIC_ROOT_STORE_BOOTSTRAP_STATUS, CANIC_SYNC_STATE, CANIC_SYNC_TOPOLOGY,
@@ -63,9 +64,11 @@ pub fn require_prepared_root_endpoint(
     if is_status_query(call)
         || is_query(call, CANIC_FLEET_SUBNET_ROOT_AUTHORITY)
         || is_composite_query(call, CANIC_ROOT_STORE_BOOTSTRAP_STATUS)
+        || is_composite_query(call, CANIC_FLEET_REGISTRY_SYNC_STATUS)
         || is_update(
             call,
             &[
+                CANIC_FLEET_REGISTRY_SYNCHRONIZE,
                 CANIC_PREPARE_FLEET_ACTIVATION,
                 CANIC_RESUME_FLEET_ACTIVATION,
                 CANIC_ROOT_STORE_BOOTSTRAP,
@@ -120,6 +123,11 @@ mod tests {
         for (endpoint, kind) in [
             (CANIC_FLEET_ACTIVATION_STATUS, EndpointCallKind::Query),
             (CANIC_FLEET_SUBNET_ROOT_AUTHORITY, EndpointCallKind::Query),
+            (CANIC_FLEET_REGISTRY_SYNCHRONIZE, EndpointCallKind::Update),
+            (
+                CANIC_FLEET_REGISTRY_SYNC_STATUS,
+                EndpointCallKind::QueryComposite,
+            ),
             (CANIC_PREPARE_FLEET_ACTIVATION, EndpointCallKind::Update),
             (CANIC_RESUME_FLEET_ACTIVATION, EndpointCallKind::Update),
             (CANIC_ROOT_STORE_BOOTSTRAP, EndpointCallKind::Update),

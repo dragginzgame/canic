@@ -101,6 +101,15 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "canic_fleet_subnet_root_join",
         command_kind("fleet_registry.root_join.v1"),
     ),
+    update_response_idempotent(
+        "canic_fleet_registry_acknowledge_root",
+        command_kind("fleet_registry.acknowledge_root.v1"),
+    ),
+    update_read_only("canic_fleet_registry_snapshot_for_root"),
+    update_response_idempotent(
+        "canic_fleet_registry_synchronize",
+        command_kind("fleet_registry.synchronize_root.v1"),
+    ),
     update_monotonic_transition(
         "canic_prepare_fleet_credential_generation",
         command_kind("fleet_activation.prepare_credential_generation.v1"),

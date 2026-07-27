@@ -18,8 +18,10 @@ use canic_core::{
         ops::fleet_registry::FleetRegistryOps,
     },
     dto::fleet_registry::{
-        FleetRegistry, FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootEntry,
-        FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse, FleetSubnetRootStatus,
+        FleetRegistry, FleetRegistryManifest, FleetRegistrySnapshotResponse, FleetRegistryVersion,
+        FleetSubnetRootEntry, FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
+        FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
+        FleetSubnetRootStatus,
     },
 };
 
@@ -55,6 +57,7 @@ impl FleetCoordinatorOps {
             component_topology: args.component_topology,
             registry,
             root_join_receipts: Vec::new(),
+            root_snapshot_acknowledgements: Vec::new(),
         })
     }
 
@@ -125,6 +128,7 @@ impl FleetCoordinatorOps {
                 entry: request.entry.clone(),
                 version: version.clone(),
             });
+        next.root_snapshot_acknowledgements.clear();
         let next = Self::validate_current(next)?;
         Self::commit_transition(&current, next)?;
         Ok(FleetSubnetRootJoinResponse {
@@ -140,6 +144,80 @@ impl FleetCoordinatorOps {
             &current.component_topology,
             &current.registry,
         )
+    }
+
+    pub(crate) fn snapshot_for_root(
+        caller: Principal,
+    ) -> Result<FleetRegistrySnapshotResponse, InternalError> {
+        let current = Self::current()?;
+        require_snapshot_root(&current, caller)?;
+        let manifest = FleetRegistryOps::manifest(
+            &current.authority,
+            &current.component_topology,
+            &current.registry,
+        )?;
+        let version = FleetRegistryVersion {
+            authority: manifest.authority.clone(),
+            revision: manifest.revision,
+            content_hash: manifest.content_hash,
+        };
+        Ok(FleetRegistrySnapshotResponse {
+            registry: current.registry,
+            manifest,
+            version,
+        })
+    }
+
+    pub(crate) fn acknowledge_root_snapshot(
+        caller: Principal,
+        request: FleetSubnetRootSnapshotAcknowledgementRequest,
+    ) -> Result<FleetSubnetRootSnapshotAcknowledgement, InternalError> {
+        let current = Self::current()?;
+        require_all_roots_joining(&current)?;
+        require_joining_root(&current, caller)?;
+        let current_version = FleetRegistryOps::version(
+            &current.authority,
+            &current.component_topology,
+            &current.registry,
+        )?;
+        if request.version != current_version {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root snapshot acknowledgement is stale",
+            ));
+        }
+        let acknowledgement = FleetSubnetRootSnapshotAcknowledgement {
+            fleet_subnet_root: caller,
+            version: current_version,
+        };
+        if let Some(existing) = current
+            .root_snapshot_acknowledgements
+            .iter()
+            .find(|existing| existing.fleet_subnet_root == caller)
+        {
+            if existing == &acknowledgement {
+                return Ok(existing.clone());
+            }
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root already acknowledged different Registry authority",
+            ));
+        }
+
+        let mut next = current.clone();
+        next.root_snapshot_acknowledgements
+            .push(acknowledgement.clone());
+        next.root_snapshot_acknowledgements.sort_by(|left, right| {
+            left.fleet_subnet_root
+                .as_slice()
+                .cmp(right.fleet_subnet_root.as_slice())
+        });
+        let next = Self::validate_current(next)?;
+        Self::commit_transition(&current, next)?;
+        Ok(acknowledgement)
+    }
+
+    pub(crate) fn root_snapshot_acknowledgements()
+    -> Result<Vec<FleetSubnetRootSnapshotAcknowledgement>, InternalError> {
+        Ok(Self::current()?.root_snapshot_acknowledgements)
     }
 
     pub(crate) fn version() -> Result<FleetRegistryVersion, InternalError> {
@@ -181,6 +259,7 @@ impl FleetCoordinatorOps {
             &current.registry,
         )?;
         validate_root_join_receipts(&current)?;
+        validate_root_snapshot_acknowledgements(&current)?;
         Ok(current)
     }
 
@@ -198,6 +277,84 @@ impl FleetCoordinatorOps {
             }
         })
     }
+}
+
+fn require_snapshot_root(
+    current: &FleetCoordinatorRegistryRecord,
+    caller: Principal,
+) -> Result<&FleetSubnetRootEntry, InternalError> {
+    current
+        .registry
+        .fleet_subnet_roots
+        .iter()
+        .find(|entry| {
+            entry.fleet_subnet_root == caller && entry.status != FleetSubnetRootStatus::Removed
+        })
+        .ok_or_else(|| {
+            InternalError::forbidden(
+                "caller is not a current Fleet Subnet Root in the Fleet Registry",
+            )
+        })
+}
+
+fn require_joining_root(
+    current: &FleetCoordinatorRegistryRecord,
+    caller: Principal,
+) -> Result<&FleetSubnetRootEntry, InternalError> {
+    current
+        .registry
+        .fleet_subnet_roots
+        .iter()
+        .find(|entry| {
+            entry.fleet_subnet_root == caller && entry.status == FleetSubnetRootStatus::Joining
+        })
+        .ok_or_else(|| {
+            InternalError::forbidden(
+                "caller is not a Joining Fleet Subnet Root in the current Registry",
+            )
+        })
+}
+
+fn require_all_roots_joining(
+    current: &FleetCoordinatorRegistryRecord,
+) -> Result<(), InternalError> {
+    if current.registry.fleet_subnet_roots.is_empty()
+        || current
+            .registry
+            .fleet_subnet_roots
+            .iter()
+            .any(|entry| entry.status != FleetSubnetRootStatus::Joining)
+    {
+        return Err(InternalError::conflict(
+            "Fleet Registry snapshot synchronization requires a non-empty all-Joining root set",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_root_snapshot_acknowledgements(
+    current: &FleetCoordinatorRegistryRecord,
+) -> Result<(), InternalError> {
+    let version = FleetRegistryOps::version(
+        &current.authority,
+        &current.component_topology,
+        &current.registry,
+    )?;
+    let mut previous: Option<Principal> = None;
+    for acknowledgement in &current.root_snapshot_acknowledgements {
+        if acknowledgement.version != version
+            || previous
+                .as_ref()
+                .is_some_and(|root| root.as_slice() >= acknowledgement.fleet_subnet_root.as_slice())
+            || require_joining_root(current, acknowledgement.fleet_subnet_root).is_err()
+        {
+            return Err(receipt_invariant(
+                "Fleet Subnet Root snapshot acknowledgements are not canonical",
+            ));
+        }
+        previous = Some(acknowledgement.fleet_subnet_root);
+    }
+    Ok(())
 }
 
 fn validate_root_join_receipts(

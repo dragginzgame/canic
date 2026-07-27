@@ -147,28 +147,39 @@ fn install_root_canister(pic: &Pic, wasm: Vec<u8>) -> Principal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use candid::encode_one;
+    use candid::{decode_one, encode_one};
     use canic::{
         CANIC_WASM_CHUNK_BYTES,
-        dto::root_store::{
-            ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX,
-            RootStoreArtifact, RootStoreBootstrapRequest, RootStoreBootstrapResponse,
-            RootStoreReleaseSetEntry, RootStoreReleaseSetEntryKind, RootStoreReleaseSetManifest,
+        dto::{
+            fleet_registry::{
+                FleetSubnetRootEntry, FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
+                FleetSubnetRootRegistrySyncRequest, FleetSubnetRootRegistrySyncResponse,
+                FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootStatus,
+            },
+            fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
+            root_store::{
+                ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX,
+                RootStoreArtifact, RootStoreBootstrapRequest, RootStoreBootstrapResponse,
+                RootStoreReleaseSetEntry, RootStoreReleaseSetEntryKind,
+                RootStoreReleaseSetManifest,
+            },
         },
         ids::{CanisterRole, ReleaseSetDigest},
     };
     use canic::{
         Error,
         dto::fleet_activation::{FleetActivationPhase, FleetActivationStatusResponse},
-        dto::fleet_subnet_root::FleetSubnetRootAuthority,
         protocol::{
-            CANIC_FLEET_ACTIVATION_STATUS, CANIC_FLEET_SUBNET_ROOT_AUTHORITY,
-            CANIC_ROOT_STORE_BOOTSTRAP, CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
-            CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
-            CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
+            CANIC_FLEET_ACTIVATION_STATUS, CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
+            CANIC_FLEET_REGISTRY_SYNC_STATUS, CANIC_FLEET_REGISTRY_SYNCHRONIZE,
+            CANIC_FLEET_REGISTRY_VERSION, CANIC_FLEET_SUBNET_ROOT_AUTHORITY,
+            CANIC_FLEET_SUBNET_ROOT_JOIN, CANIC_ROOT_STORE_BOOTSTRAP,
+            CANIC_ROOT_STORE_BOOTSTRAP_STATUS, CANIC_TEMPLATE_PREPARE_ADMIN,
+            CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN, CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
         },
     };
     use canic_control_plane::{
+        dto::fleet_coordinator::FleetCoordinatorInitArgs,
         dto::template::{
             TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
             TemplateManifestInput,
@@ -183,9 +194,23 @@ mod tests {
     use std::collections::BTreeMap;
     use std::time::Duration;
 
-    use crate::pic::canic::{
-        install_root_args_with_release_set_digest, managed_test_init_identity,
+    use crate::pic::{
+        CanicWasmBuildProfile, build_internal_test_wasm_canisters,
+        canic::{
+            install_root_args_with_release_set_digest_and_coordinator, managed_test_init_identity,
+        },
     };
+    use ic_testkit::artifacts::{read_wasm, test_target_dir, workspace_root_for};
+
+    const COORDINATOR_PACKAGE: &str = "fleet_coordinator_stub";
+    const COORDINATOR_INSTALL_CYCLES: u128 = 500_000_000_000_000;
+
+    struct BootstrappedRootFixture {
+        root_id: Principal,
+        init_args: FleetSubnetRootInitArgs,
+        request: RootStoreBootstrapRequest,
+        response: RootStoreBootstrapResponse,
+    }
 
     #[test]
     fn prepared_root_upgrade_does_not_run_runtime_or_application_continuations() {
@@ -224,6 +249,152 @@ mod tests {
     fn prepared_root_bootstraps_and_reverifies_its_exact_local_store() {
         let root_wasm = build_test_root_wasm();
         let pic = build_pic();
+        let fixture =
+            install_bootstrapped_root(&pic, root_wasm, Principal::from_slice(&[0x41; 29]));
+
+        assert_eq!(fixture.response.fleet_subnet_root, fixture.root_id);
+        assert_eq!(
+            fixture.response.release_set,
+            fixture.init_args.authority.initial_release_set
+        );
+        assert_eq!(fixture.response.catalog.len(), 3);
+
+        let retried: Result<RootStoreBootstrapResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_STORE_BOOTSTRAP,
+                (fixture.request.clone(),),
+            )
+            .expect("root Store bootstrap retry transport");
+        assert_eq!(
+            retried.expect("root Store bootstrap retry"),
+            fixture.response,
+            "exact update retry must return the same Store evidence"
+        );
+        let observed: Result<RootStoreBootstrapResponse, Error> = pic
+            .query_call(
+                fixture.root_id,
+                CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
+                (fixture.request,),
+            )
+            .expect("root Store status transport");
+        assert_eq!(
+            observed.expect("root Store status"),
+            fixture.response,
+            "composite status must independently reverify the exact live catalog"
+        );
+        assert_prepared(&pic, fixture.root_id);
+    }
+
+    #[test]
+    fn prepared_root_stages_and_acknowledges_the_exact_joining_registry_snapshot() {
+        let root_wasm = build_test_root_wasm();
+        let coordinator_wasm = build_test_coordinator_wasm();
+        let pic = build_pic();
+        let coordinator = pic.create_canister();
+        pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
+        let fixture = install_bootstrapped_root(&pic, root_wasm, coordinator);
+        let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("workspace root");
+        let config_path = root_canister_config_path(workspace_root);
+        let config = AppConfigSnapshot::load(&config_path).expect("load root config");
+        let coordinator_args = FleetCoordinatorInitArgs {
+            configured_app: fixture
+                .init_args
+                .authority
+                .binding
+                .authority
+                .binding
+                .fleet
+                .app
+                .clone(),
+            authority: fixture.init_args.authority.binding.authority.clone(),
+            component_topology: config.component_topology().clone(),
+        };
+        pic.install_canister(
+            coordinator,
+            coordinator_wasm,
+            encode_one(coordinator_args).expect("encode Coordinator init"),
+            None,
+        );
+
+        let genesis: Result<canic::dto::fleet_registry::FleetRegistryVersion, Error> = pic
+            .query_call(coordinator, CANIC_FLEET_REGISTRY_VERSION, ())
+            .expect("query Registry genesis");
+        let genesis = genesis.expect("Registry genesis");
+        let binding = &fixture.init_args.authority.binding;
+        let join_request = FleetSubnetRootJoinRequest {
+            expected_registry: genesis,
+            entry: FleetSubnetRootEntry {
+                placement_subnet: binding.placement_subnet,
+                fleet_subnet_root: fixture.root_id,
+                component_admissions: binding.component_admissions.clone(),
+                component_topology_digest: binding.component_topology_digest,
+                active_release_set: fixture.init_args.authority.initial_release_set,
+                limits: binding.limits.clone(),
+                status: FleetSubnetRootStatus::Joining,
+            },
+        };
+        let joined: Result<FleetSubnetRootJoinResponse, Error> = pic
+            .update_call(coordinator, CANIC_FLEET_SUBNET_ROOT_JOIN, (join_request,))
+            .expect("join root transport");
+        let joined = joined.expect("join root");
+
+        let sync_request = FleetSubnetRootRegistrySyncRequest {
+            expected_registry: joined.version.clone(),
+            store_bootstrap: fixture.request.clone(),
+        };
+        let synchronized: Result<FleetSubnetRootRegistrySyncResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_FLEET_REGISTRY_SYNCHRONIZE,
+                (sync_request.clone(),),
+            )
+            .expect("root Registry synchronization transport");
+        let synchronized = synchronized.expect("root Registry synchronization");
+        assert_eq!(synchronized.fleet_subnet_root, fixture.root_id);
+        assert_eq!(synchronized.version, joined.version);
+
+        let retried: Result<FleetSubnetRootRegistrySyncResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_FLEET_REGISTRY_SYNCHRONIZE,
+                (sync_request.clone(),),
+            )
+            .expect("root Registry synchronization retry transport");
+        assert_eq!(
+            retried.expect("root Registry synchronization retry"),
+            synchronized
+        );
+        let observed: Result<FleetSubnetRootRegistrySyncResponse, Error> = pic
+            .query_call(
+                fixture.root_id,
+                CANIC_FLEET_REGISTRY_SYNC_STATUS,
+                (sync_request,),
+            )
+            .expect("root Registry synchronization status transport");
+        assert_eq!(
+            observed.expect("root Registry synchronization status"),
+            synchronized
+        );
+
+        let acknowledgements: Result<Vec<FleetSubnetRootSnapshotAcknowledgement>, Error> = pic
+            .query_call(coordinator, CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS, ())
+            .expect("query root acknowledgements");
+        assert_eq!(
+            acknowledgements.expect("root acknowledgements"),
+            vec![synchronized.acknowledgement]
+        );
+        assert_prepared(&pic, fixture.root_id);
+    }
+
+    fn install_bootstrapped_root(
+        pic: &Pic,
+        root_wasm: Vec<u8>,
+        coordinator: Principal,
+    ) -> BootstrappedRootFixture {
         let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .and_then(Path::parent)
@@ -238,15 +409,22 @@ mod tests {
         );
         let root_id = pic.create_canister();
         pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
+        let init_bytes = install_root_args_with_release_set_digest_and_coordinator(
+            root_id,
+            coordinator,
+            &root_wasm,
+            &config_path,
+            digest,
+        )
+        .expect("encode exact root authority");
         let init_args =
-            install_root_args_with_release_set_digest(root_id, &root_wasm, &config_path, digest)
-                .expect("encode exact root authority");
-        pic.install_canister(root_id, root_wasm, init_args, None);
-        assert_prepared(&pic, root_id);
+            decode_one::<FleetSubnetRootInitArgs>(&init_bytes).expect("decode root init authority");
+        pic.install_canister(root_id, root_wasm, init_bytes, None);
+        assert_prepared(pic, root_id);
 
         let version = TemplateVersion::owned(manifest.release_build_id.to_string());
         stage_chunked_payload(
-            &pic,
+            pic,
             root_id,
             TemplateId::owned(format!("{ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX}{digest}")),
             version.clone(),
@@ -274,37 +452,37 @@ mod tests {
                 )
                 .expect("stage artifact manifest transport");
             staged.expect("stage artifact manifest");
-            stage_chunked_payload(&pic, root_id, template_id, version.clone(), &bytes);
+            stage_chunked_payload(pic, root_id, template_id, version.clone(), &bytes);
         }
 
         let request = RootStoreBootstrapRequest {
             manifest_payload_size_bytes: manifest_bytes.len() as u64,
         };
-        let bootstrapped: Result<RootStoreBootstrapResponse, Error> = pic
+        let response: Result<RootStoreBootstrapResponse, Error> = pic
             .update_call(root_id, CANIC_ROOT_STORE_BOOTSTRAP, (request.clone(),))
             .expect("root Store bootstrap transport");
-        let bootstrapped = bootstrapped.expect("root Store bootstrap");
-        assert_eq!(bootstrapped.fleet_subnet_root, root_id);
-        assert_eq!(bootstrapped.release_set.manifest_digest, digest);
-        assert_eq!(bootstrapped.catalog.len(), 3);
+        BootstrappedRootFixture {
+            root_id,
+            init_args,
+            request,
+            response: response.expect("root Store bootstrap"),
+        }
+    }
 
-        let retried: Result<RootStoreBootstrapResponse, Error> = pic
-            .update_call(root_id, CANIC_ROOT_STORE_BOOTSTRAP, (request.clone(),))
-            .expect("root Store bootstrap retry transport");
-        assert_eq!(
-            retried.expect("root Store bootstrap retry"),
-            bootstrapped,
-            "exact update retry must return the same Store evidence"
+    fn build_test_coordinator_wasm() -> Vec<u8> {
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let target_dir = test_target_dir(&workspace_root, "fleet-registry-sync");
+        build_internal_test_wasm_canisters(
+            &workspace_root,
+            &target_dir,
+            &[COORDINATOR_PACKAGE],
+            CanicWasmBuildProfile::Fast,
         );
-        let observed: Result<RootStoreBootstrapResponse, Error> = pic
-            .query_call(root_id, CANIC_ROOT_STORE_BOOTSTRAP_STATUS, (request,))
-            .expect("root Store status transport");
-        assert_eq!(
-            observed.expect("root Store status"),
-            bootstrapped,
-            "composite status must independently reverify the exact live catalog"
-        );
-        assert_prepared(&pic, root_id);
+        read_wasm(
+            &target_dir,
+            COORDINATOR_PACKAGE,
+            CanicWasmBuildProfile::Fast.target_dir_name(),
+        )
     }
 
     fn exact_root_store_fixture(

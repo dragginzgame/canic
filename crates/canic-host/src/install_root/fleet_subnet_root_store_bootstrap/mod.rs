@@ -185,7 +185,10 @@ fn drive_store_bootstrap(
             FleetSubnetRootInstallPhase::StoreVerified
             | FleetSubnetRootInstallPhase::RegistryJoinInFlight
             | FleetSubnetRootInstallPhase::RegistryJoined
-            | FleetSubnetRootInstallPhase::RegistryJoinVerified => {
+            | FleetSubnetRootInstallPhase::RegistryJoinVerified
+            | FleetSubnetRootInstallPhase::RegistrySyncInFlight
+            | FleetSubnetRootInstallPhase::RegistrySynchronized
+            | FleetSubnetRootInstallPhase::RegistrySyncVerified => {
                 let observed = query_store_bootstrap_status(
                     icp_root,
                     environment,
@@ -204,7 +207,7 @@ fn drive_store_bootstrap(
     Err(RootStoreBootstrapError::TransitionBoundExceeded.into())
 }
 
-fn canonical_manifest_bytes(
+pub(super) fn canonical_manifest_bytes(
     release_set: &PersistedFleetSubnetRootReleaseSet,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let host_bytes = serde_json::to_vec(&release_set.manifest)?;

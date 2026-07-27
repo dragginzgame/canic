@@ -148,9 +148,11 @@ the bounded schema.
 The 0.100 implementation is still in progress. The current command builds,
 creates, installs, and verifies the Coordinator, every planned Fleet Subnet
 Root, each root's exact local Store, and every root's Registry `Joining` row,
-then stops before snapshot synchronization, acknowledgement, activation,
-Component creation, and terminal Fleet-catalog publication. That stop is an
-explicit safety boundary rather than a partially successful Fleet.
+then stages and independently verifies the exact all-`Joining` snapshot and
+Coordinator acknowledgement at every root. It stops before Registry `Active`,
+final mirror/Directory activation, Component creation, and terminal
+Fleet-catalog publication. That stop is an explicit safety boundary rather
+than a partially successful Fleet.
 
 The following commands require a terminal installed Fleet:
 

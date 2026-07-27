@@ -46,8 +46,9 @@ Coordinator plus one Fleet Subnet Root and one root-local Wasm Store on every
 occupied Fleet/Subnet pair. The current installer builds, creates, installs,
 and independently verifies the Coordinator, all planned roots, and every
 root's exact Store. It then registers and independently verifies every root as
-Fleet Registry `Joining` before stopping ahead of snapshot synchronization,
-acknowledgement, final activation, Component creation, or terminal
+Fleet Registry `Joining`, durably stages that exact snapshot at every root and
+verifies every Coordinator acknowledgement before stopping ahead of Registry
+`Active`, final mirror/Directory activation, Component creation, or terminal
 Fleet-catalog publication.
 
 Consequently, `canic info list`, `canic info env`, backup, and restore commands
