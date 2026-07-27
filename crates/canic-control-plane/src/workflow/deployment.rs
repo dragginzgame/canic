@@ -23,8 +23,6 @@ const CONTROL_PLANE_DEPLOYMENT_QUOTA_WINDOW_SECONDS: u64 = 60;
 const MAX_CONTROL_PLANE_DEPLOYMENT_OPERATIONS_PER_WINDOW: u64 = 64;
 const MIN_CONTROL_PLANE_CYCLES_AFTER_RESERVATION: u128 = TC;
 
-pub const BOOTSTRAP_AUTO_CREATE_COMMAND_KIND: &str =
-    "management.control_plane.bootstrap_auto_create.v1";
 pub const BOOTSTRAP_WASM_STORE_CREATE_COMMAND_KIND: &str =
     "management.control_plane.bootstrap_wasm_store_create.v1";
 pub const PUBLICATION_WASM_STORE_CREATE_COMMAND_KIND: &str =

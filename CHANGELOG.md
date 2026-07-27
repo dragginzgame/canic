@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.19` prepares every root's exact empty Component Registry after active
+  Store/Registry/Directory verification, hard-cuts static role bootstrap and
+  restores mirror layering while runtime allocation remains fenced.
+
 - `0.100.18` atomically replaces every root's private Joining candidate with
   its exact all-Active Registry mirror and Registry-derived Fleet Directory,
   with journalled per-root verification and interruption-safe recovery while

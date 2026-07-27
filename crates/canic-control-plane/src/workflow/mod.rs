@@ -3,6 +3,8 @@
 #[cfg(feature = "root-control-plane")]
 pub mod bootstrap;
 #[cfg(feature = "root-control-plane")]
+pub mod component_registry;
+#[cfg(feature = "root-control-plane")]
 pub mod deployment;
 #[cfg(feature = "fleet-coordinator-canister")]
 pub mod fleet_coordinator;

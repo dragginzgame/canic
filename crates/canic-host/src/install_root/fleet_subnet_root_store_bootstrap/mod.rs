@@ -191,7 +191,10 @@ fn drive_store_bootstrap(
             | FleetSubnetRootInstallPhase::RegistrySyncVerified
             | FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight
             | FleetSubnetRootInstallPhase::RegistryMirrorActivated
-            | FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified => {
+            | FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified
+            | FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight
+            | FleetSubnetRootInstallPhase::ComponentRegistryPrepared
+            | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified => {
                 let observed = query_store_bootstrap_status(
                     icp_root,
                     environment,

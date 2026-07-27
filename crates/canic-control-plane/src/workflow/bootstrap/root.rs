@@ -6,7 +6,7 @@
 
 use crate::{
     ids::{BuildNetwork, CanisterRole},
-    ops::storage::template::{TemplateChunkedOps, TemplateManifestOps},
+    ops::{component_registry::ComponentRegistryOps, storage::template::TemplateChunkedOps},
     workflow::{deployment, runtime::template::WasmStorePublicationWorkflow},
 };
 use canic_core::api::lifecycle::metrics::{
@@ -28,28 +28,16 @@ use canic_core::control_plane_support::{
             env::EnvOps,
             ready::ReadyOps,
         },
-        storage::{
-            directory::{fleet::FleetDirectoryOps, subnet::SubnetDirectoryOps},
-            pool::PoolOps,
-            registry::subnet::SubnetRegistryOps,
-        },
+        storage::pool::PoolOps,
     },
-    view::topology::DirectoryEntryView,
     workflow::{
-        ic::{IcWorkflow, provision::ProvisionWorkflow},
+        ic::IcWorkflow,
         pool::{PoolWorkflow, query::PoolQuery},
         topology::guard::TopologyGuard,
     },
 };
-use canic_core::{
-    dto::{
-        fleet_activation::FleetActivationPhase,
-        validation::{ValidationIssue, ValidationReport},
-    },
-    log,
-    log::Topic,
-};
-use std::collections::{BTreeMap, BTreeSet};
+use canic_core::{dto::fleet_activation::FleetActivationPhase, log, log::Topic};
+use std::collections::BTreeSet;
 
 ///
 /// RootBootstrapContext
@@ -73,7 +61,7 @@ impl RootBootstrapContext {
         })
     }
 
-    fn auto_create_roles(&self) -> BTreeSet<CanisterRole> {
+    fn managed_release_roles(&self) -> BTreeSet<CanisterRole> {
         self.component_topology
             .component_specs
             .iter()
@@ -147,7 +135,7 @@ fn root_missing_staged_release_roles(
 ) -> Result<Vec<CanisterRole>, InternalError> {
     let mut missing = Vec::new();
 
-    for role in data.auto_create_roles() {
+    for role in data.managed_release_roles() {
         if role.is_wasm_store() {
             continue;
         }
@@ -158,13 +146,6 @@ fn root_missing_staged_release_roles(
     }
 
     Ok(missing)
-}
-
-fn validation_failure_summary(report: &ValidationReport) -> String {
-    report.issues.first().map_or_else(
-        || "bootstrap validation failed".to_string(),
-        |issue| format!("bootstrap validation failed: {}", issue.message),
-    )
 }
 
 fn record_root_bootstrap_metric(phase: LifecycleMetricPhase, outcome: LifecycleMetricOutcome) {
@@ -180,9 +161,21 @@ fn mark_root_bootstrap_failed(phase: LifecycleMetricPhase, message: String) {
 pub fn activation_preparation_complete() -> bool {
     BootstrapStatusOps::snapshot().phase
         == BootstrapPhaseLabel::ROOT_INIT_ACTIVATION_PREPARED.as_str()
+        && ComponentRegistryOps::current().is_some()
 }
 
 fn complete_or_wait_for_root_activation() {
+    if ComponentRegistryOps::current().is_none() {
+        record_root_bootstrap_metric(LifecycleMetricPhase::Init, LifecycleMetricOutcome::Waiting);
+        BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_INIT_WAITING_COMPONENT_REGISTRY);
+        log!(
+            Topic::Init,
+            Info,
+            "bootstrap (root:init) waiting for prepared Component Registry authority"
+        );
+        return;
+    }
+
     if fleet_is_prepared() {
         record_root_bootstrap_metric(LifecycleMetricPhase::Init, LifecycleMetricOutcome::Waiting);
         BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_INIT_ACTIVATION_PREPARED);
@@ -265,47 +258,6 @@ pub async fn bootstrap_init_root_canister() {
         let message = format!("subnet identity phase failed: {err}");
         log!(Topic::Init, Error, "{message}");
         mark_root_bootstrap_failed(LifecycleMetricPhase::Init, message);
-        return;
-    }
-
-    // On fresh init, only wait for the configured initial import slice before
-    // auto-create. Remaining static imports are queued for the pool worker.
-    BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_INIT_IMPORT_POOL);
-    root_import_pool_from_config(false).await;
-    canic_core::perf!("bootstrap_import_pool");
-
-    BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_INIT_CREATE_CANISTERS);
-    if let Err(err) = root_create_canisters().await {
-        let message = format!("registry phase failed: {err}");
-        log!(Topic::Init, Error, "{message}");
-        mark_root_bootstrap_failed(LifecycleMetricPhase::Init, message);
-        return;
-    }
-    canic_core::perf!("bootstrap_create_canisters");
-
-    BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_INIT_REBUILD_DIRECTORIES);
-    if let Err(err) = root_rebuild_directories_from_registry() {
-        let message = format!("Directory materialization failed: {err}");
-        log!(Topic::Init, Error, "{message}");
-        mark_root_bootstrap_failed(LifecycleMetricPhase::Init, message);
-        return;
-    }
-    canic_core::perf!("bootstrap_rebuild_directories");
-
-    BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_INIT_VALIDATE);
-    let report = root_validate_state();
-    canic_core::perf!("bootstrap_validate_state");
-    if !report.ok {
-        mark_root_bootstrap_failed(
-            LifecycleMetricPhase::Init,
-            validation_failure_summary(&report),
-        );
-        log!(
-            Topic::Init,
-            Error,
-            "bootstrap validation failed:\n{:#?}",
-            report.issues
-        );
         return;
     }
 
@@ -453,53 +405,11 @@ pub async fn root_import_pool_from_config(wait_for_queued_imports: bool) {
     ensure_pool_imported(&data, wait_for_queued_imports).await;
 }
 
-/// ---------------------------------------------------------------------------
-/// Canister creation
-/// ---------------------------------------------------------------------------
-
-/// Ensure all statically configured canisters for this subnet exist.
-pub async fn root_create_canisters() -> Result<(), InternalError> {
-    let data = RootBootstrapContext::load()?;
-
-    log!(
-        Topic::Init,
-        Info,
-        "auto_create: {:?}",
-        data.auto_create_roles()
-    );
-
-    ensure_required_wasm_store_canister().await?;
-    canic_core::perf!("bootstrap_ensure_wasm_store");
-    if fleet_is_prepared() {
-        log!(
-            Topic::Init,
-            Info,
-            "ws: defer ordinary store publication until Fleet activation completes"
-        );
-    } else {
-        WasmStorePublicationWorkflow::publish_staged_release_set_to_current_store().await?;
-        canic_core::perf!("bootstrap_publish_release_set");
-    }
-
-    // Publication already mirrors each selected managed-store binding back into
-    // root-owned manifest state. Re-importing the full fleet catalog here is
-    // redundant on init and can force an expensive snapshot of the just-
-    // retired rollover store before bootstrap completes.
-
-    ensure_required_canisters(&data).await
-}
-
 fn fleet_is_prepared() -> bool {
     matches!(
         canic_core::api::fleet_activation::FleetActivationApi::status(),
         Ok(status) if status.phase == FleetActivationPhase::Prepared
     )
-}
-
-pub fn root_rebuild_directories_from_registry() -> Result<(), InternalError> {
-    let _ = ProvisionWorkflow::rebuild_directories_from_registry(None)?;
-
-    Ok(())
 }
 
 async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_imports: bool) {
@@ -549,7 +459,7 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
         );
     }
 
-    if initial_limit == 0 && !data.auto_create_roles().is_empty() {
+    if initial_limit == 0 && !data.managed_release_roles().is_empty() {
         log!(
             Topic::CanisterPool,
             Warn,
@@ -740,57 +650,6 @@ fn log_pool_import_result(stats: &PoolImportStats, wait_for_queued_imports: bool
     }
 }
 
-async fn ensure_required_canisters(data: &RootBootstrapContext) -> Result<(), InternalError> {
-    for role in data.auto_create_roles() {
-        // ALWAYS re-check live registry
-        if SubnetRegistryOps::has_role(&role) {
-            CanisterOpsMetricsApi::record(
-                CanisterOpsMetricOperation::Create,
-                &role,
-                CanisterOpsMetricOutcome::Skipped,
-                CanisterOpsMetricReason::AlreadyExists,
-            );
-            log!(Topic::Init, Info, "auto_create: {role} present; skip");
-            continue;
-        }
-
-        if !TemplateManifestOps::has_approved_for_role(&role)? {
-            CanisterOpsMetricsApi::record(
-                CanisterOpsMetricOperation::Create,
-                &role,
-                CanisterOpsMetricOutcome::Skipped,
-                CanisterOpsMetricReason::MissingWasm,
-            );
-            log!(
-                Topic::Init,
-                Warn,
-                "auto_create: skipping {role}; approved manifest not staged"
-            );
-            continue;
-        }
-
-        let manifest = TemplateManifestOps::approved_for_role_response(&role)?;
-        log!(
-            Topic::Init,
-            Info,
-            "auto_create: creating {role} from {}@{}",
-            manifest.template_id,
-            manifest.version
-        );
-
-        deployment::create_canister_with_deployment_guard(
-            deployment::BOOTSTRAP_AUTO_CREATE_COMMAND_KIND,
-            role.clone(),
-            IcOps::canister_self(),
-            None,
-        )
-        .await?;
-        canic_core::perf!("bootstrap_create_role");
-    }
-
-    Ok(())
-}
-
 async fn root_reconcile_wasm_store() -> Result<(), InternalError> {
     ensure_required_wasm_store_canister().await?;
     canic_core::perf!("bootstrap_ensure_wasm_store");
@@ -846,107 +705,6 @@ async fn import_default_wasm_store_catalog() -> Result<(), InternalError> {
     log!(Topic::Init, Info, "ws: imported default catalog");
 
     Ok(())
-}
-
-pub fn root_validate_state() -> ValidationReport {
-    let fleet_entries = FleetDirectoryOps::entry_projections();
-    let subnet_entries = SubnetDirectoryOps::entry_projections();
-
-    let mut issues = Vec::new();
-
-    let env_missing = EnvOps::missing_required_fields();
-    let env_complete = env_missing.is_empty();
-    if !env_complete {
-        issues.push(ValidationIssue {
-            code: "env_missing_fields".to_string(),
-            message: format!("missing env fields: {}", env_missing.join(", ")),
-        });
-    }
-
-    let registry_roles = SubnetRegistryOps::direct_root_roles();
-
-    let (fleet_unique, fleet_consistent) = check_directory(
-        "fleet_directory",
-        &fleet_entries,
-        &registry_roles,
-        &mut issues,
-    );
-    let (subnet_unique, subnet_consistent) = check_directory(
-        "subnet_directory",
-        &subnet_entries,
-        &registry_roles,
-        &mut issues,
-    );
-
-    let unique_directory_roles = fleet_unique && subnet_unique;
-    let registry_directory_consistent = fleet_consistent && subnet_consistent;
-    let ok = env_complete && unique_directory_roles && registry_directory_consistent;
-
-    ValidationReport {
-        ok,
-        registry_directory_consistent,
-        unique_directory_roles,
-        env_complete,
-        issues,
-    }
-}
-
-fn check_directory(
-    label: &str,
-    entries: &[DirectoryEntryView],
-    registry_roles: &BTreeMap<CanisterRole, Vec<Principal>>,
-    issues: &mut Vec<ValidationIssue>,
-) -> (bool, bool) {
-    let mut unique = true;
-    let mut consistent = true;
-    let mut seen = BTreeMap::<CanisterRole, usize>::new();
-
-    for entry in entries {
-        let count = seen.entry(entry.role.clone()).or_insert(0);
-        *count += 1;
-        if *count > 1 {
-            unique = false;
-            issues.push(ValidationIssue {
-                code: "directory_role_duplicate".to_string(),
-                message: format!("{label} has duplicate role {}", entry.role),
-            });
-        }
-
-        match registry_roles.get(&entry.role) {
-            None => {
-                consistent = false;
-                issues.push(ValidationIssue {
-                    code: "directory_role_missing_in_registry".to_string(),
-                    message: format!("{label} role {} not present in registry", entry.role),
-                });
-            }
-            Some(pids) if pids.len() > 1 => {
-                consistent = false;
-                issues.push(ValidationIssue {
-                    code: "directory_role_duplicate_in_registry".to_string(),
-                    message: format!(
-                        "{label} role {} has multiple registry entries ({})",
-                        entry.role,
-                        pids.len()
-                    ),
-                });
-            }
-            Some(pids) => {
-                if pids[0] != entry.pid {
-                    consistent = false;
-                    issues.push(ValidationIssue {
-                        code: "directory_role_pid_mismatch".to_string(),
-                        message: format!(
-                            "{label} role {} points to {}, registry has {}",
-                            entry.role, entry.pid, pids[0]
-                        ),
-                    });
-                }
-            }
-        }
-    }
-
-    (unique, consistent)
 }
 
 fn summarize_principals(pids: &[Principal], limit: usize) -> String {

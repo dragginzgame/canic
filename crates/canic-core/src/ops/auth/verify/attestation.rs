@@ -106,7 +106,8 @@ mod tests {
         dto::auth::RoleAttestation,
         ids::CanisterRole,
         ops::auth::{
-            AUTH_TIME_SKEW_ALLOWANCE_NS, AuthExpiryError, AuthOpsError, AuthValidationError,
+            AUTH_TIME_SKEW_ALLOWANCE_NS, AuthExpiryError, AuthOpsError, AuthScopeError,
+            AuthValidationError,
         },
     };
 
@@ -134,6 +135,41 @@ mod tests {
 
         super::verify_role_attestation_claims(&payload, p(1), p(2), Some(p(3)), 15, 4)
             .expect("future issued_at within skew allowance should verify");
+    }
+
+    #[test]
+    fn role_attestation_claims_reject_subject_audience_subnet_and_epoch_drift() {
+        let payload = role_attestation();
+
+        let subject =
+            super::verify_role_attestation_claims(&payload, p(9), p(2), Some(p(3)), 15, 4)
+                .expect_err("wrong caller must reject");
+        std::assert_matches!(
+            subject,
+            AuthOpsError::Scope(AuthScopeError::AttestationSubjectMismatch { .. })
+        );
+
+        let audience =
+            super::verify_role_attestation_claims(&payload, p(1), p(9), Some(p(3)), 15, 4)
+                .expect_err("wrong audience must reject");
+        std::assert_matches!(
+            audience,
+            AuthOpsError::Scope(AuthScopeError::AttestationAudienceMismatch { .. })
+        );
+
+        let subnet = super::verify_role_attestation_claims(&payload, p(1), p(2), Some(p(9)), 15, 4)
+            .expect_err("wrong subnet must reject");
+        std::assert_matches!(
+            subnet,
+            AuthOpsError::Scope(AuthScopeError::AttestationSubnetMismatch { .. })
+        );
+
+        let epoch = super::verify_role_attestation_claims(&payload, p(1), p(2), Some(p(3)), 15, 5)
+            .expect_err("stale epoch must reject");
+        std::assert_matches!(
+            epoch,
+            AuthOpsError::Expiry(AuthExpiryError::AttestationEpochRejected { .. })
+        );
     }
 
     #[test]

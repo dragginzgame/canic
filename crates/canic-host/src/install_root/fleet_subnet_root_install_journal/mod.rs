@@ -25,6 +25,9 @@ use canic_core::{
     cdk::utils::hash::decode_hex,
     control_plane_support::ops::fleet_registry::FleetRegistryOps,
     dto::{
+        component_registry::{
+            RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
+        },
         fleet_registry::{
             FleetDirectorySnapshot, FleetRegistry, FleetRegistryManifest, FleetRegistryVersion,
             FleetSubnetRootEntry, FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
@@ -78,6 +81,9 @@ pub(super) enum FleetSubnetRootInstallPhase {
     RegistryMirrorActivationInFlight,
     RegistryMirrorActivated,
     RegistryMirrorActivationVerified,
+    ComponentRegistryPreparationInFlight,
+    ComponentRegistryPrepared,
+    ComponentRegistryPreparationVerified,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -106,6 +112,8 @@ pub(super) struct FleetSubnetRootInstallJournal {
     pub registry_mirror_activation_request: Option<FleetSubnetRootRegistryMirrorActivationRequest>,
     pub registry_mirror_activation_response:
         Option<FleetSubnetRootRegistryMirrorActivationResponse>,
+    pub component_registry_preparation_request: Option<RootComponentRegistryPreparationRequest>,
+    pub component_registry_preparation_response: Option<RootComponentRegistryStatusResponse>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -495,6 +503,55 @@ pub(super) fn record_registry_mirror_activation_verified(
     )
 }
 
+pub(super) fn begin_component_registry_preparation(
+    current: &ResolvedFleetSubnetRootInstall,
+    request: RootComponentRegistryPreparationRequest,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    validate_component_registry_preparation_request(&current.path, &current.journal, &request)?;
+    transition(
+        current,
+        FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified,
+        FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight,
+        |next| next.component_registry_preparation_request = Some(request),
+    )
+}
+
+pub(super) fn record_component_registry_prepared(
+    current: &ResolvedFleetSubnetRootInstall,
+    response: RootComponentRegistryStatusResponse,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    validate_component_registry_preparation_response(&current.path, &current.journal, &response)?;
+    transition(
+        current,
+        FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight,
+        FleetSubnetRootInstallPhase::ComponentRegistryPrepared,
+        |next| next.component_registry_preparation_response = Some(response),
+    )
+}
+
+pub(super) fn record_component_registry_preparation_verified(
+    current: &ResolvedFleetSubnetRootInstall,
+    response: RootComponentRegistryStatusResponse,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    validate_component_registry_preparation_response(&current.path, &current.journal, &response)?;
+    if current
+        .journal
+        .component_registry_preparation_response
+        .as_ref()
+        != Some(&response)
+    {
+        return Err(invalid(
+            &current.path,
+            "verified Component Registry preparation differs from its durable result",
+        ));
+    }
+    advance_without_evidence(
+        current,
+        FleetSubnetRootInstallPhase::ComponentRegistryPrepared,
+        FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified,
+    )
+}
+
 #[must_use]
 pub(super) fn create_result_path(journal_path: &Path) -> PathBuf {
     journal_path
@@ -601,6 +658,8 @@ fn planned_journal(
         registry_sync_response: None,
         registry_mirror_activation_request: None,
         registry_mirror_activation_response: None,
+        component_registry_preparation_request: None,
+        component_registry_preparation_response: None,
     };
     validate_journal(&path, &journal)?;
     Ok(journal)
@@ -805,6 +864,8 @@ fn validate_phase_evidence(
         journal.registry_sync_response.is_some(),
         journal.registry_mirror_activation_request.is_some(),
         journal.registry_mirror_activation_response.is_some(),
+        journal.component_registry_preparation_request.is_some(),
+        journal.component_registry_preparation_response.is_some(),
     ];
     let expected_count = phase_evidence_count(journal.phase);
     if retained
@@ -847,6 +908,9 @@ const fn phase_sequence(phase: FleetSubnetRootInstallPhase) -> u64 {
         FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight => 17,
         FleetSubnetRootInstallPhase::RegistryMirrorActivated => 18,
         FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified => 19,
+        FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight => 20,
+        FleetSubnetRootInstallPhase::ComponentRegistryPrepared => 21,
+        FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified => 22,
     }
 }
 
@@ -870,6 +934,9 @@ const fn phase_evidence_count(phase: FleetSubnetRootInstallPhase) -> usize {
         FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight => 9,
         FleetSubnetRootInstallPhase::RegistryMirrorActivated
         | FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified => 10,
+        FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight => 11,
+        FleetSubnetRootInstallPhase::ComponentRegistryPrepared
+        | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified => 12,
     }
 }
 
@@ -907,6 +974,9 @@ fn validate_root_evidence(
             | FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight
             | FleetSubnetRootInstallPhase::RegistryMirrorActivated
             | FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified
+            | FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight
+            | FleetSubnetRootInstallPhase::ComponentRegistryPrepared
+            | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified
     ) && journal.verified_binding.as_ref() != Some(&expected.binding)
     {
         return Err(invalid(
@@ -934,6 +1004,12 @@ fn validate_root_evidence(
     }
     if let Some(response) = &journal.registry_mirror_activation_response {
         validate_registry_mirror_activation_response(path, journal, response)?;
+    }
+    if let Some(request) = &journal.component_registry_preparation_request {
+        validate_component_registry_preparation_request(path, journal, request)?;
+    }
+    if let Some(response) = &journal.component_registry_preparation_response {
+        validate_component_registry_preparation_response(path, journal, response)?;
     }
     Ok(())
 }
@@ -1142,6 +1218,69 @@ fn validate_registry_mirror_activation_response(
         return Err(invalid(
             path,
             "Registry mirror activation response differs from durable authority",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_component_registry_preparation_request(
+    path: &Path,
+    journal: &FleetSubnetRootInstallJournal,
+    request: &RootComponentRegistryPreparationRequest,
+) -> Result<(), FleetSubnetRootInstallJournalError> {
+    let mirror_request = journal
+        .registry_mirror_activation_request
+        .as_ref()
+        .ok_or_else(|| {
+            invalid(
+                path,
+                "Component Registry preparation requires a durable mirror activation request",
+            )
+        })?;
+    let store_matches = request.store_bootstrap == mirror_request.store_bootstrap;
+    let registry_matches = request.expected_fleet_registry == mirror_request.expected_registry;
+    if !store_matches || !registry_matches {
+        return Err(invalid(
+            path,
+            "Component Registry preparation request differs from durable root authority",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_component_registry_preparation_response(
+    path: &Path,
+    journal: &FleetSubnetRootInstallJournal,
+    response: &RootComponentRegistryStatusResponse,
+) -> Result<(), FleetSubnetRootInstallJournalError> {
+    let request = journal
+        .component_registry_preparation_request
+        .as_ref()
+        .ok_or_else(|| {
+            invalid(
+                path,
+                "Component Registry preparation response requires a durable request",
+            )
+        })?;
+    let root = journal.fleet_subnet_root.ok_or_else(|| {
+        invalid(
+            path,
+            "Component Registry preparation requires a root principal",
+        )
+    })?;
+    if response.fleet_subnet_root != root
+        || response.prepared_against_registry != request.expected_fleet_registry
+        || response.release_set != journal.root_plan.initial_release_set
+        || response.component_topology_digest != journal.root_plan.component_topology_digest
+        || response.next_allocation_sequence != 1
+        || response.reserved_component_instances != 0
+        || response.committed_component_instances != 0
+        || response.managed_descendants != 0
+        || response.encoded_bytes != 0
+    {
+        return Err(invalid(
+            path,
+            "Component Registry preparation response differs from immutable root authority",
         ));
     }
     Ok(())

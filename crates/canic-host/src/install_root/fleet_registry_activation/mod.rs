@@ -119,6 +119,9 @@ pub(super) fn activate_and_verify_fleet_registry(
                 | FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight
                 | FleetSubnetRootInstallPhase::RegistryMirrorActivated
                 | FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified
+                | FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight
+                | FleetSubnetRootInstallPhase::ComponentRegistryPrepared
+                | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified
         ) {
             return Err(
                 FleetRegistryActivationError::RootNotSynchronized(current.journal.phase).into(),

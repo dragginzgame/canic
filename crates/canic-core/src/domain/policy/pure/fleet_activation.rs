@@ -11,7 +11,8 @@ use crate::{
         CANIC_FLEET_REGISTRY_MIRROR_STATUS, CANIC_FLEET_REGISTRY_SYNC_STATUS,
         CANIC_FLEET_REGISTRY_SYNCHRONIZE, CANIC_FLEET_SUBNET_ROOT_AUTHORITY,
         CANIC_PREPARE_FLEET_ACTIVATION, CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION,
-        CANIC_RESUME_FLEET_ACTIVATION, CANIC_ROOT_STORE_BOOTSTRAP,
+        CANIC_RESUME_FLEET_ACTIVATION, CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
+        CANIC_ROOT_COMPONENT_REGISTRY_STATUS, CANIC_ROOT_STORE_BOOTSTRAP,
         CANIC_ROOT_STORE_BOOTSTRAP_STATUS, CANIC_SYNC_STATE, CANIC_SYNC_TOPOLOGY,
         CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
         CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN, CANIC_WASM_STORE_CATALOG, CANIC_WASM_STORE_PREPARE,
@@ -67,6 +68,7 @@ pub fn require_prepared_root_endpoint(
         || is_composite_query(call, CANIC_ROOT_STORE_BOOTSTRAP_STATUS)
         || is_composite_query(call, CANIC_FLEET_REGISTRY_SYNC_STATUS)
         || is_composite_query(call, CANIC_FLEET_REGISTRY_MIRROR_STATUS)
+        || is_composite_query(call, CANIC_ROOT_COMPONENT_REGISTRY_STATUS)
         || is_update(
             call,
             &[
@@ -74,6 +76,7 @@ pub fn require_prepared_root_endpoint(
                 CANIC_FLEET_REGISTRY_SYNCHRONIZE,
                 CANIC_PREPARE_FLEET_ACTIVATION,
                 CANIC_RESUME_FLEET_ACTIVATION,
+                CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
                 CANIC_ROOT_STORE_BOOTSTRAP,
                 CANIC_TEMPLATE_PREPARE_ADMIN,
                 CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
@@ -137,6 +140,14 @@ mod tests {
             ),
             (
                 CANIC_FLEET_REGISTRY_MIRROR_STATUS,
+                EndpointCallKind::QueryComposite,
+            ),
+            (
+                CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
+                EndpointCallKind::Update,
+            ),
+            (
+                CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
                 EndpointCallKind::QueryComposite,
             ),
             (CANIC_PREPARE_FLEET_ACTIVATION, EndpointCallKind::Update),

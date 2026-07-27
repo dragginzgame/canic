@@ -31,6 +31,7 @@ mod execution_preflight;
 mod fleet_install_session;
 mod fleet_registry_activation;
 mod fleet_registry_activation_journal;
+mod fleet_subnet_root_component_registry_preparation;
 mod fleet_subnet_root_install;
 mod fleet_subnet_root_install_journal;
 mod fleet_subnet_root_registry_join;
@@ -59,6 +60,10 @@ pub use config_selection::{
 use coordinator_install::install_and_verify_fleet_coordinator;
 use current_execution::current_install_execution_context;
 use fleet_registry_activation::{ActivateFleetRegistryRequest, activate_and_verify_fleet_registry};
+use fleet_subnet_root_component_registry_preparation::{
+    PrepareFleetSubnetRootComponentRegistriesRequest,
+    prepare_and_verify_fleet_subnet_root_component_registries,
+};
 use fleet_subnet_root_install::install_and_verify_fleet_subnet_roots;
 use fleet_subnet_root_registry_join::register_and_verify_fleet_subnet_roots_joining;
 use fleet_subnet_root_registry_mirror_activation::{
@@ -187,7 +192,7 @@ impl InstallRootError {
 
 #[derive(Debug, ThisError)]
 #[error(
-    "Fleet Coordinator {coordinator} and {active_roots} planned Fleet Subnet Root(s) now have independently verified all-Active Registry mirrors and matching Fleet Directories at revision {active_registry_revision} from the durable plan at {}; Component runtime activation remains blocked until its Registry-bound lifecycle is implemented",
+    "Fleet Coordinator {coordinator} and {active_roots} planned Fleet Subnet Root(s) now have independently verified all-Active Registry mirrors, matching Fleet Directories and empty Component Registries at revision {active_registry_revision} from the durable plan at {}; Component allocation and runtime activation remain blocked until their Registry-bound lifecycle is implemented",
     plan_path.display(),
 )]
 struct ComponentRuntimeActivationUnavailableError {
@@ -376,6 +381,18 @@ fn install_current_fleet_infrastructure(
             joining_version,
             active_registry: &active.registry,
             active_version: active.version.clone(),
+        },
+    )
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
+    prepare_and_verify_fleet_subnet_root_component_registries(
+        PrepareFleetSubnetRootComponentRegistriesRequest {
+            icp_root,
+            environment,
+            local_replica,
+            config_path,
+            fleet_install_plan: &planned.plan,
+            coordinator: coordinator.coordinator,
+            install_operation_id: planned.session.operation_id,
         },
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;

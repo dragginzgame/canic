@@ -272,12 +272,15 @@ bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib
 bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib role_attestation_claims_reject -- --nocapture
 bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib root_capability_hash_binds_target_canister -- --nocapture
 bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib verify_capability_hash_binding -- --nocapture
-bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-tests --test pic_role_attestation role_attestation_verification_paths -- --test-threads=1 --nocapture
-bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-tests --test pic_role_attestation capability_endpoint_policy_and_structural_paths -- --test-threads=1 --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib role_attestation_claims -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib role_attestation_verifier -- --nocapture
 ```
 
 The wrapper is part of the method identity. A successful Cargo exit with zero
 executed tests is `BLOCKED`, never passing evidence.
+Registry-bound role-attestation PocketIC coverage remains required once the
+root Component allocation lifecycle can create the issuer; the removed static
+root/issuer fixture is not valid evidence.
 
 ## Dependency Fan-In Pressure
 

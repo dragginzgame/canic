@@ -221,14 +221,14 @@ can settle it under the contract that created it.
 
 | Field | Guidance |
 | --- | --- |
-| Symptom | Wasm-store or template publication appears partially applied, ambiguous after upgrade, or in conflict with a replay receipt. |
-| Likely cause | Durable-publication state, replay receipt state, or post-upgrade reconciliation evidence must be checked before deciding whether publish completed. |
+| Symptom | Exact root-local Store bootstrap or template publication appears partially applied or in conflict with a replay receipt during one installation. |
+| Likely cause | Store attestation, durable-publication state, or replay receipt state must be checked before deciding whether the same-release operation completed. |
 | Safety invariant | Publication should be reconciled from durable state, not repeated blindly. |
-| Safe operator action | Inspect the current wasm-store/template publication binding, replay receipt status, and root post-upgrade reconcile evidence. Retry only the same operation when the receipt allows it. |
+| Safe operator action | Inspect the exact root-local Store attestation, current template publication state, and replay receipt status. Retry only the same operation when the receipt allows it. |
 | Unsafe operator action | Re-publishing with a fresh operation ID to force the desired state without checking current durable binding. |
-| Diagnostic, log, or public error to check | Durable-publish replay policy entries, publication-store binding state, and root wasm-store reconcile tests. |
+| Diagnostic, log, or public error to check | Durable-publish replay policy entries, exact Store attestation state, and prepared-root Store verification tests. |
 | Retry/idempotency rule | If durable state already reflects the intended publication, treat it as converged. If receipt state is recovery-required, reconcile before retry. |
-| Relevant validation command | `cargo test --locked -p canic-tests --test root_wasm_store_reconcile root_post_upgrade_preserves_multi_store_current_release_binding -- --test-threads=1 --nocapture` |
+| Relevant validation command | `cargo test --locked -p canic-testing-internal prepared_root_bootstraps_and_reverifies_its_exact_local_store --lib -- --test-threads=1 --nocapture` |
 | Escalation criteria | Escalate if durable state and replay receipt state disagree and no existing test explains the case. |
 
 ### Upgrade Interrupted Near Replay-Sensitive Operation
@@ -278,11 +278,12 @@ cargo test --locked -p canic-core storage::stable::replay --lib -- --nocapture
 cargo test --locked -p canic-cli cycles::convert --lib -- --nocapture
 cargo test --locked -p canic-core workflow::ic::icp_refill --lib -- --nocapture
 cargo test --locked -p canic-tests --test lifecycle_boundary -- --test-threads=1 --nocapture
-cargo test --locked -p canic-tests --test root_wasm_store_reconcile root_post_upgrade_preserves_multi_store_current_release_binding -- --test-threads=1 --nocapture
+cargo test --locked -p canic-testing-internal prepared_root_bootstraps_and_reverifies_its_exact_local_store --lib -- --test-threads=1 --nocapture
 ```
 
-The `canic-tests` gates are PocketIC-backed and may be assigned to CI or an RC
-validation environment when too expensive for an ordinary docs slice.
+The `canic-tests` and `canic-testing-internal` gates are PocketIC-backed and may
+be assigned to CI or an RC validation environment when too expensive for an
+ordinary docs slice.
 
 ## Non-Goals
 

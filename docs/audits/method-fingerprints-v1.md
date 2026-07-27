@@ -21,13 +21,13 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 
 | Audit ID | Version | SHA-256 | Definition |
 | --- | --- | --- | --- |
-| `CANIC-AUTH-AUDIENCE-001` | `3` | `6bab92282f19fb82bc58bb3bc248bfd4c69b323bf25c1c732afead58780c5b9b` | `docs/audits/recurring/invariants/audience-target-binding.md` |
+| `CANIC-AUTH-AUDIENCE-001` | `3` | `481aaed37322a981a6f7d657a34588a453ca3b9c3bfab20db5f3a4b3ab53ec72` | `docs/audits/recurring/invariants/audience-target-binding.md` |
 | `CANIC-AUTH-EQUIVALENCE-001` | `2` | `de18b672622fdc8ec41882921ca6a11d3d7872e5d2df7754b855a45d6f639942` | `docs/audits/recurring/invariants/auth-abstraction-equivalence.md` |
 | `CANIC-AUTH-BOUNDARY-001` | `1` | `3fdc297ab141ff1bddd26981a4a25aaf7e727ff63146054b626e0e054500d822` | `docs/audits/recurring/invariants/canonical-auth-boundary.md` |
-| `CANIC-AUTH-CAPABILITY-001` | `1` | `4dd5127b43716dc8a89bef6148b76856794f7c5e158f536a7737ddceee0f1c55` | `docs/audits/recurring/invariants/capability-scope-enforcement.md` |
+| `CANIC-AUTH-CAPABILITY-001` | `1` | `c7a84870c753548893e4ab1c0d792c9f69eb1b38f09103ba851de24e914545bf` | `docs/audits/recurring/invariants/capability-scope-enforcement.md` |
 | `CANIC-AUTH-REPLAY-001` | `2` | `743b9fcc18e37be029e12fa9db2a5fa5ffb8d4258c484739a5b0e73e43632b6d` | `docs/audits/recurring/invariants/expiry-replay-single-use.md` |
 | `CANIC-AUTH-SUBJECT-001` | `1` | `8af2c270ba89aae9715e6047afa908b1812865c5949f0f1da6441539fdee4475` | `docs/audits/recurring/invariants/subject-caller-binding.md` |
-| `CANIC-AUTH-TRUST-001` | `2` | `1dc373172e21ce2141fb8922fb290b76cb0d3064fade0748722c5ee97f193970` | `docs/audits/recurring/invariants/token-trust-chain.md` |
+| `CANIC-AUTH-TRUST-001` | `2` | `150d075dd9749d6c2b849837ce422753fa1a438a8656e50eac0370f555e769c5` | `docs/audits/recurring/invariants/token-trust-chain.md` |
 | `CANIC-LIFECYCLE-001` | `1` | `df4fd68b78e1fab92bf17f85ac6adec235e978c52783f5151b2c57411b0e4913` | `docs/audits/recurring/system/bootstrap-lifecycle-symmetry.md` |
 | `CANIC-BUILD-INTEGRITY-001` | `2` | `e75c8fdc54f090bd901482f50c88e2b6272830d1425f24d7165904c1b206a94b` | `docs/audits/recurring/system/build-integrity.md` |
 | `CANIC-CAPABILITY-SURFACE-001` | `2` | `91e61f3385882d108b8541e31715b1ee1e126299f7ad64890c979043a9d7c759` | `docs/audits/recurring/system/capability-surface.md` |

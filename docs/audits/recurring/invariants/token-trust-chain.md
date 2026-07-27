@@ -227,12 +227,14 @@ cargo test --locked -p canic-core --lib issuer_canister_sig -- --nocapture
 cargo test --locked -p canic-core --lib cert_rules -- --nocapture
 cargo test --locked -p canic-core --lib install_active_delegation_proof -- --nocapture
 cargo test --locked -p canic-core --lib delegated_auth_guard_preserves_verify_bind_scope_order -- --nocapture
-cargo test --locked -p canic-tests --test pic_role_attestation role_attestation_verification_paths -- --test-threads=1 --nocapture
+cargo test --locked -p canic-core --lib role_attestation_claims -- --nocapture
+cargo test --locked -p canic-core --lib role_attestation_verifier -- --nocapture
 ```
 
 The active 0.100 design additionally requires proof batching, renewal, lazy
 repair and concurrency coverage in its Coordinator-anchored multi-root
-PocketIC journey.
+PocketIC journey. Registry-bound role-attestation PocketIC coverage resumes
+only after the root Component allocation lifecycle can create the issuer.
 
 ## Structural Hotspots
 
@@ -246,7 +248,7 @@ rg -n 'verify_chain_key_batch_root_proof|ChainKeyRootVerifierPolicy|RootProof::I
 rg -n 'RoleAttestationRootProof|verify_root_canister_signature_proof|ROOT_CANISTER_SIG_SEED|ROOT_CANISTER_SIG_DOMAIN' crates/canic-core/src -g '*.rs'
 rg -n 'verify_issuer_canister_signature_proof|issuer_canister_sig_seed_hash|ISSUER_CANISTER_SIG_SEED|ISSUER_CANISTER_SIG_DOMAIN|IssuerProof::IcCanisterSignatureV1' crates/canic-core/src -g '*.rs'
 rg -n 'cert_hash|claims_hash|issuer_proof_binding_hash|VerifyDelegatedTokenError|IssuerPidMismatch|CertHashMismatch' crates/canic-core/src/ops/auth -g '*.rs'
-git log --name-only -n 20 -- crates/canic-core/src/ops/auth crates/canic-core/src/api/auth crates/canic-core/src/config/validation/auth.rs crates/canic-core/src/domain/auth.rs crates/canic-tests/tests/pic_role_attestation_cases
+git log --name-only -n 20 -- crates/canic-core/src/ops/auth crates/canic-core/src/api/auth crates/canic-core/src/config/validation/auth.rs crates/canic-core/src/domain/auth.rs
 ```
 
 | File / Module | Struct / Function | Reason | Risk Contribution |

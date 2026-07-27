@@ -25,7 +25,6 @@ use canic_core::control_plane_support::{
 };
 use canic_core::{log, log::Topic};
 
-use super::super::super::WASM_STORE_BOOTSTRAP_BINDING;
 use super::metrics::record_wasm_store_metric;
 
 impl WasmStorePublicationWorkflow {
@@ -298,36 +297,6 @@ impl WasmStorePublicationWorkflow {
             retry.binding
         );
         fleet.record_placement(&retry.binding, &manifest);
-        Ok(())
-    }
-
-    // Publish all root-local staged releases into the Fleet Subnet Root's wasm store.
-    pub async fn publish_staged_release_set_to_current_store() -> Result<(), InternalError> {
-        let cost_guard = PublicationCostGuard::reserve(PUBLICATION_BOOTSTRAP_COMMAND_KIND)?;
-        let result =
-            Self::publish_staged_release_set_to_current_store_with_permit(cost_guard.permit())
-                .await;
-        cost_guard.settle(result)
-    }
-
-    async fn publish_staged_release_set_to_current_store_with_permit(
-        publication_permit: &CostGuardPermit,
-    ) -> Result<(), InternalError> {
-        let manifests = Self::managed_release_manifests()?
-            .into_iter()
-            .filter(|manifest| manifest.store_binding == WASM_STORE_BOOTSTRAP_BINDING)
-            .collect::<Vec<_>>();
-
-        for manifest in &manifests {
-            TemplateChunkedOps::validate_staged_release(manifest)?;
-        }
-
-        let mut fleet = Self::snapshot_publication_store_fleet(publication_permit).await?;
-        for manifest in manifests {
-            Self::publish_manifest_to_managed_fleet(&mut fleet, manifest, publication_permit)
-                .await?;
-        }
-
         Ok(())
     }
 

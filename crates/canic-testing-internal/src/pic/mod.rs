@@ -1,17 +1,17 @@
 //! Repo-only PocketIC fixtures layered on top of `ic-testkit`.
 
 mod artifacts;
-mod attestation;
 mod audit;
 mod canic;
 mod delegation;
 #[cfg(test)]
 mod fleet_coordinator;
+#[cfg(test)]
+mod fleet_registry;
 mod lifecycle;
 mod root;
 
 pub use artifacts::{CanicWasmBuildProfile, build_internal_test_wasm_canisters};
-pub use attestation::{BaselinePicGuard, CachedInstalledRoot, install_test_root_cached};
 pub use audit::{
     RootAuditProbeFixture, install_audit_leaf_probe, install_audit_root_probe,
     install_audit_scaling_probe,

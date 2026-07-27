@@ -1203,7 +1203,6 @@ dependencies = [
  "candid",
  "canic",
  "ic-cdk",
- "sha2 0.10.9",
 ]
 
 [[package]]
