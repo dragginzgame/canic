@@ -8,7 +8,7 @@ use canic_core::cdk::structures::{
 };
 use canic_core::eager_static;
 use canic_core::impl_storable_unbounded;
-use canic_core::role_contract::allocation::memory::template::{
+use canic_core::role_contract::allocation::memory::control_plane::{
     TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID, TEMPLATE_CHUNK_SETS_ID,
 };
 use serde::{Deserialize, Serialize};

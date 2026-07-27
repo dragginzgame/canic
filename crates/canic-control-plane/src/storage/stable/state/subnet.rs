@@ -3,7 +3,7 @@ use crate::ids::{WasmStoreBinding, WasmStoreGcMode};
 use canic_core::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     eager_static,
-    role_contract::allocation::memory::template::CONTROL_PLANE_SUBNET_STATE_ID,
+    role_contract::allocation::memory::control_plane::CONTROL_PLANE_SUBNET_STATE_ID,
 };
 use canic_core::{cdk::types::Principal, impl_storable_bounded};
 use serde::{Deserialize, Serialize};

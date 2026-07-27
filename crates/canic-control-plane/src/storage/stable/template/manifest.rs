@@ -6,7 +6,7 @@ use canic_core::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use canic_core::cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory, storable::Storable};
 use canic_core::eager_static;
 use canic_core::{
-    impl_storable_bounded, role_contract::allocation::memory::template::TEMPLATE_MANIFESTS_ID,
+    impl_storable_bounded, role_contract::allocation::memory::control_plane::TEMPLATE_MANIFESTS_ID,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;

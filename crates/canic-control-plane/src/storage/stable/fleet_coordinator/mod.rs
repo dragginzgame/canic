@@ -8,7 +8,7 @@
 use canic_core::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     eager_static, impl_storable_bounded,
-    role_contract::allocation::memory::template::FLEET_COORDINATOR_REGISTRY_ID,
+    role_contract::allocation::memory::control_plane::FLEET_COORDINATOR_REGISTRY_ID,
 };
 use canic_core::{
     control_plane_support::config::ComponentTopology,

@@ -385,7 +385,7 @@ mod tests {
         assert!(role.state.iter().any(|domain| {
             domain.domain == "template_manifests"
                 && domain.owner == "canic-control-plane"
-                && domain.memory_id == Some(80)
+                && domain.memory_id == Some(10)
         }));
         assert!(
             role.state
@@ -436,7 +436,7 @@ mod tests {
             .expect("Fleet Coordinator role");
         assert_eq!(role.state.len(), 1);
         assert_eq!(role.state[0].domain, "fleet_coordinator_registry");
-        assert_eq!(role.state[0].memory_id, Some(86));
+        assert_eq!(role.state[0].memory_id, Some(16));
     }
 
     #[test]
@@ -477,9 +477,9 @@ mod tests {
             role.state
                 .iter()
                 .filter_map(|domain| domain.memory_id)
-                .filter(|memory_id| (62..=65).contains(memory_id))
+                .filter(|memory_id| (59..=62).contains(memory_id))
                 .collect::<Vec<_>>(),
-            vec![63, 65, 64, 62]
+            vec![60, 62, 61, 59]
         );
         assert!(role.state.iter().all(|domain| domain.owner == "canic-core"));
     }
@@ -489,16 +489,16 @@ mod tests {
         let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
 
         for (config_path, role, expected_ids) in [
-            ("apps/test/canic.toml", "user_hub", vec![49, 53, 54, 56]),
+            ("apps/test/canic.toml", "user_hub", vec![53, 56, 57, 58]),
             (
                 "canisters/audit/scaling_probe/canic.toml",
                 "scale_hub",
-                vec![49, 52],
+                vec![53, 54],
             ),
             (
                 "canisters/test/project_hub_stub/canic.toml",
                 "project_hub",
-                vec![49, 55],
+                vec![53, 55],
             ),
         ] {
             let config = workspace.join(config_path);
@@ -510,7 +510,7 @@ mod tests {
                 .state
                 .iter()
                 .filter_map(|domain| domain.memory_id)
-                .filter(|memory_id| (49..=56).contains(memory_id))
+                .filter(|memory_id| (53..=58).contains(memory_id))
                 .collect::<Vec<_>>();
             actual_ids.sort_unstable();
 
@@ -540,8 +540,8 @@ mod tests {
         assert_eq!(
             ids,
             vec![
-                11, 12, 13, 15, 16, 18, 20, 21, 29, 30, 34, 35, 39, 40, 41, 42, 43, 44, 45, 46, 47,
-                80, 81, 82, 83, 85,
+                10, 11, 12, 13, 15, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47,
+                48, 49, 50, 51, 52,
             ]
         );
         assert_eq!(
@@ -574,7 +574,7 @@ mod tests {
                 .iter()
                 .filter_map(|domain| domain.memory_id)
                 .collect::<Vec<_>>(),
-            vec![86]
+            vec![16]
         );
     }
 
@@ -732,7 +732,7 @@ mod tests {
                     domain: "auth_sessions".to_string(),
                     version: 2,
                     storage: StateStorage::StableMemory,
-                    memory_id: Some(19),
+                    memory_id: Some(36),
                     owner: "canic-core".to_string(),
                     record: "AuthSessionRecord".to_string(),
                     snapshot: "AuthSessionsData".to_string(),
@@ -769,7 +769,7 @@ mod tests {
                     domain: "auth_sessions".to_string(),
                     version: 3,
                     storage: StateStorage::StableMemory,
-                    memory_id: Some(19),
+                    memory_id: Some(36),
                     owner: "canic-core".to_string(),
                     record: "AuthSessionRecord".to_string(),
                     snapshot: "AuthSessionsData".to_string(),
@@ -820,7 +820,7 @@ mod tests {
                     domain: "auth_sessions".to_string(),
                     version: 4,
                     storage: StateStorage::StableMemory,
-                    memory_id: Some(19),
+                    memory_id: Some(36),
                     owner: "canic-core".to_string(),
                     record: "AuthSessionRecord".to_string(),
                     snapshot: "AuthSessionsData".to_string(),
@@ -857,7 +857,7 @@ mod tests {
                     domain: "auth_sessions".to_string(),
                     version: 3,
                     storage: StateStorage::StableMemory,
-                    memory_id: Some(19),
+                    memory_id: Some(36),
                     owner: "canic-core".to_string(),
                     record: "AuthSessionRecord".to_string(),
                     snapshot: "AuthSessionsData".to_string(),

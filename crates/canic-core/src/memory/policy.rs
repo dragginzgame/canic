@@ -90,19 +90,19 @@ pub fn canonical_authority_records() -> Vec<MemoryManagerAuthorityRecord> {
         )
         .expect("valid ic-memory authority record"),
         MemoryManagerAuthorityRecord::new(
-            canic_core_range(),
-            CANIC_CORE_MEMORY_AUTHORITY,
-            MemoryManagerRangeMode::Reserved,
-            Some(CANIC_CORE_AUTHORITY_PURPOSE.to_string()),
-        )
-        .expect("valid Canic core authority record"),
-        MemoryManagerAuthorityRecord::new(
             canic_control_plane_range(),
             CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
             MemoryManagerRangeMode::Reserved,
             Some(CANIC_CONTROL_PLANE_AUTHORITY_PURPOSE.to_string()),
         )
         .expect("valid Canic control-plane authority record"),
+        MemoryManagerAuthorityRecord::new(
+            canic_core_range(),
+            CANIC_CORE_MEMORY_AUTHORITY,
+            MemoryManagerRangeMode::Reserved,
+            Some(CANIC_CORE_AUTHORITY_PURPOSE.to_string()),
+        )
+        .expect("valid Canic core authority record"),
     ]
 }
 
@@ -116,7 +116,7 @@ fn validate_key_id_claim(id: u8, stable_key: &str) -> Result<(), MemoryRegistryE
             id,
             stable_key,
             canic_core_range(),
-            "canic.core.* keys must use Canic core ids 11-79",
+            "canic.core.* keys must use Canic core ids 30-99",
         );
     }
 
@@ -125,7 +125,7 @@ fn validate_key_id_claim(id: u8, stable_key: &str) -> Result<(), MemoryRegistryE
             id,
             stable_key,
             canic_control_plane_range(),
-            "canic.control_plane.* keys must use Canic control-plane ids 80-99",
+            "canic.control_plane.* keys must use Canic control-plane ids 10-29",
         );
     }
 
@@ -264,14 +264,14 @@ mod tests {
         .expect_err("control-plane key cannot claim core range");
         std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
 
-        let err = validate("canic.unknown.state.v1", CANIC_CONTROL_PLANE_MAX_ID + 1)
+        let err = validate("canic.unknown.state.v1", CANIC_CORE_MAX_ID + 1)
             .expect_err("unknown canic namespace is reserved");
         std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
     }
 
     #[test]
     fn accepts_application_keys_only_outside_reserved_ranges() {
-        validate("app.users.v1", CANIC_CONTROL_PLANE_MAX_ID + 1).expect("application slot");
+        validate("app.users.v1", CANIC_CORE_MAX_ID + 1).expect("application slot");
         validate("app.archive.v1", ic_memory::MEMORY_MANAGER_MAX_ID).expect("last app slot");
 
         let err = validate("app.users.v1", CANIC_CORE_MIN_ID)
@@ -289,7 +289,7 @@ mod tests {
 
     #[test]
     fn rejects_application_reservations() {
-        let err = validate_reserved("app.users.v1", CANIC_CONTROL_PLANE_MAX_ID + 1)
+        let err = validate_reserved("app.users.v1", CANIC_CORE_MAX_ID + 1)
             .expect_err("Canic does not pre-reserve application keys");
         std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
     }

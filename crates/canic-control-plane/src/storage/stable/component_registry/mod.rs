@@ -11,7 +11,7 @@ use canic_core::{
         storable::Storable,
     },
     eager_static,
-    role_contract::allocation::memory::template::{
+    role_contract::allocation::memory::control_plane::{
         ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_REGISTRY_META_ID,
     },
 };

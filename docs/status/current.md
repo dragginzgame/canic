@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-27
+Last updated: 2026-07-28
 
 ## Purpose
 
@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.19`.
-- The latest published release is `v0.100.19` at
-  `9b0c51129fa3929695f68e484e03355ec836a032`.
-- The `v0.100.19` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `84d8baa32b449c39751f4a9a807ab4e3093aac4d9a8349d626a6281c74d358a0`.
+- The workspace package version is `0.100.20`.
+- The latest published release is `v0.100.20` at
+  `23f8c21a3319ce963dcd70f392fe3f2daa521f3a`.
+- The `v0.100.20` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `3376095581e9aeeed8d1e96443bb3003f33d33d0a2c1fa4d5ee18a7caabb5452`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -216,7 +216,7 @@ Historical detail is archived at:
   after Component allocation lands. The manually invoked instruction-audit
   scenarios must likewise be rebased on real Component allocation before new
   lifecycle measurements.
-- Open `0.100.20` durably reserves admitted top-level Component identities
+- Released `0.100.20` durably reserves admitted top-level Component identities
   beneath that prepared Registry authority. Each controller operation names
   only a nonzero operation ID and Component Spec; after independently
   reverifying the exact Store, all-`Active` Registry Mirror, protected root
@@ -229,6 +229,11 @@ Historical detail is archived at:
   capacity exhaustion fail closed. This phase creates or installs no
   Canister, spends no creation cycles, commits no `ComponentBinding` and
   leaves the root runtime `Prepared`.
+- Open `0.100.21` compacts stable-memory assignments into two small decimal
+  owner blocks: active control-plane state at 10-19 with reserve through 29,
+  and active `canic-core` state at 30-62 with reserve through 99. Historical
+  per-ID tombstones are removed and application memory begins consistently at
+  ID 100.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority

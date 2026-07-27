@@ -9,86 +9,89 @@ use crate::role_contract::model::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-pub const CANIC_CORE_MIN_ID: u8 = 11;
-pub const CANIC_CORE_MAX_ID: u8 = 79;
-pub const CANIC_CONTROL_PLANE_MIN_ID: u8 = 80;
-pub const CANIC_CONTROL_PLANE_MAX_ID: u8 = 99;
+pub const CANIC_CONTROL_PLANE_MIN_ID: u8 = 10;
+pub const CANIC_CONTROL_PLANE_MAX_ID: u8 = 29;
+pub const CANIC_CORE_MIN_ID: u8 = 30;
+pub const CANIC_CORE_MAX_ID: u8 = 99;
 
 /// Canonical stable-memory IDs grouped by record owner.
 pub mod memory {
+    pub mod control_plane {
+        // Wasm Store and publication state.
+        pub const TEMPLATE_MANIFESTS_ID: u8 = 10;
+        pub const TEMPLATE_CHUNK_SETS_ID: u8 = 11;
+        pub const TEMPLATE_CHUNK_REFS_ID: u8 = 12;
+        pub const TEMPLATE_CHUNK_PAYLOADS_ID: u8 = 13;
+        pub const CONTROL_PLANE_SUBNET_STATE_ID: u8 = 14;
+        pub const WASM_STORE_GC_STATE_ID: u8 = 15;
+
+        // Fleet Coordinator state.
+        pub const FLEET_COORDINATOR_REGISTRY_ID: u8 = 16;
+
+        // Fleet Subnet Root state.
+        pub const ROOT_FLEET_REGISTRY_MIRROR_ID: u8 = 17;
+        pub const ROOT_COMPONENT_REGISTRY_META_ID: u8 = 18;
+        pub const ROOT_COMPONENT_ALLOCATIONS_ID: u8 = 19;
+    }
+
     pub mod topology {
-        pub const CANISTER_CHILDREN_ID: u8 = 11;
-        pub const FLEET_DIRECTORY_ID: u8 = 12;
-        pub const SUBNET_DIRECTORY_ID: u8 = 13;
-        pub const RETIRED_APP_REGISTRY_ID: u8 = 14;
-        pub const SUBNET_REGISTRY_ID: u8 = 15;
+        pub const CANISTER_CHILDREN_ID: u8 = 30;
+        pub const FLEET_DIRECTORY_ID: u8 = 31;
+        pub const SUBNET_DIRECTORY_ID: u8 = 32;
+        pub const SUBNET_REGISTRY_ID: u8 = 33;
     }
 
     pub mod env {
-        pub const ENV_ID: u8 = 16;
-        pub const RETIRED_SUBNET_STATE_ID: u8 = 17;
-        pub const FLEET_STATE_ID: u8 = 18;
+        pub const ENV_ID: u8 = 34;
+        pub const FLEET_STATE_ID: u8 = 35;
     }
 
     pub mod auth {
-        pub const AUTH_STATE_ID: u8 = 19;
-        pub const REPLAY_RECEIPTS_ID: u8 = 20;
+        pub const AUTH_STATE_ID: u8 = 36;
+        pub const REPLAY_RECEIPTS_ID: u8 = 37;
     }
 
     pub mod activation {
-        pub const FLEET_ACTIVATION_ID: u8 = 21;
+        pub const FLEET_ACTIVATION_ID: u8 = 38;
     }
 
     pub mod observability {
-        pub const CYCLE_TRACKER_ID: u8 = 29;
-        pub const CYCLE_TOPUP_EVENTS_ID: u8 = 30;
-        pub const ICP_REFILL_RECORDS_ID: u8 = 33;
-        pub const CYCLES_FUNDING_LEDGER_ID: u8 = 34;
-        pub const LOG_ENTRIES_ID: u8 = 35;
+        pub const CYCLE_TRACKER_ID: u8 = 39;
+        pub const CYCLE_TOPUP_EVENTS_ID: u8 = 40;
+        pub const CYCLES_FUNDING_LEDGER_ID: u8 = 41;
+        pub const LOG_ENTRIES_ID: u8 = 42;
+        pub const ICP_REFILL_RECORDS_ID: u8 = 43;
     }
 
     pub mod intent {
-        pub const INTENT_META_ID: u8 = 39;
-        pub const INTENT_RECORDS_ID: u8 = 40;
-        pub const INTENT_TOTALS_ID: u8 = 41;
-        pub const INTENT_PENDING_ID: u8 = 42;
-        pub const RECEIPT_BACKED_INTENT_RECORDS_ID: u8 = 43;
-        pub const INTENT_EXPIRY_INDEX_ID: u8 = 44;
-        pub const PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID: u8 = 45;
-        pub const APPLICATION_RECEIPT_REPLAY_ID: u8 = 46;
-        pub const APPLICATION_RECEIPT_ELIGIBILITY_ID: u8 = 47;
+        pub const INTENT_META_ID: u8 = 44;
+        pub const INTENT_RECORDS_ID: u8 = 45;
+        pub const INTENT_TOTALS_ID: u8 = 46;
+        pub const INTENT_PENDING_ID: u8 = 47;
+        pub const RECEIPT_BACKED_INTENT_RECORDS_ID: u8 = 48;
+        pub const INTENT_EXPIRY_INDEX_ID: u8 = 49;
+        pub const PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID: u8 = 50;
+        pub const APPLICATION_RECEIPT_REPLAY_ID: u8 = 51;
+        pub const APPLICATION_RECEIPT_ELIGIBILITY_ID: u8 = 52;
     }
 
     pub mod pool {
-        pub const CANISTER_POOL_ID: u8 = 49;
+        pub const CANISTER_POOL_ID: u8 = 53;
     }
 
     pub mod placement {
-        pub const SCALING_REGISTRY_ID: u8 = 52;
-        pub const SHARDING_REGISTRY_ID: u8 = 53;
-        pub const SHARDING_ASSIGNMENT_ID: u8 = 54;
+        pub const SCALING_REGISTRY_ID: u8 = 54;
         pub const PLACEMENT_INDEX_REGISTRY_ID: u8 = 55;
-        pub const SHARDING_ACTIVE_SET_ID: u8 = 56;
+        pub const SHARDING_REGISTRY_ID: u8 = 56;
+        pub const SHARDING_ASSIGNMENT_ID: u8 = 57;
+        pub const SHARDING_ACTIVE_SET_ID: u8 = 58;
     }
 
     pub mod blob_storage {
-        pub const STORED_BLOBS_ID: u8 = 62;
-        pub const BLOB_DELETION_PENDING_ID: u8 = 63;
-        pub const STORAGE_GATEWAY_PRINCIPALS_ID: u8 = 64;
-        pub const BLOB_STORAGE_BILLING_ID: u8 = 65;
-    }
-
-    pub mod template {
-        pub const TEMPLATE_MANIFESTS_ID: u8 = 80;
-        pub const TEMPLATE_CHUNK_SETS_ID: u8 = 81;
-        pub const TEMPLATE_CHUNK_REFS_ID: u8 = 82;
-        pub const TEMPLATE_CHUNK_PAYLOADS_ID: u8 = 83;
-        pub const CONTROL_PLANE_SUBNET_STATE_ID: u8 = 84;
-        pub const WASM_STORE_GC_STATE_ID: u8 = 85;
-        pub const FLEET_COORDINATOR_REGISTRY_ID: u8 = 86;
-        pub const ROOT_FLEET_REGISTRY_MIRROR_ID: u8 = 87;
-        pub const ROOT_COMPONENT_REGISTRY_META_ID: u8 = 88;
-        pub const ROOT_COMPONENT_ALLOCATIONS_ID: u8 = 89;
+        pub const STORED_BLOBS_ID: u8 = 59;
+        pub const BLOB_DELETION_PENDING_ID: u8 = 60;
+        pub const STORAGE_GATEWAY_PRINCIPALS_ID: u8 = 61;
+        pub const BLOB_STORAGE_BILLING_ID: u8 = 62;
     }
 }
 
@@ -99,7 +102,13 @@ use memory::{
         BLOB_DELETION_PENDING_ID, BLOB_STORAGE_BILLING_ID, STORAGE_GATEWAY_PRINCIPALS_ID,
         STORED_BLOBS_ID,
     },
-    env::{ENV_ID, FLEET_STATE_ID, RETIRED_SUBNET_STATE_ID},
+    control_plane::{
+        CONTROL_PLANE_SUBNET_STATE_ID, FLEET_COORDINATOR_REGISTRY_ID,
+        ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_REGISTRY_META_ID,
+        ROOT_FLEET_REGISTRY_MIRROR_ID, TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID,
+        TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
+    },
+    env::{ENV_ID, FLEET_STATE_ID},
     intent::{
         APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID, INTENT_EXPIRY_INDEX_ID,
         INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
@@ -114,16 +123,7 @@ use memory::{
         SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID,
     },
     pool::CANISTER_POOL_ID,
-    template::{
-        CONTROL_PLANE_SUBNET_STATE_ID, FLEET_COORDINATOR_REGISTRY_ID,
-        ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_REGISTRY_META_ID,
-        ROOT_FLEET_REGISTRY_MIRROR_ID, TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID,
-        TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
-    },
-    topology::{
-        CANISTER_CHILDREN_ID, FLEET_DIRECTORY_ID, RETIRED_APP_REGISTRY_ID, SUBNET_DIRECTORY_ID,
-        SUBNET_REGISTRY_ID,
-    },
+    topology::{CANISTER_CHILDREN_ID, FLEET_DIRECTORY_ID, SUBNET_DIRECTORY_ID, SUBNET_REGISTRY_ID},
 };
 
 const CORE_RUNTIME_TOPOLOGY_IDS: &[MemoryId] = &[
@@ -134,10 +134,6 @@ const CORE_RUNTIME_TOPOLOGY_IDS: &[MemoryId] = &[
 ];
 const CORE_RUNTIME_ENVIRONMENT_IDS: &[MemoryId] =
     &[MemoryId::new(ENV_ID), MemoryId::new(FLEET_STATE_ID)];
-const RETIRED_MEMORY_IDS: &[MemoryId] = &[
-    MemoryId::new(RETIRED_APP_REGISTRY_ID),
-    MemoryId::new(RETIRED_SUBNET_STATE_ID),
-];
 const CORE_AUTH_STATE_IDS: &[MemoryId] = &[MemoryId::new(AUTH_STATE_ID)];
 const CORE_REPLAY_RECEIPTS_IDS: &[MemoryId] = &[MemoryId::new(REPLAY_RECEIPTS_ID)];
 const CORE_FLEET_ACTIVATION_IDS: &[MemoryId] = &[MemoryId::new(FLEET_ACTIVATION_ID)];
@@ -337,12 +333,6 @@ pub const fn allocation_definitions() -> &'static [AllocationDefinition] {
     ALLOCATION_DEFINITIONS
 }
 
-/// Stable-memory IDs permanently excluded from active allocation.
-#[must_use]
-pub const fn retired_memory_ids() -> &'static [MemoryId] {
-    RETIRED_MEMORY_IDS
-}
-
 #[must_use]
 pub fn allocation_definition(key: StateAllocationKey) -> Option<&'static AllocationDefinition> {
     ALLOCATION_DEFINITIONS
@@ -369,15 +359,6 @@ pub fn validate_allocation_definitions(
         }
 
         for memory_id in definition.memory_ids {
-            if RETIRED_MEMORY_IDS.contains(memory_id) {
-                return Err(RoleContractFinding::CatalogInvalid {
-                    reason: format!(
-                        "allocation {:?} reuses retired memory ID {}",
-                        definition.key,
-                        memory_id.get(),
-                    ),
-                });
-            }
             let (owner_min_id, owner_max_id) = match definition.owner {
                 AllocationOwner::CanicCore => (CANIC_CORE_MIN_ID, CANIC_CORE_MAX_ID),
                 AllocationOwner::CanicControlPlane => {

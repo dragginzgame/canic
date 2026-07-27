@@ -94,64 +94,68 @@ fn canonical_allocations_match_the_active_memory_map() {
     let expected = BTreeMap::from([
         (
             StateAllocationKey::CoreRuntimeTopology,
-            vec![11, 12, 13, 15],
+            vec![30, 31, 32, 33],
         ),
-        (StateAllocationKey::CoreRuntimeEnvironment, vec![16, 18]),
-        (StateAllocationKey::CoreAuthState, vec![19]),
-        (StateAllocationKey::CoreReplayReceipts, vec![20]),
-        (StateAllocationKey::CoreFleetActivation, vec![21]),
+        (StateAllocationKey::CoreRuntimeEnvironment, vec![34, 35]),
+        (StateAllocationKey::CoreAuthState, vec![36]),
+        (StateAllocationKey::CoreReplayReceipts, vec![37]),
+        (StateAllocationKey::CoreFleetActivation, vec![38]),
         (
             StateAllocationKey::CoreRuntimeObservability,
-            vec![29, 30, 34, 35],
+            vec![39, 40, 41, 42],
         ),
-        (StateAllocationKey::CoreIcpRefillRecords, vec![33]),
+        (StateAllocationKey::CoreIcpRefillRecords, vec![43]),
         (
             StateAllocationKey::CoreRuntimeIntent,
-            vec![39, 40, 41, 42, 43, 44, 45, 46, 47],
+            vec![44, 45, 46, 47, 48, 49, 50, 51, 52],
         ),
-        (StateAllocationKey::CanisterPool, vec![49]),
-        (StateAllocationKey::ScalingRegistry, vec![52]),
+        (StateAllocationKey::CanisterPool, vec![53]),
+        (StateAllocationKey::ScalingRegistry, vec![54]),
         (StateAllocationKey::PlacementIndexRegistry, vec![55]),
-        (StateAllocationKey::ShardingRegistry, vec![53]),
-        (StateAllocationKey::ShardingAssignments, vec![54]),
-        (StateAllocationKey::ShardingActiveSet, vec![56]),
-        (StateAllocationKey::StoredBlobs, vec![62]),
-        (StateAllocationKey::BlobDeletionPending, vec![63]),
-        (StateAllocationKey::StorageGatewayPrincipals, vec![64]),
-        (StateAllocationKey::BlobStorageBilling, vec![65]),
-        (StateAllocationKey::TemplateManifests, vec![80]),
-        (StateAllocationKey::TemplateChunkSets, vec![81]),
-        (StateAllocationKey::TemplateChunkRefs, vec![82]),
-        (StateAllocationKey::TemplateChunkPayloads, vec![83]),
-        (StateAllocationKey::ControlPlaneSubnetState, vec![84]),
-        (StateAllocationKey::WasmStoreGcState, vec![85]),
-        (StateAllocationKey::FleetCoordinatorRegistry, vec![86]),
-        (StateAllocationKey::RootFleetRegistryMirror, vec![87]),
-        (StateAllocationKey::RootComponentRegistry, vec![88, 89]),
+        (StateAllocationKey::ShardingRegistry, vec![56]),
+        (StateAllocationKey::ShardingAssignments, vec![57]),
+        (StateAllocationKey::ShardingActiveSet, vec![58]),
+        (StateAllocationKey::StoredBlobs, vec![59]),
+        (StateAllocationKey::BlobDeletionPending, vec![60]),
+        (StateAllocationKey::StorageGatewayPrincipals, vec![61]),
+        (StateAllocationKey::BlobStorageBilling, vec![62]),
+        (StateAllocationKey::TemplateManifests, vec![10]),
+        (StateAllocationKey::TemplateChunkSets, vec![11]),
+        (StateAllocationKey::TemplateChunkRefs, vec![12]),
+        (StateAllocationKey::TemplateChunkPayloads, vec![13]),
+        (StateAllocationKey::ControlPlaneSubnetState, vec![14]),
+        (StateAllocationKey::WasmStoreGcState, vec![15]),
+        (StateAllocationKey::FleetCoordinatorRegistry, vec![16]),
+        (StateAllocationKey::RootFleetRegistryMirror, vec![17]),
+        (StateAllocationKey::RootComponentRegistry, vec![18, 19]),
     ]);
     assert_eq!(actual, expected);
 }
 
 #[test]
-fn retired_core_memory_ids_cannot_be_reallocated() {
-    assert_eq!(
-        allocation::retired_memory_ids(),
-        &[
-            MemoryId::new(allocation::memory::topology::RETIRED_APP_REGISTRY_ID),
-            MemoryId::new(allocation::memory::env::RETIRED_SUBNET_STATE_ID),
-        ]
-    );
-
-    let definition = AllocationDefinition {
-        key: StateAllocationKey::CoreRuntimeEnvironment,
-        owner: AllocationOwner::CanicCore,
-        memory_ids: allocation::retired_memory_ids(),
+fn canonical_allocations_form_packed_owner_ledgers() {
+    let ids = |owner| {
+        let mut ids = allocation::allocation_definitions()
+            .iter()
+            .filter(|definition| definition.owner == owner)
+            .flat_map(|definition| definition.memory_ids)
+            .map(|memory_id| memory_id.get())
+            .collect::<Vec<_>>();
+        ids.sort_unstable();
+        ids
     };
 
-    assert!(matches!(
-        allocation::validate_allocation_definitions(&[definition]),
-        Err(RoleContractFinding::CatalogInvalid { .. })
-    ));
+    assert_eq!(
+        ids(AllocationOwner::CanicControlPlane),
+        (allocation::CANIC_CONTROL_PLANE_MIN_ID
+            ..=allocation::memory::control_plane::ROOT_COMPONENT_ALLOCATIONS_ID)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        ids(AllocationOwner::CanicCore),
+        (allocation::CANIC_CORE_MIN_ID..=allocation::memory::blob_storage::BLOB_STORAGE_BILLING_ID)
+            .collect::<Vec<_>>()
+    );
 }
 
 #[test]
@@ -255,7 +259,7 @@ fn root_inherently_selects_icp_refill_state() {
         .iter()
         .find(|allocation| allocation.key == StateAllocationKey::CoreIcpRefillRecords)
         .expect("ICP refill state allocation");
-    assert_eq!(allocation.memory_ids, vec![MemoryId::new(33)]);
+    assert_eq!(allocation.memory_ids, vec![MemoryId::new(43)]);
     assert_eq!(
         allocation.selected_by,
         BTreeSet::from([SelectionProvenance::Capability(RoleCapabilityKey::Root)])
@@ -268,14 +272,14 @@ fn placement_capabilities_select_only_their_placement_state() {
     scaling.scaling = Some(ScalingConfig::default());
     assert_eq!(
         placement_allocation_ids(&resolved_service_contract(scaling, BTreeSet::new()).allocations),
-        vec![49, 52]
+        vec![53, 54]
     );
 
     let mut index = ConfigTestBuilder::canister_config(CanisterKind::Service);
     index.index = Some(IndexConfig::default());
     assert_eq!(
         placement_allocation_ids(&resolved_service_contract(index, BTreeSet::new()).allocations),
-        vec![49, 55]
+        vec![53, 55]
     );
 
     let mut sharding = ConfigTestBuilder::canister_config(CanisterKind::Service);
@@ -283,7 +287,7 @@ fn placement_capabilities_select_only_their_placement_state() {
     let contract = resolved_service_contract(sharding, BTreeSet::from([CanicFeatureKey::Sharding]));
     assert_eq!(
         placement_allocation_ids(&contract.allocations),
-        vec![49, 53, 54, 56]
+        vec![53, 56, 57, 58]
     );
     let pool = contract
         .allocations
@@ -381,8 +385,8 @@ fn surplus_state_feature_allocates_normally() {
     assert_eq!(
         allocation_ids(&contract.allocations),
         vec![
-            11, 12, 13, 15, 16, 18, 20, 21, 29, 30, 34, 35, 39, 40, 41, 42, 43, 44, 45, 46, 47, 62,
-            63, 64, 65,
+            30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47, 48, 49, 50, 51, 52, 59,
+            60, 61, 62,
         ]
     );
 }
@@ -419,8 +423,8 @@ fn repeated_selection_merges_allocation_provenance() {
     assert_eq!(
         allocation_ids(&contract.allocations),
         vec![
-            11, 12, 13, 15, 16, 18, 19, 20, 21, 29, 30, 33, 34, 35, 39, 40, 41, 42, 43, 44, 45, 46,
-            47, 49, 80, 81, 82, 83, 84, 87, 88, 89,
+            10, 11, 12, 13, 14, 17, 18, 19, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43,
+            44, 45, 46, 47, 48, 49, 50, 51, 52, 53,
         ]
     );
 }
@@ -439,8 +443,8 @@ fn built_in_wasm_store_keeps_template_and_gc_ids() {
     assert_eq!(
         allocation_ids(&contract.allocations),
         vec![
-            11, 12, 13, 15, 16, 18, 20, 21, 29, 30, 34, 35, 39, 40, 41, 42, 43, 44, 45, 46, 47, 80,
-            81, 82, 83, 85,
+            10, 11, 12, 13, 15, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47, 48,
+            49, 50, 51, 52,
         ]
     );
     assert_eq!(
@@ -460,7 +464,7 @@ fn built_in_fleet_coordinator_selects_only_its_registry() {
         panic!("built-in Fleet Coordinator contract should resolve");
     };
 
-    assert_eq!(allocation_ids(&contract.allocations), vec![86]);
+    assert_eq!(allocation_ids(&contract.allocations), vec![16]);
     assert_eq!(
         contract.required_features,
         BTreeSet::from([CanicFeatureKey::FleetCoordinatorCanister])
@@ -480,7 +484,7 @@ fn allocation_ids(allocations: &[super::ResolvedStateAllocation]) -> Vec<u8> {
 fn placement_allocation_ids(allocations: &[super::ResolvedStateAllocation]) -> Vec<u8> {
     allocation_ids(allocations)
         .into_iter()
-        .filter(|memory_id| (49..=56).contains(memory_id))
+        .filter(|memory_id| (53..=58).contains(memory_id))
         .collect()
 }
 
