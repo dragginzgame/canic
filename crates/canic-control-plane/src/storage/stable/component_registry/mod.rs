@@ -90,7 +90,7 @@ eager_static! {
     static COMPONENT_REGISTRY_PRINCIPAL_INDEX: RefCell<
         StableBtreeMap<
             ComponentRegistryPrincipalKey,
-            ComponentRegistryPartitionKey,
+            ComponentRegistryPrincipalIndexRecord,
             VirtualMemory<DefaultMemoryImpl>,
         >,
     > = RefCell::new(StableBtreeMap::init(
@@ -275,6 +275,28 @@ impl_storable_bounded!(
     COMPONENT_REGISTRY_PARTITION_RECORD_MAX_BYTES,
     false
 );
+
+impl ComponentRegistryPartitionRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "ComponentRegistryPartitionRecord";
+}
+
+///
+/// ComponentRegistryPrincipalIndexRecord
+///
+/// Durable principal-to-Component lookup value derived from committed partitions.
+///
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentRegistryPrincipalIndexRecord {
+    pub component: ComponentInstanceId,
+}
+
+impl ComponentRegistryPrincipalIndexRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "ComponentRegistryPrincipalIndexRecord";
+}
+
+#[cfg(feature = "root-control-plane")]
+impl_storable_bounded!(ComponentRegistryPrincipalIndexRecord, 128, false);
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 struct RootComponentAllocationOperationKey([u8; 32]);
@@ -470,7 +492,7 @@ impl RootComponentRegistryStore {
     pub(crate) fn component_for_principal(canister: Principal) -> Option<ComponentInstanceId> {
         COMPONENT_REGISTRY_PRINCIPAL_INDEX
             .with_borrow(|map| map.get(&ComponentRegistryPrincipalKey::from(canister)))
-            .map(|key| ComponentInstanceId::from_generated_bytes(key.0))
+            .map(|record| record.component)
     }
 
     pub(crate) fn reserve_allocation(
@@ -601,7 +623,7 @@ impl RootComponentRegistryStore {
             COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow_mut(|map| {
                 map.insert(
                     principal_key,
-                    ComponentRegistryPartitionKey::from(component),
+                    ComponentRegistryPrincipalIndexRecord { component },
                 );
             });
             ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(|map| {
@@ -636,7 +658,7 @@ impl RootComponentRegistryStore {
         component: ComponentInstanceId,
     ) -> u64 {
         let key = ComponentRegistryPrincipalKey::from(canister);
-        let value = ComponentRegistryPartitionKey::from(component);
+        let value = ComponentRegistryPrincipalIndexRecord { component };
         (key.to_bytes().len() + value.to_bytes().len()) as u64
     }
 
@@ -662,7 +684,7 @@ impl RootComponentRegistryStore {
             COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow_mut(|map| {
                 map.insert(
                     ComponentRegistryPrincipalKey::from(canister),
-                    ComponentRegistryPartitionKey::from(component),
+                    ComponentRegistryPrincipalIndexRecord { component },
                 );
             });
         }

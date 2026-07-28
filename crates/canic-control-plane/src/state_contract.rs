@@ -8,6 +8,7 @@
 
 use crate::storage::stable::{
     component_registry::{
+        ComponentRegistryPartitionRecord, ComponentRegistryPrincipalIndexRecord,
         RootComponentAllocationRecord, RootComponentRegistryData, RootComponentRegistryStateRecord,
     },
     fleet_coordinator::{FleetCoordinatorRegistryData, FleetCoordinatorRegistryRecord},
@@ -27,7 +28,8 @@ use canic_core::{
         AllocationOwner, StateAllocationKey,
         allocation::memory::control_plane::{
             CONTROL_PLANE_SUBNET_STATE_ID, FLEET_COORDINATOR_REGISTRY_ID,
-            ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_REGISTRY_META_ID,
+            ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_PRINCIPAL_INDEX_ID,
+            ROOT_COMPONENT_REGISTRY_META_ID, ROOT_COMPONENT_REGISTRY_PARTITIONS_ID,
             ROOT_FLEET_REGISTRY_MIRROR_ID, TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID,
             TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
         },
@@ -151,6 +153,39 @@ fn root_component_registry_descriptor() -> StateAllocationDescriptor {
                 restore_order: Some(197),
                 post_upgrade_invariant: Some(
                     "root_component_allocations_restore_exact_operation_identity_and_capacity"
+                        .to_string(),
+                ),
+                migrations: Vec::new(),
+            },
+            StateDomainManifest {
+                domain: "component_registry_partitions".to_string(),
+                version: 1,
+                storage: StateStorage::StableMemory,
+                memory_id: Some(ROOT_COMPONENT_REGISTRY_PARTITIONS_ID),
+                owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
+                record: ComponentRegistryPartitionRecord::STATE_CONTRACT_NAME.to_string(),
+                snapshot: RootComponentRegistryData::STATE_CONTRACT_NAME.to_string(),
+                min_supported_version: 1,
+                migration_policy: MigrationPolicy::NewDomain,
+                restore_order: Some(198),
+                post_upgrade_invariant: Some(
+                    "component_registry_partitions_restore_exact_heads_and_bindings".to_string(),
+                ),
+                migrations: Vec::new(),
+            },
+            StateDomainManifest {
+                domain: "component_registry_principal_index".to_string(),
+                version: 1,
+                storage: StateStorage::StableMemory,
+                memory_id: Some(ROOT_COMPONENT_PRINCIPAL_INDEX_ID),
+                owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
+                record: ComponentRegistryPrincipalIndexRecord::STATE_CONTRACT_NAME.to_string(),
+                snapshot: RootComponentRegistryData::STATE_CONTRACT_NAME.to_string(),
+                min_supported_version: 1,
+                migration_policy: MigrationPolicy::NewDomain,
+                restore_order: Some(199),
+                post_upgrade_invariant: Some(
+                    "component_registry_principal_index_restores_unique_committed_bindings"
                         .to_string(),
                 ),
                 migrations: Vec::new(),
@@ -280,14 +315,14 @@ mod tests {
     }
 
     #[test]
-    fn root_component_registry_declares_meta_and_allocation_domains() {
+    fn root_component_registry_declares_every_normalized_domain() {
         let descriptors = canic_control_plane_state_descriptors();
         let descriptor = descriptors
             .iter()
             .find(|descriptor| descriptor.allocation == StateAllocationKey::RootComponentRegistry)
             .expect("root Component Registry descriptor");
 
-        assert_eq!(descriptor.state.len(), 2);
+        assert_eq!(descriptor.state.len(), 4);
         assert_eq!(
             descriptor
                 .state
@@ -311,6 +346,18 @@ mod tests {
                     Some(ROOT_COMPONENT_ALLOCATIONS_ID),
                     RootComponentAllocationRecord::STATE_CONTRACT_NAME,
                     Some(197),
+                ),
+                (
+                    "component_registry_partitions",
+                    Some(ROOT_COMPONENT_REGISTRY_PARTITIONS_ID),
+                    ComponentRegistryPartitionRecord::STATE_CONTRACT_NAME,
+                    Some(198),
+                ),
+                (
+                    "component_registry_principal_index",
+                    Some(ROOT_COMPONENT_PRINCIPAL_INDEX_ID),
+                    ComponentRegistryPrincipalIndexRecord::STATE_CONTRACT_NAME,
+                    Some(199),
                 ),
             ]
         );
