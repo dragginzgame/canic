@@ -35,7 +35,7 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 | `CANIC-COMPLEXITY-001` | `2` | `76bb53a536f252348567d32fd0779a40347e54c254c5fd726207253dcd069fce` | `docs/audits/recurring/system/complexity-accretion.md` |
 | `CANIC-DEPENDENCY-001` | `2` | `ad7b459667545ec5b3adfd33a614803e2c11fa77a28af873392a1d3344333f6f` | `docs/audits/recurring/system/dependency-hygiene.md` |
 | `CANIC-DUPLICATION-001` | `1` | `c4b2b2828f551a5419de394d442ecb04932900d7b15665177a3c8529ee340262` | `docs/audits/recurring/system/dry-consolidation.md` |
-| `CANIC-INSTRUCTION-001` | `2` | `610ee7acc1eb4675d19d1495ec8cccdf8132bc81411aa8d0196f6fe46308d243` | `docs/audits/recurring/system/instruction-footprint.md` |
+| `CANIC-INSTRUCTION-001` | `3` | `8703ef62ed315bbe0fe73f869c9f6934dfb1b9e08735ebe3c0f61fec47fa9d3e` | `docs/audits/recurring/system/instruction-footprint.md` |
 | `CANIC-LAYERING-001` | `2` | `a4c71532e85f3ea0c5f1802478b15f444d78eae3540dc35b96b77b04231503bc` | `docs/audits/recurring/system/layer-violations.md` |
 | `CANIC-STRUCTURE-001` | `1` | `ca370a2c910c4d9d3755af74099c6d5715086d8b1ff226c29a40c77c5ee9f58e` | `docs/audits/recurring/system/module-structure.md` |
 | `CANIC-PUBLISH-001` | `1` | `8e2eff6ac0c60c9903cd68f6354f7536636a987fd437306e851643464bdef884` | `docs/audits/recurring/system/publish-surface.md` |
@@ -57,6 +57,7 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 | `CANIC-CAPABILITY-SURFACE-001` | `1` | `d7de4f8b7115b5e4861bde23aaebe9b2ddee3c83a07f7730b61122b3f3fff898` | `docs/audits/recurring/system/capability-surface.md` | `CANIC-CAPABILITY-SURFACE-001/v2` |
 | `CANIC-CHANGE-FRICTION-001` | `1` | `00646b257428623f7ef4efce4dffdcd93f3bdc75cd7e2dbc02faad32cb2ce8d6` | `docs/audits/recurring/system/change-friction.md` | `CANIC-CHANGE-FRICTION-001/v2` |
 | `CANIC-DEPENDENCY-001` | `1` | `71be0c1d68cc573bc7c17232709b3a576d9cba903eaa9062665ae9bc71a58194` | `docs/audits/recurring/system/dependency-hygiene.md` | `CANIC-DEPENDENCY-001/v2` |
+| `CANIC-INSTRUCTION-001` | `2` | `610ee7acc1eb4675d19d1495ec8cccdf8132bc81411aa8d0196f6fe46308d243` | `docs/audits/recurring/system/instruction-footprint.md` | `CANIC-INSTRUCTION-001/v3` |
 | `CANIC-INSTRUCTION-001` | `1` | `f90bbd1443ac5acdcc69ad256eaef8877955a9219025f65c6255c6fdd7bf2805` | `docs/audits/recurring/system/instruction-footprint.md` | `CANIC-INSTRUCTION-001/v2` |
 | `CANIC-LAYERING-001` | `1` | `86270ae481556a8f5b544d71529d3b324cf5dbf7af7267100a6a74976eacfc49` | `docs/audits/recurring/system/layer-violations.md` | `CANIC-LAYERING-001/v2` |
 | `CANIC-WASM-001` | `1` | `1ed32dd340d10135e899cda5794046d68e1e66ea89da9d6910aa4ca4e958a064` | `docs/audits/recurring/system/wasm-footprint.md` | `CANIC-WASM-001/v2` |
@@ -65,6 +66,7 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 
 - `CANIC-INSTRUCTION-001/v1`: `c79f7027f3629bcbe4dbf4680005d3a9b37104c7ba6d4956a5a3c789c5b5cfab`
 - `CANIC-INSTRUCTION-001/v2`: `f48e99ac68c74e5c967b65be26df9fe93d4147725002696b7947281c194dc6b1`
+- `CANIC-INSTRUCTION-001/v3`: `f0abfa64b51c076d55fb105825267be8e18fe881709c28c7c0d7c36bec2c6626`
 - `CANIC-WASM-001/v1`: `e8c58213d9301d66d4adac4bd92e4aa702fd887b8adb55e2e602a70f29e9c505`
 - `CANIC-WASM-001/v2`: `7e6bd9d57f7791ff2a6fa4b3a2d2cbd153f56d1c9a5c4269a869ff72a7675f18`
 
@@ -84,7 +86,7 @@ and executable fixture inputs and record the resulting value in each run.
 | `039e5910c1d3235c98852bd9893ece9d80ba2e2ebdf75c0b7ecfc933b3658f9c` | `crates/canic-tests/tests/instruction_audit_support/scenarios.rs` |
 | `759301e30336b4c26fa4cffd20e3807d7710b05aa55c965ad159564342905422` | `docs/audits/AUDIT-HOWTO.md` |
 | `5d7e2f15bdd195c63276d37beffce6a88fea2b593abfd7a1d6ede7274e6aa3c6` | `docs/audits/META-AUDIT.md` |
-| `2ff0a232feeef7c6f9ba1e637da4e035249e05477c936097657891935ac78130` | `docs/audits/METHODS.md` |
+| `0e35c7892cf8618a624d280fb860c9cf75376d639eb2e381c0036ea4bd1e0f82` | `docs/audits/METHODS.md` |
 | `ea2c06b003464d6be8f458e07090082ac39f611b1c1907ff2d48ee7f9702e3c7` | `docs/audits/mandatory-trace-protocol.md` |
 | `5fee9fc12be72d84a64137f4f3467833d895b611ea899dce91c34e89a56ee472` | `docs/audits/product-tree-scope-v1.md` |
 | `a5eee1b85b1d54bfc23285e58360690b3bc09c0c1aece7e9440a8b029ec00475` | `docs/audits/retired-methods.md` |
@@ -97,8 +99,8 @@ and executable fixture inputs and record the resulting value in each run.
 | `4ff697d1ed68db19bca8810f609ea40547486a2174e81271312828ef034ca7c8` | `docs/audits/scripts/measure-complexity-v2.sh` |
 | `8f4a46a26e56b845290c3adc4994826b8a10084c97a2c68579ca60038f8e1be8` | `docs/audits/scripts/run-nonempty-cargo-test.sh` |
 | `ac7ab348d0e9a18df9def45f89f1c403f7c23e523eaf58da03b5099fb2634417` | `scripts/ci/audit-product-tree-hash.sh` |
-| `08fd9421a891e118ace74392580cceb0c82a5c5c3aa194ac5011b497d3bba845` | `scripts/ci/check-audit-method-catalog.sh` |
-| `960e8d64eef1b260f38ccc16fa65a517ecbcb2e026a00acb66282172f57af34d` | `scripts/ci/instruction-audit-report.sh` |
+| `632d6d9422006a03c8842106d4b75a4da18814d2707991ba8ac7ec5e71a4ad2f` | `scripts/ci/check-audit-method-catalog.sh` |
+| `52afc739170ee0434295a8d5a2cc66147233a9bd2365ffd4e0ce91349cb23601` | `scripts/ci/instruction-audit-report.sh` |
 | `6986f3624cae4a48374fe110dd0a1c0f8fb91445e27d7f0f22f6eadad31fbc29` | `scripts/ci/run-layering-guards.sh` |
 | `839ee5608894b029fc466056e166a782f04d8f3c6e5f601d248a5b8e475e94ca` | `scripts/ci/list-config-canisters.sh` |
 | `089e5408ede48b45d95813d96ed7ad9bfa9814453a0630af7eff3fa80b5636b2` | `scripts/ci/require_icp.sh` |

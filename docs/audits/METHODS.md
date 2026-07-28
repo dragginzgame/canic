@@ -46,7 +46,7 @@ retained-method owner below.
 | `complexity-accretion.md` | `retain` | `CANIC-COMPLEXITY-001/v2` | trend/manual | Structural complexity with deterministic scope/counters/scoring; run after cross-cutting model/control-flow growth. |
 | `dependency-hygiene.md` | `revise` | `CANIC-DEPENDENCY-001/v2` | invariant/trend | Cargo graph, feature, advisory, declared-license metadata, and lockfile posture; run after dependency/package graph changes and before closeout. |
 | `dry-consolidation.md` | `revise` | `CANIC-DUPLICATION-001/v1` | manual | Duplicate behavior/authority; run after broad host/CLI/runtime workflow work. |
-| `instruction-footprint.md` | `retain` | `CANIC-INSTRUCTION-001/v2` | measured | Fixed authoritative update/install instruction roster and checkpoint coverage; run after relevant hot-path changes or explicit perf review. |
+| `instruction-footprint.md` | `retain` | `CANIC-INSTRUCTION-001/v3` | measured | Fixed authoritative update/install instruction roster and checkpoint coverage; run after relevant hot-path changes or explicit perf review. |
 | `layer-violations.md` | `revise` | `CANIC-LAYERING-001/v2` | invariant/manual | Canonical architecture owner; run after layer, data-shape, conversion, endpoint, workflow, policy, ops, or model changes. |
 | `module-structure.md` | `revise` | `CANIC-STRUCTURE-001/v1` | invariant/trend | Module topology and visibility; run after crate/module/public-surface changes. |
 | `ops-purity.md` | `merge` | `CANIC-LAYERING-001/v2` | invariant | Layering owns ops responsibility and side-effect placement. |
