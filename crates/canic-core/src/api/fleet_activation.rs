@@ -39,6 +39,16 @@ impl FleetActivationApi {
         FleetActivationEvidenceOps::credential_manifest_hash(manifest).map_err(Error::from)
     }
 
+    /// Hash the canonical empty root issuer-policy set used by fresh activation.
+    pub fn empty_root_policy_set_hash() -> Result<[u8; 32], Error> {
+        FleetActivationEvidenceOps::empty_root_policy_set_hash().map_err(Error::from)
+    }
+
+    /// Hash the canonical empty root renewal-template set used by fresh activation.
+    pub fn empty_renewal_template_set_hash() -> Result<[u8; 32], Error> {
+        FleetActivationEvidenceOps::empty_renewal_template_set_hash().map_err(Error::from)
+    }
+
     /// Hash one Canister's exact activation identity and accepted evidence.
     pub fn activation_evidence_hash(
         identity: &FleetActivationIdentity,

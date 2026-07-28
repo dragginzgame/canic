@@ -53,6 +53,12 @@ value is that root's immutable top-level Component-instance ceiling. Every
 configured Spec must be admitted somewhere, and the sum of its root-local
 ceilings cannot exceed the Spec's Fleet-wide `maximum_instances`.
 
+An admission value is not an initial deployment count. Fresh 0.100
+installation activates each root with an empty sealed Component inventory;
+Components may then be created through the active-root lifecycle. Exact
+nonempty initial placement is a separate 0.101 Component Group deployment
+authority.
+
 All root limits and funding amounts are explicit. Cycle amounts accept exact
 integers or Canic cycle suffixes such as `"2T"`. ICP creation funding uses:
 

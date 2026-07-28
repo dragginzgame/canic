@@ -15,7 +15,7 @@ use super::{
         PlanFleetSubnetRootInstallRequest, ResolvedFleetSubnetRootInstall, begin_root_creation,
         begin_root_install, create_result_path, expected_root_authority,
         plan_fleet_subnet_root_install, record_root_created, record_root_installed,
-        record_root_verified,
+        record_root_verified, validate_live_root_activation_status,
     },
     operations::{module_hash_text, parse_module_hash},
 };
@@ -33,7 +33,7 @@ use crate::{
 use candid::Principal;
 use canic_core::{
     dto::{
-        fleet_activation::{FleetActivationPhase, FleetActivationStatusResponse},
+        fleet_activation::FleetActivationStatusResponse,
         fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
     },
     protocol,
@@ -201,8 +201,13 @@ fn drive_root_install(
                 verify_and_record_root(icp_root, environment, local_replica, &current)?
             }
             FleetSubnetRootInstallPhase::Verified => {
-                let authority =
-                    verify_live_root(icp_root, environment, local_replica, &current.journal)?;
+                let authority = verify_live_root(
+                    icp_root,
+                    environment,
+                    local_replica,
+                    &current.path,
+                    &current.journal,
+                )?;
                 return Ok(authority);
             }
             FleetSubnetRootInstallPhase::StoreStaging
@@ -221,8 +226,19 @@ fn drive_root_install(
             | FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified
             | FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight
             | FleetSubnetRootInstallPhase::ComponentRegistryPrepared
-            | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified => {
-                return verify_live_root(icp_root, environment, local_replica, &current.journal);
+            | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified
+            | FleetSubnetRootInstallPhase::RootActivationPreparationInFlight
+            | FleetSubnetRootInstallPhase::RootActivationPrepared
+            | FleetSubnetRootInstallPhase::RootActivationInFlight
+            | FleetSubnetRootInstallPhase::RootActivated
+            | FleetSubnetRootInstallPhase::RootActivationVerified => {
+                return verify_live_root(
+                    icp_root,
+                    environment,
+                    local_replica,
+                    &current.path,
+                    &current.journal,
+                );
             }
         };
     }
@@ -347,7 +363,13 @@ fn verify_and_record_root(
     local_replica: Option<&LocalReplicaTarget>,
     current: &ResolvedFleetSubnetRootInstall,
 ) -> Result<ResolvedFleetSubnetRootInstall, Box<dyn std::error::Error>> {
-    let authority = verify_live_root(icp_root, environment, local_replica, &current.journal)?;
+    let authority = verify_live_root(
+        icp_root,
+        environment,
+        local_replica,
+        &current.path,
+        &current.journal,
+    )?;
     record_root_verified(current, authority).map_err(Into::into)
 }
 
@@ -355,6 +377,7 @@ fn verify_live_root(
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
+    journal_path: &Path,
     journal: &FleetSubnetRootInstallJournal,
 ) -> Result<FleetSubnetRootAuthority, Box<dyn std::error::Error>> {
     let fleet_subnet_root = journal
@@ -381,9 +404,8 @@ fn verify_live_root(
         fleet_subnet_root,
         protocol::CANIC_FLEET_ACTIVATION_STATUS,
     )?;
-    if !matches_exact_prepared(journal, &status) {
-        return Err(RootInstallStateError::ActivationStatusMismatch.into());
-    }
+    validate_live_root_activation_status(journal_path, journal, &status)
+        .map_err(|_| RootInstallStateError::ActivationStatusMismatch)?;
     let observed = query_root::<FleetSubnetRootAuthority>(
         &icp,
         fleet_subnet_root,
@@ -393,21 +415,6 @@ fn verify_live_root(
         return Err(RootInstallStateError::AuthorityMismatch.into());
     }
     Ok(expected)
-}
-
-fn matches_exact_prepared(
-    journal: &FleetSubnetRootInstallJournal,
-    status: &FleetActivationStatusResponse,
-) -> bool {
-    status.phase == FleetActivationPhase::Prepared
-        && status.identity.fleet == journal.authority.binding.fleet
-        && status.identity.operation_id == journal.install_operation_id
-        && status.identity.release_build_id == journal.release_build_id
-        && status.cascade.is_none()
-        && status.cascade_manifest.is_none()
-        && status.credential.is_none()
-        && status.credential_manifest.is_none()
-        && status.activated_at_ns.is_none()
 }
 
 fn query_root<T>(

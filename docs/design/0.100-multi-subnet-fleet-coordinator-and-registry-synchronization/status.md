@@ -6,9 +6,9 @@ Date: 2026-07-28
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.32`.
-- Latest published release: `v0.100.32`.
-- Open patch draft: `0.100.33`; no package-version change has been authorized.
+- Workspace package version: `0.100.33`.
+- Latest published release: `v0.100.33`.
+- Open patch draft: `0.100.34`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -190,6 +190,8 @@ Registry slices replace the 0.99 root model.
 - [ ] Prove one Component operation cannot block an unrelated Component.
 - [x] Activate initial roots only after active-release-set Store and final
   topology synchronization.
+- [x] Extend the normal host journal through empty initial-inventory sealing,
+  root activation and independent terminal Registry verification.
 - [x] Hard-cut the terminal Fleet catalog from one root principal to the
   Coordinator principal and make its sole writer require complete terminal
   evidence.
@@ -549,11 +551,11 @@ root evidence, `canic status` renders `COORDINATOR`, and legacy single-root
 topology consumers fail explicitly instead of querying that Coordinator as a
 root.
 
-The current installer still stops before the complete Component/root runtime
-evidence needed by this gate. It therefore does not publish an early catalog
-row; final wiring remains behind that already-tracked activation boundary.
+At 0.100.32 the installer still stopped before the complete root-runtime
+evidence needed by this gate. It therefore did not publish an early catalog
+row; final wiring remained behind the tracked activation boundary.
 
-Open 0.100.33 adds `canic info subnets <fleet> [--json]`. It resolves only the
+Released 0.100.33 adds `canic info subnets <fleet> [--json]`. It resolves only the
 terminal Coordinator catalog row, validates current Coordinator
 Registry/manifest/version authority, queries every non-removed root's compact
 summary concurrently and emits no output unless every placement, principal,
@@ -562,11 +564,19 @@ Coordinator/root into one canonical physical-Subnet row and reports an exact
 Fleet total. JSON v1 preserves separate Coordinator, root-infrastructure,
 Component and row-total counts.
 
+Open 0.100.34 extends every normal host root-install journal from empty
+Component Registry preparation through sequences 23–27. The host records
+root-activation preparation intent, validates the exact Store cascade and
+credential evidence, records activation intent, reconciles uncertain calls
+from live status and independently verifies the active runtime plus terminal
+sealed Component Registry receipt. Because 0.100 plans contain admission
+ceilings rather than initial counts, this path deliberately seals an empty
+inventory; exact nonempty initial provisioning remains a separate 0.101
+placement-plan responsibility.
+
 ## Next Action
 
-Extend the normal host installer beyond empty Component Registry preparation:
-materialize its planned initial Components through the implemented
-Registry/Directory/runtime journey, seal and activate every root, collect the
-live root summaries and invoke the already-gated terminal catalog publication.
-Do not revive the removed single-root resolver or publish before that complete
-runtime evidence exists.
+Collect one independently verified live summary from every newly active root
+and invoke the already-gated terminal catalog publication. Do not revive the
+removed single-root resolver, reinterpret admission ceilings as initial
+Component counts or publish before the complete root-summary evidence exists.

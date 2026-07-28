@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.32`.
-- The latest published release is `v0.100.32` at
-  `fddd08a66699cd277588a1de99571a67efa888a6`.
-- Open `0.100.33` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.33`.
+- The latest published release is `v0.100.33` at
+  `189d56717571ada8687bf41c441d66ecd0e76234`.
+- Open `0.100.34` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -331,16 +331,23 @@ Historical detail is archived at:
   root set plus one agreeing compact summary per root. Deployment truth no
   longer fabricates root/legacy Registry evidence from that row, status
   renders the Coordinator, and old single-root topology consumers fail
-  explicitly rather than target the Coordinator as a root. The current
-  installer cannot call the terminal gate until its remaining runtime path
-  supplies the complete evidence.
-- Open `0.100.33` adds `canic info subnets <fleet> [--json]`. It resolves the
+  explicitly rather than target the Coordinator as a root. At that release,
+  the installer could not call the terminal gate until its later runtime path
+  supplied the complete evidence.
+- Released `0.100.33` adds `canic info subnets <fleet> [--json]`. It resolves the
   Coordinator only from terminal Fleet discovery, verifies mutually agreeing
   current Registry/manifest/version authority, queries every non-removed
   root's compact count summary concurrently and emits no output on missing,
   unreachable or contradictory evidence. Canonical physical-Subnet rows group
   co-located Coordinator/root infrastructure and JSON v1 retains separate
   Coordinator, root-infrastructure, Component and exact total counts.
+- Open `0.100.34` advances each normal host root-install journal through
+  empty initial-inventory sealing and root runtime activation. Sequences
+  23–27 retain exact preparation and activation intent/results, reconcile an
+  uncertain call from live status and independently verify the active runtime
+  plus terminal Component Registry receipt. A 0.100 admission is only a
+  capacity ceiling, so the host does not fabricate initial Component counts;
+  exact nonempty initial provisioning remains owned by 0.101 placement plans.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority

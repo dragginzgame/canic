@@ -110,12 +110,22 @@ fn assert_current_activation_order(install: &str) {
     assert_before(
         install,
         "activate_and_verify_fleet_subnet_root_registry_mirrors(",
-        "prepare_and_verify_fleet_subnet_root_component_registries(",
+        "prepare_and_activate_current_fleet_subnet_roots(",
     );
     assert_before(
         install,
+        "prepare_and_activate_current_fleet_subnet_roots(",
+        "require_fleet_catalog_publication(",
+    );
+    let root_runtime = source_section(
+        install,
+        "fn prepare_and_activate_current_fleet_subnet_roots(",
+        "fn resolve_current_install_roots(",
+    );
+    assert_before(
+        root_runtime,
         "prepare_and_verify_fleet_subnet_root_component_registries(",
-        "require_component_runtime_activation(",
+        "activate_and_verify_fleet_subnet_root_runtimes(",
     );
 }
 
