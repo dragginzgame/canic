@@ -519,6 +519,10 @@ fn assert_fleet_registry_protocol_constants() {
     assert_component_registry_protocol_constants();
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one table pins the complete Component Registry protocol family"
+)]
 fn assert_component_registry_protocol_constants() {
     for (facade, core, expected) in [
         (
@@ -555,6 +559,11 @@ fn assert_component_registry_protocol_constants() {
             canic::protocol::CANIC_ROOT_COMPONENT_CHILD_CREATE,
             canic_core::protocol::CANIC_ROOT_COMPONENT_CHILD_CREATE,
             "canic_root_component_child_create",
+        ),
+        (
+            canic::protocol::CANIC_ROOT_COMPONENT_CHILD_INSTALL,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_CHILD_INSTALL,
+            "canic_root_component_child_install",
         ),
         (
             canic::protocol::CANIC_ROOT_COMPONENT_CREATE,
@@ -670,6 +679,11 @@ fn assert_root_registry_mirror_guards(root: &str) {
         preceding_attribute_context(root, "async fn canic_root_component_child_create(")
             .contains("canic_update(internal, public)"),
         "root Component Child creation must remain a public update authenticated by workflow"
+    );
+    assert!(
+        preceding_attribute_context(root, "async fn canic_root_component_child_install(")
+            .contains("canic_update(internal, public)"),
+        "root Component Child installation must remain a public update authenticated by workflow"
     );
     for endpoint in [
         "async fn canic_root_component_create(",

@@ -6,10 +6,11 @@
 
 use crate::{
     storage::stable::component_registry::{
-        ComponentRegistryChildRecord, ComponentRegistryParentRoleCountRecord,
-        ComponentRegistryPartitionRecord, RootComponentAllocationCommitError,
-        RootComponentAllocationProgressRecord, RootComponentAllocationRecord,
-        RootComponentChildAllocationProgressRecord, RootComponentChildAllocationRecord,
+        ComponentRegistryChildRecord, ComponentRegistryChildTraversalRecord,
+        ComponentRegistryParentRoleCountRecord, ComponentRegistryPartitionRecord,
+        RootComponentAllocationCommitError, RootComponentAllocationProgressRecord,
+        RootComponentAllocationRecord, RootComponentChildAllocationProgressRecord,
+        RootComponentChildAllocationRecord, RootComponentChildInstallEffectRecord,
         RootComponentCommitmentRecord, RootComponentCreationEffectRecord,
         RootComponentInitialInventoryRecord, RootComponentInstallEffectRecord,
         RootComponentMembershipRecord, RootComponentRegistryCommitError,
@@ -18,9 +19,10 @@ use crate::{
     view::component_registry::{
         ComponentRegistryPartitionView, RootComponentAllocationProgressView,
         RootComponentAllocationView, RootComponentChildAllocationProgressView,
-        RootComponentChildAllocationView, RootComponentCommitmentView,
-        RootComponentCreationEffectView, RootComponentInitialInventoryView,
-        RootComponentInstallEffectView, RootComponentMembershipView, RootComponentRegistryView,
+        RootComponentChildAllocationView, RootComponentChildInstallEffectView,
+        RootComponentCommitmentView, RootComponentCreationEffectView,
+        RootComponentInitialInventoryView, RootComponentInstallEffectView,
+        RootComponentMembershipView, RootComponentRegistryView,
     },
 };
 use candid::CandidType;
@@ -136,6 +138,20 @@ pub struct RootComponentInstallPlan {
     pub raw_module_hash: [u8; 32],
     pub chunk_hashes: Vec<Vec<u8>>,
     pub binding: ComponentBinding,
+    pub maximum_registry_bytes: u64,
+}
+
+///
+/// RootComponentChildInstallPlan
+///
+/// Exact child module source and immutable target binding selected before installation.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentChildInstallPlan {
+    pub raw_module_hash: [u8; 32],
+    pub chunk_hashes: Vec<Vec<u8>>,
+    pub binding: ComponentChildBinding,
     pub maximum_registry_bytes: u64,
 }
 
@@ -1043,7 +1059,24 @@ impl ComponentRegistryOps {
             RootComponentChildAllocationProgressRecord::Created {
                 canister: existing, ..
             } if existing == &canister => return Ok(child_allocation_record_to_view(record)),
-            RootComponentChildAllocationProgressRecord::Created { .. } => {
+            RootComponentChildAllocationProgressRecord::InstallIntent {
+                canister: existing,
+                ..
+            }
+            | RootComponentChildAllocationProgressRecord::Installed {
+                canister: existing, ..
+            }
+            | RootComponentChildAllocationProgressRecord::Verified {
+                canister: existing, ..
+            }
+            | RootComponentChildAllocationProgressRecord::Committed {
+                canister: existing, ..
+            } if existing == &canister => return Ok(child_allocation_record_to_view(record)),
+            RootComponentChildAllocationProgressRecord::Created { .. }
+            | RootComponentChildAllocationProgressRecord::InstallIntent { .. }
+            | RootComponentChildAllocationProgressRecord::Installed { .. }
+            | RootComponentChildAllocationProgressRecord::Verified { .. }
+            | RootComponentChildAllocationProgressRecord::Committed { .. } => {
                 return Err(InternalError::conflict(
                     "Component Child allocation is already bound to a different created Canister",
                 ));
@@ -1108,6 +1141,173 @@ impl ComponentRegistryOps {
         )
         .map_err(map_allocation_commit_error)?;
         Ok(child_allocation_record_to_view(next_record))
+    }
+
+    pub(crate) fn validate_child_install_capacity(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        plan: &RootComponentChildInstallPlan,
+    ) -> Result<(), InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        let record = RootComponentRegistryStore::child_allocation(component, operation_id)
+            .ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component Child allocation operation has not been reserved",
+                )
+            })?;
+        validate_child_install_authority(&current, &partition, &record, plan)?;
+        if !matches!(
+            record.progress,
+            RootComponentChildAllocationProgressRecord::Created { .. }
+        ) {
+            return Err(InternalError::conflict(
+                "Component Child allocation is not ready to cross its install-intent boundary",
+            ));
+        }
+        let charged_entry_bytes = child_install_charged_entry_bytes(&record, plan)?;
+        child_install_capacity(&current, &partition, &record, charged_entry_bytes).map(|_| ())
+    }
+
+    pub(crate) fn begin_child_install(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        plan: RootComponentChildInstallPlan,
+        cost_guard_settlement: ReplayCostGuardSettlement,
+    ) -> Result<RootComponentChildAllocationView, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        let record = RootComponentRegistryStore::child_allocation(component, operation_id)
+            .ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component Child allocation operation has not been reserved",
+                )
+            })?;
+        validate_child_install_authority(&current, &partition, &record, &plan)?;
+        let (creation, canister) = match &record.progress {
+            RootComponentChildAllocationProgressRecord::Created { effect, canister } => {
+                (effect.clone(), *canister)
+            }
+            _ => {
+                return Err(InternalError::conflict(
+                    "Component Child allocation is not ready for installation",
+                ));
+            }
+        };
+        let charged_entry_bytes = child_install_charged_entry_bytes(&record, &plan)?;
+        let (next_partition, registry_delta) =
+            child_install_capacity(&current, &partition, &record, charged_entry_bytes)?;
+        let mut next_record = record.clone();
+        next_record.progress = RootComponentChildAllocationProgressRecord::InstallIntent {
+            creation,
+            canister,
+            installation: RootComponentChildInstallEffectRecord {
+                raw_module_hash: plan.raw_module_hash,
+                chunk_hashes: plan.chunk_hashes,
+                binding: plan.binding,
+                cost_guard_settlement,
+                charged_entry_bytes,
+            },
+        };
+        validate_charged_child_record_size(&next_record, charged_entry_bytes)?;
+        let mut next_meta = current.clone();
+        next_meta.encoded_bytes = next_meta
+            .encoded_bytes
+            .checked_add(registry_delta)
+            .ok_or_else(|| {
+                InternalError::resource_exhausted("Component Registry bytes overflow")
+            })?;
+
+        RootComponentRegistryStore::replace_child_allocation(
+            &current,
+            next_meta,
+            &partition,
+            next_partition,
+            &record,
+            next_record.clone(),
+        )
+        .map_err(map_allocation_commit_error)?;
+        Ok(child_allocation_record_to_view(next_record))
+    }
+
+    pub(crate) fn renew_child_install_intent(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        plan: &RootComponentChildInstallPlan,
+        cost_guard_settlement: ReplayCostGuardSettlement,
+    ) -> Result<RootComponentChildAllocationView, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        let record = RootComponentRegistryStore::child_allocation(component, operation_id)
+            .ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component Child allocation operation has not been reserved",
+                )
+            })?;
+        validate_child_install_authority(&current, &partition, &record, plan)?;
+        let (creation, canister, existing) = match &record.progress {
+            RootComponentChildAllocationProgressRecord::InstallIntent {
+                creation,
+                canister,
+                installation,
+            } => (creation.clone(), *canister, installation),
+            _ => {
+                return Err(InternalError::conflict(
+                    "Component Child allocation has no renewable install intent",
+                ));
+            }
+        };
+        validate_child_install_effect_record(existing, plan)?;
+        let charged_entry_bytes = existing.charged_entry_bytes;
+        let mut next_record = record.clone();
+        next_record.progress = RootComponentChildAllocationProgressRecord::InstallIntent {
+            creation,
+            canister,
+            installation: RootComponentChildInstallEffectRecord {
+                raw_module_hash: plan.raw_module_hash,
+                chunk_hashes: plan.chunk_hashes.clone(),
+                binding: plan.binding.clone(),
+                cost_guard_settlement,
+                charged_entry_bytes,
+            },
+        };
+        validate_charged_child_record_size(&next_record, charged_entry_bytes)?;
+        RootComponentRegistryStore::replace_child_allocation(
+            &current,
+            current.clone(),
+            &partition,
+            partition.clone(),
+            &record,
+            next_record.clone(),
+        )
+        .map_err(map_allocation_commit_error)?;
+        Ok(child_allocation_record_to_view(next_record))
+    }
+
+    pub(crate) fn mark_child_installed(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+    ) -> Result<RootComponentChildAllocationView, InternalError> {
+        advance_child_install_phase(component, operation_id, false)
+    }
+
+    pub(crate) fn mark_child_verified(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+    ) -> Result<RootComponentChildAllocationView, InternalError> {
+        advance_child_install_phase(component, operation_id, true)
     }
 
     pub(crate) fn commit_verified(
@@ -1923,7 +2123,57 @@ fn child_allocation_record_to_view(
                     canister,
                 }
             }
+            RootComponentChildAllocationProgressRecord::InstallIntent {
+                creation,
+                canister,
+                installation,
+            } => RootComponentChildAllocationProgressView::InstallIntent {
+                creation: creation_effect_record_to_view(creation),
+                canister,
+                installation: child_install_effect_record_to_view(installation),
+            },
+            RootComponentChildAllocationProgressRecord::Installed {
+                creation,
+                canister,
+                installation,
+            } => RootComponentChildAllocationProgressView::Installed {
+                creation: creation_effect_record_to_view(creation),
+                canister,
+                installation: child_install_effect_record_to_view(installation),
+            },
+            RootComponentChildAllocationProgressRecord::Verified {
+                creation,
+                canister,
+                installation,
+            } => RootComponentChildAllocationProgressView::Verified {
+                creation: creation_effect_record_to_view(creation),
+                canister,
+                installation: child_install_effect_record_to_view(installation),
+            },
+            RootComponentChildAllocationProgressRecord::Committed {
+                creation,
+                canister,
+                installation,
+                commitment,
+            } => RootComponentChildAllocationProgressView::Committed {
+                creation: creation_effect_record_to_view(creation),
+                canister,
+                installation: child_install_effect_record_to_view(installation),
+                commitment: commitment_record_to_view(commitment),
+            },
         },
+    }
+}
+
+fn child_install_effect_record_to_view(
+    effect: RootComponentChildInstallEffectRecord,
+) -> RootComponentChildInstallEffectView {
+    RootComponentChildInstallEffectView {
+        raw_module_hash: effect.raw_module_hash,
+        chunk_hashes: effect.chunk_hashes,
+        binding: effect.binding,
+        cost_guard_settlement: effect.cost_guard_settlement,
+        charged_entry_bytes: effect.charged_entry_bytes,
     }
 }
 
@@ -2111,6 +2361,284 @@ fn validate_charged_child_record_size(
         ));
     }
     Ok(())
+}
+
+fn validate_child_install_authority(
+    current: &RootComponentRegistryMetaRecord,
+    partition: &ComponentRegistryPartitionRecord,
+    record: &RootComponentChildAllocationRecord,
+    plan: &RootComponentChildInstallPlan,
+) -> Result<(), InternalError> {
+    validate_partition_record(partition)?;
+    validate_child_allocation_record(record)?;
+    let canister = match &record.progress {
+        RootComponentChildAllocationProgressRecord::Created { canister, .. }
+        | RootComponentChildAllocationProgressRecord::InstallIntent { canister, .. }
+        | RootComponentChildAllocationProgressRecord::Installed { canister, .. }
+        | RootComponentChildAllocationProgressRecord::Verified { canister, .. }
+        | RootComponentChildAllocationProgressRecord::Committed { canister, .. } => *canister,
+        RootComponentChildAllocationProgressRecord::Reserved
+        | RootComponentChildAllocationProgressRecord::CreationIntent(_) => {
+            return Err(InternalError::conflict(
+                "Component Child allocation has no created Canister",
+            ));
+        }
+    };
+    if partition.binding != plan.binding.component
+        || partition.release_set != record.release_set
+        || current.release_set != record.release_set
+        || partition.status != ComponentLifecycleStatus::Active
+        || plan.binding.parent_canister_id != record.parent_canister_id
+        || plan.binding.role != record.child_role
+        || plan.binding.canister_id != canister
+        || plan.maximum_registry_bytes != record.maximum_registry_bytes
+        || plan.raw_module_hash == [0; 32]
+        || plan.chunk_hashes.is_empty()
+    {
+        return Err(InternalError::conflict(
+            "Component Child install authority differs from its active reservation",
+        ));
+    }
+    Ok(())
+}
+
+fn child_install_charged_entry_bytes(
+    record: &RootComponentChildAllocationRecord,
+    plan: &RootComponentChildInstallPlan,
+) -> Result<u64, InternalError> {
+    let (creation, canister) = match &record.progress {
+        RootComponentChildAllocationProgressRecord::Created { effect, canister } => {
+            (effect.clone(), *canister)
+        }
+        _ => {
+            return Err(InternalError::conflict(
+                "Component Child allocation is not ready for installation",
+            ));
+        }
+    };
+    let installation = RootComponentChildInstallEffectRecord {
+        raw_module_hash: plan.raw_module_hash,
+        chunk_hashes: plan.chunk_hashes.clone(),
+        binding: plan.binding.clone(),
+        cost_guard_settlement: ReplayCostGuardSettlement {
+            quota_intent_id: IntentId(u64::MAX),
+            reservation_intent_id: IntentId(u64::MAX),
+        },
+        charged_entry_bytes: u64::MAX,
+    };
+    let mut maximum = record.clone();
+    maximum.progress = RootComponentChildAllocationProgressRecord::Committed {
+        creation,
+        canister,
+        installation,
+        commitment: RootComponentCommitmentRecord {
+            registry: ComponentRegistryHead {
+                component: record.component,
+                revision: u64::MAX,
+                content_hash: [u8::MAX; 32],
+            },
+            prepared_registry_encoded_bytes: u64::MAX,
+            directory_synchronized_at_ns: u64::MAX,
+            directory_authority_hash: [u8::MAX; 32],
+            directory_prepared: true,
+            runtime_activated: true,
+            membership: Some(RootComponentMembershipRecord {
+                registry_encoded_bytes: u64::MAX,
+                directory_synchronized_at_ns: u64::MAX,
+                directory_authority_hash: [u8::MAX; 32],
+                directory_synchronized: true,
+            }),
+        },
+    };
+    let child = ComponentRegistryChildRecord {
+        component: record.component,
+        canister_id: canister,
+        parent_canister_id: record.parent_canister_id,
+        role: record.child_role.clone(),
+        kind: record.child_kind,
+        installed_artifact_hash: plan.raw_module_hash,
+        status: ComponentLifecycleStatus::Active,
+    };
+    let traversal = ComponentRegistryChildTraversalRecord {
+        component: record.component,
+        parent_canister_id: record.parent_canister_id,
+        role: record.child_role.clone(),
+        canister_id: canister,
+    };
+    RootComponentRegistryStore::child_allocation_entry_bytes(&maximum)
+        .checked_add(RootComponentRegistryStore::child_entry_bytes(&child))
+        .and_then(|value| {
+            value.checked_add(RootComponentRegistryStore::child_traversal_entry_bytes(
+                &traversal,
+            ))
+        })
+        .and_then(|value| {
+            value.checked_add(RootComponentRegistryStore::principal_index_entry_bytes(
+                canister,
+                record.component,
+            ))
+        })
+        .ok_or_else(|| InternalError::resource_exhausted("Component Registry bytes overflow"))
+}
+
+fn child_install_capacity(
+    current: &RootComponentRegistryMetaRecord,
+    partition: &ComponentRegistryPartitionRecord,
+    record: &RootComponentChildAllocationRecord,
+    charged_entry_bytes: u64,
+) -> Result<(ComponentRegistryPartitionRecord, u64), InternalError> {
+    let current_reserved_bytes = match &record.progress {
+        RootComponentChildAllocationProgressRecord::Created { effect, .. } => {
+            effect.charged_entry_bytes
+        }
+        _ => {
+            return Err(InternalError::conflict(
+                "Component Child allocation is not ready to reserve install capacity",
+            ));
+        }
+    };
+    let current_total = RootComponentRegistryStore::partition_entry_bytes(partition)
+        .checked_add(current_reserved_bytes)
+        .ok_or_else(|| InternalError::resource_exhausted("Component Registry bytes overflow"))?;
+    let mut next = partition.clone();
+
+    for _ in 0..8 {
+        let next_total = RootComponentRegistryStore::partition_entry_bytes(&next)
+            .checked_add(charged_entry_bytes)
+            .ok_or_else(|| {
+                InternalError::resource_exhausted("Component Registry bytes overflow")
+            })?;
+        let registry_delta = next_total.checked_sub(current_total).ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
+                "Component Child install precharge unexpectedly reduced Registry bytes",
+            )
+        })?;
+        let encoded_bytes = partition
+            .encoded_bytes
+            .checked_add(registry_delta)
+            .ok_or_else(|| {
+                InternalError::resource_exhausted("Component Registry bytes overflow")
+            })?;
+        if next.encoded_bytes == encoded_bytes {
+            if encoded_bytes > record.maximum_registry_bytes {
+                return Err(InternalError::resource_exhausted(format!(
+                    "Component Child installation requires {encoded_bytes} bytes, exceeding protected Component limit {}",
+                    record.maximum_registry_bytes
+                )));
+            }
+            let root_encoded_bytes = current
+                .encoded_bytes
+                .checked_add(registry_delta)
+                .ok_or_else(|| {
+                    InternalError::resource_exhausted("Component Registry bytes overflow")
+                })?;
+            if root_encoded_bytes > current.root.limits.maximum_registry_bytes {
+                return Err(InternalError::resource_exhausted(format!(
+                    "Component Child installation requires {root_encoded_bytes} root Registry bytes, exceeding protected limit {}",
+                    current.root.limits.maximum_registry_bytes
+                )));
+            }
+            return Ok((next, registry_delta));
+        }
+        next.encoded_bytes = encoded_bytes;
+    }
+    Err(InternalError::invariant(
+        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+        "Component Child installation byte accounting did not converge",
+    ))
+}
+
+fn validate_child_install_effect_record(
+    effect: &RootComponentChildInstallEffectRecord,
+    plan: &RootComponentChildInstallPlan,
+) -> Result<(), InternalError> {
+    if effect.raw_module_hash != plan.raw_module_hash
+        || effect.chunk_hashes != plan.chunk_hashes
+        || effect.binding != plan.binding
+    {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "durable Component Child install intent differs from verified module or binding authority",
+        ));
+    }
+    Ok(())
+}
+
+fn advance_child_install_phase(
+    component: ComponentInstanceId,
+    operation_id: [u8; 32],
+    verified: bool,
+) -> Result<RootComponentChildAllocationView, InternalError> {
+    let current = RootComponentRegistryStore::current().ok_or_else(|| {
+        InternalError::unavailable("root Component Registry authority has not been prepared")
+    })?;
+    let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+        InternalError::unavailable("Component Registry partition has not been committed")
+    })?;
+    let record =
+        RootComponentRegistryStore::child_allocation(component, operation_id).ok_or_else(|| {
+            InternalError::unavailable("Component Child allocation operation has not been reserved")
+        })?;
+    let next_progress = match (&record.progress, verified) {
+        (
+            RootComponentChildAllocationProgressRecord::InstallIntent {
+                creation,
+                canister,
+                installation,
+            },
+            false,
+        ) => RootComponentChildAllocationProgressRecord::Installed {
+            creation: creation.clone(),
+            canister: *canister,
+            installation: installation.clone(),
+        },
+        (RootComponentChildAllocationProgressRecord::Installed { .. }, false)
+        | (
+            RootComponentChildAllocationProgressRecord::Verified { .. }
+            | RootComponentChildAllocationProgressRecord::Committed { .. },
+            _,
+        ) => return Ok(child_allocation_record_to_view(record)),
+        (
+            RootComponentChildAllocationProgressRecord::Installed {
+                creation,
+                canister,
+                installation,
+            },
+            true,
+        ) => RootComponentChildAllocationProgressRecord::Verified {
+            creation: creation.clone(),
+            canister: *canister,
+            installation: installation.clone(),
+        },
+        _ => {
+            return Err(InternalError::conflict(if verified {
+                "Component Child allocation has not recorded successful installation"
+            } else {
+                "Component Child allocation has no durable install intent"
+            }));
+        }
+    };
+    let charged_entry_bytes = match &next_progress {
+        RootComponentChildAllocationProgressRecord::Installed { installation, .. }
+        | RootComponentChildAllocationProgressRecord::Verified { installation, .. } => {
+            installation.charged_entry_bytes
+        }
+        _ => unreachable!(),
+    };
+    let mut next_record = record.clone();
+    next_record.progress = next_progress;
+    validate_charged_child_record_size(&next_record, charged_entry_bytes)?;
+    RootComponentRegistryStore::replace_child_allocation(
+        &current,
+        current.clone(),
+        &partition,
+        partition.clone(),
+        &record,
+        next_record.clone(),
+    )
+    .map_err(map_allocation_commit_error)?;
+    Ok(child_allocation_record_to_view(next_record))
 }
 
 fn creation_charged_entry_bytes(
@@ -3098,7 +3626,7 @@ mod tests {
     #[test]
     #[expect(
         clippy::too_many_lines,
-        reason = "one test follows reservation, interruption retry and both protected capacity failures"
+        reason = "one test follows the complete direct-child reserve, create and install lifecycle"
     )]
     fn child_reservation_is_parent_indexed_idempotent_and_capacity_bounded() {
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
@@ -3216,7 +3744,7 @@ mod tests {
                 .expect("registered parent")
                 .expect("top-level parent")
                 .0,
-            ManagedCanisterBinding::Component(binding)
+            ManagedCanisterBinding::Component(binding.clone())
         );
         assert_eq!(
             ComponentRegistryOps::parent_role_instances(component, parent, &decision.child_role,)
@@ -3348,13 +3876,142 @@ mod tests {
             )
             .is_err()
         );
+        let install_plan = RootComponentChildInstallPlan {
+            raw_module_hash: [56; 32],
+            chunk_hashes: vec![vec![57; 32], vec![58; 32]],
+            binding: ComponentChildBinding {
+                component: binding,
+                parent_canister_id: parent,
+                role: decision.child_role.clone(),
+                canister_id: canister,
+            },
+            maximum_registry_bytes: decision.maximum_registry_bytes,
+        };
+        let before_install = RootComponentRegistryStore::export();
+        let mut install_capacity_exhausted = before_install.clone();
+        let maximum_registry_bytes = install_capacity_exhausted
+            .current
+            .as_ref()
+            .expect("Registry status")
+            .encoded_bytes;
+        install_capacity_exhausted
+            .current
+            .as_mut()
+            .expect("Registry status")
+            .root
+            .limits
+            .maximum_registry_bytes = maximum_registry_bytes;
+        RootComponentRegistryStore::import(install_capacity_exhausted);
+        let error = ComponentRegistryOps::validate_child_install_capacity(
+            component,
+            [44; 32],
+            &install_plan,
+        )
+        .expect_err("installation must fit before the paid effect");
+        assert!(error.is_public_resource_exhausted());
+        assert!(matches!(
+            ComponentRegistryOps::child_allocation(component, [44; 32])
+                .expect("child allocation")
+                .expect("created child")
+                .progress,
+            RootComponentChildAllocationProgressView::Created { .. }
+        ));
+        RootComponentRegistryStore::import(before_install);
+
+        ComponentRegistryOps::validate_child_install_capacity(component, [44; 32], &install_plan)
+            .expect("child install capacity");
+        let install_intent = ComponentRegistryOps::begin_child_install(
+            component,
+            [44; 32],
+            install_plan.clone(),
+            ReplayCostGuardSettlement {
+                quota_intent_id: IntentId(59),
+                reservation_intent_id: IntentId(60),
+            },
+        )
+        .expect("child install intent");
+        let install_intent_bytes = ComponentRegistryOps::current()
+            .expect("Registry status")
+            .encoded_bytes;
+        assert!(install_intent_bytes > intent_bytes);
+        assert!(matches!(
+            install_intent.progress,
+            RootComponentChildAllocationProgressView::InstallIntent { .. }
+        ));
+
+        let mut conflicting_install = install_plan.clone();
+        conflicting_install.raw_module_hash = [61; 32];
+        assert!(
+            ComponentRegistryOps::renew_child_install_intent(
+                component,
+                [44; 32],
+                &conflicting_install,
+                ReplayCostGuardSettlement {
+                    quota_intent_id: IntentId(62),
+                    reservation_intent_id: IntentId(63),
+                },
+            )
+            .is_err()
+        );
+        let interrupted = RootComponentRegistryStore::export();
+        RootComponentRegistryStore::import(interrupted);
+        let renewed = ComponentRegistryOps::renew_child_install_intent(
+            component,
+            [44; 32],
+            &install_plan,
+            ReplayCostGuardSettlement {
+                quota_intent_id: IntentId(64),
+                reservation_intent_id: IntentId(65),
+            },
+        )
+        .expect("renew exact child install intent");
+        let RootComponentChildAllocationProgressView::InstallIntent { installation, .. } =
+            &renewed.progress
+        else {
+            panic!("renewed child install intent");
+        };
+        assert_eq!(installation.binding, install_plan.binding);
+        assert_eq!(
+            installation.cost_guard_settlement.quota_intent_id,
+            IntentId(64)
+        );
+
+        let installed = ComponentRegistryOps::mark_child_installed(component, [44; 32])
+            .expect("mark child installed");
+        let installed_retry = ComponentRegistryOps::mark_child_installed(component, [44; 32])
+            .expect("installed child retry");
+        assert_eq!(installed, installed_retry);
+        assert!(matches!(
+            installed.progress,
+            RootComponentChildAllocationProgressView::Installed { .. }
+        ));
+        let verified = ComponentRegistryOps::mark_child_verified(component, [44; 32])
+            .expect("mark child verified");
+        let verified_retry = ComponentRegistryOps::mark_child_verified(component, [44; 32])
+            .expect("verified child retry");
+        assert_eq!(verified, verified_retry);
+        assert!(matches!(
+            verified.progress,
+            RootComponentChildAllocationProgressView::Verified { .. }
+        ));
+        let verified_status = ComponentRegistryOps::current().expect("Registry status");
+        assert_eq!(verified_status.known_created_component_canisters, 2);
+        assert_eq!(verified_status.managed_descendants, 1);
+        assert_eq!(verified_status.encoded_bytes, install_intent_bytes);
+        let verified_partition = ComponentRegistryOps::partition(component)
+            .expect("partition read")
+            .expect("partition");
+        assert_eq!(verified_partition.reserved_descendants, 1);
+        assert_eq!(verified_partition.committed_descendants, 0);
+        assert_eq!(verified_partition.encoded_bytes, install_intent_bytes);
+
         let retried_reservation = ComponentRegistryOps::reserve_child_allocation(
             decision,
             [44; 32],
             repeated.reserved_against_registry,
         )
-        .expect("reservation retry preserves creation progress");
-        assert_eq!(retried_reservation, repeated_created);
+        .expect("reservation retry preserves install progress");
+        assert_eq!(retried_reservation, verified_retry);
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
 

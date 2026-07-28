@@ -16,8 +16,8 @@ use canic_core::{
         root_store::RootStoreBootstrapRequest,
     },
     ids::{
-        CanisterRole, ComponentBinding, ComponentInstanceId, ComponentSpecId,
-        FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
+        CanisterRole, ComponentBinding, ComponentChildBinding, ComponentInstanceId,
+        ComponentSpecId, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
     },
 };
 
@@ -113,6 +113,27 @@ pub enum RootComponentChildAllocationProgressView {
         effect: RootComponentCreationEffectView,
         canister: Principal,
     },
+    InstallIntent {
+        creation: RootComponentCreationEffectView,
+        canister: Principal,
+        installation: RootComponentChildInstallEffectView,
+    },
+    Installed {
+        creation: RootComponentCreationEffectView,
+        canister: Principal,
+        installation: RootComponentChildInstallEffectView,
+    },
+    Verified {
+        creation: RootComponentCreationEffectView,
+        canister: Principal,
+        installation: RootComponentChildInstallEffectView,
+    },
+    Committed {
+        creation: RootComponentCreationEffectView,
+        canister: Principal,
+        installation: RootComponentChildInstallEffectView,
+        commitment: RootComponentCommitmentView,
+    },
 }
 
 ///
@@ -180,6 +201,21 @@ pub struct RootComponentInstallEffectView {
     pub raw_module_hash: [u8; 32],
     pub chunk_hashes: Vec<Vec<u8>>,
     pub binding: ComponentBinding,
+    pub cost_guard_settlement: ReplayCostGuardSettlement,
+    pub charged_entry_bytes: u64,
+}
+
+///
+/// RootComponentChildInstallEffectView
+///
+/// Read-only exact child artifact, immutable binding and cost settlement.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentChildInstallEffectView {
+    pub raw_module_hash: [u8; 32],
+    pub chunk_hashes: Vec<Vec<u8>>,
+    pub binding: ComponentChildBinding,
     pub cost_guard_settlement: ReplayCostGuardSettlement,
     pub charged_entry_bytes: u64,
 }

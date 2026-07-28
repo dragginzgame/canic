@@ -7,16 +7,17 @@
 use crate::{
     ops::{
         component_registry::{
-            ComponentRegistryOps, RootComponentCreationPlan, RootComponentInstallPlan,
+            ComponentRegistryOps, RootComponentChildInstallPlan, RootComponentCreationPlan,
+            RootComponentInstallPlan,
         },
         fleet_registry_mirror::FleetRegistryMirrorOps,
     },
     view::component_registry::{
         ComponentRegistryPartitionView, RootComponentAllocationProgressView,
         RootComponentAllocationView, RootComponentChildAllocationProgressView,
-        RootComponentChildAllocationView, RootComponentCreationEffectView,
-        RootComponentInitialInventoryView, RootComponentInstallEffectView,
-        RootComponentRegistryView,
+        RootComponentChildAllocationView, RootComponentChildInstallEffectView,
+        RootComponentCreationEffectView, RootComponentInitialInventoryView,
+        RootComponentInstallEffectView, RootComponentRegistryView,
     },
     workflow::{
         bootstrap::root_store, deployment, runtime::template::resolved_root_store_module_source,
@@ -59,7 +60,8 @@ use canic_core::{
             RootComponentAllocationRequest, RootComponentAllocationResponse,
             RootComponentAllocationStatusRequest, RootComponentChildAllocationRequest,
             RootComponentChildAllocationResponse, RootComponentChildAllocationStatusRequest,
-            RootComponentChildCreationRequest, RootComponentCommitRequest,
+            RootComponentChildCreationRequest, RootComponentChildInstallEvidence,
+            RootComponentChildInstallRequest, RootComponentCommitRequest,
             RootComponentCommitResponse, RootComponentCreationEvidence,
             RootComponentCreationRequest, RootComponentDirectoryPreparationRequest,
             RootComponentDirectoryPreparationResponse, RootComponentInitialInventoryStatus,
@@ -443,6 +445,56 @@ pub async fn install_allocation(
     let plan = component_install_plan(&authority.binding, &store, &allocation).await?;
 
     advance_install(request.operation_id, allocation, plan).await
+}
+
+/// Install and independently verify one exactly created direct child through its root.
+pub async fn install_child_allocation(
+    request: RootComponentChildInstallRequest,
+) -> Result<RootComponentChildAllocationResponse, InternalError> {
+    let (authority, root) = root_authority()?;
+    let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let preparation_request = RootComponentRegistryPreparationRequest {
+        store_bootstrap: prepared.store_bootstrap.clone(),
+        expected_fleet_registry: prepared.prepared_against_registry.clone(),
+    };
+    let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    validate_active_authority(&authority, root, &preparation_request)?;
+    if FleetActivationApi::status()
+        .map_err(InternalError::public)?
+        .phase
+        != FleetActivationPhase::Active
+    {
+        return Err(InternalError::unavailable(
+            "Component Child installation requires an Active Fleet Subnet Root runtime",
+        ));
+    }
+
+    let caller = IcOps::msg_caller();
+    let parent =
+        ComponentRegistryOps::registered_parent(request.component, caller)?.ok_or_else(|| {
+            InternalError::public(Error::forbidden(format!(
+                "caller {caller} is not a registered member of Component {}",
+                request.component
+            )))
+        })?;
+    let allocation =
+        ComponentRegistryOps::child_allocation(request.component, request.operation_id)?
+            .ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component Child allocation operation has not been reserved",
+                )
+            })?;
+    validate_child_allocation(
+        &authority.binding,
+        authority.initial_release_set,
+        &ConfigOps::component_topology()?,
+        &parent.0,
+        &allocation,
+        None,
+    )?;
+    let plan =
+        child_component_install_plan(&authority.binding, &store, &parent.0, &allocation).await?;
+    advance_child_install(request.component, request.operation_id, allocation, plan).await
 }
 
 /// Atomically commit one verified top-level Component and its first Directory authority.
@@ -1093,7 +1145,11 @@ async fn advance_child_creation(
     let effect = match &intent.progress {
         RootComponentChildAllocationProgressView::CreationIntent(effect) => effect,
         RootComponentChildAllocationProgressView::Reserved
-        | RootComponentChildAllocationProgressView::Created { .. } => {
+        | RootComponentChildAllocationProgressView::Created { .. }
+        | RootComponentChildAllocationProgressView::InstallIntent { .. }
+        | RootComponentChildAllocationProgressView::Installed { .. }
+        | RootComponentChildAllocationProgressView::Verified { .. }
+        | RootComponentChildAllocationProgressView::Committed { .. } => {
             return Err(CostGuardWorkflow::recover_after_failure(
                 &cost_permit,
                 IcOps::now_secs(),
@@ -1185,7 +1241,19 @@ fn reconcile_existing_child_creation(
     plan: &RootComponentCreationPlan,
 ) -> Result<bool, InternalError> {
     match &allocation.progress {
-        RootComponentChildAllocationProgressView::Created { effect, .. } => {
+        RootComponentChildAllocationProgressView::Created { effect, .. }
+        | RootComponentChildAllocationProgressView::InstallIntent {
+            creation: effect, ..
+        }
+        | RootComponentChildAllocationProgressView::Installed {
+            creation: effect, ..
+        }
+        | RootComponentChildAllocationProgressView::Verified {
+            creation: effect, ..
+        }
+        | RootComponentChildAllocationProgressView::Committed {
+            creation: effect, ..
+        } => {
             validate_creation_effect(effect, plan)?;
             CostGuardWorkflow::complete_replay_settlement(
                 &effect.cost_guard_settlement,
@@ -1208,6 +1276,15 @@ fn reconcile_existing_child_creation(
 #[derive(Clone, Debug)]
 struct ComponentInstallPlan {
     durable: RootComponentInstallPlan,
+    source: ApprovedModuleSource,
+    payload: CanisterInitPayload,
+    canister: candid::Principal,
+    expected_status_module_hash: [u8; 32],
+}
+
+#[derive(Clone, Debug)]
+struct ComponentChildInstallPlan {
+    durable: RootComponentChildInstallPlan,
     source: ApprovedModuleSource,
     payload: CanisterInitPayload,
     canister: candid::Principal,
@@ -1303,6 +1380,296 @@ async fn component_install_plan(
         canister,
         expected_status_module_hash: artifact.payload_hash,
     })
+}
+
+async fn child_component_install_plan(
+    root: &canic_core::ids::FleetSubnetRootBinding,
+    store: &RootStoreBootstrapResponse,
+    parent: &ManagedCanisterBinding,
+    allocation: &RootComponentChildAllocationView,
+) -> Result<ComponentChildInstallPlan, InternalError> {
+    let (creation, canister) = child_allocation_creation_and_canister(allocation)?;
+    let expected_creation = child_creation_plan(root.fleet_subnet_root, store, allocation)?;
+    validate_creation_effect(creation, &expected_creation)?;
+
+    let artifact = exact_store_artifact(store, &allocation.child_role)?;
+    let source = resolved_root_store_module_source(
+        store.wasm_store,
+        allocation.release_set.release_build_id,
+        &allocation.child_role,
+        artifact.payload_hash,
+        artifact.payload_size_bytes,
+    )
+    .await?;
+    let chunk_hashes = match source.payload() {
+        ApprovedModulePayload::Chunked {
+            source_canister,
+            chunk_hashes,
+        } if source_canister == &store.wasm_store => chunk_hashes.clone(),
+        ApprovedModulePayload::Chunked { .. } | ApprovedModulePayload::Embedded { .. } => {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                "resolved Component Child module source differs from the verified root Store",
+            ));
+        }
+    };
+    if source.module_hash() != artifact.payload_hash
+        || source.payload_size_bytes() != artifact.payload_size_bytes
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "resolved Component Child module source differs from verified Store artifact evidence",
+        ));
+    }
+
+    let component = match parent {
+        ManagedCanisterBinding::Component(binding) => binding.clone(),
+        ManagedCanisterBinding::ComponentChild(binding) => binding.component.clone(),
+    };
+    let binding = canic_core::ids::ComponentChildBinding {
+        component,
+        parent_canister_id: allocation.parent_canister_id,
+        role: allocation.child_role.clone(),
+        canister_id: canister,
+    };
+    ConfigOps::component_topology()?
+        .validate_component_child_binding(root, &binding)
+        .map_err(|error| {
+            InternalError::invalid_input(format!(
+                "derived Component Child install binding is invalid: {error}"
+            ))
+        })?;
+    let durable = RootComponentChildInstallPlan {
+        raw_module_hash: artifact.raw_module_hash,
+        chunk_hashes,
+        binding: binding.clone(),
+        maximum_registry_bytes: allocation.maximum_registry_bytes,
+    };
+    let payload = CanisterInitPayload {
+        install_id: allocation.operation_id,
+        release_build_id: allocation.release_set.release_build_id,
+        authority: CanisterInitAuthority::ComponentChild {
+            root: root.clone(),
+            binding,
+        },
+    };
+
+    Ok(ComponentChildInstallPlan {
+        durable,
+        source,
+        payload,
+        canister,
+        expected_status_module_hash: artifact.payload_hash,
+    })
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "one workflow keeps every durable install and uncertain-outcome phase explicit"
+)]
+async fn advance_child_install(
+    component: canic_core::ids::ComponentInstanceId,
+    operation_id: [u8; 32],
+    allocation: RootComponentChildAllocationView,
+    plan: ComponentChildInstallPlan,
+) -> Result<RootComponentChildAllocationResponse, InternalError> {
+    match &allocation.progress {
+        RootComponentChildAllocationProgressView::Reserved
+        | RootComponentChildAllocationProgressView::CreationIntent(_) => {
+            Err(InternalError::conflict(
+                "Component Child allocation must be created before installation",
+            ))
+        }
+        RootComponentChildAllocationProgressView::Created { .. } => {
+            if observed_child_install_state(&plan).await? {
+                return Err(InternalError::conflict(
+                    "created Component Child has unjournalled installed code",
+                ));
+            }
+            ComponentRegistryOps::validate_child_install_capacity(
+                component,
+                operation_id,
+                &plan.durable,
+            )?;
+            let permit = deployment::reserve_component_child_install_cost_guard()?;
+            let intent = match ComponentRegistryOps::begin_child_install(
+                component,
+                operation_id,
+                plan.durable.clone(),
+                permit.replay_settlement(),
+            ) {
+                Ok(intent) => intent,
+                Err(error) => {
+                    return Err(CostGuardWorkflow::recover_after_failure(
+                        &permit,
+                        IcOps::now_secs(),
+                        error,
+                    ));
+                }
+            };
+            let installation = child_install_effect(&intent)?;
+            if let Err(error) = validate_child_install_effect(installation, &plan.durable) {
+                return Err(CostGuardWorkflow::recover_after_failure(
+                    &permit,
+                    IcOps::now_secs(),
+                    error,
+                ));
+            }
+            perform_child_install(component, operation_id, &plan, &permit).await
+        }
+        RootComponentChildAllocationProgressView::InstallIntent { installation, .. } => {
+            validate_child_install_effect(installation, &plan.durable)?;
+            if observed_child_install_state(&plan).await? {
+                CostGuardWorkflow::recover_replay_settlement(
+                    &installation.cost_guard_settlement,
+                    IcOps::now_secs(),
+                )?;
+                let installed =
+                    ComponentRegistryOps::mark_child_installed(component, operation_id)?;
+                return verify_and_mark_child_installed(component, operation_id, installed, &plan)
+                    .await;
+            }
+
+            CostGuardWorkflow::recover_replay_settlement(
+                &installation.cost_guard_settlement,
+                IcOps::now_secs(),
+            )?;
+            let permit = deployment::reserve_component_child_install_cost_guard()?;
+            let renewed = match ComponentRegistryOps::renew_child_install_intent(
+                component,
+                operation_id,
+                &plan.durable,
+                permit.replay_settlement(),
+            ) {
+                Ok(renewed) => renewed,
+                Err(error) => {
+                    return Err(CostGuardWorkflow::recover_after_failure(
+                        &permit,
+                        IcOps::now_secs(),
+                        error,
+                    ));
+                }
+            };
+            let installation = child_install_effect(&renewed)?;
+            if let Err(error) = validate_child_install_effect(installation, &plan.durable) {
+                return Err(CostGuardWorkflow::recover_after_failure(
+                    &permit,
+                    IcOps::now_secs(),
+                    error,
+                ));
+            }
+            perform_child_install(component, operation_id, &plan, &permit).await
+        }
+        RootComponentChildAllocationProgressView::Installed { installation, .. } => {
+            validate_child_install_effect(installation, &plan.durable)?;
+            CostGuardWorkflow::recover_replay_settlement(
+                &installation.cost_guard_settlement,
+                IcOps::now_secs(),
+            )?;
+            verify_and_mark_child_installed(component, operation_id, allocation, &plan).await
+        }
+        RootComponentChildAllocationProgressView::Verified { installation, .. }
+        | RootComponentChildAllocationProgressView::Committed { installation, .. } => {
+            validate_child_install_effect(installation, &plan.durable)?;
+            CostGuardWorkflow::recover_replay_settlement(
+                &installation.cost_guard_settlement,
+                IcOps::now_secs(),
+            )?;
+            verify_installed_child(&plan).await?;
+            Ok(child_allocation_response(allocation))
+        }
+    }
+}
+
+async fn perform_child_install(
+    component: canic_core::ids::ComponentInstanceId,
+    operation_id: [u8; 32],
+    plan: &ComponentChildInstallPlan,
+    permit: &canic_core::control_plane_support::ops::cost_guard::CostGuardPermit,
+) -> Result<RootComponentChildAllocationResponse, InternalError> {
+    if let Err(error) = ModuleInstallWorkflow::install_with_payload_with_permit(
+        permit,
+        CanisterInstallMode::Install,
+        plan.canister,
+        &plan.source,
+        plan.payload.clone(),
+        None,
+    )
+    .await
+    {
+        return Err(CostGuardWorkflow::recover_after_failure(
+            permit,
+            IcOps::now_secs(),
+            error,
+        ));
+    }
+
+    let installed = match ComponentRegistryOps::mark_child_installed(component, operation_id) {
+        Ok(installed) => installed,
+        Err(error) => {
+            return Err(CostGuardWorkflow::recover_after_failure(
+                permit,
+                IcOps::now_secs(),
+                error,
+            ));
+        }
+    };
+    CostGuardWorkflow::recover(permit, IcOps::now_secs())?;
+    verify_and_mark_child_installed(component, operation_id, installed, plan).await
+}
+
+async fn verify_and_mark_child_installed(
+    component: canic_core::ids::ComponentInstanceId,
+    operation_id: [u8; 32],
+    _installed: RootComponentChildAllocationView,
+    plan: &ComponentChildInstallPlan,
+) -> Result<RootComponentChildAllocationResponse, InternalError> {
+    verify_installed_child(plan).await?;
+    let verified = ComponentRegistryOps::mark_child_verified(component, operation_id)?;
+    if !matches!(
+        verified.progress,
+        RootComponentChildAllocationProgressView::Verified { .. }
+    ) {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component Child verification commit returned an invalid phase",
+        ));
+    }
+    Ok(child_allocation_response(verified))
+}
+
+async fn observed_child_install_state(
+    plan: &ComponentChildInstallPlan,
+) -> Result<bool, InternalError> {
+    let status = MgmtOps::canister_status(plan.canister).await?;
+    if status.settings.controllers != vec![plan.durable.binding.component.fleet_subnet_root] {
+        return Err(InternalError::conflict(
+            "Component Child Canister controllers differ from its sole root authority",
+        ));
+    }
+    match status.module_hash {
+        None => Ok(false),
+        Some(module_hash) if module_hash == plan.expected_status_module_hash => Ok(true),
+        Some(_) => Err(InternalError::conflict(
+            "Component Child Canister module hash differs from its install intent",
+        )),
+    }
+}
+
+async fn verify_installed_child(plan: &ComponentChildInstallPlan) -> Result<(), InternalError> {
+    if !observed_child_install_state(plan).await? {
+        return Err(InternalError::unavailable(
+            "Component Child Canister has no installed module after installation",
+        ));
+    }
+    let observed = query_managed_binding(plan.canister).await?;
+    let expected = ManagedCanisterBinding::ComponentChild(plan.durable.binding.clone());
+    if observed != expected {
+        return Err(InternalError::conflict(
+            "installed Component Child retained binding differs from root install authority",
+        ));
+    }
+    Ok(())
 }
 
 async fn advance_install(
@@ -1802,6 +2169,34 @@ fn allocation_creation_and_canister(
     }
 }
 
+fn child_allocation_creation_and_canister(
+    allocation: &RootComponentChildAllocationView,
+) -> Result<(&RootComponentCreationEffectView, candid::Principal), InternalError> {
+    match &allocation.progress {
+        RootComponentChildAllocationProgressView::Created { effect, canister } => {
+            Ok((effect, *canister))
+        }
+        RootComponentChildAllocationProgressView::InstallIntent {
+            creation, canister, ..
+        }
+        | RootComponentChildAllocationProgressView::Installed {
+            creation, canister, ..
+        }
+        | RootComponentChildAllocationProgressView::Verified {
+            creation, canister, ..
+        }
+        | RootComponentChildAllocationProgressView::Committed {
+            creation, canister, ..
+        } => Ok((creation, *canister)),
+        RootComponentChildAllocationProgressView::Reserved
+        | RootComponentChildAllocationProgressView::CreationIntent(_) => {
+            Err(InternalError::conflict(
+                "Component Child allocation must be created before installation",
+            ))
+        }
+    }
+}
+
 fn install_effect(
     allocation: &RootComponentAllocationView,
 ) -> Result<&RootComponentInstallEffectView, InternalError> {
@@ -1810,6 +2205,20 @@ fn install_effect(
         _ => Err(InternalError::invariant(
             InternalErrorOrigin::Storage,
             "Component install intent commit returned an invalid phase",
+        )),
+    }
+}
+
+fn child_install_effect(
+    allocation: &RootComponentChildAllocationView,
+) -> Result<&RootComponentChildInstallEffectView, InternalError> {
+    match &allocation.progress {
+        RootComponentChildAllocationProgressView::InstallIntent { installation, .. } => {
+            Ok(installation)
+        }
+        _ => Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component Child install intent commit returned an invalid phase",
         )),
     }
 }
@@ -2055,17 +2464,56 @@ fn allocation_response(
 fn child_allocation_response(
     allocation: RootComponentChildAllocationView,
 ) -> RootComponentChildAllocationResponse {
-    let (phase, creation) = match allocation.progress {
+    let (phase, creation, installation) = match allocation.progress {
         RootComponentChildAllocationProgressView::Reserved => {
-            (RootComponentAllocationPhase::Reserved, None)
+            (RootComponentAllocationPhase::Reserved, None, None)
         }
         RootComponentChildAllocationProgressView::CreationIntent(effect) => (
             RootComponentAllocationPhase::CreationIntent,
             Some(creation_evidence(effect, None)),
+            None,
         ),
         RootComponentChildAllocationProgressView::Created { effect, canister } => (
             RootComponentAllocationPhase::Created,
             Some(creation_evidence(effect, Some(canister))),
+            None,
+        ),
+        RootComponentChildAllocationProgressView::InstallIntent {
+            creation,
+            canister,
+            installation,
+        } => (
+            RootComponentAllocationPhase::InstallIntent,
+            Some(creation_evidence(creation, Some(canister))),
+            Some(child_install_evidence(installation)),
+        ),
+        RootComponentChildAllocationProgressView::Installed {
+            creation,
+            canister,
+            installation,
+        } => (
+            RootComponentAllocationPhase::Installed,
+            Some(creation_evidence(creation, Some(canister))),
+            Some(child_install_evidence(installation)),
+        ),
+        RootComponentChildAllocationProgressView::Verified {
+            creation,
+            canister,
+            installation,
+        } => (
+            RootComponentAllocationPhase::Verified,
+            Some(creation_evidence(creation, Some(canister))),
+            Some(child_install_evidence(installation)),
+        ),
+        RootComponentChildAllocationProgressView::Committed {
+            creation,
+            canister,
+            installation,
+            ..
+        } => (
+            RootComponentAllocationPhase::Committed,
+            Some(creation_evidence(creation, Some(canister))),
+            Some(child_install_evidence(installation)),
         ),
     };
     RootComponentChildAllocationResponse {
@@ -2082,6 +2530,7 @@ fn child_allocation_response(
         release_set: allocation.release_set,
         phase,
         creation,
+        installation,
     }
 }
 
@@ -2304,6 +2753,22 @@ fn validate_install_effect(
     Ok(())
 }
 
+fn validate_child_install_effect(
+    effect: &RootComponentChildInstallEffectView,
+    expected: &RootComponentChildInstallPlan,
+) -> Result<(), InternalError> {
+    if effect.raw_module_hash != expected.raw_module_hash
+        || effect.chunk_hashes != expected.chunk_hashes
+        || effect.binding != expected.binding
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "durable Component Child install intent differs from verified module or binding authority",
+        ));
+    }
+    Ok(())
+}
+
 const fn creation_evidence(
     effect: RootComponentCreationEffectView,
     canister: Option<candid::Principal>,
@@ -2320,6 +2785,16 @@ const fn creation_evidence(
 
 fn install_evidence(effect: RootComponentInstallEffectView) -> RootComponentInstallEvidence {
     RootComponentInstallEvidence {
+        raw_module_hash: effect.raw_module_hash,
+        chunk_hashes: effect.chunk_hashes,
+        binding: effect.binding,
+    }
+}
+
+fn child_install_evidence(
+    effect: RootComponentChildInstallEffectView,
+) -> RootComponentChildInstallEvidence {
+    RootComponentChildInstallEvidence {
         raw_module_hash: effect.raw_module_hash,
         chunk_hashes: effect.chunk_hashes,
         binding: effect.binding,

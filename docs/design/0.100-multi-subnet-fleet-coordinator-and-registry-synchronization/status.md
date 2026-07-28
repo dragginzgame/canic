@@ -1,14 +1,14 @@
 # Canic 0.100 Implementation Status
 
-Date: 2026-07-28
+Date: 2026-07-29
 
 - State: implementation in progress.
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.37`.
-- Latest published release: `v0.100.37`.
-- Open patch draft: `0.100.38`; no package-version change has been authorized.
+- Workspace package version: `0.100.38`.
+- Latest published release: `v0.100.38`.
+- Open patch draft: `0.100.39`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -158,8 +158,9 @@ Registry slices replace the 0.99 root model.
   for direct Component and registered descendant parents.
 - [x] Implement root-executed child creation from an exact durable reservation
   at arbitrary depth.
-- [ ] Implement child installation and Registry commitment at arbitrary
-  depth.
+- [x] Implement Store-backed child installation and independent binding
+  verification at arbitrary depth.
+- [ ] Implement child Registry commitment at arbitrary depth.
 - [ ] Make the Fleet Subnet Root the required lifecycle controller and retain
   authoritative idempotent receipts.
 - [ ] Resolve lifecycle artifacts only through the active release set.
@@ -611,24 +612,31 @@ now carries partitions, child-row schema, reservations and parent-role counts;
 reservation alone does not add a member or advance the Component
 Registry/Directory head.
 
-Open 0.100.38 consumes one such reservation through Store-bound,
+Released 0.100.38 consumes one such reservation through Store-bound,
 cost-guarded empty-Canister creation. The same registered immediate parent
 must call the public internal endpoint. Before the management effect the root
 persists the exact Store payload, initial cycles, sole-root controller, replay
 settlement and terminal Registry-byte charge as `CreationIntent`; the returned
 principal advances the operation to `Created` and increments known-created
 inventory exactly once. An unresolved intent is never blindly repeated.
-Installation, live verification and normalized child commitment remain
-outside this batch.
+
+Open 0.100.39 installs the created child from its exact accepted Store
+artifact. The root derives and freezes its immutable `ComponentChildBinding`,
+raw module/chunk authority, replay settlement and maximum terminal Registry
+charge before the management call. That charge covers the future terminal
+operation, normalized child row, principal index and parent/role traversal
+index. Lost-response reconciliation adopts exact observed code, retries only
+an empty target under a renewed intent and independently verifies the module,
+sole-root controller and retained binding before `Verified`. Normalized
+commitment remains outside this batch.
 
 ## Next Action
 
-Install one exactly created child from its frozen root-local Store artifact,
-independently verify its live module, sole root controller and retained child
-binding, then atomically commit the normalized child row plus principal and
-parent/role traversal indexes. Transfer reserved counts to committed counts
-and advance the Component Registry/Directory authority only at commitment.
-Reconcile uncertain calls from durable intent and observation; do not
-introduce nested Component declarations, let application Canisters call
-management creation directly or infer authorization from catalog presence
-alone.
+Atomically commit one exactly verified child by inserting its normalized row,
+principal index and parent/role traversal index, transferring one reserved
+descendant to committed and replacing the maximum install precharge with
+exact terminal bytes. Advance the Component Registry head and derive its next
+Directory authority only in that commit, then distribute and activate it
+through separately observed receipts. Do not introduce nested Component
+declarations, let application Canisters call management effects directly or
+infer authorization from catalog presence alone.

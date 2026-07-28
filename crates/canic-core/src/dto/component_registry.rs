@@ -12,8 +12,9 @@ use crate::{
         root_store::RootStoreBootstrapRequest,
     },
     ids::{
-        CanisterRole, ComponentBinding, ComponentInstanceId, ComponentSpecId,
-        ComponentTopologyDigest, FleetSubnetRootReleaseSet, ManagedCanisterBinding,
+        CanisterRole, ComponentBinding, ComponentChildBinding, ComponentInstanceId,
+        ComponentSpecId, ComponentTopologyDigest, FleetSubnetRootReleaseSet,
+        ManagedCanisterBinding,
     },
 };
 use candid::{CandidType, Principal};
@@ -125,6 +126,18 @@ pub struct RootComponentChildAllocationStatusRequest {
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentChildCreationRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+}
+
+///
+/// RootComponentChildInstallRequest
+///
+/// Parent command installing and verifying one already created direct-child operation.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentChildInstallRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
 }
@@ -436,6 +449,19 @@ pub struct RootComponentInstallEvidence {
 }
 
 ///
+/// RootComponentChildInstallEvidence
+///
+/// Exact child module and immutable retained binding frozen before installation.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentChildInstallEvidence {
+    pub raw_module_hash: [u8; 32],
+    pub chunk_hashes: Vec<Vec<u8>>,
+    pub binding: ComponentChildBinding,
+}
+
+///
 /// RootComponentAllocationResponse
 ///
 /// Durable identity reservation returned identically for exact operation retry.
@@ -477,6 +503,7 @@ pub struct RootComponentChildAllocationResponse {
     pub release_set: FleetSubnetRootReleaseSet,
     pub phase: RootComponentAllocationPhase,
     pub creation: Option<RootComponentCreationEvidence>,
+    pub installation: Option<RootComponentChildInstallEvidence>,
 }
 
 ///
@@ -749,7 +776,11 @@ mod tests {
     }
 
     #[test]
-    fn component_child_reservation_contracts_round_trip_through_candid() {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one round-trip test keeps the complete child lifecycle boundary coherent"
+    )]
+    fn component_child_lifecycle_contracts_round_trip_through_candid() {
         let component = ComponentInstanceId::from_generated_bytes([11; 32]);
         let registry = ComponentRegistryHead {
             component,
@@ -770,10 +801,32 @@ mod tests {
             operation_id: request.operation_id,
             component,
         };
+        let install_request = RootComponentChildInstallRequest {
+            operation_id: request.operation_id,
+            component,
+        };
+        let root = Principal::from_slice(&[17; 29]);
+        let parent = Principal::from_slice(&[14; 29]);
+        let child = Principal::from_slice(&[18; 29]);
+        let child_binding = ComponentChildBinding {
+            component: ComponentBinding {
+                authority: fleet_registry_authority(),
+                component,
+                component_spec: "projects".parse().expect("Component Spec"),
+                spec_hash: [19; 32],
+                role: CanisterRole::new("project_hub"),
+                placement_subnet: SubnetId::from_principal(Principal::from_slice(&[20; 29])),
+                fleet_subnet_root: root,
+                canister_id: parent,
+            },
+            parent_canister_id: parent,
+            role: request.child_role.clone(),
+            canister_id: child,
+        };
         let response = RootComponentChildAllocationResponse {
             operation_id: request.operation_id,
             component,
-            parent_canister_id: Principal::from_slice(&[14; 29]),
+            parent_canister_id: parent,
             parent_role: CanisterRole::new("project_hub"),
             child_role: request.child_role.clone(),
             child_kind: ComponentChildKind::Instance,
@@ -787,8 +840,20 @@ mod tests {
                 )),
                 manifest_digest: ReleaseSetDigest::from_bytes([16; 32]),
             },
-            phase: RootComponentAllocationPhase::Reserved,
-            creation: None,
+            phase: RootComponentAllocationPhase::Verified,
+            creation: Some(RootComponentCreationEvidence {
+                wasm_store: Principal::from_slice(&[21; 29]),
+                payload_hash: [22; 32],
+                payload_size_bytes: 4_096,
+                initial_cycles: Cycles::new(5_000_000_000_000),
+                controller: root,
+                canister: Some(child),
+            }),
+            installation: Some(RootComponentChildInstallEvidence {
+                raw_module_hash: [23; 32],
+                chunk_hashes: vec![vec![24; 32]],
+                binding: child_binding,
+            }),
         };
 
         let request_bytes = candid::encode_one(&request).expect("encode child reservation");
@@ -796,6 +861,8 @@ mod tests {
             candid::encode_one(status_request).expect("encode child reservation status");
         let creation_bytes =
             candid::encode_one(creation_request).expect("encode child creation request");
+        let install_bytes =
+            candid::encode_one(install_request).expect("encode child install request");
         let response_bytes = candid::encode_one(&response).expect("encode child response");
 
         assert_eq!(
@@ -812,6 +879,11 @@ mod tests {
             candid::decode_one::<RootComponentChildCreationRequest>(&creation_bytes)
                 .expect("decode child creation request"),
             creation_request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentChildInstallRequest>(&install_bytes)
+                .expect("decode child install request"),
+            install_request
         );
         assert_eq!(
             candid::decode_one::<RootComponentChildAllocationResponse>(&response_bytes)

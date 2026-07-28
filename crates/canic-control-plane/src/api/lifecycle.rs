@@ -19,8 +19,8 @@ use canic_core::{
             RootComponentAllocationRequest, RootComponentAllocationResponse,
             RootComponentAllocationStatusRequest, RootComponentChildAllocationRequest,
             RootComponentChildAllocationResponse, RootComponentChildAllocationStatusRequest,
-            RootComponentChildCreationRequest, RootComponentCommitRequest,
-            RootComponentCommitResponse, RootComponentCreationRequest,
+            RootComponentChildCreationRequest, RootComponentChildInstallRequest,
+            RootComponentCommitRequest, RootComponentCommitResponse, RootComponentCreationRequest,
             RootComponentDirectoryPreparationRequest, RootComponentDirectoryPreparationResponse,
             RootComponentInstallRequest, RootComponentMembershipActivationRequest,
             RootComponentMembershipActivationResponse, RootComponentRegistryPreparationRequest,
@@ -156,6 +156,14 @@ impl LifecycleApi {
         request: RootComponentChildCreationRequest,
     ) -> Result<RootComponentChildAllocationResponse, canic_core::dto::error::Error> {
         crate::workflow::component_registry::create_child_allocation(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn install_component_child(
+        request: RootComponentChildInstallRequest,
+    ) -> Result<RootComponentChildAllocationResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::install_child_allocation(request)
             .await
             .map_err(Into::into)
     }

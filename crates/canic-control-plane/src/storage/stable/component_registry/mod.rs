@@ -28,8 +28,8 @@ use canic_core::{
         root_store::RootStoreBootstrapRequest,
     },
     ids::{
-        CanisterRole, ComponentBinding, ComponentInstanceId, ComponentSpecId,
-        FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
+        CanisterRole, ComponentBinding, ComponentChildBinding, ComponentInstanceId,
+        ComponentSpecId, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
     },
     impl_storable_bounded,
 };
@@ -363,6 +363,42 @@ pub enum RootComponentChildAllocationProgressRecord {
         effect: RootComponentCreationEffectRecord,
         canister: Principal,
     },
+    InstallIntent {
+        creation: RootComponentCreationEffectRecord,
+        canister: Principal,
+        installation: RootComponentChildInstallEffectRecord,
+    },
+    Installed {
+        creation: RootComponentCreationEffectRecord,
+        canister: Principal,
+        installation: RootComponentChildInstallEffectRecord,
+    },
+    Verified {
+        creation: RootComponentCreationEffectRecord,
+        canister: Principal,
+        installation: RootComponentChildInstallEffectRecord,
+    },
+    Committed {
+        creation: RootComponentCreationEffectRecord,
+        canister: Principal,
+        installation: RootComponentChildInstallEffectRecord,
+        commitment: RootComponentCommitmentRecord,
+    },
+}
+
+///
+/// RootComponentChildInstallEffectRecord
+///
+/// Exact child module source, immutable binding and cost settlement frozen before installation.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentChildInstallEffectRecord {
+    pub raw_module_hash: [u8; 32],
+    pub chunk_hashes: Vec<Vec<u8>>,
+    pub binding: ComponentChildBinding,
+    pub cost_guard_settlement: ReplayCostGuardSettlement,
+    pub charged_entry_bytes: u64,
 }
 
 ///
@@ -397,15 +433,34 @@ pub struct ComponentRegistryChildRecord {
 }
 
 ///
+/// ComponentRegistryChildTraversalRecord
+///
+/// Compact parent/role traversal index value for one normalized child row.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentRegistryChildTraversalRecord {
+    pub component: ComponentInstanceId,
+    pub parent_canister_id: Principal,
+    pub role: CanisterRole,
+    pub canister_id: Principal,
+}
+
+///
 /// ComponentRegistryEntryRecord
 ///
 /// One normalized partition, operation or index value in the Component-first Registry collection.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "stable Registry values retain direct canonical records without heap-indirection semantics"
+)]
 pub enum ComponentRegistryEntryRecord {
     Partition(ComponentRegistryPartitionRecord),
     Child(ComponentRegistryChildRecord),
+    ChildTraversal(ComponentRegistryChildTraversalRecord),
     ChildAllocation(RootComponentChildAllocationRecord),
     ParentRoleCount(ComponentRegistryParentRoleCountRecord),
 }
@@ -491,6 +546,22 @@ impl ComponentRegistryEntryKey {
         }
     }
 
+    fn child_traversal(
+        component: ComponentInstanceId,
+        parent_canister_id: Principal,
+        role: &CanisterRole,
+        canister_id: Principal,
+    ) -> Self {
+        Self {
+            component: *component.as_bytes(),
+            index: ComponentRegistryEntryIndexKey::ChildTraversal {
+                parent_canister_id: parent_canister_id.as_slice().to_vec(),
+                role: role.clone(),
+                canister_id: canister_id.as_slice().to_vec(),
+            },
+        }
+    }
+
     fn parent_role_count(
         component: ComponentInstanceId,
         parent_canister_id: Principal,
@@ -510,6 +581,11 @@ impl ComponentRegistryEntryKey {
 enum ComponentRegistryEntryIndexKey {
     Partition,
     Child(Vec<u8>),
+    ChildTraversal {
+        parent_canister_id: Vec<u8>,
+        role: CanisterRole,
+        canister_id: Vec<u8>,
+    },
     ChildAllocation([u8; 32]),
     ParentRoleCount {
         parent_canister_id: Vec<u8>,
@@ -558,6 +634,7 @@ pub struct RootComponentRegistryData {
     pub allocations: Vec<RootComponentAllocationRecord>,
     pub partitions: Vec<ComponentRegistryPartitionRecord>,
     pub children: Vec<ComponentRegistryChildRecord>,
+    pub child_traversals: Vec<ComponentRegistryChildTraversalRecord>,
     pub child_allocations: Vec<RootComponentChildAllocationRecord>,
     pub parent_role_counts: Vec<ComponentRegistryParentRoleCountRecord>,
 }
@@ -644,6 +721,7 @@ impl RootComponentRegistryStore {
                     .filter_map(|entry| match entry.value() {
                         ComponentRegistryEntryRecord::Partition(record) => Some(record),
                         ComponentRegistryEntryRecord::Child(_)
+                        | ComponentRegistryEntryRecord::ChildTraversal(_)
                         | ComponentRegistryEntryRecord::ChildAllocation(_)
                         | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                     })
@@ -654,6 +732,18 @@ impl RootComponentRegistryStore {
                     .filter_map(|entry| match entry.value() {
                         ComponentRegistryEntryRecord::Child(record) => Some(record),
                         ComponentRegistryEntryRecord::Partition(_)
+                        | ComponentRegistryEntryRecord::ChildTraversal(_)
+                        | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                    })
+                    .collect()
+            }),
+            child_traversals: COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+                map.iter()
+                    .filter_map(|entry| match entry.value() {
+                        ComponentRegistryEntryRecord::ChildTraversal(record) => Some(record),
+                        ComponentRegistryEntryRecord::Partition(_)
+                        | ComponentRegistryEntryRecord::Child(_)
                         | ComponentRegistryEntryRecord::ChildAllocation(_)
                         | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                     })
@@ -665,6 +755,7 @@ impl RootComponentRegistryStore {
                         ComponentRegistryEntryRecord::ChildAllocation(record) => Some(record),
                         ComponentRegistryEntryRecord::Partition(_)
                         | ComponentRegistryEntryRecord::Child(_)
+                        | ComponentRegistryEntryRecord::ChildTraversal(_)
                         | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                     })
                     .collect()
@@ -675,6 +766,7 @@ impl RootComponentRegistryStore {
                         ComponentRegistryEntryRecord::ParentRoleCount(record) => Some(record),
                         ComponentRegistryEntryRecord::Partition(_)
                         | ComponentRegistryEntryRecord::Child(_)
+                        | ComponentRegistryEntryRecord::ChildTraversal(_)
                         | ComponentRegistryEntryRecord::ChildAllocation(_) => None,
                     })
                     .collect()
@@ -700,6 +792,7 @@ impl RootComponentRegistryStore {
                 .filter_map(|entry| match entry.value() {
                     ComponentRegistryEntryRecord::Partition(record) => Some(record),
                     ComponentRegistryEntryRecord::Child(_)
+                    | ComponentRegistryEntryRecord::ChildTraversal(_)
                     | ComponentRegistryEntryRecord::ChildAllocation(_)
                     | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                 })
@@ -761,6 +854,7 @@ impl RootComponentRegistryStore {
                 Some(ComponentRegistryEntryRecord::Partition(record)) => Some(record),
                 Some(
                     ComponentRegistryEntryRecord::Child(_)
+                    | ComponentRegistryEntryRecord::ChildTraversal(_)
                     | ComponentRegistryEntryRecord::ChildAllocation(_)
                     | ComponentRegistryEntryRecord::ParentRoleCount(_),
                 )
@@ -783,6 +877,7 @@ impl RootComponentRegistryStore {
                 Some(
                     ComponentRegistryEntryRecord::Partition(_)
                     | ComponentRegistryEntryRecord::Child(_)
+                    | ComponentRegistryEntryRecord::ChildTraversal(_)
                     | ComponentRegistryEntryRecord::ParentRoleCount(_),
                 )
                 | None => None,
@@ -800,6 +895,7 @@ impl RootComponentRegistryStore {
                 Some(ComponentRegistryEntryRecord::Child(record)) => Some(record),
                 Some(
                     ComponentRegistryEntryRecord::Partition(_)
+                    | ComponentRegistryEntryRecord::ChildTraversal(_)
                     | ComponentRegistryEntryRecord::ChildAllocation(_)
                     | ComponentRegistryEntryRecord::ParentRoleCount(_),
                 )
@@ -824,6 +920,7 @@ impl RootComponentRegistryStore {
                 Some(
                     ComponentRegistryEntryRecord::Partition(_)
                     | ComponentRegistryEntryRecord::Child(_)
+                    | ComponentRegistryEntryRecord::ChildTraversal(_)
                     | ComponentRegistryEntryRecord::ChildAllocation(_),
                 )
                 | None => None,
@@ -920,6 +1017,7 @@ impl RootComponentRegistryStore {
                     }
                     ComponentRegistryEntryRecord::Partition(_)
                     | ComponentRegistryEntryRecord::Child(_)
+                    | ComponentRegistryEntryRecord::ChildTraversal(_)
                     | ComponentRegistryEntryRecord::ChildAllocation(_)
                     | ComponentRegistryEntryRecord::ParentRoleCount(_) => {
                         Err(RootComponentAllocationCommitError::ConflictingOperation)
@@ -935,6 +1033,7 @@ impl RootComponentRegistryStore {
                         .and_then(|entry| match entry {
                             ComponentRegistryEntryRecord::Partition(record) => Some(record),
                             ComponentRegistryEntryRecord::Child(_)
+                            | ComponentRegistryEntryRecord::ChildTraversal(_)
                             | ComponentRegistryEntryRecord::ChildAllocation(_)
                             | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                         })
@@ -948,6 +1047,7 @@ impl RootComponentRegistryStore {
                     ComponentRegistryEntryRecord::ParentRoleCount(record) => Some(record),
                     ComponentRegistryEntryRecord::Partition(_)
                     | ComponentRegistryEntryRecord::Child(_)
+                    | ComponentRegistryEntryRecord::ChildTraversal(_)
                     | ComponentRegistryEntryRecord::ChildAllocation(_) => None,
                 })
             });
@@ -1026,6 +1126,7 @@ impl RootComponentRegistryStore {
                         .and_then(|entry| match entry {
                             ComponentRegistryEntryRecord::Partition(record) => Some(record),
                             ComponentRegistryEntryRecord::Child(_)
+                            | ComponentRegistryEntryRecord::ChildTraversal(_)
                             | ComponentRegistryEntryRecord::ChildAllocation(_)
                             | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                         })
@@ -1037,6 +1138,7 @@ impl RootComponentRegistryStore {
                         ComponentRegistryEntryRecord::ChildAllocation(record) => Some(record),
                         ComponentRegistryEntryRecord::Partition(_)
                         | ComponentRegistryEntryRecord::Child(_)
+                        | ComponentRegistryEntryRecord::ChildTraversal(_)
                         | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                     })
                 })
@@ -1203,6 +1305,7 @@ impl RootComponentRegistryStore {
                         .and_then(|entry| match entry {
                             ComponentRegistryEntryRecord::Partition(record) => Some(record),
                             ComponentRegistryEntryRecord::Child(_)
+                            | ComponentRegistryEntryRecord::ChildTraversal(_)
                             | ComponentRegistryEntryRecord::ChildAllocation(_)
                             | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                         })
@@ -1250,6 +1353,27 @@ impl RootComponentRegistryStore {
         let key =
             ComponentRegistryEntryKey::child_allocation(record.component, record.operation_id);
         let value = ComponentRegistryEntryRecord::ChildAllocation(record.clone());
+        (key.to_bytes().len() + value.to_bytes().len()) as u64
+    }
+
+    #[must_use]
+    pub(crate) fn child_entry_bytes(record: &ComponentRegistryChildRecord) -> u64 {
+        let key = ComponentRegistryEntryKey::child(record.component, record.canister_id);
+        let value = ComponentRegistryEntryRecord::Child(record.clone());
+        (key.to_bytes().len() + value.to_bytes().len()) as u64
+    }
+
+    #[must_use]
+    pub(crate) fn child_traversal_entry_bytes(
+        record: &ComponentRegistryChildTraversalRecord,
+    ) -> u64 {
+        let key = ComponentRegistryEntryKey::child_traversal(
+            record.component,
+            record.parent_canister_id,
+            &record.role,
+            record.canister_id,
+        );
+        let value = ComponentRegistryEntryRecord::ChildTraversal(record.clone());
         (key.to_bytes().len() + value.to_bytes().len()) as u64
     }
 
@@ -1318,6 +1442,19 @@ impl RootComponentRegistryStore {
                 map.insert(
                     ComponentRegistryPrincipalKey::from(canister),
                     ComponentRegistryPrincipalIndexRecord { component },
+                );
+            });
+        }
+        for record in data.child_traversals {
+            COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
+                map.insert(
+                    ComponentRegistryEntryKey::child_traversal(
+                        record.component,
+                        record.parent_canister_id,
+                        &record.role,
+                        record.canister_id,
+                    ),
+                    ComponentRegistryEntryRecord::ChildTraversal(record),
                 );
             });
         }
