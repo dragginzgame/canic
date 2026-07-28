@@ -16,7 +16,7 @@ use crate::{
     config::ConfigModel,
     dto::auth::SignedRoleAttestation,
     format::display_optional,
-    ids::CanisterRole,
+    ids::{CanisterRole, ManagedCanisterBinding},
     log,
     log::Topic,
     ops::{
@@ -28,6 +28,7 @@ use crate::{
             record_attestation_epoch_rejected, record_attestation_verify_failed,
         },
     },
+    workflow::runtime::fleet_activation::FleetActivationWorkflow,
 };
 
 ///
@@ -178,7 +179,7 @@ impl RuntimeAuthWorkflow {
         let caller = IcOps::msg_caller();
         let self_pid = IcOps::canister_self();
         let now_ns = IcOps::now_nanos();
-        let verifier_subnet = Some(EnvOps::subnet_pid()?);
+        let verifier_subnet = Some(role_attestation_verifier_subnet()?);
 
         match AuthOps::verify_role_attestation_cached(
             attestation,
@@ -196,6 +197,22 @@ impl RuntimeAuthWorkflow {
             }
         }
     }
+}
+
+fn role_attestation_verifier_subnet() -> Result<Principal, InternalError> {
+    if EnvOps::is_root() {
+        return Ok(FleetActivationWorkflow::root_authority()?
+            .binding
+            .placement_subnet
+            .into_principal());
+    }
+
+    let binding = EnvOps::managed_binding()?;
+    let component = match &binding {
+        ManagedCanisterBinding::Component(component) => component,
+        ManagedCanisterBinding::ComponentChild(child) => &child.component,
+    };
+    Ok(component.placement_subnet.into_principal())
 }
 
 fn resolve_min_accepted_epoch(explicit: u64, configured: Option<u64>) -> u64 {

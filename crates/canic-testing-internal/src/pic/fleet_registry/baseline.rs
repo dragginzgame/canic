@@ -47,7 +47,10 @@ mod tests {
                 RootStoreReleaseSetManifest,
             },
         },
-        ids::{CanisterRole, ComponentInstanceId, ManagedCanisterBinding, ReleaseSetDigest},
+        ids::{
+            CanisterRole, ComponentBinding, ComponentInstanceId, ManagedCanisterBinding,
+            ReleaseSetDigest,
+        },
     };
     use canic::{
         Error,
@@ -281,12 +284,17 @@ mod tests {
             vec![synchronized.acknowledgement]
         );
 
-        assert_registry_and_root_runtime_activation(
+        let issuer = assert_registry_and_root_runtime_activation(
             &pic,
             coordinator,
             &fixture,
             joined.version,
             sync_request,
+        );
+        super::super::role_attestation::assert_registry_bound_role_attestation(
+            &pic,
+            fixture.root_id,
+            &issuer,
         );
     }
 
@@ -329,7 +337,7 @@ mod tests {
         fixture: &BootstrappedRootFixture,
         joining_version: canic::dto::fleet_registry::FleetRegistryVersion,
         sync_request: FleetSubnetRootRegistrySyncRequest,
-    ) {
+    ) -> ComponentBinding {
         let activated: Result<FleetRegistryActivationResponse, Error> = pic
             .update_call(
                 coordinator,
@@ -398,7 +406,7 @@ mod tests {
             .expect("query root Registry mirror status transport");
         assert_eq!(mirror_status.expect("root Registry mirror status"), mirror);
 
-        assert_component_registry_preparation(pic, fixture, activation_request);
+        let issuer = assert_component_registry_preparation(pic, fixture, activation_request);
 
         let old_candidate: Result<FleetSubnetRootRegistrySyncResponse, Error> = pic
             .query_call(
@@ -413,13 +421,14 @@ mod tests {
                 .code,
             canic::dto::error::ErrorCode::Unavailable
         );
+        issuer
     }
 
     fn assert_component_registry_preparation(
         pic: &Pic,
         fixture: &BootstrappedRootFixture,
         activation_request: FleetSubnetRootRegistryMirrorActivationRequest,
-    ) {
+    ) -> ComponentBinding {
         let component_registry_request = RootComponentRegistryPreparationRequest {
             store_bootstrap: activation_request.store_bootstrap,
             expected_fleet_registry: activation_request.expected_registry,
@@ -474,15 +483,16 @@ mod tests {
             component_registry
         );
 
-        assert_component_allocation(pic, fixture, component_registry_request);
+        assert_component_allocation(pic, fixture, component_registry_request)
     }
 
     fn assert_component_allocation(
         pic: &Pic,
         fixture: &BootstrappedRootFixture,
         component_registry_request: RootComponentRegistryPreparationRequest,
-    ) {
+    ) -> ComponentBinding {
         let (issuer_request, issuer) = assert_issuer_component_allocation(pic, fixture);
+        let issuer_binding = installed_component_binding(&issuer);
         let projects_request = RootComponentAllocationRequest {
             operation_id: [0xa2; 32],
             component_spec: "projects".parse().expect("projects Component Spec"),
@@ -581,6 +591,18 @@ mod tests {
         assert_eq!(complete.committed_component_instances, 2);
         assert_eq!(complete.initial_inventory, None);
         assert_root_runtime_activation(pic, fixture, component_registry_request);
+        issuer_binding
+    }
+
+    fn installed_component_binding(
+        allocation: &RootComponentAllocationResponse,
+    ) -> ComponentBinding {
+        allocation
+            .installation
+            .as_ref()
+            .expect("Component installation evidence")
+            .binding
+            .clone()
     }
 
     fn assert_root_runtime_activation(
