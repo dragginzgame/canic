@@ -62,6 +62,7 @@ pub struct RootComponentRegistryStatusResponse {
     pub reserved_component_instances: u32,
     pub committed_component_instances: u32,
     pub managed_descendants: u32,
+    pub known_created_component_canisters: u32,
     pub encoded_bytes: u64,
     pub initial_inventory: Option<RootComponentInitialInventoryStatus>,
 }
@@ -502,6 +503,7 @@ mod tests {
             reserved_component_instances: 0,
             committed_component_instances: 0,
             managed_descendants: 0,
+            known_created_component_canisters: 0,
             encoded_bytes: 0,
             initial_inventory: Some(RootComponentInitialInventoryStatus {
                 fleet_activation_operation_id: [10; 32],

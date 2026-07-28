@@ -37,7 +37,9 @@ mod tests {
                 FleetSubnetRootRegistrySyncRequest, FleetSubnetRootRegistrySyncResponse,
                 FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootStatus,
             },
-            fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
+            fleet_subnet_root::{
+                FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary, FleetSubnetRootInitArgs,
+            },
             root_store::{
                 ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX,
                 RootStoreArtifact, RootStoreBootstrapRequest, RootStoreBootstrapResponse,
@@ -61,16 +63,16 @@ mod tests {
             CANIC_FLEET_REGISTRY_MIRROR_STATUS, CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
             CANIC_FLEET_REGISTRY_SYNC_STATUS, CANIC_FLEET_REGISTRY_SYNCHRONIZE,
             CANIC_FLEET_REGISTRY_VERSION, CANIC_FLEET_SUBNET_ROOT_AUTHORITY,
-            CANIC_FLEET_SUBNET_ROOT_JOIN, CANIC_PREPARE_FLEET_ACTIVATION,
-            CANIC_RESUME_FLEET_ACTIVATION, CANIC_ROOT_COMPONENT_ALLOCATE,
-            CANIC_ROOT_COMPONENT_ALLOCATION_STATUS, CANIC_ROOT_COMPONENT_COMMIT,
-            CANIC_ROOT_COMPONENT_CREATE, CANIC_ROOT_COMPONENT_DIRECTORY_HEAD,
-            CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE, CANIC_ROOT_COMPONENT_INSTALL,
-            CANIC_ROOT_COMPONENT_MEMBERSHIP_ACTIVATE, CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
-            CANIC_ROOT_COMPONENT_REGISTRY_PREPARE, CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
-            CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE, CANIC_ROOT_STORE_BOOTSTRAP,
-            CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
-            CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
+            CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY, CANIC_FLEET_SUBNET_ROOT_JOIN,
+            CANIC_PREPARE_FLEET_ACTIVATION, CANIC_RESUME_FLEET_ACTIVATION,
+            CANIC_ROOT_COMPONENT_ALLOCATE, CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
+            CANIC_ROOT_COMPONENT_COMMIT, CANIC_ROOT_COMPONENT_CREATE,
+            CANIC_ROOT_COMPONENT_DIRECTORY_HEAD, CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE,
+            CANIC_ROOT_COMPONENT_INSTALL, CANIC_ROOT_COMPONENT_MEMBERSHIP_ACTIVATE,
+            CANIC_ROOT_COMPONENT_REGISTRY_PARTITION, CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
+            CANIC_ROOT_COMPONENT_REGISTRY_STATUS, CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE,
+            CANIC_ROOT_STORE_BOOTSTRAP, CANIC_TEMPLATE_PREPARE_ADMIN,
+            CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN, CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
         },
     };
     use canic_control_plane::{
@@ -341,13 +343,39 @@ mod tests {
             joined.version,
             sync_request,
         );
-        ActiveComponentRegistryFixture {
+        let fixture = ActiveComponentRegistryFixture {
             pic,
             coordinator,
             root: fixture.root_id,
             issuer: components.issuer,
             verifier: components.verifier,
-        }
+        };
+        assert_root_canister_summary(&fixture);
+        fixture
+    }
+
+    fn assert_root_canister_summary(fixture: &ActiveComponentRegistryFixture) {
+        let summary: Result<FleetSubnetRootCanisterSummary, Error> = fixture
+            .pic()
+            .query_call(fixture.root, CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY, ())
+            .expect("query Fleet Subnet Root Canister summary");
+        let summary = summary.expect("Fleet Subnet Root Canister summary");
+        let coordinator_version: Result<canic::dto::fleet_registry::FleetRegistryVersion, Error> =
+            fixture
+                .pic()
+                .query_call(fixture.coordinator, CANIC_FLEET_REGISTRY_VERSION, ())
+                .expect("query Coordinator Registry version");
+
+        assert_eq!(
+            summary.fleet_registry,
+            coordinator_version.expect("Coordinator Registry version")
+        );
+        assert_eq!(summary.fleet_subnet_root, fixture.root);
+        assert_eq!(summary.placement_subnet, fixture.issuer.placement_subnet);
+        assert_eq!(summary.status, FleetSubnetRootStatus::Active);
+        assert_eq!(summary.infrastructure_canisters, 2);
+        assert_eq!(summary.component_canisters, 2);
+        assert_eq!(summary.total_canisters, 4);
     }
 
     fn install_fixture_coordinator(
@@ -510,6 +538,7 @@ mod tests {
         assert_eq!(component_registry.reserved_component_instances, 0);
         assert_eq!(component_registry.committed_component_instances, 0);
         assert_eq!(component_registry.managed_descendants, 0);
+        assert_eq!(component_registry.known_created_component_canisters, 0);
         assert_eq!(component_registry.encoded_bytes, 0);
 
         let component_registry_retry: Result<RootComponentRegistryStatusResponse, Error> = pic
@@ -538,6 +567,10 @@ mod tests {
         assert_component_allocation(pic, fixture, component_registry_request)
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the activation fixture verifies both initial Component allocations and their shared inventory transition"
+    )]
     fn assert_component_allocation(
         pic: &Pic,
         fixture: &BootstrappedRootFixture,
@@ -610,6 +643,7 @@ mod tests {
         assert_eq!(component_registry.reserved_component_instances, 1);
         assert_eq!(component_registry.committed_component_instances, 1);
         assert_eq!(component_registry.managed_descendants, 0);
+        assert_eq!(component_registry.known_created_component_canisters, 1);
         assert!(component_registry.encoded_bytes > 0);
         assert_prepared(pic, fixture.root_id);
         let incomplete_activation: Result<FleetActivationStatusResponse, Error> = pic
@@ -641,6 +675,7 @@ mod tests {
         let complete = component_registry_status(pic, fixture, component_registry_request.clone());
         assert_eq!(complete.reserved_component_instances, 0);
         assert_eq!(complete.committed_component_instances, 2);
+        assert_eq!(complete.known_created_component_canisters, 2);
         assert_eq!(complete.initial_inventory, None);
         assert_root_runtime_activation(pic, fixture, component_registry_request);
         ActiveComponentBindings::new(

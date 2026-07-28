@@ -353,6 +353,30 @@ fn fleet_subnet_root_authority_is_a_controller_query_on_the_root_surface() {
 }
 
 #[test]
+fn fleet_subnet_root_canister_summary_is_a_controller_query_on_the_root_surface() {
+    assert_eq!(
+        canic::protocol::CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY,
+        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY
+    );
+    assert_eq!(
+        canic::protocol::CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY,
+        "canic_fleet_subnet_root_canister_summary"
+    );
+
+    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
+    let source = read_text(&macro_path);
+    let attribute = preceding_attribute_context(
+        &source,
+        "async fn canic_fleet_subnet_root_canister_summary(",
+    );
+
+    assert!(
+        attribute.contains("canic_query(requires(caller::is_controller()))"),
+        "Fleet Subnet Root Canister summary must remain a controller-guarded query"
+    );
+}
+
+#[test]
 fn fleet_subnet_root_join_is_a_controller_update_on_the_coordinator_surface() {
     assert_eq!(
         canic::protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,

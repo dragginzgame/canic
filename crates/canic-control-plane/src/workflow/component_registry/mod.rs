@@ -1672,6 +1672,7 @@ fn response(
         reserved_component_instances: prepared.reserved_component_instances,
         committed_component_instances: prepared.committed_component_instances,
         managed_descendants: prepared.managed_descendants,
+        known_created_component_canisters: prepared.known_created_component_canisters,
         encoded_bytes: prepared.encoded_bytes,
         initial_inventory: prepared.initial_inventory.map(|inventory| {
             RootComponentInitialInventoryStatus {

@@ -1276,6 +1276,7 @@ fn validate_component_registry_preparation_response(
         || response.reserved_component_instances != 0
         || response.committed_component_instances != 0
         || response.managed_descendants != 0
+        || response.known_created_component_canisters != 0
         || response.encoded_bytes != 0
     {
         return Err(invalid(
