@@ -215,7 +215,7 @@ package = "worker"
 
     assert!(lines.iter().any(|line| {
         line.contains(
-            "Deployment truth warning: plan:plan_assumption:fleet_catalog.root_principal.missing",
+            "Deployment truth warning: plan:plan_assumption:fleet_catalog.coordinator_principal.missing",
         )
     }));
 

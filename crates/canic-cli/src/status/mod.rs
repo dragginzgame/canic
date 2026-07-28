@@ -22,20 +22,12 @@ use canic_host::{
         inspect_canic_icp_yaml_from_root, resolve_current_canic_icp_root,
     },
     install_root::{ConfigDiscoveryError, discover_project_canic_config_choices},
-    installed_fleet::{
-        InstalledFleetError, InstalledFleetRequest, resolve_installed_fleet_from_root,
-    },
-    registry::RegistryEntry,
     release_set::{AppConfigSnapshot, display_workspace_path},
     replica_query,
     table::{ColumnAlign, render_table},
 };
 use clap::Command as ClapCommand;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    ffi::OsString,
-    path::Path,
-};
+use std::{ffi::OsString, path::Path};
 use thiserror::Error as ThisError;
 
 const APP_HEADER: &str = "APP";
@@ -44,16 +36,14 @@ const NETWORK_HEADER: &str = "NETWORK";
 const DEPLOYED_HEADER: &str = "DEPLOYED";
 const CONFIG_HEADER: &str = "CONFIG";
 const CANISTERS_HEADER: &str = "CANISTERS";
-const ROOT_HEADER: &str = "ROOT";
-const LOCAL_LOST_FLEET: &str = "lost";
-const LOCAL_LOST_NOTE: &str = "Note: local ICP CLI replica state is not persistent; a lost local Fleet means the recorded root is gone. Run `canic install <app> <fleet> --fleet-input <path>` to recreate it.";
+const COORDINATOR_HEADER: &str = "COORDINATOR";
 const STATUS_HELP_AFTER: &str = "\
 Examples:
   canic status
 
 Note:
-  The local ICP CLI replica does not persist canister state across stop/start.
-  If a local Fleet is shown as lost, run `canic install <app> <fleet> --fleet-input <path>` to recreate it.";
+  Fleet rows come from terminal catalog receipts.
+  This summary does not query live Coordinator or Fleet Subnet Root state.";
 
 ///
 /// StatusCommandError
@@ -114,11 +104,10 @@ struct StatusAppRow {
     canisters: String,
 }
 
-/// App rows plus the explicit App-ID lookup used for Fleet comparison.
+/// App rows compiled independently from terminal Fleet discovery.
 
 struct StatusAppInventory {
     rows: Vec<StatusAppRow>,
-    bootstrap_roles_by_app: BTreeMap<String, Vec<String>>,
 }
 
 /// One independently discovered canonical Fleet catalog row.
@@ -129,7 +118,7 @@ struct StatusFleetRow {
     app: String,
     network: String,
     deployed: String,
-    root: String,
+    coordinator: String,
 }
 
 pub fn run<I>(args: I) -> Result<(), StatusCommandError>
@@ -169,11 +158,6 @@ fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCom
     let icp_cli = load_icp_cli_version(options);
     let icp_project = load_icp_project_config_status(&icp_root, &choices);
     let replica = load_replica_status(options, &icp_root);
-    let verify_local_roots = options.environment == local_environment()
-        && matches!(
-            replica,
-            ReplicaStatus::Running | ReplicaStatus::RunningHttpFallback
-        );
     let apps = load_status_apps(&icp_root, &choices);
     let catalog = build_fleet_catalog_report(&FleetCatalogRequest {
         project_root: icp_root.clone(),
@@ -184,17 +168,7 @@ fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCom
     let mut fleets = catalog
         .entries
         .iter()
-        .map(|entry| {
-            status_fleet_row(
-                &icp_root,
-                entry,
-                options,
-                verify_local_roots,
-                apps.bootstrap_roles_by_app
-                    .get(entry.app.as_str())
-                    .map(Vec::as_slice),
-            )
-        })
+        .map(status_fleet_row)
         .collect::<Vec<_>>();
     fleets.sort_by(|left, right| left.fleet.cmp(&right.fleet));
 
@@ -258,7 +232,6 @@ fn load_icp_project_config_status(icp_root: &Path, choices: &[std::path::PathBuf
 
 fn load_status_apps(workspace_root: &Path, paths: &[std::path::PathBuf]) -> StatusAppInventory {
     let mut rows = Vec::with_capacity(paths.len());
-    let mut bootstrap_roles_by_app = BTreeMap::new();
     for path in paths {
         match AppConfigSnapshot::load(path) {
             Ok(config) => {
@@ -268,7 +241,6 @@ fn load_status_apps(workspace_root: &Path, paths: &[std::path::PathBuf]) -> Stat
                     config: display_workspace_path(workspace_root, path),
                     canisters: config.deployable_roles().len().to_string(),
                 });
-                bootstrap_roles_by_app.insert(app, config.bootstrap_roles());
             }
             Err(_) => rows.push(StatusAppRow {
                 app: "invalid config".to_string(),
@@ -278,82 +250,16 @@ fn load_status_apps(workspace_root: &Path, paths: &[std::path::PathBuf]) -> Stat
         }
     }
     rows.sort_by(|left, right| left.app.cmp(&right.app));
-    StatusAppInventory {
-        rows,
-        bootstrap_roles_by_app,
-    }
+    StatusAppInventory { rows }
 }
 
-fn status_fleet_row(
-    icp_root: &Path,
-    fleet: &FleetCatalogEntryV1,
-    options: &StatusOptions,
-    verify_local_root: bool,
-    configured_roles: Option<&[String]>,
-) -> StatusFleetRow {
-    let deployed = deployed_label(
-        fleet,
-        options,
-        icp_root,
-        verify_local_root,
-        configured_roles,
-    );
+fn status_fleet_row(fleet: &FleetCatalogEntryV1) -> StatusFleetRow {
     StatusFleetRow {
         fleet: fleet.fleet_name.to_string(),
         app: fleet.app.to_string(),
         network: fleet.canonical_network_id.to_string(),
-        deployed,
-        root: fleet.root_principal.clone(),
-    }
-}
-
-fn deployed_label(
-    fleet: &FleetCatalogEntryV1,
-    options: &StatusOptions,
-    icp_root: &Path,
-    verify_local_root: bool,
-    configured_roles: Option<&[String]>,
-) -> String {
-    if options.environment != local_environment() {
-        return "yes".to_string();
-    }
-    if !verify_local_root {
-        return "unknown".to_string();
-    }
-
-    match resolve_installed_fleet_from_root(
-        &InstalledFleetRequest {
-            fleet: fleet.fleet_name.to_string(),
-            environment: options.environment.clone(),
-            icp: options.icp.clone(),
-            detect_lost_local_root: true,
-        },
-        icp_root,
-    ) {
-        Ok(resolution) if resolution.fleet.root_principal == fleet.root_principal => {
-            configured_roles.map_or_else(
-                || "yes".to_string(),
-                |roles| classify_local_fleet(roles, &resolution.registry.entries).to_string(),
-            )
-        }
-        Err(InstalledFleetError::LostLocalFleet { .. }) => LOCAL_LOST_FLEET.to_string(),
-        Ok(_) | Err(_) => "error".to_string(),
-    }
-}
-
-fn classify_local_fleet(configured_roles: &[String], registry: &[RegistryEntry]) -> &'static str {
-    let deployed_roles = registry
-        .iter()
-        .filter_map(|entry| entry.role.as_deref())
-        .collect::<BTreeSet<_>>();
-
-    if configured_roles
-        .iter()
-        .all(|role| deployed_roles.contains(role.as_str()))
-    {
-        "yes"
-    } else {
-        "partial"
+        deployed: "yes".to_string(),
+        coordinator: fleet.coordinator_principal.clone(),
     }
 }
 
@@ -383,20 +289,7 @@ fn render_status_report(report: &StatusReport) -> String {
         lines.push(String::new());
         lines.push(render_fleet_table(&report.fleets));
     }
-    if has_lost_local_fleet(report) {
-        lines.push(String::new());
-        lines.push(LOCAL_LOST_NOTE.to_string());
-    }
-
     lines.join("\n")
-}
-
-fn has_lost_local_fleet(report: &StatusReport) -> bool {
-    report.environment == "local"
-        && report
-            .fleets
-            .iter()
-            .any(|fleet| fleet.deployed == LOCAL_LOST_FLEET)
 }
 
 fn deployed_count(fleets: &[StatusFleetRow]) -> usize {
@@ -427,7 +320,7 @@ fn render_fleet_table(fleets: &[StatusFleetRow]) -> String {
                 fleet.app.clone(),
                 fleet.network.clone(),
                 fleet.deployed.clone(),
-                fleet.root.clone(),
+                fleet.coordinator.clone(),
             ]
         })
         .collect::<Vec<_>>();
@@ -437,7 +330,7 @@ fn render_fleet_table(fleets: &[StatusFleetRow]) -> String {
             APP_HEADER,
             NETWORK_HEADER,
             DEPLOYED_HEADER,
-            ROOT_HEADER,
+            COORDINATOR_HEADER,
         ],
         &rows,
         &[ColumnAlign::Left; 5],

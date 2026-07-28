@@ -100,8 +100,8 @@ impl DeploymentAssumptionKindV1 {
     #[must_use]
     pub const fn key(self) -> &'static str {
         match self {
-            Self::FleetCatalogMissing => "fleet_catalog.root_principal.missing",
-            Self::FleetCatalogReadFailed => "fleet_catalog.root_principal.read_failed",
+            Self::FleetCatalogMissing => "fleet_catalog.coordinator_principal.missing",
+            Self::FleetCatalogReadFailed => "fleet_catalog.coordinator_principal.read_failed",
         }
     }
 }

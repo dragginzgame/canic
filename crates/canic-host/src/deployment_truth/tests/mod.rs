@@ -1,14 +1,7 @@
 use super::*;
-use crate::deployment_truth::observe::{
-    apply_canister_control_to_observed_pool, apply_live_status_to_registry_observation,
-    observed_root_from_status, registry_entries_to_observed_canisters,
-    registry_entries_to_observed_pool,
-};
 use crate::deployment_truth::report::{RootSubnetEvidence, RootSubnetEvidenceSource};
 use crate::fleet_catalog::{FleetCatalogEntryV1, FleetCatalogError};
-use crate::icp::{IcpCanisterStatusReport, IcpCanisterStatusSettings};
-use crate::registry::RegistryEntry;
-use crate::release_set::{ConfiguredPoolExpectation, ROOT_RELEASE_SET_MANIFEST_FILE};
+use crate::release_set::ROOT_RELEASE_SET_MANIFEST_FILE;
 use crate::test_support::temp_dir;
 use canic_core::ids::{AppId, CanonicalNetworkId, FleetId};
 use serde::Serialize;

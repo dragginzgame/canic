@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.32` hard-cuts terminal Fleet discovery to one
+  Coordinator-anchored catalog row, admits publication only through exact
+  all-root terminal evidence and prevents legacy root-oriented consumers from
+  treating the Coordinator as a Fleet Subnet Root.
+
 - `0.100.31` maintains an exact durable known-created Component-Canister
   count and exposes a compact controller-only Fleet Subnet Root inventory
   summary bound to current Registry, root, placement and Store authority.

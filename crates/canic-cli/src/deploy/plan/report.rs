@@ -21,8 +21,6 @@ pub(super) const CATEGORY_DEPLOYMENT_IDENTITY: PlanDiagnosticCategory =
 pub(super) const CATEGORY_INVENTORY: PlanDiagnosticCategory = PlanDiagnosticCategory::Inventory;
 pub(super) const CATEGORY_OBSERVATION: PlanDiagnosticCategory = PlanDiagnosticCategory::Observation;
 pub(super) const CATEGORY_TOPOLOGY: PlanDiagnosticCategory = PlanDiagnosticCategory::Topology;
-pub(super) const CATEGORY_TRUST_DOMAIN: PlanDiagnosticCategory =
-    PlanDiagnosticCategory::TrustDomain;
 pub(super) const CATEGORY_UNSUPPORTED_SHAPE: PlanDiagnosticCategory =
     PlanDiagnosticCategory::UnsupportedShape;
 pub(super) const CATEGORY_VERIFIER_READINESS: PlanDiagnosticCategory =
@@ -112,7 +110,6 @@ pub(super) enum PlanDiagnosticCategory {
     Inventory,
     Observation,
     Topology,
-    TrustDomain,
     UnsupportedShape,
     VerifierReadiness,
 }
@@ -127,7 +124,6 @@ impl PlanDiagnosticCategory {
             Self::Inventory => "inventory",
             Self::Observation => "observation",
             Self::Topology => "topology",
-            Self::TrustDomain => "trust_domain",
             Self::UnsupportedShape => "unsupported_shape",
             Self::VerifierReadiness => "verifier_readiness",
         }

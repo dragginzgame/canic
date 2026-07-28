@@ -45,7 +45,7 @@ name = "demo"
 const CONTROLLER_CONFIG: &str = r#"
 controllers = [
   "zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae",
-  "aaaaa-aa",
+  "rrkah-fqaaa-aaaaa-aaaaq-cai",
 ]
 [app]
 name = "demo"
@@ -247,23 +247,17 @@ fn deploy_plan_report_builds_from_config_without_fleet_catalog_entry() {
             "future_apply_preview|verify_topology|demo-local|not_executed",
         ],
     );
-    assert!(
-        json["assumptions"]
-            .as_array()
-            .expect("assumptions")
-            .iter()
-            .all(|item| item["code"] != "fleet_catalog_root_principal")
-    );
 }
 
 #[test]
-fn deploy_plan_report_records_fleet_catalog_root_fact() {
-    let (_temp, workspace_root, icp_root) = temp_plan_workspace("canic-deploy-plan-root-fact");
+fn deploy_plan_catalog_identity_does_not_invent_one_root_fact() {
+    let (_temp, workspace_root, icp_root) =
+        temp_plan_workspace("canic-deploy-plan-coordinator-catalog");
     write_artifact(&icp_root, "root", b"root-artifact");
     write_fleet_catalog(
         &icp_root,
         "local",
-        sample_fleet_catalog_entry("demo-local", "aaaaa-aa"),
+        sample_fleet_catalog_entry("demo-local", "rrkah-fqaaa-aaaaa-aaaaq-cai"),
     );
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
@@ -283,49 +277,35 @@ fn deploy_plan_report_records_fleet_catalog_root_fact() {
     );
     let json = serde_json::to_value(&report).expect("report should serialize");
 
-    assert_eq!(json["comparison_status"], "compared_with_warnings");
+    assert_eq!(json["comparison_status"], "not_requested");
     assert_eq!(
         json["plan"]["trust_domain"]["root_trust_anchor"],
-        "aaaaa-aa"
+        JsonValue::Null
     );
     assert!(
         json["verified_facts"]
             .as_array()
             .expect("verified facts")
             .iter()
-            .any(|item| item["code"] == "installed_root_canister_id_resolved"
-                && item["source"] == "fleet_catalog")
-    );
-    assert_verified_fact(
-        &json,
-        "root_trust_anchor_resolved",
-        "demo-local",
-        "fleet_catalog",
+            .all(|item| item["code"] != "installed_root_canister_id_resolved")
     );
     assert!(
-        json["warnings"]
+        json["verified_facts"]
             .as_array()
-            .expect("warnings")
+            .expect("verified facts")
             .iter()
-            .all(|item| item["code"] != "observed_inventory_unavailable")
-    );
-    assert!(
-        json["proposed_operations"]
-            .as_array()
-            .expect("proposed operations")
-            .iter()
-            .any(|item| item["label"] == "upgrade_wasm" && item["subject"] == "root")
+            .all(|item| item["code"] != "root_trust_anchor_resolved")
     );
 }
 
 #[test]
-fn deploy_plan_report_marks_complete_catalog_inputs_as_compared() {
+fn deploy_plan_report_keeps_complete_inputs_planned_without_root_comparison() {
     let (_temp, workspace_root, icp_root) = temp_plan_workspace("canic-deploy-plan-compared");
     write_complete_local_plan_inputs(&icp_root);
     write_fleet_catalog(
         &icp_root,
         "local",
-        sample_fleet_catalog_entry("demo-local", "aaaaa-aa"),
+        sample_fleet_catalog_entry("demo-local", "rrkah-fqaaa-aaaaa-aaaaq-cai"),
     );
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
@@ -346,7 +326,7 @@ fn deploy_plan_report_marks_complete_catalog_inputs_as_compared() {
     let json = serde_json::to_value(&report).expect("report should serialize");
 
     assert_eq!(json["status"], "planned");
-    assert_eq!(json["comparison_status"], "compared");
+    assert_eq!(json["comparison_status"], "not_requested");
     assert_eq!(json["blockers"], JsonValue::Array(vec![]));
     assert_eq!(json["warnings"], JsonValue::Array(vec![]));
     assert_eq!(json["assumptions"], JsonValue::Array(vec![]));
@@ -441,7 +421,7 @@ fn deploy_plan_report_previews_controller_reconciliation() {
     assert_eq!(
         json["plan"]["authority_profile"]["expected_controllers"],
         serde_json::json!([
-            "aaaaa-aa",
+            "rrkah-fqaaa-aaaaa-aaaaq-cai",
             "zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae"
         ])
     );
@@ -890,7 +870,10 @@ fn write_release_set_manifest(icp_root: &std::path::Path) {
     .expect("write manifest");
 }
 
-fn sample_fleet_catalog_entry(fleet_name: &str, root_principal: &str) -> FleetCatalogEntryV1 {
+fn sample_fleet_catalog_entry(
+    fleet_name: &str,
+    coordinator_principal: &str,
+) -> FleetCatalogEntryV1 {
     FleetCatalogEntryV1 {
         canonical_network_id: CanonicalNetworkId::public_ic(),
         fleet_id: FleetId::from_generated_bytes([9; 32]),
@@ -898,7 +881,7 @@ fn sample_fleet_catalog_entry(fleet_name: &str, root_principal: &str) -> FleetCa
         app: AppId::from("demo"),
         environment: "local".to_string(),
         deployed_at_unix_secs: 1,
-        root_principal: root_principal.to_string(),
+        coordinator_principal: coordinator_principal.to_string(),
     }
 }
 

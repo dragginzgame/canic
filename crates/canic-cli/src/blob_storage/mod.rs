@@ -137,6 +137,7 @@ impl BlobStorageCommandError {
                 InstalledFleetError::Icp(IcpCommandError::Io(_))
                 | InstalledFleetError::NoInstalledFleet { .. }
                 | InstalledFleetError::FleetCatalog(_)
+                | InstalledFleetError::CoordinatorAnchoredTopologyUnavailable { .. }
                 | InstalledFleetError::Registry(_)
                 | InstalledFleetError::Io(_),
             )
@@ -180,6 +181,7 @@ impl BlobStorageCommandError {
             | Self::InstalledFleet(
                 InstalledFleetError::NoInstalledFleet { .. }
                 | InstalledFleetError::FleetCatalog(_)
+                | InstalledFleetError::CoordinatorAnchoredTopologyUnavailable { .. }
                 | InstalledFleetError::Registry(_)
                 | InstalledFleetError::Io(_)
                 | InstalledFleetError::Icp(IcpCommandError::Io(_)),

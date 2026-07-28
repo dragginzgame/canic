@@ -62,7 +62,7 @@ fn deploy_resume_report_resolves_latest_receipt_by_canonical_fleet_identity() {
                 "app": "demo",
                 "environment": "ic",
                 "deployed_at_unix_secs": 1,
-                "root_principal": "aaaaa-aa",
+                "coordinator_principal": "rrkah-fqaaa-aaaaa-aaaaq-cai",
             }],
         }))
         .expect("encode Fleet catalog"),

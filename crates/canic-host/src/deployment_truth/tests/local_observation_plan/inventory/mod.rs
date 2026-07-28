@@ -118,7 +118,7 @@ fn local_inventory_collects_configured_roles_and_artifacts_without_live_queries(
 }
 
 #[test]
-fn local_inventory_records_explicit_root_evidence_for_deployment_target() {
+fn local_inventory_uses_catalog_identity_without_inventing_root_evidence() {
     let temp = TempWorkspace::new("canic-host-local-root-evidence");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
@@ -128,7 +128,7 @@ fn local_inventory_records_explicit_root_evidence_for_deployment_target() {
     write_fleet_catalog_json(
         &icp_root,
         "local",
-        sample_fleet_catalog_entry("prod", "aaaaa-aa"),
+        sample_fleet_catalog_entry("prod", "rrkah-fqaaa-aaaaa-aaaaq-cai"),
     );
 
     let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
@@ -145,28 +145,12 @@ fn local_inventory_records_explicit_root_evidence_for_deployment_target() {
     let observed_identity = inventory.observed_identity.as_ref().expect("identity");
     assert_eq!(observed_identity.fleet_name, "prod");
     assert_eq!(
-        observed_identity.root_principal.as_deref(),
-        Some("aaaaa-aa")
+        observed_identity.fleet_id,
+        Some(canic_core::ids::FleetId::from_generated_bytes([7; 32]))
     );
-
-    let observed_root = inventory.observed_root.as_ref().expect("root evidence");
-    assert_eq!(observed_root.fleet_name, "prod");
-    assert_eq!(observed_root.environment, "local");
-    assert_eq!(observed_root.app, "demo");
-    assert_eq!(observed_root.root_principal, "aaaaa-aa");
-    assert_eq!(observed_root.observed_canister_id, "aaaaa-aa");
-    assert_eq!(
-        observed_root.observation_source,
-        DeploymentRootObservationSourceV1::FleetCatalog
-    );
-    assert_eq!(
-        observed_root.control_class,
-        CanisterControlClassV1::UnknownUnsafe
-    );
-    assert_eq!(
-        observed_root.role_assignment_source,
-        Some(RoleAssignmentSourceV1::FleetCatalog.label().to_string())
-    );
+    assert_eq!(observed_identity.root_principal, None);
+    assert!(inventory.observed_root.is_none());
+    assert!(inventory.observed_canisters.is_empty());
 }
 
 #[test]
@@ -177,7 +161,7 @@ fn local_inventory_uses_catalog_app_when_local_config_is_missing() {
     write_fleet_catalog_json(
         &icp_root,
         "local",
-        sample_fleet_catalog_entry("prod", "aaaaa-aa"),
+        sample_fleet_catalog_entry("prod", "rrkah-fqaaa-aaaaa-aaaaq-cai"),
     );
 
     let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
@@ -197,9 +181,11 @@ fn local_inventory_uses_catalog_app_when_local_config_is_missing() {
             .iter()
             .any(|gap| gap.key == "local_config.app")
     );
-    let observed_root = inventory.observed_root.as_ref().expect("root evidence");
-    assert_eq!(observed_root.fleet_name, "prod");
-    assert_eq!(observed_root.app, "demo");
+    let observed_identity = inventory.observed_identity.as_ref().expect("identity");
+    assert_eq!(observed_identity.fleet_name, "prod");
+    assert_eq!(observed_identity.app, "demo");
+    assert_eq!(observed_identity.root_principal, None);
+    assert!(inventory.observed_root.is_none());
 }
 
 #[test]

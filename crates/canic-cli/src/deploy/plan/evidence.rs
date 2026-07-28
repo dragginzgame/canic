@@ -10,10 +10,10 @@ use crate::deploy::plan::{
     command::DeployPlanOptions,
     report::{
         CATEGORY_ARTIFACT, CATEGORY_AUTHORITY, CATEGORY_CONFIG, CATEGORY_DEPLOYMENT_IDENTITY,
-        CATEGORY_INVENTORY, CATEGORY_OBSERVATION, CATEGORY_TOPOLOGY, CATEGORY_TRUST_DOMAIN,
-        CATEGORY_VERIFIER_READINESS, PlanDiagnostic, PlanDiagnosticCategory, PlanDiagnosticSource,
-        SEVERITY_INFO, SOURCE_APP_CONFIG, SOURCE_BUILD_PROFILE, SOURCE_DEPLOYMENT_CONFIG,
-        SOURCE_DEPLOYMENT_PLAN_BUILDER, SOURCE_FLEET_CATALOG, SOURCE_LOCAL_OBSERVATION,
+        CATEGORY_INVENTORY, CATEGORY_TOPOLOGY, CATEGORY_VERIFIER_READINESS, PlanDiagnostic,
+        PlanDiagnosticCategory, PlanDiagnosticSource, SEVERITY_INFO, SOURCE_APP_CONFIG,
+        SOURCE_BUILD_PROFILE, SOURCE_DEPLOYMENT_CONFIG, SOURCE_DEPLOYMENT_PLAN_BUILDER,
+        SOURCE_LOCAL_OBSERVATION,
     },
 };
 use std::path::Path;
@@ -61,20 +61,7 @@ pub(super) fn verified_facts(
     facts.extend(expected_canister_inventory_facts(plan));
     facts.extend(expected_pool_inventory_facts(plan));
     facts.extend(role_artifact_facts(&plan.role_artifacts));
-    facts.extend(trust_domain_facts(plan));
     facts.extend(verifier_readiness_facts(plan));
-
-    if let Some(root) = &plan.trust_domain.root_trust_anchor {
-        facts.push(PlanDiagnostic {
-            category: CATEGORY_OBSERVATION,
-            code: "installed_root_canister_id_resolved".to_string(),
-            severity: SEVERITY_INFO,
-            subject: options.fleet.clone(),
-            detail: format!("Fleet catalog resolves root canister {root}"),
-            next: None,
-            source: SOURCE_FLEET_CATALOG,
-        });
-    }
 
     facts
 }
@@ -366,23 +353,6 @@ fn role_artifact_fact_detail(artifact: &RoleArtifactV1, digest: &str) -> String 
         Some(path) => format!("observed wasm artifact {path} with sha256 {digest}"),
         None => format!("observed wasm artifact sha256 {digest}"),
     }
-}
-
-fn trust_domain_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
-    plan.trust_domain
-        .root_trust_anchor
-        .as_ref()
-        .map(|root| PlanDiagnostic {
-            category: CATEGORY_TRUST_DOMAIN,
-            code: "root_trust_anchor_resolved".to_string(),
-            severity: SEVERITY_INFO,
-            subject: plan.deployment_identity.fleet_name.clone(),
-            detail: format!("root trust anchor resolved: {root}"),
-            next: None,
-            source: SOURCE_FLEET_CATALOG,
-        })
-        .into_iter()
-        .collect()
 }
 
 pub(super) fn verifier_readiness_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {

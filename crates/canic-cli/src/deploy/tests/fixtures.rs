@@ -128,7 +128,7 @@ pub(super) fn sample_catalog_report() -> canic_host::fleet_catalog::FleetCatalog
             app: AppId::from("demo"),
             environment: "local".to_string(),
             deployed_at_unix_secs: 54,
-            root_principal: "aaaaa-aa".to_string(),
+            coordinator_principal: "aaaaa-aa".to_string(),
         }],
     }
 }

@@ -7,9 +7,8 @@ use super::{
     },
     command::{medic_subcommand_help_requested, usage},
     fleet::{
-        check_fleet_registry_not_evaluated, check_root_canister_id,
-        check_root_readiness_not_evaluated, fleet_environment_selection,
-        fleet_registry_observed_check, root_readiness_source,
+        check_coordinator_canister_id, check_coordinator_readiness_not_evaluated,
+        check_fleet_registry_not_evaluated, fleet_environment_selection,
     },
     project::project_environment_selection_check,
     render::{MEDIC_REPORT_WIDTH, render_medic_ci_text, render_medic_json, render_medic_text},
@@ -29,7 +28,7 @@ use canic_core::ids::{AppId, CanisterRole, CanonicalNetworkId, FleetId};
 use canic_host::{
     fleet_catalog::{FleetCatalogEntryV1, FleetCatalogError},
     icp::local_canister_candid_path,
-    installed_fleet::{InstalledFleetError, InstalledFleetResolution, InstalledFleetSource},
+    installed_fleet::InstalledFleetError,
     state_manifest::{StateAuditStatus, build_state_audit_report},
 };
 use serde_json::Value as JsonValue;
@@ -542,94 +541,57 @@ fn project_environment_selection_check_is_project_only() {
     assert!(project_environment_selection_check(&fleet).is_none());
 }
 
-// Ensure missing root IDs are caught before medic attempts a live readiness query.
+// Ensure missing Coordinator IDs are caught before medic attempts a live query.
 #[test]
-fn root_canister_id_check_classifies_present_and_missing_ids() {
+fn coordinator_canister_id_check_classifies_present_and_missing_ids() {
     let mut fleet = sample_fleet_catalog_entry();
-    let present = check_root_canister_id(&fleet);
+    let present = check_coordinator_canister_id(&fleet);
 
     assert_eq!(present.status, MedicStatus::Pass);
-    assert_eq!(present.code, "root_canister_id_present");
+    assert_eq!(present.code, "coordinator_canister_id_present");
     assert_eq!(present.detail, "aaaaa-aa");
 
-    fleet.root_principal = "  ".to_string();
-    let missing = check_root_canister_id(&fleet);
+    fleet.coordinator_principal = "  ".to_string();
+    let missing = check_coordinator_canister_id(&fleet);
 
     assert_eq!(missing.status, MedicStatus::Fail);
-    assert_eq!(missing.code, "root_canister_id_missing");
-    assert!(missing.detail.contains("does not record a root principal"));
+    assert_eq!(missing.code, "coordinator_canister_id_missing");
+    assert!(
+        missing
+            .detail
+            .contains("does not record a Coordinator principal")
+    );
 }
 
-// Ensure skipped root readiness is explicit when the catalog root is missing.
+// Ensure skipped Coordinator readiness is explicit when the catalog binding is missing.
 #[test]
-fn root_readiness_not_evaluated_explains_skipped_live_query() {
-    let missing_root = check_root_readiness_not_evaluated(false);
+fn coordinator_readiness_not_evaluated_explains_skipped_live_query() {
+    let missing_coordinator = check_coordinator_readiness_not_evaluated(false);
 
-    assert_eq!(missing_root.status, MedicStatus::NotEvaluated);
-    assert_eq!(missing_root.code, "root_readiness_not_evaluated");
-    assert!(missing_root.detail.contains("no root principal"));
+    assert_eq!(missing_coordinator.status, MedicStatus::NotEvaluated);
+    assert_eq!(
+        missing_coordinator.code,
+        "coordinator_readiness_not_evaluated"
+    );
+    assert!(
+        missing_coordinator
+            .detail
+            .contains("no Coordinator principal")
+    );
 }
 
-// Ensure readiness diagnostics identify local replica versus ICP CLI sources.
-#[test]
-fn root_readiness_source_tracks_selected_environment() {
-    assert_eq!(root_readiness_source("local"), MedicSource::LocalReplica);
-    assert_eq!(root_readiness_source("ic"), MedicSource::IcpCli);
-}
-
-// Ensure Fleet registry smoke checks are skipped behind the catalog root gate.
+// Ensure Fleet Registry observation is skipped behind the Coordinator gate.
 #[test]
 fn fleet_registry_not_evaluated_explains_skipped_live_query() {
-    let missing_root = check_fleet_registry_not_evaluated(false);
+    let missing_coordinator = check_fleet_registry_not_evaluated(false);
 
-    assert_eq!(missing_root.status, MedicStatus::NotEvaluated);
-    assert_eq!(missing_root.code, "fleet_registry_not_evaluated");
-    assert!(missing_root.detail.contains("no root principal"));
-}
-
-// Ensure successful Fleet registry observation reports the live entry and role counts.
-#[test]
-fn fleet_registry_observed_check_reports_entry_count() {
-    let resolution = sample_installed_fleet_resolution(vec![
-        registry_entry("aaaaa-aa", Some("root")),
-        registry_entry("bbbbbb-bb", Some("app")),
-    ]);
-
-    let check = fleet_registry_observed_check(&resolution);
-
-    assert_eq!(check.status, MedicStatus::Pass);
-    assert_eq!(check.code, "fleet_registry_observed");
-    assert_eq!(check.source, MedicSource::LocalReplica);
-    assert!(check.detail.contains("entries=2"));
-    assert!(check.detail.contains("roles=2"));
-    assert!(check.next.contains("canic inspect fleet demo --role root"));
-    assert!(check.next.contains("one explicit role"));
-}
-
-// Ensure an empty observed registry remains visible as a warning.
-#[test]
-fn fleet_registry_observed_check_warns_on_empty_registry() {
-    let resolution = sample_installed_fleet_resolution(Vec::new());
-
-    let check = fleet_registry_observed_check(&resolution);
-
-    assert_eq!(check.status, MedicStatus::Warn);
-    assert_eq!(check.code, "fleet_registry_empty");
-    assert!(check.next.contains("canic deploy plan demo --app demo"));
-    assert!(check.next.contains("canic deploy check demo"));
-}
-
-// Ensure medic can still point at runtime inspection when registry entries have no roles.
-#[test]
-fn fleet_registry_runtime_next_falls_back_to_direct_canister() {
-    let resolution = sample_installed_fleet_resolution(vec![registry_entry("cccccc-cc", None)]);
-
-    let check = fleet_registry_observed_check(&resolution);
-
-    assert_eq!(check.status, MedicStatus::Pass);
-    assert_eq!(check.code, "fleet_registry_observed");
-    assert!(check.next.contains("canic inspect canister cccccc-cc"));
-    assert!(check.next.contains("one explicit canister"));
+    assert_eq!(missing_coordinator.status, MedicStatus::NotEvaluated);
+    assert_eq!(missing_coordinator.code, "fleet_registry_not_evaluated");
+    assert!(
+        missing_coordinator
+            .detail
+            .contains("no Coordinator principal")
+    );
 }
 
 // Ensure project medic validates package-role metadata without spawning Cargo.
@@ -1291,41 +1253,7 @@ fn sample_fleet_catalog_entry() -> FleetCatalogEntryV1 {
         app: AppId::from("demo"),
         environment: "local".to_string(),
         deployed_at_unix_secs: 1,
-        root_principal: "aaaaa-aa".to_string(),
-    }
-}
-
-fn sample_installed_fleet_resolution(
-    entries: Vec<canic_host::registry::RegistryEntry>,
-) -> InstalledFleetResolution {
-    let mut roles_by_canister = std::collections::BTreeMap::new();
-    for entry in &entries {
-        if let Some(role) = &entry.role {
-            roles_by_canister.insert(entry.pid.clone(), role.clone());
-        }
-    }
-
-    InstalledFleetResolution {
-        source: InstalledFleetSource::LocalReplica,
-        fleet: sample_fleet_catalog_entry(),
-        registry: canic_host::installed_fleet::InstalledFleetRegistry {
-            root_canister_id: "aaaaa-aa".to_string(),
-            entries,
-        },
-        topology: canic_host::installed_fleet::ResolvedFleetTopology {
-            root_canister_id: "aaaaa-aa".to_string(),
-            children_by_parent: std::collections::BTreeMap::new(),
-            roles_by_canister,
-        },
-    }
-}
-
-fn registry_entry(pid: &str, role: Option<&str>) -> canic_host::registry::RegistryEntry {
-    canic_host::registry::RegistryEntry {
-        pid: pid.to_string(),
-        role: role.map(str::to_string),
-        parent_pid: Some("aaaaa-aa".to_string()),
-        module_hash: None,
+        coordinator_principal: "aaaaa-aa".to_string(),
     }
 }
 

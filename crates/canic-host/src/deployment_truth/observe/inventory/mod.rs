@@ -5,7 +5,6 @@ use super::artifacts::{
 };
 use super::config::observe_local_config_facts;
 use super::identity::{InventoryIdentityFacts, local_inventory_identity};
-use super::root::{fleet_catalog_observations, observed_root_observation};
 use crate::fleet_catalog::{FleetCatalogError, read_fleet_catalog_entry_from_root};
 use crate::network::resolve_canonical_network_id_from_root;
 use std::path::PathBuf;
@@ -66,14 +65,11 @@ pub fn collect_local_deployment_inventory(
         &local_config_facts.roles,
         &mut unresolved_observations,
     );
-    let (observed_canisters, observed_pool) = fleet_catalog_observations(
-        installed_fleet.as_ref(),
-        request,
-        &local_config_facts.pool_expectations,
-        &mut unresolved_observations,
-    );
-    let observed_root =
-        observed_root_observation(installed_fleet.as_ref(), request, &observed_canisters);
+    // A terminal catalog row discovers the Coordinator only. It is not
+    // evidence for one legacy deployment root or Subnet Registry inventory.
+    let observed_canisters = Vec::new();
+    let observed_pool = Vec::new();
+    let observed_root = None;
     let observed_identity = Some(local_inventory_identity(
         request,
         InventoryIdentityFacts {
@@ -83,9 +79,7 @@ pub fn collect_local_deployment_inventory(
                 || local_config_facts.app.clone(),
                 |fleet| fleet.app.to_string(),
             ),
-            root_principal: installed_fleet
-                .as_ref()
-                .map(|fleet| fleet.root_principal.clone()),
+            root_principal: None,
             deployment_manifest_digest,
             canonical_runtime_config_digest: canonical_runtime_config_digest.clone(),
             observed_canisters: &observed_canisters,

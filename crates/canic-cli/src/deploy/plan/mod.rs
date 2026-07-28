@@ -435,7 +435,6 @@ mod tests {
             "inventory" => CATEGORY_INVENTORY,
             "observation" => CATEGORY_OBSERVATION,
             "topology" => CATEGORY_TOPOLOGY,
-            "trust_domain" => CATEGORY_TRUST_DOMAIN,
             "unsupported_shape" => CATEGORY_UNSUPPORTED_SHAPE,
             "verifier_readiness" => CATEGORY_VERIFIER_READINESS,
             _ => panic!("unknown diagnostic category fixture {value}"),

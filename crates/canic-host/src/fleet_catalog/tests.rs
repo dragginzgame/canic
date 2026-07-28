@@ -10,8 +10,22 @@ fn catalog_reads_network_scoped_fleet_rows_in_canonical_order() {
         &root,
         network,
         vec![
-            entry(network, 1, "alpha", "shop", "staging", "aaaaa-aa"),
-            entry(network, 2, "zeta", "shop", "production", "2vxsx-fae"),
+            entry(
+                network,
+                1,
+                "alpha",
+                "shop",
+                "staging",
+                "rrkah-fqaaa-aaaaa-aaaaq-cai",
+            ),
+            entry(
+                network,
+                2,
+                "zeta",
+                "shop",
+                "production",
+                "ryjl3-tyaaa-aaaaa-aaaba-cai",
+            ),
         ],
     );
 
@@ -45,7 +59,7 @@ fn environment_aliases_read_the_same_canonical_network_catalog() {
             "shop-production",
             "shop",
             "production",
-            "aaaaa-aa",
+            "rrkah-fqaaa-aaaaa-aaaaq-cai",
         )],
     );
 
@@ -97,8 +111,22 @@ fn catalog_rejects_wrong_network_unsorted_names_and_duplicate_ids() {
         &root,
         network,
         vec![
-            entry(network, 1, "zeta", "shop", "staging", "aaaaa-aa"),
-            entry(network, 2, "alpha", "shop", "staging", "2vxsx-fae"),
+            entry(
+                network,
+                1,
+                "zeta",
+                "shop",
+                "staging",
+                "rrkah-fqaaa-aaaaa-aaaaq-cai",
+            ),
+            entry(
+                network,
+                2,
+                "alpha",
+                "shop",
+                "staging",
+                "ryjl3-tyaaa-aaaaa-aaaba-cai",
+            ),
         ],
     );
     assert!(matches!(
@@ -110,8 +138,22 @@ fn catalog_rejects_wrong_network_unsorted_names_and_duplicate_ids() {
         &root,
         network,
         vec![
-            entry(network, 1, "alpha", "shop", "staging", "aaaaa-aa"),
-            entry(network, 1, "zeta", "shop", "staging", "2vxsx-fae"),
+            entry(
+                network,
+                1,
+                "alpha",
+                "shop",
+                "staging",
+                "rrkah-fqaaa-aaaaa-aaaaq-cai",
+            ),
+            entry(
+                network,
+                1,
+                "zeta",
+                "shop",
+                "staging",
+                "ryjl3-tyaaa-aaaaa-aaaba-cai",
+            ),
         ],
     );
     assert!(matches!(
@@ -142,7 +184,7 @@ fn catalog_rejects_malformed_unknown_field_and_invalid_identity_rows() {
             "shop-production",
             "bad/app",
             "staging",
-            "aaaaa-aa",
+            "rrkah-fqaaa-aaaaa-aaaaq-cai",
         )],
     })
     .expect("catalog value");
@@ -165,9 +207,48 @@ fn catalog_rejects_malformed_unknown_field_and_invalid_identity_rows() {
             "shop-production",
             "bad/app",
             "staging",
-            "aaaaa-aa",
+            "rrkah-fqaaa-aaaaa-aaaaq-cai",
         )],
     );
+    assert!(matches!(
+        build_fleet_catalog_report(&request(&root, "staging")),
+        Err(FleetCatalogError::Invalid { .. })
+    ));
+    fs::remove_dir_all(root).expect("remove fixture");
+}
+
+#[test]
+fn catalog_rejects_non_canister_coordinator_and_zero_deployment_time() {
+    let root = fixture("invalid-coordinator");
+    let network = CanonicalNetworkId::public_ic();
+
+    write_catalog(
+        &root,
+        network,
+        vec![entry(
+            network,
+            1,
+            "shop-production",
+            "shop",
+            "staging",
+            "2vxsx-fae",
+        )],
+    );
+    assert!(matches!(
+        build_fleet_catalog_report(&request(&root, "staging")),
+        Err(FleetCatalogError::Invalid { .. })
+    ));
+
+    let mut invalid_time = entry(
+        network,
+        1,
+        "shop-production",
+        "shop",
+        "staging",
+        "rrkah-fqaaa-aaaaa-aaaaq-cai",
+    );
+    invalid_time.deployed_at_unix_secs = 0;
+    write_catalog(&root, network, vec![invalid_time]);
     assert!(matches!(
         build_fleet_catalog_report(&request(&root, "staging")),
         Err(FleetCatalogError::Invalid { .. })
@@ -234,7 +315,7 @@ fn catalog_inspect_and_text_use_fleet_identity_terms() {
             "shop-production",
             "shop",
             "production",
-            "aaaaa-aa",
+            "rrkah-fqaaa-aaaaa-aaaaq-cai",
         )],
     );
 
@@ -246,10 +327,89 @@ fn catalog_inspect_and_text_use_fleet_identity_terms() {
     assert!(text.contains("Fleet catalog:"));
     assert!(text.contains("fleet_id:"));
     assert!(text.contains("app: shop"));
+    assert!(text.contains("coordinator_principal: rrkah-fqaaa-aaaaa-aaaaq-cai"));
+    assert!(!text.contains("root_principal"));
     assert!(!text.contains("deployment target"));
     assert!(matches!(
         inspect_fleet_catalog_report(&request(&root, "staging"), "unknown"),
         Err(FleetCatalogError::UnknownFleet { .. })
+    ));
+    fs::remove_dir_all(root).expect("remove fixture");
+}
+
+#[test]
+fn catalog_commit_is_canonical_exact_retry_and_conflict_closed() {
+    let root = fixture("commit");
+    let network = CanonicalNetworkId::public_ic();
+    let alpha = entry(
+        network,
+        1,
+        "alpha",
+        "shop",
+        "staging",
+        "rrkah-fqaaa-aaaaa-aaaaq-cai",
+    );
+    let zeta = entry(
+        network,
+        2,
+        "zeta",
+        "shop",
+        "staging",
+        "ryjl3-tyaaa-aaaaa-aaaba-cai",
+    );
+
+    let committed_zeta =
+        commit_fleet_catalog_entry(&root, zeta.clone()).expect("commit zeta Fleet");
+    assert!(committed_zeta.advanced);
+    let committed_alpha =
+        commit_fleet_catalog_entry(&root, alpha.clone()).expect("commit alpha Fleet");
+    assert!(committed_alpha.advanced);
+    let repeated_alpha =
+        commit_fleet_catalog_entry(&root, alpha.clone()).expect("repeat alpha Fleet");
+
+    assert!(!repeated_alpha.advanced);
+    assert_eq!(repeated_alpha.entry, alpha);
+    assert_eq!(repeated_alpha.catalog_hash, committed_alpha.catalog_hash);
+    let report = build_fleet_catalog_report(&request(&root, "staging")).expect("Fleet catalog");
+    assert_eq!(report.entries, vec![alpha.clone(), zeta]);
+
+    let mut conflicting = alpha;
+    conflicting.coordinator_principal = "r7inp-6aaaa-aaaaa-aaabq-cai".to_string();
+    assert!(matches!(
+        commit_fleet_catalog_entry(&root, conflicting),
+        Err(FleetCatalogError::Conflict {
+            field: "fleet_name",
+            ..
+        })
+    ));
+    fs::remove_dir_all(root).expect("remove fixture");
+}
+
+#[test]
+fn catalog_hard_rejects_the_removed_single_root_shape() {
+    let root = fixture("removed-root-shape");
+    let network = CanonicalNetworkId::public_ic();
+    let path = fleet_catalog_path(&root, network);
+    let current = FleetCatalogRecord {
+        schema_version: FLEET_CATALOG_SCHEMA_VERSION,
+        canonical_network_id: network,
+        entries: vec![entry(
+            network,
+            1,
+            "shop-production",
+            "shop",
+            "staging",
+            "rrkah-fqaaa-aaaaa-aaaaq-cai",
+        )],
+    };
+    let mut value = serde_json::to_value(current).expect("catalog JSON value");
+    let entry = &mut value["entries"][0];
+    entry["root_principal"] = entry["coordinator_principal"].take();
+    write_catalog_value(&path, &value);
+
+    assert!(matches!(
+        build_fleet_catalog_report(&request(&root, "staging")),
+        Err(FleetCatalogError::Decode { .. })
     ));
     fs::remove_dir_all(root).expect("remove fixture");
 }
@@ -285,10 +445,17 @@ fn write_catalog(root: &Path, network: CanonicalNetworkId, entries: Vec<FleetCat
 }
 
 fn write_catalog_record(path: &Path, catalog: FleetCatalogRecord) {
+    write_catalog_value(
+        path,
+        &serde_json::to_value(catalog).expect("catalog JSON value"),
+    );
+}
+
+fn write_catalog_value(path: &Path, value: &serde_json::Value) {
     fs::create_dir_all(path.parent().expect("catalog parent")).expect("catalog directory");
     fs::write(
         path,
-        serde_json::to_vec_pretty(&catalog).expect("catalog JSON"),
+        serde_json::to_vec_pretty(value).expect("catalog JSON"),
     )
     .expect("write catalog");
 }
@@ -299,7 +466,7 @@ fn entry(
     fleet_name: &str,
     app: &str,
     environment: &str,
-    root_principal: &str,
+    coordinator_principal: &str,
 ) -> FleetCatalogEntryV1 {
     FleetCatalogEntryV1 {
         canonical_network_id: network,
@@ -308,6 +475,6 @@ fn entry(
         app: AppId::from(app),
         environment: environment.to_string(),
         deployed_at_unix_secs: 54,
-        root_principal: root_principal.to_string(),
+        coordinator_principal: coordinator_principal.to_string(),
     }
 }

@@ -1,6 +1,6 @@
 //! Module: canic_cli::medic::fleet
 //!
-//! Responsibility: construct installed-Fleet, registry, and root checks.
+//! Responsibility: construct installed-Fleet, Registry, and Coordinator checks.
 //! Does not own: deployment mutation, check ordering, or report rendering.
 //! Boundary: maps local and runtime Fleet evidence into Medic checks.
 
@@ -11,14 +11,11 @@ use crate::{
         display_medic_path,
         report::{MedicCategory, MedicCheck, MedicSource, MedicStatus},
     },
-    support::candid::role_candid_path,
 };
 use std::path::{Path, PathBuf};
 
 use canic_host::{
-    canister_ready::query_canister_ready,
     fleet_catalog::FleetCatalogEntryV1,
-    icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
     installed_fleet::{
         InstalledFleetError, InstalledFleetRequest, InstalledFleetResolution, InstalledFleetSource,
@@ -81,25 +78,20 @@ pub(super) fn installed_fleet_checks(
     fleet: &FleetCatalogEntryV1,
     environment: &str,
 ) -> Vec<MedicCheck> {
-    let root_canister = check_root_canister_id(fleet);
-    let root_canister_present = root_canister.status != MedicStatus::Fail;
-    let root_readiness = if root_canister_present {
-        check_root_ready(options, icp_root, fleet, environment)
-    } else {
-        check_root_readiness_not_evaluated(root_canister_present)
-    };
+    let coordinator = check_coordinator_canister_id(fleet);
+    let coordinator_present = coordinator.status != MedicStatus::Fail;
 
     vec![
         check_config_path(icp_root, fleet),
-        root_canister,
+        coordinator,
         check_fleet_registry_observation(
             options,
             icp_root,
             fleet,
             environment,
-            root_canister_present,
+            coordinator_present,
         ),
-        root_readiness,
+        check_coordinator_readiness_not_evaluated(coordinator_present),
     ]
 }
 
@@ -144,10 +136,10 @@ fn check_fleet_registry_observation(
     icp_root: Option<&Path>,
     fleet: &FleetCatalogEntryV1,
     environment: &str,
-    root_canister_present: bool,
+    coordinator_present: bool,
 ) -> MedicCheck {
-    if !root_canister_present {
-        return check_fleet_registry_not_evaluated(root_canister_present);
+    if !coordinator_present {
+        return check_fleet_registry_not_evaluated(coordinator_present);
     }
 
     let Some(root) = icp_root else {
@@ -174,11 +166,11 @@ fn check_fleet_registry_observation(
     }
 }
 
-pub(super) fn check_fleet_registry_not_evaluated(root_canister_present: bool) -> MedicCheck {
-    let detail = if root_canister_present {
+pub(super) fn check_fleet_registry_not_evaluated(coordinator_present: bool) -> MedicCheck {
+    let detail = if coordinator_present {
         "Fleet registry observation was not evaluated"
     } else {
-        "Fleet registry observation skipped because the Fleet catalog row has no root principal"
+        "Fleet Registry observation skipped because the Fleet catalog row has no Coordinator principal"
     };
 
     MedicCheck::not_evaluated(
@@ -291,6 +283,7 @@ fn fleet_registry_error_check(error: InstalledFleetError) -> MedicCheck {
         InstalledFleetError::Icp(_) => MedicSource::IcpCli,
         InstalledFleetError::NoInstalledFleet { .. }
         | InstalledFleetError::FleetCatalog(_)
+        | InstalledFleetError::CoordinatorAnchoredTopologyUnavailable { .. }
         | InstalledFleetError::Registry(_)
         | InstalledFleetError::Io(_) => MedicSource::InstalledFleet,
     };
@@ -305,98 +298,41 @@ fn fleet_registry_error_check(error: InstalledFleetError) -> MedicCheck {
     )
 }
 
-pub(super) fn check_root_canister_id(fleet: &FleetCatalogEntryV1) -> MedicCheck {
-    if fleet.root_principal.trim().is_empty() {
+pub(super) fn check_coordinator_canister_id(fleet: &FleetCatalogEntryV1) -> MedicCheck {
+    if fleet.coordinator_principal.trim().is_empty() {
         MedicCheck::fail(
             MedicCategory::Topology,
-            "root_canister_id_missing",
-            "root",
-            "Fleet catalog row does not record a root principal",
+            "coordinator_canister_id_missing",
+            "coordinator",
+            "Fleet catalog row does not record a Coordinator principal",
             "reinstall the Fleet with canic install <app> <fleet> --fleet-input <path>",
             MedicSource::InstalledFleet,
         )
     } else {
         MedicCheck::pass(
             MedicCategory::Topology,
-            "root_canister_id_present",
-            "root",
-            fleet.root_principal.clone(),
+            "coordinator_canister_id_present",
+            "coordinator",
+            fleet.coordinator_principal.clone(),
             "none",
             MedicSource::InstalledFleet,
         )
     }
 }
 
-pub(super) fn check_root_readiness_not_evaluated(root_canister_present: bool) -> MedicCheck {
-    let detail = if root_canister_present {
-        "root readiness was not evaluated"
+pub(super) fn check_coordinator_readiness_not_evaluated(coordinator_present: bool) -> MedicCheck {
+    let detail = if coordinator_present {
+        "Coordinator readiness was not evaluated"
     } else {
-        "root readiness skipped because the Fleet catalog row has no root principal"
+        "Coordinator readiness skipped because the Fleet catalog row has no Coordinator principal"
     };
 
     MedicCheck::not_evaluated(
         MedicCategory::Topology,
-        "root_readiness_not_evaluated",
-        "root",
+        "coordinator_readiness_not_evaluated",
+        "coordinator",
         detail,
-        "repair the blocking Fleet-state check, then rerun canic medic fleet <fleet>",
+        "run canic info subnets <fleet> for live Coordinator/root evidence",
         MedicSource::InstalledFleet,
     )
-}
-
-fn check_root_ready(
-    options: &MedicOptions,
-    icp_root: Option<&Path>,
-    fleet: &FleetCatalogEntryV1,
-    environment: &str,
-) -> MedicCheck {
-    let source = root_readiness_source(environment);
-    let mut icp = IcpCli::new(&options.icp, Some(environment.to_string()));
-    if let Some(root) = icp_root {
-        icp = icp.with_cwd(root);
-    }
-    let candid_path = role_candid_path(icp_root, environment, "root");
-    let ready = query_canister_ready(
-        &icp,
-        &fleet.root_principal,
-        environment,
-        icp_root,
-        candid_path.as_deref(),
-    )
-    .map_err(|err| err.to_string());
-
-    match ready {
-        Ok(true) => MedicCheck::pass(
-            MedicCategory::Topology,
-            "root_readiness_pass",
-            "root",
-            "canic_ready=true",
-            "none",
-            source,
-        ),
-        Ok(false) => MedicCheck::warn(
-            MedicCategory::Topology,
-            "root_readiness_fail",
-            "root",
-            "canic_ready=false",
-            "wait briefly, then run canic medic fleet <fleet>",
-            source,
-        ),
-        Err(err) => MedicCheck::fail(
-            MedicCategory::Topology,
-            "root_readiness_fail",
-            "root",
-            err,
-            "run canic install",
-            source,
-        ),
-    }
-}
-
-pub(super) fn root_readiness_source(environment: &str) -> MedicSource {
-    if environment == local_environment() {
-        MedicSource::LocalReplica
-    } else {
-        MedicSource::IcpCli
-    }
 }

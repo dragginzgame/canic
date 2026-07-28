@@ -47,7 +47,7 @@ fn renders_status_report() {
             app: "shop".to_string(),
             network: "network-1".to_string(),
             deployed: "yes".to_string(),
-            root: "aaaaa-aa".to_string(),
+            coordinator: "aaaaa-aa".to_string(),
         }],
     };
 
@@ -57,7 +57,7 @@ fn renders_status_report() {
     assert!(rendered.contains("Fleets: 1/1 deployed (environment local, network network-1)"));
     assert!(rendered.contains("APP    CONFIG                 CANISTERS"));
     assert!(rendered.contains("shop   apps/demo/canic.toml   4"));
-    assert!(rendered.contains("FLEET     APP    NETWORK     DEPLOYED   ROOT"));
+    assert!(rendered.contains("FLEET     APP    NETWORK     DEPLOYED   COORDINATOR"));
     assert!(rendered.contains("staging   shop   network-1   yes        aaaaa-aa"));
     assert!(!rendered.contains("DEPLOYMENT"));
 }
@@ -103,35 +103,6 @@ fn renders_http_fallback_replica_status() {
     );
 }
 
-// Ensure local missing-root rows explain the non-persistent local ICP CLI replica.
-#[test]
-fn renders_lost_local_fleet_note() {
-    let report = StatusReport {
-        environment: "local".to_string(),
-        replica: ReplicaStatus::Running,
-        replica_port: "8000".to_string(),
-        icp_cli: "icp 0.2.6".to_string(),
-        icp_project: "incomplete (missing canisters: app)".to_string(),
-        canonical_network_id: "network-1".to_string(),
-        apps: Vec::new(),
-        fleets: vec![StatusFleetRow {
-            fleet: "test".to_string(),
-            app: "shop".to_string(),
-            network: "network-1".to_string(),
-            deployed: LOCAL_LOST_FLEET.to_string(),
-            root: "t63gs-up777-77776-aaaba-cai".to_string(),
-        }],
-    };
-
-    let rendered = render_status_report(&report);
-
-    assert!(rendered.contains("test"));
-    assert!(rendered.contains("lost"));
-    assert!(rendered.contains("local ICP CLI replica state is not persistent"));
-    assert!(rendered.contains("lost local Fleet"));
-    assert!(rendered.contains("canic install <app> <fleet> --fleet-input <path>"));
-}
-
 // Ensure status renders config paths relative to the resolved Canic project root.
 #[test]
 fn status_app_inventory_uses_project_root_for_config_paths() {
@@ -171,84 +142,19 @@ maximum_instances = 1
     assert_eq!(row.app, "toko");
     assert_eq!(row.config, "apps/toko/canic.toml");
     assert_eq!(row.canisters, "2");
-    assert_eq!(
-        inventory.bootstrap_roles_by_app.get("toko"),
-        Some(&vec!["root".to_string(), "app".to_string()])
-    );
-}
-
-// Ensure local installed-state rows are not reported as deployed when live roots are unchecked.
-#[test]
-fn local_deployed_label_is_unknown_without_replica_verification() {
-    let fleet = fleet_catalog_entry();
-    assert_eq!(
-        deployed_label(
-            &fleet,
-            &StatusOptions {
-                environment: "local".to_string(),
-                icp: "icp".to_string(),
-            },
-            std::path::Path::new("."),
-            false,
-            Some(&["root".to_string()])
-        ),
-        "unknown"
-    );
-    assert_eq!(
-        deployed_label(
-            &fleet,
-            &StatusOptions {
-                environment: "ic".to_string(),
-                icp: "icp".to_string(),
-            },
-            std::path::Path::new("."),
-            false,
-            Some(&["root".to_string()])
-        ),
-        "yes"
-    );
 }
 
 #[test]
 fn fleet_status_uses_explicit_catalog_app_binding() {
     let fleet = fleet_catalog_entry();
-    let row = status_fleet_row(
-        std::path::Path::new("."),
-        &fleet,
-        &StatusOptions {
-            environment: "local".to_string(),
-            icp: "icp".to_string(),
-        },
-        false,
-        None,
-    );
+    let row = status_fleet_row(&fleet);
 
     assert_eq!(row.fleet, "demo");
     assert_eq!(row.app, "shop");
     assert_ne!(row.fleet, row.app);
     assert_eq!(row.network, fleet.canonical_network_id.to_string());
-}
-
-#[test]
-fn local_fleet_is_partial_when_registry_is_missing_configured_roles() {
-    let configured_roles = vec!["root".to_string(), "app".to_string()];
-    let registry = vec![registry_entry("aaaaa-aa", "root")];
-
-    assert_eq!(
-        classify_local_fleet(&configured_roles, &registry),
-        "partial"
-    );
-}
-
-#[test]
-fn local_fleet_is_yes_when_registry_contains_configured_roles() {
-    let configured_roles = vec!["root".to_string(), "app".to_string()];
-    let registry = vec![
-        registry_entry("aaaaa-aa", "root"),
-        registry_entry("uxrrr-q7777-77774-qaaaq-cai", "app"),
-    ];
-
-    assert_eq!(classify_local_fleet(&configured_roles, &registry), "yes");
+    assert_eq!(row.deployed, "yes");
+    assert_eq!(row.coordinator, fleet.coordinator_principal);
 }
 
 // Ensure status help points to the compact project summary command.
@@ -261,16 +167,8 @@ fn status_usage_lists_options_and_examples() {
     assert!(!text.contains("--environment"));
     assert!(!text.contains("--icp"));
     assert!(text.contains("Examples:"));
-    assert!(text.contains("does not persist canister state"));
-}
-
-fn registry_entry(pid: &str, role: &str) -> RegistryEntry {
-    RegistryEntry {
-        pid: pid.to_string(),
-        role: Some(role.to_string()),
-        parent_pid: None,
-        module_hash: None,
-    }
+    assert!(text.contains("terminal catalog receipts"));
+    assert!(text.contains("does not query live Coordinator"));
 }
 
 fn fleet_catalog_entry() -> FleetCatalogEntryV1 {
@@ -281,6 +179,6 @@ fn fleet_catalog_entry() -> FleetCatalogEntryV1 {
         app: canic_core::ids::AppId::from("shop"),
         environment: "local".to_string(),
         deployed_at_unix_secs: 1,
-        root_principal: "aaaaa-aa".to_string(),
+        coordinator_principal: "aaaaa-aa".to_string(),
     }
 }

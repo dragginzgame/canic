@@ -114,7 +114,7 @@ fn local_plan_uses_configured_controllers_as_expected_authority() {
         r#"
 controllers = [
   "zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae",
-  "aaaaa-aa",
+  "rrkah-fqaaa-aaaaa-aaaaq-cai",
 ]
 [app]
 name = "demo"
@@ -160,7 +160,7 @@ package = "store"
     assert_eq!(
         plan.authority_profile.expected_controllers,
         vec![
-            "aaaaa-aa".to_string(),
+            "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
             "zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae".to_string(),
         ]
     );
@@ -174,7 +174,7 @@ package = "store"
 }
 
 #[test]
-fn local_plan_uses_fleet_catalog_root_as_expected_canister() {
+fn local_plan_uses_catalog_fleet_identity_without_inventing_one_root() {
     let temp = TempWorkspace::new("canic-host-local-plan-root-state");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
@@ -188,7 +188,7 @@ fn local_plan_uses_fleet_catalog_root_as_expected_canister() {
     write_fleet_catalog_json(
         &icp_root,
         "local",
-        sample_fleet_catalog_entry("demo-local", "aaaaa-aa"),
+        sample_fleet_catalog_entry("demo-local", "rrkah-fqaaa-aaaaa-aaaaq-cai"),
     );
 
     let plan = build_local_deployment_plan(&LocalDeploymentPlanRequest {
@@ -204,18 +204,15 @@ fn local_plan_uses_fleet_catalog_root_as_expected_canister() {
     });
 
     assert_eq!(
-        plan.deployment_identity.root_principal.as_deref(),
-        Some("aaaaa-aa")
+        plan.deployment_identity.fleet_id,
+        Some(canic_core::ids::FleetId::from_generated_bytes([7; 32]))
     );
-    assert_eq!(
-        plan.trust_domain.root_trust_anchor.as_deref(),
-        Some("aaaaa-aa")
-    );
+    assert_eq!(plan.deployment_identity.root_principal, None);
+    assert_eq!(plan.trust_domain.root_trust_anchor, None);
     assert!(
         plan.expected_canisters
             .iter()
-            .any(|canister| canister.role == "root"
-                && canister.canister_id.as_deref() == Some("aaaaa-aa"))
+            .any(|canister| canister.role == "root" && canister.canister_id.is_none())
     );
     assert!(plan.unresolved_assumptions.is_empty());
 }
