@@ -6,9 +6,9 @@ Date: 2026-07-28
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.29`.
-- Latest published release: `v0.100.29`.
-- Open patch draft: `0.100.30`; no package-version change has been authorized.
+- Workspace package version: `0.100.30`.
+- Latest published release: `v0.100.30`.
+- Open patch draft: `0.100.31`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -192,7 +192,7 @@ Registry slices replace the 0.99 root model.
   topology synchronization.
 - [ ] Hard-cut the terminal Fleet catalog from one root principal to the
   Coordinator principal and publish it only after complete terminal evidence.
-- [ ] Expose compact root-local known-created, not-deletion-confirmed Canister
+- [x] Expose compact root-local known-created, not-deletion-confirmed Canister
   count summaries without enumerating every Component Registry member.
 - [ ] Add `canic info subnets <fleet> [--json]` with one canonical row per
   occupied physical Subnet, exact Fleet-owned Canister counts and fail-closed
@@ -512,7 +512,7 @@ journey now carries its Registry-created issuer through issuance, claim
 rejection and issuer guard metrics without reviving the retired cached
 static-role fixture.
 
-Open 0.100.30 rebases the delegated-auth instruction-audit scenarios on that
+Released 0.100.30 rebases the delegated-auth instruction-audit scenarios on that
 same real lifecycle. Root proof provisioning, issuer delegated-token
 preparation and project-hub token verification now use fresh
 Coordinator/root/Store topology plus active Registry-allocated Components.
@@ -520,11 +520,26 @@ The method is versioned to v3, and its composite fingerprint includes the
 authoritative fixture, canister packages and configs so obsolete fixture
 evidence cannot be selected as a baseline.
 
+Open 0.100.31 adds one checked
+`known_created_component_canisters` counter to root Component Registry meta
+v1. The first durable recording of a returned Component principal increments
+it atomically with allocation progress; reservations, unresolved intents,
+exact retries and conflicting retries cannot increment it. Descendant
+creation will use the same counter, and removal may decrement only after
+durable deletion confirmation.
+
+The controller-only `canic_fleet_subnet_root_canister_summary` v1 query
+recomputes and compares the active Registry snapshot, manifest, version and
+Fleet Directory, then requires exact protected root, runtime, Component
+Registry and sole local Store authority. It returns checked infrastructure,
+Component-tree and root-local totals without enumerating Registry members.
+The real activation journey proves two infrastructure Canisters plus two
+active Components under the exact Coordinator Registry version.
+
 ## Next Action
 
-Maintain checked known-created/not-deletion-confirmed Canister counters under
-the root-local Component Registry authority and expose compact
-controller-only root summaries. Then add
-`canic info subnets <fleet> [--json]`: discover the Coordinator from the
-terminal catalog, query its current root rows, fan out only the compact
-summaries and fail closed instead of reporting a partial Fleet total.
+Hard-cut the terminal Fleet catalog from its single-root principal to the
+Coordinator principal and publish it only after complete terminal install
+evidence. Then add `canic info subnets <fleet> [--json]`: discover the
+Coordinator from that catalog, query its current root rows, fan out only the
+compact summaries and fail closed instead of reporting a partial Fleet total.

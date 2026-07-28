@@ -14,6 +14,12 @@ macro_rules! canic_emit_root_admin_endpoints {
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_subnet_root_authority()
         }
 
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_fleet_subnet_root_canister_summary(
+        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetRootCanisterSummary, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_subnet_root_canister_summary()
+        }
+
         #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_fleet_registry_synchronize(
             request: ::canic::dto::fleet_registry::FleetSubnetRootRegistrySyncRequest,

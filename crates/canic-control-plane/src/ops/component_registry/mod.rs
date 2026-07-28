@@ -258,6 +258,7 @@ impl ComponentRegistryOps {
             reserved_component_instances: 0,
             committed_component_instances: 0,
             managed_descendants: 0,
+            known_created_component_canisters: 0,
             encoded_bytes: 0,
             initial_inventory: None,
         };
@@ -499,9 +500,35 @@ impl ComponentRegistryOps {
         let mut next_record = record.clone();
         next_record.progress = RootComponentAllocationProgressRecord::Created { effect, canister };
         validate_charged_record_size(&next_record, charged_entry_bytes)?;
+        let mut next_meta = current.clone();
+        next_meta.known_created_component_canisters = next_meta
+            .known_created_component_canisters
+            .checked_add(1)
+            .ok_or_else(|| {
+                InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "known-created Component Canister count overflowed",
+                )
+            })?;
+        let allocated_component_canisters = current
+            .reserved_component_instances
+            .checked_add(current.committed_component_instances)
+            .and_then(|count| count.checked_add(current.managed_descendants))
+            .ok_or_else(|| {
+                InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "allocated Component-tree Canister count overflowed",
+                )
+            })?;
+        if next_meta.known_created_component_canisters > allocated_component_canisters {
+            return Err(InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "known-created Component Canisters exceed allocated Component-tree capacity",
+            ));
+        }
         RootComponentRegistryStore::replace_allocation(
             &current,
-            current.clone(),
+            next_meta,
             &record,
             next_record.clone(),
         )
@@ -1095,6 +1122,22 @@ fn complete_initial_inventory(
             "Component Registry counters differ from the initial allocation inventory",
         ));
     }
+    let maximum_known_created = component_count
+        .checked_add(current.managed_descendants)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "initial Component-tree Canister count overflowed",
+            )
+        })?;
+    if current.known_created_component_canisters < component_count
+        || current.known_created_component_canisters > maximum_known_created
+    {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "known-created Canister counter differs from the complete initial inventory",
+        ));
+    }
 
     let partitions = RootComponentRegistryStore::partitions();
     if partitions.len() != allocations.len() {
@@ -1283,6 +1326,7 @@ fn record_to_view(record: RootComponentRegistryMetaRecord) -> RootComponentRegis
         reserved_component_instances: record.reserved_component_instances,
         committed_component_instances: record.committed_component_instances,
         managed_descendants: record.managed_descendants,
+        known_created_component_canisters: record.known_created_component_canisters,
         encoded_bytes: record.encoded_bytes,
         initial_inventory: record
             .initial_inventory
@@ -2238,6 +2282,7 @@ mod tests {
         assert_eq!(prepared.reserved_component_instances, 0);
         assert_eq!(prepared.committed_component_instances, 0);
         assert_eq!(prepared.managed_descendants, 0);
+        assert_eq!(prepared.known_created_component_canisters, 0);
         assert_eq!(prepared.encoded_bytes, 0);
 
         let mut conflicting = root;
@@ -2312,6 +2357,7 @@ mod tests {
         assert_eq!(status.next_allocation_sequence, 2);
         assert_eq!(status.reserved_component_instances, 1);
         assert_eq!(status.committed_component_instances, 0);
+        assert_eq!(status.known_created_component_canisters, 0);
         assert!(status.encoded_bytes > 0);
         assert_eq!(
             ComponentRegistryOps::component_spec_counts(&reserved.component_spec)
@@ -2354,6 +2400,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one test follows the complete paid creation lifecycle and its exact retry invariants"
+    )]
     fn creation_intent_reserves_terminal_bytes_and_created_retry_preserves_principal() {
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
         let root = root_binding();
@@ -2423,6 +2473,13 @@ mod tests {
             intent.progress,
             RootComponentAllocationProgressView::CreationIntent(_)
         ));
+        assert_eq!(
+            ComponentRegistryOps::current()
+                .expect("Registry status")
+                .known_created_component_canisters,
+            0,
+            "creation intent without a known principal must not count"
+        );
 
         let interrupted = RootComponentRegistryStore::export();
         RootComponentRegistryStore::import(interrupted);
@@ -2433,12 +2490,14 @@ mod tests {
             ComponentRegistryOps::mark_created([12; 32], canister).expect("exact created retry");
 
         assert_eq!(created, repeated);
+        let status = ComponentRegistryOps::current().expect("Registry status");
         assert_eq!(
-            ComponentRegistryOps::current()
-                .expect("Registry status")
-                .encoded_bytes,
-            intent_bytes,
+            status.encoded_bytes, intent_bytes,
             "the intent must reserve terminal record capacity before the effect"
+        );
+        assert_eq!(
+            status.known_created_component_canisters, 1,
+            "a known created principal must be counted exactly once"
         );
         assert!(matches!(
             created.progress,
@@ -2450,6 +2509,13 @@ mod tests {
         assert!(
             ComponentRegistryOps::mark_created([12; 32], candid::Principal::from_slice(&[19; 29]),)
                 .is_err()
+        );
+        assert_eq!(
+            ComponentRegistryOps::current()
+                .expect("Registry status")
+                .known_created_component_canisters,
+            1,
+            "a conflicting retry must not change the count"
         );
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }

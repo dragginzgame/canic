@@ -360,6 +360,7 @@ fn assert_registry_mirror_and_component_registry_journal(
         reserved_component_instances: 0,
         committed_component_instances: 0,
         managed_descendants: 0,
+        known_created_component_canisters: 0,
         encoded_bytes: 0,
         initial_inventory: None,
     };

@@ -36,6 +36,7 @@ pub struct RootComponentRegistryView {
     pub reserved_component_instances: u32,
     pub committed_component_instances: u32,
     pub managed_descendants: u32,
+    pub known_created_component_canisters: u32,
     pub encoded_bytes: u64,
     pub initial_inventory: Option<RootComponentInitialInventoryView>,
 }

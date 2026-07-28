@@ -9,7 +9,9 @@ use canic_core::{
         FleetSubnetRootRegistryMirrorActivationResponse, FleetSubnetRootRegistrySyncRequest,
         FleetSubnetRootRegistrySyncResponse,
     },
-    dto::fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
+    dto::fleet_subnet_root::{
+        FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary, FleetSubnetRootInitArgs,
+    },
     dto::{
         component_registry::{
             ComponentDirectoryHead, ComponentDirectoryHeadRequest,
@@ -63,6 +65,11 @@ impl LifecycleApi {
     pub fn fleet_subnet_root_authority()
     -> Result<FleetSubnetRootAuthority, canic_core::dto::error::Error> {
         canic_core::api::fleet_activation::FleetActivationApi::root_authority()
+    }
+
+    pub fn fleet_subnet_root_canister_summary()
+    -> Result<FleetSubnetRootCanisterSummary, canic_core::dto::error::Error> {
+        crate::workflow::fleet_subnet_root::canister_summary().map_err(Into::into)
     }
 
     pub async fn synchronize_fleet_registry(
