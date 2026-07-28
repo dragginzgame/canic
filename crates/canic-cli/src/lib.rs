@@ -11,6 +11,7 @@ mod evidence;
 mod evidence_support;
 mod info;
 mod info_env;
+mod info_subnets;
 mod inspect;
 mod install;
 mod list;

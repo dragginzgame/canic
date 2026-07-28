@@ -6,9 +6,9 @@ Date: 2026-07-28
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.31`.
-- Latest published release: `v0.100.31`.
-- Open patch draft: `0.100.32`; no package-version change has been authorized.
+- Workspace package version: `0.100.32`.
+- Latest published release: `v0.100.32`.
+- Open patch draft: `0.100.33`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -197,7 +197,7 @@ Registry slices replace the 0.99 root model.
   activation path can supply that complete evidence.
 - [x] Expose compact root-local known-created, not-deletion-confirmed Canister
   count summaries without enumerating every Component Registry member.
-- [ ] Add `canic info subnets <fleet> [--json]` with one canonical row per
+- [x] Add `canic info subnets <fleet> [--json]` with one canonical row per
   occupied physical Subnet, exact Fleet-owned Canister counts and fail-closed
   Coordinator/root evidence validation.
 - [ ] Qualify restore fencing and role-package boundaries.
@@ -539,7 +539,7 @@ Component-tree and root-local totals without enumerating Registry members.
 The real activation journey proves two infrastructure Canisters plus two
 active Components under the exact Coordinator Registry version.
 
-Open 0.100.32 hard-cuts Fleet catalog v1 to
+Released 0.100.32 hard-cuts Fleet catalog v1 to
 `coordinator_principal`, rejects the removed root-principal JSON shape and
 restores one network-locked canonical writer. Its sole publication workflow
 recomputes exact Coordinator Registry evidence, requires the complete planned
@@ -553,10 +553,20 @@ The current installer still stops before the complete Component/root runtime
 evidence needed by this gate. It therefore does not publish an early catalog
 row; final wiring remains behind that already-tracked activation boundary.
 
+Open 0.100.33 adds `canic info subnets <fleet> [--json]`. It resolves only the
+terminal Coordinator catalog row, validates current Coordinator
+Registry/manifest/version authority, queries every non-removed root's compact
+summary concurrently and emits no output unless every placement, principal,
+status, Registry version and count agrees. Text output groups a co-located
+Coordinator/root into one canonical physical-Subnet row and reports an exact
+Fleet total. JSON v1 preserves separate Coordinator, root-infrastructure,
+Component and row-total counts.
+
 ## Next Action
 
-Add `canic info subnets <fleet> [--json]`: discover the Coordinator from the
-terminal catalog, query its current Registry, fan out only the compact active
-root summaries and fail closed instead of reporting a partial Fleet total.
-Do not revive the removed single-root resolver or wire terminal catalog
-publication before the installer owns complete runtime evidence.
+Extend the normal host installer beyond empty Component Registry preparation:
+materialize its planned initial Components through the implemented
+Registry/Directory/runtime journey, seal and activate every root, collect the
+live root summaries and invoke the already-gated terminal catalog publication.
+Do not revive the removed single-root resolver or publish before that complete
+runtime evidence exists.

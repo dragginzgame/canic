@@ -181,7 +181,7 @@ fn auth_leaf_accepts_globals(tail: &[OsString]) -> bool {
 fn info_leaf_accepts_globals(tail: &[OsString]) -> bool {
     matches!(
         tail.first().and_then(|arg| arg.to_str()),
-        Some("cycles" | "endpoints" | "env" | "list" | "metrics")
+        Some("cycles" | "endpoints" | "env" | "list" | "metrics" | "subnets")
     )
 }
 
@@ -262,6 +262,26 @@ mod tests {
                 OsString::from("icp"),
                 OsString::from(INTERNAL_ENVIRONMENT_OPTION),
                 OsString::from("local"),
+            ]
+        );
+    }
+
+    #[test]
+    fn info_subnets_accepts_global_icp_and_environment() {
+        let mut tail = vec![OsString::from("subnets"), OsString::from("toko")];
+
+        apply_global_icp("info", &mut tail, Some("icp".to_string()));
+        apply_global_environment("info", &mut tail, Some("staging".to_string()));
+
+        assert_eq!(
+            tail,
+            [
+                OsString::from("subnets"),
+                OsString::from("toko"),
+                OsString::from(INTERNAL_ICP_OPTION),
+                OsString::from("icp"),
+                OsString::from(INTERNAL_ENVIRONMENT_OPTION),
+                OsString::from("staging"),
             ]
         );
     }

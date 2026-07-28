@@ -172,12 +172,11 @@ for scripts and local shell helpers.
 Live list sources call `canic_ready` for each listed canister and include a
 `READY` column with `yes`, `no`, or `error`, plus a `CYCLES` balance column.
 
-The required 0.100 closeout adds
-`canic info subnets <fleet> [--json]`. It will resolve the terminal
-Coordinator-anchored Fleet catalog, validate current Registry/root evidence,
-and report Fleet-owned Canister counts grouped by physical Subnet. It is not
-present in the current binary and will not infer counts from an incomplete
-install journal.
+`canic info subnets <fleet> [--json]` resolves the terminal
+Coordinator-anchored Fleet catalog, validates current Registry/root evidence,
+and reports exact Fleet-owned Canister counts grouped by physical Subnet. It
+fails without output if any non-removed root is unreachable or contradictory,
+and it never infers counts from an incomplete install journal.
 
 The `canic install <app> <fleet> --fleet-input <path>` surface keeps the source
 App under `apps/<app>/canic.toml`, the installed Fleet label, and concrete
