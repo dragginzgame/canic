@@ -361,6 +361,7 @@ fn assert_registry_mirror_and_component_registry_journal(
         committed_component_instances: 0,
         managed_descendants: 0,
         encoded_bytes: 0,
+        initial_inventory: None,
     };
     let prepared = record_component_registry_prepared(&preparing, preparation_response.clone())
         .expect("record Component Registry preparation");
