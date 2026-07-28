@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.33` adds fail-closed live Fleet Subnet inventory with exact
+  Coordinator/root evidence, canonical physical-Subnet grouping and
+  schema-versioned Fleet-owned Canister counts.
+
 - `0.100.32` hard-cuts terminal Fleet discovery to one
   Coordinator-anchored catalog row, admits publication only through exact
   all-root terminal evidence and prevents legacy root-oriented consumers from

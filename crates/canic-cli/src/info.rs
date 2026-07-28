@@ -9,7 +9,7 @@ use crate::{
         clap::{parse_subcommand, passthrough_subcommand},
         help::print_help_or_version,
     },
-    cycles, endpoints, info_env, list, metrics, version_text,
+    cycles, endpoints, info_env, info_subnets, list, metrics, version_text,
 };
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
@@ -24,6 +24,7 @@ Commands:
   list       List installed Fleet canisters
   cycles     Summarize Fleet cycle history
   metrics    Query Canic runtime telemetry
+  subnets    Show live Fleet Subnet occupancy and Canister counts
   endpoints  List callable Candid endpoints
   env        Print sourceable canister ID exports
   help       Print this message or the help of the given subcommand(s)
@@ -32,9 +33,10 @@ Examples:
   canic info list test --subtree scale_hub
   canic info cycles test --subtree scale_hub
   canic info metrics test
+  canic info subnets test
   canic info endpoints test app
   canic info env test";
-const INFO_SUBCOMMANDS: &[&str] = &["list", "cycles", "metrics", "endpoints", "env"];
+const INFO_SUBCOMMANDS: &[&str] = &["list", "cycles", "metrics", "subnets", "endpoints", "env"];
 
 ///
 /// InfoCommandError
@@ -62,6 +64,9 @@ pub enum InfoCommandError {
 
     #[error("metrics: {0}")]
     Metrics(#[from] metrics::MetricsCommandError),
+
+    #[error("subnets: {0}")]
+    Subnets(#[from] info_subnets::InfoSubnetsCommandError),
 }
 
 impl InfoCommandError {
@@ -72,7 +77,8 @@ impl InfoCommandError {
             | Self::Cycles(_)
             | Self::Env(_)
             | Self::Endpoints(_)
-            | Self::Metrics(_) => 1,
+            | Self::Metrics(_)
+            | Self::Subnets(_) => 1,
         }
     }
 }
@@ -92,6 +98,7 @@ where
         "list" => list::run_info(tail).map_err(InfoCommandError::from),
         "cycles" => cycles::run_info(tail).map_err(InfoCommandError::from),
         "metrics" => metrics::run_info(tail).map_err(InfoCommandError::from),
+        "subnets" => info_subnets::run(tail).map_err(InfoCommandError::from),
         "endpoints" => endpoints::run_info(tail).map_err(InfoCommandError::from),
         "env" => info_env::run(tail).map_err(InfoCommandError::from),
         _ => unreachable!("clap restricts info subcommands"),
@@ -163,6 +170,7 @@ mod tests {
     fn info_usage_includes_current_info_example() {
         let text = usage();
 
+        assert!(text.contains("canic info subnets test"));
         assert!(text.contains("canic info env test"));
     }
 }

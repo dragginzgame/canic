@@ -278,11 +278,10 @@ If you pass `--workspace`, `--icp-root`, or `--config` explicitly, use absolute
 paths for the explicit roots and config file.
 
 For a terminal installed Fleet, `canic info list example-local` shows its
-registered application Canisters. The planned
-`canic info subnets example-local [--json]` command will instead report exact
-Fleet-owned Canister counts grouped by occupied physical Subnet. That Subnet
-inventory is a required 0.100 closeout surface and is not available in the
-current CLI.
+registered application Canisters. `canic info subnets example-local [--json]`
+instead reports exact Fleet-owned Canister counts grouped by occupied physical
+Subnet. It exits without a partial total if current Coordinator/root evidence
+does not agree.
 
 ## Testing Shape
 

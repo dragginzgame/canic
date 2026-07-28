@@ -130,8 +130,8 @@ admissions, limits, funding, topology, or release-build authority after
 publication is a conflict; the installer does not fall back to a single-root
 path. Every pre-1.0 release transition starts from empty Fleet state.
 
-At 0.100 closeout, successful terminal publication will be
-Coordinator-anchored. The planned `canic info subnets <fleet> [--json]`
-command will resolve that terminal authority and report exact Fleet-owned
-Canister counts by occupied physical Subnet; it is not available at the
-current Registry-join boundary.
+Successful terminal publication is Coordinator-anchored.
+`canic info subnets <fleet> [--json]` resolves that terminal authority and
+reports exact Fleet-owned Canister counts by occupied physical Subnet. It
+fails closed while installation remains before the terminal catalog boundary
+or when current Coordinator/root evidence is incomplete.
