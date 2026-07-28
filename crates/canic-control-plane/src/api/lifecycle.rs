@@ -14,7 +14,8 @@ use canic_core::{
         component_registry::{
             RootComponentAllocationRequest, RootComponentAllocationResponse,
             RootComponentAllocationStatusRequest, RootComponentCreationRequest,
-            RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
+            RootComponentInstallRequest, RootComponentRegistryPreparationRequest,
+            RootComponentRegistryStatusResponse,
         },
         fleet_activation::{FleetActivationResumeRequest, FleetActivationStatusResponse},
     },
@@ -124,6 +125,14 @@ impl LifecycleApi {
         request: RootComponentCreationRequest,
     ) -> Result<RootComponentAllocationResponse, canic_core::dto::error::Error> {
         crate::workflow::component_registry::create_allocation(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn install_component_allocation(
+        request: RootComponentInstallRequest,
+    ) -> Result<RootComponentAllocationResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::install_allocation(request)
             .await
             .map_err(Into::into)
     }

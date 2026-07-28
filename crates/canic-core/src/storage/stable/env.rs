@@ -31,6 +31,10 @@ eager_static! {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct EnvRecord {
+    /// Exact managed application identity. Infrastructure and standalone-local
+    /// runtimes do not have a Component binding.
+    pub managed_binding: Option<ManagedCanisterBinding>,
+
     // fleet
     pub fleet_root_pid: Option<Principal>,
 
@@ -44,7 +48,7 @@ pub struct EnvRecord {
     pub parent_pid: Option<Principal>,
 }
 
-impl_storable_bounded!(EnvRecord, 256, true);
+impl_storable_bounded!(EnvRecord, 2_048, true);
 
 impl EnvRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "EnvRecord";
@@ -75,6 +79,11 @@ impl Env {
     #[must_use]
     pub(crate) fn get_fleet_root_pid() -> Option<Principal> {
         ENV.with_borrow(|cell| cell.get().fleet_root_pid)
+    }
+
+    #[must_use]
+    pub(crate) fn get_managed_binding() -> Option<ManagedCanisterBinding> {
+        ENV.with_borrow(|cell| cell.get().managed_binding.clone())
     }
 
     #[must_use]

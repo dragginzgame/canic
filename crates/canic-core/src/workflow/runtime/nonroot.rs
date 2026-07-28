@@ -7,10 +7,9 @@
 use crate::{
     InternalError, InternalErrorOrigin,
     dto::{
-        abi::v1::CanisterInitPayload,
+        abi::v1::{CanisterInitAuthority, CanisterInitPayload},
         env::EnvBootstrapArgs,
         fleet_activation::FleetActivationPhase,
-        topology::{FleetDirectoryInput, SubnetDirectoryInput},
     },
     ids::CanisterRole,
     log::Topic,
@@ -18,12 +17,7 @@ use crate::{
         config::ConfigOps,
         ic::release_build::ReleaseBuildOps,
         runtime::{fleet_activation::FleetActivationRuntimeOps, memory::MemoryRegistryOps},
-        storage::{
-            directory::{fleet::FleetDirectoryOps, subnet::SubnetDirectoryOps},
-            fleet_activation::FleetActivationOps,
-            state::fleet::FleetStateOps,
-        },
-        topology::directory::validate_provenance,
+        storage::{fleet_activation::FleetActivationOps, state::fleet::FleetStateOps},
     },
     workflow::{
         env::EnvWorkflow,
@@ -46,13 +40,17 @@ pub fn init_nonroot_canister(
     application_init_args: Option<Vec<u8>>,
 ) -> Result<(), InternalError> {
     let CanisterInitPayload {
-        fleet,
         install_id,
         release_build_id,
-        env,
-        fleet_directory,
-        subnet_directory,
+        authority,
     } = payload;
+    let fleet = match &authority {
+        CanisterInitAuthority::Infrastructure { fleet, .. } => fleet.clone(),
+        CanisterInitAuthority::Component { binding, .. } => binding.authority.binding.fleet.clone(),
+        CanisterInitAuthority::ComponentChild { binding, .. } => {
+            binding.component.authority.binding.fleet.clone()
+        }
+    };
 
     // --- Phase 1: Init base systems ---
     initialize_nonroot_base(&canister_role)?;
@@ -68,7 +66,7 @@ pub fn init_nonroot_canister(
     .map_err(crate::ops::storage::StorageOpsError::from)?;
 
     // --- Phase 2: Payload registration ---
-    register_managed_nonroot_payload(&canister_role, env, fleet_directory, subnet_directory)?;
+    register_managed_nonroot_authority(&canister_role, authority)?;
 
     // Prepared managed Canisters do not start timers or application hooks.
     Ok(())
@@ -105,58 +103,31 @@ fn initialize_nonroot_base(canister_role: &CanisterRole) -> Result<(), InternalE
     Ok(())
 }
 
-fn register_managed_nonroot_payload(
+fn register_managed_nonroot_authority(
     canister_role: &CanisterRole,
-    env: EnvBootstrapArgs,
-    fleet_directory: FleetDirectoryInput,
-    subnet_directory: SubnetDirectoryInput,
+    authority: CanisterInitAuthority,
 ) -> Result<(), InternalError> {
-    EnvWorkflow::init_env_from_args(env, canister_role.clone()).map_err(|err| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("env import failed: {err}"),
-        )
-    })?;
-
-    validate_provenance(&fleet_directory.provenance).map_err(|err| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("Fleet Directory provenance failed: {err}"),
-        )
-    })?;
-    validate_provenance(&subnet_directory.provenance).map_err(|err| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("Subnet Directory provenance failed: {err}"),
-        )
-    })?;
-
-    let fleet_directory = FleetDirectoryOps::filter_args_for_local_config(fleet_directory)
-        .map_err(|err| {
-            InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                format!("Fleet Directory filter failed: {err}"),
-            )
-        })?;
-    FleetDirectoryOps::import_args_allow_incomplete(fleet_directory).map_err(|err| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("Fleet Directory import failed: {err}"),
-        )
-    })?;
-    let subnet_directory = SubnetDirectoryOps::filter_args_for_local_config(subnet_directory)
-        .map_err(|err| {
-            InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                format!("Subnet Directory filter failed: {err}"),
-            )
-        })?;
-    SubnetDirectoryOps::import_args_allow_incomplete(subnet_directory).map_err(|err| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("Subnet Directory import failed: {err}"),
-        )
-    })?;
+    match authority {
+        CanisterInitAuthority::Infrastructure { env, .. } => {
+            if !canister_role.is_wasm_store() {
+                return Err(InternalError::invalid_input(
+                    "application Canisters require Registry-issued Component init authority",
+                ));
+            }
+            EnvWorkflow::init_env_from_args(env, canister_role.clone()).map_err(|err| {
+                InternalError::invariant(
+                    InternalErrorOrigin::Workflow,
+                    format!("infrastructure env import failed: {err}"),
+                )
+            })?;
+        }
+        CanisterInitAuthority::Component { root, binding } => {
+            EnvWorkflow::init_component(&root, binding, canister_role)?;
+        }
+        CanisterInitAuthority::ComponentChild { root, binding } => {
+            EnvWorkflow::init_component_child(&root, binding, canister_role)?;
+        }
+    }
 
     register_nonroot_runtime_contract(canister_role)
 }

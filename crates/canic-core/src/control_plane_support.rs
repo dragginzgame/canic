@@ -60,7 +60,7 @@ pub mod ops {
         }
 
         pub mod mgmt {
-            pub use crate::ops::ic::mgmt::MgmtOps;
+            pub use crate::ops::ic::mgmt::{CanisterInstallMode, MgmtOps};
         }
 
         pub mod build_network {
@@ -124,6 +124,12 @@ pub mod workflow {
 
     pub mod cost_guard {
         pub use crate::workflow::cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error};
+    }
+
+    pub mod runtime {
+        pub mod install {
+            pub use crate::workflow::runtime::install::ModuleInstallWorkflow;
+        }
     }
 
     pub mod ic {

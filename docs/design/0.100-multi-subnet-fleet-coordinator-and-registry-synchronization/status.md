@@ -6,9 +6,9 @@ Date: 2026-07-28
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.21`.
-- Latest published release: `v0.100.21`.
-- Open patch draft: `0.100.22`; no package-version change has been authorized.
+- Workspace package version: `0.100.22`.
+- Latest published release: `v0.100.22`.
+- Open patch draft: `0.100.23`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -147,6 +147,8 @@ Registry slices replace the 0.99 root model.
   exact Store, active Registry Mirror and Fleet Directory.
 - [x] Implement durable root-local `ComponentInstanceId` allocation.
 - [x] Implement admitted direct Component Canister creation through the root.
+- [x] Install and independently verify an admitted direct Component from its
+  exact root-local Store under an immutable `ComponentBinding`.
 - [ ] Implement same-root grant-checked peer Component provisioning while
   retaining causal origin without parentage.
 - [ ] Implement authenticated parent-to-root child effects at arbitrary depth.
@@ -380,7 +382,7 @@ Released 0.100.21 compacts the reinstall-only stable-memory assignment into
 consecutive control-plane IDs 10-19 and core IDs 30-62, with reserved growth
 through 29 and 99 respectively and application memory beginning at ID 100.
 
-Open 0.100.22 continues one reserved operation through exact Store-bound
+Released 0.100.22 continues one reserved operation through exact Store-bound
 empty-Canister creation. The root reverifies its protected authority, active
 Registry Mirror/Fleet Directory and exact Store, resolves the reserved
 Component role artifact and configured initial cycles, then durably freezes
@@ -389,21 +391,30 @@ terminal Registry-byte charge before the management call. The monotonic
 record is `Reserved → CreationIntent → Created`; an unresolved intent is never
 blindly repeated, while exact `Created` retry returns the original principal.
 
-This draft intentionally stops before Wasm installation, module attestation,
-protected `ComponentBinding` commitment, committed-count mutation, Component
+Open 0.100.23 continues the created operation through exact Store-backed
+installation. Managed application init hard-cuts the retired copied
+environment/role and Directory payload to an immutable root admission plus
+`ComponentBinding`. Durable
+`Created → InstallIntent → Installed → Verified` progress binds the qualified
+raw-Wasm digest, exact gzip chunk source and target identity before the
+management call. Live verification requires the sole root controller, the
+exact gzip-payload status hash and the target's retained binding query.
+Interrupted retry advances an already observed exact install without
+repeating it, retries only after proving the target remains empty and fails
+closed on unavailable or mismatched code.
+
+This draft intentionally stops before committed-count mutation, per-Component
 Registry partition creation, Directory publication or runtime activation.
-Every root remains runtime-`Prepared`, and the temporary Component Spec
-selector remains until installation commits the exact protected binding.
+Every root remains runtime-`Prepared`.
 
 ## Next Action
 
-Continue the created top-level Component operation through exact Store-backed
-Wasm installation, observed module-hash attestation and protected
-`ComponentBinding`/Registry-partition commitment. Hard cut the retired
-environment/role and `SubnetDirectory` install payload rather than using it
-for the new Component. Exact same-release retry must resume every journalled
-phase without blindly repeating an unresolved paid effect, and the reserved
-identity and created principal must never be reused or rebound.
+Atomically commit the verified top-level Component into its root-local
+Registry partition and move reserved capacity into committed counters without
+reusing or rebinding its identity or principal. Derive the first
+ownership-preserving Component Directory only from that committed authority.
+Exact same-release retry must resume every journalled phase without blindly
+repeating an unresolved effect.
 
 Activate root runtime only through this Registry/Store/Directory-bound
 lifecycle. Do not reintroduce role-based Directory authority, static root
@@ -420,7 +431,3 @@ controller-only root summaries. Then add
 `canic info subnets <fleet> [--json]`: discover the Coordinator from the
 terminal catalog, query its current root rows, fan out only the compact
 summaries and fail closed instead of reporting a partial Fleet total.
-
-Replace the temporary Component Spec environment selector only when root-local
-allocation and Component Registry commitment can supply a real
-`ComponentBinding`; do not fabricate one from role-only configuration.

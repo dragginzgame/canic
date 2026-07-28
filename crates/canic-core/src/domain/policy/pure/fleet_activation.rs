@@ -10,14 +10,16 @@ use crate::{
         CANIC_ACTIVATE_FLEET, CANIC_FLEET_ACTIVATION_STATUS, CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
         CANIC_FLEET_REGISTRY_MIRROR_STATUS, CANIC_FLEET_REGISTRY_SYNC_STATUS,
         CANIC_FLEET_REGISTRY_SYNCHRONIZE, CANIC_FLEET_SUBNET_ROOT_AUTHORITY,
-        CANIC_PREPARE_FLEET_ACTIVATION, CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION,
-        CANIC_RESUME_FLEET_ACTIVATION, CANIC_ROOT_COMPONENT_ALLOCATE,
-        CANIC_ROOT_COMPONENT_ALLOCATION_STATUS, CANIC_ROOT_COMPONENT_CREATE,
+        CANIC_MANAGED_CANISTER_BINDING, CANIC_PREPARE_FLEET_ACTIVATION,
+        CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION, CANIC_RESUME_FLEET_ACTIVATION,
+        CANIC_ROOT_COMPONENT_ALLOCATE, CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
+        CANIC_ROOT_COMPONENT_CREATE, CANIC_ROOT_COMPONENT_INSTALL,
         CANIC_ROOT_COMPONENT_REGISTRY_PREPARE, CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
         CANIC_ROOT_STORE_BOOTSTRAP, CANIC_ROOT_STORE_BOOTSTRAP_STATUS, CANIC_SYNC_STATE,
         CANIC_SYNC_TOPOLOGY, CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
-        CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN, CANIC_WASM_STORE_CATALOG, CANIC_WASM_STORE_PREPARE,
-        CANIC_WASM_STORE_PUBLISH_CHUNK, CANIC_WASM_STORE_STAGE_MANIFEST, CANIC_WASM_STORE_STATUS,
+        CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN, CANIC_WASM_STORE_CATALOG, CANIC_WASM_STORE_INFO,
+        CANIC_WASM_STORE_PREPARE, CANIC_WASM_STORE_PUBLISH_CHUNK, CANIC_WASM_STORE_STAGE_MANIFEST,
+        CANIC_WASM_STORE_STATUS,
     },
 };
 use thiserror::Error as ThisError;
@@ -40,6 +42,7 @@ pub fn require_prepared_nonroot_endpoint(
     call: EndpointCall,
 ) -> Result<(), FleetActivationEndpointPolicyError> {
     if is_status_query(call)
+        || is_query(call, CANIC_MANAGED_CANISTER_BINDING)
         || is_query(call, CANIC_WASM_STORE_CATALOG)
         || is_query(call, CANIC_WASM_STORE_STATUS)
         || is_update(
@@ -49,6 +52,7 @@ pub fn require_prepared_nonroot_endpoint(
                 CANIC_SYNC_TOPOLOGY,
                 CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION,
                 CANIC_ACTIVATE_FLEET,
+                CANIC_WASM_STORE_INFO,
                 CANIC_WASM_STORE_PREPARE,
                 CANIC_WASM_STORE_PUBLISH_CHUNK,
                 CANIC_WASM_STORE_STAGE_MANIFEST,
@@ -80,6 +84,7 @@ pub fn require_prepared_root_endpoint(
                 CANIC_RESUME_FLEET_ACTIVATION,
                 CANIC_ROOT_COMPONENT_ALLOCATE,
                 CANIC_ROOT_COMPONENT_CREATE,
+                CANIC_ROOT_COMPONENT_INSTALL,
                 CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
                 CANIC_ROOT_STORE_BOOTSTRAP,
                 CANIC_TEMPLATE_PREPARE_ADMIN,
@@ -156,6 +161,7 @@ mod tests {
             ),
             (CANIC_ROOT_COMPONENT_ALLOCATE, EndpointCallKind::Update),
             (CANIC_ROOT_COMPONENT_CREATE, EndpointCallKind::Update),
+            (CANIC_ROOT_COMPONENT_INSTALL, EndpointCallKind::Update),
             (
                 CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
                 EndpointCallKind::Query,
@@ -202,6 +208,7 @@ mod tests {
     fn prepared_nonroot_uses_its_own_exact_recovery_allowlist() {
         for (endpoint, kind) in [
             (CANIC_FLEET_ACTIVATION_STATUS, EndpointCallKind::Query),
+            (CANIC_MANAGED_CANISTER_BINDING, EndpointCallKind::Query),
             (CANIC_WASM_STORE_CATALOG, EndpointCallKind::Query),
             (CANIC_WASM_STORE_STATUS, EndpointCallKind::Query),
             (CANIC_SYNC_STATE, EndpointCallKind::Update),
@@ -211,6 +218,7 @@ mod tests {
                 EndpointCallKind::Update,
             ),
             (CANIC_ACTIVATE_FLEET, EndpointCallKind::Update),
+            (CANIC_WASM_STORE_INFO, EndpointCallKind::Update),
             (CANIC_WASM_STORE_PREPARE, EndpointCallKind::Update),
             (CANIC_WASM_STORE_PUBLISH_CHUNK, EndpointCallKind::Update),
             (CANIC_WASM_STORE_STAGE_MANIFEST, EndpointCallKind::Update),

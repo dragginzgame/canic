@@ -23,8 +23,8 @@ use canic_core::{
         root_store::RootStoreBootstrapRequest,
     },
     ids::{
-        CanisterRole, ComponentInstanceId, ComponentSpecId, FleetSubnetRootBinding,
-        FleetSubnetRootReleaseSet,
+        CanisterRole, ComponentBinding, ComponentInstanceId, ComponentSpecId,
+        FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
     },
     impl_storable_bounded,
 };
@@ -35,7 +35,7 @@ use std::cell::RefCell;
 #[cfg(feature = "root-control-plane")]
 const ROOT_COMPONENT_REGISTRY_STATE_MAX_BYTES: u32 = 65_536;
 #[cfg(feature = "root-control-plane")]
-const ROOT_COMPONENT_ALLOCATION_RECORD_MAX_BYTES: u32 = 2_048;
+const ROOT_COMPONENT_ALLOCATION_RECORD_MAX_BYTES: u32 = 4_096;
 
 #[cfg(feature = "root-control-plane")]
 struct RootComponentRegistryState;
@@ -138,6 +138,21 @@ pub enum RootComponentAllocationProgressRecord {
         effect: RootComponentCreationEffectRecord,
         canister: Principal,
     },
+    InstallIntent {
+        creation: RootComponentCreationEffectRecord,
+        canister: Principal,
+        installation: RootComponentInstallEffectRecord,
+    },
+    Installed {
+        creation: RootComponentCreationEffectRecord,
+        canister: Principal,
+        installation: RootComponentInstallEffectRecord,
+    },
+    Verified {
+        creation: RootComponentCreationEffectRecord,
+        canister: Principal,
+        installation: RootComponentInstallEffectRecord,
+    },
 }
 
 ///
@@ -153,6 +168,21 @@ pub struct RootComponentCreationEffectRecord {
     pub payload_size_bytes: u64,
     pub initial_cycles: Cycles,
     pub controller: Principal,
+    pub cost_guard_settlement: ReplayCostGuardSettlement,
+    pub charged_entry_bytes: u64,
+}
+
+///
+/// RootComponentInstallEffectRecord
+///
+/// Exact module source, target identity and cost settlement frozen before installation.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentInstallEffectRecord {
+    pub raw_module_hash: [u8; 32],
+    pub chunk_hashes: Vec<Vec<u8>>,
+    pub binding: ComponentBinding,
     pub cost_guard_settlement: ReplayCostGuardSettlement,
     pub charged_entry_bytes: u64,
 }

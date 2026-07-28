@@ -19,7 +19,8 @@ mod tests {
                 ComponentProvisioningOrigin, RootComponentAllocationPhase,
                 RootComponentAllocationRequest, RootComponentAllocationResponse,
                 RootComponentAllocationStatusRequest, RootComponentCreationRequest,
-                RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
+                RootComponentInstallRequest, RootComponentRegistryPreparationRequest,
+                RootComponentRegistryStatusResponse,
             },
             fleet_registry::{
                 FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistry,
@@ -38,7 +39,7 @@ mod tests {
                 RootStoreReleaseSetManifest,
             },
         },
-        ids::{CanisterRole, ComponentInstanceId, ReleaseSetDigest},
+        ids::{CanisterRole, ComponentInstanceId, ManagedCanisterBinding, ReleaseSetDigest},
     };
     use canic::{
         Error,
@@ -50,11 +51,11 @@ mod tests {
             CANIC_FLEET_REGISTRY_SYNCHRONIZE, CANIC_FLEET_REGISTRY_VERSION,
             CANIC_FLEET_SUBNET_ROOT_AUTHORITY, CANIC_FLEET_SUBNET_ROOT_JOIN,
             CANIC_ROOT_COMPONENT_ALLOCATE, CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
-            CANIC_ROOT_COMPONENT_CREATE, CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
-            CANIC_ROOT_COMPONENT_REGISTRY_STATUS, CANIC_ROOT_STORE_BOOTSTRAP,
-            CANIC_ROOT_STORE_BOOTSTRAP_STATUS, CANIC_TEMPLATE_PREPARE_ADMIN,
-            CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN, CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
-            CANIC_WASM_STORE_PREPARE,
+            CANIC_ROOT_COMPONENT_CREATE, CANIC_ROOT_COMPONENT_INSTALL,
+            CANIC_ROOT_COMPONENT_REGISTRY_PREPARE, CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
+            CANIC_ROOT_STORE_BOOTSTRAP, CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
+            CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
+            CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN, CANIC_WASM_STORE_PREPARE,
         },
     };
     use canic_control_plane::{
@@ -70,10 +71,13 @@ mod tests {
     };
     use canic_core::cdk::utils::hash::{hex_bytes, wasm_hash};
     use canic_host::release_set::AppConfigSnapshot;
-    use std::collections::BTreeMap;
+    use flate2::{Compression, write::GzEncoder};
+    use std::{collections::BTreeMap, io::Write, sync::OnceLock};
 
     use crate::pic::{
-        CanicWasmBuildProfile, build_internal_test_wasm_canisters,
+        CanicWasmBuildProfile,
+        artifacts::build_internal_test_wasm_canisters_with_env,
+        build_internal_test_wasm_canisters,
         canic::{
             install_root_args_with_release_set_digest_and_coordinator, managed_test_init_identity,
         },
@@ -81,6 +85,7 @@ mod tests {
     use ic_testkit::artifacts::{read_wasm, test_target_dir, workspace_root_for};
 
     const COORDINATOR_PACKAGE: &str = "fleet_coordinator_stub";
+    const ISSUER_PACKAGE: &str = "delegation_issuer_stub";
     const COORDINATOR_INSTALL_CYCLES: u128 = 500_000_000_000_000;
 
     struct BootstrappedRootFixture {
@@ -656,7 +661,77 @@ mod tests {
             created_status.expect("created issuer Component status"),
             created
         );
-        created
+
+        install_issuer_component(pic, fixture, operation_id, created)
+    }
+
+    fn install_issuer_component(
+        pic: &Pic,
+        fixture: &BootstrappedRootFixture,
+        operation_id: [u8; 32],
+        created: RootComponentAllocationResponse,
+    ) -> RootComponentAllocationResponse {
+        let creation = created.creation.as_ref().expect("creation evidence");
+        let artifact = fixture
+            .response
+            .catalog
+            .iter()
+            .find(|entry| entry.role == created.role)
+            .expect("issuer Store artifact");
+        let installed: Result<RootComponentAllocationResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_INSTALL,
+                (RootComponentInstallRequest { operation_id },),
+            )
+            .expect("install issuer Component transport");
+        let installed = installed.expect("install issuer Component");
+        assert_eq!(installed.phase, RootComponentAllocationPhase::Verified);
+        let installation = installed.installation.as_ref().expect("install evidence");
+        assert_eq!(installation.raw_module_hash, artifact.raw_module_hash);
+        assert_eq!(
+            installation.binding.canister_id,
+            creation.canister.expect("created Canister")
+        );
+        assert_eq!(
+            installation.binding.component, installed.component,
+            "target binding must retain the reserved Component identity"
+        );
+        let observed_binding: Result<ManagedCanisterBinding, Error> = pic
+            .query_call_as(
+                creation.canister.expect("created Canister"),
+                fixture.root_id,
+                canic::protocol::CANIC_MANAGED_CANISTER_BINDING,
+                (),
+            )
+            .expect("query installed Component binding transport");
+        assert_eq!(
+            observed_binding.expect("installed Component binding"),
+            ManagedCanisterBinding::Component(installation.binding.clone())
+        );
+        let installed_status = pic
+            .canister_status(
+                creation.canister.expect("created Canister"),
+                Some(fixture.root_id),
+            )
+            .expect("installed Component Canister status");
+        assert_eq!(
+            installed_status.module_hash,
+            Some(creation.payload_hash.to_vec())
+        );
+
+        let install_retry: Result<RootComponentAllocationResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_INSTALL,
+                (RootComponentInstallRequest { operation_id },),
+            )
+            .expect("retry issuer Component install transport");
+        assert_eq!(
+            install_retry.expect("retry issuer Component install"),
+            installed
+        );
+        installed
     }
 
     fn install_bootstrapped_root(
@@ -762,6 +837,8 @@ mod tests {
         let release_build_id = managed_test_init_identity().release_build_id;
         let mut entries = Vec::new();
         let mut artifacts = BTreeMap::new();
+        let real_modules =
+            BTreeMap::from([(CanisterRole::new("issuer"), build_test_issuer_wasm())]);
         for spec in &topology.component_specs {
             entries.push(root_store_entry(
                 config.model(),
@@ -769,6 +846,7 @@ mod tests {
                 RootStoreReleaseSetEntryKind::Component,
                 &spec.component_role,
                 release_build_id,
+                &real_modules,
                 &mut artifacts,
             ));
             entries.extend(spec.children.iter().map(|child| {
@@ -778,6 +856,7 @@ mod tests {
                     RootStoreReleaseSetEntryKind::ComponentChild,
                     &child.role,
                     release_build_id,
+                    &real_modules,
                     &mut artifacts,
                 )
             }));
@@ -799,10 +878,14 @@ mod tests {
         kind: RootStoreReleaseSetEntryKind,
         role: &CanisterRole,
         release_build_id: canic_core::ids::ReleaseBuildId,
+        real_modules: &BTreeMap<CanisterRole, Vec<u8>>,
         artifacts: &mut BTreeMap<CanisterRole, Vec<u8>>,
     ) -> RootStoreReleaseSetEntry {
-        let raw = format!("raw fixture for {role}").into_bytes();
-        let compressed = format!("compressed fixture for {role}").into_bytes();
+        let raw = real_modules
+            .get(role)
+            .cloned()
+            .unwrap_or_else(|| format!("raw fixture for {role}").into_bytes());
+        let compressed = gzip(&raw);
         let existing = artifacts.insert(role.clone(), compressed.clone());
         assert!(
             existing.as_ref().is_none_or(|bytes| bytes == &compressed),
@@ -828,6 +911,38 @@ mod tests {
                 wasm_gz_sha256_hex: hex_bytes(wasm_hash(&compressed)),
             },
         }
+    }
+
+    fn build_test_issuer_wasm() -> Vec<u8> {
+        static WASM: OnceLock<Vec<u8>> = OnceLock::new();
+        WASM.get_or_init(|| {
+            let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+            let target_dir = test_target_dir(&workspace_root, "fleet-registry-sync");
+            let config_path = root_canister_config_path(&workspace_root);
+            let canonical_config_path = config_path.to_str().expect("root config path UTF-8");
+            build_internal_test_wasm_canisters_with_env(
+                &workspace_root,
+                &target_dir,
+                &[ISSUER_PACKAGE],
+                CanicWasmBuildProfile::Fast,
+                &[(
+                    canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+                    canonical_config_path,
+                )],
+            );
+            read_wasm(
+                &target_dir,
+                ISSUER_PACKAGE,
+                CanicWasmBuildProfile::Fast.target_dir_name(),
+            )
+        })
+        .clone()
+    }
+
+    fn gzip(bytes: &[u8]) -> Vec<u8> {
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(bytes).expect("gzip fixture Wasm");
+        encoder.finish().expect("finish fixture Wasm gzip")
     }
 
     fn stage_chunked_payload(

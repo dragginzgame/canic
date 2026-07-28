@@ -1,7 +1,7 @@
 use crate::{
     config::schema::ConfigModel,
     dto::{abi::v1::CanisterInitPayload, env::EnvBootstrapArgs},
-    ids::CanisterRole,
+    ids::{CanisterRole, ManagedCanisterBinding},
     lifecycle,
 };
 
@@ -12,6 +12,11 @@ use crate::{
 pub struct LifecycleApi;
 
 impl LifecycleApi {
+    /// Return the immutable Registry-issued identity retained by this application Canister.
+    pub fn managed_binding() -> Result<ManagedCanisterBinding, crate::dto::error::Error> {
+        crate::ops::runtime::env::EnvOps::managed_binding().map_err(Into::into)
+    }
+
     pub fn init_nonroot_canister_before_bootstrap(
         role: CanisterRole,
         payload: CanisterInitPayload,

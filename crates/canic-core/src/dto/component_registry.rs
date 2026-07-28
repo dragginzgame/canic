@@ -8,8 +8,8 @@ use crate::{
     cdk::types::Cycles,
     dto::{fleet_registry::FleetRegistryVersion, root_store::RootStoreBootstrapRequest},
     ids::{
-        CanisterRole, ComponentInstanceId, ComponentSpecId, ComponentTopologyDigest,
-        FleetSubnetRootReleaseSet,
+        CanisterRole, ComponentBinding, ComponentInstanceId, ComponentSpecId,
+        ComponentTopologyDigest, FleetSubnetRootReleaseSet,
     },
 };
 use candid::{CandidType, Principal};
@@ -81,6 +81,17 @@ pub struct RootComponentCreationRequest {
 }
 
 ///
+/// RootComponentInstallRequest
+///
+/// Controller command continuing one already created top-level Component operation.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentInstallRequest {
+    pub operation_id: [u8; 32],
+}
+
+///
 /// ComponentProvisioningOrigin
 ///
 /// Authenticated causal authority retained with one top-level Component allocation.
@@ -102,6 +113,9 @@ pub enum RootComponentAllocationPhase {
     Reserved,
     CreationIntent,
     Created,
+    InstallIntent,
+    Installed,
+    Verified,
 }
 
 ///
@@ -118,6 +132,19 @@ pub struct RootComponentCreationEvidence {
     pub initial_cycles: Cycles,
     pub controller: Principal,
     pub canister: Option<Principal>,
+}
+
+///
+/// RootComponentInstallEvidence
+///
+/// Exact raw artifact, chunk source and immutable target binding frozen before installation.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentInstallEvidence {
+    pub raw_module_hash: [u8; 32],
+    pub chunk_hashes: Vec<Vec<u8>>,
+    pub binding: ComponentBinding,
 }
 
 ///
@@ -138,6 +165,7 @@ pub struct RootComponentAllocationResponse {
     pub release_set: FleetSubnetRootReleaseSet,
     pub phase: RootComponentAllocationPhase,
     pub creation: Option<RootComponentCreationEvidence>,
+    pub installation: Option<RootComponentInstallEvidence>,
 }
 
 #[cfg(test)]
@@ -206,9 +234,7 @@ mod tests {
             release_set: response.release_set,
             phase: RootComponentAllocationPhase::Reserved,
             creation: None,
-        };
-        let creation_request = RootComponentCreationRequest {
-            operation_id: allocation.operation_id,
+            installation: None,
         };
         let created = RootComponentAllocationResponse {
             phase: RootComponentAllocationPhase::Created,
@@ -220,14 +246,12 @@ mod tests {
                 controller: Principal::from_slice(&[6; 29]),
                 canister: Some(Principal::from_slice(&[16; 29])),
             }),
+            installation: None,
             ..allocation.clone()
         };
-
         let request_bytes = candid::encode_one(&request).expect("encode request");
         let response_bytes = candid::encode_one(&response).expect("encode response");
         let allocation_bytes = candid::encode_one(&allocation).expect("encode allocation");
-        let creation_request_bytes =
-            candid::encode_one(creation_request).expect("encode creation request");
         let created_bytes = candid::encode_one(&created).expect("encode created allocation");
 
         assert_eq!(
@@ -246,14 +270,37 @@ mod tests {
             allocation
         );
         assert_eq!(
-            candid::decode_one::<RootComponentCreationRequest>(&creation_request_bytes)
-                .expect("decode creation request"),
-            creation_request
-        );
-        assert_eq!(
             candid::decode_one::<RootComponentAllocationResponse>(&created_bytes)
                 .expect("decode created allocation"),
             created
+        );
+    }
+
+    #[test]
+    fn component_creation_request_round_trips_through_candid() {
+        let request = RootComponentCreationRequest {
+            operation_id: [10; 32],
+        };
+        let bytes = candid::encode_one(request).expect("encode creation request");
+
+        assert_eq!(
+            candid::decode_one::<RootComponentCreationRequest>(&bytes)
+                .expect("decode creation request"),
+            request
+        );
+    }
+
+    #[test]
+    fn component_install_request_round_trips_through_candid() {
+        let request = RootComponentInstallRequest {
+            operation_id: [10; 32],
+        };
+        let bytes = candid::encode_one(request).expect("encode install request");
+
+        assert_eq!(
+            candid::decode_one::<RootComponentInstallRequest>(&bytes)
+                .expect("decode install request"),
+            request
         );
     }
 }

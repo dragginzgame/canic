@@ -82,6 +82,7 @@ impl FleetDirectoryOps {
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn import_args_allow_incomplete(
         args: FleetDirectoryInput,
     ) -> Result<(), InternalError> {

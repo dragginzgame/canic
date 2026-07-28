@@ -9,7 +9,7 @@ pub mod mapper;
 use crate::{
     InternalError,
     dto::env::EnvSnapshotResponse,
-    ids::ComponentSpecId,
+    ids::{ComponentSpecId, ManagedCanisterBinding},
     memory::runtime::is_memory_bootstrap_ready,
     model::{
         env::ValidatedEnv,
@@ -142,6 +142,15 @@ impl EnvOps {
     /// SAFETY: Env must be initialized; do not call during init/post_upgrade.
     pub fn component_spec() -> Result<ComponentSpecId, InternalError> {
         Env::get_component_spec().ok_or_else(|| EnvOpsError::ComponentSpecUnavailable.into())
+    }
+
+    /// Return the immutable Registry-issued identity of this managed application Canister.
+    pub fn managed_binding() -> Result<ManagedCanisterBinding, InternalError> {
+        Env::get_managed_binding().ok_or_else(|| {
+            InternalError::unavailable(
+                "current Canister has no Registry-issued managed Component binding",
+            )
+        })
     }
 
     pub fn canister_role() -> Result<CanisterRole, InternalError> {
@@ -357,6 +366,7 @@ mod tests {
     fn env_data(root_pid: Principal) -> EnvData {
         EnvData {
             record: EnvRecord {
+                managed_binding: None,
                 fleet_root_pid: Some(root_pid),
                 component_spec: Some("default".parse().expect("default Component Spec ID")),
                 subnet_pid: Some(root_pid),

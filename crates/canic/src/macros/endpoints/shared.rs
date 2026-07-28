@@ -28,6 +28,12 @@ macro_rules! canic_emit_lifecycle_core_endpoints {
         -> Result<::canic::dto::fleet_activation::FleetActivationStatusResponse, ::canic::Error> {
             $crate::__internal::core::api::fleet_activation::FleetActivationApi::status()
         }
+
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_managed_canister_binding()
+        -> Result<::canic::ids::ManagedCanisterBinding, ::canic::Error> {
+            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::managed_binding()
+        }
     };
 }
 
