@@ -1,7 +1,7 @@
 //! Module: workflow::component_registry
 //!
-//! Responsibility: prepare Component Registry authority and advance top-level creation and install effects.
-//! Does not own: Component Directories, committed inventory, or runtime activation.
+//! Responsibility: prepare Component Registry authority and advance top-level creation, install and commitment.
+//! Does not own: descendant lifecycle, Directory distribution, or runtime activation.
 //! Boundary: every mutation follows exact Store and active Registry Mirror/Directory verification.
 
 use crate::{
@@ -12,8 +12,9 @@ use crate::{
         fleet_registry_mirror::FleetRegistryMirrorOps,
     },
     view::component_registry::{
-        RootComponentAllocationProgressView, RootComponentAllocationView,
-        RootComponentCreationEffectView, RootComponentInstallEffectView, RootComponentRegistryView,
+        ComponentRegistryPartitionView, RootComponentAllocationProgressView,
+        RootComponentAllocationView, RootComponentCreationEffectView,
+        RootComponentInstallEffectView, RootComponentRegistryView,
     },
     workflow::{
         bootstrap::root_store, deployment, runtime::template::resolved_root_store_module_source,
@@ -41,9 +42,12 @@ use canic_core::{
     dto::{
         abi::v1::{CanisterInitAuthority, CanisterInitPayload},
         component_registry::{
-            ComponentProvisioningOrigin, RootComponentAllocationPhase,
-            RootComponentAllocationRequest, RootComponentAllocationResponse,
-            RootComponentAllocationStatusRequest, RootComponentCreationEvidence,
+            ComponentDirectoryHead, ComponentDirectoryHeadRequest, ComponentDirectoryProvenance,
+            ComponentLifecycleStatus, ComponentProvisioningOrigin, ComponentRegistryHead,
+            ComponentRegistryPartitionRequest, ComponentRegistryPartitionResponse,
+            RootComponentAllocationPhase, RootComponentAllocationRequest,
+            RootComponentAllocationResponse, RootComponentAllocationStatusRequest,
+            RootComponentCommitRequest, RootComponentCommitResponse, RootComponentCreationEvidence,
             RootComponentCreationRequest, RootComponentInstallEvidence,
             RootComponentInstallRequest, RootComponentRegistryPreparationRequest,
             RootComponentRegistryStatusResponse,
@@ -233,38 +237,95 @@ pub async fn install_allocation(
     advance_install(request.operation_id, allocation, plan).await
 }
 
+/// Atomically commit one verified top-level Component and its first Directory authority.
+pub async fn commit_allocation(
+    request: RootComponentCommitRequest,
+) -> Result<RootComponentCommitResponse, InternalError> {
+    let (authority, root) = root_authority()?;
+    let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let preparation_request = RootComponentRegistryPreparationRequest {
+        store_bootstrap: prepared.store_bootstrap.clone(),
+        expected_fleet_registry: prepared.prepared_against_registry.clone(),
+    };
+    let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    validate_active_authority(&authority, root, &preparation_request)?;
+
+    let topology = ConfigOps::component_topology()?;
+    let allocation = ComponentRegistryOps::allocation(request.operation_id).ok_or_else(|| {
+        InternalError::unavailable("Component allocation operation has not been reserved")
+    })?;
+    validate_allocation_caller(&allocation)?;
+    validate_allocation_record(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &allocation,
+        request.operation_id,
+    )?;
+    let plan = component_install_plan(&authority.binding, &store, &allocation).await?;
+    let installation = committed_or_verified_installation(&allocation)?;
+    validate_install_effect(installation, &plan.durable)?;
+    verify_installed_component(&plan).await?;
+
+    let (committed, partition) = ComponentRegistryOps::commit_verified(
+        request.operation_id,
+        IcOps::now_nanos(),
+        plan.durable.maximum_registry_bytes,
+    )?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &partition,
+    )?;
+    commit_response(committed, partition)
+}
+
+/// Read one committed Component Registry partition without mutation.
+pub fn registry_partition(
+    request: ComponentRegistryPartitionRequest,
+) -> Result<ComponentRegistryPartitionResponse, InternalError> {
+    let (authority, _root) = root_authority()?;
+    let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let topology = ConfigOps::component_topology()?;
+    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
+        InternalError::unavailable("Component Registry partition has not been committed")
+    })?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &partition,
+    )?;
+    Ok(partition_response(partition))
+}
+
+/// Derive one compact Component Directory head from committed Registry authority.
+pub fn directory_head(
+    request: ComponentDirectoryHeadRequest,
+) -> Result<ComponentDirectoryHead, InternalError> {
+    let (authority, _root) = root_authority()?;
+    let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let topology = ConfigOps::component_topology()?;
+    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
+        InternalError::unavailable("Component Registry partition has not been committed")
+    })?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &partition,
+    )?;
+    Ok(component_directory_head(&partition))
+}
+
 async fn advance_creation(
     operation_id: [u8; 32],
     allocation: RootComponentAllocationView,
     plan: RootComponentCreationPlan,
 ) -> Result<RootComponentAllocationResponse, InternalError> {
-    match &allocation.progress {
-        RootComponentAllocationProgressView::Created { effect, .. }
-        | RootComponentAllocationProgressView::InstallIntent {
-            creation: effect, ..
-        }
-        | RootComponentAllocationProgressView::Installed {
-            creation: effect, ..
-        }
-        | RootComponentAllocationProgressView::Verified {
-            creation: effect, ..
-        } => {
-            validate_creation_effect(effect, &plan)?;
-            CostGuardWorkflow::complete_replay_settlement(
-                &effect.cost_guard_settlement,
-                IcOps::now_secs(),
-            )?;
-            return allocation_response(allocation);
-        }
-        RootComponentAllocationProgressView::CreationIntent(effect) => {
-            validate_creation_effect(effect, &plan)?;
-            CostGuardWorkflow::recover_replay_settlement(
-                &effect.cost_guard_settlement,
-                IcOps::now_secs(),
-            )?;
-            return allocation_response(allocation);
-        }
-        RootComponentAllocationProgressView::Reserved => {}
+    if reconcile_existing_creation(&allocation, &plan)? {
+        return allocation_response(allocation);
     }
 
     ComponentRegistryOps::validate_creation_capacity(operation_id, &plan)?;
@@ -289,7 +350,8 @@ async fn advance_creation(
         | RootComponentAllocationProgressView::Created { .. }
         | RootComponentAllocationProgressView::InstallIntent { .. }
         | RootComponentAllocationProgressView::Installed { .. }
-        | RootComponentAllocationProgressView::Verified { .. } => {
+        | RootComponentAllocationProgressView::Verified { .. }
+        | RootComponentAllocationProgressView::Committed { .. } => {
             return Err(CostGuardWorkflow::recover_after_failure(
                 &cost_permit,
                 IcOps::now_secs(),
@@ -337,6 +399,43 @@ async fn advance_creation(
     };
     CostGuardWorkflow::complete(&cost_permit, IcOps::now_secs())?;
     allocation_response(created)
+}
+
+fn reconcile_existing_creation(
+    allocation: &RootComponentAllocationView,
+    plan: &RootComponentCreationPlan,
+) -> Result<bool, InternalError> {
+    match &allocation.progress {
+        RootComponentAllocationProgressView::Created { effect, .. }
+        | RootComponentAllocationProgressView::InstallIntent {
+            creation: effect, ..
+        }
+        | RootComponentAllocationProgressView::Installed {
+            creation: effect, ..
+        }
+        | RootComponentAllocationProgressView::Verified {
+            creation: effect, ..
+        }
+        | RootComponentAllocationProgressView::Committed {
+            creation: effect, ..
+        } => {
+            validate_creation_effect(effect, plan)?;
+            CostGuardWorkflow::complete_replay_settlement(
+                &effect.cost_guard_settlement,
+                IcOps::now_secs(),
+            )?;
+            Ok(true)
+        }
+        RootComponentAllocationProgressView::CreationIntent(effect) => {
+            validate_creation_effect(effect, plan)?;
+            CostGuardWorkflow::recover_replay_settlement(
+                &effect.cost_guard_settlement,
+                IcOps::now_secs(),
+            )?;
+            Ok(true)
+        }
+        RootComponentAllocationProgressView::Reserved => Ok(false),
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -397,17 +496,29 @@ async fn component_install_plan(
         fleet_subnet_root: root.fleet_subnet_root,
         canister_id: canister,
     };
-    ConfigOps::component_topology()?
+    let topology = ConfigOps::component_topology()?;
+    topology
         .validate_component_binding(root, &binding)
         .map_err(|error| {
             InternalError::invalid_input(format!(
                 "derived Component install binding is invalid: {error}"
             ))
         })?;
+    let maximum_registry_bytes = topology
+        .get(&allocation.component_spec)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Config,
+                "installed Component Spec is absent from the protected topology",
+            )
+        })?
+        .limits
+        .maximum_registry_bytes;
     let durable = RootComponentInstallPlan {
         raw_module_hash: artifact.raw_module_hash,
         chunk_hashes,
         binding: binding.clone(),
+        maximum_registry_bytes,
     };
     let payload = CanisterInitPayload {
         install_id: allocation.operation_id,
@@ -517,7 +628,8 @@ async fn advance_install(
             )?;
             verify_and_mark_installed(operation_id, allocation, &plan).await
         }
-        RootComponentAllocationProgressView::Verified { installation, .. } => {
+        RootComponentAllocationProgressView::Verified { installation, .. }
+        | RootComponentAllocationProgressView::Committed { installation, .. } => {
             validate_install_effect(installation, &plan.durable)?;
             CostGuardWorkflow::recover_replay_settlement(
                 &installation.cost_guard_settlement,
@@ -644,6 +756,9 @@ fn allocation_creation_and_canister(
         }
         | RootComponentAllocationProgressView::Verified {
             creation, canister, ..
+        }
+        | RootComponentAllocationProgressView::Committed {
+            creation, canister, ..
         } => Ok((creation, *canister)),
         RootComponentAllocationProgressView::Reserved
         | RootComponentAllocationProgressView::CreationIntent(_) => Err(InternalError::conflict(
@@ -660,6 +775,18 @@ fn install_effect(
         _ => Err(InternalError::invariant(
             InternalErrorOrigin::Storage,
             "Component install intent commit returned an invalid phase",
+        )),
+    }
+}
+
+fn committed_or_verified_installation(
+    allocation: &RootComponentAllocationView,
+) -> Result<&RootComponentInstallEffectView, InternalError> {
+    match &allocation.progress {
+        RootComponentAllocationProgressView::Verified { installation, .. }
+        | RootComponentAllocationProgressView::Committed { installation, .. } => Ok(installation),
+        _ => Err(InternalError::conflict(
+            "Component allocation must be verified before Registry commitment",
         )),
     }
 }
@@ -831,6 +958,16 @@ fn allocation_response(
             Some(creation_evidence(creation, Some(canister))),
             Some(install_evidence(installation)),
         ),
+        RootComponentAllocationProgressView::Committed {
+            creation,
+            canister,
+            installation,
+            ..
+        } => (
+            RootComponentAllocationPhase::Committed,
+            Some(creation_evidence(creation, Some(canister))),
+            Some(install_evidence(installation)),
+        ),
     };
     Ok(RootComponentAllocationResponse {
         operation_id: allocation.operation_id,
@@ -845,6 +982,69 @@ fn allocation_response(
         creation,
         installation,
     })
+}
+
+fn commit_response(
+    allocation: RootComponentAllocationView,
+    partition: ComponentRegistryPartitionView,
+) -> Result<RootComponentCommitResponse, InternalError> {
+    let RootComponentAllocationProgressView::Committed { commitment, .. } = &allocation.progress
+    else {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component Registry commit returned a non-committed allocation",
+        ));
+    };
+    let expected_head = ComponentRegistryHead {
+        component: partition.binding.component,
+        revision: partition.revision,
+        content_hash: partition.content_hash,
+    };
+    if commitment.registry != expected_head
+        || commitment.directory_synchronized_at_ns != partition.directory_synchronized_at_ns
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component allocation receipt differs from its Registry or Directory authority",
+        ));
+    }
+    let registry = partition_response(partition.clone());
+    let directory = component_directory_head(&partition);
+    Ok(RootComponentCommitResponse {
+        allocation: allocation_response(allocation)?,
+        registry,
+        directory,
+    })
+}
+
+fn partition_response(
+    partition: ComponentRegistryPartitionView,
+) -> ComponentRegistryPartitionResponse {
+    ComponentRegistryPartitionResponse {
+        head: ComponentRegistryHead {
+            component: partition.binding.component,
+            revision: partition.revision,
+            content_hash: partition.content_hash,
+        },
+        binding: partition.binding,
+        provisioning_origin: partition.provisioning_origin,
+        release_set: partition.release_set,
+        status: partition.status,
+        encoded_bytes: partition.encoded_bytes,
+    }
+}
+
+fn component_directory_head(partition: &ComponentRegistryPartitionView) -> ComponentDirectoryHead {
+    ComponentDirectoryHead {
+        provenance: ComponentDirectoryProvenance {
+            component: partition.binding.clone(),
+            source_fleet_subnet_root: partition.binding.fleet_subnet_root,
+            component_registry_revision: partition.revision,
+            component_registry_content_hash: partition.content_hash,
+            synchronized_at_ns: partition.directory_synchronized_at_ns,
+        },
+        descendant_count: 0,
+    }
 }
 
 fn creation_plan(
@@ -1024,6 +1224,37 @@ fn validate_allocation_record(
         return Err(InternalError::invariant(
             InternalErrorOrigin::Storage,
             "stored Component allocation role differs from its protected Spec",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_partition(
+    root: &canic_core::ids::FleetSubnetRootBinding,
+    release_set: canic_core::ids::FleetSubnetRootReleaseSet,
+    topology: &canic_core::control_plane_support::config::ComponentTopology,
+    partition: &ComponentRegistryPartitionView,
+) -> Result<(), InternalError> {
+    topology
+        .validate_component_binding(root, &partition.binding)
+        .map_err(|error| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                format!("committed Component binding is invalid: {error}"),
+            )
+        })?;
+    if partition.release_set != release_set
+        || partition.status != ComponentLifecycleStatus::Prepared
+        || partition.binding.fleet_subnet_root != root.fleet_subnet_root
+        || partition.binding.placement_subnet != root.placement_subnet
+        || partition.revision == 0
+        || partition.directory_synchronized_at_ns == 0
+        || ComponentRegistryOps::component_for_principal(partition.binding.canister_id)
+            != Some(partition.binding.component)
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "committed Component partition differs from protected root or principal authority",
         ));
     }
     Ok(())

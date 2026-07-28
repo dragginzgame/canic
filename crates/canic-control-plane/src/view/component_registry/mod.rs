@@ -8,7 +8,10 @@ use canic_core::{
     cdk::types::{Cycles, Principal},
     control_plane_support::model::replay::ReplayCostGuardSettlement,
     dto::{
-        component_registry::ComponentProvisioningOrigin, fleet_registry::FleetRegistryVersion,
+        component_registry::{
+            ComponentLifecycleStatus, ComponentProvisioningOrigin, ComponentRegistryHead,
+        },
+        fleet_registry::FleetRegistryVersion,
         root_store::RootStoreBootstrapRequest,
     },
     ids::{
@@ -84,6 +87,12 @@ pub enum RootComponentAllocationProgressView {
         canister: Principal,
         installation: RootComponentInstallEffectView,
     },
+    Committed {
+        creation: RootComponentCreationEffectView,
+        canister: Principal,
+        installation: RootComponentInstallEffectView,
+        commitment: RootComponentCommitmentView,
+    },
 }
 
 ///
@@ -116,4 +125,34 @@ pub struct RootComponentInstallEffectView {
     pub binding: ComponentBinding,
     pub cost_guard_settlement: ReplayCostGuardSettlement,
     pub charged_entry_bytes: u64,
+}
+
+///
+/// RootComponentCommitmentView
+///
+/// Read-only link from one allocation receipt to its Registry and Directory authority.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentCommitmentView {
+    pub registry: ComponentRegistryHead,
+    pub directory_synchronized_at_ns: u64,
+}
+
+///
+/// ComponentRegistryPartitionView
+///
+/// Read-only normalized authority for one committed Component tree.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ComponentRegistryPartitionView {
+    pub binding: ComponentBinding,
+    pub provisioning_origin: ComponentProvisioningOrigin,
+    pub release_set: FleetSubnetRootReleaseSet,
+    pub status: ComponentLifecycleStatus,
+    pub revision: u64,
+    pub content_hash: [u8; 32],
+    pub directory_synchronized_at_ns: u64,
+    pub encoded_bytes: u64,
 }

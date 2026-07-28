@@ -488,6 +488,15 @@ fn assert_fleet_registry_protocol_constants() {
             canic_core::protocol::CANIC_FLEET_REGISTRY_MIRROR_STATUS,
             "canic_fleet_registry_mirror_status",
         ),
+    ] {
+        assert_eq!(facade, core);
+        assert_eq!(facade, expected);
+    }
+    assert_component_registry_protocol_constants();
+}
+
+fn assert_component_registry_protocol_constants() {
+    for (facade, core, expected) in [
         (
             canic::protocol::CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
             canic_core::protocol::CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
@@ -507,6 +516,31 @@ fn assert_fleet_registry_protocol_constants() {
             canic::protocol::CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
             canic_core::protocol::CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
             "canic_root_component_allocation_status",
+        ),
+        (
+            canic::protocol::CANIC_ROOT_COMPONENT_CREATE,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_CREATE,
+            "canic_root_component_create",
+        ),
+        (
+            canic::protocol::CANIC_ROOT_COMPONENT_INSTALL,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_INSTALL,
+            "canic_root_component_install",
+        ),
+        (
+            canic::protocol::CANIC_ROOT_COMPONENT_COMMIT,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_COMMIT,
+            "canic_root_component_commit",
+        ),
+        (
+            canic::protocol::CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
+            "canic_root_component_registry_partition",
+        ),
+        (
+            canic::protocol::CANIC_ROOT_COMPONENT_DIRECTORY_HEAD,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_DIRECTORY_HEAD,
+            "canic_root_component_directory_head",
         ),
     ] {
         assert_eq!(facade, core);
@@ -545,6 +579,27 @@ fn assert_root_registry_mirror_guards(root: &str) {
             .contains("canic_query(requires(caller::is_controller()))"),
         "root Component allocation status must remain a controller-guarded query"
     );
+    for endpoint in [
+        "async fn canic_root_component_create(",
+        "async fn canic_root_component_install(",
+        "async fn canic_root_component_commit(",
+    ] {
+        assert!(
+            preceding_attribute_context(root, endpoint)
+                .contains("canic_update(requires(caller::is_controller()))"),
+            "{endpoint} must remain a controller-guarded update"
+        );
+    }
+    for endpoint in [
+        "async fn canic_root_component_registry_partition(",
+        "async fn canic_root_component_directory_head(",
+    ] {
+        assert!(
+            preceding_attribute_context(root, endpoint)
+                .contains("canic_query(requires(caller::is_controller()))"),
+            "{endpoint} must remain a controller-guarded query"
+        );
+    }
 }
 
 #[test]

@@ -12,10 +12,12 @@ use canic_core::{
     dto::fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
     dto::{
         component_registry::{
+            ComponentDirectoryHead, ComponentDirectoryHeadRequest,
+            ComponentRegistryPartitionRequest, ComponentRegistryPartitionResponse,
             RootComponentAllocationRequest, RootComponentAllocationResponse,
-            RootComponentAllocationStatusRequest, RootComponentCreationRequest,
-            RootComponentInstallRequest, RootComponentRegistryPreparationRequest,
-            RootComponentRegistryStatusResponse,
+            RootComponentAllocationStatusRequest, RootComponentCommitRequest,
+            RootComponentCommitResponse, RootComponentCreationRequest, RootComponentInstallRequest,
+            RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
         },
         fleet_activation::{FleetActivationResumeRequest, FleetActivationStatusResponse},
     },
@@ -135,6 +137,26 @@ impl LifecycleApi {
         crate::workflow::component_registry::install_allocation(request)
             .await
             .map_err(Into::into)
+    }
+
+    pub async fn commit_component_allocation(
+        request: RootComponentCommitRequest,
+    ) -> Result<RootComponentCommitResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::commit_allocation(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub fn component_registry_partition(
+        request: ComponentRegistryPartitionRequest,
+    ) -> Result<ComponentRegistryPartitionResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::registry_partition(request).map_err(Into::into)
+    }
+
+    pub fn component_directory_head(
+        request: ComponentDirectoryHeadRequest,
+    ) -> Result<ComponentDirectoryHead, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::directory_head(request).map_err(Into::into)
     }
 
     pub async fn prepare_fleet_activation()

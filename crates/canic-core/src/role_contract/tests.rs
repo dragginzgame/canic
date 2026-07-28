@@ -127,7 +127,10 @@ fn canonical_allocations_match_the_active_memory_map() {
         (StateAllocationKey::WasmStoreGcState, vec![15]),
         (StateAllocationKey::FleetCoordinatorRegistry, vec![16]),
         (StateAllocationKey::RootFleetRegistryMirror, vec![17]),
-        (StateAllocationKey::RootComponentRegistry, vec![18, 19]),
+        (
+            StateAllocationKey::RootComponentRegistry,
+            vec![18, 19, 20, 21],
+        ),
     ]);
     assert_eq!(actual, expected);
 }
@@ -148,7 +151,7 @@ fn canonical_allocations_form_packed_owner_ledgers() {
     assert_eq!(
         ids(AllocationOwner::CanicControlPlane),
         (allocation::CANIC_CONTROL_PLANE_MIN_ID
-            ..=allocation::memory::control_plane::ROOT_COMPONENT_ALLOCATIONS_ID)
+            ..=allocation::memory::control_plane::ROOT_COMPONENT_PRINCIPAL_INDEX_ID)
             .collect::<Vec<_>>()
     );
     assert_eq!(
@@ -423,8 +426,8 @@ fn repeated_selection_merges_allocation_provenance() {
     assert_eq!(
         allocation_ids(&contract.allocations),
         vec![
-            10, 11, 12, 13, 14, 17, 18, 19, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43,
-            44, 45, 46, 47, 48, 49, 50, 51, 52, 53,
+            10, 11, 12, 13, 14, 17, 18, 19, 20, 21, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
+            42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53,
         ]
     );
 }

@@ -16,9 +16,12 @@ mod tests {
         CANIC_WASM_CHUNK_BYTES,
         dto::{
             component_registry::{
-                ComponentProvisioningOrigin, RootComponentAllocationPhase,
+                ComponentDirectoryHead, ComponentDirectoryHeadRequest, ComponentLifecycleStatus,
+                ComponentProvisioningOrigin, ComponentRegistryPartitionRequest,
+                ComponentRegistryPartitionResponse, RootComponentAllocationPhase,
                 RootComponentAllocationRequest, RootComponentAllocationResponse,
-                RootComponentAllocationStatusRequest, RootComponentCreationRequest,
+                RootComponentAllocationStatusRequest, RootComponentCommitRequest,
+                RootComponentCommitResponse, RootComponentCreationRequest,
                 RootComponentInstallRequest, RootComponentRegistryPreparationRequest,
                 RootComponentRegistryStatusResponse,
             },
@@ -51,11 +54,13 @@ mod tests {
             CANIC_FLEET_REGISTRY_SYNCHRONIZE, CANIC_FLEET_REGISTRY_VERSION,
             CANIC_FLEET_SUBNET_ROOT_AUTHORITY, CANIC_FLEET_SUBNET_ROOT_JOIN,
             CANIC_ROOT_COMPONENT_ALLOCATE, CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
-            CANIC_ROOT_COMPONENT_CREATE, CANIC_ROOT_COMPONENT_INSTALL,
-            CANIC_ROOT_COMPONENT_REGISTRY_PREPARE, CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
-            CANIC_ROOT_STORE_BOOTSTRAP, CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
-            CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
-            CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN, CANIC_WASM_STORE_PREPARE,
+            CANIC_ROOT_COMPONENT_COMMIT, CANIC_ROOT_COMPONENT_CREATE,
+            CANIC_ROOT_COMPONENT_DIRECTORY_HEAD, CANIC_ROOT_COMPONENT_INSTALL,
+            CANIC_ROOT_COMPONENT_REGISTRY_PARTITION, CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
+            CANIC_ROOT_COMPONENT_REGISTRY_STATUS, CANIC_ROOT_STORE_BOOTSTRAP,
+            CANIC_ROOT_STORE_BOOTSTRAP_STATUS, CANIC_TEMPLATE_PREPARE_ADMIN,
+            CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN, CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
+            CANIC_WASM_STORE_PREPARE,
         },
     };
     use canic_control_plane::{
@@ -95,12 +100,22 @@ mod tests {
         response: RootStoreBootstrapResponse,
     }
 
+    struct RootStoreFixture {
+        manifest: RootStoreReleaseSetManifest,
+        artifacts: BTreeMap<CanisterRole, Vec<u8>>,
+    }
+
     #[test]
     fn prepared_root_bootstraps_and_reverifies_its_exact_local_store() {
         let root_wasm = build_test_root_wasm();
+        let store_fixture = build_root_store_fixture();
         let pic = build_pic();
-        let fixture =
-            install_bootstrapped_root(&pic, root_wasm, Principal::from_slice(&[0x41; 29]));
+        let fixture = install_bootstrapped_root(
+            &pic,
+            root_wasm,
+            Principal::from_slice(&[0x41; 29]),
+            store_fixture,
+        );
 
         assert_eq!(fixture.response.fleet_subnet_root, fixture.root_id);
         assert_eq!(
@@ -178,10 +193,11 @@ mod tests {
     fn prepared_root_stages_and_acknowledges_the_exact_joining_registry_snapshot() {
         let root_wasm = build_test_root_wasm();
         let coordinator_wasm = build_test_coordinator_wasm();
+        let store_fixture = build_root_store_fixture();
         let pic = build_pic();
         let coordinator = pic.create_canister();
         pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
-        let fixture = install_bootstrapped_root(&pic, root_wasm, coordinator);
+        let fixture = install_bootstrapped_root(&pic, root_wasm, coordinator, store_fixture);
         install_fixture_coordinator(&pic, coordinator, coordinator_wasm, &fixture);
 
         let genesis: Result<canic::dto::fleet_registry::FleetRegistryVersion, Error> = pic
@@ -516,8 +532,8 @@ mod tests {
         let component_registry =
             component_registry.expect("allocated root Component Registry status");
         assert_eq!(component_registry.next_allocation_sequence, 3);
-        assert_eq!(component_registry.reserved_component_instances, 2);
-        assert_eq!(component_registry.committed_component_instances, 0);
+        assert_eq!(component_registry.reserved_component_instances, 1);
+        assert_eq!(component_registry.committed_component_instances, 1);
         assert_eq!(component_registry.managed_descendants, 0);
         assert!(component_registry.encoded_bytes > 0);
         assert_prepared(pic, fixture.root_id);
@@ -731,20 +747,152 @@ mod tests {
             install_retry.expect("retry issuer Component install"),
             installed
         );
-        installed
+        commit_issuer_component(pic, fixture, operation_id, installed)
+    }
+
+    fn commit_issuer_component(
+        pic: &Pic,
+        fixture: &BootstrappedRootFixture,
+        operation_id: [u8; 32],
+        installed: RootComponentAllocationResponse,
+    ) -> RootComponentAllocationResponse {
+        let committed: Result<RootComponentCommitResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_COMMIT,
+                (RootComponentCommitRequest { operation_id },),
+            )
+            .expect("commit issuer Component transport");
+        let committed = committed.expect("commit issuer Component");
+        assert_eq!(
+            committed.allocation.phase,
+            RootComponentAllocationPhase::Committed
+        );
+        assert_eq!(committed.allocation.component, installed.component);
+        assert_eq!(
+            committed.allocation.installation, installed.installation,
+            "Registry commitment must retain the verified install evidence"
+        );
+        assert_eq!(committed.registry.head.component, installed.component);
+        assert_eq!(committed.registry.head.revision, 1);
+        assert_ne!(committed.registry.head.content_hash, [0; 32]);
+        assert_eq!(
+            committed.registry.binding,
+            installed
+                .installation
+                .as_ref()
+                .expect("verified installation")
+                .binding
+        );
+        assert_eq!(
+            committed.registry.provisioning_origin,
+            installed.provisioning_origin
+        );
+        assert_eq!(committed.registry.release_set, installed.release_set);
+        assert_eq!(
+            committed.registry.status,
+            ComponentLifecycleStatus::Prepared
+        );
+        assert!(committed.registry.encoded_bytes > 0);
+        assert_eq!(
+            committed.directory.provenance.component,
+            committed.registry.binding
+        );
+        assert_eq!(
+            committed.directory.provenance.source_fleet_subnet_root,
+            fixture.root_id
+        );
+        assert_eq!(
+            committed.directory.provenance.component_registry_revision,
+            committed.registry.head.revision
+        );
+        assert_eq!(
+            committed
+                .directory
+                .provenance
+                .component_registry_content_hash,
+            committed.registry.head.content_hash
+        );
+        assert!(
+            committed.directory.provenance.synchronized_at_ns > 0,
+            "the first Directory must retain its derivation time"
+        );
+        assert_eq!(committed.directory.descendant_count, 0);
+
+        let retry: Result<RootComponentCommitResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_COMMIT,
+                (RootComponentCommitRequest { operation_id },),
+            )
+            .expect("retry issuer Component commitment transport");
+        assert_eq!(retry.expect("retry issuer Component commitment"), committed);
+        assert_committed_component_queries(pic, fixture, operation_id, &committed);
+        committed.allocation
+    }
+
+    fn assert_committed_component_queries(
+        pic: &Pic,
+        fixture: &BootstrappedRootFixture,
+        operation_id: [u8; 32],
+        committed: &RootComponentCommitResponse,
+    ) {
+        let allocation_status: Result<RootComponentAllocationResponse, Error> = pic
+            .query_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
+                (RootComponentAllocationStatusRequest { operation_id },),
+            )
+            .expect("query committed issuer Component transport");
+        assert_eq!(
+            allocation_status.expect("committed issuer Component status"),
+            committed.allocation
+        );
+
+        let registry: Result<ComponentRegistryPartitionResponse, Error> = pic
+            .query_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
+                (ComponentRegistryPartitionRequest {
+                    component: committed.allocation.component,
+                },),
+            )
+            .expect("query issuer Component Registry partition transport");
+        assert_eq!(
+            registry.expect("issuer Component Registry partition"),
+            committed.registry
+        );
+
+        let directory: Result<ComponentDirectoryHead, Error> = pic
+            .query_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_DIRECTORY_HEAD,
+                (ComponentDirectoryHeadRequest {
+                    component: committed.allocation.component,
+                },),
+            )
+            .expect("query issuer Component Directory head transport");
+        assert_eq!(
+            directory.expect("issuer Component Directory head"),
+            committed.directory
+        );
     }
 
     fn install_bootstrapped_root(
         pic: &Pic,
         root_wasm: Vec<u8>,
         coordinator: Principal,
+        store_fixture: RootStoreFixture,
     ) -> BootstrappedRootFixture {
         let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .and_then(Path::parent)
             .expect("workspace root");
         let config_path = root_canister_config_path(workspace_root);
-        let (manifest, artifacts) = exact_root_store_fixture(&config_path);
+        let RootStoreFixture {
+            manifest,
+            artifacts,
+        } = store_fixture;
         let manifest_bytes = serde_json::to_vec(&manifest).expect("canonical root release set");
         let digest = ReleaseSetDigest::from_bytes(
             wasm_hash(&manifest_bytes)
@@ -827,6 +975,19 @@ mod tests {
             COORDINATOR_PACKAGE,
             CanicWasmBuildProfile::Fast.target_dir_name(),
         )
+    }
+
+    fn build_root_store_fixture() -> RootStoreFixture {
+        let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("workspace root");
+        let config_path = root_canister_config_path(workspace_root);
+        let (manifest, artifacts) = exact_root_store_fixture(&config_path);
+        RootStoreFixture {
+            manifest,
+            artifacts,
+        }
     }
 
     fn exact_root_store_fixture(

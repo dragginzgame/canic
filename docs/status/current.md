@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.22`.
-- The latest published release is `v0.100.22` at
-  `484b75919ae2f58f82f375dd9a6fb85edff7a0c5`.
-- The `v0.100.22` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `6b1affbfdc0f6ec65601fb8f86dbe937160149523f0691757d3468675b66f7a7`.
+- The workspace package version is `0.100.23`.
+- The latest published release is `v0.100.23` at
+  `009646df0b565d6e81e5c2e8996b41551d229fed`.
+- The `v0.100.23` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `58e7d95c87f3275de009632ef4155922d91a0f72c1796f9f5db16587755203c7`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -244,16 +244,25 @@ Historical detail is archived at:
   repeated, while exact `Created` retry returns the original principal.
   Creation installs no Wasm, commits no `ComponentBinding` or committed count,
   publishes no Directory and leaves the root runtime `Prepared`.
-- Open `0.100.23` continues a created top-level Component through exact
+- Released `0.100.23` continues a created top-level Component through exact
   root-local Store installation. It hard-cuts managed application init to an
   immutable Registry-derived `ComponentBinding`, durably journals
   `InstallIntent → Installed → Verified`, and independently checks the sole
   root controller, exact gzip-payload status hash and retained target binding.
   Interrupted exact retry never repeats an already observed install and may
   retry only after proving the target still has no module. Raw-Wasm and gzip
-  payload hashes remain distinct release authorities. Committed counts,
-  per-Component Registry partitions, Directory publication and runtime
-  activation remain later boundaries.
+  payload hashes remain distinct release authorities.
+- Open `0.100.24` atomically advances an exactly verified allocation to
+  `Committed`, moves its capacity from reserved to committed counters and
+  stores one normalized top-level Component partition plus principal index.
+  Every partition has its own revision and domain-separated content hash. Its
+  first ownership-preserving Component Directory head is derived only from
+  that committed authority and retains the exact root, binding, revision,
+  hash and synchronization observation. Exact retry returns identical
+  evidence. Installation precharges the maximum allocation, partition and
+  index footprint before the paid effect, while commit converges to exact
+  encoded bytes. Component and root remain runtime `Prepared`; Directory
+  distribution and activation remain later boundaries.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority

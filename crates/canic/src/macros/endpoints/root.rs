@@ -85,6 +85,27 @@ macro_rules! canic_emit_root_admin_endpoints {
         }
 
         #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_root_component_commit(
+            request: ::canic::dto::component_registry::RootComponentCommitRequest,
+        ) -> Result<::canic::dto::component_registry::RootComponentCommitResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::commit_component_allocation(request).await
+        }
+
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_root_component_registry_partition(
+            request: ::canic::dto::component_registry::ComponentRegistryPartitionRequest,
+        ) -> Result<::canic::dto::component_registry::ComponentRegistryPartitionResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_registry_partition(request)
+        }
+
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_root_component_directory_head(
+            request: ::canic::dto::component_registry::ComponentDirectoryHeadRequest,
+        ) -> Result<::canic::dto::component_registry::ComponentDirectoryHead, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_directory_head(request)
+        }
+
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_prepare_fleet_activation(
         ) -> Result<::canic::dto::fleet_activation::FleetActivationStatusResponse, ::canic::Error> {
             __canic_run_prepared_root_init_block().await;
