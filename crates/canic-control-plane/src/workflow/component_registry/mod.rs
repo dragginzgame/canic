@@ -14,7 +14,8 @@ use crate::{
     view::component_registry::{
         ComponentRegistryPartitionView, RootComponentAllocationProgressView,
         RootComponentAllocationView, RootComponentCreationEffectView,
-        RootComponentInstallEffectView, RootComponentRegistryView,
+        RootComponentInitialInventoryView, RootComponentInstallEffectView,
+        RootComponentRegistryView,
     },
     workflow::{
         bootstrap::root_store, deployment, runtime::template::resolved_root_store_module_source,
@@ -54,13 +55,14 @@ use canic_core::{
             RootComponentAllocationStatusRequest, RootComponentCommitRequest,
             RootComponentCommitResponse, RootComponentCreationEvidence,
             RootComponentCreationRequest, RootComponentDirectoryPreparationRequest,
-            RootComponentDirectoryPreparationResponse, RootComponentInstallEvidence,
-            RootComponentInstallRequest, RootComponentMembershipActivationRequest,
-            RootComponentMembershipActivationResponse, RootComponentRegistryPreparationRequest,
-            RootComponentRegistryStatusResponse, RootComponentRuntimeActivationRequest,
-            RootComponentRuntimeActivationResponse,
+            RootComponentDirectoryPreparationResponse, RootComponentInitialInventoryStatus,
+            RootComponentInstallEvidence, RootComponentInstallRequest,
+            RootComponentMembershipActivationRequest, RootComponentMembershipActivationResponse,
+            RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
+            RootComponentRuntimeActivationRequest, RootComponentRuntimeActivationResponse,
         },
         error::Error,
+        fleet_activation::FleetActivationPhase,
         fleet_registry::{FleetDirectorySnapshot, FleetSubnetRootEntry, FleetSubnetRootStatus},
         root_store::RootStoreBootstrapResponse,
     },
@@ -172,6 +174,10 @@ pub async fn reserve_allocation(
         decision,
         request.operation_id,
         provisioning_origin,
+        FleetActivationApi::status()
+            .map_err(InternalError::public)?
+            .phase
+            == FleetActivationPhase::Active,
     )?;
     allocation_response(reserved)
 }
@@ -577,6 +583,147 @@ async fn synchronize_active_membership(
         active_authority_hash,
     )?;
     membership_response(allocation, active_partition, independently_observed)
+}
+
+/// Seal the complete current Component inventory before root activation preparation.
+pub async fn seal_root_activation_inventory(
+    fleet_activation_operation_id: [u8; 32],
+) -> Result<RootComponentInitialInventoryView, InternalError> {
+    let (authority, root) = root_authority()?;
+    let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let preparation_request = RootComponentRegistryPreparationRequest {
+        store_bootstrap: prepared.store_bootstrap.clone(),
+        expected_fleet_registry: prepared.prepared_against_registry.clone(),
+    };
+    root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    validate_active_authority(&authority, root, &preparation_request)?;
+    let plan = ComponentRegistryOps::seal_initial_inventory(
+        fleet_activation_operation_id,
+        IcOps::now_nanos(),
+    )?;
+    Ok(plan.receipt)
+}
+
+/// Re-observe every sealed initial Component on its exact active current Directory.
+pub async fn converge_root_activation_inventory(
+    fleet_activation_operation_id: [u8; 32],
+) -> Result<RootComponentInitialInventoryView, InternalError> {
+    let sealed =
+        ComponentRegistryOps::validate_sealed_initial_inventory(fleet_activation_operation_id)?;
+    for operation_id in &sealed.operation_ids {
+        verify_initial_component_convergence(*operation_id).await?;
+    }
+    let unchanged =
+        ComponentRegistryOps::validate_sealed_initial_inventory(fleet_activation_operation_id)?;
+    if unchanged.receipt.inventory_hash != sealed.receipt.inventory_hash
+        || unchanged.operation_ids != sealed.operation_ids
+    {
+        return Err(InternalError::conflict(
+            "initial Component inventory changed during root activation verification",
+        ));
+    }
+    let receipt = ComponentRegistryOps::mark_initial_inventory_directories_converged(
+        fleet_activation_operation_id,
+        sealed.receipt.inventory_hash,
+    )?;
+    if !receipt.directories_converged {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "initial Component Directory convergence did not commit its root receipt",
+        ));
+    }
+    Ok(receipt)
+}
+
+/// Record the terminal root-runtime receipt after Fleet activation commits.
+pub fn mark_root_runtime_activated(
+    fleet_activation_operation_id: [u8; 32],
+) -> Result<RootComponentInitialInventoryView, InternalError> {
+    let receipt = ComponentRegistryOps::initial_inventory(fleet_activation_operation_id)?;
+    if !receipt.directories_converged {
+        return Err(InternalError::unavailable(
+            "root runtime activation requires terminal initial Directory convergence",
+        ));
+    }
+    let terminal = ComponentRegistryOps::mark_initial_inventory_root_runtime_activated(
+        fleet_activation_operation_id,
+        receipt.inventory_hash,
+    )?;
+    if !terminal.root_runtime_activated {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root runtime activation did not commit its terminal Component inventory receipt",
+        ));
+    }
+    Ok(terminal)
+}
+
+#[must_use]
+pub fn root_runtime_activation_receipt_complete() -> bool {
+    ComponentRegistryOps::current()
+        .and_then(|registry| registry.initial_inventory)
+        .is_some_and(|receipt| receipt.directories_converged && receipt.root_runtime_activated)
+}
+
+async fn verify_initial_component_convergence(operation_id: [u8; 32]) -> Result<(), InternalError> {
+    let plan = prepared_component_runtime_plan(operation_id).await?;
+    let membership = committed_directory_receipt(&plan.allocation)?
+        .membership
+        .as_ref()
+        .ok_or_else(|| {
+            InternalError::unavailable(
+                "initial Component has no active Registry membership receipt",
+            )
+        })?;
+    if !membership.directory_synchronized {
+        return Err(InternalError::unavailable(
+            "initial Component has no terminal current-Directory receipt",
+        ));
+    }
+    let active_partition =
+        ComponentRegistryOps::partition(plan.allocation.component)?.ok_or_else(|| {
+            InternalError::unavailable("initial Component has no current Registry partition")
+        })?;
+    validate_partition(
+        &plan.root_binding,
+        plan.allocation.release_set,
+        &ConfigOps::component_topology()?,
+        &active_partition,
+    )?;
+    if active_partition.status != ComponentLifecycleStatus::Active {
+        return Err(InternalError::unavailable(
+            "initial Component Registry partition is not Active",
+        ));
+    }
+    let active_request = ComponentRuntimeDirectorySynchronizationRequest {
+        operation_id,
+        authority: ComponentRuntimeDirectoryAuthority {
+            fleet: plan.directory_request.authority.fleet.clone(),
+            component: component_directory_head(&active_partition),
+        },
+    };
+    let active_authority_hash =
+        ComponentRuntimeOps::directory_authority_hash(&active_request.authority)?;
+    if membership.directory_authority_hash != active_authority_hash {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "initial Component membership receipt differs from active Directory authority",
+        ));
+    }
+    let observed = query_component_runtime_status(plan.target_canister).await?;
+    if !validate_target_membership_status(
+        &observed,
+        &plan.target_binding,
+        &plan.directory_request,
+        plan.directory_authority_hash,
+        &active_request,
+        active_authority_hash,
+    )? {
+        return Err(InternalError::unavailable(
+            "initial Component has not converged on its active current Directory",
+        ));
+    }
+    Ok(())
 }
 
 /// Read one committed Component Registry partition without mutation.
@@ -1493,6 +1640,16 @@ fn response(
         committed_component_instances: prepared.committed_component_instances,
         managed_descendants: prepared.managed_descendants,
         encoded_bytes: prepared.encoded_bytes,
+        initial_inventory: prepared.initial_inventory.map(|inventory| {
+            RootComponentInitialInventoryStatus {
+                fleet_activation_operation_id: inventory.fleet_activation_operation_id,
+                component_count: inventory.component_count,
+                inventory_hash: inventory.inventory_hash,
+                sealed_at_ns: inventory.sealed_at_ns,
+                directories_converged: inventory.directories_converged,
+                root_runtime_activated: inventory.root_runtime_activated,
+            }
+        }),
     })
 }
 

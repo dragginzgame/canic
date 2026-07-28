@@ -138,6 +138,23 @@ pub struct RootComponentRegistryMetaRecord {
     pub committed_component_instances: u32,
     pub managed_descendants: u32,
     pub encoded_bytes: u64,
+    pub initial_inventory: Option<RootComponentInitialInventoryRecord>,
+}
+
+///
+/// RootComponentInitialInventoryRecord
+///
+/// Immutable initial Component inventory plus terminal root-activation receipts.
+///
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentInitialInventoryRecord {
+    pub fleet_activation_operation_id: [u8; 32],
+    pub component_count: u32,
+    pub inventory_hash: [u8; 32],
+    pub sealed_at_ns: u64,
+    pub directories_converged: bool,
+    pub root_runtime_activated: bool,
 }
 
 ///
@@ -471,6 +488,37 @@ impl RootComponentRegistryStore {
     #[must_use]
     pub(crate) fn current() -> Option<RootComponentRegistryMetaRecord> {
         ROOT_COMPONENT_REGISTRY.with_borrow(|cell| cell.get().current.clone())
+    }
+
+    #[must_use]
+    pub(crate) fn allocations() -> Vec<RootComponentAllocationRecord> {
+        ROOT_COMPONENT_ALLOCATIONS
+            .with_borrow(|map| map.iter().map(|entry| entry.value()).collect())
+    }
+
+    #[must_use]
+    pub(crate) fn partitions() -> Vec<ComponentRegistryPartitionRecord> {
+        COMPONENT_REGISTRY_PARTITIONS
+            .with_borrow(|map| map.iter().map(|entry| entry.value()).collect())
+    }
+
+    pub(crate) fn replace_meta(
+        expected: &RootComponentRegistryMetaRecord,
+        next: RootComponentRegistryMetaRecord,
+    ) -> Result<(), RootComponentAllocationCommitError> {
+        ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            let current = state
+                .current
+                .as_ref()
+                .ok_or(RootComponentAllocationCommitError::Uninitialized)?;
+            if current != expected {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            state.current = Some(next);
+            cell.set(state);
+            Ok(())
+        })
     }
 
     #[must_use]

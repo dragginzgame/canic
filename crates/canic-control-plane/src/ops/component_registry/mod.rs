@@ -9,16 +9,18 @@ use crate::{
         ComponentRegistryPartitionRecord, RootComponentAllocationCommitError,
         RootComponentAllocationProgressRecord, RootComponentAllocationRecord,
         RootComponentCommitmentRecord, RootComponentCreationEffectRecord,
-        RootComponentInstallEffectRecord, RootComponentMembershipRecord,
-        RootComponentRegistryCommitError, RootComponentRegistryMetaRecord,
-        RootComponentRegistryStore,
+        RootComponentInitialInventoryRecord, RootComponentInstallEffectRecord,
+        RootComponentMembershipRecord, RootComponentRegistryCommitError,
+        RootComponentRegistryMetaRecord, RootComponentRegistryStore,
     },
     view::component_registry::{
         ComponentRegistryPartitionView, RootComponentAllocationProgressView,
         RootComponentAllocationView, RootComponentCommitmentView, RootComponentCreationEffectView,
-        RootComponentInstallEffectView, RootComponentMembershipView, RootComponentRegistryView,
+        RootComponentInitialInventoryView, RootComponentInstallEffectView,
+        RootComponentMembershipView, RootComponentRegistryView,
     },
 };
+use candid::CandidType;
 use canic_core::{
     cdk::types::{Cycles, Principal},
     control_plane_support::{
@@ -35,8 +37,8 @@ use canic_core::{
         root_store::RootStoreBootstrapRequest,
     },
     ids::{
-        ComponentBinding, ComponentSpecId, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
-        IntentId,
+        CanisterRole, ComponentBinding, ComponentInstanceId, ComponentSpecId,
+        FleetSubnetRootBinding, FleetSubnetRootReleaseSet, IntentId,
     },
 };
 use sha2::{Digest, Sha256};
@@ -59,6 +61,45 @@ pub struct ComponentRegistryOps;
 pub struct ComponentSpecInstanceCounts {
     pub reserved: u32,
     pub committed: u32,
+}
+
+///
+/// RootComponentInitialInventoryPlan
+///
+/// Exact sealed initial Component operations consumed by root activation workflow.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentInitialInventoryPlan {
+    pub receipt: RootComponentInitialInventoryView,
+    pub operation_ids: Vec<[u8; 32]>,
+}
+
+#[derive(CandidType)]
+struct RootComponentInitialInventoryHashEntry {
+    operation_id: [u8; 32],
+    allocation_sequence: u64,
+    component: ComponentInstanceId,
+    component_spec: ComponentSpecId,
+    spec_hash: [u8; 32],
+    role: CanisterRole,
+    provisioning_origin: ComponentProvisioningOrigin,
+    release_set: FleetSubnetRootReleaseSet,
+    prepared_registry: ComponentRegistryHead,
+    prepared_registry_encoded_bytes: u64,
+    prepared_directory_synchronized_at_ns: u64,
+    prepared_directory_authority_hash: [u8; 32],
+    active_binding: ComponentBinding,
+    active_registry: ComponentRegistryHead,
+    active_registry_encoded_bytes: u64,
+    active_directory_synchronized_at_ns: u64,
+    active_directory_authority_hash: [u8; 32],
+}
+
+struct CompleteInitialInventory {
+    component_count: u32,
+    inventory_hash: [u8; 32],
+    operation_ids: Vec<[u8; 32]>,
 }
 
 ///
@@ -95,6 +136,113 @@ impl ComponentRegistryOps {
         RootComponentRegistryStore::current().map(record_to_view)
     }
 
+    pub(crate) fn seal_initial_inventory(
+        fleet_activation_operation_id: [u8; 32],
+        sealed_at_ns: u64,
+    ) -> Result<RootComponentInitialInventoryPlan, InternalError> {
+        if sealed_at_ns == 0 {
+            return Err(InternalError::invalid_input(
+                "initial Component inventory seal time must be positive",
+            ));
+        }
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let inventory = complete_initial_inventory(&current)?;
+        if let Some(existing) = current.initial_inventory {
+            validate_initial_inventory_receipt(
+                &existing,
+                fleet_activation_operation_id,
+                inventory.component_count,
+                inventory.inventory_hash,
+            )?;
+            return Ok(RootComponentInitialInventoryPlan {
+                receipt: initial_inventory_record_to_view(existing),
+                operation_ids: inventory.operation_ids,
+            });
+        }
+
+        let receipt = RootComponentInitialInventoryRecord {
+            fleet_activation_operation_id,
+            component_count: inventory.component_count,
+            inventory_hash: inventory.inventory_hash,
+            sealed_at_ns,
+            directories_converged: false,
+            root_runtime_activated: false,
+        };
+        let mut next = current.clone();
+        next.initial_inventory = Some(receipt);
+        RootComponentRegistryStore::replace_meta(&current, next)
+            .map_err(map_allocation_commit_error)?;
+        Ok(RootComponentInitialInventoryPlan {
+            receipt: initial_inventory_record_to_view(receipt),
+            operation_ids: inventory.operation_ids,
+        })
+    }
+
+    pub(crate) fn validate_sealed_initial_inventory(
+        fleet_activation_operation_id: [u8; 32],
+    ) -> Result<RootComponentInitialInventoryPlan, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let receipt = current.initial_inventory.ok_or_else(|| {
+            InternalError::unavailable("initial Component inventory has not been sealed")
+        })?;
+        let inventory = complete_initial_inventory(&current)?;
+        validate_initial_inventory_receipt(
+            &receipt,
+            fleet_activation_operation_id,
+            inventory.component_count,
+            inventory.inventory_hash,
+        )?;
+        Ok(RootComponentInitialInventoryPlan {
+            receipt: initial_inventory_record_to_view(receipt),
+            operation_ids: inventory.operation_ids,
+        })
+    }
+
+    pub(crate) fn initial_inventory(
+        fleet_activation_operation_id: [u8; 32],
+    ) -> Result<RootComponentInitialInventoryView, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let receipt = current.initial_inventory.ok_or_else(|| {
+            InternalError::unavailable("initial Component inventory has not been sealed")
+        })?;
+        if receipt.fleet_activation_operation_id != fleet_activation_operation_id {
+            return Err(InternalError::conflict(
+                "initial Component inventory is bound to a different Fleet activation",
+            ));
+        }
+        Ok(initial_inventory_record_to_view(receipt))
+    }
+
+    pub(crate) fn mark_initial_inventory_directories_converged(
+        fleet_activation_operation_id: [u8; 32],
+        expected_inventory_hash: [u8; 32],
+    ) -> Result<RootComponentInitialInventoryView, InternalError> {
+        update_initial_inventory_receipt(
+            fleet_activation_operation_id,
+            expected_inventory_hash,
+            true,
+            false,
+        )
+    }
+
+    pub(crate) fn mark_initial_inventory_root_runtime_activated(
+        fleet_activation_operation_id: [u8; 32],
+        expected_inventory_hash: [u8; 32],
+    ) -> Result<RootComponentInitialInventoryView, InternalError> {
+        update_initial_inventory_receipt(
+            fleet_activation_operation_id,
+            expected_inventory_hash,
+            true,
+            true,
+        )
+    }
+
     pub(crate) fn prepare(
         root: FleetSubnetRootBinding,
         prepared_against_registry: FleetRegistryVersion,
@@ -111,6 +259,7 @@ impl ComponentRegistryOps {
             committed_component_instances: 0,
             managed_descendants: 0,
             encoded_bytes: 0,
+            initial_inventory: None,
         };
         RootComponentRegistryStore::prepare(record.clone()).map_err(|error| match error {
             RootComponentRegistryCommitError::ConflictingState => InternalError::conflict(
@@ -148,6 +297,7 @@ impl ComponentRegistryOps {
         decision: TopLevelComponentAllocationDecision,
         operation_id: [u8; 32],
         provisioning_origin: ComponentProvisioningOrigin,
+        root_runtime_active: bool,
     ) -> Result<RootComponentAllocationView, InternalError> {
         let current = RootComponentRegistryStore::current().ok_or_else(|| {
             InternalError::unavailable("root Component Registry authority has not been prepared")
@@ -171,6 +321,26 @@ impl ComponentRegistryOps {
                     "Component allocation operation is already bound to different intent",
                 ))
             };
+        }
+        match (current.initial_inventory.as_ref(), root_runtime_active) {
+            (Some(_), false) => {
+                return Err(InternalError::conflict(
+                    "initial Component inventory is sealed while the root runtime is Prepared",
+                ));
+            }
+            (Some(receipt), true) if !receipt.root_runtime_activated => {
+                return Err(InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "active root runtime has no terminal initial-inventory receipt",
+                ));
+            }
+            (None, true) => {
+                return Err(InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "active root runtime has no sealed initial Component inventory",
+                ));
+            }
+            (None, false) | (Some(_), true) => {}
         }
 
         if current.next_allocation_sequence != record.allocation_sequence {
@@ -900,6 +1070,209 @@ impl ComponentRegistryOps {
     }
 }
 
+fn complete_initial_inventory(
+    current: &RootComponentRegistryMetaRecord,
+) -> Result<CompleteInitialInventory, InternalError> {
+    if current.reserved_component_instances != 0 {
+        return Err(InternalError::unavailable(
+            "initial Component inventory still contains nonterminal allocations",
+        ));
+    }
+
+    let mut allocations = RootComponentRegistryStore::allocations();
+    allocations.sort_by_key(|record| record.allocation_sequence);
+    let component_count = u32::try_from(allocations.len()).map_err(|_| {
+        InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "initial Component inventory exceeds u32",
+        )
+    })?;
+    if component_count != current.committed_component_instances
+        || current.next_allocation_sequence != u64::from(component_count) + 1
+    {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component Registry counters differ from the initial allocation inventory",
+        ));
+    }
+
+    let partitions = RootComponentRegistryStore::partitions();
+    if partitions.len() != allocations.len() {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "initial Component allocations and Registry partitions differ in cardinality",
+        ));
+    }
+
+    let mut entries = Vec::with_capacity(allocations.len());
+    let mut operation_ids = Vec::with_capacity(allocations.len());
+    let mut encoded_bytes = 0_u64;
+    for (index, record) in allocations.iter().enumerate() {
+        let (entry, partition_bytes) = initial_inventory_hash_entry(record, index)?;
+        encoded_bytes = encoded_bytes.checked_add(partition_bytes).ok_or_else(|| {
+            InternalError::resource_exhausted("Component Registry bytes overflow")
+        })?;
+        operation_ids.push(record.operation_id);
+        entries.push(entry);
+    }
+    if encoded_bytes != current.encoded_bytes {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "initial Component inventory differs from root Registry byte accounting",
+        ));
+    }
+
+    let inventory_hash = initial_inventory_hash(&entries)?;
+    Ok(CompleteInitialInventory {
+        component_count,
+        inventory_hash,
+        operation_ids,
+    })
+}
+
+fn initial_inventory_hash_entry(
+    record: &RootComponentAllocationRecord,
+    index: usize,
+) -> Result<(RootComponentInitialInventoryHashEntry, u64), InternalError> {
+    if record.allocation_sequence != index as u64 + 1 {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "initial Component allocation sequences are not consecutive",
+        ));
+    }
+    let RootComponentAllocationProgressRecord::Committed { commitment, .. } = &record.progress
+    else {
+        return Err(InternalError::unavailable(
+            "initial Component inventory contains an allocation without Registry commitment",
+        ));
+    };
+    let membership = commitment.membership.as_ref().ok_or_else(|| {
+        InternalError::unavailable(
+            "initial Component inventory contains an allocation without active membership",
+        )
+    })?;
+    if !commitment.directory_prepared
+        || !commitment.runtime_activated
+        || !membership.directory_synchronized
+    {
+        return Err(InternalError::unavailable(
+            "initial Component inventory lacks terminal Directory, runtime or membership evidence",
+        ));
+    }
+    let active = exact_active_partition(record, commitment, membership)?;
+    validate_partition_record(&active)?;
+    let partition_bytes = active.encoded_bytes;
+    Ok((
+        RootComponentInitialInventoryHashEntry {
+            operation_id: record.operation_id,
+            allocation_sequence: record.allocation_sequence,
+            component: record.component,
+            component_spec: record.component_spec.clone(),
+            spec_hash: record.spec_hash,
+            role: record.role.clone(),
+            provisioning_origin: record.provisioning_origin.clone(),
+            release_set: record.release_set,
+            prepared_registry: commitment.registry.clone(),
+            prepared_registry_encoded_bytes: commitment.prepared_registry_encoded_bytes,
+            prepared_directory_synchronized_at_ns: commitment.directory_synchronized_at_ns,
+            prepared_directory_authority_hash: commitment.directory_authority_hash,
+            active_binding: active.binding.clone(),
+            active_registry: ComponentRegistryHead {
+                component: active.binding.component,
+                revision: active.revision,
+                content_hash: active.content_hash,
+            },
+            active_registry_encoded_bytes: active.encoded_bytes,
+            active_directory_synchronized_at_ns: membership.directory_synchronized_at_ns,
+            active_directory_authority_hash: membership.directory_authority_hash,
+        },
+        partition_bytes,
+    ))
+}
+
+fn initial_inventory_hash(
+    entries: &[RootComponentInitialInventoryHashEntry],
+) -> Result<[u8; 32], InternalError> {
+    const DOMAIN: &[u8] = b"canic.root-component-initial-inventory.v1";
+    let payload = candid::encode_one(entries).map_err(|error| {
+        InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
+            format!("initial Component inventory cannot be encoded: {error}"),
+        )
+    })?;
+    let mut hasher = Sha256::new();
+    hasher.update(DOMAIN);
+    hasher.update((payload.len() as u64).to_be_bytes());
+    hasher.update(payload);
+    Ok(hasher.finalize().into())
+}
+
+fn validate_initial_inventory_receipt(
+    receipt: &RootComponentInitialInventoryRecord,
+    fleet_activation_operation_id: [u8; 32],
+    component_count: u32,
+    inventory_hash: [u8; 32],
+) -> Result<(), InternalError> {
+    if receipt.fleet_activation_operation_id != fleet_activation_operation_id {
+        return Err(InternalError::conflict(
+            "initial Component inventory is bound to a different Fleet activation",
+        ));
+    }
+    if receipt.component_count != component_count
+        || receipt.inventory_hash != inventory_hash
+        || receipt.sealed_at_ns == 0
+    {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "sealed initial Component inventory differs from current protected authority",
+        ));
+    }
+    Ok(())
+}
+
+fn update_initial_inventory_receipt(
+    fleet_activation_operation_id: [u8; 32],
+    expected_inventory_hash: [u8; 32],
+    directories_converged: bool,
+    root_runtime_activated: bool,
+) -> Result<RootComponentInitialInventoryView, InternalError> {
+    let current = RootComponentRegistryStore::current().ok_or_else(|| {
+        InternalError::unavailable("root Component Registry authority has not been prepared")
+    })?;
+    let mut receipt = current.initial_inventory.ok_or_else(|| {
+        InternalError::unavailable("initial Component inventory has not been sealed")
+    })?;
+    if receipt.fleet_activation_operation_id != fleet_activation_operation_id
+        || receipt.inventory_hash != expected_inventory_hash
+    {
+        return Err(InternalError::conflict(
+            "root activation receipt differs from its sealed initial Component inventory",
+        ));
+    }
+    if root_runtime_activated && !directories_converged {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
+            "root runtime activation cannot precede initial Directory convergence",
+        ));
+    }
+    receipt.directories_converged |= directories_converged;
+    receipt.root_runtime_activated |= root_runtime_activated;
+    if receipt.root_runtime_activated && !receipt.directories_converged {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "root runtime receipt has no initial Directory convergence evidence",
+        ));
+    }
+    if current.initial_inventory == Some(receipt) {
+        return Ok(initial_inventory_record_to_view(receipt));
+    }
+    let mut next = current.clone();
+    next.initial_inventory = Some(receipt);
+    RootComponentRegistryStore::replace_meta(&current, next)
+        .map_err(map_allocation_commit_error)?;
+    Ok(initial_inventory_record_to_view(receipt))
+}
+
 fn record_to_view(record: RootComponentRegistryMetaRecord) -> RootComponentRegistryView {
     RootComponentRegistryView {
         root: record.root,
@@ -911,6 +1284,22 @@ fn record_to_view(record: RootComponentRegistryMetaRecord) -> RootComponentRegis
         committed_component_instances: record.committed_component_instances,
         managed_descendants: record.managed_descendants,
         encoded_bytes: record.encoded_bytes,
+        initial_inventory: record
+            .initial_inventory
+            .map(initial_inventory_record_to_view),
+    }
+}
+
+const fn initial_inventory_record_to_view(
+    record: RootComponentInitialInventoryRecord,
+) -> RootComponentInitialInventoryView {
+    RootComponentInitialInventoryView {
+        fleet_activation_operation_id: record.fleet_activation_operation_id,
+        component_count: record.component_count,
+        inventory_hash: record.inventory_hash,
+        sealed_at_ns: record.sealed_at_ns,
+        directories_converged: record.directories_converged,
+        root_runtime_activated: record.root_runtime_activated,
     }
 }
 
@@ -1862,6 +2251,11 @@ mod tests {
             )
             .is_err()
         );
+        let empty_inventory = ComponentRegistryOps::seal_initial_inventory([10; 32], 11)
+            .expect("seal empty initial inventory");
+        assert_eq!(empty_inventory.receipt.component_count, 0);
+        assert_ne!(empty_inventory.receipt.inventory_hash, [0; 32]);
+        assert!(empty_inventory.operation_ids.is_empty());
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
 
@@ -1900,12 +2294,16 @@ mod tests {
             caller: candid::Principal::from_slice(&[11; 29]),
         };
 
-        let reserved =
-            ComponentRegistryOps::reserve_allocation(decision.clone(), [12; 32], origin.clone())
-                .expect("reserve");
+        let reserved = ComponentRegistryOps::reserve_allocation(
+            decision.clone(),
+            [12; 32],
+            origin.clone(),
+            false,
+        )
+        .expect("reserve");
         let interrupted_snapshot = RootComponentRegistryStore::export();
         RootComponentRegistryStore::import(interrupted_snapshot);
-        let repeated = ComponentRegistryOps::reserve_allocation(decision, [12; 32], origin)
+        let repeated = ComponentRegistryOps::reserve_allocation(decision, [12; 32], origin, false)
             .expect("exact retry");
 
         assert_eq!(reserved, repeated);
@@ -1923,6 +2321,16 @@ mod tests {
                 committed: 0,
             }
         );
+        assert!(
+            ComponentRegistryOps::seal_initial_inventory([20; 32], 21).is_err(),
+            "a nonterminal allocation must prevent initial inventory sealing"
+        );
+        assert!(
+            ComponentRegistryOps::current()
+                .expect("Registry status")
+                .initial_inventory
+                .is_none()
+        );
 
         let conflicting = TopLevelComponentAllocationDecision {
             allocation_sequence: 2,
@@ -1938,6 +2346,7 @@ mod tests {
                 ComponentProvisioningOrigin::FleetAdministrator {
                     caller: candid::Principal::from_slice(&[11; 29]),
                 },
+                false,
             )
             .is_err()
         );
@@ -1979,6 +2388,7 @@ mod tests {
             ComponentProvisioningOrigin::FleetAdministrator {
                 caller: candid::Principal::from_slice(&[11; 29]),
             },
+            false,
         )
         .expect("reserve");
         let reserved_bytes = ComponentRegistryOps::current()
@@ -2287,6 +2697,74 @@ mod tests {
                 .expect("membership receipt")
                 .directory_synchronized
         );
+        assert_initial_inventory_receipt();
+    }
+
+    fn assert_initial_inventory_receipt() {
+        let sealed = ComponentRegistryOps::seal_initial_inventory([40; 32], 41)
+            .expect("seal initial inventory");
+        assert_eq!(sealed.operation_ids, vec![[12; 32]]);
+        assert_eq!(sealed.receipt.fleet_activation_operation_id, [40; 32]);
+        assert_eq!(sealed.receipt.component_count, 1);
+        assert_ne!(sealed.receipt.inventory_hash, [0; 32]);
+        assert_eq!(sealed.receipt.sealed_at_ns, 41);
+        assert!(!sealed.receipt.directories_converged);
+        assert!(!sealed.receipt.root_runtime_activated);
+        let repeated = ComponentRegistryOps::seal_initial_inventory([40; 32], 42)
+            .expect("retry initial inventory seal");
+        assert_eq!(repeated, sealed);
+        assert!(
+            ComponentRegistryOps::reserve_allocation(
+                TopLevelComponentAllocationDecision {
+                    allocation_sequence: 2,
+                    component: ComponentInstanceId::from_generated_bytes([42; 32]),
+                    component_spec: "projects".parse().expect("Component Spec"),
+                    spec_hash: [43; 32],
+                    role: CanisterRole::new("project_hub"),
+                },
+                [44; 32],
+                ComponentProvisioningOrigin::FleetAdministrator {
+                    caller: candid::Principal::from_slice(&[11; 29]),
+                },
+                false,
+            )
+            .is_err(),
+            "a Prepared root cannot extend its sealed initial inventory"
+        );
+
+        let converged = ComponentRegistryOps::mark_initial_inventory_directories_converged(
+            [40; 32],
+            sealed.receipt.inventory_hash,
+        )
+        .expect("mark initial Directories converged");
+        assert!(converged.directories_converged);
+        assert!(!converged.root_runtime_activated);
+        let terminal = ComponentRegistryOps::mark_initial_inventory_root_runtime_activated(
+            [40; 32],
+            sealed.receipt.inventory_hash,
+        )
+        .expect("mark root runtime activated");
+        assert!(terminal.directories_converged);
+        assert!(terminal.root_runtime_activated);
+        assert_eq!(
+            ComponentRegistryOps::initial_inventory([40; 32]).expect("terminal initial inventory"),
+            terminal
+        );
+        ComponentRegistryOps::reserve_allocation(
+            TopLevelComponentAllocationDecision {
+                allocation_sequence: 2,
+                component: ComponentInstanceId::from_generated_bytes([42; 32]),
+                component_spec: "projects".parse().expect("Component Spec"),
+                spec_hash: [43; 32],
+                role: CanisterRole::new("project_hub"),
+            },
+            [44; 32],
+            ComponentProvisioningOrigin::FleetAdministrator {
+                caller: candid::Principal::from_slice(&[11; 29]),
+            },
+            true,
+        )
+        .expect("active root admits dynamic allocation after terminal initial receipt");
     }
 
     fn committed_membership(
@@ -2444,6 +2922,7 @@ mod tests {
             ComponentProvisioningOrigin::FleetAdministrator {
                 caller: candid::Principal::from_slice(&[11; 29]),
             },
+            false,
         )
         .expect("reserve");
         ComponentRegistryOps::begin_creation(
@@ -2537,6 +3016,7 @@ mod tests {
             ComponentProvisioningOrigin::FleetAdministrator {
                 caller: candid::Principal::from_slice(&[11; 29]),
             },
+            false,
         )
         .expect_err("Registry byte capacity must reject reservation");
         assert!(error.is_public_resource_exhausted());

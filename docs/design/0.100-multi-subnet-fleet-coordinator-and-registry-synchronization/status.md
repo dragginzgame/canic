@@ -6,9 +6,9 @@ Date: 2026-07-28
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.26`.
-- Latest published release: `v0.100.26`.
-- Open patch draft: `0.100.27`; no package-version change has been authorized.
+- Workspace package version: `0.100.27`.
+- Latest published release: `v0.100.27`.
+- Open patch draft: `0.100.28`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -188,7 +188,7 @@ Registry slices replace the 0.99 root model.
 
 - [ ] Qualify interruption and exact retry.
 - [ ] Prove one Component operation cannot block an unrelated Component.
-- [ ] Activate initial roots only after active-release-set Store and final
+- [x] Activate initial roots only after active-release-set Store and final
   topology synchronization.
 - [ ] Hard-cut the terminal Fleet catalog from one root principal to the
   Coordinator principal and publish it only after complete terminal evidence.
@@ -469,7 +469,7 @@ original `DirectoryPrepared` response even after the target has progressed.
 The Component Registry row and Fleet Subnet Root intentionally remain
 `Prepared`.
 
-Open 0.100.27 atomically promotes that exact runtime-active Component's
+Released 0.100.27 atomically promotes that exact runtime-active Component's
 Registry partition from revision-one `Prepared` to revision-two `Active`,
 replaces exact stable-byte accounting and retains a separate immutable
 membership receipt. It derives and sends the corresponding current Directory
@@ -485,17 +485,26 @@ while exact retries of commit, Directory preparation and runtime activation
 reconstruct their revision-one responses. The Fleet Subnet Root remains
 runtime `Prepared`.
 
+Open 0.100.28 seals the exact ordered initial Component allocation inventory
+only after every operation is committed, every partition is `Active`, all
+Directory/runtime/membership receipts are terminal and stable counters and
+encoded bytes match the complete set. The domain-separated inventory hash
+binds immutable allocation, release-set, Registry and Directory evidence to
+the protected Fleet activation operation.
+
+While the root remains `Prepared`, the seal blocks new reservations without
+blocking exact retry. Root activation revalidates the frozen inventory,
+independently queries each target for its exact active current Directory,
+records aggregate convergence, advances the root runtime and commits a
+terminal root-runtime receipt before bootstrap readiness. Exact activation
+retry reconciles an already-active root into the same receipt. Dynamic
+allocations resume after activation and cannot rewrite the initial inventory.
+
 ## Next Action
 
-Activate the Fleet Subnet Root runtime only after every admitted initial
-Component has exact committed Registry authority, terminal Directory,
-runtime and membership receipts, an `Active` current partition and
-independently observed current Directory convergence. Do not reintroduce
-role-based Directory authority, static root bootstrap creation or an unbound
-Canister effect.
-Restore the role-attestation PocketIC cases only after this lifecycle can
-create a Registry-bound issuer Component; do not revive the old cached
-root/issuer bootstrap fixture.
+Restore the role-attestation PocketIC cases through the real Registry-bound
+issuer Component lifecycle; do not revive the old cached root/issuer bootstrap
+fixture.
 Rebase the instruction-audit scenarios on the same real allocation boundary
 before taking new Component lifecycle measurements.
 

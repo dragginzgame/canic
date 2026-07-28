@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.26`.
-- The latest published release is `v0.100.26` at
-  `24354da29e4b072ad1914d2b142cae0a4706eb79`.
-- The `v0.100.26` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `f319e84f91d9ab7c3b7d1ce09e48f97674a73fef731d28d56f25f614e9cf4d56`.
+- The workspace package version is `0.100.27`.
+- The latest published release is `v0.100.27` at
+  `179a2c66ac0a5f0fc47207134176bc9220b7f727`.
+- The `v0.100.27` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `11255488f73da1a1736d5f3ae093c51ba84df9740591ebc9a5fca2829897a962`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -283,7 +283,7 @@ Historical detail is archived at:
   re-queries the exact active receipt and then records its fixed-size terminal
   runtime receipt. The Component Registry row and Fleet Subnet Root remain
   `Prepared`; partition promotion and active-Directory convergence are next.
-- Open `0.100.27` atomically promotes that exactly runtime-active Component
+- Released `0.100.27` atomically promotes that exactly runtime-active Component
   Registry partition from revision-one `Prepared` to revision-two `Active`,
   replaces exact Registry-byte accounting and retains a separate immutable
   membership receipt. It then synchronizes the new current Directory directly
@@ -293,6 +293,15 @@ Historical detail is archived at:
   expose revision two, while exact commit, Directory-preparation and
   runtime-activation retries reconstruct their revision-one responses. The
   Fleet Subnet Root remains runtime `Prepared`.
+- Open `0.100.28` seals the exact complete initial Component inventory only
+  after every allocation is committed with terminal Directory, runtime and
+  membership receipts and an `Active` current partition. While the root is
+  `Prepared`, the seal rejects new allocation reservations but preserves
+  exact retry. Root activation independently re-observes every sealed target's
+  current Directory, records aggregate convergence, advances the root runtime
+  and commits a terminal receipt required by bootstrap readiness. Exact
+  activation retry reconciles that receipt, while later dynamic allocations
+  resume after the root is `Active` without changing the frozen inventory.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1598,14 +1607,19 @@ the live module, controller and retained binding through durable exact retry.
 It atomically commits that Component into counters and its root-local Registry
 partition, derives exact Fleet/Component Directory authority, distributes it
 directly, activates the target only from that retained authority and records
-independently observed target/root preparation and activation evidence. Next,
-it promotes the runtime-active Component's Registry partition to `Active`,
+independently observed target/root preparation and activation evidence. It
+then promotes the runtime-active Component's Registry partition to `Active`,
 derives and synchronizes its next current Directory revision, and records a
-terminal membership receipt. Next, activate the root only after every admitted
-initial Component has complete Registry, Directory, runtime and membership
-evidence. Do not bypass Store or Registry evidence, permit nested Component
-declarations, merge roots belonging to different Fleets on one Subnet or
-consume an earlier installation.
+terminal membership receipt. Root activation now seals that exact complete
+initial inventory, independently re-observes every current Directory and
+requires aggregate convergence plus a terminal root-runtime receipt before
+readiness.
+
+Next, restore the role-attestation PocketIC cases through a real
+Registry-bound issuer Component, then rebase instruction-audit scenarios on
+the same lifecycle before taking new measurements. Do not bypass Store or
+Registry evidence, permit nested Component declarations, merge roots belonging
+to different Fleets on one Subnet or consume an earlier installation.
 
 ## Historical Release Detail
 

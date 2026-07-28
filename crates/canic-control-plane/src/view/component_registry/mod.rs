@@ -37,6 +37,23 @@ pub struct RootComponentRegistryView {
     pub committed_component_instances: u32,
     pub managed_descendants: u32,
     pub encoded_bytes: u64,
+    pub initial_inventory: Option<RootComponentInitialInventoryView>,
+}
+
+///
+/// RootComponentInitialInventoryView
+///
+/// Read-only initial Component inventory and root-activation receipt state.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RootComponentInitialInventoryView {
+    pub fleet_activation_operation_id: [u8; 32],
+    pub component_count: u32,
+    pub inventory_hash: [u8; 32],
+    pub sealed_at_ns: u64,
+    pub directories_converged: bool,
+    pub root_runtime_activated: bool,
 }
 
 ///
