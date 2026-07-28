@@ -28,13 +28,7 @@ mod coordinator_install_journal;
 mod current_execution;
 mod deployment_truth_gate;
 mod execution_preflight;
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "terminal catalog publication remains deliberately unwired until host-side Component and root runtime activation supplies live summaries"
-    )
-)]
+mod fleet_catalog_closeout;
 mod fleet_catalog_publication;
 mod fleet_install_session;
 mod fleet_registry_activation;
@@ -68,6 +62,9 @@ pub use config_selection::{
 };
 use coordinator_install::install_and_verify_fleet_coordinator;
 use current_execution::current_install_execution_context;
+use fleet_catalog_closeout::{
+    PublishInstalledFleetCatalogRequest, publish_installed_fleet_catalog,
+};
 use fleet_registry_activation::{ActivateFleetRegistryRequest, activate_and_verify_fleet_registry};
 use fleet_subnet_root_component_registry_preparation::{
     PrepareFleetSubnetRootComponentRegistriesRequest,
@@ -203,18 +200,6 @@ impl InstallRootError {
 }
 
 #[derive(Debug, ThisError)]
-#[error(
-    "Fleet Coordinator {coordinator} and {active_roots} planned Fleet Subnet Root(s) are runtime-Active with independently verified empty initial Component inventories at Registry revision {active_registry_revision} from the durable plan at {}; terminal root-summary collection and Fleet catalog publication remain blocked",
-    plan_path.display(),
-)]
-struct FleetCatalogPublicationUnavailableError {
-    plan_path: PathBuf,
-    coordinator: canic_core::cdk::types::Principal,
-    active_roots: usize,
-    active_registry_revision: u64,
-}
-
-#[derive(Debug, ThisError)]
 #[error("fresh Fleet installation requires --fleet-input <PATH>")]
 struct MissingFleetInstallInputError;
 
@@ -330,7 +315,7 @@ fn install_current_fleet_infrastructure(
         &planned.plan,
     )?;
     timings.create_canisters = coordinator_duration;
-    let (roots, roots_duration) = install_current_fleet_subnet_roots(
+    let roots_duration = install_current_fleet_subnet_roots(
         icp_root,
         environment,
         local_replica,
@@ -404,13 +389,17 @@ fn install_current_fleet_infrastructure(
         planned,
         coordinator.coordinator,
     )?;
-    require_fleet_catalog_publication(
-        &planned.plan.path,
-        coordinator.coordinator,
-        roots.roots.len(),
-        active.version.revision,
-    )
-    .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))
+    publish_installed_fleet_catalog(PublishInstalledFleetCatalogRequest {
+        icp_root,
+        environment,
+        local_replica,
+        config_path,
+        fleet_name: planned.session.fleet_name.clone(),
+        fleet_install_plan: &planned.plan,
+        coordinator: coordinator.coordinator,
+    })
+    .map(|_| ())
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))
 }
 
 fn prepare_and_activate_current_fleet_subnet_roots(
@@ -545,20 +534,6 @@ fn persist_current_fleet_install_plan(
     .map_err(Into::into)
 }
 
-fn require_fleet_catalog_publication(
-    plan_path: &Path,
-    coordinator: canic_core::cdk::types::Principal,
-    active_roots: usize,
-    active_registry_revision: u64,
-) -> Result<(), FleetCatalogPublicationUnavailableError> {
-    Err(FleetCatalogPublicationUnavailableError {
-        plan_path: plan_path.to_path_buf(),
-        coordinator,
-        active_roots,
-        active_registry_revision,
-    })
-}
-
 fn current_install_config_path(
     icp_root: &Path,
     options: &InstallRootOptions,
@@ -642,15 +617,9 @@ fn install_current_fleet_subnet_roots(
     config_path: &Path,
     planned: &PlannedCurrentFleetInstall,
     coordinator: canic_core::cdk::types::Principal,
-) -> Result<
-    (
-        fleet_subnet_root_install::VerifiedFleetSubnetRoots,
-        Duration,
-    ),
-    InstallRootError,
-> {
+) -> Result<Duration, InstallRootError> {
     let started = Instant::now();
-    let roots = install_and_verify_fleet_subnet_roots(
+    install_and_verify_fleet_subnet_roots(
         icp_root,
         environment,
         local_replica,
@@ -660,7 +629,7 @@ fn install_current_fleet_subnet_roots(
         planned.session.operation_id,
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
-    Ok((roots, started.elapsed()))
+    Ok(started.elapsed())
 }
 
 fn persist_pre_root_receipts(

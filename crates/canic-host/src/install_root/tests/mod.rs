@@ -32,7 +32,7 @@ use super::truth_check::current_install_deployment_truth_check_at;
 use super::{
     InstallRootBlockKind, InstallRootBlockedError, InstallRootError, InstallRootOptions,
     InstallRootPhase, check_install_deployment_truth, check_install_execution_preflight,
-    latest_deployment_truth_receipt_path_from_root, require_fleet_catalog_publication,
+    latest_deployment_truth_receipt_path_from_root,
 };
 use crate::canister_build::{
     CanisterArtifactBuildSpec, CanisterBuildProfile, WorkspaceBuildContext,
@@ -77,26 +77,6 @@ fn public_install_error_preserves_phase_and_typed_source() {
             .and_then(|source| source.downcast_ref::<std::io::Error>())
             .is_some()
     );
-}
-
-#[test]
-fn verified_active_roots_guard_terminal_catalog_publication() {
-    let plan_path = Path::new("/tmp/fleet-install-plan.json");
-    let coordinator = candid::Principal::from_slice(&[42]);
-    let error = require_fleet_catalog_publication(plan_path, coordinator, 3, 4)
-        .expect_err("unwired terminal Fleet catalog publication must remain blocked");
-
-    assert_eq!(error.plan_path, plan_path);
-    assert_eq!(error.coordinator, coordinator);
-    assert_eq!(error.active_roots, 3);
-    assert_eq!(error.active_registry_revision, 4);
-    assert!(error.to_string().contains("runtime-Active"));
-    assert!(
-        error
-            .to_string()
-            .contains("empty initial Component inventories")
-    );
-    assert!(error.to_string().contains("Fleet catalog publication"));
 }
 
 #[test]

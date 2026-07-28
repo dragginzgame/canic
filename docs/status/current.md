@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.33`.
-- The latest published release is `v0.100.33` at
-  `189d56717571ada8687bf41c441d66ecd0e76234`.
-- Open `0.100.34` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.34`.
+- The latest published release is `v0.100.34` at
+  `b3202550b8478250cfdd53c26b803ceb2c4a1c85`.
+- Open `0.100.35` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -341,13 +341,19 @@ Historical detail is archived at:
   unreachable or contradictory evidence. Canonical physical-Subnet rows group
   co-located Coordinator/root infrastructure and JSON v1 retains separate
   Coordinator, root-infrastructure, Component and exact total counts.
-- Open `0.100.34` advances each normal host root-install journal through
+- Released `0.100.34` advances each normal host root-install journal through
   empty initial-inventory sealing and root runtime activation. Sequences
   23–27 retain exact preparation and activation intent/results, reconcile an
   uncertain call from live status and independently verify the active runtime
   plus terminal Component Registry receipt. A 0.100 admission is only a
   capacity ceiling, so the host does not fabricate initial Component counts;
   exact nonempty initial provisioning remains owned by 0.101 placement plans.
+- Open `0.100.35` removes the terminal installer fence. The host re-queries
+  and validates the complete Coordinator Registry evidence before trusting
+  its root principals, collects every active root summary concurrently in
+  canonical order and calls the sole terminal publication gate. A normal
+  fresh install succeeds only after its Coordinator-anchored Fleet catalog
+  row is durable or exactly adopted.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1669,14 +1675,14 @@ root and an exact active Component Registry partition, while the real
 Registry-created issuer exercises claim rejection and guard metrics without a
 static bootstrap fixture.
 
-Next, extend the normal host installer beyond empty Component Registry
-preparation. Materialize the planned initial Components through the existing
-Registry/Directory/runtime path, seal and activate every root, collect exact
-live root summaries and invoke the already-gated terminal catalog publication.
-Do not revive the removed single-root resolver, publish before complete
-runtime evidence, bypass Store or Registry evidence, permit nested Component
-declarations, merge roots belonging to different Fleets on one Subnet or
-consume an earlier installation.
+Next, implement authenticated parent-to-root child creation at arbitrary
+Component tree depth. Reuse the root-owned allocation, Store-bound install,
+Directory, runtime and membership path; retain the exact immediate parent and
+enforce the declared role-to-role spawn grant. Do not let managed application
+Canisters create through management directly, infer authorization from flat
+catalog presence, revive the removed single-root resolver, permit nested
+Component declarations, merge roots belonging to different Fleets on one
+Subnet or consume an earlier installation.
 
 ## Historical Release Detail
 
