@@ -130,7 +130,7 @@ done
 grep -Fq -- 'snapshot_status:' "$FINGERPRINTS"
 grep -Fq -- 'result_validity:' "$HOWTO"
 grep -Fq -- '## Authority Precedence' "$META"
-grep -Fq -- 'METHOD_VERSION="2"' "$ROOT/scripts/ci/instruction-audit-report.sh"
+grep -Fq -- 'METHOD_VERSION="3"' "$ROOT/scripts/ci/instruction-audit-report.sh"
 grep -Fq -- 'candidate_method_fingerprint' "$ROOT/scripts/ci/instruction-audit-report.sh"
 grep -Fq -- '"$candidate_method_fingerprint" != "$METHOD_FINGERPRINT"' "$ROOT/scripts/ci/instruction-audit-report.sh"
 grep -Fq -- 'BASELINE_REPORT="N/A"' "$ROOT/scripts/ci/instruction-audit-report.sh"
