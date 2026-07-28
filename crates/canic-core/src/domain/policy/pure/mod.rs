@@ -8,6 +8,7 @@ pub mod auth;
 #[cfg(feature = "blob-storage-billing")]
 pub mod blob_storage;
 pub mod component_allocation;
+pub mod component_child_allocation;
 pub mod cycles;
 pub mod cycles_funding;
 pub mod env;

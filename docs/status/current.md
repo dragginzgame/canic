@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.34`.
-- The latest published release is `v0.100.34` at
-  `b3202550b8478250cfdd53c26b803ceb2c4a1c85`.
-- Open `0.100.35` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.35`.
+- The latest published release is `v0.100.35` at
+  `fa24af81d2b3040570914bf5ca0a0e228b14afeb`.
+- Open `0.100.36` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -348,12 +348,18 @@ Historical detail is archived at:
   plus terminal Component Registry receipt. A 0.100 admission is only a
   capacity ceiling, so the host does not fabricate initial Component counts;
   exact nonempty initial provisioning remains owned by 0.101 placement plans.
-- Open `0.100.35` removes the terminal installer fence. The host re-queries
+- Released `0.100.35` removes the terminal installer fence. The host re-queries
   and validates the complete Coordinator Registry evidence before trusting
   its root principals, collects every active root summary concurrently in
   canonical order and calls the sole terminal publication gate. A normal
   fresh install succeeds only after its Coordinator-anchored Fleet catalog
   row is durable or exactly adopted.
+- Open `0.100.36` freezes one pure direct-child reservation decision shared by
+  direct Component and registered descendant parents. It requires the exact
+  immediate-parent caller, protected Component tree, current Registry
+  authority, active prerequisite evidence and role-to-role spawn grant, then
+  checks per-parent, Component-descendant and root managed-Canister capacity.
+  It does not yet persist a child or perform a paid Canister effect.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1675,14 +1681,17 @@ root and an exact active Component Registry partition, while the real
 Registry-created issuer exercises claim rejection and guard metrics without a
 static bootstrap fixture.
 
-Next, implement authenticated parent-to-root child creation at arbitrary
-Component tree depth. Reuse the root-owned allocation, Store-bound install,
-Directory, runtime and membership path; retain the exact immediate parent and
-enforce the declared role-to-role spawn grant. Do not let managed application
-Canisters create through management directly, infer authorization from flat
-catalog presence, revive the removed single-root resolver, permit nested
-Component declarations, merge roots belonging to different Fleets on one
-Subnet or consume an earlier installation.
+Next, persist exact operation-keyed child reservations plus normalized
+principal, parent, role and count indexes in the root-owned Component
+Registry, then expose the authenticated parent-to-root reservation endpoint
+through workflow. Keep creation/install as the following effect slice so
+durable same-release retry is proved before any paid call. Reuse the existing
+Store-bound install, Directory, runtime and membership path; retain the exact
+immediate parent and enforce the declared role-to-role spawn grant. Do not
+let managed application Canisters create through management directly, infer
+authorization from flat catalog presence, revive the removed single-root
+resolver, permit nested Component declarations, merge roots belonging to
+different Fleets on one Subnet or consume an earlier installation.
 
 ## Historical Release Detail
 

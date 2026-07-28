@@ -47,6 +47,7 @@ mod tests {
         cdk::types::Principal,
         domain::policy::pure::{
             component_allocation::ComponentAllocationPolicyError,
+            component_child_allocation::ComponentChildAllocationPolicyError,
             topology::{TopologyPolicyError, registry::RegistryPolicyError},
         },
         dto::error::ErrorCode,
@@ -95,6 +96,26 @@ mod tests {
         let invalid_authority: Error =
             InternalError::from(ComponentAllocationPolicyError::RootTopologyDigestMismatch).into();
         assert_eq!(invalid_authority.code, ErrorCode::InvariantViolation);
+
+        let forbidden_child: Error =
+            InternalError::from(ComponentChildAllocationPolicyError::SpawnGrantMissing {
+                parent_role: CanisterRole::new("project_hub"),
+                child_role: CanisterRole::new("project_ledger"),
+            })
+            .into();
+        assert_eq!(forbidden_child.code, ErrorCode::Forbidden);
+
+        let stale_child: Error = InternalError::from(
+            ComponentChildAllocationPolicyError::ComponentRegistryAuthorityMismatch,
+        )
+        .into();
+        assert_eq!(stale_child.code, ErrorCode::Conflict);
+
+        let exhausted_child: Error = InternalError::from(
+            ComponentChildAllocationPolicyError::ComponentDescendantCapacityExhausted,
+        )
+        .into();
+        assert_eq!(exhausted_child.code, ErrorCode::ResourceExhausted);
 
         let token_expired: Error = AccessError::DelegatedAuthTokenExpired.into();
         assert_eq!(token_expired.code, ErrorCode::AuthTokenExpired);

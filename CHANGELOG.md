@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.36` freezes one pure direct-child reservation decision for both
+  top-level Component and registered descendant parents, with exact Registry,
+  spawn-grant, per-parent, Component-descendant and root managed-Canister
+  authority.
+
 - `0.100.35` completes normal fresh Fleet installation by independently
   re-reading terminal Coordinator/root evidence and atomically publishing the
   Coordinator-anchored Fleet catalog only after every root agrees.

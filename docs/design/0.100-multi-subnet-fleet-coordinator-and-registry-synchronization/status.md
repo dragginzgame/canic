@@ -6,9 +6,9 @@ Date: 2026-07-28
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.34`.
-- Latest published release: `v0.100.34`.
-- Open patch draft: `0.100.35`; no package-version change has been authorized.
+- Workspace package version: `0.100.35`.
+- Latest published release: `v0.100.35`.
+- Open patch draft: `0.100.36`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -151,6 +151,9 @@ Registry slices replace the 0.99 root model.
   exact root-local Store under an immutable `ComponentBinding`.
 - [ ] Implement same-root grant-checked peer Component provisioning while
   retaining causal origin without parentage.
+- [x] Freeze one pure direct-child reservation decision for direct Component
+  and registered descendant parents with exact Registry, spawn-grant and
+  per-parent, Component-descendant and root managed-Canister authority.
 - [ ] Implement authenticated parent-to-root child effects at arbitrary depth.
 - [ ] Make the Fleet Subnet Root the required lifecycle controller and retain
   authoritative idempotent receipts.
@@ -574,7 +577,7 @@ ceilings rather than initial counts, this path deliberately seals an empty
 inventory; exact nonempty initial provisioning remains a separate 0.101
 placement-plan responsibility.
 
-Open 0.100.35 removes the terminal installer fence. The host independently
+Released 0.100.35 removes the terminal installer fence. The host independently
 re-queries and validates the complete Coordinator Registry, manifest and
 version before trusting any root principal, collects every active root's
 compact summary concurrently in canonical Registry order and invokes the
@@ -582,11 +585,20 @@ existing all-root terminal publication gate. Only then does the normal fresh
 install atomically commit or exactly adopt its Coordinator-anchored Fleet
 catalog row.
 
+Open 0.100.36 freezes the pure direct-child reservation boundary shared by a
+direct Component parent and an already-registered descendant parent. It
+requires the exact protected Component tree, immediate-parent caller,
+current Component Registry version, active prerequisite evidence and explicit
+role-to-role spawn grant, then checks the per-parent, Component-descendant and
+root managed-Canister ceilings before returning normalized facts for a later
+durable mutation. It does not yet persist a child or perform a paid effect.
+
 ## Next Action
 
-Implement authenticated parent-to-root child creation at arbitrary Component
-tree depth. Reuse the same root-owned allocation, Store-bound install,
-Directory, runtime and membership path while recording the exact immediate
-parent and enforcing one explicit role-to-role spawn grant. Do not introduce
+Persist exact operation-keyed child reservations and normalized
+principal/parent/role/count indexes in the root-owned Component Registry, then
+expose the authenticated parent-to-root reservation endpoint through workflow.
+Keep creation/install as the following effect slice so the durable
+same-release retry boundary is proved before any paid call. Do not introduce
 nested Component declarations, let application Canisters call management
 creation directly or infer authorization from catalog presence alone.
