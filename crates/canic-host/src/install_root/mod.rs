@@ -45,6 +45,7 @@ mod fleet_subnet_root_install_journal;
 mod fleet_subnet_root_registry_join;
 mod fleet_subnet_root_registry_mirror_activation;
 mod fleet_subnet_root_registry_sync;
+mod fleet_subnet_root_runtime_activation;
 mod fleet_subnet_root_store_bootstrap;
 mod identity;
 mod operations;
@@ -80,6 +81,9 @@ use fleet_subnet_root_registry_mirror_activation::{
 };
 use fleet_subnet_root_registry_sync::{
     SynchronizeFleetSubnetRootsRequest, synchronize_and_verify_fleet_subnet_roots,
+};
+use fleet_subnet_root_runtime_activation::{
+    ActivateFleetSubnetRootRuntimesRequest, activate_and_verify_fleet_subnet_root_runtimes,
 };
 use fleet_subnet_root_store_bootstrap::bootstrap_and_verify_fleet_subnet_root_stores;
 use identity::resolve_install_identity;
@@ -200,10 +204,10 @@ impl InstallRootError {
 
 #[derive(Debug, ThisError)]
 #[error(
-    "Fleet Coordinator {coordinator} and {active_roots} planned Fleet Subnet Root(s) now have independently verified all-Active Registry mirrors, matching Fleet Directories and empty Component Registries at revision {active_registry_revision} from the durable plan at {}; Component allocation and runtime activation remain blocked until their Registry-bound lifecycle is implemented",
+    "Fleet Coordinator {coordinator} and {active_roots} planned Fleet Subnet Root(s) are runtime-Active with independently verified empty initial Component inventories at Registry revision {active_registry_revision} from the durable plan at {}; terminal root-summary collection and Fleet catalog publication remain blocked",
     plan_path.display(),
 )]
-struct ComponentRuntimeActivationUnavailableError {
+struct FleetCatalogPublicationUnavailableError {
     plan_path: PathBuf,
     coordinator: canic_core::cdk::types::Principal,
     active_roots: usize,
@@ -392,6 +396,31 @@ fn install_current_fleet_infrastructure(
         },
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
+    prepare_and_activate_current_fleet_subnet_roots(
+        icp_root,
+        environment,
+        local_replica,
+        config_path,
+        planned,
+        coordinator.coordinator,
+    )?;
+    require_fleet_catalog_publication(
+        &planned.plan.path,
+        coordinator.coordinator,
+        roots.roots.len(),
+        active.version.revision,
+    )
+    .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))
+}
+
+fn prepare_and_activate_current_fleet_subnet_roots(
+    icp_root: &Path,
+    environment: &str,
+    local_replica: Option<&crate::icp::LocalReplicaTarget>,
+    config_path: &Path,
+    planned: &PlannedCurrentFleetInstall,
+    coordinator: canic_core::cdk::types::Principal,
+) -> Result<(), InstallRootError> {
     prepare_and_verify_fleet_subnet_root_component_registries(
         PrepareFleetSubnetRootComponentRegistriesRequest {
             icp_root,
@@ -399,18 +428,21 @@ fn install_current_fleet_infrastructure(
             local_replica,
             config_path,
             fleet_install_plan: &planned.plan,
-            coordinator: coordinator.coordinator,
+            coordinator,
             install_operation_id: planned.session.operation_id,
         },
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
-    require_component_runtime_activation(
-        &planned.plan.path,
-        coordinator.coordinator,
-        roots.roots.len(),
-        active.version.revision,
-    )
-    .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))
+    activate_and_verify_fleet_subnet_root_runtimes(ActivateFleetSubnetRootRuntimesRequest {
+        icp_root,
+        environment,
+        local_replica,
+        config_path,
+        fleet_install_plan: &planned.plan,
+        coordinator,
+        install_operation_id: planned.session.operation_id,
+    })
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))
 }
 
 fn resolve_current_install_roots(
@@ -513,13 +545,13 @@ fn persist_current_fleet_install_plan(
     .map_err(Into::into)
 }
 
-fn require_component_runtime_activation(
+fn require_fleet_catalog_publication(
     plan_path: &Path,
     coordinator: canic_core::cdk::types::Principal,
     active_roots: usize,
     active_registry_revision: u64,
-) -> Result<(), ComponentRuntimeActivationUnavailableError> {
-    Err(ComponentRuntimeActivationUnavailableError {
+) -> Result<(), FleetCatalogPublicationUnavailableError> {
+    Err(FleetCatalogPublicationUnavailableError {
         plan_path: plan_path.to_path_buf(),
         coordinator,
         active_roots,

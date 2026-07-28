@@ -6,7 +6,7 @@
 
 use crate::ids::{FleetBinding, FleetKey, ReleaseBuildId};
 use candid::{CandidType, Principal};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Maximum managed Canisters represented by one Fleet activation.
 pub const MAX_FLEET_ACTIVATION_CANISTERS: usize = 4_096;
@@ -19,7 +19,7 @@ pub const MAX_FLEET_ACTIVATION_HOST_RECORD_BYTES: usize = 2_097_152;
 /// FleetCascadeManifestEntry
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetCascadeManifestEntry {
     pub principal: Principal,
     pub state_snapshot_hash: [u8; 32],
@@ -30,7 +30,7 @@ pub struct FleetCascadeManifestEntry {
 /// FleetCascadeActivationEvidence
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum FleetCascadeActivationEvidence {
     Source {
         cascade_manifest_hash: [u8; 32],
@@ -45,7 +45,7 @@ pub enum FleetCascadeActivationEvidence {
 /// FleetCredentialGenerationRef
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetCredentialGenerationRef {
     pub generation: u64,
     pub manifest_hash: [u8; 32],
@@ -55,7 +55,7 @@ pub struct FleetCredentialGenerationRef {
 /// FleetCredentialManifestEntry
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetCredentialManifestEntry {
     pub root_issuer: Principal,
     pub subject_canister: Principal,
@@ -71,7 +71,7 @@ pub struct FleetCredentialManifestEntry {
 /// FleetCredentialManifest
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetCredentialManifest {
     pub fleet: FleetKey,
     pub activation_id: [u8; 32],
@@ -85,7 +85,7 @@ pub struct FleetCredentialManifest {
 /// FleetActivationIdentity
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetActivationIdentity {
     pub fleet: FleetBinding,
     pub operation_id: [u8; 32],
@@ -96,7 +96,7 @@ pub struct FleetActivationIdentity {
 /// FleetActivationPhase
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum FleetActivationPhase {
     Prepared,
     Active,
@@ -106,7 +106,7 @@ pub enum FleetActivationPhase {
 /// FleetActivationStatusResponse
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetActivationStatusResponse {
     pub phase: FleetActivationPhase,
     pub identity: FleetActivationIdentity,

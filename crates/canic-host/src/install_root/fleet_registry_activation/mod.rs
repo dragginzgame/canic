@@ -122,6 +122,11 @@ pub(super) fn activate_and_verify_fleet_registry(
                 | FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight
                 | FleetSubnetRootInstallPhase::ComponentRegistryPrepared
                 | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified
+                | FleetSubnetRootInstallPhase::RootActivationPreparationInFlight
+                | FleetSubnetRootInstallPhase::RootActivationPrepared
+                | FleetSubnetRootInstallPhase::RootActivationInFlight
+                | FleetSubnetRootInstallPhase::RootActivated
+                | FleetSubnetRootInstallPhase::RootActivationVerified
         ) {
             return Err(
                 FleetRegistryActivationError::RootNotSynchronized(current.journal.phase).into(),

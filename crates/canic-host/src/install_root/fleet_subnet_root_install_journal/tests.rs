@@ -12,12 +12,14 @@ use crate::{
     install_root::fleet_subnet_root_install_journal::{
         FleetSubnetRootInstallPhase, PlanFleetSubnetRootInstallRequest,
         begin_component_registry_preparation, begin_registry_join,
-        begin_registry_mirror_activation, begin_registry_sync, begin_root_creation,
-        begin_root_install, begin_store_bootstrap, begin_store_staging, expected_root_authority,
+        begin_registry_mirror_activation, begin_registry_sync, begin_root_activation,
+        begin_root_activation_preparation, begin_root_creation, begin_root_install,
+        begin_store_bootstrap, begin_store_staging, expected_root_authority,
         plan_fleet_subnet_root_install, record_component_registry_preparation_verified,
         record_component_registry_prepared, record_registry_join_verified, record_registry_joined,
         record_registry_mirror_activated, record_registry_mirror_activation_verified,
-        record_registry_sync_verified, record_registry_synchronized, record_root_created,
+        record_registry_sync_verified, record_registry_synchronized, record_root_activated,
+        record_root_activation_prepared, record_root_activation_verified, record_root_created,
         record_root_installed, record_root_verified, record_store_bootstrapped,
         record_store_staged, record_store_verified,
     },
@@ -36,7 +38,13 @@ use canic_core::{
     control_plane_support::ops::fleet_registry::FleetRegistryOps,
     dto::{
         component_registry::{
-            RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
+            RootComponentInitialInventoryStatus, RootComponentRegistryPreparationRequest,
+            RootComponentRegistryStatusResponse,
+        },
+        fleet_activation::{
+            FleetActivationIdentity, FleetActivationPhase, FleetActivationStatusResponse,
+            FleetCascadeActivationEvidence, FleetCascadeManifestEntry,
+            FleetCredentialGenerationRef, FleetCredentialManifest,
         },
         fleet_registry::{
             FleetDirectoryProvenance, FleetDirectorySnapshot, FleetSubnetRootDirectoryEntry,
@@ -385,8 +393,132 @@ fn assert_registry_mirror_and_component_registry_journal(
         preparation_verified
             .journal
             .component_registry_preparation_response,
-        Some(preparation_response)
+        Some(preparation_response.clone())
     );
+
+    assert_root_activation_journal(&preparation_verified, root_canister, preparation_response);
+}
+
+fn assert_root_activation_journal(
+    prepared_registry: &super::ResolvedFleetSubnetRootInstall,
+    root_canister: Principal,
+    preparation_response: RootComponentRegistryStatusResponse,
+) {
+    let prepared_response = prepared_root_activation_response(prepared_registry);
+    let preparing =
+        begin_root_activation_preparation(prepared_registry).expect("begin root activation prep");
+    let activation_prepared =
+        record_root_activation_prepared(&preparing, prepared_response.clone())
+            .expect("record root activation prep");
+    let activating = begin_root_activation(&activation_prepared).expect("begin root activation");
+    let active_response = FleetActivationStatusResponse {
+        phase: FleetActivationPhase::Active,
+        activated_at_ns: Some(17),
+        ..prepared_response
+    };
+    let activated = record_root_activated(&activating, active_response.clone())
+        .expect("record root activation");
+    let terminal_registry = RootComponentRegistryStatusResponse {
+        initial_inventory: Some(RootComponentInitialInventoryStatus {
+            fleet_activation_operation_id: prepared_registry.journal.install_operation_id,
+            component_count: 0,
+            inventory_hash: [18; 32],
+            sealed_at_ns: 19,
+            directories_converged: true,
+            root_runtime_activated: true,
+        }),
+        ..preparation_response
+    };
+    let mut nonempty_registry = terminal_registry.clone();
+    nonempty_registry
+        .initial_inventory
+        .as_mut()
+        .expect("sealed inventory")
+        .component_count = 1;
+    assert!(
+        record_root_activation_verified(&activated, active_response.clone(), nonempty_registry,)
+            .is_err(),
+        "0.100 host activation must not invent a nonempty initial inventory"
+    );
+    let verified =
+        record_root_activation_verified(&activated, active_response.clone(), terminal_registry)
+            .expect("verify root activation");
+
+    assert_eq!(
+        verified.journal.phase,
+        FleetSubnetRootInstallPhase::RootActivationVerified
+    );
+    assert_eq!(verified.journal.sequence, 27);
+    assert_eq!(
+        verified.journal.root_activation_preparation_response,
+        activation_prepared
+            .journal
+            .root_activation_preparation_response
+    );
+    assert_eq!(
+        verified.journal.root_activation_response,
+        Some(active_response)
+    );
+    assert_eq!(
+        verified
+            .journal
+            .component_registry_activation_response
+            .as_ref()
+            .and_then(|response| response.initial_inventory)
+            .map(|inventory| inventory.component_count),
+        Some(0)
+    );
+    assert_eq!(verified.journal.fleet_subnet_root, Some(root_canister));
+}
+
+fn prepared_root_activation_response(
+    prepared_registry: &super::ResolvedFleetSubnetRootInstall,
+) -> FleetActivationStatusResponse {
+    let cascade_manifest = vec![FleetCascadeManifestEntry {
+        principal: Principal::from_slice(&[55]),
+        state_snapshot_hash: [13; 32],
+        topology_snapshot_hash: [14; 32],
+    }];
+    let cascade_manifest_hash =
+        canic_core::api::fleet_activation::FleetActivationApi::cascade_manifest_hash(
+            &cascade_manifest,
+        )
+        .expect("cascade manifest hash");
+    let credential_manifest = FleetCredentialManifest {
+        fleet: prepared_registry.journal.authority.binding.fleet.fleet,
+        activation_id: prepared_registry.journal.install_operation_id,
+        generation: 1,
+        root_policy_set_hash:
+            canic_core::api::fleet_activation::FleetActivationApi::empty_root_policy_set_hash()
+                .expect("empty root policy hash"),
+        renewal_template_set_hash:
+            canic_core::api::fleet_activation::FleetActivationApi::empty_renewal_template_set_hash()
+                .expect("empty renewal-template hash"),
+        entries: Vec::new(),
+    };
+    let credential = FleetCredentialGenerationRef {
+        generation: 1,
+        manifest_hash:
+            canic_core::api::fleet_activation::FleetActivationApi::credential_manifest_hash(
+                &credential_manifest,
+            )
+            .expect("credential manifest hash"),
+    };
+    FleetActivationStatusResponse {
+        phase: FleetActivationPhase::Prepared,
+        identity: FleetActivationIdentity {
+            fleet: prepared_registry.journal.authority.binding.fleet.clone(),
+            operation_id: prepared_registry.journal.install_operation_id,
+            release_build_id: prepared_registry.journal.release_build_id,
+        },
+        cascade: Some(FleetCascadeActivationEvidence::Source {
+            cascade_manifest_hash,
+        }),
+        cascade_manifest: Some(cascade_manifest),
+        credential: Some(credential),
+        credential_manifest: Some(credential_manifest),
+        activated_at_ns: None,
+    }
 }
 
 #[test]

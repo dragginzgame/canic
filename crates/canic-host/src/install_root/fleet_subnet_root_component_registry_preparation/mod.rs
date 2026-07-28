@@ -138,6 +138,11 @@ fn drive_component_registry_preparation(
                 }
                 return Ok(());
             }
+            FleetSubnetRootInstallPhase::RootActivationPreparationInFlight
+            | FleetSubnetRootInstallPhase::RootActivationPrepared
+            | FleetSubnetRootInstallPhase::RootActivationInFlight
+            | FleetSubnetRootInstallPhase::RootActivated
+            | FleetSubnetRootInstallPhase::RootActivationVerified => return Ok(()),
             phase => {
                 return Err(RootComponentRegistryPreparationError::UnexpectedPhase(phase).into());
             }
