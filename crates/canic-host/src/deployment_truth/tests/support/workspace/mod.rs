@@ -97,7 +97,7 @@ pub(in crate::deployment_truth::tests) fn write_fleet_catalog_json(
 
 pub(in crate::deployment_truth::tests) fn sample_fleet_catalog_entry(
     fleet_name: &str,
-    root_principal: &str,
+    coordinator_principal: &str,
 ) -> FleetCatalogEntryV1 {
     FleetCatalogEntryV1 {
         canonical_network_id: test_local_network_id(),
@@ -106,7 +106,7 @@ pub(in crate::deployment_truth::tests) fn sample_fleet_catalog_entry(
         app: AppId::from("demo"),
         environment: "local".to_string(),
         deployed_at_unix_secs: 1,
-        root_principal: root_principal.to_string(),
+        coordinator_principal: coordinator_principal.to_string(),
     }
 }
 

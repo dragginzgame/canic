@@ -65,7 +65,7 @@ pub(super) fn backup_create(
         run_id,
         fleet: options.fleet.clone(),
         environment: options.environment.clone(),
-        root_canister_id: installed.fleet.root_principal,
+        root_canister_id: installed.topology.root_canister_id,
         selected_canister_id,
         selected_scope_kind,
         include_descendants: true,

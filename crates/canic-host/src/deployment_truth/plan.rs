@@ -67,10 +67,10 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
         }
     };
     let resolved_fleet = local_fleet_identity(request, &mut unresolved_assumptions);
-    let root_canister_id = resolved_fleet
-        .catalog
-        .as_ref()
-        .map(|fleet| fleet.root_principal.clone());
+    // The Coordinator-anchored Fleet catalog no longer identifies one
+    // deployment root. Root-specific deployment truth must come from the
+    // multi-root Registry rather than discovery metadata.
+    let root_canister_id = None;
     let raw_config_sha256 = config_sha256_assumption(&config, &mut unresolved_assumptions);
     let canonical_runtime_config_digest =
         canonical_runtime_config_assumption(&config, &mut unresolved_assumptions);
@@ -209,7 +209,7 @@ fn local_fleet_identity(
                 assumptions.push(assumption(
                 DeploymentAssumptionKindV1::FleetCatalogMissing.key(),
                 format!(
-                    "no installed Fleet catalog entry exists for {}; root identity is unknown until installation completes",
+                    "no installed Fleet catalog entry exists for {}; Coordinator identity is unknown until installation completes",
                     request.fleet_name
                 ),
             ));

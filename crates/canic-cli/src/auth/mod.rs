@@ -124,6 +124,7 @@ impl AuthCommandError {
                 InstalledFleetError::Icp(IcpCommandError::Io(_))
                 | InstalledFleetError::NoInstalledFleet { .. }
                 | InstalledFleetError::FleetCatalog(_)
+                | InstalledFleetError::CoordinatorAnchoredTopologyUnavailable { .. }
                 | InstalledFleetError::Registry(_)
                 | InstalledFleetError::Io(_),
             )
@@ -637,7 +638,7 @@ fn resolve_auth_root_call_target(
         target: AuthRootTarget {
             input: ROOT_ROLE.to_string(),
             role: ROOT_ROLE.to_string(),
-            canister_id: installed.fleet.root_principal,
+            canister_id: installed.topology.root_canister_id,
             candid_source: AuthRenewalCandidSource::InstalledFleet,
         },
         candid_path,

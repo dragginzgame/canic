@@ -105,7 +105,7 @@ main() {
     "$CANIC_BIN" app create demo --yes > app-create.txt
     "$CANIC_BIN" scaffold canister demo store > scaffold-store.txt
     "$CANIC_BIN" app role inspect demo store > inspect-declared.txt
-    "$CANIC_BIN" app role attach demo store --subnet default > attach-store.txt
+    "$CANIC_BIN" app role attach demo store --component-spec default > attach-store.txt
     "$CANIC_BIN" app role inspect demo store > inspect-attached.txt
     "$CANIC_BIN" --environment ic deploy inspect catalog list --json --output catalog.json
     "$CANIC_BIN" evidence gate \

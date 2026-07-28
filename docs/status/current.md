@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.30`.
-- The latest published release is `v0.100.30` at
-  `c3e9ab8a11ee780e162146f9dd16c4e5a20f0f3f`.
-- The `v0.100.30` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `a5ebc6dab8a9bdef10f398fc2cc5611cb1501edd60b09dd2e9274678fc3a8de5`.
+- The workspace package version is `0.100.31`.
+- The latest published release is `v0.100.31` at
+  `0838c0df4e840451e496bcd4b1f1968af8536986`.
+- The `v0.100.31` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `01a40eec69df2de924b8d1d4afdd82c1ec90398802a3d869155330fbc18d3d76`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -315,14 +315,25 @@ Historical detail is archived at:
   fingerprints the executable audit, authoritative fixture and measured
   canister packages/configs together, so removed fixture evidence cannot be
   selected as a current baseline.
-- Open `0.100.31` maintains an exact durable count of top-level Component and
-  descendant Canisters whose principals are known-created and whose deletion
-  is not durably confirmed. Recording a first returned principal atomically
-  increments the count; exact and conflicting retries cannot increment it
-  again. A controller-only root v1 query reverifies protected root, active
-  runtime, Registry snapshot/manifest/version/Directory, Component Registry
-  and sole local Store authority before returning checked infrastructure,
-  Component and total counts without member enumeration.
+- Released `0.100.31` maintains an exact durable count of top-level Component
+  and descendant Canisters whose principals are known-created and whose
+  deletion is not durably confirmed. Recording a first returned principal
+  atomically increments the count; exact and conflicting retries cannot
+  increment it again. A controller-only root v1 query reverifies protected
+  root, active runtime, Registry snapshot/manifest/version/Directory,
+  Component Registry and sole local Store authority before returning checked
+  infrastructure, Component and total counts without member enumeration.
+- Open `0.100.32` hard-cuts terminal Fleet catalog v1 from one
+  `root_principal` to `coordinator_principal` with no old decoder. One
+  network-locked canonical writer admits only non-conflicting Fleet name, ID
+  and Coordinator authority, while the sole publication gate recomputes the
+  exact Coordinator Registry and requires the complete planned all-`Active`
+  root set plus one agreeing compact summary per root. Deployment truth no
+  longer fabricates root/legacy Registry evidence from that row, status
+  renders the Coordinator, and old single-root topology consumers fail
+  explicitly rather than target the Coordinator as a root. The current
+  installer cannot call the terminal gate until its remaining runtime path
+  supplies the complete evidence.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1644,14 +1655,13 @@ root and an exact active Component Registry partition, while the real
 Registry-created issuer exercises claim rejection and guard metrics without a
 static bootstrap fixture.
 
-Next, hard-cut the terminal Fleet catalog from its single-root principal to
-the Coordinator principal and publish it only after complete terminal install
-evidence. Then add `canic info subnets <fleet> [--json]`: discover that
-Coordinator, query its current Registry, fan out to the compact root summaries
-and fail closed rather than report a partial Fleet total. Do not bypass Store
-or Registry evidence, permit nested Component declarations, merge roots
-belonging to different Fleets on one Subnet or consume an earlier
-installation.
+Next, add `canic info subnets <fleet> [--json]`: discover the Coordinator from
+the terminal catalog, query its current Registry, fan out to the compact
+active root summaries and fail closed rather than report a partial Fleet
+total. Do not revive the removed single-root resolver, publish the terminal
+catalog before complete runtime evidence, bypass Store or Registry evidence,
+permit nested Component declarations, merge roots belonging to different
+Fleets on one Subnet or consume an earlier installation.
 
 ## Historical Release Detail
 

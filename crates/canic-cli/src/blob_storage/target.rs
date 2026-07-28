@@ -66,7 +66,7 @@ pub(super) fn resolve_blob_storage_call_target(
     let resolved = resolve_blob_storage_target(
         fleet,
         selector,
-        &installed.fleet.root_principal,
+        &installed.topology.root_canister_id,
         &installed.registry.entries,
     )?;
     let candid_path = resolved

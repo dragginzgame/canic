@@ -28,6 +28,14 @@ mod coordinator_install_journal;
 mod current_execution;
 mod deployment_truth_gate;
 mod execution_preflight;
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "terminal catalog publication remains deliberately unwired until host-side Component and root runtime activation supplies live summaries"
+    )
+)]
+mod fleet_catalog_publication;
 mod fleet_install_session;
 mod fleet_registry_activation;
 mod fleet_registry_activation_journal;
