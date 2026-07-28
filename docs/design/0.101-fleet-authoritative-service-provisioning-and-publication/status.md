@@ -134,6 +134,9 @@ change that installation ownership.
 - [ ] Derive one root-local Component Group Directory per placement without
   introducing group parentage or lifecycle authority.
 - [ ] Send exact Fleet, Component and Group Directories before activation.
+- [ ] Activate each Component runtime under its exact prepared Directory,
+  then promote its Component Registry partition to `Active` and synchronize
+  the resulting revision-bound current Directory before root activation.
 - [ ] Freeze the exact Directory-confirmation roots: all initial roots for
   fresh install, and selected plus every affected existing service-member root
   for scale-out.

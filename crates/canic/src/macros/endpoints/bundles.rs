@@ -37,10 +37,7 @@ macro_rules! canic_bundle_root_only_endpoints {
 #[macro_export]
 macro_rules! canic_bundle_managed_nonroot_only_endpoints {
     () => {
-        $crate::canic_emit_component_runtime_directory_endpoints!();
-        $crate::canic_emit_nonroot_fleet_activation_endpoints!();
-        #[cfg(not(canic_disable_bundle_nonroot_sync_topology))]
-        $crate::canic_emit_nonroot_sync_topology_endpoints!();
+        $crate::canic_emit_component_runtime_endpoints!();
         #[cfg(canic_delegated_token_issuer)]
         $crate::canic_emit_nonroot_auth_attestation_endpoints!();
     };

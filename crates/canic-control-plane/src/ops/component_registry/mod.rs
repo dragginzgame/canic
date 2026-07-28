@@ -629,9 +629,11 @@ impl ComponentRegistryOps {
             installation: installation.clone(),
             commitment: RootComponentCommitmentRecord {
                 registry: commitment.registry.clone(),
+                prepared_registry_encoded_bytes: commitment.prepared_registry_encoded_bytes,
                 directory_synchronized_at_ns: commitment.directory_synchronized_at_ns,
                 directory_authority_hash: commitment.directory_authority_hash,
                 directory_prepared: true,
+                runtime_activated: commitment.runtime_activated,
             },
         };
         validate_charged_record_size(&next_record, installation.charged_entry_bytes)?;
@@ -641,6 +643,70 @@ impl ComponentRegistryOps {
             return Err(InternalError::invariant(
                 canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
                 "Component Directory receipt changed its precharged stable footprint",
+            ));
+        }
+        RootComponentRegistryStore::replace_allocation(
+            &current,
+            current.clone(),
+            &record,
+            next_record.clone(),
+        )
+        .map_err(map_allocation_commit_error)?;
+        Ok(allocation_record_to_view(next_record))
+    }
+
+    pub(crate) fn mark_runtime_activated(
+        operation_id: [u8; 32],
+        expected_authority_hash: [u8; 32],
+    ) -> Result<RootComponentAllocationView, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
+            InternalError::unavailable("Component allocation operation has not been reserved")
+        })?;
+        let RootComponentAllocationProgressRecord::Committed {
+            creation,
+            canister,
+            installation,
+            commitment,
+        } = &record.progress
+        else {
+            return Err(InternalError::conflict(
+                "Component allocation is not committed for runtime activation",
+            ));
+        };
+        if commitment.directory_authority_hash != expected_authority_hash
+            || !commitment.directory_prepared
+        {
+            return Err(InternalError::conflict(
+                "Component runtime activation requires its exact prepared Directory authority",
+            ));
+        }
+        if commitment.runtime_activated {
+            return Ok(allocation_record_to_view(record));
+        }
+        let mut next_record = record.clone();
+        next_record.progress = RootComponentAllocationProgressRecord::Committed {
+            creation: creation.clone(),
+            canister: *canister,
+            installation: installation.clone(),
+            commitment: RootComponentCommitmentRecord {
+                registry: commitment.registry.clone(),
+                prepared_registry_encoded_bytes: commitment.prepared_registry_encoded_bytes,
+                directory_synchronized_at_ns: commitment.directory_synchronized_at_ns,
+                directory_authority_hash: commitment.directory_authority_hash,
+                directory_prepared: true,
+                runtime_activated: true,
+            },
+        };
+        validate_charged_record_size(&next_record, installation.charged_entry_bytes)?;
+        if RootComponentRegistryStore::allocation_entry_bytes(&next_record)
+            != RootComponentRegistryStore::allocation_entry_bytes(&record)
+        {
+            return Err(InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component runtime activation receipt changed its precharged stable footprint",
             ));
         }
         RootComponentRegistryStore::replace_allocation(
@@ -766,9 +832,11 @@ const fn commitment_record_to_view(
 ) -> RootComponentCommitmentView {
     RootComponentCommitmentView {
         registry: commitment.registry,
+        prepared_registry_encoded_bytes: commitment.prepared_registry_encoded_bytes,
         directory_synchronized_at_ns: commitment.directory_synchronized_at_ns,
         directory_authority_hash: commitment.directory_authority_hash,
         directory_prepared: commitment.directory_prepared,
+        runtime_activated: commitment.runtime_activated,
     }
 }
 
@@ -852,9 +920,11 @@ fn install_charged_entry_bytes(
         installation,
         commitment: RootComponentCommitmentRecord {
             registry: registry.clone(),
+            prepared_registry_encoded_bytes: u64::MAX,
             directory_synchronized_at_ns: u64::MAX,
             directory_authority_hash: [u8::MAX; 32],
             directory_prepared: true,
+            runtime_activated: true,
         },
     };
     let partition = ComponentRegistryPartitionRecord {
@@ -936,9 +1006,11 @@ fn committed_records(
         installation: installation.clone(),
         commitment: RootComponentCommitmentRecord {
             registry,
+            prepared_registry_encoded_bytes: 0,
             directory_synchronized_at_ns,
             directory_authority_hash,
             directory_prepared: false,
+            runtime_activated: false,
         },
     };
     let mut partition = ComponentRegistryPartitionRecord {
@@ -951,12 +1023,12 @@ fn committed_records(
         directory_synchronized_at_ns,
         encoded_bytes: 0,
     };
-    let operation_bytes = RootComponentRegistryStore::allocation_entry_bytes(&next_record);
     let index_bytes = RootComponentRegistryStore::principal_index_entry_bytes(
         installation.binding.canister_id,
         record.component,
     );
     for _ in 0..8 {
+        let operation_bytes = RootComponentRegistryStore::allocation_entry_bytes(&next_record);
         let encoded_bytes = operation_bytes
             .checked_add(RootComponentRegistryStore::partition_entry_bytes(
                 &partition,
@@ -965,10 +1037,21 @@ fn committed_records(
             .ok_or_else(|| {
                 InternalError::resource_exhausted("Component Registry bytes overflow")
             })?;
-        if partition.encoded_bytes == encoded_bytes {
+        let RootComponentAllocationProgressRecord::Committed { commitment, .. } =
+            &mut next_record.progress
+        else {
+            return Err(InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
+                "new Component commitment changed phase during byte accounting",
+            ));
+        };
+        if partition.encoded_bytes == encoded_bytes
+            && commitment.prepared_registry_encoded_bytes == encoded_bytes
+        {
             return Ok((next_record, partition));
         }
         partition.encoded_bytes = encoded_bytes;
+        commitment.prepared_registry_encoded_bytes = encoded_bytes;
     }
     Err(InternalError::invariant(
         canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
@@ -1000,6 +1083,7 @@ fn exact_committed_partition(
         || partition.status != ComponentLifecycleStatus::Prepared
         || partition.revision != commitment.registry.revision
         || partition.content_hash != commitment.registry.content_hash
+        || partition.encoded_bytes != commitment.prepared_registry_encoded_bytes
         || partition.directory_synchronized_at_ns != commitment.directory_synchronized_at_ns
         || commitment.registry.component != record.component
         || RootComponentRegistryStore::component_for_principal(partition.binding.canister_id)
@@ -1615,7 +1699,7 @@ mod tests {
                 .expect("committed partition"),
             partition
         );
-        assert_directory_preparation_receipt(&committed);
+        assert_directory_preparation_receipt(&committed, partition.encoded_bytes);
         let status = ComponentRegistryOps::current().expect("Registry status");
         assert_eq!(status.reserved_component_instances, 0);
         assert_eq!(status.committed_component_instances, 1);
@@ -1633,13 +1717,28 @@ mod tests {
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
 
-    fn assert_directory_preparation_receipt(committed: &RootComponentAllocationView) {
+    fn assert_directory_preparation_receipt(
+        committed: &RootComponentAllocationView,
+        prepared_registry_encoded_bytes: u64,
+    ) {
         let RootComponentAllocationProgressView::Committed { commitment, .. } = &committed.progress
         else {
             panic!("committed allocation progress");
         };
         assert_ne!(commitment.directory_authority_hash, [0; 32]);
+        assert_eq!(
+            commitment.prepared_registry_encoded_bytes,
+            prepared_registry_encoded_bytes
+        );
         assert!(!commitment.directory_prepared);
+        assert!(!commitment.runtime_activated);
+        assert!(
+            ComponentRegistryOps::mark_runtime_activated(
+                [12; 32],
+                commitment.directory_authority_hash,
+            )
+            .is_err()
+        );
         let prepared = ComponentRegistryOps::mark_directory_prepared(
             [12; 32],
             commitment.directory_authority_hash,
@@ -1652,10 +1751,33 @@ mod tests {
         .expect("retry Directory receipt");
         assert_eq!(prepared_again, prepared);
         assert!(matches!(
-            prepared.progress,
+            &prepared.progress,
             RootComponentAllocationProgressView::Committed {
                 commitment: RootComponentCommitmentView {
                     directory_prepared: true,
+                    runtime_activated: false,
+                    ..
+                },
+                ..
+            }
+        ));
+        let activated = ComponentRegistryOps::mark_runtime_activated(
+            [12; 32],
+            commitment.directory_authority_hash,
+        )
+        .expect("mark runtime activated");
+        let activated_again = ComponentRegistryOps::mark_runtime_activated(
+            [12; 32],
+            commitment.directory_authority_hash,
+        )
+        .expect("retry runtime activation receipt");
+        assert_eq!(activated_again, activated);
+        assert!(matches!(
+            activated.progress,
+            RootComponentAllocationProgressView::Committed {
+                commitment: RootComponentCommitmentView {
+                    directory_prepared: true,
+                    runtime_activated: true,
                     ..
                 },
                 ..

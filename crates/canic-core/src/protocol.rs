@@ -25,12 +25,13 @@ pub const CANIC_ROOT_COMPONENT_CREATE: &str = "canic_root_component_create";
 pub const CANIC_ROOT_COMPONENT_INSTALL: &str = "canic_root_component_install";
 pub const CANIC_ROOT_COMPONENT_COMMIT: &str = "canic_root_component_commit";
 pub const CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE: &str = "canic_root_component_directory_prepare";
+pub const CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE: &str = "canic_root_component_runtime_activate";
 pub const CANIC_ROOT_COMPONENT_REGISTRY_PARTITION: &str = "canic_root_component_registry_partition";
 pub const CANIC_ROOT_COMPONENT_DIRECTORY_HEAD: &str = "canic_root_component_directory_head";
 pub const CANIC_COMPONENT_RUNTIME_DIRECTORY_PREPARE: &str =
     "canic_component_runtime_directory_prepare";
-pub const CANIC_COMPONENT_RUNTIME_DIRECTORY_STATUS: &str =
-    "canic_component_runtime_directory_status";
+pub const CANIC_COMPONENT_RUNTIME_STATUS: &str = "canic_component_runtime_status";
+pub const CANIC_COMPONENT_RUNTIME_ACTIVATE: &str = "canic_component_runtime_activate";
 pub const CANIC_FLEET_ACTIVATION_STATUS: &str = "canic_fleet_activation_status";
 pub const CANIC_MANAGED_CANISTER_BINDING: &str = "canic_managed_canister_binding";
 pub const CANIC_PREPARE_FLEET_ACTIVATION: &str = "canic_prepare_fleet_activation";

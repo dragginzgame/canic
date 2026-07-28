@@ -6,9 +6,9 @@ Date: 2026-07-28
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.24`.
-- Latest published release: `v0.100.24`.
-- Open patch draft: `0.100.25`; no package-version change has been authorized.
+- Workspace package version: `0.100.25`.
+- Latest published release: `v0.100.25`.
+- Open patch draft: `0.100.26`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -172,6 +172,15 @@ Registry slices replace the 0.99 root model.
 - [x] Distribute exact Directories directly from the root to a committed
   Component with target-local retention, independent observation and a
   terminal root receipt.
+- [x] Activate a Directory-prepared Component runtime from its exact retained
+  authority, reconcile uncertain response, independently observe target
+  `Active` and retain a terminal root runtime receipt.
+- [x] Hard-cut generic cascade, credential-generation and Fleet-activation
+  mutations from managed application Components while retaining the separate
+  Wasm Store bundle.
+- [ ] Promote an exactly runtime-active Component Registry partition to
+  `Active`, derive its next Directory revision and synchronize that current
+  authority to the target before root activation.
 - [ ] Apply the same direct distribution boundary to registered Component
   Children as descendant creation lands.
 
@@ -426,7 +435,7 @@ partition and index footprint before its paid effect; commitment replaces
 that reservation with exact encoded bytes. The Component and root remain
 runtime-`Prepared`.
 
-Open 0.100.25 distributes one committed Component's exact active Fleet
+Released 0.100.25 distributes one committed Component's exact active Fleet
 Directory and ownership-preserving Component Directory head directly from the
 root. The commitment freezes a domain-separated hash of that combined
 authority. The target retains its protected `ManagedCanisterBinding`, complete
@@ -441,13 +450,32 @@ reconciled from target status before exact retry. Conflicting retained
 authority fails closed. The Component Registry row, Component runtime and
 root runtime all remain `Prepared`.
 
+Open 0.100.26 activates that Directory-prepared Component only from its exact
+protected binding, install operation and retained Directory-authority hash.
+The target atomically retains the full original activation Directory
+separately from later current Directory revisions, records its original
+activation time, advances the shared runtime fence and schedules durable
+application init arguments only once. It retains no fabricated cascade or
+credential evidence. Application Components hard-cut those old Store-era
+mutations from their exported bundle. The root commitment retains the
+original prepared partition's encoded-byte evidence so later revisions cannot
+change earlier operation responses.
+
+The root reconciles an uncertain activation call from target status,
+independently re-queries the exact active receipt and then records its
+fixed-size terminal runtime receipt. Exact activation retry returns the
+original response, and replay of Directory preparation reconstructs the
+original `DirectoryPrepared` response even after the target has progressed.
+The Component Registry row and Fleet Subnet Root intentionally remain
+`Prepared`.
+
 ## Next Action
 
-Activate the Directory-prepared Component only from its exact retained
-binding and matching Fleet/Component Directory authority. Journal the
-cross-Canister transition so an uncertain response is reconciled from
-independently observed target state before the root records its terminal
-activation receipt. Then activate root runtime only through the complete
+Promote the exactly runtime-active Component's Registry partition from
+`Prepared` to `Active` under a new partition revision, derive and synchronize
+the corresponding current Component Directory, independently verify the
+target retained it and record a terminal root membership receipt. Then
+activate root runtime only through the complete
 Registry/Store/Directory-bound inventory. Do not reintroduce role-based
 Directory authority, static root bootstrap creation or an unbound Canister
 effect.

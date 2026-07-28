@@ -154,13 +154,14 @@ pub struct FleetSubnetRootAuthorityRecord {
 ///
 /// ComponentRuntimeRecord
 ///
-/// Protected Component-tree identity and optional prepared Directory authority for one non-root.
+/// Protected Component-tree identity, Directory authority and activation receipt for one non-root.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ComponentRuntimeRecord {
     pub binding: ManagedCanisterBinding,
     pub directory: Option<ComponentRuntimeDirectoryRecord>,
+    pub activation: Option<ComponentRuntimeActivationRecord>,
 }
 
 ///
@@ -173,6 +174,18 @@ pub struct ComponentRuntimeRecord {
 pub struct ComponentRuntimeDirectoryRecord {
     pub authority: ComponentRuntimeDirectoryAuthority,
     pub authority_hash: [u8; 32],
+}
+
+///
+/// ComponentRuntimeActivationRecord
+///
+/// Exact target-local runtime activation receipt retained beside its Directory authority.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentRuntimeActivationRecord {
+    pub directory: ComponentRuntimeDirectoryRecord,
+    pub activated_at_ns: u64,
 }
 
 ///

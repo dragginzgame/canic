@@ -1,15 +1,15 @@
 //! Module: workflow::component_runtime
 //!
-//! Responsibility: validate and prepare exact Directory authority for one managed Component node.
-//! Does not own: root distribution, Registry mutation, endpoint authorization, or activation.
-//! Boundary: only the protected root may reach the endpoint; retained authority is revalidated.
+//! Responsibility: validate exact Directory authority and activate one managed Component runtime.
+//! Does not own: root distribution, Registry mutation, or endpoint authorization.
+//! Boundary: only exact protected binding and Directory evidence may cross each runtime phase.
 
 use crate::{
     InternalError, InternalErrorOrigin,
     dto::{
         component_registry::{
-            ComponentRuntimeDirectoryAuthority, ComponentRuntimeDirectoryPreparationRequest,
-            ComponentRuntimeDirectoryStatusResponse,
+            ComponentRuntimeActivationRequest, ComponentRuntimeDirectoryAuthority,
+            ComponentRuntimeDirectoryPreparationRequest, ComponentRuntimeStatusResponse,
         },
         fleet_registry::{FleetDirectorySnapshot, FleetSubnetRootStatus},
     },
@@ -24,9 +24,8 @@ use crate::{
 /// Prepare one exact Fleet and Component Directory authority while runtime remains Prepared.
 pub fn prepare_directory(
     request: ComponentRuntimeDirectoryPreparationRequest,
-) -> Result<ComponentRuntimeDirectoryStatusResponse, InternalError> {
-    let current =
-        FleetActivationOps::component_runtime_directory_status().map_err(StorageOpsError::from)?;
+) -> Result<ComponentRuntimeStatusResponse, InternalError> {
+    let current = FleetActivationOps::component_runtime_status().map_err(StorageOpsError::from)?;
     validate_request(&current, &request)?;
     let authority_hash = ComponentRuntimeOps::directory_authority_hash(&request.authority)?;
     FleetActivationOps::prepare_component_runtime_directory(request, authority_hash)
@@ -35,9 +34,8 @@ pub fn prepare_directory(
 }
 
 /// Independently validate and return the target-local Directory preparation state.
-pub fn directory_status() -> Result<ComponentRuntimeDirectoryStatusResponse, InternalError> {
-    let status =
-        FleetActivationOps::component_runtime_directory_status().map_err(StorageOpsError::from)?;
+pub fn status() -> Result<ComponentRuntimeStatusResponse, InternalError> {
+    let status = FleetActivationOps::component_runtime_status().map_err(StorageOpsError::from)?;
     validate_binding(&status.binding)?;
     match (&status.authority, status.authority_hash) {
         (None, None) => {}
@@ -60,8 +58,34 @@ pub fn directory_status() -> Result<ComponentRuntimeDirectoryStatusResponse, Int
     Ok(status)
 }
 
+/// Activate one exact Directory-prepared Component runtime.
+pub fn activate(
+    request: ComponentRuntimeActivationRequest,
+) -> Result<crate::view::fleet_activation::ComponentRuntimeActivationTransition, InternalError> {
+    let current = status()?;
+    if request.operation_id != current.operation_id
+        || request.directory_authority_hash == [0; 32]
+        || current.authority_hash != Some(request.directory_authority_hash)
+    {
+        return Err(InternalError::conflict(
+            "Component runtime activation differs from its protected Directory authority",
+        ));
+    }
+    let transition = FleetActivationOps::activate_component_runtime(request, IcOps::now_nanos())
+        .map_err(StorageOpsError::from)
+        .map_err(InternalError::from)?;
+    if transition.transitioned
+        && let Err(error) = crate::workflow::runtime::RuntimeWorkflow::start_all()
+    {
+        IcOps::trap(format!(
+            "Component runtime activation could not establish runtime services: {error}"
+        ));
+    }
+    Ok(transition)
+}
+
 fn validate_request(
-    current: &ComponentRuntimeDirectoryStatusResponse,
+    current: &ComponentRuntimeStatusResponse,
     request: &ComponentRuntimeDirectoryPreparationRequest,
 ) -> Result<(), InternalError> {
     if request.operation_id != current.operation_id {

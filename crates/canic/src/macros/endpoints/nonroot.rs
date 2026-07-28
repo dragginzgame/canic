@@ -4,21 +4,31 @@
 //! Does not own: cascade state application, delegated-token issuance, or proof storage.
 //! Boundary: exposes facade macros that delegate immediately to core APIs.
 
-/// Emit the managed Component-tree endpoints used before runtime activation.
+/// Emit the managed Component-tree Directory and runtime activation endpoints.
 #[macro_export]
-macro_rules! canic_emit_component_runtime_directory_endpoints {
+macro_rules! canic_emit_component_runtime_endpoints {
     () => {
         #[$crate::canic_update(internal, requires(caller::is_root()))]
         async fn canic_component_runtime_directory_prepare(
             request: ::canic::dto::component_registry::ComponentRuntimeDirectoryPreparationRequest,
-        ) -> Result<::canic::dto::component_registry::ComponentRuntimeDirectoryStatusResponse, ::canic::Error> {
+        ) -> Result<::canic::dto::component_registry::ComponentRuntimeStatusResponse, ::canic::Error> {
             $crate::__internal::core::api::component_runtime::ComponentRuntimeApi::prepare_directory(request)
         }
 
         #[$crate::canic_query(internal, requires(caller::is_root()))]
-        async fn canic_component_runtime_directory_status(
-        ) -> Result<::canic::dto::component_registry::ComponentRuntimeDirectoryStatusResponse, ::canic::Error> {
-            $crate::__internal::core::api::component_runtime::ComponentRuntimeApi::directory_status()
+        async fn canic_component_runtime_status(
+        ) -> Result<::canic::dto::component_registry::ComponentRuntimeStatusResponse, ::canic::Error> {
+            $crate::__internal::core::api::component_runtime::ComponentRuntimeApi::status()
+        }
+
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
+        async fn canic_component_runtime_activate(
+            request: ::canic::dto::component_registry::ComponentRuntimeActivationRequest,
+        ) -> Result<::canic::dto::component_registry::ComponentRuntimeStatusResponse, ::canic::Error> {
+            let transition =
+                $crate::__internal::core::api::component_runtime::ComponentRuntimeApi::activate(request)?;
+            __canic_schedule_prepared_activation_init(transition.application_init_args);
+            Ok(transition.status)
         }
     };
 }

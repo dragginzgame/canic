@@ -538,14 +538,24 @@ fn assert_component_registry_protocol_constants() {
             "canic_root_component_directory_prepare",
         ),
         (
+            canic::protocol::CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE,
+            "canic_root_component_runtime_activate",
+        ),
+        (
             canic::protocol::CANIC_COMPONENT_RUNTIME_DIRECTORY_PREPARE,
             canic_core::protocol::CANIC_COMPONENT_RUNTIME_DIRECTORY_PREPARE,
             "canic_component_runtime_directory_prepare",
         ),
         (
-            canic::protocol::CANIC_COMPONENT_RUNTIME_DIRECTORY_STATUS,
-            canic_core::protocol::CANIC_COMPONENT_RUNTIME_DIRECTORY_STATUS,
-            "canic_component_runtime_directory_status",
+            canic::protocol::CANIC_COMPONENT_RUNTIME_STATUS,
+            canic_core::protocol::CANIC_COMPONENT_RUNTIME_STATUS,
+            "canic_component_runtime_status",
+        ),
+        (
+            canic::protocol::CANIC_COMPONENT_RUNTIME_ACTIVATE,
+            canic_core::protocol::CANIC_COMPONENT_RUNTIME_ACTIVATE,
+            "canic_component_runtime_activate",
         ),
         (
             canic::protocol::CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
@@ -598,6 +608,8 @@ fn assert_root_registry_mirror_guards(root: &str) {
         "async fn canic_root_component_create(",
         "async fn canic_root_component_install(",
         "async fn canic_root_component_commit(",
+        "async fn canic_root_component_directory_prepare(",
+        "async fn canic_root_component_runtime_activate(",
     ] {
         assert!(
             preceding_attribute_context(root, endpoint)
@@ -654,11 +666,13 @@ fn root_store_bootstrap_protocol_and_guards_are_pinned() {
 }
 
 #[test]
-fn nonroot_fleet_activation_mutations_are_guarded_by_the_exact_root() {
+fn nonroot_runtime_activation_mutations_are_guarded_by_the_exact_root() {
     let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/nonroot.rs");
     let source = read_text(&macro_path);
 
     for signature in [
+        "async fn canic_component_runtime_directory_prepare(",
+        "async fn canic_component_runtime_activate(",
         "async fn canic_prepare_fleet_credential_generation(",
         "async fn canic_activate_fleet(",
     ] {
