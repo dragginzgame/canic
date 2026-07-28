@@ -114,6 +114,7 @@ mod tests {
 
     #[test]
     fn prepared_root_bootstraps_and_reverifies_its_exact_local_store() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let root_wasm = build_test_root_wasm();
         let store_fixture = build_root_store_fixture();
         let pic = build_pic();
@@ -198,6 +199,7 @@ mod tests {
 
     #[test]
     fn prepared_root_stages_and_acknowledges_the_exact_joining_registry_snapshot() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let root_wasm = build_test_root_wasm();
         let coordinator_wasm = build_test_coordinator_wasm();
         let store_fixture = build_root_store_fixture();

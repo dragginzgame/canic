@@ -30,6 +30,7 @@ use super::{
 
 const INSTALL_CYCLES: u128 = 1_000_000_000_000;
 const CANISTERS: [&str; 3] = ["canister_test", "intent_authority", "runtime_probe"];
+const LIFECYCLE_CANISTER_CONFIG_PATH: &str = "apps/test/test-configs/root-sharding.toml";
 static BUILD_ONCE: Once = Once::new();
 
 ///
@@ -176,7 +177,7 @@ fn init_payload(canister_id: Principal) -> CanisterInitPayload {
     let identity = managed_test_init_identity();
     let component_spec =
         ComponentSpecId::try_from(String::from("test")).expect("test Component Spec ID");
-    let config = AppConfigSnapshot::load(&workspace_root().join("apps/test/canic.toml"))
+    let config = AppConfigSnapshot::load(&workspace_root().join(LIFECYCLE_CANISTER_CONFIG_PATH))
         .expect("load lifecycle fixture config");
     let spec = config
         .component_topology()
@@ -254,7 +255,7 @@ fn workspace_root() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_core::bootstrap::parse_config_model;
+    use canic_core::bootstrap::{compiled::ComponentTopology, parse_config_model};
 
     const LIFECYCLE_CANISTER_CONFIG: &str =
         include_str!("../../../../apps/test/test-configs/root-sharding.toml");
@@ -262,15 +263,31 @@ mod tests {
     #[test]
     fn init_payload_component_spec_matches_embedded_canister_config() {
         let payload = init_payload(Fake::principal(3));
-        let CanisterInitAuthority::Component { binding, .. } = payload.authority else {
+        let CanisterInitAuthority::Component { root, binding } = payload.authority else {
             panic!("managed lifecycle Component authority");
         };
         let config =
             parse_config_model(LIFECYCLE_CANISTER_CONFIG).expect("lifecycle canister config");
-        let configured_spec = config
-            .get_component_spec(&binding.component_spec)
+        let topology =
+            ComponentTopology::compile(&config).expect("compile lifecycle Component Topology");
+        let configured_spec = topology
+            .get(&binding.component_spec)
             .expect("lifecycle Component Spec must be declared");
 
         assert_eq!(configured_spec.component_role, binding.role);
+        assert_eq!(configured_spec.spec_hash, binding.spec_hash);
+        let admission = root
+            .component_admissions
+            .iter()
+            .find(|admission| admission.component_spec == binding.component_spec)
+            .expect("lifecycle Component Spec admission");
+        assert_eq!(admission.spec_hash, configured_spec.spec_hash);
+        assert_eq!(
+            root.component_topology_digest,
+            topology
+                .project_for_admissions(&root.component_admissions)
+                .and_then(|projection| projection.digest())
+                .expect("lifecycle Component topology projection")
+        );
     }
 }

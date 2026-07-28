@@ -7,10 +7,9 @@
 use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
-    dto::component_registry::ComponentRuntimeDirectoryAuthority,
     ids::{
-        FleetBinding, FleetSubnetRootBinding, FleetSubnetRootReleaseSet, ManagedCanisterBinding,
-        ReleaseBuildId,
+        ComponentBinding, FleetBinding, FleetRegistryAuthority, FleetSubnetRootBinding,
+        FleetSubnetRootReleaseSet, ManagedCanisterBinding, ReleaseBuildId, SubnetId,
     },
     role_contract::allocation::memory::activation::FLEET_ACTIVATION_ID,
     storage::prelude::*,
@@ -165,6 +164,109 @@ pub struct ComponentRuntimeRecord {
 }
 
 ///
+/// ComponentRuntimeDirectoryAuthorityRecord
+///
+/// Persisted Fleet and Component Directory authority for one managed Component-tree node.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentRuntimeDirectoryAuthorityRecord {
+    pub fleet: FleetDirectorySnapshotRecord,
+    pub component: ComponentDirectoryHeadRecord,
+}
+
+///
+/// FleetDirectorySnapshotRecord
+///
+/// Persisted root-local Fleet Directory projection retained by one Component runtime.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetDirectorySnapshotRecord {
+    pub provenance: FleetDirectoryProvenanceRecord,
+    pub fleet_subnet_roots: Vec<FleetSubnetRootDirectoryEntryRecord>,
+}
+
+///
+/// FleetDirectoryProvenanceRecord
+///
+/// Persisted Registry authority and source root for one Fleet Directory projection.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetDirectoryProvenanceRecord {
+    pub registry: FleetRegistryVersionRecord,
+    pub source_fleet_subnet_root: Principal,
+}
+
+///
+/// FleetRegistryVersionRecord
+///
+/// Persisted immutable identity of the Registry behind one Fleet Directory projection.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetRegistryVersionRecord {
+    pub authority: FleetRegistryAuthority,
+    pub revision: u64,
+    pub content_hash: [u8; 32],
+}
+
+///
+/// FleetSubnetRootDirectoryEntryRecord
+///
+/// Persisted placement and lifecycle status of one Fleet Subnet Root Directory row.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDirectoryEntryRecord {
+    pub placement_subnet: SubnetId,
+    pub fleet_subnet_root: Principal,
+    pub status: FleetSubnetRootStatusRecord,
+}
+
+///
+/// FleetSubnetRootStatusRecord
+///
+/// Persisted lifecycle state of one Fleet Subnet Root Directory row.
+///
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum FleetSubnetRootStatusRecord {
+    Joining,
+    Active,
+    Draining,
+    Removed,
+}
+
+///
+/// ComponentDirectoryHeadRecord
+///
+/// Persisted independently versioned discovery head for one Component tree.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentDirectoryHeadRecord {
+    pub provenance: ComponentDirectoryProvenanceRecord,
+    pub descendant_count: u32,
+}
+
+///
+/// ComponentDirectoryProvenanceRecord
+///
+/// Persisted Component Registry authority from which one Component Directory is derived.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentDirectoryProvenanceRecord {
+    pub component: ComponentBinding,
+    pub source_fleet_subnet_root: Principal,
+    pub component_registry_revision: u64,
+    pub component_registry_content_hash: [u8; 32],
+    pub synchronized_at_ns: u64,
+}
+
+///
 /// ComponentRuntimeDirectoryRecord
 ///
 /// Exact target-local Directory authority committed before runtime activation.
@@ -172,7 +274,7 @@ pub struct ComponentRuntimeRecord {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ComponentRuntimeDirectoryRecord {
-    pub authority: ComponentRuntimeDirectoryAuthority,
+    pub authority: ComponentRuntimeDirectoryAuthorityRecord,
     pub authority_hash: [u8; 32],
 }
 

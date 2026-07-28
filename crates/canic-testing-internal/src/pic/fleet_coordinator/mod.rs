@@ -39,6 +39,7 @@ mod tests {
 
     #[test]
     fn coordinator_commits_joining_roots_and_replays_original_receipts() {
+        let _unit_test_serial = super::super::acquire_pic_unit_test_serial_guard();
         let _serial = acquire_pic_serial_guard();
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
         let target_dir = test_target_dir(&workspace_root, "fleet-coordinator");
