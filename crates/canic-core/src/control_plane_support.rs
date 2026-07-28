@@ -33,6 +33,14 @@ pub mod policy {
             TopLevelComponentAllocationInput, reserve_top_level_component,
         };
     }
+
+    pub mod component_child_allocation {
+        pub use crate::domain::policy::pure::component_child_allocation::{
+            ComponentChildAllocationDecision, ComponentChildAllocationInput,
+            ComponentChildAllocationPolicyError, ComponentChildAllocationReadiness,
+            ComponentRegistryVersionEvidence, reserve_component_child,
+        };
+    }
 }
 
 pub mod ops {

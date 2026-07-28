@@ -1,6 +1,7 @@
 use crate::access::AccessError;
 use crate::domain::policy::pure::{
     component_allocation::ComponentAllocationPolicyError,
+    component_child_allocation::ComponentChildAllocationPolicyError,
     topology::{TopologyPolicyError, registry::RegistryPolicyError},
 };
 use crate::dto::error::{Error as PublicError, ErrorCode as PublicErrorCode};
@@ -223,6 +224,45 @@ impl From<ComponentAllocationPolicyError> for InternalError {
             ComponentAllocationPolicyError::InvalidRootTopologyProjection
             | ComponentAllocationPolicyError::RootTopologyDigestMismatch
             | ComponentAllocationPolicyError::ComponentSpecHashMismatch(_) => {
+                Self::invariant(InternalErrorOrigin::Domain, message)
+            }
+        }
+    }
+}
+
+impl From<ComponentChildAllocationPolicyError> for InternalError {
+    fn from(err: ComponentChildAllocationPolicyError) -> Self {
+        let message = err.to_string();
+        match err {
+            ComponentChildAllocationPolicyError::EmptyOperationId
+            | ComponentChildAllocationPolicyError::ChildRoleNotAdmitted { .. } => {
+                Self::invalid_input(message)
+            }
+            ComponentChildAllocationPolicyError::ParentComponentMismatch
+            | ComponentChildAllocationPolicyError::ParentCallerMismatch
+            | ComponentChildAllocationPolicyError::ParentRegistryMemberNotActive
+            | ComponentChildAllocationPolicyError::SpawnGrantMissing { .. } => {
+                Self::forbidden(message)
+            }
+            ComponentChildAllocationPolicyError::FleetRegistryRootNotActive
+            | ComponentChildAllocationPolicyError::RootRuntimeNotActive
+            | ComponentChildAllocationPolicyError::ComponentRegistryNotActive => {
+                Self::unavailable(message)
+            }
+            ComponentChildAllocationPolicyError::ComponentRegistryAuthorityMismatch => {
+                Self::conflict(message)
+            }
+            ComponentChildAllocationPolicyError::ParentRoleCountOverflow
+            | ComponentChildAllocationPolicyError::ParentRoleCapacityExhausted { .. }
+            | ComponentChildAllocationPolicyError::ComponentDescendantCapacityExhausted
+            | ComponentChildAllocationPolicyError::ComponentCountOverflow
+            | ComponentChildAllocationPolicyError::ManagedCanisterCountOverflow
+            | ComponentChildAllocationPolicyError::ManagedCanisterCapacityExhausted => {
+                Self::resource_exhausted(message)
+            }
+            ComponentChildAllocationPolicyError::InvalidComponentBinding
+            | ComponentChildAllocationPolicyError::InvalidParentBinding
+            | ComponentChildAllocationPolicyError::ComponentSpecUnknown(_) => {
                 Self::invariant(InternalErrorOrigin::Domain, message)
             }
         }
