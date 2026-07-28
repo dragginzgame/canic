@@ -23,7 +23,9 @@ use canic_core::{
             RootComponentRegistryStatusResponse, RootComponentRuntimeActivationRequest,
             RootComponentRuntimeActivationResponse,
         },
-        fleet_activation::{FleetActivationResumeRequest, FleetActivationStatusResponse},
+        fleet_activation::{
+            FleetActivationPhase, FleetActivationResumeRequest, FleetActivationStatusResponse,
+        },
     },
 };
 use std::time::Duration;
@@ -195,14 +197,42 @@ impl LifecycleApi {
                 "root bootstrap has not prepared the complete managed inventory; inspect bootstrap status and retry activation preparation",
             ));
         }
+        let current = canic_core::api::fleet_activation::FleetActivationApi::status()?;
+        if current.phase == FleetActivationPhase::Active {
+            crate::workflow::component_registry::mark_root_runtime_activated(
+                current.identity.operation_id,
+            )
+            .map_err(canic_core::dto::error::Error::from)?;
+            return Ok(current);
+        }
+        crate::workflow::component_registry::seal_root_activation_inventory(
+            current.identity.operation_id,
+        )
+        .await
+        .map_err(canic_core::dto::error::Error::from)?;
         canic_core::api::fleet_activation::FleetActivationApi::prepare_root().await
     }
 
     pub async fn resume_fleet_activation(
         request: FleetActivationResumeRequest,
     ) -> Result<FleetActivationTransition, canic_core::dto::error::Error> {
+        let current = canic_core::api::fleet_activation::FleetActivationApi::status()?;
+        if current.phase == FleetActivationPhase::Prepared {
+            crate::workflow::component_registry::converge_root_activation_inventory(
+                request.operation_id,
+            )
+            .await
+            .map_err(canic_core::dto::error::Error::from)?;
+        }
         let transition =
             canic_core::api::fleet_activation::FleetActivationApi::resume_root(request).await?;
+        if transition.status.phase != FleetActivationPhase::Active {
+            return Err(canic_core::dto::error::Error::unavailable(
+                "Fleet activation resume did not activate the root runtime",
+            ));
+        }
+        crate::workflow::component_registry::mark_root_runtime_activated(request.operation_id)
+            .map_err(canic_core::dto::error::Error::from)?;
         crate::workflow::bootstrap::root::bootstrap_init_root_canister().await;
         if !canic_core::api::ready::ReadyApi::is_ready() {
             return Err(canic_core::dto::error::Error::unavailable(

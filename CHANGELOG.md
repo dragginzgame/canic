@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.28` seals the complete initial Component inventory, independently
+  reverifies every active current Directory and activates the Fleet Subnet
+  Root only after durable aggregate convergence.
+
 - `0.100.27` atomically promotes each runtime-active Component Registry
   partition to `Active`, synchronizes its revision-two current Directory and
   records exact target/root membership receipts without changing activation

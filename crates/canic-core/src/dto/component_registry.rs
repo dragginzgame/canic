@@ -31,6 +31,22 @@ pub struct RootComponentRegistryPreparationRequest {
 }
 
 ///
+/// RootComponentInitialInventoryStatus
+///
+/// Durable initial Component inventory sealed for one Fleet Subnet Root activation.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentInitialInventoryStatus {
+    pub fleet_activation_operation_id: [u8; 32],
+    pub component_count: u32,
+    pub inventory_hash: [u8; 32],
+    pub sealed_at_ns: u64,
+    pub directories_converged: bool,
+    pub root_runtime_activated: bool,
+}
+
+///
 /// RootComponentRegistryStatusResponse
 ///
 /// Compact durable Component Registry authority and current allocation counters.
@@ -47,6 +63,7 @@ pub struct RootComponentRegistryStatusResponse {
     pub committed_component_instances: u32,
     pub managed_descendants: u32,
     pub encoded_bytes: u64,
+    pub initial_inventory: Option<RootComponentInitialInventoryStatus>,
 }
 
 ///
@@ -486,6 +503,14 @@ mod tests {
             committed_component_instances: 0,
             managed_descendants: 0,
             encoded_bytes: 0,
+            initial_inventory: Some(RootComponentInitialInventoryStatus {
+                fleet_activation_operation_id: [10; 32],
+                component_count: 0,
+                inventory_hash: [11; 32],
+                sealed_at_ns: 12,
+                directories_converged: true,
+                root_runtime_activated: true,
+            }),
         };
         let allocation = RootComponentAllocationResponse {
             operation_id: [10; 32],

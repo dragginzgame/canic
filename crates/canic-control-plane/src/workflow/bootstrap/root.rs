@@ -187,6 +187,17 @@ fn complete_or_wait_for_root_activation() {
         return;
     }
 
+    if !crate::workflow::component_registry::root_runtime_activation_receipt_complete() {
+        record_root_bootstrap_metric(LifecycleMetricPhase::Init, LifecycleMetricOutcome::Waiting);
+        BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_INIT_ACTIVATION_PREPARED);
+        log!(
+            Topic::Init,
+            Info,
+            "bootstrap (root:init) waiting for terminal Component inventory activation receipt"
+        );
+        return;
+    }
+
     log!(Topic::Init, Info, "bootstrap (root:init) complete");
     record_root_bootstrap_metric(
         LifecycleMetricPhase::Init,

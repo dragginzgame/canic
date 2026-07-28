@@ -11,7 +11,8 @@ Date: 2026-07-27
   Component Spec, root-local Component identity, topology-admitted Wasm Store
   and Registry architecture, including flat potential-Wasm catalogs and
   multi-level dynamic Component trees plus separate runtime and Registry
-  membership activation with revision-bound current-Directory convergence.
+  membership activation, revision-bound current-Directory convergence and
+  inventory-bound Fleet Subnet Root runtime activation.
 - Open design blockers: none. Application-data replication remains a separate
   later design and is not an implementation blocker for 0.101 topology,
   purpose or discovery contracts.
