@@ -18,14 +18,15 @@ mod tests {
             component_registry::{
                 ComponentDirectoryHead, ComponentDirectoryHeadRequest, ComponentLifecycleStatus,
                 ComponentProvisioningOrigin, ComponentRegistryPartitionRequest,
-                ComponentRegistryPartitionResponse, ComponentRuntimeDirectoryPhase,
-                ComponentRuntimeDirectoryStatusResponse, RootComponentAllocationPhase,
+                ComponentRegistryPartitionResponse, ComponentRuntimePhase,
+                ComponentRuntimeStatusResponse, RootComponentAllocationPhase,
                 RootComponentAllocationRequest, RootComponentAllocationResponse,
                 RootComponentAllocationStatusRequest, RootComponentCommitRequest,
                 RootComponentCommitResponse, RootComponentCreationRequest,
                 RootComponentDirectoryPreparationRequest,
                 RootComponentDirectoryPreparationResponse, RootComponentInstallRequest,
                 RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
+                RootComponentRuntimeActivationRequest, RootComponentRuntimeActivationResponse,
             },
             fleet_registry::{
                 FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistry,
@@ -50,17 +51,17 @@ mod tests {
         Error,
         dto::fleet_activation::{FleetActivationPhase, FleetActivationStatusResponse},
         protocol::{
-            CANIC_COMPONENT_RUNTIME_DIRECTORY_STATUS, CANIC_FLEET_ACTIVATION_STATUS,
-            CANIC_FLEET_REGISTRY, CANIC_FLEET_REGISTRY_ACTIVATE,
-            CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR, CANIC_FLEET_REGISTRY_MIRROR_STATUS,
-            CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS, CANIC_FLEET_REGISTRY_SYNC_STATUS,
-            CANIC_FLEET_REGISTRY_SYNCHRONIZE, CANIC_FLEET_REGISTRY_VERSION,
-            CANIC_FLEET_SUBNET_ROOT_AUTHORITY, CANIC_FLEET_SUBNET_ROOT_JOIN,
-            CANIC_ROOT_COMPONENT_ALLOCATE, CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
-            CANIC_ROOT_COMPONENT_COMMIT, CANIC_ROOT_COMPONENT_CREATE,
-            CANIC_ROOT_COMPONENT_DIRECTORY_HEAD, CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE,
-            CANIC_ROOT_COMPONENT_INSTALL, CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
-            CANIC_ROOT_COMPONENT_REGISTRY_PREPARE, CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
+            CANIC_COMPONENT_RUNTIME_STATUS, CANIC_FLEET_ACTIVATION_STATUS, CANIC_FLEET_REGISTRY,
+            CANIC_FLEET_REGISTRY_ACTIVATE, CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
+            CANIC_FLEET_REGISTRY_MIRROR_STATUS, CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
+            CANIC_FLEET_REGISTRY_SYNC_STATUS, CANIC_FLEET_REGISTRY_SYNCHRONIZE,
+            CANIC_FLEET_REGISTRY_VERSION, CANIC_FLEET_SUBNET_ROOT_AUTHORITY,
+            CANIC_FLEET_SUBNET_ROOT_JOIN, CANIC_ROOT_COMPONENT_ALLOCATE,
+            CANIC_ROOT_COMPONENT_ALLOCATION_STATUS, CANIC_ROOT_COMPONENT_COMMIT,
+            CANIC_ROOT_COMPONENT_CREATE, CANIC_ROOT_COMPONENT_DIRECTORY_HEAD,
+            CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE, CANIC_ROOT_COMPONENT_INSTALL,
+            CANIC_ROOT_COMPONENT_REGISTRY_PARTITION, CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
+            CANIC_ROOT_COMPONENT_REGISTRY_STATUS, CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE,
             CANIC_ROOT_STORE_BOOTSTRAP, CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
             CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
             CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN, CANIC_WASM_STORE_PREPARE,
@@ -841,13 +842,8 @@ mod tests {
         committed: RootComponentCommitResponse,
     ) -> RootComponentAllocationResponse {
         let target = committed.registry.binding.canister_id;
-        let awaiting: Result<ComponentRuntimeDirectoryStatusResponse, Error> = pic
-            .query_call_as(
-                target,
-                fixture.root_id,
-                CANIC_COMPONENT_RUNTIME_DIRECTORY_STATUS,
-                (),
-            )
+        let awaiting: Result<ComponentRuntimeStatusResponse, Error> = pic
+            .query_call_as(target, fixture.root_id, CANIC_COMPONENT_RUNTIME_STATUS, ())
             .expect("query awaiting Component runtime Directory transport");
         let awaiting = awaiting.expect("awaiting Component runtime Directory");
         assert_eq!(awaiting.operation_id, operation_id);
@@ -855,12 +851,10 @@ mod tests {
             awaiting.binding,
             ManagedCanisterBinding::Component(committed.registry.binding.clone())
         );
-        assert_eq!(
-            awaiting.phase,
-            ComponentRuntimeDirectoryPhase::AwaitingDirectory
-        );
+        assert_eq!(awaiting.phase, ComponentRuntimePhase::AwaitingDirectory);
         assert_eq!(awaiting.authority, None);
         assert_eq!(awaiting.authority_hash, None);
+        assert_eq!(awaiting.activation, None);
 
         let request = RootComponentDirectoryPreparationRequest { operation_id };
         let prepared: Result<RootComponentDirectoryPreparationResponse, Error> = pic
@@ -874,7 +868,7 @@ mod tests {
         assert_eq!(prepared.committed, committed);
         assert_eq!(
             prepared.target.phase,
-            ComponentRuntimeDirectoryPhase::DirectoryPrepared
+            ComponentRuntimePhase::DirectoryPrepared
         );
         assert_eq!(prepared.target.operation_id, operation_id);
         assert_eq!(
@@ -905,6 +899,7 @@ mod tests {
                 .expect("Directory authority hash"),
             [0; 32]
         );
+        assert_eq!(prepared.target.activation, None);
 
         let retry: Result<RootComponentDirectoryPreparationResponse, Error> = pic
             .update_call(
@@ -917,13 +912,8 @@ mod tests {
             retry.expect("retry issuer Component Directory preparation"),
             prepared
         );
-        let observed: Result<ComponentRuntimeDirectoryStatusResponse, Error> = pic
-            .query_call_as(
-                target,
-                fixture.root_id,
-                CANIC_COMPONENT_RUNTIME_DIRECTORY_STATUS,
-                (),
-            )
+        let observed: Result<ComponentRuntimeStatusResponse, Error> = pic
+            .query_call_as(target, fixture.root_id, CANIC_COMPONENT_RUNTIME_STATUS, ())
             .expect("query prepared Component runtime Directory transport");
         assert_eq!(
             observed.expect("prepared Component runtime Directory"),
@@ -939,7 +929,96 @@ mod tests {
                 .phase,
             FleetActivationPhase::Prepared
         );
-        prepared.committed.allocation
+        activate_issuer_component_runtime(pic, fixture, request, prepared)
+    }
+
+    fn activate_issuer_component_runtime(
+        pic: &Pic,
+        fixture: &BootstrappedRootFixture,
+        directory_request: RootComponentDirectoryPreparationRequest,
+        prepared: RootComponentDirectoryPreparationResponse,
+    ) -> RootComponentAllocationResponse {
+        let target = prepared.committed.registry.binding.canister_id;
+        let request = RootComponentRuntimeActivationRequest {
+            operation_id: directory_request.operation_id,
+        };
+        let activated: Result<RootComponentRuntimeActivationResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE,
+                (request,),
+            )
+            .expect("activate issuer Component runtime transport");
+        let activated = activated.expect("activate issuer Component runtime");
+        assert_eq!(activated.committed, prepared.committed);
+        assert_eq!(activated.target.operation_id, request.operation_id);
+        assert_eq!(activated.target.binding, prepared.target.binding);
+        assert_eq!(activated.target.phase, ComponentRuntimePhase::Active);
+        assert_eq!(activated.target.authority, prepared.target.authority);
+        assert_eq!(
+            activated.target.authority_hash,
+            prepared.target.authority_hash
+        );
+        let activation = activated
+            .target
+            .activation
+            .as_ref()
+            .expect("Component runtime activation evidence");
+        assert_eq!(
+            Some(activation.directory_authority_hash),
+            activated.target.authority_hash
+        );
+        assert!(activation.activated_at_ns > 0);
+
+        let retry: Result<RootComponentRuntimeActivationResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE,
+                (request,),
+            )
+            .expect("retry issuer Component runtime activation transport");
+        assert_eq!(
+            retry.expect("retry issuer Component runtime activation"),
+            activated
+        );
+        let observed: Result<ComponentRuntimeStatusResponse, Error> = pic
+            .query_call_as(target, fixture.root_id, CANIC_COMPONENT_RUNTIME_STATUS, ())
+            .expect("query active Component runtime transport");
+        assert_eq!(
+            observed.expect("active Component runtime"),
+            activated.target
+        );
+        let target_activation: Result<FleetActivationStatusResponse, Error> = pic
+            .query_call_as(target, fixture.root_id, CANIC_FLEET_ACTIVATION_STATUS, ())
+            .expect("query active Component Fleet status transport");
+        let target_activation = target_activation.expect("active Component Fleet status");
+        assert_eq!(target_activation.phase, FleetActivationPhase::Active);
+        assert_eq!(target_activation.cascade, None);
+        assert_eq!(target_activation.credential, None);
+        assert_eq!(
+            target_activation.activated_at_ns,
+            Some(activation.activated_at_ns)
+        );
+
+        let prepared_retry: Result<RootComponentDirectoryPreparationResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE,
+                (directory_request,),
+            )
+            .expect("retry Directory preparation after runtime activation transport");
+        assert_eq!(
+            prepared_retry.expect("retry Directory preparation after runtime activation"),
+            prepared
+        );
+        assert_committed_component_queries(
+            pic,
+            fixture,
+            request.operation_id,
+            &activated.committed,
+        );
+        assert_prepared(pic, fixture.root_id);
+        activated.committed.allocation
     }
 
     fn assert_committed_component_queries(

@@ -271,7 +271,19 @@ fn standalone_local_bundle_excludes_managed_fleet_activation_updates() {
         })
         .expect("managed non-root endpoint bundle");
     assert!(
-        managed_bundle.contains("canic_emit_nonroot_fleet_activation_endpoints!()"),
-        "managed non-roots must retain the current Fleet activation updates"
+        managed_bundle.contains("canic_emit_component_runtime_endpoints!()")
+            && !managed_bundle.contains("canic_emit_nonroot_fleet_activation_endpoints!()")
+            && !managed_bundle.contains("canic_emit_nonroot_sync_topology_endpoints!()"),
+        "managed Components must expose only their Directory-bound runtime activation surface"
+    );
+
+    let store_bundle = bundles
+        .split("macro_rules! canic_bundle_wasm_store_runtime_endpoints")
+        .nth(1)
+        .expect("Wasm Store endpoint bundle");
+    assert!(
+        store_bundle.contains("canic_emit_nonroot_fleet_activation_endpoints!()")
+            && store_bundle.contains("canic_emit_nonroot_sync_topology_endpoints!()"),
+        "Wasm Store must retain its current Fleet cascade activation surface"
     );
 }

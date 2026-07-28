@@ -117,6 +117,17 @@ pub struct RootComponentDirectoryPreparationRequest {
 }
 
 ///
+/// RootComponentRuntimeActivationRequest
+///
+/// Controller command activating one Directory-prepared top-level Component runtime.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentRuntimeActivationRequest {
+    pub operation_id: [u8; 32],
+}
+
+///
 /// ComponentProvisioningOrigin
 ///
 /// Authenticated causal authority retained with one top-level Component allocation.
@@ -261,30 +272,56 @@ pub struct ComponentRuntimeDirectoryPreparationRequest {
 }
 
 ///
-/// ComponentRuntimeDirectoryPhase
+/// ComponentRuntimePhase
 ///
-/// Target-local progress before Component runtime activation.
+/// Target-local progress from installation through Component runtime activation.
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum ComponentRuntimeDirectoryPhase {
+pub enum ComponentRuntimePhase {
     AwaitingDirectory,
     DirectoryPrepared,
+    Active,
 }
 
 ///
-/// ComponentRuntimeDirectoryStatusResponse
+/// ComponentRuntimeActivationEvidence
+///
+/// Exact retained Directory authority under which one Component runtime became Active.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentRuntimeActivationEvidence {
+    pub directory_authority_hash: [u8; 32],
+    pub activated_at_ns: u64,
+}
+
+///
+/// ComponentRuntimeActivationRequest
+///
+/// Root-issued exact activation command for one Directory-prepared managed Component node.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentRuntimeActivationRequest {
+    pub operation_id: [u8; 32],
+    pub directory_authority_hash: [u8; 32],
+}
+
+///
+/// ComponentRuntimeStatusResponse
 ///
 /// Independently observable target-local binding and exact retained Directory authority.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ComponentRuntimeDirectoryStatusResponse {
+pub struct ComponentRuntimeStatusResponse {
     pub operation_id: [u8; 32],
     pub binding: ManagedCanisterBinding,
-    pub phase: ComponentRuntimeDirectoryPhase,
+    pub phase: ComponentRuntimePhase,
     pub authority: Option<ComponentRuntimeDirectoryAuthority>,
     pub authority_hash: Option<[u8; 32]>,
+    pub activation: Option<ComponentRuntimeActivationEvidence>,
 }
 
 ///
@@ -359,7 +396,19 @@ pub struct RootComponentCommitResponse {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentDirectoryPreparationResponse {
     pub committed: RootComponentCommitResponse,
-    pub target: ComponentRuntimeDirectoryStatusResponse,
+    pub target: ComponentRuntimeStatusResponse,
+}
+
+///
+/// RootComponentRuntimeActivationResponse
+///
+/// Exact root authority plus independently observed target-local runtime activation.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentRuntimeActivationResponse {
+    pub committed: RootComponentCommitResponse,
+    pub target: ComponentRuntimeStatusResponse,
 }
 
 #[cfg(test)]
@@ -594,6 +643,31 @@ mod tests {
             candid::decode_one::<RootComponentCommitRequest>(&bytes)
                 .expect("decode commit request"),
             request
+        );
+    }
+
+    #[test]
+    fn component_runtime_activation_requests_round_trip_through_candid() {
+        let root_request = RootComponentRuntimeActivationRequest {
+            operation_id: [22; 32],
+        };
+        let target_request = ComponentRuntimeActivationRequest {
+            operation_id: root_request.operation_id,
+            directory_authority_hash: [23; 32],
+        };
+        let root_bytes = candid::encode_one(root_request).expect("encode root activation request");
+        let target_bytes =
+            candid::encode_one(target_request).expect("encode target activation request");
+
+        assert_eq!(
+            candid::decode_one::<RootComponentRuntimeActivationRequest>(&root_bytes)
+                .expect("decode root activation request"),
+            root_request
+        );
+        assert_eq!(
+            candid::decode_one::<ComponentRuntimeActivationRequest>(&target_bytes)
+                .expect("decode target activation request"),
+            target_request
         );
     }
 }

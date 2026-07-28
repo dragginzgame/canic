@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.26` activates each Directory-prepared Component runtime from its
+  exact retained authority, independently verifies the result and records a
+  durable root receipt while hard-cutting obsolete application cascade activation.
+
 - `0.100.25` distributes each committed Component's exact Fleet and Component
   Directory authority directly from its root with target-local retention,
   independent verification, interruption-safe retry and a terminal root receipt

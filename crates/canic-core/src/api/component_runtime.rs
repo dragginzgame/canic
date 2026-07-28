@@ -1,13 +1,14 @@
 //! Module: api::component_runtime
 //!
-//! Responsibility: expose managed Component runtime Directory preparation workflows.
-//! Does not own: validation, stable mutation, endpoint authorization, or activation.
+//! Responsibility: expose managed Component Directory preparation and runtime activation.
+//! Does not own: validation, stable mutation, endpoint authorization, or root distribution.
 //! Boundary: maps typed internal failures into Canic's public error contract.
 
 use crate::{
     dto::{
         component_registry::{
-            ComponentRuntimeDirectoryPreparationRequest, ComponentRuntimeDirectoryStatusResponse,
+            ComponentRuntimeActivationRequest, ComponentRuntimeDirectoryPreparationRequest,
+            ComponentRuntimeStatusResponse,
         },
         error::Error,
     },
@@ -23,11 +24,17 @@ pub struct ComponentRuntimeApi;
 impl ComponentRuntimeApi {
     pub fn prepare_directory(
         request: ComponentRuntimeDirectoryPreparationRequest,
-    ) -> Result<ComponentRuntimeDirectoryStatusResponse, Error> {
+    ) -> Result<ComponentRuntimeStatusResponse, Error> {
         component_runtime::prepare_directory(request).map_err(Error::from)
     }
 
-    pub fn directory_status() -> Result<ComponentRuntimeDirectoryStatusResponse, Error> {
-        component_runtime::directory_status().map_err(Error::from)
+    pub fn status() -> Result<ComponentRuntimeStatusResponse, Error> {
+        component_runtime::status().map_err(Error::from)
+    }
+
+    pub fn activate(
+        request: ComponentRuntimeActivationRequest,
+    ) -> Result<crate::view::fleet_activation::ComponentRuntimeActivationTransition, Error> {
+        component_runtime::activate(request).map_err(Error::from)
     }
 }

@@ -4,7 +4,7 @@
 //! Does not own: storage access, mutation, activation policy, or endpoint authorization.
 //! Boundary: contradictory protected records fail closed instead of producing a partial status.
 
-use super::FleetActivationOpsError;
+use super::{FleetActivationOpsError, validate_component_runtime_directory_record};
 use crate::{
     dto::fleet_activation::{
         FleetActivationIdentity, FleetActivationPhase, FleetActivationStatusResponse,
@@ -12,8 +12,8 @@ use crate::{
         FleetCredentialManifest, FleetCredentialManifestEntry,
     },
     storage::stable::fleet_activation::{
-        FleetActivationEvidenceRecord, FleetActivationIdentityRecord, FleetActivationRecord,
-        FleetActivationStateRecord, FleetCascadeActivationEvidenceRecord,
+        ComponentRuntimeRecord, FleetActivationEvidenceRecord, FleetActivationIdentityRecord,
+        FleetActivationRecord, FleetActivationStateRecord, FleetCascadeActivationEvidenceRecord,
         FleetCascadeManifestEntryRecord, FleetCredentialGenerationRefRecord,
         FleetCredentialManifestEntryRecord, FleetCredentialManifestRecord,
         MAX_RETAINED_PREPARED_CREDENTIAL_GENERATIONS,
@@ -32,7 +32,7 @@ pub(super) fn record_to_status(
         prepared_topology_snapshot_hash: _,
         cascade_manifest,
         credential_manifests,
-        component_runtime: _,
+        component_runtime,
     } = record;
     if is_root != root_authority.is_some() {
         return Err(invalid(
@@ -50,6 +50,7 @@ pub(super) fn record_to_status(
                     "root Fleet activation retains non-root application init arguments",
                 ));
             }
+            validate_prepared_component_runtime(component_runtime.as_ref())?;
             (FleetActivationPhase::Prepared, identity, evidence, None)
         }
         FleetActivationStateRecord::Active {
@@ -57,7 +58,13 @@ pub(super) fn record_to_status(
             evidence,
             activated_at_ns,
         } => {
-            if evidence.cascade.is_none() || evidence.credential.is_none() {
+            if component_runtime.is_some() {
+                validate_active_component_runtime(
+                    component_runtime.as_ref(),
+                    &evidence,
+                    activated_at_ns,
+                )?;
+            } else if evidence.cascade.is_none() || evidence.credential.is_none() {
                 return Err(invalid(
                     "Active Fleet activation is missing cascade or credential evidence",
                 ));
@@ -97,6 +104,51 @@ pub(super) fn record_to_status(
         credential_manifest,
         activated_at_ns,
     })
+}
+
+fn validate_prepared_component_runtime(
+    component_runtime: Option<&ComponentRuntimeRecord>,
+) -> Result<(), FleetActivationOpsError> {
+    if component_runtime.is_some_and(|runtime| runtime.activation.is_some()) {
+        return Err(invalid(
+            "Prepared Component runtime retains activation evidence",
+        ));
+    }
+    if let Some(directory) = component_runtime.and_then(|runtime| runtime.directory.as_ref()) {
+        validate_component_runtime_directory_record(directory)?;
+    }
+    Ok(())
+}
+
+fn validate_active_component_runtime(
+    component_runtime: Option<&ComponentRuntimeRecord>,
+    evidence: &FleetActivationEvidenceRecord,
+    activated_at_ns: u64,
+) -> Result<(), FleetActivationOpsError> {
+    let runtime = component_runtime.expect("Component runtime presence checked by caller");
+    let directory = runtime.directory.as_ref().ok_or_else(|| {
+        invalid("Active Component runtime is missing retained Directory authority")
+    })?;
+    let activation = runtime
+        .activation
+        .as_ref()
+        .ok_or_else(|| invalid("Active Component runtime is missing activation evidence"))?;
+    if evidence.cascade.is_some() || evidence.credential.is_some() {
+        return Err(invalid(
+            "Active Component runtime retains obsolete cascade or credential evidence",
+        ));
+    }
+    validate_component_runtime_directory_record(directory)?;
+    validate_component_runtime_directory_record(&activation.directory)?;
+    if activation.directory.authority_hash == [0; 32]
+        || activation.activated_at_ns == 0
+        || activation.activated_at_ns != activated_at_ns
+    {
+        return Err(invalid(
+            "Active Component runtime evidence is incomplete or has the wrong timestamp",
+        ));
+    }
+    Ok(())
 }
 
 fn status_cascade_manifest(
