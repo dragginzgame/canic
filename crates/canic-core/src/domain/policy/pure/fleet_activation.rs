@@ -29,6 +29,11 @@ use crate::{
 };
 use thiserror::Error as ThisError;
 
+#[cfg(test)]
+use crate::protocol::{
+    CANIC_ROOT_COMPONENT_CHILD_ALLOCATE, CANIC_ROOT_COMPONENT_CHILD_ALLOCATION_STATUS,
+};
+
 ///
 /// FleetActivationEndpointPolicyError
 ///
@@ -223,6 +228,14 @@ mod tests {
             (CANIC_SYNC_STATE, EndpointCallKind::Update),
             ("canic_upsert_root_issuer_policy", EndpointCallKind::Update),
             (CANIC_FLEET_ACTIVATION_STATUS, EndpointCallKind::Update),
+            (
+                CANIC_ROOT_COMPONENT_CHILD_ALLOCATE,
+                EndpointCallKind::Update,
+            ),
+            (
+                CANIC_ROOT_COMPONENT_CHILD_ALLOCATION_STATUS,
+                EndpointCallKind::Query,
+            ),
             (CANIC_FLEET_SUBNET_ROOT_AUTHORITY, EndpointCallKind::Update),
             (
                 CANIC_FLEET_ACTIVATION_STATUS,

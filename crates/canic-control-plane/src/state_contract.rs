@@ -8,7 +8,7 @@
 
 use crate::storage::stable::{
     component_registry::{
-        ComponentRegistryPartitionRecord, ComponentRegistryPrincipalIndexRecord,
+        ComponentRegistryEntryRecord, ComponentRegistryPrincipalIndexRecord,
         RootComponentAllocationRecord, RootComponentRegistryData, RootComponentRegistryStateRecord,
     },
     fleet_coordinator::{FleetCoordinatorRegistryData, FleetCoordinatorRegistryRecord},
@@ -29,7 +29,7 @@ use canic_core::{
         allocation::memory::control_plane::{
             CONTROL_PLANE_SUBNET_STATE_ID, FLEET_COORDINATOR_REGISTRY_ID,
             ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_PRINCIPAL_INDEX_ID,
-            ROOT_COMPONENT_REGISTRY_META_ID, ROOT_COMPONENT_REGISTRY_PARTITIONS_ID,
+            ROOT_COMPONENT_REGISTRY_ENTRIES_ID, ROOT_COMPONENT_REGISTRY_META_ID,
             ROOT_FLEET_REGISTRY_MIRROR_ID, TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID,
             TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
         },
@@ -158,18 +158,19 @@ fn root_component_registry_descriptor() -> StateAllocationDescriptor {
                 migrations: Vec::new(),
             },
             StateDomainManifest {
-                domain: "component_registry_partitions".to_string(),
+                domain: "component_registry_entries".to_string(),
                 version: 1,
                 storage: StateStorage::StableMemory,
-                memory_id: Some(ROOT_COMPONENT_REGISTRY_PARTITIONS_ID),
+                memory_id: Some(ROOT_COMPONENT_REGISTRY_ENTRIES_ID),
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
-                record: ComponentRegistryPartitionRecord::STATE_CONTRACT_NAME.to_string(),
+                record: ComponentRegistryEntryRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: RootComponentRegistryData::STATE_CONTRACT_NAME.to_string(),
                 min_supported_version: 1,
                 migration_policy: MigrationPolicy::NewDomain,
                 restore_order: Some(198),
                 post_upgrade_invariant: Some(
-                    "component_registry_partitions_restore_exact_heads_and_bindings".to_string(),
+                    "component_registry_entries_restore_exact_heads_reservations_and_counts"
+                        .to_string(),
                 ),
                 migrations: Vec::new(),
             },
@@ -348,9 +349,9 @@ mod tests {
                     Some(197),
                 ),
                 (
-                    "component_registry_partitions",
-                    Some(ROOT_COMPONENT_REGISTRY_PARTITIONS_ID),
-                    ComponentRegistryPartitionRecord::STATE_CONTRACT_NAME,
+                    "component_registry_entries",
+                    Some(ROOT_COMPONENT_REGISTRY_ENTRIES_ID),
+                    ComponentRegistryEntryRecord::STATE_CONTRACT_NAME,
                     Some(198),
                 ),
                 (

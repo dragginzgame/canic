@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.37` persists exact parent-authenticated direct-child reservations,
+  per-parent role counts and Component/root descendant capacity before any
+  child Canister effect.
+
 - `0.100.36` freezes one pure direct-child reservation decision for both
   top-level Component and registered descendant parents, with exact Registry,
   spawn-grant, per-parent, Component-descendant and root managed-Canister

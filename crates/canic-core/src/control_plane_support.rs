@@ -4,7 +4,7 @@ pub mod error {
 
 pub mod config {
     pub mod schema {
-        pub use crate::config::schema::CanisterPool;
+        pub use crate::config::schema::{CanisterPool, ComponentChildKind};
     }
 
     pub use crate::config::ComponentTopology;

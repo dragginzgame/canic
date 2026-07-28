@@ -542,6 +542,16 @@ fn assert_component_registry_protocol_constants() {
             "canic_root_component_allocation_status",
         ),
         (
+            canic::protocol::CANIC_ROOT_COMPONENT_CHILD_ALLOCATE,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_CHILD_ALLOCATE,
+            "canic_root_component_child_allocate",
+        ),
+        (
+            canic::protocol::CANIC_ROOT_COMPONENT_CHILD_ALLOCATION_STATUS,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_CHILD_ALLOCATION_STATUS,
+            "canic_root_component_child_allocation_status",
+        ),
+        (
             canic::protocol::CANIC_ROOT_COMPONENT_CREATE,
             canic_core::protocol::CANIC_ROOT_COMPONENT_CREATE,
             "canic_root_component_create",
@@ -637,6 +647,19 @@ fn assert_root_registry_mirror_guards(root: &str) {
         preceding_attribute_context(root, "async fn canic_root_component_allocation_status(")
             .contains("canic_query(requires(caller::is_controller()))"),
         "root Component allocation status must remain a controller-guarded query"
+    );
+    assert!(
+        preceding_attribute_context(root, "async fn canic_root_component_child_allocate(")
+            .contains("canic_update(internal, public)"),
+        "root Component Child allocation must remain a public update authenticated by workflow"
+    );
+    assert!(
+        preceding_attribute_context(
+            root,
+            "async fn canic_root_component_child_allocation_status("
+        )
+        .contains("canic_query(internal, public)"),
+        "root Component Child allocation status must remain a public query authenticated by workflow"
     );
     for endpoint in [
         "async fn canic_root_component_create(",

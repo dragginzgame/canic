@@ -6,9 +6,9 @@ Date: 2026-07-28
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.35`.
-- Latest published release: `v0.100.35`.
-- Open patch draft: `0.100.36`; no package-version change has been authorized.
+- Workspace package version: `0.100.36`.
+- Latest published release: `v0.100.36`.
+- Open patch draft: `0.100.37`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -154,7 +154,10 @@ Registry slices replace the 0.99 root model.
 - [x] Freeze one pure direct-child reservation decision for direct Component
   and registered descendant parents with exact Registry, spawn-grant and
   per-parent, Component-descendant and root managed-Canister authority.
-- [ ] Implement authenticated parent-to-root child effects at arbitrary depth.
+- [x] Implement the authenticated parent-to-root child reservation boundary
+  for direct Component and registered descendant parents.
+- [ ] Implement child creation, installation and Registry commitment at
+  arbitrary depth.
 - [ ] Make the Fleet Subnet Root the required lifecycle controller and retain
   authoritative idempotent receipts.
 - [ ] Resolve lifecycle artifacts only through the active release set.
@@ -164,8 +167,10 @@ Registry slices replace the 0.99 root model.
   with independent per-Component heads.
 - [x] Commit normalized top-level Component rows with a principal index and
   terminal operation receipt.
-- [ ] Store normalized Component Registry rows with principal, parent/role,
-  count and operation-journal indexes.
+- [x] Store exact operation-keyed child reservations and parent-role counts in
+  the Component-first Registry collection.
+- [ ] Commit normalized child rows with principal and parent/role traversal
+  indexes.
 - [x] Derive the first ownership-preserving Component Directory head from its
   exact committed Registry partition.
 - [ ] Derive ownership-preserving Component Directories with compact heads and
@@ -585,7 +590,7 @@ existing all-root terminal publication gate. Only then does the normal fresh
 install atomically commit or exactly adopt its Coordinator-anchored Fleet
 catalog row.
 
-Open 0.100.36 freezes the pure direct-child reservation boundary shared by a
+Released 0.100.36 freezes the pure direct-child reservation boundary shared by a
 direct Component parent and an already-registered descendant parent. It
 requires the exact protected Component tree, immediate-parent caller,
 current Component Registry version, active prerequisite evidence and explicit
@@ -593,12 +598,26 @@ role-to-role spawn grant, then checks the per-parent, Component-descendant and
 root managed-Canister ceilings before returning normalized facts for a later
 durable mutation. It does not yet persist a child or perform a paid effect.
 
+Open 0.100.37 persists that decision before any paid call. A public internal
+root workflow resolves the exact caller through the Component principal index,
+binds each operation to its original Component Registry head, parent, child
+role, release set and grant ceiling, and atomically increments the
+parent-role, Component-reserved-descendant, root-managed-descendant and
+Registry-byte ledgers. Exact retry after interruption returns the original
+reservation without charging twice. The Component-first stable collection
+now carries partitions, child-row schema, reservations and parent-role counts;
+reservation alone does not add a member or advance the Component
+Registry/Directory head. Child creation, installation and commitment remain
+outside this batch.
+
 ## Next Action
 
-Persist exact operation-keyed child reservations and normalized
-principal/parent/role/count indexes in the root-owned Component Registry, then
-expose the authenticated parent-to-root reservation endpoint through workflow.
-Keep creation/install as the following effect slice so the durable
-same-release retry boundary is proved before any paid call. Do not introduce
-nested Component declarations, let application Canisters call management
-creation directly or infer authorization from catalog presence alone.
+Consume one exact durable child reservation through creation intent, paid
+Canister creation, Store-backed installation, independent verification and
+normalized child-row commitment. Insert the principal and parent/role
+traversal indexes atomically with commitment, transfer reserved counts to
+committed counts and advance the Component Registry/Directory authority.
+Reconcile uncertain calls from durable intent and observation; do not
+introduce nested Component declarations, let application Canisters call
+management creation directly or infer authorization from catalog presence
+alone.

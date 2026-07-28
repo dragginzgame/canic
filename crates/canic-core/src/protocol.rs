@@ -23,6 +23,9 @@ pub const CANIC_ROOT_COMPONENT_REGISTRY_PREPARE: &str = "canic_root_component_re
 pub const CANIC_ROOT_COMPONENT_REGISTRY_STATUS: &str = "canic_root_component_registry_status";
 pub const CANIC_ROOT_COMPONENT_ALLOCATE: &str = "canic_root_component_allocate";
 pub const CANIC_ROOT_COMPONENT_ALLOCATION_STATUS: &str = "canic_root_component_allocation_status";
+pub const CANIC_ROOT_COMPONENT_CHILD_ALLOCATE: &str = "canic_root_component_child_allocate";
+pub const CANIC_ROOT_COMPONENT_CHILD_ALLOCATION_STATUS: &str =
+    "canic_root_component_child_allocation_status";
 pub const CANIC_ROOT_COMPONENT_CREATE: &str = "canic_root_component_create";
 pub const CANIC_ROOT_COMPONENT_INSTALL: &str = "canic_root_component_install";
 pub const CANIC_ROOT_COMPONENT_COMMIT: &str = "canic_root_component_commit";
