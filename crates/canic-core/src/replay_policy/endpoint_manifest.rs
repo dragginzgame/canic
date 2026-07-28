@@ -146,8 +146,17 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "canic_root_component_commit",
         command_kind("component_registry.commit_top_level.v1"),
     ),
+    update_response_idempotent(
+        "canic_root_component_directory_prepare",
+        command_kind("component_registry.prepare_component_directory.v1"),
+    ),
     query_read_only("canic_root_component_registry_partition"),
     query_read_only("canic_root_component_directory_head"),
+    update_response_idempotent(
+        "canic_component_runtime_directory_prepare",
+        command_kind("component_runtime.prepare_directory.v1"),
+    ),
+    query_read_only("canic_component_runtime_directory_status"),
     update_monotonic_transition(
         "canic_prepare_fleet_credential_generation",
         command_kind("fleet_activation.prepare_credential_generation.v1"),

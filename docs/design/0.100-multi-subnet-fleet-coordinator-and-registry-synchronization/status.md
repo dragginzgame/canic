@@ -6,9 +6,9 @@ Date: 2026-07-28
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.23`.
-- Latest published release: `v0.100.23`.
-- Open patch draft: `0.100.24`; no package-version change has been authorized.
+- Workspace package version: `0.100.24`.
+- Latest published release: `v0.100.24`.
+- Open patch draft: `0.100.25`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -169,8 +169,11 @@ Registry slices replace the 0.99 root model.
   revision-bound pagination.
 - [ ] Run subtree removal as durable post-order traversal and partition
   mutation serialization by Component instance.
-- [ ] Distribute Directories directly from the root to Components and
-  Component Children.
+- [x] Distribute exact Directories directly from the root to a committed
+  Component with target-local retention, independent observation and a
+  terminal root receipt.
+- [ ] Apply the same direct distribution boundary to registered Component
+  Children as descendant creation lands.
 
 ## Slice 5 — Recovery and Closeout
 
@@ -407,7 +410,7 @@ Interrupted retry advances an already observed exact install without
 repeating it, retries only after proving the target remains empty and fails
 closed on unavailable or mismatched code.
 
-Open 0.100.24 atomically commits an exactly verified operation. The root
+Released 0.100.24 atomically commits an exactly verified operation. The root
 reverifies the protected root, Store, Registry Mirror, Fleet Directory,
 topology, caller, live module, sole controller and retained binding before one
 mutation inserts the normalized top-level row, principal index, terminal
@@ -423,14 +426,29 @@ partition and index footprint before its paid effect; commitment replaces
 that reservation with exact encoded bytes. The Component and root remain
 runtime-`Prepared`.
 
+Open 0.100.25 distributes one committed Component's exact active Fleet
+Directory and ownership-preserving Component Directory head directly from the
+root. The commitment freezes a domain-separated hash of that combined
+authority. The target retains its protected `ManagedCanisterBinding`, complete
+authority and hash in the existing Fleet activation cell and advances only
+from `AwaitingDirectory` to `DirectoryPrepared`.
+
+The root reverifies the Store, active Registry Mirror/Directory, committed
+partition, live module, sole controller and retained binding before the call.
+It then compares the target's complete response, independently re-queries the
+target and commits a fixed-size terminal receipt. An uncertain call is
+reconciled from target status before exact retry. Conflicting retained
+authority fails closed. The Component Registry row, Component runtime and
+root runtime all remain `Prepared`.
+
 ## Next Action
 
-Distribute the committed Component's exact Fleet and Component Directory
-provenance directly from the root, independently observe matching retained
-provenance and activate the Component only from that evidence. Record the
-terminal idempotent root receipt without changing its identity, principal,
-binding or Registry authority. Activate root runtime only through this
-Registry/Store/Directory-bound lifecycle. Do not reintroduce role-based
+Activate the Directory-prepared Component only from its exact retained
+binding and matching Fleet/Component Directory authority. Journal the
+cross-Canister transition so an uncertain response is reconciled from
+independently observed target state before the root records its terminal
+activation receipt. Then activate root runtime only through the complete
+Registry/Store/Directory-bound inventory. Do not reintroduce role-based
 Directory authority, static root bootstrap creation or an unbound Canister
 effect.
 Restore the role-attestation PocketIC cases only after this lifecycle can

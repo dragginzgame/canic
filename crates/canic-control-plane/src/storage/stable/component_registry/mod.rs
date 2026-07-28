@@ -249,6 +249,8 @@ pub struct RootComponentInstallEffectRecord {
 pub struct RootComponentCommitmentRecord {
     pub registry: ComponentRegistryHead,
     pub directory_synchronized_at_ns: u64,
+    pub directory_authority_hash: [u8; 32],
+    pub directory_prepared: bool,
 }
 
 ///

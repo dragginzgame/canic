@@ -18,6 +18,7 @@ pub mod blob_storage;
 pub mod cascade;
 #[cfg(feature = "blob-storage-billing")]
 pub mod cashier;
+pub mod component_runtime;
 pub mod config;
 pub mod cost_guard;
 pub mod fleet_activation;

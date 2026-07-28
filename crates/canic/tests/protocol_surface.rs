@@ -533,6 +533,21 @@ fn assert_component_registry_protocol_constants() {
             "canic_root_component_commit",
         ),
         (
+            canic::protocol::CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE,
+            "canic_root_component_directory_prepare",
+        ),
+        (
+            canic::protocol::CANIC_COMPONENT_RUNTIME_DIRECTORY_PREPARE,
+            canic_core::protocol::CANIC_COMPONENT_RUNTIME_DIRECTORY_PREPARE,
+            "canic_component_runtime_directory_prepare",
+        ),
+        (
+            canic::protocol::CANIC_COMPONENT_RUNTIME_DIRECTORY_STATUS,
+            canic_core::protocol::CANIC_COMPONENT_RUNTIME_DIRECTORY_STATUS,
+            "canic_component_runtime_directory_status",
+        ),
+        (
             canic::protocol::CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
             canic_core::protocol::CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
             "canic_root_component_registry_partition",

@@ -22,13 +22,15 @@ use canic_core::{
     cdk::types::{Cycles, Principal},
     control_plane_support::{
         error::InternalError, model::replay::ReplayCostGuardSettlement,
+        ops::component_runtime::ComponentRuntimeOps,
         policy::component_allocation::TopLevelComponentAllocationDecision,
     },
     dto::{
         component_registry::{
-            ComponentLifecycleStatus, ComponentProvisioningOrigin, ComponentRegistryHead,
+            ComponentDirectoryHead, ComponentDirectoryProvenance, ComponentLifecycleStatus,
+            ComponentProvisioningOrigin, ComponentRegistryHead, ComponentRuntimeDirectoryAuthority,
         },
-        fleet_registry::FleetRegistryVersion,
+        fleet_registry::{FleetDirectorySnapshot, FleetRegistryVersion},
         root_store::RootStoreBootstrapRequest,
     },
     ids::{
@@ -488,6 +490,7 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
         directory_synchronized_at_ns: u64,
         maximum_component_registry_bytes: u64,
+        fleet_directory: FleetDirectorySnapshot,
     ) -> Result<(RootComponentAllocationView, ComponentRegistryPartitionView), InternalError> {
         let current = RootComponentRegistryStore::current().ok_or_else(|| {
             InternalError::unavailable("root Component Registry authority has not been prepared")
@@ -499,6 +502,7 @@ impl ComponentRegistryOps {
             &record.progress
         {
             let partition = exact_committed_partition(&record, commitment)?;
+            validate_directory_authority_hash(&partition, &fleet_directory, commitment)?;
             return Ok((
                 allocation_record_to_view(record),
                 partition_record_to_view(partition),
@@ -526,6 +530,7 @@ impl ComponentRegistryOps {
             *canister,
             installation,
             directory_synchronized_at_ns,
+            &fleet_directory,
         )?;
         if partition.encoded_bytes > installation.charged_entry_bytes {
             return Err(InternalError::invariant(
@@ -586,6 +591,66 @@ impl ComponentRegistryOps {
             allocation_record_to_view(next_record),
             partition_record_to_view(partition),
         ))
+    }
+
+    pub(crate) fn mark_directory_prepared(
+        operation_id: [u8; 32],
+        expected_authority_hash: [u8; 32],
+    ) -> Result<RootComponentAllocationView, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
+            InternalError::unavailable("Component allocation operation has not been reserved")
+        })?;
+        let RootComponentAllocationProgressRecord::Committed {
+            creation,
+            canister,
+            installation,
+            commitment,
+        } = &record.progress
+        else {
+            return Err(InternalError::conflict(
+                "Component allocation is not committed for Directory preparation",
+            ));
+        };
+        if commitment.directory_authority_hash != expected_authority_hash {
+            return Err(InternalError::conflict(
+                "Component Directory authority differs from its committed root receipt",
+            ));
+        }
+        if commitment.directory_prepared {
+            return Ok(allocation_record_to_view(record));
+        }
+        let mut next_record = record.clone();
+        next_record.progress = RootComponentAllocationProgressRecord::Committed {
+            creation: creation.clone(),
+            canister: *canister,
+            installation: installation.clone(),
+            commitment: RootComponentCommitmentRecord {
+                registry: commitment.registry.clone(),
+                directory_synchronized_at_ns: commitment.directory_synchronized_at_ns,
+                directory_authority_hash: commitment.directory_authority_hash,
+                directory_prepared: true,
+            },
+        };
+        validate_charged_record_size(&next_record, installation.charged_entry_bytes)?;
+        if RootComponentRegistryStore::allocation_entry_bytes(&next_record)
+            != RootComponentRegistryStore::allocation_entry_bytes(&record)
+        {
+            return Err(InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component Directory receipt changed its precharged stable footprint",
+            ));
+        }
+        RootComponentRegistryStore::replace_allocation(
+            &current,
+            current.clone(),
+            &record,
+            next_record.clone(),
+        )
+        .map_err(map_allocation_commit_error)?;
+        Ok(allocation_record_to_view(next_record))
     }
 }
 
@@ -702,6 +767,8 @@ const fn commitment_record_to_view(
     RootComponentCommitmentView {
         registry: commitment.registry,
         directory_synchronized_at_ns: commitment.directory_synchronized_at_ns,
+        directory_authority_hash: commitment.directory_authority_hash,
+        directory_prepared: commitment.directory_prepared,
     }
 }
 
@@ -786,6 +853,8 @@ fn install_charged_entry_bytes(
         commitment: RootComponentCommitmentRecord {
             registry: registry.clone(),
             directory_synchronized_at_ns: u64::MAX,
+            directory_authority_hash: [u8::MAX; 32],
+            directory_prepared: true,
         },
     };
     let partition = ComponentRegistryPartitionRecord {
@@ -824,6 +893,7 @@ fn committed_records(
     canister: Principal,
     installation: &RootComponentInstallEffectRecord,
     directory_synchronized_at_ns: u64,
+    fleet_directory: &FleetDirectorySnapshot,
 ) -> Result<
     (
         RootComponentAllocationRecord,
@@ -844,6 +914,21 @@ fn committed_records(
         revision,
         content_hash,
     };
+    let directory = ComponentDirectoryHead {
+        provenance: ComponentDirectoryProvenance {
+            component: installation.binding.clone(),
+            source_fleet_subnet_root: installation.binding.fleet_subnet_root,
+            component_registry_revision: registry.revision,
+            component_registry_content_hash: registry.content_hash,
+            synchronized_at_ns: directory_synchronized_at_ns,
+        },
+        descendant_count: 0,
+    };
+    let directory_authority_hash =
+        ComponentRuntimeOps::directory_authority_hash(&ComponentRuntimeDirectoryAuthority {
+            fleet: fleet_directory.clone(),
+            component: directory,
+        })?;
     let mut next_record = record.clone();
     next_record.progress = RootComponentAllocationProgressRecord::Committed {
         creation: creation.clone(),
@@ -852,6 +937,8 @@ fn committed_records(
         commitment: RootComponentCommitmentRecord {
             registry,
             directory_synchronized_at_ns,
+            directory_authority_hash,
+            directory_prepared: false,
         },
     };
     let mut partition = ComponentRegistryPartitionRecord {
@@ -925,6 +1012,35 @@ fn exact_committed_partition(
     }
     validate_partition_record(&partition)?;
     Ok(partition)
+}
+
+fn validate_directory_authority_hash(
+    partition: &ComponentRegistryPartitionRecord,
+    fleet_directory: &FleetDirectorySnapshot,
+    commitment: &RootComponentCommitmentRecord,
+) -> Result<(), InternalError> {
+    let authority = ComponentRuntimeDirectoryAuthority {
+        fleet: fleet_directory.clone(),
+        component: ComponentDirectoryHead {
+            provenance: ComponentDirectoryProvenance {
+                component: partition.binding.clone(),
+                source_fleet_subnet_root: partition.binding.fleet_subnet_root,
+                component_registry_revision: partition.revision,
+                component_registry_content_hash: partition.content_hash,
+                synchronized_at_ns: partition.directory_synchronized_at_ns,
+            },
+            descendant_count: 0,
+        },
+    };
+    if ComponentRuntimeOps::directory_authority_hash(&authority)?
+        != commitment.directory_authority_hash
+    {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "committed Component Directory authority hash differs from current Registry authority",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_partition_record(
@@ -1180,7 +1296,11 @@ mod tests {
         cdk::types::Cycles,
         control_plane_support::policy::component_allocation::TopLevelComponentAllocationDecision,
         dto::{
-            component_registry::ComponentProvisioningOrigin, fleet_registry::FleetRegistryVersion,
+            component_registry::ComponentProvisioningOrigin,
+            fleet_registry::{
+                FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistryVersion,
+                FleetSubnetRootDirectoryEntry, FleetSubnetRootStatus,
+            },
             root_store::RootStoreBootstrapRequest,
         },
         ids::{
@@ -1458,14 +1578,23 @@ mod tests {
 
         let intent_bytes = advance_install_to_verified(&plan, created_bytes);
 
-        let (committed, partition) =
-            ComponentRegistryOps::commit_verified([12; 32], 31, plan.maximum_registry_bytes)
-                .expect("commit verified Component");
+        let directory = fleet_directory(&root);
+        let (committed, partition) = ComponentRegistryOps::commit_verified(
+            [12; 32],
+            31,
+            plan.maximum_registry_bytes,
+            directory.clone(),
+        )
+        .expect("commit verified Component");
         let interrupted = RootComponentRegistryStore::export();
         RootComponentRegistryStore::import(interrupted);
-        let repeated =
-            ComponentRegistryOps::commit_verified([12; 32], 32, plan.maximum_registry_bytes)
-                .expect("exact commitment retry");
+        let repeated = ComponentRegistryOps::commit_verified(
+            [12; 32],
+            32,
+            plan.maximum_registry_bytes,
+            directory,
+        )
+        .expect("exact commitment retry");
         assert_eq!(repeated, (committed.clone(), partition.clone()));
         assert!(matches!(
             committed.progress,
@@ -1486,6 +1615,7 @@ mod tests {
                 .expect("committed partition"),
             partition
         );
+        assert_directory_preparation_receipt(&committed);
         let status = ComponentRegistryOps::current().expect("Registry status");
         assert_eq!(status.reserved_component_instances, 0);
         assert_eq!(status.committed_component_instances, 1);
@@ -1501,6 +1631,54 @@ mod tests {
             }
         );
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
+    }
+
+    fn assert_directory_preparation_receipt(committed: &RootComponentAllocationView) {
+        let RootComponentAllocationProgressView::Committed { commitment, .. } = &committed.progress
+        else {
+            panic!("committed allocation progress");
+        };
+        assert_ne!(commitment.directory_authority_hash, [0; 32]);
+        assert!(!commitment.directory_prepared);
+        let prepared = ComponentRegistryOps::mark_directory_prepared(
+            [12; 32],
+            commitment.directory_authority_hash,
+        )
+        .expect("mark Directory prepared");
+        let prepared_again = ComponentRegistryOps::mark_directory_prepared(
+            [12; 32],
+            commitment.directory_authority_hash,
+        )
+        .expect("retry Directory receipt");
+        assert_eq!(prepared_again, prepared);
+        assert!(matches!(
+            prepared.progress,
+            RootComponentAllocationProgressView::Committed {
+                commitment: RootComponentCommitmentView {
+                    directory_prepared: true,
+                    ..
+                },
+                ..
+            }
+        ));
+    }
+
+    fn fleet_directory(root: &FleetSubnetRootBinding) -> FleetDirectorySnapshot {
+        FleetDirectorySnapshot {
+            provenance: FleetDirectoryProvenance {
+                registry: FleetRegistryVersion {
+                    authority: root.authority.clone(),
+                    revision: 4,
+                    content_hash: [5; 32],
+                },
+                source_fleet_subnet_root: root.fleet_subnet_root,
+            },
+            fleet_subnet_roots: vec![FleetSubnetRootDirectoryEntry {
+                placement_subnet: root.placement_subnet,
+                fleet_subnet_root: root.fleet_subnet_root,
+                status: FleetSubnetRootStatus::Active,
+            }],
+        }
     }
 
     fn advance_install_to_verified(plan: &RootComponentInstallPlan, created_bytes: u64) -> u64 {

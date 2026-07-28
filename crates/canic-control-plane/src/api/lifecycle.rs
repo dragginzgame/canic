@@ -16,8 +16,10 @@ use canic_core::{
             ComponentRegistryPartitionRequest, ComponentRegistryPartitionResponse,
             RootComponentAllocationRequest, RootComponentAllocationResponse,
             RootComponentAllocationStatusRequest, RootComponentCommitRequest,
-            RootComponentCommitResponse, RootComponentCreationRequest, RootComponentInstallRequest,
-            RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
+            RootComponentCommitResponse, RootComponentCreationRequest,
+            RootComponentDirectoryPreparationRequest, RootComponentDirectoryPreparationResponse,
+            RootComponentInstallRequest, RootComponentRegistryPreparationRequest,
+            RootComponentRegistryStatusResponse,
         },
         fleet_activation::{FleetActivationResumeRequest, FleetActivationStatusResponse},
     },
@@ -143,6 +145,14 @@ impl LifecycleApi {
         request: RootComponentCommitRequest,
     ) -> Result<RootComponentCommitResponse, canic_core::dto::error::Error> {
         crate::workflow::component_registry::commit_allocation(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn prepare_component_directories(
+        request: RootComponentDirectoryPreparationRequest,
+    ) -> Result<RootComponentDirectoryPreparationResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::prepare_component_directories(request)
             .await
             .map_err(Into::into)
     }
