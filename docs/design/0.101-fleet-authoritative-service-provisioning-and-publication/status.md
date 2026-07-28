@@ -10,7 +10,8 @@ Date: 2026-07-27
 - Dependency: completed 0.100 qualified infrastructure, Fleet Subnet Root,
   Component Spec, root-local Component identity, topology-admitted Wasm Store
   and Registry architecture, including flat potential-Wasm catalogs and
-  multi-level dynamic Component trees.
+  multi-level dynamic Component trees plus separate runtime and Registry
+  membership activation with revision-bound current-Directory convergence.
 - Open design blockers: none. Application-data replication remains a separate
   later design and is not an implementation blocker for 0.101 topology,
   purpose or discovery contracts.

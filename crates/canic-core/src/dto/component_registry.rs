@@ -128,6 +128,17 @@ pub struct RootComponentRuntimeActivationRequest {
 }
 
 ///
+/// RootComponentMembershipActivationRequest
+///
+/// Controller command activating one runtime-active Component's Registry membership.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentMembershipActivationRequest {
+    pub operation_id: [u8; 32],
+}
+
+///
 /// ComponentProvisioningOrigin
 ///
 /// Authenticated causal authority retained with one top-level Component allocation.
@@ -272,6 +283,18 @@ pub struct ComponentRuntimeDirectoryPreparationRequest {
 }
 
 ///
+/// ComponentRuntimeDirectorySynchronizationRequest
+///
+/// Root-issued replacement of one active managed Component node's current Directory authority.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentRuntimeDirectorySynchronizationRequest {
+    pub operation_id: [u8; 32],
+    pub authority: ComponentRuntimeDirectoryAuthority,
+}
+
+///
 /// ComponentRuntimePhase
 ///
 /// Target-local progress from installation through Component runtime activation.
@@ -408,6 +431,20 @@ pub struct RootComponentDirectoryPreparationResponse {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentRuntimeActivationResponse {
     pub committed: RootComponentCommitResponse,
+    pub target: ComponentRuntimeStatusResponse,
+}
+
+///
+/// RootComponentMembershipActivationResponse
+///
+/// Exact active Registry authority plus independently observed current target Directory.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentMembershipActivationResponse {
+    pub allocation: RootComponentAllocationResponse,
+    pub registry: ComponentRegistryPartitionResponse,
+    pub directory: ComponentDirectoryHead,
     pub target: ComponentRuntimeStatusResponse,
 }
 
@@ -655,9 +692,14 @@ mod tests {
             operation_id: root_request.operation_id,
             directory_authority_hash: [23; 32],
         };
+        let membership_request = RootComponentMembershipActivationRequest {
+            operation_id: root_request.operation_id,
+        };
         let root_bytes = candid::encode_one(root_request).expect("encode root activation request");
         let target_bytes =
             candid::encode_one(target_request).expect("encode target activation request");
+        let membership_bytes =
+            candid::encode_one(membership_request).expect("encode membership activation request");
 
         assert_eq!(
             candid::decode_one::<RootComponentRuntimeActivationRequest>(&root_bytes)
@@ -668,6 +710,11 @@ mod tests {
             candid::decode_one::<ComponentRuntimeActivationRequest>(&target_bytes)
                 .expect("decode target activation request"),
             target_request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentMembershipActivationRequest>(&membership_bytes)
+                .expect("decode membership activation request"),
+            membership_request
         );
     }
 }

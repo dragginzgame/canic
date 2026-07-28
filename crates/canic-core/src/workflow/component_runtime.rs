@@ -9,7 +9,9 @@ use crate::{
     dto::{
         component_registry::{
             ComponentRuntimeActivationRequest, ComponentRuntimeDirectoryAuthority,
-            ComponentRuntimeDirectoryPreparationRequest, ComponentRuntimeStatusResponse,
+            ComponentRuntimeDirectoryPreparationRequest,
+            ComponentRuntimeDirectorySynchronizationRequest, ComponentRuntimePhase,
+            ComponentRuntimeStatusResponse,
         },
         fleet_registry::{FleetDirectorySnapshot, FleetSubnetRootStatus},
     },
@@ -29,6 +31,36 @@ pub fn prepare_directory(
     validate_request(&current, &request)?;
     let authority_hash = ComponentRuntimeOps::directory_authority_hash(&request.authority)?;
     FleetActivationOps::prepare_component_runtime_directory(request, authority_hash)
+        .map_err(StorageOpsError::from)
+        .map_err(InternalError::from)
+}
+
+/// Synchronize one exact next current Directory authority on an Active Component runtime.
+pub fn synchronize_directory(
+    request: ComponentRuntimeDirectorySynchronizationRequest,
+) -> Result<ComponentRuntimeStatusResponse, InternalError> {
+    let current = status()?;
+    if request.operation_id != current.operation_id {
+        return Err(InternalError::conflict(
+            "Component runtime Directory operation differs from protected installation identity",
+        ));
+    }
+    validate_binding(&current.binding)?;
+    validate_authority(&current.binding, &request.authority)?;
+    if current.phase != ComponentRuntimePhase::Active || current.activation.is_none() {
+        return Err(InternalError::conflict(
+            "current Component Directory synchronization requires an Active runtime",
+        ));
+    }
+    let current_authority = current.authority.as_ref().ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Active Component runtime has no current Directory authority",
+        )
+    })?;
+    validate_directory_progression(current_authority, &request.authority)?;
+    let authority_hash = ComponentRuntimeOps::directory_authority_hash(&request.authority)?;
+    FleetActivationOps::synchronize_component_runtime_directory(request, authority_hash)
         .map_err(StorageOpsError::from)
         .map_err(InternalError::from)
 }
@@ -63,9 +95,17 @@ pub fn activate(
     request: ComponentRuntimeActivationRequest,
 ) -> Result<crate::view::fleet_activation::ComponentRuntimeActivationTransition, InternalError> {
     let current = status()?;
+    let expected_authority_hash = match current.phase {
+        ComponentRuntimePhase::AwaitingDirectory | ComponentRuntimePhase::DirectoryPrepared => {
+            current.authority_hash
+        }
+        ComponentRuntimePhase::Active => current
+            .activation
+            .map(|activation| activation.directory_authority_hash),
+    };
     if request.operation_id != current.operation_id
         || request.directory_authority_hash == [0; 32]
-        || current.authority_hash != Some(request.directory_authority_hash)
+        || expected_authority_hash != Some(request.directory_authority_hash)
     {
         return Err(InternalError::conflict(
             "Component runtime activation differs from its protected Directory authority",
@@ -131,6 +171,34 @@ fn validate_authority(
         ));
     }
     validate_fleet_directory(component, &authority.fleet)
+}
+
+fn validate_directory_progression(
+    current: &ComponentRuntimeDirectoryAuthority,
+    next: &ComponentRuntimeDirectoryAuthority,
+) -> Result<(), InternalError> {
+    let current_component = &current.component.provenance;
+    let next_component = &next.component.provenance;
+    let expected_revision = current_component
+        .component_registry_revision
+        .checked_add(1)
+        .ok_or_else(|| InternalError::resource_exhausted("Component Registry revision overflow"))?;
+    let current_fleet_revision = current.fleet.provenance.registry.revision;
+    let next_fleet_revision = next.fleet.provenance.registry.revision;
+    if next_component.component != current_component.component
+        || next_component.source_fleet_subnet_root != current_component.source_fleet_subnet_root
+        || next_component.component_registry_revision != expected_revision
+        || next_component.component_registry_content_hash
+            == current_component.component_registry_content_hash
+        || next_component.synchronized_at_ns <= current_component.synchronized_at_ns
+        || next_fleet_revision < current_fleet_revision
+        || (next_fleet_revision == current_fleet_revision && next.fleet != current.fleet)
+    {
+        return Err(InternalError::conflict(
+            "next Component Directory does not advance exact current authority",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_fleet_directory(

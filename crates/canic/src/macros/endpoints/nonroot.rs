@@ -22,6 +22,13 @@ macro_rules! canic_emit_component_runtime_endpoints {
         }
 
         #[$crate::canic_update(internal, requires(caller::is_root()))]
+        async fn canic_component_runtime_directory_synchronize(
+            request: ::canic::dto::component_registry::ComponentRuntimeDirectorySynchronizationRequest,
+        ) -> Result<::canic::dto::component_registry::ComponentRuntimeStatusResponse, ::canic::Error> {
+            $crate::__internal::core::api::component_runtime::ComponentRuntimeApi::synchronize_directory(request)
+        }
+
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
         async fn canic_component_runtime_activate(
             request: ::canic::dto::component_registry::ComponentRuntimeActivationRequest,
         ) -> Result<::canic::dto::component_registry::ComponentRuntimeStatusResponse, ::canic::Error> {

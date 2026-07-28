@@ -6,9 +6,9 @@ Date: 2026-07-28
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.25`.
-- Latest published release: `v0.100.25`.
-- Open patch draft: `0.100.26`; no package-version change has been authorized.
+- Workspace package version: `0.100.26`.
+- Latest published release: `v0.100.26`.
+- Open patch draft: `0.100.27`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -178,7 +178,7 @@ Registry slices replace the 0.99 root model.
 - [x] Hard-cut generic cascade, credential-generation and Fleet-activation
   mutations from managed application Components while retaining the separate
   Wasm Store bundle.
-- [ ] Promote an exactly runtime-active Component Registry partition to
+- [x] Promote an exactly runtime-active Component Registry partition to
   `Active`, derive its next Directory revision and synchronize that current
   authority to the target before root activation.
 - [ ] Apply the same direct distribution boundary to registered Component
@@ -450,7 +450,7 @@ reconciled from target status before exact retry. Conflicting retained
 authority fails closed. The Component Registry row, Component runtime and
 root runtime all remain `Prepared`.
 
-Open 0.100.26 activates that Directory-prepared Component only from its exact
+Released 0.100.26 activates that Directory-prepared Component only from its exact
 protected binding, install operation and retained Directory-authority hash.
 The target atomically retains the full original activation Directory
 separately from later current Directory revisions, records its original
@@ -469,16 +469,30 @@ original `DirectoryPrepared` response even after the target has progressed.
 The Component Registry row and Fleet Subnet Root intentionally remain
 `Prepared`.
 
+Open 0.100.27 atomically promotes that exact runtime-active Component's
+Registry partition from revision-one `Prepared` to revision-two `Active`,
+replaces exact stable-byte accounting and retains a separate immutable
+membership receipt. It derives and sends the corresponding current Directory
+only after the root-local commit. The already-active target accepts only the
+next revision under the same owning Component/source root, a later
+synchronization observation and non-regressing Fleet authority; its original
+activation Directory remains unchanged.
+
+The root reconciles an uncertain synchronization call through target status,
+independently re-queries the exact current authority and commits the terminal
+membership bit last. Current Registry/Directory queries expose revision two,
+while exact retries of commit, Directory preparation and runtime activation
+reconstruct their revision-one responses. The Fleet Subnet Root remains
+runtime `Prepared`.
+
 ## Next Action
 
-Promote the exactly runtime-active Component's Registry partition from
-`Prepared` to `Active` under a new partition revision, derive and synchronize
-the corresponding current Component Directory, independently verify the
-target retained it and record a terminal root membership receipt. Then
-activate root runtime only through the complete
-Registry/Store/Directory-bound inventory. Do not reintroduce role-based
-Directory authority, static root bootstrap creation or an unbound Canister
-effect.
+Activate the Fleet Subnet Root runtime only after every admitted initial
+Component has exact committed Registry authority, terminal Directory,
+runtime and membership receipts, an `Active` current partition and
+independently observed current Directory convergence. Do not reintroduce
+role-based Directory authority, static root bootstrap creation or an unbound
+Canister effect.
 Restore the role-attestation PocketIC cases only after this lifecycle can
 create a Registry-bound issuer Component; do not revive the old cached
 root/issuer bootstrap fixture.

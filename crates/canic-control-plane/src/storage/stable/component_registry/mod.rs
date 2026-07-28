@@ -253,6 +253,21 @@ pub struct RootComponentCommitmentRecord {
     pub directory_authority_hash: [u8; 32],
     pub directory_prepared: bool,
     pub runtime_activated: bool,
+    pub membership: Option<RootComponentMembershipRecord>,
+}
+
+///
+/// RootComponentMembershipRecord
+///
+/// Immutable active-membership authority and terminal current-Directory receipt.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentMembershipRecord {
+    pub registry_encoded_bytes: u64,
+    pub directory_synchronized_at_ns: u64,
+    pub directory_authority_hash: [u8; 32],
+    pub directory_synchronized: bool,
 }
 
 ///
@@ -632,6 +647,60 @@ impl RootComponentRegistryStore {
             });
             ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(|map| {
                 map.insert(operation_key, next_record);
+            });
+            state.current = Some(next_meta);
+            cell.set(state);
+            Ok(())
+        })
+    }
+
+    pub(crate) fn replace_component_partition(
+        expected_meta: &RootComponentRegistryMetaRecord,
+        next_meta: RootComponentRegistryMetaRecord,
+        expected_record: &RootComponentAllocationRecord,
+        next_record: RootComponentAllocationRecord,
+        expected_partition: &ComponentRegistryPartitionRecord,
+        next_partition: ComponentRegistryPartitionRecord,
+    ) -> Result<(), RootComponentAllocationCommitError> {
+        let operation_key = RootComponentAllocationOperationKey::from(expected_record.operation_id);
+        let component = expected_partition.binding.component;
+        if next_record.operation_id != expected_record.operation_id
+            || next_record.component != expected_record.component
+            || next_partition.binding.component != component
+            || next_partition.binding != expected_partition.binding
+            || next_partition.provisioning_origin != expected_partition.provisioning_origin
+            || next_partition.release_set != expected_partition.release_set
+        {
+            return Err(RootComponentAllocationCommitError::ComponentIdentityConflict);
+        }
+
+        ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            let current_meta = state
+                .current
+                .as_ref()
+                .ok_or(RootComponentAllocationCommitError::Uninitialized)?;
+            if current_meta != expected_meta {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            let current_record = ROOT_COMPONENT_ALLOCATIONS
+                .with_borrow(|map| map.get(&operation_key))
+                .ok_or(RootComponentAllocationCommitError::MissingOperation)?;
+            let current_partition = COMPONENT_REGISTRY_PARTITIONS
+                .with_borrow(|map| map.get(&ComponentRegistryPartitionKey::from(component)))
+                .ok_or(RootComponentAllocationCommitError::ConflictingPartition)?;
+            if &current_record != expected_record || &current_partition != expected_partition {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+
+            ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(|map| {
+                map.insert(operation_key, next_record);
+            });
+            COMPONENT_REGISTRY_PARTITIONS.with_borrow_mut(|map| {
+                map.insert(
+                    ComponentRegistryPartitionKey::from(component),
+                    next_partition,
+                );
             });
             state.current = Some(next_meta);
             cell.set(state);
