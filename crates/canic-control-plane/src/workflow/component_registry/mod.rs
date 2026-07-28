@@ -665,6 +665,39 @@ pub fn root_runtime_activation_receipt_complete() -> bool {
         .is_some_and(|receipt| receipt.directories_converged && receipt.root_runtime_activated)
 }
 
+/// Resolve one active top-level Component from current protected Registry authority.
+pub fn active_component_binding(
+    canister: candid::Principal,
+) -> Result<ComponentBinding, InternalError> {
+    let (authority, _) = root_authority()?;
+    prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let component = ComponentRegistryOps::component_for_principal(canister).ok_or_else(|| {
+        InternalError::public(Error::forbidden(format!(
+            "caller {canister} has no Component Registry identity"
+        )))
+    })?;
+    let partition = ComponentRegistryOps::partition(component)?.ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component principal index has no Registry partition",
+        )
+    })?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &ConfigOps::component_topology()?,
+        &partition,
+    )?;
+    if partition.status != ComponentLifecycleStatus::Active
+        || partition.binding.canister_id != canister
+    {
+        return Err(InternalError::public(Error::forbidden(format!(
+            "caller {canister} is not an active Component Registry member"
+        ))));
+    }
+    Ok(partition.binding)
+}
+
 async fn verify_initial_component_convergence(operation_id: [u8; 32]) -> Result<(), InternalError> {
     let plan = prepared_component_runtime_plan(operation_id).await?;
     let membership = committed_directory_receipt(&plan.allocation)?

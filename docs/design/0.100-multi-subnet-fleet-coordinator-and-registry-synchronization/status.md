@@ -6,9 +6,9 @@ Date: 2026-07-28
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.27`.
-- Latest published release: `v0.100.27`.
-- Open patch draft: `0.100.28`; no package-version change has been authorized.
+- Workspace package version: `0.100.28`.
+- Latest published release: `v0.100.28`.
+- Open patch draft: `0.100.29`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -485,7 +485,7 @@ while exact retries of commit, Directory preparation and runtime activation
 reconstruct their revision-one responses. The Fleet Subnet Root remains
 runtime `Prepared`.
 
-Open 0.100.28 seals the exact ordered initial Component allocation inventory
+Released 0.100.28 seals the exact ordered initial Component allocation inventory
 only after every operation is committed, every partition is `Active`, all
 Directory/runtime/membership receipts are terminal and stable counters and
 encoded bytes match the complete set. The domain-separated inventory hash
@@ -500,11 +500,20 @@ terminal root-runtime receipt before bootstrap readiness. Exact activation
 retry reconciles an already-active root into the same receipt. Dynamic
 allocations resume after activation and cannot rewrite the initial inventory.
 
+Open 0.100.29 hard-cuts role-attestation prepare/get admission from the
+removed `SubnetRegistry` predicate to current active Component Registry
+identity. The root requires its own runtime to be `Active`, resolves the caller
+through the protected principal index and active partition, and binds subject,
+role and physical Subnet to that exact Component. Retrieval revalidates active
+membership and the caller-bound prepared proof. Verification derives its
+expected physical Subnet from protected Component/root authority rather than
+the legacy environment root-principal alias. The real Coordinator/root/Store
+journey now carries its Registry-created issuer through issuance, claim
+rejection and issuer guard metrics without reviving the retired cached
+static-role fixture.
+
 ## Next Action
 
-Restore the role-attestation PocketIC cases through the real Registry-bound
-issuer Component lifecycle; do not revive the old cached root/issuer bootstrap
-fixture.
 Rebase the instruction-audit scenarios on the same real allocation boundary
 before taking new Component lifecycle measurements.
 

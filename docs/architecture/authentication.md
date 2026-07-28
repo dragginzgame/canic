@@ -573,8 +573,11 @@ domain = canic-root-role-attestation
 
 Issuance flow:
 
-- `canic_prepare_role_attestation` is an update call on the root canister
-- `canic_get_role_attestation` is a query call by the same caller
+- `canic_prepare_role_attestation` is an update call on an `Active` Fleet
+  Subnet Root by an active Component Registry member
+- prepare resolves the protected Registry partition and requires its exact
+  canister, role and placement Subnet to match the request
+- `canic_get_role_attestation` is a query call by the same still-active caller
 - retrieval is caller-bound and returns the embedded root proof
 
 Verifier behavior:

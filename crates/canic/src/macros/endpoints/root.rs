@@ -234,18 +234,18 @@ macro_rules! canic_emit_root_auth_attestation_endpoints {
                 .await
         }
 
-        #[$crate::canic_update(internal, requires(caller::is_registered_to_subnet()))]
+        #[$crate::canic_update(internal, public)]
         async fn canic_prepare_role_attestation(
             request: ::canic::dto::auth::RoleAttestationRequest,
         ) -> Result<::canic::dto::auth::RoleAttestationPrepareResponse, ::canic::Error> {
-            $crate::__internal::core::api::auth::AuthApi::prepare_role_attestation_root(request)
+            $crate::__internal::control_plane::api::component_auth::ComponentAuthApi::prepare_role_attestation(request)
         }
 
-        #[$crate::canic_query(internal, requires(caller::is_registered_to_subnet()))]
+        #[$crate::canic_query(internal, public)]
         async fn canic_get_role_attestation(
             request: ::canic::dto::auth::RoleAttestationGetRequest,
         ) -> Result<::canic::dto::auth::SignedRoleAttestation, ::canic::Error> {
-            $crate::__internal::core::api::auth::AuthApi::get_role_attestation_root(request)
+            $crate::__internal::control_plane::api::component_auth::ComponentAuthApi::get_role_attestation(request)
         }
     };
 }

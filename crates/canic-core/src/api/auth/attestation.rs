@@ -2,8 +2,7 @@
 //!
 //! Responsibility: adapt role-attestation endpoint calls.
 //! Does not own: role-attestation signing, cache state, or verifier internals.
-//! Boundary: the canonical downstream boundary is workflow; the direct ops call
-//! below remains a product-code violation tracked by `CANIC-092-LAYERING-001`.
+//! Boundary: endpoint adapters delegate role-attestation work to workflow.
 
 use super::AuthApi;
 use crate::{
@@ -14,25 +13,24 @@ use crate::{
         },
         error::Error,
     },
-    ops::{auth::AuthOps, ic::IcOps, runtime::env::EnvOps},
     workflow::runtime::auth::RuntimeAuthWorkflow,
 };
 
 impl AuthApi {
     /// Prepare a root-certified role attestation from the local root update path.
-    pub fn prepare_role_attestation_root(
+    pub fn prepare_component_role_attestation_root(
         request: RoleAttestationRequest,
+        component: &crate::ids::ComponentBinding,
     ) -> Result<RoleAttestationPrepareResponse, Error> {
-        RuntimeAuthWorkflow::prepare_role_attestation_root(request).map_err(Self::map_auth_error)
+        RuntimeAuthWorkflow::prepare_component_role_attestation_root(request, component)
+            .map_err(Self::map_auth_error)
     }
 
     /// Retrieve a prepared role attestation with its root canister-signature proof.
     pub fn get_role_attestation_root(
         request: RoleAttestationGetRequest,
     ) -> Result<SignedRoleAttestation, Error> {
-        EnvOps::require_root().map_err(Error::from)?;
-        AuthOps::get_role_attestation(IcOps::msg_caller(), request.payload_hash)
-            .map_err(Self::map_auth_error)
+        RuntimeAuthWorkflow::get_role_attestation_root(request).map_err(Self::map_auth_error)
     }
 
     /// Verify a role attestation locally from its embedded root proof.

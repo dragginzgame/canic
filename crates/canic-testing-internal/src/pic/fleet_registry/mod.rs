@@ -3,3 +3,5 @@
 mod baseline;
 mod build;
 mod fixture;
+#[cfg(test)]
+mod role_attestation;

@@ -1577,16 +1577,25 @@ fn root_role_attestation_prepare_get_surface_is_pinned() {
 
     let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
     let source = read_text(&macro_path);
+    let prepare_attribute = preceding_attribute(&source, "fn canic_prepare_role_attestation(");
+    let get_attribute = preceding_attribute(&source, "fn canic_get_role_attestation(");
+    assert!(
+        prepare_attribute.contains("canic_update(internal, public)")
+            && !prepare_attribute.contains("caller::is_registered_to_subnet()")
+            && get_attribute.contains("canic_query(internal, public)")
+            && !get_attribute.contains("caller::is_registered_to_subnet()"),
+        "role-attestation endpoints must defer to active Component Registry admission"
+    );
     assert!(
         source.contains("fn canic_prepare_role_attestation(")
             && source.contains("RoleAttestationPrepareResponse")
-            && source.contains("AuthApi::prepare_role_attestation_root"),
+            && source.contains("ComponentAuthApi::prepare_role_attestation"),
         "root auth endpoint bundle must expose role-attestation prepare"
     );
     assert!(
         source.contains("fn canic_get_role_attestation(")
             && source.contains("RoleAttestationGetRequest")
-            && source.contains("AuthApi::get_role_attestation_root"),
+            && source.contains("ComponentAuthApi::get_role_attestation"),
         "root auth endpoint bundle must expose role-attestation get"
     );
 }
