@@ -84,7 +84,20 @@ pub(super) enum TerminalFleetCatalogPublicationError {
 pub(super) fn publish_terminal_fleet_catalog(
     request: TerminalFleetCatalogPublicationRequest<'_>,
 ) -> Result<CommittedFleetCatalog, TerminalFleetCatalogPublicationError> {
-    validate_terminal_authority(&request)?;
+    if request.deployed_at_unix_secs == 0 {
+        return Err(TerminalFleetCatalogPublicationError::NonPositiveDeploymentTime);
+    }
+    validate_terminal_fleet_registry(
+        request.fleet_install_plan,
+        request.component_topology,
+        request.coordinator,
+        request.registry,
+    )?;
+    validate_terminal_root_summaries(
+        request.fleet_install_plan,
+        request.registry,
+        request.root_summaries,
+    )?;
     let entry = FleetCatalogEntryV1 {
         canonical_network_id: request.fleet_install_plan.fleet.fleet.canonical_network_id,
         fleet_id: request.fleet_install_plan.fleet.fleet.fleet_id,
@@ -97,74 +110,74 @@ pub(super) fn publish_terminal_fleet_catalog(
     commit_fleet_catalog_entry(request.project_root, entry).map_err(Into::into)
 }
 
-fn validate_terminal_authority(
-    request: &TerminalFleetCatalogPublicationRequest<'_>,
+/// Validate the complete Coordinator Registry before any root is trusted as a query target.
+pub(super) fn validate_terminal_fleet_registry(
+    fleet_install_plan: &FleetInstallPlan,
+    component_topology: &ComponentTopology,
+    coordinator: Principal,
+    registry: &FleetRegistrySnapshotResponse,
 ) -> Result<(), TerminalFleetCatalogPublicationError> {
-    if request.deployed_at_unix_secs == 0 {
-        return Err(TerminalFleetCatalogPublicationError::NonPositiveDeploymentTime);
-    }
     let expected_authority = FleetRegistryAuthority {
         binding: FleetCoordinatorBinding {
-            fleet: request.fleet_install_plan.fleet.clone(),
-            coordinator_subnet: request.fleet_install_plan.coordinator.coordinator_subnet,
-            coordinator: request.coordinator,
+            fleet: fleet_install_plan.fleet.clone(),
+            coordinator_subnet: fleet_install_plan.coordinator.coordinator_subnet,
+            coordinator,
         },
         epoch: 1,
     };
-    if request.coordinator == Principal::anonymous()
-        || request.coordinator == Principal::management_canister()
-        || request.registry.registry.authority != expected_authority
+    if coordinator == Principal::anonymous()
+        || coordinator == Principal::management_canister()
+        || registry.registry.authority != expected_authority
     {
         return Err(TerminalFleetCatalogPublicationError::AuthorityMismatch);
     }
 
-    FleetRegistryOps::validate(
-        &expected_authority,
-        request.component_topology,
-        &request.registry.registry,
-    )
-    .map_err(TerminalFleetCatalogPublicationError::RegistryValidation)?;
-    let manifest = FleetRegistryOps::manifest(
-        &expected_authority,
-        request.component_topology,
-        &request.registry.registry,
-    )
-    .map_err(TerminalFleetCatalogPublicationError::RegistryValidation)?;
-    let version = FleetRegistryOps::version(
-        &expected_authority,
-        request.component_topology,
-        &request.registry.registry,
-    )
-    .map_err(TerminalFleetCatalogPublicationError::RegistryValidation)?;
-    if request.registry.manifest != manifest || request.registry.version != version {
+    FleetRegistryOps::validate(&expected_authority, component_topology, &registry.registry)
+        .map_err(TerminalFleetCatalogPublicationError::RegistryValidation)?;
+    let manifest =
+        FleetRegistryOps::manifest(&expected_authority, component_topology, &registry.registry)
+            .map_err(TerminalFleetCatalogPublicationError::RegistryValidation)?;
+    let version =
+        FleetRegistryOps::version(&expected_authority, component_topology, &registry.registry)
+            .map_err(TerminalFleetCatalogPublicationError::RegistryValidation)?;
+    if registry.manifest != manifest || registry.version != version {
         return Err(TerminalFleetCatalogPublicationError::RegistryEvidenceMismatch);
     }
 
-    validate_terminal_roots(request, &version)
+    validate_terminal_root_set(fleet_install_plan, registry)
 }
 
-fn validate_terminal_roots(
-    request: &TerminalFleetCatalogPublicationRequest<'_>,
-    registry_version: &FleetRegistryVersion,
+fn validate_terminal_root_set(
+    fleet_install_plan: &FleetInstallPlan,
+    registry: &FleetRegistrySnapshotResponse,
 ) -> Result<(), TerminalFleetCatalogPublicationError> {
-    let planned_roots = &request.fleet_install_plan.fleet_subnet_roots;
-    let registry_roots = &request.registry.registry.fleet_subnet_roots;
-    if planned_roots.is_empty()
-        || planned_roots.len() != registry_roots.len()
-        || registry_roots.len() != request.root_summaries.len()
-    {
+    let planned_roots = &fleet_install_plan.fleet_subnet_roots;
+    let registry_roots = &registry.registry.fleet_subnet_roots;
+    if planned_roots.is_empty() || planned_roots.len() != registry_roots.len() {
         return Err(TerminalFleetCatalogPublicationError::RootSetMismatch);
     }
 
-    for ((planned, registered), summary) in planned_roots
-        .iter()
-        .zip(registry_roots)
-        .zip(request.root_summaries)
-    {
+    for (planned, registered) in planned_roots.iter().zip(registry_roots) {
         if !root_matches_plan(registered, planned) {
             return Err(TerminalFleetCatalogPublicationError::RootSetMismatch);
         }
-        validate_root_summary(registered, registry_version, summary)?;
+    }
+    Ok(())
+}
+
+fn validate_terminal_root_summaries(
+    fleet_install_plan: &FleetInstallPlan,
+    registry: &FleetRegistrySnapshotResponse,
+    root_summaries: &[FleetSubnetRootCanisterSummary],
+) -> Result<(), TerminalFleetCatalogPublicationError> {
+    let planned_roots = &fleet_install_plan.fleet_subnet_roots;
+    let registry_roots = &registry.registry.fleet_subnet_roots;
+    if planned_roots.len() != registry_roots.len() || registry_roots.len() != root_summaries.len() {
+        return Err(TerminalFleetCatalogPublicationError::RootSetMismatch);
+    }
+
+    for (registered, summary) in registry_roots.iter().zip(root_summaries) {
+        validate_root_summary(registered, &registry.version, summary)?;
     }
     Ok(())
 }

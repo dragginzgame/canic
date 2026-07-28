@@ -48,10 +48,6 @@ use thiserror::Error as ThisError;
 const ICP_JSON_OUTPUT: &str = "json";
 const MAX_ROOT_TRANSITIONS: usize = 8;
 
-pub(super) struct VerifiedFleetSubnetRoots {
-    pub roots: Vec<Principal>,
-}
-
 #[derive(Debug, ThisError)]
 #[error(
     "Fleet Subnet Root creation outcome on {placement_subnet} is unknown; no second paid creation was attempted. Inspect durable result {result_path} and retry after the original ICP command has settled: {detail}"
@@ -136,7 +132,7 @@ pub(super) fn install_and_verify_fleet_subnet_roots(
     fleet_install_plan: &PersistedFleetInstallPlan,
     coordinator: Principal,
     install_operation_id: [u8; 32],
-) -> Result<VerifiedFleetSubnetRoots, Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let config = AppConfigSnapshot::load(config_path)?;
     let component_topology = config.model().compile_component_topology()?;
     let infrastructure_manifest = load_persisted_canic_infrastructure_artifact_manifest(
@@ -169,12 +165,7 @@ pub(super) fn install_and_verify_fleet_subnet_roots(
         .map(|authority| authority.binding.clone())
         .collect::<Vec<_>>();
     component_topology.validate_fleet_root_bindings(&bindings)?;
-    Ok(VerifiedFleetSubnetRoots {
-        roots: roots
-            .into_iter()
-            .map(|authority| authority.binding.fleet_subnet_root)
-            .collect(),
-    })
+    Ok(())
 }
 
 fn drive_root_install(

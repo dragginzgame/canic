@@ -115,7 +115,7 @@ fn assert_current_activation_order(install: &str) {
     assert_before(
         install,
         "prepare_and_activate_current_fleet_subnet_roots(",
-        "require_fleet_catalog_publication(",
+        "publish_installed_fleet_catalog(",
     );
     let root_runtime = source_section(
         install,
@@ -126,6 +126,23 @@ fn assert_current_activation_order(install: &str) {
         root_runtime,
         "prepare_and_verify_fleet_subnet_root_component_registries(",
         "activate_and_verify_fleet_subnet_root_runtimes(",
+    );
+
+    let closeout = include_str!("../../fleet_catalog_closeout/mod.rs");
+    let closeout = source_section(
+        closeout,
+        "pub(super) fn publish_installed_fleet_catalog(",
+        "fn query_registry(",
+    );
+    assert_before(
+        closeout,
+        "validate_terminal_fleet_registry(",
+        "query_root_summaries(",
+    );
+    assert_before(
+        closeout,
+        "query_root_summaries(",
+        "publish_terminal_fleet_catalog(",
     );
 }
 

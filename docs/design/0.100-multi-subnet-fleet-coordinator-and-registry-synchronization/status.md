@@ -6,9 +6,9 @@ Date: 2026-07-28
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.33`.
-- Latest published release: `v0.100.33`.
-- Open patch draft: `0.100.34`; no package-version change has been authorized.
+- Workspace package version: `0.100.34`.
+- Latest published release: `v0.100.34`.
+- Open patch draft: `0.100.35`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -195,7 +195,7 @@ Registry slices replace the 0.99 root model.
 - [x] Hard-cut the terminal Fleet catalog from one root principal to the
   Coordinator principal and make its sole writer require complete terminal
   evidence.
-- [ ] Invoke terminal catalog publication after the remaining host runtime
+- [x] Invoke terminal catalog publication after the remaining host runtime
   activation path can supply that complete evidence.
 - [x] Expose compact root-local known-created, not-deletion-confirmed Canister
   count summaries without enumerating every Component Registry member.
@@ -564,7 +564,7 @@ Coordinator/root into one canonical physical-Subnet row and reports an exact
 Fleet total. JSON v1 preserves separate Coordinator, root-infrastructure,
 Component and row-total counts.
 
-Open 0.100.34 extends every normal host root-install journal from empty
+Released 0.100.34 extends every normal host root-install journal from empty
 Component Registry preparation through sequences 23–27. The host records
 root-activation preparation intent, validates the exact Store cascade and
 credential evidence, records activation intent, reconciles uncertain calls
@@ -574,9 +574,19 @@ ceilings rather than initial counts, this path deliberately seals an empty
 inventory; exact nonempty initial provisioning remains a separate 0.101
 placement-plan responsibility.
 
+Open 0.100.35 removes the terminal installer fence. The host independently
+re-queries and validates the complete Coordinator Registry, manifest and
+version before trusting any root principal, collects every active root's
+compact summary concurrently in canonical Registry order and invokes the
+existing all-root terminal publication gate. Only then does the normal fresh
+install atomically commit or exactly adopt its Coordinator-anchored Fleet
+catalog row.
+
 ## Next Action
 
-Collect one independently verified live summary from every newly active root
-and invoke the already-gated terminal catalog publication. Do not revive the
-removed single-root resolver, reinterpret admission ceilings as initial
-Component counts or publish before the complete root-summary evidence exists.
+Implement authenticated parent-to-root child creation at arbitrary Component
+tree depth. Reuse the same root-owned allocation, Store-bound install,
+Directory, runtime and membership path while recording the exact immediate
+parent and enforcing one explicit role-to-role spawn grant. Do not introduce
+nested Component declarations, let application Canisters call management
+creation directly or infer authorization from catalog presence alone.
