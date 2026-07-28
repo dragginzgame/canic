@@ -12,7 +12,8 @@ use crate::{
     dto::{
         component_registry::{
             ComponentRuntimeActivationEvidence, ComponentRuntimeActivationRequest,
-            ComponentRuntimeDirectoryPreparationRequest, ComponentRuntimePhase,
+            ComponentRuntimeDirectoryPreparationRequest,
+            ComponentRuntimeDirectorySynchronizationRequest, ComponentRuntimePhase,
             ComponentRuntimeStatusResponse,
         },
         fleet_activation::{
@@ -184,6 +185,13 @@ impl FleetActivationOps {
             authority: request.authority,
             authority_hash,
         };
+        if component_runtime
+            .activation
+            .as_ref()
+            .is_some_and(|activation| activation.directory == next)
+        {
+            return component_runtime_preparation_status(record);
+        }
         match &component_runtime.directory {
             Some(existing) if existing == &next => {
                 return component_runtime_status(record);
@@ -198,6 +206,74 @@ impl FleetActivationOps {
             }
             None => component_runtime.directory = Some(next),
         }
+        replace_record(record.clone())?;
+        component_runtime_status(record)
+    }
+
+    pub(crate) fn synchronize_component_runtime_directory(
+        request: ComponentRuntimeDirectorySynchronizationRequest,
+        authority_hash: [u8; 32],
+    ) -> Result<ComponentRuntimeStatusResponse, FleetActivationOpsError> {
+        let mut record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
+        let operation_id = match &record.state {
+            FleetActivationStateRecord::Prepared { .. } => {
+                return Err(FleetActivationOpsError::InvalidTransition {
+                    reason:
+                        "current Component Directory synchronization requires an Active runtime"
+                            .to_string(),
+                });
+            }
+            FleetActivationStateRecord::Active { identity, .. } => identity.operation_id,
+        };
+        if operation_id != request.operation_id {
+            return Err(FleetActivationOpsError::IdentityMismatch);
+        }
+        let component_runtime = record.component_runtime.as_mut().ok_or_else(|| {
+            FleetActivationOpsError::InvalidRecord {
+                reason: "protected non-root is not a managed Component-tree runtime".to_string(),
+            }
+        })?;
+        if component_runtime.activation.is_none() {
+            return Err(FleetActivationOpsError::InvalidRecord {
+                reason: "Active Component runtime has no immutable activation receipt".to_string(),
+            });
+        }
+        let current = component_runtime.directory.as_ref().ok_or_else(|| {
+            FleetActivationOpsError::InvalidRecord {
+                reason: "Active Component runtime has no current Directory authority".to_string(),
+            }
+        })?;
+        let next = ComponentRuntimeDirectoryRecord {
+            authority: request.authority,
+            authority_hash,
+        };
+        if current == &next {
+            return component_runtime_status(record);
+        }
+        let current_provenance = &current.authority.component.provenance;
+        let next_provenance = &next.authority.component.provenance;
+        let expected_revision = current_provenance
+            .component_registry_revision
+            .checked_add(1)
+            .ok_or_else(|| FleetActivationOpsError::InvalidTransition {
+                reason: "Component Registry revision overflow".to_string(),
+            })?;
+        let current_fleet_revision = current.authority.fleet.provenance.registry.revision;
+        let next_fleet_revision = next.authority.fleet.provenance.registry.revision;
+        if next_provenance.component != current_provenance.component
+            || next_provenance.source_fleet_subnet_root
+                != current_provenance.source_fleet_subnet_root
+            || next_provenance.component_registry_revision != expected_revision
+            || next_provenance.component_registry_content_hash
+                == current_provenance.component_registry_content_hash
+            || next_provenance.synchronized_at_ns <= current_provenance.synchronized_at_ns
+            || next_fleet_revision < current_fleet_revision
+            || (next_fleet_revision == current_fleet_revision
+                && next.authority.fleet != current.authority.fleet)
+        {
+            return Err(FleetActivationOpsError::EvidenceMismatch);
+        }
+        component_runtime.directory = Some(next);
         replace_record(record.clone())?;
         component_runtime_status(record)
     }
@@ -241,9 +317,7 @@ impl FleetActivationOps {
                     .to_string(),
             }
         })?;
-        if request.directory_authority_hash == [0; 32]
-            || directory.authority_hash != request.directory_authority_hash
-        {
+        if request.directory_authority_hash == [0; 32] {
             return Err(FleetActivationOpsError::EvidenceMismatch);
         }
         if evidence.cascade.is_some()
@@ -260,20 +334,10 @@ impl FleetActivationOps {
         }
 
         if already_active {
-            if component_runtime
-                .activation
-                .as_ref()
-                .is_none_or(|activation| {
-                    activation.directory.authority_hash != request.directory_authority_hash
-                })
-            {
-                return Err(FleetActivationOpsError::EvidenceMismatch);
-            }
-            return Ok(ComponentRuntimeActivationTransition {
-                status: component_runtime_status(record)?,
-                transitioned: false,
-                application_init_args: None,
-            });
+            return replay_component_runtime_activation(record, request);
+        }
+        if directory.authority_hash != request.directory_authority_hash {
+            return Err(FleetActivationOpsError::EvidenceMismatch);
         }
         let activation_directory = directory.clone();
         if activated_at_ns == 0 {
@@ -746,6 +810,54 @@ fn component_runtime_status(
         authority_hash,
         activation,
     })
+}
+
+fn component_runtime_preparation_status(
+    record: FleetActivationRecord,
+) -> Result<ComponentRuntimeStatusResponse, FleetActivationOpsError> {
+    let mut status = component_runtime_activation_status(record)?;
+    status.phase = ComponentRuntimePhase::DirectoryPrepared;
+    status.activation = None;
+    Ok(status)
+}
+
+fn replay_component_runtime_activation(
+    record: FleetActivationRecord,
+    request: ComponentRuntimeActivationRequest,
+) -> Result<ComponentRuntimeActivationTransition, FleetActivationOpsError> {
+    let activation = record
+        .component_runtime
+        .as_ref()
+        .and_then(|runtime| runtime.activation.as_ref())
+        .ok_or_else(|| FleetActivationOpsError::InvalidRecord {
+            reason: "Active Component runtime has no immutable activation receipt".to_string(),
+        })?;
+    if activation.directory.authority_hash != request.directory_authority_hash {
+        return Err(FleetActivationOpsError::EvidenceMismatch);
+    }
+    Ok(ComponentRuntimeActivationTransition {
+        status: component_runtime_activation_status(record)?,
+        transitioned: false,
+        application_init_args: None,
+    })
+}
+
+fn component_runtime_activation_status(
+    record: FleetActivationRecord,
+) -> Result<ComponentRuntimeStatusResponse, FleetActivationOpsError> {
+    let activation_directory = record
+        .component_runtime
+        .as_ref()
+        .and_then(|runtime| runtime.activation.as_ref())
+        .ok_or_else(|| FleetActivationOpsError::InvalidRecord {
+            reason: "Active Component runtime has no immutable activation receipt".to_string(),
+        })?
+        .directory
+        .clone();
+    let mut status = component_runtime_status(record)?;
+    status.authority = Some(activation_directory.authority);
+    status.authority_hash = Some(activation_directory.authority_hash);
+    Ok(status)
 }
 
 fn validate_component_runtime_directory_record(
@@ -1229,7 +1341,7 @@ mod tests {
         FleetActivationOps::prepare_component_runtime_directory(
             ComponentRuntimeDirectoryPreparationRequest {
                 operation_id: root_input.install_id,
-                authority,
+                authority: authority.clone(),
             },
             authority_hash,
         )
@@ -1243,6 +1355,32 @@ mod tests {
         let repeated = FleetActivationOps::activate_component_runtime(request, 51)
             .expect("repeat Component runtime activation");
 
+        assert_component_runtime_activation_transition(
+            &activated,
+            &repeated,
+            authority_hash,
+            request,
+        );
+
+        assert_component_runtime_directory_progression(
+            root_input.install_id,
+            authority,
+            authority_hash,
+            request,
+            &activated.status,
+        );
+
+        assert_component_runtime_directory_corruption_fails_closed(FleetActivationOps::snapshot());
+
+        FleetActivationOps::reset_for_tests();
+    }
+
+    fn assert_component_runtime_activation_transition(
+        activated: &ComponentRuntimeActivationTransition,
+        repeated: &ComponentRuntimeActivationTransition,
+        authority_hash: [u8; 32],
+        request: ComponentRuntimeActivationRequest,
+    ) {
         assert!(activated.transitioned);
         assert_eq!(activated.application_init_args, Some(vec![45, 46]));
         assert!(!repeated.transitioned);
@@ -1266,10 +1404,71 @@ mod tests {
             ),
             Err(FleetActivationOpsError::EvidenceMismatch)
         ));
+    }
 
-        assert_component_runtime_directory_corruption_fails_closed(FleetActivationOps::snapshot());
+    fn assert_component_runtime_directory_progression(
+        operation_id: [u8; 32],
+        mut active_authority: ComponentRuntimeDirectoryAuthority,
+        prepared_authority_hash: [u8; 32],
+        activation_request: ComponentRuntimeActivationRequest,
+        activated_status: &ComponentRuntimeStatusResponse,
+    ) {
+        active_authority
+            .component
+            .provenance
+            .component_registry_revision = 2;
+        active_authority
+            .component
+            .provenance
+            .component_registry_content_hash = [54; 32];
+        active_authority.component.provenance.synchronized_at_ns = 55;
+        let active_authority_hash =
+            crate::ops::component_runtime::ComponentRuntimeOps::directory_authority_hash(
+                &active_authority,
+            )
+            .expect("active Directory authority hash");
+        let synchronization_request = ComponentRuntimeDirectorySynchronizationRequest {
+            operation_id,
+            authority: active_authority,
+        };
+        let synchronized = FleetActivationOps::synchronize_component_runtime_directory(
+            synchronization_request.clone(),
+            active_authority_hash,
+        )
+        .expect("synchronize current Directory");
+        let synchronized_again = FleetActivationOps::synchronize_component_runtime_directory(
+            synchronization_request,
+            active_authority_hash,
+        )
+        .expect("repeat current Directory synchronization");
+        assert_eq!(synchronized_again, synchronized);
+        assert_eq!(synchronized.authority_hash, Some(active_authority_hash));
+        assert_eq!(synchronized.activation, activated_status.activation);
 
-        FleetActivationOps::reset_for_tests();
+        let activation_again =
+            FleetActivationOps::activate_component_runtime(activation_request, 56)
+                .expect("activation retry after current Directory progression");
+        assert_eq!(&activation_again.status, activated_status);
+        let preparation_again = FleetActivationOps::prepare_component_runtime_directory(
+            ComponentRuntimeDirectoryPreparationRequest {
+                operation_id,
+                authority: activated_status
+                    .authority
+                    .clone()
+                    .expect("prepared activation authority"),
+            },
+            prepared_authority_hash,
+        )
+        .expect("Directory preparation retry after current Directory progression");
+        assert_eq!(
+            preparation_again.phase,
+            ComponentRuntimePhase::DirectoryPrepared
+        );
+        assert_eq!(
+            preparation_again.authority_hash,
+            Some(prepared_authority_hash)
+        );
+        assert_eq!(preparation_again.activation, None);
     }
 
     fn assert_component_runtime_directory_corruption_fails_closed(valid: FleetActivationData) {
@@ -1285,7 +1484,7 @@ mod tests {
             .as_mut()
             .expect("activation evidence")
             .directory
-            .authority_hash = [54; 32];
+            .authority_hash = [57; 32];
         FleetActivation::import(corrupted_activation);
         assert!(matches!(
             FleetActivationOps::component_runtime_status(),
@@ -1307,7 +1506,7 @@ mod tests {
             .directory
             .as_mut()
             .expect("current Directory")
-            .authority_hash = [55; 32];
+            .authority_hash = [58; 32];
         FleetActivation::import(corrupted_current);
         assert!(matches!(
             FleetActivationOps::component_runtime_status(),

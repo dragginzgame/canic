@@ -8,7 +8,7 @@ use crate::{
     dto::{
         component_registry::{
             ComponentRuntimeActivationRequest, ComponentRuntimeDirectoryPreparationRequest,
-            ComponentRuntimeStatusResponse,
+            ComponentRuntimeDirectorySynchronizationRequest, ComponentRuntimeStatusResponse,
         },
         error::Error,
     },
@@ -30,6 +30,12 @@ impl ComponentRuntimeApi {
 
     pub fn status() -> Result<ComponentRuntimeStatusResponse, Error> {
         component_runtime::status().map_err(Error::from)
+    }
+
+    pub fn synchronize_directory(
+        request: ComponentRuntimeDirectorySynchronizationRequest,
+    ) -> Result<ComponentRuntimeStatusResponse, Error> {
+        component_runtime::synchronize_directory(request).map_err(Error::from)
     }
 
     pub fn activate(

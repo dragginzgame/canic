@@ -25,8 +25,10 @@ mod tests {
                 RootComponentCommitResponse, RootComponentCreationRequest,
                 RootComponentDirectoryPreparationRequest,
                 RootComponentDirectoryPreparationResponse, RootComponentInstallRequest,
-                RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
-                RootComponentRuntimeActivationRequest, RootComponentRuntimeActivationResponse,
+                RootComponentMembershipActivationRequest,
+                RootComponentMembershipActivationResponse, RootComponentRegistryPreparationRequest,
+                RootComponentRegistryStatusResponse, RootComponentRuntimeActivationRequest,
+                RootComponentRuntimeActivationResponse,
             },
             fleet_registry::{
                 FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistry,
@@ -60,11 +62,12 @@ mod tests {
             CANIC_ROOT_COMPONENT_ALLOCATION_STATUS, CANIC_ROOT_COMPONENT_COMMIT,
             CANIC_ROOT_COMPONENT_CREATE, CANIC_ROOT_COMPONENT_DIRECTORY_HEAD,
             CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE, CANIC_ROOT_COMPONENT_INSTALL,
-            CANIC_ROOT_COMPONENT_REGISTRY_PARTITION, CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
-            CANIC_ROOT_COMPONENT_REGISTRY_STATUS, CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE,
-            CANIC_ROOT_STORE_BOOTSTRAP, CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
-            CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
-            CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN, CANIC_WASM_STORE_PREPARE,
+            CANIC_ROOT_COMPONENT_MEMBERSHIP_ACTIVATE, CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
+            CANIC_ROOT_COMPONENT_REGISTRY_PREPARE, CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
+            CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE, CANIC_ROOT_STORE_BOOTSTRAP,
+            CANIC_ROOT_STORE_BOOTSTRAP_STATUS, CANIC_TEMPLATE_PREPARE_ADMIN,
+            CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN, CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
+            CANIC_WASM_STORE_PREPARE,
         },
     };
     use canic_control_plane::{
@@ -1018,7 +1021,178 @@ mod tests {
             &activated.committed,
         );
         assert_prepared(pic, fixture.root_id);
-        activated.committed.allocation
+        activate_issuer_component_membership(pic, fixture, directory_request, prepared, activated)
+    }
+
+    fn activate_issuer_component_membership(
+        pic: &Pic,
+        fixture: &BootstrappedRootFixture,
+        directory_request: RootComponentDirectoryPreparationRequest,
+        prepared: RootComponentDirectoryPreparationResponse,
+        activated: RootComponentRuntimeActivationResponse,
+    ) -> RootComponentAllocationResponse {
+        let request = RootComponentMembershipActivationRequest {
+            operation_id: directory_request.operation_id,
+        };
+        let membership: Result<RootComponentMembershipActivationResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_MEMBERSHIP_ACTIVATE,
+                (request,),
+            )
+            .expect("activate issuer Component membership transport");
+        let membership = membership.expect("activate issuer Component membership");
+        assert_eq!(membership.allocation, activated.committed.allocation);
+        assert_eq!(membership.registry.status, ComponentLifecycleStatus::Active);
+        assert_eq!(membership.registry.head.revision, 2);
+        assert_ne!(
+            membership.registry.head.content_hash,
+            activated.committed.registry.head.content_hash
+        );
+        assert_eq!(
+            membership.directory.provenance.component_registry_revision,
+            membership.registry.head.revision
+        );
+        assert_eq!(
+            membership
+                .directory
+                .provenance
+                .component_registry_content_hash,
+            membership.registry.head.content_hash
+        );
+        assert!(
+            membership.directory.provenance.synchronized_at_ns
+                > activated.committed.directory.provenance.synchronized_at_ns
+        );
+        assert_eq!(membership.target.phase, ComponentRuntimePhase::Active);
+        assert_eq!(
+            membership
+                .target
+                .authority
+                .as_ref()
+                .expect("current active Directory")
+                .component,
+            membership.directory
+        );
+        assert_eq!(
+            membership
+                .target
+                .activation
+                .expect("immutable activation receipt")
+                .directory_authority_hash,
+            activated
+                .target
+                .authority_hash
+                .expect("prepared activation authority hash")
+        );
+
+        assert_active_membership_queries(pic, fixture, &membership);
+        let retry: Result<RootComponentMembershipActivationResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_MEMBERSHIP_ACTIVATE,
+                (request,),
+            )
+            .expect("retry issuer Component membership transport");
+        assert_eq!(
+            retry.expect("retry issuer Component membership"),
+            membership
+        );
+
+        assert_pre_membership_retries(pic, fixture, directory_request, prepared, activated);
+        assert_prepared(pic, fixture.root_id);
+        membership.allocation
+    }
+
+    fn assert_active_membership_queries(
+        pic: &Pic,
+        fixture: &BootstrappedRootFixture,
+        membership: &RootComponentMembershipActivationResponse,
+    ) {
+        let registry: Result<ComponentRegistryPartitionResponse, Error> = pic
+            .query_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
+                (ComponentRegistryPartitionRequest {
+                    component: membership.allocation.component,
+                },),
+            )
+            .expect("query active Component Registry partition transport");
+        assert_eq!(
+            registry.expect("active Component Registry partition"),
+            membership.registry
+        );
+        let directory: Result<ComponentDirectoryHead, Error> = pic
+            .query_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_DIRECTORY_HEAD,
+                (ComponentDirectoryHeadRequest {
+                    component: membership.allocation.component,
+                },),
+            )
+            .expect("query active Component Directory transport");
+        assert_eq!(
+            directory.expect("active Component Directory"),
+            membership.directory
+        );
+        let target: Result<ComponentRuntimeStatusResponse, Error> = pic
+            .query_call_as(
+                membership.registry.binding.canister_id,
+                fixture.root_id,
+                CANIC_COMPONENT_RUNTIME_STATUS,
+                (),
+            )
+            .expect("query membership-active Component runtime transport");
+        assert_eq!(
+            target.expect("membership-active Component runtime"),
+            membership.target
+        );
+    }
+
+    fn assert_pre_membership_retries(
+        pic: &Pic,
+        fixture: &BootstrappedRootFixture,
+        directory_request: RootComponentDirectoryPreparationRequest,
+        prepared: RootComponentDirectoryPreparationResponse,
+        activated: RootComponentRuntimeActivationResponse,
+    ) {
+        let commit: Result<RootComponentCommitResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_COMMIT,
+                (RootComponentCommitRequest {
+                    operation_id: directory_request.operation_id,
+                },),
+            )
+            .expect("retry Component commitment after membership activation transport");
+        assert_eq!(
+            commit.expect("retry Component commitment after membership activation"),
+            activated.committed
+        );
+        let prepared_retry: Result<RootComponentDirectoryPreparationResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE,
+                (directory_request,),
+            )
+            .expect("retry Directory preparation after membership activation transport");
+        assert_eq!(
+            prepared_retry.expect("retry Directory preparation after membership activation"),
+            prepared
+        );
+        let activated_retry: Result<RootComponentRuntimeActivationResponse, Error> = pic
+            .update_call(
+                fixture.root_id,
+                CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE,
+                (RootComponentRuntimeActivationRequest {
+                    operation_id: directory_request.operation_id,
+                },),
+            )
+            .expect("retry runtime activation after membership activation transport");
+        assert_eq!(
+            activated_retry.expect("retry runtime activation after membership activation"),
+            activated
+        );
     }
 
     fn assert_committed_component_queries(

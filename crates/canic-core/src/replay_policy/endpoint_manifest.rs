@@ -154,11 +154,19 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "canic_root_component_runtime_activate",
         command_kind("component_registry.activate_component_runtime.v1"),
     ),
+    update_response_idempotent(
+        "canic_root_component_membership_activate",
+        command_kind("component_registry.activate_component_membership.v1"),
+    ),
     query_read_only("canic_root_component_registry_partition"),
     query_read_only("canic_root_component_directory_head"),
     update_response_idempotent(
         "canic_component_runtime_directory_prepare",
         command_kind("component_runtime.prepare_directory.v1"),
+    ),
+    update_response_idempotent(
+        "canic_component_runtime_directory_synchronize",
+        command_kind("component_runtime.synchronize_directory.v1"),
     ),
     query_read_only("canic_component_runtime_status"),
     update_response_idempotent(

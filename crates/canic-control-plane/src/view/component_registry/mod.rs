@@ -141,6 +141,21 @@ pub struct RootComponentCommitmentView {
     pub directory_authority_hash: [u8; 32],
     pub directory_prepared: bool,
     pub runtime_activated: bool,
+    pub membership: Option<RootComponentMembershipView>,
+}
+
+///
+/// RootComponentMembershipView
+///
+/// Read-only immutable active-membership authority and current-Directory receipt.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentMembershipView {
+    pub registry_encoded_bytes: u64,
+    pub directory_synchronized_at_ns: u64,
+    pub directory_authority_hash: [u8; 32],
+    pub directory_synchronized: bool,
 }
 
 ///

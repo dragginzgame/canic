@@ -9,13 +9,14 @@ use crate::{
         ComponentRegistryPartitionRecord, RootComponentAllocationCommitError,
         RootComponentAllocationProgressRecord, RootComponentAllocationRecord,
         RootComponentCommitmentRecord, RootComponentCreationEffectRecord,
-        RootComponentInstallEffectRecord, RootComponentRegistryCommitError,
-        RootComponentRegistryMetaRecord, RootComponentRegistryStore,
+        RootComponentInstallEffectRecord, RootComponentMembershipRecord,
+        RootComponentRegistryCommitError, RootComponentRegistryMetaRecord,
+        RootComponentRegistryStore,
     },
     view::component_registry::{
         ComponentRegistryPartitionView, RootComponentAllocationProgressView,
         RootComponentAllocationView, RootComponentCommitmentView, RootComponentCreationEffectView,
-        RootComponentInstallEffectView, RootComponentRegistryView,
+        RootComponentInstallEffectView, RootComponentMembershipView, RootComponentRegistryView,
     },
 };
 use canic_core::{
@@ -480,6 +481,21 @@ impl ComponentRegistryOps {
         Ok(Some(partition_record_to_view(record)))
     }
 
+    pub(crate) fn prepared_partition(
+        operation_id: [u8; 32],
+    ) -> Result<ComponentRegistryPartitionView, InternalError> {
+        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
+            InternalError::unavailable("Component allocation operation has not been reserved")
+        })?;
+        let RootComponentAllocationProgressRecord::Committed { commitment, .. } = &record.progress
+        else {
+            return Err(InternalError::conflict(
+                "Component allocation has no committed Registry authority",
+            ));
+        };
+        exact_committed_partition(&record, commitment).map(partition_record_to_view)
+    }
+
     pub(crate) fn component_for_principal(
         canister: Principal,
     ) -> Option<canic_core::ids::ComponentInstanceId> {
@@ -634,6 +650,7 @@ impl ComponentRegistryOps {
                 directory_authority_hash: commitment.directory_authority_hash,
                 directory_prepared: true,
                 runtime_activated: commitment.runtime_activated,
+                membership: commitment.membership.clone(),
             },
         };
         validate_charged_record_size(&next_record, installation.charged_entry_bytes)?;
@@ -698,6 +715,7 @@ impl ComponentRegistryOps {
                 directory_authority_hash: commitment.directory_authority_hash,
                 directory_prepared: true,
                 runtime_activated: true,
+                membership: commitment.membership.clone(),
             },
         };
         validate_charged_record_size(&next_record, installation.charged_entry_bytes)?;
@@ -707,6 +725,168 @@ impl ComponentRegistryOps {
             return Err(InternalError::invariant(
                 canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
                 "Component runtime activation receipt changed its precharged stable footprint",
+            ));
+        }
+        RootComponentRegistryStore::replace_allocation(
+            &current,
+            current.clone(),
+            &record,
+            next_record.clone(),
+        )
+        .map_err(map_allocation_commit_error)?;
+        Ok(allocation_record_to_view(next_record))
+    }
+
+    pub(crate) fn activate_membership(
+        operation_id: [u8; 32],
+        directory_synchronized_at_ns: u64,
+        maximum_component_registry_bytes: u64,
+        fleet_directory: FleetDirectorySnapshot,
+    ) -> Result<(RootComponentAllocationView, ComponentRegistryPartitionView), InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
+            InternalError::unavailable("Component allocation operation has not been reserved")
+        })?;
+        let RootComponentAllocationProgressRecord::Committed {
+            installation,
+            commitment,
+            ..
+        } = &record.progress
+        else {
+            return Err(InternalError::conflict(
+                "Component allocation is not committed for membership activation",
+            ));
+        };
+        let prepared = exact_committed_partition(&record, commitment)?;
+        if let Some(membership) = &commitment.membership {
+            let active = exact_active_partition(&record, commitment, membership)?;
+            validate_membership_directory_authority_hash(&active, &fleet_directory, membership)?;
+            return Ok((
+                allocation_record_to_view(record),
+                partition_record_to_view(active),
+            ));
+        }
+        if !commitment.directory_prepared || !commitment.runtime_activated {
+            return Err(InternalError::conflict(
+                "Component membership activation requires terminal Directory and runtime receipts",
+            ));
+        }
+        if directory_synchronized_at_ns <= commitment.directory_synchronized_at_ns {
+            return Err(InternalError::invalid_input(
+                "active Component Directory synchronization must follow its prepared authority",
+            ));
+        }
+
+        let (next_record, active) = active_membership_records(
+            &record,
+            commitment,
+            directory_synchronized_at_ns,
+            &fleet_directory,
+        )?;
+        if active.encoded_bytes > installation.charged_entry_bytes {
+            return Err(InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component membership exceeds its pre-install Registry byte reservation",
+            ));
+        }
+        if active.encoded_bytes > maximum_component_registry_bytes {
+            return Err(InternalError::resource_exhausted(format!(
+                "active Component Registry requires {} bytes, exceeding protected Component limit {maximum_component_registry_bytes}",
+                active.encoded_bytes
+            )));
+        }
+        let encoded_bytes = current
+            .encoded_bytes
+            .checked_sub(prepared.encoded_bytes)
+            .and_then(|value| value.checked_add(active.encoded_bytes))
+            .ok_or_else(|| {
+                InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "root Component Registry byte accounting cannot activate membership",
+                )
+            })?;
+        if encoded_bytes > current.root.limits.maximum_registry_bytes {
+            return Err(InternalError::resource_exhausted(
+                "active Component Registry exceeds the protected root byte limit",
+            ));
+        }
+        let mut next_meta = current.clone();
+        next_meta.encoded_bytes = encoded_bytes;
+        RootComponentRegistryStore::replace_component_partition(
+            &current,
+            next_meta,
+            &record,
+            next_record.clone(),
+            &prepared,
+            active.clone(),
+        )
+        .map_err(map_allocation_commit_error)?;
+        Ok((
+            allocation_record_to_view(next_record),
+            partition_record_to_view(active),
+        ))
+    }
+
+    pub(crate) fn mark_membership_synchronized(
+        operation_id: [u8; 32],
+        expected_authority_hash: [u8; 32],
+    ) -> Result<RootComponentAllocationView, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
+            InternalError::unavailable("Component allocation operation has not been reserved")
+        })?;
+        let RootComponentAllocationProgressRecord::Committed {
+            creation,
+            canister,
+            installation,
+            commitment,
+        } = &record.progress
+        else {
+            return Err(InternalError::conflict(
+                "Component allocation is not committed for membership synchronization",
+            ));
+        };
+        let membership = commitment.membership.as_ref().ok_or_else(|| {
+            InternalError::conflict("Component Registry membership has not been activated")
+        })?;
+        let _active = exact_active_partition(&record, commitment, membership)?;
+        if membership.directory_authority_hash != expected_authority_hash {
+            return Err(InternalError::conflict(
+                "current Component Directory differs from its active membership authority",
+            ));
+        }
+        if membership.directory_synchronized {
+            return Ok(allocation_record_to_view(record));
+        }
+
+        let mut next_membership = membership.clone();
+        next_membership.directory_synchronized = true;
+        let mut next_record = record.clone();
+        next_record.progress = RootComponentAllocationProgressRecord::Committed {
+            creation: creation.clone(),
+            canister: *canister,
+            installation: installation.clone(),
+            commitment: RootComponentCommitmentRecord {
+                registry: commitment.registry.clone(),
+                prepared_registry_encoded_bytes: commitment.prepared_registry_encoded_bytes,
+                directory_synchronized_at_ns: commitment.directory_synchronized_at_ns,
+                directory_authority_hash: commitment.directory_authority_hash,
+                directory_prepared: commitment.directory_prepared,
+                runtime_activated: commitment.runtime_activated,
+                membership: Some(next_membership),
+            },
+        };
+        validate_charged_record_size(&next_record, installation.charged_entry_bytes)?;
+        if RootComponentRegistryStore::allocation_entry_bytes(&next_record)
+            != RootComponentRegistryStore::allocation_entry_bytes(&record)
+        {
+            return Err(InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component membership receipt changed its precharged stable footprint",
             ));
         }
         RootComponentRegistryStore::replace_allocation(
@@ -827,7 +1007,7 @@ fn install_effect_record_to_view(
     }
 }
 
-const fn commitment_record_to_view(
+fn commitment_record_to_view(
     commitment: RootComponentCommitmentRecord,
 ) -> RootComponentCommitmentView {
     RootComponentCommitmentView {
@@ -837,6 +1017,18 @@ const fn commitment_record_to_view(
         directory_authority_hash: commitment.directory_authority_hash,
         directory_prepared: commitment.directory_prepared,
         runtime_activated: commitment.runtime_activated,
+        membership: commitment.membership.map(membership_record_to_view),
+    }
+}
+
+const fn membership_record_to_view(
+    membership: RootComponentMembershipRecord,
+) -> RootComponentMembershipView {
+    RootComponentMembershipView {
+        registry_encoded_bytes: membership.registry_encoded_bytes,
+        directory_synchronized_at_ns: membership.directory_synchronized_at_ns,
+        directory_authority_hash: membership.directory_authority_hash,
+        directory_synchronized: membership.directory_synchronized,
     }
 }
 
@@ -919,21 +1111,27 @@ fn install_charged_entry_bytes(
         canister,
         installation,
         commitment: RootComponentCommitmentRecord {
-            registry: registry.clone(),
+            registry,
             prepared_registry_encoded_bytes: u64::MAX,
             directory_synchronized_at_ns: u64::MAX,
             directory_authority_hash: [u8::MAX; 32],
             directory_prepared: true,
             runtime_activated: true,
+            membership: Some(RootComponentMembershipRecord {
+                registry_encoded_bytes: u64::MAX,
+                directory_synchronized_at_ns: u64::MAX,
+                directory_authority_hash: [u8::MAX; 32],
+                directory_synchronized: true,
+            }),
         },
     };
     let partition = ComponentRegistryPartitionRecord {
         binding: plan.binding.clone(),
         provisioning_origin: record.provisioning_origin.clone(),
         release_set: record.release_set,
-        status: ComponentLifecycleStatus::Prepared,
-        revision: registry.revision,
-        content_hash: registry.content_hash,
+        status: ComponentLifecycleStatus::Active,
+        revision: u64::MAX,
+        content_hash: [u8::MAX; 32],
         directory_synchronized_at_ns: u64::MAX,
         encoded_bytes: u64::MAX,
     };
@@ -1011,6 +1209,7 @@ fn committed_records(
             directory_authority_hash,
             directory_prepared: false,
             runtime_activated: false,
+            membership: None,
         },
     };
     let mut partition = ComponentRegistryPartitionRecord {
@@ -1059,6 +1258,139 @@ fn committed_records(
     ))
 }
 
+fn active_membership_records(
+    record: &RootComponentAllocationRecord,
+    commitment: &RootComponentCommitmentRecord,
+    directory_synchronized_at_ns: u64,
+    fleet_directory: &FleetDirectorySnapshot,
+) -> Result<
+    (
+        RootComponentAllocationRecord,
+        ComponentRegistryPartitionRecord,
+    ),
+    InternalError,
+> {
+    let RootComponentAllocationProgressRecord::Committed {
+        creation,
+        canister,
+        installation,
+        ..
+    } = &record.progress
+    else {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
+            "membership activation requires a committed Component allocation",
+        ));
+    };
+    let revision =
+        commitment.registry.revision.checked_add(1).ok_or_else(|| {
+            InternalError::resource_exhausted("Component Registry revision overflow")
+        })?;
+    let content_hash = component_partition_content_hash(
+        &installation.binding,
+        &record.provisioning_origin,
+        record.release_set,
+        ComponentLifecycleStatus::Active,
+        revision,
+    )?;
+    let directory_authority_hash = component_directory_authority_hash(
+        &installation.binding,
+        revision,
+        content_hash,
+        directory_synchronized_at_ns,
+        fleet_directory,
+    )?;
+    let mut next_record = record.clone();
+    let mut active = ComponentRegistryPartitionRecord {
+        binding: installation.binding.clone(),
+        provisioning_origin: record.provisioning_origin.clone(),
+        release_set: record.release_set,
+        status: ComponentLifecycleStatus::Active,
+        revision,
+        content_hash,
+        directory_synchronized_at_ns,
+        encoded_bytes: 0,
+    };
+    next_record.progress = RootComponentAllocationProgressRecord::Committed {
+        creation: creation.clone(),
+        canister: *canister,
+        installation: installation.clone(),
+        commitment: RootComponentCommitmentRecord {
+            registry: commitment.registry.clone(),
+            prepared_registry_encoded_bytes: commitment.prepared_registry_encoded_bytes,
+            directory_synchronized_at_ns: commitment.directory_synchronized_at_ns,
+            directory_authority_hash: commitment.directory_authority_hash,
+            directory_prepared: commitment.directory_prepared,
+            runtime_activated: commitment.runtime_activated,
+            membership: Some(RootComponentMembershipRecord {
+                registry_encoded_bytes: 0,
+                directory_synchronized_at_ns,
+                directory_authority_hash,
+                directory_synchronized: false,
+            }),
+        },
+    };
+    let index_bytes = RootComponentRegistryStore::principal_index_entry_bytes(
+        installation.binding.canister_id,
+        record.component,
+    );
+    for _ in 0..8 {
+        let encoded_bytes = RootComponentRegistryStore::allocation_entry_bytes(&next_record)
+            .checked_add(RootComponentRegistryStore::partition_entry_bytes(&active))
+            .and_then(|value| value.checked_add(index_bytes))
+            .ok_or_else(|| {
+                InternalError::resource_exhausted("Component Registry bytes overflow")
+            })?;
+        let RootComponentAllocationProgressRecord::Committed { commitment, .. } =
+            &mut next_record.progress
+        else {
+            return Err(InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
+                "active Component commitment changed phase during byte accounting",
+            ));
+        };
+        let membership = commitment.membership.as_mut().ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
+                "active Component commitment lost membership during byte accounting",
+            )
+        })?;
+        if active.encoded_bytes == encoded_bytes
+            && membership.registry_encoded_bytes == encoded_bytes
+        {
+            return Ok((next_record, active));
+        }
+        active.encoded_bytes = encoded_bytes;
+        membership.registry_encoded_bytes = encoded_bytes;
+    }
+    Err(InternalError::invariant(
+        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+        "active Component Registry byte accounting did not converge",
+    ))
+}
+
+fn component_directory_authority_hash(
+    binding: &ComponentBinding,
+    revision: u64,
+    content_hash: [u8; 32],
+    synchronized_at_ns: u64,
+    fleet_directory: &FleetDirectorySnapshot,
+) -> Result<[u8; 32], InternalError> {
+    ComponentRuntimeOps::directory_authority_hash(&ComponentRuntimeDirectoryAuthority {
+        fleet: fleet_directory.clone(),
+        component: ComponentDirectoryHead {
+            provenance: ComponentDirectoryProvenance {
+                component: binding.clone(),
+                source_fleet_subnet_root: binding.fleet_subnet_root,
+                component_registry_revision: revision,
+                component_registry_content_hash: content_hash,
+                synchronized_at_ns,
+            },
+            descendant_count: 0,
+        },
+    })
+}
+
 fn exact_committed_partition(
     record: &RootComponentAllocationRecord,
     commitment: &RootComponentCommitmentRecord,
@@ -1070,32 +1402,119 @@ fn exact_committed_partition(
             "Component partition validation requires a committed allocation",
         ));
     };
-    let partition = RootComponentRegistryStore::partition(record.component).ok_or_else(|| {
+    let current = RootComponentRegistryStore::partition(record.component).ok_or_else(|| {
         InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
             "committed Component allocation has no Registry partition",
         )
     })?;
-    if partition.binding != installation.binding
-        || partition.binding.component != record.component
-        || partition.provisioning_origin != record.provisioning_origin
-        || partition.release_set != record.release_set
-        || partition.status != ComponentLifecycleStatus::Prepared
-        || partition.revision != commitment.registry.revision
-        || partition.content_hash != commitment.registry.content_hash
-        || partition.encoded_bytes != commitment.prepared_registry_encoded_bytes
-        || partition.directory_synchronized_at_ns != commitment.directory_synchronized_at_ns
+    let prepared = ComponentRegistryPartitionRecord {
+        binding: installation.binding.clone(),
+        provisioning_origin: record.provisioning_origin.clone(),
+        release_set: record.release_set,
+        status: ComponentLifecycleStatus::Prepared,
+        revision: commitment.registry.revision,
+        content_hash: commitment.registry.content_hash,
+        directory_synchronized_at_ns: commitment.directory_synchronized_at_ns,
+        encoded_bytes: commitment.prepared_registry_encoded_bytes,
+    };
+    if prepared.binding.component != record.component
         || commitment.registry.component != record.component
-        || RootComponentRegistryStore::component_for_principal(partition.binding.canister_id)
+        || RootComponentRegistryStore::component_for_principal(prepared.binding.canister_id)
             != Some(record.component)
     {
         return Err(InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "committed Component allocation differs from its Registry partition or principal index",
+            "committed Component allocation differs from its prepared Registry receipt",
         ));
     }
-    validate_partition_record(&partition)?;
-    Ok(partition)
+    validate_partition_record(&prepared)?;
+    match &commitment.membership {
+        None if current == prepared => {}
+        Some(membership) => {
+            let _active = validate_active_partition(record, commitment, membership, &current)?;
+        }
+        None => {
+            return Err(InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "current Component partition differs from its prepared Registry receipt",
+            ));
+        }
+    }
+    Ok(prepared)
+}
+
+fn exact_active_partition(
+    record: &RootComponentAllocationRecord,
+    commitment: &RootComponentCommitmentRecord,
+    membership: &RootComponentMembershipRecord,
+) -> Result<ComponentRegistryPartitionRecord, InternalError> {
+    let current = RootComponentRegistryStore::partition(record.component).ok_or_else(|| {
+        InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "active Component allocation has no Registry partition",
+        )
+    })?;
+    validate_active_partition(record, commitment, membership, &current)
+}
+
+fn validate_active_partition(
+    record: &RootComponentAllocationRecord,
+    commitment: &RootComponentCommitmentRecord,
+    membership: &RootComponentMembershipRecord,
+    current: &ComponentRegistryPartitionRecord,
+) -> Result<ComponentRegistryPartitionRecord, InternalError> {
+    let expected_revision =
+        commitment.registry.revision.checked_add(1).ok_or_else(|| {
+            InternalError::resource_exhausted("Component Registry revision overflow")
+        })?;
+    let registry_encoded_bytes_match = membership.registry_encoded_bytes == current.encoded_bytes;
+    if !commitment.directory_prepared
+        || !commitment.runtime_activated
+        || !registry_encoded_bytes_match
+        || membership.directory_synchronized_at_ns <= commitment.directory_synchronized_at_ns
+        || membership.directory_synchronized_at_ns != current.directory_synchronized_at_ns
+        || membership.directory_authority_hash == [0; 32]
+        || current.binding.component != record.component
+        || current.status != ComponentLifecycleStatus::Active
+        || current.revision != expected_revision
+    {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "active Component partition differs from its immutable membership receipt",
+        ));
+    }
+    validate_partition_record(current)?;
+    Ok(current.clone())
+}
+
+fn validate_membership_directory_authority_hash(
+    partition: &ComponentRegistryPartitionRecord,
+    fleet_directory: &FleetDirectorySnapshot,
+    membership: &RootComponentMembershipRecord,
+) -> Result<(), InternalError> {
+    let authority = ComponentRuntimeDirectoryAuthority {
+        fleet: fleet_directory.clone(),
+        component: ComponentDirectoryHead {
+            provenance: ComponentDirectoryProvenance {
+                component: partition.binding.clone(),
+                source_fleet_subnet_root: partition.binding.fleet_subnet_root,
+                component_registry_revision: partition.revision,
+                component_registry_content_hash: partition.content_hash,
+                synchronized_at_ns: partition.directory_synchronized_at_ns,
+            },
+            descendant_count: 0,
+        },
+    };
+    if ComponentRuntimeOps::directory_authority_hash(&authority)?
+        != membership.directory_authority_hash
+    {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "active Component Directory authority differs from its membership receipt",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_directory_authority_hash(
@@ -1699,7 +2118,6 @@ mod tests {
                 .expect("committed partition"),
             partition
         );
-        assert_directory_preparation_receipt(&committed, partition.encoded_bytes);
         let status = ComponentRegistryOps::current().expect("Registry status");
         assert_eq!(status.reserved_component_instances, 0);
         assert_eq!(status.committed_component_instances, 1);
@@ -1714,12 +2132,20 @@ mod tests {
                 committed: 1,
             }
         );
+        assert_directory_preparation_receipt(
+            &committed,
+            &partition,
+            fleet_directory(&root),
+            plan.maximum_registry_bytes,
+        );
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
 
     fn assert_directory_preparation_receipt(
         committed: &RootComponentAllocationView,
-        prepared_registry_encoded_bytes: u64,
+        prepared_partition: &ComponentRegistryPartitionView,
+        directory: FleetDirectorySnapshot,
+        maximum_component_registry_bytes: u64,
     ) {
         let RootComponentAllocationProgressView::Committed { commitment, .. } = &committed.progress
         else {
@@ -1728,7 +2154,7 @@ mod tests {
         assert_ne!(commitment.directory_authority_hash, [0; 32]);
         assert_eq!(
             commitment.prepared_registry_encoded_bytes,
-            prepared_registry_encoded_bytes
+            prepared_partition.encoded_bytes
         );
         assert!(!commitment.directory_prepared);
         assert!(!commitment.runtime_activated);
@@ -1773,16 +2199,105 @@ mod tests {
         .expect("retry runtime activation receipt");
         assert_eq!(activated_again, activated);
         assert!(matches!(
-            activated.progress,
+            &activated.progress,
             RootComponentAllocationProgressView::Committed {
                 commitment: RootComponentCommitmentView {
                     directory_prepared: true,
                     runtime_activated: true,
+                    membership: None,
                     ..
                 },
                 ..
             }
         ));
+        assert_membership_receipt(
+            &activated,
+            prepared_partition,
+            directory,
+            maximum_component_registry_bytes,
+        );
+    }
+
+    fn assert_membership_receipt(
+        activated: &RootComponentAllocationView,
+        prepared_partition: &ComponentRegistryPartitionView,
+        directory: FleetDirectorySnapshot,
+        maximum_component_registry_bytes: u64,
+    ) {
+        assert!(committed_membership(activated).is_none());
+        let (membership_activated, active_partition) = ComponentRegistryOps::activate_membership(
+            [12; 32],
+            33,
+            maximum_component_registry_bytes,
+            directory.clone(),
+        )
+        .expect("activate Registry membership");
+        let repeated_membership = ComponentRegistryOps::activate_membership(
+            [12; 32],
+            34,
+            maximum_component_registry_bytes,
+            directory.clone(),
+        )
+        .expect("repeat Registry membership activation");
+        assert_eq!(
+            repeated_membership,
+            (membership_activated.clone(), active_partition.clone())
+        );
+        assert_eq!(active_partition.status, ComponentLifecycleStatus::Active);
+        assert_eq!(active_partition.revision, 2);
+        assert_eq!(active_partition.directory_synchronized_at_ns, 33);
+        assert_ne!(
+            active_partition.content_hash,
+            prepared_partition.content_hash
+        );
+        assert_eq!(
+            ComponentRegistryOps::prepared_partition([12; 32])
+                .expect("reconstruct prepared partition"),
+            *prepared_partition
+        );
+        assert_eq!(
+            ComponentRegistryOps::commit_verified(
+                [12; 32],
+                35,
+                maximum_component_registry_bytes,
+                directory,
+            )
+            .expect("commit retry after membership activation")
+            .1,
+            *prepared_partition
+        );
+
+        let membership_synchronized = ComponentRegistryOps::mark_membership_synchronized(
+            [12; 32],
+            committed_membership(&membership_activated)
+                .expect("membership receipt")
+                .directory_authority_hash,
+        )
+        .expect("mark membership Directory synchronized");
+        let synchronized_again = ComponentRegistryOps::mark_membership_synchronized(
+            [12; 32],
+            committed_membership(&membership_activated)
+                .expect("membership receipt")
+                .directory_authority_hash,
+        )
+        .expect("repeat membership Directory receipt");
+        assert_eq!(synchronized_again, membership_synchronized);
+        assert!(
+            committed_membership(&membership_synchronized)
+                .expect("membership receipt")
+                .directory_synchronized
+        );
+    }
+
+    fn committed_membership(
+        allocation: &RootComponentAllocationView,
+    ) -> Option<&RootComponentMembershipView> {
+        let RootComponentAllocationProgressView::Committed { commitment, .. } =
+            &allocation.progress
+        else {
+            panic!("committed allocation progress");
+        };
+        commitment.membership.as_ref()
     }
 
     fn fleet_directory(root: &FleetSubnetRootBinding) -> FleetDirectorySnapshot {

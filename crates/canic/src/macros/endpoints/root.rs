@@ -105,6 +105,13 @@ macro_rules! canic_emit_root_admin_endpoints {
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::activate_component_runtime(request).await
         }
 
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_root_component_membership_activate(
+            request: ::canic::dto::component_registry::RootComponentMembershipActivationRequest,
+        ) -> Result<::canic::dto::component_registry::RootComponentMembershipActivationResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::activate_component_membership(request).await
+        }
+
         #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_root_component_registry_partition(
             request: ::canic::dto::component_registry::ComponentRegistryPartitionRequest,

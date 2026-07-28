@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.25`.
-- The latest published release is `v0.100.25` at
-  `35c742687704ab2d750632843682e04f1470b01e`.
-- The `v0.100.25` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `6404dc4cfc724ca871ec530d2697df4e3040d66c85040241fa275a14d9da7b07`.
+- The workspace package version is `0.100.26`.
+- The latest published release is `v0.100.26` at
+  `24354da29e4b072ad1914d2b142cae0a4706eb79`.
+- The `v0.100.26` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `f319e84f91d9ab7c3b7d1ce09e48f97674a73fef731d28d56f25f614e9cf4d56`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -272,7 +272,7 @@ Historical detail is archived at:
   re-observes the complete retained evidence and then records a fixed-size
   terminal root receipt. Component and root remain runtime `Prepared`;
   Registry/Directory-bound Component activation is next.
-- Open `0.100.26` activates that Component runtime only from its protected
+- Released `0.100.26` activates that Component runtime only from its protected
   install operation, binding and retained Directory-authority hash. The target
   atomically retains the full original activation Directory separately from
   later current revisions, records the original activation time, consumes
@@ -283,6 +283,16 @@ Historical detail is archived at:
   re-queries the exact active receipt and then records its fixed-size terminal
   runtime receipt. The Component Registry row and Fleet Subnet Root remain
   `Prepared`; partition promotion and active-Directory convergence are next.
+- Open `0.100.27` atomically promotes that exactly runtime-active Component
+  Registry partition from revision-one `Prepared` to revision-two `Active`,
+  replaces exact Registry-byte accounting and retains a separate immutable
+  membership receipt. It then synchronizes the new current Directory directly
+  to the target, reconciles uncertain response through status, independently
+  verifies convergence and commits the terminal root membership bit last.
+  The full original activation Directory remains unchanged. Current queries
+  expose revision two, while exact commit, Directory-preparation and
+  runtime-activation retries reconstruct their revision-one responses. The
+  Fleet Subnet Root remains runtime `Prepared`.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1589,12 +1599,13 @@ It atomically commits that Component into counters and its root-local Registry
 partition, derives exact Fleet/Component Directory authority, distributes it
 directly, activates the target only from that retained authority and records
 independently observed target/root preparation and activation evidence. Next,
-promote the runtime-active Component's Registry partition to `Active`, derive
-and synchronize its next current Directory revision, and record a terminal
-membership receipt before activating the root only after its complete admitted
-initial inventory is Active. Do not bypass Store or Registry evidence, permit
-nested Component declarations, merge roots belonging to different Fleets on
-one Subnet or consume an earlier installation.
+it promotes the runtime-active Component's Registry partition to `Active`,
+derives and synchronizes its next current Directory revision, and records a
+terminal membership receipt. Next, activate the root only after every admitted
+initial Component has complete Registry, Directory, runtime and membership
+evidence. Do not bypass Store or Registry evidence, permit nested Component
+declarations, merge roots belonging to different Fleets on one Subnet or
+consume an earlier installation.
 
 ## Historical Release Detail
 

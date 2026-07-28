@@ -543,9 +543,19 @@ fn assert_component_registry_protocol_constants() {
             "canic_root_component_runtime_activate",
         ),
         (
+            canic::protocol::CANIC_ROOT_COMPONENT_MEMBERSHIP_ACTIVATE,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_MEMBERSHIP_ACTIVATE,
+            "canic_root_component_membership_activate",
+        ),
+        (
             canic::protocol::CANIC_COMPONENT_RUNTIME_DIRECTORY_PREPARE,
             canic_core::protocol::CANIC_COMPONENT_RUNTIME_DIRECTORY_PREPARE,
             "canic_component_runtime_directory_prepare",
+        ),
+        (
+            canic::protocol::CANIC_COMPONENT_RUNTIME_DIRECTORY_SYNCHRONIZE,
+            canic_core::protocol::CANIC_COMPONENT_RUNTIME_DIRECTORY_SYNCHRONIZE,
+            "canic_component_runtime_directory_synchronize",
         ),
         (
             canic::protocol::CANIC_COMPONENT_RUNTIME_STATUS,
@@ -610,6 +620,7 @@ fn assert_root_registry_mirror_guards(root: &str) {
         "async fn canic_root_component_commit(",
         "async fn canic_root_component_directory_prepare(",
         "async fn canic_root_component_runtime_activate(",
+        "async fn canic_root_component_membership_activate(",
     ] {
         assert!(
             preceding_attribute_context(root, endpoint)
@@ -672,6 +683,7 @@ fn nonroot_runtime_activation_mutations_are_guarded_by_the_exact_root() {
 
     for signature in [
         "async fn canic_component_runtime_directory_prepare(",
+        "async fn canic_component_runtime_directory_synchronize(",
         "async fn canic_component_runtime_activate(",
         "async fn canic_prepare_fleet_credential_generation(",
         "async fn canic_activate_fleet(",
