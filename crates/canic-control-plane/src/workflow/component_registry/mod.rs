@@ -13,9 +13,9 @@ use crate::{
     },
     view::component_registry::{
         ComponentRegistryPartitionView, RootComponentAllocationProgressView,
-        RootComponentAllocationView, RootComponentCreationEffectView,
-        RootComponentInitialInventoryView, RootComponentInstallEffectView,
-        RootComponentRegistryView,
+        RootComponentAllocationView, RootComponentChildAllocationView,
+        RootComponentCreationEffectView, RootComponentInitialInventoryView,
+        RootComponentInstallEffectView, RootComponentRegistryView,
     },
     workflow::{
         bootstrap::root_store, deployment, runtime::template::resolved_root_store_module_source,
@@ -36,8 +36,12 @@ use canic_core::{
                 mgmt::{CanisterInstallMode, MgmtOps},
             },
         },
-        policy::component_allocation::{
-            TopLevelComponentAllocationInput, reserve_top_level_component,
+        policy::{
+            component_allocation::{TopLevelComponentAllocationInput, reserve_top_level_component},
+            component_child_allocation::{
+                ComponentChildAllocationInput, ComponentChildAllocationReadiness,
+                ComponentRegistryVersionEvidence, reserve_component_child,
+            },
         },
         workflow::{cost_guard::CostGuardWorkflow, runtime::install::ModuleInstallWorkflow},
     },
@@ -52,8 +56,9 @@ use canic_core::{
             ComponentRuntimeDirectorySynchronizationRequest, ComponentRuntimePhase,
             ComponentRuntimeStatusResponse, RootComponentAllocationPhase,
             RootComponentAllocationRequest, RootComponentAllocationResponse,
-            RootComponentAllocationStatusRequest, RootComponentCommitRequest,
-            RootComponentCommitResponse, RootComponentCreationEvidence,
+            RootComponentAllocationStatusRequest, RootComponentChildAllocationRequest,
+            RootComponentChildAllocationResponse, RootComponentChildAllocationStatusRequest,
+            RootComponentCommitRequest, RootComponentCommitResponse, RootComponentCreationEvidence,
             RootComponentCreationRequest, RootComponentDirectoryPreparationRequest,
             RootComponentDirectoryPreparationResponse, RootComponentInitialInventoryStatus,
             RootComponentInstallEvidence, RootComponentInstallRequest,
@@ -200,6 +205,133 @@ pub fn allocation_status(
         request.operation_id,
     )?;
     allocation_response(allocation)
+}
+
+/// Durably reserve one direct child for the exact registered parent caller.
+pub async fn reserve_child_allocation(
+    request: RootComponentChildAllocationRequest,
+) -> Result<RootComponentChildAllocationResponse, InternalError> {
+    let (authority, root) = root_authority()?;
+    let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let preparation_request = RootComponentRegistryPreparationRequest {
+        store_bootstrap: prepared.store_bootstrap.clone(),
+        expected_fleet_registry: prepared.prepared_against_registry.clone(),
+    };
+    root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    validate_active_authority(&authority, root, &preparation_request)?;
+
+    let caller = IcOps::msg_caller();
+    let topology = ConfigOps::component_topology()?;
+    let parent =
+        ComponentRegistryOps::registered_parent(request.component, caller)?.ok_or_else(|| {
+            InternalError::public(Error::forbidden(format!(
+                "caller {caller} is not a registered member of Component {}",
+                request.component
+            )))
+        })?;
+    if let Some(existing) =
+        ComponentRegistryOps::child_allocation(request.component, request.operation_id)?
+    {
+        validate_child_allocation(
+            &authority.binding,
+            authority.initial_release_set,
+            &topology,
+            &parent.0,
+            &existing,
+            Some(&request),
+        )?;
+        return Ok(child_allocation_response(existing));
+    }
+
+    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
+        InternalError::unavailable("Component Registry partition has not been committed")
+    })?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &partition,
+    )?;
+    let current_registry = ComponentRegistryHead {
+        component: partition.binding.component,
+        revision: partition.revision,
+        content_hash: partition.content_hash,
+    };
+    let fleet_activation = FleetActivationApi::status().map_err(InternalError::public)?;
+    let readiness = if fleet_activation.phase != FleetActivationPhase::Active {
+        ComponentChildAllocationReadiness::RootRuntimeInactive
+    } else if partition.status != ComponentLifecycleStatus::Active {
+        ComponentChildAllocationReadiness::ComponentRegistryInactive
+    } else if parent.1 != ComponentLifecycleStatus::Active {
+        ComponentChildAllocationReadiness::ParentRegistryMemberInactive
+    } else {
+        ComponentChildAllocationReadiness::Ready
+    };
+    let component_descendants = partition
+        .reserved_descendants
+        .checked_add(partition.committed_descendants)
+        .ok_or_else(|| InternalError::resource_exhausted("Component descendant count overflow"))?;
+    let parent_role_instances = ComponentRegistryOps::parent_role_instances(
+        request.component,
+        caller,
+        &request.child_role,
+    )?;
+    let decision = reserve_component_child(ComponentChildAllocationInput {
+        operation_id: request.operation_id,
+        caller,
+        component: &partition.binding,
+        parent: &parent.0,
+        child_role: &request.child_role,
+        expected_registry: registry_evidence(&request.expected_registry),
+        current_registry: registry_evidence(&current_registry),
+        readiness,
+        root: &authority.binding,
+        topology: &topology,
+        reserved_component_instances: prepared.reserved_component_instances,
+        committed_component_instances: prepared.committed_component_instances,
+        component_descendants,
+        root_managed_descendants: prepared.managed_descendants,
+        parent_role_instances,
+    })
+    .map_err(InternalError::from)?;
+    let reserved = ComponentRegistryOps::reserve_child_allocation(
+        decision,
+        request.operation_id,
+        request.expected_registry,
+    )?;
+    Ok(child_allocation_response(reserved))
+}
+
+/// Read one durable direct-child reservation for its exact registered parent caller.
+pub fn child_allocation_status(
+    request: RootComponentChildAllocationStatusRequest,
+) -> Result<RootComponentChildAllocationResponse, InternalError> {
+    let (authority, _root) = root_authority()?;
+    let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let caller = IcOps::msg_caller();
+    let parent =
+        ComponentRegistryOps::registered_parent(request.component, caller)?.ok_or_else(|| {
+            InternalError::public(Error::forbidden(format!(
+                "caller {caller} is not a registered member of Component {}",
+                request.component
+            )))
+        })?;
+    let allocation =
+        ComponentRegistryOps::child_allocation(request.component, request.operation_id)?
+            .ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component Child allocation operation has not been reserved",
+                )
+            })?;
+    validate_child_allocation(
+        &authority.binding,
+        authority.initial_release_set,
+        &ConfigOps::component_topology()?,
+        &parent.0,
+        &allocation,
+        None,
+    )?;
+    Ok(child_allocation_response(allocation))
 }
 
 /// Advance one reserved top-level Component through a durable creation effect.
@@ -1763,6 +1895,32 @@ fn allocation_response(
     })
 }
 
+fn child_allocation_response(
+    allocation: RootComponentChildAllocationView,
+) -> RootComponentChildAllocationResponse {
+    RootComponentChildAllocationResponse {
+        operation_id: allocation.operation_id,
+        component: allocation.component,
+        parent_canister_id: allocation.parent_canister_id,
+        parent_role: allocation.parent_role,
+        child_role: allocation.child_role,
+        child_kind: allocation.child_kind,
+        maximum_instances_per_parent: allocation.maximum_instances_per_parent,
+        maximum_descendants: allocation.maximum_descendants,
+        maximum_registry_bytes: allocation.maximum_registry_bytes,
+        reserved_against_registry: allocation.reserved_against_registry,
+        release_set: allocation.release_set,
+    }
+}
+
+const fn registry_evidence(head: &ComponentRegistryHead) -> ComponentRegistryVersionEvidence {
+    ComponentRegistryVersionEvidence {
+        component: head.component,
+        revision: head.revision,
+        content_hash: head.content_hash,
+    }
+}
+
 fn commit_response(
     allocation: RootComponentAllocationView,
     partition: ComponentRegistryPartitionView,
@@ -1811,9 +1969,9 @@ fn membership_response(
                 "Component allocation has no active membership receipt",
             )
         })?;
-    let encoded_bytes_match = membership.registry_encoded_bytes == partition.encoded_bytes;
+    let encoded_bytes_covered = membership.registry_encoded_bytes <= partition.encoded_bytes;
     if !membership.directory_synchronized
-        || !encoded_bytes_match
+        || !encoded_bytes_covered
         || membership.directory_synchronized_at_ns != partition.directory_synchronized_at_ns
     {
         return Err(InternalError::invariant(
@@ -1844,6 +2002,8 @@ fn partition_response(
         provisioning_origin: partition.provisioning_origin,
         release_set: partition.release_set,
         status: partition.status,
+        reserved_descendants: partition.reserved_descendants,
+        committed_descendants: partition.committed_descendants,
         encoded_bytes: partition.encoded_bytes,
     }
 }
@@ -1857,7 +2017,7 @@ fn component_directory_head(partition: &ComponentRegistryPartitionView) -> Compo
             component_registry_content_hash: partition.content_hash,
             synchronized_at_ns: partition.directory_synchronized_at_ns,
         },
-        descendant_count: 0,
+        descendant_count: partition.committed_descendants,
     }
 }
 
@@ -2041,6 +2201,99 @@ fn validate_allocation_record(
         ));
     }
     Ok(())
+}
+
+fn validate_child_allocation(
+    root: &canic_core::ids::FleetSubnetRootBinding,
+    release_set: canic_core::ids::FleetSubnetRootReleaseSet,
+    topology: &canic_core::control_plane_support::config::ComponentTopology,
+    parent: &ManagedCanisterBinding,
+    allocation: &RootComponentChildAllocationView,
+    request: Option<&RootComponentChildAllocationRequest>,
+) -> Result<(), InternalError> {
+    let (parent_component, parent_canister_id, parent_role) = match parent {
+        ManagedCanisterBinding::Component(binding) => {
+            topology
+                .validate_component_binding(root, binding)
+                .map_err(|error| {
+                    InternalError::invariant(
+                        InternalErrorOrigin::Storage,
+                        format!("registered Component parent binding is invalid: {error}"),
+                    )
+                })?;
+            (binding, binding.canister_id, &binding.role)
+        }
+        ManagedCanisterBinding::ComponentChild(binding) => {
+            topology
+                .validate_component_child_binding(root, binding)
+                .map_err(|error| {
+                    InternalError::invariant(
+                        InternalErrorOrigin::Storage,
+                        format!("registered Component Child parent binding is invalid: {error}"),
+                    )
+                })?;
+            (&binding.component, binding.canister_id, &binding.role)
+        }
+    };
+    if parent_canister_id != allocation.parent_canister_id {
+        return Err(InternalError::public(Error::forbidden(
+            "Component Child allocation belongs to a different registered parent",
+        )));
+    }
+    let spec = topology
+        .get(&parent_component.component_spec)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "registered Component parent Spec is absent from protected topology",
+            )
+        })?;
+    let child = spec.child(&allocation.child_role).ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "reserved Component Child role is absent from protected Component Spec",
+        )
+    })?;
+    let grant = spec
+        .spawn_grant(parent_role, &allocation.child_role)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "reserved Component Child has no protected parent spawn grant",
+            )
+        })?;
+    if allocation.component != parent_component.component
+        || &allocation.parent_role != parent_role
+        || allocation.child_kind != child.kind
+        || allocation.maximum_instances_per_parent != grant.maximum_instances_per_parent
+        || allocation.maximum_descendants != spec.limits.maximum_descendants
+        || allocation.maximum_registry_bytes != spec.limits.maximum_registry_bytes
+        || allocation.release_set != release_set
+        || allocation.reserved_against_registry.component != allocation.component
+        || allocation.reserved_against_registry.revision == 0
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "durable Component Child allocation differs from protected tree authority",
+        ));
+    }
+    if request.is_some_and(|request| !child_allocation_request_matches(request, allocation)) {
+        return Err(InternalError::conflict(
+            "Component Child allocation operation is already bound to different intent",
+        ));
+    }
+    Ok(())
+}
+
+fn child_allocation_request_matches(
+    request: &RootComponentChildAllocationRequest,
+    allocation: &RootComponentChildAllocationView,
+) -> bool {
+    let registry_matches = request.expected_registry == allocation.reserved_against_registry;
+    request.operation_id == allocation.operation_id
+        && request.component == allocation.component
+        && registry_matches
+        && request.child_role == allocation.child_role
 }
 
 fn validate_partition(

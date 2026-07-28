@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.35`.
-- The latest published release is `v0.100.35` at
-  `fa24af81d2b3040570914bf5ca0a0e228b14afeb`.
-- Open `0.100.36` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.36`.
+- The latest published release is `v0.100.36` at
+  `8fbc2438bf772e211939d4bf79b7e7459d4b469f`.
+- Open `0.100.37` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -354,12 +354,22 @@ Historical detail is archived at:
   canonical order and calls the sole terminal publication gate. A normal
   fresh install succeeds only after its Coordinator-anchored Fleet catalog
   row is durable or exactly adopted.
-- Open `0.100.36` freezes one pure direct-child reservation decision shared by
+- Released `0.100.36` freezes one pure direct-child reservation decision shared by
   direct Component and registered descendant parents. It requires the exact
   immediate-parent caller, protected Component tree, current Registry
   authority, active prerequisite evidence and role-to-role spawn grant, then
   checks per-parent, Component-descendant and root managed-Canister capacity.
   It does not yet persist a child or perform a paid Canister effect.
+- Open `0.100.37` persists that decision as one exact parent-authenticated
+  reservation before any paid effect. The Component-first Registry collection
+  now retains operation-keyed reservations and parent-role counts, while
+  checked mutations reserve Component/root descendant and Registry-byte
+  capacity exactly once across interruption retry. Reservation does not add a
+  Registry member or advance its head/Directory. Public internal root
+  allocate/status endpoints authenticate the exact registered parent in
+  workflow and remain fenced while the root is only `Prepared`. Child
+  creation, Store-backed installation and normalized member commitment are
+  next.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1681,17 +1691,22 @@ root and an exact active Component Registry partition, while the real
 Registry-created issuer exercises claim rejection and guard metrics without a
 static bootstrap fixture.
 
-Next, persist exact operation-keyed child reservations plus normalized
-principal, parent, role and count indexes in the root-owned Component
-Registry, then expose the authenticated parent-to-root reservation endpoint
-through workflow. Keep creation/install as the following effect slice so
-durable same-release retry is proved before any paid call. Reuse the existing
-Store-bound install, Directory, runtime and membership path; retain the exact
-immediate parent and enforce the declared role-to-role spawn grant. Do not
-let managed application Canisters create through management directly, infer
-authorization from flat catalog presence, revive the removed single-root
-resolver, permit nested Component declarations, merge roots belonging to
-different Fleets on one Subnet or consume an earlier installation.
+The root now also persists exact operation-keyed child reservations and
+parent-role counts in its Component-first Registry collection. Public
+allocate/status endpoints authenticate the caller as the exact registered
+parent, reserve Component/root descendant and Registry-byte capacity once and
+survive interruption without changing the Component head or Directory.
+
+Next, consume that reservation through creation intent, root-executed paid
+Canister creation, exact Store-bound installation, independent verification
+and atomic normalized child-row/index commitment. Transfer reserved counts to
+committed counts and advance/distribute the Component Directory only after
+commit. Retain the exact immediate parent and declared role-to-role spawn
+grant. Do not let managed application Canisters create through management
+directly, infer authorization from flat catalog presence, revive the removed
+single-root resolver, permit nested Component declarations, merge roots
+belonging to different Fleets on one Subnet or consume an earlier
+installation.
 
 ## Historical Release Detail
 

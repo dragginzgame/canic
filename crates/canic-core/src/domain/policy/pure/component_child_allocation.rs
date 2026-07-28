@@ -85,6 +85,8 @@ pub struct ComponentChildAllocationDecision {
     pub child_role: CanisterRole,
     pub child_kind: ComponentChildKind,
     pub maximum_instances_per_parent: u32,
+    pub maximum_descendants: u32,
+    pub maximum_registry_bytes: u64,
 }
 
 ///
@@ -225,6 +227,8 @@ pub fn reserve_component_child(
         child_role: child.role.clone(),
         child_kind: child.kind,
         maximum_instances_per_parent: grant.maximum_instances_per_parent,
+        maximum_descendants: spec.limits.maximum_descendants,
+        maximum_registry_bytes: spec.limits.maximum_registry_bytes,
     })
 }
 
@@ -403,6 +407,8 @@ mod tests {
                 child_role,
                 child_kind: ComponentChildKind::Instance,
                 maximum_instances_per_parent: 10_000,
+                maximum_descendants: 20_000,
+                maximum_registry_bytes: 16_777_216,
             }
         );
     }

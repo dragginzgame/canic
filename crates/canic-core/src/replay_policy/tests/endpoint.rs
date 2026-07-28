@@ -230,6 +230,28 @@ fn root_component_creation_is_costed_and_response_idempotent() {
 }
 
 #[test]
+fn root_component_child_reservation_is_response_idempotent() {
+    let reservation = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_root_component_child_allocate")
+        .expect("root Component Child reservation policy entry");
+    let status = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_root_component_child_allocation_status")
+        .expect("root Component Child reservation status policy entry");
+
+    assert_eq!(
+        reservation.replay_policy,
+        ReplayPolicy::ResponseIdempotent {
+            command_kind: replay_command_kind("component_registry.allocate_child.v1"),
+        }
+    );
+    assert_eq!(reservation.cost_class, CostClass::None);
+    assert_eq!(status.replay_policy, ReplayPolicy::QueryOrReadOnly);
+    assert_eq!(status.endpoint_kind, EndpointKind::Query);
+}
+
+#[test]
 fn icp_refill_is_manifested_as_implemented_value_transfer() {
     let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()

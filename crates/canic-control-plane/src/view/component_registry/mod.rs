@@ -6,6 +6,7 @@
 
 use canic_core::{
     cdk::types::{Cycles, Principal},
+    control_plane_support::config::schema::ComponentChildKind,
     control_plane_support::model::replay::ReplayCostGuardSettlement,
     dto::{
         component_registry::{
@@ -74,6 +75,27 @@ pub struct RootComponentAllocationView {
     pub provisioning_origin: ComponentProvisioningOrigin,
     pub release_set: FleetSubnetRootReleaseSet,
     pub progress: RootComponentAllocationProgressView,
+}
+
+///
+/// RootComponentChildAllocationView
+///
+/// Read-only exact direct-child reservation inside one Component Registry partition.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentChildAllocationView {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub parent_canister_id: Principal,
+    pub parent_role: CanisterRole,
+    pub child_role: CanisterRole,
+    pub child_kind: ComponentChildKind,
+    pub maximum_instances_per_parent: u32,
+    pub maximum_descendants: u32,
+    pub maximum_registry_bytes: u64,
+    pub reserved_against_registry: ComponentRegistryHead,
+    pub release_set: FleetSubnetRootReleaseSet,
 }
 
 ///
@@ -191,5 +213,7 @@ pub struct ComponentRegistryPartitionView {
     pub revision: u64,
     pub content_hash: [u8; 32],
     pub directory_synchronized_at_ns: u64,
+    pub reserved_descendants: u32,
+    pub committed_descendants: u32,
     pub encoded_bytes: u64,
 }

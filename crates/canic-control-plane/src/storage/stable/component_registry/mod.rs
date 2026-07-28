@@ -13,11 +13,12 @@ use canic_core::{
     eager_static,
     role_contract::allocation::memory::control_plane::{
         ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_PRINCIPAL_INDEX_ID,
-        ROOT_COMPONENT_REGISTRY_META_ID, ROOT_COMPONENT_REGISTRY_PARTITIONS_ID,
+        ROOT_COMPONENT_REGISTRY_ENTRIES_ID, ROOT_COMPONENT_REGISTRY_META_ID,
     },
 };
 use canic_core::{
     cdk::types::{Cycles, Principal},
+    control_plane_support::config::schema::ComponentChildKind,
     control_plane_support::model::replay::ReplayCostGuardSettlement,
     dto::{
         component_registry::{
@@ -41,14 +42,16 @@ const ROOT_COMPONENT_REGISTRY_STATE_MAX_BYTES: u32 = 65_536;
 #[cfg(feature = "root-control-plane")]
 const ROOT_COMPONENT_ALLOCATION_RECORD_MAX_BYTES: u32 = 4_096;
 #[cfg(feature = "root-control-plane")]
-const COMPONENT_REGISTRY_PARTITION_RECORD_MAX_BYTES: u32 = 4_096;
+const COMPONENT_REGISTRY_ENTRY_KEY_MAX_BYTES: u32 = 512;
+#[cfg(feature = "root-control-plane")]
+const COMPONENT_REGISTRY_ENTRY_RECORD_MAX_BYTES: u32 = 4_096;
 
 #[cfg(feature = "root-control-plane")]
 struct RootComponentRegistryState;
 #[cfg(feature = "root-control-plane")]
 struct RootComponentAllocations;
 #[cfg(feature = "root-control-plane")]
-struct ComponentRegistryPartitions;
+struct ComponentRegistryEntries;
 #[cfg(feature = "root-control-plane")]
 struct ComponentRegistryPrincipalIndex;
 
@@ -69,18 +72,18 @@ eager_static! {
 
 #[cfg(feature = "root-control-plane")]
 eager_static! {
-    static COMPONENT_REGISTRY_PARTITIONS: RefCell<
+    static COMPONENT_REGISTRY_ENTRIES: RefCell<
         StableBtreeMap<
-            ComponentRegistryPartitionKey,
-            ComponentRegistryPartitionRecord,
+            ComponentRegistryEntryKey,
+            ComponentRegistryEntryRecord,
             VirtualMemory<DefaultMemoryImpl>,
         >,
     > = RefCell::new(StableBtreeMap::init(
         canic_core::ic_memory_key!(
             authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.component_registry_partitions.v1",
-            ty = ComponentRegistryPartitions,
-            id = ROOT_COMPONENT_REGISTRY_PARTITIONS_ID
+            key = "canic.control_plane.component_registry_entries.v1",
+            ty = ComponentRegistryEntries,
+            id = ROOT_COMPONENT_REGISTRY_ENTRIES_ID
         ),
     ));
 }
@@ -303,19 +306,91 @@ pub struct ComponentRegistryPartitionRecord {
     pub revision: u64,
     pub content_hash: [u8; 32],
     pub directory_synchronized_at_ns: u64,
+    pub reserved_descendants: u32,
+    pub committed_descendants: u32,
     pub encoded_bytes: u64,
+}
+
+///
+/// RootComponentChildAllocationRecord
+///
+/// Durable exact direct-child reservation inside one Component Registry partition.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentChildAllocationRecord {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub parent_canister_id: Principal,
+    pub parent_role: CanisterRole,
+    pub child_role: CanisterRole,
+    pub child_kind: ComponentChildKind,
+    pub maximum_instances_per_parent: u32,
+    pub maximum_descendants: u32,
+    pub maximum_registry_bytes: u64,
+    pub reserved_against_registry: ComponentRegistryHead,
+    pub release_set: FleetSubnetRootReleaseSet,
+}
+
+///
+/// ComponentRegistryParentRoleCountRecord
+///
+/// Exact reserved plus committed non-removed count for one parent and direct-child role.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentRegistryParentRoleCountRecord {
+    pub component: ComponentInstanceId,
+    pub parent_canister_id: Principal,
+    pub child_role: CanisterRole,
+    pub instances: u32,
+}
+
+///
+/// ComponentRegistryChildRecord
+///
+/// Normalized authoritative child row retained at any depth in one Component tree.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentRegistryChildRecord {
+    pub component: ComponentInstanceId,
+    pub canister_id: Principal,
+    pub parent_canister_id: Principal,
+    pub role: CanisterRole,
+    pub kind: ComponentChildKind,
+    pub installed_artifact_hash: [u8; 32],
+    pub status: ComponentLifecycleStatus,
+}
+
+///
+/// ComponentRegistryEntryRecord
+///
+/// One normalized partition, operation or index value in the Component-first Registry collection.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "stable Registry values retain direct canonical records without heap-indirection semantics"
+)]
+pub enum ComponentRegistryEntryRecord {
+    Partition(ComponentRegistryPartitionRecord),
+    Child(ComponentRegistryChildRecord),
+    ChildAllocation(RootComponentChildAllocationRecord),
+    ParentRoleCount(ComponentRegistryParentRoleCountRecord),
+}
+
+impl ComponentRegistryEntryRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "ComponentRegistryEntryRecord";
 }
 
 #[cfg(feature = "root-control-plane")]
 impl_storable_bounded!(
-    ComponentRegistryPartitionRecord,
-    COMPONENT_REGISTRY_PARTITION_RECORD_MAX_BYTES,
+    ComponentRegistryEntryRecord,
+    COMPONENT_REGISTRY_ENTRY_RECORD_MAX_BYTES,
     false
 );
-
-impl ComponentRegistryPartitionRecord {
-    pub const STATE_CONTRACT_NAME: &'static str = "ComponentRegistryPartitionRecord";
-}
 
 ///
 /// ComponentRegistryPrincipalIndexRecord
@@ -359,17 +434,66 @@ impl From<Principal> for ComponentRegistryPrincipalKey {
 #[cfg(feature = "root-control-plane")]
 impl_storable_bounded!(ComponentRegistryPrincipalKey, 128, false);
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-struct ComponentRegistryPartitionKey([u8; 32]);
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+struct ComponentRegistryEntryKey {
+    component: [u8; 32],
+    index: ComponentRegistryEntryIndexKey,
+}
 
-impl From<ComponentInstanceId> for ComponentRegistryPartitionKey {
-    fn from(value: ComponentInstanceId) -> Self {
-        Self(*value.as_bytes())
+impl ComponentRegistryEntryKey {
+    const fn partition(component: ComponentInstanceId) -> Self {
+        Self {
+            component: *component.as_bytes(),
+            index: ComponentRegistryEntryIndexKey::Partition,
+        }
+    }
+
+    const fn child_allocation(component: ComponentInstanceId, operation_id: [u8; 32]) -> Self {
+        Self {
+            component: *component.as_bytes(),
+            index: ComponentRegistryEntryIndexKey::ChildAllocation(operation_id),
+        }
+    }
+
+    fn child(component: ComponentInstanceId, canister_id: Principal) -> Self {
+        Self {
+            component: *component.as_bytes(),
+            index: ComponentRegistryEntryIndexKey::Child(canister_id.as_slice().to_vec()),
+        }
+    }
+
+    fn parent_role_count(
+        component: ComponentInstanceId,
+        parent_canister_id: Principal,
+        child_role: &CanisterRole,
+    ) -> Self {
+        Self {
+            component: *component.as_bytes(),
+            index: ComponentRegistryEntryIndexKey::ParentRoleCount {
+                parent_canister_id: parent_canister_id.as_slice().to_vec(),
+                child_role: child_role.clone(),
+            },
+        }
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+enum ComponentRegistryEntryIndexKey {
+    Partition,
+    Child(Vec<u8>),
+    ChildAllocation([u8; 32]),
+    ParentRoleCount {
+        parent_canister_id: Vec<u8>,
+        child_role: CanisterRole,
+    },
+}
+
 #[cfg(feature = "root-control-plane")]
-impl_storable_bounded!(ComponentRegistryPartitionKey, 128, false);
+impl_storable_bounded!(
+    ComponentRegistryEntryKey,
+    COMPONENT_REGISTRY_ENTRY_KEY_MAX_BYTES,
+    false
+);
 
 ///
 /// RootComponentRegistryStateRecord
@@ -404,6 +528,9 @@ pub struct RootComponentRegistryData {
     pub current: Option<RootComponentRegistryMetaRecord>,
     pub allocations: Vec<RootComponentAllocationRecord>,
     pub partitions: Vec<ComponentRegistryPartitionRecord>,
+    pub children: Vec<ComponentRegistryChildRecord>,
+    pub child_allocations: Vec<RootComponentChildAllocationRecord>,
+    pub parent_role_counts: Vec<ComponentRegistryParentRoleCountRecord>,
 }
 
 impl RootComponentRegistryData {
@@ -443,10 +570,12 @@ pub enum RootComponentRegistryCommitError {
 pub enum RootComponentAllocationCommitError {
     ComponentIdentityConflict,
     ComponentPrincipalConflict,
+    ConflictingChildEntry,
     ConflictingPartition,
     ConflictingOperation,
     ConflictingState,
     MissingOperation,
+    ParentPrincipalConflict,
     Uninitialized,
 }
 
@@ -481,8 +610,46 @@ impl RootComponentRegistryStore {
             current: cell.get().current.clone(),
             allocations: ROOT_COMPONENT_ALLOCATIONS
                 .with_borrow(|map| map.iter().map(|entry| entry.value()).collect()),
-            partitions: COMPONENT_REGISTRY_PARTITIONS
-                .with_borrow(|map| map.iter().map(|entry| entry.value()).collect()),
+            partitions: COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+                map.iter()
+                    .filter_map(|entry| match entry.value() {
+                        ComponentRegistryEntryRecord::Partition(record) => Some(record),
+                        ComponentRegistryEntryRecord::Child(_)
+                        | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                    })
+                    .collect()
+            }),
+            children: COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+                map.iter()
+                    .filter_map(|entry| match entry.value() {
+                        ComponentRegistryEntryRecord::Child(record) => Some(record),
+                        ComponentRegistryEntryRecord::Partition(_)
+                        | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                    })
+                    .collect()
+            }),
+            child_allocations: COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+                map.iter()
+                    .filter_map(|entry| match entry.value() {
+                        ComponentRegistryEntryRecord::ChildAllocation(record) => Some(record),
+                        ComponentRegistryEntryRecord::Partition(_)
+                        | ComponentRegistryEntryRecord::Child(_)
+                        | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                    })
+                    .collect()
+            }),
+            parent_role_counts: COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+                map.iter()
+                    .filter_map(|entry| match entry.value() {
+                        ComponentRegistryEntryRecord::ParentRoleCount(record) => Some(record),
+                        ComponentRegistryEntryRecord::Partition(_)
+                        | ComponentRegistryEntryRecord::Child(_)
+                        | ComponentRegistryEntryRecord::ChildAllocation(_) => None,
+                    })
+                    .collect()
+            }),
         })
     }
 
@@ -499,8 +666,16 @@ impl RootComponentRegistryStore {
 
     #[must_use]
     pub(crate) fn partitions() -> Vec<ComponentRegistryPartitionRecord> {
-        COMPONENT_REGISTRY_PARTITIONS
-            .with_borrow(|map| map.iter().map(|entry| entry.value()).collect())
+        COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+            map.iter()
+                .filter_map(|entry| match entry.value() {
+                    ComponentRegistryEntryRecord::Partition(record) => Some(record),
+                    ComponentRegistryEntryRecord::Child(_)
+                    | ComponentRegistryEntryRecord::ChildAllocation(_)
+                    | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                })
+                .collect()
+        })
     }
 
     pub(crate) fn replace_meta(
@@ -552,8 +727,79 @@ impl RootComponentRegistryStore {
     pub(crate) fn partition(
         component: ComponentInstanceId,
     ) -> Option<ComponentRegistryPartitionRecord> {
-        COMPONENT_REGISTRY_PARTITIONS
-            .with_borrow(|map| map.get(&ComponentRegistryPartitionKey::from(component)))
+        COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+            match map.get(&ComponentRegistryEntryKey::partition(component)) {
+                Some(ComponentRegistryEntryRecord::Partition(record)) => Some(record),
+                Some(
+                    ComponentRegistryEntryRecord::Child(_)
+                    | ComponentRegistryEntryRecord::ChildAllocation(_)
+                    | ComponentRegistryEntryRecord::ParentRoleCount(_),
+                )
+                | None => None,
+            }
+        })
+    }
+
+    #[must_use]
+    pub(crate) fn child_allocation(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+    ) -> Option<RootComponentChildAllocationRecord> {
+        COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+            match map.get(&ComponentRegistryEntryKey::child_allocation(
+                component,
+                operation_id,
+            )) {
+                Some(ComponentRegistryEntryRecord::ChildAllocation(record)) => Some(record),
+                Some(
+                    ComponentRegistryEntryRecord::Partition(_)
+                    | ComponentRegistryEntryRecord::Child(_)
+                    | ComponentRegistryEntryRecord::ParentRoleCount(_),
+                )
+                | None => None,
+            }
+        })
+    }
+
+    #[must_use]
+    pub(crate) fn child(
+        component: ComponentInstanceId,
+        canister_id: Principal,
+    ) -> Option<ComponentRegistryChildRecord> {
+        COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+            match map.get(&ComponentRegistryEntryKey::child(component, canister_id)) {
+                Some(ComponentRegistryEntryRecord::Child(record)) => Some(record),
+                Some(
+                    ComponentRegistryEntryRecord::Partition(_)
+                    | ComponentRegistryEntryRecord::ChildAllocation(_)
+                    | ComponentRegistryEntryRecord::ParentRoleCount(_),
+                )
+                | None => None,
+            }
+        })
+    }
+
+    #[must_use]
+    pub(crate) fn parent_role_count(
+        component: ComponentInstanceId,
+        parent_canister_id: Principal,
+        child_role: &CanisterRole,
+    ) -> Option<ComponentRegistryParentRoleCountRecord> {
+        COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+            match map.get(&ComponentRegistryEntryKey::parent_role_count(
+                component,
+                parent_canister_id,
+                child_role,
+            )) {
+                Some(ComponentRegistryEntryRecord::ParentRoleCount(record)) => Some(record),
+                Some(
+                    ComponentRegistryEntryRecord::Partition(_)
+                    | ComponentRegistryEntryRecord::Child(_)
+                    | ComponentRegistryEntryRecord::ChildAllocation(_),
+                )
+                | None => None,
+            }
+        })
     }
 
     #[must_use]
@@ -595,6 +841,115 @@ impl RootComponentRegistryStore {
 
             ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(|map| {
                 map.insert(key, record);
+            });
+            state.current = Some(next_meta);
+            cell.set(state);
+            Ok(RootComponentRegistryCommitOutcome::Committed)
+        })
+    }
+
+    pub(crate) fn reserve_child_allocation(
+        expected_meta: &RootComponentRegistryMetaRecord,
+        next_meta: RootComponentRegistryMetaRecord,
+        expected_partition: &ComponentRegistryPartitionRecord,
+        next_partition: ComponentRegistryPartitionRecord,
+        record: RootComponentChildAllocationRecord,
+        expected_parent_role_count: Option<&ComponentRegistryParentRoleCountRecord>,
+        next_parent_role_count: ComponentRegistryParentRoleCountRecord,
+    ) -> Result<RootComponentRegistryCommitOutcome, RootComponentAllocationCommitError> {
+        let component = record.component;
+        let operation_key =
+            ComponentRegistryEntryKey::child_allocation(component, record.operation_id);
+        let count_key = ComponentRegistryEntryKey::parent_role_count(
+            component,
+            record.parent_canister_id,
+            &record.child_role,
+        );
+        if expected_partition.binding.component != component
+            || next_partition.binding.component != component
+            || next_parent_role_count.component != component
+            || next_parent_role_count.parent_canister_id != record.parent_canister_id
+            || next_parent_role_count.child_role != record.child_role
+        {
+            return Err(RootComponentAllocationCommitError::ConflictingChildEntry);
+        }
+
+        ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            let current_meta = state
+                .current
+                .as_ref()
+                .ok_or(RootComponentAllocationCommitError::Uninitialized)?;
+            if let Some(existing) =
+                COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| map.get(&operation_key))
+            {
+                return match existing {
+                    ComponentRegistryEntryRecord::ChildAllocation(existing)
+                        if existing == record =>
+                    {
+                        Ok(RootComponentRegistryCommitOutcome::Existing)
+                    }
+                    ComponentRegistryEntryRecord::Partition(_)
+                    | ComponentRegistryEntryRecord::Child(_)
+                    | ComponentRegistryEntryRecord::ChildAllocation(_)
+                    | ComponentRegistryEntryRecord::ParentRoleCount(_) => {
+                        Err(RootComponentAllocationCommitError::ConflictingOperation)
+                    }
+                };
+            }
+            if current_meta != expected_meta {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            let current_partition = COMPONENT_REGISTRY_ENTRIES
+                .with_borrow(|map| {
+                    map.get(&ComponentRegistryEntryKey::partition(component))
+                        .and_then(|entry| match entry {
+                            ComponentRegistryEntryRecord::Partition(record) => Some(record),
+                            ComponentRegistryEntryRecord::Child(_)
+                            | ComponentRegistryEntryRecord::ChildAllocation(_)
+                            | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                        })
+                })
+                .ok_or(RootComponentAllocationCommitError::ConflictingPartition)?;
+            if &current_partition != expected_partition {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            let current_count = COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+                map.get(&count_key).and_then(|entry| match entry {
+                    ComponentRegistryEntryRecord::ParentRoleCount(record) => Some(record),
+                    ComponentRegistryEntryRecord::Partition(_)
+                    | ComponentRegistryEntryRecord::Child(_)
+                    | ComponentRegistryEntryRecord::ChildAllocation(_) => None,
+                })
+            });
+            if current_count.as_ref() != expected_parent_role_count {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            if COMPONENT_REGISTRY_PRINCIPAL_INDEX
+                .with_borrow(|map| {
+                    map.get(&ComponentRegistryPrincipalKey::from(
+                        record.parent_canister_id,
+                    ))
+                })
+                .map(|indexed| indexed.component)
+                != Some(component)
+            {
+                return Err(RootComponentAllocationCommitError::ParentPrincipalConflict);
+            }
+
+            COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
+                map.insert(
+                    operation_key,
+                    ComponentRegistryEntryRecord::ChildAllocation(record),
+                );
+                map.insert(
+                    count_key,
+                    ComponentRegistryEntryRecord::ParentRoleCount(next_parent_role_count),
+                );
+                map.insert(
+                    ComponentRegistryEntryKey::partition(component),
+                    ComponentRegistryEntryRecord::Partition(next_partition),
+                );
             });
             state.current = Some(next_meta);
             cell.set(state);
@@ -672,8 +1027,8 @@ impl RootComponentRegistryStore {
             if &current_record != expected_record {
                 return Err(RootComponentAllocationCommitError::ConflictingState);
             }
-            if COMPONENT_REGISTRY_PARTITIONS
-                .with_borrow(|map| map.get(&ComponentRegistryPartitionKey::from(component)))
+            if COMPONENT_REGISTRY_ENTRIES
+                .with_borrow(|map| map.get(&ComponentRegistryEntryKey::partition(component)))
                 .is_some()
             {
                 return Err(RootComponentAllocationCommitError::ConflictingPartition);
@@ -685,8 +1040,11 @@ impl RootComponentRegistryStore {
                 return Err(RootComponentAllocationCommitError::ComponentPrincipalConflict);
             }
 
-            COMPONENT_REGISTRY_PARTITIONS.with_borrow_mut(|map| {
-                map.insert(ComponentRegistryPartitionKey::from(component), partition);
+            COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
+                map.insert(
+                    ComponentRegistryEntryKey::partition(component),
+                    ComponentRegistryEntryRecord::Partition(partition),
+                );
             });
             COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow_mut(|map| {
                 map.insert(
@@ -735,8 +1093,16 @@ impl RootComponentRegistryStore {
             let current_record = ROOT_COMPONENT_ALLOCATIONS
                 .with_borrow(|map| map.get(&operation_key))
                 .ok_or(RootComponentAllocationCommitError::MissingOperation)?;
-            let current_partition = COMPONENT_REGISTRY_PARTITIONS
-                .with_borrow(|map| map.get(&ComponentRegistryPartitionKey::from(component)))
+            let current_partition = COMPONENT_REGISTRY_ENTRIES
+                .with_borrow(|map| {
+                    map.get(&ComponentRegistryEntryKey::partition(component))
+                        .and_then(|entry| match entry {
+                            ComponentRegistryEntryRecord::Partition(record) => Some(record),
+                            ComponentRegistryEntryRecord::Child(_)
+                            | ComponentRegistryEntryRecord::ChildAllocation(_)
+                            | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                        })
+                })
                 .ok_or(RootComponentAllocationCommitError::ConflictingPartition)?;
             if &current_record != expected_record || &current_partition != expected_partition {
                 return Err(RootComponentAllocationCommitError::ConflictingState);
@@ -745,10 +1111,10 @@ impl RootComponentRegistryStore {
             ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(|map| {
                 map.insert(operation_key, next_record);
             });
-            COMPONENT_REGISTRY_PARTITIONS.with_borrow_mut(|map| {
+            COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
                 map.insert(
-                    ComponentRegistryPartitionKey::from(component),
-                    next_partition,
+                    ComponentRegistryEntryKey::partition(component),
+                    ComponentRegistryEntryRecord::Partition(next_partition),
                 );
             });
             state.current = Some(next_meta);
@@ -770,8 +1136,30 @@ impl RootComponentRegistryStore {
 
     #[must_use]
     pub(crate) fn partition_entry_bytes(record: &ComponentRegistryPartitionRecord) -> u64 {
-        let key = ComponentRegistryPartitionKey::from(record.binding.component);
-        (key.to_bytes().len() + record.to_bytes().len()) as u64
+        let key = ComponentRegistryEntryKey::partition(record.binding.component);
+        let value = ComponentRegistryEntryRecord::Partition(record.clone());
+        (key.to_bytes().len() + value.to_bytes().len()) as u64
+    }
+
+    #[must_use]
+    pub(crate) fn child_allocation_entry_bytes(record: &RootComponentChildAllocationRecord) -> u64 {
+        let key =
+            ComponentRegistryEntryKey::child_allocation(record.component, record.operation_id);
+        let value = ComponentRegistryEntryRecord::ChildAllocation(record.clone());
+        (key.to_bytes().len() + value.to_bytes().len()) as u64
+    }
+
+    #[must_use]
+    pub(crate) fn parent_role_count_entry_bytes(
+        record: &ComponentRegistryParentRoleCountRecord,
+    ) -> u64 {
+        let key = ComponentRegistryEntryKey::parent_role_count(
+            record.component,
+            record.parent_canister_id,
+            &record.child_role,
+        );
+        let value = ComponentRegistryEntryRecord::ParentRoleCount(record.clone());
+        (key.to_bytes().len() + value.to_bytes().len()) as u64
     }
 
     #[must_use]
@@ -795,18 +1183,60 @@ impl RootComponentRegistryStore {
                 );
             });
         }
-        COMPONENT_REGISTRY_PARTITIONS.with_borrow_mut(StableBtreeMap::clear_new);
+        COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(StableBtreeMap::clear_new);
         COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow_mut(StableBtreeMap::clear_new);
         for record in data.partitions {
             let component = record.binding.component;
             let canister = record.binding.canister_id;
-            COMPONENT_REGISTRY_PARTITIONS.with_borrow_mut(|map| {
-                map.insert(ComponentRegistryPartitionKey::from(component), record);
+            COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
+                map.insert(
+                    ComponentRegistryEntryKey::partition(component),
+                    ComponentRegistryEntryRecord::Partition(record),
+                );
             });
             COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow_mut(|map| {
                 map.insert(
                     ComponentRegistryPrincipalKey::from(canister),
                     ComponentRegistryPrincipalIndexRecord { component },
+                );
+            });
+        }
+        for record in data.children {
+            let component = record.component;
+            let canister = record.canister_id;
+            COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
+                map.insert(
+                    ComponentRegistryEntryKey::child(component, canister),
+                    ComponentRegistryEntryRecord::Child(record),
+                );
+            });
+            COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow_mut(|map| {
+                map.insert(
+                    ComponentRegistryPrincipalKey::from(canister),
+                    ComponentRegistryPrincipalIndexRecord { component },
+                );
+            });
+        }
+        for record in data.child_allocations {
+            COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
+                map.insert(
+                    ComponentRegistryEntryKey::child_allocation(
+                        record.component,
+                        record.operation_id,
+                    ),
+                    ComponentRegistryEntryRecord::ChildAllocation(record),
+                );
+            });
+        }
+        for record in data.parent_role_counts {
+            COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
+                map.insert(
+                    ComponentRegistryEntryKey::parent_role_count(
+                        record.component,
+                        record.parent_canister_id,
+                        &record.child_role,
+                    ),
+                    ComponentRegistryEntryRecord::ParentRoleCount(record),
                 );
             });
         }

@@ -17,8 +17,9 @@ use canic_core::{
             ComponentDirectoryHead, ComponentDirectoryHeadRequest,
             ComponentRegistryPartitionRequest, ComponentRegistryPartitionResponse,
             RootComponentAllocationRequest, RootComponentAllocationResponse,
-            RootComponentAllocationStatusRequest, RootComponentCommitRequest,
-            RootComponentCommitResponse, RootComponentCreationRequest,
+            RootComponentAllocationStatusRequest, RootComponentChildAllocationRequest,
+            RootComponentChildAllocationResponse, RootComponentChildAllocationStatusRequest,
+            RootComponentCommitRequest, RootComponentCommitResponse, RootComponentCreationRequest,
             RootComponentDirectoryPreparationRequest, RootComponentDirectoryPreparationResponse,
             RootComponentInstallRequest, RootComponentMembershipActivationRequest,
             RootComponentMembershipActivationResponse, RootComponentRegistryPreparationRequest,
@@ -134,6 +135,20 @@ impl LifecycleApi {
         request: RootComponentAllocationStatusRequest,
     ) -> Result<RootComponentAllocationResponse, canic_core::dto::error::Error> {
         crate::workflow::component_registry::allocation_status(request).map_err(Into::into)
+    }
+
+    pub async fn reserve_component_child(
+        request: RootComponentChildAllocationRequest,
+    ) -> Result<RootComponentChildAllocationResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::reserve_child_allocation(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub fn component_child_allocation_status(
+        request: RootComponentChildAllocationStatusRequest,
+    ) -> Result<RootComponentChildAllocationResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::child_allocation_status(request).map_err(Into::into)
     }
 
     pub async fn create_component_allocation(

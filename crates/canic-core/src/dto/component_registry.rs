@@ -6,6 +6,7 @@
 
 use crate::{
     cdk::types::Cycles,
+    config::schema::ComponentChildKind,
     dto::{
         fleet_registry::{FleetDirectorySnapshot, FleetRegistryVersion},
         root_store::RootStoreBootstrapRequest,
@@ -88,6 +89,32 @@ pub struct RootComponentAllocationRequest {
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentAllocationStatusRequest {
     pub operation_id: [u8; 32],
+}
+
+///
+/// RootComponentChildAllocationRequest
+///
+/// Parent command naming one idempotent direct-child reservation intent.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentChildAllocationRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub expected_registry: ComponentRegistryHead,
+    pub child_role: CanisterRole,
+}
+
+///
+/// RootComponentChildAllocationStatusRequest
+///
+/// Parent lookup key for one durable direct-child reservation.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentChildAllocationStatusRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
 }
 
 ///
@@ -235,6 +262,8 @@ pub struct ComponentRegistryPartitionResponse {
     pub provisioning_origin: ComponentProvisioningOrigin,
     pub release_set: FleetSubnetRootReleaseSet,
     pub status: ComponentLifecycleStatus,
+    pub reserved_descendants: u32,
+    pub committed_descendants: u32,
     pub encoded_bytes: u64,
 }
 
@@ -413,6 +442,27 @@ pub struct RootComponentAllocationResponse {
     pub phase: RootComponentAllocationPhase,
     pub creation: Option<RootComponentCreationEvidence>,
     pub installation: Option<RootComponentInstallEvidence>,
+}
+
+///
+/// RootComponentChildAllocationResponse
+///
+/// Durable direct-child reservation returned identically for exact parent retry.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentChildAllocationResponse {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub parent_canister_id: Principal,
+    pub parent_role: CanisterRole,
+    pub child_role: CanisterRole,
+    pub child_kind: ComponentChildKind,
+    pub maximum_instances_per_parent: u32,
+    pub maximum_descendants: u32,
+    pub maximum_registry_bytes: u64,
+    pub reserved_against_registry: ComponentRegistryHead,
+    pub release_set: FleetSubnetRootReleaseSet,
 }
 
 ///
@@ -629,6 +679,8 @@ mod tests {
                 provisioning_origin,
                 release_set,
                 status: ComponentLifecycleStatus::Prepared,
+                reserved_descendants: 0,
+                committed_descendants: 0,
                 encoded_bytes: 2_048,
             },
             directory: ComponentDirectoryHead {
@@ -679,6 +731,65 @@ mod tests {
             candid::decode_one::<RootComponentCreationRequest>(&bytes)
                 .expect("decode creation request"),
             request
+        );
+    }
+
+    #[test]
+    fn component_child_reservation_contracts_round_trip_through_candid() {
+        let component = ComponentInstanceId::from_generated_bytes([11; 32]);
+        let registry = ComponentRegistryHead {
+            component,
+            revision: 2,
+            content_hash: [12; 32],
+        };
+        let request = RootComponentChildAllocationRequest {
+            operation_id: [13; 32],
+            component,
+            expected_registry: registry.clone(),
+            child_role: CanisterRole::new("project_instance"),
+        };
+        let status_request = RootComponentChildAllocationStatusRequest {
+            operation_id: request.operation_id,
+            component,
+        };
+        let response = RootComponentChildAllocationResponse {
+            operation_id: request.operation_id,
+            component,
+            parent_canister_id: Principal::from_slice(&[14; 29]),
+            parent_role: CanisterRole::new("project_hub"),
+            child_role: request.child_role.clone(),
+            child_kind: ComponentChildKind::Instance,
+            maximum_instances_per_parent: 10_000,
+            maximum_descendants: 20_000,
+            maximum_registry_bytes: 16_777_216,
+            reserved_against_registry: registry,
+            release_set: FleetSubnetRootReleaseSet {
+                release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
+                    [15; 32],
+                )),
+                manifest_digest: ReleaseSetDigest::from_bytes([16; 32]),
+            },
+        };
+
+        let request_bytes = candid::encode_one(&request).expect("encode child reservation");
+        let status_bytes =
+            candid::encode_one(status_request).expect("encode child reservation status");
+        let response_bytes = candid::encode_one(&response).expect("encode child response");
+
+        assert_eq!(
+            candid::decode_one::<RootComponentChildAllocationRequest>(&request_bytes)
+                .expect("decode child reservation"),
+            request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentChildAllocationStatusRequest>(&status_bytes)
+                .expect("decode child reservation status"),
+            status_request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentChildAllocationResponse>(&response_bytes)
+                .expect("decode child response"),
+            response
         );
     }
 
