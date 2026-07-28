@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.38` advances exact direct-child reservations through Store-bound,
+  cost-guarded root creation with durable intent, sole-root control and
+  interruption-safe principal evidence.
+
 - `0.100.37` persists exact parent-authenticated direct-child reservations,
   per-parent role counts and Component/root descendant capacity before any
   child Canister effect.

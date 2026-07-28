@@ -6,9 +6,9 @@ Date: 2026-07-28
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.36`.
-- Latest published release: `v0.100.36`.
-- Open patch draft: `0.100.37`; no package-version change has been authorized.
+- Workspace package version: `0.100.37`.
+- Latest published release: `v0.100.37`.
+- Open patch draft: `0.100.38`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -156,8 +156,10 @@ Registry slices replace the 0.99 root model.
   per-parent, Component-descendant and root managed-Canister authority.
 - [x] Implement the authenticated parent-to-root child reservation boundary
   for direct Component and registered descendant parents.
-- [ ] Implement child creation, installation and Registry commitment at
-  arbitrary depth.
+- [x] Implement root-executed child creation from an exact durable reservation
+  at arbitrary depth.
+- [ ] Implement child installation and Registry commitment at arbitrary
+  depth.
 - [ ] Make the Fleet Subnet Root the required lifecycle controller and retain
   authoritative idempotent receipts.
 - [ ] Resolve lifecycle artifacts only through the active release set.
@@ -598,7 +600,7 @@ role-to-role spawn grant, then checks the per-parent, Component-descendant and
 root managed-Canister ceilings before returning normalized facts for a later
 durable mutation. It does not yet persist a child or perform a paid effect.
 
-Open 0.100.37 persists that decision before any paid call. A public internal
+Released 0.100.37 persists that decision before any paid call. A public internal
 root workflow resolves the exact caller through the Component principal index,
 binds each operation to its original Component Registry head, parent, child
 role, release set and grant ceiling, and atomically increments the
@@ -607,16 +609,25 @@ Registry-byte ledgers. Exact retry after interruption returns the original
 reservation without charging twice. The Component-first stable collection
 now carries partitions, child-row schema, reservations and parent-role counts;
 reservation alone does not add a member or advance the Component
-Registry/Directory head. Child creation, installation and commitment remain
+Registry/Directory head.
+
+Open 0.100.38 consumes one such reservation through Store-bound,
+cost-guarded empty-Canister creation. The same registered immediate parent
+must call the public internal endpoint. Before the management effect the root
+persists the exact Store payload, initial cycles, sole-root controller, replay
+settlement and terminal Registry-byte charge as `CreationIntent`; the returned
+principal advances the operation to `Created` and increments known-created
+inventory exactly once. An unresolved intent is never blindly repeated.
+Installation, live verification and normalized child commitment remain
 outside this batch.
 
 ## Next Action
 
-Consume one exact durable child reservation through creation intent, paid
-Canister creation, Store-backed installation, independent verification and
-normalized child-row commitment. Insert the principal and parent/role
-traversal indexes atomically with commitment, transfer reserved counts to
-committed counts and advance the Component Registry/Directory authority.
+Install one exactly created child from its frozen root-local Store artifact,
+independently verify its live module, sole root controller and retained child
+binding, then atomically commit the normalized child row plus principal and
+parent/role traversal indexes. Transfer reserved counts to committed counts
+and advance the Component Registry/Directory authority only at commitment.
 Reconcile uncertain calls from durable intent and observation; do not
 introduce nested Component declarations, let application Canisters call
 management creation directly or infer authorization from catalog presence

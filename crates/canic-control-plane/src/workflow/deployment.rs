@@ -28,6 +28,8 @@ pub const BOOTSTRAP_WASM_STORE_CREATE_COMMAND_KIND: &str =
 pub const PUBLICATION_WASM_STORE_CREATE_COMMAND_KIND: &str =
     "management.control_plane.publication_wasm_store_create.v1";
 pub const COMPONENT_CREATE_COMMAND_KIND: &str = "management.control_plane.component_create.v1";
+pub const COMPONENT_CHILD_CREATE_COMMAND_KIND: &str =
+    "management.control_plane.component_child_create.v1";
 pub const COMPONENT_INSTALL_COMMAND_KIND: &str = "management.control_plane.component_install.v1";
 
 pub async fn create_canister_with_deployment_guard(
@@ -85,6 +87,18 @@ pub fn reserve_component_creation_cost_guard(
     let root = IcOps::canister_self();
     reserve_control_plane_deployment_cost_guard(
         COMPONENT_CREATE_COMMAND_KIND,
+        root,
+        root,
+        initial_cycles.to_u128(),
+    )
+}
+
+pub fn reserve_component_child_creation_cost_guard(
+    initial_cycles: &canic_core::cdk::types::Cycles,
+) -> Result<CostGuardPermit, InternalError> {
+    let root = IcOps::canister_self();
+    reserve_control_plane_deployment_cost_guard(
+        COMPONENT_CHILD_CREATE_COMMAND_KIND,
         root,
         root,
         initial_cycles.to_u128(),

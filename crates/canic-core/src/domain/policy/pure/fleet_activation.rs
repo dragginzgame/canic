@@ -32,6 +32,7 @@ use thiserror::Error as ThisError;
 #[cfg(test)]
 use crate::protocol::{
     CANIC_ROOT_COMPONENT_CHILD_ALLOCATE, CANIC_ROOT_COMPONENT_CHILD_ALLOCATION_STATUS,
+    CANIC_ROOT_COMPONENT_CHILD_CREATE,
 };
 
 ///
@@ -236,6 +237,7 @@ mod tests {
                 CANIC_ROOT_COMPONENT_CHILD_ALLOCATION_STATUS,
                 EndpointCallKind::Query,
             ),
+            (CANIC_ROOT_COMPONENT_CHILD_CREATE, EndpointCallKind::Update),
             (CANIC_FLEET_SUBNET_ROOT_AUTHORITY, EndpointCallKind::Update),
             (
                 CANIC_FLEET_ACTIVATION_STATUS,
