@@ -227,7 +227,7 @@ mod tests {
         let response_bytes = candid::encode_one(&response).expect("encode response");
         let allocation_bytes = candid::encode_one(&allocation).expect("encode allocation");
         let creation_request_bytes =
-            candid::encode_one(&creation_request).expect("encode creation request");
+            candid::encode_one(creation_request).expect("encode creation request");
         let created_bytes = candid::encode_one(&created).expect("encode created allocation");
 
         assert_eq!(

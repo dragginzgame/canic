@@ -642,7 +642,7 @@ mod tests {
             .expect("creation capacity");
         let intent = ComponentRegistryOps::begin_creation(
             [12; 32],
-            plan.clone(),
+            plan,
             ReplayCostGuardSettlement {
                 quota_intent_id: IntentId(16),
                 reservation_intent_id: IntentId(17),
