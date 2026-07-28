@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.24` atomically commits verified top-level Components into normalized,
+  independently hashed root-local Registry partitions and derives their first
+  ownership-preserving Directory heads with exact retry and capacity accounting.
+
 - `0.100.23` installs each created top-level Component from its exact
   root-local Store, hard-cuts managed init to immutable Registry bindings and
   independently verifies live module, controller and retained-binding

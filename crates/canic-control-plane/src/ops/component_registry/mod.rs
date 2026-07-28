@@ -6,14 +6,16 @@
 
 use crate::{
     storage::stable::component_registry::{
-        RootComponentAllocationCommitError, RootComponentAllocationProgressRecord,
-        RootComponentAllocationRecord, RootComponentCreationEffectRecord,
+        ComponentRegistryPartitionRecord, RootComponentAllocationCommitError,
+        RootComponentAllocationProgressRecord, RootComponentAllocationRecord,
+        RootComponentCommitmentRecord, RootComponentCreationEffectRecord,
         RootComponentInstallEffectRecord, RootComponentRegistryCommitError,
         RootComponentRegistryMetaRecord, RootComponentRegistryStore,
     },
     view::component_registry::{
-        RootComponentAllocationProgressView, RootComponentAllocationView,
-        RootComponentCreationEffectView, RootComponentInstallEffectView, RootComponentRegistryView,
+        ComponentRegistryPartitionView, RootComponentAllocationProgressView,
+        RootComponentAllocationView, RootComponentCommitmentView, RootComponentCreationEffectView,
+        RootComponentInstallEffectView, RootComponentRegistryView,
     },
 };
 use canic_core::{
@@ -23,7 +25,10 @@ use canic_core::{
         policy::component_allocation::TopLevelComponentAllocationDecision,
     },
     dto::{
-        component_registry::ComponentProvisioningOrigin, fleet_registry::FleetRegistryVersion,
+        component_registry::{
+            ComponentLifecycleStatus, ComponentProvisioningOrigin, ComponentRegistryHead,
+        },
+        fleet_registry::FleetRegistryVersion,
         root_store::RootStoreBootstrapRequest,
     },
     ids::{
@@ -31,6 +36,7 @@ use canic_core::{
         IntentId,
     },
 };
+use sha2::{Digest, Sha256};
 
 ///
 /// ComponentRegistryOps
@@ -78,6 +84,7 @@ pub struct RootComponentInstallPlan {
     pub raw_module_hash: [u8; 32],
     pub chunk_hashes: Vec<Vec<u8>>,
     pub binding: ComponentBinding,
+    pub maximum_registry_bytes: u64,
 }
 
 impl ComponentRegistryOps {
@@ -117,7 +124,7 @@ impl ComponentRegistryOps {
     pub(crate) fn component_spec_counts(
         component_spec: &ComponentSpecId,
     ) -> Result<ComponentSpecInstanceCounts, InternalError> {
-        let reserved = RootComponentRegistryStore::allocation_count(component_spec);
+        let (reserved, committed) = RootComponentRegistryStore::allocation_counts(component_spec);
         Ok(ComponentSpecInstanceCounts {
             reserved: u32::try_from(reserved).map_err(|_| {
                 InternalError::invariant(
@@ -125,7 +132,12 @@ impl ComponentRegistryOps {
                     "root Component reservation count exceeds u32",
                 )
             })?,
-            committed: 0,
+            committed: u32::try_from(committed).map_err(|_| {
+                InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "root committed Component count exceeds u32",
+                )
+            })?,
         })
     }
 
@@ -291,11 +303,15 @@ impl ComponentRegistryOps {
             }
             | RootComponentAllocationProgressRecord::Verified {
                 canister: existing, ..
+            }
+            | RootComponentAllocationProgressRecord::Committed {
+                canister: existing, ..
             } if existing == &canister => return Ok(allocation_record_to_view(record)),
             RootComponentAllocationProgressRecord::Created { .. }
             | RootComponentAllocationProgressRecord::InstallIntent { .. }
             | RootComponentAllocationProgressRecord::Installed { .. }
-            | RootComponentAllocationProgressRecord::Verified { .. } => {
+            | RootComponentAllocationProgressRecord::Verified { .. }
+            | RootComponentAllocationProgressRecord::Committed { .. } => {
                 return Err(InternalError::conflict(
                     "Component allocation is already bound to a different created Canister",
                 ));
@@ -451,6 +467,126 @@ impl ComponentRegistryOps {
     ) -> Result<RootComponentAllocationView, InternalError> {
         advance_install_phase(operation_id, true)
     }
+
+    pub(crate) fn partition(
+        component: canic_core::ids::ComponentInstanceId,
+    ) -> Result<Option<ComponentRegistryPartitionView>, InternalError> {
+        let Some(record) = RootComponentRegistryStore::partition(component) else {
+            return Ok(None);
+        };
+        validate_partition_record(&record)?;
+        Ok(Some(partition_record_to_view(record)))
+    }
+
+    pub(crate) fn component_for_principal(
+        canister: Principal,
+    ) -> Option<canic_core::ids::ComponentInstanceId> {
+        RootComponentRegistryStore::component_for_principal(canister)
+    }
+
+    pub(crate) fn commit_verified(
+        operation_id: [u8; 32],
+        directory_synchronized_at_ns: u64,
+        maximum_component_registry_bytes: u64,
+    ) -> Result<(RootComponentAllocationView, ComponentRegistryPartitionView), InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
+            InternalError::unavailable("Component allocation operation has not been reserved")
+        })?;
+        if let RootComponentAllocationProgressRecord::Committed { commitment, .. } =
+            &record.progress
+        {
+            let partition = exact_committed_partition(&record, commitment)?;
+            return Ok((
+                allocation_record_to_view(record),
+                partition_record_to_view(partition),
+            ));
+        }
+        if directory_synchronized_at_ns == 0 {
+            return Err(InternalError::invalid_input(
+                "Component Directory synchronization timestamp must be positive",
+            ));
+        }
+        let RootComponentAllocationProgressRecord::Verified {
+            creation,
+            canister,
+            installation,
+        } = &record.progress
+        else {
+            return Err(InternalError::conflict(
+                "Component allocation is not ready for Registry commitment",
+            ));
+        };
+
+        let (next_record, partition) = committed_records(
+            &record,
+            creation,
+            *canister,
+            installation,
+            directory_synchronized_at_ns,
+        )?;
+        if partition.encoded_bytes > installation.charged_entry_bytes {
+            return Err(InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component commitment exceeds its pre-install Registry byte reservation",
+            ));
+        }
+        if partition.encoded_bytes > maximum_component_registry_bytes {
+            return Err(InternalError::resource_exhausted(format!(
+                "Component Registry commitment requires {} bytes, exceeding protected Component limit {maximum_component_registry_bytes}",
+                partition.encoded_bytes
+            )));
+        }
+        let encoded_bytes = current
+            .encoded_bytes
+            .checked_sub(installation.charged_entry_bytes)
+            .and_then(|value| value.checked_add(partition.encoded_bytes))
+            .ok_or_else(|| {
+                InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "root Component Registry byte accounting cannot commit its reserved partition",
+                )
+            })?;
+        if encoded_bytes > current.root.limits.maximum_registry_bytes {
+            return Err(InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "pre-install Registry reservation exceeds the protected root limit at commitment",
+            ));
+        }
+
+        let mut next_meta = current.clone();
+        next_meta.reserved_component_instances = next_meta
+            .reserved_component_instances
+            .checked_sub(1)
+            .ok_or_else(|| {
+                InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "root reserved Component count is zero at commitment",
+                )
+            })?;
+        next_meta.committed_component_instances = next_meta
+            .committed_component_instances
+            .checked_add(1)
+            .ok_or_else(|| {
+                InternalError::resource_exhausted("committed Component instance count overflow")
+            })?;
+        next_meta.encoded_bytes = encoded_bytes;
+
+        RootComponentRegistryStore::commit_component(
+            &current,
+            next_meta,
+            &record,
+            next_record.clone(),
+            partition.clone(),
+        )
+        .map_err(map_allocation_commit_error)?;
+        Ok((
+            allocation_record_to_view(next_record),
+            partition_record_to_view(partition),
+        ))
+    }
 }
 
 fn record_to_view(record: RootComponentRegistryMetaRecord) -> RootComponentRegistryView {
@@ -519,6 +655,17 @@ fn allocation_record_to_view(record: RootComponentAllocationRecord) -> RootCompo
                 canister,
                 installation: install_effect_record_to_view(installation),
             },
+            RootComponentAllocationProgressRecord::Committed {
+                creation,
+                canister,
+                installation,
+                commitment,
+            } => RootComponentAllocationProgressView::Committed {
+                creation: creation_effect_record_to_view(creation),
+                canister,
+                installation: install_effect_record_to_view(installation),
+                commitment: commitment_record_to_view(commitment),
+            },
         },
     }
 }
@@ -546,6 +693,30 @@ fn install_effect_record_to_view(
         binding: effect.binding,
         cost_guard_settlement: effect.cost_guard_settlement,
         charged_entry_bytes: effect.charged_entry_bytes,
+    }
+}
+
+const fn commitment_record_to_view(
+    commitment: RootComponentCommitmentRecord,
+) -> RootComponentCommitmentView {
+    RootComponentCommitmentView {
+        registry: commitment.registry,
+        directory_synchronized_at_ns: commitment.directory_synchronized_at_ns,
+    }
+}
+
+fn partition_record_to_view(
+    record: ComponentRegistryPartitionRecord,
+) -> ComponentRegistryPartitionView {
+    ComponentRegistryPartitionView {
+        binding: record.binding,
+        provisioning_origin: record.provisioning_origin,
+        release_set: record.release_set,
+        status: record.status,
+        revision: record.revision,
+        content_hash: record.content_hash,
+        directory_synchronized_at_ns: record.directory_synchronized_at_ns,
+        encoded_bytes: record.encoded_bytes,
     }
 }
 
@@ -587,21 +758,225 @@ fn install_charged_entry_bytes(
         }
     };
     let mut maximum = record.clone();
-    maximum.progress = RootComponentAllocationProgressRecord::Verified {
+    let installation = RootComponentInstallEffectRecord {
+        raw_module_hash: plan.raw_module_hash,
+        chunk_hashes: plan.chunk_hashes.clone(),
+        binding: plan.binding.clone(),
+        cost_guard_settlement: ReplayCostGuardSettlement {
+            quota_intent_id: IntentId(u64::MAX),
+            reservation_intent_id: IntentId(u64::MAX),
+        },
+        charged_entry_bytes: u64::MAX,
+    };
+    let registry = ComponentRegistryHead {
+        component: record.component,
+        revision: 1,
+        content_hash: component_partition_content_hash(
+            &plan.binding,
+            &record.provisioning_origin,
+            record.release_set,
+            ComponentLifecycleStatus::Prepared,
+            1,
+        )?,
+    };
+    maximum.progress = RootComponentAllocationProgressRecord::Committed {
         creation,
         canister,
-        installation: RootComponentInstallEffectRecord {
-            raw_module_hash: plan.raw_module_hash,
-            chunk_hashes: plan.chunk_hashes.clone(),
-            binding: plan.binding.clone(),
-            cost_guard_settlement: ReplayCostGuardSettlement {
-                quota_intent_id: IntentId(u64::MAX),
-                reservation_intent_id: IntentId(u64::MAX),
-            },
-            charged_entry_bytes: u64::MAX,
+        installation,
+        commitment: RootComponentCommitmentRecord {
+            registry: registry.clone(),
+            directory_synchronized_at_ns: u64::MAX,
         },
     };
-    Ok(RootComponentRegistryStore::allocation_entry_bytes(&maximum))
+    let partition = ComponentRegistryPartitionRecord {
+        binding: plan.binding.clone(),
+        provisioning_origin: record.provisioning_origin.clone(),
+        release_set: record.release_set,
+        status: ComponentLifecycleStatus::Prepared,
+        revision: registry.revision,
+        content_hash: registry.content_hash,
+        directory_synchronized_at_ns: u64::MAX,
+        encoded_bytes: u64::MAX,
+    };
+    let charged = RootComponentRegistryStore::allocation_entry_bytes(&maximum)
+        .checked_add(RootComponentRegistryStore::partition_entry_bytes(
+            &partition,
+        ))
+        .and_then(|value| {
+            value.checked_add(RootComponentRegistryStore::principal_index_entry_bytes(
+                plan.binding.canister_id,
+                record.component,
+            ))
+        })
+        .ok_or_else(|| InternalError::resource_exhausted("Component Registry bytes overflow"))?;
+    if charged > plan.maximum_registry_bytes {
+        return Err(InternalError::resource_exhausted(format!(
+            "Component Registry commitment requires {charged} bytes, exceeding protected Component limit {}",
+            plan.maximum_registry_bytes
+        )));
+    }
+    Ok(charged)
+}
+
+fn committed_records(
+    record: &RootComponentAllocationRecord,
+    creation: &RootComponentCreationEffectRecord,
+    canister: Principal,
+    installation: &RootComponentInstallEffectRecord,
+    directory_synchronized_at_ns: u64,
+) -> Result<
+    (
+        RootComponentAllocationRecord,
+        ComponentRegistryPartitionRecord,
+    ),
+    InternalError,
+> {
+    let revision = 1;
+    let content_hash = component_partition_content_hash(
+        &installation.binding,
+        &record.provisioning_origin,
+        record.release_set,
+        ComponentLifecycleStatus::Prepared,
+        revision,
+    )?;
+    let registry = ComponentRegistryHead {
+        component: record.component,
+        revision,
+        content_hash,
+    };
+    let mut next_record = record.clone();
+    next_record.progress = RootComponentAllocationProgressRecord::Committed {
+        creation: creation.clone(),
+        canister,
+        installation: installation.clone(),
+        commitment: RootComponentCommitmentRecord {
+            registry,
+            directory_synchronized_at_ns,
+        },
+    };
+    let mut partition = ComponentRegistryPartitionRecord {
+        binding: installation.binding.clone(),
+        provisioning_origin: record.provisioning_origin.clone(),
+        release_set: record.release_set,
+        status: ComponentLifecycleStatus::Prepared,
+        revision,
+        content_hash,
+        directory_synchronized_at_ns,
+        encoded_bytes: 0,
+    };
+    let operation_bytes = RootComponentRegistryStore::allocation_entry_bytes(&next_record);
+    let index_bytes = RootComponentRegistryStore::principal_index_entry_bytes(
+        installation.binding.canister_id,
+        record.component,
+    );
+    for _ in 0..8 {
+        let encoded_bytes = operation_bytes
+            .checked_add(RootComponentRegistryStore::partition_entry_bytes(
+                &partition,
+            ))
+            .and_then(|value| value.checked_add(index_bytes))
+            .ok_or_else(|| {
+                InternalError::resource_exhausted("Component Registry bytes overflow")
+            })?;
+        if partition.encoded_bytes == encoded_bytes {
+            return Ok((next_record, partition));
+        }
+        partition.encoded_bytes = encoded_bytes;
+    }
+    Err(InternalError::invariant(
+        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+        "Component Registry partition byte accounting did not converge",
+    ))
+}
+
+fn exact_committed_partition(
+    record: &RootComponentAllocationRecord,
+    commitment: &RootComponentCommitmentRecord,
+) -> Result<ComponentRegistryPartitionRecord, InternalError> {
+    let RootComponentAllocationProgressRecord::Committed { installation, .. } = &record.progress
+    else {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
+            "Component partition validation requires a committed allocation",
+        ));
+    };
+    let partition = RootComponentRegistryStore::partition(record.component).ok_or_else(|| {
+        InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "committed Component allocation has no Registry partition",
+        )
+    })?;
+    if partition.binding != installation.binding
+        || partition.binding.component != record.component
+        || partition.provisioning_origin != record.provisioning_origin
+        || partition.release_set != record.release_set
+        || partition.status != ComponentLifecycleStatus::Prepared
+        || partition.revision != commitment.registry.revision
+        || partition.content_hash != commitment.registry.content_hash
+        || partition.directory_synchronized_at_ns != commitment.directory_synchronized_at_ns
+        || commitment.registry.component != record.component
+        || RootComponentRegistryStore::component_for_principal(partition.binding.canister_id)
+            != Some(record.component)
+    {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "committed Component allocation differs from its Registry partition or principal index",
+        ));
+    }
+    validate_partition_record(&partition)?;
+    Ok(partition)
+}
+
+fn validate_partition_record(
+    partition: &ComponentRegistryPartitionRecord,
+) -> Result<(), InternalError> {
+    if partition.revision == 0
+        || partition.directory_synchronized_at_ns == 0
+        || partition.content_hash
+            != component_partition_content_hash(
+                &partition.binding,
+                &partition.provisioning_origin,
+                partition.release_set,
+                partition.status,
+                partition.revision,
+            )?
+        || RootComponentRegistryStore::component_for_principal(partition.binding.canister_id)
+            != Some(partition.binding.component)
+    {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component Registry partition has invalid head, Directory time or principal index",
+        ));
+    }
+    Ok(())
+}
+
+fn component_partition_content_hash(
+    binding: &ComponentBinding,
+    provisioning_origin: &ComponentProvisioningOrigin,
+    release_set: FleetSubnetRootReleaseSet,
+    status: ComponentLifecycleStatus,
+    revision: u64,
+) -> Result<[u8; 32], InternalError> {
+    const DOMAIN: &[u8] = b"canic.component-registry.partition.v1";
+    let payload = candid::encode_one((
+        binding.clone(),
+        provisioning_origin.clone(),
+        release_set,
+        status,
+        revision,
+    ))
+    .map_err(|error| {
+        InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
+            format!("Component Registry hash input cannot be encoded: {error}"),
+        )
+    })?;
+    let mut hasher = Sha256::new();
+    hasher.update(DOMAIN);
+    hasher.update((payload.len() as u64).to_be_bytes());
+    hasher.update(payload);
+    Ok(hasher.finalize().into())
 }
 
 fn validate_install_capacity(
@@ -609,19 +984,21 @@ fn validate_install_capacity(
     record: &RootComponentAllocationRecord,
     charged_entry_bytes: u64,
 ) -> Result<u64, InternalError> {
-    if charged_entry_bytes > RootComponentRegistryStore::allocation_record_max_bytes() + 128 {
-        return Err(InternalError::resource_exhausted(
-            "Component installation evidence exceeds its stable record bound",
-        ));
-    }
-    let current_entry_bytes = RootComponentRegistryStore::allocation_entry_bytes(record);
+    let current_reserved_bytes = match &record.progress {
+        RootComponentAllocationProgressRecord::Created { effect, .. } => effect.charged_entry_bytes,
+        _ => {
+            return Err(InternalError::conflict(
+                "Component allocation is not ready to reserve install capacity",
+            ));
+        }
+    };
     let without_current = current
         .encoded_bytes
-        .checked_sub(current_entry_bytes)
+        .checked_sub(current_reserved_bytes)
         .ok_or_else(|| {
             InternalError::invariant(
                 canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component Registry encoded-byte accounting is below its created record",
+                "Component Registry encoded-byte accounting is below its creation reservation",
             )
         })?;
     let next_encoded_bytes = without_current
@@ -676,7 +1053,11 @@ fn advance_install_phase(
             installation: installation.clone(),
         },
         (RootComponentAllocationProgressRecord::Installed { .. }, false)
-        | (RootComponentAllocationProgressRecord::Verified { .. }, _) => {
+        | (
+            RootComponentAllocationProgressRecord::Verified { .. }
+            | RootComponentAllocationProgressRecord::Committed { .. },
+            _,
+        ) => {
             return Ok(allocation_record_to_view(record));
         }
         (
@@ -769,6 +1150,12 @@ fn map_allocation_commit_error(error: RootComponentAllocationCommitError) -> Int
     match error {
         RootComponentAllocationCommitError::ComponentIdentityConflict => InternalError::conflict(
             "derived Component identity is already reserved by another operation",
+        ),
+        RootComponentAllocationCommitError::ComponentPrincipalConflict => InternalError::conflict(
+            "Component Canister principal is already indexed by another Registry partition",
+        ),
+        RootComponentAllocationCommitError::ConflictingPartition => InternalError::conflict(
+            "Component Registry partition is already committed under different authority",
         ),
         RootComponentAllocationCommitError::ConflictingOperation => InternalError::conflict(
             "Component allocation operation is already bound to different intent",
@@ -1053,9 +1440,71 @@ mod tests {
                 fleet_subnet_root: root.fleet_subnet_root,
                 canister_id: canister,
             },
+            maximum_registry_bytes: 16_777_216,
         };
 
-        ComponentRegistryOps::validate_install_capacity([12; 32], &plan).expect("install capacity");
+        let mut component_exhausted = plan.clone();
+        component_exhausted.maximum_registry_bytes = 1;
+        let capacity_error =
+            ComponentRegistryOps::validate_install_capacity([12; 32], &component_exhausted)
+                .expect_err("terminal Component partition must fit before installation");
+        assert!(capacity_error.is_public_resource_exhausted());
+        assert!(matches!(
+            ComponentRegistryOps::allocation([12; 32])
+                .expect("created allocation")
+                .progress,
+            RootComponentAllocationProgressView::Created { .. }
+        ));
+
+        let intent_bytes = advance_install_to_verified(&plan, created_bytes);
+
+        let (committed, partition) =
+            ComponentRegistryOps::commit_verified([12; 32], 31, plan.maximum_registry_bytes)
+                .expect("commit verified Component");
+        let interrupted = RootComponentRegistryStore::export();
+        RootComponentRegistryStore::import(interrupted);
+        let repeated =
+            ComponentRegistryOps::commit_verified([12; 32], 32, plan.maximum_registry_bytes)
+                .expect("exact commitment retry");
+        assert_eq!(repeated, (committed.clone(), partition.clone()));
+        assert!(matches!(
+            committed.progress,
+            RootComponentAllocationProgressView::Committed { .. }
+        ));
+        assert_eq!(partition.binding, plan.binding);
+        assert_eq!(partition.status, ComponentLifecycleStatus::Prepared);
+        assert_eq!(partition.revision, 1);
+        assert_ne!(partition.content_hash, [0; 32]);
+        assert_eq!(partition.directory_synchronized_at_ns, 31);
+        assert_eq!(
+            ComponentRegistryOps::component_for_principal(canister),
+            Some(committed.component)
+        );
+        assert_eq!(
+            ComponentRegistryOps::partition(committed.component)
+                .expect("valid partition")
+                .expect("committed partition"),
+            partition
+        );
+        let status = ComponentRegistryOps::current().expect("Registry status");
+        assert_eq!(status.reserved_component_instances, 0);
+        assert_eq!(status.committed_component_instances, 1);
+        assert_eq!(status.managed_descendants, 0);
+        assert_eq!(status.encoded_bytes, partition.encoded_bytes);
+        assert!(status.encoded_bytes <= intent_bytes);
+        assert_eq!(
+            ComponentRegistryOps::component_spec_counts(&committed.component_spec)
+                .expect("Spec counts"),
+            ComponentSpecInstanceCounts {
+                reserved: 0,
+                committed: 1,
+            }
+        );
+        RootComponentRegistryStore::import(RootComponentRegistryData::default());
+    }
+
+    fn advance_install_to_verified(plan: &RootComponentInstallPlan, created_bytes: u64) -> u64 {
+        ComponentRegistryOps::validate_install_capacity([12; 32], plan).expect("install capacity");
         let intent = ComponentRegistryOps::begin_install(
             [12; 32],
             plan.clone(),
@@ -1092,7 +1541,7 @@ mod tests {
         RootComponentRegistryStore::import(interrupted);
         let renewed = ComponentRegistryOps::renew_install_intent(
             [12; 32],
-            &plan,
+            plan,
             ReplayCostGuardSettlement {
                 quota_intent_id: IntentId(28),
                 reservation_intent_id: IntentId(29),
@@ -1140,7 +1589,7 @@ mod tests {
             intent_bytes,
             "the install intent must reserve terminal record capacity before the effect"
         );
-        RootComponentRegistryStore::import(RootComponentRegistryData::default());
+        intent_bytes
     }
 
     fn prepared_created_allocation() -> (

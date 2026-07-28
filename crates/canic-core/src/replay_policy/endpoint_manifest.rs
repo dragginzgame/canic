@@ -142,6 +142,12 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         Some(DEPLOYMENT_QUOTA_V1),
         Some(DEPLOYMENT_RESERVE_V1),
     ),
+    update_response_idempotent(
+        "canic_root_component_commit",
+        command_kind("component_registry.commit_top_level.v1"),
+    ),
+    query_read_only("canic_root_component_registry_partition"),
+    query_read_only("canic_root_component_directory_head"),
     update_monotonic_transition(
         "canic_prepare_fleet_credential_generation",
         command_kind("fleet_activation.prepare_credential_generation.v1"),

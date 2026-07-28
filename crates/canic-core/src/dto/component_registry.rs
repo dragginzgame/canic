@@ -92,6 +92,17 @@ pub struct RootComponentInstallRequest {
 }
 
 ///
+/// RootComponentCommitRequest
+///
+/// Controller command committing one already verified top-level Component operation.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentCommitRequest {
+    pub operation_id: [u8; 32],
+}
+
+///
 /// ComponentProvisioningOrigin
 ///
 /// Authenticated causal authority retained with one top-level Component allocation.
@@ -116,6 +127,99 @@ pub enum RootComponentAllocationPhase {
     InstallIntent,
     Installed,
     Verified,
+    Committed,
+}
+
+///
+/// ComponentLifecycleStatus
+///
+/// Root-owned runtime lifecycle state of one committed Component Registry member.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum ComponentLifecycleStatus {
+    Prepared,
+    Active,
+    Draining,
+    Removed,
+}
+
+///
+/// ComponentRegistryHead
+///
+/// Exact independently versioned authority of one Component Registry partition.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentRegistryHead {
+    pub component: ComponentInstanceId,
+    pub revision: u64,
+    pub content_hash: [u8; 32],
+}
+
+///
+/// ComponentRegistryPartitionRequest
+///
+/// Read-only lookup key for one committed Component Registry partition.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentRegistryPartitionRequest {
+    pub component: ComponentInstanceId,
+}
+
+///
+/// ComponentRegistryPartitionResponse
+///
+/// Protected top-level row and independent head of one Component Registry partition.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentRegistryPartitionResponse {
+    pub head: ComponentRegistryHead,
+    pub binding: ComponentBinding,
+    pub provisioning_origin: ComponentProvisioningOrigin,
+    pub release_set: FleetSubnetRootReleaseSet,
+    pub status: ComponentLifecycleStatus,
+    pub encoded_bytes: u64,
+}
+
+///
+/// ComponentDirectoryProvenance
+///
+/// Exact Component Registry authority from which one Component Directory is derived.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentDirectoryProvenance {
+    pub component: ComponentBinding,
+    pub source_fleet_subnet_root: Principal,
+    pub component_registry_revision: u64,
+    pub component_registry_content_hash: [u8; 32],
+    pub synchronized_at_ns: u64,
+}
+
+///
+/// ComponentDirectoryHead
+///
+/// Compact independently versioned discovery projection for one Component tree.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentDirectoryHead {
+    pub provenance: ComponentDirectoryProvenance,
+    pub descendant_count: u32,
+}
+
+///
+/// ComponentDirectoryHeadRequest
+///
+/// Read-only lookup key for one committed Component Directory head.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentDirectoryHeadRequest {
+    pub component: ComponentInstanceId,
 }
 
 ///
@@ -168,6 +272,19 @@ pub struct RootComponentAllocationResponse {
     pub installation: Option<RootComponentInstallEvidence>,
 }
 
+///
+/// RootComponentCommitResponse
+///
+/// Exact committed allocation, authoritative Registry row and derived Directory head.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentCommitResponse {
+    pub allocation: RootComponentAllocationResponse,
+    pub registry: ComponentRegistryPartitionResponse,
+    pub directory: ComponentDirectoryHead,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,26 +298,12 @@ mod tests {
 
     #[test]
     fn component_registry_contracts_round_trip_through_candid() {
-        let authority = FleetRegistryAuthority {
-            binding: FleetCoordinatorBinding {
-                fleet: crate::ids::FleetBinding {
-                    fleet: FleetKey {
-                        canonical_network_id: CanonicalNetworkId::public_ic(),
-                        fleet_id: FleetId::from_generated_bytes([1; 32]),
-                    },
-                    app: AppId::from("toko"),
-                },
-                coordinator_subnet: SubnetId::from_principal(Principal::from_slice(&[2; 29])),
-                coordinator: Principal::from_slice(&[3; 29]),
-            },
-            epoch: 1,
-        };
         let request = RootComponentRegistryPreparationRequest {
             store_bootstrap: RootStoreBootstrapRequest {
                 manifest_payload_size_bytes: 128,
             },
             expected_fleet_registry: FleetRegistryVersion {
-                authority,
+                authority: fleet_registry_authority(),
                 revision: 4,
                 content_hash: [5; 32],
             },
@@ -277,6 +380,105 @@ mod tests {
     }
 
     #[test]
+    fn component_commit_response_round_trips_through_candid() {
+        let root = Principal::from_slice(&[6; 29]);
+        let component = ComponentInstanceId::from_generated_bytes([11; 32]);
+        let component_spec: ComponentSpecId = "projects".parse().expect("Component Spec ID");
+        let release_set = FleetSubnetRootReleaseSet {
+            release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
+                [7; 32],
+            )),
+            manifest_digest: ReleaseSetDigest::from_bytes([8; 32]),
+        };
+        let provisioning_origin = ComponentProvisioningOrigin::FleetAdministrator {
+            caller: Principal::from_slice(&[13; 29]),
+        };
+        let binding = ComponentBinding {
+            authority: fleet_registry_authority(),
+            component,
+            component_spec: component_spec.clone(),
+            spec_hash: [12; 32],
+            role: CanisterRole::new("project_hub"),
+            placement_subnet: SubnetId::from_principal(Principal::from_slice(&[17; 29])),
+            fleet_subnet_root: root,
+            canister_id: Principal::from_slice(&[16; 29]),
+        };
+        let head = ComponentRegistryHead {
+            component,
+            revision: 1,
+            content_hash: [18; 32],
+        };
+        let committed = RootComponentCommitResponse {
+            allocation: RootComponentAllocationResponse {
+                operation_id: [10; 32],
+                allocation_sequence: 1,
+                component,
+                component_spec,
+                spec_hash: binding.spec_hash,
+                role: binding.role.clone(),
+                provisioning_origin: provisioning_origin.clone(),
+                release_set,
+                phase: RootComponentAllocationPhase::Committed,
+                creation: Some(RootComponentCreationEvidence {
+                    wasm_store: Principal::from_slice(&[14; 29]),
+                    payload_hash: [15; 32],
+                    payload_size_bytes: 4_096,
+                    initial_cycles: Cycles::new(5_000_000_000_000),
+                    controller: root,
+                    canister: Some(binding.canister_id),
+                }),
+                installation: Some(RootComponentInstallEvidence {
+                    raw_module_hash: [20; 32],
+                    chunk_hashes: vec![vec![21; 32]],
+                    binding: binding.clone(),
+                }),
+            },
+            registry: ComponentRegistryPartitionResponse {
+                head: head.clone(),
+                binding: binding.clone(),
+                provisioning_origin,
+                release_set,
+                status: ComponentLifecycleStatus::Prepared,
+                encoded_bytes: 2_048,
+            },
+            directory: ComponentDirectoryHead {
+                provenance: ComponentDirectoryProvenance {
+                    component: binding,
+                    source_fleet_subnet_root: root,
+                    component_registry_revision: head.revision,
+                    component_registry_content_hash: head.content_hash,
+                    synchronized_at_ns: 19,
+                },
+                descendant_count: 0,
+            },
+        };
+        let committed_bytes = candid::encode_one(&committed).expect("encode committed allocation");
+
+        assert_eq!(
+            candid::decode_one::<RootComponentCommitResponse>(&committed_bytes)
+                .expect("decode committed allocation"),
+            committed
+        );
+    }
+
+    fn fleet_registry_authority() -> FleetRegistryAuthority {
+        FleetRegistryAuthority {
+            binding: FleetCoordinatorBinding {
+                fleet: crate::ids::FleetBinding {
+                    fleet: FleetKey {
+                        canonical_network_id: CanonicalNetworkId::public_ic(),
+                        fleet_id: FleetId::from_generated_bytes([1; 32]),
+                    },
+                    app: AppId::from("toko"),
+                },
+                coordinator_subnet: SubnetId::from_principal(Principal::from_slice(&[2; 29])),
+                coordinator: Principal::from_slice(&[3; 29]),
+            },
+            epoch: 1,
+        }
+    }
+
+    #[test]
     fn component_creation_request_round_trips_through_candid() {
         let request = RootComponentCreationRequest {
             operation_id: [10; 32],
@@ -300,6 +502,20 @@ mod tests {
         assert_eq!(
             candid::decode_one::<RootComponentInstallRequest>(&bytes)
                 .expect("decode install request"),
+            request
+        );
+    }
+
+    #[test]
+    fn component_commit_request_round_trips_through_candid() {
+        let request = RootComponentCommitRequest {
+            operation_id: [10; 32],
+        };
+        let bytes = candid::encode_one(request).expect("encode commit request");
+
+        assert_eq!(
+            candid::decode_one::<RootComponentCommitRequest>(&bytes)
+                .expect("decode commit request"),
             request
         );
     }

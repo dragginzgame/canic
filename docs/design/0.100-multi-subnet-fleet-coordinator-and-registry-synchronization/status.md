@@ -6,9 +6,9 @@ Date: 2026-07-28
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.22`.
-- Latest published release: `v0.100.22`.
-- Open patch draft: `0.100.23`; no package-version change has been authorized.
+- Workspace package version: `0.100.23`.
+- Latest published release: `v0.100.23`.
+- Open patch draft: `0.100.24`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -80,7 +80,7 @@ Registry slices replace the 0.99 root model.
   per-parent ceilings while allowing recursive role capabilities.
 - [x] Validate bounded peer-Component provisioning-grant targets, cycles and
   per-requester/root ceilings.
-- [ ] Replace the temporary environment Component Spec selector with protected
+- [x] Replace the temporary environment Component Spec selector with protected
   `ComponentBinding`.
 - [x] Freeze `SubnetId`, Coordinator authority, `FleetSubnetRootBinding`,
   Component admissions, root limits and protected Component/child bindings.
@@ -89,7 +89,7 @@ Registry slices replace the 0.99 root model.
 - [ ] Hard-cut Fleet Root to Fleet Subnet Root.
 - [ ] Hard-cut local `SubnetRegistry` and `SubnetDirectory` to root-owned
   per-Component `ComponentRegistry` and `ComponentDirectory`.
-- [ ] Split Fleet and Component Directory provenance.
+- [x] Split Fleet and Component Directory provenance.
 - [ ] Prove no prior-release transition reader or decoder exists.
 
 ## Slice 2 — Topology-Admitted Artifacts and Fresh Root Installation
@@ -157,10 +157,14 @@ Registry slices replace the 0.99 root model.
 - [ ] Resolve lifecycle artifacts only through the active release set.
 - [x] Implement bounded Fleet snapshot synchronization once per root.
 - [x] Atomically activate the Fleet Registry Mirror and Fleet Directory.
-- [ ] Store logical Component Registries in one bounded root-local collection
+- [x] Store logical Component Registries in one bounded root-local collection
   with independent per-Component heads.
+- [x] Commit normalized top-level Component rows with a principal index and
+  terminal operation receipt.
 - [ ] Store normalized Component Registry rows with principal, parent/role,
   count and operation-journal indexes.
+- [x] Derive the first ownership-preserving Component Directory head from its
+  exact committed Registry partition.
 - [ ] Derive ownership-preserving Component Directories with compact heads and
   revision-bound pagination.
 - [ ] Run subtree removal as durable post-order traversal and partition
@@ -391,7 +395,7 @@ terminal Registry-byte charge before the management call. The monotonic
 record is `Reserved → CreationIntent → Created`; an unresolved intent is never
 blindly repeated, while exact `Created` retry returns the original principal.
 
-Open 0.100.23 continues the created operation through exact Store-backed
+Released 0.100.23 continues the created operation through exact Store-backed
 installation. Managed application init hard-cuts the retired copied
 environment/role and Directory payload to an immutable root admission plus
 `ComponentBinding`. Durable
@@ -403,22 +407,32 @@ Interrupted retry advances an already observed exact install without
 repeating it, retries only after proving the target remains empty and fails
 closed on unavailable or mismatched code.
 
-This draft intentionally stops before committed-count mutation, per-Component
-Registry partition creation, Directory publication or runtime activation.
-Every root remains runtime-`Prepared`.
+Open 0.100.24 atomically commits an exactly verified operation. The root
+reverifies the protected root, Store, Registry Mirror, Fleet Directory,
+topology, caller, live module, sole controller and retained binding before one
+mutation inserts the normalized top-level row, principal index, terminal
+operation receipt and advanced counters. Each Component partition owns
+revision one and a domain-separated content hash independent of its root-local
+peers.
+
+The same authority derives the first ownership-preserving Component Directory
+head with the exact binding, source root, partition revision/hash and retained
+synchronization observation. Exact retry returns the original allocation,
+partition and Directory. Installation now reserves the maximum allocation,
+partition and index footprint before its paid effect; commitment replaces
+that reservation with exact encoded bytes. The Component and root remain
+runtime-`Prepared`.
 
 ## Next Action
 
-Atomically commit the verified top-level Component into its root-local
-Registry partition and move reserved capacity into committed counters without
-reusing or rebinding its identity or principal. Derive the first
-ownership-preserving Component Directory only from that committed authority.
-Exact same-release retry must resume every journalled phase without blindly
-repeating an unresolved effect.
-
-Activate root runtime only through this Registry/Store/Directory-bound
-lifecycle. Do not reintroduce role-based Directory authority, static root
-bootstrap creation or an unbound Canister effect.
+Distribute the committed Component's exact Fleet and Component Directory
+provenance directly from the root, independently observe matching retained
+provenance and activate the Component only from that evidence. Record the
+terminal idempotent root receipt without changing its identity, principal,
+binding or Registry authority. Activate root runtime only through this
+Registry/Store/Directory-bound lifecycle. Do not reintroduce role-based
+Directory authority, static root bootstrap creation or an unbound Canister
+effect.
 Restore the role-attestation PocketIC cases only after this lifecycle can
 create a Registry-bound issuer Component; do not revive the old cached
 root/issuer bootstrap fixture.
