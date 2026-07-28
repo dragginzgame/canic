@@ -6,7 +6,7 @@ cd "$ROOT"
 ORIGINAL_ARGS=("$@")
 
 METHOD_ID="CANIC-INSTRUCTION-001"
-METHOD_VERSION="2"
+METHOD_VERSION="3"
 DEFINITION_PATH="docs/audits/recurring/system/instruction-footprint.md"
 
 usage() {
@@ -145,7 +145,17 @@ mapfile -t METHOD_INPUTS < <(
     printf '%s\n' \
       "$DEFINITION_PATH" \
       "scripts/ci/instruction-audit-report.sh" \
-      "crates/canic-tests/tests/instruction_audit.rs"
+      "crates/canic-tests/tests/instruction_audit.rs" \
+      "crates/canic-testing-internal/src/pic/mod.rs" \
+      "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs" \
+      "crates/canic-testing-internal/src/pic/fleet_registry/build.rs" \
+      "crates/canic-testing-internal/src/pic/fleet_registry/fixture.rs" \
+      "crates/canic-testing-internal/src/pic/fleet_registry/mod.rs"
+    find \
+      canisters/test/delegation_issuer_stub \
+      canisters/test/delegation_root_stub \
+      canisters/test/project_hub_stub \
+      -type f \( -name '*.rs' -o -name 'Cargo.toml' -o -name 'canic.toml' \) -print
     find crates/canic-tests/tests/instruction_audit_support -type f -name '*.rs' -print
   } | sort -u
 )
@@ -175,15 +185,15 @@ while IFS= read -r candidate_method_path; do
   fi
 done < <(
   find "$ROOT/docs/audits/reports" -type f \
-    -path '*/artifacts/instruction-footprint-v2*/method.json' -print \
+    -path '*/artifacts/instruction-footprint-v3*/method.json' -print \
     | sort -V
 )
 
-RUN_STEM="instruction-footprint-v2"
+RUN_STEM="instruction-footprint-v3"
 RUN_INDEX=1
 while [[ -e "$DAY_DIR/$RUN_STEM.md" ]]; do
   ((RUN_INDEX+=1))
-  RUN_STEM="instruction-footprint-v2-$RUN_INDEX"
+  RUN_STEM="instruction-footprint-v3-$RUN_INDEX"
 done
 
 REPORT_PATH="$DAY_DIR/$RUN_STEM.md"

@@ -3,13 +3,13 @@
 ## Method Contract
 
 - Audit ID: `CANIC-INSTRUCTION-001`
-- Method version: `2`
+- Method version: `3`
 - Disposition: `retain`
 - Owner: local WebAssembly instruction measurement and critical-flow checkpoint coverage
 - Kind/profile: `measured` plus observability invariant
 - Trace mode: `execution_trace` in isolated PocketIC and `code_trace` for checkpoint ownership
 - Cost/runtime: high; 30-90 minutes depending on artifact cache state
-- Prerequisites: pinned PocketIC, the `canic-tests` root harness, the Canic-validated artifact builder, Rust/Cargo, Git, and GNU coreutils
+- Prerequisites: pinned PocketIC, the `canic-tests` root harness, the current Fleet Registry fixture, the Canic-validated artifact builder, Rust/Cargo, Git, and GNU coreutils
 - False-positive boundary: local instruction totals are pressure evidence, not correctness failures; install checkpoint groups are not endpoint totals; missing required rows or invalid build authority is a method failure
 - Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
 
@@ -30,27 +30,32 @@ Authority is singular:
 - `execution.rs` owns fixture setup, measured calls, and perf deltas;
 - `report.rs` owns checkpoint discovery, normalized output, comparison, and
   the deterministic score; and
-- Canic's root test harness and `build_artifact` path own artifact creation and
-  role validation. This audit may not build role Wasm directly with Cargo.
+- Canic's root test harness, current Fleet Registry fixture and
+  `build_artifact` path own artifact creation and role validation. This audit
+  may not build role Wasm directly with Cargo.
 
 Changing any of those inputs changes the method fingerprint. Changing scope,
 scenario meaning, counter semantics, checkpoint parsing, comparison, score,
 or artifact authority requires a method-version increment.
 
-## Fixed V2 Scenario Roster
+## Fixed V3 Scenario Roster
 
 Every scenario gets a fresh smallest applicable root-harness topology. Setup
 and prerequisites happen before the measured call. No mutable PocketIC state
-is shared between scenario rows.
+is shared between scenario rows. Delegated-auth scenarios use a real
+Coordinator, Fleet Subnet Root, root-local Wasm Store and active
+Component Registry-issued issuer and verifier Components. They do not use the
+retired Subnet Registry or a dynamically created legacy shard as issuer
+identity.
 
 | Scenario key | Origin | Required behavior |
 | --- | --- | --- |
 | `scale:request_cycles_from_parent:fresh` | update | child-to-parent structural capability round trip |
 | `scale_hub:create_worker:empty-pool` | update | scaling observation, planning, creation, and registration |
 | `user_hub:create_account:new-principal` | update | sharding assignment and shard allocation |
-| `root:test_provision_chain_key_delegation_proof_for_issuer:new-issuer` | update | explicit first delegation-proof provisioning |
-| `issuer:canic_prepare_delegated_token:active-proof` | update | issuer token preparation from an active proof |
-| `test:test_verify_delegated_token:valid-delegated-token` | update | verifier confirmation of a freshly issued delegated token |
+| `root:test_provision_chain_key_delegation_proof_for_issuer:new-issuer` | update | explicit first delegation-proof provisioning for an active Registry-issued Component |
+| `issuer:canic_prepare_delegated_token:active-proof` | update | active Registry-issued issuer Component token preparation from an active proof |
+| `project_hub:verifier_verify_token:valid-delegated-token` | update | active Registry-issued verifier Component confirmation of a freshly issued delegated token |
 | `root:canic_response_capability_v1:request-cycles-fresh` | update | fresh capability, policy, and execution path |
 | `root:canic_response_capability_v1:request-cycles-replay` | update | identical second request returns the cached replay response |
 | `root:canic_template_stage_manifest_admin:single-chunk` | update | stage one approved manifest |
@@ -58,7 +63,7 @@ is shared between scenario rows.
 | `root:canic_template_publish_chunk_admin:single-chunk` | update | publish the prepared chunk |
 | `root:bootstrap:init-checkpoints` | install | observe retained root-bootstrap checkpoints after a fresh install |
 
-Query and composite-query instruction totals are outside v2. Adding either
+Query and composite-query instruction totals are outside v3. Adding either
 requires an authoritative same-call measurement fixture and a new method
 version. The runner must not substitute a post-query shared-metrics read.
 
@@ -95,7 +100,7 @@ the measured local-instruction fields and do not affect the result or score.
 
 The executable scanner visits current Rust files under `crates/`, recognizes
 literal and namespaced single-line `perf!(` invocations, and ignores quoted
-examples and line comments. Multiline invocation syntax is outside v2 and
+examples and line comments. Multiline invocation syntax is outside v3 and
 requires a method-version change. Search commands in reports or reviews are
 navigation aids, not alternative counters.
 
@@ -122,7 +127,7 @@ The score uses three disjoint inputs:
 
 | Input | Score |
 | --- | ---: |
-| no comparable v2 predecessor | 2 |
+| no comparable v3 predecessor | 2 |
 | one missing critical-flow checkpoint class | 1 |
 | two or more missing critical-flow checkpoint classes | 2 |
 | highest average local instruction row exceeds 2,000,000 | 2 |
@@ -143,7 +148,7 @@ Result rules:
   is missing, the bootstrap checkpoint sum is zero, or output is presented
   after the runner failed.
 
-The first valid v2 run is a non-comparable baseline; that fact adds risk but
+The first valid v3 run is a non-comparable baseline; that fact adds risk but
 does not by itself make the result partial or blocked.
 
 ## Required Evidence
@@ -173,9 +178,9 @@ private material, or machine-specific repository root.
 ## Comparison And Findings
 
 Compare only reports with the same method ID, version, fingerprint, scenario
-key, and sample origin. The first valid v2 report has `N/A` deltas. Later runs
+key, and sample origin. The first valid v3 report has `N/A` deltas. Later runs
 show causal comparison to their immediate compatible predecessor; release
-closeout also compares cumulatively to the original v2 baseline. A missing or
+closeout also compares cumulatively to the original v3 baseline. A missing or
 zero denominator is `N/A`, never an invented percentage.
 
 A high instruction count is trend evidence. Create a product finding only for

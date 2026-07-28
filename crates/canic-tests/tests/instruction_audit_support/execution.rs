@@ -6,18 +6,17 @@ fn setup_for_scenario(scenario: &AuditScenario) -> root::harness::RootSetup {
         "scale:request_cycles_from_parent:fresh" | "scale_hub:create_worker:empty-pool" => {
             setup_root(RootSetupProfile::Scaling)
         }
-        "user_hub:create_account:new-principal"
-        | "root:test_provision_chain_key_delegation_proof_for_issuer:new-issuer"
-        | "issuer:canic_prepare_delegated_token:active-proof"
-        | "test:test_verify_delegated_token:valid-delegated-token" => {
-            setup_root(RootSetupProfile::Sharding)
-        }
+        "user_hub:create_account:new-principal" => setup_root(RootSetupProfile::Sharding),
         _ => setup_root(RootSetupProfile::Capability),
     }
 }
 
-// Execute one v2 scenario in a fresh authoritative root-harness topology.
+// Execute one v3 scenario in a fresh authoritative topology.
 pub(super) fn run_scenario(scenario: &AuditScenario) -> ScenarioResult {
+    if is_registry_auth_scenario(scenario) {
+        return run_registry_auth_scenario(scenario);
+    }
+
     let setup = setup_for_scenario(scenario);
     if scenario.transport_mode == "install" {
         return observe_bootstrap_scenario(setup, scenario);
@@ -39,6 +38,119 @@ pub(super) fn run_scenario(scenario: &AuditScenario) -> ScenarioResult {
     drop(setup);
 
     scenario_result(scenario, count, total_instructions, checkpoint_rows)
+}
+
+fn is_registry_auth_scenario(scenario: &AuditScenario) -> bool {
+    matches!(
+        scenario.key,
+        "root:test_provision_chain_key_delegation_proof_for_issuer:new-issuer"
+            | "issuer:canic_prepare_delegated_token:active-proof"
+            | "project_hub:verifier_verify_token:valid-delegated-token"
+    )
+}
+
+fn run_registry_auth_scenario(scenario: &AuditScenario) -> ScenarioResult {
+    let setup = setup_active_component_registry();
+    let prepared = prepare_registry_auth_scenario(&setup, scenario);
+    let before = perf_entries(setup.pic(), prepared.target_pid);
+    execute_registry_auth_scenario(&setup, scenario, &prepared);
+    let after = perf_entries(setup.pic(), prepared.target_pid);
+    let (count, total_instructions) = perf_delta(
+        &before,
+        &after,
+        scenario.subject_kind,
+        scenario.transport_mode,
+        scenario.subject_label,
+    );
+    let checkpoint_rows = checkpoint_deltas(scenario, &before, &after);
+    drop(setup);
+
+    scenario_result(scenario, count, total_instructions, checkpoint_rows)
+}
+
+fn prepare_registry_auth_scenario(
+    setup: &ActiveComponentRegistryFixture,
+    scenario: &AuditScenario,
+) -> PreparedScenario {
+    let subject = Principal::from_slice(&[scenario.key.as_bytes()[0]; 29]);
+    upsert_delegation_issuer(
+        setup.pic(),
+        setup.root,
+        setup.issuer.canister_id,
+        &setup.verifier.role,
+    );
+    upsert_delegation_renewal_template(
+        setup.pic(),
+        setup.root,
+        setup.issuer.canister_id,
+        &setup.verifier.role,
+    );
+
+    match scenario.key {
+        "root:test_provision_chain_key_delegation_proof_for_issuer:new-issuer" => {
+            PreparedScenario {
+                target_pid: setup.root,
+                caller_pid: None,
+                issuer_pid: Some(setup.issuer.canister_id),
+                delegated_token: None,
+            }
+        }
+        "issuer:canic_prepare_delegated_token:active-proof" => {
+            provision_delegation_proof(setup.pic(), setup.root, setup.issuer.canister_id);
+            PreparedScenario {
+                target_pid: setup.issuer.canister_id,
+                caller_pid: Some(subject),
+                issuer_pid: Some(setup.issuer.canister_id),
+                delegated_token: None,
+            }
+        }
+        "project_hub:verifier_verify_token:valid-delegated-token" => {
+            provision_delegation_proof(setup.pic(), setup.root, setup.issuer.canister_id);
+            let token = issue_delegated_token_from_active_proof(
+                setup.pic(),
+                setup.issuer.canister_id,
+                subject,
+                DelegationAudience::Fleet(test_fleet()),
+                vec![role_grant(
+                    setup.verifier.role.clone(),
+                    vec![cap::VERIFY.to_string()],
+                )],
+                10_000_000_000,
+            );
+            PreparedScenario {
+                target_pid: setup.verifier.canister_id,
+                caller_pid: Some(subject),
+                issuer_pid: Some(setup.issuer.canister_id),
+                delegated_token: Some(token),
+            }
+        }
+        other => panic!("unsupported Registry-bound auth audit scenario: {other}"),
+    }
+}
+
+fn execute_registry_auth_scenario(
+    setup: &ActiveComponentRegistryFixture,
+    scenario: &AuditScenario,
+    prepared: &PreparedScenario,
+) {
+    match scenario.key {
+        "root:test_provision_chain_key_delegation_proof_for_issuer:new-issuer" => {
+            provision_delegation_proof(
+                setup.pic(),
+                setup.root,
+                prepared
+                    .issuer_pid
+                    .expect("root proof scenario must prepare an issuer"),
+            );
+        }
+        "issuer:canic_prepare_delegated_token:active-proof" => {
+            execute_delegated_token_prepare(setup.pic(), prepared, &setup.verifier.role);
+        }
+        "project_hub:verifier_verify_token:valid-delegated-token" => {
+            execute_verifier_auth_scenario(setup.pic(), prepared.target_pid, prepared);
+        }
+        other => panic!("unsupported Registry-bound auth audit scenario: {other}"),
+    }
 }
 
 fn scenario_result(
@@ -120,9 +232,6 @@ fn scenario_target_pid(
         "user_hub" => *subnet_directory
             .get(&USER_HUB)
             .expect("user_hub must exist in Subnet Directory"),
-        "test" => *subnet_directory
-            .get(&TEST)
-            .expect("test must exist in Subnet Directory"),
         other => panic!("unsupported audit canister: {other}"),
     }
 }
@@ -178,43 +287,6 @@ fn prepare_scenario(
                 delegated_token: None,
             }
         }
-        "root:test_provision_chain_key_delegation_proof_for_issuer:new-issuer" => {
-            let (issuer_pid, _) = prepare_issuer(setup, 44);
-            PreparedScenario {
-                target_pid,
-                caller_pid: None,
-                issuer_pid: Some(issuer_pid),
-                delegated_token: None,
-            }
-        }
-        "issuer:canic_prepare_delegated_token:active-proof" => {
-            let (issuer_pid, subject) = prepare_issuer(setup, 46);
-            provision_delegation_proof(setup, issuer_pid);
-            PreparedScenario {
-                target_pid: issuer_pid,
-                caller_pid: Some(subject),
-                issuer_pid: Some(issuer_pid),
-                delegated_token: None,
-            }
-        }
-        "test:test_verify_delegated_token:valid-delegated-token" => {
-            let (issuer_pid, subject) = prepare_issuer(setup, 45);
-            provision_delegation_proof(setup, issuer_pid);
-            let token = issue_delegated_token_from_active_proof(
-                &setup.pic,
-                issuer_pid,
-                subject,
-                DelegationAudience::Fleet(test_fleet()),
-                vec![role_grant(TEST, vec![cap::VERIFY.to_string()])],
-                10_000_000_000,
-            );
-            PreparedScenario {
-                target_pid,
-                caller_pid: Some(subject),
-                issuer_pid: Some(issuer_pid),
-                delegated_token: Some(token),
-            }
-        }
         _ => PreparedScenario {
             target_pid,
             caller_pid: None,
@@ -242,9 +314,6 @@ fn execute_scenario(
                 999
             );
         }
-        "test:test_verify_delegated_token:valid-delegated-token" => {
-            execute_verifier_auth_scenario(setup, target_pid, prepared);
-        }
         "root:canic_response_capability_v1:request-cycles-fresh"
         | "root:canic_response_capability_v1:request-cycles-replay" => {
             execute_root_cycles_scenario(setup, target_pid);
@@ -267,17 +336,6 @@ fn execute_scenario(
                 .expect("create_worker transport failed");
             created.expect("create_worker application failed");
         }
-        "root:test_provision_chain_key_delegation_proof_for_issuer:new-issuer" => {
-            provision_delegation_proof(
-                setup,
-                prepared
-                    .issuer_pid
-                    .expect("root proof scenario must prepare an issuer"),
-            );
-        }
-        "issuer:canic_prepare_delegated_token:active-proof" => {
-            execute_delegated_token_prepare(setup, prepared);
-        }
         "root:canic_template_stage_manifest_admin:single-chunk" => {
             let fixture = audit_template_fixture(scenario);
             stage_manifest(&setup.pic, target_pid, &fixture.manifest);
@@ -294,23 +352,10 @@ fn execute_scenario(
     }
 }
 
-fn prepare_issuer(setup: &root::harness::RootSetup, subject_byte: u8) -> (Principal, Principal) {
-    let user_hub_pid = *setup
-        .subnet_directory
-        .get(&USER_HUB)
-        .expect("user_hub must exist for delegated auth audit scenarios");
-    let subject = Principal::from_slice(&[subject_byte; 29]);
-    let issuer_pid = create_user_shard(&setup.pic, user_hub_pid, subject);
-    upsert_delegation_issuer(setup, issuer_pid);
-    upsert_delegation_renewal_template(setup, issuer_pid);
-    (issuer_pid, subject)
-}
-
-fn provision_delegation_proof(setup: &root::harness::RootSetup, issuer_pid: Principal) {
-    let provisioned: Result<(), Error> = setup
-        .pic
+fn provision_delegation_proof(pic: &Pic, root: Principal, issuer_pid: Principal) {
+    let provisioned: Result<(), Error> = pic
         .update_call(
-            setup.root_id,
+            root,
             "test_provision_chain_key_delegation_proof_for_issuer",
             (issuer_pid,),
         )
@@ -318,15 +363,18 @@ fn provision_delegation_proof(setup: &root::harness::RootSetup, issuer_pid: Prin
     provisioned.expect("root proof provisioning application failed");
 }
 
-fn execute_delegated_token_prepare(setup: &root::harness::RootSetup, prepared: &PreparedScenario) {
+fn execute_delegated_token_prepare(
+    pic: &Pic,
+    prepared: &PreparedScenario,
+    verifier_role: &canic::ids::CanisterRole,
+) {
     let subject = prepared
         .caller_pid
         .expect("delegated prepare scenario must have a subject");
     let _issuer_pid = prepared
         .issuer_pid
         .expect("delegated prepare scenario must have an issuer");
-    let response: Result<DelegatedTokenPrepareResponse, Error> = setup
-        .pic
+    let response: Result<DelegatedTokenPrepareResponse, Error> = pic
         .update_call_as(
             prepared.target_pid,
             subject,
@@ -338,7 +386,10 @@ fn execute_delegated_token_prepare(setup: &root::harness::RootSetup, prepared: &
                 }),
                 subject,
                 aud: DelegationAudience::Fleet(test_fleet()),
-                grants: vec![role_grant(TEST, vec![cap::VERIFY.to_string()])],
+                grants: vec![role_grant(
+                    verifier_role.clone(),
+                    vec![cap::VERIFY.to_string()],
+                )],
                 ttl_ns: 10_000_000_000,
                 ext: None,
             },),
@@ -348,11 +399,7 @@ fn execute_delegated_token_prepare(setup: &root::harness::RootSetup, prepared: &
 }
 
 // Execute the verifier-side delegated token confirmation scenario.
-fn execute_verifier_auth_scenario(
-    setup: &root::harness::RootSetup,
-    target_pid: Principal,
-    prepared: &PreparedScenario,
-) {
+fn execute_verifier_auth_scenario(pic: &Pic, target_pid: Principal, prepared: &PreparedScenario) {
     let caller = prepared
         .caller_pid
         .expect("verifier auth audit scenario must resolve a delegated subject caller");
@@ -361,25 +408,30 @@ fn execute_verifier_auth_scenario(
         .clone()
         .expect("verifier auth audit scenario must issue a delegated token");
     let response: Result<Result<(), Error>, _> =
-        setup
-            .pic
-            .update_call_as(target_pid, caller, "test_verify_delegated_token", (token,));
+        pic.update_call_as(target_pid, caller, "verifier_verify_token", (token,));
     response
-        .expect("test_verify_delegated_token transport failed")
-        .expect("test_verify_delegated_token application failed");
+        .expect("verifier_verify_token transport failed")
+        .expect("verifier_verify_token application failed");
 }
 
-fn upsert_delegation_issuer(setup: &root::harness::RootSetup, issuer_pid: Principal) {
-    let registered: Result<RootIssuerPolicyResponse, Error> = setup
-        .pic
+fn upsert_delegation_issuer(
+    pic: &Pic,
+    root: Principal,
+    issuer_pid: Principal,
+    verifier_role: &canic::ids::CanisterRole,
+) {
+    let registered: Result<RootIssuerPolicyResponse, Error> = pic
         .update_call(
-            setup.root_id,
+            root,
             protocol::CANIC_UPSERT_ROOT_ISSUER_POLICY,
             (RootIssuerPolicyUpsertRequest {
                 issuer_pid,
                 enabled: true,
                 allowed_audiences: vec![DelegationAudience::Fleet(test_fleet())],
-                allowed_grants: vec![role_grant(TEST, vec![cap::VERIFY.to_string()])],
+                allowed_grants: vec![role_grant(
+                    verifier_role.clone(),
+                    vec![cap::VERIFY.to_string()],
+                )],
                 max_cert_ttl_ns: 60_000_000_000,
                 refresh_after_ratio_bps: 8_000,
             },),
@@ -389,17 +441,24 @@ fn upsert_delegation_issuer(setup: &root::harness::RootSetup, issuer_pid: Princi
     assert_eq!(registered.issuer.issuer_pid, issuer_pid);
 }
 
-fn upsert_delegation_renewal_template(setup: &root::harness::RootSetup, issuer_pid: Principal) {
-    let response: Result<RootIssuerRenewalTemplateResponse, Error> = setup
-        .pic
+fn upsert_delegation_renewal_template(
+    pic: &Pic,
+    root: Principal,
+    issuer_pid: Principal,
+    verifier_role: &canic::ids::CanisterRole,
+) {
+    let response: Result<RootIssuerRenewalTemplateResponse, Error> = pic
         .update_call(
-            setup.root_id,
+            root,
             protocol::CANIC_UPSERT_ROOT_ISSUER_RENEWAL_TEMPLATE,
             (RootIssuerRenewalTemplateUpsertRequest {
                 issuer_pid,
                 enabled: true,
                 aud: DelegationAudience::Fleet(test_fleet()),
-                grants: vec![role_grant(TEST, vec![cap::VERIFY.to_string()])],
+                grants: vec![role_grant(
+                    verifier_role.clone(),
+                    vec![cap::VERIFY.to_string()],
+                )],
                 cert_ttl_ns: 60_000_000_000,
             },),
         )

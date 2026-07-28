@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.30` rebases delegated-auth instruction-audit scenarios on fresh
+  Coordinator/root/Store topology with active Registry-issued Components and
+  versions the audit method/fingerprint so obsolete fixture baselines cannot
+  be compared as current evidence.
+
 - `0.100.29` binds root-signed role-attestation issuance and retrieval to the
   active root-owned Component Registry and restores real issuer verification
   and guard coverage through the Coordinator-root lifecycle.

@@ -9,7 +9,6 @@ mod canic;
 mod delegation;
 #[cfg(test)]
 mod fleet_coordinator;
-#[cfg(test)]
 mod fleet_registry;
 mod lifecycle;
 mod root;
@@ -27,6 +26,7 @@ pub use delegation::{
     create_user_shard, issue_delegated_token_from_active_proof,
     issue_delegated_token_from_active_proof_with_request_nonce, role_grant,
 };
+pub use fleet_registry::{ActiveComponentRegistryFixture, setup_active_component_registry};
 pub use lifecycle::{
     LifecycleBoundaryFixture, install_lifecycle_boundary_fixture, invalid_init_args, upgrade_args,
 };

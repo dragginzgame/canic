@@ -179,7 +179,7 @@ pub(super) fn verification_rows(
             },
         },
         VerificationRow {
-            command: "fixed v2 update/install scenario roster".to_string(),
+            command: "fixed v3 update/install scenario roster".to_string(),
             status: STATUS_PASS.to_string(),
             notes: "All twelve required scenarios completed; query instruction totals are outside this method version."
                 .to_string(),
@@ -193,7 +193,7 @@ pub(super) fn verification_rows(
                     metadata.compared_baseline_report
                 )
             } else {
-                "No comparable v2 report exists; this valid run establishes the first v2 baseline and deltas are `N/A`."
+                "No comparable v3 report exists; this valid run establishes the first v3 baseline and deltas are `N/A`."
                     .to_string()
             },
         },
@@ -290,7 +290,7 @@ pub(super) fn write_report(
     ));
     out.push_str("## Report Preamble\n\n");
     out.push_str(&format!(
-        "- Scope: Canic instruction footprint (fixed `{minor_line}` v2 update/install roster)\n"
+        "- Scope: Canic instruction footprint (fixed `{minor_line}` v3 update/install roster)\n"
     ));
     out.push_str("- Definition path: `docs/audits/recurring/system/instruction-footprint.md`\n");
     out.push_str(&format!(
@@ -322,7 +322,7 @@ pub(super) fn write_report(
         if baseline_is_selected(metadata) {
             "comparable"
         } else {
-            "first-v2-baseline"
+            "first-v3-baseline"
         }
     ));
     out.push_str("- Auditor: `codex`\n");
@@ -371,7 +371,7 @@ pub(super) fn write_report(
             metadata.compared_baseline_report
         ));
     } else {
-        out.push_str("| Baseline path selected | PASS | No comparable v2 report exists; this run establishes the first v2 baseline and deltas are `N/A`. |\n\n");
+        out.push_str("| Baseline path selected | PASS | No comparable v3 report exists; this run establishes the first v3 baseline and deltas are `N/A`. |\n\n");
     }
 
     out.push_str("## Comparison to Previous Relevant Run\n\n");
@@ -383,7 +383,7 @@ pub(super) fn write_report(
     } else {
         out.push_str("- No previous `instruction-footprint` report was available; this report establishes the first retained baseline.\n");
     }
-    out.push_str("- V1 query-probe rows never executed and are not a baseline. V2 hard-cuts those direct-build probes; future query measurement needs a separately versioned authoritative same-call fixture.\n");
+    out.push_str("- V1 query-probe rows never executed and are not a baseline. V2 removed those direct-build probes. V3 additionally requires delegated-auth rows to use Registry-issued active Components; future query measurement still needs a separately versioned authoritative same-call fixture.\n");
     if baseline_rows.is_some() {
         out.push_str("- Baseline drift values are computed from matching scenario keys in the previous report's `perf-rows.json` artifact.\n\n");
     } else if baseline_is_selected(metadata) {
@@ -567,7 +567,7 @@ pub(super) fn write_report(
 
     out.push_str("## Risk Score\n\n");
     out.push_str(&format!("Risk Score: **{risk_score} / 10**\n\n"));
-    out.push_str("Interpretation: the first valid v2 measurement has no comparable predecessor, and root-proof plus delegated-token flows still lack product checkpoints. Those limitations are recorded rather than scored as zero.\n\n");
+    out.push_str("Interpretation: the first valid v3 measurement has no comparable predecessor, and root-proof plus delegated-token flows still lack product checkpoints. Those limitations are recorded rather than scored as zero.\n\n");
 
     out.push_str("## Verification Readout\n\n");
     out.push_str("| Command | Status | Notes |\n| --- | --- | --- |\n");
@@ -690,15 +690,15 @@ fn hotspot_hint(subject_label: &str) -> (&'static str, &'static str) {
         ),
         "test_provision_chain_key_delegation_proof_for_issuer" => (
             "Root proof provisioning workflow",
-            "`apps/test/root/src/lib.rs`; `crates/canic-core/src/workflow/runtime/auth/provisioning/mod.rs`",
+            "`canisters/test/delegation_root_stub/src/lib.rs`; `crates/canic-core/src/workflow/runtime/auth/provisioning/mod.rs`",
         ),
         "canic_prepare_delegated_token" => (
             "Issuer delegated-token preparation",
             "`crates/canic-core/src/workflow/runtime/auth/prepare/mod.rs`",
         ),
-        "test_verify_delegated_token" => (
+        "verifier_verify_token" => (
             "Verifier delegated-token boundary",
-            "`apps/test/test/src/lib.rs`; `crates/canic-core/src/ops/auth/delegated/verify.rs`",
+            "`canisters/test/project_hub_stub/src/lib.rs`; `crates/canic-core/src/ops/auth/delegated/verify.rs`",
         ),
         "root_bootstrap_init" => (
             "Root installation checkpoint group",
@@ -910,7 +910,7 @@ mod tests {
             run_timestamp_utc: "2026-06-03T00:00:00Z".to_string(),
             compared_baseline_report: compared_baseline_report.to_string(),
             method_id: "CANIC-INSTRUCTION-001".to_string(),
-            method_version: "2".to_string(),
+            method_version: "3".to_string(),
             method_fingerprint: "test-fingerprint".to_string(),
         }
     }

@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.28`.
-- The latest published release is `v0.100.28` at
-  `f2d2ba44e57423f1eccac32e5e1b927222f67c4b`.
-- The `v0.100.28` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `64ba6b05e8de5f28975be76c6948e328a527b7273cd3f5d5276fd9278bb4bd4b`.
+- The workspace package version is `0.100.29`.
+- The latest published release is `v0.100.29` at
+  `df544ee158067f291c308c4d93f6b600f1f694de`.
+- The `v0.100.29` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `960042890fb70512d28f14d7b70c8c252869ead3358cb37d6a7b810265d9fbbd`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -302,13 +302,19 @@ Historical detail is archived at:
   and commits a terminal receipt required by bootstrap readiness. Exact
   activation retry reconciles that receipt, while later dynamic allocations
   resume after the root is `Active` without changing the frozen inventory.
-- Open `0.100.29` hard-cuts role-attestation issuance and retrieval from the
+- Released `0.100.29` hard-cuts role-attestation issuance and retrieval from the
   removed `SubnetRegistry` predicate to current active Component Registry
   identity. The root binds caller, subject, role and placement Subnet to the
   exact active partition, revalidates active membership for retrieval and
   derives the verifier's expected physical Subnet from protected Registry/root
   authority. The real Coordinator/root/Store/Component activation journey
   exercises claim verification plus issuer guard metrics.
+- Open `0.100.30` rebases delegated-auth instruction-audit scenarios on a
+  fresh Coordinator/root/Store lifecycle with active Registry-allocated
+  issuer and project-hub verifier Components. Instruction method v3
+  fingerprints the executable audit, authoritative fixture and measured
+  canister packages/configs together, so removed fixture evidence cannot be
+  selected as a current baseline.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1468,6 +1474,11 @@ First primary results:
   normalized rows and 21 checkpoint deltas, finds 57 static checkpoints, and
   verifies every compact evidence hash. The valid result is partial only on
   the two indexed auth-flow checkpoint gaps.
+- Instruction v3 rebases the three delegated-auth scenarios on active
+  Registry-issued Components and expands its composite method fingerprint to
+  the authoritative Fleet fixture and measured canister packages. Its 38
+  non-manual tests, targeted strict Clippy and focused real activation journey
+  pass; no new manual instruction-footprint measurement has been taken.
 - Wasm v1 fails closed at the obsolete direct build and remains invalid
   history. V2 completes 12 authoritative role/profile builds in a clean
   detached worktree, verifies every builder gzip pair, analyzes all six
@@ -1625,10 +1636,13 @@ root and an exact active Component Registry partition, while the real
 Registry-created issuer exercises claim rejection and guard metrics without a
 static bootstrap fixture.
 
-Next, rebase instruction-audit scenarios on the same lifecycle before taking
-new measurements. Do not bypass Store or Registry evidence, permit nested
-Component declarations, merge roots belonging to different Fleets on one
-Subnet or consume an earlier installation.
+Next, maintain checked known-created/not-deletion-confirmed Canister counters
+under root-local Component Registry authority and expose compact
+controller-only root summaries. Then add `canic info subnets <fleet>
+[--json]` through Coordinator discovery and fail-closed fan-out. Do not bypass
+Store or Registry evidence, permit nested Component declarations, merge roots
+belonging to different Fleets on one Subnet or consume an earlier
+installation.
 
 ## Historical Release Detail
 

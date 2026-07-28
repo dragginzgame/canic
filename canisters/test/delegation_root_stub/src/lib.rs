@@ -28,6 +28,13 @@ async fn root_now_secs() -> Result<u64, Error> {
     Ok(ic_cdk::api::time() / 1_000_000_000)
 }
 
+#[canic_update(requires(caller::is_controller()))]
+async fn test_provision_chain_key_delegation_proof_for_issuer(
+    issuer_pid: candid::Principal,
+) -> Result<(), Error> {
+    AuthApi::provision_chain_key_delegation_proof_for_issuer_root(issuer_pid).await
+}
+
 #[canic_update(public)]
 async fn root_bootstrap_delegated_session(
     token: DelegatedToken,

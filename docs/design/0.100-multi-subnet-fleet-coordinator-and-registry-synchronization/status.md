@@ -6,9 +6,9 @@ Date: 2026-07-28
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.28`.
-- Latest published release: `v0.100.28`.
-- Open patch draft: `0.100.29`; no package-version change has been authorized.
+- Workspace package version: `0.100.29`.
+- Latest published release: `v0.100.29`.
+- Open patch draft: `0.100.30`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -500,7 +500,7 @@ terminal root-runtime receipt before bootstrap readiness. Exact activation
 retry reconciles an already-active root into the same receipt. Dynamic
 allocations resume after activation and cannot rewrite the initial inventory.
 
-Open 0.100.29 hard-cuts role-attestation prepare/get admission from the
+Released 0.100.29 hard-cuts role-attestation prepare/get admission from the
 removed `SubnetRegistry` predicate to current active Component Registry
 identity. The root requires its own runtime to be `Active`, resolves the caller
 through the protected principal index and active partition, and binds subject,
@@ -512,13 +512,18 @@ journey now carries its Registry-created issuer through issuance, claim
 rejection and issuer guard metrics without reviving the retired cached
 static-role fixture.
 
+Open 0.100.30 rebases the delegated-auth instruction-audit scenarios on that
+same real lifecycle. Root proof provisioning, issuer delegated-token
+preparation and project-hub token verification now use fresh
+Coordinator/root/Store topology plus active Registry-allocated Components.
+The method is versioned to v3, and its composite fingerprint includes the
+authoritative fixture, canister packages and configs so obsolete fixture
+evidence cannot be selected as a baseline.
+
 ## Next Action
 
-Rebase the instruction-audit scenarios on the same real allocation boundary
-before taking new Component lifecycle measurements.
-
-As root-local Component Registry authority lands, maintain checked
-known-created/not-deletion-confirmed Canister counters and expose compact
+Maintain checked known-created/not-deletion-confirmed Canister counters under
+the root-local Component Registry authority and expose compact
 controller-only root summaries. Then add
 `canic info subnets <fleet> [--json]`: discover the Coordinator from the
 terminal catalog, query its current root rows, fan out only the compact

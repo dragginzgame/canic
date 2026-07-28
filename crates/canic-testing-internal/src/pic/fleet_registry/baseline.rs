@@ -1,14 +1,12 @@
 //! Prepared-root Fleet Registry and Component Registry PocketIC journey.
 
+use super::build::{SerialPic, build_pic, build_test_root_wasm, root_canister_config_path};
 use candid::Principal;
 use ic_testkit::pic::Pic;
 use std::path::Path;
 
-use super::build::{build_pic, build_test_root_wasm, root_canister_config_path};
-
 const ROOT_INSTALL_CYCLES: u128 = 80_000_000_000_000;
 
-#[cfg(test)]
 mod tests {
     use super::*;
     use candid::{decode_one, encode_one};
@@ -71,9 +69,8 @@ mod tests {
             CANIC_ROOT_COMPONENT_MEMBERSHIP_ACTIVATE, CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
             CANIC_ROOT_COMPONENT_REGISTRY_PREPARE, CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
             CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE, CANIC_ROOT_STORE_BOOTSTRAP,
-            CANIC_ROOT_STORE_BOOTSTRAP_STATUS, CANIC_TEMPLATE_PREPARE_ADMIN,
-            CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN, CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
-            CANIC_WASM_STORE_PREPARE,
+            CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
+            CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
         },
     };
     use canic_control_plane::{
@@ -102,10 +99,46 @@ mod tests {
     };
     use ic_testkit::artifacts::{read_wasm, test_target_dir, workspace_root_for};
 
+    #[cfg(test)]
+    use canic::protocol::{CANIC_ROOT_STORE_BOOTSTRAP_STATUS, CANIC_WASM_STORE_PREPARE};
+
     const COORDINATOR_PACKAGE: &str = "fleet_coordinator_stub";
     const ISSUER_PACKAGE: &str = "delegation_issuer_stub";
     const PROJECT_HUB_PACKAGE: &str = "project_hub_stub";
     const COORDINATOR_INSTALL_CYCLES: u128 = 500_000_000_000_000;
+
+    ///
+    /// ActiveComponentRegistryFixture
+    ///
+    /// Fresh Coordinator-anchored Fleet fixture whose root and two Components
+    /// are active under current Component Registry authority.
+    ///
+    pub struct ActiveComponentRegistryFixture {
+        pic: SerialPic,
+        pub coordinator: Principal,
+        pub root: Principal,
+        pub issuer: ComponentBinding,
+        pub verifier: ComponentBinding,
+    }
+
+    impl ActiveComponentRegistryFixture {
+        /// Borrow the live PocketIC instance while retaining its serial guard.
+        #[must_use]
+        pub const fn pic(&self) -> &Pic {
+            &self.pic.pic
+        }
+    }
+
+    struct ActiveComponentBindings {
+        issuer: ComponentBinding,
+        verifier: ComponentBinding,
+    }
+
+    impl ActiveComponentBindings {
+        const fn new(issuer: ComponentBinding, verifier: ComponentBinding) -> Self {
+            Self { issuer, verifier }
+        }
+    }
 
     struct BootstrappedRootFixture {
         root_id: Principal,
@@ -207,6 +240,23 @@ mod tests {
     #[test]
     fn prepared_root_activates_only_after_complete_initial_component_inventory() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_active_component_registry();
+        super::super::role_attestation::assert_registry_bound_role_attestation(
+            fixture.pic(),
+            fixture.root,
+            &fixture.issuer,
+        );
+    }
+
+    /// Build one current Coordinator/root/Store fixture with active Registry-issued Components.
+    ///
+    /// # Panics
+    ///
+    /// Panics when a fixture artifact cannot be built or any required PocketIC
+    /// management, Registry, Store, allocation, installation, or activation call
+    /// fails its current protocol contract.
+    #[must_use]
+    pub fn setup_active_component_registry() -> ActiveComponentRegistryFixture {
         let root_wasm = build_test_root_wasm();
         let coordinator_wasm = build_test_coordinator_wasm();
         let store_fixture = build_root_store_fixture();
@@ -284,18 +334,20 @@ mod tests {
             vec![synchronized.acknowledgement]
         );
 
-        let issuer = assert_registry_and_root_runtime_activation(
+        let components = assert_registry_and_root_runtime_activation(
             &pic,
             coordinator,
             &fixture,
             joined.version,
             sync_request,
         );
-        super::super::role_attestation::assert_registry_bound_role_attestation(
-            &pic,
-            fixture.root_id,
-            &issuer,
-        );
+        ActiveComponentRegistryFixture {
+            pic,
+            coordinator,
+            root: fixture.root_id,
+            issuer: components.issuer,
+            verifier: components.verifier,
+        }
     }
 
     fn install_fixture_coordinator(
@@ -337,7 +389,7 @@ mod tests {
         fixture: &BootstrappedRootFixture,
         joining_version: canic::dto::fleet_registry::FleetRegistryVersion,
         sync_request: FleetSubnetRootRegistrySyncRequest,
-    ) -> ComponentBinding {
+    ) -> ActiveComponentBindings {
         let activated: Result<FleetRegistryActivationResponse, Error> = pic
             .update_call(
                 coordinator,
@@ -428,7 +480,7 @@ mod tests {
         pic: &Pic,
         fixture: &BootstrappedRootFixture,
         activation_request: FleetSubnetRootRegistryMirrorActivationRequest,
-    ) -> ComponentBinding {
+    ) -> ActiveComponentBindings {
         let component_registry_request = RootComponentRegistryPreparationRequest {
             store_bootstrap: activation_request.store_bootstrap,
             expected_fleet_registry: activation_request.expected_registry,
@@ -490,7 +542,7 @@ mod tests {
         pic: &Pic,
         fixture: &BootstrappedRootFixture,
         component_registry_request: RootComponentRegistryPreparationRequest,
-    ) -> ComponentBinding {
+    ) -> ActiveComponentBindings {
         let (issuer_request, issuer) = assert_issuer_component_allocation(pic, fixture);
         let issuer_binding = installed_component_binding(&issuer);
         let projects_request = RootComponentAllocationRequest {
@@ -591,7 +643,10 @@ mod tests {
         assert_eq!(complete.committed_component_instances, 2);
         assert_eq!(complete.initial_inventory, None);
         assert_root_runtime_activation(pic, fixture, component_registry_request);
-        issuer_binding
+        ActiveComponentBindings::new(
+            issuer_binding,
+            installed_component_binding(&active_projects),
+        )
     }
 
     fn installed_component_binding(
@@ -1686,3 +1741,5 @@ mod tests {
         );
     }
 }
+
+pub use tests::{ActiveComponentRegistryFixture, setup_active_component_registry};
