@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-28
+Last updated: 2026-07-29
 
 ## Purpose
 
@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.37`.
-- The latest published release is `v0.100.37` at
-  `4bc253b1d56277ee9079f48d204d2e21e98bc310`.
-- Open `0.100.38` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.38`.
+- The latest published release is `v0.100.38` at
+  `147d4ce6fea5bd42f7734356b9641d4930cd5c8a`.
+- Open `0.100.39` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -368,13 +368,20 @@ Historical detail is archived at:
   Registry member or advance its head/Directory. Public internal root
   allocate/status endpoints authenticate the exact registered parent in
   workflow and remain fenced while the root is only `Prepared`.
-- Open `0.100.38` consumes that reservation through exact Store-bound,
+- Released `0.100.38` consumes that reservation through exact Store-bound,
   cost-guarded empty-Canister creation executed by the Fleet Subnet Root. The
   monotonic child operation records `Reserved → CreationIntent → Created`,
   freezes sole-root control and the terminal Registry-byte charge before the
   paid call, counts the first durable returned principal exactly once and
-  never blindly repeats an unresolved intent. Store-backed installation,
-  independent verification and normalized member commitment are next.
+  never blindly repeats an unresolved intent.
+- Open `0.100.39` installs that created child from the exact accepted
+  root-local Store artifact under its immutable `ComponentChildBinding`.
+  Durable install intent precharges the terminal operation, normalized child
+  row, principal index and parent/role traversal index before the paid call.
+  Exact observed installation is adopted after interruption, while an empty
+  target may retry only under a renewed settlement. Independent verification
+  requires the exact module, sole-root controller and retained child binding.
+  Normalized member commitment and Directory advancement are next.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1696,23 +1703,25 @@ root and an exact active Component Registry partition, while the real
 Registry-created issuer exercises claim rejection and guard metrics without a
 static bootstrap fixture.
 
-The root now also consumes exact operation-keyed child reservations through
-Store-bound, cost-guarded empty-Canister creation. Public allocate, status and
-create endpoints authenticate the caller as the exact registered parent,
-reserve Component/root capacity once and retain monotonic creation intent and
-principal evidence without changing the Component head or Directory. The
-Fleet Subnet Root is the child's sole controller.
+The root now also installs exactly created children from its accepted Store
+catalog. Public allocate, status, create and install endpoints authenticate
+the caller as the exact registered parent. Durable progress survives
+interruption through `Verified`, independent checks require the exact module,
+sole-root controller and retained `ComponentChildBinding`, and terminal
+Registry capacity is already charged without changing the Component head or
+Directory.
 
-Next, install that created child from the exact frozen Store artifact,
-independently verify its live module, sole controller and retained
-`ComponentChildBinding`, then atomically commit the normalized child row and
-principal/traversal indexes. Transfer reserved counts to committed counts and
-advance/distribute the Component Directory only after commitment. Retain the
-exact immediate parent and declared role-to-role spawn grant. Do not let
-managed application Canisters create through management directly, infer
-authorization from flat catalog presence, revive the removed single-root
-resolver, permit nested Component declarations, merge roots belonging to
-different Fleets on one Subnet or consume an earlier installation.
+Next, atomically commit that verified child as a normalized Registry member:
+insert the child row plus principal and parent/role traversal indexes,
+transfer one reserved descendant to committed, replace the install precharge
+with exact terminal bytes, advance the Component Registry head and derive its
+next Directory authority. Distribute and activate that Directory only after
+commitment. Retain the exact immediate parent and declared role-to-role spawn
+grant. Do not let managed application Canisters perform management effects,
+infer authorization from flat catalog presence, revive the removed
+single-root resolver, permit nested Component declarations, merge roots
+belonging to different Fleets on one Subnet or consume an earlier
+installation.
 
 ## Historical Release Detail
 
