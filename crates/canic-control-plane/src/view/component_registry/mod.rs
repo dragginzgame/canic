@@ -80,7 +80,7 @@ pub struct RootComponentAllocationView {
 ///
 /// RootComponentChildAllocationView
 ///
-/// Read-only exact direct-child reservation inside one Component Registry partition.
+/// Read-only exact direct-child lifecycle operation inside one Component Registry partition.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -96,6 +96,23 @@ pub struct RootComponentChildAllocationView {
     pub maximum_registry_bytes: u64,
     pub reserved_against_registry: ComponentRegistryHead,
     pub release_set: FleetSubnetRootReleaseSet,
+    pub progress: RootComponentChildAllocationProgressView,
+}
+
+///
+/// RootComponentChildAllocationProgressView
+///
+/// Read-only paid-effect state for one direct-child allocation.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RootComponentChildAllocationProgressView {
+    Reserved,
+    CreationIntent(RootComponentCreationEffectView),
+    Created {
+        effect: RootComponentCreationEffectView,
+        canister: Principal,
+    },
 }
 
 ///

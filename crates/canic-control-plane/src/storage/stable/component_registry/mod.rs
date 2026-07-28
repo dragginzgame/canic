@@ -314,7 +314,7 @@ pub struct ComponentRegistryPartitionRecord {
 ///
 /// RootComponentChildAllocationRecord
 ///
-/// Durable exact direct-child reservation inside one Component Registry partition.
+/// Durable exact direct-child lifecycle operation inside one Component Registry partition.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -330,6 +330,39 @@ pub struct RootComponentChildAllocationRecord {
     pub maximum_registry_bytes: u64,
     pub reserved_against_registry: ComponentRegistryHead,
     pub release_set: FleetSubnetRootReleaseSet,
+    pub progress: RootComponentChildAllocationProgressRecord,
+}
+
+impl RootComponentChildAllocationRecord {
+    pub(crate) fn has_same_reservation(&self, other: &Self) -> bool {
+        self.operation_id == other.operation_id
+            && self.component == other.component
+            && self.parent_canister_id == other.parent_canister_id
+            && self.parent_role == other.parent_role
+            && self.child_role == other.child_role
+            && self.child_kind == other.child_kind
+            && self.maximum_instances_per_parent == other.maximum_instances_per_parent
+            && self.maximum_descendants == other.maximum_descendants
+            && self.maximum_registry_bytes == other.maximum_registry_bytes
+            && self.reserved_against_registry == other.reserved_against_registry
+            && self.release_set == other.release_set
+    }
+}
+
+///
+/// RootComponentChildAllocationProgressRecord
+///
+/// Durable paid-effect boundary for one direct-child allocation operation.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RootComponentChildAllocationProgressRecord {
+    Reserved,
+    CreationIntent(RootComponentCreationEffectRecord),
+    Created {
+        effect: RootComponentCreationEffectRecord,
+        canister: Principal,
+    },
 }
 
 ///
@@ -370,10 +403,6 @@ pub struct ComponentRegistryChildRecord {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "stable Registry values retain direct canonical records without heap-indirection semantics"
-)]
 pub enum ComponentRegistryEntryRecord {
     Partition(ComponentRegistryPartitionRecord),
     Child(ComponentRegistryChildRecord),
@@ -885,7 +914,7 @@ impl RootComponentRegistryStore {
             {
                 return match existing {
                     ComponentRegistryEntryRecord::ChildAllocation(existing)
-                        if existing == record =>
+                        if existing.has_same_reservation(&record) =>
                     {
                         Ok(RootComponentRegistryCommitOutcome::Existing)
                     }
@@ -954,6 +983,81 @@ impl RootComponentRegistryStore {
             state.current = Some(next_meta);
             cell.set(state);
             Ok(RootComponentRegistryCommitOutcome::Committed)
+        })
+    }
+
+    pub(crate) fn replace_child_allocation(
+        expected_meta: &RootComponentRegistryMetaRecord,
+        next_meta: RootComponentRegistryMetaRecord,
+        expected_partition: &ComponentRegistryPartitionRecord,
+        next_partition: ComponentRegistryPartitionRecord,
+        expected_record: &RootComponentChildAllocationRecord,
+        next_record: RootComponentChildAllocationRecord,
+    ) -> Result<(), RootComponentAllocationCommitError> {
+        let component = expected_record.component;
+        let operation_key =
+            ComponentRegistryEntryKey::child_allocation(component, expected_record.operation_id);
+        if !next_record.has_same_reservation(expected_record)
+            || next_partition.binding != expected_partition.binding
+            || next_partition.provisioning_origin != expected_partition.provisioning_origin
+            || next_partition.release_set != expected_partition.release_set
+            || next_partition.revision != expected_partition.revision
+            || next_partition.content_hash != expected_partition.content_hash
+            || next_partition.directory_synchronized_at_ns
+                != expected_partition.directory_synchronized_at_ns
+            || next_partition.reserved_descendants != expected_partition.reserved_descendants
+            || next_partition.committed_descendants != expected_partition.committed_descendants
+        {
+            return Err(RootComponentAllocationCommitError::ConflictingChildEntry);
+        }
+
+        ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            let current_meta = state
+                .current
+                .as_ref()
+                .ok_or(RootComponentAllocationCommitError::Uninitialized)?;
+            if current_meta != expected_meta {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            let current_partition = COMPONENT_REGISTRY_ENTRIES
+                .with_borrow(|map| {
+                    map.get(&ComponentRegistryEntryKey::partition(component))
+                        .and_then(|entry| match entry {
+                            ComponentRegistryEntryRecord::Partition(record) => Some(record),
+                            ComponentRegistryEntryRecord::Child(_)
+                            | ComponentRegistryEntryRecord::ChildAllocation(_)
+                            | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                        })
+                })
+                .ok_or(RootComponentAllocationCommitError::ConflictingPartition)?;
+            let current_record = COMPONENT_REGISTRY_ENTRIES
+                .with_borrow(|map| {
+                    map.get(&operation_key).and_then(|entry| match entry {
+                        ComponentRegistryEntryRecord::ChildAllocation(record) => Some(record),
+                        ComponentRegistryEntryRecord::Partition(_)
+                        | ComponentRegistryEntryRecord::Child(_)
+                        | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                    })
+                })
+                .ok_or(RootComponentAllocationCommitError::MissingOperation)?;
+            if &current_partition != expected_partition || &current_record != expected_record {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+
+            COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
+                map.insert(
+                    operation_key,
+                    ComponentRegistryEntryRecord::ChildAllocation(next_record),
+                );
+                map.insert(
+                    ComponentRegistryEntryKey::partition(component),
+                    ComponentRegistryEntryRecord::Partition(next_partition),
+                );
+            });
+            state.current = Some(next_meta);
+            cell.set(state);
+            Ok(())
         })
     }
 

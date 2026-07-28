@@ -118,6 +118,18 @@ pub struct RootComponentChildAllocationStatusRequest {
 }
 
 ///
+/// RootComponentChildCreationRequest
+///
+/// Parent command continuing one already reserved direct-child operation.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentChildCreationRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+}
+
+///
 /// RootComponentCreationRequest
 ///
 /// Controller command continuing one already reserved top-level Component operation.
@@ -447,7 +459,7 @@ pub struct RootComponentAllocationResponse {
 ///
 /// RootComponentChildAllocationResponse
 ///
-/// Durable direct-child reservation returned identically for exact parent retry.
+/// Durable direct-child lifecycle progress returned identically for exact parent retry.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -463,6 +475,8 @@ pub struct RootComponentChildAllocationResponse {
     pub maximum_registry_bytes: u64,
     pub reserved_against_registry: ComponentRegistryHead,
     pub release_set: FleetSubnetRootReleaseSet,
+    pub phase: RootComponentAllocationPhase,
+    pub creation: Option<RootComponentCreationEvidence>,
 }
 
 ///
@@ -752,6 +766,10 @@ mod tests {
             operation_id: request.operation_id,
             component,
         };
+        let creation_request = RootComponentChildCreationRequest {
+            operation_id: request.operation_id,
+            component,
+        };
         let response = RootComponentChildAllocationResponse {
             operation_id: request.operation_id,
             component,
@@ -769,11 +787,15 @@ mod tests {
                 )),
                 manifest_digest: ReleaseSetDigest::from_bytes([16; 32]),
             },
+            phase: RootComponentAllocationPhase::Reserved,
+            creation: None,
         };
 
         let request_bytes = candid::encode_one(&request).expect("encode child reservation");
         let status_bytes =
             candid::encode_one(status_request).expect("encode child reservation status");
+        let creation_bytes =
+            candid::encode_one(creation_request).expect("encode child creation request");
         let response_bytes = candid::encode_one(&response).expect("encode child response");
 
         assert_eq!(
@@ -785,6 +807,11 @@ mod tests {
             candid::decode_one::<RootComponentChildAllocationStatusRequest>(&status_bytes)
                 .expect("decode child reservation status"),
             status_request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentChildCreationRequest>(&creation_bytes)
+                .expect("decode child creation request"),
+            creation_request
         );
         assert_eq!(
             candid::decode_one::<RootComponentChildAllocationResponse>(&response_bytes)

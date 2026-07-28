@@ -1,6 +1,6 @@
 //! Module: ops::component_registry
 //!
-//! Responsibility: read and commit Component Registry authority and allocation reservations.
+//! Responsibility: read and commit Component Registry authority and lifecycle progress.
 //! Does not own: Store, Fleet Registry, topology, admission, or lifecycle validation.
 //! Boundary: converts stable records into read-only views before workflow use.
 
@@ -9,15 +9,16 @@ use crate::{
         ComponentRegistryChildRecord, ComponentRegistryParentRoleCountRecord,
         ComponentRegistryPartitionRecord, RootComponentAllocationCommitError,
         RootComponentAllocationProgressRecord, RootComponentAllocationRecord,
-        RootComponentChildAllocationRecord, RootComponentCommitmentRecord,
-        RootComponentCreationEffectRecord, RootComponentInitialInventoryRecord,
-        RootComponentInstallEffectRecord, RootComponentMembershipRecord,
-        RootComponentRegistryCommitError, RootComponentRegistryMetaRecord,
-        RootComponentRegistryStore,
+        RootComponentChildAllocationProgressRecord, RootComponentChildAllocationRecord,
+        RootComponentCommitmentRecord, RootComponentCreationEffectRecord,
+        RootComponentInitialInventoryRecord, RootComponentInstallEffectRecord,
+        RootComponentMembershipRecord, RootComponentRegistryCommitError,
+        RootComponentRegistryMetaRecord, RootComponentRegistryStore,
     },
     view::component_registry::{
         ComponentRegistryPartitionView, RootComponentAllocationProgressView,
-        RootComponentAllocationView, RootComponentChildAllocationView, RootComponentCommitmentView,
+        RootComponentAllocationView, RootComponentChildAllocationProgressView,
+        RootComponentChildAllocationView, RootComponentCommitmentView,
         RootComponentCreationEffectView, RootComponentInitialInventoryView,
         RootComponentInstallEffectView, RootComponentMembershipView, RootComponentRegistryView,
     },
@@ -825,11 +826,12 @@ impl ComponentRegistryOps {
             maximum_registry_bytes: decision.maximum_registry_bytes,
             reserved_against_registry,
             release_set: current.release_set,
+            progress: RootComponentChildAllocationProgressRecord::Reserved,
         };
         if let Some(existing) =
             RootComponentRegistryStore::child_allocation(record.component, operation_id)
         {
-            return if existing == record {
+            return if existing.has_same_reservation(&record) {
                 Ok(child_allocation_record_to_view(existing))
             } else {
                 Err(InternalError::conflict(
@@ -923,6 +925,189 @@ impl ComponentRegistryOps {
         )
         .map_err(map_allocation_commit_error)?;
         Ok(child_allocation_record_to_view(record))
+    }
+
+    pub(crate) fn validate_child_creation_capacity(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        plan: &RootComponentCreationPlan,
+    ) -> Result<(), InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        let record = RootComponentRegistryStore::child_allocation(component, operation_id)
+            .ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component Child allocation operation has not been reserved",
+                )
+            })?;
+        validate_child_creation_authority(&current, &partition, &record, plan)?;
+        if !matches!(
+            record.progress,
+            RootComponentChildAllocationProgressRecord::Reserved
+        ) {
+            return Err(InternalError::conflict(
+                "Component Child allocation has already crossed its creation-intent boundary",
+            ));
+        }
+        let charged_entry_bytes = child_creation_charged_entry_bytes(&record, plan);
+        child_creation_capacity(&current, &partition, &record, charged_entry_bytes).map(|_| ())
+    }
+
+    pub(crate) fn begin_child_creation(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        plan: RootComponentCreationPlan,
+        cost_guard_settlement: ReplayCostGuardSettlement,
+    ) -> Result<RootComponentChildAllocationView, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        let record = RootComponentRegistryStore::child_allocation(component, operation_id)
+            .ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component Child allocation operation has not been reserved",
+                )
+            })?;
+        validate_child_creation_authority(&current, &partition, &record, &plan)?;
+        if !matches!(
+            record.progress,
+            RootComponentChildAllocationProgressRecord::Reserved
+        ) {
+            return Err(InternalError::conflict(
+                "Component Child allocation has already crossed its creation-intent boundary",
+            ));
+        }
+
+        let charged_entry_bytes = child_creation_charged_entry_bytes(&record, &plan);
+        let (next_partition, registry_delta) =
+            child_creation_capacity(&current, &partition, &record, charged_entry_bytes)?;
+        let mut next_record = record.clone();
+        next_record.progress = RootComponentChildAllocationProgressRecord::CreationIntent(
+            RootComponentCreationEffectRecord {
+                wasm_store: plan.wasm_store,
+                payload_hash: plan.payload_hash,
+                payload_size_bytes: plan.payload_size_bytes,
+                initial_cycles: plan.initial_cycles,
+                controller: plan.controller,
+                cost_guard_settlement,
+                charged_entry_bytes,
+            },
+        );
+        validate_charged_child_record_size(&next_record, charged_entry_bytes)?;
+        let mut next_meta = current.clone();
+        next_meta.encoded_bytes = next_meta
+            .encoded_bytes
+            .checked_add(registry_delta)
+            .ok_or_else(|| {
+                InternalError::resource_exhausted("Component Registry bytes overflow")
+            })?;
+
+        RootComponentRegistryStore::replace_child_allocation(
+            &current,
+            next_meta,
+            &partition,
+            next_partition,
+            &record,
+            next_record.clone(),
+        )
+        .map_err(map_allocation_commit_error)?;
+        Ok(child_allocation_record_to_view(next_record))
+    }
+
+    pub(crate) fn mark_child_created(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        canister: Principal,
+    ) -> Result<RootComponentChildAllocationView, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        let record = RootComponentRegistryStore::child_allocation(component, operation_id)
+            .ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component Child allocation operation has not been reserved",
+                )
+            })?;
+        let effect = match &record.progress {
+            RootComponentChildAllocationProgressRecord::CreationIntent(effect) => effect.clone(),
+            RootComponentChildAllocationProgressRecord::Created {
+                canister: existing, ..
+            } if existing == &canister => return Ok(child_allocation_record_to_view(record)),
+            RootComponentChildAllocationProgressRecord::Created { .. } => {
+                return Err(InternalError::conflict(
+                    "Component Child allocation is already bound to a different created Canister",
+                ));
+            }
+            RootComponentChildAllocationProgressRecord::Reserved => {
+                return Err(InternalError::conflict(
+                    "Component Child allocation has no durable creation intent",
+                ));
+            }
+        };
+        if canister == Principal::anonymous()
+            || canister == current.root.fleet_subnet_root
+            || canister == current.root.authority.binding.coordinator
+            || canister == partition.binding.canister_id
+            || canister == record.parent_canister_id
+            || RootComponentRegistryStore::component_for_principal(canister).is_some()
+        {
+            return Err(InternalError::conflict(
+                "created Component Child principal conflicts with protected Registry authority",
+            ));
+        }
+
+        let charged_entry_bytes = effect.charged_entry_bytes;
+        let mut next_record = record.clone();
+        next_record.progress =
+            RootComponentChildAllocationProgressRecord::Created { effect, canister };
+        validate_charged_child_record_size(&next_record, charged_entry_bytes)?;
+        let mut next_meta = current.clone();
+        next_meta.known_created_component_canisters = next_meta
+            .known_created_component_canisters
+            .checked_add(1)
+            .ok_or_else(|| {
+                InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "known-created Component Canister count overflowed",
+                )
+            })?;
+        let allocated_component_canisters = current
+            .reserved_component_instances
+            .checked_add(current.committed_component_instances)
+            .and_then(|count| count.checked_add(current.managed_descendants))
+            .ok_or_else(|| {
+                InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "allocated Component-tree Canister count overflowed",
+                )
+            })?;
+        if next_meta.known_created_component_canisters > allocated_component_canisters {
+            return Err(InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "known-created Component Canisters exceed allocated Component-tree capacity",
+            ));
+        }
+
+        RootComponentRegistryStore::replace_child_allocation(
+            &current,
+            next_meta,
+            &partition,
+            partition.clone(),
+            &record,
+            next_record.clone(),
+        )
+        .map_err(map_allocation_commit_error)?;
+        Ok(child_allocation_record_to_view(next_record))
     }
 
     pub(crate) fn commit_verified(
@@ -1723,6 +1908,22 @@ fn child_allocation_record_to_view(
         maximum_registry_bytes: record.maximum_registry_bytes,
         reserved_against_registry: record.reserved_against_registry,
         release_set: record.release_set,
+        progress: match record.progress {
+            RootComponentChildAllocationProgressRecord::Reserved => {
+                RootComponentChildAllocationProgressView::Reserved
+            }
+            RootComponentChildAllocationProgressRecord::CreationIntent(effect) => {
+                RootComponentChildAllocationProgressView::CreationIntent(
+                    creation_effect_record_to_view(effect),
+                )
+            }
+            RootComponentChildAllocationProgressRecord::Created { effect, canister } => {
+                RootComponentChildAllocationProgressView::Created {
+                    effect: creation_effect_record_to_view(effect),
+                    canister,
+                }
+            }
+        },
     }
 }
 
@@ -1785,6 +1986,131 @@ fn child_reservation_partition(
         canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
         "Component Child reservation byte accounting did not converge",
     ))
+}
+
+fn validate_child_creation_authority(
+    current: &RootComponentRegistryMetaRecord,
+    partition: &ComponentRegistryPartitionRecord,
+    record: &RootComponentChildAllocationRecord,
+    plan: &RootComponentCreationPlan,
+) -> Result<(), InternalError> {
+    validate_partition_record(partition)?;
+    validate_child_allocation_record(record)?;
+    if partition.binding.component != record.component
+        || partition.release_set != record.release_set
+        || partition.status != ComponentLifecycleStatus::Active
+        || plan.controller != current.root.fleet_subnet_root
+        || plan.wasm_store == Principal::anonymous()
+        || plan.payload_hash == [0; 32]
+        || plan.payload_size_bytes == 0
+    {
+        return Err(InternalError::conflict(
+            "Component Child creation authority differs from its active reservation",
+        ));
+    }
+    Ok(())
+}
+
+fn child_creation_capacity(
+    current: &RootComponentRegistryMetaRecord,
+    partition: &ComponentRegistryPartitionRecord,
+    record: &RootComponentChildAllocationRecord,
+    charged_entry_bytes: u64,
+) -> Result<(ComponentRegistryPartitionRecord, u64), InternalError> {
+    let current_partition_bytes = RootComponentRegistryStore::partition_entry_bytes(partition);
+    let current_record_bytes = RootComponentRegistryStore::child_allocation_entry_bytes(record);
+    if charged_entry_bytes < current_record_bytes {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
+            "Component Child creation charge is smaller than its reservation record",
+        ));
+    }
+    let current_total = current_partition_bytes
+        .checked_add(current_record_bytes)
+        .ok_or_else(|| InternalError::resource_exhausted("Component Registry bytes overflow"))?;
+    let mut next = partition.clone();
+
+    for _ in 0..8 {
+        let next_total = RootComponentRegistryStore::partition_entry_bytes(&next)
+            .checked_add(charged_entry_bytes)
+            .ok_or_else(|| {
+                InternalError::resource_exhausted("Component Registry bytes overflow")
+            })?;
+        let registry_delta = next_total.checked_sub(current_total).ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
+                "Component Child creation precharge unexpectedly reduced Registry bytes",
+            )
+        })?;
+        let encoded_bytes = partition
+            .encoded_bytes
+            .checked_add(registry_delta)
+            .ok_or_else(|| {
+                InternalError::resource_exhausted("Component Registry bytes overflow")
+            })?;
+        if next.encoded_bytes == encoded_bytes {
+            if encoded_bytes > record.maximum_registry_bytes {
+                return Err(InternalError::resource_exhausted(format!(
+                    "Component Child creation requires {encoded_bytes} bytes, exceeding protected Component limit {}",
+                    record.maximum_registry_bytes
+                )));
+            }
+            let root_encoded_bytes = current
+                .encoded_bytes
+                .checked_add(registry_delta)
+                .ok_or_else(|| {
+                    InternalError::resource_exhausted("Component Registry bytes overflow")
+                })?;
+            if root_encoded_bytes > current.root.limits.maximum_registry_bytes {
+                return Err(InternalError::resource_exhausted(format!(
+                    "Component Child creation requires {root_encoded_bytes} root Registry bytes, exceeding protected limit {}",
+                    current.root.limits.maximum_registry_bytes
+                )));
+            }
+            return Ok((next, registry_delta));
+        }
+        next.encoded_bytes = encoded_bytes;
+    }
+    Err(InternalError::invariant(
+        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+        "Component Child creation byte accounting did not converge",
+    ))
+}
+
+fn child_creation_charged_entry_bytes(
+    record: &RootComponentChildAllocationRecord,
+    plan: &RootComponentCreationPlan,
+) -> u64 {
+    let mut maximum = record.clone();
+    maximum.progress = RootComponentChildAllocationProgressRecord::Created {
+        effect: RootComponentCreationEffectRecord {
+            wasm_store: plan.wasm_store,
+            payload_hash: plan.payload_hash,
+            payload_size_bytes: u64::MAX,
+            initial_cycles: Cycles::new(u128::MAX),
+            controller: plan.controller,
+            cost_guard_settlement: ReplayCostGuardSettlement {
+                quota_intent_id: IntentId(u64::MAX),
+                reservation_intent_id: IntentId(u64::MAX),
+            },
+            charged_entry_bytes: u64::MAX,
+        },
+        canister: Principal::from_slice(&[u8::MAX; 29]),
+    };
+    RootComponentRegistryStore::child_allocation_entry_bytes(&maximum)
+}
+
+fn validate_charged_child_record_size(
+    record: &RootComponentChildAllocationRecord,
+    charged_entry_bytes: u64,
+) -> Result<(), InternalError> {
+    if RootComponentRegistryStore::child_allocation_entry_bytes(record) > charged_entry_bytes {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component Child allocation exceeded its precharged stable footprint",
+        ));
+    }
+    Ok(())
 }
 
 fn creation_charged_entry_bytes(
@@ -2777,6 +3103,7 @@ mod tests {
     fn child_reservation_is_parent_indexed_idempotent_and_capacity_bounded() {
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
         let root = root_binding();
+        let root_canister = root.fleet_subnet_root;
         let component = ComponentInstanceId::from_generated_bytes([10; 32]);
         let parent = candid::Principal::from_slice(&[18; 29]);
         let release_set = FleetSubnetRootReleaseSet {
@@ -2918,16 +3245,116 @@ mod tests {
         assert!(error.is_public_resource_exhausted());
         assert_eq!(RootComponentRegistryStore::export(), before);
 
-        let mut conflicting = decision;
+        let mut conflicting = decision.clone();
         conflicting.maximum_descendants -= 1;
         assert!(
             ComponentRegistryOps::reserve_child_allocation(
                 conflicting,
                 [44; 32],
-                repeated.reserved_against_registry,
+                repeated.reserved_against_registry.clone(),
             )
             .is_err()
         );
+
+        let plan = RootComponentCreationPlan {
+            wasm_store: candid::Principal::from_slice(&[50; 29]),
+            payload_hash: [51; 32],
+            payload_size_bytes: 4_096,
+            initial_cycles: Cycles::new(5_000_000_000_000),
+            controller: root_canister,
+        };
+        let before_creation = RootComponentRegistryStore::export();
+        let mut capacity_exhausted = before_creation.clone();
+        let maximum_registry_bytes = capacity_exhausted
+            .current
+            .as_ref()
+            .expect("Registry status")
+            .encoded_bytes;
+        capacity_exhausted
+            .current
+            .as_mut()
+            .expect("Registry status")
+            .root
+            .limits
+            .maximum_registry_bytes = maximum_registry_bytes;
+        RootComponentRegistryStore::import(capacity_exhausted);
+        let error =
+            ComponentRegistryOps::validate_child_creation_capacity(component, [44; 32], &plan)
+                .expect_err("creation must fit before the paid effect");
+        assert!(error.is_public_resource_exhausted());
+        assert!(matches!(
+            ComponentRegistryOps::child_allocation(component, [44; 32])
+                .expect("child allocation")
+                .expect("reserved child")
+                .progress,
+            RootComponentChildAllocationProgressView::Reserved
+        ));
+        RootComponentRegistryStore::import(before_creation);
+
+        ComponentRegistryOps::validate_child_creation_capacity(component, [44; 32], &plan)
+            .expect("child creation capacity");
+        let intent = ComponentRegistryOps::begin_child_creation(
+            component,
+            [44; 32],
+            plan,
+            ReplayCostGuardSettlement {
+                quota_intent_id: IntentId(52),
+                reservation_intent_id: IntentId(53),
+            },
+        )
+        .expect("child creation intent");
+        let intent_bytes = ComponentRegistryOps::current()
+            .expect("Registry status")
+            .encoded_bytes;
+        assert!(intent_bytes > current.encoded_bytes);
+        assert!(matches!(
+            intent.progress,
+            RootComponentChildAllocationProgressView::CreationIntent(_)
+        ));
+
+        let interrupted = RootComponentRegistryStore::export();
+        RootComponentRegistryStore::import(interrupted);
+        let canister = candid::Principal::from_slice(&[54; 29]);
+        let created = ComponentRegistryOps::mark_child_created(component, [44; 32], canister)
+            .expect("record created child");
+        let repeated_created =
+            ComponentRegistryOps::mark_child_created(component, [44; 32], canister)
+                .expect("exact created child retry");
+
+        assert_eq!(created, repeated_created);
+        assert!(matches!(
+            created.progress,
+            RootComponentChildAllocationProgressView::Created {
+                canister: created_canister,
+                ..
+            } if created_canister == canister
+        ));
+        let created_status = ComponentRegistryOps::current().expect("Registry status");
+        assert_eq!(created_status.known_created_component_canisters, 2);
+        assert_eq!(created_status.managed_descendants, 1);
+        assert_eq!(created_status.encoded_bytes, intent_bytes);
+        assert_eq!(
+            ComponentRegistryOps::partition(component)
+                .expect("partition read")
+                .expect("partition")
+                .reserved_descendants,
+            1
+        );
+        assert!(
+            ComponentRegistryOps::mark_child_created(
+                component,
+                [44; 32],
+                candid::Principal::from_slice(&[55; 29]),
+            )
+            .is_err()
+        );
+        let retried_reservation = ComponentRegistryOps::reserve_child_allocation(
+            decision,
+            [44; 32],
+            repeated.reserved_against_registry,
+        )
+        .expect("reservation retry preserves creation progress");
+        assert_eq!(retried_reservation, repeated_created);
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
 
