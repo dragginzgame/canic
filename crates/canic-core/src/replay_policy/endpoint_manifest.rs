@@ -140,7 +140,7 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         command_kind("management.control_plane.component_install.v1"),
         CostClass::ManagementDeployment,
         Some(DEPLOYMENT_QUOTA_V1),
-        None,
+        Some(DEPLOYMENT_RESERVE_V1),
     ),
     update_monotonic_transition(
         "canic_prepare_fleet_credential_generation",
