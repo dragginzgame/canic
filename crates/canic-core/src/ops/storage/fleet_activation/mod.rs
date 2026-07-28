@@ -11,8 +11,9 @@ use crate::{
     dto::fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
     dto::{
         component_registry::{
+            ComponentDirectoryHead, ComponentDirectoryProvenance,
             ComponentRuntimeActivationEvidence, ComponentRuntimeActivationRequest,
-            ComponentRuntimeDirectoryPreparationRequest,
+            ComponentRuntimeDirectoryAuthority, ComponentRuntimeDirectoryPreparationRequest,
             ComponentRuntimeDirectorySynchronizationRequest, ComponentRuntimePhase,
             ComponentRuntimeStatusResponse,
         },
@@ -22,6 +23,10 @@ use crate::{
             FleetCredentialGenerationRef, FleetCredentialGenerationRequest,
             FleetCredentialManifest,
         },
+        fleet_registry::{
+            FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistryVersion,
+            FleetSubnetRootDirectoryEntry, FleetSubnetRootStatus,
+        },
     },
     ids::{AppId, FleetBinding, ManagedCanisterBinding, ReleaseBuildId},
     model::fleet_activation::{
@@ -30,13 +35,16 @@ use crate::{
         prepare_root_install,
     },
     storage::stable::fleet_activation::{
-        ComponentRuntimeActivationRecord, ComponentRuntimeDirectoryRecord, ComponentRuntimeRecord,
-        FleetActivation, FleetActivationData, FleetActivationEvidenceRecord,
-        FleetActivationIdentityRecord, FleetActivationRecord, FleetActivationStateRecord,
-        FleetCascadeActivationEvidenceRecord, FleetCascadeManifestEntryRecord,
-        FleetCredentialGenerationRefRecord, FleetCredentialManifestEntryRecord,
-        FleetCredentialManifestRecord, FleetSubnetRootAuthorityRecord,
-        MAX_FLEET_ACTIVATION_RECORD_BYTES,
+        ComponentDirectoryHeadRecord, ComponentDirectoryProvenanceRecord,
+        ComponentRuntimeActivationRecord, ComponentRuntimeDirectoryAuthorityRecord,
+        ComponentRuntimeDirectoryRecord, ComponentRuntimeRecord, FleetActivation,
+        FleetActivationData, FleetActivationEvidenceRecord, FleetActivationIdentityRecord,
+        FleetActivationRecord, FleetActivationStateRecord, FleetCascadeActivationEvidenceRecord,
+        FleetCascadeManifestEntryRecord, FleetCredentialGenerationRefRecord,
+        FleetCredentialManifestEntryRecord, FleetCredentialManifestRecord,
+        FleetDirectoryProvenanceRecord, FleetDirectorySnapshotRecord, FleetRegistryVersionRecord,
+        FleetSubnetRootAuthorityRecord, FleetSubnetRootDirectoryEntryRecord,
+        FleetSubnetRootStatusRecord, MAX_FLEET_ACTIVATION_RECORD_BYTES,
     },
     view::fleet_activation::{ComponentRuntimeActivationTransition, FleetActivationTransition},
 };
@@ -182,7 +190,7 @@ impl FleetActivationOps {
             }
         })?;
         let next = ComponentRuntimeDirectoryRecord {
-            authority: request.authority,
+            authority: component_runtime_directory_dto_to_record(request.authority),
             authority_hash,
         };
         if component_runtime
@@ -244,7 +252,7 @@ impl FleetActivationOps {
             }
         })?;
         let next = ComponentRuntimeDirectoryRecord {
-            authority: request.authority,
+            authority: component_runtime_directory_dto_to_record(request.authority),
             authority_hash,
         };
         if current == &next {
@@ -777,7 +785,9 @@ fn component_runtime_status(
         (false, None, None) => (ComponentRuntimePhase::AwaitingDirectory, None, None, None),
         (false, Some(directory), None) => (
             ComponentRuntimePhase::DirectoryPrepared,
-            Some(directory.authority),
+            Some(component_runtime_directory_record_to_dto(
+                &directory.authority,
+            )),
             Some(directory.authority_hash),
             None,
         ),
@@ -786,7 +796,9 @@ fn component_runtime_status(
         {
             (
                 ComponentRuntimePhase::Active,
-                Some(directory.authority),
+                Some(component_runtime_directory_record_to_dto(
+                    &directory.authority,
+                )),
                 Some(directory.authority_hash),
                 Some(ComponentRuntimeActivationEvidence {
                     directory_authority_hash: activation.directory.authority_hash,
@@ -855,7 +867,9 @@ fn component_runtime_activation_status(
         .directory
         .clone();
     let mut status = component_runtime_status(record)?;
-    status.authority = Some(activation_directory.authority);
+    status.authority = Some(component_runtime_directory_record_to_dto(
+        &activation_directory.authority,
+    ));
     status.authority_hash = Some(activation_directory.authority_hash);
     Ok(status)
 }
@@ -863,13 +877,12 @@ fn component_runtime_activation_status(
 fn validate_component_runtime_directory_record(
     directory: &ComponentRuntimeDirectoryRecord,
 ) -> Result<(), FleetActivationOpsError> {
+    let authority = component_runtime_directory_record_to_dto(&directory.authority);
     let authority_hash =
-        crate::ops::component_runtime::ComponentRuntimeOps::directory_authority_hash(
-            &directory.authority,
-        )
-        .map_err(|_| FleetActivationOpsError::InvalidRecord {
-            reason: "Component runtime Directory authority cannot be hashed".to_string(),
-        })?;
+        crate::ops::component_runtime::ComponentRuntimeOps::directory_authority_hash(&authority)
+            .map_err(|_| FleetActivationOpsError::InvalidRecord {
+                reason: "Component runtime Directory authority cannot be hashed".to_string(),
+            })?;
     if authority_hash != directory.authority_hash {
         return Err(FleetActivationOpsError::InvalidRecord {
             reason: "Component runtime Directory authority does not match its retained hash"
@@ -877,6 +890,127 @@ fn validate_component_runtime_directory_record(
         });
     }
     Ok(())
+}
+
+fn component_runtime_directory_dto_to_record(
+    authority: ComponentRuntimeDirectoryAuthority,
+) -> ComponentRuntimeDirectoryAuthorityRecord {
+    let ComponentRuntimeDirectoryAuthority { fleet, component } = authority;
+    let FleetDirectorySnapshot {
+        provenance: fleet_provenance,
+        fleet_subnet_roots,
+    } = fleet;
+    let FleetDirectoryProvenance {
+        registry,
+        source_fleet_subnet_root: fleet_source,
+    } = fleet_provenance;
+    let ComponentDirectoryHead {
+        provenance: component_provenance,
+        descendant_count,
+    } = component;
+    let ComponentDirectoryProvenance {
+        component,
+        source_fleet_subnet_root: component_source,
+        component_registry_revision,
+        component_registry_content_hash,
+        synchronized_at_ns,
+    } = component_provenance;
+
+    ComponentRuntimeDirectoryAuthorityRecord {
+        fleet: FleetDirectorySnapshotRecord {
+            provenance: FleetDirectoryProvenanceRecord {
+                registry: FleetRegistryVersionRecord {
+                    authority: registry.authority,
+                    revision: registry.revision,
+                    content_hash: registry.content_hash,
+                },
+                source_fleet_subnet_root: fleet_source,
+            },
+            fleet_subnet_roots: fleet_subnet_roots
+                .into_iter()
+                .map(|entry| FleetSubnetRootDirectoryEntryRecord {
+                    placement_subnet: entry.placement_subnet,
+                    fleet_subnet_root: entry.fleet_subnet_root,
+                    status: fleet_subnet_root_status_dto_to_record(entry.status),
+                })
+                .collect(),
+        },
+        component: ComponentDirectoryHeadRecord {
+            provenance: ComponentDirectoryProvenanceRecord {
+                component,
+                source_fleet_subnet_root: component_source,
+                component_registry_revision,
+                component_registry_content_hash,
+                synchronized_at_ns,
+            },
+            descendant_count,
+        },
+    }
+}
+
+fn component_runtime_directory_record_to_dto(
+    authority: &ComponentRuntimeDirectoryAuthorityRecord,
+) -> ComponentRuntimeDirectoryAuthority {
+    ComponentRuntimeDirectoryAuthority {
+        fleet: FleetDirectorySnapshot {
+            provenance: FleetDirectoryProvenance {
+                registry: FleetRegistryVersion {
+                    authority: authority.fleet.provenance.registry.authority.clone(),
+                    revision: authority.fleet.provenance.registry.revision,
+                    content_hash: authority.fleet.provenance.registry.content_hash,
+                },
+                source_fleet_subnet_root: authority.fleet.provenance.source_fleet_subnet_root,
+            },
+            fleet_subnet_roots: authority
+                .fleet
+                .fleet_subnet_roots
+                .iter()
+                .map(|entry| FleetSubnetRootDirectoryEntry {
+                    placement_subnet: entry.placement_subnet,
+                    fleet_subnet_root: entry.fleet_subnet_root,
+                    status: fleet_subnet_root_status_record_to_dto(entry.status),
+                })
+                .collect(),
+        },
+        component: ComponentDirectoryHead {
+            provenance: ComponentDirectoryProvenance {
+                component: authority.component.provenance.component.clone(),
+                source_fleet_subnet_root: authority.component.provenance.source_fleet_subnet_root,
+                component_registry_revision: authority
+                    .component
+                    .provenance
+                    .component_registry_revision,
+                component_registry_content_hash: authority
+                    .component
+                    .provenance
+                    .component_registry_content_hash,
+                synchronized_at_ns: authority.component.provenance.synchronized_at_ns,
+            },
+            descendant_count: authority.component.descendant_count,
+        },
+    }
+}
+
+const fn fleet_subnet_root_status_dto_to_record(
+    status: FleetSubnetRootStatus,
+) -> FleetSubnetRootStatusRecord {
+    match status {
+        FleetSubnetRootStatus::Joining => FleetSubnetRootStatusRecord::Joining,
+        FleetSubnetRootStatus::Active => FleetSubnetRootStatusRecord::Active,
+        FleetSubnetRootStatus::Draining => FleetSubnetRootStatusRecord::Draining,
+        FleetSubnetRootStatus::Removed => FleetSubnetRootStatusRecord::Removed,
+    }
+}
+
+const fn fleet_subnet_root_status_record_to_dto(
+    status: FleetSubnetRootStatusRecord,
+) -> FleetSubnetRootStatus {
+    match status {
+        FleetSubnetRootStatusRecord::Joining => FleetSubnetRootStatus::Joining,
+        FleetSubnetRootStatusRecord::Active => FleetSubnetRootStatus::Active,
+        FleetSubnetRootStatusRecord::Draining => FleetSubnetRootStatus::Draining,
+        FleetSubnetRootStatusRecord::Removed => FleetSubnetRootStatus::Removed,
+    }
 }
 
 const fn credential_dto_to_record(
@@ -1260,6 +1394,7 @@ mod tests {
             operation_id: root_input.install_id,
             authority,
         };
+        let expected_authority = request.authority.clone();
         let prepared = FleetActivationOps::prepare_component_runtime_directory(
             request.clone(),
             authority_hash,
@@ -1270,6 +1405,7 @@ mod tests {
                 .expect("repeat Directory preparation");
         assert_eq!(repeated, prepared);
         assert_eq!(prepared.phase, ComponentRuntimePhase::DirectoryPrepared);
+        assert_eq!(prepared.authority, Some(expected_authority));
         assert_eq!(prepared.authority_hash, Some(authority_hash));
         assert_eq!(prepared.activation, None);
         assert_eq!(

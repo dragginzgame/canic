@@ -1,5 +1,8 @@
 //! Repo-only PocketIC fixtures layered on top of `ic-testkit`.
 
+#[cfg(test)]
+use std::sync::{Mutex, MutexGuard, PoisonError};
+
 mod artifacts;
 mod audit;
 mod canic;
@@ -32,3 +35,14 @@ pub use root::{
     ensure_root_release_artifacts_built, load_root_wasm, restore_root_cached_baseline,
     setup_root_topology,
 };
+
+#[cfg(test)]
+static PIC_UNIT_TEST_SERIAL: Mutex<()> = Mutex::new(());
+
+// Serialize the crate-local PocketIC unit journeys before they build artifacts or start a server.
+#[cfg(test)]
+fn acquire_pic_unit_test_serial_guard() -> MutexGuard<'static, ()> {
+    PIC_UNIT_TEST_SERIAL
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+}
