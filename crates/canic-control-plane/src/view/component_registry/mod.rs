@@ -12,8 +12,8 @@ use canic_core::{
         root_store::RootStoreBootstrapRequest,
     },
     ids::{
-        CanisterRole, ComponentInstanceId, ComponentSpecId, FleetSubnetRootBinding,
-        FleetSubnetRootReleaseSet,
+        CanisterRole, ComponentBinding, ComponentInstanceId, ComponentSpecId,
+        FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
     },
 };
 
@@ -69,6 +69,21 @@ pub enum RootComponentAllocationProgressView {
         effect: RootComponentCreationEffectView,
         canister: Principal,
     },
+    InstallIntent {
+        creation: RootComponentCreationEffectView,
+        canister: Principal,
+        installation: RootComponentInstallEffectView,
+    },
+    Installed {
+        creation: RootComponentCreationEffectView,
+        canister: Principal,
+        installation: RootComponentInstallEffectView,
+    },
+    Verified {
+        creation: RootComponentCreationEffectView,
+        canister: Principal,
+        installation: RootComponentInstallEffectView,
+    },
 }
 
 ///
@@ -84,6 +99,21 @@ pub struct RootComponentCreationEffectView {
     pub payload_size_bytes: u64,
     pub initial_cycles: Cycles,
     pub controller: Principal,
+    pub cost_guard_settlement: ReplayCostGuardSettlement,
+    pub charged_entry_bytes: u64,
+}
+
+///
+/// RootComponentInstallEffectView
+///
+/// Read-only exact raw artifact, install source, target identity and cost settlement.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentInstallEffectView {
+    pub raw_module_hash: [u8; 32],
+    pub chunk_hashes: Vec<Vec<u8>>,
+    pub binding: ComponentBinding,
     pub cost_guard_settlement: ReplayCostGuardSettlement,
     pub charged_entry_bytes: u64,
 }

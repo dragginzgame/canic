@@ -84,6 +84,7 @@ impl SubnetDirectoryOps {
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn import_args_allow_incomplete(
         args: SubnetDirectoryInput,
     ) -> Result<(), InternalError> {

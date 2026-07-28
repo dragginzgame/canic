@@ -582,6 +582,7 @@ dependencies = [
  "canic-control-plane",
  "canic-core",
  "canic-host",
+ "flate2",
  "ic-testkit",
  "serde_json",
 ]

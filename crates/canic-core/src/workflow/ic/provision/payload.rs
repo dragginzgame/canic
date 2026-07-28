@@ -2,61 +2,59 @@
 //!
 //! Responsibility: build non-root canister initialization payloads.
 //! Does not own: environment storage, Directory schemas, or install execution.
-//! Boundary: snapshots current environment and Directories into init payload DTOs.
+//! Boundary: emits infrastructure authority only; Components use the root Registry lifecycle.
 
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::{abi::v1::CanisterInitPayload, env::EnvBootstrapArgs},
+    dto::{
+        abi::v1::{CanisterInitAuthority, CanisterInitPayload},
+        env::EnvBootstrapArgs,
+    },
     ids::CanisterRole,
     ops::{
-        config::ConfigOps,
         runtime::env::EnvOps,
-        storage::{
-            StorageOpsError,
-            directory::{fleet::FleetDirectoryOps, subnet::SubnetDirectoryOps},
-            fleet_activation::FleetActivationOps,
-        },
-        topology::directory::current_provenance,
+        storage::{StorageOpsError, fleet_activation::FleetActivationOps},
     },
     workflow::ic::provision::ProvisionWorkflow,
 };
 
 impl ProvisionWorkflow {
     pub fn build_nonroot_init_payload(
+        target_pid: Principal,
         role: &CanisterRole,
         parent_pid: Principal,
     ) -> Result<CanisterInitPayload, InternalError> {
-        let component_spec = if role.is_wasm_store() {
-            None
-        } else if EnvOps::is_root() {
-            Some(ConfigOps::try_get_component_spec_id_by_role(role)?)
-        } else {
-            Some(EnvOps::component_spec()?)
-        };
+        if !role.is_wasm_store() {
+            return Err(InternalError::unavailable(
+                "application Canisters must be installed through the Component Registry lifecycle",
+            ));
+        }
         let env = EnvBootstrapArgs {
             fleet_root_pid: Some(EnvOps::fleet_root_pid()?),
-            component_spec,
+            component_spec: None,
             subnet_pid: Some(EnvOps::subnet_pid()?),
             root_pid: Some(EnvOps::root_pid()?),
             canister_role: Some(role.clone()),
             parent_pid: Some(parent_pid),
         };
 
-        let provenance = current_provenance()?;
-        let fleet_directory = FleetDirectoryOps::snapshot_args(provenance.clone());
-        let subnet_directory = SubnetDirectoryOps::snapshot_args(provenance);
         let identity = FleetActivationOps::status(EnvOps::is_root())
             .map_err(StorageOpsError::from)?
             .identity;
+        if target_pid == Principal::anonymous() {
+            return Err(InternalError::invalid_input(
+                "managed infrastructure target Canister is anonymous",
+            ));
+        }
 
         Ok(CanisterInitPayload {
-            fleet: identity.fleet,
             install_id: identity.operation_id,
             release_build_id: identity.release_build_id,
-            env,
-            fleet_directory,
-            subnet_directory,
+            authority: CanisterInitAuthority::Infrastructure {
+                fleet: identity.fleet,
+                env,
+            },
         })
     }
 }

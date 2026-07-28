@@ -4,7 +4,7 @@ use crate::dto::prelude::*;
 // EnvBootstrapArgs
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct EnvBootstrapArgs {
     // fleet
     pub fleet_root_pid: Option<Principal>,

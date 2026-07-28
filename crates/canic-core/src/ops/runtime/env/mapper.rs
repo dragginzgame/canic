@@ -31,6 +31,7 @@ impl EnvRecordMapper {
 
     pub fn validated_to_record(validated: ValidatedEnv) -> EnvRecord {
         EnvRecord {
+            managed_binding: validated.managed_binding,
             fleet_root_pid: Some(validated.fleet_root_pid),
             component_spec: validated.component_spec,
             subnet_pid: Some(validated.subnet_pid),

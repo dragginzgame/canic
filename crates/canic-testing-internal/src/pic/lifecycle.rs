@@ -1,15 +1,18 @@
-use crate::canister::{APP, SCALE_HUB, TEST, USER_HUB};
+use crate::canister::TEST;
 use candid::{Principal, encode_args, encode_one};
 use canic::{
     dto::{
-        abi::v1::CanisterInitPayload,
+        abi::v1::{CanisterInitAuthority, CanisterInitPayload},
         env::EnvBootstrapArgs,
-        topology::{
-            DirectoryEntryInput, DirectoryProvenance, FleetDirectoryInput, SubnetDirectoryInput,
-        },
     },
-    ids::{CanisterRole, ComponentSpecId},
+    ids::{
+        ComponentBinding, ComponentInstanceId, ComponentSpecAdmission, ComponentSpecId,
+        CyclesFundingBudget, FleetCoordinatorBinding, FleetRegistryAuthority,
+        FleetSubnetRootBinding, FleetSubnetRootLimits, SubnetId,
+    },
 };
+use canic_core::cdk::types::Cycles;
+use canic_host::release_set::AppConfigSnapshot;
 use ic_testkit::{
     Fake,
     artifacts::{read_wasm, test_target_dir, workspace_root_for},
@@ -125,29 +128,19 @@ pub fn install_lifecycle_boundary_fixture() -> LifecycleBoundaryFixture {
 #[must_use]
 pub fn invalid_init_args() -> Vec<u8> {
     let identity = managed_test_init_identity();
-    let provenance = DirectoryProvenance {
-        fleet: identity.fleet.clone(),
-        source_root: Fake::principal(1),
-    };
     let payload = CanisterInitPayload {
-        fleet: identity.fleet,
         install_id: identity.install_id,
         release_build_id: identity.release_build_id,
-        env: EnvBootstrapArgs {
-            fleet_root_pid: None,
-            component_spec: None,
-            subnet_pid: None,
-            root_pid: None,
-            canister_role: None,
-            parent_pid: None,
-        },
-        fleet_directory: FleetDirectoryInput {
-            provenance: provenance.clone(),
-            entries: Vec::new(),
-        },
-        subnet_directory: SubnetDirectoryInput {
-            provenance,
-            entries: Vec::new(),
+        authority: CanisterInitAuthority::Infrastructure {
+            fleet: identity.fleet,
+            env: EnvBootstrapArgs {
+                fleet_root_pid: None,
+                component_spec: None,
+                subnet_pid: None,
+                root_pid: None,
+                canister_role: None,
+                parent_pid: None,
+            },
         },
     };
 
@@ -181,31 +174,66 @@ fn build_canisters_once(workspace_root: &Path) {
 fn init_payload(canister_id: Principal) -> CanisterInitPayload {
     let root_pid = Fake::principal(1);
     let identity = managed_test_init_identity();
-    let provenance = DirectoryProvenance {
-        fleet: identity.fleet.clone(),
-        source_root: root_pid,
+    let component_spec =
+        ComponentSpecId::try_from(String::from("test")).expect("test Component Spec ID");
+    let config = AppConfigSnapshot::load(&workspace_root().join("apps/test/canic.toml"))
+        .expect("load lifecycle fixture config");
+    let spec = config
+        .component_topology()
+        .get(&component_spec)
+        .expect("test Component Spec");
+    let admission = ComponentSpecAdmission {
+        component_spec: component_spec.clone(),
+        spec_hash: spec.spec_hash,
+        maximum_root_instances: 1,
     };
-    let fleet_directory = fleet_directory_input(provenance.clone());
-    let subnet_directory = subnet_directory_input(canister_id, provenance);
-
-    let env = EnvBootstrapArgs {
-        fleet_root_pid: Some(root_pid),
-        component_spec: Some(
-            ComponentSpecId::try_from(String::from("test")).expect("test Component Spec ID"),
-        ),
-        subnet_pid: Some(Fake::principal(2)),
-        root_pid: Some(root_pid),
-        canister_role: Some(TEST),
-        parent_pid: Some(root_pid),
+    let admissions = vec![admission];
+    let component_topology_digest = config
+        .component_topology()
+        .project_for_admissions(&admissions)
+        .and_then(|topology| topology.digest())
+        .expect("lifecycle Component topology projection");
+    let placement_subnet = SubnetId::from_principal(Fake::principal(2));
+    let authority = FleetRegistryAuthority {
+        binding: FleetCoordinatorBinding {
+            fleet: identity.fleet,
+            coordinator_subnet: SubnetId::from_principal(Fake::principal(3)),
+            coordinator: Fake::principal(4),
+        },
+        epoch: 1,
+    };
+    let root = FleetSubnetRootBinding {
+        authority: authority.clone(),
+        placement_subnet,
+        fleet_subnet_root: root_pid,
+        component_admissions: admissions,
+        component_topology_digest,
+        limits: FleetSubnetRootLimits {
+            maximum_component_instances: 1,
+            maximum_managed_canisters: 2,
+            maximum_registry_bytes: 1_048_576,
+            maximum_wasm_store_bytes: 1_048_576,
+            cycles_funding: CyclesFundingBudget {
+                window_secs: 3_600,
+                maximum_cycles: Cycles::new(1_000_000_000_000),
+            },
+        },
+    };
+    let binding = ComponentBinding {
+        authority,
+        component: ComponentInstanceId::from_generated_bytes([5; 32]),
+        component_spec,
+        spec_hash: spec.spec_hash,
+        role: TEST,
+        placement_subnet,
+        fleet_subnet_root: root_pid,
+        canister_id,
     };
 
     CanisterInitPayload {
-        fleet: identity.fleet,
         install_id: identity.install_id,
         release_build_id: identity.release_build_id,
-        env,
-        fleet_directory,
-        subnet_directory,
+        authority: CanisterInitAuthority::Component { root, binding },
     }
 }
 
@@ -213,60 +241,6 @@ fn init_payload(canister_id: Principal) -> CanisterInitPayload {
 fn encode_init_args(payload: CanisterInitPayload) -> Vec<u8> {
     encode_args::<(CanisterInitPayload, Option<Vec<u8>>)>((payload, None))
         .expect("encode init args")
-}
-
-// Build the minimal Fleet Directory input used by lifecycle-boundary installs.
-fn fleet_directory_input(provenance: DirectoryProvenance) -> FleetDirectoryInput {
-    let roles = [USER_HUB, SCALE_HUB];
-    FleetDirectoryInput {
-        provenance,
-        entries: directory_entries(&roles, None, 10),
-    }
-}
-
-// Build the minimal Subnet Directory input used by lifecycle-boundary installs.
-fn subnet_directory_input(
-    canister_id: Principal,
-    provenance: DirectoryProvenance,
-) -> SubnetDirectoryInput {
-    let roles = [APP, USER_HUB, SCALE_HUB, TEST];
-    let override_role = Some((TEST, canister_id));
-    SubnetDirectoryInput {
-        provenance,
-        entries: directory_entries(&roles, override_role, 20),
-    }
-}
-
-// Build deterministic Directory entries with one optional explicit role override.
-fn directory_entries(
-    roles: &[CanisterRole],
-    override_role: Option<(CanisterRole, Principal)>,
-    mut next_id: u8,
-) -> Vec<DirectoryEntryInput> {
-    let mut entries = Vec::new();
-
-    for role in roles {
-        let pid = if let Some((override_role, override_pid)) = &override_role {
-            if role == override_role {
-                *override_pid
-            } else {
-                let pid = Fake::principal(u32::from(next_id));
-                next_id = next_id.saturating_add(1);
-                pid
-            }
-        } else {
-            let pid = Fake::principal(u32::from(next_id));
-            next_id = next_id.saturating_add(1);
-            pid
-        };
-
-        entries.push(DirectoryEntryInput {
-            role: role.clone(),
-            pid,
-        });
-    }
-
-    entries
 }
 
 fn workspace_root() -> PathBuf {
@@ -288,22 +262,15 @@ mod tests {
     #[test]
     fn init_payload_component_spec_matches_embedded_canister_config() {
         let payload = init_payload(Fake::principal(3));
-        let component_spec = payload
-            .env
-            .component_spec
-            .as_ref()
-            .expect("managed lifecycle Component Spec");
-        let role = payload
-            .env
-            .canister_role
-            .as_ref()
-            .expect("managed lifecycle role");
+        let CanisterInitAuthority::Component { binding, .. } = payload.authority else {
+            panic!("managed lifecycle Component authority");
+        };
         let config =
             parse_config_model(LIFECYCLE_CANISTER_CONFIG).expect("lifecycle canister config");
         let configured_spec = config
-            .get_component_spec(component_spec)
+            .get_component_spec(&binding.component_spec)
             .expect("lifecycle Component Spec must be declared");
 
-        assert_eq!(&configured_spec.component_role, role);
+        assert_eq!(configured_spec.component_role, binding.role);
     }
 }

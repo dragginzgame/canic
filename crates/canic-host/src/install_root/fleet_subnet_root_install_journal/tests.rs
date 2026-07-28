@@ -119,6 +119,7 @@ fn journals_exact_store_bootstrap_and_rejects_a_catalog_outside_root_admissions(
         release_set: fixture.plan.plan.fleet_subnet_roots[0].initial_release_set,
         catalog: vec![RootStoreCatalogEntry {
             role: CanisterRole::from("project_hub"),
+            raw_module_hash: [8; 32],
             payload_hash: [9; 32],
             payload_size_bytes: 1_024,
         }],
@@ -142,6 +143,7 @@ fn journals_exact_store_bootstrap_and_rejects_a_catalog_outside_root_admissions(
         .expect("Store evidence");
     inadmissible.catalog.push(RootStoreCatalogEntry {
         role: CanisterRole::from("unplanned"),
+        raw_module_hash: [11; 32],
         payload_hash: [10; 32],
         payload_size_bytes: 1_024,
     });
@@ -172,6 +174,7 @@ fn journals_exact_registry_join_sync_and_active_mirror_evidence() {
         release_set: fixture.plan.plan.fleet_subnet_roots[0].initial_release_set,
         catalog: vec![RootStoreCatalogEntry {
             role: CanisterRole::from("project_hub"),
+            raw_module_hash: [8; 32],
             payload_hash: [9; 32],
             payload_size_bytes: 1_024,
         }],

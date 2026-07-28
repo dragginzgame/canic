@@ -8,10 +8,19 @@ pub mod query;
 
 use crate::{
     InternalError, InternalErrorOrigin,
+    config::ComponentTopologyError,
     domain::policy::pure::env::{EnvInput, EnvPolicyError, validate_or_default},
     dto::env::EnvBootstrapArgs,
-    ids::CanisterRole,
-    ops::{ic::build_network::BuildNetworkOps, runtime::env::EnvOps},
+    ids::{
+        CanisterRole, ComponentBinding, ComponentChildBinding, FleetSubnetRootBinding,
+        ManagedCanisterBinding,
+    },
+    model::env::ValidatedEnv,
+    ops::{
+        config::ConfigOps,
+        ic::{IcOps, build_network::BuildNetworkOps},
+        runtime::env::EnvOps,
+    },
 };
 
 ///
@@ -53,4 +62,62 @@ impl EnvWorkflow {
 
         EnvOps::import_validated(validated)
     }
+
+    /// Initialize a top-level Component from exact root-issued Registry authority.
+    pub fn init_component(
+        root: &FleetSubnetRootBinding,
+        binding: ComponentBinding,
+        compiled_role: &CanisterRole,
+    ) -> Result<(), InternalError> {
+        let topology = ConfigOps::component_topology()?;
+        topology
+            .validate_component_binding(root, &binding)
+            .map_err(map_binding_error)?;
+        if &binding.role != compiled_role || binding.canister_id != IcOps::canister_self() {
+            return Err(InternalError::invalid_input(
+                "Component init authority differs from the compiled role or target Canister",
+            ));
+        }
+
+        EnvOps::import_validated(ValidatedEnv {
+            managed_binding: Some(ManagedCanisterBinding::Component(binding.clone())),
+            fleet_root_pid: root.fleet_subnet_root,
+            component_spec: Some(binding.component_spec),
+            subnet_pid: root.fleet_subnet_root,
+            root_pid: root.fleet_subnet_root,
+            canister_role: binding.role,
+            parent_pid: root.fleet_subnet_root,
+        })
+    }
+
+    /// Initialize one Component descendant from exact root-issued Registry authority.
+    pub fn init_component_child(
+        root: &FleetSubnetRootBinding,
+        binding: ComponentChildBinding,
+        compiled_role: &CanisterRole,
+    ) -> Result<(), InternalError> {
+        let topology = ConfigOps::component_topology()?;
+        topology
+            .validate_component_child_binding(root, &binding)
+            .map_err(map_binding_error)?;
+        if &binding.role != compiled_role || binding.canister_id != IcOps::canister_self() {
+            return Err(InternalError::invalid_input(
+                "Component-child init authority differs from the compiled role or target Canister",
+            ));
+        }
+
+        EnvOps::import_validated(ValidatedEnv {
+            managed_binding: Some(ManagedCanisterBinding::ComponentChild(binding.clone())),
+            fleet_root_pid: root.fleet_subnet_root,
+            component_spec: Some(binding.component.component_spec),
+            subnet_pid: root.fleet_subnet_root,
+            root_pid: root.fleet_subnet_root,
+            canister_role: binding.role,
+            parent_pid: binding.parent_canister_id,
+        })
+    }
+}
+
+fn map_binding_error(error: ComponentTopologyError) -> InternalError {
+    InternalError::invalid_input(format!("managed init authority is invalid: {error}"))
 }

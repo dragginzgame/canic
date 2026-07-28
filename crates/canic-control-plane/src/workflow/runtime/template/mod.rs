@@ -40,6 +40,43 @@ pub async fn resolved_approved_module_source_for_role(
     approved_module_source_from_manifest(&manifest).await
 }
 
+/// Resolve one exact root-local Store artifact selected by protected release-set evidence.
+pub(in crate::workflow) async fn resolved_root_store_module_source(
+    store_pid: Principal,
+    release_build_id: canic_core::ids::ReleaseBuildId,
+    role: &crate::ids::CanisterRole,
+    payload_hash: [u8; 32],
+    payload_size_bytes: u64,
+) -> Result<ApprovedModuleSource, InternalError> {
+    let template_id = TemplateId::owned(format!(
+        "{}{role}",
+        canic_core::dto::root_store::ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX
+    ));
+    let version = TemplateVersion::owned(release_build_id.to_string());
+    let info = WasmStoreInternalClient::new(store_pid)
+        .info(&template_id, &version)
+        .await?;
+    if info.chunk_hashes.is_empty()
+        || info
+            .chunk_hashes
+            .iter()
+            .any(|chunk_hash| chunk_hash.len() != 32)
+    {
+        return Err(InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            format!("root Store artifact '{template_id}' has invalid chunk metadata"),
+        ));
+    }
+
+    Ok(ApprovedModuleSource::chunked(
+        store_pid,
+        release_source_label(&template_id, &version),
+        payload_hash.to_vec(),
+        info.chunk_hashes,
+        payload_size_bytes,
+    ))
+}
+
 // Convert one approved manifest into the neutral chunk-backed install source contract.
 pub async fn approved_module_source_from_manifest(
     manifest: &TemplateManifestResponse,

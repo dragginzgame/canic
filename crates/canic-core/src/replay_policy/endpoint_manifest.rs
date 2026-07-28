@@ -135,6 +135,13 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         Some(DEPLOYMENT_QUOTA_V1),
         Some(DEPLOYMENT_RESERVE_V1),
     ),
+    update_costed_response_idempotent(
+        "canic_root_component_install",
+        command_kind("management.control_plane.component_install.v1"),
+        CostClass::ManagementDeployment,
+        Some(DEPLOYMENT_QUOTA_V1),
+        None,
+    ),
     update_monotonic_transition(
         "canic_prepare_fleet_credential_generation",
         command_kind("fleet_activation.prepare_credential_generation.v1"),
@@ -161,6 +168,7 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     query_read_only("canic_health"),
     query_read_only("canic_readiness"),
     query_read_only("canic_runtime_status"),
+    query_read_only("canic_managed_canister_binding"),
     update_monotonic_transition(
         "canic_template_prepare_admin",
         command_kind("wasm_store.template_prepare_admin.v1"),

@@ -170,3 +170,16 @@ pub struct ComponentChildBinding {
     pub role: CanisterRole,
     pub canister_id: Principal,
 }
+
+///
+/// ManagedCanisterBinding
+///
+/// Immutable Registry-issued identity retained by one managed application Canister.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub enum ManagedCanisterBinding {
+    Component(ComponentBinding),
+    ComponentChild(ComponentChildBinding),
+}

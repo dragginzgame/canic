@@ -57,7 +57,7 @@ pub(super) async fn install_canister(
         CanisterOpsMetricReason::Ok,
     );
 
-    let payload = match ProvisionWorkflow::build_nonroot_init_payload(role, parent_pid) {
+    let payload = match ProvisionWorkflow::build_nonroot_init_payload(pid, role, parent_pid) {
         Ok(payload) => payload,
         Err(err) => {
             record_canister_op_failure(role, CanisterOpsMetricOperation::Install, &err);

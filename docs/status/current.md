@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.21`.
-- The latest published release is `v0.100.21` at
-  `afa6ea4994b3b5cf15b9855a05d406e90bb697a0`.
-- The `v0.100.21` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `f579643b0594cb3f860f5c6837bc784ba62fe49719566ddf108a04cbf6ad64a4`.
+- The workspace package version is `0.100.22`.
+- The latest published release is `v0.100.22` at
+  `484b75919ae2f58f82f375dd9a6fb85edff7a0c5`.
+- The `v0.100.22` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `6b1affbfdc0f6ec65601fb8f86dbe937160149523f0691757d3468675b66f7a7`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -234,7 +234,7 @@ Historical detail is archived at:
   and active `canic-core` state at 30-62 with reserve through 99. Historical
   per-ID tombstones are removed and application memory begins consistently at
   ID 100.
-- Open `0.100.22` advances a reserved top-level Component through exact
+- Released `0.100.22` advances a reserved top-level Component through exact
   Store-bound empty-Canister creation. The root independently reverifies its
   protected authority, active Registry Mirror/Fleet Directory and local Store,
   then freezes the exact artifact, initial cycles, sole root controller,
@@ -244,6 +244,16 @@ Historical detail is archived at:
   repeated, while exact `Created` retry returns the original principal.
   Creation installs no Wasm, commits no `ComponentBinding` or committed count,
   publishes no Directory and leaves the root runtime `Prepared`.
+- Open `0.100.23` continues a created top-level Component through exact
+  root-local Store installation. It hard-cuts managed application init to an
+  immutable Registry-derived `ComponentBinding`, durably journals
+  `InstallIntent → Installed → Verified`, and independently checks the sole
+  root controller, exact gzip-payload status hash and retained target binding.
+  Interrupted exact retry never repeats an already observed install and may
+  retry only after proving the target still has no module. Raw-Wasm and gzip
+  payload hashes remain distinct release authorities. Committed counts,
+  per-Component Registry partitions, Directory publication and runtime
+  activation remain later boundaries.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1540,17 +1550,18 @@ Fresh installation now journals and verifies the Coordinator, every planned
 Fleet Subnet Root, each root's exact topology-admitted local Store, and every
 root's Registry `Joining` row, private snapshot candidate and exact
 Coordinator acknowledgement, then atomically commits and independently
-verifies the complete Coordinator Registry as all-`Active`. It now also
+verifies the complete Coordinator Registry as all-`Active`. It also
 atomically activates and independently verifies every root's exact matching
 Registry Mirror/Fleet Directory. Each root can now reserve exact admitted
-top-level Component identity and capacity. Open 0.100.22 continues the same
-operation through exact Store-bound, journalled empty-Canister creation and
-stops at durable `Created` evidence. Next, install and attest the frozen Wasm,
-then commit the protected `ComponentBinding` and Registry partition. Hard-cut
-the retired environment/role and `SubnetDirectory` install payload instead of
-adapting it. Do not bypass Store or Registry evidence, permit nested Component
-declarations, merge roots belonging to different Fleets on one Subnet or
-consume an earlier installation.
+top-level Component identity and capacity, create its empty Canister, install
+the exact Store-backed Wasm under an immutable `ComponentBinding` and verify
+the live module, controller and retained binding through durable exact retry.
+Next, atomically commit that verified Component into counters and its
+root-local Registry partition, then derive Directory authority and activate
+runtime only after the complete admitted initial inventory is committed. Do
+not bypass Store or Registry evidence, permit nested Component declarations,
+merge roots belonging to different Fleets on one Subnet or consume an earlier
+installation.
 
 ## Historical Release Detail
 

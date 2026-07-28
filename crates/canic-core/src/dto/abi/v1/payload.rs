@@ -1,37 +1,56 @@
-use crate::dto::{
-    env::EnvBootstrapArgs,
-    prelude::*,
-    topology::{FleetDirectoryInput, SubnetDirectoryInput},
+use crate::{
+    dto::{env::EnvBootstrapArgs, prelude::*},
+    ids::{
+        ComponentBinding, ComponentChildBinding, FleetBinding, FleetSubnetRootBinding,
+        ReleaseBuildId,
+    },
 };
-use crate::ids::{FleetBinding, ReleaseBuildId};
+
+///
+/// CanisterInitAuthority
+///
+/// Exact authority from which one managed non-root initializes its immutable identity.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub enum CanisterInitAuthority {
+    Infrastructure {
+        fleet: FleetBinding,
+        env: EnvBootstrapArgs,
+    },
+    Component {
+        root: FleetSubnetRootBinding,
+        binding: ComponentBinding,
+    },
+    ComponentChild {
+        root: FleetSubnetRootBinding,
+        binding: ComponentChildBinding,
+    },
+}
 
 //
 // CanisterInitPayload
 //
 
-#[derive(CandidType, Debug, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct CanisterInitPayload {
-    pub fleet: FleetBinding,
     pub install_id: [u8; 32],
     pub release_build_id: ReleaseBuildId,
-    pub env: EnvBootstrapArgs,
-    pub fleet_directory: FleetDirectoryInput,
-    pub subnet_directory: SubnetDirectoryInput,
+    pub authority: CanisterInitAuthority,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        dto::topology::{DirectoryEntryInput, DirectoryProvenance},
-        ids::{
-            AppId, CanisterRole, CanonicalNetworkId, ComponentSpecId, FleetId, FleetKey,
-            ReleaseBuildNonce,
-        },
+    use crate::cdk::types::Cycles;
+    use crate::ids::{
+        AppId, CanisterRole, CanonicalNetworkId, ComponentInstanceId, ComponentSpecId,
+        ComponentTopologyDigest, CyclesFundingBudget, FleetCoordinatorBinding, FleetId, FleetKey,
+        FleetRegistryAuthority, FleetSubnetRootLimits, ReleaseBuildNonce, SubnetId,
     };
 
     #[test]
-    fn managed_nonroot_init_payload_roundtrips_the_exact_fleet_identity_and_directories() {
+    fn managed_nonroot_init_payload_roundtrips_the_exact_component_authority() {
         let fleet = FleetBinding {
             fleet: FleetKey {
                 canonical_network_id: CanonicalNetworkId::public_ic(),
@@ -42,37 +61,48 @@ mod tests {
         let release_build_id =
             ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([2; 32]));
         let principal = Principal::from_slice(&[3; 29]);
+        let authority = FleetRegistryAuthority {
+            binding: FleetCoordinatorBinding {
+                fleet,
+                coordinator_subnet: SubnetId::from_principal(Principal::from_slice(&[4; 29])),
+                coordinator: Principal::from_slice(&[5; 29]),
+            },
+            epoch: 1,
+        };
+        let root = FleetSubnetRootBinding {
+            authority: authority.clone(),
+            placement_subnet: SubnetId::from_principal(Principal::from_slice(&[6; 29])),
+            fleet_subnet_root: Principal::from_slice(&[7; 29]),
+            component_admissions: Vec::new(),
+            component_topology_digest: ComponentTopologyDigest::from_bytes([8; 32]),
+            limits: FleetSubnetRootLimits {
+                maximum_component_instances: 1,
+                maximum_managed_canisters: 20_001,
+                maximum_registry_bytes: 16 * 1_024 * 1_024,
+                maximum_wasm_store_bytes: 16 * 1_024 * 1_024,
+                cycles_funding: CyclesFundingBudget {
+                    window_secs: 3_600,
+                    maximum_cycles: Cycles::new(1_000_000_000_000),
+                },
+            },
+        };
+        let binding = ComponentBinding {
+            authority,
+            component: ComponentInstanceId::from_generated_bytes([9; 32]),
+            component_spec: ComponentSpecId::try_from(String::from("default"))
+                .expect("default Component Spec ID"),
+            spec_hash: [10; 32],
+            role: CanisterRole::new("app"),
+            placement_subnet: root.placement_subnet,
+            fleet_subnet_root: root.fleet_subnet_root,
+            canister_id: principal,
+        };
         let payload = CanisterInitPayload {
-            fleet: fleet.clone(),
-            install_id: [4; 32],
+            install_id: [11; 32],
             release_build_id,
-            env: EnvBootstrapArgs {
-                fleet_root_pid: Some(principal),
-                component_spec: Some(
-                    ComponentSpecId::try_from(String::from("default"))
-                        .expect("default Component Spec ID"),
-                ),
-                subnet_pid: Some(principal),
-                root_pid: Some(principal),
-                canister_role: Some(CanisterRole::new("app")),
-                parent_pid: Some(principal),
-            },
-            fleet_directory: FleetDirectoryInput {
-                provenance: DirectoryProvenance {
-                    fleet: fleet.clone(),
-                    source_root: principal,
-                },
-                entries: vec![DirectoryEntryInput {
-                    role: CanisterRole::new("app"),
-                    pid: principal,
-                }],
-            },
-            subnet_directory: SubnetDirectoryInput {
-                provenance: DirectoryProvenance {
-                    fleet: fleet.clone(),
-                    source_root: principal,
-                },
-                entries: Vec::new(),
+            authority: CanisterInitAuthority::Component {
+                root,
+                binding: binding.clone(),
             },
         };
 
@@ -80,10 +110,17 @@ mod tests {
         let decoded: CanisterInitPayload =
             candid::decode_one(&bytes).expect("decode managed non-root init payload");
 
-        assert_eq!(decoded.fleet, fleet);
-        assert_eq!(decoded.install_id, [4; 32]);
+        assert_eq!(decoded.install_id, [11; 32]);
         assert_eq!(decoded.release_build_id, release_build_id);
-        assert_eq!(decoded.fleet_directory.entries.len(), 1);
-        assert!(decoded.subnet_directory.entries.is_empty());
+        assert_eq!(
+            decoded.authority,
+            CanisterInitAuthority::Component {
+                root: match &payload.authority {
+                    CanisterInitAuthority::Component { root, .. } => root.clone(),
+                    _ => unreachable!(),
+                },
+                binding,
+            }
+        );
     }
 }

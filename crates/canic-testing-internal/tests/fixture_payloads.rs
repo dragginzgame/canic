@@ -1,6 +1,6 @@
 use candid::{decode_args, decode_one};
 use canic::{
-    dto::abi::v1::CanisterInitPayload,
+    dto::abi::v1::{CanisterInitAuthority, CanisterInitPayload},
     ids::{CanisterRole, ComponentSpecId},
 };
 use canic_testing_internal::{
@@ -26,25 +26,26 @@ fn canister_role_constants_have_expected_names() {
     }
 }
 
-// Verify the invalid lifecycle init fixture encodes the intended missing env.
+// Verify the invalid lifecycle init fixture encodes incomplete infrastructure authority.
 #[test]
-fn invalid_init_args_encode_missing_env_fields() {
+fn invalid_init_args_encode_incomplete_infrastructure_authority() {
     let (payload, user_payload): (CanisterInitPayload, Option<Vec<u8>>) =
         decode_args(&invalid_init_args()).expect("decode invalid init args");
     let identity = managed_test_init_identity();
 
     assert!(user_payload.is_none());
-    assert_eq!(payload.fleet, identity.fleet);
     assert_eq!(payload.install_id, identity.install_id);
     assert_eq!(payload.release_build_id, identity.release_build_id);
-    assert!(payload.env.fleet_root_pid.is_none());
-    assert!(payload.env.component_spec.is_none());
-    assert!(payload.env.subnet_pid.is_none());
-    assert!(payload.env.root_pid.is_none());
-    assert!(payload.env.canister_role.is_none());
-    assert!(payload.env.parent_pid.is_none());
-    assert!(payload.fleet_directory.entries.is_empty());
-    assert!(payload.subnet_directory.entries.is_empty());
+    let CanisterInitAuthority::Infrastructure { fleet, env } = payload.authority else {
+        panic!("invalid fixture must carry incomplete infrastructure authority");
+    };
+    assert_eq!(fleet, identity.fleet);
+    assert!(env.fleet_root_pid.is_none());
+    assert!(env.component_spec.is_none());
+    assert!(env.subnet_pid.is_none());
+    assert!(env.root_pid.is_none());
+    assert!(env.canister_role.is_none());
+    assert!(env.parent_pid.is_none());
 }
 
 // Verify the upgrade fixture is the empty tuple expected by no-payload upgrades.

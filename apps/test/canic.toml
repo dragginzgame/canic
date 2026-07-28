@@ -80,6 +80,11 @@ component_role = "app"
 maximum_instances = 1
 topup = {}
 
+[component_specs.test]
+component_role = "test"
+maximum_instances = 1
+topup = {}
+
 # --- User Hub ---
 [component_specs.users]
 component_role = "user_hub"

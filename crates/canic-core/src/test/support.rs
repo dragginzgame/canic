@@ -113,6 +113,7 @@ pub fn import_test_env(
     root_pid: Principal,
 ) {
     let snapshot = EnvRecord {
+        managed_binding: None,
         canister_role: Some(canister_role.into()),
         component_spec: Some(component_spec.into()),
         root_pid: Some(root_pid),

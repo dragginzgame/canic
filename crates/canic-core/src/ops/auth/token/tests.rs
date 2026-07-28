@@ -436,6 +436,7 @@ fn install_verifier_test_config(
 
     Env::import(EnvData {
         record: EnvRecord {
+            managed_binding: None,
             fleet_root_pid: Some(root_pid()),
             component_spec: Some(
                 ComponentSpecId::try_from(String::from("default"))

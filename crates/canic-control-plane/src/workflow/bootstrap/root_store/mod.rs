@@ -43,12 +43,13 @@ pub async fn bootstrap(
     }
 
     let manifest = load_and_validate_manifest(&authority, request)?;
+    let module_hashes = artifact_module_hashes(&manifest)?;
     let staged = exact_staged_manifests(&manifest)?;
 
     super::root::ensure_required_wasm_store_canister().await?;
     let (wasm_store, live_catalog) =
         WasmStorePublicationWorkflow::bootstrap_exact_staged_release_set(staged.clone()).await?;
-    let catalog = verify_live_catalog(&staged, live_catalog)?;
+    let catalog = verify_live_catalog(&staged, live_catalog, &module_hashes)?;
 
     Ok(RootStoreBootstrapResponse {
         fleet_subnet_root: root,
@@ -70,9 +71,10 @@ pub async fn status(
         ));
     }
     let manifest = load_and_validate_manifest(&authority, request)?;
+    let module_hashes = artifact_module_hashes(&manifest)?;
     let staged = exact_staged_manifests(&manifest)?;
     let (wasm_store, live_catalog) = WasmStorePublicationWorkflow::single_store_catalog().await?;
-    let catalog = verify_live_catalog(&staged, live_catalog)?;
+    let catalog = verify_live_catalog(&staged, live_catalog, &module_hashes)?;
 
     Ok(RootStoreBootstrapResponse {
         fleet_subnet_root: root,
@@ -283,9 +285,27 @@ fn is_exact_bootstrap_source(binding: &crate::ids::WasmStoreBinding) -> bool {
     binding == &WASM_STORE_BOOTSTRAP_BINDING || SubnetStateOps::wasm_store_pid(binding).is_some()
 }
 
+fn artifact_module_hashes(
+    manifest: &RootStoreReleaseSetManifest,
+) -> Result<BTreeMap<CanisterRole, [u8; 32]>, InternalError> {
+    let mut module_hashes = BTreeMap::new();
+    for entry in &manifest.entries {
+        let module_hash = decode_sha256(&entry.artifact.wasm_sha256_hex)?;
+        if let Some(existing) = module_hashes.insert(entry.artifact.role.clone(), module_hash)
+            && existing != module_hash
+        {
+            return Err(InternalError::invalid_input(
+                "one role resolves to conflicting raw Wasm module hashes",
+            ));
+        }
+    }
+    Ok(module_hashes)
+}
+
 fn verify_live_catalog(
     expected: &[TemplateManifestResponse],
     observed: Vec<WasmStoreCatalogEntryResponse>,
+    module_hashes: &BTreeMap<CanisterRole, [u8; 32]>,
 ) -> Result<Vec<RootStoreCatalogEntry>, InternalError> {
     let expected = expected
         .iter()
@@ -320,8 +340,14 @@ fn verify_live_catalog(
     observed
         .into_iter()
         .map(|entry| {
+            let raw_module_hash = module_hashes.get(&entry.role).copied().ok_or_else(|| {
+                InternalError::invalid_input(
+                    "live Store catalog role has no protected raw Wasm module hash",
+                )
+            })?;
             Ok(RootStoreCatalogEntry {
                 role: entry.role,
+                raw_module_hash,
                 payload_hash: entry.payload_hash.try_into().map_err(|_| {
                     InternalError::invalid_input("live Store catalog contains a non-SHA-256 hash")
                 })?,
@@ -411,8 +437,16 @@ mod tests {
         let second = manifest("database_b", 2);
         let expected = vec![first.clone(), second.clone()];
 
-        let verified = verify_live_catalog(&expected, vec![catalog(&first), catalog(&second)])
-            .expect("exact live catalog");
+        let module_hashes = BTreeMap::from([
+            (first.role.clone(), [3; 32]),
+            (second.role.clone(), [4; 32]),
+        ]);
+        let verified = verify_live_catalog(
+            &expected,
+            vec![catalog(&first), catalog(&second)],
+            &module_hashes,
+        )
+        .expect("exact live catalog");
         assert_eq!(
             verified
                 .into_iter()
@@ -425,11 +459,16 @@ mod tests {
         );
 
         assert!(
-            verify_live_catalog(&expected, vec![catalog(&second), catalog(&first)]).is_err(),
+            verify_live_catalog(
+                &expected,
+                vec![catalog(&second), catalog(&first)],
+                &module_hashes,
+            )
+            .is_err(),
             "catalog order is part of canonical evidence"
         );
         assert!(
-            verify_live_catalog(&expected, vec![catalog(&first)]).is_err(),
+            verify_live_catalog(&expected, vec![catalog(&first)], &module_hashes).is_err(),
             "a partial catalog must not verify"
         );
     }

@@ -77,6 +77,7 @@ pub fn validate_or_default(raw_env: EnvInput) -> Result<ValidatedEnv, EnvPolicyE
         .ok_or_else(|| EnvPolicyError::MissingEnvFields("parent_pid".to_string()))?;
 
     Ok(ValidatedEnv {
+        managed_binding: None,
         fleet_root_pid,
         component_spec,
         subnet_pid,

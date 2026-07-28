@@ -93,12 +93,15 @@ pub struct RootStoreBootstrapRequest {
 ///
 /// RootStoreCatalogEntry
 ///
-/// Exact byte identity observed in the one live root-local Store.
+/// Exact release-set identity retained after live root-local Store verification.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct RootStoreCatalogEntry {
     pub role: CanisterRole,
+    /// SHA-256 of the raw Wasm qualified by the release set.
+    pub raw_module_hash: [u8; 32],
+    /// SHA-256 of the exact gzip payload retained by the Store.
     pub payload_hash: [u8; 32],
     pub payload_size_bytes: u64,
 }

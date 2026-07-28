@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.23` installs each created top-level Component from its exact
+  root-local Store, hard-cuts managed init to immutable Registry bindings and
+  independently verifies live module, controller and retained-binding
+  evidence through interruption-safe durable progress.
+
 - `0.100.22` advances reserved top-level Components through exact Store-bound,
   cost-guarded empty-Canister creation with durable intent, principal evidence
   and interruption-safe exact retry.
