@@ -14,11 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.23`.
-- The latest published release is `v0.100.23` at
-  `009646df0b565d6e81e5c2e8996b41551d229fed`.
-- The `v0.100.23` source tree is the same commit. Its Cargo.lock SHA-256 is
-  `58e7d95c87f3275de009632ef4155922d91a0f72c1796f9f5db16587755203c7`.
+- The workspace package version is `0.100.24`.
+- The latest published release is `v0.100.24` at
+  `c60a7848f9829d12040efb79661b8337ed356afc`.
+- The `v0.100.24` source tree is the same commit. Its Cargo.lock SHA-256 is
+  `e0c16b3378ccbbbfd8e884ca28a4e6450b6f5fe2faf6a35eff9ebbe6b7ae0301`.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -252,7 +252,7 @@ Historical detail is archived at:
   Interrupted exact retry never repeats an already observed install and may
   retry only after proving the target still has no module. Raw-Wasm and gzip
   payload hashes remain distinct release authorities.
-- Open `0.100.24` atomically advances an exactly verified allocation to
+- Released `0.100.24` atomically advances an exactly verified allocation to
   `Committed`, moves its capacity from reserved to committed counters and
   stores one normalized top-level Component partition plus principal index.
   Every partition has its own revision and domain-separated content hash. Its
@@ -263,6 +263,15 @@ Historical detail is archived at:
   index footprint before the paid effect, while commit converges to exact
   encoded bytes. Component and root remain runtime `Prepared`; Directory
   distribution and activation remain later boundaries.
+- Open `0.100.25` distributes a committed Component's exact active Fleet
+  Directory and Component Directory head directly from its Fleet Subnet Root.
+  The root commitment freezes their combined domain-separated authority hash;
+  the target retains the complete authority in its existing Fleet activation
+  cell and advances only from `AwaitingDirectory` to `DirectoryPrepared`.
+  Exact retry reconciles an uncertain call from target status, independently
+  re-observes the complete retained evidence and then records a fixed-size
+  terminal root receipt. Component and root remain runtime `Prepared`;
+  Registry/Directory-bound Component activation is next.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1565,12 +1574,14 @@ Registry Mirror/Fleet Directory. Each root can now reserve exact admitted
 top-level Component identity and capacity, create its empty Canister, install
 the exact Store-backed Wasm under an immutable `ComponentBinding` and verify
 the live module, controller and retained binding through durable exact retry.
-Next, atomically commit that verified Component into counters and its
-root-local Registry partition, then derive Directory authority and activate
-runtime only after the complete admitted initial inventory is committed. Do
-not bypass Store or Registry evidence, permit nested Component declarations,
-merge roots belonging to different Fleets on one Subnet or consume an earlier
-installation.
+It atomically commits that Component into counters and its root-local Registry
+partition, derives exact Fleet/Component Directory authority, distributes it
+directly and records independently observed target/root preparation evidence.
+Next, activate the Component only from that retained evidence through an
+interruption-safe transition, then activate the root only after its complete
+admitted initial inventory is Active. Do not bypass Store or Registry
+evidence, permit nested Component declarations, merge roots belonging to
+different Fleets on one Subnet or consume an earlier installation.
 
 ## Historical Release Detail
 

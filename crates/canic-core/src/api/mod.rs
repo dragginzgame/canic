@@ -9,6 +9,7 @@ pub mod auth;
 pub mod blob_storage;
 pub mod call;
 pub mod cascade;
+pub mod component_runtime;
 pub mod config;
 pub mod error;
 pub mod fleet_activation;

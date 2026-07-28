@@ -32,6 +32,7 @@ pub(super) fn record_to_status(
         prepared_topology_snapshot_hash: _,
         cascade_manifest,
         credential_manifests,
+        component_runtime: _,
     } = record;
     if is_root != root_authority.is_some() {
         return Err(invalid(

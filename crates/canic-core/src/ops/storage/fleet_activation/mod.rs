@@ -8,25 +8,32 @@ mod mapper;
 
 use crate::{
     config::ComponentTopology,
-    dto::fleet_activation::{
-        FleetActivationIdentity, FleetActivationRequest, FleetActivationStatusResponse,
-        FleetCascadeActivationEvidence, FleetCascadeManifestEntry, FleetCredentialGenerationRef,
-        FleetCredentialGenerationRequest, FleetCredentialManifest,
-    },
     dto::fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
-    ids::{AppId, FleetBinding, ReleaseBuildId},
+    dto::{
+        component_registry::{
+            ComponentRuntimeDirectoryPhase, ComponentRuntimeDirectoryPreparationRequest,
+            ComponentRuntimeDirectoryStatusResponse,
+        },
+        fleet_activation::{
+            FleetActivationIdentity, FleetActivationRequest, FleetActivationStatusResponse,
+            FleetCascadeActivationEvidence, FleetCascadeManifestEntry,
+            FleetCredentialGenerationRef, FleetCredentialGenerationRequest,
+            FleetCredentialManifest,
+        },
+    },
+    ids::{AppId, FleetBinding, ManagedCanisterBinding, ReleaseBuildId},
     model::fleet_activation::{
         NonrootInstallIdentity, PrepareFleetActivationError, PreparedFleetActivation,
         PreparedFleetSubnetRootAuthority, RootInstallIdentity, prepare_nonroot_install,
         prepare_root_install,
     },
     storage::stable::fleet_activation::{
-        FleetActivation, FleetActivationData, FleetActivationEvidenceRecord,
-        FleetActivationIdentityRecord, FleetActivationRecord, FleetActivationStateRecord,
-        FleetCascadeActivationEvidenceRecord, FleetCascadeManifestEntryRecord,
-        FleetCredentialGenerationRefRecord, FleetCredentialManifestEntryRecord,
-        FleetCredentialManifestRecord, FleetSubnetRootAuthorityRecord,
-        MAX_FLEET_ACTIVATION_RECORD_BYTES,
+        ComponentRuntimeDirectoryRecord, ComponentRuntimeRecord, FleetActivation,
+        FleetActivationData, FleetActivationEvidenceRecord, FleetActivationIdentityRecord,
+        FleetActivationRecord, FleetActivationStateRecord, FleetCascadeActivationEvidenceRecord,
+        FleetCascadeManifestEntryRecord, FleetCredentialGenerationRefRecord,
+        FleetCredentialManifestEntryRecord, FleetCredentialManifestRecord,
+        FleetSubnetRootAuthorityRecord, MAX_FLEET_ACTIVATION_RECORD_BYTES,
     },
     view::fleet_activation::FleetActivationTransition,
 };
@@ -98,7 +105,7 @@ impl FleetActivationOps {
             component_topology,
             root_canister,
         )?;
-        initialize_prepared(prepared, None)
+        initialize_prepared(prepared, None, None)
     }
 
     pub(crate) fn initialize_nonroot_prepared(
@@ -106,6 +113,7 @@ impl FleetActivationOps {
         install_id: [u8; 32],
         release_build_id: ReleaseBuildId,
         embedded_release_build_id: ReleaseBuildId,
+        component_binding: Option<ManagedCanisterBinding>,
         application_init_args: Option<Vec<u8>>,
     ) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
         let prepared = prepare_nonroot_install(
@@ -116,7 +124,7 @@ impl FleetActivationOps {
             },
             embedded_release_build_id,
         )?;
-        initialize_prepared(prepared, application_init_args)
+        initialize_prepared(prepared, component_binding, application_init_args)
     }
 
     #[must_use]
@@ -145,6 +153,51 @@ impl FleetActivationOps {
             | FleetActivationStateRecord::Active { identity, .. } => identity,
         };
         Ok(identity.fleet)
+    }
+
+    pub(crate) fn component_runtime_directory_status()
+    -> Result<ComponentRuntimeDirectoryStatusResponse, FleetActivationOpsError> {
+        let record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
+        component_runtime_directory_status(record)
+    }
+
+    pub(crate) fn prepare_component_runtime_directory(
+        request: ComponentRuntimeDirectoryPreparationRequest,
+        authority_hash: [u8; 32],
+    ) -> Result<ComponentRuntimeDirectoryStatusResponse, FleetActivationOpsError> {
+        let mut record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
+        let (operation_id, is_prepared) = match &record.state {
+            FleetActivationStateRecord::Prepared { identity, .. } => (identity.operation_id, true),
+            FleetActivationStateRecord::Active { identity, .. } => (identity.operation_id, false),
+        };
+        if operation_id != request.operation_id {
+            return Err(FleetActivationOpsError::IdentityMismatch);
+        }
+        let component_runtime = record.component_runtime.as_mut().ok_or_else(|| {
+            FleetActivationOpsError::InvalidRecord {
+                reason: "protected non-root is not a managed Component-tree runtime".to_string(),
+            }
+        })?;
+        let next = ComponentRuntimeDirectoryRecord {
+            authority: request.authority,
+            authority_hash,
+        };
+        match &component_runtime.directory {
+            Some(existing) if existing == &next => {
+                return component_runtime_directory_status(record);
+            }
+            Some(_) => return Err(FleetActivationOpsError::EvidenceMismatch),
+            None if !is_prepared => {
+                return Err(FleetActivationOpsError::InvalidTransition {
+                    reason:
+                        "Component Directory authority must be prepared before runtime activation"
+                            .to_string(),
+                });
+            }
+            None => component_runtime.directory = Some(next),
+        }
+        replace_record(record.clone())?;
+        component_runtime_directory_status(record)
     }
 
     pub(crate) fn root_authority() -> Result<FleetSubnetRootAuthority, FleetActivationOpsError> {
@@ -390,6 +443,7 @@ impl FleetActivationOps {
 
 fn initialize_prepared(
     prepared: PreparedFleetActivation,
+    component_binding: Option<ManagedCanisterBinding>,
     application_init_args: Option<Vec<u8>>,
 ) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
     let root_authority = prepared.root_authority.map(root_authority_model_to_record);
@@ -411,6 +465,10 @@ fn initialize_prepared(
         prepared_topology_snapshot_hash: None,
         cascade_manifest: None,
         credential_manifests: Vec::new(),
+        component_runtime: component_binding.map(|binding| ComponentRuntimeRecord {
+            binding,
+            directory: None,
+        }),
     };
     validate_record_bound(&record)?;
     if !FleetActivation::initialize(record) {
@@ -499,6 +557,40 @@ fn replace_record(record: FleetActivationRecord) -> Result<(), FleetActivationOp
     Ok(())
 }
 
+fn component_runtime_directory_status(
+    record: FleetActivationRecord,
+) -> Result<ComponentRuntimeDirectoryStatusResponse, FleetActivationOpsError> {
+    let operation_id = match &record.state {
+        FleetActivationStateRecord::Prepared { identity, .. }
+        | FleetActivationStateRecord::Active { identity, .. } => identity.operation_id,
+    };
+    let component_runtime =
+        record
+            .component_runtime
+            .ok_or_else(|| FleetActivationOpsError::InvalidRecord {
+                reason: "protected non-root is not a managed Component-tree runtime".to_string(),
+            })?;
+    let (phase, authority, authority_hash) = match component_runtime.directory {
+        None => (
+            ComponentRuntimeDirectoryPhase::AwaitingDirectory,
+            None,
+            None,
+        ),
+        Some(directory) => (
+            ComponentRuntimeDirectoryPhase::DirectoryPrepared,
+            Some(directory.authority),
+            Some(directory.authority_hash),
+        ),
+    };
+    Ok(ComponentRuntimeDirectoryStatusResponse {
+        operation_id,
+        binding: component_runtime.binding,
+        phase,
+        authority,
+        authority_hash,
+    })
+}
+
 const fn credential_dto_to_record(
     credential: FleetCredentialGenerationRef,
 ) -> FleetCredentialGenerationRefRecord {
@@ -567,11 +659,23 @@ mod tests {
     use crate::{
         cdk::types::Cycles,
         config::{ComponentLimits, ComponentSpec},
-        dto::fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
+        dto::{
+            component_registry::{
+                ComponentDirectoryHead, ComponentDirectoryProvenance,
+                ComponentRuntimeDirectoryAuthority, ComponentRuntimeDirectoryPhase,
+                ComponentRuntimeDirectoryPreparationRequest,
+            },
+            fleet_registry::{
+                FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistryVersion,
+                FleetSubnetRootDirectoryEntry, FleetSubnetRootStatus,
+            },
+            fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
+        },
         ids::{
-            AppId, CanisterRole, CanonicalNetworkId, ComponentSpecAdmission, CyclesFundingBudget,
-            FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority,
-            FleetSubnetRootBinding, FleetSubnetRootLimits, FleetSubnetRootReleaseSet,
+            AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentInstanceId,
+            ComponentSpecAdmission, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
+            FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootBinding,
+            FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ManagedCanisterBinding,
             ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
         },
         storage::stable::fleet_activation::{
@@ -688,6 +792,7 @@ mod tests {
             input.install_id,
             input.authority.initial_release_set.release_build_id,
             embedded_release_build_id,
+            None,
             application_init_args,
         )
     }
@@ -799,6 +904,98 @@ mod tests {
             FleetActivationOps::snapshot(),
             FleetActivationData::default()
         );
+    }
+
+    #[test]
+    fn component_directory_preparation_is_exact_idempotent_and_remains_prepared() {
+        FleetActivationOps::reset_for_tests();
+        let release_build_id = release_build(35);
+        let root_input = input(release_build_id);
+        let root = root_input.authority.binding.clone();
+        let binding = ComponentBinding {
+            authority: root.authority.clone(),
+            component: ComponentInstanceId::from_generated_bytes([36; 32]),
+            component_spec: "projects".parse().expect("Component Spec"),
+            spec_hash: [10; 32],
+            role: CanisterRole::from("project_hub"),
+            placement_subnet: root.placement_subnet,
+            fleet_subnet_root: root.fleet_subnet_root,
+            canister_id: Principal::from_slice(&[37; 29]),
+        };
+        FleetActivationOps::initialize_nonroot_prepared(
+            root.authority.binding.fleet.clone(),
+            root_input.install_id,
+            release_build_id,
+            release_build_id,
+            Some(ManagedCanisterBinding::Component(binding.clone())),
+            None,
+        )
+        .expect("initialize Component runtime");
+        let awaiting = FleetActivationOps::component_runtime_directory_status()
+            .expect("awaiting Directory status");
+        assert_eq!(
+            awaiting.phase,
+            ComponentRuntimeDirectoryPhase::AwaitingDirectory
+        );
+        assert_eq!(awaiting.authority, None);
+
+        let authority = ComponentRuntimeDirectoryAuthority {
+            fleet: FleetDirectorySnapshot {
+                provenance: FleetDirectoryProvenance {
+                    registry: FleetRegistryVersion {
+                        authority: root.authority,
+                        revision: 3,
+                        content_hash: [38; 32],
+                    },
+                    source_fleet_subnet_root: root.fleet_subnet_root,
+                },
+                fleet_subnet_roots: vec![FleetSubnetRootDirectoryEntry {
+                    placement_subnet: root.placement_subnet,
+                    fleet_subnet_root: root.fleet_subnet_root,
+                    status: FleetSubnetRootStatus::Active,
+                }],
+            },
+            component: ComponentDirectoryHead {
+                provenance: ComponentDirectoryProvenance {
+                    component: binding,
+                    source_fleet_subnet_root: root.fleet_subnet_root,
+                    component_registry_revision: 1,
+                    component_registry_content_hash: [39; 32],
+                    synchronized_at_ns: 40,
+                },
+                descendant_count: 0,
+            },
+        };
+        let authority_hash =
+            crate::ops::component_runtime::ComponentRuntimeOps::directory_authority_hash(
+                &authority,
+            )
+            .expect("Directory authority hash");
+        let request = ComponentRuntimeDirectoryPreparationRequest {
+            operation_id: root_input.install_id,
+            authority,
+        };
+        let prepared = FleetActivationOps::prepare_component_runtime_directory(
+            request.clone(),
+            authority_hash,
+        )
+        .expect("prepare Directory");
+        let repeated =
+            FleetActivationOps::prepare_component_runtime_directory(request, authority_hash)
+                .expect("repeat Directory preparation");
+        assert_eq!(repeated, prepared);
+        assert_eq!(
+            prepared.phase,
+            ComponentRuntimeDirectoryPhase::DirectoryPrepared
+        );
+        assert_eq!(prepared.authority_hash, Some(authority_hash));
+        assert_eq!(
+            FleetActivationOps::status(false)
+                .expect("Fleet activation status")
+                .phase,
+            crate::dto::fleet_activation::FleetActivationPhase::Prepared
+        );
+        FleetActivationOps::reset_for_tests();
     }
 
     #[test]

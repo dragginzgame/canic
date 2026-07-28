@@ -6,10 +6,13 @@
 
 use crate::{
     cdk::types::Cycles,
-    dto::{fleet_registry::FleetRegistryVersion, root_store::RootStoreBootstrapRequest},
+    dto::{
+        fleet_registry::{FleetDirectorySnapshot, FleetRegistryVersion},
+        root_store::RootStoreBootstrapRequest,
+    },
     ids::{
         CanisterRole, ComponentBinding, ComponentInstanceId, ComponentSpecId,
-        ComponentTopologyDigest, FleetSubnetRootReleaseSet,
+        ComponentTopologyDigest, FleetSubnetRootReleaseSet, ManagedCanisterBinding,
     },
 };
 use candid::{CandidType, Principal};
@@ -99,6 +102,17 @@ pub struct RootComponentInstallRequest {
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentCommitRequest {
+    pub operation_id: [u8; 32],
+}
+
+///
+/// RootComponentDirectoryPreparationRequest
+///
+/// Controller command distributing exact Directories to one committed top-level Component.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentDirectoryPreparationRequest {
     pub operation_id: [u8; 32],
 }
 
@@ -223,6 +237,57 @@ pub struct ComponentDirectoryHeadRequest {
 }
 
 ///
+/// ComponentRuntimeDirectoryAuthority
+///
+/// Exact Fleet and Component discovery authority retained by one managed Component-tree node.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentRuntimeDirectoryAuthority {
+    pub fleet: FleetDirectorySnapshot,
+    pub component: ComponentDirectoryHead,
+}
+
+///
+/// ComponentRuntimeDirectoryPreparationRequest
+///
+/// Root-issued exact Directory preparation command for one managed Component-tree node.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentRuntimeDirectoryPreparationRequest {
+    pub operation_id: [u8; 32],
+    pub authority: ComponentRuntimeDirectoryAuthority,
+}
+
+///
+/// ComponentRuntimeDirectoryPhase
+///
+/// Target-local progress before Component runtime activation.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum ComponentRuntimeDirectoryPhase {
+    AwaitingDirectory,
+    DirectoryPrepared,
+}
+
+///
+/// ComponentRuntimeDirectoryStatusResponse
+///
+/// Independently observable target-local binding and exact retained Directory authority.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentRuntimeDirectoryStatusResponse {
+    pub operation_id: [u8; 32],
+    pub binding: ManagedCanisterBinding,
+    pub phase: ComponentRuntimeDirectoryPhase,
+    pub authority: Option<ComponentRuntimeDirectoryAuthority>,
+    pub authority_hash: Option<[u8; 32]>,
+}
+
+///
 /// RootComponentCreationEvidence
 ///
 /// Exact Store artifact and root-owned creation settings frozen before the paid effect.
@@ -283,6 +348,18 @@ pub struct RootComponentCommitResponse {
     pub allocation: RootComponentAllocationResponse,
     pub registry: ComponentRegistryPartitionResponse,
     pub directory: ComponentDirectoryHead,
+}
+
+///
+/// RootComponentDirectoryPreparationResponse
+///
+/// Exact root authority plus independently observed target-local Directory preparation.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentDirectoryPreparationResponse {
+    pub committed: RootComponentCommitResponse,
+    pub target: ComponentRuntimeDirectoryStatusResponse,
 }
 
 #[cfg(test)]

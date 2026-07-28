@@ -1,13 +1,17 @@
 //! Module: storage::stable::fleet_activation
 //!
-//! Responsibility: persist the sole protected Fleet activation record at memory ID 21.
+//! Responsibility: persist the sole protected Fleet activation record at memory ID 38.
 //! Does not own: install admission, state transitions, Candid DTOs, or lifecycle scheduling.
 //! Boundary: ops validates and converts complete records before this single-record store mutates.
 
 use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
-    ids::{FleetBinding, FleetSubnetRootBinding, FleetSubnetRootReleaseSet, ReleaseBuildId},
+    dto::component_registry::ComponentRuntimeDirectoryAuthority,
+    ids::{
+        FleetBinding, FleetSubnetRootBinding, FleetSubnetRootReleaseSet, ManagedCanisterBinding,
+        ReleaseBuildId,
+    },
     role_contract::allocation::memory::activation::FLEET_ACTIVATION_ID,
     storage::prelude::*,
 };
@@ -148,6 +152,30 @@ pub struct FleetSubnetRootAuthorityRecord {
 }
 
 ///
+/// ComponentRuntimeRecord
+///
+/// Protected Component-tree identity and optional prepared Directory authority for one non-root.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentRuntimeRecord {
+    pub binding: ManagedCanisterBinding,
+    pub directory: Option<ComponentRuntimeDirectoryRecord>,
+}
+
+///
+/// ComponentRuntimeDirectoryRecord
+///
+/// Exact target-local Directory authority committed before runtime activation.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentRuntimeDirectoryRecord {
+    pub authority: ComponentRuntimeDirectoryAuthority,
+    pub authority_hash: [u8; 32],
+}
+
+///
 /// FleetActivationRecord
 ///
 
@@ -159,6 +187,7 @@ pub struct FleetActivationRecord {
     pub prepared_topology_snapshot_hash: Option<[u8; 32]>,
     pub cascade_manifest: Option<Vec<FleetCascadeManifestEntryRecord>>,
     pub credential_manifests: Vec<FleetCredentialManifestRecord>,
+    pub component_runtime: Option<ComponentRuntimeRecord>,
 }
 
 impl FleetActivationRecord {
@@ -270,6 +299,7 @@ mod tests {
             prepared_topology_snapshot_hash: None,
             cascade_manifest: None,
             credential_manifests: Vec::new(),
+            component_runtime: None,
         }
     }
 

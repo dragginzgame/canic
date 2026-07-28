@@ -91,6 +91,13 @@ macro_rules! canic_emit_root_admin_endpoints {
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::commit_component_allocation(request).await
         }
 
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_root_component_directory_prepare(
+            request: ::canic::dto::component_registry::RootComponentDirectoryPreparationRequest,
+        ) -> Result<::canic::dto::component_registry::RootComponentDirectoryPreparationResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_component_directories(request).await
+        }
+
         #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_root_component_registry_partition(
             request: ::canic::dto::component_registry::ComponentRegistryPartitionRequest,

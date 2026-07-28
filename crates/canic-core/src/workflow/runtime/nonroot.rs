@@ -11,7 +11,7 @@ use crate::{
         env::EnvBootstrapArgs,
         fleet_activation::FleetActivationPhase,
     },
-    ids::CanisterRole,
+    ids::{CanisterRole, ManagedCanisterBinding},
     log::Topic,
     ops::{
         config::ConfigOps,
@@ -51,6 +51,15 @@ pub fn init_nonroot_canister(
             binding.component.authority.binding.fleet.clone()
         }
     };
+    let component_binding = match &authority {
+        CanisterInitAuthority::Infrastructure { .. } => None,
+        CanisterInitAuthority::Component { binding, .. } => {
+            Some(ManagedCanisterBinding::Component(binding.clone()))
+        }
+        CanisterInitAuthority::ComponentChild { binding, .. } => {
+            Some(ManagedCanisterBinding::ComponentChild(binding.clone()))
+        }
+    };
 
     // --- Phase 1: Init base systems ---
     initialize_nonroot_base(&canister_role)?;
@@ -61,6 +70,7 @@ pub fn init_nonroot_canister(
         install_id,
         release_build_id,
         embedded_release_build_id,
+        component_binding,
         application_init_args,
     )
     .map_err(crate::ops::storage::StorageOpsError::from)?;

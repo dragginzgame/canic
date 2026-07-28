@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.25` distributes each committed Component's exact Fleet and Component
+  Directory authority directly from its root with target-local retention,
+  independent verification, interruption-safe retry and a terminal root receipt
+  while both runtimes remain `Prepared`.
+
 - `0.100.24` atomically commits verified top-level Components into normalized,
   independently hashed root-local Registry partitions and derives their first
   ownership-preserving Directory heads with exact retry and capacity accounting.

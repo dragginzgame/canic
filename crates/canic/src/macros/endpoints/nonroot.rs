@@ -4,6 +4,25 @@
 //! Does not own: cascade state application, delegated-token issuance, or proof storage.
 //! Boundary: exposes facade macros that delegate immediately to core APIs.
 
+/// Emit the managed Component-tree endpoints used before runtime activation.
+#[macro_export]
+macro_rules! canic_emit_component_runtime_directory_endpoints {
+    () => {
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
+        async fn canic_component_runtime_directory_prepare(
+            request: ::canic::dto::component_registry::ComponentRuntimeDirectoryPreparationRequest,
+        ) -> Result<::canic::dto::component_registry::ComponentRuntimeDirectoryStatusResponse, ::canic::Error> {
+            $crate::__internal::core::api::component_runtime::ComponentRuntimeApi::prepare_directory(request)
+        }
+
+        #[$crate::canic_query(internal, requires(caller::is_root()))]
+        async fn canic_component_runtime_directory_status(
+        ) -> Result<::canic::dto::component_registry::ComponentRuntimeDirectoryStatusResponse, ::canic::Error> {
+            $crate::__internal::core::api::component_runtime::ComponentRuntimeApi::directory_status()
+        }
+    };
+}
+
 /// Emit the managed non-root endpoints used during Fleet activation.
 #[macro_export]
 macro_rules! canic_emit_nonroot_fleet_activation_endpoints {

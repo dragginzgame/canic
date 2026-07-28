@@ -8,6 +8,7 @@ pub mod blob_storage;
 pub mod bootstrap;
 pub mod canister_lifecycle;
 pub mod cascade;
+pub mod component_runtime;
 pub mod config;
 pub mod cost_guard;
 pub mod env;

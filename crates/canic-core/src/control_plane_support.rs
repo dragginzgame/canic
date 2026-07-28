@@ -40,6 +40,10 @@ pub mod ops {
         pub use crate::ops::config::ConfigOps;
     }
 
+    pub mod component_runtime {
+        pub use crate::ops::component_runtime::ComponentRuntimeOps;
+    }
+
     pub mod cost_guard {
         pub use crate::ops::cost_guard::{
             CostGuardPermit, CostGuardRequest, CostGuardReserveError, CostGuardReservePublicKind,

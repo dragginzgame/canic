@@ -436,6 +436,7 @@ mod state_apply_tests {
             release,
             release,
             None,
+            None,
         )
         .expect("initialize protected Fleet binding");
 
