@@ -576,6 +576,11 @@ fn assert_component_registry_protocol_constants() {
             "canic_root_component_child_directory_prepare",
         ),
         (
+            canic::protocol::CANIC_ROOT_COMPONENT_CHILD_RUNTIME_ACTIVATE,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_CHILD_RUNTIME_ACTIVATE,
+            "canic_root_component_child_runtime_activate",
+        ),
+        (
             canic::protocol::CANIC_ROOT_COMPONENT_CREATE,
             canic_core::protocol::CANIC_ROOT_COMPONENT_CREATE,
             "canic_root_component_create",
@@ -707,6 +712,14 @@ fn assert_root_registry_mirror_guards(root: &str) {
         )
         .contains("canic_update(internal, public)"),
         "root Component Child Directory preparation must remain a public update authenticated by workflow"
+    );
+    assert!(
+        preceding_attribute_context(
+            root,
+            "async fn canic_root_component_child_runtime_activate("
+        )
+        .contains("canic_update(internal, public)"),
+        "root Component Child runtime activation must remain a public update authenticated by workflow"
     );
     for endpoint in [
         "async fn canic_root_component_create(",

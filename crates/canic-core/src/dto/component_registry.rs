@@ -167,6 +167,18 @@ pub struct RootComponentChildDirectoryPreparationRequest {
 }
 
 ///
+/// RootComponentChildRuntimeActivationRequest
+///
+/// Parent command activating one Directory-prepared direct-child runtime.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentChildRuntimeActivationRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+}
+
+///
 /// RootComponentCreationRequest
 ///
 /// Controller command continuing one already reserved top-level Component operation.
@@ -573,6 +585,18 @@ pub struct RootComponentChildDirectoryPreparationResponse {
 }
 
 ///
+/// RootComponentChildRuntimeActivationResponse
+///
+/// Exact child commitment plus independently observed Directory-bound runtime activation.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentChildRuntimeActivationResponse {
+    pub committed: RootComponentChildCommitResponse,
+    pub child: ComponentRuntimeStatusResponse,
+}
+
+///
 /// RootComponentCommitResponse
 ///
 /// Exact committed allocation, authoritative Registry row and derived Directory head.
@@ -879,6 +903,10 @@ mod tests {
             operation_id: request.operation_id,
             component,
         };
+        let activation_request = RootComponentChildRuntimeActivationRequest {
+            operation_id: request.operation_id,
+            component,
+        };
         let root = Principal::from_slice(&[17; 29]);
         let parent = Principal::from_slice(&[14; 29]);
         let child = Principal::from_slice(&[18; 29]);
@@ -994,12 +1022,26 @@ mod tests {
             },
             owning_component: ComponentRuntimeDirectoryConvergenceEvidence {
                 operation_id: [32; 32],
-                binding: ManagedCanisterBinding::Component(child_binding.component),
-                covered_authority: runtime_authority,
+                binding: ManagedCanisterBinding::Component(child_binding.component.clone()),
+                covered_authority: runtime_authority.clone(),
                 covered_authority_hash: [31; 32],
                 activation,
             },
             parent: None,
+        };
+        let activation_response = RootComponentChildRuntimeActivationResponse {
+            committed: commit_response.clone(),
+            child: ComponentRuntimeStatusResponse {
+                operation_id: request.operation_id,
+                binding: ManagedCanisterBinding::ComponentChild(child_binding),
+                phase: ComponentRuntimePhase::Active,
+                authority: Some(runtime_authority),
+                authority_hash: Some([31; 32]),
+                activation: Some(ComponentRuntimeActivationEvidence {
+                    directory_authority_hash: [31; 32],
+                    activated_at_ns: 33,
+                }),
+            },
         };
 
         let request_bytes = candid::encode_one(&request).expect("encode child reservation");
@@ -1014,10 +1056,14 @@ mod tests {
             candid::encode_one(commit_request).expect("encode child commit request");
         let directory_request_bytes =
             candid::encode_one(directory_request).expect("encode child Directory request");
+        let activation_request_bytes =
+            candid::encode_one(activation_request).expect("encode child activation request");
         let commit_response_bytes =
             candid::encode_one(&commit_response).expect("encode child commit response");
         let directory_response_bytes =
             candid::encode_one(&directory_response).expect("encode child Directory response");
+        let activation_response_bytes =
+            candid::encode_one(&activation_response).expect("encode child activation response");
 
         assert_eq!(
             candid::decode_one::<RootComponentChildAllocationRequest>(&request_bytes)
@@ -1067,6 +1113,20 @@ mod tests {
             )
             .expect("decode child Directory response"),
             directory_response
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentChildRuntimeActivationRequest>(
+                &activation_request_bytes
+            )
+            .expect("decode child activation request"),
+            activation_request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentChildRuntimeActivationResponse>(
+                &activation_response_bytes
+            )
+            .expect("decode child activation response"),
+            activation_response
         );
     }
 

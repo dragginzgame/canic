@@ -64,7 +64,8 @@ use canic_core::{
             RootComponentChildCommitRequest, RootComponentChildCommitResponse,
             RootComponentChildCreationRequest, RootComponentChildDirectoryPreparationRequest,
             RootComponentChildDirectoryPreparationResponse, RootComponentChildInstallEvidence,
-            RootComponentChildInstallRequest, RootComponentCommitRequest,
+            RootComponentChildInstallRequest, RootComponentChildRuntimeActivationRequest,
+            RootComponentChildRuntimeActivationResponse, RootComponentCommitRequest,
             RootComponentCommitResponse, RootComponentCreationEvidence,
             RootComponentCreationRequest, RootComponentDirectoryPreparationRequest,
             RootComponentDirectoryPreparationResponse, RootComponentInitialInventoryStatus,
@@ -94,6 +95,7 @@ struct PreparedComponentRuntimePlan {
 }
 
 struct PreparedChildRuntimePlan {
+    allocation: RootComponentChildAllocationView,
     committed_partition: ComponentRegistryPartitionView,
     child_canister: candid::Principal,
     child_binding: ManagedCanisterBinding,
@@ -651,6 +653,43 @@ pub async fn prepare_child_directories(
     })
 }
 
+/// Activate and independently verify one exact Directory-prepared direct-child runtime.
+pub async fn activate_child_runtime(
+    request: RootComponentChildRuntimeActivationRequest,
+) -> Result<RootComponentChildRuntimeActivationResponse, InternalError> {
+    let plan = prepared_child_runtime_plan(request.component, request.operation_id).await?;
+    if !committed_child_directory_receipt(&plan.allocation)?.directory_prepared {
+        return Err(InternalError::unavailable(
+            "Component Child runtime activation requires its terminal Directory preparation receipt",
+        ));
+    }
+
+    let child = activate_directory_prepared_runtime(
+        plan.child_canister,
+        &plan.child_binding,
+        &plan.directory_request,
+        plan.directory_authority_hash,
+    )
+    .await?;
+    validate_requesting_parent_still_active(request.component, &plan.requesting_parent_binding)?;
+    let allocation = ComponentRegistryOps::mark_child_runtime_activated(
+        request.component,
+        request.operation_id,
+        plan.directory_authority_hash,
+    )?;
+    if !committed_child_directory_receipt(&allocation)?.runtime_activated {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component Child runtime activation did not commit its terminal root receipt",
+        ));
+    }
+
+    Ok(RootComponentChildRuntimeActivationResponse {
+        committed: child_commit_response(allocation, plan.committed_partition)?,
+        child,
+    })
+}
+
 /// Atomically commit one verified top-level Component and its first Directory authority.
 pub async fn commit_allocation(
     request: RootComponentCommitRequest,
@@ -759,58 +798,13 @@ pub async fn activate_component_runtime(
         ));
     }
 
-    let target_request = ComponentRuntimeActivationRequest {
-        operation_id: request.operation_id,
-        directory_authority_hash: plan.directory_authority_hash,
-    };
-    let observed = query_component_runtime_status(plan.target_canister).await?;
-    let activated = match validate_target_directory_status(
-        &observed,
+    let response_target = activate_directory_prepared_runtime(
+        plan.target_canister,
         &plan.target_binding,
         &plan.directory_request,
         plan.directory_authority_hash,
-    )? {
-        ComponentRuntimePhase::AwaitingDirectory => {
-            return Err(InternalError::unavailable(
-                "Component runtime has not retained its Directory authority",
-            ));
-        }
-        ComponentRuntimePhase::DirectoryPrepared => {
-            match activate_target_component_runtime(plan.target_canister, target_request).await {
-                Ok(status) => status,
-                Err(call_error) => {
-                    let reconciled = query_component_runtime_status(plan.target_canister).await?;
-                    if validate_active_target_runtime_status(
-                        &reconciled,
-                        &plan.target_binding,
-                        &plan.directory_request,
-                        plan.directory_authority_hash,
-                    )
-                    .is_ok()
-                    {
-                        reconciled
-                    } else {
-                        return Err(call_error);
-                    }
-                }
-            }
-        }
-        ComponentRuntimePhase::Active => observed,
-    };
-    validate_active_target_runtime_status(
-        &activated,
-        &plan.target_binding,
-        &plan.directory_request,
-        plan.directory_authority_hash,
-    )?;
-
-    let independently_observed = query_component_runtime_status(plan.target_canister).await?;
-    let response_target = active_target_runtime_status(
-        &independently_observed,
-        &plan.target_binding,
-        &plan.directory_request,
-        plan.directory_authority_hash,
-    )?;
+    )
+    .await?;
     let allocation = ComponentRegistryOps::mark_runtime_activated(
         request.operation_id,
         plan.directory_authority_hash,
@@ -2115,7 +2109,7 @@ async fn prepared_child_runtime_plan(
         != FleetActivationPhase::Active
     {
         return Err(InternalError::unavailable(
-            "Component Child Directory preparation requires an Active Fleet Subnet Root runtime",
+            "Component Child lifecycle requires an Active Fleet Subnet Root runtime",
         ));
     }
 
@@ -2128,7 +2122,7 @@ async fn prepared_child_runtime_plan(
         })?;
     if parent_status != ComponentLifecycleStatus::Active {
         return Err(InternalError::unavailable(
-            "Component Child Directory preparation requires its exact parent to remain Active",
+            "Component Child lifecycle requires its exact parent to remain Active",
         ));
     }
     let allocation =
@@ -2184,6 +2178,7 @@ async fn prepared_child_runtime_plan(
         != managed_canister_principal(&owning_component_binding))
     .then_some(requesting_parent_binding.clone());
     Ok(PreparedChildRuntimePlan {
+        allocation,
         committed_partition,
         child_canister: install.canister,
         child_binding,
@@ -2208,7 +2203,7 @@ fn validate_requesting_parent_still_active(
         })?;
     if current != *expected || status != ComponentLifecycleStatus::Active {
         return Err(InternalError::conflict(
-            "Component Child Directory parent changed before terminal convergence",
+            "Component Child parent changed before terminal lifecycle commitment",
         ));
     }
     Ok(())
@@ -2289,6 +2284,66 @@ async fn activate_target_component_runtime(
         .candid()
         .map_err(|error| InternalError::public(Error::invariant(error.to_string())))?;
     result.map_err(InternalError::public)
+}
+
+async fn activate_directory_prepared_runtime(
+    canister: candid::Principal,
+    binding: &ManagedCanisterBinding,
+    directory_request: &ComponentRuntimeDirectoryPreparationRequest,
+    directory_authority_hash: [u8; 32],
+) -> Result<ComponentRuntimeStatusResponse, InternalError> {
+    let observed = query_component_runtime_status(canister).await?;
+    let activated = match validate_target_directory_status(
+        &observed,
+        binding,
+        directory_request,
+        directory_authority_hash,
+    )? {
+        ComponentRuntimePhase::AwaitingDirectory => {
+            return Err(InternalError::unavailable(
+                "Component runtime has not retained its Directory authority",
+            ));
+        }
+        ComponentRuntimePhase::DirectoryPrepared => {
+            let request = ComponentRuntimeActivationRequest {
+                operation_id: directory_request.operation_id,
+                directory_authority_hash,
+            };
+            match activate_target_component_runtime(canister, request).await {
+                Ok(status) => status,
+                Err(call_error) => {
+                    let reconciled = query_component_runtime_status(canister).await?;
+                    if validate_active_target_runtime_status(
+                        &reconciled,
+                        binding,
+                        directory_request,
+                        directory_authority_hash,
+                    )
+                    .is_ok()
+                    {
+                        reconciled
+                    } else {
+                        return Err(call_error);
+                    }
+                }
+            }
+        }
+        ComponentRuntimePhase::Active => observed,
+    };
+    validate_active_target_runtime_status(
+        &activated,
+        binding,
+        directory_request,
+        directory_authority_hash,
+    )?;
+
+    let independently_observed = query_component_runtime_status(canister).await?;
+    active_target_runtime_status(
+        &independently_observed,
+        binding,
+        directory_request,
+        directory_authority_hash,
+    )
 }
 
 async fn synchronize_target_component_directory(

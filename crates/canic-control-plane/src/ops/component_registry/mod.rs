@@ -1564,6 +1564,77 @@ impl ComponentRegistryOps {
         Ok(child_allocation_record_to_view(next_record))
     }
 
+    pub(crate) fn mark_child_runtime_activated(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        expected_authority_hash: [u8; 32],
+    ) -> Result<RootComponentChildAllocationView, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        validate_partition_record(&partition)?;
+        let record = RootComponentRegistryStore::child_allocation(component, operation_id)
+            .ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component Child allocation operation has not been reserved",
+                )
+            })?;
+        let RootComponentChildAllocationProgressRecord::Committed {
+            creation,
+            canister,
+            installation,
+            commitment,
+        } = &record.progress
+        else {
+            return Err(InternalError::conflict(
+                "Component Child allocation is not committed for runtime activation",
+            ));
+        };
+        let _committed = exact_committed_child_partition(&record, commitment)?;
+        if commitment.directory_authority_hash != expected_authority_hash
+            || !commitment.directory_prepared
+        {
+            return Err(InternalError::conflict(
+                "Component Child runtime activation requires its exact prepared Directory authority",
+            ));
+        }
+        if commitment.runtime_activated {
+            return Ok(child_allocation_record_to_view(record));
+        }
+
+        let mut next_commitment = commitment.clone();
+        next_commitment.runtime_activated = true;
+        let mut next_record = record.clone();
+        next_record.progress = RootComponentChildAllocationProgressRecord::Committed {
+            creation: creation.clone(),
+            canister: *canister,
+            installation: installation.clone(),
+            commitment: next_commitment,
+        };
+        validate_charged_child_record_size(&next_record, installation.charged_entry_bytes)?;
+        if RootComponentRegistryStore::child_allocation_entry_bytes(&next_record)
+            != RootComponentRegistryStore::child_allocation_entry_bytes(&record)
+        {
+            return Err(InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component Child runtime receipt changed its precharged stable footprint",
+            ));
+        }
+        RootComponentRegistryStore::replace_child_allocation(
+            &current,
+            current.clone(),
+            &partition,
+            partition.clone(),
+            &record,
+            next_record.clone(),
+        )
+        .map_err(map_allocation_commit_error)?;
+        Ok(child_allocation_record_to_view(next_record))
+    }
+
     pub(crate) fn commit_verified(
         operation_id: [u8; 32],
         directory_synchronized_at_ns: u64,
@@ -4795,6 +4866,14 @@ mod tests {
         let before_directory_partition = ComponentRegistryOps::partition(component)
             .expect("partition read")
             .expect("partition");
+        assert!(
+            ComponentRegistryOps::mark_child_runtime_activated(
+                component,
+                [44; 32],
+                child_directory_authority_hash,
+            )
+            .is_err()
+        );
         let prepared = ComponentRegistryOps::mark_child_directory_prepared(
             component,
             [44; 32],
@@ -4814,6 +4893,31 @@ mod tests {
                 commitment: RootComponentChildCommitmentView {
                     directory_prepared: true,
                     runtime_activated: false,
+                    membership: None,
+                    ..
+                },
+                ..
+            }
+        ));
+        let activated = ComponentRegistryOps::mark_child_runtime_activated(
+            component,
+            [44; 32],
+            child_directory_authority_hash,
+        )
+        .expect("mark child runtime activated");
+        let activated_again = ComponentRegistryOps::mark_child_runtime_activated(
+            component,
+            [44; 32],
+            child_directory_authority_hash,
+        )
+        .expect("repeat child runtime activation receipt");
+        assert_eq!(activated_again, activated);
+        assert!(matches!(
+            activated.progress,
+            RootComponentChildAllocationProgressView::Committed {
+                commitment: RootComponentChildCommitmentView {
+                    directory_prepared: true,
+                    runtime_activated: true,
                     membership: None,
                     ..
                 },
