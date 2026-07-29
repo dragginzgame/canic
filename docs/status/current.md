@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.47`.
-- The latest published release is `v0.100.47` at
-  `d3174bef6de3529eba1fd3e5295862530162a6d8`.
-- Open `0.100.48` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.48`.
+- The latest published release is `v0.100.48` at
+  `b102f1f118fdea50c6e88790a65e69a2e15e3d9e`.
+- Open `0.100.49` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -437,6 +437,12 @@ Historical detail is archived at:
 - Released `0.100.47` advances the host-only `ic-query` dependency to `0.11.3`,
   standardizes network identity terminology on IC mainnet and preserves
   IC-native `Application`, `CloudEngine`, `System` and `Unknown` Subnet kinds.
+- Released `0.100.48` advances host-only `ic-query` to `0.11.4` and proves
+  that rejected or incomplete child work in one Component partition neither
+  mutates that intent nor blocks another partition. Each partition retains
+  its exact pre-effect Registry charge, their sum reproduces the root ledger
+  and incomplete reservations remain charged to the shared managed-Canister
+  ceiling.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1812,22 +1818,32 @@ facts, and the 0.103/0.104 designs now use the same vocabulary.
 The active Rust network-identity names are `CanonicalNetworkId::ic_mainnet()`
 and `IcMainnetEnrollment`; no old-name alias remains.
 
-Open `0.100.48` advances the host dependency to published `ic-query 0.11.4`.
+Released `0.100.48` advances the host dependency to published `ic-query 0.11.4`.
 The dependency now shares NNS inventory cache paths, refresh-lock paths,
 mainnet validation and typed cache-load wrappers while preserving its public
 paths, errors, cache schemas and refresh behavior. Canic's typed Subnet-catalog
-boundary remains unchanged. The same open patch proves that a rejected
+boundary remains unchanged. The same released patch proves that a rejected
 operation in one Component partition cannot block an unrelated Component's
 child creation progress. Stable restart preserves exact retry of the first
 intent, each partition reconstructs its pre-effect byte charges, their sum
 reproduces the root Registry ledger and incomplete reservations remain charged
 to the shared managed-Canister limit.
 
-Next, implement durable post-order subtree removal against the same normalized
-Registry and Directory invariants without adding full-tree fan-out. Retain the
-exact immediate parent and declared role-to-role spawn grant. Do not let
-managed application Canisters perform management effects or infer
-authorization from flat catalog presence.
+Open `0.100.49` adds the first ordinary child-subtree removal boundary. A
+controller command durably freezes one active registered target and exact
+Component Registry head only after proving that no nonterminal child
+operation lies below it. Exact retry and status survive stable restart. Later
+reservations from the target or any descendant fail, while an unrelated
+sibling branch and another Component partition remain available. The fence is
+charged exactly to its Component and root Registry byte ledgers and performs
+no Canister or Directory effect.
+
+Next, persist a bounded deterministic post-order traversal cursor for that
+fenced subtree. Select and advance one leaf at a time without materializing
+the full tree or calling unrelated descendants; retain the exact immediate
+parent and declared role-to-role spawn grant. Do not let managed application
+Canisters perform management effects or infer authorization from flat catalog
+presence.
 
 ## Historical Release Detail
 

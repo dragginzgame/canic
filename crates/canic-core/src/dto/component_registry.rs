@@ -119,6 +119,32 @@ pub struct RootComponentChildAllocationStatusRequest {
 }
 
 ///
+/// RootComponentSubtreeRemovalRequest
+///
+/// Controller command durably fencing one registered child subtree.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeRemovalRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub target_canister_id: Principal,
+    pub expected_registry: ComponentRegistryHead,
+}
+
+///
+/// RootComponentSubtreeRemovalStatusRequest
+///
+/// Controller lookup key for one durable child-subtree removal operation.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeRemovalStatusRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+}
+
+///
 /// RootComponentChildCreationRequest
 ///
 /// Parent command continuing one already reserved direct-child operation.
@@ -282,6 +308,17 @@ pub enum RootComponentAllocationPhase {
     Installed,
     Verified,
     Committed,
+}
+
+///
+/// RootComponentSubtreeRemovalPhase
+///
+/// Durable root-local progress of one child-subtree removal operation.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RootComponentSubtreeRemovalPhase {
+    Fenced,
 }
 
 ///
@@ -619,6 +656,24 @@ pub struct RootComponentChildAllocationResponse {
     pub phase: RootComponentAllocationPhase,
     pub creation: Option<RootComponentCreationEvidence>,
     pub installation: Option<RootComponentChildInstallEvidence>,
+}
+
+///
+/// RootComponentSubtreeRemovalResponse
+///
+/// Exact durable subtree fence returned identically for operation retry.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeRemovalResponse {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub target_canister_id: Principal,
+    pub target_parent_canister_id: Principal,
+    pub target_role: CanisterRole,
+    pub target_status: ComponentLifecycleStatus,
+    pub reserved_against_registry: ComponentRegistryHead,
+    pub phase: RootComponentSubtreeRemovalPhase,
 }
 
 ///
@@ -1002,6 +1057,58 @@ mod tests {
             candid::decode_one::<RootComponentCreationRequest>(&bytes)
                 .expect("decode creation request"),
             request
+        );
+    }
+
+    #[test]
+    fn component_subtree_removal_contracts_round_trip_through_candid() {
+        let component = ComponentInstanceId::from_generated_bytes([41; 32]);
+        let registry = ComponentRegistryHead {
+            component,
+            revision: 7,
+            content_hash: [42; 32],
+        };
+        let request = RootComponentSubtreeRemovalRequest {
+            operation_id: [43; 32],
+            component,
+            target_canister_id: Principal::from_slice(&[44; 29]),
+            expected_registry: registry.clone(),
+        };
+        let status_request = RootComponentSubtreeRemovalStatusRequest {
+            operation_id: request.operation_id,
+            component,
+        };
+        let response = RootComponentSubtreeRemovalResponse {
+            operation_id: request.operation_id,
+            component,
+            target_canister_id: request.target_canister_id,
+            target_parent_canister_id: Principal::from_slice(&[45; 29]),
+            target_role: CanisterRole::new("project_instance"),
+            target_status: ComponentLifecycleStatus::Active,
+            reserved_against_registry: registry,
+            phase: RootComponentSubtreeRemovalPhase::Fenced,
+        };
+
+        let request_bytes = candid::encode_one(&request).expect("encode subtree removal request");
+        let status_bytes =
+            candid::encode_one(status_request).expect("encode subtree removal status request");
+        let response_bytes =
+            candid::encode_one(&response).expect("encode subtree removal response");
+
+        assert_eq!(
+            candid::decode_one::<RootComponentSubtreeRemovalRequest>(&request_bytes)
+                .expect("decode subtree removal request"),
+            request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentSubtreeRemovalStatusRequest>(&status_bytes)
+                .expect("decode subtree removal status request"),
+            status_request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentSubtreeRemovalResponse>(&response_bytes)
+                .expect("decode subtree removal response"),
+            response
         );
     }
 

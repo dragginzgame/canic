@@ -19,6 +19,7 @@ use crate::{
         RootComponentChildAllocationView, RootComponentChildInstallEffectView,
         RootComponentCreationEffectView, RootComponentInitialInventoryView,
         RootComponentInstallEffectView, RootComponentRegistryView,
+        RootComponentSubtreeRemovalProgressView, RootComponentSubtreeRemovalView,
     },
     workflow::{
         bootstrap::root_store, deployment, runtime::template::resolved_root_store_module_source,
@@ -78,6 +79,8 @@ use canic_core::{
             RootComponentMembershipActivationRequest, RootComponentMembershipActivationResponse,
             RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
             RootComponentRuntimeActivationRequest, RootComponentRuntimeActivationResponse,
+            RootComponentSubtreeRemovalPhase, RootComponentSubtreeRemovalRequest,
+            RootComponentSubtreeRemovalResponse, RootComponentSubtreeRemovalStatusRequest,
         },
         error::Error,
         fleet_activation::FleetActivationPhase,
@@ -373,6 +376,99 @@ pub fn child_allocation_status(
         None,
     )?;
     Ok(child_allocation_response(allocation))
+}
+
+/// Durably fence one registered child subtree before quiescence and post-order removal.
+pub async fn begin_subtree_removal(
+    request: RootComponentSubtreeRemovalRequest,
+) -> Result<RootComponentSubtreeRemovalResponse, InternalError> {
+    let (authority, root) = root_authority()?;
+    let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let preparation_request = RootComponentRegistryPreparationRequest {
+        store_bootstrap: prepared.store_bootstrap.clone(),
+        expected_fleet_registry: prepared.prepared_against_registry.clone(),
+    };
+    root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    validate_active_authority(&authority, root, &preparation_request)?;
+    if FleetActivationApi::status()
+        .map_err(InternalError::public)?
+        .phase
+        != FleetActivationPhase::Active
+    {
+        return Err(InternalError::unavailable(
+            "Component subtree removal requires an Active Fleet Subnet Root runtime",
+        ));
+    }
+
+    let topology = ConfigOps::component_topology()?;
+    if let Some(existing) =
+        ComponentRegistryOps::subtree_removal(request.component, request.operation_id)?
+    {
+        validate_subtree_removal(
+            &authority.binding,
+            authority.initial_release_set,
+            &topology,
+            &existing,
+            Some(&request),
+        )?;
+        return Ok(subtree_removal_response(existing));
+    }
+    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
+        InternalError::unavailable("Component Registry partition has not been committed")
+    })?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &partition,
+    )?;
+    let maximum_registry_bytes = topology
+        .get(&partition.binding.component_spec)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Config,
+                "removal target Component Spec is absent from the protected topology",
+            )
+        })?
+        .limits
+        .maximum_registry_bytes;
+    let removal = ComponentRegistryOps::begin_subtree_removal(
+        request.component,
+        request.operation_id,
+        request.target_canister_id,
+        request.expected_registry,
+        maximum_registry_bytes,
+    )?;
+    validate_subtree_removal(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &removal,
+        None,
+    )?;
+    Ok(subtree_removal_response(removal))
+}
+
+/// Read one durable child-subtree removal operation without mutation.
+pub fn subtree_removal_status(
+    request: RootComponentSubtreeRemovalStatusRequest,
+) -> Result<RootComponentSubtreeRemovalResponse, InternalError> {
+    let (authority, _root) = root_authority()?;
+    let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let removal = ComponentRegistryOps::subtree_removal(request.component, request.operation_id)?
+        .ok_or_else(|| {
+        InternalError::unavailable(
+            "Component subtree-removal operation has not been durably fenced",
+        )
+    })?;
+    validate_subtree_removal(
+        &authority.binding,
+        authority.initial_release_set,
+        &ConfigOps::component_topology()?,
+        &removal,
+        None,
+    )?;
+    Ok(subtree_removal_response(removal))
 }
 
 /// Advance one reserved direct child through a root-owned creation effect.
@@ -3381,6 +3477,25 @@ fn child_allocation_response(
     }
 }
 
+fn subtree_removal_response(
+    removal: RootComponentSubtreeRemovalView,
+) -> RootComponentSubtreeRemovalResponse {
+    RootComponentSubtreeRemovalResponse {
+        operation_id: removal.operation_id,
+        component: removal.component,
+        target_canister_id: removal.target_canister_id,
+        target_parent_canister_id: removal.target_parent_canister_id,
+        target_role: removal.target_role,
+        target_status: removal.target_status,
+        reserved_against_registry: removal.reserved_against_registry,
+        phase: match removal.progress {
+            RootComponentSubtreeRemovalProgressView::Fenced => {
+                RootComponentSubtreeRemovalPhase::Fenced
+            }
+        },
+    }
+}
+
 const fn registry_evidence(head: &ComponentRegistryHead) -> ComponentRegistryVersionEvidence {
     ComponentRegistryVersionEvidence {
         component: head.component,
@@ -3854,6 +3969,73 @@ fn validate_allocation_record(
             InternalErrorOrigin::Storage,
             "stored Component allocation role differs from its protected Spec",
         ));
+    }
+    Ok(())
+}
+
+fn validate_subtree_removal(
+    root: &canic_core::ids::FleetSubnetRootBinding,
+    release_set: canic_core::ids::FleetSubnetRootReleaseSet,
+    topology: &canic_core::control_plane_support::config::ComponentTopology,
+    removal: &RootComponentSubtreeRemovalView,
+    request: Option<&RootComponentSubtreeRemovalRequest>,
+) -> Result<(), InternalError> {
+    let partition = ComponentRegistryOps::partition(removal.component)?.ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "subtree-removal fence has no owning Component partition",
+        )
+    })?;
+    validate_partition(root, release_set, topology, &partition)?;
+    let (target, _current_status) =
+        ComponentRegistryOps::registered_parent(removal.component, removal.target_canister_id)?
+            .ok_or_else(|| {
+                InternalError::invariant(
+                    InternalErrorOrigin::Storage,
+                    "subtree-removal fence target is no longer registered",
+                )
+            })?;
+    let ManagedCanisterBinding::ComponentChild(target) = target else {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "subtree-removal fence targets a top-level Component",
+        ));
+    };
+    topology
+        .validate_component_child_binding(root, &target)
+        .map_err(|error| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                format!("subtree-removal target binding is invalid: {error}"),
+            )
+        })?;
+    if removal.operation_id == [0; 32]
+        || removal.component != target.component.component
+        || removal.target_parent_canister_id != target.parent_canister_id
+        || removal.target_role != target.role
+        || removal.target_status != ComponentLifecycleStatus::Active
+        || removal.reserved_against_registry.component != removal.component
+        || removal.reserved_against_registry.revision == 0
+        || partition.revision < removal.reserved_against_registry.revision
+        || (partition.revision == removal.reserved_against_registry.revision
+            && partition.content_hash != removal.reserved_against_registry.content_hash)
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "subtree-removal fence differs from protected Component authority",
+        ));
+    }
+    if let Some(request) = request {
+        let expected_registry = &removal.reserved_against_registry;
+        let matches_request = request.operation_id == removal.operation_id
+            && request.component == removal.component
+            && request.target_canister_id == removal.target_canister_id
+            && request.expected_registry == *expected_registry;
+        if !matches_request {
+            return Err(InternalError::conflict(
+                "Component subtree-removal operation is already bound to different intent",
+            ));
+        }
     }
     Ok(())
 }

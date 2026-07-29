@@ -134,6 +134,11 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         command_kind("component_registry.allocate_child.v1"),
     ),
     query_read_only("canic_root_component_child_allocation_status"),
+    update_response_idempotent(
+        "canic_root_component_subtree_removal_begin",
+        command_kind("component_registry.begin_subtree_removal.v1"),
+    ),
+    query_read_only("canic_root_component_subtree_removal_status"),
     update_costed_response_idempotent(
         "canic_root_component_child_create",
         command_kind("management.control_plane.component_child_create.v1"),
