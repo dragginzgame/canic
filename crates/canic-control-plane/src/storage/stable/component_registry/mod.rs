@@ -305,6 +305,7 @@ pub struct ComponentRegistryPartitionRecord {
     pub status: ComponentLifecycleStatus,
     pub revision: u64,
     pub content_hash: [u8; 32],
+    pub descendant_content_hash: [u8; 32],
     pub directory_synchronized_at_ns: u64,
     pub reserved_descendants: u32,
     pub committed_descendants: u32,
@@ -356,6 +357,10 @@ impl RootComponentChildAllocationRecord {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "stable child operations retain direct canonical records without indirection"
+)]
 pub enum RootComponentChildAllocationProgressRecord {
     Reserved,
     CreationIntent(RootComponentCreationEffectRecord),
@@ -382,7 +387,7 @@ pub enum RootComponentChildAllocationProgressRecord {
         creation: RootComponentCreationEffectRecord,
         canister: Principal,
         installation: RootComponentChildInstallEffectRecord,
-        commitment: RootComponentCommitmentRecord,
+        commitment: RootComponentChildCommitmentRecord,
     },
 }
 
@@ -399,6 +404,26 @@ pub struct RootComponentChildInstallEffectRecord {
     pub binding: ComponentChildBinding,
     pub cost_guard_settlement: ReplayCostGuardSettlement,
     pub charged_entry_bytes: u64,
+}
+
+///
+/// RootComponentChildCommitmentRecord
+///
+/// Immutable child-commit Registry head plus later Directory and membership receipts.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentChildCommitmentRecord {
+    pub registry: ComponentRegistryHead,
+    pub descendant_content_hash: [u8; 32],
+    pub registry_encoded_bytes: u64,
+    pub reserved_descendants: u32,
+    pub committed_descendants: u32,
+    pub directory_synchronized_at_ns: u64,
+    pub directory_authority_hash: [u8; 32],
+    pub directory_prepared: bool,
+    pub runtime_activated: bool,
+    pub membership: Option<RootComponentMembershipRecord>,
 }
 
 ///
@@ -905,6 +930,32 @@ impl RootComponentRegistryStore {
     }
 
     #[must_use]
+    pub(crate) fn child_traversal(
+        component: ComponentInstanceId,
+        parent_canister_id: Principal,
+        role: &CanisterRole,
+        canister_id: Principal,
+    ) -> Option<ComponentRegistryChildTraversalRecord> {
+        COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+            match map.get(&ComponentRegistryEntryKey::child_traversal(
+                component,
+                parent_canister_id,
+                role,
+                canister_id,
+            )) {
+                Some(ComponentRegistryEntryRecord::ChildTraversal(record)) => Some(record),
+                Some(
+                    ComponentRegistryEntryRecord::Partition(_)
+                    | ComponentRegistryEntryRecord::Child(_)
+                    | ComponentRegistryEntryRecord::ChildAllocation(_)
+                    | ComponentRegistryEntryRecord::ParentRoleCount(_),
+                )
+                | None => None,
+            }
+        })
+    }
+
+    #[must_use]
     pub(crate) fn parent_role_count(
         component: ComponentInstanceId,
         parent_canister_id: Principal,
@@ -1103,6 +1154,7 @@ impl RootComponentRegistryStore {
             || next_partition.release_set != expected_partition.release_set
             || next_partition.revision != expected_partition.revision
             || next_partition.content_hash != expected_partition.content_hash
+            || next_partition.descendant_content_hash != expected_partition.descendant_content_hash
             || next_partition.directory_synchronized_at_ns
                 != expected_partition.directory_synchronized_at_ns
             || next_partition.reserved_descendants != expected_partition.reserved_descendants
@@ -1260,6 +1312,132 @@ impl RootComponentRegistryStore {
             });
             ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(|map| {
                 map.insert(operation_key, next_record);
+            });
+            state.current = Some(next_meta);
+            cell.set(state);
+            Ok(())
+        })
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        clippy::too_many_lines,
+        reason = "one stable mutation compare-and-commits every normalized child authority"
+    )]
+    pub(crate) fn commit_child(
+        expected_meta: &RootComponentRegistryMetaRecord,
+        next_meta: RootComponentRegistryMetaRecord,
+        expected_partition: &ComponentRegistryPartitionRecord,
+        next_partition: ComponentRegistryPartitionRecord,
+        expected_record: &RootComponentChildAllocationRecord,
+        next_record: RootComponentChildAllocationRecord,
+        child: ComponentRegistryChildRecord,
+        traversal: ComponentRegistryChildTraversalRecord,
+    ) -> Result<(), RootComponentAllocationCommitError> {
+        let component = expected_record.component;
+        let operation_key =
+            ComponentRegistryEntryKey::child_allocation(component, expected_record.operation_id);
+        let partition_key = ComponentRegistryEntryKey::partition(component);
+        let child_key = ComponentRegistryEntryKey::child(component, child.canister_id);
+        let traversal_key = ComponentRegistryEntryKey::child_traversal(
+            component,
+            traversal.parent_canister_id,
+            &traversal.role,
+            traversal.canister_id,
+        );
+        let principal_key = ComponentRegistryPrincipalKey::from(child.canister_id);
+        if !next_record.has_same_reservation(expected_record)
+            || next_partition.binding != expected_partition.binding
+            || next_partition.provisioning_origin != expected_partition.provisioning_origin
+            || next_partition.release_set != expected_partition.release_set
+            || child.component != component
+            || traversal.component != component
+            || child.parent_canister_id != expected_record.parent_canister_id
+            || traversal.parent_canister_id != expected_record.parent_canister_id
+            || child.role != expected_record.child_role
+            || traversal.role != expected_record.child_role
+            || traversal.canister_id != child.canister_id
+        {
+            return Err(RootComponentAllocationCommitError::ConflictingChildEntry);
+        }
+
+        ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            let current_meta = state
+                .current
+                .as_ref()
+                .ok_or(RootComponentAllocationCommitError::Uninitialized)?;
+            if current_meta != expected_meta {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            let current_partition = COMPONENT_REGISTRY_ENTRIES
+                .with_borrow(|map| {
+                    map.get(&partition_key).and_then(|entry| match entry {
+                        ComponentRegistryEntryRecord::Partition(record) => Some(record),
+                        ComponentRegistryEntryRecord::Child(_)
+                        | ComponentRegistryEntryRecord::ChildTraversal(_)
+                        | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                    })
+                })
+                .ok_or(RootComponentAllocationCommitError::ConflictingPartition)?;
+            let current_record = COMPONENT_REGISTRY_ENTRIES
+                .with_borrow(|map| {
+                    map.get(&operation_key).and_then(|entry| match entry {
+                        ComponentRegistryEntryRecord::ChildAllocation(record) => Some(record),
+                        ComponentRegistryEntryRecord::Partition(_)
+                        | ComponentRegistryEntryRecord::Child(_)
+                        | ComponentRegistryEntryRecord::ChildTraversal(_)
+                        | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                    })
+                })
+                .ok_or(RootComponentAllocationCommitError::MissingOperation)?;
+            if &current_partition != expected_partition || &current_record != expected_record {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            if COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+                map.get(&child_key).is_some() || map.get(&traversal_key).is_some()
+            }) {
+                return Err(RootComponentAllocationCommitError::ConflictingChildEntry);
+            }
+            if COMPONENT_REGISTRY_PRINCIPAL_INDEX
+                .with_borrow(|map| map.get(&principal_key))
+                .is_some()
+            {
+                return Err(RootComponentAllocationCommitError::ComponentPrincipalConflict);
+            }
+            if COMPONENT_REGISTRY_PRINCIPAL_INDEX
+                .with_borrow(|map| {
+                    map.get(&ComponentRegistryPrincipalKey::from(
+                        expected_record.parent_canister_id,
+                    ))
+                })
+                .map(|indexed| indexed.component)
+                != Some(component)
+            {
+                return Err(RootComponentAllocationCommitError::ParentPrincipalConflict);
+            }
+
+            COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
+                map.insert(
+                    operation_key,
+                    ComponentRegistryEntryRecord::ChildAllocation(next_record),
+                );
+                map.insert(
+                    partition_key,
+                    ComponentRegistryEntryRecord::Partition(next_partition),
+                );
+                map.insert(child_key, ComponentRegistryEntryRecord::Child(child));
+                map.insert(
+                    traversal_key,
+                    ComponentRegistryEntryRecord::ChildTraversal(traversal),
+                );
+            });
+            COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow_mut(|map| {
+                map.insert(
+                    principal_key,
+                    ComponentRegistryPrincipalIndexRecord { component },
+                );
             });
             state.current = Some(next_meta);
             cell.set(state);

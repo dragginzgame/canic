@@ -143,6 +143,18 @@ pub struct RootComponentChildInstallRequest {
 }
 
 ///
+/// RootComponentChildCommitRequest
+///
+/// Parent command committing one already verified direct-child operation.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentChildCommitRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+}
+
+///
 /// RootComponentCreationRequest
 ///
 /// Controller command continuing one already reserved top-level Component operation.
@@ -507,6 +519,19 @@ pub struct RootComponentChildAllocationResponse {
 }
 
 ///
+/// RootComponentChildCommitResponse
+///
+/// Exact committed child operation, authoritative Component Registry and next Directory head.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentChildCommitResponse {
+    pub allocation: RootComponentChildAllocationResponse,
+    pub registry: ComponentRegistryPartitionResponse,
+    pub directory: ComponentDirectoryHead,
+}
+
+///
 /// RootComponentCommitResponse
 ///
 /// Exact committed allocation, authoritative Registry row and derived Directory head.
@@ -805,6 +830,10 @@ mod tests {
             operation_id: request.operation_id,
             component,
         };
+        let commit_request = RootComponentChildCommitRequest {
+            operation_id: request.operation_id,
+            component,
+        };
         let root = Principal::from_slice(&[17; 29]);
         let parent = Principal::from_slice(&[14; 29]);
         let child = Principal::from_slice(&[18; 29]);
@@ -852,8 +881,37 @@ mod tests {
             installation: Some(RootComponentChildInstallEvidence {
                 raw_module_hash: [23; 32],
                 chunk_hashes: vec![vec![24; 32]],
-                binding: child_binding,
+                binding: child_binding.clone(),
             }),
+        };
+        let commit_response = RootComponentChildCommitResponse {
+            allocation: response.clone(),
+            registry: ComponentRegistryPartitionResponse {
+                head: ComponentRegistryHead {
+                    component,
+                    revision: 3,
+                    content_hash: [25; 32],
+                },
+                binding: child_binding.component.clone(),
+                provisioning_origin: ComponentProvisioningOrigin::FleetAdministrator {
+                    caller: Principal::from_slice(&[26; 29]),
+                },
+                release_set: response.release_set,
+                status: ComponentLifecycleStatus::Active,
+                reserved_descendants: 0,
+                committed_descendants: 1,
+                encoded_bytes: 8_192,
+            },
+            directory: ComponentDirectoryHead {
+                provenance: ComponentDirectoryProvenance {
+                    component: child_binding.component,
+                    source_fleet_subnet_root: root,
+                    component_registry_revision: 3,
+                    component_registry_content_hash: [25; 32],
+                    synchronized_at_ns: 27,
+                },
+                descendant_count: 1,
+            },
         };
 
         let request_bytes = candid::encode_one(&request).expect("encode child reservation");
@@ -864,6 +922,10 @@ mod tests {
         let install_bytes =
             candid::encode_one(install_request).expect("encode child install request");
         let response_bytes = candid::encode_one(&response).expect("encode child response");
+        let commit_request_bytes =
+            candid::encode_one(commit_request).expect("encode child commit request");
+        let commit_response_bytes =
+            candid::encode_one(&commit_response).expect("encode child commit response");
 
         assert_eq!(
             candid::decode_one::<RootComponentChildAllocationRequest>(&request_bytes)
@@ -889,6 +951,16 @@ mod tests {
             candid::decode_one::<RootComponentChildAllocationResponse>(&response_bytes)
                 .expect("decode child response"),
             response
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentChildCommitRequest>(&commit_request_bytes)
+                .expect("decode child commit request"),
+            commit_request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentChildCommitResponse>(&commit_response_bytes)
+                .expect("decode child commit response"),
+            commit_response
         );
     }
 

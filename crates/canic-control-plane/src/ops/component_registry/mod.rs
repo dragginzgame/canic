@@ -10,19 +10,20 @@ use crate::{
         ComponentRegistryParentRoleCountRecord, ComponentRegistryPartitionRecord,
         RootComponentAllocationCommitError, RootComponentAllocationProgressRecord,
         RootComponentAllocationRecord, RootComponentChildAllocationProgressRecord,
-        RootComponentChildAllocationRecord, RootComponentChildInstallEffectRecord,
-        RootComponentCommitmentRecord, RootComponentCreationEffectRecord,
-        RootComponentInitialInventoryRecord, RootComponentInstallEffectRecord,
-        RootComponentMembershipRecord, RootComponentRegistryCommitError,
-        RootComponentRegistryMetaRecord, RootComponentRegistryStore,
+        RootComponentChildAllocationRecord, RootComponentChildCommitmentRecord,
+        RootComponentChildInstallEffectRecord, RootComponentCommitmentRecord,
+        RootComponentCreationEffectRecord, RootComponentInitialInventoryRecord,
+        RootComponentInstallEffectRecord, RootComponentMembershipRecord,
+        RootComponentRegistryCommitError, RootComponentRegistryMetaRecord,
+        RootComponentRegistryStore,
     },
     view::component_registry::{
         ComponentRegistryPartitionView, RootComponentAllocationProgressView,
         RootComponentAllocationView, RootComponentChildAllocationProgressView,
-        RootComponentChildAllocationView, RootComponentChildInstallEffectView,
-        RootComponentCommitmentView, RootComponentCreationEffectView,
-        RootComponentInitialInventoryView, RootComponentInstallEffectView,
-        RootComponentMembershipView, RootComponentRegistryView,
+        RootComponentChildAllocationView, RootComponentChildCommitmentView,
+        RootComponentChildInstallEffectView, RootComponentCommitmentView,
+        RootComponentCreationEffectView, RootComponentInitialInventoryView,
+        RootComponentInstallEffectView, RootComponentMembershipView, RootComponentRegistryView,
     },
 };
 use candid::CandidType;
@@ -750,6 +751,28 @@ impl ComponentRegistryOps {
             )
         })?;
         validate_child_record(&partition, &child)?;
+        let traversal = ComponentRegistryChildTraversalRecord {
+            component,
+            parent_canister_id: child.parent_canister_id,
+            role: child.role.clone(),
+            canister_id: child.canister_id,
+        };
+        if RootComponentRegistryStore::component_for_principal(child.parent_canister_id)
+            != Some(component)
+            || RootComponentRegistryStore::child_traversal(
+                component,
+                traversal.parent_canister_id,
+                &traversal.role,
+                traversal.canister_id,
+            )
+            .as_ref()
+                != Some(&traversal)
+        {
+            return Err(InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "indexed Component Registry child differs from its parent or traversal index",
+            ));
+        }
         Ok(Some((
             ManagedCanisterBinding::ComponentChild(ComponentChildBinding {
                 component: partition.binding,
@@ -815,21 +838,6 @@ impl ComponentRegistryOps {
                 InternalError::unavailable("Component Registry partition has not been committed")
             })?;
         validate_partition_record(&partition)?;
-        if partition.binding.component_spec != decision.component_spec
-            || partition.binding.spec_hash != decision.spec_hash
-            || partition.release_set != current.release_set
-            || partition.status != ComponentLifecycleStatus::Active
-            || reserved_against_registry
-                != (ComponentRegistryHead {
-                    component: decision.component,
-                    revision: partition.revision,
-                    content_hash: partition.content_hash,
-                })
-        {
-            return Err(InternalError::conflict(
-                "Component Child reservation authority changed before durable mutation",
-            ));
-        }
         let record = RootComponentChildAllocationRecord {
             operation_id,
             component: decision.component,
@@ -854,6 +862,21 @@ impl ComponentRegistryOps {
                     "Component Child allocation operation is already bound to different intent",
                 ))
             };
+        }
+        if partition.binding.component_spec != decision.component_spec
+            || partition.binding.spec_hash != decision.spec_hash
+            || partition.release_set != current.release_set
+            || partition.status != ComponentLifecycleStatus::Active
+            || record.reserved_against_registry
+                != (ComponentRegistryHead {
+                    component: decision.component,
+                    revision: partition.revision,
+                    content_hash: partition.content_hash,
+                })
+        {
+            return Err(InternalError::conflict(
+                "Component Child reservation authority changed before durable mutation",
+            ));
         }
 
         let current_count = RootComponentRegistryStore::parent_role_count(
@@ -1308,6 +1331,136 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
     ) -> Result<RootComponentChildAllocationView, InternalError> {
         advance_child_install_phase(component, operation_id, true)
+    }
+
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one synchronous operation validates and atomically commits every child index"
+    )]
+    pub(crate) fn commit_verified_child(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        directory_synchronized_at_ns: u64,
+        fleet_directory: FleetDirectorySnapshot,
+    ) -> Result<
+        (
+            RootComponentChildAllocationView,
+            ComponentRegistryPartitionView,
+        ),
+        InternalError,
+    > {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        validate_partition_record(&partition)?;
+        let record = RootComponentRegistryStore::child_allocation(component, operation_id)
+            .ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component Child allocation operation has not been reserved",
+                )
+            })?;
+        if let RootComponentChildAllocationProgressRecord::Committed { commitment, .. } =
+            &record.progress
+        {
+            let committed = exact_committed_child_partition(&record, commitment)?;
+            validate_child_directory_authority_hash(&committed, &fleet_directory, commitment)?;
+            return Ok((
+                child_allocation_record_to_view(record),
+                partition_record_to_view(committed),
+            ));
+        }
+        if directory_synchronized_at_ns <= partition.directory_synchronized_at_ns {
+            return Err(InternalError::invalid_input(
+                "Component Child Directory synchronization must advance the current Component authority",
+            ));
+        }
+        let RootComponentChildAllocationProgressRecord::Verified {
+            creation,
+            canister,
+            installation,
+        } = &record.progress
+        else {
+            return Err(InternalError::conflict(
+                "Component Child allocation is not ready for Registry commitment",
+            ));
+        };
+
+        let (next_record, next_partition, child, traversal) = committed_child_records(
+            &record,
+            creation,
+            *canister,
+            installation,
+            &partition,
+            directory_synchronized_at_ns,
+            &fleet_directory,
+        )?;
+        let actual_terminal_bytes =
+            RootComponentRegistryStore::child_allocation_entry_bytes(&next_record)
+                .checked_add(RootComponentRegistryStore::child_entry_bytes(&child))
+                .and_then(|value| {
+                    value.checked_add(RootComponentRegistryStore::child_traversal_entry_bytes(
+                        &traversal,
+                    ))
+                })
+                .and_then(|value| {
+                    value.checked_add(RootComponentRegistryStore::principal_index_entry_bytes(
+                        child.canister_id,
+                        component,
+                    ))
+                })
+                .ok_or_else(|| {
+                    InternalError::resource_exhausted("Component Registry bytes overflow")
+                })?;
+        if actual_terminal_bytes > installation.charged_entry_bytes {
+            return Err(InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component Child commitment exceeds its pre-install Registry byte reservation",
+            ));
+        }
+        if next_partition.encoded_bytes > record.maximum_registry_bytes {
+            return Err(InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "pre-install child reservation exceeds the protected Component limit at commitment",
+            ));
+        }
+        let registry_reduction = partition
+            .encoded_bytes
+            .checked_sub(next_partition.encoded_bytes)
+            .ok_or_else(|| {
+                InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "exact Component Child commitment exceeded its maximum terminal precharge",
+                )
+            })?;
+        let mut next_meta = current.clone();
+        next_meta.encoded_bytes = next_meta
+            .encoded_bytes
+            .checked_sub(registry_reduction)
+            .ok_or_else(|| {
+                InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "root Component Registry cannot release excess child precharge",
+                )
+            })?;
+
+        RootComponentRegistryStore::commit_child(
+            &current,
+            next_meta,
+            &partition,
+            next_partition.clone(),
+            &record,
+            next_record.clone(),
+            child,
+            traversal,
+        )
+        .map_err(map_allocation_commit_error)?;
+        Ok((
+            child_allocation_record_to_view(next_record),
+            partition_record_to_view(next_partition),
+        ))
     }
 
     pub(crate) fn commit_verified(
@@ -2086,6 +2239,7 @@ fn partition_record_to_view(
         status: record.status,
         revision: record.revision,
         content_hash: record.content_hash,
+        descendant_content_hash: record.descendant_content_hash,
         directory_synchronized_at_ns: record.directory_synchronized_at_ns,
         reserved_descendants: record.reserved_descendants,
         committed_descendants: record.committed_descendants,
@@ -2159,9 +2313,26 @@ fn child_allocation_record_to_view(
                 creation: creation_effect_record_to_view(creation),
                 canister,
                 installation: child_install_effect_record_to_view(installation),
-                commitment: commitment_record_to_view(commitment),
+                commitment: child_commitment_record_to_view(commitment),
             },
         },
+    }
+}
+
+fn child_commitment_record_to_view(
+    commitment: RootComponentChildCommitmentRecord,
+) -> RootComponentChildCommitmentView {
+    RootComponentChildCommitmentView {
+        registry: commitment.registry,
+        descendant_content_hash: commitment.descendant_content_hash,
+        registry_encoded_bytes: commitment.registry_encoded_bytes,
+        reserved_descendants: commitment.reserved_descendants,
+        committed_descendants: commitment.committed_descendants,
+        directory_synchronized_at_ns: commitment.directory_synchronized_at_ns,
+        directory_authority_hash: commitment.directory_authority_hash,
+        directory_prepared: commitment.directory_prepared,
+        runtime_activated: commitment.runtime_activated,
+        membership: commitment.membership.map(membership_record_to_view),
     }
 }
 
@@ -2431,13 +2602,16 @@ fn child_install_charged_entry_bytes(
         creation,
         canister,
         installation,
-        commitment: RootComponentCommitmentRecord {
+        commitment: RootComponentChildCommitmentRecord {
             registry: ComponentRegistryHead {
                 component: record.component,
                 revision: u64::MAX,
                 content_hash: [u8::MAX; 32],
             },
-            prepared_registry_encoded_bytes: u64::MAX,
+            descendant_content_hash: [u8::MAX; 32],
+            registry_encoded_bytes: u64::MAX,
+            reserved_descendants: u32::MAX,
+            committed_descendants: u32::MAX,
             directory_synchronized_at_ns: u64::MAX,
             directory_authority_hash: [u8::MAX; 32],
             directory_prepared: true,
@@ -2698,6 +2872,8 @@ fn install_charged_entry_bytes(
             record.release_set,
             ComponentLifecycleStatus::Prepared,
             1,
+            empty_component_descendant_content_hash(record.component),
+            0,
         )?,
     };
     maximum.progress = RootComponentAllocationProgressRecord::Committed {
@@ -2726,6 +2902,7 @@ fn install_charged_entry_bytes(
         status: ComponentLifecycleStatus::Active,
         revision: u64::MAX,
         content_hash: [u8::MAX; 32],
+        descendant_content_hash: [u8::MAX; 32],
         directory_synchronized_at_ns: u64::MAX,
         reserved_descendants: u32::MAX,
         committed_descendants: u32::MAX,
@@ -2751,6 +2928,186 @@ fn install_charged_entry_bytes(
     Ok(charged)
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one constructor converges the complete child receipt and Registry byte ledger"
+)]
+fn committed_child_records(
+    record: &RootComponentChildAllocationRecord,
+    creation: &RootComponentCreationEffectRecord,
+    canister: Principal,
+    installation: &RootComponentChildInstallEffectRecord,
+    partition: &ComponentRegistryPartitionRecord,
+    directory_synchronized_at_ns: u64,
+    fleet_directory: &FleetDirectorySnapshot,
+) -> Result<
+    (
+        RootComponentChildAllocationRecord,
+        ComponentRegistryPartitionRecord,
+        ComponentRegistryChildRecord,
+        ComponentRegistryChildTraversalRecord,
+    ),
+    InternalError,
+> {
+    if RootComponentRegistryStore::child(record.component, canister).is_some() {
+        return Err(InternalError::conflict(
+            "Component Child principal is already committed",
+        ));
+    }
+    let child = ComponentRegistryChildRecord {
+        component: record.component,
+        canister_id: canister,
+        parent_canister_id: record.parent_canister_id,
+        role: record.child_role.clone(),
+        kind: record.child_kind,
+        installed_artifact_hash: installation.raw_module_hash,
+        status: ComponentLifecycleStatus::Prepared,
+    };
+    validate_child_record(partition, &child)?;
+
+    let revision = partition
+        .revision
+        .checked_add(1)
+        .ok_or_else(|| InternalError::resource_exhausted("Component Registry revision overflow"))?;
+    let reserved_descendants = partition
+        .reserved_descendants
+        .checked_sub(1)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component Registry has no reserved descendant to commit",
+            )
+        })?;
+    let committed_descendants =
+        partition
+            .committed_descendants
+            .checked_add(1)
+            .ok_or_else(|| {
+                InternalError::resource_exhausted("committed Component descendant count overflow")
+            })?;
+    let descendant_content_hash = committed_component_descendant_content_hash(
+        partition.descendant_content_hash,
+        partition.committed_descendants,
+        revision,
+        &child,
+    )?;
+    let content_hash = component_partition_content_hash(
+        &partition.binding,
+        &partition.provisioning_origin,
+        partition.release_set,
+        partition.status,
+        revision,
+        descendant_content_hash,
+        committed_descendants,
+    )?;
+    let registry = ComponentRegistryHead {
+        component: record.component,
+        revision,
+        content_hash,
+    };
+    let directory_authority_hash = component_directory_authority_hash(
+        &partition.binding,
+        revision,
+        content_hash,
+        directory_synchronized_at_ns,
+        committed_descendants,
+        fleet_directory,
+    )?;
+    let traversal = ComponentRegistryChildTraversalRecord {
+        component: record.component,
+        parent_canister_id: record.parent_canister_id,
+        role: record.child_role.clone(),
+        canister_id: canister,
+    };
+    let mut next_record = record.clone();
+    next_record.progress = RootComponentChildAllocationProgressRecord::Committed {
+        creation: creation.clone(),
+        canister,
+        installation: installation.clone(),
+        commitment: RootComponentChildCommitmentRecord {
+            registry,
+            descendant_content_hash,
+            registry_encoded_bytes: 0,
+            reserved_descendants,
+            committed_descendants,
+            directory_synchronized_at_ns,
+            directory_authority_hash,
+            directory_prepared: false,
+            runtime_activated: false,
+            membership: None,
+        },
+    };
+    let mut next_partition = ComponentRegistryPartitionRecord {
+        binding: partition.binding.clone(),
+        provisioning_origin: partition.provisioning_origin.clone(),
+        release_set: partition.release_set,
+        status: partition.status,
+        revision,
+        content_hash,
+        descendant_content_hash,
+        directory_synchronized_at_ns,
+        reserved_descendants,
+        committed_descendants,
+        encoded_bytes: partition.encoded_bytes,
+    };
+    let current_total = RootComponentRegistryStore::partition_entry_bytes(partition)
+        .checked_add(installation.charged_entry_bytes)
+        .ok_or_else(|| InternalError::resource_exhausted("Component Registry bytes overflow"))?;
+    let child_bytes = RootComponentRegistryStore::child_entry_bytes(&child);
+    let traversal_bytes = RootComponentRegistryStore::child_traversal_entry_bytes(&traversal);
+    let index_bytes =
+        RootComponentRegistryStore::principal_index_entry_bytes(canister, record.component);
+
+    for _ in 0..8 {
+        let terminal_bytes = RootComponentRegistryStore::child_allocation_entry_bytes(&next_record)
+            .checked_add(child_bytes)
+            .and_then(|value| value.checked_add(traversal_bytes))
+            .and_then(|value| value.checked_add(index_bytes))
+            .ok_or_else(|| {
+                InternalError::resource_exhausted("Component Registry bytes overflow")
+            })?;
+        let next_total = RootComponentRegistryStore::partition_entry_bytes(&next_partition)
+            .checked_add(terminal_bytes)
+            .ok_or_else(|| {
+                InternalError::resource_exhausted("Component Registry bytes overflow")
+            })?;
+        let released_precharge = current_total.checked_sub(next_total).ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "exact Component Child commitment exceeds its maximum terminal precharge",
+            )
+        })?;
+        let encoded_bytes = partition
+            .encoded_bytes
+            .checked_sub(released_precharge)
+            .ok_or_else(|| {
+                InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "Component Registry cannot release excess child precharge",
+                )
+            })?;
+        let RootComponentChildAllocationProgressRecord::Committed { commitment, .. } =
+            &mut next_record.progress
+        else {
+            return Err(InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
+                "new Component Child commitment changed phase during byte accounting",
+            ));
+        };
+        if next_partition.encoded_bytes == encoded_bytes
+            && commitment.registry_encoded_bytes == encoded_bytes
+        {
+            return Ok((next_record, next_partition, child, traversal));
+        }
+        next_partition.encoded_bytes = encoded_bytes;
+        commitment.registry_encoded_bytes = encoded_bytes;
+    }
+    Err(InternalError::invariant(
+        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+        "Component Child commitment byte accounting did not converge",
+    ))
+}
+
 fn committed_records(
     record: &RootComponentAllocationRecord,
     creation: &RootComponentCreationEffectRecord,
@@ -2772,6 +3129,8 @@ fn committed_records(
         record.release_set,
         ComponentLifecycleStatus::Prepared,
         revision,
+        empty_component_descendant_content_hash(record.component),
+        0,
     )?;
     let registry = ComponentRegistryHead {
         component: record.component,
@@ -2815,6 +3174,7 @@ fn committed_records(
         status: ComponentLifecycleStatus::Prepared,
         revision,
         content_hash,
+        descendant_content_hash: empty_component_descendant_content_hash(record.component),
         directory_synchronized_at_ns,
         reserved_descendants: 0,
         committed_descendants: 0,
@@ -2856,6 +3216,10 @@ fn committed_records(
     ))
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one constructor freezes the complete top-level membership authority"
+)]
 fn active_membership_records(
     record: &RootComponentAllocationRecord,
     commitment: &RootComponentCommitmentRecord,
@@ -2890,12 +3254,15 @@ fn active_membership_records(
         record.release_set,
         ComponentLifecycleStatus::Active,
         revision,
+        empty_component_descendant_content_hash(record.component),
+        0,
     )?;
     let directory_authority_hash = component_directory_authority_hash(
         &installation.binding,
         revision,
         content_hash,
         directory_synchronized_at_ns,
+        0,
         fleet_directory,
     )?;
     let mut next_record = record.clone();
@@ -2906,6 +3273,7 @@ fn active_membership_records(
         status: ComponentLifecycleStatus::Active,
         revision,
         content_hash,
+        descendant_content_hash: empty_component_descendant_content_hash(record.component),
         directory_synchronized_at_ns,
         reserved_descendants: 0,
         committed_descendants: 0,
@@ -2974,6 +3342,7 @@ fn component_directory_authority_hash(
     revision: u64,
     content_hash: [u8; 32],
     synchronized_at_ns: u64,
+    descendant_count: u32,
     fleet_directory: &FleetDirectorySnapshot,
 ) -> Result<[u8; 32], InternalError> {
     ComponentRuntimeOps::directory_authority_hash(&ComponentRuntimeDirectoryAuthority {
@@ -2986,9 +3355,98 @@ fn component_directory_authority_hash(
                 component_registry_content_hash: content_hash,
                 synchronized_at_ns,
             },
-            descendant_count: 0,
+            descendant_count,
         },
     })
+}
+
+fn exact_committed_child_partition(
+    record: &RootComponentChildAllocationRecord,
+    commitment: &RootComponentChildCommitmentRecord,
+) -> Result<ComponentRegistryPartitionRecord, InternalError> {
+    let RootComponentChildAllocationProgressRecord::Committed {
+        canister,
+        installation,
+        ..
+    } = &record.progress
+    else {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
+            "Component Child partition validation requires a committed allocation",
+        ));
+    };
+    let current = RootComponentRegistryStore::partition(record.component).ok_or_else(|| {
+        InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "committed Component Child allocation has no Registry partition",
+        )
+    })?;
+    validate_partition_record(&current)?;
+    let child =
+        RootComponentRegistryStore::child(record.component, *canister).ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "committed Component Child allocation has no normalized row",
+            )
+        })?;
+    validate_child_record(&current, &child)?;
+    let traversal = ComponentRegistryChildTraversalRecord {
+        component: record.component,
+        parent_canister_id: record.parent_canister_id,
+        role: record.child_role.clone(),
+        canister_id: *canister,
+    };
+    let committed = ComponentRegistryPartitionRecord {
+        binding: installation.binding.component.clone(),
+        provisioning_origin: current.provisioning_origin.clone(),
+        release_set: record.release_set,
+        status: ComponentLifecycleStatus::Active,
+        revision: commitment.registry.revision,
+        content_hash: commitment.registry.content_hash,
+        descendant_content_hash: commitment.descendant_content_hash,
+        directory_synchronized_at_ns: commitment.directory_synchronized_at_ns,
+        reserved_descendants: commitment.reserved_descendants,
+        committed_descendants: commitment.committed_descendants,
+        encoded_bytes: commitment.registry_encoded_bytes,
+    };
+    validate_partition_snapshot(&committed)?;
+    if commitment.registry.component != record.component
+        || child.component != record.component
+        || child.canister_id != *canister
+        || child.parent_canister_id != record.parent_canister_id
+        || child.role != record.child_role
+        || child.kind != record.child_kind
+        || child.installed_artifact_hash != installation.raw_module_hash
+        || !matches!(
+            child.status,
+            ComponentLifecycleStatus::Prepared | ComponentLifecycleStatus::Active
+        )
+        || RootComponentRegistryStore::child_traversal(
+            traversal.component,
+            traversal.parent_canister_id,
+            &traversal.role,
+            traversal.canister_id,
+        )
+        .as_ref()
+            != Some(&traversal)
+        || current.binding != committed.binding
+        || current.release_set != committed.release_set
+        || current.status != ComponentLifecycleStatus::Active
+        || current.revision < committed.revision
+        || current.directory_synchronized_at_ns < committed.directory_synchronized_at_ns
+        || current.committed_descendants < committed.committed_descendants
+        || current.encoded_bytes > record.maximum_registry_bytes
+        || (current.revision == committed.revision
+            && (current.content_hash != committed.content_hash
+                || current.directory_synchronized_at_ns != committed.directory_synchronized_at_ns
+                || current.committed_descendants != committed.committed_descendants))
+    {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "committed Component Child differs from its immutable Registry receipt",
+        ));
+    }
+    Ok(committed)
 }
 
 fn exact_committed_partition(
@@ -3015,6 +3473,7 @@ fn exact_committed_partition(
         status: ComponentLifecycleStatus::Prepared,
         revision: commitment.registry.revision,
         content_hash: commitment.registry.content_hash,
+        descendant_content_hash: empty_component_descendant_content_hash(record.component),
         directory_synchronized_at_ns: commitment.directory_synchronized_at_ns,
         reserved_descendants: 0,
         committed_descendants: 0,
@@ -3030,7 +3489,7 @@ fn exact_committed_partition(
             "committed Component allocation differs from its prepared Registry receipt",
         ));
     }
-    validate_partition_record(&prepared)?;
+    validate_partition_snapshot(&prepared)?;
     match &commitment.membership {
         None if current == prepared => {}
         Some(membership) => {
@@ -3070,18 +3529,44 @@ fn validate_active_partition(
         commitment.registry.revision.checked_add(1).ok_or_else(|| {
             InternalError::resource_exhausted("Component Registry revision overflow")
         })?;
-    // Child reservations add charged partition entries without changing the
-    // committed member head retained by this immutable membership receipt.
+    let historical = ComponentRegistryPartitionRecord {
+        binding: current.binding.clone(),
+        provisioning_origin: current.provisioning_origin.clone(),
+        release_set: current.release_set,
+        status: ComponentLifecycleStatus::Active,
+        revision: expected_revision,
+        content_hash: component_partition_content_hash(
+            &current.binding,
+            &current.provisioning_origin,
+            current.release_set,
+            ComponentLifecycleStatus::Active,
+            expected_revision,
+            empty_component_descendant_content_hash(record.component),
+            0,
+        )?,
+        descendant_content_hash: empty_component_descendant_content_hash(record.component),
+        directory_synchronized_at_ns: membership.directory_synchronized_at_ns,
+        reserved_descendants: 0,
+        committed_descendants: 0,
+        encoded_bytes: membership.registry_encoded_bytes,
+    };
+    validate_partition_snapshot(&historical)?;
+    // Later child reservations and commitments may advance charged bytes and
+    // the current head without changing this immutable top-level receipt.
     let registry_encoded_bytes_covered = membership.registry_encoded_bytes <= current.encoded_bytes;
     if !commitment.directory_prepared
         || !commitment.runtime_activated
         || !registry_encoded_bytes_covered
         || membership.directory_synchronized_at_ns <= commitment.directory_synchronized_at_ns
-        || membership.directory_synchronized_at_ns != current.directory_synchronized_at_ns
         || membership.directory_authority_hash == [0; 32]
         || current.binding.component != record.component
         || current.status != ComponentLifecycleStatus::Active
-        || current.revision != expected_revision
+        || current.revision < expected_revision
+        || current.directory_synchronized_at_ns < membership.directory_synchronized_at_ns
+        || (current.revision == expected_revision
+            && (current.content_hash != historical.content_hash
+                || current.directory_synchronized_at_ns != historical.directory_synchronized_at_ns
+                || current.committed_descendants != 0))
     {
         return Err(InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
@@ -3089,7 +3574,7 @@ fn validate_active_partition(
         ));
     }
     validate_partition_record(current)?;
-    Ok(current.clone())
+    Ok(historical)
 }
 
 fn validate_membership_directory_authority_hash(
@@ -3116,6 +3601,35 @@ fn validate_membership_directory_authority_hash(
         return Err(InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
             "active Component Directory authority differs from its membership receipt",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_child_directory_authority_hash(
+    partition: &ComponentRegistryPartitionRecord,
+    fleet_directory: &FleetDirectorySnapshot,
+    commitment: &RootComponentChildCommitmentRecord,
+) -> Result<(), InternalError> {
+    let authority = ComponentRuntimeDirectoryAuthority {
+        fleet: fleet_directory.clone(),
+        component: ComponentDirectoryHead {
+            provenance: ComponentDirectoryProvenance {
+                component: partition.binding.clone(),
+                source_fleet_subnet_root: partition.binding.fleet_subnet_root,
+                component_registry_revision: commitment.registry.revision,
+                component_registry_content_hash: commitment.registry.content_hash,
+                synchronized_at_ns: commitment.directory_synchronized_at_ns,
+            },
+            descendant_count: commitment.committed_descendants,
+        },
+    };
+    if ComponentRuntimeOps::directory_authority_hash(&authority)?
+        != commitment.directory_authority_hash
+    {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "committed Component Child Directory authority differs from its Registry receipt",
         ));
     }
     Ok(())
@@ -3153,8 +3667,21 @@ fn validate_directory_authority_hash(
 fn validate_partition_record(
     partition: &ComponentRegistryPartitionRecord,
 ) -> Result<(), InternalError> {
+    validate_partition_snapshot(partition)
+}
+
+fn validate_partition_snapshot(
+    partition: &ComponentRegistryPartitionRecord,
+) -> Result<(), InternalError> {
+    let empty_descendant_hash =
+        empty_component_descendant_content_hash(partition.binding.component);
     if partition.revision == 0
         || partition.directory_synchronized_at_ns == 0
+        || partition.descendant_content_hash == [0; 32]
+        || (partition.committed_descendants == 0
+            && partition.descendant_content_hash != empty_descendant_hash)
+        || (partition.committed_descendants > 0
+            && partition.descendant_content_hash == empty_descendant_hash)
         || partition.content_hash
             != component_partition_content_hash(
                 &partition.binding,
@@ -3162,6 +3689,8 @@ fn validate_partition_record(
                 partition.release_set,
                 partition.status,
                 partition.revision,
+                partition.descendant_content_hash,
+                partition.committed_descendants,
             )?
         || RootComponentRegistryStore::component_for_principal(partition.binding.canister_id)
             != Some(partition.binding.component)
@@ -3221,6 +3750,8 @@ fn component_partition_content_hash(
     release_set: FleetSubnetRootReleaseSet,
     status: ComponentLifecycleStatus,
     revision: u64,
+    descendant_content_hash: [u8; 32],
+    committed_descendants: u32,
 ) -> Result<[u8; 32], InternalError> {
     const DOMAIN: &[u8] = b"canic.component-registry.partition.v1";
     let payload = candid::encode_one((
@@ -3229,11 +3760,58 @@ fn component_partition_content_hash(
         release_set,
         status,
         revision,
+        descendant_content_hash,
+        committed_descendants,
     ))
     .map_err(|error| {
         InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
             format!("Component Registry hash input cannot be encoded: {error}"),
+        )
+    })?;
+    let mut hasher = Sha256::new();
+    hasher.update(DOMAIN);
+    hasher.update((payload.len() as u64).to_be_bytes());
+    hasher.update(payload);
+    Ok(hasher.finalize().into())
+}
+
+fn empty_component_descendant_content_hash(component: ComponentInstanceId) -> [u8; 32] {
+    const DOMAIN: &[u8] = b"canic.component-registry.descendants.v1";
+    let mut hasher = Sha256::new();
+    hasher.update(DOMAIN);
+    hasher.update(component.as_bytes());
+    hasher.finalize().into()
+}
+
+fn committed_component_descendant_content_hash(
+    previous: [u8; 32],
+    previous_committed_descendants: u32,
+    revision: u64,
+    child: &ComponentRegistryChildRecord,
+) -> Result<[u8; 32], InternalError> {
+    const DOMAIN: &[u8] = b"canic.component-registry.descendant-commit.v1";
+    if previous == [0; 32] || child.status != ComponentLifecycleStatus::Prepared {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
+            "Component descendant digest input is invalid",
+        ));
+    }
+    let payload = candid::encode_one((
+        previous,
+        previous_committed_descendants,
+        revision,
+        child.canister_id,
+        child.parent_canister_id,
+        child.role.clone(),
+        child.kind,
+        child.installed_artifact_hash,
+        child.status,
+    ))
+    .map_err(|error| {
+        InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
+            format!("Component descendant digest input cannot be encoded: {error}"),
         )
     })?;
     let mut hasher = Sha256::new();
@@ -3626,7 +4204,7 @@ mod tests {
     #[test]
     #[expect(
         clippy::too_many_lines,
-        reason = "one test follows the complete direct-child reserve, create and install lifecycle"
+        reason = "one test follows the complete direct-child reserve-through-commit lifecycle"
     )]
     fn child_reservation_is_parent_indexed_idempotent_and_capacity_bounded() {
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
@@ -3666,8 +4244,11 @@ mod tests {
                 release_set,
                 ComponentLifecycleStatus::Active,
                 2,
+                empty_component_descendant_content_hash(component),
+                0,
             )
             .expect("partition hash"),
+            descendant_content_hash: empty_component_descendant_content_hash(component),
             directory_synchronized_at_ns: 33,
             reserved_descendants: 0,
             committed_descendants: 0,
@@ -3689,7 +4270,7 @@ mod tests {
             current: Some(RootComponentRegistryMetaRecord {
                 root: root.clone(),
                 prepared_against_registry: FleetRegistryVersion {
-                    authority: root.authority,
+                    authority: root.authority.clone(),
                     revision: 4,
                     content_hash: [5; 32],
                 },
@@ -4005,13 +4586,109 @@ mod tests {
         assert_eq!(verified_partition.committed_descendants, 0);
         assert_eq!(verified_partition.encoded_bytes, install_intent_bytes);
 
+        let committed = ComponentRegistryOps::commit_verified_child(
+            component,
+            [44; 32],
+            66,
+            fleet_directory(&root),
+        )
+        .expect("commit verified child");
+        let committed_partition = ComponentRegistryOps::partition(component)
+            .expect("partition read")
+            .expect("partition");
+        assert_eq!(committed_partition.revision, 3);
+        assert_ne!(
+            committed_partition.content_hash,
+            verified_partition.content_hash
+        );
+        assert_eq!(committed_partition.directory_synchronized_at_ns, 66);
+        assert_eq!(committed_partition.reserved_descendants, 0);
+        assert_eq!(committed_partition.committed_descendants, 1);
+        assert!(committed_partition.encoded_bytes <= install_intent_bytes);
+        let RootComponentChildAllocationProgressView::Committed {
+            commitment,
+            installation,
+            ..
+        } = &committed.0.progress
+        else {
+            panic!("committed child progress");
+        };
+        assert_eq!(
+            commitment.registry,
+            ComponentRegistryHead {
+                component,
+                revision: committed_partition.revision,
+                content_hash: committed_partition.content_hash,
+            }
+        );
+        assert_eq!(
+            commitment.registry_encoded_bytes,
+            committed_partition.encoded_bytes
+        );
+        assert_eq!(commitment.reserved_descendants, 0);
+        assert_eq!(commitment.committed_descendants, 1);
+        assert_ne!(commitment.directory_authority_hash, [0; 32]);
+        assert_eq!(installation.binding, install_plan.binding);
+        assert_eq!(committed.1, committed_partition);
+        let committed_status = ComponentRegistryOps::current().expect("Registry status");
+        assert_eq!(committed_status.managed_descendants, 1);
+        assert_eq!(committed_status.known_created_component_canisters, 2);
+        assert_eq!(
+            committed_status.encoded_bytes,
+            committed_partition.encoded_bytes
+        );
+        assert_eq!(
+            ComponentRegistryOps::parent_role_instances(component, parent, &decision.child_role,)
+                .expect("parent-role count"),
+            1
+        );
+        let registered_child = ComponentRegistryOps::registered_parent(component, canister)
+            .expect("registered child")
+            .expect("normalized child");
+        assert_eq!(
+            registered_child,
+            (
+                ManagedCanisterBinding::ComponentChild(install_plan.binding),
+                ComponentLifecycleStatus::Prepared,
+            )
+        );
+        let durable = RootComponentRegistryStore::export();
+        assert_eq!(durable.children.len(), 1);
+        assert_eq!(durable.child_traversals.len(), 1);
+        RootComponentRegistryStore::import(durable);
+        let progressed_partition = ComponentRegistryOps::partition(component)
+            .expect("partition read")
+            .expect("partition");
+        let progressed_reservation = ComponentRegistryOps::reserve_child_allocation(
+            decision.clone(),
+            [68; 32],
+            ComponentRegistryHead {
+                component,
+                revision: progressed_partition.revision,
+                content_hash: progressed_partition.content_hash,
+            },
+        )
+        .expect("later child reservation");
+        assert!(matches!(
+            progressed_reservation.progress,
+            RootComponentChildAllocationProgressView::Reserved
+        ));
+        let committed_retry = ComponentRegistryOps::commit_verified_child(
+            component,
+            [44; 32],
+            67,
+            fleet_directory(&root),
+        )
+        .expect("exact child commit retry");
+        assert_eq!(committed_retry, committed);
+
         let retried_reservation = ComponentRegistryOps::reserve_child_allocation(
             decision,
             [44; 32],
             repeated.reserved_against_registry,
         )
         .expect("reservation retry preserves install progress");
-        assert_eq!(retried_reservation, verified_retry);
+        assert_eq!(retried_reservation, committed.0);
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
 

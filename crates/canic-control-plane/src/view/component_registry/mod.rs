@@ -106,6 +106,10 @@ pub struct RootComponentChildAllocationView {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "the read-only child lifecycle mirrors its direct durable authority"
+)]
 pub enum RootComponentChildAllocationProgressView {
     Reserved,
     CreationIntent(RootComponentCreationEffectView),
@@ -132,8 +136,28 @@ pub enum RootComponentChildAllocationProgressView {
         creation: RootComponentCreationEffectView,
         canister: Principal,
         installation: RootComponentChildInstallEffectView,
-        commitment: RootComponentCommitmentView,
+        commitment: RootComponentChildCommitmentView,
     },
+}
+
+///
+/// RootComponentChildCommitmentView
+///
+/// Read-only child-commit Registry head plus later Directory and membership receipts.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentChildCommitmentView {
+    pub registry: ComponentRegistryHead,
+    pub descendant_content_hash: [u8; 32],
+    pub registry_encoded_bytes: u64,
+    pub reserved_descendants: u32,
+    pub committed_descendants: u32,
+    pub directory_synchronized_at_ns: u64,
+    pub directory_authority_hash: [u8; 32],
+    pub directory_prepared: bool,
+    pub runtime_activated: bool,
+    pub membership: Option<RootComponentMembershipView>,
 }
 
 ///
@@ -265,6 +289,7 @@ pub struct ComponentRegistryPartitionView {
     pub status: ComponentLifecycleStatus,
     pub revision: u64,
     pub content_hash: [u8; 32],
+    pub descendant_content_hash: [u8; 32],
     pub directory_synchronized_at_ns: u64,
     pub reserved_descendants: u32,
     pub committed_descendants: u32,
