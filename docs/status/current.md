@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.38`.
-- The latest published release is `v0.100.38` at
-  `147d4ce6fea5bd42f7734356b9641d4930cd5c8a`.
-- Open `0.100.39` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.39`.
+- The latest published release is `v0.100.39` at
+  `27b7db1cd0185730b943e1a29f3c36e27cd10a17`.
+- Open `0.100.40` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -374,14 +374,21 @@ Historical detail is archived at:
   freezes sole-root control and the terminal Registry-byte charge before the
   paid call, counts the first durable returned principal exactly once and
   never blindly repeats an unresolved intent.
-- Open `0.100.39` installs that created child from the exact accepted
+- Released `0.100.39` installs that created child from the exact accepted
   root-local Store artifact under its immutable `ComponentChildBinding`.
   Durable install intent precharges the terminal operation, normalized child
   row, principal index and parent/role traversal index before the paid call.
   Exact observed installation is adopted after interruption, while an empty
   target may retry only under a renewed settlement. Independent verification
   requires the exact module, sole-root controller and retained child binding.
-  Normalized member commitment and Directory advancement are next.
+- Open `0.100.40` atomically commits that verified child as a normalized
+  `Prepared` Registry member, inserts its principal and parent/role traversal
+  indexes, transfers reserved capacity to committed and replaces the maximum
+  install precharge with exact bytes. The active Component head and next
+  Directory authority advance over a protected O(1) descendant-content
+  digest suitable for 10,000–20,000 descendants. Exact parent retry preserves
+  the original response after interruption or later head progress; Directory
+  distribution and runtime activation remain separate.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority

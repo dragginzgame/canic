@@ -276,6 +276,28 @@ fn root_component_child_install_is_costed_and_response_idempotent() {
 }
 
 #[test]
+fn root_component_child_commit_is_response_idempotent() {
+    let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_root_component_child_commit")
+        .expect("root Component Child commit policy entry");
+
+    assert_eq!(
+        entry.implementation_status,
+        ReplayImplementationStatus::Implemented
+    );
+    assert_eq!(
+        entry.replay_policy,
+        ReplayPolicy::ResponseIdempotent {
+            command_kind: replay_command_kind("component_registry.commit_child.v1"),
+        }
+    );
+    assert_eq!(entry.cost_class, CostClass::None);
+    assert_eq!(entry.quota_policy, None);
+    assert_eq!(entry.cycle_reserve_policy, None);
+}
+
+#[test]
 fn root_component_child_reservation_is_response_idempotent() {
     let reservation = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()

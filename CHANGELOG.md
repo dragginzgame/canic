@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.40` atomically commits each verified child as a normalized prepared
+  Registry member, advances an O(1) descendant-bound Component head and
+  derives the next exact Directory authority with idempotent parent retry.
+
 - `0.100.39` installs and independently verifies each exactly created child
   from its root-local Store under an immutable child binding, with terminal
   Registry precharge and interruption-safe retry.

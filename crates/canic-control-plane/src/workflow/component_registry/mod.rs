@@ -60,6 +60,7 @@ use canic_core::{
             RootComponentAllocationRequest, RootComponentAllocationResponse,
             RootComponentAllocationStatusRequest, RootComponentChildAllocationRequest,
             RootComponentChildAllocationResponse, RootComponentChildAllocationStatusRequest,
+            RootComponentChildCommitRequest, RootComponentChildCommitResponse,
             RootComponentChildCreationRequest, RootComponentChildInstallEvidence,
             RootComponentChildInstallRequest, RootComponentCommitRequest,
             RootComponentCommitResponse, RootComponentCreationEvidence,
@@ -495,6 +496,73 @@ pub async fn install_child_allocation(
     let plan =
         child_component_install_plan(&authority.binding, &store, &parent.0, &allocation).await?;
     advance_child_install(request.component, request.operation_id, allocation, plan).await
+}
+
+/// Atomically commit one verified direct child and derive the next Component Directory authority.
+pub async fn commit_child_allocation(
+    request: RootComponentChildCommitRequest,
+) -> Result<RootComponentChildCommitResponse, InternalError> {
+    let (authority, root) = root_authority()?;
+    let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let preparation_request = RootComponentRegistryPreparationRequest {
+        store_bootstrap: prepared.store_bootstrap.clone(),
+        expected_fleet_registry: prepared.prepared_against_registry.clone(),
+    };
+    let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    let fleet_directory = validate_active_authority(&authority, root, &preparation_request)?;
+    if FleetActivationApi::status()
+        .map_err(InternalError::public)?
+        .phase
+        != FleetActivationPhase::Active
+    {
+        return Err(InternalError::unavailable(
+            "Component Child commitment requires an Active Fleet Subnet Root runtime",
+        ));
+    }
+
+    let caller = IcOps::msg_caller();
+    let parent =
+        ComponentRegistryOps::registered_parent(request.component, caller)?.ok_or_else(|| {
+            InternalError::public(Error::forbidden(format!(
+                "caller {caller} is not a registered member of Component {}",
+                request.component
+            )))
+        })?;
+    let allocation =
+        ComponentRegistryOps::child_allocation(request.component, request.operation_id)?
+            .ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component Child allocation operation has not been reserved",
+                )
+            })?;
+    let topology = ConfigOps::component_topology()?;
+    validate_child_allocation(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &parent.0,
+        &allocation,
+        None,
+    )?;
+    let plan =
+        child_component_install_plan(&authority.binding, &store, &parent.0, &allocation).await?;
+    let installation = committed_or_verified_child_installation(&allocation)?;
+    validate_child_install_effect(installation, &plan.durable)?;
+    verify_installed_child(&plan).await?;
+
+    let (committed, partition) = ComponentRegistryOps::commit_verified_child(
+        request.component,
+        request.operation_id,
+        IcOps::now_nanos(),
+        fleet_directory,
+    )?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &partition,
+    )?;
+    child_commit_response(committed, partition)
 }
 
 /// Atomically commit one verified top-level Component and its first Directory authority.
@@ -2235,6 +2303,20 @@ fn committed_or_verified_installation(
     }
 }
 
+fn committed_or_verified_child_installation(
+    allocation: &RootComponentChildAllocationView,
+) -> Result<&RootComponentChildInstallEffectView, InternalError> {
+    match &allocation.progress {
+        RootComponentChildAllocationProgressView::Verified { installation, .. }
+        | RootComponentChildAllocationProgressView::Committed { installation, .. } => {
+            Ok(installation)
+        }
+        _ => Err(InternalError::conflict(
+            "Component Child allocation must be verified before Registry commitment",
+        )),
+    }
+}
+
 fn committed_installation(
     allocation: &RootComponentAllocationView,
 ) -> Result<&RootComponentInstallEffectView, InternalError> {
@@ -2540,6 +2622,43 @@ const fn registry_evidence(head: &ComponentRegistryHead) -> ComponentRegistryVer
         revision: head.revision,
         content_hash: head.content_hash,
     }
+}
+
+fn child_commit_response(
+    allocation: RootComponentChildAllocationView,
+    partition: ComponentRegistryPartitionView,
+) -> Result<RootComponentChildCommitResponse, InternalError> {
+    let RootComponentChildAllocationProgressView::Committed { commitment, .. } =
+        &allocation.progress
+    else {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component Child Registry commit returned a non-committed allocation",
+        ));
+    };
+    let expected_head = ComponentRegistryHead {
+        component: partition.binding.component,
+        revision: partition.revision,
+        content_hash: partition.content_hash,
+    };
+    if commitment.registry != expected_head
+        || commitment.registry_encoded_bytes != partition.encoded_bytes
+        || commitment.reserved_descendants != partition.reserved_descendants
+        || commitment.committed_descendants != partition.committed_descendants
+        || commitment.directory_synchronized_at_ns != partition.directory_synchronized_at_ns
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component Child receipt differs from its Registry or Directory authority",
+        ));
+    }
+    let registry = partition_response(partition.clone());
+    let directory = component_directory_head(&partition);
+    Ok(RootComponentChildCommitResponse {
+        allocation: child_allocation_response(allocation),
+        registry,
+        directory,
+    })
 }
 
 fn commit_response(

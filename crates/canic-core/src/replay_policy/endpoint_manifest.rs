@@ -148,6 +148,10 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         Some(DEPLOYMENT_QUOTA_V1),
         Some(DEPLOYMENT_RESERVE_V1),
     ),
+    update_response_idempotent(
+        "canic_root_component_child_commit",
+        command_kind("component_registry.commit_child.v1"),
+    ),
     update_costed_response_idempotent(
         "canic_root_component_create",
         command_kind("management.control_plane.component_create.v1"),

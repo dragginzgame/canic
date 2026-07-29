@@ -104,6 +104,13 @@ macro_rules! canic_emit_root_admin_endpoints {
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::install_component_child(request).await
         }
 
+        #[$crate::canic_update(internal, public)]
+        async fn canic_root_component_child_commit(
+            request: ::canic::dto::component_registry::RootComponentChildCommitRequest,
+        ) -> Result<::canic::dto::component_registry::RootComponentChildCommitResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::commit_component_child(request).await
+        }
+
         #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_root_component_create(
             request: ::canic::dto::component_registry::RootComponentCreationRequest,
