@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.42`.
-- The latest published release is `v0.100.42` at
-  `657dfb1ab61657f9ac93406da6edf99d17578711`.
-- Open `0.100.43` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.43`.
+- The latest published release is `v0.100.43` at
+  `d807f09370512d0897c07fbbd10aeb8beb412bea`.
+- Open `0.100.44` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -406,7 +406,7 @@ Historical detail is archived at:
   the requesting parent and commits its fixed-size terminal runtime bit last.
   The original child commitment and activation Directory remain stable while
   the Component partition stays `Prepared` and membership remains absent.
-- Open `0.100.43` atomically changes that runtime-active child's normalized
+- Released `0.100.43` atomically changes that runtime-active child's normalized
   Registry row to `Active`, advances the owning Component head through an O(1)
   descendant-status digest and freezes the exact new head, counts, bytes and
   Directory authority in a child-specific membership receipt. The child then
@@ -414,6 +414,11 @@ Historical detail is archived at:
   and commits the terminal synchronization bit. Exact retry reconstructs the
   original membership response even after later reservations or commits
   progress the current partition.
+- Open `0.100.44` adopts the published host-only `ic-query 0.11.0` library and
+  its updated IC agent stack while retaining Canic's existing typed
+  Subnet-catalog adapter. The joined NNS Subnet-topology report is now
+  available for the separately staged host integration; no Canister runtime
+  dependency or placement-policy change occurs in this adoption.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1759,6 +1764,10 @@ That runtime-active child now promotes atomically to active Registry
 membership and converges on the following current Component Directory before
 its terminal root receipt. Exact retries retain their original head even when
 later partition progress is already visible.
+
+The host dependency baseline now uses published `ic-query 0.11.0`. Existing
+typed Subnet-catalog consumers compile unchanged, and the joined NNS
+Subnet-topology report is available for the next observational host adapter.
 
 Next, close the direct-child lifecycle integration around root sealing,
 queries and recovery qualification, including proving terminal child

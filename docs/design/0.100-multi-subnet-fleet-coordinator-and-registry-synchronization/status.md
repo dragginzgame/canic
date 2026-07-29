@@ -6,9 +6,9 @@ Date: 2026-07-29
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.42`.
-- Latest published release: `v0.100.42`.
-- Open patch draft: `0.100.43`; no package-version change has been authorized.
+- Workspace package version: `0.100.43`.
+- Latest published release: `v0.100.43`.
+- Open patch draft: `0.100.44`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -662,7 +662,7 @@ active receipt. The root then revalidates the requesting parent and commits
 the fixed-size terminal runtime bit without changing the prepared partition,
 Registry accounting or membership.
 
-Open 0.100.43 atomically changes that runtime-active child's normalized row to
+Released 0.100.43 atomically changes that runtime-active child's normalized row to
 `Active`, advances the owning Component partition through an O(1)
 descendant-status digest and freezes the exact active head, descendant digest,
 counts, encoded bytes and Directory hash in a child-specific membership
@@ -671,6 +671,13 @@ Directory, reconciles uncertainty through status, independently re-queries
 the target and commits the terminal bit only after parent revalidation.
 Exact retry reconstructs the original authority after later partition
 progress without calling unrelated descendants.
+
+Open 0.100.44 adopts published `ic-query 0.11.0` as Canic's host-only query
+library, including its updated IC agent and transport stack. Existing typed
+Subnet-catalog consumers compile unchanged, while the joined NNS
+Subnet-topology report and dependency-owned cache lifecycle become available
+for the next observational host adapter. No runtime or placement-policy
+authority changes in this dependency slice.
 
 ## Next Action
 

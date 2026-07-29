@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.44` adopts the host-only `ic-query 0.11.0` library and its updated
+  IC agent stack while preserving Canic's typed dependency boundary.
+
 - `0.100.43` atomically activates each runtime-active child in its owning
   Registry, converges its next current Directory and preserves exact retry
   evidence across unrelated later partition progress.
