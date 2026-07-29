@@ -196,6 +196,7 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     ),
     query_read_only("canic_root_component_registry_partition"),
     query_read_only("canic_root_component_directory_head"),
+    query_read_only("canic_root_component_directory_page"),
     update_response_idempotent(
         "canic_component_runtime_directory_prepare",
         command_kind("component_runtime.prepare_directory.v1"),

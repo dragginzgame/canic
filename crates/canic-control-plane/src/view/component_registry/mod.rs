@@ -179,6 +179,59 @@ pub struct RootComponentChildMembershipView {
 }
 
 ///
+/// ComponentDirectoryPageSelection
+///
+/// Registry filters and canonical continuation used for one bounded Directory page.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ComponentDirectoryPageSelection {
+    pub parent_canister_id: Option<Principal>,
+    pub role: Option<CanisterRole>,
+    pub status: Option<ComponentLifecycleStatus>,
+    pub start_after: Option<ComponentDirectoryCanonicalCursor>,
+}
+
+///
+/// ComponentDirectoryCanonicalCursor
+///
+/// Exact `(parent, role, Canister)` continuation in Directory canonical order.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ComponentDirectoryCanonicalCursor {
+    pub parent_canister_id: Principal,
+    pub role: CanisterRole,
+    pub canister_id: Principal,
+}
+
+///
+/// ComponentDirectoryChildView
+///
+/// Read-only normalized child projected with its complete protected binding.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ComponentDirectoryChildView {
+    pub binding: ComponentChildBinding,
+    pub kind: ComponentChildKind,
+    pub installed_artifact_hash: [u8; 32],
+    pub status: ComponentLifecycleStatus,
+}
+
+///
+/// ComponentDirectoryPageView
+///
+/// Bounded Registry-backed Directory entries plus a filter-matching continuation.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ComponentDirectoryPageView {
+    pub entries: Vec<ComponentDirectoryChildView>,
+    pub next_cursor: Option<ComponentDirectoryCanonicalCursor>,
+}
+
+///
 /// RootComponentAllocationProgressView
 ///
 /// Read-only paid-effect state for one top-level Component allocation.

@@ -188,6 +188,13 @@ macro_rules! canic_emit_root_admin_endpoints {
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_directory_head(request)
         }
 
+        #[$crate::canic_query(internal, public)]
+        async fn canic_root_component_directory_page(
+            request: ::canic::dto::component_registry::ComponentDirectoryPageRequest,
+        ) -> Result<::canic::dto::component_registry::ComponentDirectoryPageResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_directory_page(request)
+        }
+
         #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_prepare_fleet_activation(
         ) -> Result<::canic::dto::fleet_activation::FleetActivationStatusResponse, ::canic::Error> {
