@@ -82,6 +82,8 @@ use canic_core::{
             RootComponentSubtreeRemovalAdvanceRequest, RootComponentSubtreeRemovalNode,
             RootComponentSubtreeRemovalPhase, RootComponentSubtreeRemovalRequest,
             RootComponentSubtreeRemovalResponse, RootComponentSubtreeRemovalStatusRequest,
+            RootComponentSubtreeRemovalStopIntent,
+            RootComponentSubtreeRemovalStopPreparationRequest,
         },
         error::Error,
         fleet_activation::FleetActivationPhase,
@@ -496,6 +498,66 @@ pub async fn advance_subtree_removal(
         request.component,
         request.operation_id,
         request.expected_traversal_steps,
+        maximum_registry_bytes,
+    )?;
+    validate_subtree_removal(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &removal,
+        None,
+    )?;
+    Ok(subtree_removal_response(removal))
+}
+
+/// Freeze the exact selected leaf and sole root controller before any stop call.
+pub async fn prepare_subtree_leaf_stop(
+    request: RootComponentSubtreeRemovalStopPreparationRequest,
+) -> Result<RootComponentSubtreeRemovalResponse, InternalError> {
+    let (authority, root) = root_authority()?;
+    let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let preparation_request = RootComponentRegistryPreparationRequest {
+        store_bootstrap: prepared.store_bootstrap.clone(),
+        expected_fleet_registry: prepared.prepared_against_registry.clone(),
+    };
+    root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    validate_active_authority(&authority, root, &preparation_request)?;
+    if FleetActivationApi::status()
+        .map_err(InternalError::public)?
+        .phase
+        != FleetActivationPhase::Active
+    {
+        return Err(InternalError::unavailable(
+            "Component subtree stop preparation requires an Active Fleet Subnet Root runtime",
+        ));
+    }
+
+    let topology = ConfigOps::component_topology()?;
+    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
+        InternalError::unavailable("Component Registry partition has not been committed")
+    })?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &partition,
+    )?;
+    let maximum_registry_bytes = topology
+        .get(&partition.binding.component_spec)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Config,
+                "removal target Component Spec is absent from the protected topology",
+            )
+        })?
+        .limits
+        .maximum_registry_bytes;
+    let removal = ComponentRegistryOps::prepare_subtree_leaf_stop(
+        request.component,
+        request.operation_id,
+        request.expected_traversal_steps,
+        request.expected_leaf_canister_id,
+        request.expected_leaf_parent_canister_id,
         maximum_registry_bytes,
     )?;
     validate_subtree_removal(
@@ -3572,6 +3634,21 @@ fn subtree_removal_response(
                     status: leaf.status,
                 })
             }
+            RootComponentSubtreeRemovalProgressView::StopIntent(effect) => {
+                RootComponentSubtreeRemovalPhase::StopIntent(
+                    RootComponentSubtreeRemovalStopIntent {
+                        leaf: RootComponentSubtreeRemovalNode {
+                            canister_id: effect.leaf.canister_id,
+                            parent_canister_id: effect.leaf.parent_canister_id,
+                            role: effect.leaf.role,
+                            kind: effect.leaf.kind,
+                            installed_artifact_hash: effect.leaf.installed_artifact_hash,
+                            status: effect.leaf.status,
+                        },
+                        controller: effect.controller,
+                    },
+                )
+            }
         },
     }
 }
@@ -4103,6 +4180,16 @@ fn validate_subtree_removal(
         return Err(InternalError::invariant(
             InternalErrorOrigin::Storage,
             "subtree-removal fence differs from protected Component authority",
+        ));
+    }
+    if matches!(
+        &removal.progress,
+        RootComponentSubtreeRemovalProgressView::StopIntent(effect)
+            if effect.controller != root.fleet_subnet_root
+    ) {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "subtree-removal stop intent differs from protected root authority",
         ));
     }
     if let Some(request) = request {

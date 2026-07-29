@@ -143,7 +143,7 @@ pub enum RootComponentChildAllocationProgressView {
 ///
 /// RootComponentSubtreeRemovalView
 ///
-/// Read-only exact fence for one child-subtree removal operation.
+/// Read-only current progress of one child-subtree removal operation.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -174,6 +174,7 @@ pub enum RootComponentSubtreeRemovalProgressView {
     LeafSelected {
         leaf: RootComponentSubtreeRemovalNodeView,
     },
+    StopIntent(RootComponentSubtreeStopEffectView),
 }
 
 ///
@@ -190,6 +191,18 @@ pub struct RootComponentSubtreeRemovalNodeView {
     pub kind: ComponentChildKind,
     pub installed_artifact_hash: [u8; 32],
     pub status: ComponentLifecycleStatus,
+}
+
+///
+/// RootComponentSubtreeStopEffectView
+///
+/// Read-only exact leaf and root controller retained before a stop call.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentSubtreeStopEffectView {
+    pub leaf: RootComponentSubtreeRemovalNodeView,
+    pub controller: Principal,
 }
 
 ///

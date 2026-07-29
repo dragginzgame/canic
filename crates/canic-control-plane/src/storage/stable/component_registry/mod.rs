@@ -431,6 +431,19 @@ pub enum RootComponentSubtreeRemovalProgressRecord {
     LeafSelected {
         leaf: ComponentRegistryChildRecord,
     },
+    StopIntent(RootComponentSubtreeStopEffectRecord),
+}
+
+///
+/// RootComponentSubtreeStopEffectRecord
+///
+/// Exact registered leaf and sole root controller frozen before a stop call.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeStopEffectRecord {
+    pub leaf: ComponentRegistryChildRecord,
+    pub controller: Principal,
 }
 
 ///

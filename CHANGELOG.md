@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.51` freezes the exact selected subtree leaf and sole Fleet Subnet
+  Root controller in a durable, capacity-accounted stop intent before any
+  management call.
+
 - `0.100.50` advances each fenced child subtree through bounded, durable
   canonical descent to one exact post-order leaf without materializing the
   tree or issuing a Canister effect.
