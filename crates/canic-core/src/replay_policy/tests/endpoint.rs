@@ -386,6 +386,28 @@ fn root_component_child_reservation_is_response_idempotent() {
 }
 
 #[test]
+fn root_component_subtree_removal_fence_is_response_idempotent() {
+    let begin = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_root_component_subtree_removal_begin")
+        .expect("root Component subtree-removal begin policy entry");
+    let status = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_root_component_subtree_removal_status")
+        .expect("root Component subtree-removal status policy entry");
+
+    assert_eq!(
+        begin.replay_policy,
+        ReplayPolicy::ResponseIdempotent {
+            command_kind: replay_command_kind("component_registry.begin_subtree_removal.v1"),
+        }
+    );
+    assert_eq!(begin.cost_class, CostClass::None);
+    assert_eq!(status.replay_policy, ReplayPolicy::QueryOrReadOnly);
+    assert_eq!(status.endpoint_kind, EndpointKind::Query);
+}
+
+#[test]
 fn icp_refill_is_manifested_as_implemented_value_transfer() {
     let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()

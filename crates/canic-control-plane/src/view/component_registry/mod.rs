@@ -141,6 +141,35 @@ pub enum RootComponentChildAllocationProgressView {
 }
 
 ///
+/// RootComponentSubtreeRemovalView
+///
+/// Read-only exact fence for one child-subtree removal operation.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentSubtreeRemovalView {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub target_canister_id: Principal,
+    pub target_parent_canister_id: Principal,
+    pub target_role: CanisterRole,
+    pub target_status: ComponentLifecycleStatus,
+    pub reserved_against_registry: ComponentRegistryHead,
+    pub progress: RootComponentSubtreeRemovalProgressView,
+}
+
+///
+/// RootComponentSubtreeRemovalProgressView
+///
+/// Read-only durable post-order removal progress.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RootComponentSubtreeRemovalProgressView {
+    Fenced,
+}
+
+///
 /// RootComponentChildCommitmentView
 ///
 /// Read-only child-commit Registry head plus later Directory and membership receipts.

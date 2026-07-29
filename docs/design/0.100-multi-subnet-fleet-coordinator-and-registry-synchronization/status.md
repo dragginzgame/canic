@@ -6,10 +6,10 @@ Date: 2026-07-29
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.47`.
-- Latest published release: `v0.100.47` at
-  `d3174bef6de3529eba1fd3e5295862530162a6d8`.
-- Open patch draft: `0.100.48`; no package-version change has been authorized.
+- Workspace package version: `0.100.48`.
+- Latest published release: `v0.100.48` at
+  `b102f1f118fdea50c6e88790a65e69a2e15e3d9e`.
+- Open patch draft: `0.100.49`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -179,8 +179,11 @@ Registry slices replace the 0.99 root model.
   exact committed Registry partition.
 - [x] Derive ownership-preserving Component Directories with compact heads and
   revision-bound pagination.
-- [ ] Run subtree removal as durable post-order traversal and partition
-  mutation serialization by Component instance.
+- [x] Durably fence one exact registered child subtree, reject in-flight
+  descendant work and block later target/descendant reservations without
+  blocking unrelated branches.
+- [ ] Run the fenced subtree removal as bounded durable post-order traversal
+  and partition mutation serialization by Component instance.
 - [x] Distribute exact Directories directly from the root to a committed
   Component with target-local retention, independent observation and a
   terminal root receipt.
@@ -700,19 +703,30 @@ evidence. The dependent 0.103 and 0.104 designs now consume the same
 vocabulary. Active Rust uses `CanonicalNetworkId::ic_mainnet()` and
 `IcMainnetEnrollment` with no old-name alias.
 
-Open 0.100.48 advances the host dependency to `ic-query 0.11.4`, whose shared
+Released 0.100.48 advances the host dependency to `ic-query 0.11.4`, whose shared
 NNS inventory cache-path, refresh-lock, mainnet-validation and typed cache-load
 internals preserve the public API and cache behavior. Canic's typed
-Subnet-catalog boundary remains source-compatible. The same open patch proves
+Subnet-catalog boundary remains source-compatible. The same released patch proves
 that a rejected operation in one Component partition neither mutates its
 durable intent nor blocks child progress in another partition. Stable restart
 preserves the first intent, each partition reconstructs its exact pre-effect
 byte charges and their sum reproduces the root ledger; incomplete reservations
 remain charged against the shared managed-Canister cap.
 
+Open 0.100.49 adds the durable first phase of ordinary child-subtree removal.
+One controller operation freezes the exact active registered target row and
+Component Registry head only when no nonterminal child operation is rooted at
+that target or a descendant. Its response-idempotent receipt and status
+survive stable restart. The root rejects later child reservations from any
+node below the fence but permits unrelated sibling and Component progress.
+The stable Component-first entry and changed partition encoding are charged
+exactly to the Component and root Registry byte ledgers before mutation. This
+phase performs no stop, delete or Directory effect.
+
 ## Next Action
 
-Implement durable post-order subtree removal against the normalized Registry
-and Directory invariants. Do not introduce nested Component declarations, let
-application Canisters call management effects directly or infer authorization
-from catalog presence alone.
+Persist a bounded deterministic post-order traversal cursor for the fenced
+subtree and advance one leaf at a time without materializing the full tree or
+calling unrelated descendants. Do not introduce nested Component
+declarations, let application Canisters call management effects directly or
+infer authorization from catalog presence alone.

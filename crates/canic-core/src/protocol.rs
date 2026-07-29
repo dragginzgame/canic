@@ -26,6 +26,10 @@ pub const CANIC_ROOT_COMPONENT_ALLOCATION_STATUS: &str = "canic_root_component_a
 pub const CANIC_ROOT_COMPONENT_CHILD_ALLOCATE: &str = "canic_root_component_child_allocate";
 pub const CANIC_ROOT_COMPONENT_CHILD_ALLOCATION_STATUS: &str =
     "canic_root_component_child_allocation_status";
+pub const CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_BEGIN: &str =
+    "canic_root_component_subtree_removal_begin";
+pub const CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STATUS: &str =
+    "canic_root_component_subtree_removal_status";
 pub const CANIC_ROOT_COMPONENT_CHILD_CREATE: &str = "canic_root_component_child_create";
 pub const CANIC_ROOT_COMPONENT_CHILD_INSTALL: &str = "canic_root_component_child_install";
 pub const CANIC_ROOT_COMPONENT_CHILD_COMMIT: &str = "canic_root_component_child_commit";

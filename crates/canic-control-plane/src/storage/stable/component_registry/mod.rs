@@ -392,6 +392,41 @@ pub enum RootComponentChildAllocationProgressRecord {
 }
 
 ///
+/// RootComponentSubtreeRemovalRecord
+///
+/// Durable exact fence for one child-subtree removal operation.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeRemovalRecord {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub target: ComponentRegistryChildRecord,
+    pub reserved_against_registry: ComponentRegistryHead,
+    pub progress: RootComponentSubtreeRemovalProgressRecord,
+}
+
+impl RootComponentSubtreeRemovalRecord {
+    pub(crate) fn has_same_fence(&self, other: &Self) -> bool {
+        self.operation_id == other.operation_id
+            && self.component == other.component
+            && self.target == other.target
+            && self.reserved_against_registry == other.reserved_against_registry
+    }
+}
+
+///
+/// RootComponentSubtreeRemovalProgressRecord
+///
+/// Durable post-order removal progress after new subtree mutations are fenced.
+///
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RootComponentSubtreeRemovalProgressRecord {
+    Fenced,
+}
+
+///
 /// RootComponentChildInstallEffectRecord
 ///
 /// Exact child module source, immutable binding and cost settlement frozen before installation.
@@ -505,6 +540,7 @@ pub enum ComponentRegistryEntryRecord {
     Child(ComponentRegistryChildRecord),
     ChildTraversal(ComponentRegistryChildTraversalRecord),
     ChildAllocation(RootComponentChildAllocationRecord),
+    SubtreeRemoval(RootComponentSubtreeRemovalRecord),
     ParentRoleCount(ComponentRegistryParentRoleCountRecord),
 }
 
@@ -580,6 +616,29 @@ impl ComponentRegistryEntryKey {
             component: *component.as_bytes(),
             index: ComponentRegistryEntryIndexKey::ChildAllocation(operation_id),
         }
+    }
+
+    const fn child_allocation_range_start(component: ComponentInstanceId) -> Self {
+        Self::child_allocation(component, [0; 32])
+    }
+
+    const fn child_allocation_range_end(component: ComponentInstanceId) -> Self {
+        Self::child_allocation(component, [u8::MAX; 32])
+    }
+
+    const fn subtree_removal(component: ComponentInstanceId, operation_id: [u8; 32]) -> Self {
+        Self {
+            component: *component.as_bytes(),
+            index: ComponentRegistryEntryIndexKey::SubtreeRemoval(operation_id),
+        }
+    }
+
+    const fn subtree_removal_range_start(component: ComponentInstanceId) -> Self {
+        Self::subtree_removal(component, [0; 32])
+    }
+
+    const fn subtree_removal_range_end(component: ComponentInstanceId) -> Self {
+        Self::subtree_removal(component, [u8::MAX; 32])
     }
 
     fn child(component: ComponentInstanceId, canister_id: Principal) -> Self {
@@ -712,6 +771,7 @@ enum ComponentRegistryEntryIndexKey {
         canister_id: Vec<u8>,
     },
     ChildAllocation([u8; 32]),
+    SubtreeRemoval([u8; 32]),
     ParentRoleCount {
         parent_canister_id: Vec<u8>,
         child_role: CanisterRole,
@@ -761,6 +821,7 @@ pub struct RootComponentRegistryData {
     pub children: Vec<ComponentRegistryChildRecord>,
     pub child_traversals: Vec<ComponentRegistryChildTraversalRecord>,
     pub child_allocations: Vec<RootComponentChildAllocationRecord>,
+    pub subtree_removals: Vec<RootComponentSubtreeRemovalRecord>,
     pub parent_role_counts: Vec<ComponentRegistryParentRoleCountRecord>,
 }
 
@@ -848,6 +909,7 @@ impl RootComponentRegistryStore {
                         ComponentRegistryEntryRecord::Child(_)
                         | ComponentRegistryEntryRecord::ChildTraversal(_)
                         | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
                         | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                     })
                     .collect()
@@ -859,6 +921,7 @@ impl RootComponentRegistryStore {
                         ComponentRegistryEntryRecord::Partition(_)
                         | ComponentRegistryEntryRecord::ChildTraversal(_)
                         | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
                         | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                     })
                     .collect()
@@ -870,6 +933,7 @@ impl RootComponentRegistryStore {
                         ComponentRegistryEntryRecord::Partition(_)
                         | ComponentRegistryEntryRecord::Child(_)
                         | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
                         | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                     })
                     .collect()
@@ -881,6 +945,19 @@ impl RootComponentRegistryStore {
                         ComponentRegistryEntryRecord::Partition(_)
                         | ComponentRegistryEntryRecord::Child(_)
                         | ComponentRegistryEntryRecord::ChildTraversal(_)
+                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                        | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                    })
+                    .collect()
+            }),
+            subtree_removals: COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+                map.iter()
+                    .filter_map(|entry| match entry.value() {
+                        ComponentRegistryEntryRecord::SubtreeRemoval(record) => Some(record),
+                        ComponentRegistryEntryRecord::Partition(_)
+                        | ComponentRegistryEntryRecord::Child(_)
+                        | ComponentRegistryEntryRecord::ChildTraversal(_)
+                        | ComponentRegistryEntryRecord::ChildAllocation(_)
                         | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                     })
                     .collect()
@@ -892,7 +969,8 @@ impl RootComponentRegistryStore {
                         ComponentRegistryEntryRecord::Partition(_)
                         | ComponentRegistryEntryRecord::Child(_)
                         | ComponentRegistryEntryRecord::ChildTraversal(_)
-                        | ComponentRegistryEntryRecord::ChildAllocation(_) => None,
+                        | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::SubtreeRemoval(_) => None,
                     })
                     .collect()
             }),
@@ -919,6 +997,7 @@ impl RootComponentRegistryStore {
                     ComponentRegistryEntryRecord::Child(_)
                     | ComponentRegistryEntryRecord::ChildTraversal(_)
                     | ComponentRegistryEntryRecord::ChildAllocation(_)
+                    | ComponentRegistryEntryRecord::SubtreeRemoval(_)
                     | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                 })
                 .collect()
@@ -981,6 +1060,7 @@ impl RootComponentRegistryStore {
                     ComponentRegistryEntryRecord::Child(_)
                     | ComponentRegistryEntryRecord::ChildTraversal(_)
                     | ComponentRegistryEntryRecord::ChildAllocation(_)
+                    | ComponentRegistryEntryRecord::SubtreeRemoval(_)
                     | ComponentRegistryEntryRecord::ParentRoleCount(_),
                 )
                 | None => None,
@@ -1003,10 +1083,84 @@ impl RootComponentRegistryStore {
                     ComponentRegistryEntryRecord::Partition(_)
                     | ComponentRegistryEntryRecord::Child(_)
                     | ComponentRegistryEntryRecord::ChildTraversal(_)
+                    | ComponentRegistryEntryRecord::SubtreeRemoval(_)
                     | ComponentRegistryEntryRecord::ParentRoleCount(_),
                 )
                 | None => None,
             }
+        })
+    }
+
+    #[must_use]
+    pub(crate) fn subtree_removal(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+    ) -> Option<RootComponentSubtreeRemovalRecord> {
+        COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+            match map.get(&ComponentRegistryEntryKey::subtree_removal(
+                component,
+                operation_id,
+            )) {
+                Some(ComponentRegistryEntryRecord::SubtreeRemoval(record)) => Some(record),
+                Some(
+                    ComponentRegistryEntryRecord::Partition(_)
+                    | ComponentRegistryEntryRecord::Child(_)
+                    | ComponentRegistryEntryRecord::ChildTraversal(_)
+                    | ComponentRegistryEntryRecord::ChildAllocation(_)
+                    | ComponentRegistryEntryRecord::ParentRoleCount(_),
+                )
+                | None => None,
+            }
+        })
+    }
+
+    #[must_use]
+    pub(crate) fn subtree_removals(
+        component: ComponentInstanceId,
+    ) -> Vec<RootComponentSubtreeRemovalRecord> {
+        COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+            map.range((
+                Bound::Included(ComponentRegistryEntryKey::subtree_removal_range_start(
+                    component,
+                )),
+                Bound::Included(ComponentRegistryEntryKey::subtree_removal_range_end(
+                    component,
+                )),
+            ))
+            .filter_map(|entry| match entry.value() {
+                ComponentRegistryEntryRecord::SubtreeRemoval(record) => Some(record),
+                ComponentRegistryEntryRecord::Partition(_)
+                | ComponentRegistryEntryRecord::Child(_)
+                | ComponentRegistryEntryRecord::ChildTraversal(_)
+                | ComponentRegistryEntryRecord::ChildAllocation(_)
+                | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+            })
+            .collect()
+        })
+    }
+
+    #[must_use]
+    pub(crate) fn child_allocations(
+        component: ComponentInstanceId,
+    ) -> Vec<RootComponentChildAllocationRecord> {
+        COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+            map.range((
+                Bound::Included(ComponentRegistryEntryKey::child_allocation_range_start(
+                    component,
+                )),
+                Bound::Included(ComponentRegistryEntryKey::child_allocation_range_end(
+                    component,
+                )),
+            ))
+            .filter_map(|entry| match entry.value() {
+                ComponentRegistryEntryRecord::ChildAllocation(record) => Some(record),
+                ComponentRegistryEntryRecord::Partition(_)
+                | ComponentRegistryEntryRecord::Child(_)
+                | ComponentRegistryEntryRecord::ChildTraversal(_)
+                | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+            })
+            .collect()
         })
     }
 
@@ -1022,6 +1176,7 @@ impl RootComponentRegistryStore {
                     ComponentRegistryEntryRecord::Partition(_)
                     | ComponentRegistryEntryRecord::ChildTraversal(_)
                     | ComponentRegistryEntryRecord::ChildAllocation(_)
+                    | ComponentRegistryEntryRecord::SubtreeRemoval(_)
                     | ComponentRegistryEntryRecord::ParentRoleCount(_),
                 )
                 | None => None,
@@ -1048,6 +1203,7 @@ impl RootComponentRegistryStore {
                     ComponentRegistryEntryRecord::Partition(_)
                     | ComponentRegistryEntryRecord::Child(_)
                     | ComponentRegistryEntryRecord::ChildAllocation(_)
+                    | ComponentRegistryEntryRecord::SubtreeRemoval(_)
                     | ComponentRegistryEntryRecord::ParentRoleCount(_),
                 )
                 | None => None,
@@ -1116,6 +1272,7 @@ impl RootComponentRegistryStore {
                     ComponentRegistryEntryRecord::Partition(_)
                     | ComponentRegistryEntryRecord::Child(_)
                     | ComponentRegistryEntryRecord::ChildAllocation(_)
+                    | ComponentRegistryEntryRecord::SubtreeRemoval(_)
                     | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                 })
                 .take(limit)
@@ -1140,7 +1297,8 @@ impl RootComponentRegistryStore {
                     ComponentRegistryEntryRecord::Partition(_)
                     | ComponentRegistryEntryRecord::Child(_)
                     | ComponentRegistryEntryRecord::ChildTraversal(_)
-                    | ComponentRegistryEntryRecord::ChildAllocation(_),
+                    | ComponentRegistryEntryRecord::ChildAllocation(_)
+                    | ComponentRegistryEntryRecord::SubtreeRemoval(_),
                 )
                 | None => None,
             }
@@ -1193,6 +1351,10 @@ impl RootComponentRegistryStore {
         })
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one stable transaction compares and commits all child-reservation indexes"
+    )]
     pub(crate) fn reserve_child_allocation(
         expected_meta: &RootComponentRegistryMetaRecord,
         next_meta: RootComponentRegistryMetaRecord,
@@ -1238,6 +1400,7 @@ impl RootComponentRegistryStore {
                     | ComponentRegistryEntryRecord::Child(_)
                     | ComponentRegistryEntryRecord::ChildTraversal(_)
                     | ComponentRegistryEntryRecord::ChildAllocation(_)
+                    | ComponentRegistryEntryRecord::SubtreeRemoval(_)
                     | ComponentRegistryEntryRecord::ParentRoleCount(_) => {
                         Err(RootComponentAllocationCommitError::ConflictingOperation)
                     }
@@ -1254,6 +1417,7 @@ impl RootComponentRegistryStore {
                             ComponentRegistryEntryRecord::Child(_)
                             | ComponentRegistryEntryRecord::ChildTraversal(_)
                             | ComponentRegistryEntryRecord::ChildAllocation(_)
+                            | ComponentRegistryEntryRecord::SubtreeRemoval(_)
                             | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                         })
                 })
@@ -1267,7 +1431,8 @@ impl RootComponentRegistryStore {
                     ComponentRegistryEntryRecord::Partition(_)
                     | ComponentRegistryEntryRecord::Child(_)
                     | ComponentRegistryEntryRecord::ChildTraversal(_)
-                    | ComponentRegistryEntryRecord::ChildAllocation(_) => None,
+                    | ComponentRegistryEntryRecord::ChildAllocation(_)
+                    | ComponentRegistryEntryRecord::SubtreeRemoval(_) => None,
                 })
             });
             if current_count.as_ref() != expected_parent_role_count {
@@ -1296,6 +1461,108 @@ impl RootComponentRegistryStore {
                 );
                 map.insert(
                     ComponentRegistryEntryKey::partition(component),
+                    ComponentRegistryEntryRecord::Partition(next_partition),
+                );
+            });
+            state.current = Some(next_meta);
+            cell.set(state);
+            Ok(RootComponentRegistryCommitOutcome::Committed)
+        })
+    }
+
+    pub(crate) fn begin_subtree_removal(
+        expected_meta: &RootComponentRegistryMetaRecord,
+        next_meta: RootComponentRegistryMetaRecord,
+        expected_partition: &ComponentRegistryPartitionRecord,
+        next_partition: ComponentRegistryPartitionRecord,
+        expected_target: &ComponentRegistryChildRecord,
+        record: RootComponentSubtreeRemovalRecord,
+    ) -> Result<RootComponentRegistryCommitOutcome, RootComponentAllocationCommitError> {
+        let component = record.component;
+        let operation_key =
+            ComponentRegistryEntryKey::subtree_removal(component, record.operation_id);
+        let partition_key = ComponentRegistryEntryKey::partition(component);
+        let target_key = ComponentRegistryEntryKey::child(component, record.target.canister_id);
+        if expected_partition.binding.component != component
+            || next_partition.binding.component != component
+            || next_partition.binding != expected_partition.binding
+            || next_partition.provisioning_origin != expected_partition.provisioning_origin
+            || next_partition.release_set != expected_partition.release_set
+            || next_partition.status != expected_partition.status
+            || next_partition.revision != expected_partition.revision
+            || next_partition.content_hash != expected_partition.content_hash
+            || next_partition.descendant_content_hash != expected_partition.descendant_content_hash
+            || next_partition.directory_synchronized_at_ns
+                != expected_partition.directory_synchronized_at_ns
+            || next_partition.reserved_descendants != expected_partition.reserved_descendants
+            || next_partition.committed_descendants != expected_partition.committed_descendants
+            || &record.target != expected_target
+            || record.target.component != component
+        {
+            return Err(RootComponentAllocationCommitError::ConflictingChildEntry);
+        }
+
+        ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            let current_meta = state
+                .current
+                .as_ref()
+                .ok_or(RootComponentAllocationCommitError::Uninitialized)?;
+            if let Some(existing) =
+                COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| map.get(&operation_key))
+            {
+                return match existing {
+                    ComponentRegistryEntryRecord::SubtreeRemoval(existing)
+                        if existing.has_same_fence(&record) =>
+                    {
+                        Ok(RootComponentRegistryCommitOutcome::Existing)
+                    }
+                    ComponentRegistryEntryRecord::Partition(_)
+                    | ComponentRegistryEntryRecord::Child(_)
+                    | ComponentRegistryEntryRecord::ChildTraversal(_)
+                    | ComponentRegistryEntryRecord::ChildAllocation(_)
+                    | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                    | ComponentRegistryEntryRecord::ParentRoleCount(_) => {
+                        Err(RootComponentAllocationCommitError::ConflictingOperation)
+                    }
+                };
+            }
+            if current_meta != expected_meta {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            let (current_partition, current_target) =
+                COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+                    let partition = map.get(&partition_key).and_then(|entry| match entry {
+                        ComponentRegistryEntryRecord::Partition(record) => Some(record),
+                        ComponentRegistryEntryRecord::Child(_)
+                        | ComponentRegistryEntryRecord::ChildTraversal(_)
+                        | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                        | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                    });
+                    let target = map.get(&target_key).and_then(|entry| match entry {
+                        ComponentRegistryEntryRecord::Child(record) => Some(record),
+                        ComponentRegistryEntryRecord::Partition(_)
+                        | ComponentRegistryEntryRecord::ChildTraversal(_)
+                        | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                        | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                    });
+                    (partition, target)
+                });
+            if current_partition.as_ref() != Some(expected_partition)
+                || current_target.as_ref() != Some(expected_target)
+            {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+
+            COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
+                map.insert(
+                    operation_key,
+                    ComponentRegistryEntryRecord::SubtreeRemoval(record),
+                );
+                map.insert(
+                    partition_key,
                     ComponentRegistryEntryRecord::Partition(next_partition),
                 );
             });
@@ -1348,6 +1615,7 @@ impl RootComponentRegistryStore {
                             ComponentRegistryEntryRecord::Child(_)
                             | ComponentRegistryEntryRecord::ChildTraversal(_)
                             | ComponentRegistryEntryRecord::ChildAllocation(_)
+                            | ComponentRegistryEntryRecord::SubtreeRemoval(_)
                             | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                         })
                 })
@@ -1359,6 +1627,7 @@ impl RootComponentRegistryStore {
                         ComponentRegistryEntryRecord::Partition(_)
                         | ComponentRegistryEntryRecord::Child(_)
                         | ComponentRegistryEntryRecord::ChildTraversal(_)
+                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
                         | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                     })
                 })
@@ -1438,6 +1707,7 @@ impl RootComponentRegistryStore {
                         ComponentRegistryEntryRecord::Child(_)
                         | ComponentRegistryEntryRecord::ChildTraversal(_)
                         | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
                         | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                     });
                     let record = map.get(&operation_key).and_then(|entry| match entry {
@@ -1445,6 +1715,7 @@ impl RootComponentRegistryStore {
                         ComponentRegistryEntryRecord::Partition(_)
                         | ComponentRegistryEntryRecord::Child(_)
                         | ComponentRegistryEntryRecord::ChildTraversal(_)
+                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
                         | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                     });
                     let child = map.get(&child_key).and_then(|entry| match entry {
@@ -1452,6 +1723,7 @@ impl RootComponentRegistryStore {
                         ComponentRegistryEntryRecord::Partition(_)
                         | ComponentRegistryEntryRecord::ChildTraversal(_)
                         | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
                         | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                     });
                     (partition, record, child)
@@ -1642,6 +1914,7 @@ impl RootComponentRegistryStore {
                         ComponentRegistryEntryRecord::Child(_)
                         | ComponentRegistryEntryRecord::ChildTraversal(_)
                         | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
                         | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                     })
                 })
@@ -1653,6 +1926,7 @@ impl RootComponentRegistryStore {
                         ComponentRegistryEntryRecord::Partition(_)
                         | ComponentRegistryEntryRecord::Child(_)
                         | ComponentRegistryEntryRecord::ChildTraversal(_)
+                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
                         | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                     })
                 })
@@ -1750,6 +2024,7 @@ impl RootComponentRegistryStore {
                             ComponentRegistryEntryRecord::Child(_)
                             | ComponentRegistryEntryRecord::ChildTraversal(_)
                             | ComponentRegistryEntryRecord::ChildAllocation(_)
+                            | ComponentRegistryEntryRecord::SubtreeRemoval(_)
                             | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
                         })
                 })
@@ -1796,6 +2071,13 @@ impl RootComponentRegistryStore {
         let key =
             ComponentRegistryEntryKey::child_allocation(record.component, record.operation_id);
         let value = ComponentRegistryEntryRecord::ChildAllocation(record.clone());
+        (key.to_bytes().len() + value.to_bytes().len()) as u64
+    }
+
+    #[must_use]
+    pub(crate) fn subtree_removal_entry_bytes(record: &RootComponentSubtreeRemovalRecord) -> u64 {
+        let key = ComponentRegistryEntryKey::subtree_removal(record.component, record.operation_id);
+        let value = ComponentRegistryEntryRecord::SubtreeRemoval(record.clone());
         (key.to_bytes().len() + value.to_bytes().len()) as u64
     }
 
@@ -1909,6 +2191,17 @@ impl RootComponentRegistryStore {
                         record.operation_id,
                     ),
                     ComponentRegistryEntryRecord::ChildAllocation(record),
+                );
+            });
+        }
+        for record in data.subtree_removals {
+            COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
+                map.insert(
+                    ComponentRegistryEntryKey::subtree_removal(
+                        record.component,
+                        record.operation_id,
+                    ),
+                    ComponentRegistryEntryRecord::SubtreeRemoval(record),
                 );
             });
         }
