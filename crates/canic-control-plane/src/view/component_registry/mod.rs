@@ -155,6 +155,7 @@ pub struct RootComponentSubtreeRemovalView {
     pub target_role: CanisterRole,
     pub target_status: ComponentLifecycleStatus,
     pub reserved_against_registry: ComponentRegistryHead,
+    pub traversal_steps: u32,
     pub progress: RootComponentSubtreeRemovalProgressView,
 }
 
@@ -164,9 +165,31 @@ pub struct RootComponentSubtreeRemovalView {
 /// Read-only durable post-order removal progress.
 ///
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RootComponentSubtreeRemovalProgressView {
     Fenced,
+    Traversing {
+        cursor: RootComponentSubtreeRemovalNodeView,
+    },
+    LeafSelected {
+        leaf: RootComponentSubtreeRemovalNodeView,
+    },
+}
+
+///
+/// RootComponentSubtreeRemovalNodeView
+///
+/// Read-only exact registered child selected as a traversal cursor or leaf.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentSubtreeRemovalNodeView {
+    pub canister_id: Principal,
+    pub parent_canister_id: Principal,
+    pub role: CanisterRole,
+    pub kind: ComponentChildKind,
+    pub installed_artifact_hash: [u8; 32],
+    pub status: ComponentLifecycleStatus,
 }
 
 ///

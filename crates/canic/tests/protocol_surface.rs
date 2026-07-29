@@ -561,6 +561,11 @@ fn assert_component_registry_protocol_constants() {
             "canic_root_component_subtree_removal_begin",
         ),
         (
+            canic::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_ADVANCE,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_ADVANCE,
+            "canic_root_component_subtree_removal_advance",
+        ),
+        (
             canic::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STATUS,
             canic_core::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STATUS,
             "canic_root_component_subtree_removal_status",
@@ -719,19 +724,7 @@ fn assert_root_registry_mirror_guards(root: &str) {
         .contains("canic_query(internal, public)"),
         "root Component Child allocation status must remain a public query authenticated by workflow"
     );
-    assert!(
-        preceding_attribute_context(root, "async fn canic_root_component_subtree_removal_begin(")
-            .contains("canic_update(requires(caller::is_controller()))"),
-        "root Component subtree-removal fencing must remain a controller-guarded update"
-    );
-    assert!(
-        preceding_attribute_context(
-            root,
-            "async fn canic_root_component_subtree_removal_status("
-        )
-        .contains("canic_query(requires(caller::is_controller()))"),
-        "root Component subtree-removal status must remain a controller-guarded query"
-    );
+    assert_subtree_removal_guards(root);
     for endpoint in [
         "async fn canic_root_component_create(",
         "async fn canic_root_component_install(",
@@ -760,6 +753,30 @@ fn assert_root_registry_mirror_guards(root: &str) {
         preceding_attribute_context(root, "async fn canic_root_component_directory_page(")
             .contains("canic_query(internal, public)"),
         "root Component Directory pages must remain public queries authenticated by workflow"
+    );
+}
+
+fn assert_subtree_removal_guards(root: &str) {
+    assert!(
+        preceding_attribute_context(root, "async fn canic_root_component_subtree_removal_begin(")
+            .contains("canic_update(requires(caller::is_controller()))"),
+        "root Component subtree-removal fencing must remain a controller-guarded update"
+    );
+    assert!(
+        preceding_attribute_context(
+            root,
+            "async fn canic_root_component_subtree_removal_advance("
+        )
+        .contains("canic_update(requires(caller::is_controller()))"),
+        "root Component subtree-removal traversal must remain a controller-guarded update"
+    );
+    assert!(
+        preceding_attribute_context(
+            root,
+            "async fn canic_root_component_subtree_removal_status("
+        )
+        .contains("canic_query(requires(caller::is_controller()))"),
+        "root Component subtree-removal status must remain a controller-guarded query"
     );
 }
 

@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.48`.
-- The latest published release is `v0.100.48` at
-  `b102f1f118fdea50c6e88790a65e69a2e15e3d9e`.
-- Open `0.100.49` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.49`.
+- The latest published release is `v0.100.49` at
+  `10e085e012558c54b0e1b2e1b135b2e4543ae1d7`.
+- Open `0.100.50` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -443,6 +443,10 @@ Historical detail is archived at:
   its exact pre-effect Registry charge, their sum reproduces the root ledger
   and incomplete reservations remain charged to the shared managed-Canister
   ceiling.
+- Released `0.100.49` adds an exact durable fence for one active registered
+  child subtree, rejects nonterminal descendant work, blocks new reservations
+  below the target and preserves unrelated branch progress, restart-safe
+  retry and exact Registry byte accounting without a Canister effect.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1829,7 +1833,7 @@ intent, each partition reconstructs its pre-effect byte charges, their sum
 reproduces the root Registry ledger and incomplete reservations remain charged
 to the shared managed-Canister limit.
 
-Open `0.100.49` adds the first ordinary child-subtree removal boundary. A
+Released `0.100.49` adds the first ordinary child-subtree removal boundary. A
 controller command durably freezes one active registered target and exact
 Component Registry head only after proving that no nonterminal child
 operation lies below it. Exact retry and status survive stable restart. Later
@@ -1838,12 +1842,19 @@ sibling branch and another Component partition remain available. The fence is
 charged exactly to its Component and root Registry byte ledgers and performs
 no Canister or Directory effect.
 
-Next, persist a bounded deterministic post-order traversal cursor for that
-fenced subtree. Select and advance one leaf at a time without materializing
-the full tree or calling unrelated descendants; retain the exact immediate
-parent and declared role-to-role spawn grant. Do not let managed application
-Canisters perform management effects or infer authorization from flat catalog
-presence.
+Open `0.100.50` advances that fence through a bounded durable post-order
+cursor. Each controller call follows at most 64 canonical direct-child edges,
+validates every normalized row/index pair and persists either the exact
+midpoint or one childless leaf. A stale step expectation returns current
+progress without advancing twice; a future expectation fails. Record-size
+changes update the exact Component/root Registry ledgers atomically. The
+selected leaf remains active and registered.
+
+Next, freeze the selected leaf's exact stop intent. Stop observation, deletion
+and Registry mutation must remain separate durable phases, preserve the exact
+immediate parent, reconcile uncertain management responses and never remove a
+parent while a child row remains. Do not let managed application Canisters
+perform management effects or infer authorization from flat catalog presence.
 
 ## Historical Release Detail
 

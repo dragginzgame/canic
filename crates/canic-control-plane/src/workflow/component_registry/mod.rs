@@ -79,6 +79,7 @@ use canic_core::{
             RootComponentMembershipActivationRequest, RootComponentMembershipActivationResponse,
             RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
             RootComponentRuntimeActivationRequest, RootComponentRuntimeActivationResponse,
+            RootComponentSubtreeRemovalAdvanceRequest, RootComponentSubtreeRemovalNode,
             RootComponentSubtreeRemovalPhase, RootComponentSubtreeRemovalRequest,
             RootComponentSubtreeRemovalResponse, RootComponentSubtreeRemovalStatusRequest,
         },
@@ -437,6 +438,64 @@ pub async fn begin_subtree_removal(
         request.operation_id,
         request.target_canister_id,
         request.expected_registry,
+        maximum_registry_bytes,
+    )?;
+    validate_subtree_removal(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &removal,
+        None,
+    )?;
+    Ok(subtree_removal_response(removal))
+}
+
+/// Advance at most one bounded canonical descent batch toward the next post-order leaf.
+pub async fn advance_subtree_removal(
+    request: RootComponentSubtreeRemovalAdvanceRequest,
+) -> Result<RootComponentSubtreeRemovalResponse, InternalError> {
+    let (authority, root) = root_authority()?;
+    let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let preparation_request = RootComponentRegistryPreparationRequest {
+        store_bootstrap: prepared.store_bootstrap.clone(),
+        expected_fleet_registry: prepared.prepared_against_registry.clone(),
+    };
+    root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    validate_active_authority(&authority, root, &preparation_request)?;
+    if FleetActivationApi::status()
+        .map_err(InternalError::public)?
+        .phase
+        != FleetActivationPhase::Active
+    {
+        return Err(InternalError::unavailable(
+            "Component subtree traversal requires an Active Fleet Subnet Root runtime",
+        ));
+    }
+
+    let topology = ConfigOps::component_topology()?;
+    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
+        InternalError::unavailable("Component Registry partition has not been committed")
+    })?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &partition,
+    )?;
+    let maximum_registry_bytes = topology
+        .get(&partition.binding.component_spec)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Config,
+                "removal target Component Spec is absent from the protected topology",
+            )
+        })?
+        .limits
+        .maximum_registry_bytes;
+    let removal = ComponentRegistryOps::advance_subtree_removal(
+        request.component,
+        request.operation_id,
+        request.expected_traversal_steps,
         maximum_registry_bytes,
     )?;
     validate_subtree_removal(
@@ -3488,9 +3547,30 @@ fn subtree_removal_response(
         target_role: removal.target_role,
         target_status: removal.target_status,
         reserved_against_registry: removal.reserved_against_registry,
+        traversal_steps: removal.traversal_steps,
         phase: match removal.progress {
             RootComponentSubtreeRemovalProgressView::Fenced => {
                 RootComponentSubtreeRemovalPhase::Fenced
+            }
+            RootComponentSubtreeRemovalProgressView::Traversing { cursor } => {
+                RootComponentSubtreeRemovalPhase::Traversing(RootComponentSubtreeRemovalNode {
+                    canister_id: cursor.canister_id,
+                    parent_canister_id: cursor.parent_canister_id,
+                    role: cursor.role,
+                    kind: cursor.kind,
+                    installed_artifact_hash: cursor.installed_artifact_hash,
+                    status: cursor.status,
+                })
+            }
+            RootComponentSubtreeRemovalProgressView::LeafSelected { leaf } => {
+                RootComponentSubtreeRemovalPhase::LeafSelected(RootComponentSubtreeRemovalNode {
+                    canister_id: leaf.canister_id,
+                    parent_canister_id: leaf.parent_canister_id,
+                    role: leaf.role,
+                    kind: leaf.kind,
+                    installed_artifact_hash: leaf.installed_artifact_hash,
+                    status: leaf.status,
+                })
             }
         },
     }
