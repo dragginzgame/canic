@@ -6,10 +6,10 @@ Date: 2026-07-29
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.46`.
-- Latest published release: `v0.100.46` at
-  `094864fd4f45047bcc3a669e3d67e46ae9c044b4`.
-- Open patch draft: `0.100.47`; no package-version change has been authorized.
+- Workspace package version: `0.100.47`.
+- Latest published release: `v0.100.47` at
+  `d3174bef6de3529eba1fd3e5295862530162a6d8`.
+- Open patch draft: `0.100.48`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -205,7 +205,7 @@ Registry slices replace the 0.99 root model.
 ## Slice 5 — Recovery and Closeout
 
 - [x] Qualify interruption and exact retry.
-- [ ] Prove one Component operation cannot block an unrelated Component.
+- [x] Prove one Component operation cannot block an unrelated Component.
 - [x] Activate initial roots only after active-release-set Store and final
   topology synchronization.
 - [x] Extend the normal host journal through empty initial-inventory sealing,
@@ -691,7 +691,7 @@ evidence at every boundary. A fresh sum of every persisted Registry row and
 index must exactly reproduce both the terminal Component partition and root
 byte ledgers.
 
-Open 0.100.47 advances the host dependency to `ic-query 0.11.3` and
+Released 0.100.47 advances the host dependency to `ic-query 0.11.3` and
 hard-corrects the unimplemented topology design to retain the IC-native
 `SubnetKind::{Application, CloudEngine, System, Unknown}` with no umbrella
 kind. Network scope is named `IC mainnet`. Subnet specialization, placement
@@ -700,10 +700,19 @@ evidence. The dependent 0.103 and 0.104 designs now consume the same
 vocabulary. Active Rust uses `CanonicalNetworkId::ic_mainnet()` and
 `IcMainnetEnrollment` with no old-name alias.
 
+Open 0.100.48 advances the host dependency to `ic-query 0.11.4`, whose shared
+NNS inventory cache-path, refresh-lock, mainnet-validation and typed cache-load
+internals preserve the public API and cache behavior. Canic's typed
+Subnet-catalog boundary remains source-compatible. The same open patch proves
+that a rejected operation in one Component partition neither mutates its
+durable intent nor blocks child progress in another partition. Stable restart
+preserves the first intent, each partition reconstructs its exact pre-effect
+byte charges and their sum reproduces the root ledger; incomplete reservations
+remain charged against the shared managed-Canister cap.
+
 ## Next Action
 
-Prove one Component's incomplete or failed operation cannot block progress in
-an unrelated Component partition while shared root-wide limits remain exact.
-Then implement durable post-order subtree removal. Do not introduce nested
-Component declarations, let application Canisters call management effects
-directly or infer authorization from catalog presence alone.
+Implement durable post-order subtree removal against the normalized Registry
+and Directory invariants. Do not introduce nested Component declarations, let
+application Canisters call management effects directly or infer authorization
+from catalog presence alone.

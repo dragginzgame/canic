@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.46`.
-- The latest published release is `v0.100.46` at
-  `094864fd4f45047bcc3a669e3d67e46ae9c044b4`.
-- Open `0.100.47` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.47`.
+- The latest published release is `v0.100.47` at
+  `d3174bef6de3529eba1fd3e5295862530162a6d8`.
+- Open `0.100.48` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -434,6 +434,9 @@ Historical detail is archived at:
   preserves original identity and phase evidence, while an independent sum of
   persisted Registry rows and indexes reproduces the terminal Component and
   root byte ledgers.
+- Released `0.100.47` advances the host-only `ic-query` dependency to `0.11.3`,
+  standardizes network identity terminology on IC mainnet and preserves
+  IC-native `Application`, `CloudEngine`, `System` and `Unknown` Subnet kinds.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1799,8 +1802,9 @@ Exact retry preserves the original identity and phase evidence, while an
 independent sum of all persisted Registry rows and indexes exactly reproduces
 the terminal Component partition and root byte ledgers.
 
-Open `0.100.47` advances the host dependency to published `ic-query 0.11.3`
-and hard-corrects the unimplemented topology design to preserve IC-native
+Released `0.100.47` advances the host dependency to published
+`ic-query 0.11.3` and hard-corrects the unimplemented topology design to
+preserve IC-native
 `SubnetKind::{Application, CloudEngine, System, Unknown}` without an umbrella
 kind. Network scope is named `IC mainnet`. Fiduciary/European specialization,
 placement eligibility, creation funding and provider topology remain separate
@@ -1808,9 +1812,18 @@ facts, and the 0.103/0.104 designs now use the same vocabulary.
 The active Rust network-identity names are `CanonicalNetworkId::ic_mainnet()`
 and `IcMainnetEnrollment`; no old-name alias remains.
 
-Next, prove an incomplete or failed operation in one Component partition
-cannot block an unrelated Component while preserving exact shared root limits.
-Then implement durable post-order subtree removal against the same normalized
+Open `0.100.48` advances the host dependency to published `ic-query 0.11.4`.
+The dependency now shares NNS inventory cache paths, refresh-lock paths,
+mainnet validation and typed cache-load wrappers while preserving its public
+paths, errors, cache schemas and refresh behavior. Canic's typed Subnet-catalog
+boundary remains unchanged. The same open patch proves that a rejected
+operation in one Component partition cannot block an unrelated Component's
+child creation progress. Stable restart preserves exact retry of the first
+intent, each partition reconstructs its pre-effect byte charges, their sum
+reproduces the root Registry ledger and incomplete reservations remain charged
+to the shared managed-Canister limit.
+
+Next, implement durable post-order subtree removal against the same normalized
 Registry and Directory invariants without adding full-tree fan-out. Retain the
 exact immediate parent and declared role-to-role spawn grant. Do not let
 managed application Canisters perform management effects or infer

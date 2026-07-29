@@ -5013,6 +5013,81 @@ mod tests {
             .sum()
     }
 
+    fn exact_component_registry_entry_bytes(
+        data: &RootComponentRegistryData,
+        component: ComponentInstanceId,
+    ) -> u64 {
+        data.partitions
+            .iter()
+            .filter(|partition| partition.binding.component == component)
+            .map(RootComponentRegistryStore::partition_entry_bytes)
+            .chain(
+                data.partitions
+                    .iter()
+                    .filter(|partition| partition.binding.component == component)
+                    .map(|partition| {
+                        RootComponentRegistryStore::principal_index_entry_bytes(
+                            partition.binding.canister_id,
+                            component,
+                        )
+                    }),
+            )
+            .chain(
+                data.children
+                    .iter()
+                    .filter(|child| child.component == component)
+                    .map(RootComponentRegistryStore::child_entry_bytes),
+            )
+            .chain(
+                data.children
+                    .iter()
+                    .filter(|child| child.component == component)
+                    .map(|child| {
+                        RootComponentRegistryStore::principal_index_entry_bytes(
+                            child.canister_id,
+                            component,
+                        )
+                    }),
+            )
+            .chain(
+                data.child_traversals
+                    .iter()
+                    .filter(|traversal| traversal.component == component)
+                    .map(RootComponentRegistryStore::child_traversal_entry_bytes),
+            )
+            .chain(
+                data.child_allocations
+                    .iter()
+                    .filter(|allocation| allocation.component == component)
+                    .map(charged_child_allocation_entry_bytes),
+            )
+            .chain(
+                data.parent_role_counts
+                    .iter()
+                    .filter(|count| count.component == component)
+                    .map(RootComponentRegistryStore::parent_role_count_entry_bytes),
+            )
+            .sum()
+    }
+
+    fn charged_child_allocation_entry_bytes(record: &RootComponentChildAllocationRecord) -> u64 {
+        match &record.progress {
+            RootComponentChildAllocationProgressRecord::Reserved => {
+                RootComponentRegistryStore::child_allocation_entry_bytes(record)
+            }
+            RootComponentChildAllocationProgressRecord::CreationIntent(creation)
+            | RootComponentChildAllocationProgressRecord::Created {
+                effect: creation, ..
+            } => creation.charged_entry_bytes,
+            RootComponentChildAllocationProgressRecord::InstallIntent { installation, .. }
+            | RootComponentChildAllocationProgressRecord::Installed { installation, .. }
+            | RootComponentChildAllocationProgressRecord::Verified { installation, .. }
+            | RootComponentChildAllocationProgressRecord::Committed { installation, .. } => {
+                installation.charged_entry_bytes
+            }
+        }
+    }
+
     #[test]
     fn preparation_is_exact_idempotent_and_conflict_closed() {
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
@@ -5161,6 +5236,166 @@ mod tests {
                 false,
             )
             .is_err()
+        );
+        RootComponentRegistryStore::import(RootComponentRegistryData::default());
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one test proves independent partition progress and exact shared root capacity"
+    )]
+    fn incomplete_component_operation_does_not_block_an_unrelated_partition() {
+        RootComponentRegistryStore::import(RootComponentRegistryData::default());
+        let root = root_binding();
+        let release_set = FleetSubnetRootReleaseSet {
+            release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
+                [8; 32],
+            )),
+            manifest_digest: ReleaseSetDigest::from_bytes([9; 32]),
+        };
+        let component_a = ComponentInstanceId::from_generated_bytes([10; 32]);
+        let component_b = ComponentInstanceId::from_generated_bytes([11; 32]);
+        let parent_a = candid::Principal::from_slice(&[18; 29]);
+        let parent_b = candid::Principal::from_slice(&[19; 29]);
+        let partition_a = active_component_partition(&root, release_set, component_a, parent_a);
+        let partition_b = active_component_partition(&root, release_set, component_b, parent_b);
+        let initial_encoded_bytes = partition_a
+            .encoded_bytes
+            .checked_add(partition_b.encoded_bytes)
+            .expect("initial Registry bytes");
+        RootComponentRegistryStore::import(RootComponentRegistryData {
+            current: Some(RootComponentRegistryMetaRecord {
+                root: root.clone(),
+                prepared_against_registry: FleetRegistryVersion {
+                    authority: root.authority.clone(),
+                    revision: 4,
+                    content_hash: [5; 32],
+                },
+                release_set,
+                store_bootstrap: RootStoreBootstrapRequest {
+                    manifest_payload_size_bytes: 128,
+                },
+                next_allocation_sequence: 3,
+                reserved_component_instances: 0,
+                committed_component_instances: 2,
+                managed_descendants: 0,
+                known_created_component_canisters: 2,
+                encoded_bytes: initial_encoded_bytes,
+                initial_inventory: None,
+            }),
+            partitions: vec![partition_a.clone(), partition_b.clone()],
+            ..RootComponentRegistryData::default()
+        });
+
+        let operation_a = [44; 32];
+        let decision_a = child_allocation_decision(&partition_a, "project_instance");
+        let registry_a = component_registry_head(&partition_a);
+        ComponentRegistryOps::reserve_child_allocation(
+            decision_a.clone(),
+            operation_a,
+            registry_a.clone(),
+        )
+        .expect("reserve Component A child");
+        let incomplete_a = ComponentRegistryOps::begin_child_creation(
+            component_a,
+            operation_a,
+            child_creation_plan(&root, 50),
+            ReplayCostGuardSettlement {
+                quota_intent_id: IntentId(51),
+                reservation_intent_id: IntentId(52),
+            },
+        )
+        .expect("record Component A creation intent");
+        let partition_a_after_intent = ComponentRegistryOps::partition(component_a)
+            .expect("Component A partition read")
+            .expect("Component A partition");
+        let before_failed_a = RootComponentRegistryStore::export();
+        ComponentRegistryOps::mark_child_created(component_a, operation_a, parent_a)
+            .expect_err("Component A cannot create over its registered parent");
+        assert_eq!(RootComponentRegistryStore::export(), before_failed_a);
+
+        let operation_b = [54; 32];
+        let decision_b = child_allocation_decision(&partition_b, "project_instance");
+        let registry_b = component_registry_head(&partition_b);
+        ComponentRegistryOps::reserve_child_allocation(decision_b, operation_b, registry_b.clone())
+            .expect("reserve unrelated Component B child");
+        ComponentRegistryOps::begin_child_creation(
+            component_b,
+            operation_b,
+            child_creation_plan(&root, 55),
+            ReplayCostGuardSettlement {
+                quota_intent_id: IntentId(56),
+                reservation_intent_id: IntentId(57),
+            },
+        )
+        .expect("record Component B creation intent");
+        let child_b = candid::Principal::from_slice(&[58; 29]);
+        let progressed_b =
+            ComponentRegistryOps::mark_child_created(component_b, operation_b, child_b)
+                .expect("Component B progresses independently");
+        assert!(matches!(
+            progressed_b.progress,
+            RootComponentChildAllocationProgressView::Created { canister, .. }
+                if canister == child_b
+        ));
+
+        let durable = restart_component_registry();
+        let retried_a =
+            ComponentRegistryOps::reserve_child_allocation(decision_a, operation_a, registry_a)
+                .expect("retry preserves incomplete Component A intent");
+        assert_eq!(retried_a, incomplete_a);
+        assert_eq!(
+            ComponentRegistryOps::partition(component_a)
+                .expect("Component A partition read")
+                .expect("Component A partition"),
+            partition_a_after_intent
+        );
+        let current = ComponentRegistryOps::current().expect("Registry status");
+        assert_eq!(current.managed_descendants, 2);
+        assert_eq!(current.known_created_component_canisters, 3);
+        assert!(
+            exact_registry_entry_bytes(&durable) <= current.encoded_bytes,
+            "persisted entries must fit inside their exact pre-effect charges"
+        );
+        assert_eq!(
+            current.encoded_bytes,
+            durable
+                .partitions
+                .iter()
+                .map(|partition| partition.encoded_bytes)
+                .sum::<u64>()
+        );
+        for component in [component_a, component_b] {
+            let partition = ComponentRegistryOps::partition(component)
+                .expect("partition read")
+                .expect("active partition");
+            assert_eq!(
+                partition.encoded_bytes,
+                exact_component_registry_entry_bytes(&durable, component)
+            );
+        }
+
+        let mut capacity_bounded = durable;
+        let status = capacity_bounded.current.as_mut().expect("Registry status");
+        let managed_canisters = 1
+            + status.reserved_component_instances
+            + status.committed_component_instances
+            + status.managed_descendants;
+        assert_eq!(managed_canisters, 5);
+        status.root.limits.maximum_managed_canisters = managed_canisters;
+        RootComponentRegistryStore::import(capacity_bounded);
+        let before_capacity_failure = RootComponentRegistryStore::export();
+        let capacity_error = ComponentRegistryOps::reserve_child_allocation(
+            child_allocation_decision(&partition_b, "project_machine"),
+            [59; 32],
+            registry_b,
+        )
+        .expect_err("Component A reservation remains charged to the shared root limit");
+        assert!(capacity_error.is_public_resource_exhausted());
+        assert_eq!(
+            RootComponentRegistryStore::export(),
+            before_capacity_failure
         );
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
@@ -6698,6 +6933,106 @@ mod tests {
         assert_eq!(status.reserved_component_instances, 0);
         assert_eq!(status.encoded_bytes, 0);
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
+    }
+
+    fn active_component_partition(
+        root: &FleetSubnetRootBinding,
+        release_set: FleetSubnetRootReleaseSet,
+        component: ComponentInstanceId,
+        canister_id: candid::Principal,
+    ) -> ComponentRegistryPartitionRecord {
+        let binding = ComponentBinding {
+            authority: root.authority.clone(),
+            component,
+            component_spec: "projects".parse().expect("Component Spec"),
+            spec_hash: [6; 32],
+            role: CanisterRole::new("project_hub"),
+            placement_subnet: root.placement_subnet,
+            fleet_subnet_root: root.fleet_subnet_root,
+            canister_id,
+        };
+        let provisioning_origin = ComponentProvisioningOrigin::FleetAdministrator {
+            caller: candid::Principal::from_slice(&[11; 29]),
+        };
+        let descendant_content_hash = empty_component_descendant_content_hash(component);
+        let mut partition = ComponentRegistryPartitionRecord {
+            content_hash: component_partition_content_hash(
+                &binding,
+                &provisioning_origin,
+                release_set,
+                ComponentLifecycleStatus::Active,
+                2,
+                descendant_content_hash,
+                0,
+            )
+            .expect("partition hash"),
+            binding,
+            provisioning_origin,
+            release_set,
+            status: ComponentLifecycleStatus::Active,
+            revision: 2,
+            descendant_content_hash,
+            directory_synchronized_at_ns: 33,
+            reserved_descendants: 0,
+            committed_descendants: 0,
+            encoded_bytes: 0,
+        };
+        let principal_index_bytes =
+            RootComponentRegistryStore::principal_index_entry_bytes(canister_id, component);
+        for _ in 0..8 {
+            let encoded_bytes = RootComponentRegistryStore::partition_entry_bytes(&partition)
+                + principal_index_bytes;
+            if partition.encoded_bytes == encoded_bytes {
+                break;
+            }
+            partition.encoded_bytes = encoded_bytes;
+        }
+        assert_eq!(
+            partition.encoded_bytes,
+            RootComponentRegistryStore::partition_entry_bytes(&partition) + principal_index_bytes
+        );
+        partition
+    }
+
+    fn child_allocation_decision(
+        partition: &ComponentRegistryPartitionRecord,
+        child_role: &'static str,
+    ) -> ComponentChildAllocationDecision {
+        ComponentChildAllocationDecision {
+            component: partition.binding.component,
+            component_spec: partition.binding.component_spec.clone(),
+            spec_hash: partition.binding.spec_hash,
+            parent_canister_id: partition.binding.canister_id,
+            parent_role: partition.binding.role.clone(),
+            child_role: CanisterRole::new(child_role),
+            child_kind: ComponentChildKind::Instance,
+            maximum_instances_per_parent: 10_000,
+            maximum_descendants: 20_000,
+            maximum_registry_bytes: 16_777_216,
+        }
+    }
+
+    fn component_registry_head(
+        partition: &ComponentRegistryPartitionRecord,
+    ) -> ComponentRegistryHead {
+        ComponentRegistryHead {
+            component: partition.binding.component,
+            revision: partition.revision,
+            content_hash: partition.content_hash,
+        }
+    }
+
+    fn child_creation_plan(
+        root: &FleetSubnetRootBinding,
+        evidence_seed: u8,
+    ) -> RootComponentCreationPlan {
+        RootComponentCreationPlan {
+            wasm_store: candid::Principal::from_slice(&[evidence_seed; 29]),
+            payload_hash: [evidence_seed; 32],
+            payload_size_bytes: 4_096,
+            initial_cycles: Cycles::new(5_000_000_000_000),
+            controller: root.fleet_subnet_root,
+        }
     }
 
     fn root_binding() -> FleetSubnetRootBinding {
