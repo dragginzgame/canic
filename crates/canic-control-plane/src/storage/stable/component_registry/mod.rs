@@ -35,7 +35,7 @@ use canic_core::{
 };
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "root-control-plane")]
-use std::cell::RefCell;
+use std::{cell::RefCell, ops::Bound};
 
 #[cfg(feature = "root-control-plane")]
 const ROOT_COMPONENT_REGISTRY_STATE_MAX_BYTES: u32 = 65_536;
@@ -605,6 +605,88 @@ impl ComponentRegistryEntryKey {
         }
     }
 
+    fn child_traversal_parent_start(
+        component: ComponentInstanceId,
+        parent_canister_id: Principal,
+    ) -> Self {
+        Self {
+            component: *component.as_bytes(),
+            index: ComponentRegistryEntryIndexKey::ChildTraversal {
+                parent_canister_id: parent_canister_id.as_slice().to_vec(),
+                role: CanisterRole::new(""),
+                canister_id: Vec::new(),
+            },
+        }
+    }
+
+    fn child_traversal_parent_end(
+        component: ComponentInstanceId,
+        parent_canister_id: Principal,
+    ) -> Self {
+        let mut parent_canister_id = parent_canister_id.as_slice().to_vec();
+        parent_canister_id.push(0);
+        Self {
+            component: *component.as_bytes(),
+            index: ComponentRegistryEntryIndexKey::ChildTraversal {
+                parent_canister_id,
+                role: CanisterRole::new(""),
+                canister_id: Vec::new(),
+            },
+        }
+    }
+
+    fn child_traversal_parent_role_start(
+        component: ComponentInstanceId,
+        parent_canister_id: Principal,
+        role: &CanisterRole,
+    ) -> Self {
+        Self {
+            component: *component.as_bytes(),
+            index: ComponentRegistryEntryIndexKey::ChildTraversal {
+                parent_canister_id: parent_canister_id.as_slice().to_vec(),
+                role: role.clone(),
+                canister_id: Vec::new(),
+            },
+        }
+    }
+
+    fn child_traversal_parent_role_end(
+        component: ComponentInstanceId,
+        parent_canister_id: Principal,
+        role: &CanisterRole,
+    ) -> Self {
+        Self {
+            component: *component.as_bytes(),
+            index: ComponentRegistryEntryIndexKey::ChildTraversal {
+                parent_canister_id: parent_canister_id.as_slice().to_vec(),
+                role: role.clone(),
+                canister_id: vec![u8::MAX; Principal::MAX_LENGTH_IN_BYTES + 1],
+            },
+        }
+    }
+
+    const fn child_traversal_range_start(component: ComponentInstanceId) -> Self {
+        Self {
+            component: *component.as_bytes(),
+            index: ComponentRegistryEntryIndexKey::ChildTraversal {
+                parent_canister_id: Vec::new(),
+                role: CanisterRole::new(""),
+                canister_id: Vec::new(),
+            },
+        }
+    }
+
+    fn child_traversal_range_end(component: ComponentInstanceId) -> Self {
+        Self {
+            component: *component.as_bytes(),
+            index: ComponentRegistryEntryIndexKey::ChildTraversal {
+                parent_canister_id: vec![u8::MAX; Principal::MAX_LENGTH_IN_BYTES + 1],
+                role: CanisterRole::new(""),
+                canister_id: Vec::new(),
+            },
+        }
+    }
+
     fn parent_role_count(
         component: ComponentInstanceId,
         parent_canister_id: Principal,
@@ -970,6 +1052,74 @@ impl RootComponentRegistryStore {
                 )
                 | None => None,
             }
+        })
+    }
+
+    #[must_use]
+    pub(crate) fn child_traversals_page(
+        component: ComponentInstanceId,
+        parent_canister_id: Option<Principal>,
+        role: Option<&CanisterRole>,
+        start_after: Option<(&Principal, &CanisterRole, &Principal)>,
+        limit: usize,
+    ) -> Vec<ComponentRegistryChildTraversalRecord> {
+        COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+            let lower = match start_after {
+                Some((parent_canister_id, role, canister_id)) => {
+                    Bound::Excluded(ComponentRegistryEntryKey::child_traversal(
+                        component,
+                        *parent_canister_id,
+                        role,
+                        *canister_id,
+                    ))
+                }
+                None => Bound::Included(match (parent_canister_id, role) {
+                    (Some(parent_canister_id), Some(role)) => {
+                        ComponentRegistryEntryKey::child_traversal_parent_role_start(
+                            component,
+                            parent_canister_id,
+                            role,
+                        )
+                    }
+                    (Some(parent_canister_id), None) => {
+                        ComponentRegistryEntryKey::child_traversal_parent_start(
+                            component,
+                            parent_canister_id,
+                        )
+                    }
+                    (None, Some(_) | None) => {
+                        ComponentRegistryEntryKey::child_traversal_range_start(component)
+                    }
+                }),
+            };
+            let upper = match (parent_canister_id, role) {
+                (Some(parent_canister_id), Some(role)) => {
+                    Bound::Included(ComponentRegistryEntryKey::child_traversal_parent_role_end(
+                        component,
+                        parent_canister_id,
+                        role,
+                    ))
+                }
+                (Some(parent_canister_id), None) => {
+                    Bound::Excluded(ComponentRegistryEntryKey::child_traversal_parent_end(
+                        component,
+                        parent_canister_id,
+                    ))
+                }
+                (None, Some(_) | None) => Bound::Excluded(
+                    ComponentRegistryEntryKey::child_traversal_range_end(component),
+                ),
+            };
+            map.range((lower, upper))
+                .filter_map(|entry| match entry.value() {
+                    ComponentRegistryEntryRecord::ChildTraversal(record) => Some(record),
+                    ComponentRegistryEntryRecord::Partition(_)
+                    | ComponentRegistryEntryRecord::Child(_)
+                    | ComponentRegistryEntryRecord::ChildAllocation(_)
+                    | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                })
+                .take(limit)
+                .collect()
         })
     }
 
@@ -1779,5 +1929,88 @@ impl RootComponentRegistryStore {
                 current: data.current,
             });
         });
+    }
+}
+
+#[cfg(all(test, feature = "root-control-plane"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn child_traversal_pages_follow_canonical_parent_role_canister_order() {
+        let component = ComponentInstanceId::from_generated_bytes([1; 32]);
+        let other_component = ComponentInstanceId::from_generated_bytes([2; 32]);
+        let first_parent = Principal::from_slice(&[3; 29]);
+        let second_parent = Principal::from_slice(&[4; 29]);
+        let first = ComponentRegistryChildTraversalRecord {
+            component,
+            parent_canister_id: first_parent,
+            role: CanisterRole::new("instance"),
+            canister_id: Principal::from_slice(&[5; 29]),
+        };
+        let second = ComponentRegistryChildTraversalRecord {
+            component,
+            parent_canister_id: first_parent,
+            role: CanisterRole::new("ledger"),
+            canister_id: Principal::from_slice(&[6; 29]),
+        };
+        let third = ComponentRegistryChildTraversalRecord {
+            component,
+            parent_canister_id: second_parent,
+            role: CanisterRole::new("machine"),
+            canister_id: Principal::from_slice(&[7; 29]),
+        };
+        RootComponentRegistryStore::import(RootComponentRegistryData {
+            child_traversals: vec![
+                third.clone(),
+                ComponentRegistryChildTraversalRecord {
+                    component: other_component,
+                    parent_canister_id: first_parent,
+                    role: CanisterRole::new("instance"),
+                    canister_id: Principal::from_slice(&[8; 29]),
+                },
+                second.clone(),
+                first.clone(),
+            ],
+            ..RootComponentRegistryData::default()
+        });
+
+        let first_page =
+            RootComponentRegistryStore::child_traversals_page(component, None, None, None, 2);
+        assert_eq!(first_page, vec![first, second.clone()]);
+        let second_page = RootComponentRegistryStore::child_traversals_page(
+            component,
+            None,
+            None,
+            Some((
+                &second.parent_canister_id,
+                &second.role,
+                &second.canister_id,
+            )),
+            2,
+        );
+        assert_eq!(second_page, vec![third.clone()]);
+        assert_eq!(
+            RootComponentRegistryStore::child_traversals_page(
+                component,
+                Some(first_parent),
+                Some(&second.role),
+                None,
+                2,
+            ),
+            vec![second]
+        );
+        assert_eq!(
+            RootComponentRegistryStore::child_traversals_page(
+                component,
+                Some(second_parent),
+                None,
+                None,
+                2,
+            ),
+            vec![third]
+        );
+
+        RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
 }

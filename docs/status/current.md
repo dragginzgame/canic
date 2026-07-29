@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.43`.
-- The latest published release is `v0.100.43` at
-  `d807f09370512d0897c07fbbd10aeb8beb412bea`.
-- Open `0.100.44` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.44`.
+- The latest published release is `v0.100.44` at
+  `1df0ebfdf6bfb730dc3c8bc82989961e54b6ddad`.
+- Open `0.100.45` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -414,11 +414,20 @@ Historical detail is archived at:
   and commits the terminal synchronization bit. Exact retry reconstructs the
   original membership response even after later reservations or commits
   progress the current partition.
-- Open `0.100.44` adopts the published host-only `ic-query 0.11.0` library and
+- Released `0.100.44` adopts the published host-only `ic-query 0.11.0` library and
   its updated IC agent stack while retaining Canic's existing typed
   Subnet-catalog adapter. The joined NNS Subnet-topology report is now
   available for the separately staged host integration; no Canister runtime
   dependency or placement-policy change occurs in this adoption.
+- Open `0.100.45` exposes each root-owned Component Directory through a public
+  internal query authenticated against the caller's exact active Registry
+  membership. The request is bound to the current compact head and supports
+  parent, child-role and lifecycle-status filters. Stable traversal uses
+  canonical parent/role/Canister order, examines at most 100 rows per call and
+  returns a 2-KiB-bounded opaque cursor carrying the exact head, filters and
+  last key. A top-level Component or descendant can reconstruct its own
+  complete multi-level tree without receiving an unbounded vector or
+  selecting a co-located Component.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1765,16 +1774,23 @@ membership and converges on the following current Component Directory before
 its terminal root receipt. Exact retries retain their original head even when
 later partition progress is already visible.
 
+Each active registered member can now consume that root-owned Directory
+through exact-current-head, revision-bound pages. Parent and parent-role
+filters use stable-key ranges, residual filters remain bounded by the
+100-row scan limit, and opaque continuations prevent cross-head or
+cross-filter mixing. The initial root seal remains top-level-only and is not
+reopened by later dynamic descendants.
+
 The host dependency baseline now uses published `ic-query 0.11.0`. Existing
 typed Subnet-catalog consumers compile unchanged, and the joined NNS
 Subnet-topology report is available for the next observational host adapter.
 
-Next, close the direct-child lifecycle integration around root sealing,
-queries and recovery qualification, including proving terminal child
-operations satisfy the same inventory invariants without adding full-tree
-fan-out. Retain the exact immediate parent and declared role-to-role spawn
-grant. Do not let managed application Canisters perform management effects or
-infer authorization from flat catalog presence.
+Next, close the direct-child lifecycle integration around interruption and
+recovery qualification, including proving terminal child operations retain
+the same normalized Registry and Directory invariants without adding
+full-tree fan-out. Retain the exact immediate parent and declared
+role-to-role spawn grant. Do not let managed application Canisters perform
+management effects or infer authorization from flat catalog presence.
 
 ## Historical Release Detail
 

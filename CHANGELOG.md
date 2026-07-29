@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.45` exposes each root-owned Component Directory through bounded,
+  revision-bound pages in canonical parent/role/Canister order, with exact
+  registered-member authentication and opaque filter-bound continuation.
+
 - `0.100.44` adopts the host-only `ic-query 0.11.0` library and its updated
   IC agent stack while preserving Canic's typed dependency boundary.
 

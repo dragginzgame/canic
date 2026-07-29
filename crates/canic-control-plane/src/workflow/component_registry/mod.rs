@@ -13,6 +13,7 @@ use crate::{
         fleet_registry_mirror::FleetRegistryMirrorOps,
     },
     view::component_registry::{
+        ComponentDirectoryCanonicalCursor, ComponentDirectoryPageSelection,
         ComponentRegistryPartitionView, RootComponentAllocationProgressView,
         RootComponentAllocationView, RootComponentChildAllocationProgressView,
         RootComponentChildAllocationView, RootComponentChildInstallEffectView,
@@ -23,6 +24,7 @@ use crate::{
         bootstrap::root_store, deployment, runtime::template::resolved_root_store_module_source,
     },
 };
+use candid::CandidType;
 use canic_core::api::runtime::install::{ApprovedModulePayload, ApprovedModuleSource};
 use canic_core::{
     api::fleet_activation::FleetActivationApi,
@@ -50,11 +52,12 @@ use canic_core::{
     dto::{
         abi::v1::{CanisterInitAuthority, CanisterInitPayload},
         component_registry::{
-            ComponentDirectoryHead, ComponentDirectoryHeadRequest, ComponentDirectoryProvenance,
-            ComponentLifecycleStatus, ComponentProvisioningOrigin, ComponentRegistryHead,
-            ComponentRegistryPartitionRequest, ComponentRegistryPartitionResponse,
-            ComponentRuntimeActivationRequest, ComponentRuntimeDirectoryAuthority,
-            ComponentRuntimeDirectoryConvergenceEvidence,
+            ComponentDirectoryChildEntry, ComponentDirectoryHead, ComponentDirectoryHeadRequest,
+            ComponentDirectoryPageCursor, ComponentDirectoryPageRequest,
+            ComponentDirectoryPageResponse, ComponentDirectoryProvenance, ComponentLifecycleStatus,
+            ComponentProvisioningOrigin, ComponentRegistryHead, ComponentRegistryPartitionRequest,
+            ComponentRegistryPartitionResponse, ComponentRuntimeActivationRequest,
+            ComponentRuntimeDirectoryAuthority, ComponentRuntimeDirectoryConvergenceEvidence,
             ComponentRuntimeDirectoryPreparationRequest,
             ComponentRuntimeDirectorySynchronizationRequest, ComponentRuntimePhase,
             ComponentRuntimeStatusResponse, RootComponentAllocationPhase,
@@ -81,9 +84,13 @@ use canic_core::{
         fleet_registry::{FleetDirectorySnapshot, FleetSubnetRootEntry, FleetSubnetRootStatus},
         root_store::RootStoreBootstrapResponse,
     },
-    ids::{ComponentBinding, ManagedCanisterBinding},
+    ids::{CanisterRole, ComponentBinding, ManagedCanisterBinding},
     protocol,
 };
+use serde::Deserialize;
+
+const MAX_COMPONENT_DIRECTORY_PAGE_ENTRIES: u16 = 100;
+const MAX_COMPONENT_DIRECTORY_CURSOR_BYTES: usize = 2_048;
 
 struct PreparedComponentRuntimePlan {
     root_binding: canic_core::ids::FleetSubnetRootBinding,
@@ -107,6 +114,17 @@ struct PreparedChildRuntimePlan {
     parent_binding: Option<ManagedCanisterBinding>,
     directory_request: ComponentRuntimeDirectoryPreparationRequest,
     directory_authority_hash: [u8; 32],
+}
+
+#[derive(CandidType, Deserialize)]
+struct ComponentDirectoryCursorPayload {
+    directory: ComponentDirectoryHead,
+    parent_canister_id: Option<candid::Principal>,
+    role: Option<CanisterRole>,
+    status: Option<ComponentLifecycleStatus>,
+    last_parent_canister_id: candid::Principal,
+    last_role: CanisterRole,
+    last_canister_id: candid::Principal,
 }
 
 /// Prepare the one empty Component Registry meta record under exact active root authority.
@@ -1230,6 +1248,103 @@ pub fn directory_head(
         &partition,
     )?;
     Ok(component_directory_head(&partition))
+}
+
+/// Read one bounded, revision-stable Component Directory page for a registered member.
+pub fn directory_page(
+    request: ComponentDirectoryPageRequest,
+) -> Result<ComponentDirectoryPageResponse, InternalError> {
+    if request.limit == 0 || request.limit > MAX_COMPONENT_DIRECTORY_PAGE_ENTRIES {
+        return Err(InternalError::invalid_input(format!(
+            "Component Directory page limit must be between 1 and {MAX_COMPONENT_DIRECTORY_PAGE_ENTRIES}",
+        )));
+    }
+
+    let (authority, _root) = root_authority()?;
+    let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let topology = ConfigOps::component_topology()?;
+    let component = request.directory.provenance.component.component;
+    let partition = ComponentRegistryOps::partition(component)?.ok_or_else(|| {
+        InternalError::unavailable("Component Registry partition has not been committed")
+    })?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &partition,
+    )?;
+    let caller = IcOps::msg_caller();
+    let (member, status) =
+        ComponentRegistryOps::registered_parent(component, caller)?.ok_or_else(|| {
+            InternalError::public(Error::forbidden(format!(
+                "caller {caller} is not a registered member of Component {component}"
+            )))
+        })?;
+    validate_directory_member(&authority.binding, &topology, &partition, &member)?;
+    if status != ComponentLifecycleStatus::Active {
+        return Err(InternalError::unavailable(
+            "Component Directory pages require an Active registered member",
+        ));
+    }
+
+    let directory = component_directory_head(&partition);
+    if request.directory != directory {
+        return Err(InternalError::conflict(
+            "requested Component Directory head is not the exact current authority",
+        ));
+    }
+
+    if let Some(parent_canister_id) = request.parent_canister_id
+        && ComponentRegistryOps::registered_parent(component, parent_canister_id)?.is_none()
+    {
+        return Err(InternalError::invalid_input(
+            "Component Directory parent filter is not a registered member of this Component",
+        ));
+    }
+    if let Some(role) = request.role.as_ref() {
+        let spec = topology
+            .get(&partition.binding.component_spec)
+            .ok_or_else(|| {
+                InternalError::invariant(
+                    InternalErrorOrigin::Storage,
+                    "Component Directory Spec is absent from protected topology",
+                )
+            })?;
+        if spec.child(role).is_none() {
+            return Err(InternalError::invalid_input(
+                "Component Directory role filter is absent from the Component Spec",
+            ));
+        }
+    }
+
+    let start_after = decode_component_directory_cursor(&request)?;
+    let selection = ComponentDirectoryPageSelection {
+        parent_canister_id: request.parent_canister_id,
+        role: request.role.clone(),
+        status: request.status,
+        start_after,
+    };
+    let page =
+        ComponentRegistryOps::directory_page(component, &selection, usize::from(request.limit))?;
+    let next_cursor = page
+        .next_cursor
+        .map(|cursor| encode_component_directory_cursor(&request, cursor))
+        .transpose()?;
+
+    Ok(ComponentDirectoryPageResponse {
+        directory,
+        entries: page
+            .entries
+            .into_iter()
+            .map(|entry| ComponentDirectoryChildEntry {
+                binding: entry.binding,
+                kind: entry.kind,
+                installed_artifact_hash: entry.installed_artifact_hash,
+                status: entry.status,
+            })
+            .collect(),
+        next_cursor,
+    })
 }
 
 async fn advance_creation(
@@ -3454,6 +3569,65 @@ fn component_directory_head(partition: &ComponentRegistryPartitionView) -> Compo
     }
 }
 
+fn decode_component_directory_cursor(
+    request: &ComponentDirectoryPageRequest,
+) -> Result<Option<ComponentDirectoryCanonicalCursor>, InternalError> {
+    let Some(cursor) = request.cursor.as_ref() else {
+        return Ok(None);
+    };
+    if cursor.0.is_empty() || cursor.0.len() > MAX_COMPONENT_DIRECTORY_CURSOR_BYTES {
+        return Err(InternalError::invalid_input(
+            "Component Directory cursor has an invalid encoded size",
+        ));
+    }
+    let payload =
+        candid::decode_one::<ComponentDirectoryCursorPayload>(&cursor.0).map_err(|_| {
+            InternalError::invalid_input("Component Directory cursor is malformed or unsupported")
+        })?;
+    if payload.directory != request.directory
+        || payload.parent_canister_id != request.parent_canister_id
+        || payload.role != request.role
+        || payload.status != request.status
+    {
+        return Err(InternalError::conflict(
+            "Component Directory cursor is bound to a different head or filter",
+        ));
+    }
+    Ok(Some(ComponentDirectoryCanonicalCursor {
+        parent_canister_id: payload.last_parent_canister_id,
+        role: payload.last_role,
+        canister_id: payload.last_canister_id,
+    }))
+}
+
+fn encode_component_directory_cursor(
+    request: &ComponentDirectoryPageRequest,
+    cursor: ComponentDirectoryCanonicalCursor,
+) -> Result<ComponentDirectoryPageCursor, InternalError> {
+    let payload = ComponentDirectoryCursorPayload {
+        directory: request.directory.clone(),
+        parent_canister_id: request.parent_canister_id,
+        role: request.role.clone(),
+        status: request.status,
+        last_parent_canister_id: cursor.parent_canister_id,
+        last_role: cursor.role,
+        last_canister_id: cursor.canister_id,
+    };
+    let bytes = candid::encode_one(payload).map_err(|error| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            format!("Component Directory cursor encoding failed: {error}"),
+        )
+    })?;
+    if bytes.len() > MAX_COMPONENT_DIRECTORY_CURSOR_BYTES {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "Component Directory cursor exceeds its protocol byte bound",
+        ));
+    }
+    Ok(ComponentDirectoryPageCursor(bytes))
+}
+
 fn creation_plan(
     root: candid::Principal,
     store: &RootStoreBootstrapResponse,
@@ -3809,4 +3983,109 @@ fn validate_partition(
         ));
     }
     Ok(())
+}
+
+fn validate_directory_member(
+    root: &canic_core::ids::FleetSubnetRootBinding,
+    topology: &canic_core::control_plane_support::config::ComponentTopology,
+    partition: &ComponentRegistryPartitionView,
+    member: &ManagedCanisterBinding,
+) -> Result<(), InternalError> {
+    match member {
+        ManagedCanisterBinding::Component(binding) if binding == &partition.binding => Ok(()),
+        ManagedCanisterBinding::ComponentChild(binding)
+            if binding.component == partition.binding =>
+        {
+            topology
+                .validate_component_child_binding(root, binding)
+                .map_err(|error| {
+                    InternalError::invariant(
+                        InternalErrorOrigin::Storage,
+                        format!("Component Directory caller binding is invalid: {error}"),
+                    )
+                })
+        }
+        ManagedCanisterBinding::Component(_) | ManagedCanisterBinding::ComponentChild(_) => {
+            Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "Component Directory caller differs from its protected partition",
+            ))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use canic_core::ids::{
+        AppId, CanonicalNetworkId, ComponentInstanceId, FleetBinding, FleetCoordinatorBinding,
+        FleetId, FleetKey, FleetRegistryAuthority, SubnetId,
+    };
+
+    #[test]
+    fn component_directory_cursor_is_opaque_and_bound_to_head_and_filters() {
+        let root = candid::Principal::from_slice(&[1; 29]);
+        let component = ComponentInstanceId::from_generated_bytes([2; 32]);
+        let binding = ComponentBinding {
+            authority: FleetRegistryAuthority {
+                binding: FleetCoordinatorBinding {
+                    fleet: FleetBinding {
+                        fleet: FleetKey {
+                            canonical_network_id: CanonicalNetworkId::public_ic(),
+                            fleet_id: FleetId::from_generated_bytes([3; 32]),
+                        },
+                        app: AppId::from("toko"),
+                    },
+                    coordinator_subnet: SubnetId::from_principal(candid::Principal::from_slice(
+                        &[4; 29],
+                    )),
+                    coordinator: candid::Principal::from_slice(&[5; 29]),
+                },
+                epoch: 1,
+            },
+            component,
+            component_spec: "projects".parse().expect("Component Spec"),
+            spec_hash: [6; 32],
+            role: CanisterRole::new("project_hub"),
+            placement_subnet: SubnetId::from_principal(candid::Principal::from_slice(&[7; 29])),
+            fleet_subnet_root: root,
+            canister_id: candid::Principal::from_slice(&[8; 29]),
+        };
+        let mut request = ComponentDirectoryPageRequest {
+            directory: ComponentDirectoryHead {
+                provenance: ComponentDirectoryProvenance {
+                    component: binding.clone(),
+                    source_fleet_subnet_root: root,
+                    component_registry_revision: 9,
+                    component_registry_content_hash: [10; 32],
+                    synchronized_at_ns: 11,
+                },
+                descendant_count: 12,
+            },
+            parent_canister_id: Some(binding.canister_id),
+            role: Some(CanisterRole::new("project_instance")),
+            status: None,
+            cursor: None,
+            limit: 50,
+        };
+        let canonical = ComponentDirectoryCanonicalCursor {
+            parent_canister_id: binding.canister_id,
+            role: CanisterRole::new("project_instance"),
+            canister_id: candid::Principal::from_slice(&[13; 29]),
+        };
+        let encoded = encode_component_directory_cursor(&request, canonical.clone())
+            .expect("encode Directory cursor");
+        request.cursor = Some(encoded);
+
+        assert_eq!(
+            decode_component_directory_cursor(&request).expect("decode Directory cursor"),
+            Some(canonical)
+        );
+        let mut conflicting = request.clone();
+        conflicting.status = Some(ComponentLifecycleStatus::Active);
+        assert!(decode_component_directory_cursor(&conflicting).is_err());
+        let mut malformed = request;
+        malformed.cursor = Some(ComponentDirectoryPageCursor(vec![1, 2, 3]));
+        assert!(decode_component_directory_cursor(&malformed).is_err());
+    }
 }

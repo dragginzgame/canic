@@ -176,7 +176,7 @@ Registry slices replace the 0.99 root model.
   indexes.
 - [x] Derive the first ownership-preserving Component Directory head from its
   exact committed Registry partition.
-- [ ] Derive ownership-preserving Component Directories with compact heads and
+- [x] Derive ownership-preserving Component Directories with compact heads and
   revision-bound pagination.
 - [ ] Run subtree removal as durable post-order traversal and partition
   mutation serialization by Component instance.

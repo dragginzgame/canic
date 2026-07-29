@@ -44,6 +44,7 @@ pub const CANIC_ROOT_COMPONENT_MEMBERSHIP_ACTIVATE: &str =
     "canic_root_component_membership_activate";
 pub const CANIC_ROOT_COMPONENT_REGISTRY_PARTITION: &str = "canic_root_component_registry_partition";
 pub const CANIC_ROOT_COMPONENT_DIRECTORY_HEAD: &str = "canic_root_component_directory_head";
+pub const CANIC_ROOT_COMPONENT_DIRECTORY_PAGE: &str = "canic_root_component_directory_page";
 pub const CANIC_COMPONENT_RUNTIME_DIRECTORY_PREPARE: &str =
     "canic_component_runtime_directory_prepare";
 pub const CANIC_COMPONENT_RUNTIME_DIRECTORY_SYNCHRONIZE: &str =

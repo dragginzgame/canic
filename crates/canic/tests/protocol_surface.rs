@@ -645,6 +645,11 @@ fn assert_component_registry_protocol_constants() {
             canic_core::protocol::CANIC_ROOT_COMPONENT_DIRECTORY_HEAD,
             "canic_root_component_directory_head",
         ),
+        (
+            canic::protocol::CANIC_ROOT_COMPONENT_DIRECTORY_PAGE,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_DIRECTORY_PAGE,
+            "canic_root_component_directory_page",
+        ),
     ] {
         assert_eq!(facade, core);
         assert_eq!(facade, expected);
@@ -728,6 +733,11 @@ fn assert_root_registry_mirror_guards(root: &str) {
             "{endpoint} must remain a controller-guarded query"
         );
     }
+    assert!(
+        preceding_attribute_context(root, "async fn canic_root_component_directory_page(")
+            .contains("canic_query(internal, public)"),
+        "root Component Directory pages must remain public queries authenticated by workflow"
+    );
 }
 
 #[test]

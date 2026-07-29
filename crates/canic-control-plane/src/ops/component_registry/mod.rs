@@ -18,6 +18,8 @@ use crate::{
         RootComponentRegistryMetaRecord, RootComponentRegistryStore,
     },
     view::component_registry::{
+        ComponentDirectoryCanonicalCursor, ComponentDirectoryChildView,
+        ComponentDirectoryPageSelection, ComponentDirectoryPageView,
         ComponentRegistryPartitionView, RootComponentAllocationProgressView,
         RootComponentAllocationView, RootComponentChildAllocationProgressView,
         RootComponentChildAllocationView, RootComponentChildCommitmentView,
@@ -702,6 +704,102 @@ impl ComponentRegistryOps {
         };
         validate_partition_record(&record)?;
         Ok(Some(partition_record_to_view(record)))
+    }
+
+    pub(crate) fn directory_page(
+        component: ComponentInstanceId,
+        selection: &ComponentDirectoryPageSelection,
+        scan_limit: usize,
+    ) -> Result<ComponentDirectoryPageView, InternalError> {
+        if scan_limit == 0 {
+            return Err(InternalError::invalid_input(
+                "Component Directory page scan limit must be positive",
+            ));
+        }
+        if selection.start_after.as_ref().is_some_and(|cursor| {
+            selection
+                .parent_canister_id
+                .is_some_and(|parent| cursor.parent_canister_id != parent)
+        }) {
+            return Err(InternalError::invalid_input(
+                "Component Directory cursor is outside the selected parent",
+            ));
+        }
+        if selection.start_after.as_ref().is_some_and(|cursor| {
+            selection.parent_canister_id.is_some()
+                && selection
+                    .role
+                    .as_ref()
+                    .is_some_and(|role| role != &cursor.role)
+        }) {
+            return Err(InternalError::invalid_input(
+                "Component Directory cursor is outside the selected parent-role index",
+            ));
+        }
+
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        validate_partition_record(&partition)?;
+        let start_after = selection.start_after.as_ref().map(|cursor| {
+            (
+                &cursor.parent_canister_id,
+                &cursor.role,
+                &cursor.canister_id,
+            )
+        });
+        let mut traversals = RootComponentRegistryStore::child_traversals_page(
+            component,
+            selection.parent_canister_id,
+            selection.role.as_ref(),
+            start_after,
+            scan_limit.saturating_add(1),
+        );
+        let has_more = traversals.len() > scan_limit;
+        traversals.truncate(scan_limit);
+        let next_cursor = has_more
+            .then(|| traversals.last().map(traversal_record_to_cursor))
+            .flatten();
+
+        let mut entries = Vec::with_capacity(traversals.len());
+        for traversal in traversals {
+            validate_child_traversal_record(component, &traversal)?;
+            let child = RootComponentRegistryStore::child(component, traversal.canister_id)
+                .ok_or_else(|| {
+                    InternalError::invariant(
+                        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                        "Component Directory traversal has no normalized child row",
+                    )
+                })?;
+            validate_child_record(&partition, &child)?;
+            if traversal.parent_canister_id != child.parent_canister_id
+                || traversal.role != child.role
+                || traversal.canister_id != child.canister_id
+                || RootComponentRegistryStore::component_for_principal(traversal.parent_canister_id)
+                    != Some(component)
+            {
+                return Err(InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "Component Directory traversal differs from normalized child authority",
+                ));
+            }
+            if selection
+                .role
+                .as_ref()
+                .is_some_and(|role| role != &child.role)
+                || selection
+                    .status
+                    .is_some_and(|status| status != child.status)
+            {
+                continue;
+            }
+            entries.push(child_record_to_directory_view(&partition, child));
+        }
+
+        Ok(ComponentDirectoryPageView {
+            entries,
+            next_cursor,
+        })
     }
 
     pub(crate) fn prepared_partition(
@@ -4454,6 +4552,50 @@ fn validate_child_record(
     Ok(())
 }
 
+fn validate_child_traversal_record(
+    component: ComponentInstanceId,
+    traversal: &ComponentRegistryChildTraversalRecord,
+) -> Result<(), InternalError> {
+    if traversal.component != component
+        || traversal.parent_canister_id == Principal::anonymous()
+        || traversal.canister_id == Principal::anonymous()
+        || traversal.parent_canister_id == traversal.canister_id
+    {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component Directory traversal has invalid tree identity",
+        ));
+    }
+    Ok(())
+}
+
+fn traversal_record_to_cursor(
+    traversal: &ComponentRegistryChildTraversalRecord,
+) -> ComponentDirectoryCanonicalCursor {
+    ComponentDirectoryCanonicalCursor {
+        parent_canister_id: traversal.parent_canister_id,
+        role: traversal.role.clone(),
+        canister_id: traversal.canister_id,
+    }
+}
+
+fn child_record_to_directory_view(
+    partition: &ComponentRegistryPartitionRecord,
+    child: ComponentRegistryChildRecord,
+) -> ComponentDirectoryChildView {
+    ComponentDirectoryChildView {
+        binding: ComponentChildBinding {
+            component: partition.binding.clone(),
+            parent_canister_id: child.parent_canister_id,
+            role: child.role,
+            canister_id: child.canister_id,
+        },
+        kind: child.kind,
+        installed_artifact_hash: child.installed_artifact_hash,
+        status: child.status,
+    }
+}
+
 fn validate_child_allocation_record(
     record: &RootComponentChildAllocationRecord,
 ) -> Result<(), InternalError> {
@@ -5648,6 +5790,77 @@ mod tests {
             .expect("partition read")
             .expect("terminal active partition");
         assert_eq!(terminal_partition, membership.1);
+        let complete_directory = ComponentRegistryOps::directory_page(
+            component,
+            &ComponentDirectoryPageSelection {
+                parent_canister_id: None,
+                role: None,
+                status: None,
+                start_after: None,
+            },
+            100,
+        )
+        .expect("complete Component Directory page");
+        assert_eq!(complete_directory.entries.len(), 1);
+        assert_eq!(
+            complete_directory.entries[0].binding.component,
+            terminal_partition.binding
+        );
+        assert_eq!(
+            complete_directory.entries[0].binding.parent_canister_id,
+            parent
+        );
+        assert_eq!(
+            complete_directory.entries[0].binding.role,
+            decision.child_role
+        );
+        assert_eq!(complete_directory.entries[0].binding.canister_id, canister);
+        assert_eq!(
+            complete_directory.entries[0].status,
+            ComponentLifecycleStatus::Active
+        );
+        assert!(complete_directory.next_cursor.is_none());
+        let direct_active_children = ComponentRegistryOps::directory_page(
+            component,
+            &ComponentDirectoryPageSelection {
+                parent_canister_id: Some(parent),
+                role: Some(decision.child_role.clone()),
+                status: Some(ComponentLifecycleStatus::Active),
+                start_after: None,
+            },
+            100,
+        )
+        .expect("filtered direct-child Directory page");
+        assert_eq!(direct_active_children.entries, complete_directory.entries);
+        let after_only_child = ComponentRegistryOps::directory_page(
+            component,
+            &ComponentDirectoryPageSelection {
+                parent_canister_id: Some(parent),
+                role: Some(decision.child_role.clone()),
+                status: Some(ComponentLifecycleStatus::Active),
+                start_after: Some(ComponentDirectoryCanonicalCursor {
+                    parent_canister_id: parent,
+                    role: decision.child_role.clone(),
+                    canister_id: canister,
+                }),
+            },
+            100,
+        )
+        .expect("Directory page after only child");
+        assert!(after_only_child.entries.is_empty());
+        assert!(after_only_child.next_cursor.is_none());
+        let prepared_children = ComponentRegistryOps::directory_page(
+            component,
+            &ComponentDirectoryPageSelection {
+                parent_canister_id: Some(parent),
+                role: Some(decision.child_role.clone()),
+                status: Some(ComponentLifecycleStatus::Prepared),
+                start_after: None,
+            },
+            100,
+        )
+        .expect("status-filtered Directory page");
+        assert!(prepared_children.entries.is_empty());
         let later_reservation = ComponentRegistryOps::reserve_child_allocation(
             decision,
             [71; 32],

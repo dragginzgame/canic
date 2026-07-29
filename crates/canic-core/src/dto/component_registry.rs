@@ -379,6 +379,58 @@ pub struct ComponentDirectoryHeadRequest {
 }
 
 ///
+/// ComponentDirectoryPageCursor
+///
+/// Opaque revision- and filter-bound continuation for one bounded Directory page.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentDirectoryPageCursor(pub Vec<u8>);
+
+///
+/// ComponentDirectoryPageRequest
+///
+/// Bounded member query against one exact current Component Directory authority.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentDirectoryPageRequest {
+    pub directory: ComponentDirectoryHead,
+    pub parent_canister_id: Option<Principal>,
+    pub role: Option<CanisterRole>,
+    pub status: Option<ComponentLifecycleStatus>,
+    pub cursor: Option<ComponentDirectoryPageCursor>,
+    pub limit: u16,
+}
+
+///
+/// ComponentDirectoryChildEntry
+///
+/// One authoritative normalized child projected with its complete protected binding.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentDirectoryChildEntry {
+    pub binding: ComponentChildBinding,
+    pub kind: ComponentChildKind,
+    pub installed_artifact_hash: [u8; 32],
+    pub status: ComponentLifecycleStatus,
+}
+
+///
+/// ComponentDirectoryPageResponse
+///
+/// One bounded caller-scoped page under the exact requested Directory head.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentDirectoryPageResponse {
+    pub directory: ComponentDirectoryHead,
+    pub entries: Vec<ComponentDirectoryChildEntry>,
+    pub next_cursor: Option<ComponentDirectoryPageCursor>,
+}
+
+///
 /// ComponentRuntimeDirectoryAuthority
 ///
 /// Exact Fleet and Component discovery authority retained by one managed Component-tree node.
@@ -857,6 +909,68 @@ mod tests {
             candid::decode_one::<RootComponentCommitResponse>(&committed_bytes)
                 .expect("decode committed allocation"),
             committed
+        );
+    }
+
+    #[test]
+    fn component_directory_page_contracts_round_trip_through_candid() {
+        let root = Principal::from_slice(&[6; 29]);
+        let component = ComponentInstanceId::from_generated_bytes([11; 32]);
+        let binding = ComponentBinding {
+            authority: fleet_registry_authority(),
+            component,
+            component_spec: "projects".parse().expect("Component Spec ID"),
+            spec_hash: [12; 32],
+            role: CanisterRole::new("project_hub"),
+            placement_subnet: SubnetId::from_principal(Principal::from_slice(&[17; 29])),
+            fleet_subnet_root: root,
+            canister_id: Principal::from_slice(&[16; 29]),
+        };
+        let directory = ComponentDirectoryHead {
+            provenance: ComponentDirectoryProvenance {
+                component: binding.clone(),
+                source_fleet_subnet_root: root,
+                component_registry_revision: 3,
+                component_registry_content_hash: [18; 32],
+                synchronized_at_ns: 19,
+            },
+            descendant_count: 1,
+        };
+        let request = ComponentDirectoryPageRequest {
+            directory: directory.clone(),
+            parent_canister_id: Some(binding.canister_id),
+            role: Some(CanisterRole::new("project_instance")),
+            status: Some(ComponentLifecycleStatus::Active),
+            cursor: Some(ComponentDirectoryPageCursor(vec![20; 64])),
+            limit: 50,
+        };
+        let response = ComponentDirectoryPageResponse {
+            directory,
+            entries: vec![ComponentDirectoryChildEntry {
+                binding: ComponentChildBinding {
+                    component: binding.clone(),
+                    parent_canister_id: binding.canister_id,
+                    role: CanisterRole::new("project_instance"),
+                    canister_id: Principal::from_slice(&[21; 29]),
+                },
+                kind: ComponentChildKind::Instance,
+                installed_artifact_hash: [22; 32],
+                status: ComponentLifecycleStatus::Active,
+            }],
+            next_cursor: Some(ComponentDirectoryPageCursor(vec![23; 64])),
+        };
+        let request_bytes = candid::encode_one(&request).expect("encode Directory page request");
+        let response_bytes = candid::encode_one(&response).expect("encode Directory page response");
+
+        assert_eq!(
+            candid::decode_one::<ComponentDirectoryPageRequest>(&request_bytes)
+                .expect("decode Directory page request"),
+            request
+        );
+        assert_eq!(
+            candid::decode_one::<ComponentDirectoryPageResponse>(&response_bytes)
+                .expect("decode Directory page response"),
+            response
         );
     }
 

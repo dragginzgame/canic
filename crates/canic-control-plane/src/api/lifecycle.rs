@@ -14,13 +14,14 @@ use canic_core::{
     },
     dto::{
         component_registry::{
-            ComponentDirectoryHead, ComponentDirectoryHeadRequest,
-            ComponentRegistryPartitionRequest, ComponentRegistryPartitionResponse,
-            RootComponentAllocationRequest, RootComponentAllocationResponse,
-            RootComponentAllocationStatusRequest, RootComponentChildAllocationRequest,
-            RootComponentChildAllocationResponse, RootComponentChildAllocationStatusRequest,
-            RootComponentChildCommitRequest, RootComponentChildCommitResponse,
-            RootComponentChildCreationRequest, RootComponentChildDirectoryPreparationRequest,
+            ComponentDirectoryHead, ComponentDirectoryHeadRequest, ComponentDirectoryPageRequest,
+            ComponentDirectoryPageResponse, ComponentRegistryPartitionRequest,
+            ComponentRegistryPartitionResponse, RootComponentAllocationRequest,
+            RootComponentAllocationResponse, RootComponentAllocationStatusRequest,
+            RootComponentChildAllocationRequest, RootComponentChildAllocationResponse,
+            RootComponentChildAllocationStatusRequest, RootComponentChildCommitRequest,
+            RootComponentChildCommitResponse, RootComponentChildCreationRequest,
+            RootComponentChildDirectoryPreparationRequest,
             RootComponentChildDirectoryPreparationResponse, RootComponentChildInstallRequest,
             RootComponentChildMembershipActivationRequest,
             RootComponentChildMembershipActivationResponse,
@@ -264,6 +265,12 @@ impl LifecycleApi {
         request: ComponentDirectoryHeadRequest,
     ) -> Result<ComponentDirectoryHead, canic_core::dto::error::Error> {
         crate::workflow::component_registry::directory_head(request).map_err(Into::into)
+    }
+
+    pub fn component_directory_page(
+        request: ComponentDirectoryPageRequest,
+    ) -> Result<ComponentDirectoryPageResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::directory_page(request).map_err(Into::into)
     }
 
     pub async fn prepare_fleet_activation()
