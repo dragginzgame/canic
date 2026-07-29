@@ -33,9 +33,9 @@ impl CanonicalNetworkId {
         Self(hasher.finalize().into())
     }
 
-    /// Derive the public IC identity from Canic's compiled, pinned DER trust anchor.
+    /// Derive the IC mainnet identity from Canic's compiled, pinned DER trust anchor.
     #[must_use]
-    pub fn public_ic() -> Self {
+    pub fn ic_mainnet() -> Self {
         Self::from_der_bytes_unchecked(&mainnet_ic_root_public_key_der())
     }
 
@@ -208,12 +208,12 @@ mod tests {
     }
 
     #[test]
-    fn public_and_enrolled_der_paths_share_the_canonical_der_derivation() {
+    fn mainnet_and_enrolled_der_paths_share_the_canonical_der_derivation() {
         let der = mainnet_ic_root_public_key_der();
 
         assert_eq!(
             CanonicalNetworkId::from_der_root_trust_anchor(&der).expect("valid DER"),
-            CanonicalNetworkId::public_ic()
+            CanonicalNetworkId::ic_mainnet()
         );
         std::assert_matches!(
             CanonicalNetworkId::from_der_root_trust_anchor(&[0; IC_ROOT_PUBLIC_KEY_RAW_LENGTH]),

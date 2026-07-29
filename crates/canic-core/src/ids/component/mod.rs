@@ -383,7 +383,7 @@ mod tests {
         use crate::ids::{CanonicalNetworkId, FleetId};
 
         let fleet = FleetKey {
-            canonical_network_id: CanonicalNetworkId::public_ic(),
+            canonical_network_id: CanonicalNetworkId::ic_mainnet(),
             fleet_id: FleetId::from_generated_bytes([1; 32]),
         };
         let root = candid::Principal::from_slice(&[2; 29]);

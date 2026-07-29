@@ -100,7 +100,7 @@ for the exact completed and pending boundaries.
   [v1-readiness-checklist.md](docs/architecture/v1-readiness-checklist.md) and
   [v1-operator-walkthrough.md](docs/architecture/v1-operator-walkthrough.md).
 * **NNS evidence through shared libraries:** Canic host checks use `ic-query`
-  to read and refresh cached public IC subnet metadata without requiring the
+  to read and refresh cached IC mainnet Subnet metadata without requiring the
   standalone NNS inspection CLI.
 * **Operator workflows:** The `canic` binary builds artifacts, manages local
   App configs and replica status, installs Fleets, creates topology-aware
@@ -131,7 +131,7 @@ root-local Stores and `Joining` Registry rows are verified; the terminal
 inspection commands become applicable after the synchronization and
 activation slices are complete.
 
-For ad hoc public IC NNS inspection outside Canic, install the optional
+For ad hoc IC mainnet NNS inspection outside Canic, install the optional
 upstream CLI:
 
 ```bash

@@ -857,7 +857,7 @@ mod tests {
             infrastructure_manifest_digest: [2; 32],
             fleet: FleetBinding {
                 fleet: FleetKey {
-                    canonical_network_id: CanonicalNetworkId::public_ic(),
+                    canonical_network_id: CanonicalNetworkId::ic_mainnet(),
                     fleet_id: FleetId::from_generated_bytes([4; 32]),
                 },
                 app: AppId::from("test"),

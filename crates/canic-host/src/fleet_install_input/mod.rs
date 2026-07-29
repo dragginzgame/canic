@@ -2,7 +2,7 @@
 //!
 //! Responsibility: load and resolve strict operator placement, admission, limit, and funding input.
 //! Does not own: immutable plan publication, Canister creation, installation journals, or runtime.
-//! Boundary: public-IC selectors and funding are admitted only through trusted Subnet metadata.
+//! Boundary: IC mainnet selectors and funding are admitted only through trusted Subnet metadata.
 
 #[cfg(test)]
 mod tests;
@@ -90,7 +90,7 @@ pub enum FleetInstallInputError {
     #[error("Subnet profile {profile:?} is invalid")]
     InvalidSubnetProfile { profile: String },
 
-    #[error("{selector} requires trusted public-IC Subnet metadata")]
+    #[error("{selector} requires trusted Subnet metadata for IC mainnet")]
     TrustedMetadataRequired { selector: String },
 
     #[error("trusted Subnet selector {selector} matched no eligible Subnet")]

@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.45`.
-- The latest published release is `v0.100.45` at
-  `cfb69aa44a591a8c3822e3cf884850bb01e7f7db`.
-- Open `0.100.46` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.46`.
+- The latest published release is `v0.100.46` at
+  `094864fd4f45047bcc3a669e3d67e46ae9c044b4`.
+- Open `0.100.47` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -112,7 +112,7 @@ Historical detail is archived at:
 - Released `0.100.10` adds the strict operator-owned
   `--fleet-input <path>` TOML boundary for Coordinator selection, exact root
   Subnets, Component Spec admissions, immutable root limits and positive
-  creation funding. Public-IC `recommended`, profile and explicit Coordinator
+  creation funding. IC mainnet `recommended`, profile and explicit Coordinator
   selectors resolve only through the trusted Subnet catalog; Subnet kind must
   agree with cycles- or ICP-funded creation. Non-public networks require exact
   explicit Subnets and cycles funding. After application-artifact
@@ -428,6 +428,12 @@ Historical detail is archived at:
   filters and last key. A top-level Component or descendant can reconstruct
   its own complete multi-level tree without receiving an unbounded vector or
   selecting a co-located Component.
+- Released `0.100.46` advances the host-only `ic-query` dependency to `0.11.1`
+  and qualifies stable restart after every durable Component Child phase from
+  creation intent through terminal Directory synchronization. Exact retry
+  preserves original identity and phase evidence, while an independent sum of
+  persisted Registry rows and indexes reproduces the terminal Component and
+  root byte ledgers.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -623,7 +629,7 @@ Historical detail is archived at:
   environment-scoped deployment catalog has no reader or fallback.
 - Released `0.99.2` establishes one trust-derived canonical network identity,
   explicit immutable non-public trust enrollment and revalidated
-  environment-profile lookup. Public-IC staging/production aliases converge
+  environment-profile lookup. IC mainnet staging/production aliases converge
   on the compiled pinned root trust identity.
 - Released `0.99.1` hard-cuts tracked source identity from Fleet to App:
   `apps/<app>/`, package metadata, config discovery, source role lifecycle,
@@ -1781,17 +1787,26 @@ filters use stable-key ranges, residual filters remain bounded by the
 cross-filter mixing. The initial root seal remains top-level-only and is not
 reopened by later dynamic descendants.
 
-Open `0.100.46` advances the host dependency baseline to published
+Released `0.100.46` advances the host dependency baseline to published
 `ic-query 0.11.1`. Existing typed Subnet-catalog consumers compile unchanged,
 and the joined NNS Subnet-topology report remains available for the next
 observational host adapter. The dependency-only slice changes no runtime,
 placement or stable authority.
 
-The same open patch qualifies stable restart after every durable Component
+The same released patch qualifies stable restart after every durable Component
 Child phase from creation intent through terminal Directory synchronization.
 Exact retry preserves the original identity and phase evidence, while an
 independent sum of all persisted Registry rows and indexes exactly reproduces
 the terminal Component partition and root byte ledgers.
+
+Open `0.100.47` advances the host dependency to published `ic-query 0.11.3`
+and hard-corrects the unimplemented topology design to preserve IC-native
+`SubnetKind::{Application, CloudEngine, System, Unknown}` without an umbrella
+kind. Network scope is named `IC mainnet`. Fiduciary/European specialization,
+placement eligibility, creation funding and provider topology remain separate
+facts, and the 0.103/0.104 designs now use the same vocabulary.
+The active Rust network-identity names are `CanonicalNetworkId::ic_mainnet()`
+and `IcMainnetEnrollment`; no old-name alias remains.
 
 Next, prove an incomplete or failed operation in one Component partition
 cannot block an unrelated Component while preserving exact shared root limits.

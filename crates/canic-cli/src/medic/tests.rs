@@ -1247,7 +1247,7 @@ fn sample_check(status: MedicStatus) -> MedicCheck {
 
 fn sample_fleet_catalog_entry() -> FleetCatalogEntryV1 {
     FleetCatalogEntryV1 {
-        canonical_network_id: CanonicalNetworkId::public_ic(),
+        canonical_network_id: CanonicalNetworkId::ic_mainnet(),
         fleet_id: FleetId::from_generated_bytes([5; 32]),
         fleet_name: "demo".parse().expect("Fleet name"),
         app: AppId::from("demo"),

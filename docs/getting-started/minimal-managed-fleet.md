@@ -245,7 +245,7 @@ role = "registry"
 ## Install And Inspect
 
 Create a separate operator Fleet input using the exact local application
-Subnet principal. The complete document shape and public-IC selectors are in
+Subnet principal. The complete document shape and IC mainnet selectors are in
 [`fleet-install-input.md`](../architecture/fleet-install-input.md).
 
 Then exercise the current local installation boundary:

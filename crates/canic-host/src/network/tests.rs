@@ -225,13 +225,13 @@ fn resolver_rejects_a_digest_that_disagrees_with_the_exact_anchor() {
 }
 
 #[test]
-fn public_ic_environment_aliases_resolve_the_compiled_identity() {
-    let (root, _, _, _) = fixture("public");
+fn ic_mainnet_environment_aliases_resolve_the_compiled_identity() {
+    let (root, _, _, _) = fixture("mainnet");
     fs::write(
         root.join("icp.yaml"),
         "environments:\n  - name: staging\n    network: ic\n  - name: production\n    network: ic\n",
     )
-    .expect("write public aliases");
+    .expect("write IC mainnet aliases");
 
     assert_eq!(
         resolve_canonical_network_id_from_root(&root, "ic").expect("resolve ic"),
@@ -245,13 +245,13 @@ fn public_ic_environment_aliases_resolve_the_compiled_identity() {
 }
 
 #[test]
-fn public_ic_trust_anchor_cannot_be_enrolled() {
-    let (root, root_key_path, _, fingerprint) = fixture("public-enrollment");
+fn ic_mainnet_trust_anchor_cannot_be_enrolled() {
+    let (root, root_key_path, _, fingerprint) = fixture("mainnet-enrollment");
 
     let error = enroll_network(enroll(&root, "ic", &root_key_path, &fingerprint))
-        .expect_err("public IC enrollment must reject");
+        .expect_err("IC mainnet enrollment must reject");
 
-    std::assert_matches!(error, NetworkIdentityError::PublicIcEnrollment { .. });
+    std::assert_matches!(error, NetworkIdentityError::IcMainnetEnrollment { .. });
     assert!(!root.join(CANIC_STATE_DIRECTORY).exists());
     fs::remove_dir_all(root).expect("remove fixture");
 }

@@ -71,7 +71,7 @@ fn config() -> ConfigModel {
 fn fleet_binding(byte: u8) -> FleetBinding {
     FleetBinding {
         fleet: FleetKey {
-            canonical_network_id: CanonicalNetworkId::public_ic(),
+            canonical_network_id: CanonicalNetworkId::ic_mainnet(),
             fleet_id: FleetId::from_generated_bytes([byte; 32]),
         },
         app: AppId::from("demo"),
