@@ -6,9 +6,9 @@ Date: 2026-07-29
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.40`.
-- Latest published release: `v0.100.40`.
-- Open patch draft: `0.100.41`; no package-version change has been authorized.
+- Workspace package version: `0.100.41`.
+- Latest published release: `v0.100.41`.
+- Open patch draft: `0.100.42`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -194,6 +194,9 @@ Registry slices replace the 0.99 root model.
   authority to the target before root activation.
 - [x] Apply the same direct distribution boundary to registered Component
   Children as descendant creation lands.
+- [x] Activate a Directory-prepared registered Component Child only from its
+  exact retained authority and commit a terminal root receipt after
+  independent observation.
 
 ## Slice 5 — Recovery and Closeout
 
@@ -638,7 +641,7 @@ descendant-content digest makes head validation O(1) at the 10,000–20,000
 descendant scale while binding every committed mutation. Exact parent retry
 returns the original commitment after interruption or later head progress.
 
-Open 0.100.41 distributes that exact committed Directory authority to the
+Released 0.100.41 distributes that exact committed Directory authority to the
 `Prepared` child, independently re-queries its retained receipt, synchronizes
 the owning top-level Component and the distinct immediate parent when present,
 then revalidates the parent and commits the terminal root bit last. Existing
@@ -648,12 +651,19 @@ stable response evidence reports coverage at or beyond the required head. The
 bounded affected set prevents per-child fan-out across a
 10,000–20,000-descendant Component tree.
 
+Open 0.100.42 activates the Directory-prepared child only from its exact
+retained install operation and Directory-authority hash. The shared runtime
+workflow queries first, calls only from `DirectoryPrepared`, reconciles an
+uncertain response through status and independently re-queries the immutable
+active receipt. The root then revalidates the requesting parent and commits
+the fixed-size terminal runtime bit without changing the prepared partition,
+Registry accounting or membership.
+
 ## Next Action
 
-Activate the Directory-prepared child runtime only from its exact retained
-authority, reconcile an uncertain response through target status and commit a
-terminal root receipt only after an independent re-query. Keep child
-active-membership promotion and its following current-Directory convergence
-as a later separate transition. Do not introduce nested Component
-declarations, let application Canisters call management effects directly or
-infer authorization from catalog presence alone.
+Promote the runtime-active child to active Registry membership, derive its
+following current Component Directory revision, converge the child on that
+authority and commit the terminal membership receipt only after independent
+observation. Do not introduce nested Component declarations, let application
+Canisters call management effects directly or infer authorization from
+catalog presence alone.
