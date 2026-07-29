@@ -160,6 +160,10 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "canic_root_component_child_runtime_activate",
         command_kind("component_registry.activate_child_runtime.v1"),
     ),
+    update_response_idempotent(
+        "canic_root_component_child_membership_activate",
+        command_kind("component_registry.activate_child_membership.v1"),
+    ),
     update_costed_response_idempotent(
         "canic_root_component_create",
         command_kind("management.control_plane.component_create.v1"),

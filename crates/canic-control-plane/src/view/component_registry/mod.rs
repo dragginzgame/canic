@@ -157,7 +157,25 @@ pub struct RootComponentChildCommitmentView {
     pub directory_authority_hash: [u8; 32],
     pub directory_prepared: bool,
     pub runtime_activated: bool,
-    pub membership: Option<RootComponentMembershipView>,
+    pub membership: Option<RootComponentChildMembershipView>,
+}
+
+///
+/// RootComponentChildMembershipView
+///
+/// Read-only immutable active child head and current-Directory receipt.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentChildMembershipView {
+    pub registry: ComponentRegistryHead,
+    pub descendant_content_hash: [u8; 32],
+    pub registry_encoded_bytes: u64,
+    pub reserved_descendants: u32,
+    pub committed_descendants: u32,
+    pub directory_synchronized_at_ns: u64,
+    pub directory_authority_hash: [u8; 32],
+    pub directory_synchronized: bool,
 }
 
 ///

@@ -22,6 +22,8 @@ use canic_core::{
             RootComponentChildCommitRequest, RootComponentChildCommitResponse,
             RootComponentChildCreationRequest, RootComponentChildDirectoryPreparationRequest,
             RootComponentChildDirectoryPreparationResponse, RootComponentChildInstallRequest,
+            RootComponentChildMembershipActivationRequest,
+            RootComponentChildMembershipActivationResponse,
             RootComponentChildRuntimeActivationRequest,
             RootComponentChildRuntimeActivationResponse, RootComponentCommitRequest,
             RootComponentCommitResponse, RootComponentCreationRequest,
@@ -183,7 +185,7 @@ impl LifecycleApi {
     pub async fn prepare_component_child_directories(
         request: RootComponentChildDirectoryPreparationRequest,
     ) -> Result<RootComponentChildDirectoryPreparationResponse, canic_core::dto::error::Error> {
-        crate::workflow::component_registry::prepare_child_directories(request)
+        Box::pin(crate::workflow::component_registry::prepare_child_directories(request))
             .await
             .map_err(Into::into)
     }
@@ -192,6 +194,14 @@ impl LifecycleApi {
         request: RootComponentChildRuntimeActivationRequest,
     ) -> Result<RootComponentChildRuntimeActivationResponse, canic_core::dto::error::Error> {
         crate::workflow::component_registry::activate_child_runtime(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn activate_component_child_membership(
+        request: RootComponentChildMembershipActivationRequest,
+    ) -> Result<RootComponentChildMembershipActivationResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::activate_child_membership(request)
             .await
             .map_err(Into::into)
     }

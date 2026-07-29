@@ -179,6 +179,18 @@ pub struct RootComponentChildRuntimeActivationRequest {
 }
 
 ///
+/// RootComponentChildMembershipActivationRequest
+///
+/// Parent command activating one runtime-active direct child's Registry membership.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentChildMembershipActivationRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+}
+
+///
 /// RootComponentCreationRequest
 ///
 /// Controller command continuing one already reserved top-level Component operation.
@@ -597,6 +609,20 @@ pub struct RootComponentChildRuntimeActivationResponse {
 }
 
 ///
+/// RootComponentChildMembershipActivationResponse
+///
+/// Original child commitment plus active Registry, Directory and target convergence evidence.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentChildMembershipActivationResponse {
+    pub committed: RootComponentChildCommitResponse,
+    pub registry: ComponentRegistryPartitionResponse,
+    pub directory: ComponentDirectoryHead,
+    pub child: ComponentRuntimeStatusResponse,
+}
+
+///
 /// RootComponentCommitResponse
 ///
 /// Exact committed allocation, authoritative Registry row and derived Directory head.
@@ -907,6 +933,10 @@ mod tests {
             operation_id: request.operation_id,
             component,
         };
+        let membership_request = RootComponentChildMembershipActivationRequest {
+            operation_id: request.operation_id,
+            component,
+        };
         let root = Principal::from_slice(&[17; 29]);
         let parent = Principal::from_slice(&[14; 29]);
         let child = Principal::from_slice(&[18; 29]);
@@ -1033,10 +1063,53 @@ mod tests {
             committed: commit_response.clone(),
             child: ComponentRuntimeStatusResponse {
                 operation_id: request.operation_id,
+                binding: ManagedCanisterBinding::ComponentChild(child_binding.clone()),
+                phase: ComponentRuntimePhase::Active,
+                authority: Some(runtime_authority.clone()),
+                authority_hash: Some([31; 32]),
+                activation: Some(ComponentRuntimeActivationEvidence {
+                    directory_authority_hash: [31; 32],
+                    activated_at_ns: 33,
+                }),
+            },
+        };
+        let active_directory = ComponentDirectoryHead {
+            provenance: ComponentDirectoryProvenance {
+                component: child_binding.component.clone(),
+                source_fleet_subnet_root: root,
+                component_registry_revision: 4,
+                component_registry_content_hash: [34; 32],
+                synchronized_at_ns: 35,
+            },
+            descendant_count: 1,
+        };
+        let active_authority = ComponentRuntimeDirectoryAuthority {
+            fleet: runtime_authority.fleet,
+            component: active_directory.clone(),
+        };
+        let membership_response = RootComponentChildMembershipActivationResponse {
+            committed: commit_response.clone(),
+            registry: ComponentRegistryPartitionResponse {
+                head: ComponentRegistryHead {
+                    component,
+                    revision: 4,
+                    content_hash: [34; 32],
+                },
+                binding: child_binding.component.clone(),
+                provisioning_origin: commit_response.registry.provisioning_origin.clone(),
+                release_set: commit_response.registry.release_set,
+                status: ComponentLifecycleStatus::Active,
+                reserved_descendants: 0,
+                committed_descendants: 1,
+                encoded_bytes: 8_256,
+            },
+            directory: active_directory,
+            child: ComponentRuntimeStatusResponse {
+                operation_id: request.operation_id,
                 binding: ManagedCanisterBinding::ComponentChild(child_binding),
                 phase: ComponentRuntimePhase::Active,
-                authority: Some(runtime_authority),
-                authority_hash: Some([31; 32]),
+                authority: Some(active_authority),
+                authority_hash: Some([36; 32]),
                 activation: Some(ComponentRuntimeActivationEvidence {
                     directory_authority_hash: [31; 32],
                     activated_at_ns: 33,
@@ -1058,12 +1131,16 @@ mod tests {
             candid::encode_one(directory_request).expect("encode child Directory request");
         let activation_request_bytes =
             candid::encode_one(activation_request).expect("encode child activation request");
+        let membership_request_bytes =
+            candid::encode_one(membership_request).expect("encode child membership request");
         let commit_response_bytes =
             candid::encode_one(&commit_response).expect("encode child commit response");
         let directory_response_bytes =
             candid::encode_one(&directory_response).expect("encode child Directory response");
         let activation_response_bytes =
             candid::encode_one(&activation_response).expect("encode child activation response");
+        let membership_response_bytes =
+            candid::encode_one(&membership_response).expect("encode child membership response");
 
         assert_eq!(
             candid::decode_one::<RootComponentChildAllocationRequest>(&request_bytes)
@@ -1127,6 +1204,20 @@ mod tests {
             )
             .expect("decode child activation response"),
             activation_response
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentChildMembershipActivationRequest>(
+                &membership_request_bytes
+            )
+            .expect("decode child membership request"),
+            membership_request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentChildMembershipActivationResponse>(
+                &membership_response_bytes
+            )
+            .expect("decode child membership response"),
+            membership_response
         );
     }
 

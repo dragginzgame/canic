@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.41`.
-- The latest published release is `v0.100.41` at
-  `e8ebb201ce89b283f45d3e70cb95ab73669a1020`.
-- Open `0.100.42` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.42`.
+- The latest published release is `v0.100.42` at
+  `657dfb1ab61657f9ac93406da6edf99d17578711`.
+- Open `0.100.43` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -399,13 +399,21 @@ Historical detail is archived at:
   commits the terminal child Directory bit only after every required
   independent re-query, avoiding per-mutation fan-out across a
   10,000–20,000-descendant tree.
-- Open `0.100.42` activates that exact Directory-prepared child runtime only
+- Released `0.100.42` activates that exact Directory-prepared child runtime only
   from its retained install operation and Directory-authority hash. The root
   queries first, reconciles an uncertain activation response through target
   status, independently re-queries the immutable active receipt, revalidates
   the requesting parent and commits its fixed-size terminal runtime bit last.
   The original child commitment and activation Directory remain stable while
   the Component partition stays `Prepared` and membership remains absent.
+- Open `0.100.43` atomically changes that runtime-active child's normalized
+  Registry row to `Active`, advances the owning Component head through an O(1)
+  descendant-status digest and freezes the exact new head, counts, bytes and
+  Directory authority in a child-specific membership receipt. The child then
+  converges on that current Directory before the root revalidates its parent
+  and commits the terminal synchronization bit. Exact retry reconstructs the
+  original membership response even after later reservations or commits
+  progress the current partition.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1747,12 +1755,17 @@ authority. The root reconciles an uncertain call through target status,
 independently re-queries the immutable active receipt, revalidates the parent
 and commits the fixed-size terminal runtime bit last.
 
-Next, promote that runtime-active child to active Registry membership, derive
-the following current Component Directory revision and converge the child on
-that authority before committing its terminal membership receipt. Retain the
-exact immediate parent and declared role-to-role spawn grant. Do not let
-managed application Canisters perform management effects or infer
-authorization from flat catalog presence.
+That runtime-active child now promotes atomically to active Registry
+membership and converges on the following current Component Directory before
+its terminal root receipt. Exact retries retain their original head even when
+later partition progress is already visible.
+
+Next, close the direct-child lifecycle integration around root sealing,
+queries and recovery qualification, including proving terminal child
+operations satisfy the same inventory invariants without adding full-tree
+fan-out. Retain the exact immediate parent and declared role-to-role spawn
+grant. Do not let managed application Canisters perform management effects or
+infer authorization from flat catalog presence.
 
 ## Historical Release Detail
 
