@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.44`.
-- The latest published release is `v0.100.44` at
-  `1df0ebfdf6bfb730dc3c8bc82989961e54b6ddad`.
-- Open `0.100.45` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.45`.
+- The latest published release is `v0.100.45` at
+  `cfb69aa44a591a8c3822e3cf884850bb01e7f7db`.
+- Open `0.100.46` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -419,14 +419,14 @@ Historical detail is archived at:
   Subnet-catalog adapter. The joined NNS Subnet-topology report is now
   available for the separately staged host integration; no Canister runtime
   dependency or placement-policy change occurs in this adoption.
-- Open `0.100.45` exposes each root-owned Component Directory through a public
-  internal query authenticated against the caller's exact active Registry
-  membership. The request is bound to the current compact head and supports
-  parent, child-role and lifecycle-status filters. Stable traversal uses
-  canonical parent/role/Canister order, examines at most 100 rows per call and
-  returns a 2-KiB-bounded opaque cursor carrying the exact head, filters and
-  last key. A top-level Component or descendant can reconstruct its own
-  complete multi-level tree without receiving an unbounded vector or
+- Released `0.100.45` exposes each root-owned Component Directory through a
+  public internal query authenticated against the caller's exact active
+  Registry membership. The request is bound to the current compact head and
+  supports parent, child-role and lifecycle-status filters. Stable traversal
+  uses canonical parent/role/Canister order, examines at most 100 rows per
+  call and returns a 2-KiB-bounded opaque cursor carrying the exact head,
+  filters and last key. A top-level Component or descendant can reconstruct
+  its own complete multi-level tree without receiving an unbounded vector or
   selecting a co-located Component.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
@@ -1781,16 +1781,25 @@ filters use stable-key ranges, residual filters remain bounded by the
 cross-filter mixing. The initial root seal remains top-level-only and is not
 reopened by later dynamic descendants.
 
-The host dependency baseline now uses published `ic-query 0.11.0`. Existing
-typed Subnet-catalog consumers compile unchanged, and the joined NNS
-Subnet-topology report is available for the next observational host adapter.
+Open `0.100.46` advances the host dependency baseline to published
+`ic-query 0.11.1`. Existing typed Subnet-catalog consumers compile unchanged,
+and the joined NNS Subnet-topology report remains available for the next
+observational host adapter. The dependency-only slice changes no runtime,
+placement or stable authority.
 
-Next, close the direct-child lifecycle integration around interruption and
-recovery qualification, including proving terminal child operations retain
-the same normalized Registry and Directory invariants without adding
-full-tree fan-out. Retain the exact immediate parent and declared
-role-to-role spawn grant. Do not let managed application Canisters perform
-management effects or infer authorization from flat catalog presence.
+The same open patch qualifies stable restart after every durable Component
+Child phase from creation intent through terminal Directory synchronization.
+Exact retry preserves the original identity and phase evidence, while an
+independent sum of all persisted Registry rows and indexes exactly reproduces
+the terminal Component partition and root byte ledgers.
+
+Next, prove an incomplete or failed operation in one Component partition
+cannot block an unrelated Component while preserving exact shared root limits.
+Then implement durable post-order subtree removal against the same normalized
+Registry and Directory invariants without adding full-tree fan-out. Retain the
+exact immediate parent and declared role-to-role spawn grant. Do not let
+managed application Canisters perform management effects or infer
+authorization from flat catalog presence.
 
 ## Historical Release Detail
 

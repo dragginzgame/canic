@@ -4962,6 +4962,57 @@ mod tests {
         },
     };
 
+    fn restart_component_registry() -> RootComponentRegistryData {
+        let snapshot = RootComponentRegistryStore::export();
+        RootComponentRegistryStore::import(snapshot.clone());
+        assert_eq!(RootComponentRegistryStore::export(), snapshot);
+        snapshot
+    }
+
+    fn exact_registry_entry_bytes(data: &RootComponentRegistryData) -> u64 {
+        data.allocations
+            .iter()
+            .map(RootComponentRegistryStore::allocation_entry_bytes)
+            .chain(
+                data.partitions
+                    .iter()
+                    .map(RootComponentRegistryStore::partition_entry_bytes),
+            )
+            .chain(data.partitions.iter().map(|partition| {
+                RootComponentRegistryStore::principal_index_entry_bytes(
+                    partition.binding.canister_id,
+                    partition.binding.component,
+                )
+            }))
+            .chain(
+                data.children
+                    .iter()
+                    .map(RootComponentRegistryStore::child_entry_bytes),
+            )
+            .chain(data.children.iter().map(|child| {
+                RootComponentRegistryStore::principal_index_entry_bytes(
+                    child.canister_id,
+                    child.component,
+                )
+            }))
+            .chain(
+                data.child_traversals
+                    .iter()
+                    .map(RootComponentRegistryStore::child_traversal_entry_bytes),
+            )
+            .chain(
+                data.child_allocations
+                    .iter()
+                    .map(RootComponentRegistryStore::child_allocation_entry_bytes),
+            )
+            .chain(
+                data.parent_role_counts
+                    .iter()
+                    .map(RootComponentRegistryStore::parent_role_count_entry_bytes),
+            )
+            .sum()
+    }
+
     #[test]
     fn preparation_is_exact_idempotent_and_conflict_closed() {
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
@@ -5167,8 +5218,11 @@ mod tests {
             committed_descendants: 0,
             encoded_bytes: 0,
         };
+        let component_principal_index_bytes =
+            RootComponentRegistryStore::principal_index_entry_bytes(parent, component);
         for _ in 0..8 {
-            let encoded_bytes = RootComponentRegistryStore::partition_entry_bytes(&partition);
+            let encoded_bytes = RootComponentRegistryStore::partition_entry_bytes(&partition)
+                + component_principal_index_bytes;
             if partition.encoded_bytes == encoded_bytes {
                 break;
             }
@@ -5177,6 +5231,7 @@ mod tests {
         assert_eq!(
             partition.encoded_bytes,
             RootComponentRegistryStore::partition_entry_bytes(&partition)
+                + component_principal_index_bytes
         );
         let initial_encoded_bytes = partition.encoded_bytes;
         RootComponentRegistryStore::import(RootComponentRegistryData {
@@ -5334,11 +5389,11 @@ mod tests {
             RootComponentChildAllocationProgressView::CreationIntent(_)
         ));
 
-        let interrupted = RootComponentRegistryStore::export();
-        RootComponentRegistryStore::import(interrupted);
+        restart_component_registry();
         let canister = candid::Principal::from_slice(&[54; 29]);
         let created = ComponentRegistryOps::mark_child_created(component, [44; 32], canister)
             .expect("record created child");
+        restart_component_registry();
         let repeated_created =
             ComponentRegistryOps::mark_child_created(component, [44; 32], canister)
                 .expect("exact created child retry");
@@ -5447,8 +5502,7 @@ mod tests {
             )
             .is_err()
         );
-        let interrupted = RootComponentRegistryStore::export();
-        RootComponentRegistryStore::import(interrupted);
+        restart_component_registry();
         let renewed = ComponentRegistryOps::renew_child_install_intent(
             component,
             [44; 32],
@@ -5472,6 +5526,7 @@ mod tests {
 
         let installed = ComponentRegistryOps::mark_child_installed(component, [44; 32])
             .expect("mark child installed");
+        restart_component_registry();
         let installed_retry = ComponentRegistryOps::mark_child_installed(component, [44; 32])
             .expect("installed child retry");
         assert_eq!(installed, installed_retry);
@@ -5481,6 +5536,7 @@ mod tests {
         ));
         let verified = ComponentRegistryOps::mark_child_verified(component, [44; 32])
             .expect("mark child verified");
+        restart_component_registry();
         let verified_retry = ComponentRegistryOps::mark_child_verified(component, [44; 32])
             .expect("verified child retry");
         assert_eq!(verified, verified_retry);
@@ -5566,10 +5622,9 @@ mod tests {
                 ComponentLifecycleStatus::Prepared,
             )
         );
-        let durable = RootComponentRegistryStore::export();
+        let durable = restart_component_registry();
         assert_eq!(durable.children.len(), 1);
         assert_eq!(durable.child_traversals.len(), 1);
-        RootComponentRegistryStore::import(durable);
         let progressed_partition = ComponentRegistryOps::partition(component)
             .expect("partition read")
             .expect("partition");
@@ -5621,6 +5676,7 @@ mod tests {
             child_directory_authority_hash,
         )
         .expect("mark child Directory prepared");
+        restart_component_registry();
         let prepared_again = ComponentRegistryOps::mark_child_directory_prepared(
             component,
             [44; 32],
@@ -5655,6 +5711,7 @@ mod tests {
             child_directory_authority_hash,
         )
         .expect("mark child runtime activated");
+        restart_component_registry();
         let activated_again = ComponentRegistryOps::mark_child_runtime_activated(
             component,
             [44; 32],
@@ -5691,6 +5748,7 @@ mod tests {
             fleet_directory(&root),
         )
         .expect("activate child membership");
+        restart_component_registry();
         let membership_again = ComponentRegistryOps::activate_child_membership(
             component,
             [44; 32],
@@ -5766,6 +5824,7 @@ mod tests {
             active_membership.directory_authority_hash,
         )
         .expect("mark child membership synchronized");
+        let terminal_snapshot = restart_component_registry();
         let terminal_again = ComponentRegistryOps::mark_child_membership_synchronized(
             component,
             [44; 32],
@@ -5790,6 +5849,14 @@ mod tests {
             .expect("partition read")
             .expect("terminal active partition");
         assert_eq!(terminal_partition, membership.1);
+        let exact_terminal_bytes = exact_registry_entry_bytes(&terminal_snapshot);
+        assert_eq!(terminal_partition.encoded_bytes, exact_terminal_bytes);
+        assert_eq!(
+            ComponentRegistryOps::current()
+                .expect("terminal Registry status")
+                .encoded_bytes,
+            exact_terminal_bytes
+        );
         let complete_directory = ComponentRegistryOps::directory_page(
             component,
             &ComponentDirectoryPageSelection {
