@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.43` atomically activates each runtime-active child in its owning
+  Registry, converges its next current Directory and preserves exact retry
+  evidence across unrelated later partition progress.
+
 - `0.100.42` activates each Directory-prepared child only from its exact
   retained authority, reconciles uncertain calls by status and records the
   terminal root receipt after independent verification.

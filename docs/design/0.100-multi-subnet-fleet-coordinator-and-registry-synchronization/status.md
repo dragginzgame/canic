@@ -6,9 +6,9 @@ Date: 2026-07-29
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.41`.
-- Latest published release: `v0.100.41`.
-- Open patch draft: `0.100.42`; no package-version change has been authorized.
+- Workspace package version: `0.100.42`.
+- Latest published release: `v0.100.42`.
+- Open patch draft: `0.100.43`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -197,6 +197,9 @@ Registry slices replace the 0.99 root model.
 - [x] Activate a Directory-prepared registered Component Child only from its
   exact retained authority and commit a terminal root receipt after
   independent observation.
+- [x] Promote a runtime-active Component Child to active Registry membership,
+  advance its owning Component head and converge its following current
+  Directory with stable exact-retry evidence.
 
 ## Slice 5 — Recovery and Closeout
 
@@ -651,7 +654,7 @@ stable response evidence reports coverage at or beyond the required head. The
 bounded affected set prevents per-child fan-out across a
 10,000–20,000-descendant Component tree.
 
-Open 0.100.42 activates the Directory-prepared child only from its exact
+Released 0.100.42 activates the Directory-prepared child only from its exact
 retained install operation and Directory-authority hash. The shared runtime
 workflow queries first, calls only from `DirectoryPrepared`, reconciles an
 uncertain response through status and independently re-queries the immutable
@@ -659,11 +662,21 @@ active receipt. The root then revalidates the requesting parent and commits
 the fixed-size terminal runtime bit without changing the prepared partition,
 Registry accounting or membership.
 
+Open 0.100.43 atomically changes that runtime-active child's normalized row to
+`Active`, advances the owning Component partition through an O(1)
+descendant-status digest and freezes the exact active head, descendant digest,
+counts, encoded bytes and Directory hash in a child-specific membership
+receipt. One shared convergence path synchronizes the following current
+Directory, reconciles uncertainty through status, independently re-queries
+the target and commits the terminal bit only after parent revalidation.
+Exact retry reconstructs the original authority after later partition
+progress without calling unrelated descendants.
+
 ## Next Action
 
-Promote the runtime-active child to active Registry membership, derive its
-following current Component Directory revision, converge the child on that
-authority and commit the terminal membership receipt only after independent
-observation. Do not introduce nested Component declarations, let application
-Canisters call management effects directly or infer authorization from
-catalog presence alone.
+Close the direct-child lifecycle integration around root sealing, queries and
+same-release recovery qualification. Prove terminal child operations satisfy
+the maintained inventory and byte-ledger invariants without introducing
+full-tree Directory fan-out. Do not introduce nested Component declarations,
+let application Canisters call management effects directly or infer
+authorization from catalog presence alone.

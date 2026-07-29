@@ -64,7 +64,9 @@ use canic_core::{
             RootComponentChildCommitRequest, RootComponentChildCommitResponse,
             RootComponentChildCreationRequest, RootComponentChildDirectoryPreparationRequest,
             RootComponentChildDirectoryPreparationResponse, RootComponentChildInstallEvidence,
-            RootComponentChildInstallRequest, RootComponentChildRuntimeActivationRequest,
+            RootComponentChildInstallRequest, RootComponentChildMembershipActivationRequest,
+            RootComponentChildMembershipActivationResponse,
+            RootComponentChildRuntimeActivationRequest,
             RootComponentChildRuntimeActivationResponse, RootComponentCommitRequest,
             RootComponentCommitResponse, RootComponentCreationEvidence,
             RootComponentCreationRequest, RootComponentDirectoryPreparationRequest,
@@ -95,6 +97,7 @@ struct PreparedComponentRuntimePlan {
 }
 
 struct PreparedChildRuntimePlan {
+    root_binding: canic_core::ids::FleetSubnetRootBinding,
     allocation: RootComponentChildAllocationView,
     committed_partition: ComponentRegistryPartitionView,
     child_canister: candid::Principal,
@@ -690,6 +693,109 @@ pub async fn activate_child_runtime(
     })
 }
 
+/// Activate Registry membership and converge one runtime-active direct child.
+pub async fn activate_child_membership(
+    request: RootComponentChildMembershipActivationRequest,
+) -> Result<RootComponentChildMembershipActivationResponse, InternalError> {
+    let plan = prepared_child_runtime_plan(request.component, request.operation_id).await?;
+    if !committed_child_directory_receipt(&plan.allocation)?.runtime_activated {
+        return Err(InternalError::unavailable(
+            "Component Child membership activation requires its terminal runtime receipt",
+        ));
+    }
+    let observed = query_component_runtime_status(plan.child_canister).await?;
+    validate_active_target_runtime_status(
+        &observed,
+        &plan.child_binding,
+        &plan.directory_request,
+        plan.directory_authority_hash,
+    )?;
+
+    let (activated_allocation, active_partition) = ComponentRegistryOps::activate_child_membership(
+        request.component,
+        request.operation_id,
+        IcOps::now_nanos(),
+        plan.directory_request.authority.fleet.clone(),
+    )?;
+    validate_partition(
+        &plan.root_binding,
+        activated_allocation.release_set,
+        &ConfigOps::component_topology()?,
+        &active_partition,
+    )?;
+    let registered =
+        ComponentRegistryOps::registered_parent(request.component, plan.child_canister)?
+            .ok_or_else(|| {
+                InternalError::invariant(
+                    InternalErrorOrigin::Storage,
+                    "active Component Child membership has no registered principal",
+                )
+            })?;
+    if registered != (plan.child_binding.clone(), ComponentLifecycleStatus::Active) {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "active Component Child Registry row differs from its protected binding",
+        ));
+    }
+
+    let synchronization_request = ComponentRuntimeDirectorySynchronizationRequest {
+        operation_id: request.operation_id,
+        authority: ComponentRuntimeDirectoryAuthority {
+            fleet: plan.directory_request.authority.fleet.clone(),
+            component: component_directory_head(&active_partition),
+        },
+    };
+    let active_authority_hash =
+        ComponentRuntimeOps::directory_authority_hash(&synchronization_request.authority)?;
+    let membership = committed_child_directory_receipt(&activated_allocation)?
+        .membership
+        .as_ref()
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "active Component Child partition has no membership receipt",
+            )
+        })?;
+    if membership.registry
+        != (ComponentRegistryHead {
+            component: active_partition.binding.component,
+            revision: active_partition.revision,
+            content_hash: active_partition.content_hash,
+        })
+        || membership.descendant_content_hash != active_partition.descendant_content_hash
+        || membership.reserved_descendants != active_partition.reserved_descendants
+        || membership.committed_descendants != active_partition.committed_descendants
+        || membership.directory_authority_hash != active_authority_hash
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "active child membership receipt differs from its derived current Directory",
+        ));
+    }
+
+    let child = converge_active_membership_directory(
+        plan.child_canister,
+        &plan.child_binding,
+        &plan.directory_request,
+        plan.directory_authority_hash,
+        &synchronization_request,
+        active_authority_hash,
+    )
+    .await?;
+    validate_requesting_parent_still_active(request.component, &plan.requesting_parent_binding)?;
+    let allocation = ComponentRegistryOps::mark_child_membership_synchronized(
+        request.component,
+        request.operation_id,
+        active_authority_hash,
+    )?;
+    child_membership_response(
+        allocation,
+        plan.committed_partition,
+        active_partition,
+        child,
+    )
+}
+
 /// Atomically commit one verified top-level Component and its first Directory authority.
 pub async fn commit_allocation(
     request: RootComponentCommitRequest,
@@ -898,74 +1004,20 @@ async fn synchronize_active_membership(
     synchronization_request: ComponentRuntimeDirectorySynchronizationRequest,
     active_authority_hash: [u8; 32],
 ) -> Result<RootComponentMembershipActivationResponse, InternalError> {
-    let observed = query_component_runtime_status(plan.target_canister).await?;
-    let synchronized = if validate_target_membership_status(
-        &observed,
+    let target = converge_active_membership_directory(
+        plan.target_canister,
         &plan.target_binding,
         &plan.directory_request,
         plan.directory_authority_hash,
         &synchronization_request,
         active_authority_hash,
-    )? {
-        observed
-    } else {
-        match synchronize_target_component_directory(
-            plan.target_canister,
-            synchronization_request.clone(),
-        )
-        .await
-        {
-            Ok(status) => status,
-            Err(call_error) => {
-                let reconciled = query_component_runtime_status(plan.target_canister).await?;
-                if matches!(
-                    validate_target_membership_status(
-                        &reconciled,
-                        &plan.target_binding,
-                        &plan.directory_request,
-                        plan.directory_authority_hash,
-                        &synchronization_request,
-                        active_authority_hash,
-                    ),
-                    Ok(true)
-                ) {
-                    reconciled
-                } else {
-                    return Err(call_error);
-                }
-            }
-        }
-    };
-    if !validate_target_membership_status(
-        &synchronized,
-        &plan.target_binding,
-        &plan.directory_request,
-        plan.directory_authority_hash,
-        &synchronization_request,
-        active_authority_hash,
-    )? {
-        return Err(InternalError::unavailable(
-            "Component runtime has not retained its active membership Directory",
-        ));
-    }
-    let independently_observed = query_component_runtime_status(plan.target_canister).await?;
-    if !validate_target_membership_status(
-        &independently_observed,
-        &plan.target_binding,
-        &plan.directory_request,
-        plan.directory_authority_hash,
-        &synchronization_request,
-        active_authority_hash,
-    )? {
-        return Err(InternalError::unavailable(
-            "Component runtime did not converge on its active membership Directory",
-        ));
-    }
+    )
+    .await?;
     let allocation = ComponentRegistryOps::mark_membership_synchronized(
         synchronization_request.operation_id,
         active_authority_hash,
     )?;
-    membership_response(allocation, active_partition, independently_observed)
+    membership_response(allocation, active_partition, target)
 }
 
 /// Seal the complete current Component inventory before root activation preparation.
@@ -2178,6 +2230,7 @@ async fn prepared_child_runtime_plan(
         != managed_canister_principal(&owning_component_binding))
     .then_some(requesting_parent_binding.clone());
     Ok(PreparedChildRuntimePlan {
+        root_binding: root_authority.binding,
         allocation,
         committed_partition,
         child_canister: install.canister,
@@ -2343,6 +2396,71 @@ async fn activate_directory_prepared_runtime(
         binding,
         directory_request,
         directory_authority_hash,
+    )
+}
+
+async fn converge_active_membership_directory(
+    canister: candid::Principal,
+    binding: &ManagedCanisterBinding,
+    prepared_request: &ComponentRuntimeDirectoryPreparationRequest,
+    prepared_authority_hash: [u8; 32],
+    active_request: &ComponentRuntimeDirectorySynchronizationRequest,
+    active_authority_hash: [u8; 32],
+) -> Result<ComponentRuntimeStatusResponse, InternalError> {
+    let observed = query_component_runtime_status(canister).await?;
+    let synchronized = if validate_target_membership_status(
+        &observed,
+        binding,
+        prepared_request,
+        prepared_authority_hash,
+        active_request,
+        active_authority_hash,
+    )? {
+        observed
+    } else {
+        match synchronize_target_component_directory(canister, active_request.clone()).await {
+            Ok(status) => status,
+            Err(call_error) => {
+                let reconciled = query_component_runtime_status(canister).await?;
+                if matches!(
+                    validate_target_membership_status(
+                        &reconciled,
+                        binding,
+                        prepared_request,
+                        prepared_authority_hash,
+                        active_request,
+                        active_authority_hash,
+                    ),
+                    Ok(true)
+                ) {
+                    reconciled
+                } else {
+                    return Err(call_error);
+                }
+            }
+        }
+    };
+    if !validate_target_membership_status(
+        &synchronized,
+        binding,
+        prepared_request,
+        prepared_authority_hash,
+        active_request,
+        active_authority_hash,
+    )? {
+        return Err(InternalError::unavailable(
+            "Component runtime has not retained its active membership Directory",
+        ));
+    }
+
+    let independently_observed = query_component_runtime_status(canister).await?;
+    active_membership_target_status(
+        &independently_observed,
+        binding,
+        prepared_request,
+        prepared_authority_hash,
+        active_request,
+        active_authority_hash,
     )
 }
 
@@ -2675,19 +2793,48 @@ fn validate_target_membership_status(
         prepared_request,
         prepared_authority_hash,
     )?;
-    if status.authority.as_ref() == Some(&active_request.authority)
-        && status.authority_hash == Some(active_authority_hash)
-    {
-        return Ok(true);
+    active_member_directory_is_converged(
+        status,
+        binding,
+        &active_request.authority,
+        active_authority_hash,
+    )
+}
+
+fn active_membership_target_status(
+    status: &ComponentRuntimeStatusResponse,
+    binding: &ManagedCanisterBinding,
+    prepared_request: &ComponentRuntimeDirectoryPreparationRequest,
+    prepared_authority_hash: [u8; 32],
+    active_request: &ComponentRuntimeDirectorySynchronizationRequest,
+    active_authority_hash: [u8; 32],
+) -> Result<ComponentRuntimeStatusResponse, InternalError> {
+    if !validate_target_membership_status(
+        status,
+        binding,
+        prepared_request,
+        prepared_authority_hash,
+        active_request,
+        active_authority_hash,
+    )? {
+        return Err(InternalError::unavailable(
+            "Component runtime did not converge on its active membership Directory",
+        ));
     }
-    if status.authority.as_ref() == Some(&prepared_request.authority)
-        && status.authority_hash == Some(prepared_authority_hash)
-    {
-        return Ok(false);
-    }
-    Err(InternalError::conflict(
-        "Component runtime current Directory differs from prepared and active membership authority",
-    ))
+    let activation = status.activation.ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "active membership target lost its immutable activation receipt",
+        )
+    })?;
+    Ok(ComponentRuntimeStatusResponse {
+        operation_id: prepared_request.operation_id,
+        binding: binding.clone(),
+        phase: ComponentRuntimePhase::Active,
+        authority: Some(active_request.authority.clone()),
+        authority_hash: Some(active_authority_hash),
+        activation: Some(activation),
+    })
 }
 
 fn allocation_creation_and_canister(
@@ -3229,6 +3376,49 @@ fn membership_response(
         registry,
         directory,
         target,
+    })
+}
+
+fn child_membership_response(
+    allocation: RootComponentChildAllocationView,
+    committed_partition: ComponentRegistryPartitionView,
+    active_partition: ComponentRegistryPartitionView,
+    child: ComponentRuntimeStatusResponse,
+) -> Result<RootComponentChildMembershipActivationResponse, InternalError> {
+    let membership = committed_child_directory_receipt(&allocation)?
+        .membership
+        .as_ref()
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "Component Child allocation has no active membership receipt",
+            )
+        })?;
+    let active_head = ComponentRegistryHead {
+        component: active_partition.binding.component,
+        revision: active_partition.revision,
+        content_hash: active_partition.content_hash,
+    };
+    let registry_matches = membership.registry == active_head
+        && membership.descendant_content_hash == active_partition.descendant_content_hash
+        && membership.registry_encoded_bytes == active_partition.encoded_bytes
+        && membership.reserved_descendants == active_partition.reserved_descendants
+        && membership.committed_descendants == active_partition.committed_descendants;
+    let directory_matches =
+        membership.directory_synchronized_at_ns == active_partition.directory_synchronized_at_ns;
+    if !membership.directory_synchronized || !registry_matches || !directory_matches {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component Child membership receipt differs from active Registry authority",
+        ));
+    }
+    let directory = component_directory_head(&active_partition);
+    let registry = partition_response(active_partition);
+    Ok(RootComponentChildMembershipActivationResponse {
+        committed: child_commit_response(allocation, committed_partition)?,
+        registry,
+        directory,
+        child,
     })
 }
 

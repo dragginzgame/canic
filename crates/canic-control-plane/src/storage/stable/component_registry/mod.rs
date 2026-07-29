@@ -423,7 +423,25 @@ pub struct RootComponentChildCommitmentRecord {
     pub directory_authority_hash: [u8; 32],
     pub directory_prepared: bool,
     pub runtime_activated: bool,
-    pub membership: Option<RootComponentMembershipRecord>,
+    pub membership: Option<RootComponentChildMembershipRecord>,
+}
+
+///
+/// RootComponentChildMembershipRecord
+///
+/// Immutable active child head plus terminal current-Directory receipt.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentChildMembershipRecord {
+    pub registry: ComponentRegistryHead,
+    pub descendant_content_hash: [u8; 32],
+    pub registry_encoded_bytes: u64,
+    pub reserved_descendants: u32,
+    pub committed_descendants: u32,
+    pub directory_synchronized_at_ns: u64,
+    pub directory_authority_hash: [u8; 32],
+    pub directory_synchronized: bool,
 }
 
 ///
@@ -1208,6 +1226,103 @@ impl RootComponentRegistryStore {
                     ComponentRegistryEntryKey::partition(component),
                     ComponentRegistryEntryRecord::Partition(next_partition),
                 );
+            });
+            state.current = Some(next_meta);
+            cell.set(state);
+            Ok(())
+        })
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one compare-and-commit advances the child row, partition and operation receipt"
+    )]
+    pub(crate) fn activate_child_membership(
+        expected_meta: &RootComponentRegistryMetaRecord,
+        next_meta: RootComponentRegistryMetaRecord,
+        expected_partition: &ComponentRegistryPartitionRecord,
+        next_partition: ComponentRegistryPartitionRecord,
+        expected_record: &RootComponentChildAllocationRecord,
+        next_record: RootComponentChildAllocationRecord,
+        expected_child: &ComponentRegistryChildRecord,
+        next_child: ComponentRegistryChildRecord,
+    ) -> Result<(), RootComponentAllocationCommitError> {
+        let component = expected_record.component;
+        let operation_key =
+            ComponentRegistryEntryKey::child_allocation(component, expected_record.operation_id);
+        let partition_key = ComponentRegistryEntryKey::partition(component);
+        let child_key = ComponentRegistryEntryKey::child(component, expected_child.canister_id);
+        if !next_record.has_same_reservation(expected_record)
+            || next_partition.binding != expected_partition.binding
+            || next_partition.provisioning_origin != expected_partition.provisioning_origin
+            || next_partition.release_set != expected_partition.release_set
+            || next_partition.status != expected_partition.status
+            || next_partition.reserved_descendants != expected_partition.reserved_descendants
+            || next_partition.committed_descendants != expected_partition.committed_descendants
+            || expected_child.component != component
+            || next_child.component != component
+            || next_child.canister_id != expected_child.canister_id
+            || next_child.parent_canister_id != expected_child.parent_canister_id
+            || next_child.role != expected_child.role
+            || next_child.kind != expected_child.kind
+            || next_child.installed_artifact_hash != expected_child.installed_artifact_hash
+            || expected_child.status != ComponentLifecycleStatus::Prepared
+            || next_child.status != ComponentLifecycleStatus::Active
+        {
+            return Err(RootComponentAllocationCommitError::ConflictingChildEntry);
+        }
+
+        ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            let current_meta = state
+                .current
+                .as_ref()
+                .ok_or(RootComponentAllocationCommitError::Uninitialized)?;
+            if current_meta != expected_meta {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            let (current_partition, current_record, current_child) = COMPONENT_REGISTRY_ENTRIES
+                .with_borrow(|map| {
+                    let partition = map.get(&partition_key).and_then(|entry| match entry {
+                        ComponentRegistryEntryRecord::Partition(record) => Some(record),
+                        ComponentRegistryEntryRecord::Child(_)
+                        | ComponentRegistryEntryRecord::ChildTraversal(_)
+                        | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                    });
+                    let record = map.get(&operation_key).and_then(|entry| match entry {
+                        ComponentRegistryEntryRecord::ChildAllocation(record) => Some(record),
+                        ComponentRegistryEntryRecord::Partition(_)
+                        | ComponentRegistryEntryRecord::Child(_)
+                        | ComponentRegistryEntryRecord::ChildTraversal(_)
+                        | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                    });
+                    let child = map.get(&child_key).and_then(|entry| match entry {
+                        ComponentRegistryEntryRecord::Child(record) => Some(record),
+                        ComponentRegistryEntryRecord::Partition(_)
+                        | ComponentRegistryEntryRecord::ChildTraversal(_)
+                        | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                    });
+                    (partition, record, child)
+                });
+            if current_partition.as_ref() != Some(expected_partition)
+                || current_record.as_ref() != Some(expected_record)
+                || current_child.as_ref() != Some(expected_child)
+            {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+
+            COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
+                map.insert(
+                    operation_key,
+                    ComponentRegistryEntryRecord::ChildAllocation(next_record),
+                );
+                map.insert(
+                    partition_key,
+                    ComponentRegistryEntryRecord::Partition(next_partition),
+                );
+                map.insert(child_key, ComponentRegistryEntryRecord::Child(next_child));
             });
             state.current = Some(next_meta);
             cell.set(state);
