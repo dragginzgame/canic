@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.49`.
-- The latest published release is `v0.100.49` at
-  `10e085e012558c54b0e1b2e1b135b2e4543ae1d7`.
-- Open `0.100.50` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.50`.
+- The latest published release is `v0.100.50` at
+  `c32f57fa7f4726943ed7017e62c6439d7a89a614`.
+- Open `0.100.51` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -447,6 +447,10 @@ Historical detail is archived at:
   child subtree, rejects nonterminal descendant work, blocks new reservations
   below the target and preserves unrelated branch progress, restart-safe
   retry and exact Registry byte accounting without a Canister effect.
+- Released `0.100.50` advances that fence through bounded canonical descent,
+  persisting at most 64 edges per call until it selects one exact active
+  childless post-order leaf. Snapshot-convergent retry, restart and exact
+  Component/root Registry byte accounting require no Canister effect.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1842,7 +1846,7 @@ sibling branch and another Component partition remain available. The fence is
 charged exactly to its Component and root Registry byte ledgers and performs
 no Canister or Directory effect.
 
-Open `0.100.50` advances that fence through a bounded durable post-order
+Released `0.100.50` advances that fence through a bounded durable post-order
 cursor. Each controller call follows at most 64 canonical direct-child edges,
 validates every normalized row/index pair and persists either the exact
 midpoint or one childless leaf. A stale step expectation returns current
@@ -1850,11 +1854,18 @@ progress without advancing twice; a future expectation fails. Record-size
 changes update the exact Component/root Registry ledgers atomically. The
 selected leaf remains active and registered.
 
-Next, freeze the selected leaf's exact stop intent. Stop observation, deletion
-and Registry mutation must remain separate durable phases, preserve the exact
-immediate parent, reconcile uncertain management responses and never remove a
-parent while a child row remains. Do not let managed application Canisters
-perform management effects or infer authorization from flat catalog presence.
+Open `0.100.51` freezes that selected leaf, its exact immediate parent and the
+protected Fleet Subnet Root principal in a durable stop intent before any
+management call. The controller supplies its exact traversal observation;
+conflicts and either Registry byte ceiling fail before mutation, while exact
+retry and restart retain the same effect authority.
+
+Next, reconcile that intent against live controller and lifecycle status,
+issue or resume the root-owned stop effect and retain an independently
+observed stopped receipt. Deletion and Registry mutation remain separate later
+phases; a parent must never be removed while a child row remains. Managed
+application Canisters must not perform management effects or infer
+authorization from flat catalog presence.
 
 ## Historical Release Detail
 

@@ -386,7 +386,7 @@ fn root_component_child_reservation_is_response_idempotent() {
 }
 
 #[test]
-fn root_component_subtree_removal_fence_and_traversal_are_replay_safe() {
+fn root_component_subtree_removal_progress_is_replay_safe() {
     let begin = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
         .find(|entry| entry.endpoint == "canic_root_component_subtree_removal_begin")
@@ -395,6 +395,10 @@ fn root_component_subtree_removal_fence_and_traversal_are_replay_safe() {
         .iter()
         .find(|entry| entry.endpoint == "canic_root_component_subtree_removal_advance")
         .expect("root Component subtree-removal advance policy entry");
+    let stop_prepare = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_root_component_subtree_removal_stop_prepare")
+        .expect("root Component subtree-removal stop preparation policy entry");
     let status = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
         .find(|entry| entry.endpoint == "canic_root_component_subtree_removal_status")
@@ -414,6 +418,13 @@ fn root_component_subtree_removal_fence_and_traversal_are_replay_safe() {
         }
     );
     assert_eq!(advance.cost_class, CostClass::None);
+    assert_eq!(
+        stop_prepare.replay_policy,
+        ReplayPolicy::SnapshotConvergent {
+            command_kind: replay_command_kind("component_registry.prepare_subtree_stop.v1"),
+        }
+    );
+    assert_eq!(stop_prepare.cost_class, CostClass::None);
     assert_eq!(status.replay_policy, ReplayPolicy::QueryOrReadOnly);
     assert_eq!(status.endpoint_kind, EndpointKind::Query);
 }

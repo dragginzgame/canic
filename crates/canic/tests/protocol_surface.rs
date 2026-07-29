@@ -566,6 +566,11 @@ fn assert_component_registry_protocol_constants() {
             "canic_root_component_subtree_removal_advance",
         ),
         (
+            canic::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STOP_PREPARE,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STOP_PREPARE,
+            "canic_root_component_subtree_removal_stop_prepare",
+        ),
+        (
             canic::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STATUS,
             canic_core::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STATUS,
             "canic_root_component_subtree_removal_status",
@@ -769,6 +774,14 @@ fn assert_subtree_removal_guards(root: &str) {
         )
         .contains("canic_update(requires(caller::is_controller()))"),
         "root Component subtree-removal traversal must remain a controller-guarded update"
+    );
+    assert!(
+        preceding_attribute_context(
+            root,
+            "async fn canic_root_component_subtree_removal_stop_prepare("
+        )
+        .contains("canic_update(requires(caller::is_controller()))"),
+        "root Component subtree stop preparation must remain a controller-guarded update"
     );
     assert!(
         preceding_attribute_context(

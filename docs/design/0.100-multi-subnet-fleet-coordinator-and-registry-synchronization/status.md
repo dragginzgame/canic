@@ -6,10 +6,10 @@ Date: 2026-07-29
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.49`.
-- Latest published release: `v0.100.49` at
-  `10e085e012558c54b0e1b2e1b135b2e4543ae1d7`.
-- Open patch draft: `0.100.50`; no package-version change has been authorized.
+- Workspace package version: `0.100.50`.
+- Latest published release: `v0.100.50` at
+  `c32f57fa7f4726943ed7017e62c6439d7a89a614`.
+- Open patch draft: `0.100.51`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -184,7 +184,9 @@ Registry slices replace the 0.99 root model.
   blocking unrelated branches.
 - [x] Descend the fenced subtree in bounded canonical batches, persist the
   exact cursor and select only a childless post-order leaf.
-- [ ] Journal and execute each selected leaf transition, then return the
+- [x] Freeze the selected leaf, its immediate parent and exact root controller
+  in a durable stop intent before any management call.
+- [ ] Execute and reconcile each selected leaf transition, then return the
   cursor to its retained parent until the target is terminal.
 - [x] Distribute exact Directories directly from the root to a committed
   Component with target-local retention, independent observation and a
@@ -725,7 +727,7 @@ The stable Component-first entry and changed partition encoding are charged
 exactly to the Component and root Registry byte ledgers before mutation. This
 phase performs no stop, delete or Directory effect.
 
-Open 0.100.50 advances the fence through a bounded durable post-order cursor.
+Released 0.100.50 advances the fence through a bounded durable post-order cursor.
 Each controller call follows at most 64 canonical direct-child edges,
 validates every normalized row/index pair and persists either the exact
 midpoint or one childless leaf. Stale step expectations return current
@@ -733,11 +735,21 @@ progress without another mutation, while future expectations fail. Stable
 record-size changes update the exact Component and root Registry byte ledgers
 atomically. The selected leaf remains active and registered.
 
+Open 0.100.51 freezes the selected leaf's exact stop intent before any
+management call. The controller supplies the observed operation, traversal
+step, leaf and immediate parent; the root derives and durably records its own
+protected principal as sole controller. Exact retry and restart retain the
+same complete child row and controller, while conflicts and either Registry
+byte ceiling fail before mutation. No status, stop, delete, Directory or
+membership effect occurs in this phase.
+
 ## Next Action
 
-Freeze the selected leaf's exact stop intent. Stop observation, deletion and
-Registry mutation must remain separate durable phases, preserve the exact
-immediate parent, reconcile uncertain management responses and never remove a
-parent while a child row remains. Do not introduce nested Component
-declarations, let application Canisters call management effects directly or
-infer authorization from catalog presence alone.
+Reconcile the stop intent against live controller and lifecycle status, issue
+or resume the root-owned stop effect and retain an independently observed
+stopped receipt. Deletion and Registry mutation must remain later durable
+phases, preserve the exact immediate parent, reconcile uncertain management
+responses and never remove a parent while a child row remains. Do not
+introduce nested Component declarations, let application Canisters call
+management effects directly or infer authorization from catalog presence
+alone.

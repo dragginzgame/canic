@@ -17,6 +17,7 @@ use crate::{
         RootComponentMembershipRecord, RootComponentRegistryCommitError,
         RootComponentRegistryMetaRecord, RootComponentRegistryStore,
         RootComponentSubtreeRemovalProgressRecord, RootComponentSubtreeRemovalRecord,
+        RootComponentSubtreeStopEffectRecord,
     },
     view::component_registry::{
         ComponentDirectoryCanonicalCursor, ComponentDirectoryChildView,
@@ -29,7 +30,7 @@ use crate::{
         RootComponentInitialInventoryView, RootComponentInstallEffectView,
         RootComponentMembershipView, RootComponentRegistryView,
         RootComponentSubtreeRemovalNodeView, RootComponentSubtreeRemovalProgressView,
-        RootComponentSubtreeRemovalView,
+        RootComponentSubtreeRemovalView, RootComponentSubtreeStopEffectView,
     },
 };
 use candid::CandidType;
@@ -941,6 +942,13 @@ impl ComponentRegistryOps {
             return Ok(None);
         };
         validate_subtree_removal_record(&record)?;
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component subtree-removal operation has no root Registry authority",
+            )
+        })?;
+        validate_subtree_removal_root(&record, &current.root)?;
         let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
             InternalError::invariant(
                 canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
@@ -963,9 +971,13 @@ impl ComponentRegistryOps {
         reserved_against_registry: ComponentRegistryHead,
         maximum_component_registry_bytes: u64,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
         if let Some(existing) = RootComponentRegistryStore::subtree_removal(component, operation_id)
         {
             validate_subtree_removal_record(&existing)?;
+            validate_subtree_removal_root(&existing, &current.root)?;
             let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
                 InternalError::invariant(
                     canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
@@ -985,9 +997,6 @@ impl ComponentRegistryOps {
             };
         }
 
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
         let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
             InternalError::unavailable("Component Registry partition has not been committed")
         })?;
@@ -1102,6 +1111,7 @@ impl ComponentRegistryOps {
         let current = RootComponentRegistryStore::current().ok_or_else(|| {
             InternalError::unavailable("root Component Registry authority has not been prepared")
         })?;
+        validate_subtree_removal_root(&record, &current.root)?;
         let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
             InternalError::unavailable("Component Registry partition has not been committed")
         })?;
@@ -1118,6 +1128,7 @@ impl ComponentRegistryOps {
         if matches!(
             &record.progress,
             RootComponentSubtreeRemovalProgressRecord::LeafSelected { .. }
+                | RootComponentSubtreeRemovalProgressRecord::StopIntent(_)
         ) {
             return Ok(subtree_removal_record_to_view(record));
         }
@@ -1127,7 +1138,8 @@ impl ComponentRegistryOps {
             let cursor = match &next_record.progress {
                 RootComponentSubtreeRemovalProgressRecord::Fenced => next_record.target.clone(),
                 RootComponentSubtreeRemovalProgressRecord::Traversing { cursor } => cursor.clone(),
-                RootComponentSubtreeRemovalProgressRecord::LeafSelected { .. } => break,
+                RootComponentSubtreeRemovalProgressRecord::LeafSelected { .. }
+                | RootComponentSubtreeRemovalProgressRecord::StopIntent(_) => break,
             };
             next_record.progress = match first_registered_child(&partition, cursor.canister_id)? {
                 Some(child) => {
@@ -1143,8 +1155,99 @@ impl ComponentRegistryOps {
                 })?;
         }
         validate_subtree_removal_record(&next_record)?;
+        validate_subtree_removal_root(&next_record, &current.root)?;
         validate_subtree_removal_progress(&partition, &next_record)?;
-        let (next_partition, next_meta) = subtree_progress_state(
+        let (next_partition, next_meta) = subtree_removal_progress_state(
+            &current,
+            &partition,
+            &record,
+            &next_record,
+            maximum_component_registry_bytes,
+        )?;
+        RootComponentRegistryStore::replace_subtree_removal(
+            &current,
+            next_meta,
+            &partition,
+            next_partition,
+            &record,
+            next_record.clone(),
+        )
+        .map_err(map_allocation_commit_error)?;
+        Ok(subtree_removal_record_to_view(next_record))
+    }
+
+    pub(crate) fn prepare_subtree_leaf_stop(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        expected_traversal_steps: u32,
+        expected_leaf_canister_id: Principal,
+        expected_leaf_parent_canister_id: Principal,
+        maximum_component_registry_bytes: u64,
+    ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
+        let record = RootComponentRegistryStore::subtree_removal(component, operation_id)
+            .ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component subtree-removal operation has not been durably fenced",
+                )
+            })?;
+        validate_subtree_removal_record(&record)?;
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        validate_subtree_removal_root(&record, &current.root)?;
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        validate_partition_record(&partition)?;
+        validate_subtree_removal_progress(&partition, &record)?;
+
+        let leaf = match &record.progress {
+            RootComponentSubtreeRemovalProgressRecord::LeafSelected { leaf } => leaf,
+            RootComponentSubtreeRemovalProgressRecord::StopIntent(effect) => {
+                if record.traversal_steps == expected_traversal_steps
+                    && effect.leaf.canister_id == expected_leaf_canister_id
+                    && effect.leaf.parent_canister_id == expected_leaf_parent_canister_id
+                    && effect.controller == current.root.fleet_subnet_root
+                {
+                    return Ok(subtree_removal_record_to_view(record));
+                }
+                return Err(InternalError::conflict(
+                    "Component subtree stop preparation differs from durable intent",
+                ));
+            }
+            RootComponentSubtreeRemovalProgressRecord::Fenced
+            | RootComponentSubtreeRemovalProgressRecord::Traversing { .. } => {
+                return Err(InternalError::unavailable(
+                    "Component subtree removal has not selected a leaf to stop",
+                ));
+            }
+        };
+        if record.traversal_steps != expected_traversal_steps
+            || leaf.canister_id != expected_leaf_canister_id
+            || leaf.parent_canister_id != expected_leaf_parent_canister_id
+        {
+            return Err(InternalError::conflict(
+                "Component subtree stop preparation differs from the selected leaf",
+            ));
+        }
+        if current.root.fleet_subnet_root == Principal::anonymous() {
+            return Err(InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component subtree stop preparation has anonymous root authority",
+            ));
+        }
+
+        let mut next_record = record.clone();
+        next_record.progress = RootComponentSubtreeRemovalProgressRecord::StopIntent(
+            RootComponentSubtreeStopEffectRecord {
+                leaf: leaf.clone(),
+                controller: current.root.fleet_subnet_root,
+            },
+        );
+        validate_subtree_removal_record(&next_record)?;
+        validate_subtree_removal_root(&next_record, &current.root)?;
+        validate_subtree_removal_progress(&partition, &next_record)?;
+        let (next_partition, next_meta) = subtree_removal_progress_state(
             &current,
             &partition,
             &record,
@@ -1253,6 +1356,7 @@ impl ComponentRegistryOps {
             })?;
         for removal in RootComponentRegistryStore::subtree_removals(record.component) {
             validate_subtree_removal_record(&removal)?;
+            validate_subtree_removal_root(&removal, &current.root)?;
             if canister_is_in_subtree(
                 &partition,
                 record.parent_canister_id,
@@ -3026,6 +3130,14 @@ fn subtree_removal_record_to_view(
                     leaf: subtree_removal_node_view(leaf),
                 }
             }
+            RootComponentSubtreeRemovalProgressRecord::StopIntent(effect) => {
+                RootComponentSubtreeRemovalProgressView::StopIntent(
+                    RootComponentSubtreeStopEffectView {
+                        leaf: subtree_removal_node_view(effect.leaf),
+                        controller: effect.controller,
+                    },
+                )
+            }
         },
     }
 }
@@ -3187,7 +3299,7 @@ fn subtree_fence_partition(
     ))
 }
 
-fn subtree_progress_state(
+fn subtree_removal_progress_state(
     current: &RootComponentRegistryMetaRecord,
     partition: &ComponentRegistryPartitionRecord,
     current_record: &RootComponentSubtreeRemovalRecord,
@@ -3240,7 +3352,7 @@ fn subtree_progress_state(
         if next_partition.encoded_bytes == next_component_bytes {
             if next_component_bytes > maximum_component_registry_bytes {
                 return Err(InternalError::resource_exhausted(format!(
-                    "Component subtree traversal requires {next_component_bytes} bytes, exceeding protected Component limit {maximum_component_registry_bytes}"
+                    "Component subtree-removal progress requires {next_component_bytes} bytes, exceeding protected Component limit {maximum_component_registry_bytes}"
                 )));
             }
             let next_root_bytes =
@@ -3251,7 +3363,7 @@ fn subtree_progress_state(
                     })?;
             if next_root_bytes > current.root.limits.maximum_registry_bytes {
                 return Err(InternalError::resource_exhausted(format!(
-                    "Component subtree traversal requires {next_root_bytes} root Registry bytes, exceeding protected limit {}",
+                    "Component subtree-removal progress requires {next_root_bytes} root Registry bytes, exceeding protected limit {}",
                     current.root.limits.maximum_registry_bytes
                 )));
             }
@@ -3263,7 +3375,7 @@ fn subtree_progress_state(
     }
     Err(InternalError::invariant(
         canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-        "Component subtree traversal byte accounting did not converge",
+        "Component subtree-removal progress byte accounting did not converge",
     ))
 }
 
@@ -5012,6 +5124,11 @@ fn validate_subtree_removal_record(
         RootComponentSubtreeRemovalProgressRecord::LeafSelected { leaf } => {
             record.traversal_steps > 0 && valid_subtree_removal_node(record.component, leaf)
         }
+        RootComponentSubtreeRemovalProgressRecord::StopIntent(effect) => {
+            record.traversal_steps > 0
+                && effect.controller != Principal::anonymous()
+                && valid_subtree_removal_node(record.component, &effect.leaf)
+        }
     };
     if record.operation_id == [0; 32]
         || record.component != record.target.component
@@ -5041,6 +5158,23 @@ fn valid_subtree_removal_node(
         && node.status == ComponentLifecycleStatus::Active
 }
 
+fn validate_subtree_removal_root(
+    record: &RootComponentSubtreeRemovalRecord,
+    root: &FleetSubnetRootBinding,
+) -> Result<(), InternalError> {
+    if matches!(
+        &record.progress,
+        RootComponentSubtreeRemovalProgressRecord::StopIntent(effect)
+            if effect.controller != root.fleet_subnet_root
+    ) {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component subtree stop intent differs from protected root authority",
+        ));
+    }
+    Ok(())
+}
+
 fn validate_subtree_removal_progress(
     partition: &ComponentRegistryPartitionRecord,
     record: &RootComponentSubtreeRemovalRecord,
@@ -5066,6 +5200,7 @@ fn validate_subtree_removal_progress(
         RootComponentSubtreeRemovalProgressRecord::Fenced => None,
         RootComponentSubtreeRemovalProgressRecord::Traversing { cursor } => Some((cursor, false)),
         RootComponentSubtreeRemovalProgressRecord::LeafSelected { leaf } => Some((leaf, true)),
+        RootComponentSubtreeRemovalProgressRecord::StopIntent(effect) => Some((&effect.leaf, true)),
     };
     let Some((node, must_be_leaf)) = node else {
         return Ok(());
@@ -6034,6 +6169,18 @@ mod tests {
             fenced
         );
 
+        let before_premature_stop = RootComponentRegistryStore::export();
+        ComponentRegistryOps::prepare_subtree_leaf_stop(
+            fixture.component,
+            [70; 32],
+            0,
+            fixture.target.canister_id,
+            fixture.target.parent_canister_id,
+            16_777_216,
+        )
+        .expect_err("stop preparation requires one selected childless leaf");
+        assert_eq!(RootComponentRegistryStore::export(), before_premature_stop);
+
         let before_traversal = RootComponentRegistryStore::export();
         let before_traversal_partition = ComponentRegistryOps::partition(fixture.component)
             .expect("partition read")
@@ -6073,11 +6220,126 @@ mod tests {
             selected
         );
         assert_eq!(RootComponentRegistryStore::export(), selected_state);
+
+        let selected_partition = ComponentRegistryOps::partition(fixture.component)
+            .expect("partition read")
+            .expect("active partition");
+        ComponentRegistryOps::prepare_subtree_leaf_stop(
+            fixture.component,
+            [70; 32],
+            selected.traversal_steps,
+            fixture.descendant.canister_id,
+            fixture.target.canister_id,
+            selected_partition.encoded_bytes,
+        )
+        .expect_err("larger stop intent must fit before mutation");
+        assert_eq!(RootComponentRegistryStore::export(), selected_state);
+
+        for (steps, leaf, parent) in [
+            (
+                selected.traversal_steps + 1,
+                fixture.descendant.canister_id,
+                fixture.target.canister_id,
+            ),
+            (
+                selected.traversal_steps,
+                fixture.target.canister_id,
+                fixture.target.parent_canister_id,
+            ),
+            (
+                selected.traversal_steps,
+                fixture.descendant.canister_id,
+                fixture.target.parent_canister_id,
+            ),
+        ] {
+            ComponentRegistryOps::prepare_subtree_leaf_stop(
+                fixture.component,
+                [70; 32],
+                steps,
+                leaf,
+                parent,
+                16_777_216,
+            )
+            .expect_err("stop preparation must bind the exact selected leaf observation");
+            assert_eq!(RootComponentRegistryStore::export(), selected_state);
+        }
+
+        let prepared = ComponentRegistryOps::prepare_subtree_leaf_stop(
+            fixture.component,
+            [70; 32],
+            selected.traversal_steps,
+            fixture.descendant.canister_id,
+            fixture.target.canister_id,
+            16_777_216,
+        )
+        .expect("freeze exact leaf stop intent");
+        assert!(matches!(
+            &prepared.progress,
+            RootComponentSubtreeRemovalProgressView::StopIntent(effect)
+                if effect.leaf.canister_id == fixture.descendant.canister_id
+                    && effect.leaf.parent_canister_id == fixture.target.canister_id
+                    && effect.leaf.installed_artifact_hash
+                        == fixture.descendant.installed_artifact_hash
+                    && effect.controller == fixture.partition.binding.fleet_subnet_root
+        ));
+        let prepared_state = restart_component_registry();
+        let mut corrupted_controller = prepared_state.clone();
+        let RootComponentSubtreeRemovalProgressRecord::StopIntent(effect) =
+            &mut corrupted_controller.subtree_removals[0].progress
+        else {
+            panic!("durable stop intent");
+        };
+        effect.controller = Principal::from_slice(&[99; 29]);
+        RootComponentRegistryStore::import(corrupted_controller);
+        ComponentRegistryOps::subtree_removal(fixture.component, [70; 32])
+            .expect_err("stop intent must retain the exact protected root controller");
+        RootComponentRegistryStore::import(prepared_state.clone());
+        ComponentRegistryOps::prepare_subtree_leaf_stop(
+            fixture.component,
+            [70; 32],
+            selected.traversal_steps,
+            fixture.descendant.canister_id,
+            fixture.target.parent_canister_id,
+            16_777_216,
+        )
+        .expect_err("durable stop intent rejects conflicting parent observation");
+        assert_eq!(RootComponentRegistryStore::export(), prepared_state);
+        assert_eq!(
+            ComponentRegistryOps::prepare_subtree_leaf_stop(
+                fixture.component,
+                [70; 32],
+                selected.traversal_steps,
+                fixture.descendant.canister_id,
+                fixture.target.canister_id,
+                16_777_216,
+            )
+            .expect("exact stop preparation retry"),
+            prepared
+        );
+        assert_eq!(RootComponentRegistryStore::export(), prepared_state);
+        assert_eq!(
+            ComponentRegistryOps::advance_subtree_removal(
+                fixture.component,
+                [70; 32],
+                selected.traversal_steps,
+                16_777_216,
+            )
+            .expect("traversal retry converges on stop intent"),
+            prepared
+        );
+        assert_eq!(RootComponentRegistryStore::export(), prepared_state);
         assert_eq!(
             ComponentRegistryOps::current()
                 .expect("Registry status")
                 .encoded_bytes,
-            exact_registry_entry_bytes(&selected_state)
+            exact_registry_entry_bytes(&prepared_state)
+        );
+        assert_eq!(
+            ComponentRegistryOps::partition(fixture.component)
+                .expect("partition read")
+                .expect("active partition")
+                .encoded_bytes,
+            exact_component_registry_entry_bytes(&prepared_state, fixture.component)
         );
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }

@@ -146,6 +146,21 @@ pub struct RootComponentSubtreeRemovalAdvanceRequest {
 }
 
 ///
+/// RootComponentSubtreeRemovalStopPreparationRequest
+///
+/// Controller command freezing the exact selected leaf and root stop authority.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeRemovalStopPreparationRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub expected_traversal_steps: u32,
+    pub expected_leaf_canister_id: Principal,
+    pub expected_leaf_parent_canister_id: Principal,
+}
+
+///
 /// RootComponentSubtreeRemovalStatusRequest
 ///
 /// Controller lookup key for one durable child-subtree removal operation.
@@ -334,6 +349,7 @@ pub enum RootComponentSubtreeRemovalPhase {
     Fenced,
     Traversing(RootComponentSubtreeRemovalNode),
     LeafSelected(RootComponentSubtreeRemovalNode),
+    StopIntent(RootComponentSubtreeRemovalStopIntent),
 }
 
 ///
@@ -350,6 +366,18 @@ pub struct RootComponentSubtreeRemovalNode {
     pub kind: ComponentChildKind,
     pub installed_artifact_hash: [u8; 32],
     pub status: ComponentLifecycleStatus,
+}
+
+///
+/// RootComponentSubtreeRemovalStopIntent
+///
+/// Exact registered leaf and sole root controller frozen before a stop call.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeRemovalStopIntent {
+    pub leaf: RootComponentSubtreeRemovalNode,
+    pub controller: Principal,
 }
 
 ///
@@ -692,7 +720,7 @@ pub struct RootComponentChildAllocationResponse {
 ///
 /// RootComponentSubtreeRemovalResponse
 ///
-/// Exact durable subtree fence returned identically for operation retry.
+/// Current durable snapshot of one monotonic subtree-removal operation.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -1115,6 +1143,13 @@ mod tests {
             component,
             expected_traversal_steps: 1,
         };
+        let stop_request = RootComponentSubtreeRemovalStopPreparationRequest {
+            operation_id: request.operation_id,
+            component,
+            expected_traversal_steps: 2,
+            expected_leaf_canister_id: Principal::from_slice(&[46; 29]),
+            expected_leaf_parent_canister_id: request.target_canister_id,
+        };
         let response = RootComponentSubtreeRemovalResponse {
             operation_id: request.operation_id,
             component,
@@ -1124,14 +1159,17 @@ mod tests {
             target_status: ComponentLifecycleStatus::Active,
             reserved_against_registry: registry,
             traversal_steps: 2,
-            phase: RootComponentSubtreeRemovalPhase::LeafSelected(
-                RootComponentSubtreeRemovalNode {
-                    canister_id: Principal::from_slice(&[46; 29]),
-                    parent_canister_id: request.target_canister_id,
-                    role: CanisterRole::new("project_ledger"),
-                    kind: ComponentChildKind::Singleton,
-                    installed_artifact_hash: [47; 32],
-                    status: ComponentLifecycleStatus::Active,
+            phase: RootComponentSubtreeRemovalPhase::StopIntent(
+                RootComponentSubtreeRemovalStopIntent {
+                    controller: Principal::from_slice(&[48; 29]),
+                    leaf: RootComponentSubtreeRemovalNode {
+                        canister_id: Principal::from_slice(&[46; 29]),
+                        parent_canister_id: request.target_canister_id,
+                        role: CanisterRole::new("project_ledger"),
+                        kind: ComponentChildKind::Singleton,
+                        installed_artifact_hash: [47; 32],
+                        status: ComponentLifecycleStatus::Active,
+                    },
                 },
             ),
         };
@@ -1139,6 +1177,8 @@ mod tests {
         let request_bytes = candid::encode_one(&request).expect("encode subtree removal request");
         let advance_bytes =
             candid::encode_one(advance_request).expect("encode subtree removal advance request");
+        let stop_bytes =
+            candid::encode_one(stop_request).expect("encode subtree removal stop request");
         let status_bytes =
             candid::encode_one(status_request).expect("encode subtree removal status request");
         let response_bytes =
@@ -1153,6 +1193,11 @@ mod tests {
             candid::decode_one::<RootComponentSubtreeRemovalAdvanceRequest>(&advance_bytes)
                 .expect("decode subtree removal advance request"),
             advance_request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentSubtreeRemovalStopPreparationRequest>(&stop_bytes)
+                .expect("decode subtree removal stop request"),
+            stop_request
         );
         assert_eq!(
             candid::decode_one::<RootComponentSubtreeRemovalStatusRequest>(&status_bytes)
