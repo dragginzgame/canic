@@ -718,6 +718,38 @@ impl ComponentRegistryOps {
         exact_committed_partition(&record, commitment).map(partition_record_to_view)
     }
 
+    pub(crate) fn committed_child_authority(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        fleet_directory: &FleetDirectorySnapshot,
+    ) -> Result<
+        (
+            RootComponentChildAllocationView,
+            ComponentRegistryPartitionView,
+        ),
+        InternalError,
+    > {
+        let record = RootComponentRegistryStore::child_allocation(component, operation_id)
+            .ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component Child allocation operation has not been reserved",
+                )
+            })?;
+        let RootComponentChildAllocationProgressRecord::Committed { commitment, .. } =
+            &record.progress
+        else {
+            return Err(InternalError::conflict(
+                "Component Child allocation has no committed Registry authority",
+            ));
+        };
+        let committed = exact_committed_child_partition(&record, commitment)?;
+        validate_child_directory_authority_hash(&committed, fleet_directory, commitment)?;
+        Ok((
+            child_allocation_record_to_view(record),
+            partition_record_to_view(committed),
+        ))
+    }
+
     pub(crate) fn component_for_principal(
         canister: Principal,
     ) -> Option<canic_core::ids::ComponentInstanceId> {
@@ -1461,6 +1493,75 @@ impl ComponentRegistryOps {
             child_allocation_record_to_view(next_record),
             partition_record_to_view(next_partition),
         ))
+    }
+
+    pub(crate) fn mark_child_directory_prepared(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        expected_authority_hash: [u8; 32],
+    ) -> Result<RootComponentChildAllocationView, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        validate_partition_record(&partition)?;
+        let record = RootComponentRegistryStore::child_allocation(component, operation_id)
+            .ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component Child allocation operation has not been reserved",
+                )
+            })?;
+        let RootComponentChildAllocationProgressRecord::Committed {
+            creation,
+            canister,
+            installation,
+            commitment,
+        } = &record.progress
+        else {
+            return Err(InternalError::conflict(
+                "Component Child allocation is not committed for Directory preparation",
+            ));
+        };
+        let _committed = exact_committed_child_partition(&record, commitment)?;
+        if commitment.directory_authority_hash != expected_authority_hash {
+            return Err(InternalError::conflict(
+                "Component Child Directory authority differs from its committed root receipt",
+            ));
+        }
+        if commitment.directory_prepared {
+            return Ok(child_allocation_record_to_view(record));
+        }
+
+        let mut next_commitment = commitment.clone();
+        next_commitment.directory_prepared = true;
+        let mut next_record = record.clone();
+        next_record.progress = RootComponentChildAllocationProgressRecord::Committed {
+            creation: creation.clone(),
+            canister: *canister,
+            installation: installation.clone(),
+            commitment: next_commitment,
+        };
+        validate_charged_child_record_size(&next_record, installation.charged_entry_bytes)?;
+        if RootComponentRegistryStore::child_allocation_entry_bytes(&next_record)
+            != RootComponentRegistryStore::child_allocation_entry_bytes(&record)
+        {
+            return Err(InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component Child Directory receipt changed its precharged stable footprint",
+            ));
+        }
+        RootComponentRegistryStore::replace_child_allocation(
+            &current,
+            current.clone(),
+            &partition,
+            partition.clone(),
+            &record,
+            next_record.clone(),
+        )
+        .map_err(map_allocation_commit_error)?;
+        Ok(child_allocation_record_to_view(next_record))
     }
 
     pub(crate) fn commit_verified(
@@ -4628,6 +4729,7 @@ mod tests {
         assert_eq!(commitment.reserved_descendants, 0);
         assert_eq!(commitment.committed_descendants, 1);
         assert_ne!(commitment.directory_authority_hash, [0; 32]);
+        let child_directory_authority_hash = commitment.directory_authority_hash;
         assert_eq!(installation.binding, install_plan.binding);
         assert_eq!(committed.1, committed_partition);
         let committed_status = ComponentRegistryOps::current().expect("Registry status");
@@ -4689,6 +4791,45 @@ mod tests {
         )
         .expect("reservation retry preserves install progress");
         assert_eq!(retried_reservation, committed.0);
+        let before_directory_receipt = ComponentRegistryOps::current().expect("Registry status");
+        let before_directory_partition = ComponentRegistryOps::partition(component)
+            .expect("partition read")
+            .expect("partition");
+        let prepared = ComponentRegistryOps::mark_child_directory_prepared(
+            component,
+            [44; 32],
+            child_directory_authority_hash,
+        )
+        .expect("mark child Directory prepared");
+        let prepared_again = ComponentRegistryOps::mark_child_directory_prepared(
+            component,
+            [44; 32],
+            child_directory_authority_hash,
+        )
+        .expect("repeat child Directory preparation receipt");
+        assert_eq!(prepared_again, prepared);
+        assert!(matches!(
+            prepared.progress,
+            RootComponentChildAllocationProgressView::Committed {
+                commitment: RootComponentChildCommitmentView {
+                    directory_prepared: true,
+                    runtime_activated: false,
+                    membership: None,
+                    ..
+                },
+                ..
+            }
+        ));
+        assert_eq!(
+            ComponentRegistryOps::current().expect("Registry status"),
+            before_directory_receipt
+        );
+        assert_eq!(
+            ComponentRegistryOps::partition(component)
+                .expect("partition read")
+                .expect("partition"),
+            before_directory_partition
+        );
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
 

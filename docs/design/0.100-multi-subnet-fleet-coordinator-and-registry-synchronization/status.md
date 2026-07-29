@@ -6,9 +6,9 @@ Date: 2026-07-29
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.39`.
-- Latest published release: `v0.100.39`.
-- Open patch draft: `0.100.40`; no package-version change has been authorized.
+- Workspace package version: `0.100.40`.
+- Latest published release: `v0.100.40`.
+- Open patch draft: `0.100.41`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -160,7 +160,7 @@ Registry slices replace the 0.99 root model.
   at arbitrary depth.
 - [x] Implement Store-backed child installation and independent binding
   verification at arbitrary depth.
-- [ ] Implement child Registry commitment at arbitrary depth.
+- [x] Implement child Registry commitment at arbitrary depth.
 - [ ] Make the Fleet Subnet Root the required lifecycle controller and retain
   authoritative idempotent receipts.
 - [ ] Resolve lifecycle artifacts only through the active release set.
@@ -172,7 +172,7 @@ Registry slices replace the 0.99 root model.
   terminal operation receipt.
 - [x] Store exact operation-keyed child reservations and parent-role counts in
   the Component-first Registry collection.
-- [ ] Commit normalized child rows with principal and parent/role traversal
+- [x] Commit normalized child rows with principal and parent/role traversal
   indexes.
 - [x] Derive the first ownership-preserving Component Directory head from its
   exact committed Registry partition.
@@ -192,7 +192,7 @@ Registry slices replace the 0.99 root model.
 - [x] Promote an exactly runtime-active Component Registry partition to
   `Active`, derive its next Directory revision and synchronize that current
   authority to the target before root activation.
-- [ ] Apply the same direct distribution boundary to registered Component
+- [x] Apply the same direct distribution boundary to registered Component
   Children as descendant creation lands.
 
 ## Slice 5 — Recovery and Closeout
@@ -629,7 +629,7 @@ index. Lost-response reconciliation adopts exact observed code, retries only
 an empty target under a renewed intent and independently verifies the module,
 sole-root controller and retained binding before `Verified`.
 
-Open 0.100.40 atomically commits that verified child as one normalized
+Released 0.100.40 atomically commits that verified child as one normalized
 `Prepared` member. The same mutation inserts its principal and parent/role
 traversal indexes, transfers one reserved descendant to committed, replaces
 the maximum install precharge with exact terminal bytes and advances the
@@ -638,13 +638,22 @@ descendant-content digest makes head validation O(1) at the 10,000–20,000
 descendant scale while binding every committed mutation. Exact parent retry
 returns the original commitment after interruption or later head progress.
 
+Open 0.100.41 distributes that exact committed Directory authority to the
+`Prepared` child, independently re-queries its retained receipt, synchronizes
+the owning top-level Component and the distinct immediate parent when present,
+then revalidates the parent and commits the terminal root bit last. Existing
+active members may advance monotonically over irrelevant intermediate
+revisions while their immutable activation Directories remain unchanged;
+stable response evidence reports coverage at or beyond the required head. The
+bounded affected set prevents per-child fan-out across a
+10,000–20,000-descendant Component tree.
+
 ## Next Action
 
-Distribute the committed child revision's exact Directory authority to the
-`Prepared` child and independently verify its retained receipt before any
-runtime activation. Converge affected already-active Component members on the
-same current head without changing their immutable activation Directories.
-Keep activation and active-membership promotion as later separately observed
-transitions. Do not introduce nested Component declarations, let application
-Canisters call management effects directly or infer authorization from
-catalog presence alone.
+Activate the Directory-prepared child runtime only from its exact retained
+authority, reconcile an uncertain response through target status and commit a
+terminal root receipt only after an independent re-query. Keep child
+active-membership promotion and its following current-Directory convergence
+as a later separate transition. Do not introduce nested Component
+declarations, let application Canisters call management effects directly or
+infer authorization from catalog presence alone.

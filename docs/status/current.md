@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.39`.
-- The latest published release is `v0.100.39` at
-  `27b7db1cd0185730b943e1a29f3c36e27cd10a17`.
-- Open `0.100.40` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.40`.
+- The latest published release is `v0.100.40` at
+  `1b41ccbf0701a35016439d2ac511cbcc21c17d90`.
+- Open `0.100.41` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -381,7 +381,7 @@ Historical detail is archived at:
   Exact observed installation is adopted after interruption, while an empty
   target may retry only under a renewed settlement. Independent verification
   requires the exact module, sole-root controller and retained child binding.
-- Open `0.100.40` atomically commits that verified child as a normalized
+- Released `0.100.40` atomically commits that verified child as a normalized
   `Prepared` Registry member, inserts its principal and parent/role traversal
   indexes, transfers reserved capacity to committed and replaces the maximum
   install precharge with exact bytes. The active Component head and next
@@ -389,6 +389,16 @@ Historical detail is archived at:
   digest suitable for 10,000–20,000 descendants. Exact parent retry preserves
   the original response after interruption or later head progress; Directory
   distribution and runtime activation remain separate.
+- Open `0.100.41` distributes that committed revision to the `Prepared`
+  child, independently verifies its target-local receipt and converges the
+  bounded affected active set: the owning top-level Component plus the exact
+  immediate parent when distinct. Active members may skip irrelevant
+  intermediate heads under strictly monotonic authority without changing
+  their immutable activation Directories. Stable response evidence reports
+  coverage at or beyond the required head. The root revalidates the parent and
+  commits the terminal child Directory bit only after every required
+  independent re-query, avoiding per-mutation fan-out across a
+  10,000–20,000-descendant tree.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1710,25 +1720,28 @@ root and an exact active Component Registry partition, while the real
 Registry-created issuer exercises claim rejection and guard metrics without a
 static bootstrap fixture.
 
-The root now also installs exactly created children from its accepted Store
-catalog. Public allocate, status, create and install endpoints authenticate
-the caller as the exact registered parent. Durable progress survives
-interruption through `Verified`, independent checks require the exact module,
-sole-root controller and retained `ComponentChildBinding`, and terminal
-Registry capacity is already charged without changing the Component head or
-Directory.
+The root now also reserves, creates, installs and atomically commits exact
+children from its accepted Store catalog. Every public internal lifecycle
+endpoint authenticates the caller as the same registered immediate parent.
+The normalized child row, principal and parent/role traversal indexes,
+capacity transfer, exact terminal bytes and descendant-bound Component head
+survive interruption with one immutable commitment receipt.
 
-Next, atomically commit that verified child as a normalized Registry member:
-insert the child row plus principal and parent/role traversal indexes,
-transfer one reserved descendant to committed, replace the install precharge
-with exact terminal bytes, advance the Component Registry head and derive its
-next Directory authority. Distribute and activate that Directory only after
-commitment. Retain the exact immediate parent and declared role-to-role spawn
-grant. Do not let managed application Canisters perform management effects,
-infer authorization from flat catalog presence, revive the removed
-single-root resolver, permit nested Component declarations, merge roots
-belonging to different Fleets on one Subnet or consume an earlier
-installation.
+That committed revision is distributed to the `Prepared` child and
+independently re-queried before the root records completion. The owning
+top-level Component and distinct immediate parent are independently observed
+at or beyond the required compact head; unrelated descendants are not called.
+An affected member may advance monotonically over intermediate revisions
+while its immutable activation Directory remains unchanged, keeping one child
+creation bounded at no more than two active-member synchronization calls.
+
+Next, activate the Directory-prepared child only from its exact retained
+authority, reconcile an uncertain response through target status and commit
+the terminal root runtime receipt after an independent re-query. Active child
+membership promotion and its current-Directory convergence remain a later
+separate transition. Retain the exact immediate parent and declared
+role-to-role spawn grant. Do not let managed application Canisters perform
+management effects or infer authorization from flat catalog presence.
 
 ## Historical Release Detail
 

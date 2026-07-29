@@ -33,7 +33,7 @@ use thiserror::Error as ThisError;
 use crate::protocol::{
     CANIC_ROOT_COMPONENT_CHILD_ALLOCATE, CANIC_ROOT_COMPONENT_CHILD_ALLOCATION_STATUS,
     CANIC_ROOT_COMPONENT_CHILD_COMMIT, CANIC_ROOT_COMPONENT_CHILD_CREATE,
-    CANIC_ROOT_COMPONENT_CHILD_INSTALL,
+    CANIC_ROOT_COMPONENT_CHILD_DIRECTORY_PREPARE, CANIC_ROOT_COMPONENT_CHILD_INSTALL,
 };
 
 ///
@@ -241,6 +241,10 @@ mod tests {
             (CANIC_ROOT_COMPONENT_CHILD_CREATE, EndpointCallKind::Update),
             (CANIC_ROOT_COMPONENT_CHILD_INSTALL, EndpointCallKind::Update),
             (CANIC_ROOT_COMPONENT_CHILD_COMMIT, EndpointCallKind::Update),
+            (
+                CANIC_ROOT_COMPONENT_CHILD_DIRECTORY_PREPARE,
+                EndpointCallKind::Update,
+            ),
             (CANIC_FLEET_SUBNET_ROOT_AUTHORITY, EndpointCallKind::Update),
             (
                 CANIC_FLEET_ACTIVATION_STATUS,

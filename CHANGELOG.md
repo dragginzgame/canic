@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.41` prepares each committed child under its exact Directory and
+  converges only its owning Component and distinct immediate parent, avoiding
+  whole-tree fan-out while preserving independently verified retry evidence.
+
 - `0.100.40` atomically commits each verified child as a normalized prepared
   Registry member, advances an O(1) descendant-bound Component head and
   derives the next exact Directory authority with idempotent parent retry.
