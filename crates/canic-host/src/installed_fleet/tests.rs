@@ -11,7 +11,7 @@ fn retains_fleet_catalog_decode_error() {
     let path = root
         .join(".canic")
         .join("networks")
-        .join(CanonicalNetworkId::public_ic().to_string())
+        .join(CanonicalNetworkId::ic_mainnet().to_string())
         .join("fleets/catalog.json");
     fs::create_dir_all(path.parent().expect("Fleet catalog parent"))
         .expect("create Fleet catalog parent");
@@ -43,7 +43,7 @@ fn coordinator_catalog_rejects_the_removed_single_root_topology_resolver() {
         "environments:\n  - name: staging\n    network: ic\n",
     )
     .expect("write ICP config");
-    let network = CanonicalNetworkId::public_ic();
+    let network = CanonicalNetworkId::ic_mainnet();
     let path = root
         .join(".canic")
         .join("networks")

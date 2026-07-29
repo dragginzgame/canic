@@ -2,7 +2,7 @@ use super::*;
 
 pub(in crate::deployment_truth::tests) fn sample_identity() -> DeploymentIdentityV1 {
     DeploymentIdentityV1 {
-        canonical_network_id: Some(CanonicalNetworkId::public_ic()),
+        canonical_network_id: Some(CanonicalNetworkId::ic_mainnet()),
         fleet_id: Some(FleetId::from_generated_bytes([7; 32])),
         fleet_name: "local-root".to_string(),
         app: "root".to_string(),
@@ -132,7 +132,7 @@ pub(in crate::deployment_truth::tests) fn sample_matching_inventory() -> Deploym
 
 pub(in crate::deployment_truth::tests) fn sample_root_observation() -> DeploymentRootObservationV1 {
     DeploymentRootObservationV1 {
-        canonical_network_id: CanonicalNetworkId::public_ic(),
+        canonical_network_id: CanonicalNetworkId::ic_mainnet(),
         fleet_id: FleetId::from_generated_bytes([7; 32]),
         fleet_name: "demo".to_string(),
         environment: "local".to_string(),

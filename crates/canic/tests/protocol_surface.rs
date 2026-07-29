@@ -53,7 +53,7 @@ use canic::{
 
 fn test_fleet() -> FleetKey {
     FleetKey {
-        canonical_network_id: CanonicalNetworkId::public_ic(),
+        canonical_network_id: CanonicalNetworkId::ic_mainnet(),
         fleet_id: FleetId::from_generated_bytes([1; 32]),
     }
 }

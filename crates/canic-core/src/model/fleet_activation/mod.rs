@@ -198,7 +198,7 @@ mod tests {
                     binding: FleetCoordinatorBinding {
                         fleet: FleetBinding {
                             fleet: FleetKey {
-                                canonical_network_id: CanonicalNetworkId::public_ic(),
+                                canonical_network_id: CanonicalNetworkId::ic_mainnet(),
                                 fleet_id: FleetId::from_generated_bytes([2; 32]),
                             },
                             app: AppId::from("toko"),

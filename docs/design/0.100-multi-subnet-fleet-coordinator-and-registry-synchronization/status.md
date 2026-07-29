@@ -6,10 +6,10 @@ Date: 2026-07-29
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.45`.
-- Latest published release: `v0.100.45` at
-  `cfb69aa44a591a8c3822e3cf884850bb01e7f7db`.
-- Open patch draft: `0.100.46`; no package-version change has been authorized.
+- Workspace package version: `0.100.46`.
+- Latest published release: `v0.100.46` at
+  `094864fd4f45047bcc3a669e3d67e46ae9c044b4`.
+- Open patch draft: `0.100.47`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -674,22 +674,31 @@ Exact retry reconstructs the original authority after later partition
 progress without calling unrelated descendants.
 
 Released 0.100.44 adopted published `ic-query 0.11.0` as Canic's host-only
-query library, including its updated IC agent and transport stack. Open
-0.100.46 advances that boundary to published `ic-query 0.11.1` and its shared
+query library, including its updated IC agent and transport stack. Released
+0.100.46 advanced that boundary to published `ic-query 0.11.1` and its shared
 inventory-source, cache-error, freshness, provenance and relation-resolution
 internals. Existing typed Subnet-catalog consumers compile unchanged, while
 the joined NNS Subnet-topology report and dependency-owned cache lifecycle
 remain available for the next observational host adapter. No runtime or
 placement-policy authority changes in either dependency slice.
 
-Open 0.100.46 also qualifies the complete durable Component Child progression
-across stable Registry restart after creation intent, observed creation,
-install intent, installation, verification, commitment, Directory preparation,
-runtime activation, Registry membership and terminal Directory
+Released 0.100.46 also qualifies the complete durable Component Child
+progression across stable Registry restart after creation intent, observed
+creation, install intent, installation, verification, commitment, Directory
+preparation, runtime activation, Registry membership and terminal Directory
 synchronization. Exact retry preserves the original identity and phase
 evidence at every boundary. A fresh sum of every persisted Registry row and
 index must exactly reproduce both the terminal Component partition and root
 byte ledgers.
+
+Open 0.100.47 advances the host dependency to `ic-query 0.11.3` and
+hard-corrects the unimplemented topology design to retain the IC-native
+`SubnetKind::{Application, CloudEngine, System, Unknown}` with no umbrella
+kind. Network scope is named `IC mainnet`. Subnet specialization, placement
+eligibility, creation funding and provider topology remain independent
+evidence. The dependent 0.103 and 0.104 designs now consume the same
+vocabulary. Active Rust uses `CanonicalNetworkId::ic_mainnet()` and
+`IcMainnetEnrollment` with no old-name alias.
 
 ## Next Action
 

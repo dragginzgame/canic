@@ -380,7 +380,7 @@ fn sample_fleet_activation_identity() -> FleetActivationIdentity {
 
 fn sample_fleet_key() -> FleetKey {
     FleetKey {
-        canonical_network_id: CanonicalNetworkId::public_ic(),
+        canonical_network_id: CanonicalNetworkId::ic_mainnet(),
         fleet_id: FleetId::from_generated_bytes([7; 32]),
     }
 }

@@ -20,7 +20,7 @@ use canic_core::ids::CanonicalNetworkId;
 fn exact_retry_recovers_one_immutable_fleet_and_operation_identity() {
     let root = temp_dir("fleet-install-session-retry");
     let finalized = finalized_release(&root, [7; 32]);
-    let network = CanonicalNetworkId::public_ic();
+    let network = CanonicalNetworkId::ic_mainnet();
     let request = || PlanFleetInstallSessionRequest {
         root: &root,
         canonical_network_id: network,
@@ -36,9 +36,9 @@ fn exact_retry_recovers_one_immutable_fleet_and_operation_identity() {
     assert_ne!(first.operation_id, [0; 32]);
     assert_eq!(
         first.fleet.fleet.canonical_network_id,
-        CanonicalNetworkId::public_ic()
+        CanonicalNetworkId::ic_mainnet()
     );
-    let path = session_path(&root, CanonicalNetworkId::public_ic(), &first.fleet_name);
+    let path = session_path(&root, CanonicalNetworkId::ic_mainnet(), &first.fleet_name);
     let bytes = fs::read(&path).expect("read session");
     assert_eq!(bytes.last(), Some(&b'\n'));
 }
@@ -47,7 +47,7 @@ fn exact_retry_recovers_one_immutable_fleet_and_operation_identity() {
 fn retry_rejects_changed_app_or_release_authority() {
     let root = temp_dir("fleet-install-session-conflict");
     let first_release = finalized_release(&root, [8; 32]);
-    let network = CanonicalNetworkId::public_ic();
+    let network = CanonicalNetworkId::ic_mainnet();
     let first = PlanFleetInstallSessionRequest {
         root: &root,
         canonical_network_id: network,
@@ -90,7 +90,7 @@ fn session_loader_rejects_noncanonical_and_symlinked_files() {
 
     let root = temp_dir("fleet-install-session-files");
     let finalized = finalized_release(&root, [10; 32]);
-    let network = CanonicalNetworkId::public_ic();
+    let network = CanonicalNetworkId::ic_mainnet();
     let request = || PlanFleetInstallSessionRequest {
         root: &root,
         canonical_network_id: network,

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.47` advances host-only `ic-query` to `0.11.3`, standardizes network
+  identity terminology on IC mainnet and preserves IC-native
+  `Application`/`CloudEngine`/`System`/`Unknown` Subnet kinds.
+
 - `0.100.46` advances the host-only `ic-query` dependency to `0.11.1` and
   qualifies stable-restart exact retry across every durable Component Child
   phase with terminal Registry byte-ledger reconstruction.

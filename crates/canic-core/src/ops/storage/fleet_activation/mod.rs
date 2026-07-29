@@ -1126,7 +1126,7 @@ mod tests {
                         binding: FleetCoordinatorBinding {
                             fleet: FleetBinding {
                                 fleet: FleetKey {
-                                    canonical_network_id: CanonicalNetworkId::public_ic(),
+                                    canonical_network_id: CanonicalNetworkId::ic_mainnet(),
                                     fleet_id: FleetId::from_generated_bytes([11; 32]),
                                 },
                                 app: AppId::from("toko"),
@@ -1691,7 +1691,7 @@ mod tests {
             .credential_manifests
             .push(FleetCredentialManifestRecord {
                 fleet: FleetKey {
-                    canonical_network_id: CanonicalNetworkId::public_ic(),
+                    canonical_network_id: CanonicalNetworkId::ic_mainnet(),
                     fleet_id: FleetId::from_generated_bytes([11; 32]),
                 },
                 activation_id: [12; 32],

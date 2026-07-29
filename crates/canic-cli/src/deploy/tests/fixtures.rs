@@ -30,7 +30,7 @@ pub(super) fn sample_authority_check() -> DeploymentCheckV1 {
 
 pub(super) fn sample_deployment_identity() -> DeploymentIdentityV1 {
     DeploymentIdentityV1 {
-        canonical_network_id: Some(CanonicalNetworkId::public_ic()),
+        canonical_network_id: Some(CanonicalNetworkId::ic_mainnet()),
         fleet_id: Some(FleetId::from_generated_bytes([2; 32])),
         fleet_name: "demo".to_string(),
         app: "demo".to_string(),

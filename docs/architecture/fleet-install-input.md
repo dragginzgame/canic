@@ -82,7 +82,7 @@ kind = "explicit"
 subnet = "<subnet-principal>"
 ```
 
-The public IC additionally supports:
+IC mainnet additionally supports:
 
 ```toml
 [coordinator.subnet]
@@ -97,14 +97,14 @@ kind = "profile"
 profile = "fiduciary"
 ```
 
-`recommended` resolves to the unique trusted public-IC Fiduciary application
+`recommended` resolves to the unique trusted IC mainnet Fiduciary application
 Subnet. `profile` resolves an exact unique eligible application Subnet by its
-trusted catalog label. Explicit public-IC Subnets must also exist in the
+trusted catalog label. Explicit IC mainnet Subnets must also exist in the
 trusted catalog.
 
-Public-IC application Subnets require `cycles` creation funding. Restricted
+IC mainnet application Subnets require `cycles` creation funding. Restricted
 system Subnets require `icp` funding. Cloud Engine and unknown Subnets are not
-eligible for Fleet infrastructure. Non-public networks currently require
+eligible for Fleet infrastructure. Non-mainnet networks currently require
 explicit Subnets and cycles funding; Canic does not invent an ICP amount,
 silently change the funding method, or fall back to another Subnet.
 

@@ -5,7 +5,7 @@ use std::fs;
 #[test]
 fn catalog_reads_network_scoped_fleet_rows_in_canonical_order() {
     let root = fixture("list");
-    let network = CanonicalNetworkId::public_ic();
+    let network = CanonicalNetworkId::ic_mainnet();
     write_catalog(
         &root,
         network,
@@ -49,7 +49,7 @@ fn catalog_reads_network_scoped_fleet_rows_in_canonical_order() {
 #[test]
 fn environment_aliases_read_the_same_canonical_network_catalog() {
     let root = fixture("aliases");
-    let network = CanonicalNetworkId::public_ic();
+    let network = CanonicalNetworkId::ic_mainnet();
     write_catalog(
         &root,
         network,
@@ -88,7 +88,7 @@ fn missing_catalog_has_no_fleet_entries() {
 #[test]
 fn catalog_rejects_wrong_network_unsorted_names_and_duplicate_ids() {
     let root = fixture("invalid");
-    let network = CanonicalNetworkId::public_ic();
+    let network = CanonicalNetworkId::ic_mainnet();
     let path = fleet_catalog_path(&root, network);
 
     write_catalog_record(
@@ -166,7 +166,7 @@ fn catalog_rejects_wrong_network_unsorted_names_and_duplicate_ids() {
 #[test]
 fn catalog_rejects_malformed_unknown_field_and_invalid_identity_rows() {
     let root = fixture("malformed");
-    let network = CanonicalNetworkId::public_ic();
+    let network = CanonicalNetworkId::ic_mainnet();
     let path = fleet_catalog_path(&root, network);
     fs::create_dir_all(path.parent().expect("catalog parent")).expect("catalog directory");
     fs::write(&path, b"{not-json").expect("malformed catalog");
@@ -220,7 +220,7 @@ fn catalog_rejects_malformed_unknown_field_and_invalid_identity_rows() {
 #[test]
 fn catalog_rejects_non_canister_coordinator_and_zero_deployment_time() {
     let root = fixture("invalid-coordinator");
-    let network = CanonicalNetworkId::public_ic();
+    let network = CanonicalNetworkId::ic_mainnet();
 
     write_catalog(
         &root,
@@ -262,7 +262,7 @@ fn catalog_rejects_symlinked_authority() {
     use std::os::unix::fs::symlink;
 
     let root = fixture("symlink");
-    let network = CanonicalNetworkId::public_ic();
+    let network = CanonicalNetworkId::ic_mainnet();
     let path = fleet_catalog_path(&root, network);
     fs::create_dir_all(path.parent().expect("catalog parent")).expect("catalog directory");
     let target = root.join("catalog-target.json");
@@ -289,7 +289,7 @@ fn catalog_rejects_special_file_authority() {
     use rustix::fs::{CWD, Mode, mkfifoat};
 
     let root = fixture("special-file");
-    let network = CanonicalNetworkId::public_ic();
+    let network = CanonicalNetworkId::ic_mainnet();
     let path = fleet_catalog_path(&root, network);
     fs::create_dir_all(path.parent().expect("catalog parent")).expect("catalog directory");
     mkfifoat(CWD, &path, Mode::from_raw_mode(0o600)).expect("catalog FIFO");
@@ -305,7 +305,7 @@ fn catalog_rejects_special_file_authority() {
 #[test]
 fn catalog_inspect_and_text_use_fleet_identity_terms() {
     let root = fixture("inspect");
-    let network = CanonicalNetworkId::public_ic();
+    let network = CanonicalNetworkId::ic_mainnet();
     write_catalog(
         &root,
         network,
@@ -340,7 +340,7 @@ fn catalog_inspect_and_text_use_fleet_identity_terms() {
 #[test]
 fn catalog_commit_is_canonical_exact_retry_and_conflict_closed() {
     let root = fixture("commit");
-    let network = CanonicalNetworkId::public_ic();
+    let network = CanonicalNetworkId::ic_mainnet();
     let alpha = entry(
         network,
         1,
@@ -388,7 +388,7 @@ fn catalog_commit_is_canonical_exact_retry_and_conflict_closed() {
 #[test]
 fn catalog_hard_rejects_the_removed_single_root_shape() {
     let root = fixture("removed-root-shape");
-    let network = CanonicalNetworkId::public_ic();
+    let network = CanonicalNetworkId::ic_mainnet();
     let path = fleet_catalog_path(&root, network);
     let current = FleetCatalogRecord {
         schema_version: FLEET_CATALOG_SCHEMA_VERSION,

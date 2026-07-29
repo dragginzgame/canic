@@ -47,7 +47,7 @@ fn inventory_round_trips_through_json() {
         observed_at: "2026-05-21T00:00:00Z".to_string(),
         observed_identity: Some(sample_identity()),
         observed_root: Some(DeploymentRootObservationV1 {
-            canonical_network_id: CanonicalNetworkId::public_ic(),
+            canonical_network_id: CanonicalNetworkId::ic_mainnet(),
             fleet_id: FleetId::from_generated_bytes([7; 32]),
             fleet_name: "demo".to_string(),
             environment: "local".to_string(),

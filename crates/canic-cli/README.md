@@ -128,8 +128,8 @@ Canic verifies the supplied fingerprint before writing anything. The root key
 and enrollment record are the durable authority under
 `.canic/networks/<canonical-network-id>/`; the environment profile is only a
 lookup pointer. Repeating the exact enrollment is idempotent, while changing
-the anchor for an existing profile is rejected. Public-IC environments such as
-`ic`, or named profiles backed by `ic`, use Canic's compiled pinned root key
+the anchor for an existing profile is rejected. IC mainnet environments such
+as `ic`, or named profiles backed by `ic`, use Canic's compiled pinned root key
 and are not enrolled.
 
 Install planning requires a separate operator-owned Fleet input:

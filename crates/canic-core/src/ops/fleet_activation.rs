@@ -410,7 +410,7 @@ mod tests {
         FleetActivationIdentity {
             fleet: FleetBinding {
                 fleet: FleetKey {
-                    canonical_network_id: CanonicalNetworkId::public_ic(),
+                    canonical_network_id: CanonicalNetworkId::ic_mainnet(),
                     fleet_id: FleetId::from_generated_bytes([1; 32]),
                 },
                 app: AppId::from("app"),

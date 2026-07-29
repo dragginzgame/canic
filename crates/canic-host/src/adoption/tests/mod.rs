@@ -183,7 +183,7 @@ fn inventory(observed_canisters: Vec<ObservedCanisterV1>) -> DeploymentInventory
         observed_at: "2026-05-30T00:00:00Z".to_string(),
         observed_identity: None,
         observed_root: Some(DeploymentRootObservationV1 {
-            canonical_network_id: canic_core::ids::CanonicalNetworkId::public_ic(),
+            canonical_network_id: canic_core::ids::CanonicalNetworkId::ic_mainnet(),
             fleet_id: canic_core::ids::FleetId::from_generated_bytes([7; 32]),
             fleet_name: "demo-dev".to_string(),
             app: "demo".to_string(),

@@ -95,9 +95,9 @@ pub enum NetworkIdentityError {
     InvalidEnvironmentName { name: String },
 
     #[error(
-        "ICP environment {environment:?} resolves to the public IC, whose root trust anchor is compiled into Canic and cannot be enrolled"
+        "ICP environment {environment:?} resolves to IC mainnet, whose root trust anchor is compiled into Canic and cannot be enrolled"
     )]
-    PublicIcEnrollment { environment: String },
+    IcMainnetEnrollment { environment: String },
 
     #[error("root-key fingerprint must contain exactly 64 lowercase hexadecimal characters")]
     InvalidFingerprint,
@@ -167,7 +167,7 @@ pub enum NetworkIdentityError {
     UnsupportedPlatform(&'static str),
 }
 
-/// Enroll an exact non-public trust anchor and publish its environment profile.
+/// Enroll an exact non-mainnet trust anchor and publish its environment profile.
 pub fn enroll_network(
     options: NetworkEnrollmentOptions<'_>,
 ) -> Result<NetworkEnrollmentReport, NetworkIdentityError> {
@@ -175,7 +175,7 @@ pub fn enroll_network(
     if resolve_icp_build_network_from_root(options.project_root, options.environment)?
         == BuildNetwork::Ic
     {
-        return Err(NetworkIdentityError::PublicIcEnrollment {
+        return Err(NetworkIdentityError::IcMainnetEnrollment {
             environment: options.environment.to_string(),
         });
     }
@@ -268,7 +268,7 @@ pub fn resolve_canonical_network_id_from_root(
     let profile_path = environment_profile_path(project_root, environment);
 
     if build_network == BuildNetwork::Ic {
-        let expected = CanonicalNetworkId::public_ic();
+        let expected = CanonicalNetworkId::ic_mainnet();
         if let Some(profile) = read_optional_profile(&profile_path)?
             && profile.canonical_network_id != expected
         {

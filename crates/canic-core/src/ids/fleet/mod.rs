@@ -303,7 +303,7 @@ mod tests {
             fleet_id: FleetId,
         }
 
-        let canonical_network_id = CanonicalNetworkId::public_ic();
+        let canonical_network_id = CanonicalNetworkId::ic_mainnet();
         let fleet_id = FleetId::from_generated_bytes([7; 32]);
         let fleet = FleetKey {
             canonical_network_id,
@@ -350,7 +350,7 @@ mod tests {
 
     #[test]
     fn fleet_binding_keeps_app_and_network_separate_from_the_label() {
-        let canonical_network_id = CanonicalNetworkId::public_ic();
+        let canonical_network_id = CanonicalNetworkId::ic_mainnet();
         let fleet_id = FleetId::from_generated_bytes([7; 32]);
         let binding = FleetBinding {
             fleet: FleetKey {

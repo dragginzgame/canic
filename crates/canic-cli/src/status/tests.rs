@@ -173,7 +173,7 @@ fn status_usage_lists_options_and_examples() {
 
 fn fleet_catalog_entry() -> FleetCatalogEntryV1 {
     FleetCatalogEntryV1 {
-        canonical_network_id: canic_core::ids::CanonicalNetworkId::public_ic(),
+        canonical_network_id: canic_core::ids::CanonicalNetworkId::ic_mainnet(),
         fleet_id: canic_core::ids::FleetId::from_generated_bytes([1; 32]),
         fleet_name: "demo".parse().expect("Fleet name"),
         app: canic_core::ids::AppId::from("shop"),

@@ -41,7 +41,7 @@ fn deploy_resume_report_allows_catalog_resolved_receipt_lookup() {
 fn deploy_resume_report_resolves_latest_receipt_by_canonical_fleet_identity() {
     let root = super::fixtures::temp_json_path("canonical-fleet-receipt");
     fs::create_dir_all(&root).expect("create ICP root");
-    let network = canic_core::ids::CanonicalNetworkId::public_ic();
+    let network = canic_core::ids::CanonicalNetworkId::ic_mainnet();
     let fleet_id = canic_core::ids::FleetId::from_generated_bytes([7; 32]);
     let catalog_path = root
         .join(".canic")
