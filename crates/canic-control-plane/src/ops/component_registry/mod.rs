@@ -28,7 +28,8 @@ use crate::{
         RootComponentCommitmentView, RootComponentCreationEffectView,
         RootComponentInitialInventoryView, RootComponentInstallEffectView,
         RootComponentMembershipView, RootComponentRegistryView,
-        RootComponentSubtreeRemovalProgressView, RootComponentSubtreeRemovalView,
+        RootComponentSubtreeRemovalNodeView, RootComponentSubtreeRemovalProgressView,
+        RootComponentSubtreeRemovalView,
     },
 };
 use candid::CandidType;
@@ -58,6 +59,8 @@ use canic_core::{
     },
 };
 use sha2::{Digest, Sha256};
+
+const SUBTREE_REMOVAL_TRAVERSAL_BATCH_SIZE: u32 = 64;
 
 ///
 /// ComponentRegistryOps
@@ -938,6 +941,14 @@ impl ComponentRegistryOps {
             return Ok(None);
         };
         validate_subtree_removal_record(&record)?;
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component subtree-removal operation has no owning partition",
+            )
+        })?;
+        validate_partition_record(&partition)?;
+        validate_subtree_removal_progress(&partition, &record)?;
         Ok(Some(subtree_removal_record_to_view(record)))
     }
 
@@ -955,6 +966,14 @@ impl ComponentRegistryOps {
         if let Some(existing) = RootComponentRegistryStore::subtree_removal(component, operation_id)
         {
             validate_subtree_removal_record(&existing)?;
+            let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+                InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "Component subtree-removal operation has no owning partition",
+                )
+            })?;
+            validate_partition_record(&partition)?;
+            validate_subtree_removal_progress(&partition, &existing)?;
             return if existing.target.canister_id == target_canister_id
                 && existing.reserved_against_registry == reserved_against_registry
             {
@@ -1030,6 +1049,7 @@ impl ComponentRegistryOps {
             component,
             target,
             reserved_against_registry,
+            traversal_steps: 0,
             progress: RootComponentSubtreeRemovalProgressRecord::Fenced,
         };
         validate_subtree_removal_record(&record)?;
@@ -1064,6 +1084,83 @@ impl ComponentRegistryOps {
         )
         .map_err(map_allocation_commit_error)?;
         Ok(subtree_removal_record_to_view(record))
+    }
+
+    pub(crate) fn advance_subtree_removal(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        expected_traversal_steps: u32,
+        maximum_component_registry_bytes: u64,
+    ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
+        let record = RootComponentRegistryStore::subtree_removal(component, operation_id)
+            .ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component subtree-removal operation has not been durably fenced",
+                )
+            })?;
+        validate_subtree_removal_record(&record)?;
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        validate_partition_record(&partition)?;
+        validate_subtree_removal_progress(&partition, &record)?;
+        if expected_traversal_steps < record.traversal_steps {
+            return Ok(subtree_removal_record_to_view(record));
+        }
+        if expected_traversal_steps > record.traversal_steps {
+            return Err(InternalError::conflict(
+                "Component subtree-removal traversal expectation is ahead of durable progress",
+            ));
+        }
+        if matches!(
+            &record.progress,
+            RootComponentSubtreeRemovalProgressRecord::LeafSelected { .. }
+        ) {
+            return Ok(subtree_removal_record_to_view(record));
+        }
+
+        let mut next_record = record.clone();
+        for _ in 0..SUBTREE_REMOVAL_TRAVERSAL_BATCH_SIZE {
+            let cursor = match &next_record.progress {
+                RootComponentSubtreeRemovalProgressRecord::Fenced => next_record.target.clone(),
+                RootComponentSubtreeRemovalProgressRecord::Traversing { cursor } => cursor.clone(),
+                RootComponentSubtreeRemovalProgressRecord::LeafSelected { .. } => break,
+            };
+            next_record.progress = match first_registered_child(&partition, cursor.canister_id)? {
+                Some(child) => {
+                    RootComponentSubtreeRemovalProgressRecord::Traversing { cursor: child }
+                }
+                None => RootComponentSubtreeRemovalProgressRecord::LeafSelected { leaf: cursor },
+            };
+            next_record.traversal_steps =
+                next_record.traversal_steps.checked_add(1).ok_or_else(|| {
+                    InternalError::resource_exhausted(
+                        "Component subtree-removal traversal step overflow",
+                    )
+                })?;
+        }
+        validate_subtree_removal_record(&next_record)?;
+        validate_subtree_removal_progress(&partition, &next_record)?;
+        let (next_partition, next_meta) = subtree_progress_state(
+            &current,
+            &partition,
+            &record,
+            &next_record,
+            maximum_component_registry_bytes,
+        )?;
+        RootComponentRegistryStore::replace_subtree_removal(
+            &current,
+            next_meta,
+            &partition,
+            next_partition,
+            &record,
+            next_record.clone(),
+        )
+        .map_err(map_allocation_commit_error)?;
+        Ok(subtree_removal_record_to_view(next_record))
     }
 
     pub(crate) fn parent_role_instances(
@@ -2914,11 +3011,35 @@ fn subtree_removal_record_to_view(
         target_role: record.target.role,
         target_status: record.target.status,
         reserved_against_registry: record.reserved_against_registry,
+        traversal_steps: record.traversal_steps,
         progress: match record.progress {
             RootComponentSubtreeRemovalProgressRecord::Fenced => {
                 RootComponentSubtreeRemovalProgressView::Fenced
             }
+            RootComponentSubtreeRemovalProgressRecord::Traversing { cursor } => {
+                RootComponentSubtreeRemovalProgressView::Traversing {
+                    cursor: subtree_removal_node_view(cursor),
+                }
+            }
+            RootComponentSubtreeRemovalProgressRecord::LeafSelected { leaf } => {
+                RootComponentSubtreeRemovalProgressView::LeafSelected {
+                    leaf: subtree_removal_node_view(leaf),
+                }
+            }
         },
+    }
+}
+
+fn subtree_removal_node_view(
+    record: ComponentRegistryChildRecord,
+) -> RootComponentSubtreeRemovalNodeView {
+    RootComponentSubtreeRemovalNodeView {
+        canister_id: record.canister_id,
+        parent_canister_id: record.parent_canister_id,
+        role: record.role,
+        kind: record.kind,
+        installed_artifact_hash: record.installed_artifact_hash,
+        status: record.status,
     }
 }
 
@@ -3063,6 +3184,86 @@ fn subtree_fence_partition(
     Err(InternalError::invariant(
         canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
         "Component subtree-removal fence byte accounting did not converge",
+    ))
+}
+
+fn subtree_progress_state(
+    current: &RootComponentRegistryMetaRecord,
+    partition: &ComponentRegistryPartitionRecord,
+    current_record: &RootComponentSubtreeRemovalRecord,
+    next_record: &RootComponentSubtreeRemovalRecord,
+    maximum_component_registry_bytes: u64,
+) -> Result<
+    (
+        ComponentRegistryPartitionRecord,
+        RootComponentRegistryMetaRecord,
+    ),
+    InternalError,
+> {
+    let current_total = RootComponentRegistryStore::partition_entry_bytes(partition)
+        .checked_add(RootComponentRegistryStore::subtree_removal_entry_bytes(
+            current_record,
+        ))
+        .ok_or_else(|| InternalError::resource_exhausted("Component Registry bytes overflow"))?;
+    let component_without_current = partition
+        .encoded_bytes
+        .checked_sub(current_total)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component Registry bytes are below subtree traversal authority",
+            )
+        })?;
+    let root_without_current = current
+        .encoded_bytes
+        .checked_sub(current_total)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "root Registry bytes are below subtree traversal authority",
+            )
+        })?;
+    let next_record_bytes = RootComponentRegistryStore::subtree_removal_entry_bytes(next_record);
+    let mut next_partition = partition.clone();
+
+    for _ in 0..8 {
+        let next_total = RootComponentRegistryStore::partition_entry_bytes(&next_partition)
+            .checked_add(next_record_bytes)
+            .ok_or_else(|| {
+                InternalError::resource_exhausted("Component Registry bytes overflow")
+            })?;
+        let next_component_bytes = component_without_current
+            .checked_add(next_total)
+            .ok_or_else(|| {
+                InternalError::resource_exhausted("Component Registry bytes overflow")
+            })?;
+        if next_partition.encoded_bytes == next_component_bytes {
+            if next_component_bytes > maximum_component_registry_bytes {
+                return Err(InternalError::resource_exhausted(format!(
+                    "Component subtree traversal requires {next_component_bytes} bytes, exceeding protected Component limit {maximum_component_registry_bytes}"
+                )));
+            }
+            let next_root_bytes =
+                root_without_current
+                    .checked_add(next_total)
+                    .ok_or_else(|| {
+                        InternalError::resource_exhausted("Component Registry bytes overflow")
+                    })?;
+            if next_root_bytes > current.root.limits.maximum_registry_bytes {
+                return Err(InternalError::resource_exhausted(format!(
+                    "Component subtree traversal requires {next_root_bytes} root Registry bytes, exceeding protected limit {}",
+                    current.root.limits.maximum_registry_bytes
+                )));
+            }
+            let mut next_meta = current.clone();
+            next_meta.encoded_bytes = next_root_bytes;
+            return Ok((next_partition, next_meta));
+        }
+        next_partition.encoded_bytes = next_component_bytes;
+    }
+    Err(InternalError::invariant(
+        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+        "Component subtree traversal byte accounting did not converge",
     ))
 }
 
@@ -4803,6 +5004,15 @@ fn validate_registered_child_record(
 fn validate_subtree_removal_record(
     record: &RootComponentSubtreeRemovalRecord,
 ) -> Result<(), InternalError> {
+    let progress_is_valid = match &record.progress {
+        RootComponentSubtreeRemovalProgressRecord::Fenced => record.traversal_steps == 0,
+        RootComponentSubtreeRemovalProgressRecord::Traversing { cursor } => {
+            record.traversal_steps > 0 && valid_subtree_removal_node(record.component, cursor)
+        }
+        RootComponentSubtreeRemovalProgressRecord::LeafSelected { leaf } => {
+            record.traversal_steps > 0 && valid_subtree_removal_node(record.component, leaf)
+        }
+    };
     if record.operation_id == [0; 32]
         || record.component != record.target.component
         || record.component != record.reserved_against_registry.component
@@ -4810,6 +5020,7 @@ fn validate_subtree_removal_record(
         || record.target.canister_id == Principal::anonymous()
         || record.target.parent_canister_id == Principal::anonymous()
         || record.target.status != ComponentLifecycleStatus::Active
+        || !progress_is_valid
     {
         return Err(InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
@@ -4817,6 +5028,122 @@ fn validate_subtree_removal_record(
         ));
     }
     Ok(())
+}
+
+fn valid_subtree_removal_node(
+    component: ComponentInstanceId,
+    node: &ComponentRegistryChildRecord,
+) -> bool {
+    node.component == component
+        && node.canister_id != Principal::anonymous()
+        && node.parent_canister_id != Principal::anonymous()
+        && node.canister_id != node.parent_canister_id
+        && node.status == ComponentLifecycleStatus::Active
+}
+
+fn validate_subtree_removal_progress(
+    partition: &ComponentRegistryPartitionRecord,
+    record: &RootComponentSubtreeRemovalRecord,
+) -> Result<(), InternalError> {
+    let current_target =
+        RootComponentRegistryStore::child(record.component, record.target.canister_id).ok_or_else(
+            || {
+                InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "Component subtree-removal target is no longer registered",
+                )
+            },
+        )?;
+    validate_registered_child_record(partition, &current_target)?;
+    if current_target != record.target {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component subtree-removal target differs from its frozen fence",
+        ));
+    }
+
+    let node = match &record.progress {
+        RootComponentSubtreeRemovalProgressRecord::Fenced => None,
+        RootComponentSubtreeRemovalProgressRecord::Traversing { cursor } => Some((cursor, false)),
+        RootComponentSubtreeRemovalProgressRecord::LeafSelected { leaf } => Some((leaf, true)),
+    };
+    let Some((node, must_be_leaf)) = node else {
+        return Ok(());
+    };
+    let current_node = RootComponentRegistryStore::child(record.component, node.canister_id)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component subtree-removal cursor is no longer registered",
+            )
+        })?;
+    validate_registered_child_record(partition, &current_node)?;
+    if &current_node != node {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component subtree-removal cursor differs from current Registry authority",
+        ));
+    }
+    let traversal_limit = partition
+        .committed_descendants
+        .checked_add(1)
+        .ok_or_else(|| InternalError::resource_exhausted("Component descendant count overflow"))?;
+    if !canister_is_in_subtree(
+        partition,
+        node.canister_id,
+        record.target.canister_id,
+        traversal_limit,
+    )? {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component subtree-removal cursor escaped its fenced subtree",
+        ));
+    }
+    if must_be_leaf && first_registered_child(partition, node.canister_id)?.is_some() {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component subtree-removal selected a node that still has a registered child",
+        ));
+    }
+    Ok(())
+}
+
+fn first_registered_child(
+    partition: &ComponentRegistryPartitionRecord,
+    parent_canister_id: Principal,
+) -> Result<Option<ComponentRegistryChildRecord>, InternalError> {
+    let Some(traversal) = RootComponentRegistryStore::child_traversals_page(
+        partition.binding.component,
+        Some(parent_canister_id),
+        None,
+        None,
+        1,
+    )
+    .into_iter()
+    .next() else {
+        return Ok(None);
+    };
+    validate_child_traversal_record(partition.binding.component, &traversal)?;
+    let child =
+        RootComponentRegistryStore::child(partition.binding.component, traversal.canister_id)
+            .ok_or_else(|| {
+                InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "Component subtree traversal references an absent child row",
+                )
+            })?;
+    validate_registered_child_record(partition, &child)?;
+    if traversal.parent_canister_id != parent_canister_id
+        || traversal.parent_canister_id != child.parent_canister_id
+        || traversal.role != child.role
+        || traversal.canister_id != child.canister_id
+    {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component subtree traversal index differs from its child row",
+        ));
+    }
+    Ok(Some(child))
 }
 
 const fn child_allocation_is_terminal(record: &RootComponentChildAllocationRecord) -> bool {
@@ -5706,6 +6033,140 @@ mod tests {
             .expect("fence retry survives unrelated progress"),
             fenced
         );
+
+        let before_traversal = RootComponentRegistryStore::export();
+        let before_traversal_partition = ComponentRegistryOps::partition(fixture.component)
+            .expect("partition read")
+            .expect("active partition");
+        ComponentRegistryOps::advance_subtree_removal(
+            fixture.component,
+            [70; 32],
+            0,
+            before_traversal_partition.encoded_bytes,
+        )
+        .expect_err("larger traversal receipt must fit before mutation");
+        assert_eq!(RootComponentRegistryStore::export(), before_traversal);
+
+        let selected = ComponentRegistryOps::advance_subtree_removal(
+            fixture.component,
+            [70; 32],
+            0,
+            16_777_216,
+        )
+        .expect("select first post-order leaf");
+        assert_eq!(selected.traversal_steps, 2);
+        assert!(matches!(
+            &selected.progress,
+            RootComponentSubtreeRemovalProgressView::LeafSelected { leaf }
+                if leaf.canister_id == fixture.descendant.canister_id
+                    && leaf.parent_canister_id == fixture.target.canister_id
+        ));
+        let selected_state = restart_component_registry();
+        assert_eq!(
+            ComponentRegistryOps::advance_subtree_removal(
+                fixture.component,
+                [70; 32],
+                0,
+                16_777_216,
+            )
+            .expect("stale traversal retry returns current progress"),
+            selected
+        );
+        assert_eq!(RootComponentRegistryStore::export(), selected_state);
+        assert_eq!(
+            ComponentRegistryOps::current()
+                .expect("Registry status")
+                .encoded_bytes,
+            exact_registry_entry_bytes(&selected_state)
+        );
+        RootComponentRegistryStore::import(RootComponentRegistryData::default());
+    }
+
+    #[test]
+    fn subtree_removal_traversal_is_bounded_deterministic_and_restart_safe() {
+        let (fixture, expected_leaf) = import_deep_active_component_tree(65);
+        let registry = component_registry_head(&fixture.partition);
+        ComponentRegistryOps::begin_subtree_removal(
+            fixture.component,
+            [80; 32],
+            fixture.target.canister_id,
+            registry,
+            16_777_216,
+        )
+        .expect("fence deep subtree");
+
+        let traversing = ComponentRegistryOps::advance_subtree_removal(
+            fixture.component,
+            [80; 32],
+            0,
+            16_777_216,
+        )
+        .expect("advance one bounded traversal batch");
+        assert_eq!(
+            traversing.traversal_steps,
+            SUBTREE_REMOVAL_TRAVERSAL_BATCH_SIZE
+        );
+        assert!(matches!(
+            &traversing.progress,
+            RootComponentSubtreeRemovalProgressView::Traversing { cursor }
+                if cursor.canister_id != expected_leaf
+        ));
+
+        let durable_midpoint = restart_component_registry();
+        assert_eq!(
+            ComponentRegistryOps::advance_subtree_removal(
+                fixture.component,
+                [80; 32],
+                0,
+                16_777_216,
+            )
+            .expect("stale traversal retry"),
+            traversing
+        );
+        assert_eq!(RootComponentRegistryStore::export(), durable_midpoint);
+
+        let selected = ComponentRegistryOps::advance_subtree_removal(
+            fixture.component,
+            [80; 32],
+            traversing.traversal_steps,
+            16_777_216,
+        )
+        .expect("resume traversal and select deepest leaf");
+        assert_eq!(selected.traversal_steps, 67);
+        assert!(matches!(
+            &selected.progress,
+            RootComponentSubtreeRemovalProgressView::LeafSelected { leaf }
+                if leaf.canister_id == expected_leaf
+        ));
+        let terminal = restart_component_registry();
+        assert_eq!(
+            ComponentRegistryOps::subtree_removal(fixture.component, [80; 32])
+                .expect("valid traversal status")
+                .expect("durable traversal status"),
+            selected
+        );
+        assert_eq!(
+            ComponentRegistryOps::current()
+                .expect("Registry status")
+                .encoded_bytes,
+            exact_registry_entry_bytes(&terminal)
+        );
+        assert_eq!(
+            ComponentRegistryOps::partition(fixture.component)
+                .expect("partition read")
+                .expect("active partition")
+                .encoded_bytes,
+            exact_component_registry_entry_bytes(&terminal, fixture.component)
+        );
+        let before_ahead_rejection = RootComponentRegistryStore::export();
+        ComponentRegistryOps::advance_subtree_removal(
+            fixture.component,
+            [80; 32],
+            selected.traversal_steps + 1,
+            16_777_216,
+        )
+        .expect_err("future traversal expectation must fail");
+        assert_eq!(RootComponentRegistryStore::export(), before_ahead_rejection);
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
 
@@ -7456,7 +7917,21 @@ mod tests {
             installed_artifact_hash: [33; 32],
             status: ComponentLifecycleStatus::Active,
         };
-        let children = vec![target.clone(), descendant.clone(), unrelated.clone()];
+        let alternate_descendant = ComponentRegistryChildRecord {
+            component,
+            canister_id: candid::Principal::from_slice(&[24; 29]),
+            parent_canister_id: target.canister_id,
+            role: CanisterRole::new("project_machine"),
+            kind: ComponentChildKind::Singleton,
+            installed_artifact_hash: [34; 32],
+            status: ComponentLifecycleStatus::Active,
+        };
+        let children = vec![
+            target.clone(),
+            descendant.clone(),
+            unrelated.clone(),
+            alternate_descendant,
+        ];
         let child_traversals = children
             .iter()
             .map(|child| ComponentRegistryChildTraversalRecord {
@@ -7479,8 +7954,14 @@ mod tests {
                 child_role: CanisterRole::new("project_ledger"),
                 instances: 1,
             },
+            ComponentRegistryParentRoleCountRecord {
+                component,
+                parent_canister_id: target.canister_id,
+                child_role: CanisterRole::new("project_machine"),
+                instances: 1,
+            },
         ];
-        partition.committed_descendants = 3;
+        partition.committed_descendants = 4;
         partition.descendant_content_hash = [77; 32];
         partition.content_hash = component_partition_content_hash(
             &partition.binding,
@@ -7527,8 +8008,8 @@ mod tests {
             next_allocation_sequence: 2,
             reserved_component_instances: 0,
             committed_component_instances: 1,
-            managed_descendants: 3,
-            known_created_component_canisters: 4,
+            managed_descendants: 4,
+            known_created_component_canisters: 5,
             encoded_bytes: partition.encoded_bytes,
             initial_inventory: None,
         });
@@ -7540,6 +8021,106 @@ mod tests {
             descendant,
             unrelated,
         }
+    }
+
+    fn import_deep_active_component_tree(
+        depth: usize,
+    ) -> (ActiveComponentTreeFixture, candid::Principal) {
+        assert!(depth > 0 && depth <= 100);
+        let mut fixture = import_active_component_tree();
+        let mut data = RootComponentRegistryStore::export();
+        let mut parent_canister_id = fixture.descendant.canister_id;
+        let role = CanisterRole::new("deep_node");
+
+        for index in 0..depth {
+            let principal_byte = 100_u8
+                .checked_add(u8::try_from(index).expect("bounded deep-tree index"))
+                .expect("bounded deep-tree principal");
+            let canister_id = candid::Principal::from_slice(&[principal_byte; 29]);
+            let child = ComponentRegistryChildRecord {
+                component: fixture.component,
+                canister_id,
+                parent_canister_id,
+                role: role.clone(),
+                kind: ComponentChildKind::Instance,
+                installed_artifact_hash: [principal_byte; 32],
+                status: ComponentLifecycleStatus::Active,
+            };
+            data.children.push(child);
+            data.child_traversals
+                .push(ComponentRegistryChildTraversalRecord {
+                    component: fixture.component,
+                    parent_canister_id,
+                    role: role.clone(),
+                    canister_id,
+                });
+            data.parent_role_counts
+                .push(ComponentRegistryParentRoleCountRecord {
+                    component: fixture.component,
+                    parent_canister_id,
+                    child_role: role.clone(),
+                    instances: 1,
+                });
+            parent_canister_id = canister_id;
+        }
+
+        let partition = data
+            .partitions
+            .iter_mut()
+            .find(|partition| partition.binding.component == fixture.component)
+            .expect("deep-tree partition");
+        partition.committed_descendants = partition
+            .committed_descendants
+            .checked_add(u32::try_from(depth).expect("bounded deep-tree depth"))
+            .expect("deep-tree descendant count");
+        partition.descendant_content_hash = [78; 32];
+        partition.content_hash = component_partition_content_hash(
+            &partition.binding,
+            &partition.provisioning_origin,
+            partition.release_set,
+            partition.status,
+            partition.revision,
+            partition.descendant_content_hash,
+            partition.committed_descendants,
+        )
+        .expect("deep-tree partition hash");
+        partition.encoded_bytes = 0;
+        for _ in 0..8 {
+            let encoded_bytes = exact_component_registry_entry_bytes(&data, fixture.component);
+            let partition = data
+                .partitions
+                .iter_mut()
+                .find(|partition| partition.binding.component == fixture.component)
+                .expect("deep-tree partition");
+            if partition.encoded_bytes == encoded_bytes {
+                break;
+            }
+            partition.encoded_bytes = encoded_bytes;
+        }
+        fixture.partition = data
+            .partitions
+            .iter()
+            .find(|partition| partition.binding.component == fixture.component)
+            .expect("deep-tree partition")
+            .clone();
+        assert_eq!(
+            fixture.partition.encoded_bytes,
+            exact_component_registry_entry_bytes(&data, fixture.component)
+        );
+        let depth = u32::try_from(depth).expect("bounded deep-tree depth");
+        let encoded_bytes = exact_registry_entry_bytes(&data);
+        let current = data.current.as_mut().expect("deep-tree Registry status");
+        current.managed_descendants = current
+            .managed_descendants
+            .checked_add(depth)
+            .expect("deep-tree managed count");
+        current.known_created_component_canisters = current
+            .known_created_component_canisters
+            .checked_add(depth)
+            .expect("deep-tree known-created count");
+        current.encoded_bytes = encoded_bytes;
+        RootComponentRegistryStore::import(data);
+        (fixture, parent_canister_id)
     }
 
     fn active_component_partition(

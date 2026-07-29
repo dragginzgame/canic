@@ -32,8 +32,9 @@ use canic_core::{
             RootComponentInstallRequest, RootComponentMembershipActivationRequest,
             RootComponentMembershipActivationResponse, RootComponentRegistryPreparationRequest,
             RootComponentRegistryStatusResponse, RootComponentRuntimeActivationRequest,
-            RootComponentRuntimeActivationResponse, RootComponentSubtreeRemovalRequest,
-            RootComponentSubtreeRemovalResponse, RootComponentSubtreeRemovalStatusRequest,
+            RootComponentRuntimeActivationResponse, RootComponentSubtreeRemovalAdvanceRequest,
+            RootComponentSubtreeRemovalRequest, RootComponentSubtreeRemovalResponse,
+            RootComponentSubtreeRemovalStatusRequest,
         },
         fleet_activation::{
             FleetActivationPhase, FleetActivationResumeRequest, FleetActivationStatusResponse,
@@ -172,6 +173,14 @@ impl LifecycleApi {
         request: RootComponentSubtreeRemovalStatusRequest,
     ) -> Result<RootComponentSubtreeRemovalResponse, canic_core::dto::error::Error> {
         crate::workflow::component_registry::subtree_removal_status(request).map_err(Into::into)
+    }
+
+    pub async fn advance_component_subtree_removal(
+        request: RootComponentSubtreeRemovalAdvanceRequest,
+    ) -> Result<RootComponentSubtreeRemovalResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::advance_subtree_removal(request)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn create_component_child(

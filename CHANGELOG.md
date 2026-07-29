@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.50` advances each fenced child subtree through bounded, durable
+  canonical descent to one exact post-order leaf without materializing the
+  tree or issuing a Canister effect.
+
 - `0.100.49` durably fences an exact registered child subtree before removal,
   blocking only target and descendant mutations while preserving unrelated
   Component-tree progress, exact retry and bounded Registry accounting.

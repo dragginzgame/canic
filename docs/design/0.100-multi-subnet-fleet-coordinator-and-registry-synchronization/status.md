@@ -6,10 +6,10 @@ Date: 2026-07-29
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.48`.
-- Latest published release: `v0.100.48` at
-  `b102f1f118fdea50c6e88790a65e69a2e15e3d9e`.
-- Open patch draft: `0.100.49`; no package-version change has been authorized.
+- Workspace package version: `0.100.49`.
+- Latest published release: `v0.100.49` at
+  `10e085e012558c54b0e1b2e1b135b2e4543ae1d7`.
+- Open patch draft: `0.100.50`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -182,8 +182,10 @@ Registry slices replace the 0.99 root model.
 - [x] Durably fence one exact registered child subtree, reject in-flight
   descendant work and block later target/descendant reservations without
   blocking unrelated branches.
-- [ ] Run the fenced subtree removal as bounded durable post-order traversal
-  and partition mutation serialization by Component instance.
+- [x] Descend the fenced subtree in bounded canonical batches, persist the
+  exact cursor and select only a childless post-order leaf.
+- [ ] Journal and execute each selected leaf transition, then return the
+  cursor to its retained parent until the target is terminal.
 - [x] Distribute exact Directories directly from the root to a committed
   Component with target-local retention, independent observation and a
   terminal root receipt.
@@ -713,7 +715,7 @@ preserves the first intent, each partition reconstructs its exact pre-effect
 byte charges and their sum reproduces the root ledger; incomplete reservations
 remain charged against the shared managed-Canister cap.
 
-Open 0.100.49 adds the durable first phase of ordinary child-subtree removal.
+Released 0.100.49 adds the durable first phase of ordinary child-subtree removal.
 One controller operation freezes the exact active registered target row and
 Component Registry head only when no nonterminal child operation is rooted at
 that target or a descendant. Its response-idempotent receipt and status
@@ -723,10 +725,19 @@ The stable Component-first entry and changed partition encoding are charged
 exactly to the Component and root Registry byte ledgers before mutation. This
 phase performs no stop, delete or Directory effect.
 
+Open 0.100.50 advances the fence through a bounded durable post-order cursor.
+Each controller call follows at most 64 canonical direct-child edges,
+validates every normalized row/index pair and persists either the exact
+midpoint or one childless leaf. Stale step expectations return current
+progress without another mutation, while future expectations fail. Stable
+record-size changes update the exact Component and root Registry byte ledgers
+atomically. The selected leaf remains active and registered.
+
 ## Next Action
 
-Persist a bounded deterministic post-order traversal cursor for the fenced
-subtree and advance one leaf at a time without materializing the full tree or
-calling unrelated descendants. Do not introduce nested Component
+Freeze the selected leaf's exact stop intent. Stop observation, deletion and
+Registry mutation must remain separate durable phases, preserve the exact
+immediate parent, reconcile uncertain management responses and never remove a
+parent while a child row remains. Do not introduce nested Component
 declarations, let application Canisters call management effects directly or
 infer authorization from catalog presence alone.

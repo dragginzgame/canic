@@ -133,6 +133,19 @@ pub struct RootComponentSubtreeRemovalRequest {
 }
 
 ///
+/// RootComponentSubtreeRemovalAdvanceRequest
+///
+/// Controller command advancing bounded traversal from one observed durable step.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeRemovalAdvanceRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub expected_traversal_steps: u32,
+}
+
+///
 /// RootComponentSubtreeRemovalStatusRequest
 ///
 /// Controller lookup key for one durable child-subtree removal operation.
@@ -316,9 +329,27 @@ pub enum RootComponentAllocationPhase {
 /// Durable root-local progress of one child-subtree removal operation.
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RootComponentSubtreeRemovalPhase {
     Fenced,
+    Traversing(RootComponentSubtreeRemovalNode),
+    LeafSelected(RootComponentSubtreeRemovalNode),
+}
+
+///
+/// RootComponentSubtreeRemovalNode
+///
+/// Exact registered child selected as a traversal cursor or removable leaf.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeRemovalNode {
+    pub canister_id: Principal,
+    pub parent_canister_id: Principal,
+    pub role: CanisterRole,
+    pub kind: ComponentChildKind,
+    pub installed_artifact_hash: [u8; 32],
+    pub status: ComponentLifecycleStatus,
 }
 
 ///
@@ -673,6 +704,7 @@ pub struct RootComponentSubtreeRemovalResponse {
     pub target_role: CanisterRole,
     pub target_status: ComponentLifecycleStatus,
     pub reserved_against_registry: ComponentRegistryHead,
+    pub traversal_steps: u32,
     pub phase: RootComponentSubtreeRemovalPhase,
 }
 
@@ -1078,6 +1110,11 @@ mod tests {
             operation_id: request.operation_id,
             component,
         };
+        let advance_request = RootComponentSubtreeRemovalAdvanceRequest {
+            operation_id: request.operation_id,
+            component,
+            expected_traversal_steps: 1,
+        };
         let response = RootComponentSubtreeRemovalResponse {
             operation_id: request.operation_id,
             component,
@@ -1086,10 +1123,22 @@ mod tests {
             target_role: CanisterRole::new("project_instance"),
             target_status: ComponentLifecycleStatus::Active,
             reserved_against_registry: registry,
-            phase: RootComponentSubtreeRemovalPhase::Fenced,
+            traversal_steps: 2,
+            phase: RootComponentSubtreeRemovalPhase::LeafSelected(
+                RootComponentSubtreeRemovalNode {
+                    canister_id: Principal::from_slice(&[46; 29]),
+                    parent_canister_id: request.target_canister_id,
+                    role: CanisterRole::new("project_ledger"),
+                    kind: ComponentChildKind::Singleton,
+                    installed_artifact_hash: [47; 32],
+                    status: ComponentLifecycleStatus::Active,
+                },
+            ),
         };
 
         let request_bytes = candid::encode_one(&request).expect("encode subtree removal request");
+        let advance_bytes =
+            candid::encode_one(advance_request).expect("encode subtree removal advance request");
         let status_bytes =
             candid::encode_one(status_request).expect("encode subtree removal status request");
         let response_bytes =
@@ -1099,6 +1148,11 @@ mod tests {
             candid::decode_one::<RootComponentSubtreeRemovalRequest>(&request_bytes)
                 .expect("decode subtree removal request"),
             request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentSubtreeRemovalAdvanceRequest>(&advance_bytes)
+                .expect("decode subtree removal advance request"),
+            advance_request
         );
         assert_eq!(
             candid::decode_one::<RootComponentSubtreeRemovalStatusRequest>(&status_bytes)

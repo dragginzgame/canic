@@ -386,11 +386,15 @@ fn root_component_child_reservation_is_response_idempotent() {
 }
 
 #[test]
-fn root_component_subtree_removal_fence_is_response_idempotent() {
+fn root_component_subtree_removal_fence_and_traversal_are_replay_safe() {
     let begin = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
         .find(|entry| entry.endpoint == "canic_root_component_subtree_removal_begin")
         .expect("root Component subtree-removal begin policy entry");
+    let advance = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_root_component_subtree_removal_advance")
+        .expect("root Component subtree-removal advance policy entry");
     let status = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
         .find(|entry| entry.endpoint == "canic_root_component_subtree_removal_status")
@@ -403,6 +407,13 @@ fn root_component_subtree_removal_fence_is_response_idempotent() {
         }
     );
     assert_eq!(begin.cost_class, CostClass::None);
+    assert_eq!(
+        advance.replay_policy,
+        ReplayPolicy::SnapshotConvergent {
+            command_kind: replay_command_kind("component_registry.advance_subtree_removal.v1"),
+        }
+    );
+    assert_eq!(advance.cost_class, CostClass::None);
     assert_eq!(status.replay_policy, ReplayPolicy::QueryOrReadOnly);
     assert_eq!(status.endpoint_kind, EndpointKind::Query);
 }
