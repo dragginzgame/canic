@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.46` advances the host-only `ic-query` dependency to `0.11.1` and
+  qualifies stable-restart exact retry across every durable Component Child
+  phase with terminal Registry byte-ledger reconstruction.
+
 - `0.100.45` exposes each root-owned Component Directory through bounded,
   revision-bound pages in canonical parent/role/Canister order, with exact
   registered-member authentication and opaque filter-bound continuation.

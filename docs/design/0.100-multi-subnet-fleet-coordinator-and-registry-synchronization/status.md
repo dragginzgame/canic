@@ -6,9 +6,10 @@ Date: 2026-07-29
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.43`.
-- Latest published release: `v0.100.43`.
-- Open patch draft: `0.100.44`; no package-version change has been authorized.
+- Workspace package version: `0.100.45`.
+- Latest published release: `v0.100.45` at
+  `cfb69aa44a591a8c3822e3cf884850bb01e7f7db`.
+- Open patch draft: `0.100.46`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -203,7 +204,7 @@ Registry slices replace the 0.99 root model.
 
 ## Slice 5 — Recovery and Closeout
 
-- [ ] Qualify interruption and exact retry.
+- [x] Qualify interruption and exact retry.
 - [ ] Prove one Component operation cannot block an unrelated Component.
 - [x] Activate initial roots only after active-release-set Store and final
   topology synchronization.
@@ -672,18 +673,28 @@ the target and commits the terminal bit only after parent revalidation.
 Exact retry reconstructs the original authority after later partition
 progress without calling unrelated descendants.
 
-Open 0.100.44 adopts published `ic-query 0.11.0` as Canic's host-only query
-library, including its updated IC agent and transport stack. Existing typed
-Subnet-catalog consumers compile unchanged, while the joined NNS
-Subnet-topology report and dependency-owned cache lifecycle become available
-for the next observational host adapter. No runtime or placement-policy
-authority changes in this dependency slice.
+Released 0.100.44 adopted published `ic-query 0.11.0` as Canic's host-only
+query library, including its updated IC agent and transport stack. Open
+0.100.46 advances that boundary to published `ic-query 0.11.1` and its shared
+inventory-source, cache-error, freshness, provenance and relation-resolution
+internals. Existing typed Subnet-catalog consumers compile unchanged, while
+the joined NNS Subnet-topology report and dependency-owned cache lifecycle
+remain available for the next observational host adapter. No runtime or
+placement-policy authority changes in either dependency slice.
+
+Open 0.100.46 also qualifies the complete durable Component Child progression
+across stable Registry restart after creation intent, observed creation,
+install intent, installation, verification, commitment, Directory preparation,
+runtime activation, Registry membership and terminal Directory
+synchronization. Exact retry preserves the original identity and phase
+evidence at every boundary. A fresh sum of every persisted Registry row and
+index must exactly reproduce both the terminal Component partition and root
+byte ledgers.
 
 ## Next Action
 
-Close the direct-child lifecycle integration around root sealing, queries and
-same-release recovery qualification. Prove terminal child operations satisfy
-the maintained inventory and byte-ledger invariants without introducing
-full-tree Directory fan-out. Do not introduce nested Component declarations,
-let application Canisters call management effects directly or infer
-authorization from catalog presence alone.
+Prove one Component's incomplete or failed operation cannot block progress in
+an unrelated Component partition while shared root-wide limits remain exact.
+Then implement durable post-order subtree removal. Do not introduce nested
+Component declarations, let application Canisters call management effects
+directly or infer authorization from catalog presence alone.
