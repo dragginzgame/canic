@@ -177,17 +177,17 @@ fn validate_directory_progression(
     current: &ComponentRuntimeDirectoryAuthority,
     next: &ComponentRuntimeDirectoryAuthority,
 ) -> Result<(), InternalError> {
+    if current == next {
+        return Ok(());
+    }
     let current_component = &current.component.provenance;
     let next_component = &next.component.provenance;
-    let expected_revision = current_component
-        .component_registry_revision
-        .checked_add(1)
-        .ok_or_else(|| InternalError::resource_exhausted("Component Registry revision overflow"))?;
     let current_fleet_revision = current.fleet.provenance.registry.revision;
     let next_fleet_revision = next.fleet.provenance.registry.revision;
     if next_component.component != current_component.component
         || next_component.source_fleet_subnet_root != current_component.source_fleet_subnet_root
-        || next_component.component_registry_revision != expected_revision
+        || next_component.component_registry_revision
+            <= current_component.component_registry_revision
         || next_component.component_registry_content_hash
             == current_component.component_registry_content_hash
         || next_component.synchronized_at_ns <= current_component.synchronized_at_ns
@@ -252,5 +252,103 @@ const fn owning_component(binding: &ManagedCanisterBinding) -> &ComponentBinding
     match binding {
         ManagedCanisterBinding::Component(component) => component,
         ManagedCanisterBinding::ComponentChild(child) => &child.component,
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        dto::{
+            component_registry::{ComponentDirectoryHead, ComponentDirectoryProvenance},
+            fleet_registry::{
+                FleetDirectoryProvenance, FleetRegistryVersion, FleetSubnetRootDirectoryEntry,
+            },
+        },
+        ids::{
+            AppId, CanisterRole, CanonicalNetworkId, ComponentInstanceId, FleetBinding,
+            FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, SubnetId,
+        },
+    };
+    use candid::Principal;
+
+    #[test]
+    fn directory_progression_accepts_exact_replay_and_skipped_revisions() {
+        let current = directory_authority();
+        assert!(validate_directory_progression(&current, &current).is_ok());
+
+        let mut skipped = current.clone();
+        skipped.component.provenance.component_registry_revision = 3;
+        skipped.component.provenance.component_registry_content_hash = [13; 32];
+        skipped.component.provenance.synchronized_at_ns = 14;
+        skipped.component.descendant_count = 2;
+        assert!(validate_directory_progression(&current, &skipped).is_ok());
+
+        let mut conflicting = current.clone();
+        conflicting
+            .component
+            .provenance
+            .component_registry_content_hash = [15; 32];
+        assert!(validate_directory_progression(&current, &conflicting).is_err());
+    }
+
+    fn directory_authority() -> ComponentRuntimeDirectoryAuthority {
+        let subnet = SubnetId::from_principal(Principal::from_slice(&[2; 29]));
+        let root = Principal::from_slice(&[3; 29]);
+        let authority = FleetRegistryAuthority {
+            binding: FleetCoordinatorBinding {
+                fleet: FleetBinding {
+                    fleet: FleetKey {
+                        canonical_network_id: CanonicalNetworkId::public_ic(),
+                        fleet_id: FleetId::from_generated_bytes([4; 32]),
+                    },
+                    app: AppId::from("test"),
+                },
+                coordinator_subnet: subnet,
+                coordinator: Principal::from_slice(&[5; 29]),
+            },
+            epoch: 1,
+        };
+        let component = ComponentBinding {
+            authority: authority.clone(),
+            component: ComponentInstanceId::from_generated_bytes([6; 32]),
+            component_spec: "projects".parse().expect("Component Spec"),
+            spec_hash: [7; 32],
+            role: CanisterRole::new("project_hub"),
+            placement_subnet: subnet,
+            fleet_subnet_root: root,
+            canister_id: Principal::from_slice(&[8; 29]),
+        };
+        ComponentRuntimeDirectoryAuthority {
+            fleet: FleetDirectorySnapshot {
+                provenance: FleetDirectoryProvenance {
+                    registry: FleetRegistryVersion {
+                        authority,
+                        revision: 9,
+                        content_hash: [10; 32],
+                    },
+                    source_fleet_subnet_root: root,
+                },
+                fleet_subnet_roots: vec![FleetSubnetRootDirectoryEntry {
+                    placement_subnet: subnet,
+                    fleet_subnet_root: root,
+                    status: FleetSubnetRootStatus::Active,
+                }],
+            },
+            component: ComponentDirectoryHead {
+                provenance: ComponentDirectoryProvenance {
+                    component,
+                    source_fleet_subnet_root: root,
+                    component_registry_revision: 1,
+                    component_registry_content_hash: [11; 32],
+                    synchronized_at_ns: 12,
+                },
+                descendant_count: 0,
+            },
+        }
     }
 }

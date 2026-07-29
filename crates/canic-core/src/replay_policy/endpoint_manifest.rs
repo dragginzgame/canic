@@ -152,6 +152,10 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "canic_root_component_child_commit",
         command_kind("component_registry.commit_child.v1"),
     ),
+    update_response_idempotent(
+        "canic_root_component_child_directory_prepare",
+        command_kind("component_registry.prepare_child_directory.v1"),
+    ),
     update_costed_response_idempotent(
         "canic_root_component_create",
         command_kind("management.control_plane.component_create.v1"),

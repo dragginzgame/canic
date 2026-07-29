@@ -155,6 +155,18 @@ pub struct RootComponentChildCommitRequest {
 }
 
 ///
+/// RootComponentChildDirectoryPreparationRequest
+///
+/// Parent command distributing one committed child's Directory and converging its affected members.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentChildDirectoryPreparationRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+}
+
+///
 /// RootComponentCreationRequest
 ///
 /// Controller command continuing one already reserved top-level Component operation.
@@ -432,6 +444,21 @@ pub struct ComponentRuntimeStatusResponse {
 }
 
 ///
+/// ComponentRuntimeDirectoryConvergenceEvidence
+///
+/// Stable root evidence that one active member covered at least the required Directory authority.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentRuntimeDirectoryConvergenceEvidence {
+    pub operation_id: [u8; 32],
+    pub binding: ManagedCanisterBinding,
+    pub covered_authority: ComponentRuntimeDirectoryAuthority,
+    pub covered_authority_hash: [u8; 32],
+    pub activation: ComponentRuntimeActivationEvidence,
+}
+
+///
 /// RootComponentCreationEvidence
 ///
 /// Exact Store artifact and root-owned creation settings frozen before the paid effect.
@@ -529,6 +556,20 @@ pub struct RootComponentChildCommitResponse {
     pub allocation: RootComponentChildAllocationResponse,
     pub registry: ComponentRegistryPartitionResponse,
     pub directory: ComponentDirectoryHead,
+}
+
+///
+/// RootComponentChildDirectoryPreparationResponse
+///
+/// Exact child preparation plus stable bounded active-member Directory coverage.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentChildDirectoryPreparationResponse {
+    pub committed: RootComponentChildCommitResponse,
+    pub child: ComponentRuntimeStatusResponse,
+    pub owning_component: ComponentRuntimeDirectoryConvergenceEvidence,
+    pub parent: Option<ComponentRuntimeDirectoryConvergenceEvidence>,
 }
 
 ///
@@ -834,6 +875,10 @@ mod tests {
             operation_id: request.operation_id,
             component,
         };
+        let directory_request = RootComponentChildDirectoryPreparationRequest {
+            operation_id: request.operation_id,
+            component,
+        };
         let root = Principal::from_slice(&[17; 29]);
         let parent = Principal::from_slice(&[14; 29]);
         let child = Principal::from_slice(&[18; 29]);
@@ -904,7 +949,7 @@ mod tests {
             },
             directory: ComponentDirectoryHead {
                 provenance: ComponentDirectoryProvenance {
-                    component: child_binding.component,
+                    component: child_binding.component.clone(),
                     source_fleet_subnet_root: root,
                     component_registry_revision: 3,
                     component_registry_content_hash: [25; 32],
@@ -912,6 +957,49 @@ mod tests {
                 },
                 descendant_count: 1,
             },
+        };
+        let runtime_authority = ComponentRuntimeDirectoryAuthority {
+            fleet: FleetDirectorySnapshot {
+                provenance: crate::dto::fleet_registry::FleetDirectoryProvenance {
+                    registry: FleetRegistryVersion {
+                        authority: fleet_registry_authority(),
+                        revision: 4,
+                        content_hash: [28; 32],
+                    },
+                    source_fleet_subnet_root: root,
+                },
+                fleet_subnet_roots: vec![
+                    crate::dto::fleet_registry::FleetSubnetRootDirectoryEntry {
+                        placement_subnet: commit_response.registry.binding.placement_subnet,
+                        fleet_subnet_root: root,
+                        status: crate::dto::fleet_registry::FleetSubnetRootStatus::Active,
+                    },
+                ],
+            },
+            component: commit_response.directory.clone(),
+        };
+        let activation = ComponentRuntimeActivationEvidence {
+            directory_authority_hash: [29; 32],
+            activated_at_ns: 30,
+        };
+        let directory_response = RootComponentChildDirectoryPreparationResponse {
+            committed: commit_response.clone(),
+            child: ComponentRuntimeStatusResponse {
+                operation_id: request.operation_id,
+                binding: ManagedCanisterBinding::ComponentChild(child_binding.clone()),
+                phase: ComponentRuntimePhase::DirectoryPrepared,
+                authority: Some(runtime_authority.clone()),
+                authority_hash: Some([31; 32]),
+                activation: None,
+            },
+            owning_component: ComponentRuntimeDirectoryConvergenceEvidence {
+                operation_id: [32; 32],
+                binding: ManagedCanisterBinding::Component(child_binding.component),
+                covered_authority: runtime_authority,
+                covered_authority_hash: [31; 32],
+                activation,
+            },
+            parent: None,
         };
 
         let request_bytes = candid::encode_one(&request).expect("encode child reservation");
@@ -924,8 +1012,12 @@ mod tests {
         let response_bytes = candid::encode_one(&response).expect("encode child response");
         let commit_request_bytes =
             candid::encode_one(commit_request).expect("encode child commit request");
+        let directory_request_bytes =
+            candid::encode_one(directory_request).expect("encode child Directory request");
         let commit_response_bytes =
             candid::encode_one(&commit_response).expect("encode child commit response");
+        let directory_response_bytes =
+            candid::encode_one(&directory_response).expect("encode child Directory response");
 
         assert_eq!(
             candid::decode_one::<RootComponentChildAllocationRequest>(&request_bytes)
@@ -958,9 +1050,23 @@ mod tests {
             commit_request
         );
         assert_eq!(
+            candid::decode_one::<RootComponentChildDirectoryPreparationRequest>(
+                &directory_request_bytes
+            )
+            .expect("decode child Directory request"),
+            directory_request
+        );
+        assert_eq!(
             candid::decode_one::<RootComponentChildCommitResponse>(&commit_response_bytes)
                 .expect("decode child commit response"),
             commit_response
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentChildDirectoryPreparationResponse>(
+                &directory_response_bytes
+            )
+            .expect("decode child Directory response"),
+            directory_response
         );
     }
 

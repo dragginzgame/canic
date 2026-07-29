@@ -54,6 +54,7 @@ use canic_core::{
             ComponentLifecycleStatus, ComponentProvisioningOrigin, ComponentRegistryHead,
             ComponentRegistryPartitionRequest, ComponentRegistryPartitionResponse,
             ComponentRuntimeActivationRequest, ComponentRuntimeDirectoryAuthority,
+            ComponentRuntimeDirectoryConvergenceEvidence,
             ComponentRuntimeDirectoryPreparationRequest,
             ComponentRuntimeDirectorySynchronizationRequest, ComponentRuntimePhase,
             ComponentRuntimeStatusResponse, RootComponentAllocationPhase,
@@ -61,7 +62,8 @@ use canic_core::{
             RootComponentAllocationStatusRequest, RootComponentChildAllocationRequest,
             RootComponentChildAllocationResponse, RootComponentChildAllocationStatusRequest,
             RootComponentChildCommitRequest, RootComponentChildCommitResponse,
-            RootComponentChildCreationRequest, RootComponentChildInstallEvidence,
+            RootComponentChildCreationRequest, RootComponentChildDirectoryPreparationRequest,
+            RootComponentChildDirectoryPreparationResponse, RootComponentChildInstallEvidence,
             RootComponentChildInstallRequest, RootComponentCommitRequest,
             RootComponentCommitResponse, RootComponentCreationEvidence,
             RootComponentCreationRequest, RootComponentDirectoryPreparationRequest,
@@ -85,10 +87,21 @@ struct PreparedComponentRuntimePlan {
     allocation: RootComponentAllocationView,
     partition: ComponentRegistryPartitionView,
     target_canister: candid::Principal,
-    target_binding: ComponentBinding,
+    target_binding: ManagedCanisterBinding,
     directory_request: ComponentRuntimeDirectoryPreparationRequest,
     directory_authority_hash: [u8; 32],
     maximum_component_registry_bytes: u64,
+}
+
+struct PreparedChildRuntimePlan {
+    committed_partition: ComponentRegistryPartitionView,
+    child_canister: candid::Principal,
+    child_binding: ManagedCanisterBinding,
+    owning_component_binding: ManagedCanisterBinding,
+    requesting_parent_binding: ManagedCanisterBinding,
+    parent_binding: Option<ManagedCanisterBinding>,
+    directory_request: ComponentRuntimeDirectoryPreparationRequest,
+    directory_authority_hash: [u8; 32],
 }
 
 /// Prepare the one empty Component Registry meta record under exact active root authority.
@@ -563,6 +576,79 @@ pub async fn commit_child_allocation(
         &partition,
     )?;
     child_commit_response(committed, partition)
+}
+
+/// Prepare one committed child and converge its owning Component plus distinct direct parent.
+pub async fn prepare_child_directories(
+    request: RootComponentChildDirectoryPreparationRequest,
+) -> Result<RootComponentChildDirectoryPreparationResponse, InternalError> {
+    let plan = prepared_child_runtime_plan(request.component, request.operation_id).await?;
+    let observed = query_component_runtime_status(plan.child_canister).await?;
+    let prepared_child = match validate_target_directory_status(
+        &observed,
+        &plan.child_binding,
+        &plan.directory_request,
+        plan.directory_authority_hash,
+    )? {
+        ComponentRuntimePhase::AwaitingDirectory => {
+            prepare_target_component_directories(
+                plan.child_canister,
+                plan.directory_request.clone(),
+            )
+            .await?
+        }
+        ComponentRuntimePhase::DirectoryPrepared | ComponentRuntimePhase::Active => observed,
+    };
+    let _ = prepared_target_directory_status(
+        &prepared_child,
+        &plan.child_binding,
+        &plan.directory_request,
+        plan.directory_authority_hash,
+    )?;
+
+    let independently_observed = query_component_runtime_status(plan.child_canister).await?;
+    let child = prepared_target_directory_status(
+        &independently_observed,
+        &plan.child_binding,
+        &plan.directory_request,
+        plan.directory_authority_hash,
+    )?;
+    let owning_component = converge_active_member_directory(
+        &plan.owning_component_binding,
+        &plan.directory_request.authority,
+        plan.directory_authority_hash,
+    )
+    .await?;
+    let parent = match &plan.parent_binding {
+        Some(parent_binding) => Some(
+            converge_active_member_directory(
+                parent_binding,
+                &plan.directory_request.authority,
+                plan.directory_authority_hash,
+            )
+            .await?,
+        ),
+        None => None,
+    };
+    validate_requesting_parent_still_active(request.component, &plan.requesting_parent_binding)?;
+    let allocation = ComponentRegistryOps::mark_child_directory_prepared(
+        request.component,
+        request.operation_id,
+        plan.directory_authority_hash,
+    )?;
+    if !committed_child_directory_receipt(&allocation)?.directory_prepared {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component Child Directory preparation did not commit its terminal root receipt",
+        ));
+    }
+
+    Ok(RootComponentChildDirectoryPreparationResponse {
+        committed: child_commit_response(allocation, plan.committed_partition)?,
+        child,
+        owning_component,
+        parent,
+    })
 }
 
 /// Atomically commit one verified top-level Component and its first Directory authority.
@@ -2001,7 +2087,7 @@ async fn prepared_component_runtime_plan(
         allocation,
         partition,
         target_canister: install.canister,
-        target_binding: install.durable.binding,
+        target_binding: ManagedCanisterBinding::Component(install.durable.binding),
         directory_request: ComponentRuntimeDirectoryPreparationRequest {
             operation_id,
             authority,
@@ -2009,6 +2095,172 @@ async fn prepared_component_runtime_plan(
         directory_authority_hash,
         maximum_component_registry_bytes: install.durable.maximum_registry_bytes,
     })
+}
+
+async fn prepared_child_runtime_plan(
+    component: canic_core::ids::ComponentInstanceId,
+    operation_id: [u8; 32],
+) -> Result<PreparedChildRuntimePlan, InternalError> {
+    let (root_authority, root) = root_authority()?;
+    let prepared = prepared_registry(&root_authority.binding, root_authority.initial_release_set)?;
+    let preparation_request = RootComponentRegistryPreparationRequest {
+        store_bootstrap: prepared.store_bootstrap.clone(),
+        expected_fleet_registry: prepared.prepared_against_registry.clone(),
+    };
+    let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    let fleet_directory = validate_active_authority(&root_authority, root, &preparation_request)?;
+    if FleetActivationApi::status()
+        .map_err(InternalError::public)?
+        .phase
+        != FleetActivationPhase::Active
+    {
+        return Err(InternalError::unavailable(
+            "Component Child Directory preparation requires an Active Fleet Subnet Root runtime",
+        ));
+    }
+
+    let caller = IcOps::msg_caller();
+    let (parent_binding, parent_status) =
+        ComponentRegistryOps::registered_parent(component, caller)?.ok_or_else(|| {
+            InternalError::public(Error::forbidden(format!(
+                "caller {caller} is not a registered member of Component {component}"
+            )))
+        })?;
+    if parent_status != ComponentLifecycleStatus::Active {
+        return Err(InternalError::unavailable(
+            "Component Child Directory preparation requires its exact parent to remain Active",
+        ));
+    }
+    let allocation =
+        ComponentRegistryOps::child_allocation(component, operation_id)?.ok_or_else(|| {
+            InternalError::unavailable("Component Child allocation operation has not been reserved")
+        })?;
+    let topology = ConfigOps::component_topology()?;
+    validate_child_allocation(
+        &root_authority.binding,
+        root_authority.initial_release_set,
+        &topology,
+        &parent_binding,
+        &allocation,
+        None,
+    )?;
+    let install = child_component_install_plan(
+        &root_authority.binding,
+        &store,
+        &parent_binding,
+        &allocation,
+    )
+    .await?;
+    let installation = committed_child_installation(&allocation)?;
+    validate_child_install_effect(installation, &install.durable)?;
+    verify_installed_child(&install).await?;
+    let child_binding = ManagedCanisterBinding::ComponentChild(installation.binding.clone());
+
+    let (allocation, committed_partition) =
+        ComponentRegistryOps::committed_child_authority(component, operation_id, &fleet_directory)?;
+    validate_partition(
+        &root_authority.binding,
+        root_authority.initial_release_set,
+        &topology,
+        &committed_partition,
+    )?;
+    let current_partition = current_child_partition(
+        &root_authority.binding,
+        root_authority.initial_release_set,
+        &topology,
+        component,
+        &committed_partition,
+    )?;
+    let (directory_request, directory_authority_hash) = child_directory_request(
+        operation_id,
+        fleet_directory,
+        &committed_partition,
+        &allocation,
+    )?;
+
+    let owning_component_binding = ManagedCanisterBinding::Component(current_partition.binding);
+    let requesting_parent_binding = parent_binding;
+    let parent_binding = (managed_canister_principal(&requesting_parent_binding)
+        != managed_canister_principal(&owning_component_binding))
+    .then_some(requesting_parent_binding.clone());
+    Ok(PreparedChildRuntimePlan {
+        committed_partition,
+        child_canister: install.canister,
+        child_binding,
+        owning_component_binding,
+        requesting_parent_binding,
+        parent_binding,
+        directory_request,
+        directory_authority_hash,
+    })
+}
+
+fn validate_requesting_parent_still_active(
+    component: canic_core::ids::ComponentInstanceId,
+    expected: &ManagedCanisterBinding,
+) -> Result<(), InternalError> {
+    let caller = IcOps::msg_caller();
+    let (current, status) = ComponentRegistryOps::registered_parent(component, caller)?
+        .ok_or_else(|| {
+            InternalError::public(Error::forbidden(format!(
+                "caller {caller} is no longer a registered member of Component {component}"
+            )))
+        })?;
+    if current != *expected || status != ComponentLifecycleStatus::Active {
+        return Err(InternalError::conflict(
+            "Component Child Directory parent changed before terminal convergence",
+        ));
+    }
+    Ok(())
+}
+
+fn current_child_partition(
+    root: &canic_core::ids::FleetSubnetRootBinding,
+    release_set: canic_core::ids::FleetSubnetRootReleaseSet,
+    topology: &canic_core::control_plane_support::config::ComponentTopology,
+    component: canic_core::ids::ComponentInstanceId,
+    committed: &ComponentRegistryPartitionView,
+) -> Result<ComponentRegistryPartitionView, InternalError> {
+    let current = ComponentRegistryOps::partition(component)?.ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "committed Component Child has no current owning Registry partition",
+        )
+    })?;
+    validate_partition(root, release_set, topology, &current)?;
+    if current.status != ComponentLifecycleStatus::Active
+        || current.binding != committed.binding
+        || current.revision < committed.revision
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "committed Component Child differs from its current owning Component authority",
+        ));
+    }
+    Ok(current)
+}
+
+fn child_directory_request(
+    operation_id: [u8; 32],
+    fleet: FleetDirectorySnapshot,
+    partition: &ComponentRegistryPartitionView,
+    allocation: &RootComponentChildAllocationView,
+) -> Result<(ComponentRuntimeDirectoryPreparationRequest, [u8; 32]), InternalError> {
+    let request = ComponentRuntimeDirectoryPreparationRequest {
+        operation_id,
+        authority: ComponentRuntimeDirectoryAuthority {
+            fleet,
+            component: component_directory_head(partition),
+        },
+    };
+    let authority_hash = ComponentRuntimeOps::directory_authority_hash(&request.authority)?;
+    if committed_child_directory_receipt(allocation)?.directory_authority_hash != authority_hash {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "committed Component Child Directory receipt differs from its Registry authority",
+        ));
+    }
+    Ok((request, authority_hash))
 }
 
 async fn query_component_runtime_status(
@@ -2075,15 +2327,187 @@ async fn prepare_target_component_directories(
     result.map_err(InternalError::public)
 }
 
+async fn converge_active_member_directory(
+    binding: &ManagedCanisterBinding,
+    authority: &ComponentRuntimeDirectoryAuthority,
+    authority_hash: [u8; 32],
+) -> Result<ComponentRuntimeDirectoryConvergenceEvidence, InternalError> {
+    let canister = managed_canister_principal(binding);
+    let observed = query_component_runtime_status(canister).await?;
+    let converged =
+        if active_member_directory_is_converged(&observed, binding, authority, authority_hash)? {
+            observed
+        } else {
+            let request = ComponentRuntimeDirectorySynchronizationRequest {
+                operation_id: observed.operation_id,
+                authority: authority.clone(),
+            };
+            match synchronize_target_component_directory(canister, request).await {
+                Ok(status) => status,
+                Err(call_error) => {
+                    let reconciled = query_component_runtime_status(canister).await?;
+                    if active_member_directory_is_converged(
+                        &reconciled,
+                        binding,
+                        authority,
+                        authority_hash,
+                    )
+                    .is_ok_and(|converged| converged)
+                    {
+                        reconciled
+                    } else {
+                        return Err(call_error);
+                    }
+                }
+            }
+        };
+    if !active_member_directory_is_converged(&converged, binding, authority, authority_hash)? {
+        return Err(InternalError::unavailable(
+            "active Component-tree member has not retained the committed Directory authority",
+        ));
+    }
+
+    let independently_observed = query_component_runtime_status(canister).await?;
+    exact_active_member_directory_receipt(
+        &independently_observed,
+        binding,
+        authority,
+        authority_hash,
+    )
+}
+
+fn active_member_directory_is_converged(
+    status: &ComponentRuntimeStatusResponse,
+    binding: &ManagedCanisterBinding,
+    expected: &ComponentRuntimeDirectoryAuthority,
+    expected_hash: [u8; 32],
+) -> Result<bool, InternalError> {
+    let current = status.authority.as_ref().ok_or_else(|| {
+        InternalError::conflict("Active Component-tree member has no current Directory authority")
+    })?;
+    let current_hash = status.authority_hash.ok_or_else(|| {
+        InternalError::conflict("Active Component-tree member has no current Directory hash")
+    })?;
+    let activation = status.activation.ok_or_else(|| {
+        InternalError::conflict("Active Component-tree member has no immutable activation receipt")
+    })?;
+    if status.binding != *binding
+        || status.phase != ComponentRuntimePhase::Active
+        || activation.directory_authority_hash == [0; 32]
+        || activation.activated_at_ns == 0
+        || ComponentRuntimeOps::directory_authority_hash(current)? != current_hash
+    {
+        return Err(InternalError::conflict(
+            "Component-tree member status differs from its active protected authority",
+        ));
+    }
+
+    let current_component = &current.component.provenance;
+    let expected_component = &expected.component.provenance;
+    if current_component.component != expected_component.component
+        || current_component.source_fleet_subnet_root != expected_component.source_fleet_subnet_root
+        || current_component.component != *owning_component(binding)
+    {
+        return Err(InternalError::conflict(
+            "Component-tree member belongs to a different Component Directory",
+        ));
+    }
+    match current_component
+        .component_registry_revision
+        .cmp(&expected_component.component_registry_revision)
+    {
+        std::cmp::Ordering::Equal => {
+            if current == expected && current_hash == expected_hash {
+                Ok(true)
+            } else {
+                Err(InternalError::conflict(
+                    "Component-tree member retained conflicting authority at the committed revision",
+                ))
+            }
+        }
+        std::cmp::Ordering::Less => {
+            if expected_component.component_registry_content_hash
+                == current_component.component_registry_content_hash
+                || expected_component.synchronized_at_ns <= current_component.synchronized_at_ns
+                || !fleet_directory_non_regressing(&current.fleet, &expected.fleet)
+            {
+                return Err(InternalError::conflict(
+                    "committed Component Directory cannot advance the active member safely",
+                ));
+            }
+            Ok(false)
+        }
+        std::cmp::Ordering::Greater => {
+            if current_component.component_registry_content_hash
+                == expected_component.component_registry_content_hash
+                || current_component.synchronized_at_ns <= expected_component.synchronized_at_ns
+                || !fleet_directory_non_regressing(&expected.fleet, &current.fleet)
+            {
+                return Err(InternalError::conflict(
+                    "active Component-tree member progressed through conflicting Directory authority",
+                ));
+            }
+            Ok(true)
+        }
+    }
+}
+
+fn exact_active_member_directory_receipt(
+    status: &ComponentRuntimeStatusResponse,
+    binding: &ManagedCanisterBinding,
+    authority: &ComponentRuntimeDirectoryAuthority,
+    authority_hash: [u8; 32],
+) -> Result<ComponentRuntimeDirectoryConvergenceEvidence, InternalError> {
+    if !active_member_directory_is_converged(status, binding, authority, authority_hash)? {
+        return Err(InternalError::unavailable(
+            "active Component-tree member has not converged on the committed Directory authority",
+        ));
+    }
+    let activation = status.activation.ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "converged Component-tree member lost its immutable activation receipt",
+        )
+    })?;
+    Ok(ComponentRuntimeDirectoryConvergenceEvidence {
+        operation_id: status.operation_id,
+        binding: binding.clone(),
+        covered_authority: authority.clone(),
+        covered_authority_hash: authority_hash,
+        activation,
+    })
+}
+
+fn fleet_directory_non_regressing(
+    current: &FleetDirectorySnapshot,
+    next: &FleetDirectorySnapshot,
+) -> bool {
+    let current_revision = current.provenance.registry.revision;
+    let next_revision = next.provenance.registry.revision;
+    next_revision > current_revision || (next_revision == current_revision && next == current)
+}
+
+const fn managed_canister_principal(binding: &ManagedCanisterBinding) -> candid::Principal {
+    match binding {
+        ManagedCanisterBinding::Component(component) => component.canister_id,
+        ManagedCanisterBinding::ComponentChild(child) => child.canister_id,
+    }
+}
+
+const fn owning_component(binding: &ManagedCanisterBinding) -> &ComponentBinding {
+    match binding {
+        ManagedCanisterBinding::Component(component) => component,
+        ManagedCanisterBinding::ComponentChild(child) => &child.component,
+    }
+}
+
 fn validate_target_directory_status(
     status: &ComponentRuntimeStatusResponse,
-    binding: &ComponentBinding,
+    binding: &ManagedCanisterBinding,
     request: &ComponentRuntimeDirectoryPreparationRequest,
     authority_hash: [u8; 32],
 ) -> Result<ComponentRuntimePhase, InternalError> {
-    if status.operation_id != request.operation_id
-        || status.binding != ManagedCanisterBinding::Component(binding.clone())
-    {
+    if status.operation_id != request.operation_id || status.binding != *binding {
         return Err(InternalError::conflict(
             "Component runtime Directory status differs from root installation authority",
         ));
@@ -2123,7 +2547,7 @@ fn validate_target_directory_status(
 
 fn prepared_target_directory_status(
     status: &ComponentRuntimeStatusResponse,
-    binding: &ComponentBinding,
+    binding: &ManagedCanisterBinding,
     request: &ComponentRuntimeDirectoryPreparationRequest,
     authority_hash: [u8; 32],
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
@@ -2131,7 +2555,7 @@ fn prepared_target_directory_status(
         ComponentRuntimePhase::DirectoryPrepared => Ok(status.clone()),
         ComponentRuntimePhase::Active => Ok(ComponentRuntimeStatusResponse {
             operation_id: request.operation_id,
-            binding: ManagedCanisterBinding::Component(binding.clone()),
+            binding: binding.clone(),
             phase: ComponentRuntimePhase::DirectoryPrepared,
             authority: Some(request.authority.clone()),
             authority_hash: Some(authority_hash),
@@ -2145,7 +2569,7 @@ fn prepared_target_directory_status(
 
 fn validate_active_target_runtime_status(
     status: &ComponentRuntimeStatusResponse,
-    binding: &ComponentBinding,
+    binding: &ManagedCanisterBinding,
     request: &ComponentRuntimeDirectoryPreparationRequest,
     authority_hash: [u8; 32],
 ) -> Result<(), InternalError> {
@@ -2161,7 +2585,7 @@ fn validate_active_target_runtime_status(
 
 fn active_target_runtime_status(
     status: &ComponentRuntimeStatusResponse,
-    binding: &ComponentBinding,
+    binding: &ManagedCanisterBinding,
     request: &ComponentRuntimeDirectoryPreparationRequest,
     authority_hash: [u8; 32],
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
@@ -2174,7 +2598,7 @@ fn active_target_runtime_status(
     })?;
     Ok(ComponentRuntimeStatusResponse {
         operation_id: request.operation_id,
-        binding: ManagedCanisterBinding::Component(binding.clone()),
+        binding: binding.clone(),
         phase: ComponentRuntimePhase::Active,
         authority: Some(request.authority.clone()),
         authority_hash: Some(authority_hash),
@@ -2184,7 +2608,7 @@ fn active_target_runtime_status(
 
 fn validate_target_membership_status(
     status: &ComponentRuntimeStatusResponse,
-    binding: &ComponentBinding,
+    binding: &ManagedCanisterBinding,
     prepared_request: &ComponentRuntimeDirectoryPreparationRequest,
     prepared_authority_hash: [u8; 32],
     active_request: &ComponentRuntimeDirectorySynchronizationRequest,
@@ -2328,6 +2752,19 @@ fn committed_installation(
     }
 }
 
+fn committed_child_installation(
+    allocation: &RootComponentChildAllocationView,
+) -> Result<&RootComponentChildInstallEffectView, InternalError> {
+    match &allocation.progress {
+        RootComponentChildAllocationProgressView::Committed { installation, .. } => {
+            Ok(installation)
+        }
+        _ => Err(InternalError::conflict(
+            "Component Child allocation must be committed before Directory preparation",
+        )),
+    }
+}
+
 fn committed_directory_receipt(
     allocation: &RootComponentAllocationView,
 ) -> Result<&crate::view::component_registry::RootComponentCommitmentView, InternalError> {
@@ -2335,6 +2772,17 @@ fn committed_directory_receipt(
         RootComponentAllocationProgressView::Committed { commitment, .. } => Ok(commitment),
         _ => Err(InternalError::conflict(
             "Component allocation has no committed Directory authority",
+        )),
+    }
+}
+
+fn committed_child_directory_receipt(
+    allocation: &RootComponentChildAllocationView,
+) -> Result<&crate::view::component_registry::RootComponentChildCommitmentView, InternalError> {
+    match &allocation.progress {
+        RootComponentChildAllocationProgressView::Committed { commitment, .. } => Ok(commitment),
+        _ => Err(InternalError::conflict(
+            "Component Child allocation has no committed Directory authority",
         )),
     }
 }

@@ -260,18 +260,13 @@ impl FleetActivationOps {
         }
         let current_provenance = &current.authority.component.provenance;
         let next_provenance = &next.authority.component.provenance;
-        let expected_revision = current_provenance
-            .component_registry_revision
-            .checked_add(1)
-            .ok_or_else(|| FleetActivationOpsError::InvalidTransition {
-                reason: "Component Registry revision overflow".to_string(),
-            })?;
         let current_fleet_revision = current.authority.fleet.provenance.registry.revision;
         let next_fleet_revision = next.authority.fleet.provenance.registry.revision;
         if next_provenance.component != current_provenance.component
             || next_provenance.source_fleet_subnet_root
                 != current_provenance.source_fleet_subnet_root
-            || next_provenance.component_registry_revision != expected_revision
+            || next_provenance.component_registry_revision
+                <= current_provenance.component_registry_revision
             || next_provenance.component_registry_content_hash
                 == current_provenance.component_registry_content_hash
             || next_provenance.synchronized_at_ns <= current_provenance.synchronized_at_ns
@@ -1552,7 +1547,7 @@ mod tests {
         active_authority
             .component
             .provenance
-            .component_registry_revision = 2;
+            .component_registry_revision = 3;
         active_authority
             .component
             .provenance

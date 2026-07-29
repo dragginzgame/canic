@@ -29,6 +29,8 @@ pub const CANIC_ROOT_COMPONENT_CHILD_ALLOCATION_STATUS: &str =
 pub const CANIC_ROOT_COMPONENT_CHILD_CREATE: &str = "canic_root_component_child_create";
 pub const CANIC_ROOT_COMPONENT_CHILD_INSTALL: &str = "canic_root_component_child_install";
 pub const CANIC_ROOT_COMPONENT_CHILD_COMMIT: &str = "canic_root_component_child_commit";
+pub const CANIC_ROOT_COMPONENT_CHILD_DIRECTORY_PREPARE: &str =
+    "canic_root_component_child_directory_prepare";
 pub const CANIC_ROOT_COMPONENT_CREATE: &str = "canic_root_component_create";
 pub const CANIC_ROOT_COMPONENT_INSTALL: &str = "canic_root_component_install";
 pub const CANIC_ROOT_COMPONENT_COMMIT: &str = "canic_root_component_commit";

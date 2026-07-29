@@ -571,6 +571,11 @@ fn assert_component_registry_protocol_constants() {
             "canic_root_component_child_commit",
         ),
         (
+            canic::protocol::CANIC_ROOT_COMPONENT_CHILD_DIRECTORY_PREPARE,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_CHILD_DIRECTORY_PREPARE,
+            "canic_root_component_child_directory_prepare",
+        ),
+        (
             canic::protocol::CANIC_ROOT_COMPONENT_CREATE,
             canic_core::protocol::CANIC_ROOT_COMPONENT_CREATE,
             "canic_root_component_create",
@@ -694,6 +699,14 @@ fn assert_root_registry_mirror_guards(root: &str) {
         preceding_attribute_context(root, "async fn canic_root_component_child_commit(")
             .contains("canic_update(internal, public)"),
         "root Component Child commitment must remain a public update authenticated by workflow"
+    );
+    assert!(
+        preceding_attribute_context(
+            root,
+            "async fn canic_root_component_child_directory_prepare("
+        )
+        .contains("canic_update(internal, public)"),
+        "root Component Child Directory preparation must remain a public update authenticated by workflow"
     );
     for endpoint in [
         "async fn canic_root_component_create(",
