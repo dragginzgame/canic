@@ -10,6 +10,7 @@ use crate::storage::stable::{
     component_registry::{
         ComponentRegistryEntryRecord, ComponentRegistryPrincipalIndexRecord,
         RootComponentAllocationRecord, RootComponentRegistryData, RootComponentRegistryStateRecord,
+        RootComponentSubtreeRemovalCompletedLeafRecord,
     },
     fleet_coordinator::{FleetCoordinatorRegistryData, FleetCoordinatorRegistryRecord},
     fleet_registry_mirror::{RootFleetRegistryMirrorData, RootFleetRegistryMirrorStateRecord},
@@ -30,8 +31,9 @@ use canic_core::{
             CONTROL_PLANE_SUBNET_STATE_ID, FLEET_COORDINATOR_REGISTRY_ID,
             ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_PRINCIPAL_INDEX_ID,
             ROOT_COMPONENT_REGISTRY_ENTRIES_ID, ROOT_COMPONENT_REGISTRY_META_ID,
-            ROOT_FLEET_REGISTRY_MIRROR_ID, TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID,
-            TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
+            ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID, ROOT_FLEET_REGISTRY_MIRROR_ID,
+            TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID, TEMPLATE_CHUNK_SETS_ID,
+            TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
         },
     },
     state_contract::{
@@ -67,7 +69,7 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
             TEMPLATE_MANIFESTS_ID,
             TemplateManifestRecord::STATE_CONTRACT_NAME,
             TemplateManifestsData::STATE_CONTRACT_NAME,
-            200,
+            201,
             "template_manifests_restore_release_index",
         ),
         descriptor(
@@ -187,6 +189,24 @@ fn root_component_registry_descriptor() -> StateAllocationDescriptor {
                 restore_order: Some(199),
                 post_upgrade_invariant: Some(
                     "component_registry_principal_index_restores_unique_committed_bindings"
+                        .to_string(),
+                ),
+                migrations: Vec::new(),
+            },
+            StateDomainManifest {
+                domain: "root_component_subtree_removal_history".to_string(),
+                version: 1,
+                storage: StateStorage::StableMemory,
+                memory_id: Some(ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID),
+                owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
+                record: RootComponentSubtreeRemovalCompletedLeafRecord::STATE_CONTRACT_NAME
+                    .to_string(),
+                snapshot: RootComponentRegistryData::STATE_CONTRACT_NAME.to_string(),
+                min_supported_version: 1,
+                migration_policy: MigrationPolicy::NewDomain,
+                restore_order: Some(200),
+                post_upgrade_invariant: Some(
+                    "root_component_subtree_removal_history_restores_exact_operation_step_receipts"
                         .to_string(),
                 ),
                 migrations: Vec::new(),
@@ -323,7 +343,7 @@ mod tests {
             .find(|descriptor| descriptor.allocation == StateAllocationKey::RootComponentRegistry)
             .expect("root Component Registry descriptor");
 
-        assert_eq!(descriptor.state.len(), 4);
+        assert_eq!(descriptor.state.len(), 5);
         assert_eq!(
             descriptor
                 .state
@@ -359,6 +379,12 @@ mod tests {
                     Some(ROOT_COMPONENT_PRINCIPAL_INDEX_ID),
                     ComponentRegistryPrincipalIndexRecord::STATE_CONTRACT_NAME,
                     Some(199),
+                ),
+                (
+                    "root_component_subtree_removal_history",
+                    Some(ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID),
+                    RootComponentSubtreeRemovalCompletedLeafRecord::STATE_CONTRACT_NAME,
+                    Some(200),
                 ),
             ]
         );

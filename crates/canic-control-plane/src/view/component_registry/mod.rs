@@ -156,6 +156,8 @@ pub struct RootComponentSubtreeRemovalView {
     pub target_role: CanisterRole,
     pub target_status: ComponentLifecycleStatus,
     pub reserved_against_registry: ComponentRegistryHead,
+    pub maximum_completed_leaves: u32,
+    pub completed_leaves: u32,
     pub traversal_steps: u32,
     pub progress: RootComponentSubtreeRemovalProgressView,
 }
@@ -185,6 +187,7 @@ pub enum RootComponentSubtreeRemovalProgressView {
     Deleted(RootComponentSubtreeDeletedEffectView),
     MembershipRemoved(RootComponentSubtreeMembershipRemovedView),
     DirectorySynchronized(RootComponentSubtreeDirectorySynchronizedView),
+    Completed(RootComponentSubtreeRemovalCompletedView),
 }
 
 ///
@@ -301,6 +304,18 @@ pub struct RootComponentSubtreeDirectorySynchronizedView {
     pub covered_authority_hash: [u8; 32],
     pub owning_component: RootComponentSubtreeDirectoryConvergenceView,
     pub parent: Option<RootComponentSubtreeDirectoryConvergenceView>,
+}
+
+///
+/// RootComponentSubtreeRemovalCompletedView
+///
+/// Read-only terminal authority after the fenced target is finalized.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentSubtreeRemovalCompletedView {
+    pub registry: ComponentRegistryHead,
+    pub directory_authority_hash: [u8; 32],
 }
 
 ///

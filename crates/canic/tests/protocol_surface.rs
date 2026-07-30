@@ -596,6 +596,11 @@ fn assert_component_registry_protocol_constants() {
             "canic_root_component_subtree_removal_directory_synchronize",
         ),
         (
+            canic::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_LEAF_FINALIZE,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_LEAF_FINALIZE,
+            "canic_root_component_subtree_removal_leaf_finalize",
+        ),
+        (
             canic::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STATUS,
             canic_core::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STATUS,
             "canic_root_component_subtree_removal_status",
@@ -844,6 +849,14 @@ fn assert_subtree_removal_guards(root: &str) {
         )
         .contains("canic_update(requires(caller::is_controller()))"),
         "root Component subtree Directory synchronization must remain a controller-guarded update"
+    );
+    assert!(
+        preceding_attribute_context(
+            root,
+            "async fn canic_root_component_subtree_removal_leaf_finalize("
+        )
+        .contains("canic_update(requires(caller::is_controller()))"),
+        "root Component subtree leaf finalization must remain a controller-guarded update"
     );
     assert!(
         preceding_attribute_context(

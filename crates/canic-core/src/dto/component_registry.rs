@@ -236,6 +236,21 @@ pub struct RootComponentSubtreeRemovalDirectorySynchronizationRequest {
 }
 
 ///
+/// RootComponentSubtreeRemovalLeafFinalizationRequest
+///
+/// Controller command archiving one completed leaf and resuming its retained parent.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeRemovalLeafFinalizationRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub expected_traversal_steps: u32,
+    pub expected_leaf_canister_id: Principal,
+    pub expected_leaf_parent_canister_id: Principal,
+}
+
+///
 /// RootComponentSubtreeRemovalStatusRequest
 ///
 /// Controller lookup key for one durable child-subtree removal operation.
@@ -434,6 +449,7 @@ pub enum RootComponentSubtreeRemovalPhase {
     Deleted(RootComponentSubtreeRemovalDeletedReceipt),
     MembershipRemoved(RootComponentSubtreeRemovalMembershipRemovedReceipt),
     DirectorySynchronized(RootComponentSubtreeRemovalDirectorySynchronizedReceipt),
+    Completed(RootComponentSubtreeRemovalCompletedReceipt),
 }
 
 ///
@@ -550,6 +566,18 @@ pub struct RootComponentSubtreeRemovalDirectorySynchronizedReceipt {
     pub covered_authority_hash: [u8; 32],
     pub owning_component: RootComponentSubtreeRemovalDirectoryConvergenceEvidence,
     pub parent: Option<RootComponentSubtreeRemovalDirectoryConvergenceEvidence>,
+}
+
+///
+/// RootComponentSubtreeRemovalCompletedReceipt
+///
+/// Terminal Registry and Directory authority after the fenced target is finalized.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeRemovalCompletedReceipt {
+    pub registry: ComponentRegistryHead,
+    pub directory_authority_hash: [u8; 32],
 }
 
 ///
@@ -904,6 +932,8 @@ pub struct RootComponentSubtreeRemovalResponse {
     pub target_role: CanisterRole,
     pub target_status: ComponentLifecycleStatus,
     pub reserved_against_registry: ComponentRegistryHead,
+    pub maximum_completed_leaves: u32,
+    pub completed_leaves: u32,
     pub traversal_steps: u32,
     pub phase: RootComponentSubtreeRemovalPhase,
 }
@@ -1348,6 +1378,8 @@ mod tests {
             target_role: CanisterRole::new("project_instance"),
             target_status: ComponentLifecycleStatus::Active,
             reserved_against_registry: registry,
+            maximum_completed_leaves: 4,
+            completed_leaves: 1,
             traversal_steps: 2,
             phase: RootComponentSubtreeRemovalPhase::DirectorySynchronized(
                 RootComponentSubtreeRemovalDirectorySynchronizedReceipt {
@@ -1472,6 +1504,13 @@ mod tests {
             expected_leaf_canister_id: prepare.expected_leaf_canister_id,
             expected_leaf_parent_canister_id: prepare.expected_leaf_parent_canister_id,
         };
+        let finalization_request = RootComponentSubtreeRemovalLeafFinalizationRequest {
+            operation_id: prepare.operation_id,
+            component: prepare.component,
+            expected_traversal_steps: prepare.expected_traversal_steps,
+            expected_leaf_canister_id: prepare.expected_leaf_canister_id,
+            expected_leaf_parent_canister_id: prepare.expected_leaf_parent_canister_id,
+        };
         let prepare_bytes = candid::encode_one(prepare)
             .expect("encode subtree removal deletion preparation request");
         let request_bytes =
@@ -1480,6 +1519,8 @@ mod tests {
             .expect("encode subtree removal membership-removal request");
         let directory_request_bytes = candid::encode_one(directory_request)
             .expect("encode subtree removal Directory synchronization request");
+        let finalization_request_bytes = candid::encode_one(finalization_request)
+            .expect("encode subtree removal leaf-finalization request");
 
         assert_eq!(
             candid::decode_one::<RootComponentSubtreeRemovalDeletePreparationRequest>(
@@ -1506,6 +1547,13 @@ mod tests {
             )
             .expect("decode subtree removal Directory synchronization request"),
             directory_request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentSubtreeRemovalLeafFinalizationRequest>(
+                &finalization_request_bytes
+            )
+            .expect("decode subtree removal leaf-finalization request"),
+            finalization_request
         );
     }
 

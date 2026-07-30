@@ -6,10 +6,10 @@ Date: 2026-07-30
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.55`.
-- Latest published release: `v0.100.55` at
-  `d838762180696ead48f5ff50c0a1e353c4c01fed`.
-- Open patch draft: `0.100.56`; no package-version change has been authorized.
+- Workspace package version: `0.100.56`.
+- Latest published release: `v0.100.56` at
+  `3d2b8f7bdd32806d9a2ade4198a8e3e7aed722f8`.
+- Open patch draft: `0.100.57`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -197,7 +197,7 @@ Registry slices replace the 0.99 root model.
 - [x] Publish the post-removal current Component Directory to the surviving
   owner and distinct immediate parent, independently verify both and retain a
   bounded stable convergence receipt.
-- [ ] Normalize the completed leaf receipt and return the cursor to its
+- [x] Normalize the completed leaf receipt and return the cursor to its
   retained parent until the target is terminal.
 - [x] Distribute exact Directories directly from the root to a committed
   Component with target-local retention, independent observation and a
@@ -792,7 +792,7 @@ both Registry heads plus the next exact Directory-authority hash against the
 active Fleet Directory. Completed allocation history remains available for
 replay; no Directory publication occurs in this transition.
 
-Open 0.100.56 publishes the current post-removal Component Directory to the
+Released 0.100.56 publishes the current post-removal Component Directory to the
 surviving owning Component and, when distinct, the removed leaf's retained
 immediate parent. The root queries first, reconciles uncertain synchronization
 calls and independently re-observes both recipients before committing a
@@ -804,11 +804,23 @@ memory runtime to `ic-memory 0.12.3`, adopting its validated semantic policy
 identity and failure-aware size diagnostics without changing durable
 allocation-ledger bytes, stable keys or memory IDs.
 
+Open 0.100.57 normalizes that complete per-leaf receipt into compact immutable
+history keyed by Component, removal operation and traversal step. Each entry
+retains the exact selection, observed module, terminal Registry/Directory
+authority and a domain-separated digest of the full convergence receipt. The
+operation freezes its history ceiling from the initial committed-descendant
+count. One atomic commit increments the completed count and either returns the
+cursor to the retained immediate parent or records terminal authority when the
+fenced target itself is complete. Exact retries of every older phase converge
+through history without repeating an effect, and terminal completion releases
+the live subtree fence.
+
 ## Next Action
 
-Normalize the completed leaf and Directory convergence receipt into bounded
-operation-keyed history, then atomically return the traversal cursor to the
-exact retained parent for the next post-order selection. Never remove a parent
-while a child row remains. Do not introduce nested Component declarations,
-let application Canisters call management effects directly or infer
-authorization from catalog presence alone.
+Begin top-level Component draining by fencing new Component mutation and
+reusing the completed post-order loop until no descendant row remains. The
+later Component-target transition must retain qualified quiescence and final
+inventory evidence before removing the top-level Component; it must not infer
+removal from an unreachable Canister. Do not introduce nested Component
+declarations, let application Canisters call management effects directly or
+infer authorization from catalog presence alone.

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.57` finalizes each removed subtree leaf into bounded durable history,
+  resumes traversal at its retained parent and terminates the operation only
+  after the fenced target itself is removed.
+
 - `0.100.56` converges the post-removal Component Directory on the surviving
   owner and distinct immediate parent, retaining bounded independently
   observed evidence before traversal resumes, and advances the sole memory

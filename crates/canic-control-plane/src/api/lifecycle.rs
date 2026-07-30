@@ -36,6 +36,7 @@ use canic_core::{
             RootComponentSubtreeRemovalDeletePreparationRequest,
             RootComponentSubtreeRemovalDeleteRequest,
             RootComponentSubtreeRemovalDirectorySynchronizationRequest,
+            RootComponentSubtreeRemovalLeafFinalizationRequest,
             RootComponentSubtreeRemovalMembershipRemovalRequest,
             RootComponentSubtreeRemovalRequest, RootComponentSubtreeRemovalResponse,
             RootComponentSubtreeRemovalStatusRequest,
@@ -233,6 +234,14 @@ impl LifecycleApi {
         request: RootComponentSubtreeRemovalDirectorySynchronizationRequest,
     ) -> Result<RootComponentSubtreeRemovalResponse, canic_core::dto::error::Error> {
         crate::workflow::component_registry::synchronize_subtree_leaf_directory(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn finalize_component_subtree_leaf(
+        request: RootComponentSubtreeRemovalLeafFinalizationRequest,
+    ) -> Result<RootComponentSubtreeRemovalResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::finalize_subtree_leaf(request)
             .await
             .map_err(Into::into)
     }
