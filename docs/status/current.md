@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.58`.
-- The latest published release is `v0.100.58` at
-  `ceb0f0b62a315d5b3b1169a8723c44dff67e4030`.
-- Open `0.100.59` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.59`.
+- The latest published release is `v0.100.59` at
+  `6c142f8df051bbb5d2c2ae7c5c2fd1a0ad6090ed`.
+- Open `0.100.60` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -490,7 +490,7 @@ Historical detail is archived at:
   descendant count and digest, and Directory authority at stable-memory ID
   23. The draining partition rejects new descendants while retaining
   principal lookup, Directory pagination and post-order evacuation.
-- Open `0.100.59` adds qualified top-level Component quiescence. It converges
+- Released `0.100.59` adds qualified top-level Component quiescence. It converges
   the runtime onto the exact draining Component head under the active Fleet
   Directory, freezes its exact Canister, sole root controller, verified Store
   module and retained runtime evidence before stopping, and commits only an
@@ -499,6 +499,12 @@ Historical detail is archived at:
   on that terminal evidence. Subsequent Directory receipts do not call the
   stopped owner, but still bind exact root-derived authority and converge any
   surviving non-root parent.
+- Open `0.100.60` adds the bounded Component drain driver. It owns canonical
+  direct-subtree selection, derives each removal operation from frozen
+  draining authority, retains one durable cursor through target membership
+  removal and advances exactly one existing post-order phase per call.
+  Caller-selected subtree removal is now `Active`-only; exact current
+  empty-inventory evidence remains distinct from the later final receipt.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1970,7 +1976,7 @@ blocks new child reservations while preserving lookup, current Directory
 pagination and the existing post-order removal path. It performs no Canister
 effect.
 
-Open `0.100.59` converges that top-level runtime against the exact draining
+Released `0.100.59` converges that top-level runtime against the exact draining
 Component head and current Fleet Directory, durably precharges and freezes its
 sole-root/Store-module stop authority, reconciles the management stop and
 records `Quiescent` only after an independent qualified `Stopped`
@@ -1978,10 +1984,19 @@ observation. Descendant removal from a draining tree now requires that
 terminal receipt; its Directory phase omits the stopped owner without
 fabricating evidence and continues to converge any surviving non-root parent.
 
-Next, reuse the post-order loop until no descendant row remains. Component
-removal must then retain final-inventory evidence; an unreachable Canister is
-never evidence of removal. Managed application Canisters must not perform
-management effects or infer authorization from flat catalog presence.
+Open `0.100.60` drives that retained tree without caller-selected targets. It
+chooses the canonical first direct child, derives its operation ID from the
+draining fence, atomically retains one active subtree cursor and advances at
+most one existing durable removal phase per update. The cursor survives target
+membership removal until Directory synchronization and finalization, avoiding
+a skipped subtree and repeated completed-history scans at the intended
+10,000–20,000-descendant scale.
+
+Next, persist the exact empty descendant inventory as final Component-removal
+authority, then delete and remove the already-quiescent top-level Component
+under a durable receipt. An unreachable Canister is never evidence of removal.
+Managed application Canisters must not perform management effects or infer
+authorization from flat catalog presence.
 
 ## Historical Release Detail
 

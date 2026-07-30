@@ -313,6 +313,18 @@ pub struct RootComponentQuiescenceStatusRequest {
 }
 
 ///
+/// RootComponentDrainingAdvanceRequest
+///
+/// Controller command advancing at most one deterministic draining-removal phase.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentDrainingAdvanceRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+}
+
+///
 /// RootComponentChildCreationRequest
 ///
 /// Parent command continuing one already reserved direct-child operation.
@@ -1069,6 +1081,47 @@ pub struct RootComponentQuiescenceResponse {
 }
 
 ///
+/// RootComponentDrainingDescendantsEmpty
+///
+/// Exact current Registry proof that one draining Component has no descendants.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentDrainingDescendantsEmpty {
+    pub registry: ComponentRegistryHead,
+    pub descendant_content_hash: [u8; 32],
+}
+
+///
+/// RootComponentDrainingAdvancePhase
+///
+/// One bounded driver result: current subtree progress or exact empty inventory.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "wire result embeds the current durable subtree snapshot without a Rust-only indirection"
+)]
+pub enum RootComponentDrainingAdvancePhase {
+    DescendantRemoval(RootComponentSubtreeRemovalResponse),
+    DescendantsEmpty(RootComponentDrainingDescendantsEmpty),
+}
+
+///
+/// RootComponentDrainingAdvanceResponse
+///
+/// Current bounded progress of one terminally quiescent Component drain.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentDrainingAdvanceResponse {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub phase: RootComponentDrainingAdvancePhase,
+}
+
+///
 /// RootComponentChildCommitResponse
 ///
 /// Exact committed child operation, authoritative Component Registry and next Directory head.
@@ -1739,6 +1792,72 @@ mod tests {
             candid::decode_one::<RootComponentQuiescenceResponse>(&response_bytes)
                 .expect("decode quiescence response"),
             response
+        );
+    }
+
+    #[test]
+    fn component_draining_advance_contracts_round_trip_through_candid() {
+        let component = ComponentInstanceId::from_generated_bytes([81; 32]);
+        let registry = ComponentRegistryHead {
+            component,
+            revision: 12,
+            content_hash: [82; 32],
+        };
+        let request = RootComponentDrainingAdvanceRequest {
+            operation_id: [83; 32],
+            component,
+        };
+        let descendant_removal = RootComponentDrainingAdvanceResponse {
+            operation_id: request.operation_id,
+            component,
+            phase: RootComponentDrainingAdvancePhase::DescendantRemoval(
+                RootComponentSubtreeRemovalResponse {
+                    operation_id: [84; 32],
+                    component,
+                    target_canister_id: Principal::from_slice(&[85; 29]),
+                    target_parent_canister_id: Principal::from_slice(&[86; 29]),
+                    target_role: CanisterRole::new("project_instance"),
+                    target_status: ComponentLifecycleStatus::Active,
+                    reserved_against_registry: registry.clone(),
+                    maximum_completed_leaves: 20_000,
+                    completed_leaves: 0,
+                    traversal_steps: 0,
+                    phase: RootComponentSubtreeRemovalPhase::Fenced,
+                },
+            ),
+        };
+        let descendants_empty = RootComponentDrainingAdvanceResponse {
+            operation_id: request.operation_id,
+            component,
+            phase: RootComponentDrainingAdvancePhase::DescendantsEmpty(
+                RootComponentDrainingDescendantsEmpty {
+                    registry,
+                    descendant_content_hash: [87; 32],
+                },
+            ),
+        };
+
+        let request_bytes =
+            candid::encode_one(request).expect("encode Component draining advance request");
+        let removal_bytes = candid::encode_one(&descendant_removal)
+            .expect("encode Component draining removal response");
+        let empty_bytes = candid::encode_one(&descendants_empty)
+            .expect("encode Component draining empty response");
+
+        assert_eq!(
+            candid::decode_one::<RootComponentDrainingAdvanceRequest>(&request_bytes)
+                .expect("decode Component draining advance request"),
+            request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentDrainingAdvanceResponse>(&removal_bytes)
+                .expect("decode Component draining removal response"),
+            descendant_removal
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentDrainingAdvanceResponse>(&empty_bytes)
+                .expect("decode Component draining empty response"),
+            descendants_empty
         );
     }
 

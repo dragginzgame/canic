@@ -21,7 +21,7 @@ use crate::{
         RootComponentSubtreeDeleteEffectRecord, RootComponentSubtreeDeletedEffectRecord,
         RootComponentSubtreeDirectoryConvergenceRecord,
         RootComponentSubtreeDirectorySynchronizedRecord,
-        RootComponentSubtreeMembershipRemovedRecord,
+        RootComponentSubtreeMembershipRemovedRecord, RootComponentSubtreeRemovalBeginCommit,
         RootComponentSubtreeRemovalCompletedLeafRecord, RootComponentSubtreeRemovalCompletedRecord,
         RootComponentSubtreeRemovalProgressRecord, RootComponentSubtreeRemovalRecord,
         RootComponentSubtreeStopEffectRecord, RootComponentSubtreeStoppedEffectRecord,
@@ -33,7 +33,8 @@ use crate::{
         RootComponentAllocationView, RootComponentChildAllocationProgressView,
         RootComponentChildAllocationView, RootComponentChildCommitmentView,
         RootComponentChildInstallEffectView, RootComponentChildMembershipView,
-        RootComponentCommitmentView, RootComponentCreationEffectView, RootComponentDrainingView,
+        RootComponentCommitmentView, RootComponentCreationEffectView,
+        RootComponentDrainingAdvanceView, RootComponentDrainingView,
         RootComponentInitialInventoryView, RootComponentInstallEffectView,
         RootComponentMembershipView, RootComponentQuiescenceProgressView,
         RootComponentQuiescenceStopIntentView, RootComponentQuiescentReceiptView,
@@ -76,6 +77,14 @@ use canic_core::{
 use sha2::{Digest, Sha256};
 
 const SUBTREE_REMOVAL_TRAVERSAL_BATCH_SIZE: u32 = 64;
+const COMPONENT_DRAINING_SUBTREE_OPERATION_DOMAIN: &[u8] =
+    b"canic.component-draining.subtree-operation.v1";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SubtreeRemovalOrigin {
+    Ordinary,
+    DrainingDriver,
+}
 
 ///
 /// ComponentRegistryOps
@@ -1644,6 +1653,7 @@ impl ComponentRegistryOps {
             )?,
             started_at_ns,
             quiescence: None,
+            subtree_operation_id: None,
         };
         let (next_partition, next_meta) = component_draining_state(
             &current,
@@ -1834,10 +1844,122 @@ impl ComponentRegistryOps {
             .map(|leaf| leaf.is_some())
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one synchronous transaction validates and durably charges the exact subtree fence"
-    )]
+    pub(crate) fn advance_component_draining(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+    ) -> Result<RootComponentDrainingAdvanceView, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        validate_partition_record(&partition)?;
+        let draining =
+            RootComponentRegistryStore::component_draining(component).ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component draining operation has not been durably fenced",
+                )
+            })?;
+        validate_component_draining_record(&partition, &draining)?;
+        if operation_id != draining.operation_id
+            || partition.status != ComponentLifecycleStatus::Draining
+            || !component_has_terminal_quiescence(&partition)?
+        {
+            return Err(InternalError::conflict(
+                "Component draining advance differs from terminal quiescent authority",
+            ));
+        }
+
+        if let Some(subtree_operation_id) = draining.subtree_operation_id {
+            let existing =
+                RootComponentRegistryStore::subtree_removal(component, subtree_operation_id)
+                    .ok_or_else(|| {
+                        InternalError::invariant(
+                            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                            "Component draining cursor has no durable subtree removal",
+                        )
+                    })?;
+            validate_subtree_removal_record(&existing)?;
+            validate_subtree_removal_root(&existing, &current.root)?;
+            validate_subtree_removal_progress(&partition, &existing)?;
+            if !matches!(
+                existing.progress,
+                RootComponentSubtreeRemovalProgressRecord::Completed(_)
+            ) {
+                return Ok(RootComponentDrainingAdvanceView::DescendantRemoval(
+                    Box::new(subtree_removal_record_to_view(existing)),
+                ));
+            }
+        }
+
+        let Some(target) = first_registered_child(&partition, partition.binding.canister_id)?
+        else {
+            if partition.committed_descendants != 0
+                || partition.descendant_content_hash
+                    != empty_component_descendant_content_hash(component)
+            {
+                return Err(InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "Component draining inventory has descendants without a direct root child",
+                ));
+            }
+            return Ok(RootComponentDrainingAdvanceView::DescendantsEmpty {
+                registry: component_partition_head(&partition),
+                descendant_content_hash: partition.descendant_content_hash,
+            });
+        };
+        let subtree_operation_id =
+            component_draining_subtree_operation_id(&draining, target.canister_id);
+        if let Some(existing) =
+            RootComponentRegistryStore::subtree_removal(component, subtree_operation_id)
+        {
+            validate_subtree_removal_record(&existing)?;
+            validate_subtree_removal_root(&existing, &current.root)?;
+            validate_subtree_removal_progress(&partition, &existing)?;
+            if existing.target != target {
+                return Err(InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "Component draining cursor differs from its derived subtree operation",
+                ));
+            }
+            return Ok(RootComponentDrainingAdvanceView::DescendantRemoval(
+                Box::new(subtree_removal_record_to_view(existing)),
+            ));
+        }
+
+        Ok(RootComponentDrainingAdvanceView::DescendantSubtreePending {
+            operation_id: subtree_operation_id,
+            target_canister_id: target.canister_id,
+            reserved_against_registry: component_partition_head(&partition),
+        })
+    }
+
+    pub(crate) fn begin_draining_subtree_removal(
+        component: ComponentInstanceId,
+        draining_operation_id: [u8; 32],
+        maximum_component_registry_bytes: u64,
+    ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
+        let RootComponentDrainingAdvanceView::DescendantSubtreePending {
+            operation_id,
+            target_canister_id,
+            reserved_against_registry,
+        } = Self::advance_component_draining(component, draining_operation_id)?
+        else {
+            return Err(InternalError::conflict(
+                "Component draining has no new direct subtree to fence",
+            ));
+        };
+        Self::begin_subtree_removal_with_origin(
+            component,
+            operation_id,
+            target_canister_id,
+            reserved_against_registry,
+            maximum_component_registry_bytes,
+            SubtreeRemovalOrigin::DrainingDriver,
+        )
+    }
+
     pub(crate) fn begin_subtree_removal(
         component: ComponentInstanceId,
         operation_id: [u8; 32],
@@ -1845,20 +1967,51 @@ impl ComponentRegistryOps {
         reserved_against_registry: ComponentRegistryHead,
         maximum_component_registry_bytes: u64,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
+        Self::begin_subtree_removal_with_origin(
+            component,
+            operation_id,
+            target_canister_id,
+            reserved_against_registry,
+            maximum_component_registry_bytes,
+            SubtreeRemovalOrigin::Ordinary,
+        )
+    }
+
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one synchronous transaction validates and durably charges the exact subtree fence"
+    )]
+    fn begin_subtree_removal_with_origin(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        target_canister_id: Principal,
+        reserved_against_registry: ComponentRegistryHead,
+        maximum_component_registry_bytes: u64,
+        origin: SubtreeRemovalOrigin,
+    ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
         let current = RootComponentRegistryStore::current().ok_or_else(|| {
             InternalError::unavailable("root Component Registry authority has not been prepared")
         })?;
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        validate_partition_record(&partition)?;
+        let lifecycle_matches_origin = match origin {
+            SubtreeRemovalOrigin::Ordinary => partition.status == ComponentLifecycleStatus::Active,
+            SubtreeRemovalOrigin::DrainingDriver => {
+                partition.status == ComponentLifecycleStatus::Draining
+                    && component_has_terminal_quiescence(&partition)?
+            }
+        };
+        if !lifecycle_matches_origin {
+            return Err(InternalError::conflict(
+                "Component subtree-removal origin differs from lifecycle authority",
+            ));
+        }
         if let Some(existing) = RootComponentRegistryStore::subtree_removal(component, operation_id)
         {
             validate_subtree_removal_record(&existing)?;
             validate_subtree_removal_root(&existing, &current.root)?;
-            let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-                InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "Component subtree-removal operation has no owning partition",
-                )
-            })?;
-            validate_partition_record(&partition)?;
             validate_subtree_removal_progress(&partition, &existing)?;
             return if existing.target.canister_id == target_canister_id
                 && existing.reserved_against_registry == reserved_against_registry
@@ -1871,21 +2024,7 @@ impl ComponentRegistryOps {
             };
         }
 
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
-        validate_partition_record(&partition)?;
-        if partition.status == ComponentLifecycleStatus::Draining
-            && !component_has_terminal_quiescence(&partition)?
-        {
-            return Err(InternalError::unavailable(
-                "Draining Component must be quiescent before descendant removal begins",
-            ));
-        }
-        if !matches!(
-            partition.status,
-            ComponentLifecycleStatus::Active | ComponentLifecycleStatus::Draining
-        ) || reserved_against_registry
+        if reserved_against_registry
             != (ComponentRegistryHead {
                 component,
                 revision: partition.revision,
@@ -1896,14 +2035,15 @@ impl ComponentRegistryOps {
                 "Component subtree-removal fence authority changed before durable mutation",
             ));
         }
-        if RootComponentRegistryStore::subtree_removals(component)
-            .iter()
-            .any(|removal| {
-                !matches!(
-                    &removal.progress,
-                    RootComponentSubtreeRemovalProgressRecord::Completed(_)
-                )
-            })
+        if origin == SubtreeRemovalOrigin::Ordinary
+            && RootComponentRegistryStore::subtree_removals(component)
+                .iter()
+                .any(|removal| {
+                    !matches!(
+                        &removal.progress,
+                        RootComponentSubtreeRemovalProgressRecord::Completed(_)
+                    )
+                })
         {
             return Err(InternalError::conflict(
                 "Component already has an in-progress subtree-removal operation",
@@ -1919,7 +2059,7 @@ impl ComponentRegistryOps {
         validate_registered_child_record(&partition, &target)?;
         if target.status != ComponentLifecycleStatus::Active {
             return Err(InternalError::conflict(
-                "ordinary Component subtree removal requires an Active target",
+                "Component subtree removal requires an Active target",
             ));
         }
         let traversal_limit = partition
@@ -1976,14 +2116,33 @@ impl ComponentRegistryOps {
             )));
         }
 
-        RootComponentRegistryStore::begin_subtree_removal(
-            &current,
+        let draining_transition = match origin {
+            SubtreeRemovalOrigin::Ordinary => None,
+            SubtreeRemovalOrigin::DrainingDriver => {
+                let current_draining = RootComponentRegistryStore::component_draining(component)
+                    .ok_or_else(|| {
+                        InternalError::invariant(
+                            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                            "draining subtree fence has no Component draining authority",
+                        )
+                    })?;
+                validate_component_draining_record(&partition, &current_draining)?;
+                let mut next_draining = current_draining.clone();
+                next_draining.subtree_operation_id = Some(operation_id);
+                validate_component_draining_record(&partition, &next_draining)?;
+                Some((current_draining, next_draining))
+            }
+        };
+        RootComponentRegistryStore::begin_subtree_removal(RootComponentSubtreeRemovalBeginCommit {
+            expected_meta: &current,
             next_meta,
-            &partition,
+            expected_partition: &partition,
             next_partition,
-            &record.target,
-            record.clone(),
-        )
+            expected_target: &record.target,
+            record: record.clone(),
+            expected_draining: draining_transition.as_ref().map(|(expected, _)| expected),
+            next_draining: draining_transition.as_ref().map(|(_, next)| next.clone()),
+        })
         .map_err(map_allocation_commit_error)?;
         Ok(subtree_removal_record_to_view(record))
     }
@@ -5399,6 +5558,7 @@ fn component_quiescence_terminal_entry_bytes(
         let mut terminal_intent = intent.clone();
         terminal_intent.charged_entry_bytes = charged_entry_bytes;
         let mut terminal = draining.clone();
+        terminal.subtree_operation_id = Some([u8::MAX; 32]);
         terminal.quiescence = Some(RootComponentQuiescenceProgressRecord::Quiescent(
             RootComponentQuiescentReceiptRecord {
                 stop: terminal_intent,
@@ -7421,6 +7581,14 @@ fn validate_component_draining_record(
         });
         intent_is_valid && terminal_is_valid
     });
+    let subtree_cursor_is_valid = record.subtree_operation_id.is_none()
+        || (record
+            .subtree_operation_id
+            .is_some_and(|operation_id| operation_id != [0; 32])
+            && matches!(
+                record.quiescence,
+                Some(RootComponentQuiescenceProgressRecord::Quiescent(_))
+            ));
     let valid = record.operation_id != [0; 32]
         && record.component == partition.binding.component
         && record.previous_registry.component == record.component
@@ -7437,6 +7605,7 @@ fn validate_component_draining_record(
         && partition.revision >= record.registry.revision
         && partition.directory_synchronized_at_ns >= record.started_at_ns
         && quiescence_is_valid
+        && subtree_cursor_is_valid
         && (partition.revision != record.registry.revision
             || (partition.content_hash == record.registry.content_hash
                 && partition.descendant_content_hash == record.descendant_content_hash
@@ -8460,6 +8629,21 @@ fn empty_component_descendant_content_hash(component: ComponentInstanceId) -> [u
     let mut hasher = Sha256::new();
     hasher.update(DOMAIN);
     hasher.update(component.as_bytes());
+    hasher.finalize().into()
+}
+
+fn component_draining_subtree_operation_id(
+    draining: &RootComponentDrainingRecord,
+    target_canister_id: Principal,
+) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(COMPONENT_DRAINING_SUBTREE_OPERATION_DOMAIN);
+    hasher.update(draining.operation_id);
+    hasher.update(draining.component.as_bytes());
+    hasher.update(draining.registry.revision.to_be_bytes());
+    hasher.update(draining.registry.content_hash);
+    hasher.update((target_canister_id.as_slice().len() as u64).to_be_bytes());
+    hasher.update(target_canister_id.as_slice());
     hasher.finalize().into()
 }
 
@@ -10411,10 +10595,61 @@ mod tests {
             fixture.component,
             [81; 32],
             fixture.target.canister_id,
-            draining.registry,
+            draining.registry.clone(),
             16_777_216,
         )
-        .expect("quiescent Draining Component retains its tree for post-order removal");
+        .expect_err("caller-selected subtree removal must remain Active-only");
+        assert_eq!(RootComponentRegistryStore::export(), quiescent_state);
+
+        let pending = ComponentRegistryOps::advance_component_draining(
+            fixture.component,
+            draining.operation_id,
+        )
+        .expect("derive the first draining subtree");
+        let pending_state = restart_component_registry();
+        let restarted = ComponentRegistryOps::advance_component_draining(
+            fixture.component,
+            draining.operation_id,
+        )
+        .expect("derive the same draining subtree after restart");
+        assert_eq!(RootComponentRegistryStore::export(), pending_state);
+        let (
+            RootComponentDrainingAdvanceView::DescendantSubtreePending {
+                operation_id,
+                target_canister_id,
+                reserved_against_registry,
+            },
+            RootComponentDrainingAdvanceView::DescendantSubtreePending {
+                operation_id: restarted_operation_id,
+                target_canister_id: restarted_target,
+                reserved_against_registry: restarted_registry,
+            },
+        ) = (pending, restarted)
+        else {
+            panic!("draining driver must select an unfenced direct subtree");
+        };
+        assert_eq!(target_canister_id, fixture.target.canister_id);
+        assert_eq!(restarted_operation_id, operation_id);
+        assert_eq!(restarted_target, target_canister_id);
+        assert_eq!(restarted_registry, reserved_against_registry);
+
+        let fenced = ComponentRegistryOps::begin_draining_subtree_removal(
+            fixture.component,
+            draining.operation_id,
+            16_777_216,
+        )
+        .expect("driver fences its deterministic direct subtree");
+        assert_eq!(fenced.operation_id, operation_id);
+        assert_eq!(fenced.target_canister_id, target_canister_id);
+        assert!(matches!(
+            ComponentRegistryOps::advance_component_draining(
+                fixture.component,
+                draining.operation_id,
+            )
+            .expect("read the durable draining cursor"),
+            RootComponentDrainingAdvanceView::DescendantRemoval(removal)
+                if *removal == fenced
+        ));
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
 
@@ -10477,14 +10712,15 @@ mod tests {
         ComponentRegistryOps::mark_component_quiescent(fixture.component, [90; 32], [86; 32], 101)
             .expect("observe Component quiescent");
         let registry = draining.registry;
-        ComponentRegistryOps::begin_subtree_removal(
+        ComponentRegistryOps::begin_subtree_removal_with_origin(
             fixture.component,
             operation_id,
             fixture.unrelated.canister_id,
             registry,
             16_777_216,
+            SubtreeRemovalOrigin::DrainingDriver,
         )
-        .expect("fence direct leaf target");
+        .expect("fence a direct leaf through the draining removal primitive");
         let selected = ComponentRegistryOps::advance_subtree_removal(
             fixture.component,
             operation_id,
@@ -10550,6 +10786,16 @@ mod tests {
             active_fleet_directory.clone(),
         )
         .expect("remove target membership");
+        assert!(matches!(
+            ComponentRegistryOps::advance_component_draining(fixture.component, [90; 32])
+                .expect("retain the removal cursor after target membership removal"),
+            RootComponentDrainingAdvanceView::DescendantRemoval(removal)
+                if removal.operation_id == operation_id
+                    && matches!(
+                        &removal.progress,
+                        RootComponentSubtreeRemovalProgressView::MembershipRemoved(_)
+                    )
+        ));
 
         let partition = ComponentRegistryOps::partition(fixture.component)
             .expect("partition read")
@@ -10630,18 +10876,34 @@ mod tests {
         let partition = ComponentRegistryOps::partition(fixture.component)
             .expect("partition read")
             .expect("active partition");
-        ComponentRegistryOps::begin_subtree_removal(
-            fixture.component,
-            [96; 32],
-            fixture.target.canister_id,
+        let RootComponentDrainingAdvanceView::DescendantSubtreePending {
+            operation_id: next_operation_id,
+            target_canister_id,
+            reserved_against_registry,
+        } = ComponentRegistryOps::advance_component_draining(fixture.component, [90; 32])
+            .expect("advance beyond the completed removal cursor")
+        else {
+            panic!("completed draining subtree must release the driver cursor");
+        };
+        assert_eq!(target_canister_id, fixture.target.canister_id);
+        assert_eq!(
+            reserved_against_registry,
             ComponentRegistryHead {
                 component: fixture.component,
                 revision: partition.revision,
                 content_hash: partition.content_hash,
-            },
-            16_777_216,
-        )
-        .expect("terminal operation no longer occupies the live removal fence");
+            }
+        );
+        assert_eq!(
+            ComponentRegistryOps::begin_draining_subtree_removal(
+                fixture.component,
+                [90; 32],
+                16_777_216,
+            )
+            .expect("fence the next deterministic draining subtree")
+            .operation_id,
+            next_operation_id
+        );
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
 
