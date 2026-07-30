@@ -118,7 +118,9 @@ mod tests {
     #[cfg(test)]
     use canic::{
         dto::component_registry::{
-            RootComponentSubtreeRemovalAdvanceRequest, RootComponentSubtreeRemovalPhase,
+            RootComponentSubtreeRemovalAdvanceRequest,
+            RootComponentSubtreeRemovalDeletePreparationRequest,
+            RootComponentSubtreeRemovalDeleteRequest, RootComponentSubtreeRemovalPhase,
             RootComponentSubtreeRemovalRequest, RootComponentSubtreeRemovalResponse,
             RootComponentSubtreeRemovalStatusRequest,
             RootComponentSubtreeRemovalStopPreparationRequest,
@@ -127,6 +129,8 @@ mod tests {
         protocol::{
             CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_ADVANCE,
             CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_BEGIN,
+            CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_DELETE,
+            CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_DELETE_PREPARE,
             CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STATUS, CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STOP,
             CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STOP_PREPARE,
         },
@@ -282,9 +286,9 @@ mod tests {
     #[test]
     #[expect(
         clippy::too_many_lines,
-        reason = "one PocketIC journey keeps the complete fence-and-stop boundary coherent"
+        reason = "one PocketIC journey keeps the fence, stop and deletion boundary coherent"
     )]
-    fn active_root_stops_one_exact_registered_child_before_removal() {
+    fn active_root_deletes_one_exact_registered_child_before_membership_removal() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let fixture = setup_active_component_registry();
         let (child, registry) = create_active_project_instance(&fixture);
@@ -411,6 +415,89 @@ mod tests {
             )
             .expect("query stopped subtree receipt transport");
         assert_eq!(durable.expect("query stopped subtree receipt"), stopped);
+
+        let delete_request = RootComponentSubtreeRemovalDeleteRequest {
+            operation_id,
+            component: fixture.verifier.component,
+            expected_traversal_steps: advanced.traversal_steps,
+            expected_leaf_canister_id: child,
+            expected_leaf_parent_canister_id: fixture.verifier.canister_id,
+        };
+        let prepared_delete: Result<RootComponentSubtreeRemovalResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_DELETE_PREPARE,
+                (RootComponentSubtreeRemovalDeletePreparationRequest {
+                    operation_id: delete_request.operation_id,
+                    component: delete_request.component,
+                    expected_traversal_steps: delete_request.expected_traversal_steps,
+                    expected_leaf_canister_id: delete_request.expected_leaf_canister_id,
+                    expected_leaf_parent_canister_id: delete_request
+                        .expected_leaf_parent_canister_id,
+                },),
+            )
+            .expect("prepare subtree leaf deletion transport");
+        assert!(matches!(
+            prepared_delete
+                .expect("prepare subtree leaf deletion")
+                .phase,
+            RootComponentSubtreeRemovalPhase::DeleteIntent(_)
+        ));
+
+        let deleted: Result<RootComponentSubtreeRemovalResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_DELETE,
+                (delete_request,),
+            )
+            .expect("delete subtree leaf transport");
+        let deleted = deleted.expect("delete subtree leaf");
+        let RootComponentSubtreeRemovalPhase::Deleted(receipt) = &deleted.phase else {
+            panic!("subtree leaf must retain an independently observed deleted receipt");
+        };
+        assert_eq!(receipt.deletion.stopped.stop.leaf.canister_id, child);
+        assert_eq!(
+            receipt.deletion.stopped.stop.leaf.parent_canister_id,
+            fixture.verifier.canister_id
+        );
+        assert_eq!(receipt.deletion.stopped.stop.controller, fixture.root);
+        assert!(
+            fixture
+                .pic()
+                .canister_status(child, Some(fixture.root))
+                .is_err(),
+            "independently receipted deletion must leave the Canister absent"
+        );
+
+        let retry: Result<RootComponentSubtreeRemovalResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_DELETE,
+                (delete_request,),
+            )
+            .expect("retry deleted subtree leaf transport");
+        assert_eq!(retry.expect("retry deleted subtree leaf"), deleted);
+
+        let durable: Result<RootComponentSubtreeRemovalResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STATUS,
+                (RootComponentSubtreeRemovalStatusRequest {
+                    operation_id,
+                    component: fixture.verifier.component,
+                },),
+            )
+            .expect("query deleted subtree receipt transport");
+        assert_eq!(durable.expect("query deleted subtree receipt"), deleted);
+        assert_eq!(
+            deleted.target_status,
+            ComponentLifecycleStatus::Active,
+            "deletion must not silently mutate Registry membership"
+        );
     }
 
     /// Build one current Coordinator/root/Store fixture with active Registry-issued Components.

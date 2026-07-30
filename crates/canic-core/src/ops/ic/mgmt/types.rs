@@ -168,6 +168,18 @@ pub struct CanisterStatus {
 }
 
 ///
+/// CanisterStatusObservation
+///
+/// Typed result of observing either one live Canister status or exact absence.
+///
+
+#[derive(Clone, Debug)]
+pub enum CanisterStatusObservation {
+    Present(Box<CanisterStatus>),
+    Absent,
+}
+
+///
 /// CanisterSettingsSnapshot
 ///
 /// Operations-layer canister settings snapshot returned by status calls.

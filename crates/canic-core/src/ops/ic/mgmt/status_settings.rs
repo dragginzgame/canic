@@ -35,6 +35,30 @@ impl MgmtOps {
         Ok(canister_status_from_infra(status))
     }
 
+    /// Observe one Canister without collapsing typed absence into an infra failure.
+    pub async fn observe_canister_status(
+        canister_pid: Principal,
+    ) -> Result<CanisterStatusObservation, InternalError> {
+        match management_call_infra(
+            ManagementCallMetricOperation::CanisterStatus,
+            MgmtInfra::canister_status(canister_pid),
+        )
+        .await
+        {
+            Ok(status) => {
+                SystemMetrics::increment(SystemMetricKind::CanisterStatus);
+                Ok(CanisterStatusObservation::Present(Box::new(
+                    canister_status_from_infra(status),
+                )))
+            }
+            Err(error) if error.is_canister_not_found() => {
+                SystemMetrics::increment(SystemMetricKind::CanisterStatus);
+                Ok(CanisterStatusObservation::Absent)
+            }
+            Err(error) => Err(OpsError::from(error).into()),
+        }
+    }
+
     /// Updates canister settings via the management canister and records metrics.
     pub async fn update_settings(args: &UpdateSettingsArgs) -> Result<(), InternalError> {
         let infra_args = update_settings_to_infra(args);

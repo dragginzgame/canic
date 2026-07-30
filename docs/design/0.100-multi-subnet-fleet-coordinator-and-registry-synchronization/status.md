@@ -6,10 +6,10 @@ Date: 2026-07-30
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.51`.
-- Latest published release: `v0.100.51` at
-  `7524072dcc56e0afb4da7f57b106f46b526ab2e5`.
-- Open patch draft: `0.100.52`; no package-version change has been authorized.
+- Workspace package version: `0.100.52`.
+- Latest published release: `v0.100.52` at
+  `f070a63c22279171a34eabd4ac65651b54067e00`.
+- Open patch draft: `0.100.53`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -189,6 +189,9 @@ Registry slices replace the 0.99 root model.
 - [x] Reconcile that intent against the exact live Store module and sole-root
   control, avoid repeating a `Stopping` effect and retain a receipt only after
   independently observing the leaf stopped.
+- [x] Freeze the complete stopped receipt before deletion, reconcile the
+  destructive call through typed live absence and retain a durable deleted
+  receipt without mutating Registry membership or Directory authority.
 - [ ] Execute and reconcile each selected leaf transition, then return the
   cursor to its retained parent until the target is terminal.
 - [x] Distribute exact Directories directly from the root to a committed
@@ -746,7 +749,7 @@ same complete child row and controller, while conflicts and either Registry
 byte ceiling fail before mutation. No status, stop, delete, Directory or
 membership effect occurs in this phase.
 
-Open 0.100.52 executes and reconciles that exact stop intent. Before any
+Released 0.100.52 executes and reconciles that exact stop intent. Before any
 effect, the root independently reads live status and requires its sole
 controller and installed module to equal protected root and Store authority.
 An already stopped leaf converges directly, a `Stopping` leaf never repeats
@@ -757,11 +760,21 @@ occurs. The same patch advances the host-only `ic-query` library to `0.14.0`
 without changing Canic's cached Subnet Catalog contract or introducing
 another package version into the lockfile.
 
+Open 0.100.53 freezes the complete stopped receipt as exact deletion
+authority before the destructive management call. It adopts an already absent
+target, otherwise requires the Canister to remain stopped under the same sole
+root controller and Store module, then observes again after either success or
+an uncertain error. Only typed live absence commits the durable `Deleted`
+receipt. Registry membership, traversal indexes, parent-role counts,
+descendant capacity and Directory authority remain unchanged.
+
 ## Next Action
 
-Freeze exact deletion authority from the stopped receipt, then execute or
-reconcile deletion through an independent live-absence observation. Registry
-mutation must remain a later durable phase, preserve the exact immediate
-parent and never remove a parent while a child row remains. Do not introduce
-nested Component declarations, let application Canisters call management
-effects directly or infer authorization from catalog presence alone.
+Atomically remove the independently deleted leaf from its exact Component
+Registry partition and normalized indexes, decrement parent-role,
+Component-descendant and root managed-Canister accounting, and retain a
+durable membership-removal receipt before returning the traversal cursor to
+the exact retained parent. Directory publication remains a later transition.
+Never remove a parent while a child row remains. Do not introduce nested
+Component declarations, let application Canisters call management effects
+directly or infer authorization from catalog presence alone.

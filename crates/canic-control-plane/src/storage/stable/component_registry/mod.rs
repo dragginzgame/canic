@@ -529,6 +529,8 @@ pub enum RootComponentSubtreeRemovalProgressRecord {
     },
     StopIntent(RootComponentSubtreeStopEffectRecord),
     Stopped(RootComponentSubtreeStoppedEffectRecord),
+    DeleteIntent(RootComponentSubtreeDeleteEffectRecord),
+    Deleted(RootComponentSubtreeDeletedEffectRecord),
 }
 
 ///
@@ -553,6 +555,28 @@ pub struct RootComponentSubtreeStopEffectRecord {
 pub struct RootComponentSubtreeStoppedEffectRecord {
     pub stop: RootComponentSubtreeStopEffectRecord,
     pub observed_module_hash: [u8; 32],
+}
+
+///
+/// RootComponentSubtreeDeleteEffectRecord
+///
+/// Exact stopped receipt frozen before a destructive management call.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeDeleteEffectRecord {
+    pub stopped: RootComponentSubtreeStoppedEffectRecord,
+}
+
+///
+/// RootComponentSubtreeDeletedEffectRecord
+///
+/// Exact deletion authority retained after independently observed absence.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeDeletedEffectRecord {
+    pub deletion: RootComponentSubtreeDeleteEffectRecord,
 }
 
 ///

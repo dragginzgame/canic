@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.53` freezes exact stopped-leaf deletion authority, reconciles the
+  destructive call through typed live absence and retains a durable deleted
+  receipt without mutating Registry membership or Directory authority.
+
 - `0.100.52` executes each prepared subtree-leaf stop through exact live
   root-controller and Store-module reconciliation, retaining a durable receipt
   only after independently observing the Canister stopped, and advances the
