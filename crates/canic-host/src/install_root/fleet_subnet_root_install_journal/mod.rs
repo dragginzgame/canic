@@ -26,17 +26,20 @@ use canic_core::{
     control_plane_support::ops::fleet_registry::FleetRegistryOps,
     dto::{
         component_registry::{
-            RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
+            RootComponentInitialInventoryStatus, RootComponentRegistryPreparationRequest,
+            RootComponentRegistryStatusResponse,
         },
         fleet_activation::{
-            FleetActivationPhase, FleetActivationStatusResponse, FleetCascadeActivationEvidence,
+            FleetActivationIdentity, FleetActivationPhase, FleetActivationStatusResponse,
+            FleetCascadeActivationEvidence, FleetCredentialManifest,
         },
         fleet_registry::{
             FleetDirectorySnapshot, FleetRegistry, FleetRegistryManifest, FleetRegistryVersion,
             FleetSubnetRootEntry, FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
             FleetSubnetRootRegistryMirrorActivationRequest,
             FleetSubnetRootRegistryMirrorActivationResponse, FleetSubnetRootRegistrySyncRequest,
-            FleetSubnetRootRegistrySyncResponse, FleetSubnetRootStatus,
+            FleetSubnetRootRegistrySyncResponse, FleetSubnetRootSnapshotAcknowledgement,
+            FleetSubnetRootStatus,
         },
         fleet_subnet_root::FleetSubnetRootAuthority,
         root_store::RootStoreBootstrapResponse,
@@ -1193,13 +1196,16 @@ fn validate_store_bootstrap_evidence(
     let fleet_subnet_root = journal
         .fleet_subnet_root
         .ok_or_else(|| invalid(path, "Store evidence requires a root principal"))?;
-    if evidence.fleet_subnet_root != fleet_subnet_root
-        || evidence.wasm_store == Principal::anonymous()
-        || evidence.wasm_store == fleet_subnet_root
-        || evidence.wasm_store == journal.authority.binding.coordinator
-        || evidence.release_set != journal.root_plan.initial_release_set
-        || evidence.catalog.is_empty()
-    {
+    let protected_principals = [
+        Principal::anonymous(),
+        fleet_subnet_root,
+        journal.authority.binding.coordinator,
+    ];
+    let root_authority_matches = evidence.fleet_subnet_root == fleet_subnet_root
+        && evidence.release_set == journal.root_plan.initial_release_set;
+    let store_evidence_is_complete =
+        !protected_principals.contains(&evidence.wasm_store) && !evidence.catalog.is_empty();
+    if !root_authority_matches || !store_evidence_is_complete {
         return Err(invalid(
             path,
             "Store bootstrap evidence differs from immutable root authority",
@@ -1270,11 +1276,21 @@ fn validate_registry_join_response(
         .revision
         .checked_add(1)
         .ok_or_else(|| invalid(path, "Registry join expected revision is exhausted"))?;
-    if response.entry != request.entry
-        || response.version.authority != journal.authority
-        || response.version.revision != expected_revision
-        || response.version.content_hash == [0; 32]
-    {
+    if response.version.content_hash == [0; 32] {
+        return Err(invalid(
+            path,
+            "Registry join response has no committed content hash",
+        ));
+    }
+    let expected = FleetSubnetRootJoinResponse {
+        entry: request.entry.clone(),
+        version: FleetRegistryVersion {
+            authority: journal.authority.clone(),
+            revision: expected_revision,
+            content_hash: response.version.content_hash,
+        },
+    };
+    if response != &expected {
         return Err(invalid(
             path,
             "Registry join response differs from the durable request",
@@ -1315,11 +1331,15 @@ fn validate_registry_sync_response(
     let root = journal
         .fleet_subnet_root
         .ok_or_else(|| invalid(path, "Registry synchronization requires a root principal"))?;
-    if response.fleet_subnet_root != root
-        || response.version != request.expected_registry
-        || response.acknowledgement.fleet_subnet_root != root
-        || response.acknowledgement.version != request.expected_registry
-    {
+    let expected = FleetSubnetRootRegistrySyncResponse {
+        fleet_subnet_root: root,
+        version: request.expected_registry.clone(),
+        acknowledgement: FleetSubnetRootSnapshotAcknowledgement {
+            fleet_subnet_root: root,
+            version: request.expected_registry.clone(),
+        },
+    };
+    if response != &expected {
         return Err(invalid(
             path,
             "Registry synchronization response differs from durable authority",
@@ -1342,19 +1362,20 @@ fn validate_registry_mirror_activation_request(
     let root = journal
         .fleet_subnet_root
         .ok_or_else(|| invalid(path, "Registry mirror activation requires a root principal"))?;
-    if request.previous_registry != sync_request.expected_registry
-        || request.expected_registry.authority != journal.authority
-        || request.previous_registry.revision.checked_add(1)
-            != Some(request.expected_registry.revision)
-        || request.expected_registry.content_hash == [0; 32]
-        || request.store_bootstrap != sync_request.store_bootstrap
-        || request.expected_directory.provenance.registry != request.expected_registry
-        || request
+    let registry_authority_advances = request.previous_registry == sync_request.expected_registry
+        && request.expected_registry.authority == journal.authority
+        && request.previous_registry.revision.checked_add(1)
+            == Some(request.expected_registry.revision)
+        && request.expected_registry.content_hash != [0; 32];
+    let store_authority_matches = request.store_bootstrap == sync_request.store_bootstrap;
+    let directory_authority_matches = request.expected_directory.provenance.registry
+        == request.expected_registry
+        && request
             .expected_directory
             .provenance
             .source_fleet_subnet_root
-            != root
-    {
+            == root;
+    if !registry_authority_advances || !store_authority_matches || !directory_authority_matches {
         return Err(invalid(
             path,
             "Registry mirror activation request differs from durable root authority",
@@ -1381,11 +1402,13 @@ fn validate_registry_mirror_activation_response(
     let root = journal
         .fleet_subnet_root
         .ok_or_else(|| invalid(path, "Registry mirror activation requires a root principal"))?;
-    if response.fleet_subnet_root != root
-        || response.previous_registry != request.previous_registry
-        || response.version != request.expected_registry
-        || response.directory != request.expected_directory
-    {
+    let expected = FleetSubnetRootRegistryMirrorActivationResponse {
+        fleet_subnet_root: root,
+        previous_registry: request.previous_registry.clone(),
+        version: request.expected_registry.clone(),
+        directory: request.expected_directory.clone(),
+    };
+    if response != &expected {
         return Err(invalid(
             path,
             "Registry mirror activation response differs from durable authority",
@@ -1439,18 +1462,20 @@ fn validate_component_registry_preparation_response(
             "Component Registry preparation requires a root principal",
         )
     })?;
-    if response.fleet_subnet_root != root
-        || response.prepared_against_registry != request.expected_fleet_registry
-        || response.release_set != journal.root_plan.initial_release_set
-        || response.component_topology_digest != journal.root_plan.component_topology_digest
-        || response.next_allocation_sequence != 1
-        || response.reserved_component_instances != 0
-        || response.committed_component_instances != 0
-        || response.managed_descendants != 0
-        || response.known_created_component_canisters != 0
-        || response.encoded_bytes != 0
-        || response.initial_inventory.is_some()
-    {
+    let expected = RootComponentRegistryStatusResponse {
+        fleet_subnet_root: root,
+        prepared_against_registry: request.expected_fleet_registry.clone(),
+        release_set: journal.root_plan.initial_release_set,
+        component_topology_digest: journal.root_plan.component_topology_digest,
+        next_allocation_sequence: 1,
+        reserved_component_instances: 0,
+        committed_component_instances: 0,
+        managed_descendants: 0,
+        known_created_component_canisters: 0,
+        encoded_bytes: 0,
+        initial_inventory: None,
+    };
+    if response != &expected {
         return Err(invalid(
             path,
             "Component Registry preparation response differs from immutable root authority",
@@ -1482,6 +1507,12 @@ fn validate_root_activation_preparation_response(
         .cascade_manifest
         .as_ref()
         .ok_or_else(|| invalid(path, "prepared root activation has no cascade manifest"))?;
+    let [cascade_entry] = cascade_manifest.as_slice() else {
+        return Err(invalid(
+            path,
+            "prepared root activation has a non-canonical cascade manifest",
+        ));
+    };
     let FleetCascadeActivationEvidence::Source {
         cascade_manifest_hash,
     } = response
@@ -1510,23 +1541,32 @@ fn validate_root_activation_preparation_response(
     let expected_renewal_hash =
         canic_core::api::fleet_activation::FleetActivationApi::empty_renewal_template_set_hash()
             .map_err(|error| invalid(path, error.to_string()))?;
-    if response.phase != FleetActivationPhase::Prepared
-        || response.identity.fleet != journal.authority.binding.fleet
-        || response.identity.operation_id != journal.install_operation_id
-        || response.identity.release_build_id != journal.release_build_id
-        || response.activated_at_ns.is_some()
-        || cascade_manifest.len() != 1
-        || cascade_manifest[0].principal != store.wasm_store
-        || cascade_manifest[0].state_snapshot_hash == [0; 32]
-        || cascade_manifest[0].topology_snapshot_hash == [0; 32]
-        || observed_cascade_hash != *cascade_manifest_hash
-        || credential_manifest.fleet != journal.authority.binding.fleet.fleet
-        || credential_manifest.activation_id != journal.install_operation_id
-        || credential_manifest.generation != credential.generation
-        || credential_manifest.root_policy_set_hash != expected_policy_hash
-        || credential_manifest.renewal_template_set_hash != expected_renewal_hash
-        || !credential_manifest.entries.is_empty()
-        || observed_credential_hash != credential.manifest_hash
+    let expected_identity = FleetActivationIdentity {
+        fleet: journal.authority.binding.fleet.clone(),
+        operation_id: journal.install_operation_id,
+        release_build_id: journal.release_build_id,
+    };
+    let expected_credential_manifest = FleetCredentialManifest {
+        fleet: journal.authority.binding.fleet.fleet,
+        activation_id: journal.install_operation_id,
+        generation: credential.generation,
+        root_policy_set_hash: expected_policy_hash,
+        renewal_template_set_hash: expected_renewal_hash,
+        entries: Vec::new(),
+    };
+    let activation_is_prepared = response.phase == FleetActivationPhase::Prepared
+        && response.identity == expected_identity
+        && response.activated_at_ns.is_none();
+    let cascade_targets_store = cascade_entry.principal == store.wasm_store;
+    let cascade_snapshots_are_bound = cascade_entry.state_snapshot_hash != [0; 32]
+        && cascade_entry.topology_snapshot_hash != [0; 32]
+        && observed_cascade_hash == *cascade_manifest_hash;
+    let credential_authority_matches = credential_manifest == &expected_credential_manifest
+        && observed_credential_hash == credential.manifest_hash;
+    if !activation_is_prepared
+        || !cascade_targets_store
+        || !cascade_snapshots_are_bound
+        || !credential_authority_matches
     {
         return Err(invalid(
             path,
@@ -1540,15 +1580,20 @@ fn matches_initial_prepared_activation(
     journal: &FleetSubnetRootInstallJournal,
     response: &FleetActivationStatusResponse,
 ) -> bool {
-    response.phase == FleetActivationPhase::Prepared
-        && response.identity.fleet == journal.authority.binding.fleet
-        && response.identity.operation_id == journal.install_operation_id
-        && response.identity.release_build_id == journal.release_build_id
-        && response.cascade.is_none()
-        && response.cascade_manifest.is_none()
-        && response.credential.is_none()
-        && response.credential_manifest.is_none()
-        && response.activated_at_ns.is_none()
+    response
+        == &FleetActivationStatusResponse {
+            phase: FleetActivationPhase::Prepared,
+            identity: FleetActivationIdentity {
+                fleet: journal.authority.binding.fleet.clone(),
+                operation_id: journal.install_operation_id,
+                release_build_id: journal.release_build_id,
+            },
+            cascade: None,
+            cascade_manifest: None,
+            credential: None,
+            credential_manifest: None,
+            activated_at_ns: None,
+        }
 }
 
 fn validate_root_activation_response(
@@ -1565,14 +1610,14 @@ fn validate_root_activation_response(
                 "root activation requires durable preparation evidence",
             )
         })?;
-    if response.phase != FleetActivationPhase::Active
-        || response.identity != prepared.identity
-        || response.cascade != prepared.cascade
-        || response.cascade_manifest != prepared.cascade_manifest
-        || response.credential != prepared.credential
-        || response.credential_manifest != prepared.credential_manifest
-        || response.activated_at_ns.is_none_or(|time| time == 0)
-    {
+    let activated_at_ns = response
+        .activated_at_ns
+        .filter(|time| *time > 0)
+        .ok_or_else(|| invalid(path, "active root response has no activation time"))?;
+    let mut expected = prepared.clone();
+    expected.phase = FleetActivationPhase::Active;
+    expected.activated_at_ns = Some(activated_at_ns);
+    if response != &expected {
         return Err(invalid(
             path,
             "active root response differs from durable preparation authority",
@@ -1596,16 +1641,23 @@ fn validate_component_registry_activation_response(
             "active root has no sealed initial Component inventory",
         )
     })?;
+    if inventory.inventory_hash == [0; 32] || inventory.sealed_at_ns == 0 {
+        return Err(invalid(
+            path,
+            "active root has invalid initial Component inventory evidence",
+        ));
+    }
+    let expected_inventory = RootComponentInitialInventoryStatus {
+        fleet_activation_operation_id: journal.install_operation_id,
+        component_count: 0,
+        inventory_hash: inventory.inventory_hash,
+        sealed_at_ns: inventory.sealed_at_ns,
+        directories_converged: true,
+        root_runtime_activated: true,
+    };
     let mut expected = prepared.clone();
-    expected.initial_inventory = Some(inventory);
-    if response != &expected
-        || inventory.fleet_activation_operation_id != journal.install_operation_id
-        || inventory.component_count != 0
-        || inventory.inventory_hash == [0; 32]
-        || inventory.sealed_at_ns == 0
-        || !inventory.directories_converged
-        || !inventory.root_runtime_activated
-    {
+    expected.initial_inventory = Some(expected_inventory);
+    if response != &expected {
         return Err(invalid(
             path,
             "active root Component Registry differs from its empty initial inventory authority",
@@ -1633,13 +1685,13 @@ fn validate_fleet_directory(
     let mut roots = BTreeSet::new();
     let mut previous = None;
     for entry in &directory.fleet_subnet_roots {
-        if entry.placement_subnet.as_principal() == &Principal::anonymous()
-            || entry.fleet_subnet_root == Principal::anonymous()
-            || entry.status != FleetSubnetRootStatus::Active
-            || !subnets.insert(entry.placement_subnet)
-            || !roots.insert(entry.fleet_subnet_root)
-            || previous.is_some_and(|subnet| subnet >= entry.placement_subnet)
-        {
+        let identity_is_active = entry.placement_subnet.as_principal() != &Principal::anonymous()
+            && entry.fleet_subnet_root != Principal::anonymous()
+            && entry.status == FleetSubnetRootStatus::Active;
+        let identity_is_unique =
+            subnets.insert(entry.placement_subnet) && roots.insert(entry.fleet_subnet_root);
+        let order_is_canonical = previous.is_none_or(|subnet| subnet < entry.placement_subnet);
+        if !identity_is_active || !identity_is_unique || !order_is_canonical {
             return Err(invalid(
                 path,
                 "Fleet Directory root order or identity is invalid",
@@ -1671,14 +1723,13 @@ fn validate_joined_registry_snapshot(
     let expected_version =
         FleetRegistryOps::version(&journal.authority, &journal.component_topology, registry)
             .map_err(|error| invalid(path, error.to_string()))?;
-    if manifest != &expected_manifest
-        || version != &expected_version
-        || version != &response.version
-        || !registry
+    let snapshot_is_canonical = manifest == &expected_manifest && version == &expected_version;
+    let receipt_matches = version == &response.version
+        && registry
             .fleet_subnet_roots
             .iter()
-            .any(|entry| entry == &response.entry)
-    {
+            .any(|entry| entry == &response.entry);
+    if !snapshot_is_canonical || !receipt_matches {
         return Err(invalid(
             path,
             "live Registry evidence differs from the exact joined snapshot",

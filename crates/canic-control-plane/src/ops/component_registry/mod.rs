@@ -17,7 +17,7 @@ use crate::{
         RootComponentMembershipRecord, RootComponentRegistryCommitError,
         RootComponentRegistryMetaRecord, RootComponentRegistryStore,
         RootComponentSubtreeRemovalProgressRecord, RootComponentSubtreeRemovalRecord,
-        RootComponentSubtreeStopEffectRecord,
+        RootComponentSubtreeStopEffectRecord, RootComponentSubtreeStoppedEffectRecord,
     },
     view::component_registry::{
         ComponentDirectoryCanonicalCursor, ComponentDirectoryChildView,
@@ -31,12 +31,14 @@ use crate::{
         RootComponentMembershipView, RootComponentRegistryView,
         RootComponentSubtreeRemovalNodeView, RootComponentSubtreeRemovalProgressView,
         RootComponentSubtreeRemovalView, RootComponentSubtreeStopEffectView,
+        RootComponentSubtreeStoppedEffectView,
     },
 };
 use candid::CandidType;
 use canic_core::{
     cdk::types::{Cycles, Principal},
     control_plane_support::{
+        config::schema::ComponentChildKind,
         error::InternalError,
         model::replay::ReplayCostGuardSettlement,
         ops::component_runtime::ComponentRuntimeOps,
@@ -122,6 +124,344 @@ struct CompleteInitialInventory {
     operation_ids: Vec<[u8; 32]>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ComponentTreeNodeIdentity<'a> {
+    component: ComponentInstanceId,
+    parent_canister_id: Principal,
+    role: &'a CanisterRole,
+    canister_id: Principal,
+}
+
+impl<'a> ComponentTreeNodeIdentity<'a> {
+    const fn new(
+        component: ComponentInstanceId,
+        parent_canister_id: Principal,
+        role: &'a CanisterRole,
+        canister_id: Principal,
+    ) -> Self {
+        Self {
+            component,
+            parent_canister_id,
+            role,
+            canister_id,
+        }
+    }
+
+    const fn from_child(child: &'a ComponentRegistryChildRecord) -> Self {
+        Self::new(
+            child.component,
+            child.parent_canister_id,
+            &child.role,
+            child.canister_id,
+        )
+    }
+
+    const fn from_traversal(traversal: &'a ComponentRegistryChildTraversalRecord) -> Self {
+        Self::new(
+            traversal.component,
+            traversal.parent_canister_id,
+            &traversal.role,
+            traversal.canister_id,
+        )
+    }
+
+    fn is_valid_for(self, component: ComponentInstanceId) -> bool {
+        self.component == component
+            && self.parent_canister_id != Principal::anonymous()
+            && self.canister_id != Principal::anonymous()
+            && self.parent_canister_id != self.canister_id
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ComponentTreeNodeState<'a> {
+    identity: ComponentTreeNodeIdentity<'a>,
+    kind: ComponentChildKind,
+    installed_artifact_hash: [u8; 32],
+    status: ComponentLifecycleStatus,
+}
+
+impl<'a> ComponentTreeNodeState<'a> {
+    const fn new(
+        identity: ComponentTreeNodeIdentity<'a>,
+        kind: ComponentChildKind,
+        installed_artifact_hash: [u8; 32],
+        status: ComponentLifecycleStatus,
+    ) -> Self {
+        Self {
+            identity,
+            kind,
+            installed_artifact_hash,
+            status,
+        }
+    }
+
+    const fn from_child(child: &'a ComponentRegistryChildRecord) -> Self {
+        Self::new(
+            ComponentTreeNodeIdentity::from_child(child),
+            child.kind,
+            child.installed_artifact_hash,
+            child.status,
+        )
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ComponentTreeBoundary {
+    component: ComponentInstanceId,
+    root_canister: Principal,
+    fleet_subnet_root: Principal,
+    coordinator: Principal,
+}
+
+impl ComponentTreeBoundary {
+    const fn from_partition(partition: &ComponentRegistryPartitionRecord) -> Self {
+        Self {
+            component: partition.binding.component,
+            root_canister: partition.binding.canister_id,
+            fleet_subnet_root: partition.binding.fleet_subnet_root,
+            coordinator: partition.binding.authority.binding.coordinator,
+        }
+    }
+
+    fn admits(self, child: &ComponentRegistryChildRecord) -> bool {
+        let protected_child_principals = [
+            Principal::anonymous(),
+            self.root_canister,
+            self.fleet_subnet_root,
+            self.coordinator,
+        ];
+        let protected_parent_principals = [
+            Principal::anonymous(),
+            self.fleet_subnet_root,
+            self.coordinator,
+        ];
+        child.component == self.component
+            && child.canister_id != child.parent_canister_id
+            && !protected_child_principals.contains(&child.canister_id)
+            && !protected_parent_principals.contains(&child.parent_canister_id)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ComponentParentRoleIdentity<'a> {
+    component: ComponentInstanceId,
+    parent_canister_id: Principal,
+    child_role: &'a CanisterRole,
+}
+
+impl<'a> ComponentParentRoleIdentity<'a> {
+    const fn new(
+        component: ComponentInstanceId,
+        parent_canister_id: Principal,
+        child_role: &'a CanisterRole,
+    ) -> Self {
+        Self {
+            component,
+            parent_canister_id,
+            child_role,
+        }
+    }
+
+    const fn from_count(record: &'a ComponentRegistryParentRoleCountRecord) -> Self {
+        Self::new(
+            record.component,
+            record.parent_canister_id,
+            &record.child_role,
+        )
+    }
+
+    const fn from_allocation(record: &'a RootComponentChildAllocationRecord) -> Self {
+        Self::new(
+            record.component,
+            record.parent_canister_id,
+            &record.child_role,
+        )
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ComponentPartitionLifecycleAuthority {
+    component: ComponentInstanceId,
+    release_set: FleetSubnetRootReleaseSet,
+    status: ComponentLifecycleStatus,
+}
+
+impl ComponentPartitionLifecycleAuthority {
+    const fn active_reservation(record: &RootComponentChildAllocationRecord) -> Self {
+        Self {
+            component: record.component,
+            release_set: record.release_set,
+            status: ComponentLifecycleStatus::Active,
+        }
+    }
+
+    const fn from_partition(partition: &ComponentRegistryPartitionRecord) -> Self {
+        Self {
+            component: partition.binding.component,
+            release_set: partition.release_set,
+            status: partition.status,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ComponentPartitionCoverage<'a> {
+    current: &'a ComponentRegistryPartitionRecord,
+    historical: &'a ComponentRegistryPartitionRecord,
+}
+
+impl<'a> ComponentPartitionCoverage<'a> {
+    const fn new(
+        current: &'a ComponentRegistryPartitionRecord,
+        historical: &'a ComponentRegistryPartitionRecord,
+    ) -> Self {
+        Self {
+            current,
+            historical,
+        }
+    }
+
+    fn is_monotonic(self) -> bool {
+        match self.current.revision.cmp(&self.historical.revision) {
+            std::cmp::Ordering::Less => false,
+            std::cmp::Ordering::Equal => {
+                self.current.content_hash == self.historical.content_hash
+                    && self.current.descendant_content_hash
+                        == self.historical.descendant_content_hash
+                    && self.current.directory_synchronized_at_ns
+                        == self.historical.directory_synchronized_at_ns
+                    && self.current.reserved_descendants >= self.historical.reserved_descendants
+                    && self.current.committed_descendants == self.historical.committed_descendants
+                    && self.current.encoded_bytes >= self.historical.encoded_bytes
+            }
+            std::cmp::Ordering::Greater => {
+                self.current.directory_synchronized_at_ns
+                    >= self.historical.directory_synchronized_at_ns
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ComponentChildActivationEvidence<'a> {
+    component: ComponentInstanceId,
+    commitment: &'a RootComponentChildCommitmentRecord,
+    membership: &'a RootComponentChildMembershipRecord,
+}
+
+impl<'a> ComponentChildActivationEvidence<'a> {
+    const fn new(
+        component: ComponentInstanceId,
+        commitment: &'a RootComponentChildCommitmentRecord,
+        membership: &'a RootComponentChildMembershipRecord,
+    ) -> Self {
+        Self {
+            component,
+            commitment,
+            membership,
+        }
+    }
+
+    fn is_valid(self) -> bool {
+        let activation_receipt_is_complete =
+            self.commitment.directory_prepared && self.commitment.runtime_activated;
+        let registry_authority_advances = self.membership.registry.component == self.component
+            && self.membership.registry.revision > self.commitment.registry.revision
+            && self.membership.descendant_content_hash != self.commitment.descendant_content_hash;
+        let directory_authority_advances = self.membership.directory_synchronized_at_ns
+            > self.commitment.directory_synchronized_at_ns
+            && self.membership.directory_authority_hash != [0; 32];
+        activation_receipt_is_complete
+            && registry_authority_advances
+            && directory_authority_advances
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ComponentActivationEvidence<'a> {
+    commitment: &'a RootComponentCommitmentRecord,
+    membership: &'a RootComponentMembershipRecord,
+    current: &'a ComponentRegistryPartitionRecord,
+}
+
+impl<'a> ComponentActivationEvidence<'a> {
+    const fn new(
+        commitment: &'a RootComponentCommitmentRecord,
+        membership: &'a RootComponentMembershipRecord,
+        current: &'a ComponentRegistryPartitionRecord,
+    ) -> Self {
+        Self {
+            commitment,
+            membership,
+            current,
+        }
+    }
+
+    fn is_valid(self) -> bool {
+        let activation_receipt_is_complete =
+            self.commitment.directory_prepared && self.commitment.runtime_activated;
+        let registry_bytes_cover_receipt =
+            self.membership.registry_encoded_bytes <= self.current.encoded_bytes;
+        let directory_authority_advances = self.membership.directory_synchronized_at_ns
+            > self.commitment.directory_synchronized_at_ns
+            && self.membership.directory_authority_hash != [0; 32];
+        activation_receipt_is_complete
+            && registry_bytes_cover_receipt
+            && directory_authority_advances
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct SubtreeLeafSelection {
+    traversal_steps: u32,
+    canister_id: Principal,
+    parent_canister_id: Principal,
+}
+
+impl SubtreeLeafSelection {
+    const fn new(
+        traversal_steps: u32,
+        canister_id: Principal,
+        parent_canister_id: Principal,
+    ) -> Self {
+        Self {
+            traversal_steps,
+            canister_id,
+            parent_canister_id,
+        }
+    }
+
+    const fn from_record(traversal_steps: u32, leaf: &ComponentRegistryChildRecord) -> Self {
+        Self::new(traversal_steps, leaf.canister_id, leaf.parent_canister_id)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct SubtreeLeafStopAuthority {
+    selection: SubtreeLeafSelection,
+    controller: Principal,
+}
+
+impl SubtreeLeafStopAuthority {
+    const fn new(selection: SubtreeLeafSelection, controller: Principal) -> Self {
+        Self {
+            selection,
+            controller,
+        }
+    }
+
+    const fn from_record(
+        traversal_steps: u32,
+        stop: &RootComponentSubtreeStopEffectRecord,
+    ) -> Self {
+        Self::new(
+            SubtreeLeafSelection::from_record(traversal_steps, &stop.leaf),
+            stop.controller,
+        )
+    }
+}
+
 ///
 /// RootComponentCreationPlan
 ///
@@ -135,6 +475,51 @@ pub struct RootComponentCreationPlan {
     pub payload_size_bytes: u64,
     pub initial_cycles: Cycles,
     pub controller: Principal,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct RootComponentCreationAuthority<'a> {
+    wasm_store: Principal,
+    payload_hash: [u8; 32],
+    payload_size_bytes: u64,
+    initial_cycles: &'a Cycles,
+    controller: Principal,
+}
+
+impl<'a> From<&'a RootComponentCreationPlan> for RootComponentCreationAuthority<'a> {
+    fn from(plan: &'a RootComponentCreationPlan) -> Self {
+        Self {
+            wasm_store: plan.wasm_store,
+            payload_hash: plan.payload_hash,
+            payload_size_bytes: plan.payload_size_bytes,
+            initial_cycles: &plan.initial_cycles,
+            controller: plan.controller,
+        }
+    }
+}
+
+impl<'a> From<&'a RootComponentCreationEffectView> for RootComponentCreationAuthority<'a> {
+    fn from(effect: &'a RootComponentCreationEffectView) -> Self {
+        Self {
+            wasm_store: effect.wasm_store,
+            payload_hash: effect.payload_hash,
+            payload_size_bytes: effect.payload_size_bytes,
+            initial_cycles: &effect.initial_cycles,
+            controller: effect.controller,
+        }
+    }
+}
+
+impl RootComponentCreationPlan {
+    pub(crate) fn matches_effect(&self, effect: &RootComponentCreationEffectView) -> bool {
+        RootComponentCreationAuthority::from(self) == RootComponentCreationAuthority::from(effect)
+    }
+
+    fn has_valid_store_artifact(&self) -> bool {
+        self.wasm_store != Principal::anonymous()
+            && self.payload_hash != [0; 32]
+            && self.payload_size_bytes > 0
+    }
 }
 
 ///
@@ -151,6 +536,39 @@ pub struct RootComponentInstallPlan {
     pub maximum_registry_bytes: u64,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+struct RootComponentInstallAuthority<'a> {
+    raw_module_hash: [u8; 32],
+    chunk_hashes: &'a [Vec<u8>],
+    binding: &'a ComponentBinding,
+}
+
+impl<'a> From<&'a RootComponentInstallPlan> for RootComponentInstallAuthority<'a> {
+    fn from(plan: &'a RootComponentInstallPlan) -> Self {
+        Self {
+            raw_module_hash: plan.raw_module_hash,
+            chunk_hashes: &plan.chunk_hashes,
+            binding: &plan.binding,
+        }
+    }
+}
+
+impl<'a> From<&'a RootComponentInstallEffectView> for RootComponentInstallAuthority<'a> {
+    fn from(effect: &'a RootComponentInstallEffectView) -> Self {
+        Self {
+            raw_module_hash: effect.raw_module_hash,
+            chunk_hashes: &effect.chunk_hashes,
+            binding: &effect.binding,
+        }
+    }
+}
+
+impl RootComponentInstallPlan {
+    pub(crate) fn matches_effect(&self, effect: &RootComponentInstallEffectView) -> bool {
+        RootComponentInstallAuthority::from(self) == RootComponentInstallAuthority::from(effect)
+    }
+}
+
 ///
 /// RootComponentChildInstallPlan
 ///
@@ -163,6 +581,48 @@ pub struct RootComponentChildInstallPlan {
     pub chunk_hashes: Vec<Vec<u8>>,
     pub binding: ComponentChildBinding,
     pub maximum_registry_bytes: u64,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct RootComponentChildInstallAuthority<'a> {
+    raw_module_hash: [u8; 32],
+    chunk_hashes: &'a [Vec<u8>],
+    binding: &'a ComponentChildBinding,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct ComponentChildInstallReservationAuthority<'a> {
+    binding: &'a ComponentChildBinding,
+    partition: ComponentPartitionLifecycleAuthority,
+    root_release_set: FleetSubnetRootReleaseSet,
+    maximum_registry_bytes: u64,
+}
+
+impl<'a> From<&'a RootComponentChildInstallPlan> for RootComponentChildInstallAuthority<'a> {
+    fn from(plan: &'a RootComponentChildInstallPlan) -> Self {
+        Self {
+            raw_module_hash: plan.raw_module_hash,
+            chunk_hashes: &plan.chunk_hashes,
+            binding: &plan.binding,
+        }
+    }
+}
+
+impl<'a> From<&'a RootComponentChildInstallEffectView> for RootComponentChildInstallAuthority<'a> {
+    fn from(effect: &'a RootComponentChildInstallEffectView) -> Self {
+        Self {
+            raw_module_hash: effect.raw_module_hash,
+            chunk_hashes: &effect.chunk_hashes,
+            binding: &effect.binding,
+        }
+    }
+}
+
+impl RootComponentChildInstallPlan {
+    pub(crate) fn matches_effect(&self, effect: &RootComponentChildInstallEffectView) -> bool {
+        RootComponentChildInstallAuthority::from(self)
+            == RootComponentChildInstallAuthority::from(effect)
+    }
 }
 
 impl ComponentRegistryOps {
@@ -778,9 +1238,8 @@ impl ComponentRegistryOps {
                     )
                 })?;
             validate_child_record(&partition, &child)?;
-            if traversal.parent_canister_id != child.parent_canister_id
-                || traversal.role != child.role
-                || traversal.canister_id != child.canister_id
+            if ComponentTreeNodeIdentity::from_traversal(&traversal)
+                != ComponentTreeNodeIdentity::from_child(&child)
                 || RootComponentRegistryStore::component_for_principal(traversal.parent_canister_id)
                     != Some(component)
             {
@@ -1129,6 +1588,7 @@ impl ComponentRegistryOps {
             &record.progress,
             RootComponentSubtreeRemovalProgressRecord::LeafSelected { .. }
                 | RootComponentSubtreeRemovalProgressRecord::StopIntent(_)
+                | RootComponentSubtreeRemovalProgressRecord::Stopped(_)
         ) {
             return Ok(subtree_removal_record_to_view(record));
         }
@@ -1139,7 +1599,8 @@ impl ComponentRegistryOps {
                 RootComponentSubtreeRemovalProgressRecord::Fenced => next_record.target.clone(),
                 RootComponentSubtreeRemovalProgressRecord::Traversing { cursor } => cursor.clone(),
                 RootComponentSubtreeRemovalProgressRecord::LeafSelected { .. }
-                | RootComponentSubtreeRemovalProgressRecord::StopIntent(_) => break,
+                | RootComponentSubtreeRemovalProgressRecord::StopIntent(_)
+                | RootComponentSubtreeRemovalProgressRecord::Stopped(_) => break,
             };
             next_record.progress = match first_registered_child(&partition, cursor.canister_id)? {
                 Some(child) => {
@@ -1201,18 +1662,33 @@ impl ComponentRegistryOps {
         validate_partition_record(&partition)?;
         validate_subtree_removal_progress(&partition, &record)?;
 
+        let expected_selection = SubtreeLeafSelection::new(
+            expected_traversal_steps,
+            expected_leaf_canister_id,
+            expected_leaf_parent_canister_id,
+        );
+        let expected_stop =
+            SubtreeLeafStopAuthority::new(expected_selection, current.root.fleet_subnet_root);
         let leaf = match &record.progress {
             RootComponentSubtreeRemovalProgressRecord::LeafSelected { leaf } => leaf,
             RootComponentSubtreeRemovalProgressRecord::StopIntent(effect) => {
-                if record.traversal_steps == expected_traversal_steps
-                    && effect.leaf.canister_id == expected_leaf_canister_id
-                    && effect.leaf.parent_canister_id == expected_leaf_parent_canister_id
-                    && effect.controller == current.root.fleet_subnet_root
+                if SubtreeLeafStopAuthority::from_record(record.traversal_steps, effect)
+                    == expected_stop
                 {
                     return Ok(subtree_removal_record_to_view(record));
                 }
                 return Err(InternalError::conflict(
                     "Component subtree stop preparation differs from durable intent",
+                ));
+            }
+            RootComponentSubtreeRemovalProgressRecord::Stopped(receipt) => {
+                if SubtreeLeafStopAuthority::from_record(record.traversal_steps, &receipt.stop)
+                    == expected_stop
+                {
+                    return Ok(subtree_removal_record_to_view(record));
+                }
+                return Err(InternalError::conflict(
+                    "Component subtree stop preparation differs from durable stopped authority",
                 ));
             }
             RootComponentSubtreeRemovalProgressRecord::Fenced
@@ -1222,10 +1698,7 @@ impl ComponentRegistryOps {
                 ));
             }
         };
-        if record.traversal_steps != expected_traversal_steps
-            || leaf.canister_id != expected_leaf_canister_id
-            || leaf.parent_canister_id != expected_leaf_parent_canister_id
-        {
+        if SubtreeLeafSelection::from_record(record.traversal_steps, leaf) != expected_selection {
             return Err(InternalError::conflict(
                 "Component subtree stop preparation differs from the selected leaf",
             ));
@@ -1266,6 +1739,97 @@ impl ComponentRegistryOps {
         Ok(subtree_removal_record_to_view(next_record))
     }
 
+    pub(crate) fn mark_subtree_leaf_stopped(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        expected_traversal_steps: u32,
+        expected_leaf_canister_id: Principal,
+        expected_leaf_parent_canister_id: Principal,
+        observed_module_hash: [u8; 32],
+        maximum_component_registry_bytes: u64,
+    ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
+        let record = RootComponentRegistryStore::subtree_removal(component, operation_id)
+            .ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component subtree-removal operation has not been durably fenced",
+                )
+            })?;
+        validate_subtree_removal_record(&record)?;
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        validate_subtree_removal_root(&record, &current.root)?;
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        validate_partition_record(&partition)?;
+        validate_subtree_removal_progress(&partition, &record)?;
+
+        let expected_stop = SubtreeLeafStopAuthority::new(
+            SubtreeLeafSelection::new(
+                expected_traversal_steps,
+                expected_leaf_canister_id,
+                expected_leaf_parent_canister_id,
+            ),
+            current.root.fleet_subnet_root,
+        );
+        let stop = match &record.progress {
+            RootComponentSubtreeRemovalProgressRecord::StopIntent(effect) => effect,
+            RootComponentSubtreeRemovalProgressRecord::Stopped(receipt) => {
+                let durable_stop =
+                    SubtreeLeafStopAuthority::from_record(record.traversal_steps, &receipt.stop);
+                if durable_stop == expected_stop
+                    && receipt.observed_module_hash == observed_module_hash
+                {
+                    return Ok(subtree_removal_record_to_view(record));
+                }
+                return Err(InternalError::conflict(
+                    "Component subtree stopped observation differs from durable receipt",
+                ));
+            }
+            RootComponentSubtreeRemovalProgressRecord::Fenced
+            | RootComponentSubtreeRemovalProgressRecord::Traversing { .. }
+            | RootComponentSubtreeRemovalProgressRecord::LeafSelected { .. } => {
+                return Err(InternalError::unavailable(
+                    "Component subtree leaf has no durable stop intent",
+                ));
+            }
+        };
+        if SubtreeLeafStopAuthority::from_record(record.traversal_steps, stop) != expected_stop {
+            return Err(InternalError::conflict(
+                "Component subtree stopped observation differs from prepared authority",
+            ));
+        }
+
+        let mut next_record = record.clone();
+        next_record.progress = RootComponentSubtreeRemovalProgressRecord::Stopped(
+            RootComponentSubtreeStoppedEffectRecord {
+                stop: stop.clone(),
+                observed_module_hash,
+            },
+        );
+        validate_subtree_removal_record(&next_record)?;
+        validate_subtree_removal_root(&next_record, &current.root)?;
+        validate_subtree_removal_progress(&partition, &next_record)?;
+        let (next_partition, next_meta) = subtree_removal_progress_state(
+            &current,
+            &partition,
+            &record,
+            &next_record,
+            maximum_component_registry_bytes,
+        )?;
+        RootComponentRegistryStore::replace_subtree_removal(
+            &current,
+            next_meta,
+            &partition,
+            next_partition,
+            &record,
+            next_record.clone(),
+        )
+        .map_err(map_allocation_commit_error)?;
+        Ok(subtree_removal_record_to_view(next_record))
+    }
+
     pub(crate) fn parent_role_instances(
         component: ComponentInstanceId,
         parent_canister_id: Principal,
@@ -1278,9 +1842,9 @@ impl ComponentRegistryOps {
         ) else {
             return Ok(0);
         };
-        if record.component != component
-            || record.parent_canister_id != parent_canister_id
-            || &record.child_role != child_role
+        let expected_identity =
+            ComponentParentRoleIdentity::new(component, parent_canister_id, child_role);
+        if ComponentParentRoleIdentity::from_count(&record) != expected_identity
             || record.instances == 0
         {
             return Err(InternalError::invariant(
@@ -1333,16 +1897,18 @@ impl ComponentRegistryOps {
                 ))
             };
         }
-        if partition.binding.component_spec != decision.component_spec
-            || partition.binding.spec_hash != decision.spec_hash
-            || partition.release_set != current.release_set
-            || partition.status != ComponentLifecycleStatus::Active
-            || record.reserved_against_registry
-                != (ComponentRegistryHead {
-                    component: decision.component,
-                    revision: partition.revision,
-                    content_hash: partition.content_hash,
-                })
+        let spec_authority_matches = partition.binding.component_spec == decision.component_spec
+            && partition.binding.spec_hash == decision.spec_hash;
+        let partition_is_active = partition.release_set == current.release_set
+            && partition.status == ComponentLifecycleStatus::Active;
+        let expected_registry = ComponentRegistryHead {
+            component: decision.component,
+            revision: partition.revision,
+            content_hash: partition.content_hash,
+        };
+        if !spec_authority_matches
+            || !partition_is_active
+            || record.reserved_against_registry != expected_registry
         {
             return Err(InternalError::conflict(
                 "Component Child reservation authority changed before durable mutation",
@@ -1600,11 +2166,14 @@ impl ComponentRegistryOps {
                 ));
             }
         };
-        if canister == Principal::anonymous()
-            || canister == current.root.fleet_subnet_root
-            || canister == current.root.authority.binding.coordinator
-            || canister == partition.binding.canister_id
-            || canister == record.parent_canister_id
+        let protected_principals = [
+            Principal::anonymous(),
+            current.root.fleet_subnet_root,
+            current.root.authority.binding.coordinator,
+            partition.binding.canister_id,
+            record.parent_canister_id,
+        ];
+        if protected_principals.contains(&canister)
             || RootComponentRegistryStore::component_for_principal(canister).is_some()
         {
             return Err(InternalError::conflict(
@@ -3138,6 +3707,17 @@ fn subtree_removal_record_to_view(
                     },
                 )
             }
+            RootComponentSubtreeRemovalProgressRecord::Stopped(receipt) => {
+                RootComponentSubtreeRemovalProgressView::Stopped(
+                    RootComponentSubtreeStoppedEffectView {
+                        stop: RootComponentSubtreeStopEffectView {
+                            leaf: subtree_removal_node_view(receipt.stop.leaf),
+                            controller: receipt.stop.controller,
+                        },
+                        observed_module_hash: receipt.observed_module_hash,
+                    },
+                )
+            }
         },
     }
 }
@@ -3205,12 +3785,11 @@ fn child_reservation_partition(
     current_count: Option<&ComponentRegistryParentRoleCountRecord>,
     next_count: &ComponentRegistryParentRoleCountRecord,
 ) -> Result<(ComponentRegistryPartitionRecord, u64), InternalError> {
-    if let Some(count) = current_count
-        && (count.component != allocation.component
-            || count.parent_canister_id != allocation.parent_canister_id
-            || count.child_role != allocation.child_role
-            || count.instances == 0)
-    {
+    let allocation_identity = ComponentParentRoleIdentity::from_allocation(allocation);
+    let current_count_is_valid = current_count.is_none_or(|count| {
+        ComponentParentRoleIdentity::from_count(count) == allocation_identity && count.instances > 0
+    });
+    if !current_count_is_valid {
         return Err(InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
             "Component Registry parent-role count index is invalid",
@@ -3387,13 +3966,12 @@ fn validate_child_creation_authority(
 ) -> Result<(), InternalError> {
     validate_partition_record(partition)?;
     validate_child_allocation_record(record)?;
-    if partition.binding.component != record.component
-        || partition.release_set != record.release_set
-        || partition.status != ComponentLifecycleStatus::Active
-        || plan.controller != current.root.fleet_subnet_root
-        || plan.wasm_store == Principal::anonymous()
-        || plan.payload_hash == [0; 32]
-        || plan.payload_size_bytes == 0
+    let partition_authority = ComponentPartitionLifecycleAuthority::from_partition(partition);
+    let reservation_authority = ComponentPartitionLifecycleAuthority::active_reservation(record);
+    let root_controls_creation = plan.controller == current.root.fleet_subnet_root;
+    if partition_authority != reservation_authority
+        || !root_controls_creation
+        || !plan.has_valid_store_artifact()
     {
         return Err(InternalError::conflict(
             "Component Child creation authority differs from its active reservation",
@@ -3525,17 +4103,28 @@ fn validate_child_install_authority(
             ));
         }
     };
-    if partition.binding != plan.binding.component
-        || partition.release_set != record.release_set
-        || current.release_set != record.release_set
-        || partition.status != ComponentLifecycleStatus::Active
-        || plan.binding.parent_canister_id != record.parent_canister_id
-        || plan.binding.role != record.child_role
-        || plan.binding.canister_id != canister
-        || plan.maximum_registry_bytes != record.maximum_registry_bytes
-        || plan.raw_module_hash == [0; 32]
-        || plan.chunk_hashes.is_empty()
-    {
+    let expected_binding = ComponentChildBinding {
+        component: partition.binding.clone(),
+        parent_canister_id: record.parent_canister_id,
+        role: record.child_role.clone(),
+        canister_id: canister,
+    };
+    let partition_authority = ComponentPartitionLifecycleAuthority::from_partition(partition);
+    let reservation_authority = ComponentPartitionLifecycleAuthority::active_reservation(record);
+    let artifact_source_is_valid = plan.raw_module_hash != [0; 32] && !plan.chunk_hashes.is_empty();
+    let observed_authority = ComponentChildInstallReservationAuthority {
+        binding: &plan.binding,
+        partition: partition_authority,
+        root_release_set: current.release_set,
+        maximum_registry_bytes: plan.maximum_registry_bytes,
+    };
+    let expected_authority = ComponentChildInstallReservationAuthority {
+        binding: &expected_binding,
+        partition: reservation_authority,
+        root_release_set: record.release_set,
+        maximum_registry_bytes: record.maximum_registry_bytes,
+    };
+    if observed_authority != expected_authority || !artifact_source_is_valid {
         return Err(InternalError::conflict(
             "Component Child install authority differs from its active reservation",
         ));
@@ -4741,31 +5330,29 @@ fn validate_active_child_partition(
         encoded_bytes: membership.registry_encoded_bytes,
     };
     validate_partition_snapshot(&historical)?;
-    if !commitment.directory_prepared
-        || !commitment.runtime_activated
-        || membership.registry.component != record.component
-        || membership.registry.revision <= commitment.registry.revision
-        || membership.descendant_content_hash == commitment.descendant_content_hash
-        || membership.directory_synchronized_at_ns <= commitment.directory_synchronized_at_ns
-        || membership.directory_authority_hash == [0; 32]
-        || child.canister_id != *canister
-        || child.parent_canister_id != record.parent_canister_id
-        || child.role != record.child_role
-        || child.kind != record.child_kind
-        || child.installed_artifact_hash != installation.raw_module_hash
-        || child.status != ComponentLifecycleStatus::Active
-        || current.binding != historical.binding
-        || current.release_set != historical.release_set
-        || current.status != ComponentLifecycleStatus::Active
-        || current.revision < historical.revision
-        || current.directory_synchronized_at_ns < historical.directory_synchronized_at_ns
-        || (current.revision == historical.revision
-            && (current.content_hash != historical.content_hash
-                || current.descendant_content_hash != historical.descendant_content_hash
-                || current.directory_synchronized_at_ns != historical.directory_synchronized_at_ns
-                || current.reserved_descendants < historical.reserved_descendants
-                || current.committed_descendants != historical.committed_descendants
-                || current.encoded_bytes < historical.encoded_bytes))
+    let activation_evidence =
+        ComponentChildActivationEvidence::new(record.component, commitment, membership);
+    let child_state = ComponentTreeNodeState::from_child(&child);
+    let expected_child_state = ComponentTreeNodeState::new(
+        ComponentTreeNodeIdentity::new(
+            record.component,
+            record.parent_canister_id,
+            &record.child_role,
+            *canister,
+        ),
+        record.child_kind,
+        installation.raw_module_hash,
+        ComponentLifecycleStatus::Active,
+    );
+    let current_identity_is_valid = current.binding == historical.binding
+        && current.release_set == historical.release_set
+        && current.status == ComponentLifecycleStatus::Active;
+    let current_progress_is_valid =
+        ComponentPartitionCoverage::new(current, &historical).is_monotonic();
+    if !activation_evidence.is_valid()
+        || child_state != expected_child_state
+        || !current_identity_is_valid
+        || !current_progress_is_valid
     {
         return Err(InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
@@ -4880,21 +5467,12 @@ fn validate_active_partition(
     validate_partition_snapshot(&historical)?;
     // Later child reservations and commitments may advance charged bytes and
     // the current head without changing this immutable top-level receipt.
-    let registry_encoded_bytes_covered = membership.registry_encoded_bytes <= current.encoded_bytes;
-    if !commitment.directory_prepared
-        || !commitment.runtime_activated
-        || !registry_encoded_bytes_covered
-        || membership.directory_synchronized_at_ns <= commitment.directory_synchronized_at_ns
-        || membership.directory_authority_hash == [0; 32]
-        || current.binding.component != record.component
-        || current.status != ComponentLifecycleStatus::Active
-        || current.revision < expected_revision
-        || current.directory_synchronized_at_ns < membership.directory_synchronized_at_ns
-        || (current.revision == expected_revision
-            && (current.content_hash != historical.content_hash
-                || current.directory_synchronized_at_ns != historical.directory_synchronized_at_ns
-                || current.committed_descendants != 0))
-    {
+    let activation_evidence = ComponentActivationEvidence::new(commitment, membership, current);
+    let current_identity_is_valid = current.binding.component == record.component
+        && current.status == ComponentLifecycleStatus::Active;
+    let current_progress_is_valid =
+        ComponentPartitionCoverage::new(current, &historical).is_monotonic();
+    if !activation_evidence.is_valid() || !current_identity_is_valid || !current_progress_is_valid {
         return Err(InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
             "active Component partition differs from its immutable membership receipt",
@@ -5031,25 +5609,31 @@ fn validate_partition_snapshot(
 ) -> Result<(), InternalError> {
     let empty_descendant_hash =
         empty_component_descendant_content_hash(partition.binding.component);
-    if partition.revision == 0
-        || partition.directory_synchronized_at_ns == 0
-        || partition.descendant_content_hash == [0; 32]
-        || (partition.committed_descendants == 0
-            && partition.descendant_content_hash != empty_descendant_hash)
-        || (partition.committed_descendants > 0
-            && partition.descendant_content_hash == empty_descendant_hash)
-        || partition.content_hash
-            != component_partition_content_hash(
-                &partition.binding,
-                &partition.provisioning_origin,
-                partition.release_set,
-                partition.status,
-                partition.revision,
-                partition.descendant_content_hash,
-                partition.committed_descendants,
-            )?
-        || RootComponentRegistryStore::component_for_principal(partition.binding.canister_id)
-            != Some(partition.binding.component)
+    let descendant_hash_matches_count = match partition.committed_descendants {
+        0 => partition.descendant_content_hash == empty_descendant_hash,
+        _ => partition.descendant_content_hash != empty_descendant_hash,
+    };
+    let expected_content_hash = component_partition_content_hash(
+        &partition.binding,
+        &partition.provisioning_origin,
+        partition.release_set,
+        partition.status,
+        partition.revision,
+        partition.descendant_content_hash,
+        partition.committed_descendants,
+    )?;
+    let principal_index_matches =
+        RootComponentRegistryStore::component_for_principal(partition.binding.canister_id)
+            == Some(partition.binding.component);
+    let head_is_versioned = partition.revision > 0;
+    let directory_is_synchronized = partition.directory_synchronized_at_ns > 0;
+    let content_is_canonical = partition.descendant_content_hash != [0; 32]
+        && descendant_hash_matches_count
+        && partition.content_hash == expected_content_hash;
+    if !head_is_versioned
+        || !directory_is_synchronized
+        || !content_is_canonical
+        || !principal_index_matches
     {
         return Err(InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
@@ -5063,16 +5647,7 @@ fn validate_child_record(
     partition: &ComponentRegistryPartitionRecord,
     child: &ComponentRegistryChildRecord,
 ) -> Result<(), InternalError> {
-    if child.component != partition.binding.component
-        || child.canister_id == Principal::anonymous()
-        || child.parent_canister_id == Principal::anonymous()
-        || child.canister_id == child.parent_canister_id
-        || child.canister_id == partition.binding.canister_id
-        || child.canister_id == partition.binding.fleet_subnet_root
-        || child.canister_id == partition.binding.authority.binding.coordinator
-        || child.parent_canister_id == partition.binding.fleet_subnet_root
-        || child.parent_canister_id == partition.binding.authority.binding.coordinator
-    {
+    if !ComponentTreeBoundary::from_partition(partition).admits(child) {
         return Err(InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
             "Component Registry child row has invalid tree identity",
@@ -5129,14 +5704,21 @@ fn validate_subtree_removal_record(
                 && effect.controller != Principal::anonymous()
                 && valid_subtree_removal_node(record.component, &effect.leaf)
         }
+        RootComponentSubtreeRemovalProgressRecord::Stopped(receipt) => {
+            record.traversal_steps > 0
+                && receipt.stop.controller != Principal::anonymous()
+                && valid_subtree_removal_node(record.component, &receipt.stop.leaf)
+        }
     };
+    let target_is_active = ComponentTreeNodeIdentity::from_child(&record.target)
+        .is_valid_for(record.component)
+        && record.target.status == ComponentLifecycleStatus::Active;
+    let registry_fence_is_versioned = record.component
+        == record.reserved_against_registry.component
+        && record.reserved_against_registry.revision > 0;
     if record.operation_id == [0; 32]
-        || record.component != record.target.component
-        || record.component != record.reserved_against_registry.component
-        || record.reserved_against_registry.revision == 0
-        || record.target.canister_id == Principal::anonymous()
-        || record.target.parent_canister_id == Principal::anonymous()
-        || record.target.status != ComponentLifecycleStatus::Active
+        || !target_is_active
+        || !registry_fence_is_versioned
         || !progress_is_valid
     {
         return Err(InternalError::invariant(
@@ -5151,10 +5733,7 @@ fn valid_subtree_removal_node(
     component: ComponentInstanceId,
     node: &ComponentRegistryChildRecord,
 ) -> bool {
-    node.component == component
-        && node.canister_id != Principal::anonymous()
-        && node.parent_canister_id != Principal::anonymous()
-        && node.canister_id != node.parent_canister_id
+    ComponentTreeNodeIdentity::from_child(node).is_valid_for(component)
         && node.status == ComponentLifecycleStatus::Active
 }
 
@@ -5162,11 +5741,16 @@ fn validate_subtree_removal_root(
     record: &RootComponentSubtreeRemovalRecord,
     root: &FleetSubnetRootBinding,
 ) -> Result<(), InternalError> {
-    if matches!(
-        &record.progress,
-        RootComponentSubtreeRemovalProgressRecord::StopIntent(effect)
-            if effect.controller != root.fleet_subnet_root
-    ) {
+    let stop_controller = match &record.progress {
+        RootComponentSubtreeRemovalProgressRecord::StopIntent(effect) => Some(effect.controller),
+        RootComponentSubtreeRemovalProgressRecord::Stopped(receipt) => {
+            Some(receipt.stop.controller)
+        }
+        RootComponentSubtreeRemovalProgressRecord::Fenced
+        | RootComponentSubtreeRemovalProgressRecord::Traversing { .. }
+        | RootComponentSubtreeRemovalProgressRecord::LeafSelected { .. } => None,
+    };
+    if stop_controller.is_some_and(|controller| controller != root.fleet_subnet_root) {
         return Err(InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
             "Component subtree stop intent differs from protected root authority",
@@ -5201,6 +5785,9 @@ fn validate_subtree_removal_progress(
         RootComponentSubtreeRemovalProgressRecord::Traversing { cursor } => Some((cursor, false)),
         RootComponentSubtreeRemovalProgressRecord::LeafSelected { leaf } => Some((leaf, true)),
         RootComponentSubtreeRemovalProgressRecord::StopIntent(effect) => Some((&effect.leaf, true)),
+        RootComponentSubtreeRemovalProgressRecord::Stopped(receipt) => {
+            Some((&receipt.stop.leaf, true))
+        }
     };
     let Some((node, must_be_leaf)) = node else {
         return Ok(());
@@ -5268,11 +5855,13 @@ fn first_registered_child(
                 )
             })?;
     validate_registered_child_record(partition, &child)?;
-    if traversal.parent_canister_id != parent_canister_id
-        || traversal.parent_canister_id != child.parent_canister_id
-        || traversal.role != child.role
-        || traversal.canister_id != child.canister_id
-    {
+    let expected_identity = ComponentTreeNodeIdentity::new(
+        partition.binding.component,
+        parent_canister_id,
+        &child.role,
+        child.canister_id,
+    );
+    if ComponentTreeNodeIdentity::from_traversal(&traversal) != expected_identity {
         return Err(InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
             "Component subtree traversal index differs from its child row",
@@ -5329,11 +5918,7 @@ fn validate_child_traversal_record(
     component: ComponentInstanceId,
     traversal: &ComponentRegistryChildTraversalRecord,
 ) -> Result<(), InternalError> {
-    if traversal.component != component
-        || traversal.parent_canister_id == Principal::anonymous()
-        || traversal.canister_id == Principal::anonymous()
-        || traversal.parent_canister_id == traversal.canister_id
-    {
+    if !ComponentTreeNodeIdentity::from_traversal(traversal).is_valid_for(component) {
         return Err(InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
             "Component Directory traversal has invalid tree identity",
@@ -6328,18 +6913,91 @@ mod tests {
             prepared
         );
         assert_eq!(RootComponentRegistryStore::export(), prepared_state);
+
+        let prepared_partition = ComponentRegistryOps::partition(fixture.component)
+            .expect("partition read")
+            .expect("active partition");
+        ComponentRegistryOps::mark_subtree_leaf_stopped(
+            fixture.component,
+            [70; 32],
+            selected.traversal_steps,
+            fixture.descendant.canister_id,
+            fixture.target.canister_id,
+            [55; 32],
+            prepared_partition.encoded_bytes,
+        )
+        .expect_err("larger stopped receipt must fit before mutation");
+        assert_eq!(RootComponentRegistryStore::export(), prepared_state);
+
+        let stopped = ComponentRegistryOps::mark_subtree_leaf_stopped(
+            fixture.component,
+            [70; 32],
+            selected.traversal_steps,
+            fixture.descendant.canister_id,
+            fixture.target.canister_id,
+            [55; 32],
+            16_777_216,
+        )
+        .expect("commit independently observed stopped receipt");
+        assert!(matches!(
+            &stopped.progress,
+            RootComponentSubtreeRemovalProgressView::Stopped(receipt)
+                if receipt.stop.leaf.canister_id == fixture.descendant.canister_id
+                    && receipt.stop.leaf.parent_canister_id == fixture.target.canister_id
+                    && receipt.stop.controller == fixture.partition.binding.fleet_subnet_root
+                    && receipt.observed_module_hash == [55; 32]
+        ));
+        let stopped_state = restart_component_registry();
+        assert_eq!(
+            ComponentRegistryOps::mark_subtree_leaf_stopped(
+                fixture.component,
+                [70; 32],
+                selected.traversal_steps,
+                fixture.descendant.canister_id,
+                fixture.target.canister_id,
+                [55; 32],
+                16_777_216,
+            )
+            .expect("exact stopped receipt retry"),
+            stopped
+        );
+        assert_eq!(RootComponentRegistryStore::export(), stopped_state);
+        ComponentRegistryOps::mark_subtree_leaf_stopped(
+            fixture.component,
+            [70; 32],
+            selected.traversal_steps,
+            fixture.descendant.canister_id,
+            fixture.target.canister_id,
+            [56; 32],
+            16_777_216,
+        )
+        .expect_err("stopped receipt rejects conflicting module observation");
+        assert_eq!(RootComponentRegistryStore::export(), stopped_state);
+        assert_eq!(
+            ComponentRegistryOps::prepare_subtree_leaf_stop(
+                fixture.component,
+                [70; 32],
+                selected.traversal_steps,
+                fixture.descendant.canister_id,
+                fixture.target.canister_id,
+                16_777_216,
+            )
+            .expect("stop preparation converges on stopped receipt"),
+            stopped
+        );
+        assert_eq!(RootComponentRegistryStore::export(), stopped_state);
         assert_eq!(
             ComponentRegistryOps::current()
                 .expect("Registry status")
                 .encoded_bytes,
-            exact_registry_entry_bytes(&prepared_state)
+            exact_registry_entry_bytes(&stopped_state)
         );
         assert_eq!(
             ComponentRegistryOps::partition(fixture.component)
                 .expect("partition read")
                 .expect("active partition")
                 .encoded_bytes,
-            exact_component_registry_entry_bytes(&prepared_state, fixture.component)
+            exact_component_registry_entry_bytes(&stopped_state, fixture.component)
         );
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }

@@ -8,8 +8,8 @@ use crate::{
     InternalError, InternalErrorOrigin,
     dto::{
         component_registry::{
-            ComponentRuntimeActivationRequest, ComponentRuntimeDirectoryAuthority,
-            ComponentRuntimeDirectoryPreparationRequest,
+            ComponentDirectoryProvenance, ComponentRuntimeActivationRequest,
+            ComponentRuntimeDirectoryAuthority, ComponentRuntimeDirectoryPreparationRequest,
             ComponentRuntimeDirectorySynchronizationRequest, ComponentRuntimePhase,
             ComponentRuntimeStatusResponse,
         },
@@ -22,6 +22,28 @@ use crate::{
         storage::{StorageOpsError, fleet_activation::FleetActivationOps},
     },
 };
+
+#[derive(Debug, Eq, PartialEq)]
+struct ComponentDirectoryIdentity<'a> {
+    component: &'a ComponentBinding,
+    source_fleet_subnet_root: &'a crate::cdk::types::Principal,
+}
+
+impl<'a> ComponentDirectoryIdentity<'a> {
+    const fn from_component(component: &'a ComponentBinding) -> Self {
+        Self {
+            component,
+            source_fleet_subnet_root: &component.fleet_subnet_root,
+        }
+    }
+
+    const fn from_provenance(provenance: &'a ComponentDirectoryProvenance) -> Self {
+        Self {
+            component: &provenance.component,
+            source_fleet_subnet_root: &provenance.source_fleet_subnet_root,
+        }
+    }
+}
 
 /// Prepare one exact Fleet and Component Directory authority while runtime remains Prepared.
 pub fn prepare_directory(
@@ -156,16 +178,13 @@ fn validate_authority(
     authority: &ComponentRuntimeDirectoryAuthority,
 ) -> Result<(), InternalError> {
     let component = owning_component(binding);
-    if authority.component.provenance.component != *component
-        || authority.component.provenance.source_fleet_subnet_root != component.fleet_subnet_root
-        || authority.component.provenance.component_registry_revision == 0
-        || authority
-            .component
-            .provenance
-            .component_registry_content_hash
-            == [0; 32]
-        || authority.component.provenance.synchronized_at_ns == 0
-    {
+    let provenance = &authority.component.provenance;
+    let identity_matches = ComponentDirectoryIdentity::from_provenance(provenance)
+        == ComponentDirectoryIdentity::from_component(component);
+    let head_is_versioned = provenance.component_registry_revision > 0
+        && provenance.component_registry_content_hash != [0; 32]
+        && provenance.synchronized_at_ns > 0;
+    if !identity_matches || !head_is_versioned {
         return Err(InternalError::invalid_input(
             "Component Directory does not match the protected Component-tree binding",
         ));
@@ -184,15 +203,21 @@ fn validate_directory_progression(
     let next_component = &next.component.provenance;
     let current_fleet_revision = current.fleet.provenance.registry.revision;
     let next_fleet_revision = next.fleet.provenance.registry.revision;
-    if next_component.component != current_component.component
-        || next_component.source_fleet_subnet_root != current_component.source_fleet_subnet_root
-        || next_component.component_registry_revision
-            <= current_component.component_registry_revision
-        || next_component.component_registry_content_hash
-            == current_component.component_registry_content_hash
-        || next_component.synchronized_at_ns <= current_component.synchronized_at_ns
-        || next_fleet_revision < current_fleet_revision
-        || (next_fleet_revision == current_fleet_revision && next.fleet != current.fleet)
+    let component_identity_is_stable = next_component.component == current_component.component
+        && next_component.source_fleet_subnet_root == current_component.source_fleet_subnet_root;
+    let component_authority_advances = next_component.component_registry_revision
+        > current_component.component_registry_revision
+        && next_component.component_registry_content_hash
+            != current_component.component_registry_content_hash
+        && next_component.synchronized_at_ns > current_component.synchronized_at_ns;
+    let fleet_authority_is_monotonic = match next_fleet_revision.cmp(&current_fleet_revision) {
+        std::cmp::Ordering::Less => false,
+        std::cmp::Ordering::Equal => next.fleet == current.fleet,
+        std::cmp::Ordering::Greater => true,
+    };
+    if !component_identity_is_stable
+        || !component_authority_advances
+        || !fleet_authority_is_monotonic
     {
         return Err(InternalError::conflict(
             "next Component Directory does not advance exact current authority",

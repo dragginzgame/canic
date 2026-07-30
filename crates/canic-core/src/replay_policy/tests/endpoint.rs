@@ -399,6 +399,10 @@ fn root_component_subtree_removal_progress_is_replay_safe() {
         .iter()
         .find(|entry| entry.endpoint == "canic_root_component_subtree_removal_stop_prepare")
         .expect("root Component subtree-removal stop preparation policy entry");
+    let stop = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_root_component_subtree_removal_stop")
+        .expect("root Component subtree-removal stop policy entry");
     let status = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
         .find(|entry| entry.endpoint == "canic_root_component_subtree_removal_status")
@@ -425,6 +429,13 @@ fn root_component_subtree_removal_progress_is_replay_safe() {
         }
     );
     assert_eq!(stop_prepare.cost_class, CostClass::None);
+    assert_eq!(
+        stop.replay_policy,
+        ReplayPolicy::SnapshotConvergent {
+            command_kind: replay_command_kind("management.control_plane.component_subtree_stop.v1"),
+        }
+    );
+    assert_eq!(stop.cost_class, CostClass::None);
     assert_eq!(status.replay_policy, ReplayPolicy::QueryOrReadOnly);
     assert_eq!(status.endpoint_kind, EndpointKind::Query);
 }

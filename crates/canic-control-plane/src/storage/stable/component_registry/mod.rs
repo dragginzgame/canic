@@ -184,6 +184,21 @@ impl RootComponentAllocationRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "RootComponentAllocationRecord";
 }
 
+#[derive(Debug, Eq, PartialEq)]
+struct RootComponentAllocationIdentity<'a> {
+    operation_id: &'a [u8; 32],
+    component: &'a ComponentInstanceId,
+}
+
+impl<'a> From<&'a RootComponentAllocationRecord> for RootComponentAllocationIdentity<'a> {
+    fn from(record: &'a RootComponentAllocationRecord) -> Self {
+        Self {
+            operation_id: &record.operation_id,
+            component: &record.component,
+        }
+    }
+}
+
 #[cfg(feature = "root-control-plane")]
 impl_storable_bounded!(
     RootComponentAllocationRecord,
@@ -312,6 +327,48 @@ pub struct ComponentRegistryPartitionRecord {
     pub encoded_bytes: u64,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+struct ComponentPartitionStableAuthority<'a> {
+    binding: &'a ComponentBinding,
+    provisioning_origin: &'a ComponentProvisioningOrigin,
+    release_set: &'a FleetSubnetRootReleaseSet,
+}
+
+impl<'a> From<&'a ComponentRegistryPartitionRecord> for ComponentPartitionStableAuthority<'a> {
+    fn from(partition: &'a ComponentRegistryPartitionRecord) -> Self {
+        Self {
+            binding: &partition.binding,
+            provisioning_origin: &partition.provisioning_origin,
+            release_set: &partition.release_set,
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct ComponentPartitionSnapshotAuthority<'a> {
+    stable: ComponentPartitionStableAuthority<'a>,
+    revision: u64,
+    content_hash: &'a [u8; 32],
+    descendant_content_hash: &'a [u8; 32],
+    directory_synchronized_at_ns: u64,
+    reserved_descendants: u32,
+    committed_descendants: u32,
+}
+
+impl<'a> From<&'a ComponentRegistryPartitionRecord> for ComponentPartitionSnapshotAuthority<'a> {
+    fn from(partition: &'a ComponentRegistryPartitionRecord) -> Self {
+        Self {
+            stable: ComponentPartitionStableAuthority::from(partition),
+            revision: partition.revision,
+            content_hash: &partition.content_hash,
+            descendant_content_hash: &partition.descendant_content_hash,
+            directory_synchronized_at_ns: partition.directory_synchronized_at_ns,
+            reserved_descendants: partition.reserved_descendants,
+            committed_descendants: partition.committed_descendants,
+        }
+    }
+}
+
 ///
 /// RootComponentChildAllocationRecord
 ///
@@ -334,19 +391,42 @@ pub struct RootComponentChildAllocationRecord {
     pub progress: RootComponentChildAllocationProgressRecord,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+struct RootComponentChildReservation<'a> {
+    operation_id: &'a [u8; 32],
+    component: &'a ComponentInstanceId,
+    parent_canister_id: &'a Principal,
+    parent_role: &'a CanisterRole,
+    child_role: &'a CanisterRole,
+    child_kind: &'a ComponentChildKind,
+    maximum_instances_per_parent: u32,
+    maximum_descendants: u32,
+    maximum_registry_bytes: u64,
+    reserved_against_registry: &'a ComponentRegistryHead,
+    release_set: &'a FleetSubnetRootReleaseSet,
+}
+
+impl<'a> From<&'a RootComponentChildAllocationRecord> for RootComponentChildReservation<'a> {
+    fn from(record: &'a RootComponentChildAllocationRecord) -> Self {
+        Self {
+            operation_id: &record.operation_id,
+            component: &record.component,
+            parent_canister_id: &record.parent_canister_id,
+            parent_role: &record.parent_role,
+            child_role: &record.child_role,
+            child_kind: &record.child_kind,
+            maximum_instances_per_parent: record.maximum_instances_per_parent,
+            maximum_descendants: record.maximum_descendants,
+            maximum_registry_bytes: record.maximum_registry_bytes,
+            reserved_against_registry: &record.reserved_against_registry,
+            release_set: &record.release_set,
+        }
+    }
+}
+
 impl RootComponentChildAllocationRecord {
     pub(crate) fn has_same_reservation(&self, other: &Self) -> bool {
-        self.operation_id == other.operation_id
-            && self.component == other.component
-            && self.parent_canister_id == other.parent_canister_id
-            && self.parent_role == other.parent_role
-            && self.child_role == other.child_role
-            && self.child_kind == other.child_kind
-            && self.maximum_instances_per_parent == other.maximum_instances_per_parent
-            && self.maximum_descendants == other.maximum_descendants
-            && self.maximum_registry_bytes == other.maximum_registry_bytes
-            && self.reserved_against_registry == other.reserved_against_registry
-            && self.release_set == other.release_set
+        RootComponentChildReservation::from(self) == RootComponentChildReservation::from(other)
     }
 }
 
@@ -407,12 +487,28 @@ pub struct RootComponentSubtreeRemovalRecord {
     pub progress: RootComponentSubtreeRemovalProgressRecord,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+struct RootComponentSubtreeFence<'a> {
+    operation_id: &'a [u8; 32],
+    component: &'a ComponentInstanceId,
+    target: &'a ComponentRegistryChildRecord,
+    reserved_against_registry: &'a ComponentRegistryHead,
+}
+
+impl<'a> From<&'a RootComponentSubtreeRemovalRecord> for RootComponentSubtreeFence<'a> {
+    fn from(record: &'a RootComponentSubtreeRemovalRecord) -> Self {
+        Self {
+            operation_id: &record.operation_id,
+            component: &record.component,
+            target: &record.target,
+            reserved_against_registry: &record.reserved_against_registry,
+        }
+    }
+}
+
 impl RootComponentSubtreeRemovalRecord {
     pub(crate) fn has_same_fence(&self, other: &Self) -> bool {
-        self.operation_id == other.operation_id
-            && self.component == other.component
-            && self.target == other.target
-            && self.reserved_against_registry == other.reserved_against_registry
+        RootComponentSubtreeFence::from(self) == RootComponentSubtreeFence::from(other)
     }
 }
 
@@ -432,6 +528,7 @@ pub enum RootComponentSubtreeRemovalProgressRecord {
         leaf: ComponentRegistryChildRecord,
     },
     StopIntent(RootComponentSubtreeStopEffectRecord),
+    Stopped(RootComponentSubtreeStoppedEffectRecord),
 }
 
 ///
@@ -444,6 +541,18 @@ pub enum RootComponentSubtreeRemovalProgressRecord {
 pub struct RootComponentSubtreeStopEffectRecord {
     pub leaf: ComponentRegistryChildRecord,
     pub controller: Principal,
+}
+
+///
+/// RootComponentSubtreeStoppedEffectRecord
+///
+/// Frozen stop authority plus the module hash independently observed stopped.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeStoppedEffectRecord {
+    pub stop: RootComponentSubtreeStopEffectRecord,
+    pub observed_module_hash: [u8; 32],
 }
 
 ///
@@ -542,6 +651,71 @@ pub struct ComponentRegistryChildTraversalRecord {
     pub parent_canister_id: Principal,
     pub role: CanisterRole,
     pub canister_id: Principal,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct ComponentParentRoleAuthority<'a> {
+    component: &'a ComponentInstanceId,
+    parent_canister_id: &'a Principal,
+    child_role: &'a CanisterRole,
+}
+
+impl<'a> ComponentParentRoleAuthority<'a> {
+    const fn from_count(record: &'a ComponentRegistryParentRoleCountRecord) -> Self {
+        Self {
+            component: &record.component,
+            parent_canister_id: &record.parent_canister_id,
+            child_role: &record.child_role,
+        }
+    }
+
+    const fn from_allocation(record: &'a RootComponentChildAllocationRecord) -> Self {
+        Self {
+            component: &record.component,
+            parent_canister_id: &record.parent_canister_id,
+            child_role: &record.child_role,
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct ComponentChildIndexAuthority<'a> {
+    component: &'a ComponentInstanceId,
+    parent_canister_id: &'a Principal,
+    role: &'a CanisterRole,
+    canister_id: Principal,
+}
+
+impl<'a> ComponentChildIndexAuthority<'a> {
+    const fn from_child(record: &'a ComponentRegistryChildRecord) -> Self {
+        Self {
+            component: &record.component,
+            parent_canister_id: &record.parent_canister_id,
+            role: &record.role,
+            canister_id: record.canister_id,
+        }
+    }
+
+    const fn from_traversal(record: &'a ComponentRegistryChildTraversalRecord) -> Self {
+        Self {
+            component: &record.component,
+            parent_canister_id: &record.parent_canister_id,
+            role: &record.role,
+            canister_id: record.canister_id,
+        }
+    }
+
+    const fn from_allocation(
+        record: &'a RootComponentChildAllocationRecord,
+        canister_id: Principal,
+    ) -> Self {
+        Self {
+            component: &record.component,
+            parent_canister_id: &record.parent_canister_id,
+            role: &record.child_role,
+            canister_id,
+        }
+    }
 }
 
 ///
@@ -1392,12 +1566,11 @@ impl RootComponentRegistryStore {
             record.parent_canister_id,
             &record.child_role,
         );
-        if expected_partition.binding.component != component
-            || next_partition.binding.component != component
-            || next_parent_role_count.component != component
-            || next_parent_role_count.parent_canister_id != record.parent_canister_id
-            || next_parent_role_count.child_role != record.child_role
-        {
+        let partition_component_matches = expected_partition.binding.component == component
+            && next_partition.binding.component == component;
+        let parent_role_matches = ComponentParentRoleAuthority::from_count(&next_parent_role_count)
+            == ComponentParentRoleAuthority::from_allocation(&record);
+        if !partition_component_matches || !parent_role_matches {
             return Err(RootComponentAllocationCommitError::ConflictingChildEntry);
         }
 
@@ -1684,16 +1857,8 @@ impl RootComponentRegistryStore {
         let operation_key =
             ComponentRegistryEntryKey::child_allocation(component, expected_record.operation_id);
         if !next_record.has_same_reservation(expected_record)
-            || next_partition.binding != expected_partition.binding
-            || next_partition.provisioning_origin != expected_partition.provisioning_origin
-            || next_partition.release_set != expected_partition.release_set
-            || next_partition.revision != expected_partition.revision
-            || next_partition.content_hash != expected_partition.content_hash
-            || next_partition.descendant_content_hash != expected_partition.descendant_content_hash
-            || next_partition.directory_synchronized_at_ns
-                != expected_partition.directory_synchronized_at_ns
-            || next_partition.reserved_descendants != expected_partition.reserved_descendants
-            || next_partition.committed_descendants != expected_partition.committed_descendants
+            || ComponentPartitionSnapshotAuthority::from(&next_partition)
+                != ComponentPartitionSnapshotAuthority::from(expected_partition)
         {
             return Err(RootComponentAllocationCommitError::ConflictingChildEntry);
         }
@@ -1983,17 +2148,15 @@ impl RootComponentRegistryStore {
             traversal.canister_id,
         );
         let principal_key = ComponentRegistryPrincipalKey::from(child.canister_id);
+        let expected_child_authority =
+            ComponentChildIndexAuthority::from_allocation(expected_record, child.canister_id);
+        let child_authority = ComponentChildIndexAuthority::from_child(&child);
+        let traversal_authority = ComponentChildIndexAuthority::from_traversal(&traversal);
         if !next_record.has_same_reservation(expected_record)
-            || next_partition.binding != expected_partition.binding
-            || next_partition.provisioning_origin != expected_partition.provisioning_origin
-            || next_partition.release_set != expected_partition.release_set
-            || child.component != component
-            || traversal.component != component
-            || child.parent_canister_id != expected_record.parent_canister_id
-            || traversal.parent_canister_id != expected_record.parent_canister_id
-            || child.role != expected_record.child_role
-            || traversal.role != expected_record.child_role
-            || traversal.canister_id != child.canister_id
+            || ComponentPartitionStableAuthority::from(&next_partition)
+                != ComponentPartitionStableAuthority::from(expected_partition)
+            || child_authority != expected_child_authority
+            || traversal_authority != expected_child_authority
         {
             return Err(RootComponentAllocationCommitError::ConflictingChildEntry);
         }
@@ -2094,12 +2257,11 @@ impl RootComponentRegistryStore {
     ) -> Result<(), RootComponentAllocationCommitError> {
         let operation_key = RootComponentAllocationOperationKey::from(expected_record.operation_id);
         let component = expected_partition.binding.component;
-        if next_record.operation_id != expected_record.operation_id
-            || next_record.component != expected_record.component
+        if RootComponentAllocationIdentity::from(&next_record)
+            != RootComponentAllocationIdentity::from(expected_record)
             || next_partition.binding.component != component
-            || next_partition.binding != expected_partition.binding
-            || next_partition.provisioning_origin != expected_partition.provisioning_origin
-            || next_partition.release_set != expected_partition.release_set
+            || ComponentPartitionStableAuthority::from(&next_partition)
+                != ComponentPartitionStableAuthority::from(expected_partition)
         {
             return Err(RootComponentAllocationCommitError::ComponentIdentityConflict);
         }

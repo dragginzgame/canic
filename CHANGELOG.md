@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.52` executes each prepared subtree-leaf stop through exact live
+  root-controller and Store-module reconciliation, retaining a durable receipt
+  only after independently observing the Canister stopped, and advances the
+  host-only `ic-query` dependency to `0.14.0`.
+
 - `0.100.51` freezes the exact selected subtree leaf and sole Fleet Subnet
   Root controller in a durable, capacity-accounted stop intent before any
   management call.

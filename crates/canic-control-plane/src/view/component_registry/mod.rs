@@ -175,6 +175,7 @@ pub enum RootComponentSubtreeRemovalProgressView {
         leaf: RootComponentSubtreeRemovalNodeView,
     },
     StopIntent(RootComponentSubtreeStopEffectView),
+    Stopped(RootComponentSubtreeStoppedEffectView),
 }
 
 ///
@@ -203,6 +204,18 @@ pub struct RootComponentSubtreeRemovalNodeView {
 pub struct RootComponentSubtreeStopEffectView {
     pub leaf: RootComponentSubtreeRemovalNodeView,
     pub controller: Principal,
+}
+
+///
+/// RootComponentSubtreeStoppedEffectView
+///
+/// Read-only frozen stop authority and independently observed module hash.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentSubtreeStoppedEffectView {
+    pub stop: RootComponentSubtreeStopEffectView,
+    pub observed_module_hash: [u8; 32],
 }
 
 ///

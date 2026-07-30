@@ -19,7 +19,15 @@ mod tests {
                 ComponentRegistryPartitionResponse, ComponentRuntimePhase,
                 ComponentRuntimeStatusResponse, RootComponentAllocationPhase,
                 RootComponentAllocationRequest, RootComponentAllocationResponse,
-                RootComponentAllocationStatusRequest, RootComponentCommitRequest,
+                RootComponentAllocationStatusRequest, RootComponentChildAllocationRequest,
+                RootComponentChildAllocationResponse, RootComponentChildCommitRequest,
+                RootComponentChildCommitResponse, RootComponentChildCreationRequest,
+                RootComponentChildDirectoryPreparationRequest,
+                RootComponentChildDirectoryPreparationResponse, RootComponentChildInstallRequest,
+                RootComponentChildMembershipActivationRequest,
+                RootComponentChildMembershipActivationResponse,
+                RootComponentChildRuntimeActivationRequest,
+                RootComponentChildRuntimeActivationResponse, RootComponentCommitRequest,
                 RootComponentCommitResponse, RootComponentCreationRequest,
                 RootComponentDirectoryPreparationRequest,
                 RootComponentDirectoryPreparationResponse, RootComponentInitialInventoryStatus,
@@ -66,13 +74,17 @@ mod tests {
             CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY, CANIC_FLEET_SUBNET_ROOT_JOIN,
             CANIC_PREPARE_FLEET_ACTIVATION, CANIC_RESUME_FLEET_ACTIVATION,
             CANIC_ROOT_COMPONENT_ALLOCATE, CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
-            CANIC_ROOT_COMPONENT_COMMIT, CANIC_ROOT_COMPONENT_CREATE,
-            CANIC_ROOT_COMPONENT_DIRECTORY_HEAD, CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE,
-            CANIC_ROOT_COMPONENT_INSTALL, CANIC_ROOT_COMPONENT_MEMBERSHIP_ACTIVATE,
-            CANIC_ROOT_COMPONENT_REGISTRY_PARTITION, CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
-            CANIC_ROOT_COMPONENT_REGISTRY_STATUS, CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE,
-            CANIC_ROOT_STORE_BOOTSTRAP, CANIC_TEMPLATE_PREPARE_ADMIN,
-            CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN, CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
+            CANIC_ROOT_COMPONENT_CHILD_ALLOCATE, CANIC_ROOT_COMPONENT_CHILD_COMMIT,
+            CANIC_ROOT_COMPONENT_CHILD_CREATE, CANIC_ROOT_COMPONENT_CHILD_DIRECTORY_PREPARE,
+            CANIC_ROOT_COMPONENT_CHILD_INSTALL, CANIC_ROOT_COMPONENT_CHILD_MEMBERSHIP_ACTIVATE,
+            CANIC_ROOT_COMPONENT_CHILD_RUNTIME_ACTIVATE, CANIC_ROOT_COMPONENT_COMMIT,
+            CANIC_ROOT_COMPONENT_CREATE, CANIC_ROOT_COMPONENT_DIRECTORY_HEAD,
+            CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE, CANIC_ROOT_COMPONENT_INSTALL,
+            CANIC_ROOT_COMPONENT_MEMBERSHIP_ACTIVATE, CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
+            CANIC_ROOT_COMPONENT_REGISTRY_PREPARE, CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
+            CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE, CANIC_ROOT_STORE_BOOTSTRAP,
+            CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
+            CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
         },
     };
     use canic_control_plane::{
@@ -103,10 +115,27 @@ mod tests {
 
     #[cfg(test)]
     use canic::protocol::{CANIC_ROOT_STORE_BOOTSTRAP_STATUS, CANIC_WASM_STORE_PREPARE};
+    #[cfg(test)]
+    use canic::{
+        dto::component_registry::{
+            RootComponentSubtreeRemovalAdvanceRequest, RootComponentSubtreeRemovalPhase,
+            RootComponentSubtreeRemovalRequest, RootComponentSubtreeRemovalResponse,
+            RootComponentSubtreeRemovalStatusRequest,
+            RootComponentSubtreeRemovalStopPreparationRequest,
+            RootComponentSubtreeRemovalStopRequest,
+        },
+        protocol::{
+            CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_ADVANCE,
+            CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_BEGIN,
+            CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STATUS, CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STOP,
+            CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STOP_PREPARE,
+        },
+    };
 
     const COORDINATOR_PACKAGE: &str = "fleet_coordinator_stub";
     const ISSUER_PACKAGE: &str = "delegation_issuer_stub";
     const PROJECT_HUB_PACKAGE: &str = "project_hub_stub";
+    const PROJECT_INSTANCE_PACKAGE: &str = "project_instance_stub";
     const COORDINATOR_INSTALL_CYCLES: u128 = 500_000_000_000_000;
 
     ///
@@ -250,6 +279,140 @@ mod tests {
         );
     }
 
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one PocketIC journey keeps the complete fence-and-stop boundary coherent"
+    )]
+    fn active_root_stops_one_exact_registered_child_before_removal() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_active_component_registry();
+        let (child, registry) = create_active_project_instance(&fixture);
+        let operation_id = [0xd1; 32];
+        let begin_request = RootComponentSubtreeRemovalRequest {
+            operation_id,
+            component: fixture.verifier.component,
+            target_canister_id: child,
+            expected_registry: registry,
+        };
+        let fenced: Result<RootComponentSubtreeRemovalResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_BEGIN,
+                (begin_request,),
+            )
+            .expect("begin subtree removal transport");
+        assert_eq!(
+            fenced.expect("begin subtree removal").phase,
+            RootComponentSubtreeRemovalPhase::Fenced
+        );
+
+        let advanced: Result<RootComponentSubtreeRemovalResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_ADVANCE,
+                (RootComponentSubtreeRemovalAdvanceRequest {
+                    operation_id,
+                    component: fixture.verifier.component,
+                    expected_traversal_steps: 0,
+                },),
+            )
+            .expect("advance subtree removal transport");
+        let advanced = advanced.expect("advance subtree removal");
+        assert_eq!(advanced.traversal_steps, 1);
+        assert!(matches!(
+            &advanced.phase,
+            RootComponentSubtreeRemovalPhase::LeafSelected(leaf)
+                if leaf.canister_id == child
+                    && leaf.parent_canister_id == fixture.verifier.canister_id
+        ));
+
+        let stop_request = RootComponentSubtreeRemovalStopRequest {
+            operation_id,
+            component: fixture.verifier.component,
+            expected_traversal_steps: advanced.traversal_steps,
+            expected_leaf_canister_id: child,
+            expected_leaf_parent_canister_id: fixture.verifier.canister_id,
+        };
+        let prepared: Result<RootComponentSubtreeRemovalResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STOP_PREPARE,
+                (RootComponentSubtreeRemovalStopPreparationRequest {
+                    operation_id: stop_request.operation_id,
+                    component: stop_request.component,
+                    expected_traversal_steps: stop_request.expected_traversal_steps,
+                    expected_leaf_canister_id: stop_request.expected_leaf_canister_id,
+                    expected_leaf_parent_canister_id: stop_request.expected_leaf_parent_canister_id,
+                },),
+            )
+            .expect("prepare subtree leaf stop transport");
+        assert!(matches!(
+            prepared.expect("prepare subtree leaf stop").phase,
+            RootComponentSubtreeRemovalPhase::StopIntent(_)
+        ));
+
+        let stopped: Result<RootComponentSubtreeRemovalResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STOP,
+                (stop_request,),
+            )
+            .expect("stop subtree leaf transport");
+        let stopped = stopped.expect("stop subtree leaf");
+        let RootComponentSubtreeRemovalPhase::Stopped(receipt) = &stopped.phase else {
+            panic!("subtree leaf must retain an independently observed stopped receipt");
+        };
+        assert_eq!(receipt.stop.leaf.canister_id, child);
+        assert_eq!(
+            receipt.stop.leaf.parent_canister_id,
+            fixture.verifier.canister_id
+        );
+        assert_eq!(receipt.stop.controller, fixture.root);
+        assert_ne!(receipt.observed_module_hash, [0; 32]);
+        let live = fixture
+            .pic()
+            .canister_status(child, Some(fixture.root))
+            .expect("stopped child status");
+        assert_eq!(
+            format!("{:?}", live.status),
+            "Stopped",
+            "the independently receipted child must be stopped in PocketIC"
+        );
+        assert_eq!(live.settings.controllers, vec![fixture.root]);
+        assert_eq!(
+            live.module_hash.as_deref(),
+            Some(receipt.observed_module_hash.as_slice())
+        );
+
+        let retry: Result<RootComponentSubtreeRemovalResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STOP,
+                (stop_request,),
+            )
+            .expect("retry stopped subtree leaf transport");
+        assert_eq!(retry.expect("retry stopped subtree leaf"), stopped);
+
+        let durable: Result<RootComponentSubtreeRemovalResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STATUS,
+                (RootComponentSubtreeRemovalStatusRequest {
+                    operation_id,
+                    component: fixture.verifier.component,
+                },),
+            )
+            .expect("query stopped subtree receipt transport");
+        assert_eq!(durable.expect("query stopped subtree receipt"), stopped);
+    }
+
     /// Build one current Coordinator/root/Store fixture with active Registry-issued Components.
     ///
     /// # Panics
@@ -352,6 +515,164 @@ mod tests {
         };
         assert_root_canister_summary(&fixture);
         fixture
+    }
+
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "used only by the focused PocketIC removal test")
+    )]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the fixture must drive every real child lifecycle phase before removal"
+    )]
+    fn create_active_project_instance(
+        fixture: &ActiveComponentRegistryFixture,
+    ) -> (
+        Principal,
+        canic::dto::component_registry::ComponentRegistryHead,
+    ) {
+        let partition: Result<ComponentRegistryPartitionResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
+                (ComponentRegistryPartitionRequest {
+                    component: fixture.verifier.component,
+                },),
+            )
+            .expect("query projects Component Registry transport");
+        let partition = partition.expect("query projects Component Registry");
+        let operation_id = [0xc1; 32];
+        let reserved: Result<RootComponentChildAllocationResponse, Error> = fixture
+            .pic()
+            .update_call_as(
+                fixture.root,
+                fixture.verifier.canister_id,
+                CANIC_ROOT_COMPONENT_CHILD_ALLOCATE,
+                (RootComponentChildAllocationRequest {
+                    operation_id,
+                    component: fixture.verifier.component,
+                    expected_registry: partition.head,
+                    child_role: CanisterRole::new("project_instance"),
+                },),
+            )
+            .expect("reserve project instance transport");
+        assert_eq!(
+            reserved.expect("reserve project instance").phase,
+            RootComponentAllocationPhase::Reserved
+        );
+
+        let created: Result<RootComponentChildAllocationResponse, Error> = fixture
+            .pic()
+            .update_call_as(
+                fixture.root,
+                fixture.verifier.canister_id,
+                CANIC_ROOT_COMPONENT_CHILD_CREATE,
+                (RootComponentChildCreationRequest {
+                    operation_id,
+                    component: fixture.verifier.component,
+                },),
+            )
+            .expect("create project instance transport");
+        let created = created.expect("create project instance");
+        assert_eq!(created.phase, RootComponentAllocationPhase::Created);
+        let child = created
+            .creation
+            .as_ref()
+            .and_then(|creation| creation.canister)
+            .expect("created project instance Canister");
+
+        let installed: Result<RootComponentChildAllocationResponse, Error> = fixture
+            .pic()
+            .update_call_as(
+                fixture.root,
+                fixture.verifier.canister_id,
+                CANIC_ROOT_COMPONENT_CHILD_INSTALL,
+                (RootComponentChildInstallRequest {
+                    operation_id,
+                    component: fixture.verifier.component,
+                },),
+            )
+            .expect("install project instance transport");
+        assert_eq!(
+            installed.expect("install project instance").phase,
+            RootComponentAllocationPhase::Verified
+        );
+
+        let committed: Result<RootComponentChildCommitResponse, Error> = fixture
+            .pic()
+            .update_call_as(
+                fixture.root,
+                fixture.verifier.canister_id,
+                CANIC_ROOT_COMPONENT_CHILD_COMMIT,
+                (RootComponentChildCommitRequest {
+                    operation_id,
+                    component: fixture.verifier.component,
+                },),
+            )
+            .expect("commit project instance transport");
+        let committed = committed.expect("commit project instance");
+        assert_eq!(
+            committed.allocation.phase,
+            RootComponentAllocationPhase::Committed
+        );
+
+        let prepared: Result<RootComponentChildDirectoryPreparationResponse, Error> = fixture
+            .pic()
+            .update_call_as(
+                fixture.root,
+                fixture.verifier.canister_id,
+                CANIC_ROOT_COMPONENT_CHILD_DIRECTORY_PREPARE,
+                (RootComponentChildDirectoryPreparationRequest {
+                    operation_id,
+                    component: fixture.verifier.component,
+                },),
+            )
+            .expect("prepare project instance Directory transport");
+        assert_eq!(
+            prepared
+                .expect("prepare project instance Directory")
+                .child
+                .phase,
+            ComponentRuntimePhase::DirectoryPrepared
+        );
+
+        let activated: Result<RootComponentChildRuntimeActivationResponse, Error> = fixture
+            .pic()
+            .update_call_as(
+                fixture.root,
+                fixture.verifier.canister_id,
+                CANIC_ROOT_COMPONENT_CHILD_RUNTIME_ACTIVATE,
+                (RootComponentChildRuntimeActivationRequest {
+                    operation_id,
+                    component: fixture.verifier.component,
+                },),
+            )
+            .expect("activate project instance runtime transport");
+        assert_eq!(
+            activated
+                .expect("activate project instance runtime")
+                .child
+                .phase,
+            ComponentRuntimePhase::Active
+        );
+
+        let membership: Result<RootComponentChildMembershipActivationResponse, Error> = fixture
+            .pic()
+            .update_call_as(
+                fixture.root,
+                fixture.verifier.canister_id,
+                CANIC_ROOT_COMPONENT_CHILD_MEMBERSHIP_ACTIVATE,
+                (RootComponentChildMembershipActivationRequest {
+                    operation_id,
+                    component: fixture.verifier.component,
+                },),
+            )
+            .expect("activate project instance membership transport");
+        let membership = membership.expect("activate project instance membership");
+        assert_eq!(membership.registry.status, ComponentLifecycleStatus::Active);
+        assert_eq!(membership.child.phase, ComponentRuntimePhase::Active);
+        (child, membership.registry.head)
     }
 
     fn assert_root_canister_summary(fixture: &ActiveComponentRegistryFixture) {
@@ -1584,6 +1905,10 @@ mod tests {
                 CanisterRole::new("project_hub"),
                 build_test_project_hub_wasm(),
             ),
+            (
+                CanisterRole::new("project_instance"),
+                build_test_project_instance_wasm(),
+            ),
         ]);
         for spec in &topology.component_specs {
             entries.push(root_store_entry(
@@ -1705,6 +2030,32 @@ mod tests {
             read_wasm(
                 &target_dir,
                 PROJECT_HUB_PACKAGE,
+                CanicWasmBuildProfile::Fast.target_dir_name(),
+            )
+        })
+        .clone()
+    }
+
+    fn build_test_project_instance_wasm() -> Vec<u8> {
+        static WASM: OnceLock<Vec<u8>> = OnceLock::new();
+        WASM.get_or_init(|| {
+            let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+            let target_dir = test_target_dir(&workspace_root, "fleet-registry-sync");
+            let config_path = root_canister_config_path(&workspace_root);
+            let canonical_config_path = config_path.to_str().expect("root config path UTF-8");
+            build_internal_test_wasm_canisters_with_env(
+                &workspace_root,
+                &target_dir,
+                &[PROJECT_INSTANCE_PACKAGE],
+                CanicWasmBuildProfile::Fast,
+                &[(
+                    canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+                    canonical_config_path,
+                )],
+            );
+            read_wasm(
+                &target_dir,
+                PROJECT_INSTANCE_PACKAGE,
                 CanicWasmBuildProfile::Fast.target_dir_name(),
             )
         })

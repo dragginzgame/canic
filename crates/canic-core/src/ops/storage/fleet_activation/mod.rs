@@ -262,17 +262,23 @@ impl FleetActivationOps {
         let next_provenance = &next.authority.component.provenance;
         let current_fleet_revision = current.authority.fleet.provenance.registry.revision;
         let next_fleet_revision = next.authority.fleet.provenance.registry.revision;
-        if next_provenance.component != current_provenance.component
-            || next_provenance.source_fleet_subnet_root
-                != current_provenance.source_fleet_subnet_root
-            || next_provenance.component_registry_revision
-                <= current_provenance.component_registry_revision
-            || next_provenance.component_registry_content_hash
-                == current_provenance.component_registry_content_hash
-            || next_provenance.synchronized_at_ns <= current_provenance.synchronized_at_ns
-            || next_fleet_revision < current_fleet_revision
-            || (next_fleet_revision == current_fleet_revision
-                && next.authority.fleet != current.authority.fleet)
+        let component_identity_is_stable = next_provenance.component
+            == current_provenance.component
+            && next_provenance.source_fleet_subnet_root
+                == current_provenance.source_fleet_subnet_root;
+        let component_authority_advances = next_provenance.component_registry_revision
+            > current_provenance.component_registry_revision
+            && next_provenance.component_registry_content_hash
+                != current_provenance.component_registry_content_hash
+            && next_provenance.synchronized_at_ns > current_provenance.synchronized_at_ns;
+        let fleet_authority_is_monotonic = match next_fleet_revision.cmp(&current_fleet_revision) {
+            std::cmp::Ordering::Less => false,
+            std::cmp::Ordering::Equal => next.authority.fleet == current.authority.fleet,
+            std::cmp::Ordering::Greater => true,
+        };
+        if !component_identity_is_stable
+            || !component_authority_advances
+            || !fleet_authority_is_monotonic
         {
             return Err(FleetActivationOpsError::EvidenceMismatch);
         }
@@ -323,13 +329,12 @@ impl FleetActivationOps {
         if request.directory_authority_hash == [0; 32] {
             return Err(FleetActivationOpsError::EvidenceMismatch);
         }
-        if evidence.cascade.is_some()
-            || evidence.credential.is_some()
-            || record.prepared_state_snapshot_hash.is_some()
+        let obsolete_fleet_evidence = evidence.cascade.is_some() || evidence.credential.is_some();
+        let obsolete_runtime_evidence = record.prepared_state_snapshot_hash.is_some()
             || record.prepared_topology_snapshot_hash.is_some()
             || record.cascade_manifest.is_some()
-            || !record.credential_manifests.is_empty()
-        {
+            || !record.credential_manifests.is_empty();
+        if obsolete_fleet_evidence || obsolete_runtime_evidence {
             return Err(FleetActivationOpsError::InvalidRecord {
                 reason: "managed Component runtime retains obsolete cascade or credential evidence"
                     .to_string(),
@@ -409,11 +414,11 @@ impl FleetActivationOps {
         else {
             return Self::status(true);
         };
-        if credential.generation == 0
-            || credential_manifest.fleet != identity.fleet.fleet
-            || credential_manifest.activation_id != identity.operation_id
-            || credential_manifest.generation != credential.generation
-        {
+        let credential_is_versioned =
+            credential.generation > 0 && credential_manifest.generation == credential.generation;
+        let credential_scope_matches = credential_manifest.fleet == identity.fleet.fleet
+            && credential_manifest.activation_id == identity.operation_id;
+        if !credential_is_versioned || !credential_scope_matches {
             return Err(FleetActivationOpsError::IdentityMismatch);
         }
 

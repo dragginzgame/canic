@@ -23,11 +23,58 @@ use canic_core::{
     dto::root_store::{
         ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES,
         ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX, RootStoreBootstrapRequest,
-        RootStoreBootstrapResponse, RootStoreCatalogEntry, RootStoreReleaseSetEntryKind,
-        RootStoreReleaseSetManifest,
+        RootStoreBootstrapResponse, RootStoreCatalogEntry, RootStoreReleaseSetEntry,
+        RootStoreReleaseSetEntryKind, RootStoreReleaseSetManifest,
     },
+    ids::{ComponentSpecId, ReleaseBuildId},
 };
 use std::collections::{BTreeMap, BTreeSet};
+
+#[derive(Debug, Eq, PartialEq)]
+struct RootReleaseSetEntryAuthority<'a> {
+    component_spec: &'a ComponentSpecId,
+    kind: RootStoreReleaseSetEntryKind,
+    role: &'a CanisterRole,
+    release_build_id: &'a ReleaseBuildId,
+    package: &'a str,
+}
+
+impl<'a> RootReleaseSetEntryAuthority<'a> {
+    fn from_entry(entry: &'a RootStoreReleaseSetEntry) -> Self {
+        Self {
+            component_spec: &entry.component_spec,
+            kind: entry.kind,
+            role: &entry.artifact.role,
+            release_build_id: &entry.artifact.release_build_id,
+            package: &entry.artifact.package,
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct StagedArtifactAuthority<'a> {
+    template_id: &'a TemplateId,
+    role: &'a CanisterRole,
+    version: &'a TemplateVersion,
+    payload_hash: &'a [u8],
+    payload_size_bytes: u64,
+    chunking_mode: TemplateChunkingMode,
+    manifest_state: TemplateManifestState,
+}
+
+impl<'a> StagedArtifactAuthority<'a> {
+    const fn from_manifest(manifest: &'a TemplateManifestResponse) -> Self {
+        Self {
+            template_id: &manifest.template_id,
+            role: &manifest.role,
+            version: &manifest.version,
+            payload_hash: manifest.payload_hash.as_slice(),
+            payload_size_bytes: manifest.payload_size_bytes,
+            chunking_mode: manifest.chunking_mode,
+            manifest_state: manifest.manifest_state,
+        }
+    }
+}
 
 /// Bootstrap and verify the exact local Store for one still-Prepared root.
 pub async fn bootstrap(
@@ -186,12 +233,15 @@ fn validate_manifest_projection(
     let mut unique_payloads = BTreeSet::new();
     let mut total_bytes = 0_u64;
     for (entry, (component_spec, kind, role)) in manifest.entries.iter().zip(expected) {
-        if entry.component_spec != component_spec
-            || entry.kind != kind
-            || entry.artifact.role != role
-            || entry.artifact.release_build_id != manifest.release_build_id
-            || entry.artifact.package != ConfigOps::role_package(&role)?
-        {
+        let expected_package = ConfigOps::role_package(&role)?;
+        let expected_authority = RootReleaseSetEntryAuthority {
+            component_spec: &component_spec,
+            kind,
+            role: &role,
+            release_build_id: &manifest.release_build_id,
+            package: &expected_package,
+        };
+        if RootReleaseSetEntryAuthority::from_entry(entry) != expected_authority {
             return Err(InternalError::invalid_input(
                 "root release-set entry differs from the admitted topology projection",
             ));
@@ -225,12 +275,15 @@ fn validate_artifact_shape(
     entry: &canic_core::dto::root_store::RootStoreReleaseSetEntry,
 ) -> Result<(), InternalError> {
     let artifact = &entry.artifact;
-    if artifact.package.is_empty()
-        || artifact.wasm_relative_path.is_empty()
-        || artifact.wasm_gz_relative_path.is_empty()
-        || artifact.wasm_size_bytes == 0
-        || artifact.wasm_gz_size_bytes == 0
-    {
+    let paths_are_complete = [
+        artifact.package.as_str(),
+        artifact.wasm_relative_path.as_str(),
+        artifact.wasm_gz_relative_path.as_str(),
+    ]
+    .into_iter()
+    .all(|value| !value.is_empty());
+    let sizes_are_positive = artifact.wasm_size_bytes > 0 && artifact.wasm_gz_size_bytes > 0;
+    if !paths_are_complete || !sizes_are_positive {
         return Err(InternalError::invalid_input(
             "root release-set artifact metadata is incomplete",
         ));
@@ -262,14 +315,17 @@ fn exact_staged_manifests(
         .map(|(role, (payload_hash, payload_size_bytes))| {
             let observed = TemplateManifestOps::approved_for_role_response(&role)?;
             let expected_template_id = artifact_template_id(&role);
-            if observed.template_id != expected_template_id
-                || observed.role != role
-                || observed.version != version
-                || observed.payload_hash != payload_hash
-                || observed.payload_size_bytes != payload_size_bytes
+            let expected = StagedArtifactAuthority {
+                template_id: &expected_template_id,
+                role: &role,
+                version: &version,
+                payload_hash: payload_hash.as_slice(),
+                payload_size_bytes,
+                chunking_mode: TemplateChunkingMode::Chunked,
+                manifest_state: TemplateManifestState::Approved,
+            };
+            if StagedArtifactAuthority::from_manifest(&observed) != expected
                 || !is_exact_bootstrap_source(&observed.store_binding)
-                || observed.chunking_mode != TemplateChunkingMode::Chunked
-                || observed.manifest_state != TemplateManifestState::Approved
             {
                 return Err(InternalError::invalid_input(format!(
                     "staged artifact for role '{role}' differs from the protected root release set"

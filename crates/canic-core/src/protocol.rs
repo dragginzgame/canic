@@ -32,6 +32,8 @@ pub const CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_ADVANCE: &str =
     "canic_root_component_subtree_removal_advance";
 pub const CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STOP_PREPARE: &str =
     "canic_root_component_subtree_removal_stop_prepare";
+pub const CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STOP: &str =
+    "canic_root_component_subtree_removal_stop";
 pub const CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STATUS: &str =
     "canic_root_component_subtree_removal_status";
 pub const CANIC_ROOT_COMPONENT_CHILD_CREATE: &str = "canic_root_component_child_create";
