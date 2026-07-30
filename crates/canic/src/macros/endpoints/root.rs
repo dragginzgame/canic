@@ -126,6 +126,13 @@ macro_rules! canic_emit_root_admin_endpoints {
         }
 
         #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_root_component_draining_inventory_finalize(
+            request: ::canic::dto::component_registry::RootComponentFinalInventoryRequest,
+        ) -> Result<::canic::dto::component_registry::RootComponentFinalInventoryResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::finalize_component_inventory(request).await
+        }
+
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_root_component_subtree_removal_begin(
             request: ::canic::dto::component_registry::RootComponentSubtreeRemovalRequest,
         ) -> Result<::canic::dto::component_registry::RootComponentSubtreeRemovalResponse, ::canic::Error> {

@@ -91,6 +91,10 @@ Dependency direction is strict: `endpoints -> workflow -> policy -> ops -> model
 - Prefer `#[expect(...)]` over `#[allow(...)]` for lint suppressions so stale
   suppressions surface automatically. Use `#[allow(...)]` only for confirmed
   false positives where the lint may legitimately stop firing.
+- Treat long or mixed `&&`/`||` expressions as a design smell, especially in
+  authority and persistence validation. Group exact field equality into named
+  authority structs and compose named predicates or helpers so each invariant
+  remains independently readable and testable.
 - Rust edition is 2024.
 - Use directory modules with `mod.rs`; never keep both `foo.rs` and `foo/`.
 - Do not use `#[path = "..."]` for module layout. Rename files/directories so

@@ -53,7 +53,7 @@ const SUBTREE_REMOVAL_HISTORY_KEY_MAX_BYTES: u32 = 256;
 #[cfg(feature = "root-control-plane")]
 const SUBTREE_REMOVAL_HISTORY_RECORD_MAX_BYTES: u32 = 1_024;
 #[cfg(feature = "root-control-plane")]
-const COMPONENT_DRAINING_RECORD_MAX_BYTES: u32 = 2_048;
+const COMPONENT_DRAINING_RECORD_MAX_BYTES: u32 = 4_096;
 
 #[cfg(feature = "root-control-plane")]
 struct RootComponentRegistryState;
@@ -394,6 +394,26 @@ pub struct RootComponentDrainingRecord {
     pub started_at_ns: u64,
     pub quiescence: Option<RootComponentQuiescenceProgressRecord>,
     pub subtree_operation_id: Option<[u8; 32]>,
+    pub final_inventory: Option<RootComponentFinalInventoryRecord>,
+}
+
+///
+/// RootComponentFinalInventoryRecord
+///
+/// Durable exact empty-inventory authority frozen before top-level Component deletion.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentFinalInventoryRecord {
+    pub registry: ComponentRegistryHead,
+    pub descendant_content_hash: [u8; 32],
+    pub registry_encoded_bytes: u64,
+    pub directory_synchronized_at_ns: u64,
+    pub covered_fleet_registry_revision: u64,
+    pub covered_fleet_registry_content_hash: [u8; 32],
+    pub directory_authority_hash: [u8; 32],
+    pub inventory_hash: [u8; 32],
+    pub finalized_at_ns: u64,
 }
 
 ///
@@ -444,26 +464,124 @@ pub enum RootComponentQuiescenceProgressRecord {
     Quiescent(RootComponentQuiescentReceiptRecord),
 }
 
+#[cfg(feature = "root-control-plane")]
+#[derive(Debug, Eq, PartialEq)]
+struct RootComponentDrainingFenceAuthority<'a> {
+    operation_id: [u8; 32],
+    component: ComponentInstanceId,
+    previous_registry: &'a ComponentRegistryHead,
+    registry: &'a ComponentRegistryHead,
+    descendant_count: u32,
+    descendant_content_hash: [u8; 32],
+    directory_authority_hash: [u8; 32],
+    started_at_ns: u64,
+}
+
+#[cfg(feature = "root-control-plane")]
+impl<'a> From<&'a RootComponentDrainingRecord> for RootComponentDrainingFenceAuthority<'a> {
+    fn from(record: &'a RootComponentDrainingRecord) -> Self {
+        Self {
+            operation_id: record.operation_id,
+            component: record.component,
+            previous_registry: &record.previous_registry,
+            registry: &record.registry,
+            descendant_count: record.descendant_count,
+            descendant_content_hash: record.descendant_content_hash,
+            directory_authority_hash: record.directory_authority_hash,
+            started_at_ns: record.started_at_ns,
+        }
+    }
+}
+
+#[cfg(feature = "root-control-plane")]
 fn component_draining_identity_matches(
     left: &RootComponentDrainingRecord,
     right: &RootComponentDrainingRecord,
 ) -> bool {
     component_draining_fence_matches(left, right)
         && left.subtree_operation_id == right.subtree_operation_id
+        && left.final_inventory == right.final_inventory
 }
 
+#[cfg(feature = "root-control-plane")]
 fn component_draining_fence_matches(
     left: &RootComponentDrainingRecord,
     right: &RootComponentDrainingRecord,
 ) -> bool {
-    left.operation_id == right.operation_id
-        && left.component == right.component
-        && left.previous_registry == right.previous_registry
-        && left.registry == right.registry
-        && left.descendant_count == right.descendant_count
-        && left.descendant_content_hash == right.descendant_content_hash
-        && left.directory_authority_hash == right.directory_authority_hash
-        && left.started_at_ns == right.started_at_ns
+    RootComponentDrainingFenceAuthority::from(left)
+        == RootComponentDrainingFenceAuthority::from(right)
+}
+
+#[cfg(feature = "root-control-plane")]
+const fn component_draining_has_no_progress(record: &RootComponentDrainingRecord) -> bool {
+    if record.quiescence.is_some() {
+        return false;
+    }
+    if record.subtree_operation_id.is_some() {
+        return false;
+    }
+    record.final_inventory.is_none()
+}
+
+#[cfg(feature = "root-control-plane")]
+fn component_final_inventory_transition_is_valid(
+    expected: &RootComponentDrainingRecord,
+    next: &RootComponentDrainingRecord,
+    charged_entry_bytes: u64,
+) -> bool {
+    if !component_draining_fence_matches(expected, next) {
+        return false;
+    }
+    if expected.quiescence != next.quiescence {
+        return false;
+    }
+    if expected.subtree_operation_id != next.subtree_operation_id {
+        return false;
+    }
+    if expected.final_inventory.is_some() {
+        return false;
+    }
+    if next.final_inventory.is_none() {
+        return false;
+    }
+    RootComponentRegistryStore::component_draining_entry_bytes(next) <= charged_entry_bytes
+}
+
+#[cfg(feature = "root-control-plane")]
+fn component_draining_cursor_transition_is_valid(
+    expected: &RootComponentDrainingRecord,
+    next: &RootComponentDrainingRecord,
+    removal: &RootComponentSubtreeRemovalRecord,
+) -> bool {
+    if expected.component != removal.component {
+        return false;
+    }
+    if !component_draining_fence_matches(expected, next) {
+        return false;
+    }
+    if expected.quiescence != next.quiescence {
+        return false;
+    }
+    if expected.final_inventory != next.final_inventory {
+        return false;
+    }
+    if next.subtree_operation_id != Some(removal.operation_id) {
+        return false;
+    }
+    if removal.operation_id == [0; 32] {
+        return false;
+    }
+    let charged_entry_bytes = next
+        .quiescence
+        .as_ref()
+        .map(|progress| match progress {
+            RootComponentQuiescenceProgressRecord::StopIntent(intent) => intent.charged_entry_bytes,
+            RootComponentQuiescenceProgressRecord::Quiescent(receipt) => {
+                receipt.stop.charged_entry_bytes
+            }
+        })
+        .unwrap_or_default();
+    RootComponentRegistryStore::component_draining_entry_bytes(next) <= charged_entry_bytes
 }
 
 impl RootComponentDrainingRecord {
@@ -1064,7 +1182,7 @@ impl From<ComponentInstanceId> for RootComponentDrainingKey {
 }
 
 #[cfg(feature = "root-control-plane")]
-impl_storable_bounded!(RootComponentDrainingKey, 64, false);
+impl_storable_bounded!(RootComponentDrainingKey, 128, false);
 
 impl From<[u8; 32]> for RootComponentAllocationOperationKey {
     fn from(value: [u8; 32]) -> Self {
@@ -1385,26 +1503,7 @@ impl RootComponentSubtreeRemovalBeginCommit<'_> {
         match (self.expected_draining, &self.next_draining) {
             (None, None) => true,
             (Some(expected), Some(next)) => {
-                expected.component == self.record.component
-                    && component_draining_fence_matches(expected, next)
-                    && expected.quiescence == next.quiescence
-                    && next.subtree_operation_id == Some(self.record.operation_id)
-                    && next
-                        .subtree_operation_id
-                        .is_some_and(|operation_id| operation_id != [0; 32])
-                    && RootComponentRegistryStore::component_draining_entry_bytes(next)
-                        <= next
-                            .quiescence
-                            .as_ref()
-                            .map(|progress| match progress {
-                                RootComponentQuiescenceProgressRecord::StopIntent(intent) => {
-                                    intent.charged_entry_bytes
-                                }
-                                RootComponentQuiescenceProgressRecord::Quiescent(receipt) => {
-                                    receipt.stop.charged_entry_bytes
-                                }
-                            })
-                            .unwrap_or_default()
+                component_draining_cursor_transition_is_valid(expected, next, &self.record)
             }
             (None, Some(_)) | (Some(_), None) => false,
         }
@@ -1931,6 +2030,39 @@ impl RootComponentRegistryStore {
         COMPONENT_REGISTRY_PRINCIPAL_INDEX
             .with_borrow(|map| map.get(&ComponentRegistryPrincipalKey::from(canister)))
             .map(|record| record.component)
+    }
+
+    #[must_use]
+    pub(crate) fn component_live_inventory_is_empty(component: ComponentInstanceId) -> bool {
+        COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+            map.range((
+                Bound::Included(ComponentRegistryEntryKey::partition(component)),
+                Bound::Unbounded,
+            ))
+            .take_while(|entry| entry.key().component == *component.as_bytes())
+            .all(|entry| {
+                matches!(
+                    entry.value(),
+                    ComponentRegistryEntryRecord::Partition(_)
+                        | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                )
+            })
+        })
+    }
+
+    #[must_use]
+    pub(crate) fn component_principal_inventory_is_exact(
+        component: ComponentInstanceId,
+        top_level_canister: Principal,
+    ) -> bool {
+        Self::component_for_principal(top_level_canister) == Some(component)
+            && COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow(|map| {
+                map.iter()
+                    .filter(|entry| entry.value().component == component)
+                    .count()
+                    == 1
+            })
     }
 
     pub(crate) fn reserve_allocation(
@@ -3163,8 +3295,7 @@ impl RootComponentRegistryStore {
             || record.descendant_count != expected_partition.committed_descendants
             || record.descendant_content_hash != expected_partition.descendant_content_hash
             || record.directory_authority_hash == [0; 32]
-            || record.quiescence.is_some()
-            || record.subtree_operation_id.is_some()
+            || !component_draining_has_no_progress(&record)
         {
             return Err(RootComponentAllocationCommitError::ConflictingPartition);
         }
@@ -3313,6 +3444,40 @@ impl RootComponentRegistryStore {
             || Self::component_draining_entry_bytes(&next_record)
                 > expected_intent.charged_entry_bytes
         {
+            return Err(RootComponentAllocationCommitError::ConflictingState);
+        }
+
+        ROOT_COMPONENT_DRAINING.with_borrow_mut(|map| {
+            let current = map
+                .get(&key)
+                .ok_or(RootComponentAllocationCommitError::ConflictingState)?;
+            if current != *expected_record {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            map.insert(key, next_record);
+            Ok(())
+        })
+    }
+
+    pub(crate) fn mark_component_final_inventory(
+        expected_record: &RootComponentDrainingRecord,
+        next_record: RootComponentDrainingRecord,
+    ) -> Result<(), RootComponentAllocationCommitError> {
+        let component = expected_record.component;
+        let key = RootComponentDrainingKey::from(component);
+        let charged_entry_bytes = match &expected_record.quiescence {
+            Some(RootComponentQuiescenceProgressRecord::Quiescent(receipt)) => {
+                receipt.stop.charged_entry_bytes
+            }
+            None | Some(RootComponentQuiescenceProgressRecord::StopIntent(_)) => {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+        };
+        if !component_final_inventory_transition_is_valid(
+            expected_record,
+            &next_record,
+            charged_entry_bytes,
+        ) {
             return Err(RootComponentAllocationCommitError::ConflictingState);
         }
 

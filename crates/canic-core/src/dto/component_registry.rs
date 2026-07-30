@@ -325,6 +325,19 @@ pub struct RootComponentDrainingAdvanceRequest {
 }
 
 ///
+/// RootComponentFinalInventoryRequest
+///
+/// Controller command freezing one exact empty draining Component inventory.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentFinalInventoryRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub expected_registry: ComponentRegistryHead,
+}
+
+///
 /// RootComponentChildCreationRequest
 ///
 /// Parent command continuing one already reserved direct-child operation.
@@ -1122,6 +1135,38 @@ pub struct RootComponentDrainingAdvanceResponse {
 }
 
 ///
+/// RootComponentFinalInventory
+///
+/// Exact empty Component Registry and current Fleet Directory authority frozen before deletion.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentFinalInventory {
+    pub registry: ComponentRegistryHead,
+    pub descendant_content_hash: [u8; 32],
+    pub registry_encoded_bytes: u64,
+    pub directory_synchronized_at_ns: u64,
+    pub covered_fleet_registry_revision: u64,
+    pub covered_fleet_registry_content_hash: [u8; 32],
+    pub directory_authority_hash: [u8; 32],
+    pub inventory_hash: [u8; 32],
+    pub finalized_at_ns: u64,
+}
+
+///
+/// RootComponentFinalInventoryResponse
+///
+/// Response-idempotent receipt for one finalized empty Component inventory.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentFinalInventoryResponse {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub inventory: RootComponentFinalInventory,
+}
+
+///
 /// RootComponentChildCommitResponse
 ///
 /// Exact committed child operation, authoritative Component Registry and next Directory head.
@@ -1858,6 +1903,51 @@ mod tests {
             candid::decode_one::<RootComponentDrainingAdvanceResponse>(&empty_bytes)
                 .expect("decode Component draining empty response"),
             descendants_empty
+        );
+    }
+
+    #[test]
+    fn component_final_inventory_contracts_round_trip_through_candid() {
+        let component = ComponentInstanceId::from_generated_bytes([88; 32]);
+        let registry = ComponentRegistryHead {
+            component,
+            revision: 21,
+            content_hash: [89; 32],
+        };
+        let request = RootComponentFinalInventoryRequest {
+            operation_id: [90; 32],
+            component,
+            expected_registry: registry.clone(),
+        };
+        let response = RootComponentFinalInventoryResponse {
+            operation_id: request.operation_id,
+            component,
+            inventory: RootComponentFinalInventory {
+                registry,
+                descendant_content_hash: [91; 32],
+                registry_encoded_bytes: 4_096,
+                directory_synchronized_at_ns: 92,
+                covered_fleet_registry_revision: 93,
+                covered_fleet_registry_content_hash: [94; 32],
+                directory_authority_hash: [95; 32],
+                inventory_hash: [96; 32],
+                finalized_at_ns: 97,
+            },
+        };
+
+        let request_bytes =
+            candid::encode_one(&request).expect("encode Component final inventory request");
+        let response_bytes =
+            candid::encode_one(&response).expect("encode Component final inventory response");
+        assert_eq!(
+            candid::decode_one::<RootComponentFinalInventoryRequest>(&request_bytes)
+                .expect("decode Component final inventory request"),
+            request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentFinalInventoryResponse>(&response_bytes)
+                .expect("decode Component final inventory response"),
+            response
         );
     }
 

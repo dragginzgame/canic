@@ -19,10 +19,11 @@ use crate::{
         RootComponentChildAllocationView, RootComponentChildCommitmentView,
         RootComponentChildInstallEffectView, RootComponentChildMembershipView,
         RootComponentCreationEffectView, RootComponentDrainingAdvanceView,
-        RootComponentDrainingView, RootComponentInitialInventoryView,
-        RootComponentInstallEffectView, RootComponentQuiescenceProgressView,
-        RootComponentQuiescenceStopIntentView, RootComponentRegistryView,
-        RootComponentSubtreeDeleteEffectView, RootComponentSubtreeDirectoryConvergenceView,
+        RootComponentDrainingView, RootComponentFinalInventoryView,
+        RootComponentInitialInventoryView, RootComponentInstallEffectView,
+        RootComponentQuiescenceProgressView, RootComponentQuiescenceStopIntentView,
+        RootComponentRegistryView, RootComponentSubtreeDeleteEffectView,
+        RootComponentSubtreeDirectoryConvergenceView,
         RootComponentSubtreeDirectorySynchronizedView, RootComponentSubtreeMembershipRemovedView,
         RootComponentSubtreeRemovalProgressView, RootComponentSubtreeRemovalView,
         RootComponentSubtreeStopEffectView, RootComponentSubtreeStoppedEffectView,
@@ -88,15 +89,17 @@ use canic_core::{
             RootComponentDrainingAdvanceRequest, RootComponentDrainingAdvanceResponse,
             RootComponentDrainingDescendantsEmpty, RootComponentDrainingRequest,
             RootComponentDrainingResponse, RootComponentDrainingStatusRequest,
-            RootComponentInitialInventoryStatus, RootComponentInstallEvidence,
-            RootComponentInstallRequest, RootComponentMembershipActivationRequest,
-            RootComponentMembershipActivationResponse, RootComponentQuiescencePhase,
-            RootComponentQuiescenceRequest, RootComponentQuiescenceResponse,
-            RootComponentQuiescenceStatusRequest, RootComponentQuiescenceStopIntent,
-            RootComponentQuiescentReceipt, RootComponentRegistryPreparationRequest,
-            RootComponentRegistryStatusResponse, RootComponentRuntimeActivationRequest,
-            RootComponentRuntimeActivationResponse, RootComponentSubtreeRemovalAdvanceRequest,
-            RootComponentSubtreeRemovalCompletedReceipt, RootComponentSubtreeRemovalDeleteIntent,
+            RootComponentFinalInventory, RootComponentFinalInventoryRequest,
+            RootComponentFinalInventoryResponse, RootComponentInitialInventoryStatus,
+            RootComponentInstallEvidence, RootComponentInstallRequest,
+            RootComponentMembershipActivationRequest, RootComponentMembershipActivationResponse,
+            RootComponentQuiescencePhase, RootComponentQuiescenceRequest,
+            RootComponentQuiescenceResponse, RootComponentQuiescenceStatusRequest,
+            RootComponentQuiescenceStopIntent, RootComponentQuiescentReceipt,
+            RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
+            RootComponentRuntimeActivationRequest, RootComponentRuntimeActivationResponse,
+            RootComponentSubtreeRemovalAdvanceRequest, RootComponentSubtreeRemovalCompletedReceipt,
+            RootComponentSubtreeRemovalDeleteIntent,
             RootComponentSubtreeRemovalDeletePreparationRequest,
             RootComponentSubtreeRemovalDeleteRequest, RootComponentSubtreeRemovalDeletedReceipt,
             RootComponentSubtreeRemovalDirectoryConvergenceEvidence,
@@ -322,11 +325,12 @@ struct PreparedComponentQuiescencePlan {
     already_quiescent: bool,
 }
 
-struct PreparedComponentDrainingAdvance {
+struct PreparedComponentDrainingBoundary {
     root: FleetSubnetRootBinding,
     release_set: FleetSubnetRootReleaseSet,
     topology: canic_core::control_plane_support::config::ComponentTopology,
     maximum_component_registry_bytes: u64,
+    fleet_directory: FleetDirectorySnapshot,
 }
 
 enum ComponentDrainingRemovalAction {
@@ -865,10 +869,29 @@ pub async fn advance_component_draining(
     }
 }
 
+/// Freeze exact empty Component Registry and current Fleet Directory authority.
+pub async fn finalize_component_inventory(
+    request: RootComponentFinalInventoryRequest,
+) -> Result<RootComponentFinalInventoryResponse, InternalError> {
+    let prepared = prepared_component_draining_boundary(request.component).await?;
+    let inventory = ComponentRegistryOps::finalize_component_inventory(
+        request.component,
+        request.operation_id,
+        request.expected_registry,
+        prepared.fleet_directory,
+        IcOps::now_nanos(),
+    )?;
+    Ok(component_final_inventory_response(
+        request.operation_id,
+        request.component,
+        inventory,
+    ))
+}
+
 async fn advance_component_draining_boundary(
     request: RootComponentDrainingAdvanceRequest,
 ) -> Result<RootComponentDrainingAdvanceResponse, InternalError> {
-    let prepared = prepared_component_draining_advance(request.component).await?;
+    let prepared = prepared_component_draining_boundary(request.component).await?;
     match ComponentRegistryOps::advance_component_draining(request.component, request.operation_id)?
     {
         RootComponentDrainingAdvanceView::DescendantSubtreePending { .. } => {
@@ -916,9 +939,9 @@ async fn advance_component_draining_boundary(
     }
 }
 
-async fn prepared_component_draining_advance(
+async fn prepared_component_draining_boundary(
     component: canic_core::ids::ComponentInstanceId,
-) -> Result<PreparedComponentDrainingAdvance, InternalError> {
+) -> Result<PreparedComponentDrainingBoundary, InternalError> {
     let (authority, root) = root_authority()?;
     let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
     let preparation_request = RootComponentRegistryPreparationRequest {
@@ -926,14 +949,14 @@ async fn prepared_component_draining_advance(
         expected_fleet_registry: prepared.prepared_against_registry,
     };
     root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    validate_active_authority(&authority, root, &preparation_request)?;
+    let fleet_directory = validate_active_authority(&authority, root, &preparation_request)?;
     if FleetActivationApi::status()
         .map_err(InternalError::public)?
         .phase
         != FleetActivationPhase::Active
     {
         return Err(InternalError::unavailable(
-            "Component draining advance requires an Active Fleet Subnet Root runtime",
+            "Component draining requires an Active Fleet Subnet Root runtime",
         ));
     }
 
@@ -957,11 +980,12 @@ async fn prepared_component_draining_advance(
         })?
         .limits
         .maximum_registry_bytes;
-    Ok(PreparedComponentDrainingAdvance {
+    Ok(PreparedComponentDrainingBoundary {
         root: authority.binding,
         release_set: authority.initial_release_set,
         topology,
         maximum_component_registry_bytes,
+        fleet_directory,
     })
 }
 
@@ -4907,6 +4931,28 @@ const fn component_draining_response(
         descendant_content_hash: draining.descendant_content_hash,
         directory_authority_hash: draining.directory_authority_hash,
         started_at_ns: draining.started_at_ns,
+    }
+}
+
+const fn component_final_inventory_response(
+    operation_id: [u8; 32],
+    component: ComponentInstanceId,
+    inventory: RootComponentFinalInventoryView,
+) -> RootComponentFinalInventoryResponse {
+    RootComponentFinalInventoryResponse {
+        operation_id,
+        component,
+        inventory: RootComponentFinalInventory {
+            registry: inventory.registry,
+            descendant_content_hash: inventory.descendant_content_hash,
+            registry_encoded_bytes: inventory.registry_encoded_bytes,
+            directory_synchronized_at_ns: inventory.directory_synchronized_at_ns,
+            covered_fleet_registry_revision: inventory.covered_fleet_registry_revision,
+            covered_fleet_registry_content_hash: inventory.covered_fleet_registry_content_hash,
+            directory_authority_hash: inventory.directory_authority_hash,
+            inventory_hash: inventory.inventory_hash,
+            finalized_at_ns: inventory.finalized_at_ns,
+        },
     }
 }
 

@@ -421,6 +421,10 @@ fn root_component_quiescence_and_bounded_drain_are_replay_safe() {
         .iter()
         .find(|entry| entry.endpoint == "canic_root_component_draining_advance")
         .expect("root Component draining advance policy entry");
+    let final_inventory = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_root_component_draining_inventory_finalize")
+        .expect("root Component final inventory policy entry");
 
     assert_eq!(
         quiesce.replay_policy,
@@ -438,6 +442,13 @@ fn root_component_quiescence_and_bounded_drain_are_replay_safe() {
         }
     );
     assert_eq!(advance.cost_class, CostClass::None);
+    assert_eq!(
+        final_inventory.replay_policy,
+        ReplayPolicy::ResponseIdempotent {
+            command_kind: replay_command_kind("component_registry.finalize_component_inventory.v1"),
+        }
+    );
+    assert_eq!(final_inventory.cost_class, CostClass::None);
 }
 
 #[test]

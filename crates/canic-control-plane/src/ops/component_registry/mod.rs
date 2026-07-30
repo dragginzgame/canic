@@ -13,13 +13,13 @@ use crate::{
         RootComponentChildAllocationRecord, RootComponentChildCommitmentRecord,
         RootComponentChildInstallEffectRecord, RootComponentChildMembershipRecord,
         RootComponentCommitmentRecord, RootComponentCreationEffectRecord,
-        RootComponentDrainingRecord, RootComponentInitialInventoryRecord,
-        RootComponentInstallEffectRecord, RootComponentMembershipRecord,
-        RootComponentQuiescenceProgressRecord, RootComponentQuiescenceStopIntentRecord,
-        RootComponentQuiescentReceiptRecord, RootComponentRegistryCommitError,
-        RootComponentRegistryMetaRecord, RootComponentRegistryStore,
-        RootComponentSubtreeDeleteEffectRecord, RootComponentSubtreeDeletedEffectRecord,
-        RootComponentSubtreeDirectoryConvergenceRecord,
+        RootComponentDrainingRecord, RootComponentFinalInventoryRecord,
+        RootComponentInitialInventoryRecord, RootComponentInstallEffectRecord,
+        RootComponentMembershipRecord, RootComponentQuiescenceProgressRecord,
+        RootComponentQuiescenceStopIntentRecord, RootComponentQuiescentReceiptRecord,
+        RootComponentRegistryCommitError, RootComponentRegistryMetaRecord,
+        RootComponentRegistryStore, RootComponentSubtreeDeleteEffectRecord,
+        RootComponentSubtreeDeletedEffectRecord, RootComponentSubtreeDirectoryConvergenceRecord,
         RootComponentSubtreeDirectorySynchronizedRecord,
         RootComponentSubtreeMembershipRemovedRecord, RootComponentSubtreeRemovalBeginCommit,
         RootComponentSubtreeRemovalCompletedLeafRecord, RootComponentSubtreeRemovalCompletedRecord,
@@ -35,11 +35,12 @@ use crate::{
         RootComponentChildInstallEffectView, RootComponentChildMembershipView,
         RootComponentCommitmentView, RootComponentCreationEffectView,
         RootComponentDrainingAdvanceView, RootComponentDrainingView,
-        RootComponentInitialInventoryView, RootComponentInstallEffectView,
-        RootComponentMembershipView, RootComponentQuiescenceProgressView,
-        RootComponentQuiescenceStopIntentView, RootComponentQuiescentReceiptView,
-        RootComponentRegistryView, RootComponentSubtreeDeleteEffectView,
-        RootComponentSubtreeDeletedEffectView, RootComponentSubtreeDirectoryConvergenceView,
+        RootComponentFinalInventoryView, RootComponentInitialInventoryView,
+        RootComponentInstallEffectView, RootComponentMembershipView,
+        RootComponentQuiescenceProgressView, RootComponentQuiescenceStopIntentView,
+        RootComponentQuiescentReceiptView, RootComponentRegistryView,
+        RootComponentSubtreeDeleteEffectView, RootComponentSubtreeDeletedEffectView,
+        RootComponentSubtreeDirectoryConvergenceView,
         RootComponentSubtreeDirectorySynchronizedView, RootComponentSubtreeMembershipRemovedView,
         RootComponentSubtreeRemovalCompletedView, RootComponentSubtreeRemovalNodeView,
         RootComponentSubtreeRemovalProgressView, RootComponentSubtreeRemovalView,
@@ -79,6 +80,7 @@ use sha2::{Digest, Sha256};
 const SUBTREE_REMOVAL_TRAVERSAL_BATCH_SIZE: u32 = 64;
 const COMPONENT_DRAINING_SUBTREE_OPERATION_DOMAIN: &[u8] =
     b"canic.component-draining.subtree-operation.v1";
+const COMPONENT_FINAL_INVENTORY_HASH_DOMAIN: &[u8] = b"canic.component.final-inventory.v1";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SubtreeRemovalOrigin {
@@ -137,6 +139,104 @@ struct RootComponentInitialInventoryHashEntry {
     active_registry_encoded_bytes: u64,
     active_directory_synchronized_at_ns: u64,
     active_directory_authority_hash: [u8; 32],
+}
+
+#[derive(CandidType)]
+struct RootComponentFinalInventoryHashAuthority {
+    binding: ComponentBinding,
+    provisioning_origin: ComponentProvisioningOrigin,
+    release_set: FleetSubnetRootReleaseSet,
+    status: ComponentLifecycleStatus,
+    registry: ComponentRegistryHead,
+    descendant_content_hash: [u8; 32],
+    directory_synchronized_at_ns: u64,
+    reserved_descendants: u32,
+    committed_descendants: u32,
+    registry_encoded_bytes: u64,
+    covered_fleet_registry_revision: u64,
+    covered_fleet_registry_content_hash: [u8; 32],
+    directory_authority_hash: [u8; 32],
+    finalized_at_ns: u64,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct RootComponentFinalInventorySnapshotAuthority {
+    registry: ComponentRegistryHead,
+    descendant_content_hash: [u8; 32],
+    registry_encoded_bytes: u64,
+    directory_synchronized_at_ns: u64,
+}
+
+impl RootComponentFinalInventorySnapshotAuthority {
+    const fn from_partition(partition: &ComponentRegistryPartitionRecord) -> Self {
+        Self {
+            registry: component_partition_head(partition),
+            descendant_content_hash: partition.descendant_content_hash,
+            registry_encoded_bytes: partition.encoded_bytes,
+            directory_synchronized_at_ns: partition.directory_synchronized_at_ns,
+        }
+    }
+
+    fn from_inventory(inventory: &RootComponentFinalInventoryRecord) -> Self {
+        Self {
+            registry: inventory.registry.clone(),
+            descendant_content_hash: inventory.descendant_content_hash,
+            registry_encoded_bytes: inventory.registry_encoded_bytes,
+            directory_synchronized_at_ns: inventory.directory_synchronized_at_ns,
+        }
+    }
+}
+
+struct RootComponentFinalInventoryAuthority<'a> {
+    partition: &'a ComponentRegistryPartitionRecord,
+    draining: &'a RootComponentDrainingRecord,
+    inventory: &'a RootComponentFinalInventoryRecord,
+}
+
+impl RootComponentFinalInventoryAuthority<'_> {
+    fn validate(&self) -> Result<(), InternalError> {
+        let quiesced_at_ns =
+            terminal_component_quiesced_at_ns(self.draining).ok_or_else(Self::invalid)?;
+        let current = RootComponentFinalInventorySnapshotAuthority::from_partition(self.partition);
+        let frozen = RootComponentFinalInventorySnapshotAuthority::from_inventory(self.inventory);
+        if current != frozen {
+            return Err(Self::invalid());
+        }
+        if !component_final_inventory_fleet_coverage_is_versioned(self.inventory) {
+            return Err(Self::invalid());
+        }
+        if self.inventory.directory_authority_hash == [0; 32] {
+            return Err(Self::invalid());
+        }
+        if !component_final_inventory_time_is_monotonic(
+            self.partition,
+            quiesced_at_ns,
+            self.inventory.finalized_at_ns,
+        ) {
+            return Err(Self::invalid());
+        }
+        let expected_hash = component_final_inventory_hash(self.partition, self.inventory)?;
+        if self.inventory.inventory_hash != expected_hash {
+            return Err(Self::invalid());
+        }
+        if !component_partition_is_empty_and_draining(self.partition) {
+            return Err(Self::invalid());
+        }
+        if !component_final_inventory_indexes_are_empty(self.partition) {
+            return Err(Self::invalid());
+        }
+        if !component_draining_cursor_is_terminal(self.draining) {
+            return Err(Self::invalid());
+        }
+        Ok(())
+    }
+
+    fn invalid() -> InternalError {
+        InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component final inventory differs from exact empty Registry authority",
+        )
+    }
 }
 
 struct CompleteInitialInventory {
@@ -1654,6 +1754,7 @@ impl ComponentRegistryOps {
             started_at_ns,
             quiescence: None,
             subtree_operation_id: None,
+            final_inventory: None,
         };
         let (next_partition, next_meta) = component_draining_state(
             &current,
@@ -1933,6 +2034,76 @@ impl ComponentRegistryOps {
             target_canister_id: target.canister_id,
             reserved_against_registry: component_partition_head(&partition),
         })
+    }
+
+    pub(crate) fn finalize_component_inventory(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        expected_registry: ComponentRegistryHead,
+        fleet_directory: FleetDirectorySnapshot,
+        finalized_at_ns: u64,
+    ) -> Result<RootComponentFinalInventoryView, InternalError> {
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        validate_partition_record(&partition)?;
+        let draining =
+            RootComponentRegistryStore::component_draining(component).ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component draining operation has not been durably fenced",
+                )
+            })?;
+        validate_component_draining_record(&partition, &draining)?;
+        if operation_id != draining.operation_id {
+            return Err(InternalError::conflict(
+                "Component final inventory is bound to different draining intent",
+            ));
+        }
+        if let Some(existing) = draining.final_inventory {
+            return if expected_registry == existing.registry {
+                Ok(component_final_inventory_record_to_view(existing))
+            } else {
+                Err(InternalError::conflict(
+                    "Component final inventory is already bound to a different Registry head",
+                ))
+            };
+        }
+
+        let current_registry = component_partition_head(&partition);
+        ensure_component_final_inventory_candidate(&partition, &expected_registry)?;
+        let quiesced_at_ns = terminal_component_quiesced_at_ns(&draining).ok_or_else(|| {
+            InternalError::conflict("Component final inventory requires terminal quiescence")
+        })?;
+        ensure_component_final_inventory_time(&partition, quiesced_at_ns, finalized_at_ns)?;
+        ensure_component_final_inventory_indexes_are_empty(&partition)?;
+        ensure_component_lifecycle_history_is_terminal(&partition)?;
+        ensure_component_final_inventory_fleet_authority(&partition, &fleet_directory)?;
+
+        let mut inventory = RootComponentFinalInventoryRecord {
+            registry: current_registry,
+            descendant_content_hash: partition.descendant_content_hash,
+            registry_encoded_bytes: partition.encoded_bytes,
+            directory_synchronized_at_ns: partition.directory_synchronized_at_ns,
+            covered_fleet_registry_revision: fleet_directory.provenance.registry.revision,
+            covered_fleet_registry_content_hash: fleet_directory.provenance.registry.content_hash,
+            directory_authority_hash: component_directory_authority_hash(
+                &partition.binding,
+                partition.revision,
+                partition.content_hash,
+                partition.directory_synchronized_at_ns,
+                0,
+                &fleet_directory,
+            )?,
+            inventory_hash: [0; 32],
+            finalized_at_ns,
+        };
+        inventory.inventory_hash = component_final_inventory_hash(&partition, &inventory)?;
+        let mut next_draining = draining.clone();
+        next_draining.final_inventory = Some(inventory.clone());
+        validate_component_draining_record(&partition, &next_draining)?;
+        RootComponentRegistryStore::mark_component_final_inventory(&draining, next_draining)
+            .map_err(map_allocation_commit_error)?;
+        Ok(component_final_inventory_record_to_view(inventory))
     }
 
     pub(crate) fn begin_draining_subtree_removal(
@@ -5162,6 +5333,25 @@ fn component_draining_record_to_view(
                 })
             }
         }),
+        final_inventory: record
+            .final_inventory
+            .map(component_final_inventory_record_to_view),
+    }
+}
+
+const fn component_final_inventory_record_to_view(
+    record: RootComponentFinalInventoryRecord,
+) -> RootComponentFinalInventoryView {
+    RootComponentFinalInventoryView {
+        registry: record.registry,
+        descendant_content_hash: record.descendant_content_hash,
+        registry_encoded_bytes: record.registry_encoded_bytes,
+        directory_synchronized_at_ns: record.directory_synchronized_at_ns,
+        covered_fleet_registry_revision: record.covered_fleet_registry_revision,
+        covered_fleet_registry_content_hash: record.covered_fleet_registry_content_hash,
+        directory_authority_hash: record.directory_authority_hash,
+        inventory_hash: record.inventory_hash,
+        finalized_at_ns: record.finalized_at_ns,
     }
 }
 
@@ -5559,6 +5749,21 @@ fn component_quiescence_terminal_entry_bytes(
         terminal_intent.charged_entry_bytes = charged_entry_bytes;
         let mut terminal = draining.clone();
         terminal.subtree_operation_id = Some([u8::MAX; 32]);
+        terminal.final_inventory = Some(RootComponentFinalInventoryRecord {
+            registry: ComponentRegistryHead {
+                component: draining.component,
+                revision: u64::MAX,
+                content_hash: [u8::MAX; 32],
+            },
+            descendant_content_hash: [u8::MAX; 32],
+            registry_encoded_bytes: u64::MAX,
+            directory_synchronized_at_ns: u64::MAX,
+            covered_fleet_registry_revision: u64::MAX,
+            covered_fleet_registry_content_hash: [u8::MAX; 32],
+            directory_authority_hash: [u8::MAX; 32],
+            inventory_hash: [u8::MAX; 32],
+            finalized_at_ns: u64::MAX,
+        });
         terminal.quiescence = Some(RootComponentQuiescenceProgressRecord::Quiescent(
             RootComponentQuiescentReceiptRecord {
                 stop: terminal_intent,
@@ -7589,6 +7794,9 @@ fn validate_component_draining_record(
                 record.quiescence,
                 Some(RootComponentQuiescenceProgressRecord::Quiescent(_))
             ));
+    if let Some(inventory) = &record.final_inventory {
+        validate_component_final_inventory_record(partition, record, inventory)?;
+    }
     let valid = record.operation_id != [0; 32]
         && record.component == partition.binding.component
         && record.previous_registry.component == record.component
@@ -7615,6 +7823,148 @@ fn validate_component_draining_record(
         return Err(InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
             "Component draining receipt differs from protected Registry authority",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_component_final_inventory_record(
+    partition: &ComponentRegistryPartitionRecord,
+    draining: &RootComponentDrainingRecord,
+    inventory: &RootComponentFinalInventoryRecord,
+) -> Result<(), InternalError> {
+    RootComponentFinalInventoryAuthority {
+        partition,
+        draining,
+        inventory,
+    }
+    .validate()?;
+    ensure_component_lifecycle_history_is_terminal(partition)
+}
+
+const fn terminal_component_quiesced_at_ns(draining: &RootComponentDrainingRecord) -> Option<u64> {
+    match &draining.quiescence {
+        Some(RootComponentQuiescenceProgressRecord::Quiescent(receipt)) => {
+            Some(receipt.quiesced_at_ns)
+        }
+        None | Some(RootComponentQuiescenceProgressRecord::StopIntent(_)) => None,
+    }
+}
+
+fn component_final_inventory_fleet_coverage_is_versioned(
+    inventory: &RootComponentFinalInventoryRecord,
+) -> bool {
+    inventory.covered_fleet_registry_revision > 0
+        && inventory.covered_fleet_registry_content_hash != [0; 32]
+}
+
+const fn component_final_inventory_time_is_monotonic(
+    partition: &ComponentRegistryPartitionRecord,
+    quiesced_at_ns: u64,
+    finalized_at_ns: u64,
+) -> bool {
+    finalized_at_ns >= quiesced_at_ns && finalized_at_ns >= partition.directory_synchronized_at_ns
+}
+
+fn component_partition_is_empty_and_draining(partition: &ComponentRegistryPartitionRecord) -> bool {
+    if partition.status != ComponentLifecycleStatus::Draining {
+        return false;
+    }
+    if partition.reserved_descendants != 0 {
+        return false;
+    }
+    if partition.committed_descendants != 0 {
+        return false;
+    }
+    partition.descendant_content_hash
+        == empty_component_descendant_content_hash(partition.binding.component)
+}
+
+fn component_final_inventory_indexes_are_empty(
+    partition: &ComponentRegistryPartitionRecord,
+) -> bool {
+    if !RootComponentRegistryStore::component_live_inventory_is_empty(partition.binding.component) {
+        return false;
+    }
+    RootComponentRegistryStore::component_principal_inventory_is_exact(
+        partition.binding.component,
+        partition.binding.canister_id,
+    )
+}
+
+fn component_draining_cursor_is_terminal(draining: &RootComponentDrainingRecord) -> bool {
+    let Some(operation_id) = draining.subtree_operation_id else {
+        return true;
+    };
+    RootComponentRegistryStore::subtree_removal(draining.component, operation_id).is_some_and(
+        |removal| {
+            matches!(
+                removal.progress,
+                RootComponentSubtreeRemovalProgressRecord::Completed(_)
+            )
+        },
+    )
+}
+
+fn ensure_component_final_inventory_candidate(
+    partition: &ComponentRegistryPartitionRecord,
+    expected_registry: &ComponentRegistryHead,
+) -> Result<(), InternalError> {
+    if expected_registry != &component_partition_head(partition) {
+        return Err(InternalError::conflict(
+            "Component final inventory differs from current Registry head",
+        ));
+    }
+    if !component_partition_is_empty_and_draining(partition) {
+        return Err(InternalError::conflict(
+            "Component final inventory differs from current empty draining authority",
+        ));
+    }
+    Ok(())
+}
+
+fn ensure_component_final_inventory_time(
+    partition: &ComponentRegistryPartitionRecord,
+    quiesced_at_ns: u64,
+    finalized_at_ns: u64,
+) -> Result<(), InternalError> {
+    if component_final_inventory_time_is_monotonic(partition, quiesced_at_ns, finalized_at_ns) {
+        return Ok(());
+    }
+    Err(InternalError::invalid_input(
+        "Component final inventory time precedes its terminal authority",
+    ))
+}
+
+fn ensure_component_final_inventory_indexes_are_empty(
+    partition: &ComponentRegistryPartitionRecord,
+) -> Result<(), InternalError> {
+    if component_final_inventory_indexes_are_empty(partition) {
+        return Ok(());
+    }
+    Err(InternalError::invariant(
+        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+        "Component final inventory still contains live descendant membership",
+    ))
+}
+
+fn ensure_component_final_inventory_fleet_authority(
+    partition: &ComponentRegistryPartitionRecord,
+    fleet_directory: &FleetDirectorySnapshot,
+) -> Result<(), InternalError> {
+    if fleet_directory.provenance.source_fleet_subnet_root != partition.binding.fleet_subnet_root {
+        return Err(InternalError::conflict(
+            "Component final inventory has a foreign Fleet Directory root",
+        ));
+    }
+    if fleet_directory.provenance.registry.revision == 0 {
+        return Err(InternalError::conflict(
+            "Component final inventory has an unversioned Fleet Directory",
+        ));
+    }
+    if fleet_directory.provenance.registry.content_hash == [0; 32] {
+        return Err(InternalError::conflict(
+            "Component final inventory has an empty Fleet Directory hash",
         ));
     }
     Ok(())
@@ -8503,6 +8853,34 @@ const fn child_allocation_is_terminal(record: &RootComponentChildAllocationRecor
     )
 }
 
+fn ensure_component_lifecycle_history_is_terminal(
+    partition: &ComponentRegistryPartitionRecord,
+) -> Result<(), InternalError> {
+    for allocation in RootComponentRegistryStore::child_allocations(partition.binding.component) {
+        validate_child_allocation_record(&allocation)?;
+        if !child_allocation_is_terminal(&allocation) {
+            return Err(InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component final inventory has incomplete child lifecycle history",
+            ));
+        }
+    }
+    for removal in RootComponentRegistryStore::subtree_removals(partition.binding.component) {
+        validate_subtree_removal_record(&removal)?;
+        validate_subtree_removal_progress(partition, &removal)?;
+        if !matches!(
+            removal.progress,
+            RootComponentSubtreeRemovalProgressRecord::Completed(_)
+        ) {
+            return Err(InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component final inventory has incomplete subtree-removal history",
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn canister_is_in_subtree(
     partition: &ComponentRegistryPartitionRecord,
     candidate: Principal,
@@ -8630,6 +9008,39 @@ fn empty_component_descendant_content_hash(component: ComponentInstanceId) -> [u
     hasher.update(DOMAIN);
     hasher.update(component.as_bytes());
     hasher.finalize().into()
+}
+
+fn component_final_inventory_hash(
+    partition: &ComponentRegistryPartitionRecord,
+    inventory: &RootComponentFinalInventoryRecord,
+) -> Result<[u8; 32], InternalError> {
+    let payload = candid::encode_one(RootComponentFinalInventoryHashAuthority {
+        binding: partition.binding.clone(),
+        provisioning_origin: partition.provisioning_origin.clone(),
+        release_set: partition.release_set,
+        status: partition.status,
+        registry: inventory.registry.clone(),
+        descendant_content_hash: inventory.descendant_content_hash,
+        directory_synchronized_at_ns: inventory.directory_synchronized_at_ns,
+        reserved_descendants: partition.reserved_descendants,
+        committed_descendants: partition.committed_descendants,
+        registry_encoded_bytes: inventory.registry_encoded_bytes,
+        covered_fleet_registry_revision: inventory.covered_fleet_registry_revision,
+        covered_fleet_registry_content_hash: inventory.covered_fleet_registry_content_hash,
+        directory_authority_hash: inventory.directory_authority_hash,
+        finalized_at_ns: inventory.finalized_at_ns,
+    })
+    .map_err(|error| {
+        InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
+            format!("Component final inventory hash input cannot be encoded: {error}"),
+        )
+    })?;
+    let mut hasher = Sha256::new();
+    hasher.update(COMPONENT_FINAL_INVENTORY_HASH_DOMAIN);
+    hasher.update((payload.len() as u64).to_be_bytes());
+    hasher.update(payload);
+    Ok(hasher.finalize().into())
 }
 
 fn component_draining_subtree_operation_id(
@@ -9311,6 +9722,106 @@ mod tests {
             )
             .is_err()
         );
+        RootComponentRegistryStore::import(RootComponentRegistryData::default());
+    }
+
+    #[test]
+    fn component_final_inventory_is_exact_durable_and_response_idempotent() {
+        let (partition, draining, fleet) = import_empty_quiescent_component();
+        let RootComponentDrainingAdvanceView::DescendantsEmpty {
+            registry,
+            descendant_content_hash,
+        } = ComponentRegistryOps::advance_component_draining(
+            partition.binding.component,
+            draining.operation_id,
+        )
+        .expect("observe exact empty draining inventory")
+        else {
+            panic!("empty Component must have no draining subtree");
+        };
+        assert_eq!(registry, draining.registry);
+        assert_eq!(
+            descendant_content_hash,
+            empty_component_descendant_content_hash(partition.binding.component)
+        );
+
+        let before_finalization = RootComponentRegistryStore::export();
+        let mut conflicting_registry = registry.clone();
+        conflicting_registry.revision += 1;
+        ComponentRegistryOps::finalize_component_inventory(
+            partition.binding.component,
+            draining.operation_id,
+            conflicting_registry.clone(),
+            fleet.clone(),
+            112,
+        )
+        .expect_err("final inventory must bind the exact current Registry head");
+        ComponentRegistryOps::finalize_component_inventory(
+            partition.binding.component,
+            draining.operation_id,
+            registry.clone(),
+            fleet.clone(),
+            110,
+        )
+        .expect_err("final inventory time cannot precede terminal quiescence");
+        assert_eq!(RootComponentRegistryStore::export(), before_finalization);
+
+        let inventory = ComponentRegistryOps::finalize_component_inventory(
+            partition.binding.component,
+            draining.operation_id,
+            registry.clone(),
+            fleet.clone(),
+            112,
+        )
+        .expect("freeze exact final Component inventory");
+        assert_final_inventory_receipt(&partition, &fleet, &inventory);
+
+        let durable = restart_component_registry();
+        let restarted = ComponentRegistryOps::component_draining(partition.binding.component)
+            .expect("valid final inventory")
+            .expect("durable draining authority");
+        assert_eq!(restarted.final_inventory, Some(inventory.clone()));
+        assert_eq!(
+            ComponentRegistryOps::finalize_component_inventory(
+                partition.binding.component,
+                draining.operation_id,
+                registry,
+                fleet,
+                999,
+            )
+            .expect("exact final-inventory retry returns the original receipt"),
+            inventory
+        );
+        assert_eq!(RootComponentRegistryStore::export(), durable);
+        ComponentRegistryOps::finalize_component_inventory(
+            partition.binding.component,
+            draining.operation_id,
+            conflicting_registry,
+            fleet_directory(&root_binding()),
+            999,
+        )
+        .expect_err("final inventory rejects a different Registry head after commit");
+        assert_eq!(RootComponentRegistryStore::export(), durable);
+        assert_eq!(
+            ComponentRegistryOps::current()
+                .expect("Registry status")
+                .encoded_bytes,
+            exact_registry_entry_bytes(&durable)
+        );
+        assert_eq!(
+            partition.encoded_bytes,
+            exact_component_registry_entry_bytes(&durable, partition.binding.component)
+        );
+
+        let mut corrupted = durable;
+        corrupted.component_drainings[0]
+            .final_inventory
+            .as_mut()
+            .expect("final inventory receipt")
+            .inventory_hash = [0; 32];
+        RootComponentRegistryStore::import(corrupted);
+        ComponentRegistryOps::component_draining(partition.binding.component)
+            .expect_err("final inventory hash must remain canonical");
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
 
@@ -12367,6 +12878,127 @@ mod tests {
                 status: FleetSubnetRootStatus::Active,
             }],
         }
+    }
+
+    fn assert_final_inventory_receipt(
+        partition: &ComponentRegistryPartitionView,
+        fleet: &FleetDirectorySnapshot,
+        inventory: &RootComponentFinalInventoryView,
+    ) {
+        assert_eq!(inventory.registry.component, partition.binding.component);
+        assert_eq!(inventory.registry.revision, partition.revision);
+        assert_eq!(inventory.registry.content_hash, partition.content_hash);
+        assert_eq!(
+            inventory.descendant_content_hash,
+            empty_component_descendant_content_hash(partition.binding.component)
+        );
+        assert_eq!(inventory.registry_encoded_bytes, partition.encoded_bytes);
+        assert_eq!(
+            inventory.covered_fleet_registry_revision,
+            fleet.provenance.registry.revision
+        );
+        assert_ne!(inventory.directory_authority_hash, [0; 32]);
+        assert_ne!(inventory.inventory_hash, [0; 32]);
+        assert_eq!(inventory.finalized_at_ns, 112);
+    }
+
+    fn import_empty_quiescent_component() -> (
+        ComponentRegistryPartitionView,
+        RootComponentDrainingView,
+        FleetDirectorySnapshot,
+    ) {
+        RootComponentRegistryStore::import(RootComponentRegistryData::default());
+        let root = root_binding();
+        let release_set = FleetSubnetRootReleaseSet {
+            release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
+                [8; 32],
+            )),
+            manifest_digest: ReleaseSetDigest::from_bytes([9; 32]),
+        };
+        let component = ComponentInstanceId::from_generated_bytes([97; 32]);
+        let canister = candid::Principal::from_slice(&[98; 29]);
+        let partition = active_component_partition(&root, release_set, component, canister);
+        RootComponentRegistryStore::import(RootComponentRegistryData {
+            current: Some(RootComponentRegistryMetaRecord {
+                root: root.clone(),
+                prepared_against_registry: FleetRegistryVersion {
+                    authority: root.authority.clone(),
+                    revision: 4,
+                    content_hash: [5; 32],
+                },
+                release_set,
+                store_bootstrap: RootStoreBootstrapRequest {
+                    manifest_payload_size_bytes: 128,
+                },
+                next_allocation_sequence: 2,
+                reserved_component_instances: 0,
+                committed_component_instances: 1,
+                managed_descendants: 0,
+                known_created_component_canisters: 1,
+                encoded_bytes: partition.encoded_bytes,
+                initial_inventory: None,
+            }),
+            partitions: vec![partition.clone()],
+            ..RootComponentRegistryData::default()
+        });
+        let fleet = fleet_directory(&root);
+        let draining = ComponentRegistryOps::begin_component_draining(
+            component,
+            [99; 32],
+            component_registry_head(&partition),
+            100,
+            16_777_216,
+            fleet.clone(),
+        )
+        .expect("drain empty Component");
+        let draining_partition = ComponentRegistryOps::partition(component)
+            .expect("draining partition read")
+            .expect("draining partition");
+        let directory_authority = ComponentRuntimeDirectoryAuthority {
+            fleet: fleet.clone(),
+            component: ComponentDirectoryHead {
+                provenance: ComponentDirectoryProvenance {
+                    component: draining_partition.binding.clone(),
+                    source_fleet_subnet_root: draining_partition.binding.fleet_subnet_root,
+                    component_registry_revision: draining_partition.revision,
+                    component_registry_content_hash: draining_partition.content_hash,
+                    synchronized_at_ns: draining_partition.directory_synchronized_at_ns,
+                },
+                descendant_count: 0,
+            },
+        };
+        let authority_hash = ComponentRuntimeOps::directory_authority_hash(&directory_authority)
+            .expect("empty draining Directory authority hash");
+        ComponentRegistryOps::prepare_component_quiescence(
+            component,
+            draining.operation_id,
+            draining.registry.clone(),
+            ComponentRuntimeDirectoryConvergenceEvidence {
+                operation_id: [100; 32],
+                binding: ManagedCanisterBinding::Component(draining_partition.binding),
+                covered_authority: directory_authority,
+                covered_authority_hash: authority_hash,
+                activation: ComponentRuntimeActivationEvidence {
+                    directory_authority_hash: [101; 32],
+                    activated_at_ns: 102,
+                },
+            },
+            [103; 32],
+            110,
+            16_777_216,
+        )
+        .expect("prepare empty Component quiescence");
+        ComponentRegistryOps::mark_component_quiescent(
+            component,
+            draining.operation_id,
+            [103; 32],
+            111,
+        )
+        .expect("observe empty Component quiescence");
+        let partition = ComponentRegistryOps::partition(component)
+            .expect("quiescent partition read")
+            .expect("quiescent partition");
+        (partition, draining, fleet)
     }
 
     fn advance_install_to_verified(plan: &RootComponentInstallPlan, created_bytes: u64) -> u64 {

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.61` freezes exact empty Component Registry and current Fleet
+  Directory authority in a durable response-idempotent final-inventory receipt
+  before any top-level deletion may begin.
+
 - `0.100.60` adds a bounded deterministic drain driver that owns descendant
   subtree selection and advances one durable post-order phase per call until
   the quiescent Component has an exact empty-inventory observation.
