@@ -5,6 +5,8 @@
 //! Boundary: ops commit only exact authority and records already validated by workflow.
 
 #[cfg(feature = "root-control-plane")]
+use canic_core::impl_storable_bounded;
+#[cfg(feature = "root-control-plane")]
 use canic_core::{
     cdk::structures::{
         DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, cell::Cell, memory::VirtualMemory,
@@ -33,7 +35,6 @@ use canic_core::{
         CanisterRole, ComponentBinding, ComponentChildBinding, ComponentInstanceId,
         ComponentSpecId, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
     },
-    impl_storable_bounded,
 };
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "root-control-plane")]
@@ -1366,6 +1367,7 @@ pub enum RootComponentRegistryCommitOutcome {
 /// Exact stable compare-and-commit authority for one subtree fence and optional drain cursor.
 ///
 
+#[cfg(feature = "root-control-plane")]
 pub struct RootComponentSubtreeRemovalBeginCommit<'a> {
     pub expected_meta: &'a RootComponentRegistryMetaRecord,
     pub next_meta: RootComponentRegistryMetaRecord,
@@ -1377,6 +1379,7 @@ pub struct RootComponentSubtreeRemovalBeginCommit<'a> {
     pub next_draining: Option<RootComponentDrainingRecord>,
 }
 
+#[cfg(feature = "root-control-plane")]
 impl RootComponentSubtreeRemovalBeginCommit<'_> {
     fn draining_transition_is_valid(&self) -> bool {
         match (self.expected_draining, &self.next_draining) {
