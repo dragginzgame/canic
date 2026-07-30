@@ -519,6 +519,10 @@ impl RootComponentSubtreeRemovalRecord {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "stable progress retains complete inline receipts for deterministic replay"
+)]
 pub enum RootComponentSubtreeRemovalProgressRecord {
     Fenced,
     Traversing {
@@ -531,6 +535,7 @@ pub enum RootComponentSubtreeRemovalProgressRecord {
     Stopped(RootComponentSubtreeStoppedEffectRecord),
     DeleteIntent(RootComponentSubtreeDeleteEffectRecord),
     Deleted(RootComponentSubtreeDeletedEffectRecord),
+    MembershipRemoved(RootComponentSubtreeMembershipRemovedRecord),
 }
 
 ///
@@ -577,6 +582,30 @@ pub struct RootComponentSubtreeDeleteEffectRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentSubtreeDeletedEffectRecord {
     pub deletion: RootComponentSubtreeDeleteEffectRecord,
+}
+
+///
+/// RootComponentSubtreeMembershipRemovedRecord
+///
+/// Exact Registry transition retained after the independently deleted leaf is unregistered.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeMembershipRemovedRecord {
+    pub deleted: RootComponentSubtreeDeletedEffectRecord,
+    pub removed_from_registry: ComponentRegistryHead,
+    pub previous_descendant_content_hash: [u8; 32],
+    pub previous_committed_descendants: u32,
+    pub registry: ComponentRegistryHead,
+    pub descendant_content_hash: [u8; 32],
+    pub registry_encoded_bytes: u64,
+    pub reserved_descendants: u32,
+    pub committed_descendants: u32,
+    pub directory_synchronized_at_ns: u64,
+    pub directory_authority_hash: [u8; 32],
+    pub parent_role_instances: u32,
+    pub root_managed_descendants: u32,
+    pub root_known_created_component_canisters: u32,
 }
 
 ///
@@ -1862,6 +1891,217 @@ impl RootComponentRegistryStore {
                     partition_key,
                     ComponentRegistryEntryRecord::Partition(next_partition),
                 );
+            });
+            state.current = Some(next_meta);
+            cell.set(state);
+            Ok(())
+        })
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        clippy::too_many_lines,
+        reason = "one stable mutation compare-and-commits every normalized removal authority"
+    )]
+    pub(crate) fn remove_subtree_leaf_membership(
+        expected_meta: &RootComponentRegistryMetaRecord,
+        next_meta: RootComponentRegistryMetaRecord,
+        expected_partition: &ComponentRegistryPartitionRecord,
+        next_partition: ComponentRegistryPartitionRecord,
+        expected_record: &RootComponentSubtreeRemovalRecord,
+        next_record: RootComponentSubtreeRemovalRecord,
+        expected_child: &ComponentRegistryChildRecord,
+        expected_traversal: &ComponentRegistryChildTraversalRecord,
+        expected_parent_role_count: &ComponentRegistryParentRoleCountRecord,
+        next_parent_role_count: Option<ComponentRegistryParentRoleCountRecord>,
+    ) -> Result<(), RootComponentAllocationCommitError> {
+        let component = expected_record.component;
+        let operation_key =
+            ComponentRegistryEntryKey::subtree_removal(component, expected_record.operation_id);
+        let partition_key = ComponentRegistryEntryKey::partition(component);
+        let child_key = ComponentRegistryEntryKey::child(component, expected_child.canister_id);
+        let traversal_key = ComponentRegistryEntryKey::child_traversal(
+            component,
+            expected_traversal.parent_canister_id,
+            &expected_traversal.role,
+            expected_traversal.canister_id,
+        );
+        let count_key = ComponentRegistryEntryKey::parent_role_count(
+            component,
+            expected_child.parent_canister_id,
+            &expected_child.role,
+        );
+        let principal_key = ComponentRegistryPrincipalKey::from(expected_child.canister_id);
+        let child_authority = ComponentChildIndexAuthority::from_child(expected_child);
+        let traversal_authority = ComponentChildIndexAuthority::from_traversal(expected_traversal);
+        let parent_role_authority =
+            ComponentParentRoleAuthority::from_count(expected_parent_role_count);
+        let next_parent_role_is_valid = next_parent_role_count.as_ref().is_none_or(|next| {
+            ComponentParentRoleAuthority::from_count(next) == parent_role_authority
+                && next.instances.checked_add(1) == Some(expected_parent_role_count.instances)
+        });
+        let root_count_transition_is_valid = expected_meta.managed_descendants.checked_sub(1)
+            == Some(next_meta.managed_descendants)
+            && expected_meta
+                .known_created_component_canisters
+                .checked_sub(1)
+                == Some(next_meta.known_created_component_canisters);
+        let mut expected_next_meta = expected_meta.clone();
+        expected_next_meta.managed_descendants = next_meta.managed_descendants;
+        expected_next_meta.known_created_component_canisters =
+            next_meta.known_created_component_canisters;
+        expected_next_meta.encoded_bytes = next_meta.encoded_bytes;
+        let partition_transition_is_valid = expected_partition.revision.checked_add(1)
+            == Some(next_partition.revision)
+            && expected_partition.committed_descendants.checked_sub(1)
+                == Some(next_partition.committed_descendants)
+            && next_partition.directory_synchronized_at_ns
+                > expected_partition.directory_synchronized_at_ns
+            && next_partition.content_hash != [0; 32]
+            && next_partition.descendant_content_hash != [0; 32]
+            && next_partition.reserved_descendants == expected_partition.reserved_descendants
+            && next_partition.status == expected_partition.status;
+        let progress_transition_is_valid = match (&expected_record.progress, &next_record.progress)
+        {
+            (
+                RootComponentSubtreeRemovalProgressRecord::Deleted(deleted),
+                RootComponentSubtreeRemovalProgressRecord::MembershipRemoved(receipt),
+            ) => {
+                &receipt.deleted == deleted
+                    && receipt.removed_from_registry
+                        == (ComponentRegistryHead {
+                            component,
+                            revision: expected_partition.revision,
+                            content_hash: expected_partition.content_hash,
+                        })
+                    && receipt.previous_descendant_content_hash
+                        == expected_partition.descendant_content_hash
+                    && receipt.previous_committed_descendants
+                        == expected_partition.committed_descendants
+                    && receipt.registry
+                        == (ComponentRegistryHead {
+                            component,
+                            revision: next_partition.revision,
+                            content_hash: next_partition.content_hash,
+                        })
+                    && receipt.descendant_content_hash == next_partition.descendant_content_hash
+                    && receipt.registry_encoded_bytes == next_partition.encoded_bytes
+                    && receipt.reserved_descendants == next_partition.reserved_descendants
+                    && receipt.committed_descendants == next_partition.committed_descendants
+                    && receipt.directory_synchronized_at_ns
+                        == next_partition.directory_synchronized_at_ns
+                    && receipt.directory_authority_hash != [0; 32]
+                    && receipt.parent_role_instances
+                        == next_parent_role_count
+                            .as_ref()
+                            .map_or(0, |count| count.instances)
+                    && receipt.root_managed_descendants == next_meta.managed_descendants
+                    && receipt.root_known_created_component_canisters
+                        == next_meta.known_created_component_canisters
+            }
+            _ => false,
+        };
+        if !next_record.has_same_fence(expected_record)
+            || next_record.traversal_steps != expected_record.traversal_steps
+            || ComponentPartitionStableAuthority::from(&next_partition)
+                != ComponentPartitionStableAuthority::from(expected_partition)
+            || child_authority != traversal_authority
+            || parent_role_authority
+                != (ComponentParentRoleAuthority {
+                    component: &expected_child.component,
+                    parent_canister_id: &expected_child.parent_canister_id,
+                    child_role: &expected_child.role,
+                })
+            || expected_parent_role_count.instances == 0
+            || (expected_parent_role_count.instances == 1) != next_parent_role_count.is_none()
+            || !next_parent_role_is_valid
+            || !root_count_transition_is_valid
+            || next_meta != expected_next_meta
+            || !partition_transition_is_valid
+            || !progress_transition_is_valid
+        {
+            return Err(RootComponentAllocationCommitError::ConflictingChildEntry);
+        }
+
+        ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            let current_meta = state
+                .current
+                .as_ref()
+                .ok_or(RootComponentAllocationCommitError::Uninitialized)?;
+            if current_meta != expected_meta {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            let (
+                current_partition,
+                current_record,
+                current_child,
+                current_traversal,
+                current_count,
+            ) = COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+                let partition = map.get(&partition_key).and_then(|entry| match entry {
+                    ComponentRegistryEntryRecord::Partition(record) => Some(record),
+                    _ => None,
+                });
+                let record = map.get(&operation_key).and_then(|entry| match entry {
+                    ComponentRegistryEntryRecord::SubtreeRemoval(record) => Some(record),
+                    _ => None,
+                });
+                let child = map.get(&child_key).and_then(|entry| match entry {
+                    ComponentRegistryEntryRecord::Child(record) => Some(record),
+                    _ => None,
+                });
+                let traversal = map.get(&traversal_key).and_then(|entry| match entry {
+                    ComponentRegistryEntryRecord::ChildTraversal(record) => Some(record),
+                    _ => None,
+                });
+                let count = map.get(&count_key).and_then(|entry| match entry {
+                    ComponentRegistryEntryRecord::ParentRoleCount(record) => Some(record),
+                    _ => None,
+                });
+                (partition, record, child, traversal, count)
+            });
+            if current_partition.as_ref() != Some(expected_partition)
+                || current_record.as_ref() != Some(expected_record)
+                || current_child.as_ref() != Some(expected_child)
+                || current_traversal.as_ref() != Some(expected_traversal)
+                || current_count.as_ref() != Some(expected_parent_role_count)
+            {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            if COMPONENT_REGISTRY_PRINCIPAL_INDEX
+                .with_borrow(|map| map.get(&principal_key))
+                .map(|indexed| indexed.component)
+                != Some(component)
+            {
+                return Err(RootComponentAllocationCommitError::ComponentPrincipalConflict);
+            }
+
+            COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
+                map.insert(
+                    operation_key,
+                    ComponentRegistryEntryRecord::SubtreeRemoval(next_record),
+                );
+                map.insert(
+                    partition_key,
+                    ComponentRegistryEntryRecord::Partition(next_partition),
+                );
+                map.remove(&child_key);
+                map.remove(&traversal_key);
+                match next_parent_role_count {
+                    Some(next) => {
+                        map.insert(
+                            count_key,
+                            ComponentRegistryEntryRecord::ParentRoleCount(next),
+                        );
+                    }
+                    None => {
+                        map.remove(&count_key);
+                    }
+                }
+            });
+            COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow_mut(|map| {
+                map.remove(&principal_key);
             });
             state.current = Some(next_meta);
             cell.set(state);

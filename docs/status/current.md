@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.53`.
-- The latest published release is `v0.100.53` at
-  `2353403ff5862da4f2b4ab8292318009a2a99ab3`.
-- Open `0.100.54` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.54`.
+- The latest published release is `v0.100.54` at
+  `39ac025f1d33424f29cd4a388a1b51d49969f1f0`.
+- Open `0.100.55` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -463,6 +463,14 @@ Historical detail is archived at:
 - Released `0.100.53` freezes the complete stopped receipt as exact deletion
   authority, adopts a target already absent or re-observes it after the
   destructive call, and commits `Deleted` only from typed live absence.
+- Released `0.100.54` adopts `ic-memory 0.12.1` as the sole memory-runtime
+  owner, removes Canic's duplicate diagnostic manager and advances host-only
+  `ic-query` to `0.14.1` without changing stable keys, memory IDs or the
+  embedded Subnet Catalog boundary.
+- Open `0.100.55` atomically removes one independently deleted childless leaf
+  from live Registry membership, settles its exact normalized indexes,
+  counters, digest and byte ledgers, and freezes both Registry heads plus the
+  next Directory-authority hash in a durable receipt.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1891,20 +1899,25 @@ error. Only typed live absence commits the durable `Deleted` receipt. Registry
 membership, traversal indexes, parent-role counts, descendant capacity and
 Directory authority remain unchanged.
 
-Open `0.100.54` advances `ic-memory` to `0.12.1`, makes its explicit default
-runtime the sole owner of bootstrap, committed opens and allocation-ledger
-diagnostics, and binds repeated bootstrap to Canic's v1 policy identity.
-Canic's duplicate diagnostic manager and ledger cell are removed without
-changing durable ledger bytes, stable keys or memory IDs. The concurrent
-host-only `ic-query 0.14.1` update adopts its renamed `cache_root` request
-contract while retaining Canic's explicit embedded cache boundary.
+Released `0.100.54` advances `ic-memory` to `0.12.1`, makes its explicit
+default runtime the sole owner of bootstrap, committed opens and
+allocation-ledger diagnostics, and advances host-only `ic-query` to `0.14.1`.
+The dependency changes preserve durable memory authority and Canic's embedded
+Subnet Catalog evidence boundary.
 
-Next, atomically remove that independently deleted leaf from its exact
-Component Registry partition and indexes, decrement its retained parent-role,
-Component-descendant and root managed-Canister accounting, and preserve a
-durable membership-removal receipt before advancing the traversal cursor to
-the retained parent. Directory publication remains its own following
-transition; a parent must never be removed while a child row remains. Managed
+Open `0.100.55` atomically removes the independently deleted childless leaf
+from its exact Component Registry child, traversal and principal indexes. It
+settles parent-role, Component-descendant and root managed/known-created
+Canister counts, advances the domain-separated Component head, converges exact
+Component/root byte ledgers and retains one immutable membership-removal
+receipt with both Registry heads and the next exact Directory-authority hash.
+Completed allocation history remains available for replay; that Directory
+authority is not yet published.
+
+Next, publish and independently verify the membership-removed Component head
+through its current Directory, retain that convergence receipt, then return
+the traversal cursor to the exact retained parent for the next post-order
+selection. A parent must never be removed while a child row remains. Managed
 application Canisters must not perform management effects or infer
 authorization from flat catalog presence.
 

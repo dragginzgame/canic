@@ -38,6 +38,8 @@ pub const CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_DELETE_PREPARE: &str =
     "canic_root_component_subtree_removal_delete_prepare";
 pub const CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_DELETE: &str =
     "canic_root_component_subtree_removal_delete";
+pub const CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_MEMBERSHIP_REMOVE: &str =
+    "canic_root_component_subtree_removal_membership_remove";
 pub const CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STATUS: &str =
     "canic_root_component_subtree_removal_status";
 pub const CANIC_ROOT_COMPONENT_CHILD_CREATE: &str = "canic_root_component_child_create";

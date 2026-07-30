@@ -6,10 +6,10 @@ Date: 2026-07-30
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.53`.
-- Latest published release: `v0.100.53` at
-  `2353403ff5862da4f2b4ab8292318009a2a99ab3`.
-- Open patch draft: `0.100.54`; no package-version change has been authorized.
+- Workspace package version: `0.100.54`.
+- Latest published release: `v0.100.54` at
+  `39ac025f1d33424f29cd4a388a1b51d49969f1f0`.
+- Open patch draft: `0.100.55`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -768,21 +768,30 @@ an uncertain error. Only typed live absence commits the durable `Deleted`
 receipt. Registry membership, traversal indexes, parent-role counts,
 descendant capacity and Directory authority remain unchanged.
 
-Open 0.100.54 advances `ic-memory` to `0.12.1` and makes its explicit default
-runtime the sole owner of bootstrap, committed opens and allocation-ledger
-diagnostics. Canic supplies a stable v1 bootstrap-policy identity and removes
-its duplicate diagnostic memory manager and ledger cell without changing
-durable ledger bytes, stable keys or memory IDs. The concurrent host-only
-`ic-query 0.14.1` update adopts its renamed `cache_root` request contract
-without changing the embedded Subnet Catalog evidence boundary.
+Released 0.100.54 advances `ic-memory` to `0.12.1` and makes its explicit
+default runtime the sole owner of bootstrap, committed opens and
+allocation-ledger diagnostics. Canic supplies a stable v1 bootstrap-policy
+identity and removes its duplicate diagnostic memory manager and ledger cell
+without changing durable ledger bytes, stable keys or memory IDs. The
+concurrent host-only `ic-query 0.14.1` update adopts its renamed `cache_root`
+request contract without changing the embedded Subnet Catalog evidence
+boundary.
+
+Open 0.100.55 atomically removes the independently deleted childless leaf from
+its exact normalized child, traversal and principal indexes. The same stable
+compare-and-commit settles its parent-role count, Component committed
+descendants, root managed and known-created Canister counts, next
+domain-separated Component head and exact Component/root byte ledgers. Its
+immutable `MembershipRemoved` receipt retains complete deletion authority and
+both Registry heads plus the next exact Directory-authority hash against the
+active Fleet Directory. Completed allocation history remains available for
+replay; no Directory publication occurs in this transition.
 
 ## Next Action
 
-Atomically remove the independently deleted leaf from its exact Component
-Registry partition and normalized indexes, decrement parent-role,
-Component-descendant and root managed-Canister accounting, and retain a
-durable membership-removal receipt before returning the traversal cursor to
-the exact retained parent. Directory publication remains a later transition.
-Never remove a parent while a child row remains. Do not introduce nested
-Component declarations, let application Canisters call management effects
-directly or infer authorization from catalog presence alone.
+Publish and independently verify the membership-removed Component head through
+its current Directory, retain that convergence receipt, then return the
+traversal cursor to the exact retained parent for the next post-order
+selection. Never remove a parent while a child row remains. Do not introduce
+nested Component declarations, let application Canisters call management
+effects directly or infer authorization from catalog presence alone.
