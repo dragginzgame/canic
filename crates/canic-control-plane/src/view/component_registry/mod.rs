@@ -11,6 +11,7 @@ use canic_core::{
     dto::{
         component_registry::{
             ComponentLifecycleStatus, ComponentProvisioningOrigin, ComponentRegistryHead,
+            ComponentRuntimeActivationEvidence,
         },
         fleet_registry::FleetRegistryVersion,
         root_store::RootStoreBootstrapRequest,
@@ -183,6 +184,7 @@ pub enum RootComponentSubtreeRemovalProgressView {
     DeleteIntent(RootComponentSubtreeDeleteEffectView),
     Deleted(RootComponentSubtreeDeletedEffectView),
     MembershipRemoved(RootComponentSubtreeMembershipRemovedView),
+    DirectorySynchronized(RootComponentSubtreeDirectorySynchronizedView),
 }
 
 ///
@@ -269,6 +271,36 @@ pub struct RootComponentSubtreeMembershipRemovedView {
     pub parent_role_instances: u32,
     pub root_managed_descendants: u32,
     pub root_known_created_component_canisters: u32,
+}
+
+///
+/// RootComponentSubtreeDirectoryConvergenceView
+///
+/// Read-only compact proof that one surviving member covered the required Directory.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentSubtreeDirectoryConvergenceView {
+    pub operation_id: [u8; 32],
+    pub canister_id: Principal,
+    pub activation: ComponentRuntimeActivationEvidence,
+}
+
+///
+/// RootComponentSubtreeDirectorySynchronizedView
+///
+/// Read-only membership removal plus surviving-member convergence receipt.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentSubtreeDirectorySynchronizedView {
+    pub membership_removed: RootComponentSubtreeMembershipRemovedView,
+    pub covered_fleet_registry_revision: u64,
+    pub covered_fleet_registry_content_hash: [u8; 32],
+    pub covered_component_registry: ComponentRegistryHead,
+    pub covered_authority_hash: [u8; 32],
+    pub owning_component: RootComponentSubtreeDirectoryConvergenceView,
+    pub parent: Option<RootComponentSubtreeDirectoryConvergenceView>,
 }
 
 ///

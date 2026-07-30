@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.56` converges the post-removal Component Directory on the surviving
+  owner and distinct immediate parent, retaining bounded independently
+  observed evidence before traversal resumes, and advances the sole memory
+  runtime to `ic-memory 0.12.3`.
+
 - `0.100.55` atomically removes an independently deleted subtree leaf from
   live Registry membership and normalized indexes, settling exact counters,
   hashes and byte ledgers into a durable replay-safe receipt.

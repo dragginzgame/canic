@@ -17,6 +17,8 @@ use crate::{
         RootComponentMembershipRecord, RootComponentRegistryCommitError,
         RootComponentRegistryMetaRecord, RootComponentRegistryStore,
         RootComponentSubtreeDeleteEffectRecord, RootComponentSubtreeDeletedEffectRecord,
+        RootComponentSubtreeDirectoryConvergenceRecord,
+        RootComponentSubtreeDirectorySynchronizedRecord,
         RootComponentSubtreeMembershipRemovedRecord, RootComponentSubtreeRemovalProgressRecord,
         RootComponentSubtreeRemovalRecord, RootComponentSubtreeStopEffectRecord,
         RootComponentSubtreeStoppedEffectRecord,
@@ -32,9 +34,11 @@ use crate::{
         RootComponentInitialInventoryView, RootComponentInstallEffectView,
         RootComponentMembershipView, RootComponentRegistryView,
         RootComponentSubtreeDeleteEffectView, RootComponentSubtreeDeletedEffectView,
-        RootComponentSubtreeMembershipRemovedView, RootComponentSubtreeRemovalNodeView,
-        RootComponentSubtreeRemovalProgressView, RootComponentSubtreeRemovalView,
-        RootComponentSubtreeStopEffectView, RootComponentSubtreeStoppedEffectView,
+        RootComponentSubtreeDirectoryConvergenceView,
+        RootComponentSubtreeDirectorySynchronizedView, RootComponentSubtreeMembershipRemovedView,
+        RootComponentSubtreeRemovalNodeView, RootComponentSubtreeRemovalProgressView,
+        RootComponentSubtreeRemovalView, RootComponentSubtreeStopEffectView,
+        RootComponentSubtreeStoppedEffectView,
     },
 };
 use candid::CandidType;
@@ -54,6 +58,7 @@ use canic_core::{
         component_registry::{
             ComponentDirectoryHead, ComponentDirectoryProvenance, ComponentLifecycleStatus,
             ComponentProvisioningOrigin, ComponentRegistryHead, ComponentRuntimeDirectoryAuthority,
+            ComponentRuntimeDirectoryConvergenceEvidence,
         },
         fleet_registry::{FleetDirectorySnapshot, FleetRegistryVersion},
         root_store::RootStoreBootstrapRequest,
@@ -498,6 +503,9 @@ const fn retained_subtree_stop_effect(
         RootComponentSubtreeRemovalProgressRecord::MembershipRemoved(receipt) => {
             Some(&receipt.deleted.deletion.stopped.stop)
         }
+        RootComponentSubtreeRemovalProgressRecord::DirectorySynchronized(receipt) => {
+            Some(&receipt.membership_removed.deleted.deletion.stopped.stop)
+        }
         RootComponentSubtreeRemovalProgressRecord::Fenced
         | RootComponentSubtreeRemovalProgressRecord::Traversing { .. }
         | RootComponentSubtreeRemovalProgressRecord::LeafSelected { .. } => None,
@@ -518,10 +526,33 @@ const fn retained_subtree_stopped_effect(
         RootComponentSubtreeRemovalProgressRecord::MembershipRemoved(receipt) => {
             Some(&receipt.deleted.deletion.stopped)
         }
+        RootComponentSubtreeRemovalProgressRecord::DirectorySynchronized(receipt) => {
+            Some(&receipt.membership_removed.deleted.deletion.stopped)
+        }
         RootComponentSubtreeRemovalProgressRecord::Fenced
         | RootComponentSubtreeRemovalProgressRecord::Traversing { .. }
         | RootComponentSubtreeRemovalProgressRecord::LeafSelected { .. }
         | RootComponentSubtreeRemovalProgressRecord::StopIntent(_) => None,
+    }
+}
+
+const fn retained_subtree_deleted_effect(
+    progress: &RootComponentSubtreeRemovalProgressRecord,
+) -> Option<&RootComponentSubtreeDeletedEffectRecord> {
+    match progress {
+        RootComponentSubtreeRemovalProgressRecord::Deleted(receipt) => Some(receipt),
+        RootComponentSubtreeRemovalProgressRecord::MembershipRemoved(receipt) => {
+            Some(&receipt.deleted)
+        }
+        RootComponentSubtreeRemovalProgressRecord::DirectorySynchronized(receipt) => {
+            Some(&receipt.membership_removed.deleted)
+        }
+        RootComponentSubtreeRemovalProgressRecord::Fenced
+        | RootComponentSubtreeRemovalProgressRecord::Traversing { .. }
+        | RootComponentSubtreeRemovalProgressRecord::LeafSelected { .. }
+        | RootComponentSubtreeRemovalProgressRecord::StopIntent(_)
+        | RootComponentSubtreeRemovalProgressRecord::Stopped(_)
+        | RootComponentSubtreeRemovalProgressRecord::DeleteIntent(_) => None,
     }
 }
 
@@ -1655,6 +1686,7 @@ impl ComponentRegistryOps {
                 | RootComponentSubtreeRemovalProgressRecord::DeleteIntent(_)
                 | RootComponentSubtreeRemovalProgressRecord::Deleted(_)
                 | RootComponentSubtreeRemovalProgressRecord::MembershipRemoved(_)
+                | RootComponentSubtreeRemovalProgressRecord::DirectorySynchronized(_)
         ) {
             return Ok(subtree_removal_record_to_view(record));
         }
@@ -1669,7 +1701,8 @@ impl ComponentRegistryOps {
                 | RootComponentSubtreeRemovalProgressRecord::Stopped(_)
                 | RootComponentSubtreeRemovalProgressRecord::DeleteIntent(_)
                 | RootComponentSubtreeRemovalProgressRecord::Deleted(_)
-                | RootComponentSubtreeRemovalProgressRecord::MembershipRemoved(_) => break,
+                | RootComponentSubtreeRemovalProgressRecord::MembershipRemoved(_)
+                | RootComponentSubtreeRemovalProgressRecord::DirectorySynchronized(_) => break,
             };
             next_record.progress = match first_registered_child(&partition, cursor.canister_id)? {
                 Some(child) => {
@@ -1979,6 +2012,18 @@ impl ComponentRegistryOps {
                     "Component subtree deletion preparation differs from durable membership-removal receipt",
                 ));
             }
+            RootComponentSubtreeRemovalProgressRecord::DirectorySynchronized(receipt) => {
+                if SubtreeLeafStopAuthority::from_record(
+                    record.traversal_steps,
+                    &receipt.membership_removed.deleted.deletion.stopped.stop,
+                ) == expected_stop
+                {
+                    return Ok(subtree_removal_record_to_view(record));
+                }
+                return Err(InternalError::conflict(
+                    "Component subtree deletion preparation differs from durable Directory receipt",
+                ));
+            }
             RootComponentSubtreeRemovalProgressRecord::Fenced
             | RootComponentSubtreeRemovalProgressRecord::Traversing { .. }
             | RootComponentSubtreeRemovalProgressRecord::LeafSelected { .. }
@@ -2057,41 +2102,23 @@ impl ComponentRegistryOps {
             ),
             current.root.fleet_subnet_root,
         );
-        let deletion = match &record.progress {
-            RootComponentSubtreeRemovalProgressRecord::DeleteIntent(deletion) => deletion,
-            RootComponentSubtreeRemovalProgressRecord::Deleted(receipt) => {
-                let durable_stop = SubtreeLeafStopAuthority::from_record(
-                    record.traversal_steps,
-                    &receipt.deletion.stopped.stop,
-                );
-                if durable_stop == expected_stop {
-                    return Ok(subtree_removal_record_to_view(record));
-                }
-                return Err(InternalError::conflict(
-                    "Component subtree deleted observation differs from durable receipt",
-                ));
-            }
-            RootComponentSubtreeRemovalProgressRecord::MembershipRemoved(receipt) => {
-                let durable_stop = SubtreeLeafStopAuthority::from_record(
-                    record.traversal_steps,
-                    &receipt.deleted.deletion.stopped.stop,
-                );
-                if durable_stop == expected_stop {
-                    return Ok(subtree_removal_record_to_view(record));
-                }
-                return Err(InternalError::conflict(
-                    "Component subtree deleted observation differs from durable membership-removal receipt",
-                ));
-            }
-            RootComponentSubtreeRemovalProgressRecord::Fenced
-            | RootComponentSubtreeRemovalProgressRecord::Traversing { .. }
-            | RootComponentSubtreeRemovalProgressRecord::LeafSelected { .. }
-            | RootComponentSubtreeRemovalProgressRecord::StopIntent(_)
-            | RootComponentSubtreeRemovalProgressRecord::Stopped(_) => {
+        let RootComponentSubtreeRemovalProgressRecord::DeleteIntent(deletion) = &record.progress
+        else {
+            let Some(receipt) = retained_subtree_deleted_effect(&record.progress) else {
                 return Err(InternalError::unavailable(
                     "Component subtree leaf has no durable deletion intent",
                 ));
+            };
+            let durable_stop = SubtreeLeafStopAuthority::from_record(
+                record.traversal_steps,
+                &receipt.deletion.stopped.stop,
+            );
+            if durable_stop == expected_stop {
+                return Ok(subtree_removal_record_to_view(record));
             }
+            return Err(InternalError::conflict(
+                "Component subtree deleted observation differs from durable receipt",
+            ));
         };
         if SubtreeLeafStopAuthority::from_record(record.traversal_steps, &deletion.stopped.stop)
             != expected_stop
@@ -2178,6 +2205,24 @@ impl ComponentRegistryOps {
                 }
                 return Err(InternalError::conflict(
                     "Component subtree membership removal differs from durable authority",
+                ));
+            }
+            RootComponentSubtreeRemovalProgressRecord::DirectorySynchronized(receipt) => {
+                let durable_selection = SubtreeLeafSelection::from_record(
+                    record.traversal_steps,
+                    &receipt
+                        .membership_removed
+                        .deleted
+                        .deletion
+                        .stopped
+                        .stop
+                        .leaf,
+                );
+                if durable_selection == expected_selection {
+                    return Ok(subtree_removal_record_to_view(record));
+                }
+                return Err(InternalError::conflict(
+                    "Component subtree membership removal differs from durable Directory authority",
                 ));
             }
             RootComponentSubtreeRemovalProgressRecord::Fenced
@@ -2362,6 +2407,128 @@ impl ComponentRegistryOps {
             &traversal,
             &parent_role_count,
             next_parent_role_count,
+        )
+        .map_err(map_allocation_commit_error)?;
+        Ok(subtree_removal_record_to_view(next_record))
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        clippy::too_many_lines,
+        reason = "the exact leaf selection and both independently observed recipients are one durable transition"
+    )]
+    pub(crate) fn mark_subtree_leaf_directory_synchronized(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        expected_traversal_steps: u32,
+        expected_leaf_canister_id: Principal,
+        expected_leaf_parent_canister_id: Principal,
+        owning_component: ComponentRuntimeDirectoryConvergenceEvidence,
+        parent: Option<ComponentRuntimeDirectoryConvergenceEvidence>,
+        maximum_component_registry_bytes: u64,
+    ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
+        let record = RootComponentRegistryStore::subtree_removal(component, operation_id)
+            .ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component subtree-removal operation has not been durably fenced",
+                )
+            })?;
+        validate_subtree_removal_record(&record)?;
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        validate_subtree_removal_root(&record, &current.root)?;
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        validate_partition_record(&partition)?;
+        validate_subtree_removal_progress(&partition, &record)?;
+
+        let expected_selection = SubtreeLeafSelection::new(
+            expected_traversal_steps,
+            expected_leaf_canister_id,
+            expected_leaf_parent_canister_id,
+        );
+        let membership_removed = match &record.progress {
+            RootComponentSubtreeRemovalProgressRecord::MembershipRemoved(receipt) => receipt,
+            RootComponentSubtreeRemovalProgressRecord::DirectorySynchronized(receipt) => {
+                let durable_selection = SubtreeLeafSelection::from_record(
+                    record.traversal_steps,
+                    &receipt
+                        .membership_removed
+                        .deleted
+                        .deletion
+                        .stopped
+                        .stop
+                        .leaf,
+                );
+                if durable_selection == expected_selection {
+                    return Ok(subtree_removal_record_to_view(record));
+                }
+                return Err(InternalError::conflict(
+                    "Component subtree Directory synchronization differs from durable authority",
+                ));
+            }
+            RootComponentSubtreeRemovalProgressRecord::Fenced
+            | RootComponentSubtreeRemovalProgressRecord::Traversing { .. }
+            | RootComponentSubtreeRemovalProgressRecord::LeafSelected { .. }
+            | RootComponentSubtreeRemovalProgressRecord::StopIntent(_)
+            | RootComponentSubtreeRemovalProgressRecord::Stopped(_)
+            | RootComponentSubtreeRemovalProgressRecord::DeleteIntent(_)
+            | RootComponentSubtreeRemovalProgressRecord::Deleted(_) => {
+                return Err(InternalError::unavailable(
+                    "Component subtree leaf membership has not been removed",
+                ));
+            }
+        };
+        let leaf = &membership_removed.deleted.deletion.stopped.stop.leaf;
+        if SubtreeLeafSelection::from_record(record.traversal_steps, leaf) != expected_selection {
+            return Err(InternalError::conflict(
+                "Component subtree Directory synchronization differs from the removed leaf",
+            ));
+        }
+
+        let owning_binding = ManagedCanisterBinding::Component(partition.binding.clone());
+        let (coverage, owning_component) =
+            subtree_directory_convergence_record(&partition, &owning_binding, owning_component)?;
+        let parent = subtree_directory_parent_convergence_record(
+            &partition,
+            component,
+            leaf.parent_canister_id,
+            parent,
+            &coverage,
+        )?;
+
+        let mut next_record = record.clone();
+        next_record.progress = RootComponentSubtreeRemovalProgressRecord::DirectorySynchronized(
+            RootComponentSubtreeDirectorySynchronizedRecord {
+                membership_removed: membership_removed.clone(),
+                covered_fleet_registry_revision: coverage.fleet_registry_revision,
+                covered_fleet_registry_content_hash: coverage.fleet_registry_content_hash,
+                covered_component_registry_revision: coverage.component_registry_revision,
+                covered_component_registry_content_hash: coverage.component_registry_content_hash,
+                covered_authority_hash: coverage.authority_hash,
+                owning_component,
+                parent,
+            },
+        );
+        validate_subtree_removal_record(&next_record)?;
+        validate_subtree_removal_root(&next_record, &current.root)?;
+        validate_subtree_removal_progress(&partition, &next_record)?;
+        let (next_partition, next_meta) = subtree_removal_progress_state(
+            &current,
+            &partition,
+            &record,
+            &next_record,
+            maximum_component_registry_bytes,
+        )?;
+        RootComponentRegistryStore::replace_subtree_removal(
+            &current,
+            next_meta,
+            &partition,
+            next_partition,
+            &record,
+            next_record.clone(),
         )
         .map_err(map_allocation_commit_error)?;
         Ok(subtree_removal_record_to_view(next_record))
@@ -4263,26 +4430,30 @@ fn subtree_removal_record_to_view(
             }
             RootComponentSubtreeRemovalProgressRecord::MembershipRemoved(receipt) => {
                 RootComponentSubtreeRemovalProgressView::MembershipRemoved(
-                    RootComponentSubtreeMembershipRemovedView {
-                        deleted: RootComponentSubtreeDeletedEffectView {
-                            deletion: subtree_delete_effect_record_to_view(
-                                receipt.deleted.deletion,
-                            ),
+                    subtree_membership_removed_record_to_view(receipt),
+                )
+            }
+            RootComponentSubtreeRemovalProgressRecord::DirectorySynchronized(receipt) => {
+                RootComponentSubtreeRemovalProgressView::DirectorySynchronized(
+                    RootComponentSubtreeDirectorySynchronizedView {
+                        membership_removed: subtree_membership_removed_record_to_view(
+                            receipt.membership_removed,
+                        ),
+                        covered_fleet_registry_revision: receipt.covered_fleet_registry_revision,
+                        covered_fleet_registry_content_hash: receipt
+                            .covered_fleet_registry_content_hash,
+                        covered_component_registry: ComponentRegistryHead {
+                            component: record.component,
+                            revision: receipt.covered_component_registry_revision,
+                            content_hash: receipt.covered_component_registry_content_hash,
                         },
-                        removed_from_registry: receipt.removed_from_registry,
-                        previous_descendant_content_hash: receipt.previous_descendant_content_hash,
-                        previous_committed_descendants: receipt.previous_committed_descendants,
-                        registry: receipt.registry,
-                        descendant_content_hash: receipt.descendant_content_hash,
-                        registry_encoded_bytes: receipt.registry_encoded_bytes,
-                        reserved_descendants: receipt.reserved_descendants,
-                        committed_descendants: receipt.committed_descendants,
-                        directory_synchronized_at_ns: receipt.directory_synchronized_at_ns,
-                        directory_authority_hash: receipt.directory_authority_hash,
-                        parent_role_instances: receipt.parent_role_instances,
-                        root_managed_descendants: receipt.root_managed_descendants,
-                        root_known_created_component_canisters: receipt
-                            .root_known_created_component_canisters,
+                        covered_authority_hash: receipt.covered_authority_hash,
+                        owning_component: subtree_directory_convergence_record_to_view(
+                            receipt.owning_component,
+                        ),
+                        parent: receipt
+                            .parent
+                            .map(subtree_directory_convergence_record_to_view),
                     },
                 )
             }
@@ -4320,6 +4491,39 @@ fn subtree_delete_effect_record_to_view(
 ) -> RootComponentSubtreeDeleteEffectView {
     RootComponentSubtreeDeleteEffectView {
         stopped: subtree_stopped_effect_record_to_view(record.stopped),
+    }
+}
+
+fn subtree_membership_removed_record_to_view(
+    receipt: RootComponentSubtreeMembershipRemovedRecord,
+) -> RootComponentSubtreeMembershipRemovedView {
+    RootComponentSubtreeMembershipRemovedView {
+        deleted: RootComponentSubtreeDeletedEffectView {
+            deletion: subtree_delete_effect_record_to_view(receipt.deleted.deletion),
+        },
+        removed_from_registry: receipt.removed_from_registry,
+        previous_descendant_content_hash: receipt.previous_descendant_content_hash,
+        previous_committed_descendants: receipt.previous_committed_descendants,
+        registry: receipt.registry,
+        descendant_content_hash: receipt.descendant_content_hash,
+        registry_encoded_bytes: receipt.registry_encoded_bytes,
+        reserved_descendants: receipt.reserved_descendants,
+        committed_descendants: receipt.committed_descendants,
+        directory_synchronized_at_ns: receipt.directory_synchronized_at_ns,
+        directory_authority_hash: receipt.directory_authority_hash,
+        parent_role_instances: receipt.parent_role_instances,
+        root_managed_descendants: receipt.root_managed_descendants,
+        root_known_created_component_canisters: receipt.root_known_created_component_canisters,
+    }
+}
+
+const fn subtree_directory_convergence_record_to_view(
+    evidence: RootComponentSubtreeDirectoryConvergenceRecord,
+) -> RootComponentSubtreeDirectoryConvergenceView {
+    RootComponentSubtreeDirectoryConvergenceView {
+        operation_id: evidence.operation_id,
+        canister_id: evidence.canister_id,
+        activation: evidence.activation,
     }
 }
 
@@ -6389,6 +6593,114 @@ fn validate_registered_child_record(
     Ok(())
 }
 
+#[derive(Debug, Eq, PartialEq)]
+struct SubtreeDirectoryCoverage {
+    fleet_registry_revision: u64,
+    fleet_registry_content_hash: [u8; 32],
+    component_registry_revision: u64,
+    component_registry_content_hash: [u8; 32],
+    authority_hash: [u8; 32],
+}
+
+const fn managed_canister_principal(binding: &ManagedCanisterBinding) -> Principal {
+    match binding {
+        ManagedCanisterBinding::Component(component) => component.canister_id,
+        ManagedCanisterBinding::ComponentChild(child) => child.canister_id,
+    }
+}
+
+fn subtree_directory_convergence_record(
+    partition: &ComponentRegistryPartitionRecord,
+    expected_binding: &ManagedCanisterBinding,
+    evidence: ComponentRuntimeDirectoryConvergenceEvidence,
+) -> Result<
+    (
+        SubtreeDirectoryCoverage,
+        RootComponentSubtreeDirectoryConvergenceRecord,
+    ),
+    InternalError,
+> {
+    let authority = &evidence.covered_authority;
+    let directory = &authority.component;
+    let provenance = &directory.provenance;
+    let expected_hash = ComponentRuntimeOps::directory_authority_hash(authority)?;
+    let evidence_is_exact = evidence.operation_id != [0; 32]
+        && evidence.binding == *expected_binding
+        && authority.fleet.provenance.source_fleet_subnet_root
+            == partition.binding.fleet_subnet_root
+        && provenance.component == partition.binding
+        && provenance.source_fleet_subnet_root == partition.binding.fleet_subnet_root
+        && provenance.component_registry_revision == partition.revision
+        && provenance.component_registry_content_hash == partition.content_hash
+        && provenance.synchronized_at_ns == partition.directory_synchronized_at_ns
+        && directory.descendant_count == partition.committed_descendants
+        && evidence.covered_authority_hash != [0; 32]
+        && evidence.covered_authority_hash == expected_hash
+        && evidence.activation.directory_authority_hash != [0; 32]
+        && evidence.activation.activated_at_ns > 0;
+    if !evidence_is_exact {
+        return Err(InternalError::conflict(
+            "Component subtree Directory evidence differs from current protected authority",
+        ));
+    }
+    Ok((
+        SubtreeDirectoryCoverage {
+            fleet_registry_revision: authority.fleet.provenance.registry.revision,
+            fleet_registry_content_hash: authority.fleet.provenance.registry.content_hash,
+            component_registry_revision: partition.revision,
+            component_registry_content_hash: partition.content_hash,
+            authority_hash: evidence.covered_authority_hash,
+        },
+        RootComponentSubtreeDirectoryConvergenceRecord {
+            operation_id: evidence.operation_id,
+            canister_id: managed_canister_principal(&evidence.binding),
+            activation: evidence.activation,
+        },
+    ))
+}
+
+fn subtree_directory_parent_convergence_record(
+    partition: &ComponentRegistryPartitionRecord,
+    component: ComponentInstanceId,
+    parent_canister_id: Principal,
+    evidence: Option<ComponentRuntimeDirectoryConvergenceEvidence>,
+    expected_coverage: &SubtreeDirectoryCoverage,
+) -> Result<Option<RootComponentSubtreeDirectoryConvergenceRecord>, InternalError> {
+    if parent_canister_id == partition.binding.canister_id {
+        return if evidence.is_none() {
+            Ok(None)
+        } else {
+            Err(InternalError::conflict(
+                "top-level Component parent must not have duplicate Directory evidence",
+            ))
+        };
+    }
+    let (binding, status) = ComponentRegistryOps::registered_parent(component, parent_canister_id)?
+        .ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "removed subtree leaf has no retained registered parent",
+            )
+        })?;
+    if status != ComponentLifecycleStatus::Active {
+        return Err(InternalError::conflict(
+            "removed subtree leaf parent is not Active",
+        ));
+    }
+    let evidence = evidence.ok_or_else(|| {
+        InternalError::unavailable(
+            "removed subtree leaf parent has no Directory convergence evidence",
+        )
+    })?;
+    let (coverage, record) = subtree_directory_convergence_record(partition, &binding, evidence)?;
+    if &coverage != expected_coverage {
+        return Err(InternalError::conflict(
+            "surviving Component subtree members covered different Directory authority",
+        ));
+    }
+    Ok(Some(record))
+}
+
 fn validate_subtree_removal_record(
     record: &RootComponentSubtreeRemovalRecord,
 ) -> Result<(), InternalError> {
@@ -6418,19 +6730,25 @@ fn validate_subtree_removal_record(
         }
         RootComponentSubtreeRemovalProgressRecord::MembershipRemoved(receipt) => {
             record.traversal_steps > 0
-                && valid_subtree_stopped_effect(record.component, &receipt.deleted.deletion.stopped)
-                && receipt.removed_from_registry.component == record.component
-                && receipt.removed_from_registry.revision > 0
-                && receipt.previous_descendant_content_hash != [0; 32]
-                && receipt.previous_committed_descendants > 0
-                && receipt.registry.component == record.component
-                && receipt.registry.revision > receipt.removed_from_registry.revision
-                && receipt.descendant_content_hash != [0; 32]
-                && receipt.registry_encoded_bytes > 0
-                && receipt.committed_descendants
-                    == receipt.previous_committed_descendants.saturating_sub(1)
-                && receipt.directory_synchronized_at_ns > 0
-                && receipt.directory_authority_hash != [0; 32]
+                && valid_subtree_membership_removed_record(record.component, receipt)
+        }
+        RootComponentSubtreeRemovalProgressRecord::DirectorySynchronized(receipt) => {
+            record.traversal_steps > 0
+                && valid_subtree_membership_removed_record(
+                    record.component,
+                    &receipt.membership_removed,
+                )
+                && receipt.covered_fleet_registry_revision > 0
+                && receipt.covered_fleet_registry_content_hash != [0; 32]
+                && receipt.covered_component_registry_revision
+                    >= receipt.membership_removed.registry.revision
+                && receipt.covered_component_registry_content_hash != [0; 32]
+                && receipt.covered_authority_hash != [0; 32]
+                && valid_subtree_directory_convergence_record(&receipt.owning_component)
+                && receipt
+                    .parent
+                    .as_ref()
+                    .is_none_or(valid_subtree_directory_convergence_record)
         }
     };
     let target_is_active = ComponentTreeNodeIdentity::from_child(&record.target)
@@ -6468,6 +6786,33 @@ fn valid_subtree_stopped_effect(
         && valid_subtree_removal_node(component, &stopped.stop.leaf)
 }
 
+fn valid_subtree_membership_removed_record(
+    component: ComponentInstanceId,
+    receipt: &RootComponentSubtreeMembershipRemovedRecord,
+) -> bool {
+    valid_subtree_stopped_effect(component, &receipt.deleted.deletion.stopped)
+        && receipt.removed_from_registry.component == component
+        && receipt.removed_from_registry.revision > 0
+        && receipt.previous_descendant_content_hash != [0; 32]
+        && receipt.previous_committed_descendants > 0
+        && receipt.registry.component == component
+        && receipt.registry.revision > receipt.removed_from_registry.revision
+        && receipt.descendant_content_hash != [0; 32]
+        && receipt.registry_encoded_bytes > 0
+        && receipt.committed_descendants == receipt.previous_committed_descendants.saturating_sub(1)
+        && receipt.directory_synchronized_at_ns > 0
+        && receipt.directory_authority_hash != [0; 32]
+}
+
+fn valid_subtree_directory_convergence_record(
+    evidence: &RootComponentSubtreeDirectoryConvergenceRecord,
+) -> bool {
+    evidence.operation_id != [0; 32]
+        && evidence.canister_id != Principal::anonymous()
+        && evidence.activation.directory_authority_hash != [0; 32]
+        && evidence.activation.activated_at_ns > 0
+}
+
 fn validate_subtree_removal_root(
     record: &RootComponentSubtreeRemovalRecord,
     root: &FleetSubnetRootBinding,
@@ -6486,6 +6831,15 @@ fn validate_subtree_removal_root(
         RootComponentSubtreeRemovalProgressRecord::MembershipRemoved(receipt) => {
             Some(receipt.deleted.deletion.stopped.stop.controller)
         }
+        RootComponentSubtreeRemovalProgressRecord::DirectorySynchronized(receipt) => Some(
+            receipt
+                .membership_removed
+                .deleted
+                .deletion
+                .stopped
+                .stop
+                .controller,
+        ),
         RootComponentSubtreeRemovalProgressRecord::Fenced
         | RootComponentSubtreeRemovalProgressRecord::Traversing { .. }
         | RootComponentSubtreeRemovalProgressRecord::LeafSelected { .. } => None,
@@ -6506,6 +6860,12 @@ fn validate_subtree_removal_progress(
     if let RootComponentSubtreeRemovalProgressRecord::MembershipRemoved(receipt) = &record.progress
     {
         return validate_subtree_membership_removed(partition, record, receipt);
+    }
+    if let RootComponentSubtreeRemovalProgressRecord::DirectorySynchronized(receipt) =
+        &record.progress
+    {
+        validate_subtree_membership_removed(partition, record, &receipt.membership_removed)?;
+        return validate_subtree_directory_synchronized(partition, record, receipt);
     }
     let current_target =
         RootComponentRegistryStore::child(record.component, record.target.canister_id).ok_or_else(
@@ -6540,6 +6900,9 @@ fn validate_subtree_removal_progress(
         }
         RootComponentSubtreeRemovalProgressRecord::MembershipRemoved(_) => {
             unreachable!("membership-removed progress is validated before registered-cursor checks")
+        }
+        RootComponentSubtreeRemovalProgressRecord::DirectorySynchronized(_) => {
+            unreachable!("Directory-synchronized progress is validated before cursor checks")
         }
     };
     let Some((node, must_be_leaf)) = node else {
@@ -6583,6 +6946,10 @@ fn validate_subtree_removal_progress(
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one validator reconstructs the complete historical and current membership-removal authority"
+)]
 fn validate_subtree_membership_removed(
     partition: &ComponentRegistryPartitionRecord,
     record: &RootComponentSubtreeRemovalRecord,
@@ -6615,12 +6982,18 @@ fn validate_subtree_membership_removed(
         receipt.previous_descendant_content_hash,
         receipt.previous_committed_descendants,
     )?;
+    let later_progress_can_grow_registry_bytes = matches!(
+        &record.progress,
+        RootComponentSubtreeRemovalProgressRecord::DirectorySynchronized(_)
+    ) && partition.encoded_bytes
+        >= receipt.registry_encoded_bytes;
     let exact_head_is_current = partition.revision == receipt.registry.revision
         && partition.content_hash == receipt.registry.content_hash
         && partition.descendant_content_hash == receipt.descendant_content_hash
         && partition.committed_descendants == receipt.committed_descendants
         && partition.reserved_descendants == receipt.reserved_descendants
-        && partition.encoded_bytes == receipt.registry_encoded_bytes
+        && (partition.encoded_bytes == receipt.registry_encoded_bytes
+            || later_progress_can_grow_registry_bytes)
         && partition.directory_synchronized_at_ns == receipt.directory_synchronized_at_ns;
     let head_was_advanced = partition.revision > receipt.registry.revision
         && partition.directory_synchronized_at_ns >= receipt.directory_synchronized_at_ns;
@@ -6683,6 +7056,50 @@ fn validate_subtree_membership_removed(
                 "Component subtree-removal target differs from its frozen fence",
             ));
         }
+    }
+    Ok(())
+}
+
+fn validate_subtree_directory_synchronized(
+    partition: &ComponentRegistryPartitionRecord,
+    record: &RootComponentSubtreeRemovalRecord,
+    receipt: &RootComponentSubtreeDirectorySynchronizedRecord,
+) -> Result<(), InternalError> {
+    let membership = &receipt.membership_removed;
+    let leaf = &membership.deleted.deletion.stopped.stop.leaf;
+    let covered_component_registry = ComponentRegistryHead {
+        component: record.component,
+        revision: receipt.covered_component_registry_revision,
+        content_hash: receipt.covered_component_registry_content_hash,
+    };
+    let owner = &receipt.owning_component;
+    let owner_covers_current_or_prior = covered_component_registry.revision <= partition.revision
+        && (covered_component_registry.revision != partition.revision
+            || covered_component_registry.content_hash == partition.content_hash);
+    let owner_covers_membership = covered_component_registry.revision
+        > membership.registry.revision
+        || covered_component_registry == membership.registry;
+    let expected_parent = if leaf.parent_canister_id == partition.binding.canister_id {
+        None
+    } else {
+        ComponentRegistryOps::registered_parent(record.component, leaf.parent_canister_id)?
+    };
+    let parent_is_exact = match (expected_parent, receipt.parent.as_ref()) {
+        (None, None) => true,
+        (Some((binding, ComponentLifecycleStatus::Active)), Some(parent)) => {
+            parent.canister_id == managed_canister_principal(&binding)
+        }
+        _ => false,
+    };
+    if owner.canister_id != partition.binding.canister_id
+        || !owner_covers_current_or_prior
+        || !owner_covers_membership
+        || !parent_is_exact
+    {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component subtree Directory receipt differs from surviving Registry authority",
+        ));
     }
     Ok(())
 }
@@ -7211,7 +7628,7 @@ mod tests {
             },
         },
         dto::{
-            component_registry::ComponentProvisioningOrigin,
+            component_registry::{ComponentProvisioningOrigin, ComponentRuntimeActivationEvidence},
             fleet_registry::{
                 FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistryVersion,
                 FleetSubnetRootDirectoryEntry, FleetSubnetRootStatus,
@@ -8134,7 +8551,7 @@ mod tests {
                 fixture.target.canister_id,
                 deleted_partition.directory_synchronized_at_ns + 1,
                 16_777_216,
-                active_fleet_directory,
+                active_fleet_directory.clone(),
             )
             .expect("exact membership-removal retry"),
             membership_removed
@@ -8170,6 +8587,117 @@ mod tests {
         assert_eq!(
             partition.encoded_bytes,
             exact_component_registry_entry_bytes(&membership_removed_state, fixture.component)
+        );
+
+        let directory_authority = ComponentRuntimeDirectoryAuthority {
+            fleet: active_fleet_directory,
+            component: ComponentDirectoryHead {
+                provenance: ComponentDirectoryProvenance {
+                    component: partition.binding.clone(),
+                    source_fleet_subnet_root: partition.binding.fleet_subnet_root,
+                    component_registry_revision: partition.revision,
+                    component_registry_content_hash: partition.content_hash,
+                    synchronized_at_ns: partition.directory_synchronized_at_ns,
+                },
+                descendant_count: partition.committed_descendants,
+            },
+        };
+        let directory_authority_hash =
+            ComponentRuntimeOps::directory_authority_hash(&directory_authority)
+                .expect("current Directory authority hash");
+        let owning_component = ComponentRuntimeDirectoryConvergenceEvidence {
+            operation_id: [81; 32],
+            binding: ManagedCanisterBinding::Component(partition.binding.clone()),
+            covered_authority: directory_authority.clone(),
+            covered_authority_hash: directory_authority_hash,
+            activation: ComponentRuntimeActivationEvidence {
+                directory_authority_hash: [82; 32],
+                activated_at_ns: 83,
+            },
+        };
+        let parent_binding =
+            ComponentRegistryOps::registered_parent(fixture.component, fixture.target.canister_id)
+                .expect("registered parent read")
+                .expect("registered parent")
+                .0;
+        let parent = ComponentRuntimeDirectoryConvergenceEvidence {
+            operation_id: [84; 32],
+            binding: parent_binding,
+            covered_authority: directory_authority,
+            covered_authority_hash: directory_authority_hash,
+            activation: ComponentRuntimeActivationEvidence {
+                directory_authority_hash: [85; 32],
+                activated_at_ns: 86,
+            },
+        };
+        ComponentRegistryOps::mark_subtree_leaf_directory_synchronized(
+            fixture.component,
+            [70; 32],
+            selected.traversal_steps,
+            fixture.descendant.canister_id,
+            fixture.target.canister_id,
+            owning_component.clone(),
+            Some(parent.clone()),
+            1,
+        )
+        .expect_err("Directory convergence receipt must fit before mutation");
+        assert_eq!(
+            RootComponentRegistryStore::export(),
+            membership_removed_state
+        );
+
+        let directory_synchronized =
+            ComponentRegistryOps::mark_subtree_leaf_directory_synchronized(
+                fixture.component,
+                [70; 32],
+                selected.traversal_steps,
+                fixture.descendant.canister_id,
+                fixture.target.canister_id,
+                owning_component.clone(),
+                Some(parent.clone()),
+                16_777_216,
+            )
+            .expect("retain surviving-member Directory convergence");
+        assert!(matches!(
+            &directory_synchronized.progress,
+            RootComponentSubtreeRemovalProgressView::DirectorySynchronized(receipt)
+                if receipt.membership_removed.registry == receipt.covered_component_registry
+                    && receipt.owning_component.canister_id == partition.binding.canister_id
+                    && receipt.parent.as_ref().map(|evidence| evidence.canister_id)
+                        == Some(fixture.target.canister_id)
+                    && receipt.covered_authority_hash == directory_authority_hash
+        ));
+        let directory_synchronized_state = restart_component_registry();
+        assert_eq!(
+            ComponentRegistryOps::mark_subtree_leaf_directory_synchronized(
+                fixture.component,
+                [70; 32],
+                selected.traversal_steps,
+                fixture.descendant.canister_id,
+                fixture.target.canister_id,
+                owning_component,
+                Some(parent),
+                16_777_216,
+            )
+            .expect("exact Directory synchronization retry"),
+            directory_synchronized
+        );
+        assert_eq!(
+            RootComponentRegistryStore::export(),
+            directory_synchronized_state
+        );
+        assert_eq!(
+            ComponentRegistryOps::current()
+                .expect("Registry status")
+                .encoded_bytes,
+            exact_registry_entry_bytes(&directory_synchronized_state)
+        );
+        assert_eq!(
+            ComponentRegistryOps::partition(fixture.component)
+                .expect("partition read")
+                .expect("active partition")
+                .encoded_bytes,
+            exact_component_registry_entry_bytes(&directory_synchronized_state, fixture.component)
         );
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }

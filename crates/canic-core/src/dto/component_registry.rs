@@ -221,6 +221,21 @@ pub struct RootComponentSubtreeRemovalMembershipRemovalRequest {
 }
 
 ///
+/// RootComponentSubtreeRemovalDirectorySynchronizationRequest
+///
+/// Controller command converging the post-removal Directory on surviving members.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeRemovalDirectorySynchronizationRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub expected_traversal_steps: u32,
+    pub expected_leaf_canister_id: Principal,
+    pub expected_leaf_parent_canister_id: Principal,
+}
+
+///
 /// RootComponentSubtreeRemovalStatusRequest
 ///
 /// Controller lookup key for one durable child-subtree removal operation.
@@ -418,6 +433,7 @@ pub enum RootComponentSubtreeRemovalPhase {
     DeleteIntent(RootComponentSubtreeRemovalDeleteIntent),
     Deleted(RootComponentSubtreeRemovalDeletedReceipt),
     MembershipRemoved(RootComponentSubtreeRemovalMembershipRemovedReceipt),
+    DirectorySynchronized(RootComponentSubtreeRemovalDirectorySynchronizedReceipt),
 }
 
 ///
@@ -504,6 +520,36 @@ pub struct RootComponentSubtreeRemovalMembershipRemovedReceipt {
     pub parent_role_instances: u32,
     pub root_managed_descendants: u32,
     pub root_known_created_component_canisters: u32,
+}
+
+///
+/// RootComponentSubtreeRemovalDirectoryConvergenceEvidence
+///
+/// Compact durable proof that one surviving member covered the required Directory.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeRemovalDirectoryConvergenceEvidence {
+    pub operation_id: [u8; 32],
+    pub canister_id: Principal,
+    pub activation: ComponentRuntimeActivationEvidence,
+}
+
+///
+/// RootComponentSubtreeRemovalDirectorySynchronizedReceipt
+///
+/// Membership removal plus independently verified surviving-member convergence.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeRemovalDirectorySynchronizedReceipt {
+    pub membership_removed: RootComponentSubtreeRemovalMembershipRemovedReceipt,
+    pub covered_fleet_registry_revision: u64,
+    pub covered_fleet_registry_content_hash: [u8; 32],
+    pub covered_component_registry: ComponentRegistryHead,
+    pub covered_authority_hash: [u8; 32],
+    pub owning_component: RootComponentSubtreeRemovalDirectoryConvergenceEvidence,
+    pub parent: Option<RootComponentSubtreeRemovalDirectoryConvergenceEvidence>,
 }
 
 ///
@@ -1303,32 +1349,58 @@ mod tests {
             target_status: ComponentLifecycleStatus::Active,
             reserved_against_registry: registry,
             traversal_steps: 2,
-            phase: RootComponentSubtreeRemovalPhase::MembershipRemoved(
-                RootComponentSubtreeRemovalMembershipRemovedReceipt {
-                    deleted: RootComponentSubtreeRemovalDeletedReceipt {
-                        deletion: RootComponentSubtreeRemovalDeleteIntent { stopped },
+            phase: RootComponentSubtreeRemovalPhase::DirectorySynchronized(
+                RootComponentSubtreeRemovalDirectorySynchronizedReceipt {
+                    membership_removed: RootComponentSubtreeRemovalMembershipRemovedReceipt {
+                        deleted: RootComponentSubtreeRemovalDeletedReceipt {
+                            deletion: RootComponentSubtreeRemovalDeleteIntent { stopped },
+                        },
+                        removed_from_registry: ComponentRegistryHead {
+                            component,
+                            revision: 8,
+                            content_hash: [50; 32],
+                        },
+                        previous_descendant_content_hash: [51; 32],
+                        previous_committed_descendants: 4,
+                        registry: ComponentRegistryHead {
+                            component,
+                            revision: 9,
+                            content_hash: [52; 32],
+                        },
+                        descendant_content_hash: [53; 32],
+                        registry_encoded_bytes: 4_096,
+                        reserved_descendants: 1,
+                        committed_descendants: 3,
+                        directory_synchronized_at_ns: 54,
+                        directory_authority_hash: [55; 32],
+                        parent_role_instances: 0,
+                        root_managed_descendants: 4,
+                        root_known_created_component_canisters: 4,
                     },
-                    removed_from_registry: ComponentRegistryHead {
-                        component,
-                        revision: 8,
-                        content_hash: [50; 32],
-                    },
-                    previous_descendant_content_hash: [51; 32],
-                    previous_committed_descendants: 4,
-                    registry: ComponentRegistryHead {
+                    covered_fleet_registry_revision: 6,
+                    covered_fleet_registry_content_hash: [56; 32],
+                    covered_component_registry: ComponentRegistryHead {
                         component,
                         revision: 9,
                         content_hash: [52; 32],
                     },
-                    descendant_content_hash: [53; 32],
-                    registry_encoded_bytes: 4_096,
-                    reserved_descendants: 1,
-                    committed_descendants: 3,
-                    directory_synchronized_at_ns: 54,
-                    directory_authority_hash: [55; 32],
-                    parent_role_instances: 0,
-                    root_managed_descendants: 4,
-                    root_known_created_component_canisters: 4,
+                    covered_authority_hash: [55; 32],
+                    owning_component: RootComponentSubtreeRemovalDirectoryConvergenceEvidence {
+                        operation_id: [57; 32],
+                        canister_id: Principal::from_slice(&[58; 29]),
+                        activation: ComponentRuntimeActivationEvidence {
+                            directory_authority_hash: [59; 32],
+                            activated_at_ns: 60,
+                        },
+                    },
+                    parent: Some(RootComponentSubtreeRemovalDirectoryConvergenceEvidence {
+                        operation_id: [61; 32],
+                        canister_id: request.target_canister_id,
+                        activation: ComponentRuntimeActivationEvidence {
+                            directory_authority_hash: [62; 32],
+                            activated_at_ns: 63,
+                        },
+                    }),
                 },
             ),
         };
@@ -1393,12 +1465,21 @@ mod tests {
             expected_leaf_canister_id: prepare.expected_leaf_canister_id,
             expected_leaf_parent_canister_id: prepare.expected_leaf_parent_canister_id,
         };
+        let directory_request = RootComponentSubtreeRemovalDirectorySynchronizationRequest {
+            operation_id: prepare.operation_id,
+            component: prepare.component,
+            expected_traversal_steps: prepare.expected_traversal_steps,
+            expected_leaf_canister_id: prepare.expected_leaf_canister_id,
+            expected_leaf_parent_canister_id: prepare.expected_leaf_parent_canister_id,
+        };
         let prepare_bytes = candid::encode_one(prepare)
             .expect("encode subtree removal deletion preparation request");
         let request_bytes =
             candid::encode_one(request).expect("encode subtree removal deletion request");
         let membership_request_bytes = candid::encode_one(membership_request)
             .expect("encode subtree removal membership-removal request");
+        let directory_request_bytes = candid::encode_one(directory_request)
+            .expect("encode subtree removal Directory synchronization request");
 
         assert_eq!(
             candid::decode_one::<RootComponentSubtreeRemovalDeletePreparationRequest>(
@@ -1418,6 +1499,13 @@ mod tests {
             )
             .expect("decode subtree removal membership-removal request"),
             membership_request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentSubtreeRemovalDirectorySynchronizationRequest>(
+                &directory_request_bytes
+            )
+            .expect("decode subtree removal Directory synchronization request"),
+            directory_request
         );
     }
 

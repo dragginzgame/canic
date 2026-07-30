@@ -6,10 +6,10 @@ Date: 2026-07-30
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.54`.
-- Latest published release: `v0.100.54` at
-  `39ac025f1d33424f29cd4a388a1b51d49969f1f0`.
-- Open patch draft: `0.100.55`; no package-version change has been authorized.
+- Workspace package version: `0.100.55`.
+- Latest published release: `v0.100.55` at
+  `d838762180696ead48f5ff50c0a1e353c4c01fed`.
+- Open patch draft: `0.100.56`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -192,8 +192,13 @@ Registry slices replace the 0.99 root model.
 - [x] Freeze the complete stopped receipt before deletion, reconcile the
   destructive call through typed live absence and retain a durable deleted
   receipt without mutating Registry membership or Directory authority.
-- [ ] Execute and reconcile each selected leaf transition, then return the
-  cursor to its retained parent until the target is terminal.
+- [x] Execute and reconcile each selected leaf stop, deletion and Registry
+  membership-removal transition with independently observed effect evidence.
+- [x] Publish the post-removal current Component Directory to the surviving
+  owner and distinct immediate parent, independently verify both and retain a
+  bounded stable convergence receipt.
+- [ ] Normalize the completed leaf receipt and return the cursor to its
+  retained parent until the target is terminal.
 - [x] Distribute exact Directories directly from the root to a committed
   Component with target-local retention, independent observation and a
   terminal root receipt.
@@ -777,7 +782,7 @@ concurrent host-only `ic-query 0.14.1` update adopts its renamed `cache_root`
 request contract without changing the embedded Subnet Catalog evidence
 boundary.
 
-Open 0.100.55 atomically removes the independently deleted childless leaf from
+Released 0.100.55 atomically removes the independently deleted childless leaf from
 its exact normalized child, traversal and principal indexes. The same stable
 compare-and-commit settles its parent-role count, Component committed
 descendants, root managed and known-created Canister counts, next
@@ -787,11 +792,23 @@ both Registry heads plus the next exact Directory-authority hash against the
 active Fleet Directory. Completed allocation history remains available for
 replay; no Directory publication occurs in this transition.
 
+Open 0.100.56 publishes the current post-removal Component Directory to the
+surviving owning Component and, when distinct, the removed leaf's retained
+immediate parent. The root queries first, reconciles uncertain synchronization
+calls and independently re-observes both recipients before committing a
+bounded `DirectorySynchronized` receipt. Shared covered Fleet/Component
+Registry evidence is stored once; recipient receipts retain exact runtime
+operation, principal and immutable activation evidence. The traversal cursor
+does not move in this transition. The same open patch advances the canonical
+memory runtime to `ic-memory 0.12.3`, adopting its validated semantic policy
+identity and failure-aware size diagnostics without changing durable
+allocation-ledger bytes, stable keys or memory IDs.
+
 ## Next Action
 
-Publish and independently verify the membership-removed Component head through
-its current Directory, retain that convergence receipt, then return the
-traversal cursor to the exact retained parent for the next post-order
-selection. Never remove a parent while a child row remains. Do not introduce
-nested Component declarations, let application Canisters call management
-effects directly or infer authorization from catalog presence alone.
+Normalize the completed leaf and Directory convergence receipt into bounded
+operation-keyed history, then atomically return the traversal cursor to the
+exact retained parent for the next post-order selection. Never remove a parent
+while a child row remains. Do not introduce nested Component declarations,
+let application Canisters call management effects directly or infer
+authorization from catalog presence alone.
