@@ -139,6 +139,13 @@ macro_rules! canic_emit_root_admin_endpoints {
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::remove_component_subtree_leaf_membership(request).await
         }
 
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_root_component_subtree_removal_directory_synchronize(
+            request: ::canic::dto::component_registry::RootComponentSubtreeRemovalDirectorySynchronizationRequest,
+        ) -> Result<::canic::dto::component_registry::RootComponentSubtreeRemovalResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::synchronize_component_subtree_leaf_directory(request).await
+        }
+
         #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_root_component_subtree_removal_status(
             request: ::canic::dto::component_registry::RootComponentSubtreeRemovalStatusRequest,

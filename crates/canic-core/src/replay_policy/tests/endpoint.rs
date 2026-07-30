@@ -386,6 +386,10 @@ fn root_component_child_reservation_is_response_idempotent() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one policy inventory test keeps every monotonic subtree-removal transition aligned"
+)]
 fn root_component_subtree_removal_progress_is_replay_safe() {
     let begin = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
@@ -415,6 +419,12 @@ fn root_component_subtree_removal_progress_is_replay_safe() {
         .iter()
         .find(|entry| entry.endpoint == "canic_root_component_subtree_removal_membership_remove")
         .expect("root Component subtree membership-removal policy entry");
+    let directory_synchronize = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| {
+            entry.endpoint == "canic_root_component_subtree_removal_directory_synchronize"
+        })
+        .expect("root Component subtree Directory synchronization policy entry");
     let status = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
         .find(|entry| entry.endpoint == "canic_root_component_subtree_removal_status")
@@ -473,6 +483,15 @@ fn root_component_subtree_removal_progress_is_replay_safe() {
         }
     );
     assert_eq!(membership_remove.cost_class, CostClass::None);
+    assert_eq!(
+        directory_synchronize.replay_policy,
+        ReplayPolicy::SnapshotConvergent {
+            command_kind: replay_command_kind(
+                "component_registry.synchronize_subtree_removal_directory.v1"
+            ),
+        }
+    );
+    assert_eq!(directory_synchronize.cost_class, CostClass::None);
     assert_eq!(status.replay_policy, ReplayPolicy::QueryOrReadOnly);
     assert_eq!(status.endpoint_kind, EndpointKind::Query);
 }

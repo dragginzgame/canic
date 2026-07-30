@@ -16,12 +16,14 @@ use crate::{
 };
 use ic_memory::{
     AllocationPolicy, AllocationSlotDescriptor, MemoryManagerAuthorityRecord, MemoryManagerIdRange,
-    MemoryManagerRangeMode, MemoryManagerSlotError, RuntimeBootstrapPolicy, StableKey,
+    MemoryManagerRangeMode, MemoryManagerSlotError, PolicyIdentity, PolicyIdentityError,
+    RuntimeBootstrapPolicy, StableKey,
 };
 
 pub const CANIC_CORE_AUTHORITY_PURPOSE: &str = "Canic core allocation authority";
 pub const CANIC_CONTROL_PLANE_AUTHORITY_PURPOSE: &str = "Canic control-plane allocation authority";
-const CANIC_MEMORY_BOOTSTRAP_POLICY_IDENTITY: &str = "canic.memory-bootstrap-policy.v1";
+const CANIC_MEMORY_BOOTSTRAP_POLICY_NAME: &str = "canic.memory-bootstrap-policy";
+const CANIC_MEMORY_BOOTSTRAP_POLICY_VERSION: u32 = 1;
 
 ///
 /// CanicMemoryManagerPolicy
@@ -80,8 +82,11 @@ impl AllocationPolicy for CanicMemoryManagerPolicy {
 }
 
 impl RuntimeBootstrapPolicy for CanicMemoryManagerPolicy {
-    fn runtime_bootstrap_identity(&self) -> &'static str {
-        CANIC_MEMORY_BOOTSTRAP_POLICY_IDENTITY
+    fn runtime_bootstrap_identity(&self) -> Result<PolicyIdentity, PolicyIdentityError> {
+        PolicyIdentity::new(
+            CANIC_MEMORY_BOOTSTRAP_POLICY_NAME,
+            CANIC_MEMORY_BOOTSTRAP_POLICY_VERSION,
+        )
     }
 }
 
@@ -221,8 +226,11 @@ mod tests {
     #[test]
     fn runtime_bootstrap_policy_has_explicit_v1_identity() {
         assert_eq!(
-            policy().runtime_bootstrap_identity(),
-            "canic.memory-bootstrap-policy.v1"
+            policy()
+                .runtime_bootstrap_identity()
+                .expect("valid Canic policy identity"),
+            PolicyIdentity::new("canic.memory-bootstrap-policy", 1)
+                .expect("valid expected policy identity")
         );
     }
 
