@@ -411,6 +411,10 @@ fn root_component_subtree_removal_progress_is_replay_safe() {
         .iter()
         .find(|entry| entry.endpoint == "canic_root_component_subtree_removal_delete")
         .expect("root Component subtree-removal deletion policy entry");
+    let membership_remove = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_root_component_subtree_removal_membership_remove")
+        .expect("root Component subtree membership-removal policy entry");
     let status = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
         .find(|entry| entry.endpoint == "canic_root_component_subtree_removal_status")
@@ -460,6 +464,15 @@ fn root_component_subtree_removal_progress_is_replay_safe() {
         }
     );
     assert_eq!(delete.cost_class, CostClass::None);
+    assert_eq!(
+        membership_remove.replay_policy,
+        ReplayPolicy::SnapshotConvergent {
+            command_kind: replay_command_kind(
+                "component_registry.remove_subtree_leaf_membership.v1"
+            ),
+        }
+    );
+    assert_eq!(membership_remove.cost_class, CostClass::None);
     assert_eq!(status.replay_policy, ReplayPolicy::QueryOrReadOnly);
     assert_eq!(status.endpoint_kind, EndpointKind::Query);
 }

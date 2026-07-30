@@ -158,6 +158,10 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "canic_root_component_subtree_removal_delete",
         command_kind("management.control_plane.component_subtree_delete.v1"),
     ),
+    update_snapshot_convergent(
+        "canic_root_component_subtree_removal_membership_remove",
+        command_kind("component_registry.remove_subtree_leaf_membership.v1"),
+    ),
     query_read_only("canic_root_component_subtree_removal_status"),
     update_costed_response_idempotent(
         "canic_root_component_child_create",

@@ -166,6 +166,10 @@ pub struct RootComponentSubtreeRemovalView {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "read-only progress preserves the complete durable removal receipt"
+)]
 pub enum RootComponentSubtreeRemovalProgressView {
     Fenced,
     Traversing {
@@ -178,6 +182,7 @@ pub enum RootComponentSubtreeRemovalProgressView {
     Stopped(RootComponentSubtreeStoppedEffectView),
     DeleteIntent(RootComponentSubtreeDeleteEffectView),
     Deleted(RootComponentSubtreeDeletedEffectView),
+    MembershipRemoved(RootComponentSubtreeMembershipRemovedView),
 }
 
 ///
@@ -240,6 +245,30 @@ pub struct RootComponentSubtreeDeleteEffectView {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentSubtreeDeletedEffectView {
     pub deletion: RootComponentSubtreeDeleteEffectView,
+}
+
+///
+/// RootComponentSubtreeMembershipRemovedView
+///
+/// Read-only exact Registry transition retained after a deleted leaf is unregistered.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentSubtreeMembershipRemovedView {
+    pub deleted: RootComponentSubtreeDeletedEffectView,
+    pub removed_from_registry: ComponentRegistryHead,
+    pub previous_descendant_content_hash: [u8; 32],
+    pub previous_committed_descendants: u32,
+    pub registry: ComponentRegistryHead,
+    pub descendant_content_hash: [u8; 32],
+    pub registry_encoded_bytes: u64,
+    pub reserved_descendants: u32,
+    pub committed_descendants: u32,
+    pub directory_synchronized_at_ns: u64,
+    pub directory_authority_hash: [u8; 32],
+    pub parent_role_instances: u32,
+    pub root_managed_descendants: u32,
+    pub root_known_created_component_canisters: u32,
 }
 
 ///

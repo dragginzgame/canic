@@ -34,8 +34,10 @@ use canic_core::{
             RootComponentRegistryStatusResponse, RootComponentRuntimeActivationRequest,
             RootComponentRuntimeActivationResponse, RootComponentSubtreeRemovalAdvanceRequest,
             RootComponentSubtreeRemovalDeletePreparationRequest,
-            RootComponentSubtreeRemovalDeleteRequest, RootComponentSubtreeRemovalRequest,
-            RootComponentSubtreeRemovalResponse, RootComponentSubtreeRemovalStatusRequest,
+            RootComponentSubtreeRemovalDeleteRequest,
+            RootComponentSubtreeRemovalMembershipRemovalRequest,
+            RootComponentSubtreeRemovalRequest, RootComponentSubtreeRemovalResponse,
+            RootComponentSubtreeRemovalStatusRequest,
             RootComponentSubtreeRemovalStopPreparationRequest,
             RootComponentSubtreeRemovalStopRequest,
         },
@@ -214,6 +216,14 @@ impl LifecycleApi {
         request: RootComponentSubtreeRemovalDeleteRequest,
     ) -> Result<RootComponentSubtreeRemovalResponse, canic_core::dto::error::Error> {
         crate::workflow::component_registry::delete_subtree_leaf(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn remove_component_subtree_leaf_membership(
+        request: RootComponentSubtreeRemovalMembershipRemovalRequest,
+    ) -> Result<RootComponentSubtreeRemovalResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::remove_subtree_leaf_membership(request)
             .await
             .map_err(Into::into)
     }

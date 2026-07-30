@@ -206,6 +206,21 @@ pub struct RootComponentSubtreeRemovalDeleteRequest {
 }
 
 ///
+/// RootComponentSubtreeRemovalMembershipRemovalRequest
+///
+/// Controller command removing one independently deleted leaf from Registry membership.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeRemovalMembershipRemovalRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub expected_traversal_steps: u32,
+    pub expected_leaf_canister_id: Principal,
+    pub expected_leaf_parent_canister_id: Principal,
+}
+
+///
 /// RootComponentSubtreeRemovalStatusRequest
 ///
 /// Controller lookup key for one durable child-subtree removal operation.
@@ -390,6 +405,10 @@ pub enum RootComponentAllocationPhase {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "wire phases retain complete inline receipts for deterministic Candid responses"
+)]
 pub enum RootComponentSubtreeRemovalPhase {
     Fenced,
     Traversing(RootComponentSubtreeRemovalNode),
@@ -398,6 +417,7 @@ pub enum RootComponentSubtreeRemovalPhase {
     Stopped(RootComponentSubtreeRemovalStoppedReceipt),
     DeleteIntent(RootComponentSubtreeRemovalDeleteIntent),
     Deleted(RootComponentSubtreeRemovalDeletedReceipt),
+    MembershipRemoved(RootComponentSubtreeRemovalMembershipRemovedReceipt),
 }
 
 ///
@@ -460,6 +480,30 @@ pub struct RootComponentSubtreeRemovalDeleteIntent {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentSubtreeRemovalDeletedReceipt {
     pub deletion: RootComponentSubtreeRemovalDeleteIntent,
+}
+
+///
+/// RootComponentSubtreeRemovalMembershipRemovedReceipt
+///
+/// Exact Registry transition retained after the independently deleted leaf is unregistered.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeRemovalMembershipRemovedReceipt {
+    pub deleted: RootComponentSubtreeRemovalDeletedReceipt,
+    pub removed_from_registry: ComponentRegistryHead,
+    pub previous_descendant_content_hash: [u8; 32],
+    pub previous_committed_descendants: u32,
+    pub registry: ComponentRegistryHead,
+    pub descendant_content_hash: [u8; 32],
+    pub registry_encoded_bytes: u64,
+    pub reserved_descendants: u32,
+    pub committed_descendants: u32,
+    pub directory_synchronized_at_ns: u64,
+    pub directory_authority_hash: [u8; 32],
+    pub parent_role_instances: u32,
+    pub root_managed_descendants: u32,
+    pub root_known_created_component_canisters: u32,
 }
 
 ///
@@ -1203,6 +1247,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one Candid contract test covers every subtree-removal phase receipt"
+    )]
     fn component_subtree_removal_contracts_round_trip_through_candid() {
         let component = ComponentInstanceId::from_generated_bytes([41; 32]);
         let registry = ComponentRegistryHead {
@@ -1255,9 +1303,32 @@ mod tests {
             target_status: ComponentLifecycleStatus::Active,
             reserved_against_registry: registry,
             traversal_steps: 2,
-            phase: RootComponentSubtreeRemovalPhase::Deleted(
-                RootComponentSubtreeRemovalDeletedReceipt {
-                    deletion: RootComponentSubtreeRemovalDeleteIntent { stopped },
+            phase: RootComponentSubtreeRemovalPhase::MembershipRemoved(
+                RootComponentSubtreeRemovalMembershipRemovedReceipt {
+                    deleted: RootComponentSubtreeRemovalDeletedReceipt {
+                        deletion: RootComponentSubtreeRemovalDeleteIntent { stopped },
+                    },
+                    removed_from_registry: ComponentRegistryHead {
+                        component,
+                        revision: 8,
+                        content_hash: [50; 32],
+                    },
+                    previous_descendant_content_hash: [51; 32],
+                    previous_committed_descendants: 4,
+                    registry: ComponentRegistryHead {
+                        component,
+                        revision: 9,
+                        content_hash: [52; 32],
+                    },
+                    descendant_content_hash: [53; 32],
+                    registry_encoded_bytes: 4_096,
+                    reserved_descendants: 1,
+                    committed_descendants: 3,
+                    directory_synchronized_at_ns: 54,
+                    directory_authority_hash: [55; 32],
+                    parent_role_instances: 0,
+                    root_managed_descendants: 4,
+                    root_known_created_component_canisters: 4,
                 },
             ),
         };
@@ -1315,10 +1386,19 @@ mod tests {
             expected_leaf_canister_id: prepare.expected_leaf_canister_id,
             expected_leaf_parent_canister_id: prepare.expected_leaf_parent_canister_id,
         };
+        let membership_request = RootComponentSubtreeRemovalMembershipRemovalRequest {
+            operation_id: prepare.operation_id,
+            component: prepare.component,
+            expected_traversal_steps: prepare.expected_traversal_steps,
+            expected_leaf_canister_id: prepare.expected_leaf_canister_id,
+            expected_leaf_parent_canister_id: prepare.expected_leaf_parent_canister_id,
+        };
         let prepare_bytes = candid::encode_one(prepare)
             .expect("encode subtree removal deletion preparation request");
         let request_bytes =
             candid::encode_one(request).expect("encode subtree removal deletion request");
+        let membership_request_bytes = candid::encode_one(membership_request)
+            .expect("encode subtree removal membership-removal request");
 
         assert_eq!(
             candid::decode_one::<RootComponentSubtreeRemovalDeletePreparationRequest>(
@@ -1331,6 +1411,13 @@ mod tests {
             candid::decode_one::<RootComponentSubtreeRemovalDeleteRequest>(&request_bytes)
                 .expect("decode subtree removal deletion request"),
             request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentSubtreeRemovalMembershipRemovalRequest>(
+                &membership_request_bytes
+            )
+            .expect("decode subtree removal membership-removal request"),
+            membership_request
         );
     }
 
