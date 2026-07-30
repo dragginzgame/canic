@@ -14,6 +14,7 @@ use canic_core::{
     role_contract::allocation::memory::control_plane::{
         ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_PRINCIPAL_INDEX_ID,
         ROOT_COMPONENT_REGISTRY_ENTRIES_ID, ROOT_COMPONENT_REGISTRY_META_ID,
+        ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID,
     },
 };
 use canic_core::{
@@ -46,6 +47,10 @@ const ROOT_COMPONENT_ALLOCATION_RECORD_MAX_BYTES: u32 = 4_096;
 const COMPONENT_REGISTRY_ENTRY_KEY_MAX_BYTES: u32 = 512;
 #[cfg(feature = "root-control-plane")]
 const COMPONENT_REGISTRY_ENTRY_RECORD_MAX_BYTES: u32 = 4_096;
+#[cfg(feature = "root-control-plane")]
+const SUBTREE_REMOVAL_HISTORY_KEY_MAX_BYTES: u32 = 256;
+#[cfg(feature = "root-control-plane")]
+const SUBTREE_REMOVAL_HISTORY_RECORD_MAX_BYTES: u32 = 1_024;
 
 #[cfg(feature = "root-control-plane")]
 struct RootComponentRegistryState;
@@ -55,6 +60,8 @@ struct RootComponentAllocations;
 struct ComponentRegistryEntries;
 #[cfg(feature = "root-control-plane")]
 struct ComponentRegistryPrincipalIndex;
+#[cfg(feature = "root-control-plane")]
+struct RootComponentSubtreeRemovalHistory;
 
 #[cfg(feature = "root-control-plane")]
 eager_static! {
@@ -69,6 +76,24 @@ eager_static! {
             ),
             RootComponentRegistryStateRecord::default(),
         ));
+}
+
+#[cfg(feature = "root-control-plane")]
+eager_static! {
+    static ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY: RefCell<
+        StableBtreeMap<
+            RootComponentSubtreeRemovalHistoryKey,
+            RootComponentSubtreeRemovalCompletedLeafRecord,
+            VirtualMemory<DefaultMemoryImpl>,
+        >,
+    > = RefCell::new(StableBtreeMap::init(
+        canic_core::ic_memory_key!(
+            authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
+            key = "canic.control_plane.root_component_subtree_removal_history.v1",
+            ty = RootComponentSubtreeRemovalHistory,
+            id = ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID
+        ),
+    ));
 }
 
 #[cfg(feature = "root-control-plane")]
@@ -484,6 +509,8 @@ pub struct RootComponentSubtreeRemovalRecord {
     pub component: ComponentInstanceId,
     pub target: ComponentRegistryChildRecord,
     pub reserved_against_registry: ComponentRegistryHead,
+    pub maximum_completed_leaves: u32,
+    pub completed_leaves: u32,
     pub traversal_steps: u32,
     pub progress: RootComponentSubtreeRemovalProgressRecord,
 }
@@ -494,6 +521,7 @@ struct RootComponentSubtreeFence<'a> {
     component: &'a ComponentInstanceId,
     target: &'a ComponentRegistryChildRecord,
     reserved_against_registry: &'a ComponentRegistryHead,
+    maximum_completed_leaves: u32,
 }
 
 impl<'a> From<&'a RootComponentSubtreeRemovalRecord> for RootComponentSubtreeFence<'a> {
@@ -503,6 +531,7 @@ impl<'a> From<&'a RootComponentSubtreeRemovalRecord> for RootComponentSubtreeFen
             component: &record.component,
             target: &record.target,
             reserved_against_registry: &record.reserved_against_registry,
+            maximum_completed_leaves: record.maximum_completed_leaves,
         }
     }
 }
@@ -538,6 +567,7 @@ pub enum RootComponentSubtreeRemovalProgressRecord {
     Deleted(RootComponentSubtreeDeletedEffectRecord),
     MembershipRemoved(RootComponentSubtreeMembershipRemovedRecord),
     DirectorySynchronized(RootComponentSubtreeDirectorySynchronizedRecord),
+    Completed(RootComponentSubtreeRemovalCompletedRecord),
 }
 
 ///
@@ -640,6 +670,48 @@ pub struct RootComponentSubtreeDirectorySynchronizedRecord {
     pub owning_component: RootComponentSubtreeDirectoryConvergenceRecord,
     pub parent: Option<RootComponentSubtreeDirectoryConvergenceRecord>,
 }
+
+///
+/// RootComponentSubtreeRemovalCompletedRecord
+///
+/// Compact terminal authority after the fenced target itself is finalized.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeRemovalCompletedRecord {
+    pub registry: ComponentRegistryHead,
+    pub directory_authority_hash: [u8; 32],
+}
+
+///
+/// RootComponentSubtreeRemovalCompletedLeafRecord
+///
+/// Compact immutable operation/step-keyed history for one finalized leaf.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeRemovalCompletedLeafRecord {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub traversal_steps: u32,
+    pub leaf_canister_id: Principal,
+    pub leaf_parent_canister_id: Principal,
+    pub observed_module_hash: [u8; 32],
+    pub registry: ComponentRegistryHead,
+    pub directory_authority_hash: [u8; 32],
+    pub receipt_hash: [u8; 32],
+}
+
+impl RootComponentSubtreeRemovalCompletedLeafRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "RootComponentSubtreeRemovalCompletedLeafRecord";
+}
+
+#[cfg(feature = "root-control-plane")]
+impl_storable_bounded!(
+    RootComponentSubtreeRemovalCompletedLeafRecord,
+    SUBTREE_REMOVAL_HISTORY_RECORD_MAX_BYTES,
+    false
+);
 
 ///
 /// RootComponentChildInstallEffectRecord
@@ -864,6 +936,34 @@ impl From<[u8; 32]> for RootComponentAllocationOperationKey {
 
 #[cfg(feature = "root-control-plane")]
 impl_storable_bounded!(RootComponentAllocationOperationKey, 128, false);
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+struct RootComponentSubtreeRemovalHistoryKey {
+    component: [u8; 32],
+    operation_id: [u8; 32],
+    traversal_steps: u32,
+}
+
+impl RootComponentSubtreeRemovalHistoryKey {
+    const fn new(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        traversal_steps: u32,
+    ) -> Self {
+        Self {
+            component: *component.as_bytes(),
+            operation_id,
+            traversal_steps,
+        }
+    }
+}
+
+#[cfg(feature = "root-control-plane")]
+impl_storable_bounded!(
+    RootComponentSubtreeRemovalHistoryKey,
+    SUBTREE_REMOVAL_HISTORY_KEY_MAX_BYTES,
+    false
+);
 
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 struct ComponentRegistryPrincipalKey(Vec<u8>);
@@ -1102,6 +1202,7 @@ pub struct RootComponentRegistryData {
     pub child_traversals: Vec<ComponentRegistryChildTraversalRecord>,
     pub child_allocations: Vec<RootComponentChildAllocationRecord>,
     pub subtree_removals: Vec<RootComponentSubtreeRemovalRecord>,
+    pub subtree_removal_history: Vec<RootComponentSubtreeRemovalCompletedLeafRecord>,
     pub parent_role_counts: Vec<ComponentRegistryParentRoleCountRecord>,
 }
 
@@ -1242,6 +1343,8 @@ impl RootComponentRegistryStore {
                     })
                     .collect()
             }),
+            subtree_removal_history: ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY
+                .with_borrow(|map| map.iter().map(|entry| entry.value()).collect()),
             parent_role_counts: COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
                 map.iter()
                     .filter_map(|entry| match entry.value() {
@@ -1391,6 +1494,21 @@ impl RootComponentRegistryStore {
                 )
                 | None => None,
             }
+        })
+    }
+
+    #[must_use]
+    pub(crate) fn subtree_removal_completed_leaf(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        traversal_steps: u32,
+    ) -> Option<RootComponentSubtreeRemovalCompletedLeafRecord> {
+        ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY.with_borrow(|map| {
+            map.get(&RootComponentSubtreeRemovalHistoryKey::new(
+                component,
+                operation_id,
+                traversal_steps,
+            ))
         })
     }
 
@@ -1915,6 +2033,156 @@ impl RootComponentRegistryStore {
                 return Err(RootComponentAllocationCommitError::ConflictingState);
             }
 
+            COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
+                map.insert(
+                    operation_key,
+                    ComponentRegistryEntryRecord::SubtreeRemoval(next_record),
+                );
+                map.insert(
+                    partition_key,
+                    ComponentRegistryEntryRecord::Partition(next_partition),
+                );
+            });
+            state.current = Some(next_meta);
+            cell.set(state);
+            Ok(())
+        })
+    }
+
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one atomic stable mutation validates and commits cursor, history and byte authority"
+    )]
+    pub(crate) fn finalize_subtree_removal_leaf(
+        expected_meta: &RootComponentRegistryMetaRecord,
+        next_meta: RootComponentRegistryMetaRecord,
+        expected_partition: &ComponentRegistryPartitionRecord,
+        next_partition: ComponentRegistryPartitionRecord,
+        expected_record: &RootComponentSubtreeRemovalRecord,
+        next_record: RootComponentSubtreeRemovalRecord,
+        completed_leaf: RootComponentSubtreeRemovalCompletedLeafRecord,
+    ) -> Result<(), RootComponentAllocationCommitError> {
+        let component = expected_record.component;
+        let operation_key =
+            ComponentRegistryEntryKey::subtree_removal(component, expected_record.operation_id);
+        let partition_key = ComponentRegistryEntryKey::partition(component);
+        let history_key = RootComponentSubtreeRemovalHistoryKey::new(
+            component,
+            expected_record.operation_id,
+            expected_record.traversal_steps,
+        );
+        let RootComponentSubtreeRemovalProgressRecord::DirectorySynchronized(expected_receipt) =
+            &expected_record.progress
+        else {
+            return Err(RootComponentAllocationCommitError::ConflictingChildEntry);
+        };
+        let leaf = &expected_receipt
+            .membership_removed
+            .deleted
+            .deletion
+            .stopped
+            .stop
+            .leaf;
+        let expected_completed = expected_record.completed_leaves.checked_add(1);
+        let progress_transition_is_valid = match &next_record.progress {
+            RootComponentSubtreeRemovalProgressRecord::Traversing { cursor } => {
+                leaf.canister_id != expected_record.target.canister_id
+                    && cursor.component == component
+                    && cursor.canister_id == leaf.parent_canister_id
+            }
+            RootComponentSubtreeRemovalProgressRecord::Completed(completed) => {
+                leaf.canister_id == expected_record.target.canister_id
+                    && completed.registry.component == component
+                    && completed.registry.revision
+                        == expected_receipt.covered_component_registry_revision
+                    && completed.registry.content_hash
+                        == expected_receipt.covered_component_registry_content_hash
+                    && completed.directory_authority_hash == expected_receipt.covered_authority_hash
+            }
+            RootComponentSubtreeRemovalProgressRecord::Fenced
+            | RootComponentSubtreeRemovalProgressRecord::LeafSelected { .. }
+            | RootComponentSubtreeRemovalProgressRecord::StopIntent(_)
+            | RootComponentSubtreeRemovalProgressRecord::Stopped(_)
+            | RootComponentSubtreeRemovalProgressRecord::DeleteIntent(_)
+            | RootComponentSubtreeRemovalProgressRecord::Deleted(_)
+            | RootComponentSubtreeRemovalProgressRecord::MembershipRemoved(_)
+            | RootComponentSubtreeRemovalProgressRecord::DirectorySynchronized(_) => false,
+        };
+        let mut expected_next_meta = expected_meta.clone();
+        expected_next_meta.encoded_bytes = next_meta.encoded_bytes;
+        if !next_record.has_same_fence(expected_record)
+            || next_record.maximum_completed_leaves != expected_record.maximum_completed_leaves
+            || Some(next_record.completed_leaves) != expected_completed
+            || next_record.completed_leaves > next_record.maximum_completed_leaves
+            || next_record.traversal_steps != expected_record.traversal_steps
+            || !progress_transition_is_valid
+            || completed_leaf.operation_id != expected_record.operation_id
+            || completed_leaf.component != component
+            || completed_leaf.traversal_steps != expected_record.traversal_steps
+            || completed_leaf.leaf_canister_id != leaf.canister_id
+            || completed_leaf.leaf_parent_canister_id != leaf.parent_canister_id
+            || completed_leaf.observed_module_hash
+                != expected_receipt
+                    .membership_removed
+                    .deleted
+                    .deletion
+                    .stopped
+                    .observed_module_hash
+            || completed_leaf.registry.component != component
+            || completed_leaf.registry.revision
+                != expected_receipt.covered_component_registry_revision
+            || completed_leaf.registry.content_hash
+                != expected_receipt.covered_component_registry_content_hash
+            || completed_leaf.directory_authority_hash != expected_receipt.covered_authority_hash
+            || completed_leaf.receipt_hash == [0; 32]
+            || ComponentPartitionStableAuthority::from(&next_partition)
+                != ComponentPartitionStableAuthority::from(expected_partition)
+            || next_meta != expected_next_meta
+        {
+            return Err(RootComponentAllocationCommitError::ConflictingChildEntry);
+        }
+
+        ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            let current_meta = state
+                .current
+                .as_ref()
+                .ok_or(RootComponentAllocationCommitError::Uninitialized)?;
+            if current_meta != expected_meta
+                || ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY
+                    .with_borrow(|map| map.contains_key(&history_key))
+            {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            let (current_partition, current_record) =
+                COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+                    let partition = map.get(&partition_key).and_then(|entry| match entry {
+                        ComponentRegistryEntryRecord::Partition(record) => Some(record),
+                        ComponentRegistryEntryRecord::Child(_)
+                        | ComponentRegistryEntryRecord::ChildTraversal(_)
+                        | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                        | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                    });
+                    let record = map.get(&operation_key).and_then(|entry| match entry {
+                        ComponentRegistryEntryRecord::SubtreeRemoval(record) => Some(record),
+                        ComponentRegistryEntryRecord::Partition(_)
+                        | ComponentRegistryEntryRecord::Child(_)
+                        | ComponentRegistryEntryRecord::ChildTraversal(_)
+                        | ComponentRegistryEntryRecord::ChildAllocation(_)
+                        | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                    });
+                    (partition, record)
+                });
+            if current_partition.as_ref() != Some(expected_partition)
+                || current_record.as_ref() != Some(expected_record)
+            {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+
+            ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY.with_borrow_mut(|map| {
+                map.insert(history_key, completed_leaf);
+            });
             COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
                 map.insert(
                     operation_key,
@@ -2641,6 +2909,18 @@ impl RootComponentRegistryStore {
     }
 
     #[must_use]
+    pub(crate) fn subtree_removal_completed_leaf_entry_bytes(
+        record: &RootComponentSubtreeRemovalCompletedLeafRecord,
+    ) -> u64 {
+        let key = RootComponentSubtreeRemovalHistoryKey::new(
+            record.component,
+            record.operation_id,
+            record.traversal_steps,
+        );
+        (key.to_bytes().len() + record.to_bytes().len()) as u64
+    }
+
+    #[must_use]
     pub(crate) fn child_entry_bytes(record: &ComponentRegistryChildRecord) -> u64 {
         let key = ComponentRegistryEntryKey::child(record.component, record.canister_id);
         let value = ComponentRegistryEntryRecord::Child(record.clone());
@@ -2685,8 +2965,13 @@ impl RootComponentRegistryStore {
     }
 
     #[cfg(test)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "test snapshot import repopulates every normalized stable domain explicitly"
+    )]
     pub(crate) fn import(data: RootComponentRegistryData) {
         ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(StableBtreeMap::clear_new);
+        ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY.with_borrow_mut(StableBtreeMap::clear_new);
         for record in data.allocations {
             ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(|map| {
                 map.insert(
@@ -2761,6 +3046,18 @@ impl RootComponentRegistryStore {
                         record.operation_id,
                     ),
                     ComponentRegistryEntryRecord::SubtreeRemoval(record),
+                );
+            });
+        }
+        for record in data.subtree_removal_history {
+            ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY.with_borrow_mut(|map| {
+                map.insert(
+                    RootComponentSubtreeRemovalHistoryKey::new(
+                        record.component,
+                        record.operation_id,
+                        record.traversal_steps,
+                    ),
+                    record,
                 );
             });
         }

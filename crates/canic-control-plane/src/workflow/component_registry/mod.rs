@@ -87,12 +87,14 @@ use canic_core::{
             RootComponentMembershipActivationRequest, RootComponentMembershipActivationResponse,
             RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
             RootComponentRuntimeActivationRequest, RootComponentRuntimeActivationResponse,
-            RootComponentSubtreeRemovalAdvanceRequest, RootComponentSubtreeRemovalDeleteIntent,
+            RootComponentSubtreeRemovalAdvanceRequest, RootComponentSubtreeRemovalCompletedReceipt,
+            RootComponentSubtreeRemovalDeleteIntent,
             RootComponentSubtreeRemovalDeletePreparationRequest,
             RootComponentSubtreeRemovalDeleteRequest, RootComponentSubtreeRemovalDeletedReceipt,
             RootComponentSubtreeRemovalDirectoryConvergenceEvidence,
             RootComponentSubtreeRemovalDirectorySynchronizationRequest,
             RootComponentSubtreeRemovalDirectorySynchronizedReceipt,
+            RootComponentSubtreeRemovalLeafFinalizationRequest,
             RootComponentSubtreeRemovalMembershipRemovalRequest,
             RootComponentSubtreeRemovalMembershipRemovedReceipt, RootComponentSubtreeRemovalNode,
             RootComponentSubtreeRemovalPhase, RootComponentSubtreeRemovalRequest,
@@ -819,6 +821,15 @@ pub async fn stop_subtree_leaf(
         &removal,
         None,
     )?;
+    if ComponentRegistryOps::subtree_removal_completed_leaf_matches(
+        request.component,
+        request.operation_id,
+        request.expected_traversal_steps,
+        request.expected_leaf_canister_id,
+        request.expected_leaf_parent_canister_id,
+    )? {
+        return Ok(subtree_removal_response(removal));
+    }
     let plan = prepared_subtree_leaf_stop_plan(
         &authority.binding,
         &store,
@@ -964,6 +975,15 @@ pub async fn delete_subtree_leaf(
         &removal,
         None,
     )?;
+    if ComponentRegistryOps::subtree_removal_completed_leaf_matches(
+        request.component,
+        request.operation_id,
+        request.expected_traversal_steps,
+        request.expected_leaf_canister_id,
+        request.expected_leaf_parent_canister_id,
+    )? {
+        return Ok(subtree_removal_response(removal));
+    }
     let plan = prepared_subtree_leaf_delete_plan(
         &authority.binding,
         &store,
@@ -1114,6 +1134,15 @@ pub async fn synchronize_subtree_leaf_directory(
         &removal,
         None,
     )?;
+    if ComponentRegistryOps::subtree_removal_completed_leaf_matches(
+        request.component,
+        request.operation_id,
+        request.expected_traversal_steps,
+        request.expected_leaf_canister_id,
+        request.expected_leaf_parent_canister_id,
+    )? {
+        return Ok(subtree_removal_response(removal));
+    }
     let membership_removed = match &removal.progress {
         RootComponentSubtreeRemovalProgressView::MembershipRemoved(receipt) => receipt,
         RootComponentSubtreeRemovalProgressView::DirectorySynchronized(receipt) => {
@@ -1126,7 +1155,8 @@ pub async fn synchronize_subtree_leaf_directory(
         | RootComponentSubtreeRemovalProgressView::StopIntent(_)
         | RootComponentSubtreeRemovalProgressView::Stopped(_)
         | RootComponentSubtreeRemovalProgressView::DeleteIntent(_)
-        | RootComponentSubtreeRemovalProgressView::Deleted(_) => {
+        | RootComponentSubtreeRemovalProgressView::Deleted(_)
+        | RootComponentSubtreeRemovalProgressView::Completed(_) => {
             return Err(InternalError::unavailable(
                 "Component subtree leaf membership has not been removed",
             ));
@@ -1165,6 +1195,66 @@ pub async fn synchronize_subtree_leaf_directory(
         None,
     )?;
     Ok(subtree_removal_response(synchronized))
+}
+
+/// Archive one synchronized leaf and resume from its retained parent.
+pub async fn finalize_subtree_leaf(
+    request: RootComponentSubtreeRemovalLeafFinalizationRequest,
+) -> Result<RootComponentSubtreeRemovalResponse, InternalError> {
+    let (authority, root) = root_authority()?;
+    let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let preparation_request = RootComponentRegistryPreparationRequest {
+        store_bootstrap: prepared.store_bootstrap.clone(),
+        expected_fleet_registry: prepared.prepared_against_registry.clone(),
+    };
+    root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    validate_active_authority(&authority, root, &preparation_request)?;
+    if FleetActivationApi::status()
+        .map_err(InternalError::public)?
+        .phase
+        != FleetActivationPhase::Active
+    {
+        return Err(InternalError::unavailable(
+            "Component subtree leaf finalization requires an Active Fleet Subnet Root runtime",
+        ));
+    }
+
+    let topology = ConfigOps::component_topology()?;
+    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
+        InternalError::unavailable("Component Registry partition has not been committed")
+    })?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &partition,
+    )?;
+    let maximum_registry_bytes = topology
+        .get(&partition.binding.component_spec)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Config,
+                "removal target Component Spec is absent from the protected topology",
+            )
+        })?
+        .limits
+        .maximum_registry_bytes;
+    let removal = ComponentRegistryOps::finalize_subtree_leaf(
+        request.component,
+        request.operation_id,
+        request.expected_traversal_steps,
+        request.expected_leaf_canister_id,
+        request.expected_leaf_parent_canister_id,
+        maximum_registry_bytes,
+    )?;
+    validate_subtree_removal(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &removal,
+        None,
+    )?;
+    Ok(subtree_removal_response(removal))
 }
 
 /// Read one durable child-subtree removal operation without mutation.
@@ -4240,6 +4330,8 @@ fn subtree_removal_response(
         target_role: removal.target_role,
         target_status: removal.target_status,
         reserved_against_registry: removal.reserved_against_registry,
+        maximum_completed_leaves: removal.maximum_completed_leaves,
+        completed_leaves: removal.completed_leaves,
         traversal_steps: removal.traversal_steps,
         phase: match removal.progress {
             RootComponentSubtreeRemovalProgressView::Fenced => {
@@ -4295,6 +4387,14 @@ fn subtree_removal_response(
             RootComponentSubtreeRemovalProgressView::DirectorySynchronized(receipt) => {
                 RootComponentSubtreeRemovalPhase::DirectorySynchronized(
                     subtree_directory_synchronized_receipt_response(receipt),
+                )
+            }
+            RootComponentSubtreeRemovalProgressView::Completed(completed) => {
+                RootComponentSubtreeRemovalPhase::Completed(
+                    RootComponentSubtreeRemovalCompletedReceipt {
+                        registry: completed.registry,
+                        directory_authority_hash: completed.directory_authority_hash,
+                    },
                 )
             }
         },
@@ -4719,7 +4819,8 @@ fn prepared_subtree_leaf_stop_plan(
         ),
         RootComponentSubtreeRemovalProgressView::Fenced
         | RootComponentSubtreeRemovalProgressView::Traversing { .. }
-        | RootComponentSubtreeRemovalProgressView::LeafSelected { .. } => {
+        | RootComponentSubtreeRemovalProgressView::LeafSelected { .. }
+        | RootComponentSubtreeRemovalProgressView::Completed(_) => {
             return Err(InternalError::unavailable(
                 "Component subtree leaf has not prepared its stop intent",
             ));
@@ -4828,7 +4929,8 @@ fn prepared_subtree_leaf_delete_plan(
         | RootComponentSubtreeRemovalProgressView::Traversing { .. }
         | RootComponentSubtreeRemovalProgressView::LeafSelected { .. }
         | RootComponentSubtreeRemovalProgressView::StopIntent(_)
-        | RootComponentSubtreeRemovalProgressView::Stopped(_) => {
+        | RootComponentSubtreeRemovalProgressView::Stopped(_)
+        | RootComponentSubtreeRemovalProgressView::Completed(_) => {
             return Err(InternalError::unavailable(
                 "Component subtree leaf has not prepared its deletion intent",
             ));
@@ -5165,7 +5267,8 @@ const fn retained_subtree_stop_controller(
         ),
         RootComponentSubtreeRemovalProgressView::Fenced
         | RootComponentSubtreeRemovalProgressView::Traversing { .. }
-        | RootComponentSubtreeRemovalProgressView::LeafSelected { .. } => None,
+        | RootComponentSubtreeRemovalProgressView::LeafSelected { .. }
+        | RootComponentSubtreeRemovalProgressView::Completed(_) => None,
     }
 }
 
@@ -5183,40 +5286,7 @@ fn validate_subtree_removal(
         )
     })?;
     validate_partition(root, release_set, topology, &partition)?;
-    let (target, _current_status) =
-        ComponentRegistryOps::registered_parent(removal.component, removal.target_canister_id)?
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "subtree-removal fence target is no longer registered",
-                )
-            })?;
-    let ManagedCanisterBinding::ComponentChild(target) = target else {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "subtree-removal fence targets a top-level Component",
-        ));
-    };
-    topology
-        .validate_component_child_binding(root, &target)
-        .map_err(|error| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                format!("subtree-removal target binding is invalid: {error}"),
-            )
-        })?;
-    let target_identity = (
-        removal.component,
-        removal.target_parent_canister_id,
-        &removal.target_role,
-        removal.target_status,
-    );
-    let registered_target_identity = (
-        target.component.component,
-        target.parent_canister_id,
-        &target.role,
-        ComponentLifecycleStatus::Active,
-    );
+    validate_subtree_removal_target(root, topology, removal)?;
     let reserved_registry_is_valid = removal.reserved_against_registry.component
         == removal.component
         && removal.reserved_against_registry.revision > 0;
@@ -5231,7 +5301,8 @@ fn validate_subtree_removal(
         std::cmp::Ordering::Greater => true,
     };
     if removal.operation_id == [0; 32]
-        || target_identity != registered_target_identity
+        || removal.maximum_completed_leaves == 0
+        || removal.completed_leaves > removal.maximum_completed_leaves
         || !reserved_registry_is_valid
         || !partition_covers_reservation
     {
@@ -5263,6 +5334,66 @@ fn validate_subtree_removal(
         if request_identity != durable_identity {
             return Err(InternalError::conflict(
                 "Component subtree-removal operation is already bound to different intent",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_subtree_removal_target(
+    root: &canic_core::ids::FleetSubnetRootBinding,
+    topology: &canic_core::control_plane_support::config::ComponentTopology,
+    removal: &RootComponentSubtreeRemovalView,
+) -> Result<(), InternalError> {
+    let registered_target =
+        ComponentRegistryOps::registered_parent(removal.component, removal.target_canister_id)?;
+    if matches!(
+        &removal.progress,
+        RootComponentSubtreeRemovalProgressView::Completed(_)
+    ) {
+        if registered_target.is_some() {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "completed subtree-removal target remains registered",
+            ));
+        }
+    } else {
+        let (target, _current_status) = registered_target.ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "subtree-removal fence target is no longer registered",
+            )
+        })?;
+        let ManagedCanisterBinding::ComponentChild(target) = target else {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "subtree-removal fence targets a top-level Component",
+            ));
+        };
+        topology
+            .validate_component_child_binding(root, &target)
+            .map_err(|error| {
+                InternalError::invariant(
+                    InternalErrorOrigin::Storage,
+                    format!("subtree-removal target binding is invalid: {error}"),
+                )
+            })?;
+        let target_identity = (
+            removal.component,
+            removal.target_parent_canister_id,
+            &removal.target_role,
+            removal.target_status,
+        );
+        let registered_target_identity = (
+            target.component.component,
+            target.parent_canister_id,
+            &target.role,
+            ComponentLifecycleStatus::Active,
+        );
+        if target_identity != registered_target_identity {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "subtree-removal fence differs from registered target authority",
             ));
         }
     }

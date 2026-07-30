@@ -151,7 +151,7 @@ fn canonical_allocations_form_packed_owner_ledgers() {
     assert_eq!(
         ids(AllocationOwner::CanicControlPlane),
         (allocation::CANIC_CONTROL_PLANE_MIN_ID
-            ..=allocation::memory::control_plane::ROOT_COMPONENT_PRINCIPAL_INDEX_ID)
+            ..=allocation::memory::control_plane::ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID)
             .collect::<Vec<_>>()
     );
     assert_eq!(

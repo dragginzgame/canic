@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.55`.
-- The latest published release is `v0.100.55` at
-  `d838762180696ead48f5ff50c0a1e353c4c01fed`.
-- Open `0.100.56` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.56`.
+- The latest published release is `v0.100.56` at
+  `3d2b8f7bdd32806d9a2ade4198a8e3e7aed722f8`.
+- Open `0.100.57` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -471,13 +471,19 @@ Historical detail is archived at:
   from live Registry membership, settles its exact normalized indexes,
   counters, digest and byte ledgers, and freezes both Registry heads plus the
   next Directory-authority hash in a durable receipt.
-- Open `0.100.56` publishes that post-removal current Directory to the
+- Released `0.100.56` publishes that post-removal current Directory to the
   surviving owning Component and distinct immediate parent, independently
   verifies both and retains bounded convergence evidence without moving the
   traversal cursor. It also advances the sole memory runtime to
   `ic-memory 0.12.3`, adopting validated policy identity and failure-aware
   per-slot diagnostic outcomes without changing durable ledger bytes, stable
   keys or memory IDs.
+- Open `0.100.57` normalizes each complete leaf and Directory receipt into
+  compact selection/module/authority facts plus a digest under its Component,
+  removal operation and traversal step, bounded by the initial
+  committed-descendant count. It atomically returns interior traversal to the
+  retained parent or records terminal authority for the fenced target, after
+  which a new removal operation may begin.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1921,7 +1927,7 @@ receipt with both Registry heads and the next exact Directory-authority hash.
 Completed allocation history remains available for replay; that Directory
 authority is not yet published.
 
-Open `0.100.56` publishes the current post-removal Component Directory to the
+Released `0.100.56` publishes the current post-removal Component Directory to the
 surviving owning Component and distinct retained immediate parent. It
 reconciles uncertain synchronization calls, independently re-observes both
 recipients and commits one bounded `DirectorySynchronized` receipt with shared
@@ -1931,11 +1937,22 @@ Canic policy identity and preserves the existing Canic memory-ledger boundary
 by projecting only successfully measured per-slot sizes. The upstream durable
 allocation-ledger format, Canic stable keys and memory IDs do not change.
 
-Next, normalize that completed leaf and Directory receipt into bounded
-operation-keyed history, then atomically return the traversal cursor to the
-exact retained parent for the next post-order selection. A parent must never
-be removed while a child row remains. Managed application Canisters must not
-perform management effects or infer authorization from flat catalog presence.
+Open `0.100.57` normalizes each completed leaf and Directory receipt into
+operation/step-keyed history at consecutive control-plane stable-memory ID 22.
+Each compact entry retains exact selection, observed module,
+Registry/Directory authority and a domain-separated digest of the full
+convergence receipt. The frozen initial descendant count bounds history
+cardinality. Finalizing an interior leaf atomically returns to its exact
+retained parent; finalizing the fenced target records compact terminal
+authority, releases the live fence and remains exactly replayable through
+history.
+
+Next, begin top-level Component draining by fencing new Component mutation and
+reusing this post-order loop until no descendant row remains. Component
+removal must then retain qualified quiescence and final-inventory evidence; an
+unreachable Canister is never evidence of removal. Managed application
+Canisters must not perform management effects or infer authorization from flat
+catalog presence.
 
 ## Historical Release Detail
 
