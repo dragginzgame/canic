@@ -39,6 +39,26 @@ pub struct RootComponentDrainingView {
     pub directory_authority_hash: [u8; 32],
     pub started_at_ns: u64,
     pub quiescence: Option<RootComponentQuiescenceProgressView>,
+    pub final_inventory: Option<RootComponentFinalInventoryView>,
+}
+
+///
+/// RootComponentFinalInventoryView
+///
+/// Read-only exact empty-inventory authority frozen before top-level deletion.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentFinalInventoryView {
+    pub registry: ComponentRegistryHead,
+    pub descendant_content_hash: [u8; 32],
+    pub registry_encoded_bytes: u64,
+    pub directory_synchronized_at_ns: u64,
+    pub covered_fleet_registry_revision: u64,
+    pub covered_fleet_registry_content_hash: [u8; 32],
+    pub directory_authority_hash: [u8; 32],
+    pub inventory_hash: [u8; 32],
+    pub finalized_at_ns: u64,
 }
 
 ///

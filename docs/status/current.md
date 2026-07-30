@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.59`.
-- The latest published release is `v0.100.59` at
-  `6c142f8df051bbb5d2c2ae7c5c2fd1a0ad6090ed`.
-- Open `0.100.60` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.60`.
+- The latest published release is `v0.100.60` at
+  `281bb86d29aec2e6608aaa2f8e3dde0a44629ec2`.
+- Open `0.100.61` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -499,12 +499,19 @@ Historical detail is archived at:
   on that terminal evidence. Subsequent Directory receipts do not call the
   stopped owner, but still bind exact root-derived authority and converge any
   surviving non-root parent.
-- Open `0.100.60` adds the bounded Component drain driver. It owns canonical
+- Released `0.100.60` adds the bounded Component drain driver. It owns canonical
   direct-subtree selection, derives each removal operation from frozen
   draining authority, retains one durable cursor through target membership
   removal and advances exactly one existing post-order phase per call.
   Caller-selected subtree removal is now `Active`-only; exact current
   empty-inventory evidence remains distinct from the later final receipt.
+- Open `0.100.61` persists that exact empty observation as final Component
+  inventory authority. It revalidates terminal quiescence, the canonical empty
+  partition and normalized indexes, terminal child/removal history and the
+  current Fleet Directory, then stores a domain-separated hashed receipt in
+  the existing stable-memory-ID-23 draining record. Quiescence precharges its
+  maximum shape; finalization changes no Registry byte ledger and performs no
+  deletion or membership mutation.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1984,7 +1991,7 @@ observation. Descendant removal from a draining tree now requires that
 terminal receipt; its Directory phase omits the stopped owner without
 fabricating evidence and continues to converge any surviving non-root parent.
 
-Open `0.100.60` drives that retained tree without caller-selected targets. It
+Released `0.100.60` drives that retained tree without caller-selected targets. It
 chooses the canonical first direct child, derives its operation ID from the
 draining fence, atomically retains one active subtree cursor and advances at
 most one existing durable removal phase per update. The cursor survives target
@@ -1992,11 +1999,17 @@ membership removal until Directory synchronization and finalization, avoiding
 a skipped subtree and repeated completed-history scans at the intended
 10,000–20,000-descendant scale.
 
-Next, persist the exact empty descendant inventory as final Component-removal
-authority, then delete and remove the already-quiescent top-level Component
-under a durable receipt. An unreachable Canister is never evidence of removal.
-Managed application Canisters must not perform management effects or infer
-authorization from flat catalog presence.
+Open `0.100.61` freezes the exact empty Component Registry and current Fleet
+Directory as final Component-removal authority. Its response-idempotent receipt
+retains the current head, empty digest, byte ledger, Directory time, Fleet
+coverage, exact Directory hash, canonical inventory hash and finalization
+time. It remains inside memory ID 23 and is fully covered by the earlier
+pre-effect quiescence reservation.
+
+Next, delete and remove the already-quiescent top-level Component under a
+durable receipt bound to that final inventory. An unreachable Canister is
+never evidence of removal. Managed application Canisters must not perform
+management effects or infer authorization from flat catalog presence.
 
 ## Historical Release Detail
 

@@ -6,10 +6,10 @@ Date: 2026-07-30
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.59`.
-- Latest published release: `v0.100.59` at
-  `6c142f8df051bbb5d2c2ae7c5c2fd1a0ad6090ed`.
-- Open patch draft: `0.100.60`; no package-version change has been authorized.
+- Workspace package version: `0.100.60`.
+- Latest published release: `v0.100.60` at
+  `281bb86d29aec2e6608aaa2f8e3dde0a44629ec2`.
+- Open patch draft: `0.100.61`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -207,6 +207,9 @@ Registry slices replace the 0.99 root model.
 - [x] Drive terminally quiescent descendant evacuation through one durable
   deterministic subtree cursor, advancing at most one post-order phase per
   call and rejecting caller-selected Draining targets.
+- [x] Freeze exact empty Component Registry and current Fleet Directory
+  authority in a response-idempotent final-inventory receipt before
+  top-level deletion.
 - [x] Distribute exact Directories directly from the root to a committed
   Component with target-local retention, independent observation and a
   terminal root receipt.
@@ -847,7 +850,7 @@ owner convergence for that stopped top-level Component while retaining the
 exact root-derived Directory authority and still converging any surviving
 non-root parent; Active trees continue to require owner convergence.
 
-Open 0.100.60 adds the bounded drain driver beneath that terminal receipt.
+Released 0.100.60 adds the bounded drain driver beneath that terminal receipt.
 It deterministically selects the canonical first direct child, derives its
 subtree operation ID from the draining operation and frozen initial Registry
 authority, and atomically retains one active cursor in the existing
@@ -858,11 +861,18 @@ only by the next canonical direct subtree. Caller-selected removal is
 `Active`-only, and the direct cursor avoids repeated scans of completed
 history at the intended 10,000–20,000-descendant scale.
 
+Open 0.100.61 converts the driver's empty observation into durable
+final-inventory authority. It revalidates terminal quiescence, the exact empty
+partition, normalized index absence and terminal lifecycle history, binds the
+current Fleet Directory, and stores a canonical hashed receipt in the existing
+memory-ID-23 draining record. The earlier quiescence reservation covers its
+maximum encoded shape, and the transition performs no deletion or membership
+mutation.
+
 ## Next Action
 
-Persist the driver's exact empty descendant observation as final Component
-inventory evidence, then reconcile deletion and local membership removal of
-the already-quiescent top-level Component under a durable receipt. It must not
-infer removal from an unreachable Canister. Do not introduce nested Component
-declarations, let application Canisters call management effects directly or
-infer authorization from catalog presence alone.
+Reconcile deletion and local membership removal of the already-quiescent
+top-level Component under a durable receipt and the frozen final inventory. It
+must not infer removal from an unreachable Canister. Do not introduce nested
+Component declarations, let application Canisters call management effects
+directly or infer authorization from catalog presence alone.
