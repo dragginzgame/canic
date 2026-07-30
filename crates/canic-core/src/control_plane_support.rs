@@ -72,7 +72,7 @@ pub mod ops {
         }
 
         pub mod mgmt {
-            pub use crate::ops::ic::mgmt::{CanisterInstallMode, MgmtOps};
+            pub use crate::ops::ic::mgmt::{CanisterInstallMode, CanisterStatusType, MgmtOps};
         }
 
         pub mod build_network {

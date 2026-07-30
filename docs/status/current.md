@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-29
+Last updated: 2026-07-30
 
 ## Purpose
 
@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.50`.
-- The latest published release is `v0.100.50` at
-  `c32f57fa7f4726943ed7017e62c6439d7a89a614`.
-- Open `0.100.51` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.51`.
+- The latest published release is `v0.100.51` at
+  `7524072dcc56e0afb4da7f57b106f46b526ab2e5`.
+- Open `0.100.52` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -451,6 +451,10 @@ Historical detail is archived at:
   persisting at most 64 edges per call until it selects one exact active
   childless post-order leaf. Snapshot-convergent retry, restart and exact
   Component/root Registry byte accounting require no Canister effect.
+- Released `0.100.51` freezes that selected leaf, its exact immediate parent
+  and the protected Fleet Subnet Root principal in a durable stop intent
+  before any management call. Exact retry, restart and both Registry byte
+  ceilings preserve the same effect authority.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1854,18 +1858,29 @@ progress without advancing twice; a future expectation fails. Record-size
 changes update the exact Component/root Registry ledgers atomically. The
 selected leaf remains active and registered.
 
-Open `0.100.51` freezes that selected leaf, its exact immediate parent and the
-protected Fleet Subnet Root principal in a durable stop intent before any
+Released `0.100.51` freezes that selected leaf, its exact immediate parent and
+the protected Fleet Subnet Root principal in a durable stop intent before any
 management call. The controller supplies its exact traversal observation;
 conflicts and either Registry byte ceiling fail before mutation, while exact
 retry and restart retain the same effect authority.
 
-Next, reconcile that intent against live controller and lifecycle status,
-issue or resume the root-owned stop effect and retain an independently
-observed stopped receipt. Deletion and Registry mutation remain separate later
-phases; a parent must never be removed while a child row remains. Managed
-application Canisters must not perform management effects or infer
-authorization from flat catalog presence.
+Open `0.100.52` reconciles the intent against live status, exact Store module
+identity and sole-root control. It adopts an already stopped leaf, never
+repeats a `Stopping` effect and records the stopped receipt only after an
+independent observation. A real PocketIC Project Hub child now completes its
+normal lifecycle before this exact fence-and-stop path. The same open patch
+advances host-only `ic-query` from `0.11.4` to `0.14.0`; Canic's cached Subnet
+Catalog surface remains source-compatible, and the lockfile gains no new
+package version. `ic-query` is now recorded as another immediate introducer of
+the existing accepted transitive `serde_cbor 0.11.2` advisory; Canic retains
+no direct dependency on that crate.
+
+Next, freeze exact deletion authority from the stopped receipt, execute or
+reconcile deletion through live absence and retain a durable deleted receipt.
+Registry membership and Directory mutation remain separate later phases; a
+parent must never be removed while a child row remains. Managed application
+Canisters must not perform management effects or infer authorization from flat
+catalog presence.
 
 ## Historical Release Detail
 
