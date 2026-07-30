@@ -60,3 +60,18 @@ impl From<CdkCallError> for IcInfraError {
         }
     }
 }
+
+impl IcInfraError {
+    /// Whether a management observation proved that its target Canister is absent.
+    #[must_use]
+    pub fn is_canister_not_found(&self) -> bool {
+        matches!(
+            self,
+            Self::CallFailed(CallFailed::CallRejected(rejection))
+                if matches!(
+                    rejection.reject_code(),
+                    Ok(ic_cdk::call::RejectCode::DestinationInvalid)
+                )
+        )
+    }
+}

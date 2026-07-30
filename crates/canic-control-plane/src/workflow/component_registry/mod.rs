@@ -20,8 +20,9 @@ use crate::{
         RootComponentChildInstallEffectView, RootComponentChildMembershipView,
         RootComponentCreationEffectView, RootComponentInitialInventoryView,
         RootComponentInstallEffectView, RootComponentRegistryView,
-        RootComponentSubtreeRemovalProgressView, RootComponentSubtreeRemovalView,
-        RootComponentSubtreeStopEffectView,
+        RootComponentSubtreeDeleteEffectView, RootComponentSubtreeRemovalProgressView,
+        RootComponentSubtreeRemovalView, RootComponentSubtreeStopEffectView,
+        RootComponentSubtreeStoppedEffectView,
     },
     workflow::{
         bootstrap::root_store, deployment, runtime::template::resolved_root_store_module_source,
@@ -41,7 +42,10 @@ use canic_core::{
             ic::{
                 IcOps,
                 call::CallOps,
-                mgmt::{CanisterInstallMode, CanisterStatusType, MgmtOps},
+                mgmt::{
+                    CanisterInstallMode, CanisterStatus, CanisterStatusObservation,
+                    CanisterStatusType, MgmtOps,
+                },
             },
         },
         policy::{
@@ -82,10 +86,12 @@ use canic_core::{
             RootComponentMembershipActivationRequest, RootComponentMembershipActivationResponse,
             RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
             RootComponentRuntimeActivationRequest, RootComponentRuntimeActivationResponse,
-            RootComponentSubtreeRemovalAdvanceRequest, RootComponentSubtreeRemovalNode,
-            RootComponentSubtreeRemovalPhase, RootComponentSubtreeRemovalRequest,
-            RootComponentSubtreeRemovalResponse, RootComponentSubtreeRemovalStatusRequest,
-            RootComponentSubtreeRemovalStopIntent,
+            RootComponentSubtreeRemovalAdvanceRequest, RootComponentSubtreeRemovalDeleteIntent,
+            RootComponentSubtreeRemovalDeletePreparationRequest,
+            RootComponentSubtreeRemovalDeleteRequest, RootComponentSubtreeRemovalDeletedReceipt,
+            RootComponentSubtreeRemovalNode, RootComponentSubtreeRemovalPhase,
+            RootComponentSubtreeRemovalRequest, RootComponentSubtreeRemovalResponse,
+            RootComponentSubtreeRemovalStatusRequest, RootComponentSubtreeRemovalStopIntent,
             RootComponentSubtreeRemovalStopPreparationRequest,
             RootComponentSubtreeRemovalStopRequest, RootComponentSubtreeRemovalStoppedReceipt,
         },
@@ -288,6 +294,18 @@ struct PreparedSubtreeLeafStopPlan {
     stop: RootComponentSubtreeStopEffectView,
     expected_status_module_hash: [u8; 32],
     maximum_component_registry_bytes: u64,
+    progressed_beyond_stopped: bool,
+}
+
+#[derive(Clone, Debug)]
+struct PreparedSubtreeLeafDeletePlan {
+    component: canic_core::ids::ComponentInstanceId,
+    operation_id: [u8; 32],
+    traversal_steps: u32,
+    deletion: RootComponentSubtreeDeleteEffectView,
+    expected_status_module_hash: [u8; 32],
+    maximum_component_registry_bytes: u64,
+    already_deleted: bool,
 }
 
 #[derive(CandidType, Deserialize)]
@@ -802,6 +820,9 @@ pub async fn stop_subtree_leaf(
         &request,
         maximum_component_registry_bytes,
     )?;
+    if plan.progressed_beyond_stopped {
+        return Ok(subtree_removal_response(removal));
+    }
     observe_or_stop_subtree_leaf(&plan).await?;
     let stopped = ComponentRegistryOps::mark_subtree_leaf_stopped(
         plan.component,
@@ -820,6 +841,150 @@ pub async fn stop_subtree_leaf(
         None,
     )?;
     Ok(subtree_removal_response(stopped))
+}
+
+/// Freeze one exact stopped receipt before a destructive management call.
+pub async fn prepare_subtree_leaf_delete(
+    request: RootComponentSubtreeRemovalDeletePreparationRequest,
+) -> Result<RootComponentSubtreeRemovalResponse, InternalError> {
+    let (authority, root) = root_authority()?;
+    let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let preparation_request = RootComponentRegistryPreparationRequest {
+        store_bootstrap: prepared.store_bootstrap.clone(),
+        expected_fleet_registry: prepared.prepared_against_registry.clone(),
+    };
+    root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    validate_active_authority(&authority, root, &preparation_request)?;
+    if FleetActivationApi::status()
+        .map_err(InternalError::public)?
+        .phase
+        != FleetActivationPhase::Active
+    {
+        return Err(InternalError::unavailable(
+            "Component subtree deletion preparation requires an Active Fleet Subnet Root runtime",
+        ));
+    }
+
+    let topology = ConfigOps::component_topology()?;
+    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
+        InternalError::unavailable("Component Registry partition has not been committed")
+    })?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &partition,
+    )?;
+    let maximum_registry_bytes = topology
+        .get(&partition.binding.component_spec)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Config,
+                "removal target Component Spec is absent from the protected topology",
+            )
+        })?
+        .limits
+        .maximum_registry_bytes;
+    let removal = ComponentRegistryOps::prepare_subtree_leaf_delete(
+        request.component,
+        request.operation_id,
+        request.expected_traversal_steps,
+        request.expected_leaf_canister_id,
+        request.expected_leaf_parent_canister_id,
+        maximum_registry_bytes,
+    )?;
+    validate_subtree_removal(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &removal,
+        None,
+    )?;
+    Ok(subtree_removal_response(removal))
+}
+
+/// Reconcile one prepared deletion and commit only independently observed absence.
+pub async fn delete_subtree_leaf(
+    request: RootComponentSubtreeRemovalDeleteRequest,
+) -> Result<RootComponentSubtreeRemovalResponse, InternalError> {
+    let (authority, root) = root_authority()?;
+    let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let preparation_request = RootComponentRegistryPreparationRequest {
+        store_bootstrap: prepared.store_bootstrap.clone(),
+        expected_fleet_registry: prepared.prepared_against_registry.clone(),
+    };
+    let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    validate_active_authority(&authority, root, &preparation_request)?;
+    if FleetActivationApi::status()
+        .map_err(InternalError::public)?
+        .phase
+        != FleetActivationPhase::Active
+    {
+        return Err(InternalError::unavailable(
+            "Component subtree deletion requires an Active Fleet Subnet Root runtime",
+        ));
+    }
+
+    let topology = ConfigOps::component_topology()?;
+    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
+        InternalError::unavailable("Component Registry partition has not been committed")
+    })?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &partition,
+    )?;
+    let maximum_component_registry_bytes = topology
+        .get(&partition.binding.component_spec)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Config,
+                "removal target Component Spec is absent from the protected topology",
+            )
+        })?
+        .limits
+        .maximum_registry_bytes;
+    let removal = ComponentRegistryOps::subtree_removal(request.component, request.operation_id)?
+        .ok_or_else(|| {
+        InternalError::unavailable(
+            "Component subtree-removal operation has not been durably fenced",
+        )
+    })?;
+    validate_subtree_removal(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &removal,
+        None,
+    )?;
+    let plan = prepared_subtree_leaf_delete_plan(
+        &authority.binding,
+        &store,
+        &removal,
+        &request,
+        maximum_component_registry_bytes,
+    )?;
+    if plan.already_deleted {
+        return Ok(subtree_removal_response(removal));
+    }
+    observe_or_delete_subtree_leaf(&plan).await?;
+    let deleted = ComponentRegistryOps::mark_subtree_leaf_deleted(
+        plan.component,
+        plan.operation_id,
+        plan.traversal_steps,
+        plan.deletion.stopped.stop.leaf.canister_id,
+        plan.deletion.stopped.stop.leaf.parent_canister_id,
+        plan.maximum_component_registry_bytes,
+    )?;
+    validate_subtree_removal(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &deleted,
+        None,
+    )?;
+    Ok(subtree_removal_response(deleted))
 }
 
 /// Read one durable child-subtree removal operation without mutation.
@@ -3882,39 +4047,53 @@ fn subtree_removal_response(
                 })
             }
             RootComponentSubtreeRemovalProgressView::StopIntent(effect) => {
-                RootComponentSubtreeRemovalPhase::StopIntent(
-                    RootComponentSubtreeRemovalStopIntent {
-                        leaf: RootComponentSubtreeRemovalNode {
-                            canister_id: effect.leaf.canister_id,
-                            parent_canister_id: effect.leaf.parent_canister_id,
-                            role: effect.leaf.role,
-                            kind: effect.leaf.kind,
-                            installed_artifact_hash: effect.leaf.installed_artifact_hash,
-                            status: effect.leaf.status,
-                        },
-                        controller: effect.controller,
+                RootComponentSubtreeRemovalPhase::StopIntent(subtree_stop_intent_response(effect))
+            }
+            RootComponentSubtreeRemovalProgressView::Stopped(receipt) => {
+                RootComponentSubtreeRemovalPhase::Stopped(subtree_stopped_receipt_response(receipt))
+            }
+            RootComponentSubtreeRemovalProgressView::DeleteIntent(deletion) => {
+                RootComponentSubtreeRemovalPhase::DeleteIntent(
+                    RootComponentSubtreeRemovalDeleteIntent {
+                        stopped: subtree_stopped_receipt_response(deletion.stopped),
                     },
                 )
             }
-            RootComponentSubtreeRemovalProgressView::Stopped(receipt) => {
-                RootComponentSubtreeRemovalPhase::Stopped(
-                    RootComponentSubtreeRemovalStoppedReceipt {
-                        stop: RootComponentSubtreeRemovalStopIntent {
-                            leaf: RootComponentSubtreeRemovalNode {
-                                canister_id: receipt.stop.leaf.canister_id,
-                                parent_canister_id: receipt.stop.leaf.parent_canister_id,
-                                role: receipt.stop.leaf.role,
-                                kind: receipt.stop.leaf.kind,
-                                installed_artifact_hash: receipt.stop.leaf.installed_artifact_hash,
-                                status: receipt.stop.leaf.status,
-                            },
-                            controller: receipt.stop.controller,
+            RootComponentSubtreeRemovalProgressView::Deleted(receipt) => {
+                RootComponentSubtreeRemovalPhase::Deleted(
+                    RootComponentSubtreeRemovalDeletedReceipt {
+                        deletion: RootComponentSubtreeRemovalDeleteIntent {
+                            stopped: subtree_stopped_receipt_response(receipt.deletion.stopped),
                         },
-                        observed_module_hash: receipt.observed_module_hash,
                     },
                 )
             }
         },
+    }
+}
+
+fn subtree_stop_intent_response(
+    effect: RootComponentSubtreeStopEffectView,
+) -> RootComponentSubtreeRemovalStopIntent {
+    RootComponentSubtreeRemovalStopIntent {
+        leaf: RootComponentSubtreeRemovalNode {
+            canister_id: effect.leaf.canister_id,
+            parent_canister_id: effect.leaf.parent_canister_id,
+            role: effect.leaf.role,
+            kind: effect.leaf.kind,
+            installed_artifact_hash: effect.leaf.installed_artifact_hash,
+            status: effect.leaf.status,
+        },
+        controller: effect.controller,
+    }
+}
+
+fn subtree_stopped_receipt_response(
+    receipt: RootComponentSubtreeStoppedEffectView,
+) -> RootComponentSubtreeRemovalStoppedReceipt {
+    RootComponentSubtreeRemovalStoppedReceipt {
+        stop: subtree_stop_intent_response(receipt.stop),
+        observed_module_hash: receipt.observed_module_hash,
     }
 }
 
@@ -4216,11 +4395,25 @@ fn prepared_subtree_leaf_stop_plan(
     request: &RootComponentSubtreeRemovalStopRequest,
     maximum_component_registry_bytes: u64,
 ) -> Result<PreparedSubtreeLeafStopPlan, InternalError> {
-    let (stop, durable_module_hash) = match &removal.progress {
-        RootComponentSubtreeRemovalProgressView::StopIntent(effect) => (effect.clone(), None),
-        RootComponentSubtreeRemovalProgressView::Stopped(receipt) => {
-            (receipt.stop.clone(), Some(receipt.observed_module_hash))
+    let (stop, durable_module_hash, progressed_beyond_stopped) = match &removal.progress {
+        RootComponentSubtreeRemovalProgressView::StopIntent(effect) => {
+            (effect.clone(), None, false)
         }
+        RootComponentSubtreeRemovalProgressView::Stopped(receipt) => (
+            receipt.stop.clone(),
+            Some(receipt.observed_module_hash),
+            false,
+        ),
+        RootComponentSubtreeRemovalProgressView::DeleteIntent(deletion) => (
+            deletion.stopped.stop.clone(),
+            Some(deletion.stopped.observed_module_hash),
+            true,
+        ),
+        RootComponentSubtreeRemovalProgressView::Deleted(receipt) => (
+            receipt.deletion.stopped.stop.clone(),
+            Some(receipt.deletion.stopped.observed_module_hash),
+            true,
+        ),
         RootComponentSubtreeRemovalProgressView::Fenced
         | RootComponentSubtreeRemovalProgressView::Traversing { .. }
         | RootComponentSubtreeRemovalProgressView::LeafSelected { .. } => {
@@ -4276,6 +4469,82 @@ fn prepared_subtree_leaf_stop_plan(
         stop,
         expected_status_module_hash: artifact.payload_hash,
         maximum_component_registry_bytes,
+        progressed_beyond_stopped,
+    })
+}
+
+fn prepared_subtree_leaf_delete_plan(
+    root: &canic_core::ids::FleetSubnetRootBinding,
+    store: &RootStoreBootstrapResponse,
+    removal: &RootComponentSubtreeRemovalView,
+    request: &RootComponentSubtreeRemovalDeleteRequest,
+    maximum_component_registry_bytes: u64,
+) -> Result<PreparedSubtreeLeafDeletePlan, InternalError> {
+    let (deletion, already_deleted) = match &removal.progress {
+        RootComponentSubtreeRemovalProgressView::DeleteIntent(deletion) => {
+            (deletion.clone(), false)
+        }
+        RootComponentSubtreeRemovalProgressView::Deleted(receipt) => {
+            (receipt.deletion.clone(), true)
+        }
+        RootComponentSubtreeRemovalProgressView::Fenced
+        | RootComponentSubtreeRemovalProgressView::Traversing { .. }
+        | RootComponentSubtreeRemovalProgressView::LeafSelected { .. }
+        | RootComponentSubtreeRemovalProgressView::StopIntent(_)
+        | RootComponentSubtreeRemovalProgressView::Stopped(_) => {
+            return Err(InternalError::unavailable(
+                "Component subtree leaf has not prepared its deletion intent",
+            ));
+        }
+    };
+    let requested_leaf_authority = (
+        request.operation_id,
+        request.component,
+        request.expected_traversal_steps,
+        request.expected_leaf_canister_id,
+        request.expected_leaf_parent_canister_id,
+    );
+    let durable_leaf_authority = (
+        removal.operation_id,
+        removal.component,
+        removal.traversal_steps,
+        deletion.stopped.stop.leaf.canister_id,
+        deletion.stopped.stop.leaf.parent_canister_id,
+    );
+    if requested_leaf_authority != durable_leaf_authority {
+        return Err(InternalError::conflict(
+            "Component subtree deletion request differs from durable leaf authority",
+        ));
+    }
+    if deletion.stopped.stop.controller != root.fleet_subnet_root {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "durable Component subtree deletion controller differs from protected root authority",
+        ));
+    }
+    if store.fleet_subnet_root != root.fleet_subnet_root {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "verified Store differs from Component subtree deletion root authority",
+        ));
+    }
+    let artifact = exact_store_artifact(store, &deletion.stopped.stop.leaf.role)?;
+    if artifact.raw_module_hash != deletion.stopped.stop.leaf.installed_artifact_hash
+        || artifact.payload_hash != deletion.stopped.observed_module_hash
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component subtree deletion authority differs from verified Store artifact",
+        ));
+    }
+    Ok(PreparedSubtreeLeafDeletePlan {
+        component: removal.component,
+        operation_id: removal.operation_id,
+        traversal_steps: removal.traversal_steps,
+        deletion,
+        expected_status_module_hash: artifact.payload_hash,
+        maximum_component_registry_bytes,
+        already_deleted,
     })
 }
 
@@ -4309,16 +4578,67 @@ async fn observe_or_stop_subtree_leaf(
     }
 }
 
+async fn observe_or_delete_subtree_leaf(
+    plan: &PreparedSubtreeLeafDeletePlan,
+) -> Result<(), InternalError> {
+    match observed_subtree_leaf_for_deletion(plan).await? {
+        CanisterStatusObservation::Absent => return Ok(()),
+        CanisterStatusObservation::Present(_) => {}
+    }
+
+    let delete_error = MgmtOps::delete_canister(plan.deletion.stopped.stop.leaf.canister_id)
+        .await
+        .err();
+    match observed_subtree_leaf_for_deletion(plan).await? {
+        CanisterStatusObservation::Absent => Ok(()),
+        CanisterStatusObservation::Present(_) => match delete_error {
+            Some(error) => Err(error),
+            None => Err(InternalError::unavailable(
+                "Component subtree leaf remains present after its deletion call completed",
+            )),
+        },
+    }
+}
+
 async fn observed_subtree_leaf_status(
     plan: &PreparedSubtreeLeafStopPlan,
 ) -> Result<CanisterStatusType, InternalError> {
     let status = MgmtOps::canister_status(plan.stop.leaf.canister_id).await?;
-    if status.settings.controllers != vec![plan.stop.controller] {
+    validate_subtree_leaf_live_status(&status, &plan.stop, plan.expected_status_module_hash)
+}
+
+async fn observed_subtree_leaf_for_deletion(
+    plan: &PreparedSubtreeLeafDeletePlan,
+) -> Result<CanisterStatusObservation, InternalError> {
+    let observation =
+        MgmtOps::observe_canister_status(plan.deletion.stopped.stop.leaf.canister_id).await?;
+    let CanisterStatusObservation::Present(status) = &observation else {
+        return Ok(observation);
+    };
+    let status_type = validate_subtree_leaf_live_status(
+        status,
+        &plan.deletion.stopped.stop,
+        plan.expected_status_module_hash,
+    )?;
+    if status_type != CanisterStatusType::Stopped {
+        return Err(InternalError::conflict(
+            "Component subtree leaf is no longer stopped under its deletion authority",
+        ));
+    }
+    Ok(observation)
+}
+
+fn validate_subtree_leaf_live_status(
+    status: &CanisterStatus,
+    stop: &RootComponentSubtreeStopEffectView,
+    expected_status_module_hash: [u8; 32],
+) -> Result<CanisterStatusType, InternalError> {
+    if status.settings.controllers != vec![stop.controller] {
         return Err(InternalError::conflict(
             "Component subtree leaf controllers differ from its sole root authority",
         ));
     }
-    if status.module_hash.as_deref() != Some(plan.expected_status_module_hash.as_slice()) {
+    if status.module_hash.as_deref() != Some(expected_status_module_hash.as_slice()) {
         return Err(InternalError::conflict(
             "Component subtree leaf module differs from its verified Store authority",
         ));
@@ -4482,6 +4802,24 @@ fn validate_allocation_record(
     Ok(())
 }
 
+const fn retained_subtree_stop_controller(
+    progress: &RootComponentSubtreeRemovalProgressView,
+) -> Option<candid::Principal> {
+    match progress {
+        RootComponentSubtreeRemovalProgressView::StopIntent(effect) => Some(effect.controller),
+        RootComponentSubtreeRemovalProgressView::Stopped(receipt) => Some(receipt.stop.controller),
+        RootComponentSubtreeRemovalProgressView::DeleteIntent(deletion) => {
+            Some(deletion.stopped.stop.controller)
+        }
+        RootComponentSubtreeRemovalProgressView::Deleted(receipt) => {
+            Some(receipt.deletion.stopped.stop.controller)
+        }
+        RootComponentSubtreeRemovalProgressView::Fenced
+        | RootComponentSubtreeRemovalProgressView::Traversing { .. }
+        | RootComponentSubtreeRemovalProgressView::LeafSelected { .. } => None,
+    }
+}
+
 fn validate_subtree_removal(
     root: &canic_core::ids::FleetSubnetRootBinding,
     release_set: canic_core::ids::FleetSubnetRootReleaseSet,
@@ -4553,13 +4891,7 @@ fn validate_subtree_removal(
             "subtree-removal fence differs from protected Component authority",
         ));
     }
-    let stop_controller = match &removal.progress {
-        RootComponentSubtreeRemovalProgressView::StopIntent(effect) => Some(effect.controller),
-        RootComponentSubtreeRemovalProgressView::Stopped(receipt) => Some(receipt.stop.controller),
-        RootComponentSubtreeRemovalProgressView::Fenced
-        | RootComponentSubtreeRemovalProgressView::Traversing { .. }
-        | RootComponentSubtreeRemovalProgressView::LeafSelected { .. } => None,
-    };
+    let stop_controller = retained_subtree_stop_controller(&removal.progress);
     if stop_controller.is_some_and(|controller| controller != root.fleet_subnet_root) {
         return Err(InternalError::invariant(
             InternalErrorOrigin::Storage,

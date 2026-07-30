@@ -118,6 +118,20 @@ macro_rules! canic_emit_root_admin_endpoints {
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::stop_component_subtree_leaf(request).await
         }
 
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_root_component_subtree_removal_delete_prepare(
+            request: ::canic::dto::component_registry::RootComponentSubtreeRemovalDeletePreparationRequest,
+        ) -> Result<::canic::dto::component_registry::RootComponentSubtreeRemovalResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_component_subtree_leaf_delete(request).await
+        }
+
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_root_component_subtree_removal_delete(
+            request: ::canic::dto::component_registry::RootComponentSubtreeRemovalDeleteRequest,
+        ) -> Result<::canic::dto::component_registry::RootComponentSubtreeRemovalResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::delete_component_subtree_leaf(request).await
+        }
+
         #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_root_component_subtree_removal_status(
             request: ::canic::dto::component_registry::RootComponentSubtreeRemovalStatusRequest,

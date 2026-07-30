@@ -176,6 +176,8 @@ pub enum RootComponentSubtreeRemovalProgressView {
     },
     StopIntent(RootComponentSubtreeStopEffectView),
     Stopped(RootComponentSubtreeStoppedEffectView),
+    DeleteIntent(RootComponentSubtreeDeleteEffectView),
+    Deleted(RootComponentSubtreeDeletedEffectView),
 }
 
 ///
@@ -216,6 +218,28 @@ pub struct RootComponentSubtreeStopEffectView {
 pub struct RootComponentSubtreeStoppedEffectView {
     pub stop: RootComponentSubtreeStopEffectView,
     pub observed_module_hash: [u8; 32],
+}
+
+///
+/// RootComponentSubtreeDeleteEffectView
+///
+/// Read-only stopped receipt retained as exact deletion authority.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentSubtreeDeleteEffectView {
+    pub stopped: RootComponentSubtreeStoppedEffectView,
+}
+
+///
+/// RootComponentSubtreeDeletedEffectView
+///
+/// Read-only deletion authority retained after independently observed absence.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentSubtreeDeletedEffectView {
+    pub deletion: RootComponentSubtreeDeleteEffectView,
 }
 
 ///

@@ -40,9 +40,10 @@ use std::future::Future;
 )]
 pub use types::UpgradeFlags;
 pub use types::{
-    CanisterInstallMode, CanisterSettings, CanisterSettingsSnapshot, CanisterStatus, EcdsaKeyId,
-    EcdsaPublicKeyArgs, EcdsaPublicKeyResult, EnvironmentVariable, MemoryMetricsSnapshot,
-    QueryStatsSnapshot, SignWithEcdsaArgs, SignWithEcdsaResult, UpdateSettingsArgs,
+    CanisterInstallMode, CanisterSettings, CanisterSettingsSnapshot, CanisterStatus,
+    CanisterStatusObservation, EcdsaKeyId, EcdsaPublicKeyArgs, EcdsaPublicKeyResult,
+    EnvironmentVariable, MemoryMetricsSnapshot, QueryStatsSnapshot, SignWithEcdsaArgs,
+    SignWithEcdsaResult, UpdateSettingsArgs,
 };
 #[expect(
     unused_imports,
@@ -69,6 +70,15 @@ async fn management_call<T>(
     operation: ManagementCallMetricOperation,
     fut: impl Future<Output = Result<T, IcInfraError>>,
 ) -> Result<T, InternalError> {
+    management_call_infra(operation, fut)
+        .await
+        .map_err(|err| OpsError::from(err).into())
+}
+
+async fn management_call_infra<T>(
+    operation: ManagementCallMetricOperation,
+    fut: impl Future<Output = Result<T, IcInfraError>>,
+) -> Result<T, IcInfraError> {
     record_management_call(
         operation,
         PlatformCallMetricOutcome::Started,
@@ -96,7 +106,7 @@ async fn management_call<T>(
                 ManagementCallMetricOutcome::Failed,
                 ManagementCallMetricReason::Infra,
             );
-            Err(OpsError::from(err).into())
+            Err(err)
         }
     }
 }

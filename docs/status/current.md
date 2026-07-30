@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.51`.
-- The latest published release is `v0.100.51` at
-  `7524072dcc56e0afb4da7f57b106f46b526ab2e5`.
-- Open `0.100.52` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.52`.
+- The latest published release is `v0.100.52` at
+  `f070a63c22279171a34eabd4ac65651b54067e00`.
+- Open `0.100.53` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -455,6 +455,11 @@ Historical detail is archived at:
   and the protected Fleet Subnet Root principal in a durable stop intent
   before any management call. Exact retry, restart and both Registry byte
   ceilings preserve the same effect authority.
+- Released `0.100.52` executes and reconciles the exact stop intent against
+  sole-root control and the Store-backed live module. Only independently
+  observed `Stopped` status commits the durable receipt. The same release
+  advances host-only `ic-query` to `0.14.0` without changing Canic's cached
+  Subnet Catalog contract.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1864,23 +1869,33 @@ management call. The controller supplies its exact traversal observation;
 conflicts and either Registry byte ceiling fail before mutation, while exact
 retry and restart retain the same effect authority.
 
-Open `0.100.52` reconciles the intent against live status, exact Store module
-identity and sole-root control. It adopts an already stopped leaf, never
-repeats a `Stopping` effect and records the stopped receipt only after an
-independent observation. A real PocketIC Project Hub child now completes its
-normal lifecycle before this exact fence-and-stop path. The same open patch
+Released `0.100.52` reconciles the intent against live status, exact Store
+module identity and sole-root control. It adopts an already stopped leaf,
+never repeats a `Stopping` effect and records the stopped receipt only after
+an independent observation. A real PocketIC Project Hub child now completes
+its normal lifecycle before this exact fence-and-stop path. The same release
 advances host-only `ic-query` from `0.11.4` to `0.14.0`; Canic's cached Subnet
 Catalog surface remains source-compatible, and the lockfile gains no new
-package version. `ic-query` is now recorded as another immediate introducer of
-the existing accepted transitive `serde_cbor 0.11.2` advisory; Canic retains
-no direct dependency on that crate.
+package version. `ic-query` is now recorded as another immediate introducer
+of the existing accepted transitive `serde_cbor 0.11.2` advisory; Canic
+retains no direct dependency on that crate.
 
-Next, freeze exact deletion authority from the stopped receipt, execute or
-reconcile deletion through live absence and retain a durable deleted receipt.
-Registry membership and Directory mutation remain separate later phases; a
-parent must never be removed while a child row remains. Managed application
-Canisters must not perform management effects or infer authorization from flat
-catalog presence.
+Open `0.100.53` freezes the complete stopped receipt as exact deletion
+authority before the destructive call. It adopts a target already proven
+absent, otherwise requires the present Canister to remain stopped under the
+same sole root and Store module, then re-observes after either call success or
+error. Only typed live absence commits the durable `Deleted` receipt. Registry
+membership, traversal indexes, parent-role counts, descendant capacity and
+Directory authority remain unchanged.
+
+Next, atomically remove that independently deleted leaf from its exact
+Component Registry partition and indexes, decrement its retained parent-role,
+Component-descendant and root managed-Canister accounting, and preserve a
+durable membership-removal receipt before advancing the traversal cursor to
+the retained parent. Directory publication remains its own following
+transition; a parent must never be removed while a child row remains. Managed
+application Canisters must not perform management effects or infer
+authorization from flat catalog presence.
 
 ## Historical Release Detail
 

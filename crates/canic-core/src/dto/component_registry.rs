@@ -176,6 +176,36 @@ pub struct RootComponentSubtreeRemovalStopRequest {
 }
 
 ///
+/// RootComponentSubtreeRemovalDeletePreparationRequest
+///
+/// Controller command freezing exact deletion authority from one stopped receipt.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeRemovalDeletePreparationRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub expected_traversal_steps: u32,
+    pub expected_leaf_canister_id: Principal,
+    pub expected_leaf_parent_canister_id: Principal,
+}
+
+///
+/// RootComponentSubtreeRemovalDeleteRequest
+///
+/// Controller command reconciling and deleting one exactly prepared leaf.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeRemovalDeleteRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub expected_traversal_steps: u32,
+    pub expected_leaf_canister_id: Principal,
+    pub expected_leaf_parent_canister_id: Principal,
+}
+
+///
 /// RootComponentSubtreeRemovalStatusRequest
 ///
 /// Controller lookup key for one durable child-subtree removal operation.
@@ -366,6 +396,8 @@ pub enum RootComponentSubtreeRemovalPhase {
     LeafSelected(RootComponentSubtreeRemovalNode),
     StopIntent(RootComponentSubtreeRemovalStopIntent),
     Stopped(RootComponentSubtreeRemovalStoppedReceipt),
+    DeleteIntent(RootComponentSubtreeRemovalDeleteIntent),
+    Deleted(RootComponentSubtreeRemovalDeletedReceipt),
 }
 
 ///
@@ -406,6 +438,28 @@ pub struct RootComponentSubtreeRemovalStopIntent {
 pub struct RootComponentSubtreeRemovalStoppedReceipt {
     pub stop: RootComponentSubtreeRemovalStopIntent,
     pub observed_module_hash: [u8; 32],
+}
+
+///
+/// RootComponentSubtreeRemovalDeleteIntent
+///
+/// Exact stopped receipt frozen before the destructive management call.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeRemovalDeleteIntent {
+    pub stopped: RootComponentSubtreeRemovalStoppedReceipt,
+}
+
+///
+/// RootComponentSubtreeRemovalDeletedReceipt
+///
+/// Frozen deletion authority committed only after independently observed absence.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentSubtreeRemovalDeletedReceipt {
+    pub deletion: RootComponentSubtreeRemovalDeleteIntent,
 }
 
 ///
@@ -1178,6 +1232,20 @@ mod tests {
             expected_leaf_canister_id: Principal::from_slice(&[46; 29]),
             expected_leaf_parent_canister_id: request.target_canister_id,
         };
+        let stopped = RootComponentSubtreeRemovalStoppedReceipt {
+            observed_module_hash: [49; 32],
+            stop: RootComponentSubtreeRemovalStopIntent {
+                controller: Principal::from_slice(&[48; 29]),
+                leaf: RootComponentSubtreeRemovalNode {
+                    canister_id: Principal::from_slice(&[46; 29]),
+                    parent_canister_id: request.target_canister_id,
+                    role: CanisterRole::new("project_ledger"),
+                    kind: ComponentChildKind::Singleton,
+                    installed_artifact_hash: [47; 32],
+                    status: ComponentLifecycleStatus::Active,
+                },
+            },
+        };
         let response = RootComponentSubtreeRemovalResponse {
             operation_id: request.operation_id,
             component,
@@ -1187,20 +1255,9 @@ mod tests {
             target_status: ComponentLifecycleStatus::Active,
             reserved_against_registry: registry,
             traversal_steps: 2,
-            phase: RootComponentSubtreeRemovalPhase::Stopped(
-                RootComponentSubtreeRemovalStoppedReceipt {
-                    observed_module_hash: [49; 32],
-                    stop: RootComponentSubtreeRemovalStopIntent {
-                        controller: Principal::from_slice(&[48; 29]),
-                        leaf: RootComponentSubtreeRemovalNode {
-                            canister_id: Principal::from_slice(&[46; 29]),
-                            parent_canister_id: request.target_canister_id,
-                            role: CanisterRole::new("project_ledger"),
-                            kind: ComponentChildKind::Singleton,
-                            installed_artifact_hash: [47; 32],
-                            status: ComponentLifecycleStatus::Active,
-                        },
-                    },
+            phase: RootComponentSubtreeRemovalPhase::Deleted(
+                RootComponentSubtreeRemovalDeletedReceipt {
+                    deletion: RootComponentSubtreeRemovalDeleteIntent { stopped },
                 },
             ),
         };
@@ -1239,6 +1296,41 @@ mod tests {
             candid::decode_one::<RootComponentSubtreeRemovalResponse>(&response_bytes)
                 .expect("decode subtree removal response"),
             response
+        );
+    }
+
+    #[test]
+    fn component_subtree_removal_deletion_requests_round_trip_through_candid() {
+        let prepare = RootComponentSubtreeRemovalDeletePreparationRequest {
+            operation_id: [50; 32],
+            component: ComponentInstanceId::from_generated_bytes([51; 32]),
+            expected_traversal_steps: 3,
+            expected_leaf_canister_id: Principal::from_slice(&[52; 29]),
+            expected_leaf_parent_canister_id: Principal::from_slice(&[53; 29]),
+        };
+        let request = RootComponentSubtreeRemovalDeleteRequest {
+            operation_id: prepare.operation_id,
+            component: prepare.component,
+            expected_traversal_steps: prepare.expected_traversal_steps,
+            expected_leaf_canister_id: prepare.expected_leaf_canister_id,
+            expected_leaf_parent_canister_id: prepare.expected_leaf_parent_canister_id,
+        };
+        let prepare_bytes = candid::encode_one(prepare)
+            .expect("encode subtree removal deletion preparation request");
+        let request_bytes =
+            candid::encode_one(request).expect("encode subtree removal deletion request");
+
+        assert_eq!(
+            candid::decode_one::<RootComponentSubtreeRemovalDeletePreparationRequest>(
+                &prepare_bytes
+            )
+            .expect("decode subtree removal deletion preparation request"),
+            prepare
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentSubtreeRemovalDeleteRequest>(&request_bytes)
+                .expect("decode subtree removal deletion request"),
+            request
         );
     }
 
