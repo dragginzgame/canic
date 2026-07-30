@@ -29,10 +29,12 @@ use canic_core::{
             RootComponentChildRuntimeActivationResponse, RootComponentCommitRequest,
             RootComponentCommitResponse, RootComponentCreationRequest,
             RootComponentDirectoryPreparationRequest, RootComponentDirectoryPreparationResponse,
-            RootComponentInstallRequest, RootComponentMembershipActivationRequest,
-            RootComponentMembershipActivationResponse, RootComponentRegistryPreparationRequest,
-            RootComponentRegistryStatusResponse, RootComponentRuntimeActivationRequest,
-            RootComponentRuntimeActivationResponse, RootComponentSubtreeRemovalAdvanceRequest,
+            RootComponentDrainingRequest, RootComponentDrainingResponse,
+            RootComponentDrainingStatusRequest, RootComponentInstallRequest,
+            RootComponentMembershipActivationRequest, RootComponentMembershipActivationResponse,
+            RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
+            RootComponentRuntimeActivationRequest, RootComponentRuntimeActivationResponse,
+            RootComponentSubtreeRemovalAdvanceRequest,
             RootComponentSubtreeRemovalDeletePreparationRequest,
             RootComponentSubtreeRemovalDeleteRequest,
             RootComponentSubtreeRemovalDirectorySynchronizationRequest,
@@ -166,6 +168,20 @@ impl LifecycleApi {
         request: RootComponentChildAllocationStatusRequest,
     ) -> Result<RootComponentChildAllocationResponse, canic_core::dto::error::Error> {
         crate::workflow::component_registry::child_allocation_status(request).map_err(Into::into)
+    }
+
+    pub async fn begin_component_draining(
+        request: RootComponentDrainingRequest,
+    ) -> Result<RootComponentDrainingResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::begin_component_draining(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub fn component_draining_status(
+        request: RootComponentDrainingStatusRequest,
+    ) -> Result<RootComponentDrainingResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::component_draining_status(request).map_err(Into::into)
     }
 
     pub async fn begin_component_subtree_removal(

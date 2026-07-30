@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.56`.
-- The latest published release is `v0.100.56` at
-  `3d2b8f7bdd32806d9a2ade4198a8e3e7aed722f8`.
-- Open `0.100.57` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.57`.
+- The latest published release is `v0.100.57` at
+  `80e920c758bb8497f94ef9830e8df151183fa286`.
+- Open `0.100.58` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -478,12 +478,18 @@ Historical detail is archived at:
   `ic-memory 0.12.3`, adopting validated policy identity and failure-aware
   per-slot diagnostic outcomes without changing durable ledger bytes, stable
   keys or memory IDs.
-- Open `0.100.57` normalizes each complete leaf and Directory receipt into
+- Released `0.100.57` normalizes each complete leaf and Directory receipt into
   compact selection/module/authority facts plus a digest under its Component,
   removal operation and traversal step, bounded by the initial
   committed-descendant count. It atomically returns interior traversal to the
   retained parent or records terminal authority for the fenced target, after
   which a new removal operation may begin.
+- Open `0.100.58` durably advances one exact top-level Component from `Active`
+  to `Draining` only after all earlier child lifecycle and subtree-removal
+  operations are terminal. Its operation receipt freezes both Registry heads,
+  descendant count and digest, and Directory authority at stable-memory ID
+  23. The draining partition rejects new descendants while retaining
+  principal lookup, Directory pagination and post-order evacuation.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1937,7 +1943,7 @@ Canic policy identity and preserves the existing Canic memory-ledger boundary
 by projecting only successfully measured per-slot sizes. The upstream durable
 allocation-ledger format, Canic stable keys and memory IDs do not change.
 
-Open `0.100.57` normalizes each completed leaf and Directory receipt into
+Released `0.100.57` normalizes each completed leaf and Directory receipt into
 operation/step-keyed history at consecutive control-plane stable-memory ID 22.
 Each compact entry retains exact selection, observed module,
 Registry/Directory authority and a domain-separated digest of the full
@@ -1947,12 +1953,19 @@ retained parent; finalizing the fenced target records compact terminal
 authority, releases the live fence and remains exactly replayable through
 history.
 
-Next, begin top-level Component draining by fencing new Component mutation and
-reusing this post-order loop until no descendant row remains. Component
-removal must then retain qualified quiescence and final-inventory evidence; an
-unreachable Canister is never evidence of removal. Managed application
-Canisters must not perform management effects or infer authorization from flat
-catalog presence.
+Open `0.100.58` durably fences an exact active top-level Component into
+`Draining`. It requires an exact current head and settled earlier work,
+atomically advances the Component status/head and stores a bounded one-per-
+Component receipt at consecutive control-plane stable-memory ID 23. Draining
+blocks new child reservations while preserving lookup, current Directory
+pagination and the existing post-order removal path. It performs no Canister
+effect.
+
+Next, obtain qualified Component-specific quiescence evidence and reuse the
+post-order loop until no descendant row remains. Component removal must then
+retain final-inventory evidence; an unreachable Canister is never evidence of
+removal. Managed application Canisters must not perform management effects or
+infer authorization from flat catalog presence.
 
 ## Historical Release Detail
 

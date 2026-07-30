@@ -6,10 +6,10 @@ Date: 2026-07-30
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.56`.
-- Latest published release: `v0.100.56` at
-  `3d2b8f7bdd32806d9a2ade4198a8e3e7aed722f8`.
-- Open patch draft: `0.100.57`; no package-version change has been authorized.
+- Workspace package version: `0.100.57`.
+- Latest published release: `v0.100.57` at
+  `80e920c758bb8497f94ef9830e8df151183fa286`.
+- Open patch draft: `0.100.58`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -199,6 +199,9 @@ Registry slices replace the 0.99 root model.
   bounded stable convergence receipt.
 - [x] Normalize the completed leaf receipt and return the cursor to its
   retained parent until the target is terminal.
+- [x] Durably advance one exact top-level Component from `Active` to
+  `Draining`, reject new descendants, retain lookup and allow the existing
+  post-order removal workflow to evacuate its frozen tree.
 - [x] Distribute exact Directories directly from the root to a committed
   Component with target-local retention, independent observation and a
   terminal root receipt.
@@ -804,7 +807,7 @@ memory runtime to `ic-memory 0.12.3`, adopting its validated semantic policy
 identity and failure-aware size diagnostics without changing durable
 allocation-ledger bytes, stable keys or memory IDs.
 
-Open 0.100.57 normalizes that complete per-leaf receipt into compact immutable
+Released 0.100.57 normalizes that complete per-leaf receipt into compact immutable
 history keyed by Component, removal operation and traversal step. Each entry
 retains the exact selection, observed module, terminal Registry/Directory
 authority and a domain-separated digest of the full convergence receipt. The
@@ -815,12 +818,22 @@ fenced target itself is complete. Exact retries of every older phase converge
 through history without repeating an effect, and terminal completion releases
 the live subtree fence.
 
+Open 0.100.58 adds the durable top-level Component `Active` to `Draining`
+fence. It requires the exact current head and no reserved descendants,
+incomplete child lifecycle or in-progress subtree removal, then atomically
+advances the Component head and stores one bounded operation receipt at
+consecutive control-plane memory ID 23. Draining rejects every new child
+reservation while preserving the frozen descendant count and content digest,
+normalized descendants, principal lookup, Directory pagination and the
+existing post-order removal path. The transition does not stop or delete a
+Canister.
+
 ## Next Action
 
-Begin top-level Component draining by fencing new Component mutation and
-reusing the completed post-order loop until no descendant row remains. The
-later Component-target transition must retain qualified quiescence and final
-inventory evidence before removing the top-level Component; it must not infer
-removal from an unreachable Canister. Do not introduce nested Component
+Obtain qualified Component-specific quiescence evidence after the durable
+draining fence, then drive the existing completed post-order loop until no
+descendant row remains. The later Component-target transition must retain
+final inventory evidence before removing the top-level Component; it must not
+infer removal from an unreachable Canister. Do not introduce nested Component
 declarations, let application Canisters call management effects directly or
 infer authorization from catalog presence alone.

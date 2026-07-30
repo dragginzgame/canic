@@ -386,6 +386,28 @@ fn root_component_child_reservation_is_response_idempotent() {
 }
 
 #[test]
+fn root_component_draining_fence_is_response_idempotent() {
+    let begin = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_root_component_draining_begin")
+        .expect("root Component draining begin policy entry");
+    let status = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_root_component_draining_status")
+        .expect("root Component draining status policy entry");
+
+    assert_eq!(
+        begin.replay_policy,
+        ReplayPolicy::ResponseIdempotent {
+            command_kind: replay_command_kind("component_registry.begin_component_draining.v1"),
+        }
+    );
+    assert_eq!(begin.cost_class, CostClass::None);
+    assert_eq!(status.replay_policy, ReplayPolicy::QueryOrReadOnly);
+    assert_eq!(status.endpoint_kind, EndpointKind::Query);
+}
+
+#[test]
 #[expect(
     clippy::too_many_lines,
     reason = "one policy inventory test keeps every monotonic subtree-removal transition aligned"

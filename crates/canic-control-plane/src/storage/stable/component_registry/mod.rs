@@ -12,9 +12,9 @@ use canic_core::{
     },
     eager_static,
     role_contract::allocation::memory::control_plane::{
-        ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_PRINCIPAL_INDEX_ID,
-        ROOT_COMPONENT_REGISTRY_ENTRIES_ID, ROOT_COMPONENT_REGISTRY_META_ID,
-        ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID,
+        ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_DRAINING_ID,
+        ROOT_COMPONENT_PRINCIPAL_INDEX_ID, ROOT_COMPONENT_REGISTRY_ENTRIES_ID,
+        ROOT_COMPONENT_REGISTRY_META_ID, ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID,
     },
 };
 use canic_core::{
@@ -51,6 +51,8 @@ const COMPONENT_REGISTRY_ENTRY_RECORD_MAX_BYTES: u32 = 4_096;
 const SUBTREE_REMOVAL_HISTORY_KEY_MAX_BYTES: u32 = 256;
 #[cfg(feature = "root-control-plane")]
 const SUBTREE_REMOVAL_HISTORY_RECORD_MAX_BYTES: u32 = 1_024;
+#[cfg(feature = "root-control-plane")]
+const COMPONENT_DRAINING_RECORD_MAX_BYTES: u32 = 1_024;
 
 #[cfg(feature = "root-control-plane")]
 struct RootComponentRegistryState;
@@ -62,6 +64,8 @@ struct ComponentRegistryEntries;
 struct ComponentRegistryPrincipalIndex;
 #[cfg(feature = "root-control-plane")]
 struct RootComponentSubtreeRemovalHistory;
+#[cfg(feature = "root-control-plane")]
+struct RootComponentDraining;
 
 #[cfg(feature = "root-control-plane")]
 eager_static! {
@@ -76,6 +80,24 @@ eager_static! {
             ),
             RootComponentRegistryStateRecord::default(),
         ));
+}
+
+#[cfg(feature = "root-control-plane")]
+eager_static! {
+    static ROOT_COMPONENT_DRAINING: RefCell<
+        StableBtreeMap<
+            RootComponentDrainingKey,
+            RootComponentDrainingRecord,
+            VirtualMemory<DefaultMemoryImpl>,
+        >,
+    > = RefCell::new(StableBtreeMap::init(
+        canic_core::ic_memory_key!(
+            authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
+            key = "canic.control_plane.root_component_draining.v1",
+            ty = RootComponentDraining,
+            id = ROOT_COMPONENT_DRAINING_ID
+        ),
+    ));
 }
 
 #[cfg(feature = "root-control-plane")]
@@ -352,6 +374,35 @@ pub struct ComponentRegistryPartitionRecord {
     pub committed_descendants: u32,
     pub encoded_bytes: u64,
 }
+
+///
+/// RootComponentDrainingRecord
+///
+/// Immutable one-per-Component authority for the Active-to-Draining transition.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentDrainingRecord {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub previous_registry: ComponentRegistryHead,
+    pub registry: ComponentRegistryHead,
+    pub descendant_count: u32,
+    pub descendant_content_hash: [u8; 32],
+    pub directory_authority_hash: [u8; 32],
+    pub started_at_ns: u64,
+}
+
+impl RootComponentDrainingRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "RootComponentDrainingRecord";
+}
+
+#[cfg(feature = "root-control-plane")]
+impl_storable_bounded!(
+    RootComponentDrainingRecord,
+    COMPONENT_DRAINING_RECORD_MAX_BYTES,
+    false
+);
 
 #[derive(Debug, Eq, PartialEq)]
 struct ComponentPartitionStableAuthority<'a> {
@@ -928,6 +979,18 @@ impl_storable_bounded!(ComponentRegistryPrincipalIndexRecord, 128, false);
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 struct RootComponentAllocationOperationKey([u8; 32]);
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+struct RootComponentDrainingKey([u8; 32]);
+
+impl From<ComponentInstanceId> for RootComponentDrainingKey {
+    fn from(value: ComponentInstanceId) -> Self {
+        Self(*value.as_bytes())
+    }
+}
+
+#[cfg(feature = "root-control-plane")]
+impl_storable_bounded!(RootComponentDrainingKey, 64, false);
+
 impl From<[u8; 32]> for RootComponentAllocationOperationKey {
     fn from(value: [u8; 32]) -> Self {
         Self(value)
@@ -1203,6 +1266,7 @@ pub struct RootComponentRegistryData {
     pub child_allocations: Vec<RootComponentChildAllocationRecord>,
     pub subtree_removals: Vec<RootComponentSubtreeRemovalRecord>,
     pub subtree_removal_history: Vec<RootComponentSubtreeRemovalCompletedLeafRecord>,
+    pub component_drainings: Vec<RootComponentDrainingRecord>,
     pub parent_role_counts: Vec<ComponentRegistryParentRoleCountRecord>,
 }
 
@@ -1345,6 +1409,8 @@ impl RootComponentRegistryStore {
             }),
             subtree_removal_history: ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY
                 .with_borrow(|map| map.iter().map(|entry| entry.value()).collect()),
+            component_drainings: ROOT_COMPONENT_DRAINING
+                .with_borrow(|map| map.iter().map(|entry| entry.value()).collect()),
             parent_role_counts: COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
                 map.iter()
                     .filter_map(|entry| match entry.value() {
@@ -1449,6 +1515,14 @@ impl RootComponentRegistryStore {
                 | None => None,
             }
         })
+    }
+
+    #[must_use]
+    pub(crate) fn component_draining(
+        component: ComponentInstanceId,
+    ) -> Option<RootComponentDrainingRecord> {
+        ROOT_COMPONENT_DRAINING
+            .with_borrow(|map| map.get(&RootComponentDrainingKey::from(component)))
     }
 
     #[must_use]
@@ -2875,6 +2949,89 @@ impl RootComponentRegistryStore {
         })
     }
 
+    pub(crate) fn begin_component_draining(
+        expected_meta: &RootComponentRegistryMetaRecord,
+        next_meta: RootComponentRegistryMetaRecord,
+        expected_partition: &ComponentRegistryPartitionRecord,
+        next_partition: ComponentRegistryPartitionRecord,
+        record: RootComponentDrainingRecord,
+    ) -> Result<(), RootComponentAllocationCommitError> {
+        let component = expected_partition.binding.component;
+        let key = RootComponentDrainingKey::from(component);
+        let expected_registry = ComponentRegistryHead {
+            component,
+            revision: expected_partition.revision,
+            content_hash: expected_partition.content_hash,
+        };
+        let next_registry = ComponentRegistryHead {
+            component,
+            revision: next_partition.revision,
+            content_hash: next_partition.content_hash,
+        };
+        if ComponentPartitionStableAuthority::from(&next_partition)
+            != ComponentPartitionStableAuthority::from(expected_partition)
+            || expected_partition.status != ComponentLifecycleStatus::Active
+            || next_partition.status != ComponentLifecycleStatus::Draining
+            || next_partition.descendant_content_hash != expected_partition.descendant_content_hash
+            || next_partition.reserved_descendants != expected_partition.reserved_descendants
+            || next_partition.committed_descendants != expected_partition.committed_descendants
+            || expected_partition.revision.checked_add(1) != Some(next_partition.revision)
+            || next_partition.directory_synchronized_at_ns != record.started_at_ns
+            || record.started_at_ns <= expected_partition.directory_synchronized_at_ns
+            || record.operation_id == [0; 32]
+            || record.component != component
+            || record.previous_registry != expected_registry
+            || record.registry != next_registry
+            || record.descendant_count != expected_partition.committed_descendants
+            || record.descendant_content_hash != expected_partition.descendant_content_hash
+            || record.directory_authority_hash == [0; 32]
+        {
+            return Err(RootComponentAllocationCommitError::ConflictingPartition);
+        }
+
+        ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            let current_meta = state
+                .current
+                .as_ref()
+                .ok_or(RootComponentAllocationCommitError::Uninitialized)?;
+            if current_meta != expected_meta
+                || ROOT_COMPONENT_DRAINING.with_borrow(|map| map.contains_key(&key))
+            {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            let current_partition = COMPONENT_REGISTRY_ENTRIES
+                .with_borrow(|map| {
+                    map.get(&ComponentRegistryEntryKey::partition(component))
+                        .and_then(|entry| match entry {
+                            ComponentRegistryEntryRecord::Partition(partition) => Some(partition),
+                            ComponentRegistryEntryRecord::Child(_)
+                            | ComponentRegistryEntryRecord::ChildTraversal(_)
+                            | ComponentRegistryEntryRecord::ChildAllocation(_)
+                            | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                            | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                        })
+                })
+                .ok_or(RootComponentAllocationCommitError::ConflictingPartition)?;
+            if &current_partition != expected_partition {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+
+            ROOT_COMPONENT_DRAINING.with_borrow_mut(|map| {
+                map.insert(key, record);
+            });
+            COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
+                map.insert(
+                    ComponentRegistryEntryKey::partition(component),
+                    ComponentRegistryEntryRecord::Partition(next_partition),
+                );
+            });
+            state.current = Some(next_meta);
+            cell.set(state);
+            Ok(())
+        })
+    }
+
     #[must_use]
     pub(crate) fn allocation_entry_bytes(record: &RootComponentAllocationRecord) -> u64 {
         let key = RootComponentAllocationOperationKey::from(record.operation_id);
@@ -2917,6 +3074,12 @@ impl RootComponentRegistryStore {
             record.operation_id,
             record.traversal_steps,
         );
+        (key.to_bytes().len() + record.to_bytes().len()) as u64
+    }
+
+    #[must_use]
+    pub(crate) fn component_draining_entry_bytes(record: &RootComponentDrainingRecord) -> u64 {
+        let key = RootComponentDrainingKey::from(record.component);
         (key.to_bytes().len() + record.to_bytes().len()) as u64
     }
 
@@ -2972,6 +3135,7 @@ impl RootComponentRegistryStore {
     pub(crate) fn import(data: RootComponentRegistryData) {
         ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(StableBtreeMap::clear_new);
         ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY.with_borrow_mut(StableBtreeMap::clear_new);
+        ROOT_COMPONENT_DRAINING.with_borrow_mut(StableBtreeMap::clear_new);
         for record in data.allocations {
             ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(|map| {
                 map.insert(
@@ -3059,6 +3223,11 @@ impl RootComponentRegistryStore {
                     ),
                     record,
                 );
+            });
+        }
+        for record in data.component_drainings {
+            ROOT_COMPONENT_DRAINING.with_borrow_mut(|map| {
+                map.insert(RootComponentDrainingKey::from(record.component), record);
             });
         }
         for record in data.parent_role_counts {

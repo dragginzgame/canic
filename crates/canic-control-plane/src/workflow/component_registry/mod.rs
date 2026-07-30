@@ -18,9 +18,10 @@ use crate::{
         RootComponentAllocationView, RootComponentChildAllocationProgressView,
         RootComponentChildAllocationView, RootComponentChildCommitmentView,
         RootComponentChildInstallEffectView, RootComponentChildMembershipView,
-        RootComponentCreationEffectView, RootComponentInitialInventoryView,
-        RootComponentInstallEffectView, RootComponentRegistryView,
-        RootComponentSubtreeDeleteEffectView, RootComponentSubtreeDirectoryConvergenceView,
+        RootComponentCreationEffectView, RootComponentDrainingView,
+        RootComponentInitialInventoryView, RootComponentInstallEffectView,
+        RootComponentRegistryView, RootComponentSubtreeDeleteEffectView,
+        RootComponentSubtreeDirectoryConvergenceView,
         RootComponentSubtreeDirectorySynchronizedView, RootComponentSubtreeMembershipRemovedView,
         RootComponentSubtreeRemovalProgressView, RootComponentSubtreeRemovalView,
         RootComponentSubtreeStopEffectView, RootComponentSubtreeStoppedEffectView,
@@ -82,13 +83,14 @@ use canic_core::{
             RootComponentChildRuntimeActivationResponse, RootComponentCommitRequest,
             RootComponentCommitResponse, RootComponentCreationEvidence,
             RootComponentCreationRequest, RootComponentDirectoryPreparationRequest,
-            RootComponentDirectoryPreparationResponse, RootComponentInitialInventoryStatus,
-            RootComponentInstallEvidence, RootComponentInstallRequest,
-            RootComponentMembershipActivationRequest, RootComponentMembershipActivationResponse,
-            RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
-            RootComponentRuntimeActivationRequest, RootComponentRuntimeActivationResponse,
-            RootComponentSubtreeRemovalAdvanceRequest, RootComponentSubtreeRemovalCompletedReceipt,
-            RootComponentSubtreeRemovalDeleteIntent,
+            RootComponentDirectoryPreparationResponse, RootComponentDrainingRequest,
+            RootComponentDrainingResponse, RootComponentDrainingStatusRequest,
+            RootComponentInitialInventoryStatus, RootComponentInstallEvidence,
+            RootComponentInstallRequest, RootComponentMembershipActivationRequest,
+            RootComponentMembershipActivationResponse, RootComponentRegistryPreparationRequest,
+            RootComponentRegistryStatusResponse, RootComponentRuntimeActivationRequest,
+            RootComponentRuntimeActivationResponse, RootComponentSubtreeRemovalAdvanceRequest,
+            RootComponentSubtreeRemovalCompletedReceipt, RootComponentSubtreeRemovalDeleteIntent,
             RootComponentSubtreeRemovalDeletePreparationRequest,
             RootComponentSubtreeRemovalDeleteRequest, RootComponentSubtreeRemovalDeletedReceipt,
             RootComponentSubtreeRemovalDirectoryConvergenceEvidence,
@@ -575,6 +577,103 @@ pub fn child_allocation_status(
         None,
     )?;
     Ok(child_allocation_response(allocation))
+}
+
+/// Durably advance one exact active Component into Draining.
+pub async fn begin_component_draining(
+    request: RootComponentDrainingRequest,
+) -> Result<RootComponentDrainingResponse, InternalError> {
+    let (authority, root) = root_authority()?;
+    let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let preparation_request = RootComponentRegistryPreparationRequest {
+        store_bootstrap: prepared.store_bootstrap.clone(),
+        expected_fleet_registry: prepared.prepared_against_registry.clone(),
+    };
+    root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    let fleet_directory = validate_active_authority(&authority, root, &preparation_request)?;
+    if FleetActivationApi::status()
+        .map_err(InternalError::public)?
+        .phase
+        != FleetActivationPhase::Active
+    {
+        return Err(InternalError::unavailable(
+            "Component draining requires an Active Fleet Subnet Root runtime",
+        ));
+    }
+
+    let topology = ConfigOps::component_topology()?;
+    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
+        InternalError::unavailable("Component Registry partition has not been committed")
+    })?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &partition,
+    )?;
+    let maximum_registry_bytes = topology
+        .get(&partition.binding.component_spec)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Config,
+                "draining Component Spec is absent from the protected topology",
+            )
+        })?
+        .limits
+        .maximum_registry_bytes;
+    let draining = ComponentRegistryOps::begin_component_draining(
+        request.component,
+        request.operation_id,
+        request.expected_registry.clone(),
+        IcOps::now_nanos(),
+        maximum_registry_bytes,
+        fleet_directory.clone(),
+    )?;
+    let current = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "draining Component partition disappeared after mutation",
+        )
+    })?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &current,
+    )?;
+    validate_component_draining(&current, &draining, Some(&request), Some(&fleet_directory))?;
+    Ok(component_draining_response(draining))
+}
+
+/// Read one durable top-level Component draining operation without mutation.
+pub fn component_draining_status(
+    request: RootComponentDrainingStatusRequest,
+) -> Result<RootComponentDrainingResponse, InternalError> {
+    let (authority, _root) = root_authority()?;
+    let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let draining =
+        ComponentRegistryOps::component_draining(request.component)?.ok_or_else(|| {
+            InternalError::unavailable("Component draining operation has not been durably fenced")
+        })?;
+    if draining.operation_id != request.operation_id {
+        return Err(InternalError::conflict(
+            "Component draining operation is bound to different intent",
+        ));
+    }
+    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component draining authority has no Registry partition",
+        )
+    })?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &ConfigOps::component_topology()?,
+        &partition,
+    )?;
+    validate_component_draining(&partition, &draining, None, None)?;
+    Ok(component_draining_response(draining))
 }
 
 /// Durably fence one registered child subtree before quiescence and post-order removal.
@@ -2181,9 +2280,9 @@ pub fn directory_page(
             )))
         })?;
     validate_directory_member(&authority.binding, &topology, &partition, &member)?;
-    if status != ComponentLifecycleStatus::Active {
+    if !component_directory_member_can_read(status) {
         return Err(InternalError::unavailable(
-            "Component Directory pages require an Active registered member",
+            "Component Directory pages require a live registered member",
         ));
     }
 
@@ -4319,6 +4418,21 @@ fn child_allocation_response(
     }
 }
 
+const fn component_draining_response(
+    draining: RootComponentDrainingView,
+) -> RootComponentDrainingResponse {
+    RootComponentDrainingResponse {
+        operation_id: draining.operation_id,
+        component: draining.component,
+        previous_registry: draining.previous_registry,
+        registry: draining.registry,
+        descendant_count: draining.descendant_count,
+        descendant_content_hash: draining.descendant_content_hash,
+        directory_authority_hash: draining.directory_authority_hash,
+        started_at_ns: draining.started_at_ns,
+    }
+}
+
 fn subtree_removal_response(
     removal: RootComponentSubtreeRemovalView,
 ) -> RootComponentSubtreeRemovalResponse {
@@ -5516,7 +5630,9 @@ fn validate_partition(
         && partition.binding.placement_subnet == root.placement_subnet;
     let lifecycle_is_committed = matches!(
         partition.status,
-        ComponentLifecycleStatus::Prepared | ComponentLifecycleStatus::Active
+        ComponentLifecycleStatus::Prepared
+            | ComponentLifecycleStatus::Active
+            | ComponentLifecycleStatus::Draining
     ) && partition.revision > 0
         && partition.directory_synchronized_at_ns > 0;
     let principal_index_matches =
@@ -5527,6 +5643,61 @@ fn validate_partition(
             InternalErrorOrigin::Storage,
             "committed Component partition differs from protected root or principal authority",
         ));
+    }
+    Ok(())
+}
+
+fn validate_component_draining(
+    partition: &ComponentRegistryPartitionView,
+    draining: &RootComponentDrainingView,
+    request: Option<&RootComponentDrainingRequest>,
+    fleet_directory: Option<&FleetDirectorySnapshot>,
+) -> Result<(), InternalError> {
+    let current_covers_receipt = partition.binding.component == draining.component
+        && partition.status == ComponentLifecycleStatus::Draining
+        && partition.revision >= draining.registry.revision
+        && partition.committed_descendants <= draining.descendant_count
+        && (partition.revision != draining.registry.revision
+            || (partition.content_hash == draining.registry.content_hash
+                && partition.descendant_content_hash == draining.descendant_content_hash
+                && partition.committed_descendants == draining.descendant_count
+                && partition.directory_synchronized_at_ns == draining.started_at_ns));
+    let request_matches = match request {
+        None => true,
+        Some(request) => {
+            let operation_matches = request.operation_id == draining.operation_id;
+            let component_matches = request.component == draining.component;
+            let registry_matches = request.expected_registry == draining.previous_registry;
+            operation_matches && component_matches && registry_matches
+        }
+    };
+    if !current_covers_receipt || !request_matches {
+        return Err(InternalError::conflict(
+            "Component draining receipt differs from protected intent or Registry authority",
+        ));
+    }
+    if let Some(fleet_directory) = fleet_directory {
+        let authority = ComponentRuntimeDirectoryAuthority {
+            fleet: fleet_directory.clone(),
+            component: ComponentDirectoryHead {
+                provenance: ComponentDirectoryProvenance {
+                    component: partition.binding.clone(),
+                    source_fleet_subnet_root: partition.binding.fleet_subnet_root,
+                    component_registry_revision: draining.registry.revision,
+                    component_registry_content_hash: draining.registry.content_hash,
+                    synchronized_at_ns: draining.started_at_ns,
+                },
+                descendant_count: draining.descendant_count,
+            },
+        };
+        if ComponentRuntimeOps::directory_authority_hash(&authority)?
+            != draining.directory_authority_hash
+        {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "Component draining Directory authority hash is invalid",
+            ));
+        }
     }
     Ok(())
 }
@@ -5560,6 +5731,13 @@ fn validate_directory_member(
     }
 }
 
+const fn component_directory_member_can_read(status: ComponentLifecycleStatus) -> bool {
+    matches!(
+        status,
+        ComponentLifecycleStatus::Active | ComponentLifecycleStatus::Draining
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5567,6 +5745,22 @@ mod tests {
         AppId, CanonicalNetworkId, ComponentInstanceId, FleetBinding, FleetCoordinatorBinding,
         FleetId, FleetKey, FleetRegistryAuthority, SubnetId,
     };
+
+    #[test]
+    fn draining_component_members_retain_directory_lookup() {
+        assert!(component_directory_member_can_read(
+            ComponentLifecycleStatus::Active
+        ));
+        assert!(component_directory_member_can_read(
+            ComponentLifecycleStatus::Draining
+        ));
+        assert!(!component_directory_member_can_read(
+            ComponentLifecycleStatus::Prepared
+        ));
+        assert!(!component_directory_member_can_read(
+            ComponentLifecycleStatus::Removed
+        ));
+    }
 
     #[test]
     fn component_directory_cursor_is_opaque_and_bound_to_head_and_filters() {

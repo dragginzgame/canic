@@ -9,8 +9,8 @@
 use crate::storage::stable::{
     component_registry::{
         ComponentRegistryEntryRecord, ComponentRegistryPrincipalIndexRecord,
-        RootComponentAllocationRecord, RootComponentRegistryData, RootComponentRegistryStateRecord,
-        RootComponentSubtreeRemovalCompletedLeafRecord,
+        RootComponentAllocationRecord, RootComponentDrainingRecord, RootComponentRegistryData,
+        RootComponentRegistryStateRecord, RootComponentSubtreeRemovalCompletedLeafRecord,
     },
     fleet_coordinator::{FleetCoordinatorRegistryData, FleetCoordinatorRegistryRecord},
     fleet_registry_mirror::{RootFleetRegistryMirrorData, RootFleetRegistryMirrorStateRecord},
@@ -29,11 +29,11 @@ use canic_core::{
         AllocationOwner, StateAllocationKey,
         allocation::memory::control_plane::{
             CONTROL_PLANE_SUBNET_STATE_ID, FLEET_COORDINATOR_REGISTRY_ID,
-            ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_PRINCIPAL_INDEX_ID,
-            ROOT_COMPONENT_REGISTRY_ENTRIES_ID, ROOT_COMPONENT_REGISTRY_META_ID,
-            ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID, ROOT_FLEET_REGISTRY_MIRROR_ID,
-            TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID, TEMPLATE_CHUNK_SETS_ID,
-            TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
+            ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_DRAINING_ID,
+            ROOT_COMPONENT_PRINCIPAL_INDEX_ID, ROOT_COMPONENT_REGISTRY_ENTRIES_ID,
+            ROOT_COMPONENT_REGISTRY_META_ID, ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID,
+            ROOT_FLEET_REGISTRY_MIRROR_ID, TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID,
+            TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
         },
     },
     state_contract::{
@@ -69,7 +69,7 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
             TEMPLATE_MANIFESTS_ID,
             TemplateManifestRecord::STATE_CONTRACT_NAME,
             TemplateManifestsData::STATE_CONTRACT_NAME,
-            201,
+            202,
             "template_manifests_restore_release_index",
         ),
         descriptor(
@@ -211,8 +211,28 @@ fn root_component_registry_descriptor() -> StateAllocationDescriptor {
                 ),
                 migrations: Vec::new(),
             },
+            root_component_draining_domain(),
         ],
         reserved_memory: Vec::new(),
+    }
+}
+
+fn root_component_draining_domain() -> StateDomainManifest {
+    StateDomainManifest {
+        domain: "root_component_draining".to_string(),
+        version: 1,
+        storage: StateStorage::StableMemory,
+        memory_id: Some(ROOT_COMPONENT_DRAINING_ID),
+        owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
+        record: RootComponentDrainingRecord::STATE_CONTRACT_NAME.to_string(),
+        snapshot: RootComponentRegistryData::STATE_CONTRACT_NAME.to_string(),
+        min_supported_version: 1,
+        migration_policy: MigrationPolicy::NewDomain,
+        restore_order: Some(201),
+        post_upgrade_invariant: Some(
+            "root_component_draining_restores_exact_operation_and_registry_fence".to_string(),
+        ),
+        migrations: Vec::new(),
     }
 }
 
@@ -343,7 +363,7 @@ mod tests {
             .find(|descriptor| descriptor.allocation == StateAllocationKey::RootComponentRegistry)
             .expect("root Component Registry descriptor");
 
-        assert_eq!(descriptor.state.len(), 5);
+        assert_eq!(descriptor.state.len(), 6);
         assert_eq!(
             descriptor
                 .state
@@ -385,6 +405,12 @@ mod tests {
                     Some(ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID),
                     RootComponentSubtreeRemovalCompletedLeafRecord::STATE_CONTRACT_NAME,
                     Some(200),
+                ),
+                (
+                    "root_component_draining",
+                    Some(ROOT_COMPONENT_DRAINING_ID),
+                    RootComponentDrainingRecord::STATE_CONTRACT_NAME,
+                    Some(201),
                 ),
             ]
         );
