@@ -107,11 +107,9 @@ impl RootSubnetEvidenceSource for LiveSubnetCatalogRootSubnetEvidenceSource {
         icp_root: &Path,
         canister_id: &str,
     ) -> Result<RootSubnetEvidence, String> {
-        let request = SubnetCatalogCacheRequest {
-            icp_root: icp_root.to_path_buf(),
-            // `ic-query` names its ICP environment selector `network`.
-            network: environment.to_string(),
-        };
+        // Canic deliberately supplies its deployment-state root as the cache
+        // boundary for this embedded library call.
+        let request = SubnetCatalogCacheRequest::new(icp_root, environment);
         let cached = load_or_refresh_subnet_catalog(
             &request,
             DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT,

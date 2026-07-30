@@ -63,8 +63,7 @@ pub fn init_eager_tls() {
 }
 
 /// Return whether memory access is currently allowed during bootstrap.
-#[must_use]
-pub fn is_memory_bootstrap_ready() -> bool {
+pub fn is_memory_bootstrap_ready() -> Result<bool, ic_memory::RuntimeStateError> {
     ic_memory::is_default_memory_manager_bootstrapped()
 }
 
@@ -77,15 +76,27 @@ pub fn is_memory_bootstrap_ready() -> bool {
 /// debug builds, an installed bootstrap hook is run first and the function only
 /// panics if memory remains unbootstrapped after that hook.
 pub fn assert_memory_bootstrap_ready(label: &str, id: u8) {
-    if is_memory_bootstrap_ready() {
-        return;
+    match is_memory_bootstrap_ready() {
+        Ok(true) => return,
+        Ok(false) => {}
+        Err(error) => {
+            panic!(
+                "stable memory slot '{label}' (id {id}) could not inspect memory bootstrap: {error}"
+            );
+        }
     }
 
     #[cfg(any(test, debug_assertions))]
     {
         run_test_bootstrap_hook();
-        if is_memory_bootstrap_ready() {
-            return;
+        match is_memory_bootstrap_ready() {
+            Ok(true) => return,
+            Ok(false) => {}
+            Err(error) => {
+                panic!(
+                    "stable memory slot '{label}' (id {id}) could not inspect memory bootstrap after the test hook: {error}"
+                );
+            }
         }
     }
 

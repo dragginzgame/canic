@@ -6,10 +6,10 @@ Date: 2026-07-30
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.52`.
-- Latest published release: `v0.100.52` at
-  `f070a63c22279171a34eabd4ac65651b54067e00`.
-- Open patch draft: `0.100.53`; no package-version change has been authorized.
+- Workspace package version: `0.100.53`.
+- Latest published release: `v0.100.53` at
+  `2353403ff5862da4f2b4ab8292318009a2a99ab3`.
+- Open patch draft: `0.100.54`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -760,13 +760,21 @@ occurs. The same patch advances the host-only `ic-query` library to `0.14.0`
 without changing Canic's cached Subnet Catalog contract or introducing
 another package version into the lockfile.
 
-Open 0.100.53 freezes the complete stopped receipt as exact deletion
+Released 0.100.53 freezes the complete stopped receipt as exact deletion
 authority before the destructive management call. It adopts an already absent
 target, otherwise requires the Canister to remain stopped under the same sole
 root controller and Store module, then observes again after either success or
 an uncertain error. Only typed live absence commits the durable `Deleted`
 receipt. Registry membership, traversal indexes, parent-role counts,
 descendant capacity and Directory authority remain unchanged.
+
+Open 0.100.54 advances `ic-memory` to `0.12.1` and makes its explicit default
+runtime the sole owner of bootstrap, committed opens and allocation-ledger
+diagnostics. Canic supplies a stable v1 bootstrap-policy identity and removes
+its duplicate diagnostic memory manager and ledger cell without changing
+durable ledger bytes, stable keys or memory IDs. The concurrent host-only
+`ic-query 0.14.1` update adopts its renamed `cache_root` request contract
+without changing the embedded Subnet Catalog evidence boundary.
 
 ## Next Action
 

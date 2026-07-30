@@ -38,6 +38,12 @@ pub enum MemoryRegistryOpsError {
     // this error comes from the generic ic-memory runtime boundary
     #[error(transparent)]
     Runtime(#[from] ic_memory::RuntimeBootstrapError<MemoryRegistryError>),
+    // this error comes from the generic ic-memory runtime diagnostic boundary
+    #[error(transparent)]
+    Diagnostic(#[from] ic_memory::RuntimeDiagnosticError),
+    // this error comes from entering the default ic-memory TLS runtime
+    #[error(transparent)]
+    State(#[from] ic_memory::RuntimeStateError),
 }
 
 impl From<MemoryRegistryOpsError> for InternalError {
@@ -73,28 +79,23 @@ impl MemoryRegistryOps {
         Ok(())
     }
 
-    #[cfg(target_arch = "wasm32")]
-    #[must_use]
-    pub fn is_initialized() -> bool {
+    pub fn is_initialized() -> Result<bool, InternalError> {
         crate::memory::runtime::is_memory_bootstrap_ready()
+            .map_err(MemoryRegistryOpsError::from)
+            .map_err(Into::into)
     }
 
     #[cfg(target_arch = "wasm32")]
     pub fn ensure_bootstrap() -> Result<(), InternalError> {
-        if Self::is_initialized() {
+        if Self::is_initialized()? {
             return Ok(());
         }
 
-        Self::bootstrap_registry()?;
-        Ok(())
+        Self::bootstrap_registry()
     }
 
     // Read the committed ABI ledger using the restricted diagnostic path.
     pub fn ledger_snapshot() -> Result<MemoryLedgerResponse, InternalError> {
-        #[cfg(target_arch = "wasm32")]
-        let snapshot = ledger::try_diagnostic_snapshot().map_err(MemoryRegistryOpsError::from)?;
-
-        #[cfg(not(target_arch = "wasm32"))]
         let snapshot = ledger::try_snapshot().map_err(MemoryRegistryOpsError::from)?;
 
         let authorities = snapshot
@@ -311,7 +312,28 @@ mod tests {
     };
 
     #[test]
-    fn commit_slot_response_maps_ic_memory_011_variants_exactly() {
+    fn ledger_snapshot_reads_the_bootstrapped_ic_memory_runtime() {
+        MemoryRegistryOps::init_registry().expect("bootstrap canonical memory runtime");
+
+        let snapshot = MemoryRegistryOps::ledger_snapshot().expect("runtime diagnostic export");
+
+        assert!(snapshot.current_generation > 0);
+        assert!(
+            snapshot
+                .authorities
+                .iter()
+                .any(|authority| authority.owner == "canic-core")
+        );
+        assert!(
+            snapshot
+                .memories
+                .iter()
+                .any(|memory| memory.memory_manager_id >= 30)
+        );
+    }
+
+    #[test]
+    fn commit_slot_response_maps_ic_memory_012_variants_exactly() {
         assert_eq!(
             commit_slot_response(CommitSlotDiagnostic::Empty),
             MemoryCommitSlotResponse {
