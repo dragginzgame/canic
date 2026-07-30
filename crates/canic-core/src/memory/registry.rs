@@ -35,11 +35,4 @@ pub enum MemoryRegistryError {
         /// Human-readable reason for the rejection.
         reason: &'static str,
     },
-
-    /// The persisted ABI ledger cannot be validated.
-    #[error("memory layout ledger is corrupt: {reason}")]
-    LedgerCorrupt {
-        /// Human-readable corruption reason.
-        reason: &'static str,
-    },
 }

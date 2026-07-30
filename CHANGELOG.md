@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.54` adopts `ic-memory 0.12.1` as Canic's sole memory-runtime
+  authority and advances the host-only `ic-query` dependency to `0.14.1`.
+
 - `0.100.53` freezes exact stopped-leaf deletion authority, reconciles the
   destructive call through typed live absence and retains a durable deleted
   receipt without mutating Registry membership or Directory authority.

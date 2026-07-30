@@ -5,7 +5,6 @@
 //! Boundary: lifecycle initializes this before stable structures are accessed.
 
 pub(crate) mod ledger;
-mod manager;
 mod policy;
 pub mod registry;
 pub mod runtime;

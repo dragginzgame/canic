@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.52`.
-- The latest published release is `v0.100.52` at
-  `f070a63c22279171a34eabd4ac65651b54067e00`.
-- Open `0.100.53` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.53`.
+- The latest published release is `v0.100.53` at
+  `2353403ff5862da4f2b4ab8292318009a2a99ab3`.
+- Open `0.100.54` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -460,6 +460,9 @@ Historical detail is archived at:
   observed `Stopped` status commits the durable receipt. The same release
   advances host-only `ic-query` to `0.14.0` without changing Canic's cached
   Subnet Catalog contract.
+- Released `0.100.53` freezes the complete stopped receipt as exact deletion
+  authority, adopts a target already absent or re-observes it after the
+  destructive call, and commits `Deleted` only from typed live absence.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1880,13 +1883,21 @@ package version. `ic-query` is now recorded as another immediate introducer
 of the existing accepted transitive `serde_cbor 0.11.2` advisory; Canic
 retains no direct dependency on that crate.
 
-Open `0.100.53` freezes the complete stopped receipt as exact deletion
+Released `0.100.53` freezes the complete stopped receipt as exact deletion
 authority before the destructive call. It adopts a target already proven
 absent, otherwise requires the present Canister to remain stopped under the
 same sole root and Store module, then re-observes after either call success or
 error. Only typed live absence commits the durable `Deleted` receipt. Registry
 membership, traversal indexes, parent-role counts, descendant capacity and
 Directory authority remain unchanged.
+
+Open `0.100.54` advances `ic-memory` to `0.12.1`, makes its explicit default
+runtime the sole owner of bootstrap, committed opens and allocation-ledger
+diagnostics, and binds repeated bootstrap to Canic's v1 policy identity.
+Canic's duplicate diagnostic manager and ledger cell are removed without
+changing durable ledger bytes, stable keys or memory IDs. The concurrent
+host-only `ic-query 0.14.1` update adopts its renamed `cache_root` request
+contract while retaining Canic's explicit embedded cache boundary.
 
 Next, atomically remove that independently deleted leaf from its exact
 Component Registry partition and indexes, decrement its retained parent-role,

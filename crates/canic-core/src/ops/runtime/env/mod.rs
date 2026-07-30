@@ -10,13 +10,12 @@ use crate::{
     InternalError,
     dto::env::EnvSnapshotResponse,
     ids::{ComponentSpecId, ManagedCanisterBinding},
-    memory::runtime::is_memory_bootstrap_ready,
     model::{
         env::ValidatedEnv,
         runtime_kind::{self, CanicRuntimeKind},
     },
-    ops::runtime::env::mapper::EnvRecordMapper,
-    ops::{prelude::*, runtime::RuntimeOpsError},
+    ops::prelude::*,
+    ops::runtime::{RuntimeOpsError, env::mapper::EnvRecordMapper, memory::MemoryRegistryOps},
     storage::stable::env::{Env, EnvData, EnvRecord},
 };
 use ic_cdk::api::canister_self;
@@ -289,7 +288,7 @@ impl EnvOps {
     }
 
     fn assert_memory_registry_initialized() -> Result<(), InternalError> {
-        let initialized = is_memory_bootstrap_ready();
+        let initialized = MemoryRegistryOps::is_initialized()?;
         debug_assert!(
             initialized,
             "memory registry must be initialized before env restore"
