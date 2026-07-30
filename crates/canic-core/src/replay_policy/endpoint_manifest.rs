@@ -140,6 +140,11 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     ),
     query_read_only("canic_root_component_draining_status"),
     update_response_idempotent(
+        "canic_root_component_quiesce",
+        command_kind("component_registry.quiesce_component.v1"),
+    ),
+    query_read_only("canic_root_component_quiescence_status"),
+    update_response_idempotent(
         "canic_root_component_subtree_removal_begin",
         command_kind("component_registry.begin_subtree_removal.v1"),
     ),

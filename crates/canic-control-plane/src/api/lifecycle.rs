@@ -32,9 +32,10 @@ use canic_core::{
             RootComponentDrainingRequest, RootComponentDrainingResponse,
             RootComponentDrainingStatusRequest, RootComponentInstallRequest,
             RootComponentMembershipActivationRequest, RootComponentMembershipActivationResponse,
-            RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
-            RootComponentRuntimeActivationRequest, RootComponentRuntimeActivationResponse,
-            RootComponentSubtreeRemovalAdvanceRequest,
+            RootComponentQuiescenceRequest, RootComponentQuiescenceResponse,
+            RootComponentQuiescenceStatusRequest, RootComponentRegistryPreparationRequest,
+            RootComponentRegistryStatusResponse, RootComponentRuntimeActivationRequest,
+            RootComponentRuntimeActivationResponse, RootComponentSubtreeRemovalAdvanceRequest,
             RootComponentSubtreeRemovalDeletePreparationRequest,
             RootComponentSubtreeRemovalDeleteRequest,
             RootComponentSubtreeRemovalDirectorySynchronizationRequest,
@@ -182,6 +183,21 @@ impl LifecycleApi {
         request: RootComponentDrainingStatusRequest,
     ) -> Result<RootComponentDrainingResponse, canic_core::dto::error::Error> {
         crate::workflow::component_registry::component_draining_status(request).map_err(Into::into)
+    }
+
+    pub async fn quiesce_component(
+        request: RootComponentQuiescenceRequest,
+    ) -> Result<RootComponentQuiescenceResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::quiesce_component(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub fn component_quiescence_status(
+        request: RootComponentQuiescenceStatusRequest,
+    ) -> Result<RootComponentQuiescenceResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::component_quiescence_status(request)
+            .map_err(Into::into)
     }
 
     pub async fn begin_component_subtree_removal(

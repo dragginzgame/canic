@@ -6,10 +6,10 @@ Date: 2026-07-30
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.57`.
-- Latest published release: `v0.100.57` at
-  `80e920c758bb8497f94ef9830e8df151183fa286`.
-- Open patch draft: `0.100.58`; no package-version change has been authorized.
+- Workspace package version: `0.100.58`.
+- Latest published release: `v0.100.58` at
+  `ceb0f0b62a315d5b3b1169a8723c44dff67e4030`.
+- Open patch draft: `0.100.59`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -818,7 +818,7 @@ fenced target itself is complete. Exact retries of every older phase converge
 through history without repeating an effect, and terminal completion releases
 the live subtree fence.
 
-Open 0.100.58 adds the durable top-level Component `Active` to `Draining`
+Released 0.100.58 adds the durable top-level Component `Active` to `Draining`
 fence. It requires the exact current head and no reserved descendants,
 incomplete child lifecycle or in-progress subtree removal, then atomically
 advances the Component head and stores one bounded operation receipt at
@@ -828,12 +828,26 @@ normalized descendants, principal lookup, Directory pagination and the
 existing post-order removal path. The transition does not stop or delete a
 Canister.
 
+Open 0.100.59 adds qualified top-level Component quiescence beneath that
+fence. It converges and independently re-queries the Component runtime against
+the exact draining Component head and currently active Fleet Directory, then
+durably freezes the exact Canister, sole root controller, verified Store
+payload module and covered runtime authority before any management effect. It
+precharges the terminal receipt, reconciles `stop_canister` through live
+status and commits `Quiescent` only after independently observing the
+qualified Canister stopped. The progress remains inside the existing draining
+record at memory ID 23, and post-order descendant removal is now rejected
+until that terminal receipt exists. The removal loop then explicitly omits
+owner convergence for that stopped top-level Component while retaining the
+exact root-derived Directory authority and still converging any surviving
+non-root parent; Active trees continue to require owner convergence.
+
 ## Next Action
 
-Obtain qualified Component-specific quiescence evidence after the durable
-draining fence, then drive the existing completed post-order loop until no
-descendant row remains. The later Component-target transition must retain
-final inventory evidence before removing the top-level Component; it must not
-infer removal from an unreachable Canister. Do not introduce nested Component
-declarations, let application Canisters call management effects directly or
-infer authorization from catalog presence alone.
+Drive the existing completed post-order loop from the terminal Component
+quiescence receipt until no descendant row remains. The later
+Component-target transition must retain final inventory evidence before
+removing the top-level Component; it must not infer removal from an
+unreachable Canister. Do not introduce nested Component declarations, let
+application Canisters call management effects directly or infer authorization
+from catalog presence alone.
