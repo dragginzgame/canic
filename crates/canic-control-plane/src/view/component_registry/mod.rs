@@ -23,6 +23,24 @@ use canic_core::{
 };
 
 ///
+/// RootComponentDrainingView
+///
+/// Read-only projection of one durable top-level Component draining fence.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentDrainingView {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub previous_registry: ComponentRegistryHead,
+    pub registry: ComponentRegistryHead,
+    pub descendant_count: u32,
+    pub descendant_content_hash: [u8; 32],
+    pub directory_authority_hash: [u8; 32],
+    pub started_at_ns: u64,
+}
+
+///
 /// RootComponentRegistryView
 ///
 /// Read-only durable preparation authority and current allocation counters.

@@ -556,6 +556,16 @@ fn assert_component_registry_protocol_constants() {
             "canic_root_component_child_allocation_status",
         ),
         (
+            canic::protocol::CANIC_ROOT_COMPONENT_DRAINING_BEGIN,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_DRAINING_BEGIN,
+            "canic_root_component_draining_begin",
+        ),
+        (
+            canic::protocol::CANIC_ROOT_COMPONENT_DRAINING_STATUS,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_DRAINING_STATUS,
+            "canic_root_component_draining_status",
+        ),
+        (
             canic::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_BEGIN,
             canic_core::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_BEGIN,
             "canic_root_component_subtree_removal_begin",
@@ -758,6 +768,16 @@ fn assert_root_registry_mirror_guards(root: &str) {
         )
         .contains("canic_query(internal, public)"),
         "root Component Child allocation status must remain a public query authenticated by workflow"
+    );
+    assert!(
+        preceding_attribute_context(root, "async fn canic_root_component_draining_begin(")
+            .contains("canic_update(requires(caller::is_controller()))"),
+        "root Component draining must remain a controller-guarded update"
+    );
+    assert!(
+        preceding_attribute_context(root, "async fn canic_root_component_draining_status(")
+            .contains("canic_query(requires(caller::is_controller()))"),
+        "root Component draining status must remain a controller-guarded query"
     );
     assert_subtree_removal_guards(root);
     for endpoint in [

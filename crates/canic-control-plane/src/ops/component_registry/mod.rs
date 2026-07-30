@@ -13,11 +13,11 @@ use crate::{
         RootComponentChildAllocationRecord, RootComponentChildCommitmentRecord,
         RootComponentChildInstallEffectRecord, RootComponentChildMembershipRecord,
         RootComponentCommitmentRecord, RootComponentCreationEffectRecord,
-        RootComponentInitialInventoryRecord, RootComponentInstallEffectRecord,
-        RootComponentMembershipRecord, RootComponentRegistryCommitError,
-        RootComponentRegistryMetaRecord, RootComponentRegistryStore,
-        RootComponentSubtreeDeleteEffectRecord, RootComponentSubtreeDeletedEffectRecord,
-        RootComponentSubtreeDirectoryConvergenceRecord,
+        RootComponentDrainingRecord, RootComponentInitialInventoryRecord,
+        RootComponentInstallEffectRecord, RootComponentMembershipRecord,
+        RootComponentRegistryCommitError, RootComponentRegistryMetaRecord,
+        RootComponentRegistryStore, RootComponentSubtreeDeleteEffectRecord,
+        RootComponentSubtreeDeletedEffectRecord, RootComponentSubtreeDirectoryConvergenceRecord,
         RootComponentSubtreeDirectorySynchronizedRecord,
         RootComponentSubtreeMembershipRemovedRecord,
         RootComponentSubtreeRemovalCompletedLeafRecord, RootComponentSubtreeRemovalCompletedRecord,
@@ -31,7 +31,7 @@ use crate::{
         RootComponentAllocationView, RootComponentChildAllocationProgressView,
         RootComponentChildAllocationView, RootComponentChildCommitmentView,
         RootComponentChildInstallEffectView, RootComponentChildMembershipView,
-        RootComponentCommitmentView, RootComponentCreationEffectView,
+        RootComponentCommitmentView, RootComponentCreationEffectView, RootComponentDrainingView,
         RootComponentInitialInventoryView, RootComponentInstallEffectView,
         RootComponentMembershipView, RootComponentRegistryView,
         RootComponentSubtreeDeleteEffectView, RootComponentSubtreeDeletedEffectView,
@@ -1517,6 +1517,150 @@ impl ComponentRegistryOps {
         Ok(Some(subtree_removal_record_to_view(record)))
     }
 
+    pub(crate) fn component_draining(
+        component: ComponentInstanceId,
+    ) -> Result<Option<RootComponentDrainingView>, InternalError> {
+        let Some(record) = RootComponentRegistryStore::component_draining(component) else {
+            return Ok(None);
+        };
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component draining authority has no Registry partition",
+            )
+        })?;
+        validate_partition_record(&partition)?;
+        validate_component_draining_record(&partition, &record)?;
+        Ok(Some(component_draining_record_to_view(record)))
+    }
+
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one synchronous transition validates, derives and atomically charges the complete draining fence"
+    )]
+    pub(crate) fn begin_component_draining(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        expected_registry: ComponentRegistryHead,
+        started_at_ns: u64,
+        maximum_component_registry_bytes: u64,
+        fleet_directory: FleetDirectorySnapshot,
+    ) -> Result<RootComponentDrainingView, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        validate_partition_record(&partition)?;
+        if let Some(existing) = RootComponentRegistryStore::component_draining(component) {
+            validate_component_draining_record(&partition, &existing)?;
+            return if existing.operation_id == operation_id
+                && existing.previous_registry == expected_registry
+            {
+                Ok(component_draining_record_to_view(existing))
+            } else {
+                Err(InternalError::conflict(
+                    "Component draining is already bound to different intent",
+                ))
+            };
+        }
+        let current_registry = component_partition_head(&partition);
+        if operation_id == [0; 32]
+            || partition.status != ComponentLifecycleStatus::Active
+            || expected_registry != current_registry
+        {
+            return Err(InternalError::conflict(
+                "Component draining authority changed before durable mutation",
+            ));
+        }
+        if started_at_ns <= partition.directory_synchronized_at_ns {
+            return Err(InternalError::invalid_input(
+                "Component draining authority must advance its Directory time",
+            ));
+        }
+        if partition.reserved_descendants != 0 {
+            return Err(InternalError::unavailable(
+                "Component has an incomplete child lifecycle operation",
+            ));
+        }
+        for allocation in RootComponentRegistryStore::child_allocations(component) {
+            validate_child_allocation_record(&allocation)?;
+            if !child_allocation_is_terminal(&allocation) {
+                return Err(InternalError::unavailable(
+                    "Component has an incomplete child lifecycle operation",
+                ));
+            }
+        }
+        for removal in RootComponentRegistryStore::subtree_removals(component) {
+            validate_subtree_removal_record(&removal)?;
+            validate_subtree_removal_root(&removal, &current.root)?;
+            validate_subtree_removal_progress(&partition, &removal)?;
+            if !matches!(
+                removal.progress,
+                RootComponentSubtreeRemovalProgressRecord::Completed(_)
+            ) {
+                return Err(InternalError::unavailable(
+                    "Component has an in-progress subtree-removal operation",
+                ));
+            }
+        }
+
+        let revision = partition.revision.checked_add(1).ok_or_else(|| {
+            InternalError::resource_exhausted("Component Registry revision overflow")
+        })?;
+        let content_hash = component_partition_content_hash(
+            &partition.binding,
+            &partition.provisioning_origin,
+            partition.release_set,
+            ComponentLifecycleStatus::Draining,
+            revision,
+            partition.descendant_content_hash,
+            partition.committed_descendants,
+        )?;
+        let mut next_partition = partition.clone();
+        next_partition.status = ComponentLifecycleStatus::Draining;
+        next_partition.revision = revision;
+        next_partition.content_hash = content_hash;
+        next_partition.directory_synchronized_at_ns = started_at_ns;
+        let registry = component_partition_head(&next_partition);
+        let record = RootComponentDrainingRecord {
+            operation_id,
+            component,
+            previous_registry: current_registry,
+            registry,
+            descendant_count: next_partition.committed_descendants,
+            descendant_content_hash: next_partition.descendant_content_hash,
+            directory_authority_hash: component_directory_authority_hash(
+                &next_partition.binding,
+                next_partition.revision,
+                next_partition.content_hash,
+                started_at_ns,
+                next_partition.committed_descendants,
+                &fleet_directory,
+            )?,
+            started_at_ns,
+        };
+        let (next_partition, next_meta) = component_draining_state(
+            &current,
+            &partition,
+            next_partition,
+            &record,
+            maximum_component_registry_bytes,
+        )?;
+        validate_partition_record(&next_partition)?;
+        validate_component_draining_record(&next_partition, &record)?;
+        RootComponentRegistryStore::begin_component_draining(
+            &current,
+            next_meta,
+            &partition,
+            next_partition,
+            record.clone(),
+        )
+        .map_err(map_allocation_commit_error)?;
+        Ok(component_draining_record_to_view(record))
+    }
+
     pub(crate) fn subtree_removal_completed_leaf_matches(
         component: ComponentInstanceId,
         operation_id: [u8; 32],
@@ -1578,13 +1722,15 @@ impl ComponentRegistryOps {
             InternalError::unavailable("Component Registry partition has not been committed")
         })?;
         validate_partition_record(&partition)?;
-        if partition.status != ComponentLifecycleStatus::Active
-            || reserved_against_registry
-                != (ComponentRegistryHead {
-                    component,
-                    revision: partition.revision,
-                    content_hash: partition.content_hash,
-                })
+        if !matches!(
+            partition.status,
+            ComponentLifecycleStatus::Active | ComponentLifecycleStatus::Draining
+        ) || reserved_against_registry
+            != (ComponentRegistryHead {
+                component,
+                revision: partition.revision,
+                content_hash: partition.content_hash,
+            })
         {
             return Err(InternalError::conflict(
                 "Component subtree-removal fence authority changed before durable mutation",
@@ -4648,6 +4794,21 @@ fn subtree_removal_record_to_view(
     }
 }
 
+const fn component_draining_record_to_view(
+    record: RootComponentDrainingRecord,
+) -> RootComponentDrainingView {
+    RootComponentDrainingView {
+        operation_id: record.operation_id,
+        component: record.component,
+        previous_registry: record.previous_registry,
+        registry: record.registry,
+        descendant_count: record.descendant_count,
+        descendant_content_hash: record.descendant_content_hash,
+        directory_authority_hash: record.directory_authority_hash,
+        started_at_ns: record.started_at_ns,
+    }
+}
+
 fn subtree_removal_node_view(
     record: ComponentRegistryChildRecord,
 ) -> RootComponentSubtreeRemovalNodeView {
@@ -4934,6 +5095,81 @@ fn subtree_removal_progress_state(
     Err(InternalError::invariant(
         canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
         "Component subtree-removal progress byte accounting did not converge",
+    ))
+}
+
+fn component_draining_state(
+    current: &RootComponentRegistryMetaRecord,
+    partition: &ComponentRegistryPartitionRecord,
+    mut next_partition: ComponentRegistryPartitionRecord,
+    record: &RootComponentDrainingRecord,
+    maximum_component_registry_bytes: u64,
+) -> Result<
+    (
+        ComponentRegistryPartitionRecord,
+        RootComponentRegistryMetaRecord,
+    ),
+    InternalError,
+> {
+    let current_partition_bytes = RootComponentRegistryStore::partition_entry_bytes(partition);
+    let component_without_partition = partition
+        .encoded_bytes
+        .checked_sub(current_partition_bytes)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component Registry bytes are below the partition being drained",
+            )
+        })?;
+    let root_without_partition = current
+        .encoded_bytes
+        .checked_sub(current_partition_bytes)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "root Registry bytes are below the Component partition being drained",
+            )
+        })?;
+    let draining_bytes = RootComponentRegistryStore::component_draining_entry_bytes(record);
+
+    for _ in 0..8 {
+        let next_total = RootComponentRegistryStore::partition_entry_bytes(&next_partition)
+            .checked_add(draining_bytes)
+            .ok_or_else(|| {
+                InternalError::resource_exhausted("Component Registry bytes overflow")
+            })?;
+        let next_component_bytes = component_without_partition
+            .checked_add(next_total)
+            .ok_or_else(|| {
+                InternalError::resource_exhausted("Component Registry bytes overflow")
+            })?;
+        if next_partition.encoded_bytes == next_component_bytes {
+            if next_component_bytes > maximum_component_registry_bytes {
+                return Err(InternalError::resource_exhausted(format!(
+                    "Component draining requires {next_component_bytes} bytes, exceeding protected Component limit {maximum_component_registry_bytes}"
+                )));
+            }
+            let next_root_bytes =
+                root_without_partition
+                    .checked_add(next_total)
+                    .ok_or_else(|| {
+                        InternalError::resource_exhausted("Component Registry bytes overflow")
+                    })?;
+            if next_root_bytes > current.root.limits.maximum_registry_bytes {
+                return Err(InternalError::resource_exhausted(format!(
+                    "Component draining requires {next_root_bytes} root Registry bytes, exceeding protected limit {}",
+                    current.root.limits.maximum_registry_bytes
+                )));
+            }
+            let mut next_meta = current.clone();
+            next_meta.encoded_bytes = next_root_bytes;
+            return Ok((next_partition, next_meta));
+        }
+        next_partition.encoded_bytes = next_component_bytes;
+    }
+    Err(InternalError::invariant(
+        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+        "Component draining byte accounting did not converge",
     ))
 }
 
@@ -6435,7 +6671,7 @@ fn exact_committed_child_partition(
             != Some(&traversal)
         || current.binding != committed.binding
         || current.release_set != committed.release_set
-        || current.status != ComponentLifecycleStatus::Active
+        || !component_partition_retains_active_membership(current.status)
         || current.revision < committed.revision
         || current.directory_synchronized_at_ns < committed.directory_synchronized_at_ns
         || current.committed_descendants < committed.committed_descendants
@@ -6522,7 +6758,7 @@ fn validate_active_child_partition(
     );
     let current_identity_is_valid = current.binding == historical.binding
         && current.release_set == historical.release_set
-        && current.status == ComponentLifecycleStatus::Active;
+        && component_partition_retains_active_membership(current.status);
     let current_progress_is_valid =
         ComponentPartitionCoverage::new(current, &historical).is_monotonic();
     if !activation_evidence.is_valid()
@@ -6645,7 +6881,7 @@ fn validate_active_partition(
     // the current head without changing this immutable top-level receipt.
     let activation_evidence = ComponentActivationEvidence::new(commitment, membership, current);
     let current_identity_is_valid = current.binding.component == record.component
-        && current.status == ComponentLifecycleStatus::Active;
+        && component_partition_retains_active_membership(current.status);
     let current_progress_is_valid =
         ComponentPartitionCoverage::new(current, &historical).is_monotonic();
     if !activation_evidence.is_valid() || !current_identity_is_valid || !current_progress_is_valid {
@@ -6778,6 +7014,74 @@ fn validate_partition_record(
     partition: &ComponentRegistryPartitionRecord,
 ) -> Result<(), InternalError> {
     validate_partition_snapshot(partition)
+}
+
+const fn component_partition_head(
+    partition: &ComponentRegistryPartitionRecord,
+) -> ComponentRegistryHead {
+    ComponentRegistryHead {
+        component: partition.binding.component,
+        revision: partition.revision,
+        content_hash: partition.content_hash,
+    }
+}
+
+const fn component_partition_retains_active_membership(status: ComponentLifecycleStatus) -> bool {
+    matches!(
+        status,
+        ComponentLifecycleStatus::Active | ComponentLifecycleStatus::Draining
+    )
+}
+
+fn validate_component_draining_record(
+    partition: &ComponentRegistryPartitionRecord,
+    record: &RootComponentDrainingRecord,
+) -> Result<(), InternalError> {
+    let previous_content_hash = component_partition_content_hash(
+        &partition.binding,
+        &partition.provisioning_origin,
+        partition.release_set,
+        ComponentLifecycleStatus::Active,
+        record.previous_registry.revision,
+        record.descendant_content_hash,
+        record.descendant_count,
+    )?;
+    let draining_content_hash = component_partition_content_hash(
+        &partition.binding,
+        &partition.provisioning_origin,
+        partition.release_set,
+        ComponentLifecycleStatus::Draining,
+        record.registry.revision,
+        record.descendant_content_hash,
+        record.descendant_count,
+    )?;
+    let valid = record.operation_id != [0; 32]
+        && record.component == partition.binding.component
+        && record.previous_registry.component == record.component
+        && record.previous_registry.revision > 0
+        && record.previous_registry.content_hash == previous_content_hash
+        && record.registry.component == record.component
+        && record.previous_registry.revision.checked_add(1) == Some(record.registry.revision)
+        && record.registry.content_hash == draining_content_hash
+        && record.descendant_count >= partition.committed_descendants
+        && record.descendant_content_hash != [0; 32]
+        && record.directory_authority_hash != [0; 32]
+        && record.started_at_ns > 0
+        && partition.status == ComponentLifecycleStatus::Draining
+        && partition.revision >= record.registry.revision
+        && partition.directory_synchronized_at_ns >= record.started_at_ns
+        && (partition.revision != record.registry.revision
+            || (partition.content_hash == record.registry.content_hash
+                && partition.descendant_content_hash == record.descendant_content_hash
+                && partition.committed_descendants == record.descendant_count
+                && partition.directory_synchronized_at_ns == record.started_at_ns));
+    if !valid {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component draining receipt differs from protected Registry authority",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_partition_snapshot(
@@ -8160,6 +8464,11 @@ mod tests {
                     .map(RootComponentRegistryStore::subtree_removal_completed_leaf_entry_bytes),
             )
             .chain(
+                data.component_drainings
+                    .iter()
+                    .map(RootComponentRegistryStore::component_draining_entry_bytes),
+            )
+            .chain(
                 data.parent_role_counts
                     .iter()
                     .map(RootComponentRegistryStore::parent_role_count_entry_bytes),
@@ -8226,6 +8535,12 @@ mod tests {
                     .iter()
                     .filter(|history| history.component == component)
                     .map(RootComponentRegistryStore::subtree_removal_completed_leaf_entry_bytes),
+            )
+            .chain(
+                data.component_drainings
+                    .iter()
+                    .filter(|draining| draining.component == component)
+                    .map(RootComponentRegistryStore::component_draining_entry_bytes),
             )
             .chain(
                 data.parent_role_counts
@@ -9388,6 +9703,179 @@ mod tests {
         )
         .expect_err("future traversal expectation must fail");
         assert_eq!(RootComponentRegistryStore::export(), before_ahead_rejection);
+        RootComponentRegistryStore::import(RootComponentRegistryData::default());
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one test proves the complete durable Component draining fence"
+    )]
+    fn component_draining_fence_is_durable_capacity_bounded_and_stops_growth() {
+        let fixture = import_active_component_tree();
+        let initial = RootComponentRegistryStore::export();
+        let previous_registry = component_registry_head(&fixture.partition);
+
+        ComponentRegistryOps::reserve_child_allocation(
+            child_allocation_decision_for_parent(
+                &fixture.partition,
+                fixture.unrelated.canister_id,
+                &fixture.unrelated.role,
+                "project_machine",
+            ),
+            [77; 32],
+            previous_registry.clone(),
+        )
+        .expect("reserve in-flight descendant");
+        let before_inflight_rejection = RootComponentRegistryStore::export();
+        ComponentRegistryOps::begin_component_draining(
+            fixture.component,
+            [79; 32],
+            previous_registry.clone(),
+            100,
+            16_777_216,
+            fleet_directory(
+                &before_inflight_rejection
+                    .current
+                    .as_ref()
+                    .expect("Registry meta")
+                    .root,
+            ),
+        )
+        .expect_err("in-flight child lifecycle must prevent draining");
+        assert_eq!(
+            RootComponentRegistryStore::export(),
+            before_inflight_rejection
+        );
+        RootComponentRegistryStore::import(initial.clone());
+
+        ComponentRegistryOps::begin_subtree_removal(
+            fixture.component,
+            [78; 32],
+            fixture.target.canister_id,
+            previous_registry.clone(),
+            16_777_216,
+        )
+        .expect("fence in-progress subtree removal");
+        let before_removal_rejection = RootComponentRegistryStore::export();
+        ComponentRegistryOps::begin_component_draining(
+            fixture.component,
+            [79; 32],
+            previous_registry.clone(),
+            100,
+            16_777_216,
+            fleet_directory(
+                &before_removal_rejection
+                    .current
+                    .as_ref()
+                    .expect("Registry meta")
+                    .root,
+            ),
+        )
+        .expect_err("in-progress subtree removal must prevent draining");
+        assert_eq!(
+            RootComponentRegistryStore::export(),
+            before_removal_rejection
+        );
+        RootComponentRegistryStore::import(initial.clone());
+
+        ComponentRegistryOps::begin_component_draining(
+            fixture.component,
+            [79; 32],
+            previous_registry.clone(),
+            100,
+            fixture.partition.encoded_bytes,
+            fleet_directory(&initial.current.as_ref().expect("Registry meta").root),
+        )
+        .expect_err("draining receipt must fit before mutation");
+        assert_eq!(RootComponentRegistryStore::export(), initial);
+
+        let draining = ComponentRegistryOps::begin_component_draining(
+            fixture.component,
+            [79; 32],
+            previous_registry.clone(),
+            100,
+            16_777_216,
+            fleet_directory(&initial.current.as_ref().expect("Registry meta").root),
+        )
+        .expect("durably fence Component growth");
+        assert_eq!(draining.previous_registry, previous_registry);
+        assert_eq!(draining.registry.revision, fixture.partition.revision + 1);
+        assert_eq!(draining.descendant_count, 4);
+        assert_eq!(
+            draining.descendant_content_hash,
+            fixture.partition.descendant_content_hash
+        );
+        assert_ne!(draining.directory_authority_hash, [0; 32]);
+
+        let durable = restart_component_registry();
+        let partition = ComponentRegistryOps::partition(fixture.component)
+            .expect("valid draining partition")
+            .expect("draining partition");
+        assert_eq!(partition.status, ComponentLifecycleStatus::Draining);
+        assert_eq!(partition.revision, draining.registry.revision);
+        assert_eq!(partition.content_hash, draining.registry.content_hash);
+        assert_eq!(
+            ComponentRegistryOps::component_for_principal(fixture.partition.binding.canister_id),
+            Some(fixture.component)
+        );
+        assert_eq!(
+            ComponentRegistryOps::component_draining(fixture.component)
+                .expect("valid draining receipt")
+                .expect("durable draining receipt"),
+            draining
+        );
+        let mut corrupted = durable.clone();
+        corrupted.component_drainings[0].descendant_content_hash = [0; 32];
+        RootComponentRegistryStore::import(corrupted);
+        ComponentRegistryOps::component_draining(fixture.component)
+            .expect_err("draining receipt must retain its canonical descendant digest");
+        RootComponentRegistryStore::import(durable.clone());
+        assert_eq!(
+            ComponentRegistryOps::begin_component_draining(
+                fixture.component,
+                [79; 32],
+                draining.previous_registry.clone(),
+                101,
+                16_777_216,
+                fleet_directory(&initial.current.as_ref().expect("Registry meta").root),
+            )
+            .expect("exact retry"),
+            draining
+        );
+        assert_eq!(
+            partition.encoded_bytes,
+            exact_component_registry_entry_bytes(&durable, fixture.component)
+        );
+        assert_eq!(
+            ComponentRegistryOps::current()
+                .expect("Registry status")
+                .encoded_bytes,
+            exact_registry_entry_bytes(&durable)
+        );
+
+        let before_growth = RootComponentRegistryStore::export();
+        ComponentRegistryOps::reserve_child_allocation(
+            child_allocation_decision_for_parent(
+                &fixture.partition,
+                fixture.unrelated.canister_id,
+                &fixture.unrelated.role,
+                "project_machine",
+            ),
+            [80; 32],
+            draining.registry.clone(),
+        )
+        .expect_err("Draining Component cannot reserve a new child");
+        assert_eq!(RootComponentRegistryStore::export(), before_growth);
+
+        ComponentRegistryOps::begin_subtree_removal(
+            fixture.component,
+            [81; 32],
+            fixture.target.canister_id,
+            draining.registry,
+            16_777_216,
+        )
+        .expect("Draining Component retains its existing tree for post-order removal");
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
 

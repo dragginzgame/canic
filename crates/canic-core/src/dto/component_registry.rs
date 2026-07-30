@@ -263,6 +263,31 @@ pub struct RootComponentSubtreeRemovalStatusRequest {
 }
 
 ///
+/// RootComponentDrainingRequest
+///
+/// Controller command fencing one exact active Component against new mutation.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentDrainingRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub expected_registry: ComponentRegistryHead,
+}
+
+///
+/// RootComponentDrainingStatusRequest
+///
+/// Read-only lookup key for one durable Component-draining operation.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentDrainingStatusRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+}
+
+///
 /// RootComponentChildCreationRequest
 ///
 /// Parent command continuing one already reserved direct-child operation.
@@ -939,6 +964,24 @@ pub struct RootComponentSubtreeRemovalResponse {
 }
 
 ///
+/// RootComponentDrainingResponse
+///
+/// Exact Registry and Directory authority produced by the durable draining fence.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentDrainingResponse {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub previous_registry: ComponentRegistryHead,
+    pub registry: ComponentRegistryHead,
+    pub descendant_count: u32,
+    pub descendant_content_hash: [u8; 32],
+    pub directory_authority_hash: [u8; 32],
+    pub started_at_ns: u64,
+}
+
+///
 /// RootComponentChildCommitResponse
 ///
 /// Exact committed child operation, authoritative Component Registry and next Directory head.
@@ -1470,6 +1513,62 @@ mod tests {
         assert_eq!(
             candid::decode_one::<RootComponentSubtreeRemovalResponse>(&response_bytes)
                 .expect("decode subtree removal response"),
+            response
+        );
+    }
+
+    #[test]
+    fn component_draining_contracts_round_trip_through_candid() {
+        let component = ComponentInstanceId::from_generated_bytes([60; 32]);
+        let previous_registry = ComponentRegistryHead {
+            component,
+            revision: 7,
+            content_hash: [61; 32],
+        };
+        let request = RootComponentDrainingRequest {
+            operation_id: [62; 32],
+            component,
+            expected_registry: previous_registry.clone(),
+        };
+        let status_request = RootComponentDrainingStatusRequest {
+            operation_id: request.operation_id,
+            component,
+        };
+        let response = RootComponentDrainingResponse {
+            operation_id: request.operation_id,
+            component,
+            previous_registry,
+            registry: ComponentRegistryHead {
+                component,
+                revision: 8,
+                content_hash: [63; 32],
+            },
+            descendant_count: 20_000,
+            descendant_content_hash: [64; 32],
+            directory_authority_hash: [65; 32],
+            started_at_ns: 66,
+        };
+
+        let request_bytes =
+            candid::encode_one(&request).expect("encode Component draining request");
+        let status_bytes =
+            candid::encode_one(status_request).expect("encode Component draining status request");
+        let response_bytes =
+            candid::encode_one(&response).expect("encode Component draining response");
+
+        assert_eq!(
+            candid::decode_one::<RootComponentDrainingRequest>(&request_bytes)
+                .expect("decode Component draining request"),
+            request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentDrainingStatusRequest>(&status_bytes)
+                .expect("decode Component draining status request"),
+            status_request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentDrainingResponse>(&response_bytes)
+                .expect("decode Component draining response"),
             response
         );
     }
