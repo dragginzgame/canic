@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.59` durably converges and stops the exact top-level Canister of a
+  draining Component, requiring qualified Directory, Store module and sole
+  root-controller evidence before its retained descendants may be removed.
+
 - `0.100.58` durably fences an exact active top-level Component into
   `Draining`, rejecting new descendants while retaining its normalized tree,
   lookup and post-order evacuation path.

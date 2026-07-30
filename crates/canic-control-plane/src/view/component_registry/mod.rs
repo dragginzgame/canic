@@ -38,6 +38,55 @@ pub struct RootComponentDrainingView {
     pub descendant_content_hash: [u8; 32],
     pub directory_authority_hash: [u8; 32],
     pub started_at_ns: u64,
+    pub quiescence: Option<RootComponentQuiescenceProgressView>,
+}
+
+///
+/// RootComponentQuiescenceStopIntentView
+///
+/// Read-only pre-effect authority for stopping one draining top-level Component.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentQuiescenceStopIntentView {
+    pub registry: ComponentRegistryHead,
+    pub descendant_count: u32,
+    pub descendant_content_hash: [u8; 32],
+    pub canister_id: Principal,
+    pub controller: Principal,
+    pub expected_module_hash: [u8; 32],
+    pub covered_fleet_registry_revision: u64,
+    pub covered_fleet_registry_content_hash: [u8; 32],
+    pub covered_authority_hash: [u8; 32],
+    pub runtime_operation_id: [u8; 32],
+    pub activation: ComponentRuntimeActivationEvidence,
+    pub prepared_at_ns: u64,
+    pub charged_entry_bytes: u64,
+}
+
+///
+/// RootComponentQuiescentReceiptView
+///
+/// Read-only terminal evidence for one independently observed stopped Component.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentQuiescentReceiptView {
+    pub stop: RootComponentQuiescenceStopIntentView,
+    pub observed_module_hash: [u8; 32],
+    pub quiesced_at_ns: u64,
+}
+
+///
+/// RootComponentQuiescenceProgressView
+///
+/// Read-only monotonic stop progress embedded in one Component draining fence.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RootComponentQuiescenceProgressView {
+    StopIntent(RootComponentQuiescenceStopIntentView),
+    Quiescent(RootComponentQuiescentReceiptView),
 }
 
 ///
@@ -312,6 +361,8 @@ pub struct RootComponentSubtreeDirectoryConvergenceView {
 ///
 /// Read-only membership removal plus surviving-member convergence receipt.
 ///
+/// The owner is absent only under terminal top-level Component quiescence.
+///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentSubtreeDirectorySynchronizedView {
@@ -320,7 +371,7 @@ pub struct RootComponentSubtreeDirectorySynchronizedView {
     pub covered_fleet_registry_content_hash: [u8; 32],
     pub covered_component_registry: ComponentRegistryHead,
     pub covered_authority_hash: [u8; 32],
-    pub owning_component: RootComponentSubtreeDirectoryConvergenceView,
+    pub owning_component: Option<RootComponentSubtreeDirectoryConvergenceView>,
     pub parent: Option<RootComponentSubtreeDirectoryConvergenceView>,
 }
 

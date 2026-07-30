@@ -408,6 +408,28 @@ fn root_component_draining_fence_is_response_idempotent() {
 }
 
 #[test]
+fn root_component_quiescence_is_response_idempotent() {
+    let quiesce = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_root_component_quiesce")
+        .expect("root Component quiescence policy entry");
+    let status = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_root_component_quiescence_status")
+        .expect("root Component quiescence status policy entry");
+
+    assert_eq!(
+        quiesce.replay_policy,
+        ReplayPolicy::ResponseIdempotent {
+            command_kind: replay_command_kind("component_registry.quiesce_component.v1"),
+        }
+    );
+    assert_eq!(quiesce.cost_class, CostClass::None);
+    assert_eq!(status.replay_policy, ReplayPolicy::QueryOrReadOnly);
+    assert_eq!(status.endpoint_kind, EndpointKind::Query);
+}
+
+#[test]
 #[expect(
     clippy::too_many_lines,
     reason = "one policy inventory test keeps every monotonic subtree-removal transition aligned"

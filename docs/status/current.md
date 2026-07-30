@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.57`.
-- The latest published release is `v0.100.57` at
-  `80e920c758bb8497f94ef9830e8df151183fa286`.
-- Open `0.100.58` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.58`.
+- The latest published release is `v0.100.58` at
+  `ceb0f0b62a315d5b3b1169a8723c44dff67e4030`.
+- Open `0.100.59` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -484,12 +484,21 @@ Historical detail is archived at:
   committed-descendant count. It atomically returns interior traversal to the
   retained parent or records terminal authority for the fenced target, after
   which a new removal operation may begin.
-- Open `0.100.58` durably advances one exact top-level Component from `Active`
+- Released `0.100.58` durably advances one exact top-level Component from `Active`
   to `Draining` only after all earlier child lifecycle and subtree-removal
   operations are terminal. Its operation receipt freezes both Registry heads,
   descendant count and digest, and Directory authority at stable-memory ID
   23. The draining partition rejects new descendants while retaining
   principal lookup, Directory pagination and post-order evacuation.
+- Open `0.100.59` adds qualified top-level Component quiescence. It converges
+  the runtime onto the exact draining Component head under the active Fleet
+  Directory, freezes its exact Canister, sole root controller, verified Store
+  module and retained runtime evidence before stopping, and commits only an
+  independently observed `Stopped` result. The terminal receipt is precharged
+  inside the existing ID-23 draining record, and descendant removal is gated
+  on that terminal evidence. Subsequent Directory receipts do not call the
+  stopped owner, but still bind exact root-derived authority and converge any
+  surviving non-root parent.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1953,7 +1962,7 @@ retained parent; finalizing the fenced target records compact terminal
 authority, releases the live fence and remains exactly replayable through
 history.
 
-Open `0.100.58` durably fences an exact active top-level Component into
+Released `0.100.58` durably fences an exact active top-level Component into
 `Draining`. It requires an exact current head and settled earlier work,
 atomically advances the Component status/head and stores a bounded one-per-
 Component receipt at consecutive control-plane stable-memory ID 23. Draining
@@ -1961,11 +1970,18 @@ blocks new child reservations while preserving lookup, current Directory
 pagination and the existing post-order removal path. It performs no Canister
 effect.
 
-Next, obtain qualified Component-specific quiescence evidence and reuse the
-post-order loop until no descendant row remains. Component removal must then
-retain final-inventory evidence; an unreachable Canister is never evidence of
-removal. Managed application Canisters must not perform management effects or
-infer authorization from flat catalog presence.
+Open `0.100.59` converges that top-level runtime against the exact draining
+Component head and current Fleet Directory, durably precharges and freezes its
+sole-root/Store-module stop authority, reconciles the management stop and
+records `Quiescent` only after an independent qualified `Stopped`
+observation. Descendant removal from a draining tree now requires that
+terminal receipt; its Directory phase omits the stopped owner without
+fabricating evidence and continues to converge any surviving non-root parent.
+
+Next, reuse the post-order loop until no descendant row remains. Component
+removal must then retain final-inventory evidence; an unreachable Canister is
+never evidence of removal. Managed application Canisters must not perform
+management effects or infer authorization from flat catalog presence.
 
 ## Historical Release Detail
 

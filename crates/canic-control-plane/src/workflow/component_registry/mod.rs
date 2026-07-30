@@ -20,6 +20,7 @@ use crate::{
         RootComponentChildInstallEffectView, RootComponentChildMembershipView,
         RootComponentCreationEffectView, RootComponentDrainingView,
         RootComponentInitialInventoryView, RootComponentInstallEffectView,
+        RootComponentQuiescenceProgressView, RootComponentQuiescenceStopIntentView,
         RootComponentRegistryView, RootComponentSubtreeDeleteEffectView,
         RootComponentSubtreeDirectoryConvergenceView,
         RootComponentSubtreeDirectorySynchronizedView, RootComponentSubtreeMembershipRemovedView,
@@ -87,7 +88,10 @@ use canic_core::{
             RootComponentDrainingResponse, RootComponentDrainingStatusRequest,
             RootComponentInitialInventoryStatus, RootComponentInstallEvidence,
             RootComponentInstallRequest, RootComponentMembershipActivationRequest,
-            RootComponentMembershipActivationResponse, RootComponentRegistryPreparationRequest,
+            RootComponentMembershipActivationResponse, RootComponentQuiescencePhase,
+            RootComponentQuiescenceRequest, RootComponentQuiescenceResponse,
+            RootComponentQuiescenceStatusRequest, RootComponentQuiescenceStopIntent,
+            RootComponentQuiescentReceipt, RootComponentRegistryPreparationRequest,
             RootComponentRegistryStatusResponse, RootComponentRuntimeActivationRequest,
             RootComponentRuntimeActivationResponse, RootComponentSubtreeRemovalAdvanceRequest,
             RootComponentSubtreeRemovalCompletedReceipt, RootComponentSubtreeRemovalDeleteIntent,
@@ -305,6 +309,15 @@ struct PreparedSubtreeLeafStopPlan {
     expected_status_module_hash: [u8; 32],
     maximum_component_registry_bytes: u64,
     progressed_beyond_stopped: bool,
+}
+
+#[derive(Clone, Debug)]
+struct PreparedComponentQuiescencePlan {
+    component: ComponentInstanceId,
+    operation_id: [u8; 32],
+    stop: RootComponentQuiescenceStopIntentView,
+    expected_status_module_hash: [u8; 32],
+    already_quiescent: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -674,6 +687,143 @@ pub fn component_draining_status(
     )?;
     validate_component_draining(&partition, &draining, None, None)?;
     Ok(component_draining_response(draining))
+}
+
+/// Converge and stop one exact draining top-level Component before descendant removal.
+pub async fn quiesce_component(
+    request: RootComponentQuiescenceRequest,
+) -> Result<RootComponentQuiescenceResponse, InternalError> {
+    let (authority, root) = root_authority()?;
+    let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let preparation_request = RootComponentRegistryPreparationRequest {
+        store_bootstrap: prepared.store_bootstrap.clone(),
+        expected_fleet_registry: prepared.prepared_against_registry.clone(),
+    };
+    let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    let fleet_directory = validate_active_authority(&authority, root, &preparation_request)?;
+    if FleetActivationApi::status()
+        .map_err(InternalError::public)?
+        .phase
+        != FleetActivationPhase::Active
+    {
+        return Err(InternalError::unavailable(
+            "Component quiescence requires an Active Fleet Subnet Root runtime",
+        ));
+    }
+
+    let topology = ConfigOps::component_topology()?;
+    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
+        InternalError::unavailable("Component Registry partition has not been committed")
+    })?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &partition,
+    )?;
+    let maximum_component_registry_bytes = topology
+        .get(&partition.binding.component_spec)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Config,
+                "quiescing Component Spec is absent from the protected topology",
+            )
+        })?
+        .limits
+        .maximum_registry_bytes;
+    let draining =
+        ComponentRegistryOps::component_draining(request.component)?.ok_or_else(|| {
+            InternalError::unavailable("Component draining operation has not been durably fenced")
+        })?;
+    validate_component_draining(&partition, &draining, None, None)?;
+    let operation_matches = request.operation_id == draining.operation_id;
+    let registry_matches = request.expected_registry == draining.registry;
+    if !operation_matches || !registry_matches {
+        return Err(InternalError::conflict(
+            "Component quiescence request differs from its durable draining authority",
+        ));
+    }
+
+    let draining = if draining.quiescence.is_none() {
+        let component_authority = ComponentRuntimeDirectoryAuthority {
+            fleet: fleet_directory,
+            component: component_directory_head(&partition),
+        };
+        let authority_hash = ComponentRuntimeOps::directory_authority_hash(&component_authority)?;
+        let binding = ManagedCanisterBinding::Component(partition.binding.clone());
+        let convergence =
+            converge_active_member_directory(&binding, &component_authority, authority_hash)
+                .await?;
+        let artifact = exact_store_artifact(&store, &partition.binding.role)?;
+        ComponentRegistryOps::prepare_component_quiescence(
+            request.component,
+            request.operation_id,
+            request.expected_registry.clone(),
+            convergence,
+            artifact.payload_hash,
+            IcOps::now_nanos(),
+            maximum_component_registry_bytes,
+        )?
+    } else {
+        draining
+    };
+    let plan =
+        prepared_component_quiescence_plan(&authority.binding, &store, &partition, &draining)?;
+    if plan.already_quiescent {
+        return component_quiescence_response(draining);
+    }
+    observe_or_stop_component(&plan).await?;
+    let quiescent = ComponentRegistryOps::mark_component_quiescent(
+        plan.component,
+        plan.operation_id,
+        plan.expected_status_module_hash,
+        IcOps::now_nanos(),
+    )?;
+    let current = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "quiescent Component partition disappeared after terminal mutation",
+        )
+    })?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &current,
+    )?;
+    validate_component_draining(&current, &quiescent, None, None)?;
+    component_quiescence_response(quiescent)
+}
+
+/// Read one draining Component's durable quiescence progress without mutation.
+pub fn component_quiescence_status(
+    request: RootComponentQuiescenceStatusRequest,
+) -> Result<RootComponentQuiescenceResponse, InternalError> {
+    let (authority, _root) = root_authority()?;
+    let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let draining =
+        ComponentRegistryOps::component_draining(request.component)?.ok_or_else(|| {
+            InternalError::unavailable("Component draining operation has not been durably fenced")
+        })?;
+    if request.operation_id != draining.operation_id {
+        return Err(InternalError::conflict(
+            "Component quiescence status is bound to different draining intent",
+        ));
+    }
+    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component quiescence authority has no Registry partition",
+        )
+    })?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &ConfigOps::component_topology()?,
+        &partition,
+    )?;
+    validate_component_draining(&partition, &draining, None, None)?;
+    component_quiescence_response(draining)
 }
 
 /// Durably fence one registered child subtree before quiescence and post-order removal.
@@ -1282,6 +1432,8 @@ pub async fn synchronize_subtree_leaf_directory(
         request.expected_traversal_steps,
         request.expected_leaf_canister_id,
         request.expected_leaf_parent_canister_id,
+        directory_authority,
+        directory_authority_hash,
         owning_component,
         parent,
         maximum_registry_bytes,
@@ -3621,14 +3773,40 @@ async fn converge_subtree_directory_recipients(
     authority_hash: [u8; 32],
 ) -> Result<
     (
-        ComponentRuntimeDirectoryConvergenceEvidence,
+        Option<ComponentRuntimeDirectoryConvergenceEvidence>,
         Option<ComponentRuntimeDirectoryConvergenceEvidence>,
     ),
     InternalError,
 > {
     let owning_binding = ManagedCanisterBinding::Component(partition.binding.clone());
-    let owning_component =
-        converge_active_member_directory(&owning_binding, authority, authority_hash).await?;
+    let owning_component = match partition.status {
+        ComponentLifecycleStatus::Active => Some(
+            converge_active_member_directory(&owning_binding, authority, authority_hash).await?,
+        ),
+        ComponentLifecycleStatus::Draining => {
+            let draining = ComponentRegistryOps::component_draining(partition.binding.component)?
+                .ok_or_else(|| {
+                InternalError::invariant(
+                    InternalErrorOrigin::Storage,
+                    "Draining Component has no durable draining authority",
+                )
+            })?;
+            if !matches!(
+                draining.quiescence,
+                Some(RootComponentQuiescenceProgressView::Quiescent(_))
+            ) {
+                return Err(InternalError::unavailable(
+                    "Draining Component is not terminally quiescent",
+                ));
+            }
+            None
+        }
+        ComponentLifecycleStatus::Prepared | ComponentLifecycleStatus::Removed => {
+            return Err(InternalError::conflict(
+                "Component subtree Directory convergence requires Active or Draining authority",
+            ));
+        }
+    };
     let leaf = &membership.deleted.deletion.stopped.stop.leaf;
     if leaf.parent_canister_id == partition.binding.canister_id {
         return Ok((owning_component, None));
@@ -4433,6 +4611,49 @@ const fn component_draining_response(
     }
 }
 
+fn component_quiescence_response(
+    draining: RootComponentDrainingView,
+) -> Result<RootComponentQuiescenceResponse, InternalError> {
+    let phase = draining.quiescence.ok_or_else(|| {
+        InternalError::unavailable("Component quiescence stop intent has not been prepared")
+    })?;
+    Ok(RootComponentQuiescenceResponse {
+        operation_id: draining.operation_id,
+        component: draining.component,
+        phase: match phase {
+            RootComponentQuiescenceProgressView::StopIntent(intent) => {
+                RootComponentQuiescencePhase::StopIntent(component_quiescence_stop_intent(intent))
+            }
+            RootComponentQuiescenceProgressView::Quiescent(receipt) => {
+                RootComponentQuiescencePhase::Quiescent(RootComponentQuiescentReceipt {
+                    stop: component_quiescence_stop_intent(receipt.stop),
+                    observed_module_hash: receipt.observed_module_hash,
+                    quiesced_at_ns: receipt.quiesced_at_ns,
+                })
+            }
+        },
+    })
+}
+
+const fn component_quiescence_stop_intent(
+    intent: RootComponentQuiescenceStopIntentView,
+) -> RootComponentQuiescenceStopIntent {
+    RootComponentQuiescenceStopIntent {
+        registry: intent.registry,
+        descendant_count: intent.descendant_count,
+        descendant_content_hash: intent.descendant_content_hash,
+        canister_id: intent.canister_id,
+        controller: intent.controller,
+        expected_module_hash: intent.expected_module_hash,
+        covered_fleet_registry_revision: intent.covered_fleet_registry_revision,
+        covered_fleet_registry_content_hash: intent.covered_fleet_registry_content_hash,
+        covered_authority_hash: intent.covered_authority_hash,
+        runtime_operation_id: intent.runtime_operation_id,
+        activation: intent.activation,
+        prepared_at_ns: intent.prepared_at_ns,
+    }
+}
+
 fn subtree_removal_response(
     removal: RootComponentSubtreeRemovalView,
 ) -> RootComponentSubtreeRemovalResponse {
@@ -4524,7 +4745,9 @@ fn subtree_directory_synchronized_receipt_response(
         covered_fleet_registry_content_hash: receipt.covered_fleet_registry_content_hash,
         covered_component_registry: receipt.covered_component_registry,
         covered_authority_hash: receipt.covered_authority_hash,
-        owning_component: subtree_directory_convergence_evidence_response(receipt.owning_component),
+        owning_component: receipt
+            .owning_component
+            .map(subtree_directory_convergence_evidence_response),
         parent: receipt
             .parent
             .map(subtree_directory_convergence_evidence_response),
@@ -4882,6 +5105,70 @@ fn exact_store_artifact<'a>(
     Ok(artifact)
 }
 
+fn prepared_component_quiescence_plan(
+    root: &FleetSubnetRootBinding,
+    store: &RootStoreBootstrapResponse,
+    partition: &ComponentRegistryPartitionView,
+    draining: &RootComponentDrainingView,
+) -> Result<PreparedComponentQuiescencePlan, InternalError> {
+    let (stop, observed_module_hash, already_quiescent) = match &draining.quiescence {
+        Some(RootComponentQuiescenceProgressView::StopIntent(stop)) => (stop.clone(), None, false),
+        Some(RootComponentQuiescenceProgressView::Quiescent(receipt)) => (
+            receipt.stop.clone(),
+            Some(receipt.observed_module_hash),
+            true,
+        ),
+        None => {
+            return Err(InternalError::unavailable(
+                "Component quiescence stop intent has not been durably prepared",
+            ));
+        }
+    };
+    let durable_authority = (
+        draining.operation_id,
+        draining.component,
+        &draining.registry,
+        partition.binding.canister_id,
+        partition.binding.fleet_subnet_root,
+    );
+    let stop_authority = (
+        draining.operation_id,
+        partition.binding.component,
+        &stop.registry,
+        stop.canister_id,
+        stop.controller,
+    );
+    if durable_authority != stop_authority {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component quiescence stop intent differs from protected draining authority",
+        ));
+    }
+    if store.fleet_subnet_root != root.fleet_subnet_root
+        || store.release_set != partition.release_set
+    {
+        return Err(InternalError::conflict(
+            "verified Store differs from Component quiescence root authority",
+        ));
+    }
+    let artifact = exact_store_artifact(store, &partition.binding.role)?;
+    if stop.expected_module_hash != artifact.payload_hash
+        || observed_module_hash.is_some_and(|hash| hash != artifact.payload_hash)
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component quiescence module authority differs from the verified Store artifact",
+        ));
+    }
+    Ok(PreparedComponentQuiescencePlan {
+        component: draining.component,
+        operation_id: draining.operation_id,
+        stop,
+        expected_status_module_hash: artifact.payload_hash,
+        already_quiescent,
+    })
+}
+
 fn prepared_subtree_leaf_stop_plan(
     root: &canic_core::ids::FleetSubnetRootBinding,
     store: &RootStoreBootstrapResponse,
@@ -5099,6 +5386,51 @@ fn prepared_subtree_leaf_delete_plan(
         maximum_component_registry_bytes,
         already_deleted,
     })
+}
+
+async fn observe_or_stop_component(
+    plan: &PreparedComponentQuiescencePlan,
+) -> Result<(), InternalError> {
+    match observed_component_quiescence_status(plan).await? {
+        CanisterStatusType::Stopped => return Ok(()),
+        CanisterStatusType::Stopping => {
+            return Err(InternalError::unavailable(
+                "Component quiescence stop is still in progress",
+            ));
+        }
+        CanisterStatusType::Running => {}
+    }
+
+    let stop_error = MgmtOps::stop_canister(plan.stop.canister_id).await.err();
+    match observed_component_quiescence_status(plan).await? {
+        CanisterStatusType::Stopped => Ok(()),
+        CanisterStatusType::Stopping => Err(InternalError::unavailable(
+            "Component quiescence stop is still in progress",
+        )),
+        CanisterStatusType::Running => match stop_error {
+            Some(error) => Err(error),
+            None => Err(InternalError::unavailable(
+                "Component remains running after its quiescence stop call completed",
+            )),
+        },
+    }
+}
+
+async fn observed_component_quiescence_status(
+    plan: &PreparedComponentQuiescencePlan,
+) -> Result<CanisterStatusType, InternalError> {
+    let status = MgmtOps::canister_status(plan.stop.canister_id).await?;
+    if status.settings.controllers != vec![plan.stop.controller] {
+        return Err(InternalError::conflict(
+            "Component controllers differ from its sole root quiescence authority",
+        ));
+    }
+    if status.module_hash.as_deref() != Some(plan.expected_status_module_hash.as_slice()) {
+        return Err(InternalError::conflict(
+            "Component module differs from its verified Store quiescence authority",
+        ));
+    }
+    Ok(status.status)
 }
 
 async fn observe_or_stop_subtree_leaf(

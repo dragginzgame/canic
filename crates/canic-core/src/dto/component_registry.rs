@@ -288,6 +288,31 @@ pub struct RootComponentDrainingStatusRequest {
 }
 
 ///
+/// RootComponentQuiescenceRequest
+///
+/// Controller command converging and stopping one exact draining Component.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentQuiescenceRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub expected_registry: ComponentRegistryHead,
+}
+
+///
+/// RootComponentQuiescenceStatusRequest
+///
+/// Read-only lookup key for one draining Component's quiescence progress.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentQuiescenceStatusRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+}
+
+///
 /// RootComponentChildCreationRequest
 ///
 /// Parent command continuing one already reserved direct-child operation.
@@ -581,6 +606,8 @@ pub struct RootComponentSubtreeRemovalDirectoryConvergenceEvidence {
 ///
 /// Membership removal plus independently verified surviving-member convergence.
 ///
+/// The owner is absent only when its top-level Component is durably quiescent.
+///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentSubtreeRemovalDirectorySynchronizedReceipt {
@@ -589,7 +616,7 @@ pub struct RootComponentSubtreeRemovalDirectorySynchronizedReceipt {
     pub covered_fleet_registry_content_hash: [u8; 32],
     pub covered_component_registry: ComponentRegistryHead,
     pub covered_authority_hash: [u8; 32],
-    pub owning_component: RootComponentSubtreeRemovalDirectoryConvergenceEvidence,
+    pub owning_component: Option<RootComponentSubtreeRemovalDirectoryConvergenceEvidence>,
     pub parent: Option<RootComponentSubtreeRemovalDirectoryConvergenceEvidence>,
 }
 
@@ -979,6 +1006,66 @@ pub struct RootComponentDrainingResponse {
     pub descendant_content_hash: [u8; 32],
     pub directory_authority_hash: [u8; 32],
     pub started_at_ns: u64,
+}
+
+///
+/// RootComponentQuiescenceStopIntent
+///
+/// Exact runtime, Directory, module and controller authority frozen before stopping.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentQuiescenceStopIntent {
+    pub registry: ComponentRegistryHead,
+    pub descendant_count: u32,
+    pub descendant_content_hash: [u8; 32],
+    pub canister_id: Principal,
+    pub controller: Principal,
+    pub expected_module_hash: [u8; 32],
+    pub covered_fleet_registry_revision: u64,
+    pub covered_fleet_registry_content_hash: [u8; 32],
+    pub covered_authority_hash: [u8; 32],
+    pub runtime_operation_id: [u8; 32],
+    pub activation: ComponentRuntimeActivationEvidence,
+    pub prepared_at_ns: u64,
+}
+
+///
+/// RootComponentQuiescentReceipt
+///
+/// Durable evidence that the exact prepared Component was independently observed stopped.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentQuiescentReceipt {
+    pub stop: RootComponentQuiescenceStopIntent,
+    pub observed_module_hash: [u8; 32],
+    pub quiesced_at_ns: u64,
+}
+
+///
+/// RootComponentQuiescencePhase
+///
+/// Monotonic progress from pre-effect stop authority to observed quiescence.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RootComponentQuiescencePhase {
+    StopIntent(RootComponentQuiescenceStopIntent),
+    Quiescent(RootComponentQuiescentReceipt),
+}
+
+///
+/// RootComponentQuiescenceResponse
+///
+/// Current durable quiescence progress for one draining Component.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentQuiescenceResponse {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub phase: RootComponentQuiescencePhase,
 }
 
 ///
@@ -1460,14 +1547,16 @@ mod tests {
                         content_hash: [52; 32],
                     },
                     covered_authority_hash: [55; 32],
-                    owning_component: RootComponentSubtreeRemovalDirectoryConvergenceEvidence {
-                        operation_id: [57; 32],
-                        canister_id: Principal::from_slice(&[58; 29]),
-                        activation: ComponentRuntimeActivationEvidence {
-                            directory_authority_hash: [59; 32],
-                            activated_at_ns: 60,
+                    owning_component: Some(
+                        RootComponentSubtreeRemovalDirectoryConvergenceEvidence {
+                            operation_id: [57; 32],
+                            canister_id: Principal::from_slice(&[58; 29]),
+                            activation: ComponentRuntimeActivationEvidence {
+                                directory_authority_hash: [59; 32],
+                                activated_at_ns: 60,
+                            },
                         },
-                    },
+                    ),
                     parent: Some(RootComponentSubtreeRemovalDirectoryConvergenceEvidence {
                         operation_id: [61; 32],
                         canister_id: request.target_canister_id,
@@ -1514,6 +1603,21 @@ mod tests {
             candid::decode_one::<RootComponentSubtreeRemovalResponse>(&response_bytes)
                 .expect("decode subtree removal response"),
             response
+        );
+
+        let mut quiescent_owner_response = response;
+        let RootComponentSubtreeRemovalPhase::DirectorySynchronized(receipt) =
+            &mut quiescent_owner_response.phase
+        else {
+            panic!("Directory-synchronized response");
+        };
+        receipt.owning_component = None;
+        let quiescent_owner_bytes = candid::encode_one(&quiescent_owner_response)
+            .expect("encode quiescent-owner subtree response");
+        assert_eq!(
+            candid::decode_one::<RootComponentSubtreeRemovalResponse>(&quiescent_owner_bytes)
+                .expect("decode quiescent-owner subtree response"),
+            quiescent_owner_response
         );
     }
 
@@ -1569,6 +1673,71 @@ mod tests {
         assert_eq!(
             candid::decode_one::<RootComponentDrainingResponse>(&response_bytes)
                 .expect("decode Component draining response"),
+            response
+        );
+    }
+
+    #[test]
+    fn component_quiescence_contracts_round_trip_through_candid() {
+        let component = ComponentInstanceId::from_generated_bytes([67; 32]);
+        let registry = ComponentRegistryHead {
+            component,
+            revision: 9,
+            content_hash: [68; 32],
+        };
+        let request = RootComponentQuiescenceRequest {
+            operation_id: [69; 32],
+            component,
+            expected_registry: registry.clone(),
+        };
+        let status_request = RootComponentQuiescenceStatusRequest {
+            operation_id: request.operation_id,
+            component,
+        };
+        let stop = RootComponentQuiescenceStopIntent {
+            registry,
+            descendant_count: 20_000,
+            descendant_content_hash: [70; 32],
+            canister_id: Principal::from_slice(&[71; 29]),
+            controller: Principal::from_slice(&[72; 29]),
+            expected_module_hash: [73; 32],
+            covered_fleet_registry_revision: 10,
+            covered_fleet_registry_content_hash: [74; 32],
+            covered_authority_hash: [75; 32],
+            runtime_operation_id: [76; 32],
+            activation: ComponentRuntimeActivationEvidence {
+                directory_authority_hash: [77; 32],
+                activated_at_ns: 78,
+            },
+            prepared_at_ns: 79,
+        };
+        let response = RootComponentQuiescenceResponse {
+            operation_id: request.operation_id,
+            component,
+            phase: RootComponentQuiescencePhase::Quiescent(RootComponentQuiescentReceipt {
+                stop,
+                observed_module_hash: [73; 32],
+                quiesced_at_ns: 80,
+            }),
+        };
+
+        let request_bytes = candid::encode_one(&request).expect("encode quiescence request");
+        let status_bytes =
+            candid::encode_one(status_request).expect("encode quiescence status request");
+        let response_bytes = candid::encode_one(&response).expect("encode quiescence response");
+        assert_eq!(
+            candid::decode_one::<RootComponentQuiescenceRequest>(&request_bytes)
+                .expect("decode quiescence request"),
+            request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentQuiescenceStatusRequest>(&status_bytes)
+                .expect("decode quiescence status request"),
+            status_request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentQuiescenceResponse>(&response_bytes)
+                .expect("decode quiescence response"),
             response
         );
     }

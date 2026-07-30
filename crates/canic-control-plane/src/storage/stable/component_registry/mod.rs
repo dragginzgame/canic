@@ -52,7 +52,7 @@ const SUBTREE_REMOVAL_HISTORY_KEY_MAX_BYTES: u32 = 256;
 #[cfg(feature = "root-control-plane")]
 const SUBTREE_REMOVAL_HISTORY_RECORD_MAX_BYTES: u32 = 1_024;
 #[cfg(feature = "root-control-plane")]
-const COMPONENT_DRAINING_RECORD_MAX_BYTES: u32 = 1_024;
+const COMPONENT_DRAINING_RECORD_MAX_BYTES: u32 = 2_048;
 
 #[cfg(feature = "root-control-plane")]
 struct RootComponentRegistryState;
@@ -378,7 +378,7 @@ pub struct ComponentRegistryPartitionRecord {
 ///
 /// RootComponentDrainingRecord
 ///
-/// Immutable one-per-Component authority for the Active-to-Draining transition.
+/// One-per-Component draining fence with monotonic qualified-quiescence progress.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -391,6 +391,69 @@ pub struct RootComponentDrainingRecord {
     pub descendant_content_hash: [u8; 32],
     pub directory_authority_hash: [u8; 32],
     pub started_at_ns: u64,
+    pub quiescence: Option<RootComponentQuiescenceProgressRecord>,
+}
+
+///
+/// RootComponentQuiescenceStopIntentRecord
+///
+/// Durable pre-effect authority and terminal-byte reservation for Component quiescence.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentQuiescenceStopIntentRecord {
+    pub registry: ComponentRegistryHead,
+    pub descendant_count: u32,
+    pub descendant_content_hash: [u8; 32],
+    pub canister_id: Principal,
+    pub controller: Principal,
+    pub expected_module_hash: [u8; 32],
+    pub covered_fleet_registry_revision: u64,
+    pub covered_fleet_registry_content_hash: [u8; 32],
+    pub covered_authority_hash: [u8; 32],
+    pub runtime_operation_id: [u8; 32],
+    pub activation: ComponentRuntimeActivationEvidence,
+    pub prepared_at_ns: u64,
+    pub charged_entry_bytes: u64,
+}
+
+///
+/// RootComponentQuiescentReceiptRecord
+///
+/// Durable terminal evidence for one independently observed stopped Component.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentQuiescentReceiptRecord {
+    pub stop: RootComponentQuiescenceStopIntentRecord,
+    pub observed_module_hash: [u8; 32],
+    pub quiesced_at_ns: u64,
+}
+
+///
+/// RootComponentQuiescenceProgressRecord
+///
+/// Monotonic pre-effect or terminal quiescence state within one draining record.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RootComponentQuiescenceProgressRecord {
+    StopIntent(RootComponentQuiescenceStopIntentRecord),
+    Quiescent(RootComponentQuiescentReceiptRecord),
+}
+
+fn component_draining_identity_matches(
+    left: &RootComponentDrainingRecord,
+    right: &RootComponentDrainingRecord,
+) -> bool {
+    left.operation_id == right.operation_id
+        && left.component == right.component
+        && left.previous_registry == right.previous_registry
+        && left.registry == right.registry
+        && left.descendant_count == right.descendant_count
+        && left.descendant_content_hash == right.descendant_content_hash
+        && left.directory_authority_hash == right.directory_authority_hash
+        && left.started_at_ns == right.started_at_ns
 }
 
 impl RootComponentDrainingRecord {
@@ -709,6 +772,8 @@ pub struct RootComponentSubtreeDirectoryConvergenceRecord {
 ///
 /// Membership removal plus independently verified surviving-member convergence.
 ///
+/// The owner is absent only under terminal top-level Component quiescence.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentSubtreeDirectorySynchronizedRecord {
@@ -718,7 +783,7 @@ pub struct RootComponentSubtreeDirectorySynchronizedRecord {
     pub covered_component_registry_revision: u64,
     pub covered_component_registry_content_hash: [u8; 32],
     pub covered_authority_hash: [u8; 32],
-    pub owning_component: RootComponentSubtreeDirectoryConvergenceRecord,
+    pub owning_component: Option<RootComponentSubtreeDirectoryConvergenceRecord>,
     pub parent: Option<RootComponentSubtreeDirectoryConvergenceRecord>,
 }
 
@@ -2985,6 +3050,7 @@ impl RootComponentRegistryStore {
             || record.descendant_count != expected_partition.committed_descendants
             || record.descendant_content_hash != expected_partition.descendant_content_hash
             || record.directory_authority_hash == [0; 32]
+            || record.quiescence.is_some()
         {
             return Err(RootComponentAllocationCommitError::ConflictingPartition);
         }
@@ -3028,6 +3094,122 @@ impl RootComponentRegistryStore {
             });
             state.current = Some(next_meta);
             cell.set(state);
+            Ok(())
+        })
+    }
+
+    pub(crate) fn prepare_component_quiescence(
+        expected_meta: &RootComponentRegistryMetaRecord,
+        next_meta: RootComponentRegistryMetaRecord,
+        expected_partition: &ComponentRegistryPartitionRecord,
+        next_partition: ComponentRegistryPartitionRecord,
+        expected_record: &RootComponentDrainingRecord,
+        next_record: RootComponentDrainingRecord,
+    ) -> Result<(), RootComponentAllocationCommitError> {
+        let component = expected_partition.binding.component;
+        let key = RootComponentDrainingKey::from(component);
+        let next_intent = match &next_record.quiescence {
+            Some(RootComponentQuiescenceProgressRecord::StopIntent(intent)) => intent,
+            None | Some(RootComponentQuiescenceProgressRecord::Quiescent(_)) => {
+                return Err(RootComponentAllocationCommitError::ConflictingPartition);
+            }
+        };
+        if expected_record.quiescence.is_some()
+            || ComponentPartitionSnapshotAuthority::from(&next_partition)
+                != ComponentPartitionSnapshotAuthority::from(expected_partition)
+            || expected_partition.status != ComponentLifecycleStatus::Draining
+            || next_partition.status != ComponentLifecycleStatus::Draining
+            || !component_draining_identity_matches(expected_record, &next_record)
+            || next_intent.registry != expected_record.registry
+            || next_intent.descendant_count != expected_record.descendant_count
+            || next_intent.descendant_content_hash != expected_record.descendant_content_hash
+            || next_intent.canister_id != expected_partition.binding.canister_id
+            || next_intent.controller != expected_partition.binding.fleet_subnet_root
+            || next_intent.charged_entry_bytes < Self::component_draining_entry_bytes(&next_record)
+        {
+            return Err(RootComponentAllocationCommitError::ConflictingPartition);
+        }
+
+        ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            let current_meta = state
+                .current
+                .as_ref()
+                .ok_or(RootComponentAllocationCommitError::Uninitialized)?;
+            let current_record = ROOT_COMPONENT_DRAINING
+                .with_borrow(|map| map.get(&key))
+                .ok_or(RootComponentAllocationCommitError::ConflictingState)?;
+            let current_partition = COMPONENT_REGISTRY_ENTRIES
+                .with_borrow(|map| {
+                    map.get(&ComponentRegistryEntryKey::partition(component))
+                        .and_then(|entry| match entry {
+                            ComponentRegistryEntryRecord::Partition(partition) => Some(partition),
+                            ComponentRegistryEntryRecord::Child(_)
+                            | ComponentRegistryEntryRecord::ChildTraversal(_)
+                            | ComponentRegistryEntryRecord::ChildAllocation(_)
+                            | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                            | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                        })
+                })
+                .ok_or(RootComponentAllocationCommitError::ConflictingPartition)?;
+            if current_meta != expected_meta
+                || current_record != *expected_record
+                || current_partition != *expected_partition
+            {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+
+            ROOT_COMPONENT_DRAINING.with_borrow_mut(|map| {
+                map.insert(key, next_record);
+            });
+            COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
+                map.insert(
+                    ComponentRegistryEntryKey::partition(component),
+                    ComponentRegistryEntryRecord::Partition(next_partition),
+                );
+            });
+            state.current = Some(next_meta);
+            cell.set(state);
+            Ok(())
+        })
+    }
+
+    pub(crate) fn mark_component_quiescent(
+        expected_record: &RootComponentDrainingRecord,
+        next_record: RootComponentDrainingRecord,
+    ) -> Result<(), RootComponentAllocationCommitError> {
+        let component = expected_record.component;
+        let key = RootComponentDrainingKey::from(component);
+        let expected_intent = match &expected_record.quiescence {
+            Some(RootComponentQuiescenceProgressRecord::StopIntent(intent)) => intent,
+            None | Some(RootComponentQuiescenceProgressRecord::Quiescent(_)) => {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+        };
+        let next_receipt = match &next_record.quiescence {
+            Some(RootComponentQuiescenceProgressRecord::Quiescent(receipt)) => receipt,
+            None | Some(RootComponentQuiescenceProgressRecord::StopIntent(_)) => {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+        };
+        if !component_draining_identity_matches(expected_record, &next_record)
+            || next_receipt.stop != *expected_intent
+            || next_receipt.observed_module_hash != expected_intent.expected_module_hash
+            || next_receipt.quiesced_at_ns < expected_intent.prepared_at_ns
+            || Self::component_draining_entry_bytes(&next_record)
+                > expected_intent.charged_entry_bytes
+        {
+            return Err(RootComponentAllocationCommitError::ConflictingState);
+        }
+
+        ROOT_COMPONENT_DRAINING.with_borrow_mut(|map| {
+            let current = map
+                .get(&key)
+                .ok_or(RootComponentAllocationCommitError::ConflictingState)?;
+            if current != *expected_record {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            map.insert(key, next_record);
             Ok(())
         })
     }

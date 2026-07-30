@@ -15,9 +15,11 @@ use crate::{
         RootComponentCommitmentRecord, RootComponentCreationEffectRecord,
         RootComponentDrainingRecord, RootComponentInitialInventoryRecord,
         RootComponentInstallEffectRecord, RootComponentMembershipRecord,
-        RootComponentRegistryCommitError, RootComponentRegistryMetaRecord,
-        RootComponentRegistryStore, RootComponentSubtreeDeleteEffectRecord,
-        RootComponentSubtreeDeletedEffectRecord, RootComponentSubtreeDirectoryConvergenceRecord,
+        RootComponentQuiescenceProgressRecord, RootComponentQuiescenceStopIntentRecord,
+        RootComponentQuiescentReceiptRecord, RootComponentRegistryCommitError,
+        RootComponentRegistryMetaRecord, RootComponentRegistryStore,
+        RootComponentSubtreeDeleteEffectRecord, RootComponentSubtreeDeletedEffectRecord,
+        RootComponentSubtreeDirectoryConvergenceRecord,
         RootComponentSubtreeDirectorySynchronizedRecord,
         RootComponentSubtreeMembershipRemovedRecord,
         RootComponentSubtreeRemovalCompletedLeafRecord, RootComponentSubtreeRemovalCompletedRecord,
@@ -33,9 +35,10 @@ use crate::{
         RootComponentChildInstallEffectView, RootComponentChildMembershipView,
         RootComponentCommitmentView, RootComponentCreationEffectView, RootComponentDrainingView,
         RootComponentInitialInventoryView, RootComponentInstallEffectView,
-        RootComponentMembershipView, RootComponentRegistryView,
-        RootComponentSubtreeDeleteEffectView, RootComponentSubtreeDeletedEffectView,
-        RootComponentSubtreeDirectoryConvergenceView,
+        RootComponentMembershipView, RootComponentQuiescenceProgressView,
+        RootComponentQuiescenceStopIntentView, RootComponentQuiescentReceiptView,
+        RootComponentRegistryView, RootComponentSubtreeDeleteEffectView,
+        RootComponentSubtreeDeletedEffectView, RootComponentSubtreeDirectoryConvergenceView,
         RootComponentSubtreeDirectorySynchronizedView, RootComponentSubtreeMembershipRemovedView,
         RootComponentSubtreeRemovalCompletedView, RootComponentSubtreeRemovalNodeView,
         RootComponentSubtreeRemovalProgressView, RootComponentSubtreeRemovalView,
@@ -1640,6 +1643,7 @@ impl ComponentRegistryOps {
                 &fleet_directory,
             )?,
             started_at_ns,
+            quiescence: None,
         };
         let (next_partition, next_meta) = component_draining_state(
             &current,
@@ -1659,6 +1663,155 @@ impl ComponentRegistryOps {
         )
         .map_err(map_allocation_commit_error)?;
         Ok(component_draining_record_to_view(record))
+    }
+
+    pub(crate) fn prepare_component_quiescence(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        expected_registry: ComponentRegistryHead,
+        evidence: ComponentRuntimeDirectoryConvergenceEvidence,
+        expected_module_hash: [u8; 32],
+        prepared_at_ns: u64,
+        maximum_component_registry_bytes: u64,
+    ) -> Result<RootComponentDrainingView, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        let record =
+            RootComponentRegistryStore::component_draining(component).ok_or_else(|| {
+                InternalError::unavailable("Component has not been durably fenced for draining")
+            })?;
+        validate_partition_record(&partition)?;
+        validate_component_draining_record(&partition, &record)?;
+        if operation_id != record.operation_id || expected_registry != record.registry {
+            return Err(InternalError::conflict(
+                "Component quiescence request differs from its durable draining fence",
+            ));
+        }
+        if record.quiescence.is_some() {
+            return Ok(component_draining_record_to_view(record));
+        }
+        if component_partition_head(&partition) != record.registry
+            || partition.committed_descendants != record.descendant_count
+            || partition.descendant_content_hash != record.descendant_content_hash
+        {
+            return Err(InternalError::conflict(
+                "Component quiescence must be prepared before descendant removal begins",
+            ));
+        }
+        if expected_module_hash == [0; 32] || prepared_at_ns < record.started_at_ns {
+            return Err(InternalError::invalid_input(
+                "Component quiescence requires qualified module and time evidence",
+            ));
+        }
+        let expected_binding = ManagedCanisterBinding::Component(partition.binding.clone());
+        let (coverage, convergence) =
+            subtree_directory_convergence_record(&partition, &expected_binding, evidence)?;
+        if coverage.component_registry_revision != record.registry.revision
+            || coverage.component_registry_content_hash != record.registry.content_hash
+        {
+            return Err(InternalError::conflict(
+                "Component quiescence Directory evidence differs from its draining fence",
+            ));
+        }
+
+        let mut intent = RootComponentQuiescenceStopIntentRecord {
+            registry: record.registry.clone(),
+            descendant_count: record.descendant_count,
+            descendant_content_hash: record.descendant_content_hash,
+            canister_id: partition.binding.canister_id,
+            controller: partition.binding.fleet_subnet_root,
+            expected_module_hash,
+            covered_fleet_registry_revision: coverage.fleet_registry_revision,
+            covered_fleet_registry_content_hash: coverage.fleet_registry_content_hash,
+            covered_authority_hash: coverage.authority_hash,
+            runtime_operation_id: convergence.operation_id,
+            activation: convergence.activation,
+            prepared_at_ns,
+            charged_entry_bytes: 0,
+        };
+        intent.charged_entry_bytes = component_quiescence_terminal_entry_bytes(&record, &intent)?;
+        let mut next_record = record.clone();
+        next_record.quiescence = Some(RootComponentQuiescenceProgressRecord::StopIntent(intent));
+        let (next_partition, next_meta) = component_quiescence_intent_state(
+            &current,
+            &partition,
+            &record,
+            &next_record,
+            maximum_component_registry_bytes,
+        )?;
+        validate_partition_record(&next_partition)?;
+        validate_component_draining_record(&next_partition, &next_record)?;
+        RootComponentRegistryStore::prepare_component_quiescence(
+            &current,
+            next_meta,
+            &partition,
+            next_partition,
+            &record,
+            next_record.clone(),
+        )
+        .map_err(map_allocation_commit_error)?;
+        Ok(component_draining_record_to_view(next_record))
+    }
+
+    pub(crate) fn mark_component_quiescent(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        observed_module_hash: [u8; 32],
+        quiesced_at_ns: u64,
+    ) -> Result<RootComponentDrainingView, InternalError> {
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        let record =
+            RootComponentRegistryStore::component_draining(component).ok_or_else(|| {
+                InternalError::unavailable("Component has not been durably fenced for draining")
+            })?;
+        validate_partition_record(&partition)?;
+        validate_component_draining_record(&partition, &record)?;
+        if operation_id != record.operation_id {
+            return Err(InternalError::conflict(
+                "Component quiescence operation differs from its draining fence",
+            ));
+        }
+        let intent = match &record.quiescence {
+            Some(RootComponentQuiescenceProgressRecord::StopIntent(intent)) => intent,
+            Some(RootComponentQuiescenceProgressRecord::Quiescent(receipt)) => {
+                return if receipt.observed_module_hash == observed_module_hash {
+                    Ok(component_draining_record_to_view(record))
+                } else {
+                    Err(InternalError::conflict(
+                        "Component quiescence receipt differs from observed module authority",
+                    ))
+                };
+            }
+            None => {
+                return Err(InternalError::unavailable(
+                    "Component quiescence stop intent has not been durably prepared",
+                ));
+            }
+        };
+        if observed_module_hash != intent.expected_module_hash
+            || quiesced_at_ns < intent.prepared_at_ns
+        {
+            return Err(InternalError::conflict(
+                "Component quiescence observation differs from its durable stop intent",
+            ));
+        }
+        let receipt = RootComponentQuiescentReceiptRecord {
+            stop: intent.clone(),
+            observed_module_hash,
+            quiesced_at_ns,
+        };
+        let mut next_record = record.clone();
+        next_record.quiescence = Some(RootComponentQuiescenceProgressRecord::Quiescent(receipt));
+        validate_component_draining_record(&partition, &next_record)?;
+        RootComponentRegistryStore::mark_component_quiescent(&record, next_record.clone())
+            .map_err(map_allocation_commit_error)?;
+        Ok(component_draining_record_to_view(next_record))
     }
 
     pub(crate) fn subtree_removal_completed_leaf_matches(
@@ -1722,6 +1875,13 @@ impl ComponentRegistryOps {
             InternalError::unavailable("Component Registry partition has not been committed")
         })?;
         validate_partition_record(&partition)?;
+        if partition.status == ComponentLifecycleStatus::Draining
+            && !component_has_terminal_quiescence(&partition)?
+        {
+            return Err(InternalError::unavailable(
+                "Draining Component must be quiescent before descendant removal begins",
+            ));
+        }
         if !matches!(
             partition.status,
             ComponentLifecycleStatus::Active | ComponentLifecycleStatus::Draining
@@ -2630,7 +2790,9 @@ impl ComponentRegistryOps {
         expected_traversal_steps: u32,
         expected_leaf_canister_id: Principal,
         expected_leaf_parent_canister_id: Principal,
-        owning_component: ComponentRuntimeDirectoryConvergenceEvidence,
+        authority: ComponentRuntimeDirectoryAuthority,
+        authority_hash: [u8; 32],
+        owning_component: Option<ComponentRuntimeDirectoryConvergenceEvidence>,
         parent: Option<ComponentRuntimeDirectoryConvergenceEvidence>,
         maximum_component_registry_bytes: u64,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
@@ -2701,8 +2863,29 @@ impl ComponentRegistryOps {
         }
 
         let owning_binding = ManagedCanisterBinding::Component(partition.binding.clone());
-        let (coverage, owning_component) =
-            subtree_directory_convergence_record(&partition, &owning_binding, owning_component)?;
+        let coverage = subtree_directory_coverage(&partition, &authority, authority_hash)?;
+        let owning_component = match (partition.status, owning_component) {
+            (ComponentLifecycleStatus::Active, Some(evidence)) => {
+                let (observed_coverage, evidence) =
+                    subtree_directory_convergence_record(&partition, &owning_binding, evidence)?;
+                if observed_coverage != coverage {
+                    return Err(InternalError::conflict(
+                        "Component owner Directory evidence differs from covered authority",
+                    ));
+                }
+                Some(evidence)
+            }
+            (ComponentLifecycleStatus::Draining, None)
+                if component_has_terminal_quiescence(&partition)? =>
+            {
+                None
+            }
+            _ => {
+                return Err(InternalError::conflict(
+                    "Component owner Directory convergence differs from lifecycle authority",
+                ));
+            }
+        };
         let parent = subtree_directory_parent_convergence_record(
             &partition,
             component,
@@ -4773,9 +4956,9 @@ fn subtree_removal_record_to_view(
                             content_hash: receipt.covered_component_registry_content_hash,
                         },
                         covered_authority_hash: receipt.covered_authority_hash,
-                        owning_component: subtree_directory_convergence_record_to_view(
-                            receipt.owning_component,
-                        ),
+                        owning_component: receipt
+                            .owning_component
+                            .map(subtree_directory_convergence_record_to_view),
                         parent: receipt
                             .parent
                             .map(subtree_directory_convergence_record_to_view),
@@ -4794,7 +4977,7 @@ fn subtree_removal_record_to_view(
     }
 }
 
-const fn component_draining_record_to_view(
+fn component_draining_record_to_view(
     record: RootComponentDrainingRecord,
 ) -> RootComponentDrainingView {
     RootComponentDrainingView {
@@ -4806,6 +4989,40 @@ const fn component_draining_record_to_view(
         descendant_content_hash: record.descendant_content_hash,
         directory_authority_hash: record.directory_authority_hash,
         started_at_ns: record.started_at_ns,
+        quiescence: record.quiescence.map(|progress| match progress {
+            RootComponentQuiescenceProgressRecord::StopIntent(intent) => {
+                RootComponentQuiescenceProgressView::StopIntent(
+                    component_quiescence_stop_intent_record_to_view(intent),
+                )
+            }
+            RootComponentQuiescenceProgressRecord::Quiescent(receipt) => {
+                RootComponentQuiescenceProgressView::Quiescent(RootComponentQuiescentReceiptView {
+                    stop: component_quiescence_stop_intent_record_to_view(receipt.stop),
+                    observed_module_hash: receipt.observed_module_hash,
+                    quiesced_at_ns: receipt.quiesced_at_ns,
+                })
+            }
+        }),
+    }
+}
+
+const fn component_quiescence_stop_intent_record_to_view(
+    record: RootComponentQuiescenceStopIntentRecord,
+) -> RootComponentQuiescenceStopIntentView {
+    RootComponentQuiescenceStopIntentView {
+        registry: record.registry,
+        descendant_count: record.descendant_count,
+        descendant_content_hash: record.descendant_content_hash,
+        canister_id: record.canister_id,
+        controller: record.controller,
+        expected_module_hash: record.expected_module_hash,
+        covered_fleet_registry_revision: record.covered_fleet_registry_revision,
+        covered_fleet_registry_content_hash: record.covered_fleet_registry_content_hash,
+        covered_authority_hash: record.covered_authority_hash,
+        runtime_operation_id: record.runtime_operation_id,
+        activation: record.activation,
+        prepared_at_ns: record.prepared_at_ns,
+        charged_entry_bytes: record.charged_entry_bytes,
     }
 }
 
@@ -5170,6 +5387,123 @@ fn component_draining_state(
     Err(InternalError::invariant(
         canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
         "Component draining byte accounting did not converge",
+    ))
+}
+
+fn component_quiescence_terminal_entry_bytes(
+    draining: &RootComponentDrainingRecord,
+    intent: &RootComponentQuiescenceStopIntentRecord,
+) -> Result<u64, InternalError> {
+    let mut charged_entry_bytes = 0;
+    for _ in 0..8 {
+        let mut terminal_intent = intent.clone();
+        terminal_intent.charged_entry_bytes = charged_entry_bytes;
+        let mut terminal = draining.clone();
+        terminal.quiescence = Some(RootComponentQuiescenceProgressRecord::Quiescent(
+            RootComponentQuiescentReceiptRecord {
+                stop: terminal_intent,
+                observed_module_hash: intent.expected_module_hash,
+                quiesced_at_ns: u64::MAX,
+            },
+        ));
+        let next = RootComponentRegistryStore::component_draining_entry_bytes(&terminal);
+        if next == charged_entry_bytes {
+            return Ok(next);
+        }
+        charged_entry_bytes = next;
+    }
+    Err(InternalError::invariant(
+        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+        "Component quiescence terminal byte reservation did not converge",
+    ))
+}
+
+fn charged_component_draining_entry_bytes(record: &RootComponentDrainingRecord) -> u64 {
+    match &record.quiescence {
+        Some(RootComponentQuiescenceProgressRecord::StopIntent(intent)) => {
+            intent.charged_entry_bytes
+        }
+        Some(RootComponentQuiescenceProgressRecord::Quiescent(receipt)) => {
+            receipt.stop.charged_entry_bytes
+        }
+        None => RootComponentRegistryStore::component_draining_entry_bytes(record),
+    }
+}
+
+fn component_quiescence_intent_state(
+    current: &RootComponentRegistryMetaRecord,
+    partition: &ComponentRegistryPartitionRecord,
+    current_draining: &RootComponentDrainingRecord,
+    next_draining: &RootComponentDrainingRecord,
+    maximum_component_registry_bytes: u64,
+) -> Result<
+    (
+        ComponentRegistryPartitionRecord,
+        RootComponentRegistryMetaRecord,
+    ),
+    InternalError,
+> {
+    let current_partition_bytes = RootComponentRegistryStore::partition_entry_bytes(partition);
+    let current_draining_bytes = charged_component_draining_entry_bytes(current_draining);
+    let component_without_mutated_entries = partition
+        .encoded_bytes
+        .checked_sub(current_partition_bytes)
+        .and_then(|bytes| bytes.checked_sub(current_draining_bytes))
+        .ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component Registry bytes are below its partition and draining authority",
+            )
+        })?;
+    let root_without_mutated_entries = current
+        .encoded_bytes
+        .checked_sub(current_partition_bytes)
+        .and_then(|bytes| bytes.checked_sub(current_draining_bytes))
+        .ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "root Registry bytes are below Component quiescence authority",
+            )
+        })?;
+    let next_draining_bytes = charged_component_draining_entry_bytes(next_draining);
+    let mut next_partition = partition.clone();
+    for _ in 0..8 {
+        let next_mutated_bytes = RootComponentRegistryStore::partition_entry_bytes(&next_partition)
+            .checked_add(next_draining_bytes)
+            .ok_or_else(|| {
+                InternalError::resource_exhausted("Component Registry bytes overflow")
+            })?;
+        let next_component_bytes = component_without_mutated_entries
+            .checked_add(next_mutated_bytes)
+            .ok_or_else(|| {
+                InternalError::resource_exhausted("Component Registry bytes overflow")
+            })?;
+        if next_partition.encoded_bytes == next_component_bytes {
+            if next_component_bytes > maximum_component_registry_bytes {
+                return Err(InternalError::resource_exhausted(format!(
+                    "Component quiescence requires {next_component_bytes} bytes, exceeding protected Component limit {maximum_component_registry_bytes}"
+                )));
+            }
+            let next_root_bytes = root_without_mutated_entries
+                .checked_add(next_mutated_bytes)
+                .ok_or_else(|| {
+                    InternalError::resource_exhausted("Component Registry bytes overflow")
+                })?;
+            if next_root_bytes > current.root.limits.maximum_registry_bytes {
+                return Err(InternalError::resource_exhausted(format!(
+                    "Component quiescence requires {next_root_bytes} root Registry bytes, exceeding protected limit {}",
+                    current.root.limits.maximum_registry_bytes
+                )));
+            }
+            let mut next_meta = current.clone();
+            next_meta.encoded_bytes = next_root_bytes;
+            return Ok((next_partition, next_meta));
+        }
+        next_partition.encoded_bytes = next_component_bytes;
+    }
+    Err(InternalError::invariant(
+        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+        "Component quiescence byte accounting did not converge",
     ))
 }
 
@@ -7055,6 +7389,38 @@ fn validate_component_draining_record(
         record.descendant_content_hash,
         record.descendant_count,
     )?;
+    let quiescence_is_valid = record.quiescence.as_ref().is_none_or(|progress| {
+        let (intent, terminal) = match progress {
+            RootComponentQuiescenceProgressRecord::StopIntent(intent) => (intent, None),
+            RootComponentQuiescenceProgressRecord::Quiescent(receipt) => {
+                (&receipt.stop, Some(receipt))
+            }
+        };
+        let intent_is_valid = intent.registry == record.registry
+            && intent.descendant_count == record.descendant_count
+            && intent.descendant_content_hash == record.descendant_content_hash
+            && intent.canister_id == partition.binding.canister_id
+            && intent.canister_id != Principal::anonymous()
+            && intent.controller == partition.binding.fleet_subnet_root
+            && intent.controller != Principal::anonymous()
+            && intent.expected_module_hash != [0; 32]
+            && intent.covered_fleet_registry_revision > 0
+            && intent.covered_fleet_registry_content_hash != [0; 32]
+            && intent.covered_authority_hash != [0; 32]
+            && intent.runtime_operation_id != [0; 32]
+            && intent.activation.directory_authority_hash != [0; 32]
+            && intent.activation.activated_at_ns > 0
+            && intent.prepared_at_ns >= record.started_at_ns
+            && intent.charged_entry_bytes
+                >= RootComponentRegistryStore::component_draining_entry_bytes(record)
+            && component_quiescence_terminal_entry_bytes(record, intent)
+                .is_ok_and(|bytes| bytes == intent.charged_entry_bytes);
+        let terminal_is_valid = terminal.is_none_or(|receipt| {
+            receipt.observed_module_hash == intent.expected_module_hash
+                && receipt.quiesced_at_ns >= intent.prepared_at_ns
+        });
+        intent_is_valid && terminal_is_valid
+    });
     let valid = record.operation_id != [0; 32]
         && record.component == partition.binding.component
         && record.previous_registry.component == record.component
@@ -7070,6 +7436,7 @@ fn validate_component_draining_record(
         && partition.status == ComponentLifecycleStatus::Draining
         && partition.revision >= record.registry.revision
         && partition.directory_synchronized_at_ns >= record.started_at_ns
+        && quiescence_is_valid
         && (partition.revision != record.registry.revision
             || (partition.content_hash == record.registry.content_hash
                 && partition.descendant_content_hash == record.descendant_content_hash
@@ -7082,6 +7449,23 @@ fn validate_component_draining_record(
         ));
     }
     Ok(())
+}
+
+fn component_has_terminal_quiescence(
+    partition: &ComponentRegistryPartitionRecord,
+) -> Result<bool, InternalError> {
+    let draining = RootComponentRegistryStore::component_draining(partition.binding.component)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Draining Component partition has no durable draining authority",
+            )
+        })?;
+    validate_component_draining_record(partition, &draining)?;
+    Ok(matches!(
+        draining.quiescence,
+        Some(RootComponentQuiescenceProgressRecord::Quiescent(_))
+    ))
 }
 
 fn validate_partition_snapshot(
@@ -7184,6 +7568,38 @@ const fn managed_canister_principal(binding: &ManagedCanisterBinding) -> Princip
     }
 }
 
+fn subtree_directory_coverage(
+    partition: &ComponentRegistryPartitionRecord,
+    authority: &ComponentRuntimeDirectoryAuthority,
+    authority_hash: [u8; 32],
+) -> Result<SubtreeDirectoryCoverage, InternalError> {
+    let directory = &authority.component;
+    let provenance = &directory.provenance;
+    let expected_hash = ComponentRuntimeOps::directory_authority_hash(authority)?;
+    let coverage_is_exact = authority.fleet.provenance.source_fleet_subnet_root
+        == partition.binding.fleet_subnet_root
+        && provenance.component == partition.binding
+        && provenance.source_fleet_subnet_root == partition.binding.fleet_subnet_root
+        && provenance.component_registry_revision == partition.revision
+        && provenance.component_registry_content_hash == partition.content_hash
+        && provenance.synchronized_at_ns == partition.directory_synchronized_at_ns
+        && directory.descendant_count == partition.committed_descendants
+        && authority_hash != [0; 32]
+        && authority_hash == expected_hash;
+    if !coverage_is_exact {
+        return Err(InternalError::conflict(
+            "Component subtree Directory coverage differs from current protected authority",
+        ));
+    }
+    Ok(SubtreeDirectoryCoverage {
+        fleet_registry_revision: authority.fleet.provenance.registry.revision,
+        fleet_registry_content_hash: authority.fleet.provenance.registry.content_hash,
+        component_registry_revision: partition.revision,
+        component_registry_content_hash: partition.content_hash,
+        authority_hash,
+    })
+}
+
 fn subtree_directory_convergence_record(
     partition: &ComponentRegistryPartitionRecord,
     expected_binding: &ManagedCanisterBinding,
@@ -7196,21 +7612,10 @@ fn subtree_directory_convergence_record(
     InternalError,
 > {
     let authority = &evidence.covered_authority;
-    let directory = &authority.component;
-    let provenance = &directory.provenance;
-    let expected_hash = ComponentRuntimeOps::directory_authority_hash(authority)?;
+    let coverage =
+        subtree_directory_coverage(partition, authority, evidence.covered_authority_hash)?;
     let evidence_is_exact = evidence.operation_id != [0; 32]
         && evidence.binding == *expected_binding
-        && authority.fleet.provenance.source_fleet_subnet_root
-            == partition.binding.fleet_subnet_root
-        && provenance.component == partition.binding
-        && provenance.source_fleet_subnet_root == partition.binding.fleet_subnet_root
-        && provenance.component_registry_revision == partition.revision
-        && provenance.component_registry_content_hash == partition.content_hash
-        && provenance.synchronized_at_ns == partition.directory_synchronized_at_ns
-        && directory.descendant_count == partition.committed_descendants
-        && evidence.covered_authority_hash != [0; 32]
-        && evidence.covered_authority_hash == expected_hash
         && evidence.activation.directory_authority_hash != [0; 32]
         && evidence.activation.activated_at_ns > 0;
     if !evidence_is_exact {
@@ -7219,13 +7624,7 @@ fn subtree_directory_convergence_record(
         ));
     }
     Ok((
-        SubtreeDirectoryCoverage {
-            fleet_registry_revision: authority.fleet.provenance.registry.revision,
-            fleet_registry_content_hash: authority.fleet.provenance.registry.content_hash,
-            component_registry_revision: partition.revision,
-            component_registry_content_hash: partition.content_hash,
-            authority_hash: evidence.covered_authority_hash,
-        },
+        coverage,
         RootComponentSubtreeDirectoryConvergenceRecord {
             operation_id: evidence.operation_id,
             canister_id: managed_canister_principal(&evidence.binding),
@@ -7319,7 +7718,10 @@ fn validate_subtree_removal_record(
                     >= receipt.membership_removed.registry.revision
                 && receipt.covered_component_registry_content_hash != [0; 32]
                 && receipt.covered_authority_hash != [0; 32]
-                && valid_subtree_directory_convergence_record(&receipt.owning_component)
+                && receipt
+                    .owning_component
+                    .as_ref()
+                    .is_none_or(valid_subtree_directory_convergence_record)
                 && receipt
                     .parent
                     .as_ref()
@@ -7672,13 +8074,20 @@ fn validate_subtree_directory_synchronized(
         revision: receipt.covered_component_registry_revision,
         content_hash: receipt.covered_component_registry_content_hash,
     };
-    let owner = &receipt.owning_component;
-    let owner_covers_current_or_prior = covered_component_registry.revision <= partition.revision
+    let coverage_covers_current_or_prior = covered_component_registry.revision
+        <= partition.revision
         && (covered_component_registry.revision != partition.revision
             || covered_component_registry.content_hash == partition.content_hash);
-    let owner_covers_membership = covered_component_registry.revision
+    let coverage_covers_membership = covered_component_registry.revision
         > membership.registry.revision
         || covered_component_registry == membership.registry;
+    let owner_is_exact = match (partition.status, receipt.owning_component.as_ref()) {
+        (ComponentLifecycleStatus::Active, Some(owner)) => {
+            owner.canister_id == partition.binding.canister_id
+        }
+        (ComponentLifecycleStatus::Draining, None) => component_has_terminal_quiescence(partition)?,
+        _ => false,
+    };
     let expected_parent = if leaf.parent_canister_id == partition.binding.canister_id {
         None
     } else {
@@ -7691,9 +8100,9 @@ fn validate_subtree_directory_synchronized(
         }
         _ => false,
     };
-    if owner.canister_id != partition.binding.canister_id
-        || !owner_covers_current_or_prior
-        || !owner_covers_membership
+    if !owner_is_exact
+        || !coverage_covers_current_or_prior
+        || !coverage_covers_membership
         || !parent_is_exact
     {
         return Err(InternalError::invariant(
@@ -8466,7 +8875,7 @@ mod tests {
             .chain(
                 data.component_drainings
                     .iter()
-                    .map(RootComponentRegistryStore::component_draining_entry_bytes),
+                    .map(charged_component_draining_entry_bytes),
             )
             .chain(
                 data.parent_role_counts
@@ -8540,7 +8949,7 @@ mod tests {
                 data.component_drainings
                     .iter()
                     .filter(|draining| draining.component == component)
-                    .map(RootComponentRegistryStore::component_draining_entry_bytes),
+                    .map(charged_component_draining_entry_bytes),
             )
             .chain(
                 data.parent_role_counts
@@ -9412,7 +9821,7 @@ mod tests {
         let parent = ComponentRuntimeDirectoryConvergenceEvidence {
             operation_id: [84; 32],
             binding: parent_binding,
-            covered_authority: directory_authority,
+            covered_authority: directory_authority.clone(),
             covered_authority_hash: directory_authority_hash,
             activation: ComponentRuntimeActivationEvidence {
                 directory_authority_hash: [85; 32],
@@ -9425,7 +9834,9 @@ mod tests {
             selected.traversal_steps,
             fixture.descendant.canister_id,
             fixture.target.canister_id,
-            owning_component.clone(),
+            directory_authority.clone(),
+            directory_authority_hash,
+            Some(owning_component.clone()),
             Some(parent.clone()),
             1,
         )
@@ -9442,7 +9853,9 @@ mod tests {
                 selected.traversal_steps,
                 fixture.descendant.canister_id,
                 fixture.target.canister_id,
-                owning_component.clone(),
+                directory_authority.clone(),
+                directory_authority_hash,
+                Some(owning_component.clone()),
                 Some(parent.clone()),
                 16_777_216,
             )
@@ -9451,7 +9864,8 @@ mod tests {
             &directory_synchronized.progress,
             RootComponentSubtreeRemovalProgressView::DirectorySynchronized(receipt)
                 if receipt.membership_removed.registry == receipt.covered_component_registry
-                    && receipt.owning_component.canister_id == partition.binding.canister_id
+                    && receipt.owning_component.as_ref().map(|evidence| evidence.canister_id)
+                        == Some(partition.binding.canister_id)
                     && receipt.parent.as_ref().map(|evidence| evidence.canister_id)
                         == Some(fixture.target.canister_id)
                     && receipt.covered_authority_hash == directory_authority_hash
@@ -9464,7 +9878,9 @@ mod tests {
                 selected.traversal_steps,
                 fixture.descendant.canister_id,
                 fixture.target.canister_id,
-                owning_component.clone(),
+                directory_authority.clone(),
+                directory_authority_hash,
+                Some(owning_component.clone()),
                 Some(parent.clone()),
                 16_777_216,
             )
@@ -9579,7 +9995,9 @@ mod tests {
                 selected.traversal_steps,
                 fixture.descendant.canister_id,
                 fixture.target.canister_id,
-                owning_component,
+                directory_authority,
+                directory_authority_hash,
+                Some(owning_component),
                 Some(parent),
                 16_777_216,
             )
@@ -9872,10 +10290,131 @@ mod tests {
             fixture.component,
             [81; 32],
             fixture.target.canister_id,
+            draining.registry.clone(),
+            16_777_216,
+        )
+        .expect_err("Draining Component must be quiescent before post-order removal");
+        assert_eq!(RootComponentRegistryStore::export(), before_growth);
+
+        let active_fleet_directory =
+            fleet_directory(&initial.current.as_ref().expect("Registry meta").root);
+        let directory_authority = ComponentRuntimeDirectoryAuthority {
+            fleet: active_fleet_directory,
+            component: ComponentDirectoryHead {
+                provenance: ComponentDirectoryProvenance {
+                    component: partition.binding.clone(),
+                    source_fleet_subnet_root: partition.binding.fleet_subnet_root,
+                    component_registry_revision: partition.revision,
+                    component_registry_content_hash: partition.content_hash,
+                    synchronized_at_ns: partition.directory_synchronized_at_ns,
+                },
+                descendant_count: partition.committed_descendants,
+            },
+        };
+        let authority_hash = ComponentRuntimeOps::directory_authority_hash(&directory_authority)
+            .expect("draining Directory authority hash");
+        let convergence = ComponentRuntimeDirectoryConvergenceEvidence {
+            operation_id: [82; 32],
+            binding: ManagedCanisterBinding::Component(partition.binding.clone()),
+            covered_authority: directory_authority,
+            covered_authority_hash: authority_hash,
+            activation: ComponentRuntimeActivationEvidence {
+                directory_authority_hash: [83; 32],
+                activated_at_ns: 84,
+            },
+        };
+        ComponentRegistryOps::prepare_component_quiescence(
+            fixture.component,
+            [79; 32],
+            draining.registry.clone(),
+            convergence.clone(),
+            [85; 32],
+            110,
+            partition.encoded_bytes,
+        )
+        .expect_err("terminal quiescence receipt must fit before the stop intent is committed");
+        assert_eq!(RootComponentRegistryStore::export(), before_growth);
+
+        let prepared = ComponentRegistryOps::prepare_component_quiescence(
+            fixture.component,
+            [79; 32],
+            draining.registry.clone(),
+            convergence,
+            [85; 32],
+            110,
+            16_777_216,
+        )
+        .expect("durably prepare qualified Component stop");
+        assert!(matches!(
+            &prepared.quiescence,
+            Some(RootComponentQuiescenceProgressView::StopIntent(intent))
+                if intent.registry == draining.registry
+                    && intent.canister_id == fixture.partition.binding.canister_id
+                    && intent.controller == fixture.partition.binding.fleet_subnet_root
+                    && intent.expected_module_hash == [85; 32]
+                    && intent.covered_authority_hash == authority_hash
+        ));
+        let prepared_state = restart_component_registry();
+        assert_eq!(
+            ComponentRegistryOps::partition(fixture.component)
+                .expect("partition read")
+                .expect("draining partition")
+                .encoded_bytes,
+            exact_component_registry_entry_bytes(&prepared_state, fixture.component)
+        );
+        let mut corrupted_reservation = prepared_state.clone();
+        let Some(RootComponentQuiescenceProgressRecord::StopIntent(intent)) =
+            &mut corrupted_reservation.component_drainings[0].quiescence
+        else {
+            panic!("durable Component stop intent");
+        };
+        intent.charged_entry_bytes += 1;
+        RootComponentRegistryStore::import(corrupted_reservation);
+        ComponentRegistryOps::component_draining(fixture.component)
+            .expect_err("quiescence terminal byte reservation must remain canonical");
+        RootComponentRegistryStore::import(prepared_state);
+        let before_observation_rejection = RootComponentRegistryStore::export();
+        ComponentRegistryOps::mark_component_quiescent(fixture.component, [79; 32], [86; 32], 110)
+            .expect_err("observed module must match the durable stop intent");
+        assert_eq!(
+            RootComponentRegistryStore::export(),
+            before_observation_rejection
+        );
+        let quiescent = ComponentRegistryOps::mark_component_quiescent(
+            fixture.component,
+            [79; 32],
+            [85; 32],
+            110,
+        )
+        .expect("commit independently observed Component quiescence");
+        assert!(matches!(
+            &quiescent.quiescence,
+            Some(RootComponentQuiescenceProgressView::Quiescent(receipt))
+                if receipt.stop.canister_id == fixture.partition.binding.canister_id
+                    && receipt.observed_module_hash == [85; 32]
+                    && receipt.quiesced_at_ns == 110
+        ));
+        let quiescent_state = restart_component_registry();
+        assert_eq!(
+            ComponentRegistryOps::mark_component_quiescent(
+                fixture.component,
+                [79; 32],
+                [85; 32],
+                111,
+            )
+            .expect("terminal quiescence retry"),
+            quiescent
+        );
+        assert_eq!(RootComponentRegistryStore::export(), quiescent_state);
+
+        ComponentRegistryOps::begin_subtree_removal(
+            fixture.component,
+            [81; 32],
+            fixture.target.canister_id,
             draining.registry,
             16_777_216,
         )
-        .expect("Draining Component retains its existing tree for post-order removal");
+        .expect("quiescent Draining Component retains its tree for post-order removal");
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
 
@@ -9887,7 +10426,57 @@ mod tests {
     fn subtree_removal_target_finalization_is_terminal_and_releases_the_live_fence() {
         let fixture = import_active_component_tree();
         let operation_id = [91; 32];
-        let registry = component_registry_head(&fixture.partition);
+        let initial = RootComponentRegistryStore::export();
+        let draining = ComponentRegistryOps::begin_component_draining(
+            fixture.component,
+            [90; 32],
+            component_registry_head(&fixture.partition),
+            100,
+            16_777_216,
+            fleet_directory(&initial.current.as_ref().expect("Registry meta").root),
+        )
+        .expect("drain Component before terminal target removal");
+        let partition = ComponentRegistryOps::partition(fixture.component)
+            .expect("partition read")
+            .expect("draining partition");
+        let directory_authority = ComponentRuntimeDirectoryAuthority {
+            fleet: fleet_directory(&initial.current.as_ref().expect("Registry meta").root),
+            component: ComponentDirectoryHead {
+                provenance: ComponentDirectoryProvenance {
+                    component: partition.binding.clone(),
+                    source_fleet_subnet_root: partition.binding.fleet_subnet_root,
+                    component_registry_revision: partition.revision,
+                    component_registry_content_hash: partition.content_hash,
+                    synchronized_at_ns: partition.directory_synchronized_at_ns,
+                },
+                descendant_count: partition.committed_descendants,
+            },
+        };
+        let directory_authority_hash =
+            ComponentRuntimeOps::directory_authority_hash(&directory_authority)
+                .expect("draining Directory authority");
+        ComponentRegistryOps::prepare_component_quiescence(
+            fixture.component,
+            [90; 32],
+            draining.registry.clone(),
+            ComponentRuntimeDirectoryConvergenceEvidence {
+                operation_id: [89; 32],
+                binding: ManagedCanisterBinding::Component(partition.binding),
+                covered_authority: directory_authority,
+                covered_authority_hash: directory_authority_hash,
+                activation: ComponentRuntimeActivationEvidence {
+                    directory_authority_hash: [88; 32],
+                    activated_at_ns: 87,
+                },
+            },
+            [86; 32],
+            101,
+            16_777_216,
+        )
+        .expect("prepare Component quiescence");
+        ComponentRegistryOps::mark_component_quiescent(fixture.component, [90; 32], [86; 32], 101)
+            .expect("observe Component quiescent");
+        let registry = draining.registry;
         ComponentRegistryOps::begin_subtree_removal(
             fixture.component,
             operation_id,
@@ -9981,27 +10570,24 @@ mod tests {
         let directory_authority_hash =
             ComponentRuntimeOps::directory_authority_hash(&directory_authority)
                 .expect("target Directory authority hash");
-        let owning_component = ComponentRuntimeDirectoryConvergenceEvidence {
-            operation_id: [93; 32],
-            binding: ManagedCanisterBinding::Component(partition.binding),
-            covered_authority: directory_authority,
-            covered_authority_hash: directory_authority_hash,
-            activation: ComponentRuntimeActivationEvidence {
-                directory_authority_hash: [94; 32],
-                activated_at_ns: 95,
-            },
-        };
-        ComponentRegistryOps::mark_subtree_leaf_directory_synchronized(
+        let synchronized = ComponentRegistryOps::mark_subtree_leaf_directory_synchronized(
             fixture.component,
             operation_id,
             selected.traversal_steps,
             fixture.unrelated.canister_id,
             fixture.unrelated.parent_canister_id,
-            owning_component,
+            directory_authority,
+            directory_authority_hash,
+            None,
             None,
             16_777_216,
         )
-        .expect("converge target Directory");
+        .expect("retain local Directory authority without calling the quiescent owner");
+        assert!(matches!(
+            synchronized.progress,
+            RootComponentSubtreeRemovalProgressView::DirectorySynchronized(receipt)
+                if receipt.owning_component.is_none() && receipt.parent.is_none()
+        ));
 
         let completed = ComponentRegistryOps::finalize_subtree_leaf(
             fixture.component,

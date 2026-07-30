@@ -230,7 +230,7 @@ fn root_component_draining_domain() -> StateDomainManifest {
         migration_policy: MigrationPolicy::NewDomain,
         restore_order: Some(201),
         post_upgrade_invariant: Some(
-            "root_component_draining_restores_exact_operation_and_registry_fence".to_string(),
+            "root_component_draining_restores_exact_fence_and_quiescence_progress".to_string(),
         ),
         migrations: Vec::new(),
     }
