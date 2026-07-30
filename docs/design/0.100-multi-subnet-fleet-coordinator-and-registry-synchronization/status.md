@@ -6,10 +6,10 @@ Date: 2026-07-30
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.58`.
-- Latest published release: `v0.100.58` at
-  `ceb0f0b62a315d5b3b1169a8723c44dff67e4030`.
-- Open patch draft: `0.100.59`; no package-version change has been authorized.
+- Workspace package version: `0.100.59`.
+- Latest published release: `v0.100.59` at
+  `6c142f8df051bbb5d2c2ae7c5c2fd1a0ad6090ed`.
+- Open patch draft: `0.100.60`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -202,6 +202,11 @@ Registry slices replace the 0.99 root model.
 - [x] Durably advance one exact top-level Component from `Active` to
   `Draining`, reject new descendants, retain lookup and allow the existing
   post-order removal workflow to evacuate its frozen tree.
+- [x] Qualify and stop the exact top-level Component runtime before
+  descendant evacuation.
+- [x] Drive terminally quiescent descendant evacuation through one durable
+  deterministic subtree cursor, advancing at most one post-order phase per
+  call and rejecting caller-selected Draining targets.
 - [x] Distribute exact Directories directly from the root to a committed
   Component with target-local retention, independent observation and a
   terminal root receipt.
@@ -828,7 +833,7 @@ normalized descendants, principal lookup, Directory pagination and the
 existing post-order removal path. The transition does not stop or delete a
 Canister.
 
-Open 0.100.59 adds qualified top-level Component quiescence beneath that
+Released 0.100.59 adds qualified top-level Component quiescence beneath that
 fence. It converges and independently re-queries the Component runtime against
 the exact draining Component head and currently active Fleet Directory, then
 durably freezes the exact Canister, sole root controller, verified Store
@@ -842,12 +847,22 @@ owner convergence for that stopped top-level Component while retaining the
 exact root-derived Directory authority and still converging any surviving
 non-root parent; Active trees continue to require owner convergence.
 
+Open 0.100.60 adds the bounded drain driver beneath that terminal receipt.
+It deterministically selects the canonical first direct child, derives its
+subtree operation ID from the draining operation and frozen initial Registry
+authority, and atomically retains one active cursor in the existing
+memory-ID-23 draining record. Each update advances at most one existing
+post-order phase. The cursor remains authoritative after target membership
+removal until Directory synchronization and finalization, then may be replaced
+only by the next canonical direct subtree. Caller-selected removal is
+`Active`-only, and the direct cursor avoids repeated scans of completed
+history at the intended 10,000–20,000-descendant scale.
+
 ## Next Action
 
-Drive the existing completed post-order loop from the terminal Component
-quiescence receipt until no descendant row remains. The later
-Component-target transition must retain final inventory evidence before
-removing the top-level Component; it must not infer removal from an
-unreachable Canister. Do not introduce nested Component declarations, let
-application Canisters call management effects directly or infer authorization
-from catalog presence alone.
+Persist the driver's exact empty descendant observation as final Component
+inventory evidence, then reconcile deletion and local membership removal of
+the already-quiescent top-level Component under a durable receipt. It must not
+infer removal from an unreachable Canister. Do not introduce nested Component
+declarations, let application Canisters call management effects directly or
+infer authorization from catalog presence alone.

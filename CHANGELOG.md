@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.60` adds a bounded deterministic drain driver that owns descendant
+  subtree selection and advances one durable post-order phase per call until
+  the quiescent Component has an exact empty-inventory observation.
+
 - `0.100.59` durably converges and stops the exact top-level Canister of a
   draining Component, requiring qualified Directory, Store module and sole
   root-controller evidence before its retained descendants may be removed.

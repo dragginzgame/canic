@@ -90,6 +90,26 @@ pub enum RootComponentQuiescenceProgressView {
 }
 
 ///
+/// RootComponentDrainingAdvanceView
+///
+/// One bounded driver observation: the current removal operation or exact empty inventory.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RootComponentDrainingAdvanceView {
+    DescendantSubtreePending {
+        operation_id: [u8; 32],
+        target_canister_id: Principal,
+        reserved_against_registry: ComponentRegistryHead,
+    },
+    DescendantRemoval(Box<RootComponentSubtreeRemovalView>),
+    DescendantsEmpty {
+        registry: ComponentRegistryHead,
+        descendant_content_hash: [u8; 32],
+    },
+}
+
+///
 /// RootComponentRegistryView
 ///
 /// Read-only durable preparation authority and current allocation counters.

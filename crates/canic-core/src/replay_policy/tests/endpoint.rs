@@ -408,7 +408,7 @@ fn root_component_draining_fence_is_response_idempotent() {
 }
 
 #[test]
-fn root_component_quiescence_is_response_idempotent() {
+fn root_component_quiescence_and_bounded_drain_are_replay_safe() {
     let quiesce = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
         .find(|entry| entry.endpoint == "canic_root_component_quiesce")
@@ -417,6 +417,10 @@ fn root_component_quiescence_is_response_idempotent() {
         .iter()
         .find(|entry| entry.endpoint == "canic_root_component_quiescence_status")
         .expect("root Component quiescence status policy entry");
+    let advance = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_root_component_draining_advance")
+        .expect("root Component draining advance policy entry");
 
     assert_eq!(
         quiesce.replay_policy,
@@ -427,6 +431,13 @@ fn root_component_quiescence_is_response_idempotent() {
     assert_eq!(quiesce.cost_class, CostClass::None);
     assert_eq!(status.replay_policy, ReplayPolicy::QueryOrReadOnly);
     assert_eq!(status.endpoint_kind, EndpointKind::Query);
+    assert_eq!(
+        advance.replay_policy,
+        ReplayPolicy::SnapshotConvergent {
+            command_kind: replay_command_kind("component_registry.advance_component_draining.v1"),
+        }
+    );
+    assert_eq!(advance.cost_class, CostClass::None);
 }
 
 #[test]

@@ -29,6 +29,7 @@ use canic_core::{
             RootComponentChildRuntimeActivationResponse, RootComponentCommitRequest,
             RootComponentCommitResponse, RootComponentCreationRequest,
             RootComponentDirectoryPreparationRequest, RootComponentDirectoryPreparationResponse,
+            RootComponentDrainingAdvanceRequest, RootComponentDrainingAdvanceResponse,
             RootComponentDrainingRequest, RootComponentDrainingResponse,
             RootComponentDrainingStatusRequest, RootComponentInstallRequest,
             RootComponentMembershipActivationRequest, RootComponentMembershipActivationResponse,
@@ -197,6 +198,14 @@ impl LifecycleApi {
         request: RootComponentQuiescenceStatusRequest,
     ) -> Result<RootComponentQuiescenceResponse, canic_core::dto::error::Error> {
         crate::workflow::component_registry::component_quiescence_status(request)
+            .map_err(Into::into)
+    }
+
+    pub async fn advance_component_draining(
+        request: RootComponentDrainingAdvanceRequest,
+    ) -> Result<RootComponentDrainingAdvanceResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::advance_component_draining(request)
+            .await
             .map_err(Into::into)
     }
 

@@ -18,11 +18,11 @@ use crate::{
         RootComponentAllocationView, RootComponentChildAllocationProgressView,
         RootComponentChildAllocationView, RootComponentChildCommitmentView,
         RootComponentChildInstallEffectView, RootComponentChildMembershipView,
-        RootComponentCreationEffectView, RootComponentDrainingView,
-        RootComponentInitialInventoryView, RootComponentInstallEffectView,
-        RootComponentQuiescenceProgressView, RootComponentQuiescenceStopIntentView,
-        RootComponentRegistryView, RootComponentSubtreeDeleteEffectView,
-        RootComponentSubtreeDirectoryConvergenceView,
+        RootComponentCreationEffectView, RootComponentDrainingAdvanceView,
+        RootComponentDrainingView, RootComponentInitialInventoryView,
+        RootComponentInstallEffectView, RootComponentQuiescenceProgressView,
+        RootComponentQuiescenceStopIntentView, RootComponentRegistryView,
+        RootComponentSubtreeDeleteEffectView, RootComponentSubtreeDirectoryConvergenceView,
         RootComponentSubtreeDirectorySynchronizedView, RootComponentSubtreeMembershipRemovedView,
         RootComponentSubtreeRemovalProgressView, RootComponentSubtreeRemovalView,
         RootComponentSubtreeStopEffectView, RootComponentSubtreeStoppedEffectView,
@@ -84,7 +84,9 @@ use canic_core::{
             RootComponentChildRuntimeActivationResponse, RootComponentCommitRequest,
             RootComponentCommitResponse, RootComponentCreationEvidence,
             RootComponentCreationRequest, RootComponentDirectoryPreparationRequest,
-            RootComponentDirectoryPreparationResponse, RootComponentDrainingRequest,
+            RootComponentDirectoryPreparationResponse, RootComponentDrainingAdvancePhase,
+            RootComponentDrainingAdvanceRequest, RootComponentDrainingAdvanceResponse,
+            RootComponentDrainingDescendantsEmpty, RootComponentDrainingRequest,
             RootComponentDrainingResponse, RootComponentDrainingStatusRequest,
             RootComponentInitialInventoryStatus, RootComponentInstallEvidence,
             RootComponentInstallRequest, RootComponentMembershipActivationRequest,
@@ -318,6 +320,24 @@ struct PreparedComponentQuiescencePlan {
     stop: RootComponentQuiescenceStopIntentView,
     expected_status_module_hash: [u8; 32],
     already_quiescent: bool,
+}
+
+struct PreparedComponentDrainingAdvance {
+    root: FleetSubnetRootBinding,
+    release_set: FleetSubnetRootReleaseSet,
+    topology: canic_core::control_plane_support::config::ComponentTopology,
+    maximum_component_registry_bytes: u64,
+}
+
+enum ComponentDrainingRemovalAction {
+    Advance(RootComponentSubtreeRemovalAdvanceRequest),
+    PrepareStop(RootComponentSubtreeRemovalStopPreparationRequest),
+    Stop(RootComponentSubtreeRemovalStopRequest),
+    PrepareDelete(RootComponentSubtreeRemovalDeletePreparationRequest),
+    Delete(RootComponentSubtreeRemovalDeleteRequest),
+    RemoveMembership(RootComponentSubtreeRemovalMembershipRemovalRequest),
+    SynchronizeDirectory(RootComponentSubtreeRemovalDirectorySynchronizationRequest),
+    FinalizeLeaf(RootComponentSubtreeRemovalLeafFinalizationRequest),
 }
 
 #[derive(Clone, Debug)]
@@ -824,6 +844,285 @@ pub fn component_quiescence_status(
     )?;
     validate_component_draining(&partition, &draining, None, None)?;
     component_quiescence_response(draining)
+}
+
+/// Advance at most one deterministic post-order phase for a quiescent Component drain.
+pub async fn advance_component_draining(
+    request: RootComponentDrainingAdvanceRequest,
+) -> Result<RootComponentDrainingAdvanceResponse, InternalError> {
+    match ComponentRegistryOps::advance_component_draining(request.component, request.operation_id)?
+    {
+        RootComponentDrainingAdvanceView::DescendantRemoval(removal) => {
+            let removal = advance_draining_removal_phase(*removal).await?;
+            Ok(component_draining_advance_removal_response(
+                request, removal,
+            ))
+        }
+        RootComponentDrainingAdvanceView::DescendantSubtreePending { .. }
+        | RootComponentDrainingAdvanceView::DescendantsEmpty { .. } => {
+            advance_component_draining_boundary(request).await
+        }
+    }
+}
+
+async fn advance_component_draining_boundary(
+    request: RootComponentDrainingAdvanceRequest,
+) -> Result<RootComponentDrainingAdvanceResponse, InternalError> {
+    let prepared = prepared_component_draining_advance(request.component).await?;
+    match ComponentRegistryOps::advance_component_draining(request.component, request.operation_id)?
+    {
+        RootComponentDrainingAdvanceView::DescendantSubtreePending { .. } => {
+            let removal = ComponentRegistryOps::begin_draining_subtree_removal(
+                request.component,
+                request.operation_id,
+                prepared.maximum_component_registry_bytes,
+            )?;
+            validate_subtree_removal(
+                &prepared.root,
+                prepared.release_set,
+                &prepared.topology,
+                &removal,
+                None,
+            )?;
+            Ok(component_draining_advance_removal_response(
+                request, removal,
+            ))
+        }
+        RootComponentDrainingAdvanceView::DescendantRemoval(removal) => {
+            validate_subtree_removal(
+                &prepared.root,
+                prepared.release_set,
+                &prepared.topology,
+                &removal,
+                None,
+            )?;
+            Ok(component_draining_advance_removal_response(
+                request, *removal,
+            ))
+        }
+        RootComponentDrainingAdvanceView::DescendantsEmpty {
+            registry,
+            descendant_content_hash,
+        } => Ok(RootComponentDrainingAdvanceResponse {
+            operation_id: request.operation_id,
+            component: request.component,
+            phase: RootComponentDrainingAdvancePhase::DescendantsEmpty(
+                RootComponentDrainingDescendantsEmpty {
+                    registry,
+                    descendant_content_hash,
+                },
+            ),
+        }),
+    }
+}
+
+async fn prepared_component_draining_advance(
+    component: canic_core::ids::ComponentInstanceId,
+) -> Result<PreparedComponentDrainingAdvance, InternalError> {
+    let (authority, root) = root_authority()?;
+    let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let preparation_request = RootComponentRegistryPreparationRequest {
+        store_bootstrap: prepared.store_bootstrap,
+        expected_fleet_registry: prepared.prepared_against_registry,
+    };
+    root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    validate_active_authority(&authority, root, &preparation_request)?;
+    if FleetActivationApi::status()
+        .map_err(InternalError::public)?
+        .phase
+        != FleetActivationPhase::Active
+    {
+        return Err(InternalError::unavailable(
+            "Component draining advance requires an Active Fleet Subnet Root runtime",
+        ));
+    }
+
+    let topology = ConfigOps::component_topology()?;
+    let partition = ComponentRegistryOps::partition(component)?.ok_or_else(|| {
+        InternalError::unavailable("Component Registry partition has not been committed")
+    })?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &partition,
+    )?;
+    let maximum_component_registry_bytes = topology
+        .get(&partition.binding.component_spec)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Config,
+                "draining Component Spec is absent from the protected topology",
+            )
+        })?
+        .limits
+        .maximum_registry_bytes;
+    Ok(PreparedComponentDrainingAdvance {
+        root: authority.binding,
+        release_set: authority.initial_release_set,
+        topology,
+        maximum_component_registry_bytes,
+    })
+}
+
+async fn advance_draining_removal_phase(
+    removal: RootComponentSubtreeRemovalView,
+) -> Result<RootComponentSubtreeRemovalView, InternalError> {
+    let action = component_draining_removal_action(&removal)?;
+    let response = match action {
+        ComponentDrainingRemovalAction::Advance(request) => {
+            advance_subtree_removal(request).await?
+        }
+        ComponentDrainingRemovalAction::PrepareStop(request) => {
+            prepare_subtree_leaf_stop(request).await?
+        }
+        ComponentDrainingRemovalAction::Stop(request) => stop_subtree_leaf(request).await?,
+        ComponentDrainingRemovalAction::PrepareDelete(request) => {
+            prepare_subtree_leaf_delete(request).await?
+        }
+        ComponentDrainingRemovalAction::Delete(request) => delete_subtree_leaf(request).await?,
+        ComponentDrainingRemovalAction::RemoveMembership(request) => {
+            remove_subtree_leaf_membership(request).await?
+        }
+        ComponentDrainingRemovalAction::SynchronizeDirectory(request) => {
+            synchronize_subtree_leaf_directory(request).await?
+        }
+        ComponentDrainingRemovalAction::FinalizeLeaf(request) => {
+            finalize_subtree_leaf(request).await?
+        }
+    };
+    ComponentRegistryOps::subtree_removal(response.component, response.operation_id)?.ok_or_else(
+        || {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "Component draining phase removed its durable subtree cursor",
+            )
+        },
+    )
+}
+
+fn component_draining_removal_action(
+    removal: &RootComponentSubtreeRemovalView,
+) -> Result<ComponentDrainingRemovalAction, InternalError> {
+    let action = match &removal.progress {
+        RootComponentSubtreeRemovalProgressView::Fenced
+        | RootComponentSubtreeRemovalProgressView::Traversing { .. } => {
+            ComponentDrainingRemovalAction::Advance(RootComponentSubtreeRemovalAdvanceRequest {
+                operation_id: removal.operation_id,
+                component: removal.component,
+                expected_traversal_steps: removal.traversal_steps,
+            })
+        }
+        RootComponentSubtreeRemovalProgressView::LeafSelected { leaf } => {
+            ComponentDrainingRemovalAction::PrepareStop(
+                RootComponentSubtreeRemovalStopPreparationRequest {
+                    operation_id: removal.operation_id,
+                    component: removal.component,
+                    expected_traversal_steps: removal.traversal_steps,
+                    expected_leaf_canister_id: leaf.canister_id,
+                    expected_leaf_parent_canister_id: leaf.parent_canister_id,
+                },
+            )
+        }
+        RootComponentSubtreeRemovalProgressView::StopIntent(stop) => {
+            ComponentDrainingRemovalAction::Stop(RootComponentSubtreeRemovalStopRequest {
+                operation_id: removal.operation_id,
+                component: removal.component,
+                expected_traversal_steps: removal.traversal_steps,
+                expected_leaf_canister_id: stop.leaf.canister_id,
+                expected_leaf_parent_canister_id: stop.leaf.parent_canister_id,
+            })
+        }
+        RootComponentSubtreeRemovalProgressView::Stopped(stopped) => {
+            ComponentDrainingRemovalAction::PrepareDelete(
+                RootComponentSubtreeRemovalDeletePreparationRequest {
+                    operation_id: removal.operation_id,
+                    component: removal.component,
+                    expected_traversal_steps: removal.traversal_steps,
+                    expected_leaf_canister_id: stopped.stop.leaf.canister_id,
+                    expected_leaf_parent_canister_id: stopped.stop.leaf.parent_canister_id,
+                },
+            )
+        }
+        RootComponentSubtreeRemovalProgressView::DeleteIntent(deletion) => {
+            ComponentDrainingRemovalAction::Delete(RootComponentSubtreeRemovalDeleteRequest {
+                operation_id: removal.operation_id,
+                component: removal.component,
+                expected_traversal_steps: removal.traversal_steps,
+                expected_leaf_canister_id: deletion.stopped.stop.leaf.canister_id,
+                expected_leaf_parent_canister_id: deletion.stopped.stop.leaf.parent_canister_id,
+            })
+        }
+        RootComponentSubtreeRemovalProgressView::Deleted(deleted) => {
+            let leaf = &deleted.deletion.stopped.stop.leaf;
+            ComponentDrainingRemovalAction::RemoveMembership(
+                component_draining_membership_removal_request(removal, leaf),
+            )
+        }
+        RootComponentSubtreeRemovalProgressView::MembershipRemoved(membership) => {
+            let leaf = &membership.deleted.deletion.stopped.stop.leaf;
+            ComponentDrainingRemovalAction::SynchronizeDirectory(
+                RootComponentSubtreeRemovalDirectorySynchronizationRequest {
+                    operation_id: removal.operation_id,
+                    component: removal.component,
+                    expected_traversal_steps: removal.traversal_steps,
+                    expected_leaf_canister_id: leaf.canister_id,
+                    expected_leaf_parent_canister_id: leaf.parent_canister_id,
+                },
+            )
+        }
+        RootComponentSubtreeRemovalProgressView::DirectorySynchronized(directory) => {
+            let leaf = &directory
+                .membership_removed
+                .deleted
+                .deletion
+                .stopped
+                .stop
+                .leaf;
+            ComponentDrainingRemovalAction::FinalizeLeaf(
+                RootComponentSubtreeRemovalLeafFinalizationRequest {
+                    operation_id: removal.operation_id,
+                    component: removal.component,
+                    expected_traversal_steps: removal.traversal_steps,
+                    expected_leaf_canister_id: leaf.canister_id,
+                    expected_leaf_parent_canister_id: leaf.parent_canister_id,
+                },
+            )
+        }
+        RootComponentSubtreeRemovalProgressView::Completed(_) => {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "Component draining cursor retained a completed subtree target",
+            ));
+        }
+    };
+    Ok(action)
+}
+
+const fn component_draining_membership_removal_request(
+    removal: &RootComponentSubtreeRemovalView,
+    leaf: &crate::view::component_registry::RootComponentSubtreeRemovalNodeView,
+) -> RootComponentSubtreeRemovalMembershipRemovalRequest {
+    RootComponentSubtreeRemovalMembershipRemovalRequest {
+        operation_id: removal.operation_id,
+        component: removal.component,
+        expected_traversal_steps: removal.traversal_steps,
+        expected_leaf_canister_id: leaf.canister_id,
+        expected_leaf_parent_canister_id: leaf.parent_canister_id,
+    }
+}
+
+fn component_draining_advance_removal_response(
+    request: RootComponentDrainingAdvanceRequest,
+    removal: RootComponentSubtreeRemovalView,
+) -> RootComponentDrainingAdvanceResponse {
+    RootComponentDrainingAdvanceResponse {
+        operation_id: request.operation_id,
+        component: request.component,
+        phase: RootComponentDrainingAdvancePhase::DescendantRemoval(subtree_removal_response(
+            removal,
+        )),
+    }
 }
 
 /// Durably fence one registered child subtree before quiescence and post-order removal.

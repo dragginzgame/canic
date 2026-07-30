@@ -392,6 +392,7 @@ pub struct RootComponentDrainingRecord {
     pub directory_authority_hash: [u8; 32],
     pub started_at_ns: u64,
     pub quiescence: Option<RootComponentQuiescenceProgressRecord>,
+    pub subtree_operation_id: Option<[u8; 32]>,
 }
 
 ///
@@ -443,6 +444,14 @@ pub enum RootComponentQuiescenceProgressRecord {
 }
 
 fn component_draining_identity_matches(
+    left: &RootComponentDrainingRecord,
+    right: &RootComponentDrainingRecord,
+) -> bool {
+    component_draining_fence_matches(left, right)
+        && left.subtree_operation_id == right.subtree_operation_id
+}
+
+fn component_draining_fence_matches(
     left: &RootComponentDrainingRecord,
     right: &RootComponentDrainingRecord,
 ) -> bool {
@@ -1352,6 +1361,78 @@ pub enum RootComponentRegistryCommitOutcome {
 }
 
 ///
+/// RootComponentSubtreeRemovalBeginCommit
+///
+/// Exact stable compare-and-commit authority for one subtree fence and optional drain cursor.
+///
+
+pub struct RootComponentSubtreeRemovalBeginCommit<'a> {
+    pub expected_meta: &'a RootComponentRegistryMetaRecord,
+    pub next_meta: RootComponentRegistryMetaRecord,
+    pub expected_partition: &'a ComponentRegistryPartitionRecord,
+    pub next_partition: ComponentRegistryPartitionRecord,
+    pub expected_target: &'a ComponentRegistryChildRecord,
+    pub record: RootComponentSubtreeRemovalRecord,
+    pub expected_draining: Option<&'a RootComponentDrainingRecord>,
+    pub next_draining: Option<RootComponentDrainingRecord>,
+}
+
+impl RootComponentSubtreeRemovalBeginCommit<'_> {
+    fn draining_transition_is_valid(&self) -> bool {
+        match (self.expected_draining, &self.next_draining) {
+            (None, None) => true,
+            (Some(expected), Some(next)) => {
+                expected.component == self.record.component
+                    && component_draining_fence_matches(expected, next)
+                    && expected.quiescence == next.quiescence
+                    && next.subtree_operation_id == Some(self.record.operation_id)
+                    && next
+                        .subtree_operation_id
+                        .is_some_and(|operation_id| operation_id != [0; 32])
+                    && RootComponentRegistryStore::component_draining_entry_bytes(next)
+                        <= next
+                            .quiescence
+                            .as_ref()
+                            .map(|progress| match progress {
+                                RootComponentQuiescenceProgressRecord::StopIntent(intent) => {
+                                    intent.charged_entry_bytes
+                                }
+                                RootComponentQuiescenceProgressRecord::Quiescent(receipt) => {
+                                    receipt.stop.charged_entry_bytes
+                                }
+                            })
+                            .unwrap_or_default()
+            }
+            (None, Some(_)) | (Some(_), None) => false,
+        }
+    }
+
+    fn shape_is_valid(&self) -> bool {
+        let component = self.record.component;
+        self.draining_transition_is_valid()
+            && self.expected_partition.binding.component == component
+            && self.next_partition.binding.component == component
+            && self.next_partition.binding == self.expected_partition.binding
+            && self.next_partition.provisioning_origin
+                == self.expected_partition.provisioning_origin
+            && self.next_partition.release_set == self.expected_partition.release_set
+            && self.next_partition.status == self.expected_partition.status
+            && self.next_partition.revision == self.expected_partition.revision
+            && self.next_partition.content_hash == self.expected_partition.content_hash
+            && self.next_partition.descendant_content_hash
+                == self.expected_partition.descendant_content_hash
+            && self.next_partition.directory_synchronized_at_ns
+                == self.expected_partition.directory_synchronized_at_ns
+            && self.next_partition.reserved_descendants
+                == self.expected_partition.reserved_descendants
+            && self.next_partition.committed_descendants
+                == self.expected_partition.committed_descendants
+            && &self.record.target == self.expected_target
+            && self.record.target.component == component
+    }
+}
+
+///
 /// RootComponentRegistryCommitError
 ///
 /// Rejection when preparation conflicts with already durable authority.
@@ -2006,37 +2087,31 @@ impl RootComponentRegistryStore {
         })
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one atomic compare-and-commit verifies and writes the subtree fence, partition and optional drain cursor"
+    )]
     pub(crate) fn begin_subtree_removal(
-        expected_meta: &RootComponentRegistryMetaRecord,
-        next_meta: RootComponentRegistryMetaRecord,
-        expected_partition: &ComponentRegistryPartitionRecord,
-        next_partition: ComponentRegistryPartitionRecord,
-        expected_target: &ComponentRegistryChildRecord,
-        record: RootComponentSubtreeRemovalRecord,
+        commit: RootComponentSubtreeRemovalBeginCommit<'_>,
     ) -> Result<RootComponentRegistryCommitOutcome, RootComponentAllocationCommitError> {
+        if !commit.shape_is_valid() {
+            return Err(RootComponentAllocationCommitError::ConflictingChildEntry);
+        }
+        let RootComponentSubtreeRemovalBeginCommit {
+            expected_meta,
+            next_meta,
+            expected_partition,
+            next_partition,
+            expected_target,
+            record,
+            expected_draining,
+            next_draining,
+        } = commit;
         let component = record.component;
         let operation_key =
             ComponentRegistryEntryKey::subtree_removal(component, record.operation_id);
         let partition_key = ComponentRegistryEntryKey::partition(component);
         let target_key = ComponentRegistryEntryKey::child(component, record.target.canister_id);
-        if expected_partition.binding.component != component
-            || next_partition.binding.component != component
-            || next_partition.binding != expected_partition.binding
-            || next_partition.provisioning_origin != expected_partition.provisioning_origin
-            || next_partition.release_set != expected_partition.release_set
-            || next_partition.status != expected_partition.status
-            || next_partition.revision != expected_partition.revision
-            || next_partition.content_hash != expected_partition.content_hash
-            || next_partition.descendant_content_hash != expected_partition.descendant_content_hash
-            || next_partition.directory_synchronized_at_ns
-                != expected_partition.directory_synchronized_at_ns
-            || next_partition.reserved_descendants != expected_partition.reserved_descendants
-            || next_partition.committed_descendants != expected_partition.committed_descendants
-            || &record.target != expected_target
-            || record.target.component != component
-        {
-            return Err(RootComponentAllocationCommitError::ConflictingChildEntry);
-        }
 
         ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
             let mut state = cell.get().clone();
@@ -2065,6 +2140,36 @@ impl RootComponentRegistryStore {
             }
             if current_meta != expected_meta {
                 return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            if let Some(expected_draining) = expected_draining {
+                let draining_key = RootComponentDrainingKey::from(component);
+                let current_draining = ROOT_COMPONENT_DRAINING
+                    .with_borrow(|map| map.get(&draining_key))
+                    .ok_or(RootComponentAllocationCommitError::ConflictingState)?;
+                if current_draining != *expected_draining {
+                    return Err(RootComponentAllocationCommitError::ConflictingState);
+                }
+                if let Some(previous_operation_id) = expected_draining.subtree_operation_id
+                    && previous_operation_id != record.operation_id
+                {
+                    let previous_key = ComponentRegistryEntryKey::subtree_removal(
+                        component,
+                        previous_operation_id,
+                    );
+                    let previous_is_completed = COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+                        matches!(
+                            map.get(&previous_key),
+                            Some(ComponentRegistryEntryRecord::SubtreeRemoval(previous))
+                                if matches!(
+                                    previous.progress,
+                                    RootComponentSubtreeRemovalProgressRecord::Completed(_)
+                                )
+                        )
+                    });
+                    if !previous_is_completed {
+                        return Err(RootComponentAllocationCommitError::ConflictingState);
+                    }
+                }
             }
             let (current_partition, current_target) =
                 COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
@@ -2102,6 +2207,11 @@ impl RootComponentRegistryStore {
                     ComponentRegistryEntryRecord::Partition(next_partition),
                 );
             });
+            if let Some(next_draining) = next_draining {
+                ROOT_COMPONENT_DRAINING.with_borrow_mut(|map| {
+                    map.insert(RootComponentDrainingKey::from(component), next_draining);
+                });
+            }
             state.current = Some(next_meta);
             cell.set(state);
             Ok(RootComponentRegistryCommitOutcome::Committed)
@@ -3051,6 +3161,7 @@ impl RootComponentRegistryStore {
             || record.descendant_content_hash != expected_partition.descendant_content_hash
             || record.directory_authority_hash == [0; 32]
             || record.quiescence.is_some()
+            || record.subtree_operation_id.is_some()
         {
             return Err(RootComponentAllocationCommitError::ConflictingPartition);
         }

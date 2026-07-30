@@ -30,6 +30,7 @@ pub const CANIC_ROOT_COMPONENT_DRAINING_BEGIN: &str = "canic_root_component_drai
 pub const CANIC_ROOT_COMPONENT_DRAINING_STATUS: &str = "canic_root_component_draining_status";
 pub const CANIC_ROOT_COMPONENT_QUIESCE: &str = "canic_root_component_quiesce";
 pub const CANIC_ROOT_COMPONENT_QUIESCENCE_STATUS: &str = "canic_root_component_quiescence_status";
+pub const CANIC_ROOT_COMPONENT_DRAINING_ADVANCE: &str = "canic_root_component_draining_advance";
 pub const CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_BEGIN: &str =
     "canic_root_component_subtree_removal_begin";
 pub const CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_ADVANCE: &str =
