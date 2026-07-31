@@ -538,7 +538,9 @@ Historical detail is archived at:
   receipt; every validated read reconstructs join, activation and ordered
   draining history. Exact replay survives restart and later progress. Root
   mirrors and Fleet Directories intentionally remain on the prior `Active`
-  version until the next synchronization boundary.
+  version until the next synchronization boundary. The same open patch adopts
+  transitive `event-listener 5.4.2`, removing RUSTSEC-2026-0221 without
+  widening the accepted unmaintained-advisory inventory.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
