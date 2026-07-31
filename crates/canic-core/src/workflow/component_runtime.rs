@@ -15,7 +15,7 @@ use crate::{
         },
         fleet_registry::{FleetDirectorySnapshot, FleetSubnetRootStatus},
     },
-    ids::{ComponentBinding, ManagedCanisterBinding},
+    ids::{ComponentBinding, FleetRegistryAuthority, ManagedCanisterBinding},
     ops::{
         component_runtime::ComponentRuntimeOps,
         ic::IcOps,
@@ -41,6 +41,28 @@ impl<'a> ComponentDirectoryIdentity<'a> {
         Self {
             component: &provenance.component,
             source_fleet_subnet_root: &provenance.source_fleet_subnet_root,
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct FleetDirectoryIdentity<'a> {
+    authority: &'a FleetRegistryAuthority,
+    source_fleet_subnet_root: &'a crate::cdk::types::Principal,
+}
+
+impl<'a> FleetDirectoryIdentity<'a> {
+    const fn from_component(component: &'a ComponentBinding) -> Self {
+        Self {
+            authority: &component.authority,
+            source_fleet_subnet_root: &component.fleet_subnet_root,
+        }
+    }
+
+    const fn from_directory(directory: &'a FleetDirectorySnapshot) -> Self {
+        Self {
+            authority: &directory.provenance.registry.authority,
+            source_fleet_subnet_root: &directory.provenance.source_fleet_subnet_root,
         }
     }
 }
@@ -181,9 +203,13 @@ fn validate_authority(
     let provenance = &authority.component.provenance;
     let identity_matches = ComponentDirectoryIdentity::from_provenance(provenance)
         == ComponentDirectoryIdentity::from_component(component);
-    let head_is_versioned = provenance.component_registry_revision > 0
-        && provenance.component_registry_content_hash != [0; 32]
-        && provenance.synchronized_at_ns > 0;
+    let head_is_versioned = [
+        provenance.component_registry_revision > 0,
+        provenance.component_registry_content_hash != [0; 32],
+        provenance.synchronized_at_ns > 0,
+    ]
+    .into_iter()
+    .all(|valid| valid);
     if !identity_matches || !head_is_versioned {
         return Err(InternalError::invalid_input(
             "Component Directory does not match the protected Component-tree binding",
@@ -230,11 +256,14 @@ fn validate_fleet_directory(
     component: &ComponentBinding,
     directory: &FleetDirectorySnapshot,
 ) -> Result<(), InternalError> {
-    if directory.provenance.registry.authority != component.authority
-        || directory.provenance.registry.revision == 0
-        || directory.provenance.registry.content_hash == [0; 32]
-        || directory.provenance.source_fleet_subnet_root != component.fleet_subnet_root
-        || directory.fleet_subnet_roots.is_empty()
+    let identity_matches = FleetDirectoryIdentity::from_directory(directory)
+        == FleetDirectoryIdentity::from_component(component);
+    let version_is_present = directory.provenance.registry.revision > 0
+        && directory.provenance.registry.content_hash != [0; 32];
+    let root_set_is_present = !directory.fleet_subnet_roots.is_empty();
+    if ![identity_matches, version_is_present, root_set_is_present]
+        .into_iter()
+        .all(|valid| valid)
     {
         return Err(InternalError::invalid_input(
             "Fleet Directory does not match the protected Component-tree binding",
@@ -248,18 +277,29 @@ fn validate_fleet_directory(
             entry.placement_subnet.as_principal().as_slice(),
             entry.fleet_subnet_root.as_slice(),
         );
-        if entry.status != FleetSubnetRootStatus::Active
-            || previous.is_some_and(|previous| previous >= key)
-        {
+        let status_is_published = entry.status != FleetSubnetRootStatus::Joining;
+        let order_is_canonical = previous.is_none_or(|previous| previous < key);
+        if !status_is_published || !order_is_canonical {
             return Err(InternalError::invalid_input(
-                "Fleet Directory root entries are not unique, canonical and Active",
+                "Fleet Directory root entries are not unique, canonical and published",
             ));
         }
         previous = Some(key);
         if entry.fleet_subnet_root == component.fleet_subnet_root {
-            if found_source || entry.placement_subnet != component.placement_subnet {
+            let source_is_current = matches!(
+                entry.status,
+                FleetSubnetRootStatus::Active | FleetSubnetRootStatus::Draining
+            );
+            let source_is_exact = [
+                !found_source,
+                entry.placement_subnet == component.placement_subnet,
+                source_is_current,
+            ]
+            .into_iter()
+            .all(|valid| valid);
+            if !source_is_exact {
                 return Err(InternalError::invalid_input(
-                    "Fleet Directory source root placement differs from the Component binding",
+                    "Fleet Directory source root differs from the current Component binding",
                 ));
             }
             found_source = true;
@@ -319,6 +359,21 @@ mod tests {
             .provenance
             .component_registry_content_hash = [15; 32];
         assert!(validate_directory_progression(&current, &conflicting).is_err());
+    }
+
+    #[test]
+    fn fleet_directory_accepts_draining_but_not_joining_or_removed_source() {
+        let mut authority = directory_authority();
+        let component = authority.component.provenance.component.clone();
+        authority.fleet.fleet_subnet_roots[0].status = FleetSubnetRootStatus::Draining;
+        validate_fleet_directory(&component, &authority.fleet)
+            .expect("Draining source remains current for admitted Component lifecycle");
+
+        authority.fleet.fleet_subnet_roots[0].status = FleetSubnetRootStatus::Joining;
+        assert!(validate_fleet_directory(&component, &authority.fleet).is_err());
+
+        authority.fleet.fleet_subnet_roots[0].status = FleetSubnetRootStatus::Removed;
+        assert!(validate_fleet_directory(&component, &authority.fleet).is_err());
     }
 
     fn directory_authority() -> ComponentRuntimeDirectoryAuthority {

@@ -23,9 +23,9 @@ pub use config::{
     AppConfigDeclaration, AppConfigError, AppConfigIoOperation, AppConfigMutationConflict,
     AppConfigNameField, AppConfigNameIssue, AppConfigOperation, AppConfigPackageIssue,
     AppConfigSnapshot, AppConfigTomlOperation, AttachedAppRole, ConfiguredPoolExpectation,
-    ConfiguredRoleLifecycle, DeclaredAppRole, LOCAL_ROOT_MIN_READY_CYCLES, RenamedAppRole,
-    attach_app_role, declare_app_role, plan_attach_app_role, plan_declare_app_role,
-    plan_rename_app_role, read_app_config_identity, rename_app_role,
+    ConfiguredRoleLifecycle, DeclaredAppRole, RenamedAppRole, attach_app_role, declare_app_role,
+    plan_attach_app_role, plan_declare_app_role, plan_rename_app_role, read_app_config_identity,
+    rename_app_role,
 };
 pub use infrastructure::{
     CanicInfrastructureArtifactBuildOutput, CanicInfrastructureArtifactEntry,

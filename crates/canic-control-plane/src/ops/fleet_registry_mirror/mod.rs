@@ -11,12 +11,30 @@ use crate::{
     },
     view::fleet_registry_mirror::{
         RootFleetRegistryActiveView, RootFleetRegistryCandidateView, RootFleetRegistryMirrorView,
+        ValidatedRootFleetRegistryMirrorView,
     },
 };
-use canic_core::dto::fleet_registry::{
-    FleetDirectorySnapshot, FleetRegistrySnapshotResponse, FleetRegistryVersion,
-    FleetSubnetRootSnapshotAcknowledgement,
+use canic_core::{
+    control_plane_support::{
+        error::{InternalError, InternalErrorOrigin},
+        ops::{config::ConfigOps, fleet_registry::FleetRegistryOps},
+    },
+    dto::{
+        fleet_registry::{
+            FleetDirectorySnapshot, FleetRegistryManifest, FleetRegistrySnapshotResponse,
+            FleetRegistryVersion, FleetSubnetRootEntry, FleetSubnetRootSnapshotAcknowledgement,
+            FleetSubnetRootStatus,
+        },
+        fleet_subnet_root::FleetSubnetRootAuthority,
+    },
 };
+
+#[derive(Eq, PartialEq)]
+struct CanonicalMirrorEvidence<'a> {
+    manifest: &'a FleetRegistryManifest,
+    version: &'a FleetRegistryVersion,
+    directory: &'a FleetDirectorySnapshot,
+}
 
 ///
 /// FleetRegistryMirrorOps
@@ -33,6 +51,64 @@ impl FleetRegistryMirrorOps {
             candidate: data.candidate.map(candidate_record_to_view),
             active: data.active.map(active_record_to_view),
         }
+    }
+
+    pub(crate) fn validated_current(
+        authority: &FleetSubnetRootAuthority,
+        root: candid::Principal,
+    ) -> Result<ValidatedRootFleetRegistryMirrorView, InternalError> {
+        if authority.binding.fleet_subnet_root != root {
+            return Err(InternalError::invalid_input(
+                "protected Fleet Subnet Root authority does not name this Canister",
+            ));
+        }
+        let active = Self::current().active.ok_or_else(|| {
+            InternalError::unavailable("root has no active Fleet Registry mirror")
+        })?;
+        let topology = ConfigOps::component_topology()?;
+        FleetRegistryOps::validate(
+            &authority.binding.authority,
+            &topology,
+            &active.snapshot.registry,
+        )?;
+        let manifest = FleetRegistryOps::manifest(
+            &authority.binding.authority,
+            &topology,
+            &active.snapshot.registry,
+        )?;
+        let version = FleetRegistryOps::version(
+            &authority.binding.authority,
+            &topology,
+            &active.snapshot.registry,
+        )?;
+        let root_entry = validated_root_entry(
+            authority,
+            root,
+            &active.snapshot.registry.fleet_subnet_roots,
+        )?;
+        let directory = FleetRegistryOps::directory_for_root(
+            &authority.binding.authority,
+            &topology,
+            &active.snapshot.registry,
+            root,
+        )?;
+        let stored = CanonicalMirrorEvidence {
+            manifest: &active.snapshot.manifest,
+            version: &active.snapshot.version,
+            directory: &active.directory,
+        };
+        let canonical = CanonicalMirrorEvidence {
+            manifest: &manifest,
+            version: &version,
+            directory: &directory,
+        };
+        if stored != canonical || !version_precedes(&active.previous_registry, &version) {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "active root Registry mirror evidence is not internally consistent",
+            ));
+        }
+        Ok(ValidatedRootFleetRegistryMirrorView { active, root_entry })
     }
 
     pub(crate) fn commit_candidate(
@@ -56,6 +132,52 @@ impl FleetRegistryMirrorOps {
             directory,
         });
     }
+}
+
+fn validated_root_entry(
+    authority: &FleetSubnetRootAuthority,
+    root: candid::Principal,
+    entries: &[FleetSubnetRootEntry],
+) -> Result<FleetSubnetRootEntry, InternalError> {
+    let root_entry = entries
+        .iter()
+        .find(|entry| entry.fleet_subnet_root == root)
+        .cloned()
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "active root Registry mirror does not contain this root",
+            )
+        })?;
+    let expected = FleetSubnetRootEntry {
+        placement_subnet: authority.binding.placement_subnet,
+        fleet_subnet_root: root,
+        component_admissions: authority.binding.component_admissions.clone(),
+        component_topology_digest: authority.binding.component_topology_digest,
+        active_release_set: authority.initial_release_set,
+        limits: authority.binding.limits.clone(),
+        status: root_entry.status,
+    };
+    let status_is_current = matches!(
+        root_entry.status,
+        FleetSubnetRootStatus::Active | FleetSubnetRootStatus::Draining
+    );
+    if root_entry != expected || !status_is_current {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "active root Registry row differs from protected authority or is not current",
+        ));
+    }
+    Ok(root_entry)
+}
+
+fn version_precedes(previous: &FleetRegistryVersion, current: &FleetRegistryVersion) -> bool {
+    let same_authority = previous.authority == current.authority;
+    let earlier_revision = previous.revision < current.revision;
+    let hashes_are_present = previous.content_hash != [0; 32] && current.content_hash != [0; 32];
+    [same_authority, earlier_revision, hashes_are_present]
+        .into_iter()
+        .all(|valid| valid)
 }
 
 fn candidate_record_to_view(

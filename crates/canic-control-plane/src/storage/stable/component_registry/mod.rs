@@ -240,6 +240,8 @@ impl RootFleetSubnetDrainingRecord {
     pub(crate) fn is_valid_for_current(&self, meta: &RootComponentRegistryMetaRecord) -> bool {
         let source_is_exact = RootFleetSubnetDrainingSourceAuthority::from_record(self)
             == RootFleetSubnetDrainingSourceAuthority::from_meta(meta);
+        let registry_is_covered =
+            registry_covers_preparation(&meta.prepared_against_registry, &self.active_registry);
         let operation_is_valid = self.operation_id != [0; 32];
         let time_is_valid = self.started_at_ns > 0;
         let sequence_is_valid = self.next_allocation_sequence > 0;
@@ -247,6 +249,7 @@ impl RootFleetSubnetDrainingRecord {
             self.root_registry_encoded_bytes <= meta.root.limits.maximum_registry_bytes;
         [
             source_is_exact,
+            registry_is_covered,
             operation_is_valid,
             time_is_valid,
             sequence_is_valid,
@@ -266,32 +269,46 @@ impl RootFleetSubnetDrainingRecord {
 }
 
 #[cfg(feature = "root-control-plane")]
+fn registry_covers_preparation(
+    prepared: &FleetRegistryVersion,
+    current: &FleetRegistryVersion,
+) -> bool {
+    let authority_is_exact = prepared.authority == current.authority;
+    let revision_is_covered = match prepared.revision.cmp(&current.revision) {
+        std::cmp::Ordering::Less => true,
+        std::cmp::Ordering::Equal => prepared.content_hash == current.content_hash,
+        std::cmp::Ordering::Greater => false,
+    };
+    let hashes_are_present = prepared.content_hash != [0; 32] && current.content_hash != [0; 32];
+    [authority_is_exact, revision_is_covered, hashes_are_present]
+        .into_iter()
+        .all(|valid| valid)
+}
+
+#[cfg(feature = "root-control-plane")]
 #[derive(Debug, Eq, PartialEq)]
-struct RootFleetSubnetDrainingSourceAuthority<'a> {
+struct RootFleetSubnetDrainingSourceAuthority {
     fleet_subnet_root: Principal,
     placement_subnet: SubnetId,
-    active_registry: &'a FleetRegistryVersion,
     component_topology_digest: ComponentTopologyDigest,
     active_release_set: FleetSubnetRootReleaseSet,
 }
 
 #[cfg(feature = "root-control-plane")]
-impl<'a> RootFleetSubnetDrainingSourceAuthority<'a> {
-    const fn from_record(record: &'a RootFleetSubnetDrainingRecord) -> Self {
+impl RootFleetSubnetDrainingSourceAuthority {
+    const fn from_record(record: &RootFleetSubnetDrainingRecord) -> Self {
         Self {
             fleet_subnet_root: record.fleet_subnet_root,
             placement_subnet: record.placement_subnet,
-            active_registry: &record.active_registry,
             component_topology_digest: record.component_topology_digest,
             active_release_set: record.active_release_set,
         }
     }
 
-    const fn from_meta(meta: &'a RootComponentRegistryMetaRecord) -> Self {
+    const fn from_meta(meta: &RootComponentRegistryMetaRecord) -> Self {
         Self {
             fleet_subnet_root: meta.root.fleet_subnet_root,
             placement_subnet: meta.root.placement_subnet,
-            active_registry: &meta.prepared_against_registry,
             component_topology_digest: meta.root.component_topology_digest,
             active_release_set: meta.release_set,
         }

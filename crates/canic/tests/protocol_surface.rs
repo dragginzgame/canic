@@ -2198,11 +2198,11 @@ fn missing_finish_marker_stays_actionable() {
     let marker = "__canic_missing_finish_macro_add_canic_finish_at_end_after_all_endpoints";
 
     assert!(
-        source.contains(&format!("const _: fn() = {marker};")),
+        source.contains(&format!("const _: () = {marker};")),
         "lifecycle start macros must reference an actionable missing-finish marker"
     );
     assert!(
-        source.contains(&format!("fn {marker}()")),
+        source.contains(&format!("const {marker}: ()")),
         "finish! must define the same missing-finish marker"
     );
     assert!(

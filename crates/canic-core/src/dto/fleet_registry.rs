@@ -251,7 +251,7 @@ pub struct FleetSubnetRootDirectoryEntry {
 ///
 /// FleetDirectorySnapshot
 ///
-/// Root-local read-only discovery projection derived from one exact all-Active Registry.
+/// Root-local read-only discovery projection derived from one exact published Registry.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -263,8 +263,7 @@ pub struct FleetDirectorySnapshot {
 ///
 /// FleetSubnetRootRegistryMirrorActivationRequest
 ///
-/// Controller command that atomically replaces a Joining candidate with its all-Active mirror
-/// and matching Fleet Directory.
+/// Controller command that atomically activates a newer complete Registry mirror and Directory.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -278,7 +277,7 @@ pub struct FleetSubnetRootRegistryMirrorActivationRequest {
 ///
 /// FleetSubnetRootRegistryMirrorActivationResponse
 ///
-/// Exact durable evidence for one root's active Registry mirror and Fleet Directory.
+/// Exact durable evidence for one root's current Registry mirror and Fleet Directory.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

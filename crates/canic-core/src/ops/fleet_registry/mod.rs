@@ -96,10 +96,10 @@ pub enum FleetRegistryOpsError {
     #[error("Fleet Registry root draining target {fleet_subnet_root} is missing")]
     FleetSubnetRootDrainingTargetMissing { fleet_subnet_root: Principal },
 
-    #[error("Fleet Directory activation requires a non-empty all-Active root set")]
-    FleetDirectoryRequiresAllActive,
+    #[error("Fleet Directory activation requires a non-empty root set with no Joining rows")]
+    FleetDirectoryRequiresPublishedRoots,
 
-    #[error("Fleet Directory source does not name one active Registry root")]
+    #[error("Fleet Directory source does not name one current non-Removed Registry root")]
     FleetDirectorySourceMissing,
 
     #[error("Fleet Registry genesis App '{received}' does not match configured App '{expected}'")]
@@ -243,14 +243,14 @@ impl FleetRegistryOps {
         })
     }
 
-    /// Derive one root's exact Fleet Directory from a complete all-Active Registry.
-    pub fn active_directory_for_root(
+    /// Derive one current root's exact Fleet Directory from a complete published Registry.
+    pub fn directory_for_root(
         expected_authority: &FleetRegistryAuthority,
         topology: &ComponentTopology,
         registry: &FleetRegistry,
         source_fleet_subnet_root: Principal,
     ) -> Result<FleetDirectorySnapshot, InternalError> {
-        active_directory_for_root(
+        directory_for_root(
             expected_authority,
             topology,
             registry,
@@ -261,26 +261,25 @@ impl FleetRegistryOps {
     }
 }
 
-fn active_directory_for_root(
+fn directory_for_root(
     expected_authority: &FleetRegistryAuthority,
     topology: &ComponentTopology,
     registry: &FleetRegistry,
     source_fleet_subnet_root: Principal,
 ) -> Result<FleetDirectorySnapshot, FleetRegistryOpsError> {
     validation::validate(expected_authority, topology, registry)?;
-    if registry.fleet_subnet_roots.is_empty()
-        || registry
-            .fleet_subnet_roots
-            .iter()
-            .any(|entry| entry.status != FleetSubnetRootStatus::Active)
-    {
-        return Err(FleetRegistryOpsError::FleetDirectoryRequiresAllActive);
-    }
-    if !registry
+    let contains_joining_root = registry
         .fleet_subnet_roots
         .iter()
-        .any(|entry| entry.fleet_subnet_root == source_fleet_subnet_root)
-    {
+        .any(|entry| entry.status == FleetSubnetRootStatus::Joining);
+    if registry.fleet_subnet_roots.is_empty() || contains_joining_root {
+        return Err(FleetRegistryOpsError::FleetDirectoryRequiresPublishedRoots);
+    }
+    let source_is_current = registry.fleet_subnet_roots.iter().any(|entry| {
+        entry.fleet_subnet_root == source_fleet_subnet_root
+            && entry.status != FleetSubnetRootStatus::Removed
+    });
+    if !source_is_current {
         return Err(FleetRegistryOpsError::FleetDirectorySourceMissing);
     }
     let manifest = {

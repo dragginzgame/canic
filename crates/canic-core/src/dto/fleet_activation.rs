@@ -12,8 +12,6 @@ use serde::{Deserialize, Serialize};
 pub const MAX_FLEET_ACTIVATION_CANISTERS: usize = 4_096;
 /// Maximum issuer entries represented by one Fleet credential manifest.
 pub const MAX_FLEET_CREDENTIAL_MANIFEST_ENTRIES: usize = 64;
-/// Maximum canonical host activation-record size.
-pub const MAX_FLEET_ACTIVATION_HOST_RECORD_BYTES: usize = 2_097_152;
 
 ///
 /// FleetCascadeManifestEntry
@@ -134,29 +132,6 @@ pub struct FleetActivationRequest {
     pub operation_id: [u8; 32],
     pub credential: FleetCredentialGenerationRef,
     pub activation_evidence_hash: [u8; 32],
-}
-
-///
-/// FleetHostCanisterActivationEvidence
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FleetHostCanisterActivationEvidence {
-    pub principal: Principal,
-    pub activation_evidence_hash: Option<[u8; 32]>,
-}
-
-///
-/// FleetActivationHostRecord
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FleetActivationHostRecord {
-    pub identity: FleetActivationIdentity,
-    pub cascade_manifest: Option<Vec<FleetCascadeManifestEntry>>,
-    pub credential: Option<FleetCredentialGenerationRef>,
-    pub credential_manifest: Option<FleetCredentialManifest>,
-    pub canisters: Vec<FleetHostCanisterActivationEvidence>,
 }
 
 #[cfg(test)]

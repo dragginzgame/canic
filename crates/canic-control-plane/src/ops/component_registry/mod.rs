@@ -59,7 +59,7 @@ use canic_core::{
     cdk::types::{Cycles, Principal},
     control_plane_support::{
         config::schema::ComponentChildKind,
-        error::InternalError,
+        error::{InternalError, InternalErrorOrigin},
         model::replay::ReplayCostGuardSettlement,
         ops::component_runtime::ComponentRuntimeOps,
         policy::{
@@ -1024,16 +1024,17 @@ impl ComponentRegistryOps {
                 ))
             };
         }
-        if &current.prepared_against_registry != expected_registry {
+        if !Self::registry_covers_preparation(&current.prepared_against_registry, expected_registry)
+        {
             return Err(InternalError::conflict(
-                "Fleet Subnet Root draining request names a different active Registry",
+                "Fleet Subnet Root draining request is not covered by its preparation authority",
             ));
         }
         let record = RootFleetSubnetDrainingRecord {
             operation_id,
             fleet_subnet_root: current.root.fleet_subnet_root,
             placement_subnet: current.root.placement_subnet,
-            active_registry: current.prepared_against_registry.clone(),
+            active_registry: expected_registry.clone(),
             component_topology_digest: current.root.component_topology_digest,
             active_release_set: current.release_set,
             next_allocation_sequence: current.next_allocation_sequence,
@@ -1070,6 +1071,47 @@ impl ComponentRegistryOps {
             ));
         }
         Ok(root_draining_record_to_view(record.clone()))
+    }
+
+    pub(crate) fn validate_published_root_draining(
+        current_registry: &FleetRegistryVersion,
+    ) -> Result<RootFleetSubnetDrainingView, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let record = current.root_draining.as_ref().ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "Draining root mirror lacks its local admission cutoff",
+            )
+        })?;
+        validate_root_draining_record(&current, record)?;
+        let publication_is_later = record.active_registry.authority == current_registry.authority
+            && record.active_registry.revision < current_registry.revision;
+        if !publication_is_later {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "Draining root mirror is not later than its local admission cutoff",
+            ));
+        }
+        Ok(root_draining_record_to_view(record.clone()))
+    }
+
+    pub(crate) fn registry_covers_preparation(
+        prepared: &FleetRegistryVersion,
+        current: &FleetRegistryVersion,
+    ) -> bool {
+        let authority_is_exact = prepared.authority == current.authority;
+        let revision_is_covered = match prepared.revision.cmp(&current.revision) {
+            std::cmp::Ordering::Less => true,
+            std::cmp::Ordering::Equal => prepared.content_hash == current.content_hash,
+            std::cmp::Ordering::Greater => false,
+        };
+        let hashes_are_present =
+            prepared.content_hash != [0; 32] && current.content_hash != [0; 32];
+        [authority_is_exact, revision_is_covered, hashes_are_present]
+            .into_iter()
+            .all(|valid| valid)
     }
 
     pub(crate) fn seal_initial_inventory(
@@ -10702,6 +10744,13 @@ mod tests {
             },
         )
         .expect("prepare");
+        let conflicting_version = FleetRegistryVersion {
+            authority: version.authority.clone(),
+            revision: version.revision,
+            content_hash: [15; 32],
+        };
+        ComponentRegistryOps::begin_root_draining([13; 32], &conflicting_version, 14)
+            .expect_err("equal Registry revision with a different hash must fail closed");
         let existing_decision = TopLevelComponentAllocationDecision {
             allocation_sequence: 1,
             component: ComponentInstanceId::from_generated_bytes([10; 32]),
@@ -10720,8 +10769,14 @@ mod tests {
         )
         .expect("reserve before draining");
 
-        let draining =
-            ComponentRegistryOps::begin_root_draining([13; 32], &version, 14).expect("begin");
+        let current_version = FleetRegistryVersion {
+            authority: version.authority.clone(),
+            revision: version.revision + 2,
+            content_hash: [15; 32],
+        };
+        let draining = ComponentRegistryOps::begin_root_draining([13; 32], &current_version, 14)
+            .expect("begin after later mirror synchronization");
+        assert_eq!(draining.active_registry, current_version);
         assert_eq!(draining.next_allocation_sequence, 2);
         assert_eq!(draining.reserved_component_instances, 1);
         assert_eq!(draining.committed_component_instances, 0);
@@ -10735,12 +10790,13 @@ mod tests {
             draining
         );
         assert_eq!(
-            ComponentRegistryOps::begin_root_draining([13; 32], &version, 99).expect("exact retry"),
+            ComponentRegistryOps::begin_root_draining([13; 32], &current_version, 99)
+                .expect("exact retry"),
             draining
         );
         ComponentRegistryOps::root_draining([15; 32])
             .expect_err("status must bind the exact operation");
-        ComponentRegistryOps::begin_root_draining([15; 32], &version, 16)
+        ComponentRegistryOps::begin_root_draining([15; 32], &current_version, 16)
             .expect_err("different draining intent must conflict");
 
         let repeated = ComponentRegistryOps::reserve_allocation(

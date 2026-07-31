@@ -6,6 +6,8 @@
 
 mod mapper;
 
+#[cfg(test)]
+use crate::storage::stable::fleet_activation::FleetActivationData;
 use crate::{
     config::ComponentTopology,
     dto::fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
@@ -38,8 +40,8 @@ use crate::{
         ComponentDirectoryHeadRecord, ComponentDirectoryProvenanceRecord,
         ComponentRuntimeActivationRecord, ComponentRuntimeDirectoryAuthorityRecord,
         ComponentRuntimeDirectoryRecord, ComponentRuntimeRecord, FleetActivation,
-        FleetActivationData, FleetActivationEvidenceRecord, FleetActivationIdentityRecord,
-        FleetActivationRecord, FleetActivationStateRecord, FleetCascadeActivationEvidenceRecord,
+        FleetActivationEvidenceRecord, FleetActivationIdentityRecord, FleetActivationRecord,
+        FleetActivationStateRecord, FleetCascadeActivationEvidenceRecord,
         FleetCascadeManifestEntryRecord, FleetCredentialGenerationRefRecord,
         FleetCredentialManifestEntryRecord, FleetCredentialManifestRecord,
         FleetDirectoryProvenanceRecord, FleetDirectorySnapshotRecord, FleetRegistryVersionRecord,
@@ -138,14 +140,8 @@ impl FleetActivationOps {
         initialize_prepared(prepared, component_binding, application_init_args)
     }
 
+    #[cfg(test)]
     #[must_use]
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the activation snapshot remains staged for lifecycle persistence"
-        )
-    )]
     pub(crate) fn snapshot() -> FleetActivationData {
         FleetActivation::export()
     }

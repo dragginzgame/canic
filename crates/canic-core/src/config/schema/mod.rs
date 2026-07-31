@@ -250,15 +250,6 @@ impl ConfigModel {
         roles
     }
 
-    /// Return the App-scoped roles attached to topology.
-    #[must_use]
-    pub fn attached_app_roles(&self) -> BTreeSet<AppRoleRef> {
-        self.attached_roles()
-            .into_iter()
-            .map(|role| AppRoleRef::new(self.app.name.clone(), role))
-            .collect()
-    }
-
     /// Return the currently projected Fleet Directory role set.
     ///
     /// The Component-aware Fleet Registry projection replaces this transitional

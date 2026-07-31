@@ -1,6 +1,4 @@
-use super::super::model::{
-    ConfiguredPoolExpectation, DEFAULT_INITIAL_CYCLES, LOCAL_ROOT_MIN_READY_CYCLES,
-};
+use super::super::model::ConfiguredPoolExpectation;
 use canic_core::{
     bootstrap::compiled::{ComponentSpecConfig, ConfigModel},
     ids::CanisterRole,
@@ -20,22 +18,6 @@ impl ComponentRoleScope {
     const fn includes_root(self) -> bool {
         matches!(self, Self::Deployable)
     }
-}
-
-// Estimate local root create funding from all configured Component obligations.
-pub(in crate::release_set) fn configured_local_root_create_cycles_from_config(
-    config: &ConfigModel,
-) -> Option<u128> {
-    if !config.roles.contains_key(&CanisterRole::ROOT) {
-        return None;
-    }
-
-    let mut cycles = DEFAULT_INITIAL_CYCLES;
-    for component_spec in config.component_specs.values() {
-        cycles = cycles.saturating_add(component_spec.initial_cycles.to_u128());
-    }
-
-    Some(cycles.saturating_add(LOCAL_ROOT_MIN_READY_CYCLES))
 }
 
 // Enumerate configured pool identities across all Component Specs.

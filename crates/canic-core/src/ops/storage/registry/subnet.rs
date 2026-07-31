@@ -188,11 +188,6 @@ impl SubnetRegistryOps {
     }
 
     #[must_use]
-    pub fn has_role(role: &CanisterRole) -> bool {
-        Self::find_pid_for_role(role).is_some()
-    }
-
-    #[must_use]
     pub fn get_parent(pid: Principal) -> Option<Principal> {
         SubnetRegistry::get_parent(pid)
     }

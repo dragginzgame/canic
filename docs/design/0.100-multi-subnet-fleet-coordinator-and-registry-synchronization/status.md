@@ -6,10 +6,10 @@ Date: 2026-07-31
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.63`.
-- Latest published release: `v0.100.63` at
-  `3358a50dcc8b7e899c5ab569275be9849de4af1f`.
-- Open patch draft: `0.100.64`; no package-version change has been authorized.
+- Workspace package version: `0.100.65`.
+- Latest published release: `v0.100.65` at
+  `7a09657fa7043dabccb86f22a629a22dfbcecadb`.
+- Open patch draft: `0.100.66`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -139,7 +139,7 @@ Registry slices replace the 0.99 root model.
 - [x] Implement the initial atomic all-root `Active` transition.
 - [x] Begin root draining with a durable root-local top-level allocation cutoff.
 - [x] Publish root `Draining` through the Coordinator Registry.
-- [ ] Synchronize mixed-lifecycle Registry authority through root mirrors and
+- [x] Synchronize mixed-lifecycle Registry authority through root mirrors and
   Fleet Directories.
 - [ ] Implement root `Draining` and `Removed`.
 - [x] Install initial roots behind the runtime `Prepared` fence.
@@ -904,20 +904,31 @@ counter changes do not invalidate the frozen cutoff. No management effect,
 Coordinator status transition, Directory publication or new stable-memory ID
 occurs in this boundary.
 
-Open 0.100.65 publishes that exact local cutoff through one atomic Coordinator
-Registry `Active -> Draining` transition. The Coordinator validates the root,
-Subnet, topology, release set, current Registry and bounded inventory facts,
-then retains the exact request/response receipt in its existing stable domain.
-Lifecycle validation reconstructs genesis, ordered joins, activation and every
-draining publication before accepting the stored head. Exact retry survives
-restart and later revisions; conflicting root or operation authority fails
-closed. Root mirrors and Fleet Directories deliberately remain on the prior
-`Active` version for the next interruption boundary.
+Released 0.100.65 publishes that exact local cutoff through one atomic
+Coordinator Registry `Active -> Draining` transition. The Coordinator validates
+the root, Subnet, topology, release set, current Registry and bounded inventory
+facts, then retains the exact request/response receipt in its existing stable
+domain. Lifecycle validation reconstructs genesis, ordered joins, activation
+and every draining publication before accepting the stored head. Exact retry
+survives restart and later revisions; conflicting root or operation authority
+fails closed. Root mirrors and Fleet Directories deliberately remain on the
+prior `Active` version for the next interruption boundary.
+
+Open 0.100.66 completes that third boundary through the existing mirror
+activation endpoint. Complete later snapshots converge monotonically without
+requiring every intermediate revision, mixed `Active`/`Draining` Directories
+become current atomically with their Registry Mirror, and exact or stale retry
+returns the durable current version without regression. A root may accept its
+own `Draining` row only after its exact local cutoff is durable. Immutable
+initial Component Registry preparation remains bound to its original Registry
+while current operations require its exact same-revision hash or a later
+same-authority mirror, so synchronized lifecycle progress cannot reopen
+top-level allocation. The patch also hardens dead-code ownership without
+allocating a stable-memory domain or changing an endpoint shape, and removes
+the confirmed unreachable test-support and zero-consumer internal surfaces.
 
 ## Next Action
 
-Synchronize the Coordinator's mixed `Active`/`Draining` canonical snapshot into
-root mirrors and Fleet Directories without reopening allocation. Keep ordinary
-root removal gated until every local Component partition is absent, the Store
-is quiescent and an exact final root inventory exists; an unreachable root or
-Subnet is not removal evidence.
+Freeze the exact final Fleet Subnet Root inventory after every local Component
+partition is absent and the Store is quiescent, then use that authority for
+ordinary root removal. An unreachable root or Subnet is not removal evidence.

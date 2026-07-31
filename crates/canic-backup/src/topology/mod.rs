@@ -66,7 +66,7 @@ impl TopologyHasher {
 
     /// Build the stable canonical topology input used by `hash`.
     #[must_use]
-    pub fn canonical_input(records: &[TopologyRecord]) -> String {
+    fn canonical_input(records: &[TopologyRecord]) -> String {
         let mut rows = records.iter().map(canonical_row).collect::<Vec<_>>();
         rows.sort();
         rows.join("\n")

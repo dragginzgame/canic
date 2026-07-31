@@ -2,11 +2,11 @@ use super::artifact::{read_release_artifact, resolve_release_artifact_path};
 use super::config::{
     attach_app_role_source, configured_bootstrap_roles_from_config,
     configured_controllers_from_config, configured_deployable_roles_from_config,
-    configured_local_root_create_cycles_from_config, configured_pool_expectations_from_config,
-    configured_release_roles_from_config, configured_role_auto_create_from_config,
-    configured_role_details_from_config, configured_role_kinds_from_config,
-    configured_role_lifecycle_from_config, configured_role_metrics_profiles_from_config,
-    configured_role_topups_from_config, declare_app_role_source, rename_app_role_source,
+    configured_pool_expectations_from_config, configured_release_roles_from_config,
+    configured_role_auto_create_from_config, configured_role_details_from_config,
+    configured_role_kinds_from_config, configured_role_lifecycle_from_config,
+    configured_role_metrics_profiles_from_config, configured_role_topups_from_config,
+    declare_app_role_source, rename_app_role_source,
 };
 use super::{
     ArtifactRootError, app_sources_root, artifact_root_path, config_path, plan_attach_app_role,

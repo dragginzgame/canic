@@ -103,7 +103,7 @@ pub(super) fn activate_and_verify_fleet_subnet_root_registry_mirrors(
             .journal
             .fleet_subnet_root
             .ok_or(RootRegistryMirrorActivationError::LiveEvidenceMismatch)?;
-        let directory = FleetRegistryOps::active_directory_for_root(
+        let directory = FleetRegistryOps::directory_for_root(
             &current.journal.authority,
             &component_topology,
             request.active_registry,

@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 pub(super) const DEFAULT_INITIAL_CYCLES: u128 = 5_000_000_000_000;
-pub const LOCAL_ROOT_MIN_READY_CYCLES: u128 = 100_000_000_000_000;
 
 ///
 /// ConfiguredPoolExpectation

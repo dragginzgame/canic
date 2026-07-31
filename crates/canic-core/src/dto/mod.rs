@@ -53,7 +53,6 @@ pub mod rpc;
 pub mod runtime;
 pub mod state;
 pub mod topology;
-pub mod validation;
 
 ///
 /// Prelude

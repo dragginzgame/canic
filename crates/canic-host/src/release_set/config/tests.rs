@@ -154,33 +154,6 @@ fn loaded_snapshot_keeps_one_validated_file_state_across_projections() {
 }
 
 #[test]
-fn root_cycle_projection_includes_multiple_components() {
-    let root = temp_root("multiple-components");
-    fs::create_dir_all(&root).expect("create temp root");
-    let config_path = root.join("canic.toml");
-    let source = format!(
-        "{CONFIG}\n\
-         [roles.worker]\n\
-         kind = \"canister\"\n\
-         package = \"worker\"\n\n\
-         [component_specs.secondary]\n\
-         component_role = \"worker\"\n\
-         maximum_instances = 1\n\
-         initial_cycles = \"2T\"\n"
-    );
-    fs::write(&config_path, source).expect("write multi-Component config");
-
-    let snapshot = AppConfigSnapshot::load(&config_path).expect("load multi-Component config");
-    assert_eq!(snapshot.component_topology().component_specs.len(), 1);
-    let cycles = snapshot
-        .local_root_create_cycles()
-        .expect("all Components should contribute to root funding");
-    assert!(cycles >= 2_000_000_000_000);
-
-    fs::remove_dir_all(root).expect("remove temp root");
-}
-
-#[test]
 fn app_mutation_failures_are_classified_without_rendered_text() {
     assert!(matches!(
         declare_app_role_source(CONFIG, "demo", "bad role", "store")

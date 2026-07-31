@@ -43,7 +43,6 @@ use canic_core::{
         ops::{
             component_runtime::ComponentRuntimeOps,
             config::ConfigOps,
-            fleet_registry::FleetRegistryOps,
             ic::{
                 IcOps,
                 call::CallOps,
@@ -120,10 +119,7 @@ use canic_core::{
         },
         error::Error,
         fleet_activation::FleetActivationPhase,
-        fleet_registry::{
-            FleetDirectorySnapshot, FleetRegistryVersion, FleetSubnetRootEntry,
-            FleetSubnetRootStatus,
-        },
+        fleet_registry::{FleetDirectorySnapshot, FleetRegistryVersion, FleetSubnetRootStatus},
         root_store::{RootStoreBootstrapRequest, RootStoreBootstrapResponse},
     },
     ids::{
@@ -437,7 +433,11 @@ pub async fn prepare(
 ) -> Result<RootComponentRegistryStatusResponse, InternalError> {
     let (authority, root) = root_authority()?;
     root_store::status(request.store_bootstrap.clone()).await?;
-    validate_active_authority(&authority, root, &request)?;
+    if ComponentRegistryOps::current().is_some() {
+        validate_current_mirror_authority(&authority, root, &request)?;
+    } else {
+        validate_preparation_authority(&authority, root, &request)?;
+    }
 
     let prepared = ComponentRegistryOps::prepare(
         authority.binding,
@@ -454,7 +454,7 @@ pub async fn status(
 ) -> Result<RootComponentRegistryStatusResponse, InternalError> {
     let (authority, root) = root_authority()?;
     root_store::status(request.store_bootstrap.clone()).await?;
-    validate_active_authority(&authority, root, &request)?;
+    validate_current_mirror_authority(&authority, root, &request)?;
 
     let prepared = ComponentRegistryOps::current().ok_or_else(|| {
         InternalError::unavailable("root Component Registry authority has not been prepared")
@@ -484,7 +484,7 @@ pub async fn reserve_allocation(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    validate_active_authority(&authority, root, &preparation_request)?;
+    validate_current_mirror_authority(&authority, root, &preparation_request)?;
 
     let provisioning_origin = ComponentProvisioningOrigin::FleetAdministrator {
         caller: IcOps::msg_caller(),
@@ -566,7 +566,7 @@ pub async fn reserve_child_allocation(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    validate_active_authority(&authority, root, &preparation_request)?;
+    validate_current_mirror_authority(&authority, root, &preparation_request)?;
 
     let caller = IcOps::msg_caller();
     let topology = ConfigOps::component_topology()?;
@@ -693,7 +693,8 @@ pub async fn begin_component_draining(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    let fleet_directory = validate_active_authority(&authority, root, &preparation_request)?;
+    let fleet_directory =
+        validate_current_mirror_authority(&authority, root, &preparation_request)?;
     if FleetActivationApi::status()
         .map_err(InternalError::public)?
         .phase
@@ -790,16 +791,11 @@ pub async fn quiesce_component(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    let fleet_directory = validate_active_authority(&authority, root, &preparation_request)?;
-    if FleetActivationApi::status()
-        .map_err(InternalError::public)?
-        .phase
-        != FleetActivationPhase::Active
-    {
-        return Err(InternalError::unavailable(
-            "Component quiescence requires an Active Fleet Subnet Root runtime",
-        ));
-    }
+    let fleet_directory =
+        validate_current_mirror_authority(&authority, root, &preparation_request)?;
+    require_active_root_runtime(
+        "Component quiescence requires an Active Fleet Subnet Root runtime",
+    )?;
 
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
@@ -1113,7 +1109,8 @@ async fn prepared_component_draining_boundary(
         expected_fleet_registry: prepared.prepared_against_registry,
     };
     let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    let fleet_directory = validate_active_authority(&authority, root, &preparation_request)?;
+    let fleet_directory =
+        validate_current_mirror_authority(&authority, root, &preparation_request)?;
     if FleetActivationApi::status()
         .map_err(InternalError::public)?
         .phase
@@ -1325,7 +1322,7 @@ pub async fn begin_subtree_removal(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    validate_active_authority(&authority, root, &preparation_request)?;
+    validate_current_mirror_authority(&authority, root, &preparation_request)?;
     if FleetActivationApi::status()
         .map_err(InternalError::public)?
         .phase
@@ -1396,7 +1393,7 @@ pub async fn advance_subtree_removal(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    validate_active_authority(&authority, root, &preparation_request)?;
+    validate_current_mirror_authority(&authority, root, &preparation_request)?;
     if FleetActivationApi::status()
         .map_err(InternalError::public)?
         .phase
@@ -1454,7 +1451,7 @@ pub async fn prepare_subtree_leaf_stop(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    validate_active_authority(&authority, root, &preparation_request)?;
+    validate_current_mirror_authority(&authority, root, &preparation_request)?;
     if FleetActivationApi::status()
         .map_err(InternalError::public)?
         .phase
@@ -1514,7 +1511,7 @@ pub async fn stop_subtree_leaf(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    validate_active_authority(&authority, root, &preparation_request)?;
+    validate_current_mirror_authority(&authority, root, &preparation_request)?;
     if FleetActivationApi::status()
         .map_err(InternalError::public)?
         .phase
@@ -1608,7 +1605,7 @@ pub async fn prepare_subtree_leaf_delete(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    validate_active_authority(&authority, root, &preparation_request)?;
+    validate_current_mirror_authority(&authority, root, &preparation_request)?;
     if FleetActivationApi::status()
         .map_err(InternalError::public)?
         .phase
@@ -1668,7 +1665,7 @@ pub async fn delete_subtree_leaf(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    validate_active_authority(&authority, root, &preparation_request)?;
+    validate_current_mirror_authority(&authority, root, &preparation_request)?;
     if FleetActivationApi::status()
         .map_err(InternalError::public)?
         .phase
@@ -1761,7 +1758,8 @@ pub async fn remove_subtree_leaf_membership(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    let fleet_directory = validate_active_authority(&authority, root, &preparation_request)?;
+    let fleet_directory =
+        validate_current_mirror_authority(&authority, root, &preparation_request)?;
     if FleetActivationApi::status()
         .map_err(InternalError::public)?
         .phase
@@ -1827,7 +1825,8 @@ pub async fn synchronize_subtree_leaf_directory(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    let fleet_directory = validate_active_authority(&authority, root, &preparation_request)?;
+    let fleet_directory =
+        validate_current_mirror_authority(&authority, root, &preparation_request)?;
     if FleetActivationApi::status()
         .map_err(InternalError::public)?
         .phase
@@ -1947,7 +1946,7 @@ pub async fn finalize_subtree_leaf(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    validate_active_authority(&authority, root, &preparation_request)?;
+    validate_current_mirror_authority(&authority, root, &preparation_request)?;
     if FleetActivationApi::status()
         .map_err(InternalError::public)?
         .phase
@@ -2029,7 +2028,7 @@ pub async fn create_child_allocation(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    validate_active_authority(&authority, root, &preparation_request)?;
+    validate_current_mirror_authority(&authority, root, &preparation_request)?;
     if FleetActivationApi::status()
         .map_err(InternalError::public)?
         .phase
@@ -2078,7 +2077,7 @@ pub async fn create_allocation(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    validate_active_authority(&authority, root, &preparation_request)?;
+    validate_current_mirror_authority(&authority, root, &preparation_request)?;
 
     let topology = ConfigOps::component_topology()?;
     let allocation = ComponentRegistryOps::allocation(request.operation_id).ok_or_else(|| {
@@ -2108,7 +2107,7 @@ pub async fn install_allocation(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    validate_active_authority(&authority, root, &preparation_request)?;
+    validate_current_mirror_authority(&authority, root, &preparation_request)?;
 
     let topology = ConfigOps::component_topology()?;
     let allocation = ComponentRegistryOps::allocation(request.operation_id).ok_or_else(|| {
@@ -2138,7 +2137,7 @@ pub async fn install_child_allocation(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    validate_active_authority(&authority, root, &preparation_request)?;
+    validate_current_mirror_authority(&authority, root, &preparation_request)?;
     if FleetActivationApi::status()
         .map_err(InternalError::public)?
         .phase
@@ -2188,7 +2187,8 @@ pub async fn commit_child_allocation(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    let fleet_directory = validate_active_authority(&authority, root, &preparation_request)?;
+    let fleet_directory =
+        validate_current_mirror_authority(&authority, root, &preparation_request)?;
     if FleetActivationApi::status()
         .map_err(InternalError::public)?
         .phase
@@ -2464,7 +2464,8 @@ pub async fn commit_allocation(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    let fleet_directory = validate_active_authority(&authority, root, &preparation_request)?;
+    let fleet_directory =
+        validate_current_mirror_authority(&authority, root, &preparation_request)?;
 
     let topology = ConfigOps::component_topology()?;
     let allocation = ComponentRegistryOps::allocation(request.operation_id).ok_or_else(|| {
@@ -2688,7 +2689,7 @@ pub async fn seal_root_activation_inventory(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    validate_active_authority(&authority, root, &preparation_request)?;
+    validate_current_mirror_authority(&authority, root, &preparation_request)?;
     let plan = ComponentRegistryOps::seal_initial_inventory(
         fleet_activation_operation_id,
         IcOps::now_nanos(),
@@ -3865,7 +3866,8 @@ async fn prepared_component_runtime_plan(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    let fleet_directory = validate_active_authority(&root_authority, root, &preparation_request)?;
+    let fleet_directory =
+        validate_current_mirror_authority(&root_authority, root, &preparation_request)?;
     let topology = ConfigOps::component_topology()?;
     let allocation = ComponentRegistryOps::allocation(operation_id).ok_or_else(|| {
         InternalError::unavailable("Component allocation operation has not been reserved")
@@ -3934,7 +3936,8 @@ async fn prepared_child_runtime_plan(
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
     let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    let fleet_directory = validate_active_authority(&root_authority, root, &preparation_request)?;
+    let fleet_directory =
+        validate_current_mirror_authority(&root_authority, root, &preparation_request)?;
     if FleetActivationApi::status()
         .map_err(InternalError::public)?
         .phase
@@ -4852,65 +4855,41 @@ fn prepared_registry(
     Ok(prepared)
 }
 
-fn validate_active_authority(
+fn validate_preparation_authority(
     authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
     root: candid::Principal,
     request: &RootComponentRegistryPreparationRequest,
 ) -> Result<FleetDirectorySnapshot, InternalError> {
-    let active = FleetRegistryMirrorOps::current().active.ok_or_else(|| {
-        InternalError::unavailable("root has no active Fleet Registry Mirror and Directory")
-    })?;
-    if active.snapshot.version != request.expected_fleet_registry {
+    let mirror = FleetRegistryMirrorOps::validated_current(authority, root)?;
+    let target_is_exact = mirror.active.snapshot.version == request.expected_fleet_registry;
+    let root_is_active = mirror.root_entry.status == FleetSubnetRootStatus::Active;
+    if !target_is_exact || !root_is_active {
         return Err(InternalError::conflict(
-            "active root Registry Mirror differs from Component Registry preparation authority",
+            "Component Registry preparation requires this root's exact Active mirror authority",
         ));
     }
+    Ok(mirror.active.directory)
+}
 
-    let topology = ConfigOps::component_topology()?;
-    FleetRegistryOps::validate(
-        &authority.binding.authority,
-        &topology,
-        &active.snapshot.registry,
-    )?;
-    let manifest = FleetRegistryOps::manifest(
-        &authority.binding.authority,
-        &topology,
-        &active.snapshot.registry,
-    )?;
-    let version = FleetRegistryOps::version(
-        &authority.binding.authority,
-        &topology,
-        &active.snapshot.registry,
-    )?;
-    let expected_entry = FleetSubnetRootEntry {
-        placement_subnet: authority.binding.placement_subnet,
-        fleet_subnet_root: root,
-        component_admissions: authority.binding.component_admissions.clone(),
-        component_topology_digest: authority.binding.component_topology_digest,
-        active_release_set: authority.initial_release_set,
-        limits: authority.binding.limits.clone(),
-        status: FleetSubnetRootStatus::Active,
-    };
-    let directory = FleetRegistryOps::active_directory_for_root(
-        &authority.binding.authority,
-        &topology,
-        &active.snapshot.registry,
-        root,
-    )?;
-    let snapshot_matches =
-        active.snapshot.manifest == manifest && active.snapshot.version == version;
-    let root_is_active = active
-        .snapshot
-        .registry
-        .fleet_subnet_roots
-        .iter()
-        .any(|entry| entry == &expected_entry);
-    if !snapshot_matches || !root_is_active || active.directory != directory {
-        return Err(InternalError::invalid_input(
-            "active root Registry Mirror or Fleet Directory differs from protected authority",
+fn validate_current_mirror_authority(
+    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    root: candid::Principal,
+    request: &RootComponentRegistryPreparationRequest,
+) -> Result<FleetDirectorySnapshot, InternalError> {
+    let mirror = FleetRegistryMirrorOps::validated_current(authority, root)?;
+    let prepared = &request.expected_fleet_registry;
+    let current = &mirror.active.snapshot.version;
+    let preparation_is_covered =
+        ComponentRegistryOps::registry_covers_preparation(prepared, current);
+    if !preparation_is_covered {
+        return Err(InternalError::conflict(
+            "current root Registry Mirror does not cover Component Registry preparation authority",
         ));
     }
-    Ok(directory)
+    if mirror.root_entry.status == FleetSubnetRootStatus::Draining {
+        ComponentRegistryOps::validate_published_root_draining(current)?;
+    }
+    Ok(mirror.active.directory)
 }
 
 fn root_authority() -> Result<
@@ -4928,6 +4907,17 @@ fn root_authority() -> Result<
         ));
     }
     Ok((authority, root))
+}
+
+fn require_active_root_runtime(unavailable_message: &'static str) -> Result<(), InternalError> {
+    if FleetActivationApi::status()
+        .map_err(InternalError::public)?
+        .phase
+        != FleetActivationPhase::Active
+    {
+        return Err(InternalError::unavailable(unavailable_message));
+    }
+    Ok(())
 }
 
 fn response(

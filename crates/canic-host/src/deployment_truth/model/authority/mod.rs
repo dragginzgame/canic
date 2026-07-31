@@ -84,7 +84,6 @@ pub enum AuthorityActionV1 {
     RemoveControllers,
     ReplaceControllerSet,
     RequiresExternalController,
-    RequiresDestructiveImportConfirmation,
     ObserveOnly,
     AdoptPlanAvailable,
     BlockedByPolicy,
