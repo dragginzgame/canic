@@ -11,7 +11,7 @@ use crate::{
     },
     view::component_registry::{
         RootComponentRegistryView, RootFleetSubnetDrainingView, RootFleetSubnetFinalInventoryView,
-        RootFleetSubnetRemovalPublicationView,
+        RootFleetSubnetRemovalPublicationView, RootFleetSubnetStoreReclamationView,
     },
     workflow::{
         bootstrap::root_store, runtime::template::publication::WasmStorePublicationWorkflow,
@@ -35,6 +35,8 @@ use canic_core::{
             FleetSubnetRootDrainingStatusRequest, FleetSubnetRootFinalInventoryRequest,
             FleetSubnetRootFinalInventoryResponse, FleetSubnetRootFinalInventoryStatusRequest,
             FleetSubnetRootRemovalRequest, FleetSubnetRootRemovalStatusRequest,
+            FleetSubnetRootStoreReclamationRequest, FleetSubnetRootStoreReclamationResponse,
+            FleetSubnetRootStoreReclamationStatusRequest,
         },
     },
     ids::{FleetSubnetRootBinding, FleetSubnetRootReleaseSet},
@@ -214,6 +216,67 @@ pub fn removal_status(
     removal_publication_response(publication, inventory)
 }
 
+/// Reclaim the retained Store only after exact logical root removal is durable.
+pub async fn reclaim_store(
+    request: FleetSubnetRootStoreReclamationRequest,
+) -> Result<FleetSubnetRootStoreReclamationResponse, InternalError> {
+    let state = validated_root_state()?;
+    let inventory = removed_root_inventory(request.operation_id)?;
+    if request.expected_final_inventory_hash != inventory.inventory_hash {
+        return Err(InternalError::conflict(
+            "Fleet Subnet Root Store reclamation names a different final inventory",
+        ));
+    }
+    if let Some(existing) =
+        ComponentRegistryOps::root_store_reclamation_if_present(request.operation_id)?
+    {
+        return Ok(store_reclamation_response(existing));
+    }
+
+    let intent =
+        ComponentRegistryOps::root_store_reclamation_intent_if_present(request.operation_id)?;
+    if let Some(intent) = intent {
+        let intent_is_exact = [
+            intent.final_inventory_hash == request.expected_final_inventory_hash,
+            intent.wasm_store == inventory.wasm_store,
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !intent_is_exact {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root Store reclamation differs from its durable intent",
+            ));
+        }
+    } else {
+        verify_store_before_reclamation(&state, &inventory).await?;
+        ComponentRegistryOps::begin_root_store_reclamation(
+            request.operation_id,
+            request.expected_final_inventory_hash,
+            IcOps::now_nanos(),
+        )?;
+    }
+
+    let evidence = WasmStorePublicationWorkflow::reclaim_single_root_store(&inventory).await?;
+    ComponentRegistryOps::record_root_store_reclamation(
+        request.operation_id,
+        evidence,
+        IcOps::now_nanos(),
+    )
+    .map(store_reclamation_response)
+}
+
+/// Read one durable Store-reclamation receipt without inter-Canister calls.
+pub fn store_reclamation_status(
+    request: FleetSubnetRootStoreReclamationStatusRequest,
+) -> Result<FleetSubnetRootStoreReclamationResponse, InternalError> {
+    let _state = validated_root_state()?;
+    ComponentRegistryOps::root_store_reclamation_if_present(request.operation_id)?
+        .ok_or_else(|| {
+            InternalError::unavailable("Fleet Subnet Root Store reclamation is not complete")
+        })
+        .map(store_reclamation_response)
+}
+
 /// Return one compact, fail-closed inventory for this active Fleet Subnet Root.
 pub fn canister_summary() -> Result<FleetSubnetRootCanisterSummary, InternalError> {
     let state = validated_root_state()?;
@@ -335,6 +398,50 @@ fn ensure_root_is_published_draining(
     if state.root_entry.status != FleetSubnetRootStatus::Draining {
         return Err(InternalError::conflict(
             "Fleet Subnet Root final inventory requires a published Draining Registry entry",
+        ));
+    }
+    Ok(())
+}
+
+fn removed_root_inventory(
+    operation_id: [u8; 32],
+) -> Result<RootFleetSubnetFinalInventoryView, InternalError> {
+    let publication = ComponentRegistryOps::root_removal_publication_if_present(operation_id)?
+        .ok_or_else(|| {
+            InternalError::unavailable("Fleet Subnet Root logical removal has not been published")
+        })?;
+    let inventory = ComponentRegistryOps::root_final_inventory(operation_id)?;
+    if publication.final_inventory_hash != inventory.inventory_hash {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root removal publication differs from retained final inventory",
+        ));
+    }
+    Ok(inventory)
+}
+
+async fn verify_store_before_reclamation(
+    state: &ValidatedFleetSubnetRootState,
+    inventory: &RootFleetSubnetFinalInventoryView,
+) -> Result<(), InternalError> {
+    let (wasm_store, store_status) =
+        WasmStorePublicationWorkflow::verify_single_root_store_for_removal().await?;
+    let store = root_store::status(state.component_registry.store_bootstrap.clone()).await?;
+    if store.wasm_store != wasm_store {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "verified reclamation Store differs from the exact root release-set catalog",
+        ));
+    }
+    let verified = ComponentRegistryOps::verify_root_final_inventory_store(
+        inventory.operation_id,
+        &store,
+        &store_status,
+    )?;
+    if &verified != inventory {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "verified reclamation Store differs from retained final inventory",
         ));
     }
     Ok(())
@@ -482,6 +589,27 @@ fn removal_publication_response(
         previous_version: publication.previous_registry,
         version: publication.registry,
     })
+}
+
+const fn store_reclamation_response(
+    view: RootFleetSubnetStoreReclamationView,
+) -> FleetSubnetRootStoreReclamationResponse {
+    FleetSubnetRootStoreReclamationResponse {
+        operation_id: view.operation_id,
+        fleet_subnet_root: view.fleet_subnet_root,
+        wasm_store: view.wasm_store,
+        final_inventory_hash: view.final_inventory_hash,
+        reclaimed_store_bytes: view.reclaimed_store_bytes,
+        reclaimed_catalog_entries: view.reclaimed_catalog_entries,
+        reclaimed_template_count: view.reclaimed_template_count,
+        reclaimed_release_count: view.reclaimed_release_count,
+        gc_prepared_at_secs: view.gc_prepared_at_secs,
+        gc_started_at_secs: view.gc_started_at_secs,
+        gc_completed_at_secs: view.gc_completed_at_secs,
+        gc_runs_completed: view.gc_runs_completed,
+        completed_at_ns: view.completed_at_ns,
+        reclamation_hash: view.reclamation_hash,
+    }
 }
 
 #[cfg(test)]

@@ -129,6 +129,48 @@ pub struct FleetSubnetRootRemovalStatusRequest {
 }
 
 ///
+/// FleetSubnetRootStoreReclamationRequest
+///
+/// Controller command reclaiming the retained Store after exact logical root removal.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootStoreReclamationRequest {
+    pub operation_id: [u8; 32],
+    pub expected_final_inventory_hash: [u8; 32],
+}
+
+/// Read-only lookup key for one durable root Store-reclamation receipt.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootStoreReclamationStatusRequest {
+    pub operation_id: [u8; 32],
+}
+
+///
+/// FleetSubnetRootStoreReclamationResponse
+///
+/// Durable proof that the logically removed root's retained Store completed exact GC.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootStoreReclamationResponse {
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+    pub wasm_store: Principal,
+    pub final_inventory_hash: [u8; 32],
+    pub reclaimed_store_bytes: u64,
+    pub reclaimed_catalog_entries: u32,
+    pub reclaimed_template_count: u32,
+    pub reclaimed_release_count: u32,
+    pub gc_prepared_at_secs: u64,
+    pub gc_started_at_secs: u64,
+    pub gc_completed_at_secs: u64,
+    pub gc_runs_completed: u32,
+    pub completed_at_ns: u64,
+    pub reclamation_hash: [u8; 32],
+}
+
+///
 /// FleetSubnetRootFinalInventoryResponse
 ///
 /// Exact terminal Component history and retained write-fenced Store authority.
@@ -307,6 +349,43 @@ mod tests {
         assert_candid_round_trip(&removal_status);
         assert_candid_round_trip(&coordinator_request);
         assert_candid_round_trip(&coordinator_response);
+
+        let reclamation_request = FleetSubnetRootStoreReclamationRequest {
+            operation_id: coordinator_response.final_inventory.operation_id,
+            expected_final_inventory_hash: coordinator_response.final_inventory.inventory_hash,
+        };
+        let reclamation_status = FleetSubnetRootStoreReclamationStatusRequest {
+            operation_id: reclamation_request.operation_id,
+        };
+        let reclamation_response = FleetSubnetRootStoreReclamationResponse {
+            operation_id: reclamation_request.operation_id,
+            fleet_subnet_root: coordinator_response.final_inventory.fleet_subnet_root,
+            wasm_store: coordinator_response.final_inventory.wasm_store,
+            final_inventory_hash: reclamation_request.expected_final_inventory_hash,
+            reclaimed_store_bytes: coordinator_response
+                .final_inventory
+                .wasm_store_occupied_bytes,
+            reclaimed_catalog_entries: coordinator_response
+                .final_inventory
+                .wasm_store_catalog_entries,
+            reclaimed_template_count: coordinator_response
+                .final_inventory
+                .wasm_store_template_count,
+            reclaimed_release_count: coordinator_response
+                .final_inventory
+                .wasm_store_release_count,
+            gc_prepared_at_secs: coordinator_response
+                .final_inventory
+                .wasm_store_gc_prepared_at_secs,
+            gc_started_at_secs: 30,
+            gc_completed_at_secs: 31,
+            gc_runs_completed: 1,
+            completed_at_ns: 32,
+            reclamation_hash: [33; 32],
+        };
+        assert_candid_round_trip(&reclamation_request);
+        assert_candid_round_trip(&reclamation_status);
+        assert_candid_round_trip(&reclamation_response);
     }
 
     fn assert_candid_round_trip<T>(value: &T)

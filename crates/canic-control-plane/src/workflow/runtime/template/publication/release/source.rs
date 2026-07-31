@@ -1,9 +1,12 @@
 use crate::{
     dto::template::{TemplateChunkSetInfoResponse, TemplateManifestResponse},
     ops::storage::template::TemplateChunkedOps,
-    workflow::runtime::template::publication::{
-        WasmStorePublicationWorkflow,
-        store::{local_chunk, store_chunk, store_chunk_set_info},
+    workflow::runtime::template::{
+        publication::{
+            WasmStorePublicationWorkflow,
+            store::{local_chunk, store_chunk, store_chunk_set_info},
+        },
+        record_wasm_store_metric,
     },
 };
 use canic_core::api::lifecycle::metrics::{
@@ -13,9 +16,7 @@ use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{error::InternalError, ops::cost_guard::CostGuardPermit};
 
 use super::super::super::{WASM_STORE_BOOTSTRAP_BINDING, store_pid_for_binding};
-use super::metrics::{
-    WasmStorePublicationError, record_wasm_store_metric, record_wasm_store_publish_failed,
-};
+use super::metrics::{WasmStorePublicationError, record_wasm_store_publish_failed};
 
 impl WasmStorePublicationWorkflow {
     // Resolve the source store pid for one manifest-backed release, if it is store-backed.

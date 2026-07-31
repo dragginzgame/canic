@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.69`.
-- The latest published release is `v0.100.69` at
-  `c333ccbf636b2be19a88b13e56898e28fab9553b`.
-- Open `0.100.70` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.70`.
+- The latest published release is `v0.100.70` at
+  `b0ee505e33c05d23ca0e21ebefb26140e5926518`.
+- Open `0.100.71` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -577,15 +577,24 @@ Historical detail is archived at:
   Registry revision. It performs no Store reclamation or physical Canister
   deletion and adds no memory ID. The same release centralizes duplicated
   host/CLI utilities under their existing owners.
-- Open `0.100.70` qualifies the existing snapshot-convergent mirror boundary
+- Released `0.100.70` qualifies the existing snapshot-convergent mirror boundary
   after logical root removal. A surviving current root fetches the complete
   canonical Registry and atomically activates a matching Fleet Directory that
   retains the exact `Removed` tombstone, while the removed root is forbidden as
-  a later Coordinator snapshot or Directory source. The same open patch
+  a later Coordinator snapshot or Directory source. The same release
   hard-cuts unused core surfaces and consolidates endpoint fallibility,
   blob-billing conversion and local cycles-balance logic under their existing
   owners. Physical Store reclamation and infrastructure Canister deletion
   remain later explicit boundaries.
+- Open `0.100.71` adds durable Store reclamation after exact logical root
+  removal. The root reverifies its sole retained Store before committing a
+  pre-effect intent, resumes exact GC progress through `Prepared`,
+  `InProgress`, interrupted `Clearing` or `Complete`, and commits a terminal
+  response-idempotent receipt only for one completed run with zero bytes and an
+  empty catalog. The Store/root Canisters and active Store binding remain
+  present; binding finalization and physical deletion are later boundaries.
+  The same open draft retains the compatible replay, evidence, CLI ICP target
+  and Store publication-metric owner consolidation already in progress.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -2034,7 +2043,7 @@ surviving owning Component and distinct retained immediate parent. It
 reconciles uncertain synchronization calls, independently re-observes both
 recipients and commits one bounded `DirectorySynchronized` receipt with shared
 covered Registry authority plus exact recipient runtime evidence.
-The same open patch advances `ic-memory` to `0.12.3`, adopts its validated v1
+The same release advances `ic-memory` to `0.12.3`, adopts its validated v1
 Canic policy identity and preserves the existing Canic memory-ledger boundary
 by projecting only successfully measured per-slot sizes. The upstream durable
 allocation-ledger format, Canic stable keys and memory IDs do not change.
@@ -2129,14 +2138,24 @@ Released `v0.100.68` centralizes identical Fleet-install ICP context
 construction without changing command, authority, journal or public contract
 behavior. Nine redundant host functions and 87 net lines are removed.
 
-Open `0.100.69` revalidates that exact final receipt against the retained live
+Released `0.100.69` revalidates that exact final receipt against the retained live
 Store, authenticates the root's own Coordinator call and atomically publishes
 the root as Registry `Removed` with durable exact replay at both Canisters. The
-same open patch centralizes the completed host/CLI utility hardening pass.
+same release centralizes the completed host/CLI utility hardening pass.
 
-Next, converge surviving mirrors on the `Removed` Registry and freeze the
-destructive Store-reclamation and physical root-deletion sequence. Neither an
-unreachable root nor a Subnet failure is removal evidence.
+Released `0.100.70` converges surviving roots on the later canonical Registry
+containing an exact `Removed` peer and hard-cuts the confirmed unused and
+redundant core surfaces from the focused module-hardening pass.
+
+Open `0.100.71` continues that cleanup by consolidating replay-response
+encoding, evidence success classification, shared CLI ICP target context and
+Wasm Store metric forwarding under existing owners. It also durably reclaims
+the retained Store after exact logical removal, accepting only one completed GC
+run with zero bytes and an empty catalog while leaving both infrastructure
+Canisters installed. Next, hard-cut the active Store binding under that receipt
+and freeze physical Store deletion as its own interruption boundary; root
+deletion remains later. Neither an unreachable root nor a Subnet failure is
+deletion evidence.
 
 ## Historical Release Detail
 

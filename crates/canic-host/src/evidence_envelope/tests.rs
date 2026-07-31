@@ -15,6 +15,9 @@ fn exit_class_serializes_to_snake_case() {
         Some(ExitClassV1::SuccessWithWarnings)
     );
     assert_eq!(ExitClassV1::from_label("success-ish"), None);
+    assert!(ExitClassV1::Success.is_success());
+    assert!(ExitClassV1::SuccessWithWarnings.is_success());
+    assert!(!ExitClassV1::BlockedByPolicy.is_success());
 }
 
 #[test]

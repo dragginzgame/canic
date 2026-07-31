@@ -458,7 +458,7 @@ pub(super) fn icp_refill_payload_hash(
 fn encode_icp_refill_replay_response(
     response: &IcpRefillResponse,
 ) -> Result<Vec<u8>, InternalError> {
-    replay_ops::encode_icp_refill_replay_response(response).map_err(|err| match err {
+    replay_ops::encode_replay_response(response).map_err(|err| match err {
         replay_ops::ReplayCommitError::EncodeFailed(message) => InternalError::workflow(
             InternalErrorOrigin::Workflow,
             format!("failed to encode ICP refill replay response: {message}"),

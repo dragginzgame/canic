@@ -472,7 +472,7 @@ fn map_pool_create_empty_replay_store_error(err: ReplayReceiptStoreError) -> Int
 fn encode_pool_create_empty_response(
     response: &PoolAdminResponse,
 ) -> Result<Vec<u8>, InternalError> {
-    replay_ops::encode_pool_create_empty_replay_response(response).map_err(|err| match err {
+    replay_ops::encode_replay_response(response).map_err(|err| match err {
         replay_ops::ReplayCommitError::EncodeFailed(message) => InternalError::workflow(
             InternalErrorOrigin::Workflow,
             format!("failed to encode pool create-empty replay response: {message}"),

@@ -15,6 +15,8 @@ use canic_core::{
         FleetSubnetRootFinalInventoryRequest, FleetSubnetRootFinalInventoryResponse,
         FleetSubnetRootFinalInventoryStatusRequest, FleetSubnetRootInitArgs,
         FleetSubnetRootRemovalRequest, FleetSubnetRootRemovalStatusRequest,
+        FleetSubnetRootStoreReclamationRequest, FleetSubnetRootStoreReclamationResponse,
+        FleetSubnetRootStoreReclamationStatusRequest,
     },
     dto::{
         component_registry::{
@@ -139,6 +141,20 @@ impl LifecycleApi {
         request: FleetSubnetRootRemovalStatusRequest,
     ) -> Result<FleetSubnetRootRemovalPublicationResponse, canic_core::dto::error::Error> {
         crate::workflow::fleet_subnet_root::removal_status(request).map_err(Into::into)
+    }
+
+    pub async fn reclaim_fleet_subnet_root_store(
+        request: FleetSubnetRootStoreReclamationRequest,
+    ) -> Result<FleetSubnetRootStoreReclamationResponse, canic_core::dto::error::Error> {
+        crate::workflow::fleet_subnet_root::reclaim_store(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub fn fleet_subnet_root_store_reclamation_status(
+        request: FleetSubnetRootStoreReclamationStatusRequest,
+    ) -> Result<FleetSubnetRootStoreReclamationResponse, canic_core::dto::error::Error> {
+        crate::workflow::fleet_subnet_root::store_reclamation_status(request).map_err(Into::into)
     }
 
     pub async fn synchronize_fleet_registry(

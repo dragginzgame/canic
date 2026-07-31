@@ -212,6 +212,11 @@ pub enum ExitClassV1 {
 
 impl ExitClassV1 {
     #[must_use]
+    pub const fn is_success(self) -> bool {
+        matches!(self, Self::Success | Self::SuccessWithWarnings)
+    }
+
+    #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
             Self::Success => "success",

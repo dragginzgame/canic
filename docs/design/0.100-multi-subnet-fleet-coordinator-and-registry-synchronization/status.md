@@ -6,10 +6,10 @@ Date: 2026-07-31
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.65`.
-- Latest published release: `v0.100.65` at
-  `7a09657fa7043dabccb86f22a629a22dfbcecadb`.
-- Open patch draft: `0.100.66`; no package-version change has been authorized.
+- Workspace package version: `0.100.70`.
+- Latest published release: `v0.100.70` at
+  `b0ee505e33c05d23ca0e21ebefb26140e5926518`.
+- Open patch draft: `0.100.71`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -914,21 +914,36 @@ survives restart and later revisions; conflicting root or operation authority
 fails closed. Root mirrors and Fleet Directories deliberately remain on the
 prior `Active` version for the next interruption boundary.
 
-Open 0.100.66 completes that third boundary through the existing mirror
+Released 0.100.66 completes that third boundary through the existing mirror
 activation endpoint. Complete later snapshots converge monotonically without
 requiring every intermediate revision, mixed `Active`/`Draining` Directories
 become current atomically with their Registry Mirror, and exact or stale retry
-returns the durable current version without regression. A root may accept its
-own `Draining` row only after its exact local cutoff is durable. Immutable
-initial Component Registry preparation remains bound to its original Registry
-while current operations require its exact same-revision hash or a later
-same-authority mirror, so synchronized lifecycle progress cannot reopen
-top-level allocation. The patch also hardens dead-code ownership without
-allocating a stable-memory domain or changing an endpoint shape, and removes
-the confirmed unreachable test-support and zero-consumer internal surfaces.
+returns the durable current version without regression. The same patch removes
+confirmed unreachable test support and zero-consumer internal surfaces.
+
+Released 0.100.67 freezes the exact final root inventory after all Component
+membership, counters and normalized indexes are empty. The sole local Store is
+one-way fenced at GC `Prepared`, and one durable intent plus terminal receipt
+retain its exact release-set catalog, bytes and Component-history authority.
+
+Released 0.100.68 consolidates duplicated host Fleet-install ICP context.
+Released 0.100.69 revalidates the retained Store and atomically publishes the
+root as Coordinator-authoritative `Removed` with durable exact replay at both
+Canisters. Released 0.100.70 allows surviving roots to converge their existing
+Registry Mirror/Fleet Directory boundary on that exact `Removed` tombstone.
+
+Open 0.100.71 adds the next destructive boundary. After exact logical removal,
+the root durably freezes Store-reclamation intent, resumes the retained Store
+from exact GC `Prepared`, `InProgress`, `Clearing` or `Complete` evidence, and
+accepts only one completed run with zero bytes and an empty catalog. The
+terminal receipt is response-idempotent and survives restart; the Store/root
+Canisters and active Store binding remain present. The same open patch retains
+the compatible replay, evidence, CLI target and publication-metric owner
+consolidation already in progress.
 
 ## Next Action
 
-Freeze the exact final Fleet Subnet Root inventory after every local Component
-partition is absent and the Store is quiescent, then use that authority for
-ordinary root removal. An unreachable root or Subnet is not removal evidence.
+Hard-cut the retained active Store binding only after its exact reclamation
+receipt, then freeze and execute physical Store deletion as a separate durable
+boundary. Physical Fleet Subnet Root deletion remains later. An unreachable
+root or Subnet is not deletion evidence.

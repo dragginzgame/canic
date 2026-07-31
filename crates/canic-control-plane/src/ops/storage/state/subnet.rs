@@ -1,14 +1,16 @@
 #[cfg(test)]
 use crate::storage::stable::state::subnet::{
-    ControlPlaneSubnetStateData, PublicationStoreStateRecord, SubnetStateRecord, WasmStoreGcRecord,
-    WasmStoreRecord,
+    ControlPlaneSubnetStateData, PublicationStoreStateRecord, SubnetStateRecord, WasmStoreRecord,
 };
 use crate::{
-    dto::{state::SubnetStateResponse, template::WasmStorePublicationStateResponse},
+    dto::{
+        state::SubnetStateResponse,
+        template::{WasmStoreGcStatusResponse, WasmStorePublicationStateResponse},
+    },
     ids::{WasmStoreBinding, WasmStoreGcMode},
     ops::storage::state::mapper::SubnetStateMapper,
     storage::stable::state::subnet::{
-        SubnetState, WasmStoreInventoryConflict, WasmStoreUpsertOutcome,
+        SubnetState, WasmStoreGcRecord, WasmStoreInventoryConflict, WasmStoreUpsertOutcome,
     },
     view::state::{PublicationStoreStateView, WasmStoreView},
 };
@@ -143,6 +145,27 @@ impl SubnetStateOps {
         changed_at: u64,
     ) -> bool {
         SubnetState::transition_wasm_store_gc(binding, next, changed_at)
+    }
+
+    /// Reconcile runtime GC authority from one independently observed exact live Store.
+    #[must_use]
+    pub fn reconcile_wasm_store_gc(
+        binding: &WasmStoreBinding,
+        pid: Principal,
+        live: &WasmStoreGcStatusResponse,
+    ) -> bool {
+        SubnetState::reconcile_wasm_store_gc(
+            binding,
+            pid,
+            WasmStoreGcRecord {
+                mode: live.mode,
+                changed_at: live.changed_at,
+                prepared_at: live.prepared_at,
+                started_at: live.started_at,
+                completed_at: live.completed_at,
+                runs_completed: live.runs_completed,
+            },
+        )
     }
 
     /// Return the current root-owned publication binding lifecycle state as a DTO response.

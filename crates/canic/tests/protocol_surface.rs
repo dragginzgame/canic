@@ -402,6 +402,14 @@ fn fleet_subnet_root_draining_is_controller_guarded_on_the_root_surface() {
         canic::protocol::CANIC_FLEET_SUBNET_ROOT_REMOVAL_STATUS,
         canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_REMOVAL_STATUS
     );
+    assert_eq!(
+        canic::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_RECLAIM,
+        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_RECLAIM
+    );
+    assert_eq!(
+        canic::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_RECLAMATION_STATUS,
+        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_RECLAMATION_STATUS
+    );
 
     let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
     let source = read_text(&macro_path);
@@ -421,6 +429,12 @@ fn fleet_subnet_root_draining_is_controller_guarded_on_the_root_surface() {
         preceding_attribute_context(&source, "async fn canic_fleet_subnet_root_removal_publish(");
     let removal_status =
         preceding_attribute_context(&source, "async fn canic_fleet_subnet_root_removal_status(");
+    let store_reclaim =
+        preceding_attribute_context(&source, "async fn canic_fleet_subnet_root_store_reclaim(");
+    let store_reclamation_status = preceding_attribute_context(
+        &source,
+        "async fn canic_fleet_subnet_root_store_reclamation_status(",
+    );
 
     assert!(
         begin.contains("canic_update(requires(caller::is_controller()))"),
@@ -445,6 +459,14 @@ fn fleet_subnet_root_draining_is_controller_guarded_on_the_root_surface() {
     assert!(
         removal_status.contains("canic_query(requires(caller::is_controller()))"),
         "Fleet Subnet Root removal status must remain a controller-guarded query"
+    );
+    assert!(
+        store_reclaim.contains("canic_update(requires(caller::is_controller()))"),
+        "Fleet Subnet Root Store reclamation must remain a controller-guarded update"
+    );
+    assert!(
+        store_reclamation_status.contains("canic_query(requires(caller::is_controller()))"),
+        "Fleet Subnet Root Store reclamation status must remain a controller-guarded query"
     );
 }
 

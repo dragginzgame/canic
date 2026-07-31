@@ -1,17 +1,17 @@
 use crate::{
     cli::clap::{
         flag_arg, parse_matches, passthrough_subcommand, render_usage, required_string,
-        required_typed, string_option, string_option_or_else, value_arg,
+        required_typed, string_option, value_arg,
     },
-    cli::defaults::{default_icp, local_environment},
     cli::globals::{internal_environment_arg, internal_icp_arg},
     cli::help::print_help_or_version,
     cycles::{CyclesCommandError, convert},
+    support::icp_target::IcpTargetOptions,
     version_text,
 };
 use canic_host::{
     format::cycles_tc,
-    icp::{IcpCli, command_display, run_output_with_stderr},
+    icp::{command_display, run_output_with_stderr},
     icp_config::resolve_current_canic_icp_root,
     installed_fleet::{InstalledFleetRequest, resolve_installed_fleet_from_root},
     registry::RegistryEntry,
@@ -112,16 +112,6 @@ Examples:
   canic cycles transfer 4T demo/app
   canic cycles convert demo --icp-e8s 100000000 --dry-run
   canic cycles topup demo app 4T";
-
-///
-/// IcpTargetOptions
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) struct IcpTargetOptions {
-    pub(super) environment: String,
-    pub(super) icp: String,
-}
 
 ///
 /// BalanceOptions
@@ -250,15 +240,6 @@ fn wallet_passthrough_command(spec: WalletCommand) -> ClapCommand {
     passthrough_subcommand(ClapCommand::new(spec.kind.label()).disable_help_flag(true))
 }
 
-impl IcpTargetOptions {
-    pub(super) fn parse(matches: &clap::ArgMatches) -> Self {
-        Self {
-            environment: string_option_or_else(matches, "environment", local_environment),
-            icp: string_option_or_else(matches, "icp", default_icp),
-        }
-    }
-}
-
 impl BalanceOptions {
     fn parse<I>(args: I) -> Result<Self, CyclesCommandError>
     where
@@ -335,7 +316,7 @@ impl TopupOptions {
 
 fn run_balance(options: &BalanceOptions) -> Result<(), CyclesCommandError> {
     let root = resolve_current_canic_icp_root().map_err(CyclesCommandError::IcpRoot)?;
-    let mut command = icp_command(&options.target, &root);
+    let mut command = options.target.icp_cli(&root).command();
     command.args(["cycles", WalletCommandKind::Balance.label()]);
     append_optional_long_arg(&mut command, SUBACCOUNT_ARG, options.subaccount.as_deref());
     append_optional_long_arg(
@@ -345,13 +326,13 @@ fn run_balance(options: &BalanceOptions) -> Result<(), CyclesCommandError> {
     );
     append_long_flag(&mut command, JSON_ARG, options.json);
     append_long_flag(&mut command, QUIET_ARG, options.quiet);
-    append_target_args(&mut command, &options.target);
+    options.target.append_target_args(&mut command);
     run_or_print_command(&mut command, false)
 }
 
 fn run_mint(options: &MintOptions) -> Result<(), CyclesCommandError> {
     let root = resolve_current_canic_icp_root().map_err(CyclesCommandError::IcpRoot)?;
-    let mut command = icp_command(&options.target, &root);
+    let mut command = options.target.icp_cli(&root).command();
     command.args(["cycles", WalletCommandKind::Mint.label()]);
     append_optional_long_arg(&mut command, "icp", options.icp_amount.as_deref());
     append_optional_long_arg(&mut command, "cycles", options.cycles_amount.as_deref());
@@ -366,14 +347,14 @@ fn run_mint(options: &MintOptions) -> Result<(), CyclesCommandError> {
         options.to_subaccount.as_deref(),
     );
     append_long_flag(&mut command, JSON_ARG, options.json);
-    append_target_args(&mut command, &options.target);
+    options.target.append_target_args(&mut command);
     run_or_print_command(&mut command, false)
 }
 
 fn run_transfer(options: &TransferOptions) -> Result<(), CyclesCommandError> {
     let root = resolve_current_canic_icp_root().map_err(CyclesCommandError::IcpRoot)?;
     let receiver = transfer_receiver(&options.target, &root, &options.receiver)?;
-    let mut command = icp_command(&options.target, &root);
+    let mut command = options.target.icp_cli(&root).command();
     command.args(["cycles", WalletCommandKind::Transfer.label()]);
     command.arg(&options.amount);
     command.arg(receiver);
@@ -389,7 +370,7 @@ fn run_transfer(options: &TransferOptions) -> Result<(), CyclesCommandError> {
     );
     append_long_flag(&mut command, JSON_ARG, options.json);
     append_long_flag(&mut command, QUIET_ARG, options.quiet);
-    append_target_args(&mut command, &options.target);
+    options.target.append_target_args(&mut command);
     run_or_print_command(&mut command, options.dry_run)
 }
 
@@ -402,11 +383,7 @@ fn run_topup(options: &TopupOptions) -> Result<(), CyclesCommandError> {
         &installed.topology.root_canister_id,
         &installed.registry.entries,
     )?;
-    let icp = IcpCli::new(
-        &options.target.icp,
-        Some(options.target.environment.clone()),
-    )
-    .with_cwd(&root);
+    let icp = options.target.icp_cli(&root);
     if options.dry_run {
         println!(
             "{}",
@@ -553,15 +530,6 @@ fn resolved_target_from_entry(entry: &RegistryEntry) -> ResolvedCanisterTarget {
         canister_id: entry.pid.clone(),
         role: entry.role.clone(),
     }
-}
-
-fn icp_command(target: &IcpTargetOptions, root: &Path) -> std::process::Command {
-    let icp = IcpCli::new(&target.icp, Some(target.environment.clone())).with_cwd(root);
-    icp.command()
-}
-
-fn append_target_args(command: &mut std::process::Command, target: &IcpTargetOptions) {
-    canic_host::icp::add_target_args(command, Some(&target.environment), None);
 }
 
 fn run_or_print_command(
