@@ -185,12 +185,8 @@ impl InstallRootError {
         }
     }
 
-    fn from_boxed(phase: InstallRootPhase, source: Box<dyn std::error::Error>) -> Self {
-        Self { phase, source }
-    }
-
     fn in_phase(phase: InstallRootPhase) -> impl FnOnce(Box<dyn std::error::Error>) -> Self {
-        move |source| Self::from_boxed(phase, source)
+        move |source| Self { phase, source }
     }
 
     #[must_use]

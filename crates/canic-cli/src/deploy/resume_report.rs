@@ -54,7 +54,7 @@ where
 
     let options = DeployResumeReportOptions::parse(args)?;
     let receipt_path = options.receipt_path()?;
-    let receipt = read_deployment_receipt(&receipt_path)?;
+    let receipt: DeploymentReceiptV1 = read_json_file(&receipt_path)?;
     let check = load_deployment_check(options.truth)?;
     let diff = compare_plan_inventory_and_receipt(&check.plan, &check.inventory, &receipt);
     print_json(&diff.resume_safety)?;
@@ -146,8 +146,4 @@ fn receipt_arg() -> clap::Arg {
 
 pub(super) fn usage() -> String {
     render_usage(command)
-}
-
-fn read_deployment_receipt(path: &PathBuf) -> Result<DeploymentReceiptV1, DeployCommandError> {
-    read_json_file(path)
 }

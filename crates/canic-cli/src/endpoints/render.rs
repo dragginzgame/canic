@@ -10,7 +10,7 @@ pub(super) fn render_plain_endpoints(endpoints: &[EndpointEntry]) -> String {
         .iter()
         .map(|endpoint| {
             [
-                render_endpoint_method_name(endpoint),
+                render_candid_method_name(&endpoint.name),
                 render_endpoint_mode_label(endpoint),
                 render_endpoint_signature(endpoint),
             ]
@@ -29,10 +29,6 @@ fn render_endpoint_type_list(types: &[EndpointType]) -> String {
             .collect::<Vec<_>>()
             .join(", ")
     )
-}
-
-fn render_endpoint_method_name(endpoint: &EndpointEntry) -> String {
-    render_candid_method_name(&endpoint.name)
 }
 
 fn render_endpoint_mode_label(endpoint: &EndpointEntry) -> String {

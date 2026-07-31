@@ -441,7 +441,7 @@ fn query_cycle_tracker_page(
 }
 
 fn cycle_query_target(options: &CyclesOptions, entry: &RegistryEntry) -> CycleQueryTarget {
-    let root = resolve_cycles_icp_root();
+    let root = resolve_current_canic_icp_root().ok();
     CycleQueryTarget {
         icp: cycles_icp(options, root.as_deref()),
         canister_id: entry.pid.clone(),
@@ -527,10 +527,6 @@ fn resolve_cycles_fleet(
         &root,
     )
     .map_err(CyclesCommandError::from)
-}
-
-fn resolve_cycles_icp_root() -> Option<PathBuf> {
-    resolve_current_canic_icp_root().ok()
 }
 
 #[cfg(test)]

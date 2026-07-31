@@ -168,7 +168,7 @@ fn resolve_current_install_truth_inputs(
         let default_config = options
             .expected_app
             .as_ref()
-            .map(|app| default_config_path_for_app(app));
+            .map(|app| format!("apps/{app}/canic.toml"));
         resolve_install_config_path(
             &icp_root,
             default_config.as_deref(),
@@ -185,10 +185,6 @@ fn resolve_current_install_truth_inputs(
         config_path,
         fleet_name: options.fleet_name.clone(),
     })
-}
-
-fn default_config_path_for_app(app: &str) -> String {
-    format!("apps/{app}/canic.toml")
 }
 
 fn current_install_deployment_truth_check_for_plan(
