@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.67`.
-- The latest published release is `v0.100.67` at
-  `8720cb7a2d4b77cb8f42658becca3edf4c91b1ae`.
-- Open `0.100.68` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.68`.
+- The latest published release is `v0.100.68` at
+  `e145e3d6253191fd9bf0b518a45e3261dc435eb8`.
+- Open `0.100.69` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -564,6 +564,19 @@ Historical detail is archived at:
   deletion or root Registry transition. Ordinary root removal remains the next
   explicit boundary. The same release includes the focused post-0.100.66 host
   module-surface hardening audit and its low-risk helper cleanup.
+- Released `0.100.68` consolidates duplicated Fleet-install ICP context
+  construction under one host boundary. The exact executable, environment,
+  project root, optional direct-replica target and every role-specific command
+  remain unchanged while nine redundant functions and 87 net lines are
+  removed.
+- Open `0.100.69` revalidates the retained final inventory against the sole
+  live Store at exact GC `Prepared`, then has that root call the Coordinator
+  under its own principal. One atomic response-idempotent commit advances only
+  its canonical row from `Draining` to `Removed`; both Coordinator and root
+  retain exact receipts and reconstruct interleaved root lifecycle history by
+  Registry revision. It performs no Store reclamation or physical Canister
+  deletion and adds no memory ID. The same open patch centralizes duplicated
+  host/CLI utilities under their existing owners.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -2103,8 +2116,18 @@ an exact retry recoverable across unrelated later Registry progress. The same
 release retains the focused post-0.100.66 host module-surface hardening evidence
 and cleanup.
 
-Next, revalidate that receipt and Store fence for ordinary root removal.
-Neither an unreachable root nor a Subnet failure is removal evidence.
+Released `v0.100.68` centralizes identical Fleet-install ICP context
+construction without changing command, authority, journal or public contract
+behavior. Nine redundant host functions and 87 net lines are removed.
+
+Open `0.100.69` revalidates that exact final receipt against the retained live
+Store, authenticates the root's own Coordinator call and atomically publishes
+the root as Registry `Removed` with durable exact replay at both Canisters. The
+same open patch centralizes the completed host/CLI utility hardening pass.
+
+Next, converge surviving mirrors on the `Removed` Registry and freeze the
+destructive Store-reclamation and physical root-deletion sequence. Neither an
+unreachable root nor a Subnet failure is removal evidence.
 
 ## Historical Release Detail
 

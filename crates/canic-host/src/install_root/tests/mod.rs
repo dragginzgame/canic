@@ -1,6 +1,6 @@
 use super::build_network::resolve_install_build_context;
 use super::build_snapshot::{InstallBuildTarget, resolve_install_snapshot};
-use super::commands::{add_icp_environment_target, icp_canister_command, root_init_args};
+use super::commands::{add_icp_environment_target, candid_arg, icp_canister_command, icp_e8s_text};
 use super::config_selection::{
     config_selection_error, discover_canic_config_choices, discover_project_canic_config_choices,
     resolve_install_config_path, select_discovered_app_config_path,

@@ -7,13 +7,14 @@ use canic_core::{
     dto::fleet_registry::{
         FleetSubnetRootRegistryMirrorActivationRequest,
         FleetSubnetRootRegistryMirrorActivationResponse, FleetSubnetRootRegistrySyncRequest,
-        FleetSubnetRootRegistrySyncResponse,
+        FleetSubnetRootRegistrySyncResponse, FleetSubnetRootRemovalPublicationResponse,
     },
     dto::fleet_subnet_root::{
         FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary, FleetSubnetRootDrainingRequest,
         FleetSubnetRootDrainingResponse, FleetSubnetRootDrainingStatusRequest,
         FleetSubnetRootFinalInventoryRequest, FleetSubnetRootFinalInventoryResponse,
         FleetSubnetRootFinalInventoryStatusRequest, FleetSubnetRootInitArgs,
+        FleetSubnetRootRemovalRequest, FleetSubnetRootRemovalStatusRequest,
     },
     dto::{
         component_registry::{
@@ -124,6 +125,20 @@ impl LifecycleApi {
         request: FleetSubnetRootFinalInventoryStatusRequest,
     ) -> Result<FleetSubnetRootFinalInventoryResponse, canic_core::dto::error::Error> {
         crate::workflow::fleet_subnet_root::final_inventory_status(request).map_err(Into::into)
+    }
+
+    pub async fn publish_fleet_subnet_root_removal(
+        request: FleetSubnetRootRemovalRequest,
+    ) -> Result<FleetSubnetRootRemovalPublicationResponse, canic_core::dto::error::Error> {
+        crate::workflow::fleet_subnet_root::publish_removal(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub fn fleet_subnet_root_removal_status(
+        request: FleetSubnetRootRemovalStatusRequest,
+    ) -> Result<FleetSubnetRootRemovalPublicationResponse, canic_core::dto::error::Error> {
+        crate::workflow::fleet_subnet_root::removal_status(request).map_err(Into::into)
     }
 
     pub async fn synchronize_fleet_registry(

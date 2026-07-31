@@ -14,18 +14,18 @@ use super::{
         FleetSubnetRootInstallPhase, PlanFleetSubnetRootInstallRequest,
         expected_registry_join_entry, plan_fleet_subnet_root_install,
     },
+    operations::{LiveRegistryEvidence, call_with_arg, query_live_registry, query_no_arg},
 };
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
-    icp::{IcpCli, LocalReplicaTarget, decode_json_result_response},
+    icp::{IcpCli, LocalReplicaTarget},
     release_set::{AppConfigSnapshot, load_persisted_canic_infrastructure_artifact_manifest},
 };
-use candid::{CandidType, IDLValue, Principal};
+use candid::Principal;
 use canic_core::{
     control_plane_support::{config::ComponentTopology, ops::fleet_registry::FleetRegistryOps},
     dto::fleet_registry::{
-        FleetRegistry, FleetRegistryActivationResponse, FleetRegistryManifest,
-        FleetRegistryVersion, FleetSubnetRootSnapshotAcknowledgement,
+        FleetRegistry, FleetRegistryVersion, FleetSubnetRootSnapshotAcknowledgement,
     },
     ids::{FleetCoordinatorBinding, FleetRegistryAuthority},
     protocol,
@@ -33,7 +33,6 @@ use canic_core::{
 use std::path::Path;
 use thiserror::Error as ThisError;
 
-const ICP_JSON_OUTPUT: &str = "json";
 const MAX_ACTIVATION_TRANSITIONS: usize = 4;
 
 #[derive(Debug, ThisError)]
@@ -52,12 +51,6 @@ enum FleetRegistryActivationError {
 
     #[error("Fleet Registry activation exceeded its bounded journal transitions")]
     TransitionBoundExceeded,
-}
-
-struct LiveRegistryEvidence {
-    registry: FleetRegistry,
-    manifest: FleetRegistryManifest,
-    version: FleetRegistryVersion,
 }
 
 pub(super) struct VerifiedFleetRegistryActivation {
@@ -207,7 +200,13 @@ fn drive_activation(
                 begin_registry_activation(&current)?
             }
             FleetRegistryActivationPhase::ActivationInFlight => {
-                let response = call_activation(icp, coordinator, &current.journal.request)?;
+                let response = call_with_arg(
+                    icp,
+                    coordinator,
+                    protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
+                    &current.journal.request,
+                    false,
+                )?;
                 record_registry_activated(&current, response)?
             }
             FleetRegistryActivationPhase::Activated => {
@@ -232,7 +231,7 @@ fn require_exact_acknowledgements(
     expected_roots: &mut [Principal],
     version: &FleetRegistryVersion,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let live: Vec<FleetSubnetRootSnapshotAcknowledgement> = query_coordinator(
+    let live: Vec<FleetSubnetRootSnapshotAcknowledgement> = query_no_arg(
         icp,
         coordinator,
         protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
@@ -247,51 +246,6 @@ fn require_exact_acknowledgements(
         return Err(FleetRegistryActivationError::AcknowledgementSetMismatch.into());
     }
     Ok(())
-}
-
-fn call_activation(
-    icp: &IcpCli,
-    coordinator: Principal,
-    request: &canic_core::dto::fleet_registry::FleetRegistryActivationRequest,
-) -> Result<FleetRegistryActivationResponse, Box<dyn std::error::Error>> {
-    let value = IDLValue::try_from_candid_type(request)?;
-    let args = format!("({value})");
-    let output = icp.canister_call_arg_output_with_candid(
-        &coordinator.to_text(),
-        protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
-        &args,
-        Some(ICP_JSON_OUTPUT),
-        None,
-    )?;
-    decode_json_result_response(&output).map_err(Into::into)
-}
-
-fn query_live_registry(
-    icp: &IcpCli,
-    coordinator: Principal,
-) -> Result<LiveRegistryEvidence, Box<dyn std::error::Error>> {
-    Ok(LiveRegistryEvidence {
-        registry: query_coordinator(icp, coordinator, protocol::CANIC_FLEET_REGISTRY)?,
-        manifest: query_coordinator(icp, coordinator, protocol::CANIC_FLEET_REGISTRY_MANIFEST)?,
-        version: query_coordinator(icp, coordinator, protocol::CANIC_FLEET_REGISTRY_VERSION)?,
-    })
-}
-
-fn query_coordinator<T>(
-    icp: &IcpCli,
-    coordinator: Principal,
-    method: &str,
-) -> Result<T, Box<dyn std::error::Error>>
-where
-    T: CandidType + serde::de::DeserializeOwned,
-{
-    let output = icp.canister_query_output_with_candid(
-        &coordinator.to_text(),
-        method,
-        Some(ICP_JSON_OUTPUT),
-        None,
-    )?;
-    decode_json_result_response(&output).map_err(Into::into)
 }
 
 fn require_exact_registry(

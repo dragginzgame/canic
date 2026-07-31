@@ -111,6 +111,24 @@ pub struct FleetSubnetRootFinalInventoryStatusRequest {
 }
 
 ///
+/// FleetSubnetRootRemovalRequest
+///
+/// Controller command revalidating terminal Store authority before logical root removal.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootRemovalRequest {
+    pub operation_id: [u8; 32],
+    pub expected_registry: FleetRegistryVersion,
+}
+
+/// Read-only lookup key for one durable logical root-removal publication.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootRemovalStatusRequest {
+    pub operation_id: [u8; 32],
+}
+
+///
 /// FleetSubnetRootFinalInventoryResponse
 ///
 /// Exact terminal Component history and retained write-fenced Store authority.
@@ -260,6 +278,45 @@ mod tests {
             >(&publication_response_bytes)
             .expect("decode root draining publication response"),
             publication_response
+        );
+
+        let final_inventory = final_inventory_response(&publication_response.root_draining);
+        let removal_request = FleetSubnetRootRemovalRequest {
+            operation_id: final_inventory.operation_id,
+            expected_registry: publication_response.version.clone(),
+        };
+        let removal_status = FleetSubnetRootRemovalStatusRequest {
+            operation_id: final_inventory.operation_id,
+        };
+        let coordinator_request =
+            crate::dto::fleet_registry::FleetSubnetRootRemovalPublicationRequest {
+                expected_registry: publication_response.version.clone(),
+                final_inventory: final_inventory.clone(),
+            };
+        let coordinator_response =
+            crate::dto::fleet_registry::FleetSubnetRootRemovalPublicationResponse {
+                final_inventory,
+                previous_version: publication_response.version.clone(),
+                version: FleetRegistryVersion {
+                    authority: publication_response.version.authority.clone(),
+                    revision: publication_response.version.revision + 1,
+                    content_hash: [29; 32],
+                },
+            };
+        assert_candid_round_trip(&removal_request);
+        assert_candid_round_trip(&removal_status);
+        assert_candid_round_trip(&coordinator_request);
+        assert_candid_round_trip(&coordinator_response);
+    }
+
+    fn assert_candid_round_trip<T>(value: &T)
+    where
+        T: CandidType + for<'de> candid::Deserialize<'de> + Eq + std::fmt::Debug,
+    {
+        let bytes = candid::encode_one(value).expect("encode Candid contract");
+        assert_eq!(
+            &candid::decode_one::<T>(&bytes).expect("decode Candid contract"),
+            value,
         );
     }
 

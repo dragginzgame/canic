@@ -25,6 +25,11 @@ pub(crate) use self::{
     status::local_replica_root_key_from_root, transport::local_replica_endpoint_from_root,
 };
 
+fn nonempty_text(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
 ///
 /// ReplicaQueryError
 ///

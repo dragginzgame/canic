@@ -1,6 +1,7 @@
 use crate::cycles::{
     CyclesCommandError,
     convert::{
+        extend_hash_part,
         options::ConvertOptions,
         pending::{
             PendingIcpRefillOperationInput, PendingOperationLogError,
@@ -125,10 +126,10 @@ fn generated_operation_id(
 ) -> [u8; 32] {
     let mut bytes = Vec::new();
     bytes.extend_from_slice(b"canic:cycles-convert:icp-refill:v1");
-    extend_operation_id_part(&mut bytes, fleet.as_bytes());
-    extend_operation_id_part(&mut bytes, root_canister.as_bytes());
-    extend_operation_id_part(&mut bytes, &amount_e8s.to_be_bytes());
-    extend_operation_id_part(&mut bytes, &now_nanos.to_be_bytes());
+    extend_hash_part(&mut bytes, fleet.as_bytes());
+    extend_hash_part(&mut bytes, root_canister.as_bytes());
+    extend_hash_part(&mut bytes, &amount_e8s.to_be_bytes());
+    extend_hash_part(&mut bytes, &now_nanos.to_be_bytes());
     let digest = sha256_bytes(&bytes);
     let mut operation_id = [0; 32];
     operation_id.copy_from_slice(&digest);
@@ -154,11 +155,6 @@ fn generated_operation_id_notice(
             source.label()
         )
     })
-}
-
-fn extend_operation_id_part(bytes: &mut Vec<u8>, part: &[u8]) {
-    bytes.extend_from_slice(&(part.len() as u64).to_be_bytes());
-    bytes.extend_from_slice(part);
 }
 
 #[cfg(test)]

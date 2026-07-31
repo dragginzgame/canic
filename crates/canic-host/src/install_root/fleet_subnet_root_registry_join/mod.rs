@@ -10,17 +10,18 @@ use super::fleet_subnet_root_install_journal::{
     begin_registry_join, expected_registry_join_entry, plan_fleet_subnet_root_install,
     record_registry_join_verified, record_registry_joined,
 };
+use super::operations::{LiveRegistryEvidence, query_live_registry};
 use crate::{
     durable_io::write_bytes,
     fleet_install_plan::PersistedFleetInstallPlan,
     icp::{IcpCli, LocalReplicaTarget, decode_json_result_response},
     release_set::{AppConfigSnapshot, load_persisted_canic_infrastructure_artifact_manifest},
 };
-use candid::{CandidType, Principal};
+use candid::Principal;
 use canic_core::{
     control_plane_support::{config::ComponentTopology, ops::fleet_registry::FleetRegistryOps},
     dto::fleet_registry::{
-        FleetRegistry, FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootJoinRequest,
+        FleetRegistry, FleetRegistryVersion, FleetSubnetRootJoinRequest,
         FleetSubnetRootJoinResponse,
     },
     ids::{FleetCoordinatorBinding, FleetRegistryAuthority},
@@ -55,12 +56,6 @@ enum RootRegistryJoinError {
 
     #[error("root Registry join arguments are not a regular file: {0}")]
     UnsafeArgumentsFile(PathBuf),
-}
-
-struct LiveRegistryEvidence {
-    registry: FleetRegistry,
-    manifest: FleetRegistryManifest,
-    version: FleetRegistryVersion,
 }
 
 pub(super) fn register_and_verify_fleet_subnet_roots_joining(
@@ -251,34 +246,6 @@ fn call_registry_join(
     let cleanup = fs::remove_file(&args_path);
     let output = result?;
     cleanup.map_err(|_| RootRegistryJoinError::UnsafeArgumentsFile(args_path))?;
-    decode_json_result_response(&output).map_err(Into::into)
-}
-
-fn query_live_registry(
-    icp: &IcpCli,
-    coordinator: Principal,
-) -> Result<LiveRegistryEvidence, Box<dyn std::error::Error>> {
-    Ok(LiveRegistryEvidence {
-        registry: query_coordinator(icp, coordinator, protocol::CANIC_FLEET_REGISTRY)?,
-        manifest: query_coordinator(icp, coordinator, protocol::CANIC_FLEET_REGISTRY_MANIFEST)?,
-        version: query_coordinator(icp, coordinator, protocol::CANIC_FLEET_REGISTRY_VERSION)?,
-    })
-}
-
-fn query_coordinator<T>(
-    icp: &IcpCli,
-    coordinator: Principal,
-    method: &str,
-) -> Result<T, Box<dyn std::error::Error>>
-where
-    T: CandidType + serde::de::DeserializeOwned,
-{
-    let output = icp.canister_query_output_with_candid(
-        &coordinator.to_text(),
-        method,
-        Some(ICP_JSON_OUTPUT),
-        None,
-    )?;
     decode_json_result_response(&output).map_err(Into::into)
 }
 

@@ -14,6 +14,7 @@ use crate::{
         globals::internal_environment_arg,
         help::print_help_or_version,
     },
+    evidence_support::current_evidence_timestamp,
     output, version_text,
 };
 use canic_core::ids::BuildNetwork;
@@ -36,7 +37,6 @@ use std::{
     env,
     ffi::OsString,
     path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error as ThisError;
 
@@ -249,7 +249,7 @@ fn write_build_provenance_if_requested(
         config_path: context.config_path.clone(),
         output,
         command: build_command_provenance(options, &context.workspace_root),
-        generated_at: current_build_generated_at()?,
+        generated_at: current_evidence_timestamp()?,
         canic_version: env!("CARGO_PKG_VERSION").to_string(),
     };
     let envelope = build_provenance_envelope(&request)?;
@@ -302,13 +302,6 @@ fn build_command_provenance(options: &BuildOptions, workspace_root: &Path) -> Co
 fn push_path_arg(argv_normalized: &mut Vec<String>, name: &str, path: &str, root: &Path) {
     argv_normalized.push(name.to_string());
     argv_normalized.push(command_path_for_root(Path::new(path), root));
-}
-
-fn current_build_generated_at() -> Result<String, Box<dyn std::error::Error>> {
-    Ok(format!(
-        "unix:{}",
-        SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs()
-    ))
 }
 
 fn resolve_build_config_path(options: &BuildOptions) -> Result<PathBuf, BuildCommandError> {

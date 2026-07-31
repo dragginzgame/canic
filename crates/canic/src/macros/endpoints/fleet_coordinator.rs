@@ -76,5 +76,15 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
                 request,
             )
         }
+
+
+        #[$crate::canic_update(public)]
+        async fn canic_fleet_registry_publish_root_removed(
+            request: ::canic::dto::fleet_registry::FleetSubnetRootRemovalPublicationRequest,
+        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootRemovalPublicationResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::publish_root_removed(
+                request,
+            )
+        }
     };
 }

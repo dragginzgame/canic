@@ -130,17 +130,20 @@ mod tests {
         },
         dto::fleet_registry::{
             FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingPublicationResponse,
+            FleetSubnetRootRemovalPublicationResponse,
         },
         dto::fleet_subnet_root::{
             FleetSubnetRootDrainingRequest, FleetSubnetRootDrainingResponse,
             FleetSubnetRootDrainingStatusRequest, FleetSubnetRootFinalInventoryRequest,
             FleetSubnetRootFinalInventoryResponse, FleetSubnetRootFinalInventoryStatusRequest,
+            FleetSubnetRootRemovalRequest, FleetSubnetRootRemovalStatusRequest,
         },
         protocol::{
             CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING, CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN,
             CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_FINALIZE,
             CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_STATUS,
-            CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS, CANIC_ROOT_COMPONENT_CHILD_ALLOCATE,
+            CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS, CANIC_FLEET_SUBNET_ROOT_REMOVAL_PUBLISH,
+            CANIC_FLEET_SUBNET_ROOT_REMOVAL_STATUS, CANIC_ROOT_COMPONENT_CHILD_ALLOCATE,
             CANIC_ROOT_COMPONENT_CHILD_COMMIT, CANIC_ROOT_COMPONENT_CHILD_CREATE,
             CANIC_ROOT_COMPONENT_CHILD_DIRECTORY_PREPARE, CANIC_ROOT_COMPONENT_CHILD_INSTALL,
             CANIC_ROOT_COMPONENT_CHILD_MEMBERSHIP_ACTIVATE,
@@ -822,6 +825,58 @@ mod tests {
         assert_eq!(
             durable.expect("query Fleet Subnet Root inventory"),
             final_inventory
+        );
+
+        let removal_request = FleetSubnetRootRemovalRequest {
+            operation_id: root_draining.operation_id,
+            expected_registry: final_inventory.registry.clone(),
+        };
+        let removed: Result<FleetSubnetRootRemovalPublicationResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_FLEET_SUBNET_ROOT_REMOVAL_PUBLISH,
+                (removal_request.clone(),),
+            )
+            .expect("publish Fleet Subnet Root removal transport");
+        let removed = removed.expect("publish Fleet Subnet Root removal");
+        assert_eq!(removed.final_inventory, final_inventory);
+        assert_eq!(removed.previous_version, removal_request.expected_registry);
+        assert_eq!(
+            removed.version.revision,
+            removed.previous_version.revision + 1
+        );
+
+        let retry: Result<FleetSubnetRootRemovalPublicationResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_FLEET_SUBNET_ROOT_REMOVAL_PUBLISH,
+                (removal_request,),
+            )
+            .expect("retry Fleet Subnet Root removal transport");
+        assert_eq!(retry.expect("retry Fleet Subnet Root removal"), removed);
+        let durable: Result<FleetSubnetRootRemovalPublicationResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.root,
+                CANIC_FLEET_SUBNET_ROOT_REMOVAL_STATUS,
+                (FleetSubnetRootRemovalStatusRequest {
+                    operation_id: root_draining.operation_id,
+                },),
+            )
+            .expect("query Fleet Subnet Root removal transport");
+        assert_eq!(durable.expect("query Fleet Subnet Root removal"), removed);
+
+        let registry: Result<FleetRegistry, Error> = fixture
+            .pic()
+            .query_call(fixture.coordinator, CANIC_FLEET_REGISTRY, ())
+            .expect("query Removed Fleet Registry transport");
+        let registry = registry.expect("query Removed Fleet Registry");
+        assert_eq!(registry.revision, removed.version.revision);
+        assert_eq!(
+            registry.fleet_subnet_roots[0].status,
+            FleetSubnetRootStatus::Removed
         );
     }
 

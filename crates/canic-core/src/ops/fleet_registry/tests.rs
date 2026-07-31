@@ -273,7 +273,7 @@ fn activation_atomically_transitions_one_nonempty_all_joining_snapshot() {
 }
 
 #[test]
-fn draining_transitions_only_one_exact_active_root() {
+fn draining_and_removal_transition_only_one_exact_root() {
     let topology = topology();
     let authority = authority();
     let mut joining =
@@ -311,6 +311,30 @@ fn draining_transitions_only_one_exact_active_root() {
     );
     assert!(
         FleetRegistryOps::compile_draining(&authority, &topology, &active, principal(9)).is_err()
+    );
+
+    let removed = FleetRegistryOps::compile_removed(&authority, &topology, &draining, principal(6))
+        .expect("remove one draining root");
+    assert_eq!(removed.revision, draining.revision + 1);
+    assert_eq!(
+        removed
+            .fleet_subnet_roots
+            .iter()
+            .map(|entry| entry.status)
+            .collect::<Vec<_>>(),
+        vec![
+            FleetSubnetRootStatus::Removed,
+            FleetSubnetRootStatus::Active
+        ]
+    );
+    assert!(
+        FleetRegistryOps::compile_removed(&authority, &topology, &removed, principal(6)).is_err()
+    );
+    assert!(
+        FleetRegistryOps::compile_removed(&authority, &topology, &active, principal(6)).is_err()
+    );
+    assert!(
+        FleetRegistryOps::compile_removed(&authority, &topology, &draining, principal(9)).is_err()
     );
 }
 

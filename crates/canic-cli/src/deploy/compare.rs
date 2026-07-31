@@ -1,12 +1,13 @@
 use super::{
-    DeployCommandError, current_observed_at, output_format::JsonTextOutputFormat,
-    print_json_or_text, read_json_file, value_arg,
+    DeployCommandError, output_format::JsonTextOutputFormat, print_json_or_text, read_json_file,
+    value_arg,
 };
 use crate::{
     cli::{
         clap::{flag_arg, parse_matches, render_usage, required_path, string_option},
         help::print_help_or_version,
     },
+    evidence_support::current_evidence_timestamp,
     version_text,
 };
 use canic_host::deployment_truth::{
@@ -82,7 +83,7 @@ pub(super) fn build_report_from_checks(
     let right_label = right_label.unwrap_or(right.plan.deployment_identity.fleet_name.as_str());
     let report = deployment_comparison_report_from_checks(
         local_report_id(left_label, right_label),
-        current_observed_at()?,
+        current_evidence_timestamp()?,
         left_label,
         right_label,
         left,

@@ -45,6 +45,7 @@ pub struct RootFleetSubnetDrainingView {
     pub root_registry_encoded_bytes: u64,
     pub started_at_ns: u64,
     pub final_inventory: Option<RootFleetSubnetFinalInventoryView>,
+    pub removal_publication: Option<RootFleetSubnetRemovalPublicationView>,
 }
 
 ///
@@ -74,6 +75,16 @@ pub struct RootFleetSubnetFinalInventoryView {
     pub wasm_store_gc_prepared_at_secs: u64,
     pub finalized_at_ns: u64,
     pub inventory_hash: [u8; 32],
+}
+
+/// Read-only projection of one exact Coordinator root-removal publication.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootFleetSubnetRemovalPublicationView {
+    pub operation_id: [u8; 32],
+    pub final_inventory_hash: [u8; 32],
+    pub previous_registry: FleetRegistryVersion,
+    pub registry: FleetRegistryVersion,
+    pub recorded_at_ns: u64,
 }
 
 ///

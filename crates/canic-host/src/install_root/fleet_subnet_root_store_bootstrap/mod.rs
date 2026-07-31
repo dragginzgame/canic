@@ -10,6 +10,7 @@ use super::fleet_subnet_root_install_journal::{
     begin_store_bootstrap, begin_store_staging, plan_fleet_subnet_root_install,
     record_store_bootstrapped, record_store_staged, record_store_verified,
 };
+use super::operations::call_with_arg;
 use crate::{
     durable_io::{RegularFileReadError, read_optional_regular_bytes, write_bytes},
     fleet_install_plan::{PersistedFleetInstallPlan, PersistedFleetSubnetRootReleaseSet},
@@ -19,7 +20,7 @@ use crate::{
         load_persisted_canic_infrastructure_artifact_manifest, resolve_release_artifact_path,
     },
 };
-use candid::{CandidType, IDLValue, Principal};
+use candid::{CandidType, Principal};
 use canic_control_plane::{
     dto::template::{
         TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
@@ -422,11 +423,11 @@ fn call_store_bootstrap(
         .journal
         .fleet_subnet_root
         .expect("Store bootstrap follows verified root installation");
-    call_text_result(
+    call_with_arg(
         &super::install_icp(icp_root, environment, local_replica),
         root,
         protocol::CANIC_ROOT_STORE_BOOTSTRAP,
-        request,
+        &request,
         false,
     )
 }
@@ -442,11 +443,11 @@ fn query_store_bootstrap_status(
         .journal
         .fleet_subnet_root
         .expect("Store verification follows verified root installation");
-    call_text_result(
+    call_with_arg(
         &super::install_icp(icp_root, environment, local_replica),
         root,
         protocol::CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
-        request,
+        &request,
         true,
     )
 }
@@ -477,38 +478,5 @@ where
     let cleanup = fs::remove_file(&args_path);
     let output = result?;
     cleanup?;
-    decode_json_result_response::<O>(&output).map_err(Into::into)
-}
-
-fn call_text_result<I, O>(
-    icp: &IcpCli,
-    root: Principal,
-    method: &str,
-    input: I,
-    query: bool,
-) -> Result<O, Box<dyn std::error::Error>>
-where
-    I: CandidType,
-    O: CandidType + serde::de::DeserializeOwned,
-{
-    let value = IDLValue::try_from_candid_type(&input)?;
-    let args = format!("({value})");
-    let output = if query {
-        icp.canister_query_arg_output_with_candid(
-            &root.to_text(),
-            method,
-            &args,
-            Some(ICP_JSON_OUTPUT),
-            None,
-        )?
-    } else {
-        icp.canister_call_arg_output_with_candid(
-            &root.to_text(),
-            method,
-            &args,
-            Some(ICP_JSON_OUTPUT),
-            None,
-        )?
-    };
     decode_json_result_response::<O>(&output).map_err(Into::into)
 }

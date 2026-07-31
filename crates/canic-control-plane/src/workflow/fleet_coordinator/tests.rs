@@ -14,9 +14,12 @@ use canic_core::{
         error::ErrorCode,
         fleet_registry::{
             FleetRegistryActivationRequest, FleetSubnetRootDrainingPublicationRequest,
-            FleetSubnetRootEntry, FleetSubnetRootJoinRequest, FleetSubnetRootStatus,
+            FleetSubnetRootEntry, FleetSubnetRootJoinRequest,
+            FleetSubnetRootRemovalPublicationRequest, FleetSubnetRootStatus,
         },
-        fleet_subnet_root::FleetSubnetRootDrainingResponse,
+        fleet_subnet_root::{
+            FleetSubnetRootDrainingResponse, FleetSubnetRootFinalInventoryResponse,
+        },
     },
     ids::{
         AppId, CanonicalNetworkId, ComponentSpecAdmission, CyclesFundingBudget, FleetBinding,
@@ -370,6 +373,125 @@ fn assert_root_draining_publication(
         .expect_err("reject corrupted root Draining publication receipt");
     assert_eq!(invalid.code, ErrorCode::InvariantViolation);
     FleetCoordinatorRegistryStore::import(valid);
+
+    assert_root_removal_publication(first_entry, second_entry, &published);
+}
+
+fn assert_root_removal_publication(
+    first_entry: &FleetSubnetRootEntry,
+    second_entry: &FleetSubnetRootEntry,
+    published: &canic_core::dto::fleet_registry::FleetSubnetRootDrainingPublicationResponse,
+) {
+    let removal_request = FleetSubnetRootRemovalPublicationRequest {
+        expected_registry: published.version.clone(),
+        final_inventory: FleetSubnetRootFinalInventoryResponse {
+            operation_id: [21; 32],
+            fleet_subnet_root: first_entry.fleet_subnet_root,
+            placement_subnet: first_entry.placement_subnet,
+            registry: published.version.clone(),
+            component_topology_digest: first_entry.component_topology_digest,
+            active_release_set: first_entry.active_release_set,
+            next_allocation_sequence: 3,
+            removed_component_instances: 2,
+            terminal_component_history_hash: [23; 32],
+            root_registry_encoded_bytes: 1_024,
+            wasm_store: principal(24),
+            wasm_store_catalog_hash: [25; 32],
+            wasm_store_catalog_entries: 2,
+            wasm_store_occupied_bytes: 2_048,
+            wasm_store_template_count: 2,
+            wasm_store_release_count: 2,
+            wasm_store_gc_prepared_at_secs: 26,
+            finalized_at_ns: 27,
+            inventory_hash: [28; 32],
+        },
+    };
+    let before_unauthorized = FleetCoordinatorRegistryStore::export();
+    let unauthorized = FleetCoordinatorWorkflow::publish_root_removed(
+        second_entry.fleet_subnet_root,
+        removal_request.clone(),
+    )
+    .expect_err("only the exact draining root can publish its removal");
+    assert_eq!(
+        unauthorized.public_error().map(|error| error.code),
+        Some(ErrorCode::Forbidden)
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), before_unauthorized);
+
+    let removed = FleetCoordinatorWorkflow::publish_root_removed(
+        first_entry.fleet_subnet_root,
+        removal_request.clone(),
+    )
+    .expect("publish root Removed");
+    assert_eq!(removed.previous_version, published.version);
+    assert_eq!(removed.version.revision, published.version.revision + 1);
+    let durable = FleetCoordinatorRegistryStore::export();
+    FleetCoordinatorRegistryStore::import(durable);
+    assert_eq!(
+        FleetCoordinatorWorkflow::publish_root_removed(
+            first_entry.fleet_subnet_root,
+            removal_request,
+        )
+        .expect("exact removal retry after restart"),
+        removed
+    );
+    let registry = FleetCoordinatorWorkflow::registry().expect("Removed Registry");
+    assert_eq!(
+        registry
+            .fleet_subnet_roots
+            .iter()
+            .find(|entry| entry.fleet_subnet_root == first_entry.fleet_subnet_root)
+            .expect("removed root")
+            .status,
+        FleetSubnetRootStatus::Removed
+    );
+    assert_eq!(
+        registry
+            .fleet_subnet_roots
+            .iter()
+            .find(|entry| entry.fleet_subnet_root == second_entry.fleet_subnet_root)
+            .expect("surviving root")
+            .status,
+        FleetSubnetRootStatus::Active
+    );
+    assert_later_root_can_drain_after_removal(second_entry, &removed.version);
+}
+
+fn assert_later_root_can_drain_after_removal(
+    second_entry: &FleetSubnetRootEntry,
+    removed_version: &FleetRegistryVersion,
+) {
+    let request = FleetSubnetRootDrainingPublicationRequest {
+        expected_registry: removed_version.clone(),
+        root_draining: FleetSubnetRootDrainingResponse {
+            operation_id: [31; 32],
+            fleet_subnet_root: second_entry.fleet_subnet_root,
+            placement_subnet: second_entry.placement_subnet,
+            active_registry: removed_version.clone(),
+            component_topology_digest: second_entry.component_topology_digest,
+            active_release_set: second_entry.active_release_set,
+            next_allocation_sequence: 1,
+            reserved_component_instances: 0,
+            committed_component_instances: 0,
+            managed_descendants: 0,
+            known_created_component_canisters: 0,
+            root_registry_encoded_bytes: 0,
+            started_at_ns: 32,
+        },
+    };
+    let published = FleetCoordinatorWorkflow::publish_root_draining(request)
+        .expect("publish later root Draining after removal");
+    assert_eq!(published.previous_version, removed_version.clone());
+    let registry = FleetCoordinatorWorkflow::registry().expect("interleaved lifecycle Registry");
+    assert_eq!(
+        registry
+            .fleet_subnet_roots
+            .iter()
+            .find(|entry| entry.fleet_subnet_root == second_entry.fleet_subnet_root)
+            .expect("later draining root")
+            .status,
+        FleetSubnetRootStatus::Draining
+    );
 }
 
 fn joining_entry(

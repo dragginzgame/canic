@@ -27,6 +27,11 @@ use std::{
 
 const ICP_REFILL_METHOD: &str = "canic_icp_refill";
 
+fn extend_hash_part(bytes: &mut Vec<u8>, part: &[u8]) {
+    bytes.extend_from_slice(&(part.len() as u64).to_be_bytes());
+    bytes.extend_from_slice(part);
+}
+
 pub(super) fn run(args: Vec<OsString>) -> Result<(), CyclesCommandError> {
     let options = ConvertOptions::parse(args)?;
     run_options(&options)

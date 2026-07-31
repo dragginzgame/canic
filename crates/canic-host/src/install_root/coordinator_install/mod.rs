@@ -7,7 +7,8 @@
 
 use super::{
     commands::{
-        add_icp_environment_target, icp_canister_command, parse_created_canister_id, run_command,
+        add_icp_environment_target, candid_arg, icp_canister_command, icp_e8s_text,
+        parse_created_canister_id, run_command,
     },
     coordinator_install_journal::{
         FleetCoordinatorInstallJournal, FleetCoordinatorInstallPhase,
@@ -16,26 +17,25 @@ use super::{
         plan_fleet_coordinator_install, record_coordinator_created, record_coordinator_installed,
         record_coordinator_verified,
     },
-    operations::{module_hash_text, parse_module_hash},
+    operations::{module_hash_text, parse_module_hash, query_live_registry},
 };
 use crate::{
     durable_io::{
         RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
     },
     fleet_install_plan::{PersistedFleetInstallPlan, PlannedCanisterCreationFunding},
-    icp::{IcpCli, LocalReplicaTarget, decode_json_result_response, run_output_to_file},
+    icp::{LocalReplicaTarget, run_output_to_file},
     release_set::{
         AppConfigSnapshot, CanicInfrastructureRole,
         load_persisted_canic_infrastructure_artifact_manifest, resolve_release_artifact_path,
     },
 };
-use candid::{IDLValue, Principal};
+use candid::Principal;
 use canic_control_plane::dto::fleet_coordinator::FleetCoordinatorInitArgs;
 use canic_core::{
     control_plane_support::ops::fleet_registry::FleetRegistryOps,
     dto::fleet_registry::{FleetRegistry, FleetRegistryManifest, FleetRegistryVersion},
     ids::{FleetCoordinatorBinding, FleetRegistryAuthority},
-    protocol,
 };
 use sha2::{Digest, Sha256};
 use std::{
@@ -44,7 +44,6 @@ use std::{
 };
 use thiserror::Error as ThisError;
 
-const ICP_JSON_OUTPUT: &str = "json";
 const MAX_COORDINATOR_TRANSITIONS: usize = 8;
 
 ///
@@ -352,25 +351,14 @@ fn verify_live_coordinator_genesis(
 
     let expected = expected_genesis(journal)?;
     let icp = super::install_icp(icp_root, environment, local_replica);
-    let registry =
-        query_coordinator::<FleetRegistry>(&icp, coordinator, protocol::CANIC_FLEET_REGISTRY)?;
-    if registry != expected.registry {
+    let live = query_live_registry(&icp, coordinator)?;
+    if live.registry != expected.registry {
         return Err(CoordinatorInstallStateError::RegistryMismatch.into());
     }
-    let manifest = query_coordinator::<FleetRegistryManifest>(
-        &icp,
-        coordinator,
-        protocol::CANIC_FLEET_REGISTRY_MANIFEST,
-    )?;
-    if manifest != expected.manifest {
+    if live.manifest != expected.manifest {
         return Err(CoordinatorInstallStateError::RegistryManifestMismatch.into());
     }
-    let version = query_coordinator::<FleetRegistryVersion>(
-        &icp,
-        coordinator,
-        protocol::CANIC_FLEET_REGISTRY_VERSION,
-    )?;
-    if version != expected.version {
+    if live.version != expected.version {
         return Err(CoordinatorInstallStateError::RegistryVersionMismatch.into());
     }
     Ok(expected)
@@ -399,57 +387,29 @@ fn verify_live_coordinator_current(
 
     let expected = expected_genesis(journal)?;
     let icp = super::install_icp(icp_root, environment, local_replica);
-    let registry =
-        query_coordinator::<FleetRegistry>(&icp, coordinator, protocol::CANIC_FLEET_REGISTRY)?;
+    let live = query_live_registry(&icp, coordinator)?;
     FleetRegistryOps::validate(
         &expected.init_args.authority,
         &journal.component_topology,
-        &registry,
-    )?;
-    let manifest = query_coordinator::<FleetRegistryManifest>(
-        &icp,
-        coordinator,
-        protocol::CANIC_FLEET_REGISTRY_MANIFEST,
+        &live.registry,
     )?;
     let expected_manifest = FleetRegistryOps::manifest(
         &expected.init_args.authority,
         &journal.component_topology,
-        &registry,
+        &live.registry,
     )?;
-    if manifest != expected_manifest {
+    if live.manifest != expected_manifest {
         return Err(CoordinatorInstallStateError::RegistryManifestMismatch.into());
     }
-    let version = query_coordinator::<FleetRegistryVersion>(
-        &icp,
-        coordinator,
-        protocol::CANIC_FLEET_REGISTRY_VERSION,
-    )?;
     let expected_version = FleetRegistryOps::version(
         &expected.init_args.authority,
         &journal.component_topology,
-        &registry,
+        &live.registry,
     )?;
-    if version != expected_version {
+    if live.version != expected_version {
         return Err(CoordinatorInstallStateError::RegistryVersionMismatch.into());
     }
     Ok(())
-}
-
-fn query_coordinator<T>(
-    icp: &IcpCli,
-    coordinator: Principal,
-    method: &str,
-) -> Result<T, Box<dyn std::error::Error>>
-where
-    T: candid::CandidType + serde::de::DeserializeOwned,
-{
-    let output = icp.canister_query_output_with_candid(
-        &coordinator.to_text(),
-        method,
-        Some(ICP_JSON_OUTPUT),
-        None,
-    )?;
-    decode_json_result_response(&output).map_err(Into::into)
 }
 
 fn expected_genesis(
@@ -523,7 +483,7 @@ fn resolve_coordinator_artifact(
         }
         .into());
     }
-    let actual_hash = hex_digest(Sha256::digest(&wasm).into());
+    let actual_hash = module_hash_text(Sha256::digest(&wasm).into());
     if actual_hash != entry.wasm_sha256_hex {
         return Err(CoordinatorInstallStateError::ArtifactHash {
             path: wasm_path,
@@ -576,14 +536,9 @@ fn coordinator_install_command(
         "--wasm",
     ]);
     command.arg(wasm_path);
-    command.args(["--args", &coordinator_init_args(init_args)?]);
+    command.args(["--args", &candid_arg(init_args)?]);
     add_icp_environment_target(&mut command, environment, local_replica);
     Ok(command)
-}
-
-fn coordinator_init_args(args: &FleetCoordinatorInitArgs) -> Result<String, candid::Error> {
-    let value = IDLValue::try_from_candid_type(args)?;
-    Ok(format!("({value})"))
 }
 
 fn observed_module_hash(
@@ -762,27 +717,6 @@ fn open_creation_result_for_effect(_path: &Path) -> io::Result<fs::File> {
     ))
 }
 
-fn icp_e8s_text(e8s: u64) -> String {
-    const E8S_PER_ICP: u64 = 100_000_000;
-    let whole = e8s / E8S_PER_ICP;
-    let remainder = e8s % E8S_PER_ICP;
-    if remainder == 0 {
-        return whole.to_string();
-    }
-    let fractional = format!("{remainder:08}");
-    format!("{whole}.{}", fractional.trim_end_matches('0'))
-}
-
-fn hex_digest(bytes: [u8; 32]) -> String {
-    bytes
-        .iter()
-        .fold(String::with_capacity(64), |mut text, byte| {
-            use std::fmt::Write as _;
-            let _ = write!(text, "{byte:02x}");
-            text
-        })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -790,14 +724,6 @@ mod tests {
         AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, ReleaseBuildId,
         ReleaseBuildNonce, SubnetId,
     };
-
-    #[test]
-    fn renders_exact_icp_e8s_without_float_rounding() {
-        assert_eq!(icp_e8s_text(1), "0.00000001");
-        assert_eq!(icp_e8s_text(10_000_000), "0.1");
-        assert_eq!(icp_e8s_text(100_000_000), "1");
-        assert_eq!(icp_e8s_text(123_456_789), "1.23456789");
-    }
 
     #[test]
     fn coordinator_creation_command_binds_subnet_and_exact_cycles() {

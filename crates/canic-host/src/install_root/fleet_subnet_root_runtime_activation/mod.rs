@@ -10,12 +10,13 @@ use super::fleet_subnet_root_install_journal::{
     record_root_activated, record_root_activation_prepared, record_root_activation_verified,
     validate_live_root_activation_status,
 };
+use super::operations::{call_no_arg, call_with_arg, query_no_arg};
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
-    icp::{IcpCli, LocalReplicaTarget, decode_json_result_response},
+    icp::LocalReplicaTarget,
     release_set::{AppConfigSnapshot, load_persisted_canic_infrastructure_artifact_manifest},
 };
-use candid::{CandidType, IDLValue, Principal};
+use candid::Principal;
 use canic_core::{
     dto::{
         component_registry::{
@@ -28,7 +29,6 @@ use canic_core::{
 use std::path::Path;
 use thiserror::Error as ThisError;
 
-const ICP_JSON_OUTPUT: &str = "json";
 const MAX_ROOT_ACTIVATION_TRANSITIONS: usize = 7;
 
 #[derive(Debug, ThisError)]
@@ -133,7 +133,7 @@ fn drive_root_runtime_activation(
                     &icp,
                     root,
                     protocol::CANIC_RESUME_FLEET_ACTIVATION,
-                    request,
+                    &request,
                     false,
                 )?;
                 record_root_activated(&current, response)?
@@ -144,7 +144,7 @@ fn drive_root_runtime_activation(
                     &icp,
                     root,
                     protocol::CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
-                    component_registry_request.clone(),
+                    &component_registry_request,
                     true,
                 )?;
                 record_root_activation_verified(&current, response, component_registry)?
@@ -156,7 +156,7 @@ fn drive_root_runtime_activation(
                     &icp,
                     root,
                     protocol::CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
-                    component_registry_request,
+                    &component_registry_request,
                     true,
                 )?;
                 if current.journal.root_activation_response.as_ref() != Some(&response)
@@ -175,72 +175,4 @@ fn drive_root_runtime_activation(
     }
 
     Err(RootRuntimeActivationError::TransitionBoundExceeded.into())
-}
-
-fn call_no_arg<O>(
-    icp: &IcpCli,
-    canister: Principal,
-    method: &str,
-) -> Result<O, Box<dyn std::error::Error>>
-where
-    O: CandidType + serde::de::DeserializeOwned,
-{
-    let output = icp.canister_call_arg_output_with_candid(
-        &canister.to_text(),
-        method,
-        "()",
-        Some(ICP_JSON_OUTPUT),
-        None,
-    )?;
-    decode_json_result_response(&output).map_err(Into::into)
-}
-
-fn call_with_arg<I, O>(
-    icp: &IcpCli,
-    canister: Principal,
-    method: &str,
-    input: I,
-    query: bool,
-) -> Result<O, Box<dyn std::error::Error>>
-where
-    I: CandidType,
-    O: CandidType + serde::de::DeserializeOwned,
-{
-    let value = IDLValue::try_from_candid_type(&input)?;
-    let args = format!("({value})");
-    let output = if query {
-        icp.canister_query_arg_output_with_candid(
-            &canister.to_text(),
-            method,
-            &args,
-            Some(ICP_JSON_OUTPUT),
-            None,
-        )?
-    } else {
-        icp.canister_call_arg_output_with_candid(
-            &canister.to_text(),
-            method,
-            &args,
-            Some(ICP_JSON_OUTPUT),
-            None,
-        )?
-    };
-    decode_json_result_response(&output).map_err(Into::into)
-}
-
-fn query_no_arg<O>(
-    icp: &IcpCli,
-    canister: Principal,
-    method: &str,
-) -> Result<O, Box<dyn std::error::Error>>
-where
-    O: CandidType + serde::de::DeserializeOwned,
-{
-    let output = icp.canister_query_output_with_candid(
-        &canister.to_text(),
-        method,
-        Some(ICP_JSON_OUTPUT),
-        None,
-    )?;
-    decode_json_result_response(&output).map_err(Into::into)
 }

@@ -155,6 +155,34 @@ impl WasmStorePublicationWorkflow {
         Ok((runtime.pid, live))
     }
 
+    /// Re-read the sole root Store and require the retained final-inventory write fence.
+    pub async fn verify_single_root_store_for_removal()
+    -> Result<(Principal, WasmStoreStatusResponse), InternalError> {
+        let _guard = LifecycleOperationGuard::try_enter()?;
+        Self::sync_registered_wasm_store_inventory()?;
+        let stores = SubnetStateOps::wasm_stores();
+        if stores.len() != 1 {
+            return Err(PublicationWorkflowError::InvalidState(format!(
+                "root removal requires exactly one local wasm store, found {}",
+                stores.len()
+            ))
+            .into());
+        }
+        let runtime = stores.into_iter().next().expect("validated one Store");
+        let live = store_status(runtime.pid).await?;
+        validate_live_prepared_store(&live)?;
+        let runtime_is_exact = PreparedStoreGcAuthority::from_runtime(&runtime)
+            == PreparedStoreGcAuthority::from_live(runtime.pid, &live.gc);
+        if !runtime_is_exact {
+            return Err(PublicationWorkflowError::InvalidState(format!(
+                "persisted GC authority for '{}' differs from its live Store",
+                runtime.binding
+            ))
+            .into());
+        }
+        Ok((runtime.pid, live))
+    }
+
     // Resolve one binding from authoritative runtime inventory.
     fn runtime_store(binding: &WasmStoreBinding) -> Result<WasmStoreView, InternalError> {
         SubnetStateOps::wasm_stores()

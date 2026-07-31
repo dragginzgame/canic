@@ -1,6 +1,6 @@
 use crate::icp::{self, LocalReplicaTarget};
-use candid::IDLValue;
-use canic_core::{cdk::types::Principal, dto::fleet_subnet_root::FleetSubnetRootInitArgs};
+use candid::{CandidType, IDLValue};
+use canic_core::cdk::types::Principal;
 use serde_json::Value as JsonValue;
 use std::{path::Path, process::Command};
 
@@ -28,7 +28,7 @@ pub(super) fn parse_canister_id_json(value: &JsonValue) -> Option<String> {
     }
 }
 
-pub(super) fn root_init_args(args: &FleetSubnetRootInitArgs) -> Result<String, candid::Error> {
+pub(super) fn candid_arg<T: CandidType>(args: &T) -> Result<String, candid::Error> {
     let value = IDLValue::try_from_candid_type(args)?;
     Ok(format!("({value})"))
 }
@@ -49,4 +49,15 @@ pub(super) fn add_icp_environment_target(
     local_replica: Option<&LocalReplicaTarget>,
 ) {
     icp::add_target_args(command, Some(environment), local_replica);
+}
+
+pub(super) fn icp_e8s_text(e8s: u64) -> String {
+    const E8S_PER_ICP: u64 = 100_000_000;
+    let whole = e8s / E8S_PER_ICP;
+    let remainder = e8s % E8S_PER_ICP;
+    if remainder == 0 {
+        return whole.to_string();
+    }
+    let fractional = format!("{remainder:08}");
+    format!("{whole}.{}", fractional.trim_end_matches('0'))
 }

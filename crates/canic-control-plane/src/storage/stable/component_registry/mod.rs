@@ -235,6 +235,7 @@ pub struct RootFleetSubnetDrainingRecord {
     pub started_at_ns: u64,
     pub final_inventory_intent: Option<RootFleetSubnetFinalInventoryIntentRecord>,
     pub final_inventory: Option<RootFleetSubnetFinalInventoryRecord>,
+    pub removal_publication: Option<RootFleetSubnetRemovalPublicationRecord>,
 }
 
 ///
@@ -282,6 +283,21 @@ pub struct RootFleetSubnetFinalInventoryRecord {
     pub inventory_hash: [u8; 32],
 }
 
+///
+/// RootFleetSubnetRemovalPublicationRecord
+///
+/// Durable local evidence of the Coordinator's exact logical root-removal commit.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootFleetSubnetRemovalPublicationRecord {
+    pub operation_id: [u8; 32],
+    pub final_inventory_hash: [u8; 32],
+    pub previous_registry: FleetRegistryVersion,
+    pub registry: FleetRegistryVersion,
+    pub recorded_at_ns: u64,
+}
+
 #[cfg(feature = "root-control-plane")]
 impl RootFleetSubnetDrainingRecord {
     pub(crate) fn is_valid_for_current(&self, meta: &RootComponentRegistryMetaRecord) -> bool {
@@ -302,6 +318,10 @@ impl RootFleetSubnetDrainingRecord {
             .final_inventory
             .as_ref()
             .is_none_or(|inventory| inventory.is_valid_for_current(meta, self));
+        let removal_publication_is_valid = self
+            .removal_publication
+            .as_ref()
+            .is_none_or(|publication| publication.is_valid_for_current(self));
         [
             source_is_exact,
             registry_is_covered,
@@ -311,6 +331,7 @@ impl RootFleetSubnetDrainingRecord {
             bytes_are_bounded,
             final_inventory_intent_is_valid,
             final_inventory_is_valid,
+            removal_publication_is_valid,
         ]
         .into_iter()
         .all(|valid| valid)
@@ -391,6 +412,35 @@ impl RootFleetSubnetFinalInventoryRecord {
             self.finalized_at_ns >= draining.started_at_ns,
             self.inventory_hash != [0; 32],
             intent_is_exact,
+        ]
+        .into_iter()
+        .all(|valid| valid)
+    }
+}
+
+#[cfg(feature = "root-control-plane")]
+impl RootFleetSubnetRemovalPublicationRecord {
+    fn is_valid_for_current(&self, draining: &RootFleetSubnetDrainingRecord) -> bool {
+        let Some(inventory) = draining.final_inventory.as_ref() else {
+            return false;
+        };
+        let registry_transition_is_exact = [
+            self.previous_registry.authority == self.registry.authority,
+            self.previous_registry.content_hash != [0; 32],
+            self.registry.content_hash != [0; 32],
+            self.previous_registry
+                .revision
+                .checked_add(1)
+                .is_some_and(|revision| revision == self.registry.revision),
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        [
+            self.operation_id == draining.operation_id,
+            self.final_inventory_hash == inventory.inventory_hash,
+            registry_covers_preparation(&inventory.registry, &self.previous_registry),
+            registry_transition_is_exact,
+            self.recorded_at_ns >= inventory.finalized_at_ns,
         ]
         .into_iter()
         .all(|valid| valid)
@@ -2389,6 +2439,44 @@ impl RootComponentRegistryStore {
                 .as_mut()
                 .expect("validated root draining authority")
                 .final_inventory = Some(record);
+            state.current = Some(next);
+            cell.set(state);
+            Ok(RootComponentRegistryCommitOutcome::Committed)
+        })
+    }
+
+    pub(crate) fn record_root_removal_publication(
+        expected: &RootComponentRegistryMetaRecord,
+        record: RootFleetSubnetRemovalPublicationRecord,
+    ) -> Result<RootComponentRegistryCommitOutcome, RootComponentRegistryCommitError> {
+        ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            let current = state
+                .current
+                .as_ref()
+                .ok_or(RootComponentRegistryCommitError::ConflictingState)?;
+            let draining = current
+                .root_draining
+                .as_ref()
+                .ok_or(RootComponentRegistryCommitError::ConflictingState)?;
+            if draining.removal_publication.as_ref() == Some(&record) {
+                return Ok(RootComponentRegistryCommitOutcome::Existing);
+            }
+            let transition_is_exact = [
+                current == expected,
+                draining.removal_publication.is_none(),
+                record.is_valid_for_current(draining),
+            ]
+            .into_iter()
+            .all(|valid| valid);
+            if !transition_is_exact {
+                return Err(RootComponentRegistryCommitError::ConflictingState);
+            }
+            let mut next = current.clone();
+            next.root_draining
+                .as_mut()
+                .expect("validated root draining authority")
+                .removal_publication = Some(record);
             state.current = Some(next);
             cell.set(state);
             Ok(RootComponentRegistryCommitOutcome::Committed)

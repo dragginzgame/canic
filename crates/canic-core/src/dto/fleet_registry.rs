@@ -5,7 +5,8 @@
 //! Boundary: Coordinator and Fleet Subnet Root workflows validate these passive shapes.
 
 use crate::dto::{
-    fleet_subnet_root::FleetSubnetRootDrainingResponse, root_store::RootStoreBootstrapRequest,
+    fleet_subnet_root::{FleetSubnetRootDrainingResponse, FleetSubnetRootFinalInventoryResponse},
+    root_store::RootStoreBootstrapRequest,
 };
 use crate::ids::{
     CanisterRole, ComponentSpecAdmission, ComponentSpecId, ComponentTopologyDigest,
@@ -168,6 +169,31 @@ pub struct FleetSubnetRootDrainingPublicationRequest {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootDrainingPublicationResponse {
     pub root_draining: FleetSubnetRootDrainingResponse,
+    pub previous_version: FleetRegistryVersion,
+    pub version: FleetRegistryVersion,
+}
+
+///
+/// FleetSubnetRootRemovalPublicationRequest
+///
+/// Root-authenticated command publishing one exact terminal inventory to the Coordinator.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootRemovalPublicationRequest {
+    pub expected_registry: FleetRegistryVersion,
+    pub final_inventory: FleetSubnetRootFinalInventoryResponse,
+}
+
+///
+/// FleetSubnetRootRemovalPublicationResponse
+///
+/// Durable response authority for one root's canonical `Draining -> Removed` transition.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootRemovalPublicationResponse {
+    pub final_inventory: FleetSubnetRootFinalInventoryResponse,
     pub previous_version: FleetRegistryVersion,
     pub version: FleetRegistryVersion,
 }
