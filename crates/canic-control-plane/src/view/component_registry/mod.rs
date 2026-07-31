@@ -44,6 +44,36 @@ pub struct RootFleetSubnetDrainingView {
     pub known_created_component_canisters: u32,
     pub root_registry_encoded_bytes: u64,
     pub started_at_ns: u64,
+    pub final_inventory: Option<RootFleetSubnetFinalInventoryView>,
+}
+
+///
+/// RootFleetSubnetFinalInventoryView
+///
+/// Read-only terminal Component history and retained write-fenced Store authority.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootFleetSubnetFinalInventoryView {
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+    pub placement_subnet: SubnetId,
+    pub registry: FleetRegistryVersion,
+    pub component_topology_digest: ComponentTopologyDigest,
+    pub active_release_set: FleetSubnetRootReleaseSet,
+    pub next_allocation_sequence: u64,
+    pub removed_component_instances: u32,
+    pub terminal_component_history_hash: [u8; 32],
+    pub root_registry_encoded_bytes: u64,
+    pub wasm_store: Principal,
+    pub wasm_store_catalog_hash: [u8; 32],
+    pub wasm_store_catalog_entries: u32,
+    pub wasm_store_occupied_bytes: u64,
+    pub wasm_store_template_count: u32,
+    pub wasm_store_release_count: u32,
+    pub wasm_store_gc_prepared_at_secs: u64,
+    pub finalized_at_ns: u64,
+    pub inventory_hash: [u8; 32],
 }
 
 ///

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.67` freezes one exact terminal Fleet Subnet Root inventory from
+  canonical removed-Component history and the retained write-fenced local
+  Wasm Store, and completes a focused host module-surface hardening pass.
+
 - `0.100.66` atomically converges mixed `Active`/`Draining` Fleet Registry
   snapshots through root mirrors without reopening allocation, and removes
   obsolete dead-code suppression plus 866 net lines of unreachable test support,

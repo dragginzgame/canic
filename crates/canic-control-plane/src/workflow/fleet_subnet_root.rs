@@ -1,6 +1,6 @@
 //! Module: workflow::fleet_subnet_root
 //!
-//! Responsibility: validate active root authority, begin local draining and project summaries.
+//! Responsibility: validate root authority, orchestrate draining/final inventory and project summaries.
 //! Does not own: durable records, Coordinator Registry mutation, Component effects, or CLI output.
 //! Boundary: root actions require consistent protected, mirror, runtime and Component authority.
 
@@ -9,7 +9,12 @@ use crate::{
         component_registry::ComponentRegistryOps, fleet_registry_mirror::FleetRegistryMirrorOps,
         storage::state::subnet::SubnetStateOps,
     },
-    view::component_registry::{RootComponentRegistryView, RootFleetSubnetDrainingView},
+    view::component_registry::{
+        RootComponentRegistryView, RootFleetSubnetDrainingView, RootFleetSubnetFinalInventoryView,
+    },
+    workflow::{
+        bootstrap::root_store, runtime::template::publication::WasmStorePublicationWorkflow,
+    },
 };
 use canic_core::{
     api::fleet_activation::FleetActivationApi,
@@ -22,7 +27,8 @@ use canic_core::{
         fleet_subnet_root::{
             FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary,
             FleetSubnetRootDrainingRequest, FleetSubnetRootDrainingResponse,
-            FleetSubnetRootDrainingStatusRequest,
+            FleetSubnetRootDrainingStatusRequest, FleetSubnetRootFinalInventoryRequest,
+            FleetSubnetRootFinalInventoryResponse, FleetSubnetRootFinalInventoryStatusRequest,
         },
     },
     ids::{FleetSubnetRootBinding, FleetSubnetRootReleaseSet},
@@ -69,6 +75,68 @@ pub fn draining_status(
 ) -> Result<FleetSubnetRootDrainingResponse, InternalError> {
     let _state = validated_root_state()?;
     ComponentRegistryOps::root_draining(request.operation_id).map(draining_response)
+}
+
+/// Freeze one exact terminal Component history and retained write-fenced Store inventory.
+pub async fn finalize_inventory(
+    request: FleetSubnetRootFinalInventoryRequest,
+) -> Result<FleetSubnetRootFinalInventoryResponse, InternalError> {
+    let state = validated_root_state()?;
+    ensure_root_is_published_draining(&state)?;
+    if let Some(existing) =
+        ComponentRegistryOps::root_final_inventory_if_present(request.operation_id)?
+    {
+        if request.expected_registry != existing.registry {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root final inventory retry names a different Registry",
+            ));
+        }
+        return Ok(final_inventory_response(existing));
+    }
+    let intent_registry =
+        ComponentRegistryOps::root_final_inventory_intent_registry(request.operation_id)?;
+    if let Some(intent_registry) = intent_registry {
+        if request.expected_registry != intent_registry {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root final inventory differs from its durable intent",
+            ));
+        }
+    } else if request.expected_registry != state.fleet_registry {
+        return Err(InternalError::conflict(
+            "Fleet Subnet Root final inventory request differs from the active Registry mirror",
+        ));
+    }
+    ComponentRegistryOps::begin_root_final_inventory(
+        request.operation_id,
+        &request.expected_registry,
+        IcOps::now_nanos(),
+    )?;
+    let (wasm_store, store_status) =
+        WasmStorePublicationWorkflow::quiesce_single_root_store_for_final_inventory().await?;
+    let store = root_store::status(state.component_registry.store_bootstrap).await?;
+    if store.wasm_store != wasm_store {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "write-fenced Store differs from the exact root release-set catalog",
+        ));
+    }
+    ComponentRegistryOps::finalize_root_inventory(
+        request.operation_id,
+        &request.expected_registry,
+        &store,
+        &store_status,
+        IcOps::now_nanos(),
+    )
+    .map(final_inventory_response)
+}
+
+/// Read one exact durable terminal root-local inventory without mutation.
+pub fn final_inventory_status(
+    request: FleetSubnetRootFinalInventoryStatusRequest,
+) -> Result<FleetSubnetRootFinalInventoryResponse, InternalError> {
+    let state = validated_root_state()?;
+    ensure_root_is_published_draining(&state)?;
+    ComponentRegistryOps::root_final_inventory(request.operation_id).map(final_inventory_response)
 }
 
 /// Return one compact, fail-closed inventory for this active Fleet Subnet Root.
@@ -186,6 +254,17 @@ fn validate_draining_evidence(
     Ok(())
 }
 
+fn ensure_root_is_published_draining(
+    state: &ValidatedFleetSubnetRootState,
+) -> Result<(), InternalError> {
+    if state.root_entry.status != FleetSubnetRootStatus::Draining {
+        return Err(InternalError::conflict(
+            "Fleet Subnet Root final inventory requires a published Draining Registry entry",
+        ));
+    }
+    Ok(())
+}
+
 fn summary(
     fleet_registry: FleetRegistryVersion,
     root_entry: FleetSubnetRootEntry,
@@ -247,6 +326,32 @@ fn draining_response(view: RootFleetSubnetDrainingView) -> FleetSubnetRootDraini
         known_created_component_canisters: view.known_created_component_canisters,
         root_registry_encoded_bytes: view.root_registry_encoded_bytes,
         started_at_ns: view.started_at_ns,
+    }
+}
+
+fn final_inventory_response(
+    view: RootFleetSubnetFinalInventoryView,
+) -> FleetSubnetRootFinalInventoryResponse {
+    FleetSubnetRootFinalInventoryResponse {
+        operation_id: view.operation_id,
+        fleet_subnet_root: view.fleet_subnet_root,
+        placement_subnet: view.placement_subnet,
+        registry: view.registry,
+        component_topology_digest: view.component_topology_digest,
+        active_release_set: view.active_release_set,
+        next_allocation_sequence: view.next_allocation_sequence,
+        removed_component_instances: view.removed_component_instances,
+        terminal_component_history_hash: view.terminal_component_history_hash,
+        root_registry_encoded_bytes: view.root_registry_encoded_bytes,
+        wasm_store: view.wasm_store,
+        wasm_store_catalog_hash: view.wasm_store_catalog_hash,
+        wasm_store_catalog_entries: view.wasm_store_catalog_entries,
+        wasm_store_occupied_bytes: view.wasm_store_occupied_bytes,
+        wasm_store_template_count: view.wasm_store_template_count,
+        wasm_store_release_count: view.wasm_store_release_count,
+        wasm_store_gc_prepared_at_secs: view.wasm_store_gc_prepared_at_secs,
+        finalized_at_ns: view.finalized_at_ns,
+        inventory_hash: view.inventory_hash,
     }
 }
 

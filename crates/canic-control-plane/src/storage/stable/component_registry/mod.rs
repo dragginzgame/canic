@@ -233,6 +233,53 @@ pub struct RootFleetSubnetDrainingRecord {
     pub known_created_component_canisters: u32,
     pub root_registry_encoded_bytes: u64,
     pub started_at_ns: u64,
+    pub final_inventory_intent: Option<RootFleetSubnetFinalInventoryIntentRecord>,
+    pub final_inventory: Option<RootFleetSubnetFinalInventoryRecord>,
+}
+
+///
+/// RootFleetSubnetFinalInventoryIntentRecord
+///
+/// Durable terminal Component authority frozen before the Store write-fence effect.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootFleetSubnetFinalInventoryIntentRecord {
+    pub operation_id: [u8; 32],
+    pub registry: FleetRegistryVersion,
+    pub removed_component_instances: u32,
+    pub terminal_component_history_hash: [u8; 32],
+    pub root_registry_encoded_bytes: u64,
+    pub prepared_at_ns: u64,
+}
+
+///
+/// RootFleetSubnetFinalInventoryRecord
+///
+/// Durable terminal Component history and retained write-fenced Store authority.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootFleetSubnetFinalInventoryRecord {
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+    pub placement_subnet: SubnetId,
+    pub registry: FleetRegistryVersion,
+    pub component_topology_digest: ComponentTopologyDigest,
+    pub active_release_set: FleetSubnetRootReleaseSet,
+    pub next_allocation_sequence: u64,
+    pub removed_component_instances: u32,
+    pub terminal_component_history_hash: [u8; 32],
+    pub root_registry_encoded_bytes: u64,
+    pub wasm_store: Principal,
+    pub wasm_store_catalog_hash: [u8; 32],
+    pub wasm_store_catalog_entries: u32,
+    pub wasm_store_occupied_bytes: u64,
+    pub wasm_store_template_count: u32,
+    pub wasm_store_release_count: u32,
+    pub wasm_store_gc_prepared_at_secs: u64,
+    pub finalized_at_ns: u64,
+    pub inventory_hash: [u8; 32],
 }
 
 #[cfg(feature = "root-control-plane")]
@@ -247,6 +294,14 @@ impl RootFleetSubnetDrainingRecord {
         let sequence_is_valid = self.next_allocation_sequence > 0;
         let bytes_are_bounded =
             self.root_registry_encoded_bytes <= meta.root.limits.maximum_registry_bytes;
+        let final_inventory_intent_is_valid = self
+            .final_inventory_intent
+            .as_ref()
+            .is_none_or(|intent| intent.is_valid_for_current(meta, self));
+        let final_inventory_is_valid = self
+            .final_inventory
+            .as_ref()
+            .is_none_or(|inventory| inventory.is_valid_for_current(meta, self));
         [
             source_is_exact,
             registry_is_covered,
@@ -254,6 +309,8 @@ impl RootFleetSubnetDrainingRecord {
             time_is_valid,
             sequence_is_valid,
             bytes_are_bounded,
+            final_inventory_intent_is_valid,
+            final_inventory_is_valid,
         ]
         .into_iter()
         .all(|valid| valid)
@@ -262,9 +319,81 @@ impl RootFleetSubnetDrainingRecord {
     fn matches_begin_meta(&self, meta: &RootComponentRegistryMetaRecord) -> bool {
         let inventory_is_exact = RootFleetSubnetDrainingInventoryAuthority::from_record(self)
             == RootFleetSubnetDrainingInventoryAuthority::from_meta(meta);
-        [self.is_valid_for_current(meta), inventory_is_exact]
-            .into_iter()
-            .all(|valid| valid)
+        [
+            self.is_valid_for_current(meta),
+            inventory_is_exact,
+            self.final_inventory_intent.is_none(),
+            self.final_inventory.is_none(),
+        ]
+        .into_iter()
+        .all(|valid| valid)
+    }
+}
+
+#[cfg(feature = "root-control-plane")]
+impl RootFleetSubnetFinalInventoryIntentRecord {
+    fn is_valid_for_current(
+        &self,
+        meta: &RootComponentRegistryMetaRecord,
+        draining: &RootFleetSubnetDrainingRecord,
+    ) -> bool {
+        let removed_component_instances = draining.next_allocation_sequence.saturating_sub(1);
+        [
+            self.operation_id == draining.operation_id,
+            registry_covers_preparation(&draining.active_registry, &self.registry),
+            u64::from(self.removed_component_instances) == removed_component_instances,
+            self.terminal_component_history_hash != [0; 32],
+            self.root_registry_encoded_bytes == meta.encoded_bytes,
+            self.prepared_at_ns >= draining.started_at_ns,
+        ]
+        .into_iter()
+        .all(|valid| valid)
+    }
+}
+
+#[cfg(feature = "root-control-plane")]
+impl RootFleetSubnetFinalInventoryRecord {
+    fn is_valid_for_current(
+        &self,
+        meta: &RootComponentRegistryMetaRecord,
+        draining: &RootFleetSubnetDrainingRecord,
+    ) -> bool {
+        let removed_component_instances = self.next_allocation_sequence.saturating_sub(1);
+        let intent_is_exact = draining
+            .final_inventory_intent
+            .as_ref()
+            .is_some_and(|intent| {
+                [
+                    self.operation_id == intent.operation_id,
+                    self.registry == intent.registry,
+                    self.removed_component_instances == intent.removed_component_instances,
+                    self.terminal_component_history_hash == intent.terminal_component_history_hash,
+                    self.root_registry_encoded_bytes == intent.root_registry_encoded_bytes,
+                    self.finalized_at_ns >= intent.prepared_at_ns,
+                ]
+                .into_iter()
+                .all(|valid| valid)
+            });
+        [
+            self.operation_id == draining.operation_id,
+            self.fleet_subnet_root == draining.fleet_subnet_root,
+            self.placement_subnet == draining.placement_subnet,
+            registry_covers_preparation(&draining.active_registry, &self.registry),
+            self.component_topology_digest == draining.component_topology_digest,
+            self.active_release_set == draining.active_release_set,
+            self.next_allocation_sequence == draining.next_allocation_sequence,
+            u64::from(self.removed_component_instances) == removed_component_instances,
+            self.terminal_component_history_hash != [0; 32],
+            self.root_registry_encoded_bytes == meta.encoded_bytes,
+            self.wasm_store != Principal::anonymous(),
+            self.wasm_store_catalog_hash != [0; 32],
+            self.wasm_store_gc_prepared_at_secs > 0,
+            self.finalized_at_ns >= draining.started_at_ns,
+            self.inventory_hash != [0; 32],
+            intent_is_exact,
+        ]
+        .into_iter()
+        .all(|valid| valid)
     }
 }
 
@@ -2189,6 +2318,83 @@ impl RootComponentRegistryStore {
         })
     }
 
+    pub(crate) fn prepare_root_final_inventory(
+        expected: &RootComponentRegistryMetaRecord,
+        record: RootFleetSubnetFinalInventoryIntentRecord,
+    ) -> Result<RootComponentRegistryCommitOutcome, RootComponentRegistryCommitError> {
+        ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            let current = state
+                .current
+                .as_ref()
+                .ok_or(RootComponentRegistryCommitError::ConflictingState)?;
+            let draining = current
+                .root_draining
+                .as_ref()
+                .ok_or(RootComponentRegistryCommitError::ConflictingState)?;
+            if draining.final_inventory_intent.as_ref() == Some(&record) {
+                return Ok(RootComponentRegistryCommitOutcome::Existing);
+            }
+            let transition_is_exact = [
+                current == expected,
+                draining.final_inventory_intent.is_none(),
+                draining.final_inventory.is_none(),
+                record.is_valid_for_current(current, draining),
+            ]
+            .into_iter()
+            .all(|valid| valid);
+            if !transition_is_exact {
+                return Err(RootComponentRegistryCommitError::ConflictingState);
+            }
+            let mut next = current.clone();
+            next.root_draining
+                .as_mut()
+                .expect("validated root draining authority")
+                .final_inventory_intent = Some(record);
+            state.current = Some(next);
+            cell.set(state);
+            Ok(RootComponentRegistryCommitOutcome::Committed)
+        })
+    }
+
+    pub(crate) fn finalize_root_inventory(
+        expected: &RootComponentRegistryMetaRecord,
+        record: RootFleetSubnetFinalInventoryRecord,
+    ) -> Result<RootComponentRegistryCommitOutcome, RootComponentRegistryCommitError> {
+        ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            let current = state
+                .current
+                .as_ref()
+                .ok_or(RootComponentRegistryCommitError::ConflictingState)?;
+            let draining = current
+                .root_draining
+                .as_ref()
+                .ok_or(RootComponentRegistryCommitError::ConflictingState)?;
+            if draining.final_inventory.as_ref() == Some(&record) {
+                return Ok(RootComponentRegistryCommitOutcome::Existing);
+            }
+            let transition_is_exact = [
+                current == expected,
+                draining.final_inventory.is_none(),
+                record.is_valid_for_current(current, draining),
+            ]
+            .into_iter()
+            .all(|valid| valid);
+            if !transition_is_exact {
+                return Err(RootComponentRegistryCommitError::ConflictingState);
+            }
+            let mut next = current.clone();
+            next.root_draining
+                .as_mut()
+                .expect("validated root draining authority")
+                .final_inventory = Some(record);
+            state.current = Some(next);
+            cell.set(state);
+            Ok(RootComponentRegistryCommitOutcome::Committed)
+        })
+    }
+
     #[must_use]
     #[cfg(test)]
     pub(crate) fn export() -> RootComponentRegistryData {
@@ -2284,6 +2490,25 @@ impl RootComponentRegistryStore {
     pub(crate) fn allocations() -> Vec<RootComponentAllocationRecord> {
         ROOT_COMPONENT_ALLOCATIONS
             .with_borrow(|map| map.iter().map(|entry| entry.value()).collect())
+    }
+
+    #[must_use]
+    pub(crate) fn component_drainings() -> Vec<RootComponentDrainingRecord> {
+        ROOT_COMPONENT_DRAINING.with_borrow(|map| map.iter().map(|entry| entry.value()).collect())
+    }
+
+    #[must_use]
+    pub(crate) fn registry_components() -> Vec<ComponentInstanceId> {
+        COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+            map.iter()
+                .map(|entry| ComponentInstanceId::from_generated_bytes(entry.key().component))
+                .collect()
+        })
+    }
+
+    #[must_use]
+    pub(crate) fn principal_inventory_is_empty() -> bool {
+        COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow(StableBtreeMap::is_empty)
     }
 
     #[must_use]
@@ -2437,6 +2662,20 @@ impl RootComponentRegistryStore {
                 operation_id,
                 traversal_steps,
             ))
+        })
+    }
+
+    #[must_use]
+    pub(crate) fn subtree_removal_history(
+        component: ComponentInstanceId,
+    ) -> Vec<RootComponentSubtreeRemovalCompletedLeafRecord> {
+        ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY.with_borrow(|map| {
+            let start = RootComponentSubtreeRemovalHistoryKey::new(component, [0; 32], 0);
+            let end =
+                RootComponentSubtreeRemovalHistoryKey::new(component, [u8::MAX; 32], u32::MAX);
+            map.range((Bound::Included(start), Bound::Included(end)))
+                .map(|entry| entry.value())
+                .collect()
         })
     }
 

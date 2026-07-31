@@ -10,6 +10,7 @@ use crate::{
         WasmStoreAdminCommand, WasmStoreAdminResponse, WasmStoreFinalizedStoreResponse,
     },
     ids::CanisterRole,
+    ops::component_registry::ComponentRegistryOps,
 };
 use canic_core::control_plane_support::error::InternalError;
 
@@ -28,6 +29,7 @@ impl WasmStorePublicationWorkflow {
     pub async fn handle_admin(
         cmd: WasmStoreAdminCommand,
     ) -> Result<WasmStoreAdminResponse, InternalError> {
+        ComponentRegistryOps::require_root_store_admin_open()?;
         match cmd {
             WasmStoreAdminCommand::PublishCurrentReleaseToStore { store_pid } => {
                 let cost_guard = PublicationCostGuard::reserve(PUBLICATION_ADMIN_COMMAND_KIND)?;

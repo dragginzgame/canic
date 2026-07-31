@@ -1,10 +1,12 @@
 //! Module: ops::component_registry
 //!
 //! Responsibility: read and commit Component Registry authority and lifecycle progress.
-//! Does not own: Store, Fleet Registry, topology, admission, or lifecycle validation.
+//! Does not own: Store side effects, Fleet Registry, topology, admission, or orchestration.
 //! Boundary: converts stable records into read-only views before workflow use.
 
 use crate::{
+    dto::template::WasmStoreStatusResponse,
+    ids::WasmStoreGcMode,
     storage::stable::component_registry::{
         ComponentRegistryChildRecord, ComponentRegistryChildTraversalRecord,
         ComponentRegistryParentRoleCountRecord, ComponentRegistryPartitionRecord,
@@ -28,7 +30,8 @@ use crate::{
         RootComponentSubtreeRemovalCompletedLeafRecord, RootComponentSubtreeRemovalCompletedRecord,
         RootComponentSubtreeRemovalProgressRecord, RootComponentSubtreeRemovalRecord,
         RootComponentSubtreeStopEffectRecord, RootComponentSubtreeStoppedEffectRecord,
-        RootFleetSubnetDrainingRecord,
+        RootFleetSubnetDrainingRecord, RootFleetSubnetFinalInventoryIntentRecord,
+        RootFleetSubnetFinalInventoryRecord,
     },
     view::component_registry::{
         ComponentDirectoryCanonicalCursor, ComponentDirectoryChildView,
@@ -51,7 +54,7 @@ use crate::{
         RootComponentSubtreeRemovalCompletedView, RootComponentSubtreeRemovalNodeView,
         RootComponentSubtreeRemovalProgressView, RootComponentSubtreeRemovalView,
         RootComponentSubtreeStopEffectView, RootComponentSubtreeStoppedEffectView,
-        RootFleetSubnetDrainingView,
+        RootFleetSubnetDrainingView, RootFleetSubnetFinalInventoryView,
     },
 };
 use candid::CandidType;
@@ -75,6 +78,7 @@ use canic_core::{
         },
         fleet_registry::{FleetDirectorySnapshot, FleetRegistryVersion},
         root_store::RootStoreBootstrapRequest,
+        root_store::RootStoreBootstrapResponse,
     },
     ids::{
         CanisterRole, ComponentBinding, ComponentChildBinding, ComponentInstanceId,
@@ -83,12 +87,17 @@ use canic_core::{
     },
 };
 use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, BTreeSet};
 
 const SUBTREE_REMOVAL_TRAVERSAL_BATCH_SIZE: u32 = 64;
 const COMPONENT_DRAINING_SUBTREE_OPERATION_DOMAIN: &[u8] =
     b"canic.component-draining.subtree-operation.v1";
 const COMPONENT_FINAL_INVENTORY_HASH_DOMAIN: &[u8] = b"canic.component.final-inventory.v1";
 const COMPONENT_MEMBERSHIP_REMOVAL_HASH_DOMAIN: &[u8] = b"canic.component.membership-removal.v1";
+const ROOT_TERMINAL_COMPONENT_HISTORY_HASH_DOMAIN: &[u8] =
+    b"canic.fleet-subnet-root.terminal-component-history.v1";
+const ROOT_STORE_FINAL_CATALOG_HASH_DOMAIN: &[u8] = b"canic.fleet-subnet-root.store-catalog.v1";
+const ROOT_FINAL_INVENTORY_HASH_DOMAIN: &[u8] = b"canic.fleet-subnet-root.final-inventory.v1";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SubtreeRemovalOrigin {
@@ -126,6 +135,64 @@ pub struct ComponentSpecInstanceCounts {
 pub struct RootComponentInitialInventoryPlan {
     pub receipt: RootComponentInitialInventoryView,
     pub operation_ids: Vec<[u8; 32]>,
+}
+
+///
+/// RootFleetSubnetFinalInventoryPlan
+///
+/// Exact terminal Component authority frozen before the Store quiescence effect.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootFleetSubnetFinalInventoryPlan {
+    pub operation_id: [u8; 32],
+    pub registry: FleetRegistryVersion,
+    pub removed_component_instances: u32,
+    pub terminal_component_history_hash: [u8; 32],
+    pub root_registry_encoded_bytes: u64,
+}
+
+#[derive(CandidType)]
+struct RootTerminalComponentHistoryHashEntry {
+    allocation_sequence: u64,
+    component: ComponentInstanceId,
+    allocation_operation_id: [u8; 32],
+    draining_operation_id: [u8; 32],
+    membership_removal_hash: [u8; 32],
+}
+
+#[derive(CandidType)]
+struct RootStoreFinalCatalogHashAuthority<'a> {
+    fleet_subnet_root: Principal,
+    wasm_store: Principal,
+    release_set: FleetSubnetRootReleaseSet,
+    catalog: &'a [canic_core::dto::root_store::RootStoreCatalogEntry],
+    occupied_store_bytes: u64,
+    template_count: u32,
+    release_count: u32,
+    gc_prepared_at_secs: u64,
+}
+
+#[derive(CandidType)]
+struct RootFleetSubnetFinalInventoryHashAuthority<'a> {
+    operation_id: [u8; 32],
+    fleet_subnet_root: Principal,
+    placement_subnet: canic_core::ids::SubnetId,
+    registry: &'a FleetRegistryVersion,
+    component_topology_digest: canic_core::ids::ComponentTopologyDigest,
+    active_release_set: FleetSubnetRootReleaseSet,
+    next_allocation_sequence: u64,
+    removed_component_instances: u32,
+    terminal_component_history_hash: [u8; 32],
+    root_registry_encoded_bytes: u64,
+    wasm_store: Principal,
+    wasm_store_catalog_hash: [u8; 32],
+    wasm_store_catalog_entries: u32,
+    wasm_store_occupied_bytes: u64,
+    wasm_store_template_count: u32,
+    wasm_store_release_count: u32,
+    wasm_store_gc_prepared_at_secs: u64,
+    finalized_at_ns: u64,
 }
 
 #[derive(CandidType)]
@@ -1044,6 +1111,8 @@ impl ComponentRegistryOps {
             known_created_component_canisters: current.known_created_component_canisters,
             root_registry_encoded_bytes: current.encoded_bytes,
             started_at_ns,
+            final_inventory_intent: None,
+            final_inventory: None,
         };
         RootComponentRegistryStore::begin_root_draining(&current, record.clone()).map_err(
             |error| match error {
@@ -1095,6 +1164,227 @@ impl ComponentRegistryOps {
             ));
         }
         Ok(root_draining_record_to_view(record.clone()))
+    }
+
+    pub(crate) fn require_root_store_admin_open() -> Result<(), InternalError> {
+        let Some(current) = RootComponentRegistryStore::current() else {
+            return Ok(());
+        };
+        if current.root_draining.is_some() {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root draining has fenced Wasm Store administration",
+            ));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn prepare_root_final_inventory(
+        operation_id: [u8; 32],
+        expected_registry: &FleetRegistryVersion,
+    ) -> Result<RootFleetSubnetFinalInventoryPlan, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining = current.root_draining.as_ref().ok_or_else(|| {
+            InternalError::unavailable("Fleet Subnet Root draining has not begun")
+        })?;
+        validate_root_draining_record(&current, draining)?;
+        let plan =
+            terminal_root_inventory_plan(&current, draining, operation_id, expected_registry)?;
+        if let Some(intent) = draining.final_inventory_intent.as_ref() {
+            validate_root_final_inventory_intent_record(&current, draining, intent, &plan)?;
+        }
+        Ok(plan)
+    }
+
+    pub(crate) fn root_final_inventory_intent_registry(
+        operation_id: [u8; 32],
+    ) -> Result<Option<FleetRegistryVersion>, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining = current.root_draining.as_ref().ok_or_else(|| {
+            InternalError::unavailable("Fleet Subnet Root draining has not begun")
+        })?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root final inventory names a different draining operation",
+            ));
+        }
+        let Some(intent) = draining.final_inventory_intent.as_ref() else {
+            return Ok(None);
+        };
+        let plan =
+            terminal_root_inventory_plan(&current, draining, operation_id, &intent.registry)?;
+        validate_root_final_inventory_intent_record(&current, draining, intent, &plan)?;
+        Ok(Some(intent.registry.clone()))
+    }
+
+    pub(crate) fn begin_root_final_inventory(
+        operation_id: [u8; 32],
+        expected_registry: &FleetRegistryVersion,
+        prepared_at_ns: u64,
+    ) -> Result<RootFleetSubnetFinalInventoryPlan, InternalError> {
+        if prepared_at_ns == 0 {
+            return Err(InternalError::invalid_input(
+                "Fleet Subnet Root final inventory preparation time must be positive",
+            ));
+        }
+        let plan = Self::prepare_root_final_inventory(operation_id, expected_registry)?;
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        if let Some(intent) = draining.final_inventory_intent.as_ref() {
+            validate_root_final_inventory_intent_record(&current, draining, intent, &plan)?;
+            return Ok(plan);
+        }
+        if prepared_at_ns < draining.started_at_ns {
+            return Err(InternalError::invalid_input(
+                "Fleet Subnet Root final inventory preparation precedes its draining fence",
+            ));
+        }
+        let record = RootFleetSubnetFinalInventoryIntentRecord {
+            operation_id,
+            registry: expected_registry.clone(),
+            removed_component_instances: plan.removed_component_instances,
+            terminal_component_history_hash: plan.terminal_component_history_hash,
+            root_registry_encoded_bytes: plan.root_registry_encoded_bytes,
+            prepared_at_ns,
+        };
+        RootComponentRegistryStore::prepare_root_final_inventory(&current, record).map_err(
+            |RootComponentRegistryCommitError::ConflictingState| {
+                InternalError::conflict(
+                    "root Component Registry changed before final inventory intent committed",
+                )
+            },
+        )?;
+        let committed = Self::prepare_root_final_inventory(operation_id, expected_registry)?;
+        if committed != plan {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "committed root final inventory intent differs from prepared authority",
+            ));
+        }
+        Ok(committed)
+    }
+
+    pub(crate) fn root_final_inventory(
+        operation_id: [u8; 32],
+    ) -> Result<RootFleetSubnetFinalInventoryView, InternalError> {
+        Self::root_final_inventory_if_present(operation_id)?.ok_or_else(|| {
+            InternalError::unavailable("Fleet Subnet Root final inventory has not been frozen")
+        })
+    }
+
+    pub(crate) fn root_final_inventory_if_present(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootFleetSubnetFinalInventoryView>, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining = current.root_draining.as_ref().ok_or_else(|| {
+            InternalError::unavailable("Fleet Subnet Root draining has not begun")
+        })?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root final inventory names a different draining operation",
+            ));
+        }
+        let Some(inventory) = draining.final_inventory.as_ref() else {
+            return Ok(None);
+        };
+        validate_root_final_inventory_record(&current, draining, inventory)?;
+        Ok(Some(root_final_inventory_record_to_view(inventory.clone())))
+    }
+
+    pub(crate) fn finalize_root_inventory(
+        operation_id: [u8; 32],
+        expected_registry: &FleetRegistryVersion,
+        store: &RootStoreBootstrapResponse,
+        store_status: &WasmStoreStatusResponse,
+        finalized_at_ns: u64,
+    ) -> Result<RootFleetSubnetFinalInventoryView, InternalError> {
+        if let Some(existing) = Self::root_final_inventory_if_present(operation_id)? {
+            if &existing.registry != expected_registry {
+                return Err(InternalError::conflict(
+                    "Fleet Subnet Root final inventory retry names a different Registry",
+                ));
+            }
+            return Ok(existing);
+        }
+        if finalized_at_ns == 0 {
+            return Err(InternalError::invalid_input(
+                "Fleet Subnet Root final inventory time must be positive",
+            ));
+        }
+        let intent_registry = Self::root_final_inventory_intent_registry(operation_id)?
+            .ok_or_else(|| {
+                InternalError::unavailable(
+                    "Fleet Subnet Root final inventory intent has not been prepared",
+                )
+            })?;
+        if &intent_registry != expected_registry {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root final inventory differs from its durable intent",
+            ));
+        }
+        let plan = Self::prepare_root_final_inventory(operation_id, expected_registry)?;
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        if finalized_at_ns < draining.started_at_ns {
+            return Err(InternalError::invalid_input(
+                "Fleet Subnet Root final inventory time precedes its draining fence",
+            ));
+        }
+        let store_evidence = root_store_final_inventory_evidence(&current, store, store_status)?;
+        let mut record = RootFleetSubnetFinalInventoryRecord {
+            operation_id,
+            fleet_subnet_root: current.root.fleet_subnet_root,
+            placement_subnet: current.root.placement_subnet,
+            registry: plan.registry,
+            component_topology_digest: current.root.component_topology_digest,
+            active_release_set: current.release_set,
+            next_allocation_sequence: current.next_allocation_sequence,
+            removed_component_instances: plan.removed_component_instances,
+            terminal_component_history_hash: plan.terminal_component_history_hash,
+            root_registry_encoded_bytes: plan.root_registry_encoded_bytes,
+            wasm_store: store.wasm_store,
+            wasm_store_catalog_hash: store_evidence.catalog_hash,
+            wasm_store_catalog_entries: store_evidence.catalog_entries,
+            wasm_store_occupied_bytes: store_status.occupied_store_bytes,
+            wasm_store_template_count: store_status.template_count,
+            wasm_store_release_count: store_status.release_count,
+            wasm_store_gc_prepared_at_secs: store_evidence.gc_prepared_at_secs,
+            finalized_at_ns,
+            inventory_hash: [0; 32],
+        };
+        record.inventory_hash = root_final_inventory_hash(&record)?;
+        RootComponentRegistryStore::finalize_root_inventory(&current, record.clone()).map_err(
+            |RootComponentRegistryCommitError::ConflictingState| {
+                InternalError::conflict(
+                    "root Component Registry changed before final inventory committed",
+                )
+            },
+        )?;
+        let committed = Self::root_final_inventory(operation_id)?;
+        if committed != root_final_inventory_record_to_view(record) {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "committed Fleet Subnet Root final inventory differs from prepared authority",
+            ));
+        }
+        Ok(committed)
     }
 
     pub(crate) fn registry_covers_preparation(
@@ -5469,6 +5759,484 @@ fn validate_root_draining_record(
     Ok(())
 }
 
+fn terminal_root_inventory_plan(
+    current: &RootComponentRegistryMetaRecord,
+    draining: &RootFleetSubnetDrainingRecord,
+    operation_id: [u8; 32],
+    expected_registry: &FleetRegistryVersion,
+) -> Result<RootFleetSubnetFinalInventoryPlan, InternalError> {
+    ensure_terminal_root_request(draining, operation_id, expected_registry)?;
+    ensure_terminal_root_counters(current)?;
+    ensure_terminal_root_indexes_are_empty()?;
+    let history = terminal_root_component_history()?;
+    let expected_next_sequence = u64::from(history.removed_component_instances)
+        .checked_add(1)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "terminal Component allocation sequence overflows",
+            )
+        })?;
+    if current.next_allocation_sequence != expected_next_sequence {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "terminal Component allocation history is not contiguous",
+        ));
+    }
+
+    let retained_registry_components: BTreeSet<_> =
+        RootComponentRegistryStore::registry_components()
+            .into_iter()
+            .collect();
+    if !retained_registry_components.is_subset(&history.components) {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "terminal root Registry retains history for an unknown Component",
+        ));
+    }
+    if history.registry_bytes != current.encoded_bytes {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "terminal root Registry byte ledger differs from retained history",
+        ));
+    }
+
+    Ok(RootFleetSubnetFinalInventoryPlan {
+        operation_id,
+        registry: expected_registry.clone(),
+        removed_component_instances: history.removed_component_instances,
+        terminal_component_history_hash: history.hash,
+        root_registry_encoded_bytes: current.encoded_bytes,
+    })
+}
+
+struct TerminalRootComponentHistory {
+    removed_component_instances: u32,
+    hash: [u8; 32],
+    registry_bytes: u64,
+    components: BTreeSet<ComponentInstanceId>,
+}
+
+fn terminal_root_component_history() -> Result<TerminalRootComponentHistory, InternalError> {
+    let mut allocations = RootComponentRegistryStore::allocations();
+    allocations.sort_by_key(|allocation| allocation.allocation_sequence);
+    let removed_component_instances = u32::try_from(allocations.len()).map_err(|_| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "terminal Component allocation count exceeds u32",
+        )
+    })?;
+    let mut drainings: BTreeMap<_, _> = RootComponentRegistryStore::component_drainings()
+        .into_iter()
+        .map(|record| (record.component, record))
+        .collect();
+    if drainings.len() != allocations.len() {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "terminal Component allocation and draining histories differ",
+        ));
+    }
+
+    let mut hash_entries = Vec::with_capacity(allocations.len());
+    let mut registry_bytes = 0_u64;
+    let mut components = BTreeSet::new();
+    for (index, allocation) in allocations.iter().enumerate() {
+        ensure_terminal_allocation_sequence(index, allocation)?;
+        let draining = drainings.remove(&allocation.component).ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "terminal Component allocation lacks draining history",
+            )
+        })?;
+        validate_removed_component_authority(&draining)?;
+        let receipt = removed_component_membership_receipt(&draining)?;
+        registry_bytes = registry_bytes
+            .checked_add(terminal_component_registry_bytes(allocation, &draining)?)
+            .ok_or_else(|| {
+                InternalError::invariant(
+                    InternalErrorOrigin::Storage,
+                    "terminal root Registry byte ledger overflows",
+                )
+            })?;
+        components.insert(allocation.component);
+        hash_entries.push(RootTerminalComponentHistoryHashEntry {
+            allocation_sequence: allocation.allocation_sequence,
+            component: allocation.component,
+            allocation_operation_id: allocation.operation_id,
+            draining_operation_id: draining.operation_id,
+            membership_removal_hash: receipt.removal_hash,
+        });
+    }
+    Ok(TerminalRootComponentHistory {
+        removed_component_instances,
+        hash: terminal_component_history_hash(&hash_entries)?,
+        registry_bytes,
+        components,
+    })
+}
+
+fn ensure_terminal_allocation_sequence(
+    index: usize,
+    allocation: &RootComponentAllocationRecord,
+) -> Result<(), InternalError> {
+    let sequence = u64::try_from(index)
+        .ok()
+        .and_then(|index| index.checked_add(1))
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "terminal Component allocation index overflows",
+            )
+        })?;
+    let allocation_is_terminal = [
+        allocation.allocation_sequence == sequence,
+        matches!(
+            allocation.progress,
+            RootComponentAllocationProgressRecord::Removed { .. }
+        ),
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    if !allocation_is_terminal {
+        return Err(InternalError::unavailable(
+            "Fleet Subnet Root still has nonterminal Component allocation history",
+        ));
+    }
+    Ok(())
+}
+
+fn ensure_terminal_root_request(
+    draining: &RootFleetSubnetDrainingRecord,
+    operation_id: [u8; 32],
+    expected_registry: &FleetRegistryVersion,
+) -> Result<(), InternalError> {
+    if operation_id == [0; 32] {
+        return Err(InternalError::invalid_input(
+            "Fleet Subnet Root final inventory operation ID must be nonzero",
+        ));
+    }
+    if operation_id != draining.operation_id {
+        return Err(InternalError::conflict(
+            "Fleet Subnet Root final inventory names a different draining operation",
+        ));
+    }
+    let publication_is_current_or_later = ComponentRegistryOps::registry_covers_preparation(
+        &draining.active_registry,
+        expected_registry,
+    );
+    if !publication_is_current_or_later {
+        return Err(InternalError::conflict(
+            "Fleet Subnet Root final inventory is not covered by its draining Registry",
+        ));
+    }
+    Ok(())
+}
+
+fn ensure_terminal_root_counters(
+    current: &RootComponentRegistryMetaRecord,
+) -> Result<(), InternalError> {
+    let counters_are_empty = [
+        current.reserved_component_instances,
+        current.committed_component_instances,
+        current.managed_descendants,
+        current.known_created_component_canisters,
+    ]
+    .into_iter()
+    .all(|count| count == 0);
+    if !counters_are_empty {
+        return Err(InternalError::unavailable(
+            "Fleet Subnet Root still has live Component capacity or Canister inventory",
+        ));
+    }
+    Ok(())
+}
+
+fn ensure_terminal_root_indexes_are_empty() -> Result<(), InternalError> {
+    let indexes_are_empty = [
+        RootComponentRegistryStore::partitions().is_empty(),
+        RootComponentRegistryStore::principal_inventory_is_empty(),
+    ]
+    .into_iter()
+    .all(|empty| empty);
+    if !indexes_are_empty {
+        return Err(InternalError::unavailable(
+            "Fleet Subnet Root still has live Component Registry membership",
+        ));
+    }
+    Ok(())
+}
+
+fn terminal_component_registry_bytes(
+    allocation: &RootComponentAllocationRecord,
+    draining: &RootComponentDrainingRecord,
+) -> Result<u64, InternalError> {
+    let component = allocation.component;
+    let child_allocations = RootComponentRegistryStore::child_allocations(component);
+    let subtree_removals = RootComponentRegistryStore::subtree_removals(component);
+    let subtree_history = RootComponentRegistryStore::subtree_removal_history(component);
+    let mut entries = std::iter::once(RootComponentRegistryStore::allocation_entry_bytes(
+        allocation,
+    ))
+    .chain(
+        child_allocations
+            .iter()
+            .map(charged_child_allocation_entry_bytes),
+    )
+    .chain(
+        subtree_removals
+            .iter()
+            .map(RootComponentRegistryStore::subtree_removal_entry_bytes),
+    )
+    .chain(
+        subtree_history
+            .iter()
+            .map(RootComponentRegistryStore::subtree_removal_completed_leaf_entry_bytes),
+    )
+    .chain(std::iter::once(charged_component_draining_entry_bytes(
+        draining,
+    )));
+    entries.try_fold(0_u64, |total, bytes| {
+        total.checked_add(bytes).ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "terminal Component Registry byte ledger overflows",
+            )
+        })
+    })
+}
+
+fn charged_child_allocation_entry_bytes(record: &RootComponentChildAllocationRecord) -> u64 {
+    match &record.progress {
+        RootComponentChildAllocationProgressRecord::Reserved => {
+            RootComponentRegistryStore::child_allocation_entry_bytes(record)
+        }
+        RootComponentChildAllocationProgressRecord::CreationIntent(creation)
+        | RootComponentChildAllocationProgressRecord::Created {
+            effect: creation, ..
+        } => creation.charged_entry_bytes,
+        RootComponentChildAllocationProgressRecord::InstallIntent { installation, .. }
+        | RootComponentChildAllocationProgressRecord::Installed { installation, .. }
+        | RootComponentChildAllocationProgressRecord::Verified { installation, .. }
+        | RootComponentChildAllocationProgressRecord::Committed { installation, .. } => {
+            installation.charged_entry_bytes
+        }
+    }
+}
+
+fn removed_component_membership_receipt(
+    draining: &RootComponentDrainingRecord,
+) -> Result<&RootComponentMembershipRemovedRecord, InternalError> {
+    match draining.deletion.as_ref() {
+        Some(RootComponentDeletionProgressRecord::MembershipRemoved(receipt)) => Ok(receipt),
+        Some(
+            RootComponentDeletionProgressRecord::DeleteIntent(_)
+            | RootComponentDeletionProgressRecord::Deleted(_),
+        )
+        | None => Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "terminal Component history lacks membership-removal authority",
+        )),
+    }
+}
+
+fn terminal_component_history_hash(
+    entries: &[RootTerminalComponentHistoryHashEntry],
+) -> Result<[u8; 32], InternalError> {
+    let payload = candid::encode_one(entries).map_err(|error| {
+        InternalError::invariant(
+            InternalErrorOrigin::Ops,
+            format!("terminal Component history cannot be encoded: {error}"),
+        )
+    })?;
+    Ok(domain_hash(
+        ROOT_TERMINAL_COMPONENT_HISTORY_HASH_DOMAIN,
+        &payload,
+    ))
+}
+
+struct RootStoreFinalInventoryEvidence {
+    catalog_hash: [u8; 32],
+    catalog_entries: u32,
+    gc_prepared_at_secs: u64,
+}
+
+fn root_store_final_inventory_evidence(
+    current: &RootComponentRegistryMetaRecord,
+    store: &RootStoreBootstrapResponse,
+    status: &WasmStoreStatusResponse,
+) -> Result<RootStoreFinalInventoryEvidence, InternalError> {
+    let catalog_entries = u32::try_from(store.catalog.len()).map_err(|_| {
+        InternalError::invariant(
+            InternalErrorOrigin::Ops,
+            "root Store catalog entry count exceeds u32",
+        )
+    })?;
+    let template_entries = u32::try_from(status.templates.len()).map_err(|_| {
+        InternalError::invariant(
+            InternalErrorOrigin::Ops,
+            "root Store template count exceeds u32",
+        )
+    })?;
+    let gc_prepared_at_secs = status
+        .gc
+        .prepared_at
+        .ok_or_else(|| InternalError::conflict("root Store lacks a prepared GC write fence"))?;
+    let source_is_exact = [
+        store.fleet_subnet_root == current.root.fleet_subnet_root,
+        store.release_set == current.release_set,
+        store.wasm_store != Principal::anonymous(),
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    let catalog_is_exact = [
+        catalog_entries > 0,
+        status.release_count == catalog_entries,
+        status.template_count == template_entries,
+        status.occupied_store_bytes <= status.max_store_bytes,
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    let gc_is_exact = [
+        status.gc.mode == WasmStoreGcMode::Prepared,
+        status.gc.changed_at == gc_prepared_at_secs,
+        gc_prepared_at_secs > 0,
+        status.gc.started_at.is_none(),
+        status.gc.completed_at.is_none(),
+        status.gc.runs_completed == 0,
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    let evidence_is_exact = [source_is_exact, catalog_is_exact, gc_is_exact]
+        .into_iter()
+        .all(|valid| valid);
+    if !evidence_is_exact {
+        return Err(InternalError::conflict(
+            "root Store is not one exact retained write-fenced final inventory",
+        ));
+    }
+
+    let mut catalog = store.catalog.clone();
+    catalog.sort();
+    let payload = candid::encode_one(RootStoreFinalCatalogHashAuthority {
+        fleet_subnet_root: store.fleet_subnet_root,
+        wasm_store: store.wasm_store,
+        release_set: store.release_set,
+        catalog: &catalog,
+        occupied_store_bytes: status.occupied_store_bytes,
+        template_count: status.template_count,
+        release_count: status.release_count,
+        gc_prepared_at_secs,
+    })
+    .map_err(|error| {
+        InternalError::invariant(
+            InternalErrorOrigin::Ops,
+            format!("root Store final catalog cannot be encoded: {error}"),
+        )
+    })?;
+    Ok(RootStoreFinalInventoryEvidence {
+        catalog_hash: domain_hash(ROOT_STORE_FINAL_CATALOG_HASH_DOMAIN, &payload),
+        catalog_entries,
+        gc_prepared_at_secs,
+    })
+}
+
+fn validate_root_final_inventory_record(
+    current: &RootComponentRegistryMetaRecord,
+    draining: &RootFleetSubnetDrainingRecord,
+    inventory: &RootFleetSubnetFinalInventoryRecord,
+) -> Result<(), InternalError> {
+    let plan = terminal_root_inventory_plan(
+        current,
+        draining,
+        inventory.operation_id,
+        &inventory.registry,
+    )?;
+    let component_authority_is_exact = [
+        inventory.removed_component_instances == plan.removed_component_instances,
+        inventory.terminal_component_history_hash == plan.terminal_component_history_hash,
+        inventory.root_registry_encoded_bytes == plan.root_registry_encoded_bytes,
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    let inventory_hash_is_exact = inventory.inventory_hash == root_final_inventory_hash(inventory)?;
+    if ![component_authority_is_exact, inventory_hash_is_exact]
+        .into_iter()
+        .all(|valid| valid)
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Fleet Subnet Root final inventory differs from terminal local authority",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_root_final_inventory_intent_record(
+    current: &RootComponentRegistryMetaRecord,
+    draining: &RootFleetSubnetDrainingRecord,
+    intent: &RootFleetSubnetFinalInventoryIntentRecord,
+    plan: &RootFleetSubnetFinalInventoryPlan,
+) -> Result<(), InternalError> {
+    let intent_is_exact = [
+        intent.operation_id == plan.operation_id,
+        intent.registry == plan.registry,
+        intent.removed_component_instances == plan.removed_component_instances,
+        intent.terminal_component_history_hash == plan.terminal_component_history_hash,
+        intent.root_registry_encoded_bytes == plan.root_registry_encoded_bytes,
+        intent.root_registry_encoded_bytes == current.encoded_bytes,
+        intent.prepared_at_ns >= draining.started_at_ns,
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    if !intent_is_exact {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Fleet Subnet Root final inventory intent differs from terminal local authority",
+        ));
+    }
+    Ok(())
+}
+
+fn root_final_inventory_hash(
+    inventory: &RootFleetSubnetFinalInventoryRecord,
+) -> Result<[u8; 32], InternalError> {
+    let payload = candid::encode_one(RootFleetSubnetFinalInventoryHashAuthority {
+        operation_id: inventory.operation_id,
+        fleet_subnet_root: inventory.fleet_subnet_root,
+        placement_subnet: inventory.placement_subnet,
+        registry: &inventory.registry,
+        component_topology_digest: inventory.component_topology_digest,
+        active_release_set: inventory.active_release_set,
+        next_allocation_sequence: inventory.next_allocation_sequence,
+        removed_component_instances: inventory.removed_component_instances,
+        terminal_component_history_hash: inventory.terminal_component_history_hash,
+        root_registry_encoded_bytes: inventory.root_registry_encoded_bytes,
+        wasm_store: inventory.wasm_store,
+        wasm_store_catalog_hash: inventory.wasm_store_catalog_hash,
+        wasm_store_catalog_entries: inventory.wasm_store_catalog_entries,
+        wasm_store_occupied_bytes: inventory.wasm_store_occupied_bytes,
+        wasm_store_template_count: inventory.wasm_store_template_count,
+        wasm_store_release_count: inventory.wasm_store_release_count,
+        wasm_store_gc_prepared_at_secs: inventory.wasm_store_gc_prepared_at_secs,
+        finalized_at_ns: inventory.finalized_at_ns,
+    })
+    .map_err(|error| {
+        InternalError::invariant(
+            InternalErrorOrigin::Ops,
+            format!("Fleet Subnet Root final inventory cannot be encoded: {error}"),
+        )
+    })?;
+    Ok(domain_hash(ROOT_FINAL_INVENTORY_HASH_DOMAIN, &payload))
+}
+
+fn domain_hash(domain: &[u8], payload: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(domain);
+    hasher.update((payload.len() as u64).to_be_bytes());
+    hasher.update(payload);
+    hasher.finalize().into()
+}
+
 fn ensure_root_accepts_top_level_allocation(
     current: &RootComponentRegistryMetaRecord,
 ) -> Result<(), InternalError> {
@@ -5497,6 +6265,35 @@ fn root_draining_record_to_view(
         known_created_component_canisters: record.known_created_component_canisters,
         root_registry_encoded_bytes: record.root_registry_encoded_bytes,
         started_at_ns: record.started_at_ns,
+        final_inventory: record
+            .final_inventory
+            .map(root_final_inventory_record_to_view),
+    }
+}
+
+fn root_final_inventory_record_to_view(
+    record: RootFleetSubnetFinalInventoryRecord,
+) -> RootFleetSubnetFinalInventoryView {
+    RootFleetSubnetFinalInventoryView {
+        operation_id: record.operation_id,
+        fleet_subnet_root: record.fleet_subnet_root,
+        placement_subnet: record.placement_subnet,
+        registry: record.registry,
+        component_topology_digest: record.component_topology_digest,
+        active_release_set: record.active_release_set,
+        next_allocation_sequence: record.next_allocation_sequence,
+        removed_component_instances: record.removed_component_instances,
+        terminal_component_history_hash: record.terminal_component_history_hash,
+        root_registry_encoded_bytes: record.root_registry_encoded_bytes,
+        wasm_store: record.wasm_store,
+        wasm_store_catalog_hash: record.wasm_store_catalog_hash,
+        wasm_store_catalog_entries: record.wasm_store_catalog_entries,
+        wasm_store_occupied_bytes: record.wasm_store_occupied_bytes,
+        wasm_store_template_count: record.wasm_store_template_count,
+        wasm_store_release_count: record.wasm_store_release_count,
+        wasm_store_gc_prepared_at_secs: record.wasm_store_gc_prepared_at_secs,
+        finalized_at_ns: record.finalized_at_ns,
+        inventory_hash: record.inventory_hash,
     }
 }
 
@@ -10783,6 +11580,8 @@ mod tests {
         assert_eq!(draining.managed_descendants, 0);
         assert_eq!(draining.known_created_component_canisters, 0);
         assert_eq!(draining.active_release_set, release_set);
+        assert_eq!(draining.final_inventory, None);
+        assert_root_final_inventory_is_fenced(&current_version);
 
         restart_component_registry();
         assert_eq!(
@@ -10824,6 +11623,162 @@ mod tests {
         );
         assert_eq!(RootComponentRegistryStore::export(), before_rejection);
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
+    }
+
+    fn assert_root_final_inventory_is_fenced(current_version: &FleetRegistryVersion) {
+        ComponentRegistryOps::prepare_root_final_inventory([13; 32], current_version)
+            .expect_err("reserved Component history must prevent root final inventory");
+        ComponentRegistryOps::require_root_store_admin_open()
+            .expect_err("root draining must fence Store administration");
+    }
+
+    #[test]
+    fn empty_root_final_inventory_is_exact_durable_and_response_idempotent() {
+        RootComponentRegistryStore::import(RootComponentRegistryData::default());
+        let root = root_binding();
+        let prepared_registry = FleetRegistryVersion {
+            authority: root.authority.clone(),
+            revision: 4,
+            content_hash: [5; 32],
+        };
+        let release_set = FleetSubnetRootReleaseSet {
+            release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
+                [8; 32],
+            )),
+            manifest_digest: ReleaseSetDigest::from_bytes([9; 32]),
+        };
+        ComponentRegistryOps::prepare(
+            root.clone(),
+            prepared_registry.clone(),
+            release_set,
+            RootStoreBootstrapRequest {
+                manifest_payload_size_bytes: 128,
+            },
+        )
+        .expect("prepare");
+        ComponentRegistryOps::require_root_store_admin_open().expect("active root Store admin");
+        ComponentRegistryOps::begin_root_draining([10; 32], &prepared_registry, 11)
+            .expect("begin root draining");
+        let published_registry = FleetRegistryVersion {
+            authority: prepared_registry.authority,
+            revision: prepared_registry.revision + 1,
+            content_hash: [12; 32],
+        };
+        let plan =
+            ComponentRegistryOps::prepare_root_final_inventory([10; 32], &published_registry)
+                .expect("empty root is terminal");
+        assert_eq!(plan.removed_component_instances, 0);
+        assert_eq!(plan.root_registry_encoded_bytes, 0);
+        assert_ne!(plan.terminal_component_history_hash, [0; 32]);
+        assert_durable_root_final_inventory_intent(&plan, &published_registry);
+
+        let store_pid = candid::Principal::from_slice(&[13; 29]);
+        let store = RootStoreBootstrapResponse {
+            fleet_subnet_root: root.fleet_subnet_root,
+            wasm_store: store_pid,
+            release_set,
+            catalog: vec![canic_core::dto::root_store::RootStoreCatalogEntry {
+                role: CanisterRole::new("project_hub"),
+                raw_module_hash: [14; 32],
+                payload_hash: [15; 32],
+                payload_size_bytes: 16_000,
+            }],
+        };
+        let status = prepared_store_status();
+        let mut writable = status.clone();
+        writable.gc.mode = WasmStoreGcMode::Normal;
+        writable.gc.changed_at = 0;
+        writable.gc.prepared_at = None;
+        ComponentRegistryOps::finalize_root_inventory(
+            [10; 32],
+            &published_registry,
+            &store,
+            &writable,
+            19,
+        )
+        .expect_err("writable Store must not authorize root final inventory");
+        let inventory = ComponentRegistryOps::finalize_root_inventory(
+            [10; 32],
+            &published_registry,
+            &store,
+            &status,
+            20,
+        )
+        .expect("finalize root inventory");
+        assert_eq!(inventory.registry, published_registry);
+        assert_eq!(inventory.removed_component_instances, 0);
+        assert_eq!(inventory.wasm_store, store_pid);
+        assert_eq!(inventory.wasm_store_catalog_entries, 1);
+        assert_eq!(inventory.wasm_store_gc_prepared_at_secs, 18);
+        assert_ne!(inventory.wasm_store_catalog_hash, [0; 32]);
+        assert_ne!(inventory.inventory_hash, [0; 32]);
+
+        restart_component_registry();
+        assert_eq!(
+            ComponentRegistryOps::root_final_inventory([10; 32])
+                .expect("final inventory after restart"),
+            inventory
+        );
+        assert_eq!(
+            ComponentRegistryOps::finalize_root_inventory(
+                [10; 32],
+                &published_registry,
+                &store,
+                &status,
+                99,
+            )
+            .expect("exact response-idempotent retry"),
+            inventory
+        );
+
+        RootComponentRegistryStore::import(RootComponentRegistryData::default());
+    }
+
+    fn assert_durable_root_final_inventory_intent(
+        plan: &RootFleetSubnetFinalInventoryPlan,
+        published_registry: &FleetRegistryVersion,
+    ) {
+        assert_eq!(
+            ComponentRegistryOps::begin_root_final_inventory([10; 32], published_registry, 12,)
+                .expect("prepare durable root final inventory intent"),
+            plan.clone()
+        );
+        restart_component_registry();
+        assert_eq!(
+            ComponentRegistryOps::root_final_inventory_intent_registry([10; 32])
+                .expect("final inventory intent after restart"),
+            Some(published_registry.clone())
+        );
+    }
+
+    fn prepared_store_status() -> WasmStoreStatusResponse {
+        WasmStoreStatusResponse {
+            gc: crate::dto::template::WasmStoreGcStatusResponse {
+                mode: WasmStoreGcMode::Prepared,
+                changed_at: 18,
+                prepared_at: Some(18),
+                started_at: None,
+                completed_at: None,
+                runs_completed: 0,
+            },
+            occupied_store_bytes: 16_000,
+            occupied_store_size: "15.6 KiB".to_string(),
+            max_store_bytes: 32_000,
+            max_store_size: "31.2 KiB".to_string(),
+            remaining_store_bytes: 16_000,
+            remaining_store_size: "15.6 KiB".to_string(),
+            headroom_bytes: None,
+            headroom_size: None,
+            within_headroom: true,
+            template_count: 1,
+            max_templates: Some(10),
+            release_count: 1,
+            max_template_versions_per_template: Some(2),
+            templates: vec![crate::dto::template::WasmStoreTemplateStatusResponse {
+                template_id: crate::ids::TemplateId::new("project_hub"),
+                versions: 1,
+            }],
+        }
     }
 
     #[test]

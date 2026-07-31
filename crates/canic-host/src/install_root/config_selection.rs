@@ -1,6 +1,5 @@
 use crate::release_set::{AppConfigSnapshot, WorkspaceDiscoveryError, read_app_config_identity};
 use crate::table::{ColumnAlign, render_table};
-use crate::workspace_discovery::normalize_workspace_path;
 use std::{
     collections::BTreeMap,
     env, fs,
@@ -105,10 +104,12 @@ pub(super) fn resolve_install_config_path(
     interactive: bool,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     if let Some(path) = explicit_config_path {
-        return Ok(normalize_workspace_path(
-            workspace_root,
-            PathBuf::from(path),
-        ));
+        let path = PathBuf::from(path);
+        return Ok(if path.is_absolute() {
+            path
+        } else {
+            workspace_root.join(path)
+        });
     }
 
     let default = workspace_root.join(APPS_ROOT).join(ROOT_CONFIG_RELATIVE);

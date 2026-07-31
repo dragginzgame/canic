@@ -159,15 +159,6 @@ fn project_file_exists(path: &Path) -> Result<bool, WorkspaceDiscoveryError> {
     }
 }
 
-// Normalize a workspace-relative path against the chosen workspace root.
-pub fn normalize_workspace_path(workspace_root: &Path, path: PathBuf) -> PathBuf {
-    if path.is_absolute() {
-        path
-    } else {
-        workspace_root.join(path)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

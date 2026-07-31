@@ -383,6 +383,14 @@ fn fleet_subnet_root_draining_is_controller_guarded_on_the_root_surface() {
         canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN
     );
     assert_eq!(
+        canic::protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_FINALIZE,
+        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_FINALIZE
+    );
+    assert_eq!(
+        canic::protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_STATUS,
+        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_STATUS
+    );
+    assert_eq!(
         canic::protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS,
         canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS
     );
@@ -393,6 +401,14 @@ fn fleet_subnet_root_draining_is_controller_guarded_on_the_root_surface() {
         preceding_attribute_context(&source, "async fn canic_fleet_subnet_root_draining_begin(");
     let status =
         preceding_attribute_context(&source, "async fn canic_fleet_subnet_root_draining_status(");
+    let finalize = preceding_attribute_context(
+        &source,
+        "async fn canic_fleet_subnet_root_draining_inventory_finalize(",
+    );
+    let inventory_status = preceding_attribute_context(
+        &source,
+        "async fn canic_fleet_subnet_root_draining_inventory_status(",
+    );
 
     assert!(
         begin.contains("canic_update(requires(caller::is_controller()))"),
@@ -401,6 +417,14 @@ fn fleet_subnet_root_draining_is_controller_guarded_on_the_root_surface() {
     assert!(
         status.contains("canic_query(requires(caller::is_controller()))"),
         "Fleet Subnet Root draining status must remain a controller-guarded query"
+    );
+    assert!(
+        finalize.contains("canic_update(requires(caller::is_controller()))"),
+        "Fleet Subnet Root final inventory must remain a controller-guarded update"
+    );
+    assert!(
+        inventory_status.contains("canic_query(requires(caller::is_controller()))"),
+        "Fleet Subnet Root final inventory status must remain a controller-guarded query"
     );
 }
 
