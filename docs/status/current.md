@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.65`.
-- The latest published release is `v0.100.65` at
-  `7a09657fa7043dabccb86f22a629a22dfbcecadb`.
-- Open `0.100.66` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.66`.
+- The latest published release is `v0.100.66` at
+  `bc2f75c483fdc42b1af35a209e932bcde65c3bdc`.
+- Open `0.100.67` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -541,7 +541,7 @@ Historical detail is archived at:
   version until the next synchronization boundary. The same release adopts
   transitive `event-listener 5.4.2`, removing RUSTSEC-2026-0221 without
   widening the accepted unmaintained-advisory inventory.
-- Open `0.100.66` completes that synchronization through the existing mirror
+- Released `0.100.66` completes that synchronization through the existing mirror
   activation endpoint. Complete mixed-lifecycle snapshots converge
   monotonically, Fleet Directory and Registry Mirror authority commit
   atomically, and stale retry returns the later durable version without
@@ -549,9 +549,21 @@ Historical detail is archived at:
   immutable Component Registry preparation remains frozen while current
   operations prove its exact same-revision hash or a later same-authority
   mirror. The same patch removes obsolete dead-code suppressions and records
-  the retained state-contract owners, then removes 701 net lines of
+  the retained state-contract owners, then removes 866 net lines of
   unreachable test support and zero-consumer internal wrappers. It adds no
   stable-memory domain or ID.
+- Open `0.100.67` freezes one terminal Fleet Subnet Root inventory after every
+  allocation is `Removed`, every retained Component removal authority and the
+  exact Registry byte ledger validate, live membership and root counters are
+  empty, and the sole local Store is at exact GC `Prepared`. That one-way Store
+  state blocks writes while retaining the independently verified catalog and
+  bytes. The response-idempotent finalization and read-only status endpoints
+  retain a pre-effect intent and hashed receipt inside the existing Component
+  Registry stable domain, allowing exact recovery across unrelated later
+  Registry progress. They add no memory ID, Coordinator mutation, management
+  deletion or root Registry transition. Ordinary root removal remains the next
+  explicit boundary. The same draft includes the focused post-0.100.66 host
+  module-surface hardening audit and its low-risk helper cleanup.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -2073,7 +2085,7 @@ restart-safe replay authority. The Coordinator reconstructs the complete
 canonical lifecycle history before accepting its current head and allocates no
 new stable-memory ID.
 
-Open `0.100.66` synchronizes that mixed-lifecycle canonical state through the
+Released `0.100.66` synchronizes that mixed-lifecycle canonical state through the
 existing snapshot-convergent mirror endpoint. It advances Registry Mirror and
 Fleet Directory authority atomically, reports the synchronized `Draining`
 summary, preserves immutable Component preparation and requires the published
@@ -2082,8 +2094,16 @@ cannot reopen across any interruption. The same patch completes the
 repository-wide dead-code surface hardening audit and removes its confirmed
 unreachable test-support and zero-consumer internal surfaces.
 
-Next, freeze the exact final root inventory once every Component partition is
-absent and Store authority is quiescent, then use it for ordinary root removal.
+Open `0.100.67` freezes the exact final root inventory once every Component
+allocation is terminal, live membership and counters are empty, retained
+history reconstructs the exact Registry ledger and the sole Store is
+write-fenced at exact GC `Prepared`. Its durable local receipt adds no memory
+ID and performs no deletion or Coordinator mutation; a pre-effect intent keeps
+an exact retry recoverable across unrelated later Registry progress. The same
+draft retains the focused post-0.100.66 host module-surface hardening evidence
+and cleanup.
+
+Next, revalidate that receipt and Store fence for ordinary root removal.
 Neither an unreachable root nor a Subnet failure is removal evidence.
 
 ## Historical Release Detail

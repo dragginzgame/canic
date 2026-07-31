@@ -643,14 +643,14 @@ impl NetworkPaths {
 mod digest_hex {
     use super::*;
 
-    pub fn serialize<S>(digest: &[u8; 32], serializer: S) -> Result<S::Ok, S::Error>
+    pub(super) fn serialize<S>(digest: &[u8; 32], serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         serializer.serialize_str(&encode_digest(*digest))
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<[u8; 32], D::Error>
+    pub(super) fn deserialize<'de, D>(deserializer: D) -> Result<[u8; 32], D::Error>
     where
         D: Deserializer<'de>,
     {

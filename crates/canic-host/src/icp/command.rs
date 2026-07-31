@@ -210,7 +210,7 @@ pub fn add_target_args(
 }
 
 /// Add ICP CLI output formatting, handling JSON as its own flag.
-pub fn add_output_arg(command: &mut Command, output: &str) {
+pub(super) fn add_output_arg(command: &mut Command, output: &str) {
     if output == "json" {
         command.arg("--json");
     } else {
@@ -256,7 +256,7 @@ pub(super) fn add_debug_arg(command: &mut Command, debug: bool) {
 }
 
 /// Ensure a command points at a supported ICP CLI executable before spawning it.
-pub fn ensure_command_compatible(command: &Command) -> Result<(), IcpCommandError> {
+pub(super) fn ensure_command_compatible(command: &Command) -> Result<(), IcpCommandError> {
     let executable = command.get_program().to_string_lossy();
     compatible_version_output(executable.as_ref(), command.get_current_dir()).map(|_| ())
 }

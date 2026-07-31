@@ -12,7 +12,8 @@ use canic_core::{
     dto::fleet_subnet_root::{
         FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary, FleetSubnetRootDrainingRequest,
         FleetSubnetRootDrainingResponse, FleetSubnetRootDrainingStatusRequest,
-        FleetSubnetRootInitArgs,
+        FleetSubnetRootFinalInventoryRequest, FleetSubnetRootFinalInventoryResponse,
+        FleetSubnetRootFinalInventoryStatusRequest, FleetSubnetRootInitArgs,
     },
     dto::{
         component_registry::{
@@ -109,6 +110,20 @@ impl LifecycleApi {
         request: FleetSubnetRootDrainingStatusRequest,
     ) -> Result<FleetSubnetRootDrainingResponse, canic_core::dto::error::Error> {
         crate::workflow::fleet_subnet_root::draining_status(request).map_err(Into::into)
+    }
+
+    pub async fn finalize_fleet_subnet_root_inventory(
+        request: FleetSubnetRootFinalInventoryRequest,
+    ) -> Result<FleetSubnetRootFinalInventoryResponse, canic_core::dto::error::Error> {
+        crate::workflow::fleet_subnet_root::finalize_inventory(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub fn fleet_subnet_root_final_inventory_status(
+        request: FleetSubnetRootFinalInventoryStatusRequest,
+    ) -> Result<FleetSubnetRootFinalInventoryResponse, canic_core::dto::error::Error> {
+        crate::workflow::fleet_subnet_root::final_inventory_status(request).map_err(Into::into)
     }
 
     pub async fn synchronize_fleet_registry(

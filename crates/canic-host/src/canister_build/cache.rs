@@ -25,7 +25,13 @@ pub fn canister_build_target_root(workspace_root: &Path) -> PathBuf {
         .map(PathBuf::from)
         .map_or_else(
             || workspace_root.join(DEFAULT_WASM_TARGET_RELATIVE),
-            |path| absolute_from(workspace_root, path),
+            |path| {
+                if path.is_absolute() {
+                    path
+                } else {
+                    workspace_root.join(path)
+                }
+            },
         )
 }
 
@@ -59,14 +65,6 @@ impl Drop for DefaultCanisterBuildCacheCleanup {
                 path.display()
             ),
         }
-    }
-}
-
-fn absolute_from(workspace_root: &Path, path: PathBuf) -> PathBuf {
-    if path.is_absolute() {
-        path
-    } else {
-        workspace_root.join(path)
     }
 }
 

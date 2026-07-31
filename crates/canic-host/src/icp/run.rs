@@ -14,7 +14,7 @@ use super::{
 };
 
 /// Execute a command and capture trimmed stdout.
-pub fn run_output(command: &mut Command) -> Result<String, IcpCommandError> {
+pub(super) fn run_output(command: &mut Command) -> Result<String, IcpCommandError> {
     ensure_command_compatible(command)?;
     run_output_unchecked(command)
 }

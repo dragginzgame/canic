@@ -8,9 +8,12 @@
 use crate::{
     dto::template::{TemplateManifestResponse, WasmStoreCatalogEntryResponse},
     ids::{CanisterRole, TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion},
-    ops::storage::{
-        state::subnet::SubnetStateOps,
-        template::{TemplateChunkedOps, TemplateManifestOps},
+    ops::{
+        component_registry::ComponentRegistryOps,
+        storage::{
+            state::subnet::SubnetStateOps,
+            template::{TemplateChunkedOps, TemplateManifestOps},
+        },
     },
     workflow::runtime::template::{WASM_STORE_BOOTSTRAP_BINDING, WasmStorePublicationWorkflow},
 };
@@ -81,6 +84,7 @@ pub async fn bootstrap(
     request: RootStoreBootstrapRequest,
 ) -> Result<RootStoreBootstrapResponse, InternalError> {
     let _guard = TopologyGuard::try_enter()?;
+    ComponentRegistryOps::require_root_store_admin_open()?;
     let authority = FleetActivationApi::root_authority().map_err(InternalError::public)?;
     let root = canic_core::control_plane_support::ops::ic::IcOps::canister_self();
     if authority.binding.fleet_subnet_root != root {

@@ -133,10 +133,13 @@ mod tests {
         },
         dto::fleet_subnet_root::{
             FleetSubnetRootDrainingRequest, FleetSubnetRootDrainingResponse,
-            FleetSubnetRootDrainingStatusRequest,
+            FleetSubnetRootDrainingStatusRequest, FleetSubnetRootFinalInventoryRequest,
+            FleetSubnetRootFinalInventoryResponse, FleetSubnetRootFinalInventoryStatusRequest,
         },
         protocol::{
             CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING, CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN,
+            CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_FINALIZE,
+            CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_STATUS,
             CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS, CANIC_ROOT_COMPONENT_CHILD_ALLOCATE,
             CANIC_ROOT_COMPONENT_CHILD_COMMIT, CANIC_ROOT_COMPONENT_CHILD_CREATE,
             CANIC_ROOT_COMPONENT_CHILD_DIRECTORY_PREPARE, CANIC_ROOT_COMPONENT_CHILD_INSTALL,
@@ -755,6 +758,170 @@ mod tests {
             durable_fence.expect("root draining fence after Component removal"),
             root_draining
         );
+
+        let issuer_removed = remove_empty_component(&fixture, &fixture.issuer, [0xd3; 32]);
+        let RootComponentDeletionPhase::MembershipRemoved(issuer_removal) = issuer_removed.phase
+        else {
+            panic!("issuer Component must retain terminal membership-removal authority");
+        };
+        assert_eq!(issuer_removal.root_committed_component_instances, 0);
+        assert_eq!(issuer_removal.root_known_created_component_canisters, 0);
+
+        let inventory_request = FleetSubnetRootFinalInventoryRequest {
+            operation_id: root_draining.operation_id,
+            expected_registry: published.version,
+        };
+        let final_inventory: Result<FleetSubnetRootFinalInventoryResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_FINALIZE,
+                (inventory_request.clone(),),
+            )
+            .expect("finalize Fleet Subnet Root inventory transport");
+        let final_inventory = final_inventory.expect("finalize Fleet Subnet Root inventory");
+        assert_eq!(final_inventory.operation_id, root_draining.operation_id);
+        assert_eq!(
+            final_inventory.registry,
+            inventory_request.expected_registry
+        );
+        assert_eq!(final_inventory.removed_component_instances, 2);
+        assert_eq!(
+            final_inventory.root_registry_encoded_bytes,
+            issuer_removal.root_registry_encoded_bytes
+        );
+        assert_ne!(final_inventory.terminal_component_history_hash, [0; 32]);
+        assert_ne!(final_inventory.wasm_store_catalog_hash, [0; 32]);
+        assert!(final_inventory.wasm_store_catalog_entries > 0);
+        assert!(final_inventory.wasm_store_occupied_bytes > 0);
+        assert!(final_inventory.wasm_store_gc_prepared_at_secs > 0);
+        assert_ne!(final_inventory.inventory_hash, [0; 32]);
+
+        let retry: Result<FleetSubnetRootFinalInventoryResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_FINALIZE,
+                (inventory_request,),
+            )
+            .expect("retry Fleet Subnet Root inventory transport");
+        assert_eq!(
+            retry.expect("retry Fleet Subnet Root inventory"),
+            final_inventory
+        );
+        let durable: Result<FleetSubnetRootFinalInventoryResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.root,
+                CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_STATUS,
+                (FleetSubnetRootFinalInventoryStatusRequest {
+                    operation_id: root_draining.operation_id,
+                },),
+            )
+            .expect("query Fleet Subnet Root inventory transport");
+        assert_eq!(
+            durable.expect("query Fleet Subnet Root inventory"),
+            final_inventory
+        );
+    }
+
+    #[cfg(test)]
+    fn remove_empty_component(
+        fixture: &ActiveComponentRegistryFixture,
+        binding: &ComponentBinding,
+        operation_id: [u8; 32],
+    ) -> RootComponentDeletionResponse {
+        let partition: Result<ComponentRegistryPartitionResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
+                (ComponentRegistryPartitionRequest {
+                    component: binding.component,
+                },),
+            )
+            .expect("query empty Component partition transport");
+        let partition = partition.expect("query empty Component partition");
+        assert_eq!(partition.committed_descendants, 0);
+        let draining: Result<RootComponentDrainingResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_DRAINING_BEGIN,
+                (RootComponentDrainingRequest {
+                    operation_id,
+                    component: binding.component,
+                    expected_registry: partition.head,
+                },),
+            )
+            .expect("begin empty Component draining transport");
+        let draining = draining.expect("begin empty Component draining");
+        let quiescent: Result<RootComponentQuiescenceResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_QUIESCE,
+                (RootComponentQuiescenceRequest {
+                    operation_id,
+                    component: binding.component,
+                    expected_registry: draining.registry,
+                },),
+            )
+            .expect("quiesce empty Component transport");
+        quiescent.expect("quiesce empty Component");
+        let empty: Result<RootComponentDrainingAdvanceResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_DRAINING_ADVANCE,
+                (RootComponentDrainingAdvanceRequest {
+                    operation_id,
+                    component: binding.component,
+                },),
+            )
+            .expect("observe empty Component inventory transport");
+        let RootComponentDrainingAdvancePhase::DescendantsEmpty(empty) =
+            empty.expect("observe empty Component inventory").phase
+        else {
+            panic!("Component must have exact empty descendant inventory");
+        };
+        let inventory: Result<RootComponentFinalInventoryResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_DRAINING_INVENTORY_FINALIZE,
+                (RootComponentFinalInventoryRequest {
+                    operation_id,
+                    component: binding.component,
+                    expected_registry: empty.registry,
+                },),
+            )
+            .expect("finalize empty Component inventory transport");
+        let request = RootComponentDeletionRequest {
+            operation_id,
+            component: binding.component,
+            expected_inventory_hash: inventory
+                .expect("finalize empty Component inventory")
+                .inventory
+                .inventory_hash,
+        };
+        let deleted: Result<RootComponentDeletionResponse, Error> = fixture
+            .pic()
+            .update_call(fixture.root, CANIC_ROOT_COMPONENT_DELETE, (request,))
+            .expect("delete empty Component transport");
+        assert!(matches!(
+            deleted.expect("delete empty Component").phase,
+            RootComponentDeletionPhase::Deleted(_)
+        ));
+        let removed: Result<RootComponentDeletionResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_MEMBERSHIP_REMOVE,
+                (request,),
+            )
+            .expect("remove empty Component membership transport");
+        removed.expect("remove empty Component membership")
     }
 
     /// Build one current Coordinator/root/Store fixture with active Registry-issued Components.

@@ -1,6 +1,6 @@
 //! Module: workflow::runtime::template::publication::lifecycle::gc
 //!
-//! Responsibility: orchestrate root-owned Wasm-store retirement and deletion.
+//! Responsibility: orchestrate root-owned Store write fencing, retirement and deletion.
 //! Does not own: store-local GC execution, endpoint authorization, or persisted schemas.
 //! Boundary: binds remote GC effects to one generation-checked publication state.
 
@@ -11,6 +11,7 @@ use super::super::{
     store::{store_begin_gc, store_complete_gc, store_prepare_gc, store_status},
 };
 use crate::{
+    dto::template::{WasmStoreGcStatusResponse, WasmStoreStatusResponse},
     ids::{WasmStoreBinding, WasmStoreGcMode},
     ops::storage::state::subnet::SubnetStateOps,
     view::state::{PublicationStoreStateView, WasmStoreView},
@@ -30,6 +31,43 @@ thread_local! {
 
 #[derive(Debug)]
 struct LifecycleOperationGuard;
+
+#[derive(Debug, Eq, PartialEq)]
+struct PreparedStoreGcAuthority {
+    pid: Principal,
+    mode: WasmStoreGcMode,
+    changed_at: u64,
+    prepared_at: Option<u64>,
+    started_at: Option<u64>,
+    completed_at: Option<u64>,
+    runs_completed: u32,
+}
+
+impl PreparedStoreGcAuthority {
+    const fn from_runtime(store: &WasmStoreView) -> Self {
+        Self {
+            pid: store.pid,
+            mode: store.gc.mode,
+            changed_at: store.gc.changed_at,
+            prepared_at: store.gc.prepared_at,
+            started_at: store.gc.started_at,
+            completed_at: store.gc.completed_at,
+            runs_completed: store.gc.runs_completed,
+        }
+    }
+
+    const fn from_live(pid: Principal, status: &WasmStoreGcStatusResponse) -> Self {
+        Self {
+            pid,
+            mode: status.mode,
+            changed_at: status.changed_at,
+            prepared_at: status.prepared_at,
+            started_at: status.started_at,
+            completed_at: status.completed_at,
+            runs_completed: status.runs_completed,
+        }
+    }
+}
 
 impl LifecycleOperationGuard {
     fn try_enter() -> Result<Self, InternalError> {
@@ -60,6 +98,63 @@ impl Drop for LifecycleOperationGuard {
 }
 
 impl WasmStorePublicationWorkflow {
+    /// One-way write-fence the sole root-local Store while retaining its exact inventory.
+    pub async fn quiesce_single_root_store_for_final_inventory()
+    -> Result<(Principal, WasmStoreStatusResponse), InternalError> {
+        let _guard = LifecycleOperationGuard::try_enter()?;
+        Self::sync_registered_wasm_store_inventory()?;
+        let stores = SubnetStateOps::wasm_stores();
+        if stores.len() != 1 {
+            return Err(PublicationWorkflowError::InvalidState(format!(
+                "root final inventory requires exactly one local wasm store, found {}",
+                stores.len()
+            ))
+            .into());
+        }
+        let runtime = stores.into_iter().next().expect("validated one Store");
+        let mut live = store_status(runtime.pid).await?;
+        match (runtime.gc.mode, live.gc.mode) {
+            (WasmStoreGcMode::Normal, WasmStoreGcMode::Normal) => {
+                store_prepare_gc(runtime.pid).await?;
+                live = store_status(runtime.pid).await?;
+            }
+            (WasmStoreGcMode::Normal | WasmStoreGcMode::Prepared, WasmStoreGcMode::Prepared) => {}
+            (runtime_mode, live_mode) => {
+                return Err(PublicationWorkflowError::InvalidState(format!(
+                    "root final inventory requires normal/prepared GC authority, found runtime={runtime_mode:?} live={live_mode:?}"
+                ))
+                .into());
+            }
+        }
+        validate_live_prepared_store(&live)?;
+
+        if runtime.gc.mode == WasmStoreGcMode::Normal {
+            let persisted = SubnetStateOps::transition_wasm_store_gc(
+                &runtime.binding,
+                WasmStoreGcMode::Prepared,
+                live.gc.changed_at,
+            );
+            if !persisted {
+                return Err(PublicationWorkflowError::InvalidState(format!(
+                    "failed to persist prepared GC authority for '{}'",
+                    runtime.binding
+                ))
+                .into());
+            }
+        }
+        let persisted = Self::runtime_store(&runtime.binding)?;
+        let runtime_is_exact = PreparedStoreGcAuthority::from_runtime(&persisted)
+            == PreparedStoreGcAuthority::from_live(runtime.pid, &live.gc);
+        if !runtime_is_exact {
+            return Err(PublicationWorkflowError::InvalidState(format!(
+                "persisted GC authority for '{}' differs from its live Store",
+                runtime.binding
+            ))
+            .into());
+        }
+        Ok((runtime.pid, live))
+    }
+
     // Resolve one binding from authoritative runtime inventory.
     fn runtime_store(binding: &WasmStoreBinding) -> Result<WasmStoreView, InternalError> {
         SubnetStateOps::wasm_stores()
@@ -374,6 +469,28 @@ impl WasmStorePublicationWorkflow {
 
         Ok(())
     }
+}
+
+fn validate_live_prepared_store(status: &WasmStoreStatusResponse) -> Result<(), InternalError> {
+    let prepared_at = status.gc.prepared_at.unwrap_or_default();
+    let evidence_is_exact = [
+        status.gc.mode == WasmStoreGcMode::Prepared,
+        prepared_at > 0,
+        status.gc.changed_at == prepared_at,
+        status.gc.started_at.is_none(),
+        status.gc.completed_at.is_none(),
+        status.gc.runs_completed == 0,
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    if !evidence_is_exact {
+        return Err(PublicationWorkflowError::InvalidState(
+            "root final inventory requires one retained Store at exact GC Prepared authority"
+                .to_string(),
+        )
+        .into());
+    }
+    Ok(())
 }
 
 #[cfg(test)]
