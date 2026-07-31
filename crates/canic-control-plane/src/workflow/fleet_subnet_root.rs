@@ -11,6 +11,7 @@ use crate::{
     },
     view::component_registry::{
         RootComponentRegistryView, RootFleetSubnetDrainingView, RootFleetSubnetFinalInventoryView,
+        RootFleetSubnetRemovalPublicationView,
     },
     workflow::{
         bootstrap::root_store, runtime::template::publication::WasmStorePublicationWorkflow,
@@ -20,18 +21,24 @@ use canic_core::{
     api::fleet_activation::FleetActivationApi,
     control_plane_support::{
         error::{InternalError, InternalErrorOrigin},
-        ops::ic::IcOps,
+        ops::ic::{IcOps, call::CallOps},
     },
     dto::{
-        fleet_registry::{FleetRegistryVersion, FleetSubnetRootEntry, FleetSubnetRootStatus},
+        error::Error,
+        fleet_registry::{
+            FleetRegistryVersion, FleetSubnetRootEntry, FleetSubnetRootRemovalPublicationRequest,
+            FleetSubnetRootRemovalPublicationResponse, FleetSubnetRootStatus,
+        },
         fleet_subnet_root::{
             FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary,
             FleetSubnetRootDrainingRequest, FleetSubnetRootDrainingResponse,
             FleetSubnetRootDrainingStatusRequest, FleetSubnetRootFinalInventoryRequest,
             FleetSubnetRootFinalInventoryResponse, FleetSubnetRootFinalInventoryStatusRequest,
+            FleetSubnetRootRemovalRequest, FleetSubnetRootRemovalStatusRequest,
         },
     },
     ids::{FleetSubnetRootBinding, FleetSubnetRootReleaseSet},
+    protocol,
 };
 
 struct ValidatedFleetSubnetRootState {
@@ -137,6 +144,74 @@ pub fn final_inventory_status(
     let state = validated_root_state()?;
     ensure_root_is_published_draining(&state)?;
     ComponentRegistryOps::root_final_inventory(request.operation_id).map(final_inventory_response)
+}
+
+/// Revalidate the retained Store and publish this root as logically `Removed`.
+pub async fn publish_removal(
+    request: FleetSubnetRootRemovalRequest,
+) -> Result<FleetSubnetRootRemovalPublicationResponse, InternalError> {
+    let state = validated_root_state()?;
+    ensure_root_is_published_draining(&state)?;
+    if let Some(existing) =
+        ComponentRegistryOps::root_removal_publication_if_present(request.operation_id)?
+    {
+        if existing.previous_registry != request.expected_registry {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root removal retry names a different Registry",
+            ));
+        }
+        let inventory = ComponentRegistryOps::root_final_inventory(request.operation_id)?;
+        return removal_publication_response(existing, inventory);
+    }
+    if request.expected_registry != state.fleet_registry {
+        return Err(InternalError::conflict(
+            "Fleet Subnet Root removal request differs from the active Registry mirror",
+        ));
+    }
+    let coordinator = state.component_registry.root.authority.binding.coordinator;
+    let (wasm_store, store_status) =
+        WasmStorePublicationWorkflow::verify_single_root_store_for_removal().await?;
+    let store = root_store::status(state.component_registry.store_bootstrap).await?;
+    if store.wasm_store != wasm_store {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "verified removal Store differs from the exact root release-set catalog",
+        ));
+    }
+    let inventory = ComponentRegistryOps::verify_root_final_inventory_store(
+        request.operation_id,
+        &store,
+        &store_status,
+    )?;
+    let publication_request = FleetSubnetRootRemovalPublicationRequest {
+        expected_registry: request.expected_registry,
+        final_inventory: final_inventory_response(inventory),
+    };
+    let response = publish_removed_to_coordinator(coordinator, publication_request.clone()).await?;
+    validate_removal_publication_response(&publication_request, &response)?;
+    let publication = ComponentRegistryOps::record_root_removal_publication(
+        request.operation_id,
+        &response,
+        IcOps::now_nanos(),
+    )?;
+    removal_publication_response(
+        publication,
+        ComponentRegistryOps::root_final_inventory(request.operation_id)?,
+    )
+}
+
+/// Read the locally retained exact Coordinator removal receipt without inter-Canister calls.
+pub fn removal_status(
+    request: FleetSubnetRootRemovalStatusRequest,
+) -> Result<FleetSubnetRootRemovalPublicationResponse, InternalError> {
+    let _state = validated_root_state()?;
+    let publication =
+        ComponentRegistryOps::root_removal_publication_if_present(request.operation_id)?
+            .ok_or_else(|| {
+                InternalError::unavailable("Fleet Subnet Root removal has not been published")
+            })?;
+    let inventory = ComponentRegistryOps::root_final_inventory(request.operation_id)?;
+    removal_publication_response(publication, inventory)
 }
 
 /// Return one compact, fail-closed inventory for this active Fleet Subnet Root.
@@ -353,6 +428,60 @@ fn final_inventory_response(
         finalized_at_ns: view.finalized_at_ns,
         inventory_hash: view.inventory_hash,
     }
+}
+
+async fn publish_removed_to_coordinator(
+    coordinator: candid::Principal,
+    request: FleetSubnetRootRemovalPublicationRequest,
+) -> Result<FleetSubnetRootRemovalPublicationResponse, InternalError> {
+    let call = CallOps::unbounded_wait(
+        coordinator,
+        protocol::CANIC_FLEET_REGISTRY_PUBLISH_ROOT_REMOVED,
+    )
+    .with_arg(request)?
+    .execute()
+    .await?;
+    let result: Result<FleetSubnetRootRemovalPublicationResponse, Error> = call.candid()?;
+    result.map_err(InternalError::public)
+}
+
+fn validate_removal_publication_response(
+    request: &FleetSubnetRootRemovalPublicationRequest,
+    response: &FleetSubnetRootRemovalPublicationResponse,
+) -> Result<(), InternalError> {
+    let transition_revision = response.previous_version.revision.checked_add(1);
+    let response_is_exact = [
+        response.final_inventory == request.final_inventory,
+        response.previous_version == request.expected_registry,
+        response.version.authority == response.previous_version.authority,
+        transition_revision.is_some_and(|revision| revision == response.version.revision),
+        response.version.content_hash != [0; 32],
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    if !response_is_exact {
+        return Err(InternalError::invalid_input(
+            "Coordinator root removal response differs from requested authority",
+        ));
+    }
+    Ok(())
+}
+
+fn removal_publication_response(
+    publication: RootFleetSubnetRemovalPublicationView,
+    inventory: RootFleetSubnetFinalInventoryView,
+) -> Result<FleetSubnetRootRemovalPublicationResponse, InternalError> {
+    if publication.final_inventory_hash != inventory.inventory_hash {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root removal publication differs from retained final inventory",
+        ));
+    }
+    Ok(FleetSubnetRootRemovalPublicationResponse {
+        final_inventory: final_inventory_response(inventory),
+        previous_version: publication.previous_registry,
+        version: publication.registry,
+    })
 }
 
 #[cfg(test)]

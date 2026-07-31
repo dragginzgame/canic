@@ -4,12 +4,10 @@ mod options;
 mod render;
 
 use crate::{
-    cli::clap::parse_subcommand, cli::help::print_help_or_version, scaffold, version_text,
+    cli::clap::parse_subcommand, cli::help::print_help_or_version,
+    evidence_support::current_evidence_timestamp, scaffold, version_text,
 };
-use adoption_report::{
-    build_adoption_report_from_config_path, current_adoption_report_generated_at,
-    write_adoption_report,
-};
+use adoption_report::{build_adoption_report_from_config_path, write_adoption_report};
 #[cfg(test)]
 use adoption_report::{cargo_metadata_package_path, render_adoption_report};
 use canic_host::{
@@ -167,7 +165,7 @@ where
 
     let options = AdoptionReportOptions::parse(args)?;
     let config_path = selected_app_config_path(&options.app)?;
-    let generated_at = current_adoption_report_generated_at()?;
+    let generated_at = current_evidence_timestamp()?;
     let report = build_adoption_report_from_config_path(&config_path, &options, &generated_at)?;
     write_adoption_report(&config_path, &options, &report)
 }

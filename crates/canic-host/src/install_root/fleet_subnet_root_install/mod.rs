@@ -7,8 +7,8 @@
 
 use super::{
     commands::{
-        add_icp_environment_target, icp_canister_command, parse_created_canister_id,
-        root_init_args, run_command,
+        add_icp_environment_target, candid_arg, icp_canister_command, icp_e8s_text,
+        parse_created_canister_id, run_command,
     },
     fleet_subnet_root_install_journal::{
         FleetSubnetRootInstallJournal, FleetSubnetRootInstallPhase,
@@ -17,14 +17,14 @@ use super::{
         plan_fleet_subnet_root_install, record_root_created, record_root_installed,
         record_root_verified, validate_live_root_activation_status,
     },
-    operations::{module_hash_text, parse_module_hash},
+    operations::{module_hash_text, parse_module_hash, query_no_arg},
 };
 use crate::{
     durable_io::{
         RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
     },
     fleet_install_plan::{PersistedFleetInstallPlan, PlannedCanisterCreationFunding},
-    icp::{IcpCli, LocalReplicaTarget, decode_json_result_response, run_output_to_file},
+    icp::{LocalReplicaTarget, run_output_to_file},
     release_set::{
         AppConfigSnapshot, CanicInfrastructureRole,
         load_persisted_canic_infrastructure_artifact_manifest, resolve_release_artifact_path,
@@ -45,7 +45,6 @@ use std::{
 };
 use thiserror::Error as ThisError;
 
-const ICP_JSON_OUTPUT: &str = "json";
 const MAX_ROOT_TRANSITIONS: usize = 8;
 
 #[derive(Debug, ThisError)]
@@ -390,14 +389,14 @@ fn verify_live_root(
 
     let expected = expected_root_authority(journal)?;
     let icp = super::install_icp(icp_root, environment, local_replica);
-    let status = query_root::<FleetActivationStatusResponse>(
+    let status = query_no_arg::<FleetActivationStatusResponse>(
         &icp,
         fleet_subnet_root,
         protocol::CANIC_FLEET_ACTIVATION_STATUS,
     )?;
     validate_live_root_activation_status(journal_path, journal, &status)
         .map_err(|_| RootInstallStateError::ActivationStatusMismatch)?;
-    let observed = query_root::<FleetSubnetRootAuthority>(
+    let observed = query_no_arg::<FleetSubnetRootAuthority>(
         &icp,
         fleet_subnet_root,
         protocol::CANIC_FLEET_SUBNET_ROOT_AUTHORITY,
@@ -406,23 +405,6 @@ fn verify_live_root(
         return Err(RootInstallStateError::AuthorityMismatch.into());
     }
     Ok(expected)
-}
-
-fn query_root<T>(
-    icp: &IcpCli,
-    fleet_subnet_root: Principal,
-    method: &str,
-) -> Result<T, Box<dyn std::error::Error>>
-where
-    T: candid::CandidType + serde::de::DeserializeOwned,
-{
-    let output = icp.canister_query_output_with_candid(
-        &fleet_subnet_root.to_text(),
-        method,
-        Some(ICP_JSON_OUTPUT),
-        None,
-    )?;
-    decode_json_result_response(&output).map_err(Into::into)
 }
 
 fn root_install_args(
@@ -470,7 +452,7 @@ fn resolve_root_artifact(
         }
         .into());
     }
-    let actual_hash = hex_digest(Sha256::digest(&wasm).into());
+    let actual_hash = module_hash_text(Sha256::digest(&wasm).into());
     if actual_hash != entry.wasm_sha256_hex {
         return Err(RootInstallStateError::ArtifactHash {
             path: wasm_path,
@@ -523,7 +505,7 @@ fn root_install_command(
         "--wasm",
     ]);
     command.arg(wasm_path);
-    command.args(["--args", &root_init_args(init_args)?]);
+    command.args(["--args", &candid_arg(init_args)?]);
     add_icp_environment_target(&mut command, environment, local_replica);
     Ok(command)
 }
@@ -701,25 +683,4 @@ fn open_creation_result_for_effect(_path: &Path) -> io::Result<fs::File> {
         io::ErrorKind::Unsupported,
         "Fleet Subnet Root creation result capture is unsupported",
     ))
-}
-
-fn icp_e8s_text(e8s: u64) -> String {
-    const E8S_PER_ICP: u64 = 100_000_000;
-    let whole = e8s / E8S_PER_ICP;
-    let remainder = e8s % E8S_PER_ICP;
-    if remainder == 0 {
-        return whole.to_string();
-    }
-    let fractional = format!("{remainder:08}");
-    format!("{whole}.{}", fractional.trim_end_matches('0'))
-}
-
-fn hex_digest(bytes: [u8; 32]) -> String {
-    bytes
-        .iter()
-        .fold(String::with_capacity(64), |mut text, byte| {
-            use std::fmt::Write as _;
-            let _ = write!(text, "{byte:02x}");
-            text
-        })
 }

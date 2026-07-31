@@ -386,7 +386,7 @@ fn root_component_child_reservation_is_response_idempotent() {
 }
 
 #[test]
-fn fleet_subnet_root_draining_and_final_inventory_are_response_idempotent() {
+fn fleet_subnet_root_draining_inventory_and_removal_are_response_idempotent() {
     let begin = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
         .find(|entry| entry.endpoint == "canic_fleet_subnet_root_draining_begin")
@@ -403,6 +403,18 @@ fn fleet_subnet_root_draining_and_final_inventory_are_response_idempotent() {
         .iter()
         .find(|entry| entry.endpoint == "canic_fleet_subnet_root_draining_inventory_status")
         .expect("Fleet Subnet Root final inventory status policy entry");
+    let removal = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_fleet_subnet_root_removal_publish")
+        .expect("Fleet Subnet Root removal publication policy entry");
+    let removal_status = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_fleet_subnet_root_removal_status")
+        .expect("Fleet Subnet Root removal status policy entry");
+    let coordinator = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_fleet_registry_publish_root_removed")
+        .expect("Coordinator root removal publication policy entry");
 
     assert_eq!(
         begin.replay_policy,
@@ -425,6 +437,22 @@ fn fleet_subnet_root_draining_and_final_inventory_are_response_idempotent() {
         ReplayPolicy::QueryOrReadOnly
     );
     assert_eq!(inventory_status.endpoint_kind, EndpointKind::Query);
+    assert_eq!(
+        removal.replay_policy,
+        ReplayPolicy::ResponseIdempotent {
+            command_kind: replay_command_kind("fleet_subnet_root.publish_removal.v1"),
+        }
+    );
+    assert_eq!(removal.cost_class, CostClass::None);
+    assert_eq!(removal_status.replay_policy, ReplayPolicy::QueryOrReadOnly);
+    assert_eq!(removal_status.endpoint_kind, EndpointKind::Query);
+    assert_eq!(
+        coordinator.replay_policy,
+        ReplayPolicy::ResponseIdempotent {
+            command_kind: replay_command_kind("fleet_registry.publish_root_removed.v1"),
+        }
+    );
+    assert_eq!(coordinator.cost_class, CostClass::None);
 }
 
 #[test]

@@ -5,7 +5,18 @@
 //! Boundary: normalizes optional path arguments for stable command provenance.
 
 use canic_host::evidence_envelope::command_path_for_root;
-use std::path::Path;
+use std::{
+    path::Path,
+    time::{SystemTime, UNIX_EPOCH},
+};
+
+/// Return the current evidence timestamp in the canonical Unix-seconds form.
+pub fn current_evidence_timestamp() -> Result<String, Box<dyn std::error::Error>> {
+    Ok(format!(
+        "unix:{}",
+        SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs()
+    ))
+}
 
 pub fn push_optional_path_arg(
     args: &mut Vec<String>,

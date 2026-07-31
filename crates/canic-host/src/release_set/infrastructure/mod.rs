@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error as ThisError;
 
-use super::{GZIP_MAGIC, WASM_MAGIC, validate_release_artifact_relative_path};
+use super::{GZIP_MAGIC, WASM_MAGIC, valid_package_name, validate_release_artifact_relative_path};
 
 pub use persistence::{
     CanicInfrastructureArtifactBuildOutput, CanicInfrastructureArtifactPersistenceError,
@@ -30,7 +30,6 @@ pub use persistence::{
 
 const SHA_256_HEX_BYTES: usize = 64;
 const MAX_ARTIFACT_PATH_BYTES: usize = 4_096;
-const MAX_PACKAGE_BYTES: usize = 128;
 const REQUIRED_INFRASTRUCTURE_ROLES: [CanicInfrastructureRole; 3] = [
     CanicInfrastructureRole::FleetCoordinator,
     CanicInfrastructureRole::FleetSubnetRoot,
@@ -410,15 +409,4 @@ fn validate_sha256(
             value: value.to_string(),
         })
     }
-}
-
-fn valid_package_name(package: &str) -> bool {
-    let bytes = package.as_bytes();
-    !bytes.is_empty()
-        && bytes.len() <= MAX_PACKAGE_BYTES
-        && bytes.first().is_some_and(u8::is_ascii_alphanumeric)
-        && bytes.last().is_some_and(u8::is_ascii_alphanumeric)
-        && bytes
-            .iter()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
 }

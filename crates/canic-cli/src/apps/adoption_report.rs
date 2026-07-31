@@ -27,7 +27,6 @@ use serde::de::DeserializeOwned;
 use std::{
     fs,
     path::{Component, Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 use super::{
@@ -707,13 +706,6 @@ fn format_adoption_classifications(classifications: &[AdoptionClassificationV1])
         .map(|classification| adoption_classification_label(*classification))
         .collect::<Vec<_>>()
         .join(",")
-}
-
-pub(super) fn current_adoption_report_generated_at() -> Result<String, Box<dyn std::error::Error>> {
-    Ok(format!(
-        "unix:{}",
-        SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs()
-    ))
 }
 
 const fn adoption_profile_label(profile: AdoptionProfileV1) -> &'static str {

@@ -16,6 +16,7 @@ use canic_core::{
         FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
         FleetRegistryVersion, FleetSubnetRootDrainingPublicationRequest,
         FleetSubnetRootDrainingPublicationResponse, FleetSubnetRootEntry,
+        FleetSubnetRootRemovalPublicationRequest, FleetSubnetRootRemovalPublicationResponse,
         FleetSubnetRootSnapshotAcknowledgement,
     },
     ids::{AppId, FleetRegistryAuthority},
@@ -27,8 +28,8 @@ use std::cell::RefCell;
 #[cfg(feature = "fleet-coordinator-canister")]
 // The record may contain one topology, one Registry snapshot, and the
 // root-entry portion of that Registry again as immutable join receipts, one
-// exact acknowledgement per current root, and at most one draining
-// publication receipt per root.
+// exact acknowledgement per current root, and at most one draining and one
+// removal publication receipt per root.
 const FLEET_COORDINATOR_STATE_MAX_BYTES: u32 = 8_388_608;
 
 #[cfg(feature = "fleet-coordinator-canister")]
@@ -65,6 +66,7 @@ pub struct FleetCoordinatorRegistryRecord {
     pub root_snapshot_acknowledgements: Vec<FleetSubnetRootSnapshotAcknowledgement>,
     pub registry_activation_receipt: Option<FleetRegistryActivationReceiptRecord>,
     pub root_draining_publication_receipts: Vec<FleetSubnetRootDrainingPublicationReceiptRecord>,
+    pub root_removal_publication_receipts: Vec<FleetSubnetRootRemovalPublicationReceiptRecord>,
 }
 
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
@@ -96,6 +98,13 @@ pub struct FleetRegistryActivationReceiptRecord {
 pub struct FleetSubnetRootDrainingPublicationReceiptRecord {
     pub request: FleetSubnetRootDrainingPublicationRequest,
     pub response: FleetSubnetRootDrainingPublicationResponse,
+}
+
+/// Persisted exact request and response for one root's published `Removed` transition.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootRemovalPublicationReceiptRecord {
+    pub request: FleetSubnetRootRemovalPublicationRequest,
+    pub response: FleetSubnetRootRemovalPublicationResponse,
 }
 
 ///

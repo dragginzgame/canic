@@ -4,6 +4,7 @@
 //! Does not own: HTTP transport, Candid reply payloads, or replica targeting.
 //! Boundary: codec-specific values and errors do not escape this module.
 
+use super::nonempty_text;
 use canic_core::cdk::utils::hash::hex_bytes;
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
@@ -85,11 +86,6 @@ fn root_key_from_value(value: &ciborium::Value) -> Option<String> {
             .or_else(|| map.iter().find_map(|(_, value)| root_key_from_value(value))),
         _ => None,
     }
-}
-
-fn nonempty_text(text: &str) -> Option<String> {
-    let trimmed = text.trim();
-    (!trimmed.is_empty()).then(|| trimmed.to_string())
 }
 
 fn cbor_error(error: impl std::fmt::Display) -> CborError {

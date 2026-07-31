@@ -394,6 +394,14 @@ fn fleet_subnet_root_draining_is_controller_guarded_on_the_root_surface() {
         canic::protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS,
         canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS
     );
+    assert_eq!(
+        canic::protocol::CANIC_FLEET_SUBNET_ROOT_REMOVAL_PUBLISH,
+        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_REMOVAL_PUBLISH
+    );
+    assert_eq!(
+        canic::protocol::CANIC_FLEET_SUBNET_ROOT_REMOVAL_STATUS,
+        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_REMOVAL_STATUS
+    );
 
     let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
     let source = read_text(&macro_path);
@@ -409,6 +417,10 @@ fn fleet_subnet_root_draining_is_controller_guarded_on_the_root_surface() {
         &source,
         "async fn canic_fleet_subnet_root_draining_inventory_status(",
     );
+    let removal =
+        preceding_attribute_context(&source, "async fn canic_fleet_subnet_root_removal_publish(");
+    let removal_status =
+        preceding_attribute_context(&source, "async fn canic_fleet_subnet_root_removal_status(");
 
     assert!(
         begin.contains("canic_update(requires(caller::is_controller()))"),
@@ -425,6 +437,14 @@ fn fleet_subnet_root_draining_is_controller_guarded_on_the_root_surface() {
     assert!(
         inventory_status.contains("canic_query(requires(caller::is_controller()))"),
         "Fleet Subnet Root final inventory status must remain a controller-guarded query"
+    );
+    assert!(
+        removal.contains("canic_update(requires(caller::is_controller()))"),
+        "Fleet Subnet Root removal publication must remain a controller-guarded update"
+    );
+    assert!(
+        removal_status.contains("canic_query(requires(caller::is_controller()))"),
+        "Fleet Subnet Root removal status must remain a controller-guarded query"
     );
 }
 
@@ -488,6 +508,14 @@ fn fleet_registry_snapshot_synchronization_protocol_and_guards_are_pinned() {
         .contains("canic_update(requires(caller::is_controller()))"),
         "root Draining publication must remain a controller-guarded update"
     );
+    assert!(
+        preceding_attribute_context(
+            &coordinator,
+            "async fn canic_fleet_registry_publish_root_removed(",
+        )
+        .contains("canic_update(public)"),
+        "root Removed publication must remain inter-canister callable"
+    );
 
     let coordinator_api_path =
         workspace_root().join("crates/canic-control-plane/src/api/fleet_coordinator.rs");
@@ -496,7 +524,9 @@ fn fleet_registry_snapshot_synchronization_protocol_and_guards_are_pinned() {
         coordinator_api.contains("FleetCoordinatorWorkflow::snapshot_for_root(msg_caller())",)
             && coordinator_api.contains(
                 "FleetCoordinatorWorkflow::acknowledge_root_snapshot(msg_caller(), request)",
-            ),
+            )
+            && coordinator_api
+                .contains("FleetCoordinatorWorkflow::publish_root_removed(msg_caller(), request)",),
         "public Coordinator transports must authenticate the exact calling root in the API facade"
     );
 
@@ -551,6 +581,11 @@ fn assert_fleet_registry_protocol_constants() {
             canic::protocol::CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,
             canic_core::protocol::CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,
             "canic_fleet_registry_publish_root_draining",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_PUBLISH_ROOT_REMOVED,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_PUBLISH_ROOT_REMOVED,
+            "canic_fleet_registry_publish_root_removed",
         ),
         (
             canic::protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,

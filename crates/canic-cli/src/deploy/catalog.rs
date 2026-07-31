@@ -1,6 +1,4 @@
-use super::{
-    DeployCommandError, current_observed_at, output_format::JsonTextOutputFormat, value_arg,
-};
+use super::{DeployCommandError, output_format::JsonTextOutputFormat, value_arg};
 use crate::{
     cli::{
         clap::{
@@ -11,6 +9,7 @@ use crate::{
         globals::internal_environment_arg,
         help::print_help_or_version,
     },
+    evidence_support::current_evidence_timestamp,
     output, version_text,
 };
 use canic_host::{
@@ -167,7 +166,7 @@ fn request(options: &DeployCatalogOptions) -> Result<FleetCatalogRequest, Deploy
     Ok(FleetCatalogRequest {
         project_root,
         environment: options.environment.clone(),
-        generated_at: current_observed_at()?,
+        generated_at: current_evidence_timestamp()?,
     })
 }
 

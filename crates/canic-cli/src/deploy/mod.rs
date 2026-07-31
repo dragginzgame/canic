@@ -21,6 +21,7 @@ use crate::{
         defaults::local_environment,
         help::print_help_or_version,
     },
+    evidence_support::current_evidence_timestamp,
     version_text,
 };
 use canic_host::{
@@ -33,12 +34,7 @@ use canic_host::{
 };
 use clap::Command as ClapCommand;
 use serde::de::DeserializeOwned;
-use std::{
-    ffi::OsString,
-    fs,
-    path::PathBuf,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{ffi::OsString, fs, path::PathBuf};
 use thiserror::Error as ThisError;
 
 const DEFAULT_ROOT_TARGET: &str = "root";
@@ -136,7 +132,7 @@ pub fn load_deployment_check(
     let app = fleet.app.to_string();
     check_install_deployment_truth(
         &options.into_install_root_options_with_icp_root(Some(icp_root), app),
-        current_observed_at()?,
+        current_evidence_timestamp()?,
     )
     .map_err(DeployCommandError::from)
 }
@@ -218,13 +214,6 @@ impl DeployTruthOptions {
             deployment_plan_override: None,
         }
     }
-}
-
-pub fn current_observed_at() -> Result<String, Box<dyn std::error::Error>> {
-    Ok(format!(
-        "unix:{}",
-        SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs()
-    ))
 }
 
 #[cfg(test)]

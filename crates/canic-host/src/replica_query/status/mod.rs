@@ -1,4 +1,4 @@
-use super::{ReplicaQueryError, cbor::decode_status_root_key, transport};
+use super::{ReplicaQueryError, cbor::decode_status_root_key, nonempty_text, transport};
 use std::path::Path;
 
 #[must_use]
@@ -39,11 +39,6 @@ fn root_key_from_json(value: &serde_json::Value) -> Option<String> {
             .or_else(|| map.values().find_map(root_key_from_json)),
         _ => None,
     }
-}
-
-fn nonempty_text(text: &str) -> Option<String> {
-    let trimmed = text.trim();
-    (!trimmed.is_empty()).then(|| trimmed.to_string())
 }
 
 #[cfg(test)]

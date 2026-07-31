@@ -1,4 +1,6 @@
-use crate::release_set::{AppConfigSnapshot, WorkspaceDiscoveryError, read_app_config_identity};
+use crate::release_set::{
+    AppConfigSnapshot, WorkspaceDiscoveryError, display_workspace_path, read_app_config_identity,
+};
 use crate::table::{ColumnAlign, render_table};
 use std::{
     collections::BTreeMap,
@@ -379,12 +381,4 @@ fn format_canister_summary(roles: &[String]) -> String {
     };
 
     format!("{} ({preview}{suffix})", roles.len())
-}
-
-// Render a workspace-relative path where possible for concise diagnostics.
-fn display_workspace_path(workspace_root: &Path, path: &Path) -> String {
-    path.strip_prefix(workspace_root)
-        .unwrap_or(path)
-        .display()
-        .to_string()
 }

@@ -12,13 +12,14 @@ use super::{
         record_registry_mirror_activation_verified,
     },
     fleet_subnet_root_store_bootstrap::canonical_manifest_bytes,
+    operations::call_with_arg,
 };
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
-    icp::{IcpCli, LocalReplicaTarget, decode_json_result_response},
+    icp::LocalReplicaTarget,
     release_set::{AppConfigSnapshot, load_persisted_canic_infrastructure_artifact_manifest},
 };
-use candid::{CandidType, IDLValue, Principal};
+use candid::Principal;
 use canic_core::{
     control_plane_support::ops::fleet_registry::FleetRegistryOps,
     dto::{
@@ -32,7 +33,6 @@ use canic_core::{
 use std::path::Path;
 use thiserror::Error as ThisError;
 
-const ICP_JSON_OUTPUT: &str = "json";
 const MAX_MIRROR_ACTIVATION_TRANSITIONS: usize = 4;
 
 #[derive(Debug, ThisError)]
@@ -150,7 +150,7 @@ fn drive_root_mirror_activation(
                     &icp,
                     root,
                     protocol::CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
-                    request.clone(),
+                    &request,
                     false,
                 )?;
                 record_registry_mirror_activated(&current, response)?
@@ -160,7 +160,7 @@ fn drive_root_mirror_activation(
                     &icp,
                     root,
                     protocol::CANIC_FLEET_REGISTRY_MIRROR_STATUS,
-                    request.clone(),
+                    &request,
                     true,
                 )?;
                 record_registry_mirror_activation_verified(&current, response)?
@@ -178,7 +178,7 @@ fn drive_root_mirror_activation(
                     &icp,
                     root,
                     protocol::CANIC_FLEET_REGISTRY_MIRROR_STATUS,
-                    request,
+                    &request,
                     true,
                 )?;
                 if current.journal.registry_mirror_activation_response.as_ref() != Some(&response) {
@@ -192,37 +192,4 @@ fn drive_root_mirror_activation(
         };
     }
     Err(RootRegistryMirrorActivationError::TransitionBoundExceeded.into())
-}
-
-fn call_with_arg<I, O>(
-    icp: &IcpCli,
-    canister: Principal,
-    method: &str,
-    input: I,
-    query: bool,
-) -> Result<O, Box<dyn std::error::Error>>
-where
-    I: CandidType,
-    O: CandidType + serde::de::DeserializeOwned,
-{
-    let value = IDLValue::try_from_candid_type(&input)?;
-    let args = format!("({value})");
-    let output = if query {
-        icp.canister_query_arg_output_with_candid(
-            &canister.to_text(),
-            method,
-            &args,
-            Some(ICP_JSON_OUTPUT),
-            None,
-        )?
-    } else {
-        icp.canister_call_arg_output_with_candid(
-            &canister.to_text(),
-            method,
-            &args,
-            Some(ICP_JSON_OUTPUT),
-            None,
-        )?
-    };
-    decode_json_result_response(&output).map_err(Into::into)
 }

@@ -14,6 +14,8 @@ pub const CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS: &str =
 pub const CANIC_FLEET_REGISTRY_ACTIVATE: &str = "canic_fleet_registry_activate";
 pub const CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING: &str =
     "canic_fleet_registry_publish_root_draining";
+pub const CANIC_FLEET_REGISTRY_PUBLISH_ROOT_REMOVED: &str =
+    "canic_fleet_registry_publish_root_removed";
 pub const CANIC_FLEET_SUBNET_ROOT_AUTHORITY: &str = "canic_fleet_subnet_root_authority";
 pub const CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY: &str =
     "canic_fleet_subnet_root_canister_summary";
@@ -23,6 +25,8 @@ pub const CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_FINALIZE: &str =
     "canic_fleet_subnet_root_draining_inventory_finalize";
 pub const CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_STATUS: &str =
     "canic_fleet_subnet_root_draining_inventory_status";
+pub const CANIC_FLEET_SUBNET_ROOT_REMOVAL_PUBLISH: &str = "canic_fleet_subnet_root_removal_publish";
+pub const CANIC_FLEET_SUBNET_ROOT_REMOVAL_STATUS: &str = "canic_fleet_subnet_root_removal_status";
 pub const CANIC_FLEET_REGISTRY_SYNCHRONIZE: &str = "canic_fleet_registry_synchronize";
 pub const CANIC_FLEET_REGISTRY_SYNC_STATUS: &str = "canic_fleet_registry_sync_status";
 pub const CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR: &str = "canic_fleet_registry_activate_mirror";

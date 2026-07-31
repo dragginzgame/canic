@@ -96,6 +96,12 @@ pub enum FleetRegistryOpsError {
     #[error("Fleet Registry root draining target {fleet_subnet_root} is missing")]
     FleetSubnetRootDrainingTargetMissing { fleet_subnet_root: Principal },
 
+    #[error("Fleet Registry root removal requires a Draining target")]
+    FleetSubnetRootRemovalRequiresDraining,
+
+    #[error("Fleet Registry root removal target {fleet_subnet_root} is missing")]
+    FleetSubnetRootRemovalTargetMissing { fleet_subnet_root: Principal },
+
     #[error("Fleet Directory activation requires a non-empty root set with no Joining rows")]
     FleetDirectoryRequiresPublishedRoots,
 
@@ -186,6 +192,18 @@ impl FleetRegistryOps {
         fleet_subnet_root: Principal,
     ) -> Result<FleetRegistry, InternalError> {
         compile_draining(expected_authority, topology, current, fleet_subnet_root)
+            .map_err(OpsError::from)
+            .map_err(InternalError::from)
+    }
+
+    /// Construct the next canonical snapshot with one exact draining root marked `Removed`.
+    pub fn compile_removed(
+        expected_authority: &FleetRegistryAuthority,
+        topology: &ComponentTopology,
+        current: &FleetRegistry,
+        fleet_subnet_root: Principal,
+    ) -> Result<FleetRegistry, InternalError> {
+        compile_removed(expected_authority, topology, current, fleet_subnet_root)
             .map_err(OpsError::from)
             .map_err(InternalError::from)
     }
@@ -392,6 +410,32 @@ fn compile_draining(
         .checked_add(1)
         .ok_or(FleetRegistryOpsError::RevisionExhausted)?;
     next.fleet_subnet_roots[target_index].status = FleetSubnetRootStatus::Draining;
+    validation::validate(expected_authority, topology, &next)?;
+    Ok(next)
+}
+
+fn compile_removed(
+    expected_authority: &FleetRegistryAuthority,
+    topology: &ComponentTopology,
+    current: &FleetRegistry,
+    fleet_subnet_root: Principal,
+) -> Result<FleetRegistry, FleetRegistryOpsError> {
+    validation::validate(expected_authority, topology, current)?;
+    let target_index = current
+        .fleet_subnet_roots
+        .iter()
+        .position(|entry| entry.fleet_subnet_root == fleet_subnet_root)
+        .ok_or(FleetRegistryOpsError::FleetSubnetRootRemovalTargetMissing { fleet_subnet_root })?;
+    if current.fleet_subnet_roots[target_index].status != FleetSubnetRootStatus::Draining {
+        return Err(FleetRegistryOpsError::FleetSubnetRootRemovalRequiresDraining);
+    }
+
+    let mut next = current.clone();
+    next.revision = next
+        .revision
+        .checked_add(1)
+        .ok_or(FleetRegistryOpsError::RevisionExhausted)?;
+    next.fleet_subnet_roots[target_index].status = FleetSubnetRootStatus::Removed;
     validation::validate(expected_authority, topology, &next)?;
     Ok(next)
 }

@@ -31,7 +31,7 @@ use crate::{
         RootComponentSubtreeRemovalProgressRecord, RootComponentSubtreeRemovalRecord,
         RootComponentSubtreeStopEffectRecord, RootComponentSubtreeStoppedEffectRecord,
         RootFleetSubnetDrainingRecord, RootFleetSubnetFinalInventoryIntentRecord,
-        RootFleetSubnetFinalInventoryRecord,
+        RootFleetSubnetFinalInventoryRecord, RootFleetSubnetRemovalPublicationRecord,
     },
     view::component_registry::{
         ComponentDirectoryCanonicalCursor, ComponentDirectoryChildView,
@@ -55,6 +55,7 @@ use crate::{
         RootComponentSubtreeRemovalProgressView, RootComponentSubtreeRemovalView,
         RootComponentSubtreeStopEffectView, RootComponentSubtreeStoppedEffectView,
         RootFleetSubnetDrainingView, RootFleetSubnetFinalInventoryView,
+        RootFleetSubnetRemovalPublicationView,
     },
 };
 use candid::CandidType;
@@ -76,7 +77,9 @@ use canic_core::{
             ComponentProvisioningOrigin, ComponentRegistryHead, ComponentRuntimeDirectoryAuthority,
             ComponentRuntimeDirectoryConvergenceEvidence,
         },
-        fleet_registry::{FleetDirectorySnapshot, FleetRegistryVersion},
+        fleet_registry::{
+            FleetDirectorySnapshot, FleetRegistryVersion, FleetSubnetRootRemovalPublicationResponse,
+        },
         root_store::RootStoreBootstrapRequest,
         root_store::RootStoreBootstrapResponse,
     },
@@ -1113,6 +1116,7 @@ impl ComponentRegistryOps {
             started_at_ns,
             final_inventory_intent: None,
             final_inventory: None,
+            removal_publication: None,
         };
         RootComponentRegistryStore::begin_root_draining(&current, record.clone()).map_err(
             |error| match error {
@@ -1301,6 +1305,127 @@ impl ComponentRegistryOps {
         };
         validate_root_final_inventory_record(&current, draining, inventory)?;
         Ok(Some(root_final_inventory_record_to_view(inventory.clone())))
+    }
+
+    pub(crate) fn verify_root_final_inventory_store(
+        operation_id: [u8; 32],
+        store: &RootStoreBootstrapResponse,
+        store_status: &WasmStoreStatusResponse,
+    ) -> Result<RootFleetSubnetFinalInventoryView, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining = current.root_draining.as_ref().ok_or_else(|| {
+            InternalError::unavailable("Fleet Subnet Root draining has not begun")
+        })?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root removal names a different draining operation",
+            ));
+        }
+        let inventory = draining.final_inventory.as_ref().ok_or_else(|| {
+            InternalError::unavailable("Fleet Subnet Root final inventory is not complete")
+        })?;
+        validate_root_final_inventory_record(&current, draining, inventory)?;
+        let evidence = root_store_final_inventory_evidence(&current, store, store_status)?;
+        let store_is_exact = [
+            store.wasm_store == inventory.wasm_store,
+            evidence.catalog_hash == inventory.wasm_store_catalog_hash,
+            evidence.catalog_entries == inventory.wasm_store_catalog_entries,
+            store_status.occupied_store_bytes == inventory.wasm_store_occupied_bytes,
+            store_status.template_count == inventory.wasm_store_template_count,
+            store_status.release_count == inventory.wasm_store_release_count,
+            evidence.gc_prepared_at_secs == inventory.wasm_store_gc_prepared_at_secs,
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !store_is_exact {
+            return Err(InternalError::conflict(
+                "live root Store differs from the retained terminal inventory",
+            ));
+        }
+        Ok(root_final_inventory_record_to_view(inventory.clone()))
+    }
+
+    pub(crate) fn root_removal_publication_if_present(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootFleetSubnetRemovalPublicationView>, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining = current.root_draining.as_ref().ok_or_else(|| {
+            InternalError::unavailable("Fleet Subnet Root draining has not begun")
+        })?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root removal publication names a different draining operation",
+            ));
+        }
+        Ok(draining
+            .removal_publication
+            .clone()
+            .map(root_removal_publication_record_to_view))
+    }
+
+    pub(crate) fn record_root_removal_publication(
+        operation_id: [u8; 32],
+        response: &FleetSubnetRootRemovalPublicationResponse,
+        recorded_at_ns: u64,
+    ) -> Result<RootFleetSubnetRemovalPublicationView, InternalError> {
+        if let Some(existing) = Self::root_removal_publication_if_present(operation_id)? {
+            let response_is_exact = [
+                existing.operation_id == operation_id,
+                existing.final_inventory_hash == response.final_inventory.inventory_hash,
+                existing.previous_registry == response.previous_version,
+                existing.registry == response.version,
+            ]
+            .into_iter()
+            .all(|valid| valid);
+            if response_is_exact {
+                return Ok(existing);
+            }
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root removal publication already contains different authority",
+            ));
+        }
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        let inventory = draining
+            .final_inventory
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable("root final inventory is not complete"))?;
+        if !root_final_inventory_record_matches_response(inventory, &response.final_inventory) {
+            return Err(InternalError::invalid_input(
+                "Coordinator root removal response differs from local final inventory",
+            ));
+        }
+        let record = RootFleetSubnetRemovalPublicationRecord {
+            operation_id,
+            final_inventory_hash: inventory.inventory_hash,
+            previous_registry: response.previous_version.clone(),
+            registry: response.version.clone(),
+            recorded_at_ns,
+        };
+        RootComponentRegistryStore::record_root_removal_publication(&current, record).map_err(
+            |RootComponentRegistryCommitError::ConflictingState| {
+                InternalError::conflict(
+                    "root Component Registry changed before removal publication committed",
+                )
+            },
+        )?;
+        Self::root_removal_publication_if_present(operation_id)?.ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "committed root removal publication is missing",
+            )
+        })
     }
 
     pub(crate) fn finalize_root_inventory(
@@ -6268,6 +6393,9 @@ fn root_draining_record_to_view(
         final_inventory: record
             .final_inventory
             .map(root_final_inventory_record_to_view),
+        removal_publication: record
+            .removal_publication
+            .map(root_removal_publication_record_to_view),
     }
 }
 
@@ -6295,6 +6423,47 @@ fn root_final_inventory_record_to_view(
         finalized_at_ns: record.finalized_at_ns,
         inventory_hash: record.inventory_hash,
     }
+}
+
+fn root_removal_publication_record_to_view(
+    record: RootFleetSubnetRemovalPublicationRecord,
+) -> RootFleetSubnetRemovalPublicationView {
+    RootFleetSubnetRemovalPublicationView {
+        operation_id: record.operation_id,
+        final_inventory_hash: record.final_inventory_hash,
+        previous_registry: record.previous_registry,
+        registry: record.registry,
+        recorded_at_ns: record.recorded_at_ns,
+    }
+}
+
+fn root_final_inventory_record_matches_response(
+    record: &RootFleetSubnetFinalInventoryRecord,
+    response: &canic_core::dto::fleet_subnet_root::FleetSubnetRootFinalInventoryResponse,
+) -> bool {
+    [
+        response.operation_id == record.operation_id,
+        response.fleet_subnet_root == record.fleet_subnet_root,
+        response.placement_subnet == record.placement_subnet,
+        response.registry == record.registry,
+        response.component_topology_digest == record.component_topology_digest,
+        response.active_release_set == record.active_release_set,
+        response.next_allocation_sequence == record.next_allocation_sequence,
+        response.removed_component_instances == record.removed_component_instances,
+        response.terminal_component_history_hash == record.terminal_component_history_hash,
+        response.root_registry_encoded_bytes == record.root_registry_encoded_bytes,
+        response.wasm_store == record.wasm_store,
+        response.wasm_store_catalog_hash == record.wasm_store_catalog_hash,
+        response.wasm_store_catalog_entries == record.wasm_store_catalog_entries,
+        response.wasm_store_occupied_bytes == record.wasm_store_occupied_bytes,
+        response.wasm_store_template_count == record.wasm_store_template_count,
+        response.wasm_store_release_count == record.wasm_store_release_count,
+        response.wasm_store_gc_prepared_at_secs == record.wasm_store_gc_prepared_at_secs,
+        response.finalized_at_ns == record.finalized_at_ns,
+        response.inventory_hash == record.inventory_hash,
+    ]
+    .into_iter()
+    .all(|valid| valid)
 }
 
 const fn initial_inventory_record_to_view(
@@ -11731,6 +11900,8 @@ mod tests {
             inventory
         );
 
+        assert_root_removal_publication_is_exact(&store, status, &inventory, &published_registry);
+
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
 
@@ -11778,6 +11949,73 @@ mod tests {
                 template_id: crate::ids::TemplateId::new("project_hub"),
                 versions: 1,
             }],
+        }
+    }
+
+    fn assert_root_removal_publication_is_exact(
+        store: &RootStoreBootstrapResponse,
+        status: WasmStoreStatusResponse,
+        inventory: &RootFleetSubnetFinalInventoryView,
+        published_registry: &FleetRegistryVersion,
+    ) {
+        assert_eq!(
+            ComponentRegistryOps::verify_root_final_inventory_store([10; 32], store, &status)
+                .expect("revalidate retained Store"),
+            inventory.clone()
+        );
+        let mut changed_status = status;
+        changed_status.occupied_store_bytes += 1;
+        ComponentRegistryOps::verify_root_final_inventory_store([10; 32], store, &changed_status)
+            .expect_err("changed Store inventory must fail closed");
+
+        let response = FleetSubnetRootRemovalPublicationResponse {
+            final_inventory: final_inventory_dto(inventory),
+            previous_version: published_registry.clone(),
+            version: FleetRegistryVersion {
+                authority: published_registry.authority.clone(),
+                revision: published_registry.revision + 1,
+                content_hash: [21; 32],
+            },
+        };
+        let publication =
+            ComponentRegistryOps::record_root_removal_publication([10; 32], &response, 22)
+                .expect("record root removal publication");
+        assert_eq!(publication.final_inventory_hash, inventory.inventory_hash);
+        restart_component_registry();
+        assert_eq!(
+            ComponentRegistryOps::record_root_removal_publication([10; 32], &response, 99)
+                .expect("exact root removal publication retry"),
+            publication
+        );
+        let mut conflicting = response;
+        conflicting.version.content_hash[0] ^= 1;
+        ComponentRegistryOps::record_root_removal_publication([10; 32], &conflicting, 23)
+            .expect_err("conflicting removal publication must fail closed");
+    }
+
+    fn final_inventory_dto(
+        inventory: &RootFleetSubnetFinalInventoryView,
+    ) -> canic_core::dto::fleet_subnet_root::FleetSubnetRootFinalInventoryResponse {
+        canic_core::dto::fleet_subnet_root::FleetSubnetRootFinalInventoryResponse {
+            operation_id: inventory.operation_id,
+            fleet_subnet_root: inventory.fleet_subnet_root,
+            placement_subnet: inventory.placement_subnet,
+            registry: inventory.registry.clone(),
+            component_topology_digest: inventory.component_topology_digest,
+            active_release_set: inventory.active_release_set,
+            next_allocation_sequence: inventory.next_allocation_sequence,
+            removed_component_instances: inventory.removed_component_instances,
+            terminal_component_history_hash: inventory.terminal_component_history_hash,
+            root_registry_encoded_bytes: inventory.root_registry_encoded_bytes,
+            wasm_store: inventory.wasm_store,
+            wasm_store_catalog_hash: inventory.wasm_store_catalog_hash,
+            wasm_store_catalog_entries: inventory.wasm_store_catalog_entries,
+            wasm_store_occupied_bytes: inventory.wasm_store_occupied_bytes,
+            wasm_store_template_count: inventory.wasm_store_template_count,
+            wasm_store_release_count: inventory.wasm_store_release_count,
+            wasm_store_gc_prepared_at_secs: inventory.wasm_store_gc_prepared_at_secs,
+            finalized_at_ns: inventory.finalized_at_ns,
+            inventory_hash: inventory.inventory_hash,
         }
     }
 

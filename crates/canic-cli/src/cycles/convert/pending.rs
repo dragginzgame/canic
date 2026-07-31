@@ -1,3 +1,4 @@
+use super::{extend_hash_part, operation::current_unix_nanos};
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes, sha256_bytes};
 use rustix::fs::{FlockOperation, flock};
 use serde::{Deserialize, Serialize};
@@ -5,7 +6,6 @@ use std::{
     fs, io,
     io::Write,
     path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error as ThisError;
 
@@ -365,15 +365,15 @@ fn parse_logged_operation_id(
 
 fn icp_refill_operation_key(input: &PendingIcpRefillOperationInput<'_>) -> String {
     let mut bytes = Vec::new();
-    extend_key_part(&mut bytes, b"canic:pending-operation:icp-refill:v1");
-    extend_key_part(&mut bytes, input.environment.as_bytes());
-    extend_key_part(&mut bytes, input.fleet.as_bytes());
-    extend_key_part(&mut bytes, input.root_canister_id.as_bytes());
+    extend_hash_part(&mut bytes, b"canic:pending-operation:icp-refill:v1");
+    extend_hash_part(&mut bytes, input.environment.as_bytes());
+    extend_hash_part(&mut bytes, input.fleet.as_bytes());
+    extend_hash_part(&mut bytes, input.root_canister_id.as_bytes());
     extend_optional_key_part(
         &mut bytes,
         input.source_subaccount.as_ref().map(AsRef::as_ref),
     );
-    extend_key_part(&mut bytes, &input.amount_e8s.to_be_bytes());
+    extend_hash_part(&mut bytes, &input.amount_e8s.to_be_bytes());
     hex_bytes(sha256_bytes(&bytes))
 }
 
@@ -381,21 +381,10 @@ fn extend_optional_key_part(bytes: &mut Vec<u8>, part: Option<&[u8]>) {
     match part {
         Some(part) => {
             bytes.push(1);
-            extend_key_part(bytes, part);
+            extend_hash_part(bytes, part);
         }
         None => bytes.push(0),
     }
-}
-
-fn extend_key_part(bytes: &mut Vec<u8>, part: &[u8]) {
-    bytes.extend_from_slice(&(part.len() as u64).to_be_bytes());
-    bytes.extend_from_slice(part);
-}
-
-fn current_unix_nanos() -> u128 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |duration| duration.as_nanos())
 }
 
 #[cfg(test)]

@@ -113,6 +113,10 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "canic_fleet_registry_publish_root_draining",
         command_kind("fleet_registry.publish_root_draining.v1"),
     ),
+    update_response_idempotent(
+        "canic_fleet_registry_publish_root_removed",
+        command_kind("fleet_registry.publish_root_removed.v1"),
+    ),
     update_read_only("canic_fleet_registry_snapshot_for_root"),
     update_response_idempotent(
         "canic_fleet_registry_synchronize",
@@ -133,6 +137,11 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         command_kind("fleet_subnet_root.begin_draining.v1"),
     ),
     query_read_only("canic_fleet_subnet_root_draining_status"),
+    update_response_idempotent(
+        "canic_fleet_subnet_root_removal_publish",
+        command_kind("fleet_subnet_root.publish_removal.v1"),
+    ),
+    query_read_only("canic_fleet_subnet_root_removal_status"),
     update_response_idempotent(
         "canic_fleet_subnet_root_draining_inventory_finalize",
         command_kind("fleet_subnet_root.finalize_inventory.v1"),

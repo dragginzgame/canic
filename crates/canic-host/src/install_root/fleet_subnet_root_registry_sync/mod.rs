@@ -12,18 +12,19 @@ use super::{
         record_registry_synchronized,
     },
     fleet_subnet_root_store_bootstrap::canonical_manifest_bytes,
+    operations::{call_with_arg, query_live_registry, query_no_arg},
 };
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
-    icp::{IcpCli, LocalReplicaTarget, decode_json_result_response},
+    icp::LocalReplicaTarget,
     release_set::{AppConfigSnapshot, load_persisted_canic_infrastructure_artifact_manifest},
 };
-use candid::{CandidType, IDLValue, Principal};
+use candid::Principal;
 use canic_core::{
     control_plane_support::ops::fleet_registry::FleetRegistryOps,
     dto::fleet_registry::{
-        FleetRegistry, FleetRegistryManifest, FleetRegistryVersion,
-        FleetSubnetRootRegistrySyncRequest, FleetSubnetRootSnapshotAcknowledgement,
+        FleetRegistryVersion, FleetSubnetRootRegistrySyncRequest,
+        FleetSubnetRootSnapshotAcknowledgement,
     },
     dto::root_store::RootStoreBootstrapRequest,
     ids::{FleetCoordinatorBinding, FleetRegistryAuthority},
@@ -32,7 +33,6 @@ use canic_core::{
 use std::path::Path;
 use thiserror::Error as ThisError;
 
-const ICP_JSON_OUTPUT: &str = "json";
 const MAX_SYNC_TRANSITIONS: usize = 4;
 
 #[derive(Debug, ThisError)]
@@ -167,23 +167,6 @@ pub(super) fn synchronize_and_verify_fleet_subnet_roots(
     Ok(())
 }
 
-struct LiveRegistryEvidence {
-    registry: FleetRegistry,
-    manifest: FleetRegistryManifest,
-    version: FleetRegistryVersion,
-}
-
-fn query_live_registry(
-    icp: &IcpCli,
-    coordinator: Principal,
-) -> Result<LiveRegistryEvidence, Box<dyn std::error::Error>> {
-    Ok(LiveRegistryEvidence {
-        registry: query_no_arg(icp, coordinator, protocol::CANIC_FLEET_REGISTRY)?,
-        manifest: query_no_arg(icp, coordinator, protocol::CANIC_FLEET_REGISTRY_MANIFEST)?,
-        version: query_no_arg(icp, coordinator, protocol::CANIC_FLEET_REGISTRY_VERSION)?,
-    })
-}
-
 fn drive_root_sync(
     icp_root: &Path,
     environment: &str,
@@ -206,7 +189,7 @@ fn drive_root_sync(
                     &icp,
                     root,
                     protocol::CANIC_FLEET_REGISTRY_SYNCHRONIZE,
-                    request.clone(),
+                    &request,
                     false,
                 )?;
                 record_registry_synchronized(&current, response)?
@@ -216,7 +199,7 @@ fn drive_root_sync(
                     &icp,
                     root,
                     protocol::CANIC_FLEET_REGISTRY_SYNC_STATUS,
-                    request.clone(),
+                    &request,
                     true,
                 )?;
                 record_registry_sync_verified(&current, response)?
@@ -237,54 +220,4 @@ fn drive_root_sync(
         };
     }
     Err(RootRegistrySyncError::TransitionBoundExceeded.into())
-}
-
-fn call_with_arg<I, O>(
-    icp: &IcpCli,
-    canister: Principal,
-    method: &str,
-    input: I,
-    query: bool,
-) -> Result<O, Box<dyn std::error::Error>>
-where
-    I: CandidType,
-    O: CandidType + serde::de::DeserializeOwned,
-{
-    let value = IDLValue::try_from_candid_type(&input)?;
-    let args = format!("({value})");
-    let output = if query {
-        icp.canister_query_arg_output_with_candid(
-            &canister.to_text(),
-            method,
-            &args,
-            Some(ICP_JSON_OUTPUT),
-            None,
-        )?
-    } else {
-        icp.canister_call_arg_output_with_candid(
-            &canister.to_text(),
-            method,
-            &args,
-            Some(ICP_JSON_OUTPUT),
-            None,
-        )?
-    };
-    decode_json_result_response(&output).map_err(Into::into)
-}
-
-fn query_no_arg<O>(
-    icp: &IcpCli,
-    canister: Principal,
-    method: &str,
-) -> Result<O, Box<dyn std::error::Error>>
-where
-    O: CandidType + serde::de::DeserializeOwned,
-{
-    let output = icp.canister_query_output_with_candid(
-        &canister.to_text(),
-        method,
-        Some(ICP_JSON_OUTPUT),
-        None,
-    )?;
-    decode_json_result_response(&output).map_err(Into::into)
 }

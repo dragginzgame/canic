@@ -143,7 +143,7 @@ fn root_init_args_roundtrip_the_exact_protected_authority() {
         install_id: activation.operation_id,
     };
 
-    let args = root_init_args(&identity).expect("build init args");
+    let args = candid_arg(&identity).expect("build init args");
     let parsed = candid_parser::parse_idl_args(&args).expect("parse textual Candid");
     let bytes = parsed
         .to_bytes_with_types(&TypeEnv::new(), &[FleetSubnetRootInitArgs::ty()])
@@ -152,4 +152,12 @@ fn root_init_args_roundtrip_the_exact_protected_authority() {
         candid::decode_one(&bytes).expect("decode init identity");
 
     assert_eq!(decoded, identity);
+}
+
+#[test]
+fn renders_exact_icp_e8s_without_float_rounding() {
+    assert_eq!(icp_e8s_text(1), "0.00000001");
+    assert_eq!(icp_e8s_text(10_000_000), "0.1");
+    assert_eq!(icp_e8s_text(100_000_000), "1");
+    assert_eq!(icp_e8s_text(123_456_789), "1.23456789");
 }

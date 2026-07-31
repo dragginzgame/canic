@@ -53,5 +53,17 @@ pub(crate) const ROOT_RELEASE_SET_MANIFEST_FILE: &str = "root.release-set.json";
 pub(super) const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
 pub(super) const WASM_MAGIC: [u8; 4] = [0x00, 0x61, 0x73, 0x6d];
 
+pub(super) fn valid_package_name(package: &str) -> bool {
+    const MAX_PACKAGE_BYTES: usize = 128;
+    let bytes = package.as_bytes();
+    !bytes.is_empty()
+        && bytes.len() <= MAX_PACKAGE_BYTES
+        && bytes.first().is_some_and(u8::is_ascii_alphanumeric)
+        && bytes.last().is_some_and(u8::is_ascii_alphanumeric)
+        && bytes
+            .iter()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+}
+
 #[cfg(test)]
 mod tests;

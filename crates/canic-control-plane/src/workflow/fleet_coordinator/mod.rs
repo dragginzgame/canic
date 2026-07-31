@@ -18,6 +18,7 @@ use canic_core::{
         FleetRegistryManifest, FleetRegistrySnapshotResponse, FleetRegistryVersion,
         FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingPublicationResponse,
         FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
+        FleetSubnetRootRemovalPublicationRequest, FleetSubnetRootRemovalPublicationResponse,
         FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
     },
 };
@@ -89,6 +90,13 @@ impl FleetCoordinatorWorkflow {
         request: FleetSubnetRootDrainingPublicationRequest,
     ) -> Result<FleetSubnetRootDrainingPublicationResponse, InternalError> {
         FleetCoordinatorOps::publish_root_draining(request)
+    }
+
+    pub(crate) fn publish_root_removed(
+        caller: Principal,
+        request: FleetSubnetRootRemovalPublicationRequest,
+    ) -> Result<FleetSubnetRootRemovalPublicationResponse, InternalError> {
+        FleetCoordinatorOps::publish_root_removed(caller, request)
     }
 
     pub(crate) fn version() -> Result<FleetRegistryVersion, InternalError> {
