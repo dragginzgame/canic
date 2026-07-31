@@ -43,7 +43,8 @@ pub fn query_cycle_balance(
     candid_path: Option<&Path>,
 ) -> Result<u128, CycleBalanceQueryError> {
     if replica_query::should_use_local_replica_query(Some(environment)) {
-        return query_local_cycle_balance(environment, canister_id, icp_root).map_err(Into::into);
+        return replica_query::query_cycle_balance(Some(environment), canister_id, icp_root)
+            .map_err(Into::into);
     }
 
     let output = icp.canister_query_output_with_candid(
@@ -53,12 +54,4 @@ pub fn query_cycle_balance(
         candid_path,
     )?;
     decode_json_result_response(&output).map_err(Into::into)
-}
-
-fn query_local_cycle_balance(
-    environment: &str,
-    canister_id: &str,
-    icp_root: Option<&Path>,
-) -> Result<u128, ReplicaQueryError> {
-    replica_query::query_cycle_balance(Some(environment), canister_id, icp_root)
 }

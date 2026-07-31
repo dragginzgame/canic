@@ -22,7 +22,7 @@ use canic_host::{
     },
     registry::RegistryEntry,
 };
-use std::{path::PathBuf, sync::Arc, thread};
+use std::{sync::Arc, thread};
 use thiserror::Error as ThisError;
 
 const METRICS_UNAVAILABLE_HINT: &str =
@@ -224,7 +224,7 @@ fn query_metrics(
         options.limit
     );
     let mut icp = IcpCli::new(&options.icp, Some(options.environment.clone()));
-    let root = resolve_metrics_icp_root();
+    let root = resolve_current_canic_icp_root().ok();
     let candid_path = registry_entry_candid_path(root.as_deref(), &options.environment, entry);
     if let Some(root) = root {
         icp = icp.with_cwd(root);
@@ -254,10 +254,6 @@ fn resolve_metrics_fleet(
         &root,
     )
     .map_err(MetricsCommandError::from)
-}
-
-fn resolve_metrics_icp_root() -> Option<PathBuf> {
-    resolve_current_canic_icp_root().ok()
 }
 
 #[cfg(test)]

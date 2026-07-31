@@ -23,7 +23,7 @@ where
     T: Serialize,
 {
     let bytes = serde_json::to_vec_pretty(value)?;
-    replace_bytes(path, &bytes).map_err(PersistenceError::from)
+    replace_bytes_at_barriers(path, &bytes, |_| {}).map_err(PersistenceError::from)
 }
 
 pub fn create_json_durable<T>(path: &Path, value: &T) -> Result<(), PersistenceError>
@@ -40,10 +40,6 @@ where
 {
     let file = File::open(path)?;
     Ok(serde_json::from_reader(file)?)
-}
-
-fn replace_bytes(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    replace_bytes_at_barriers(path, bytes, |_| {})
 }
 
 fn create_bytes_at_barriers(
