@@ -139,6 +139,13 @@ macro_rules! canic_emit_root_admin_endpoints {
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::delete_component(request).await
         }
 
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_root_component_membership_remove(
+            request: ::canic::dto::component_registry::RootComponentDeletionRequest,
+        ) -> Result<::canic::dto::component_registry::RootComponentDeletionResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::remove_component_membership(request)
+        }
+
         #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_root_component_deletion_status(
             request: ::canic::dto::component_registry::RootComponentDeletionStatusRequest,

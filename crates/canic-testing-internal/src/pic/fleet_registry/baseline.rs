@@ -136,7 +136,8 @@ mod tests {
         protocol::{
             CANIC_ROOT_COMPONENT_DELETE, CANIC_ROOT_COMPONENT_DELETION_STATUS,
             CANIC_ROOT_COMPONENT_DRAINING_ADVANCE, CANIC_ROOT_COMPONENT_DRAINING_BEGIN,
-            CANIC_ROOT_COMPONENT_DRAINING_INVENTORY_FINALIZE, CANIC_ROOT_COMPONENT_QUIESCE,
+            CANIC_ROOT_COMPONENT_DRAINING_INVENTORY_FINALIZE,
+            CANIC_ROOT_COMPONENT_MEMBERSHIP_REMOVE, CANIC_ROOT_COMPONENT_QUIESCE,
             CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_ADVANCE,
             CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_BEGIN,
             CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_DELETE,
@@ -513,9 +514,9 @@ mod tests {
     #[test]
     #[expect(
         clippy::too_many_lines,
-        reason = "one PocketIC journey proves qualified top-level stop, final inventory and deletion"
+        reason = "one PocketIC journey proves qualified top-level stop, deletion and membership removal"
     )]
-    fn active_root_deletes_one_exact_empty_component_before_membership_removal() {
+    fn active_root_removes_one_exact_empty_component() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let fixture = setup_active_component_registry();
         let partition: Result<ComponentRegistryPartitionResponse, Error> = fixture
@@ -656,6 +657,77 @@ mod tests {
         assert_eq!(
             retained.expect("retained Component membership").status,
             ComponentLifecycleStatus::Draining
+        );
+
+        let removed: Result<RootComponentDeletionResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_MEMBERSHIP_REMOVE,
+                (delete_request,),
+            )
+            .expect("remove top-level Component membership transport");
+        let removed = removed.expect("remove top-level Component membership");
+        let RootComponentDeletionPhase::MembershipRemoved(removal) = &removed.phase else {
+            panic!("top-level Component must retain terminal membership-removal authority");
+        };
+        assert_eq!(&removal.deleted, receipt);
+        assert_eq!(removal.root_committed_component_instances, 1);
+        assert_eq!(removal.root_known_created_component_canisters, 1);
+        assert_ne!(removal.allocation_operation_id, [0; 32]);
+        assert_ne!(removal.removal_hash, [0; 32]);
+
+        let removal_retry: Result<RootComponentDeletionResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_MEMBERSHIP_REMOVE,
+                (delete_request,),
+            )
+            .expect("retry top-level Component membership removal transport");
+        assert_eq!(
+            removal_retry.expect("retry top-level Component membership removal"),
+            removed
+        );
+        let deletion_retry: Result<RootComponentDeletionResponse, Error> = fixture
+            .pic()
+            .update_call(fixture.root, CANIC_ROOT_COMPONENT_DELETE, (delete_request,))
+            .expect("retry top-level Component deletion after membership removal transport");
+        assert_eq!(
+            deletion_retry.expect("retry top-level Component deletion after membership removal"),
+            removed
+        );
+        let durable_removed: Result<RootComponentDeletionResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_DELETION_STATUS,
+                (RootComponentDeletionStatusRequest {
+                    operation_id,
+                    component: fixture.verifier.component,
+                },),
+            )
+            .expect("query terminal top-level Component removal transport");
+        assert_eq!(
+            durable_removed.expect("query terminal top-level Component removal"),
+            removed
+        );
+
+        let absent_membership: Result<ComponentRegistryPartitionResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
+                (ComponentRegistryPartitionRequest {
+                    component: fixture.verifier.component,
+                },),
+            )
+            .expect("query removed Component membership transport");
+        assert_eq!(
+            absent_membership
+                .expect_err("removed Component membership must be absent")
+                .code,
+            canic::dto::error::ErrorCode::Unavailable
         );
     }
 

@@ -526,6 +526,7 @@ pub enum RootComponentAllocationPhase {
     Installed,
     Verified,
     Committed,
+    Removed,
 }
 
 ///
@@ -1217,15 +1218,34 @@ pub struct RootComponentDeletedReceipt {
 }
 
 ///
+/// RootComponentMembershipRemovedReceipt
+///
+/// Terminal local-membership removal and settled root/Spec accounting authority.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentMembershipRemovedReceipt {
+    pub deleted: RootComponentDeletedReceipt,
+    pub allocation_operation_id: [u8; 32],
+    pub remaining_spec_committed_instances: u32,
+    pub root_committed_component_instances: u32,
+    pub root_known_created_component_canisters: u32,
+    pub root_registry_encoded_bytes: u64,
+    pub removed_at_ns: u64,
+    pub removal_hash: [u8; 32],
+}
+
+///
 /// RootComponentDeletionPhase
 ///
-/// Monotonic top-level deletion progress from durable intent to observed absence.
+/// Monotonic top-level deletion progress through terminal local-membership removal.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RootComponentDeletionPhase {
     DeleteIntent(RootComponentDeletionIntent),
     Deleted(RootComponentDeletedReceipt),
+    MembershipRemoved(RootComponentMembershipRemovedReceipt),
 }
 
 ///
@@ -2048,13 +2068,30 @@ mod tests {
             },
             prepared_at_ns: 107,
         };
+        let deleted_receipt = RootComponentDeletedReceipt {
+            deletion,
+            deleted_at_ns: 108,
+        };
         let deletion_response = RootComponentDeletionResponse {
             operation_id: request.operation_id,
             component,
-            phase: RootComponentDeletionPhase::Deleted(RootComponentDeletedReceipt {
-                deletion,
-                deleted_at_ns: 108,
-            }),
+            phase: RootComponentDeletionPhase::Deleted(deleted_receipt.clone()),
+        };
+        let membership_removed_response = RootComponentDeletionResponse {
+            operation_id: request.operation_id,
+            component,
+            phase: RootComponentDeletionPhase::MembershipRemoved(
+                RootComponentMembershipRemovedReceipt {
+                    deleted: deleted_receipt,
+                    allocation_operation_id: [109; 32],
+                    remaining_spec_committed_instances: 2,
+                    root_committed_component_instances: 3,
+                    root_known_created_component_canisters: 4,
+                    root_registry_encoded_bytes: 5_000,
+                    removed_at_ns: 110,
+                    removal_hash: [111; 32],
+                },
+            ),
         };
 
         let request_bytes =
@@ -2067,6 +2104,8 @@ mod tests {
             .expect("encode Component deletion status request");
         let deletion_response_bytes =
             candid::encode_one(&deletion_response).expect("encode Component deletion response");
+        let membership_removed_response_bytes = candid::encode_one(&membership_removed_response)
+            .expect("encode Component membership-removal response");
         assert_eq!(
             candid::decode_one::<RootComponentFinalInventoryRequest>(&request_bytes)
                 .expect("decode Component final inventory request"),
@@ -2091,6 +2130,11 @@ mod tests {
             candid::decode_one::<RootComponentDeletionResponse>(&deletion_response_bytes)
                 .expect("decode Component deletion response"),
             deletion_response
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentDeletionResponse>(&membership_removed_response_bytes)
+                .expect("decode Component membership-removal response"),
+            membership_removed_response
         );
     }
 

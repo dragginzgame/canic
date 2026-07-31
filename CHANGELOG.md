@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.63` atomically removes an independently deleted top-level Component
+  from local Registry membership, settles its retained allocation and exact
+  root/Spec capacity accounting, and preserves canonical terminal retry authority.
+
 - `0.100.62` reconciles qualified top-level Component deletion through a
   durable final-inventory-bound intent and typed live absence, retaining the
   exact deleted receipt without mutating local Registry membership.
