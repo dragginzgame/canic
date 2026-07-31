@@ -508,6 +508,7 @@ pub async fn reserve_allocation(
         return allocation_response(existing);
     }
 
+    ComponentRegistryOps::require_top_level_allocation_open()?;
     let counts = ComponentRegistryOps::component_spec_counts(&request.component_spec)?;
     let decision = reserve_top_level_component(TopLevelComponentAllocationInput {
         operation_id: request.operation_id,

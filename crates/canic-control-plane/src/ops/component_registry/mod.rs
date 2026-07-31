@@ -28,6 +28,7 @@ use crate::{
         RootComponentSubtreeRemovalCompletedLeafRecord, RootComponentSubtreeRemovalCompletedRecord,
         RootComponentSubtreeRemovalProgressRecord, RootComponentSubtreeRemovalRecord,
         RootComponentSubtreeStopEffectRecord, RootComponentSubtreeStoppedEffectRecord,
+        RootFleetSubnetDrainingRecord,
     },
     view::component_registry::{
         ComponentDirectoryCanonicalCursor, ComponentDirectoryChildView,
@@ -50,6 +51,7 @@ use crate::{
         RootComponentSubtreeRemovalCompletedView, RootComponentSubtreeRemovalNodeView,
         RootComponentSubtreeRemovalProgressView, RootComponentSubtreeRemovalView,
         RootComponentSubtreeStopEffectView, RootComponentSubtreeStoppedEffectView,
+        RootFleetSubnetDrainingView,
     },
 };
 use candid::CandidType;
@@ -992,6 +994,84 @@ impl ComponentRegistryOps {
         RootComponentRegistryStore::current().map(record_to_view)
     }
 
+    pub(crate) fn begin_root_draining(
+        operation_id: [u8; 32],
+        expected_registry: &FleetRegistryVersion,
+        started_at_ns: u64,
+    ) -> Result<RootFleetSubnetDrainingView, InternalError> {
+        if operation_id == [0; 32] {
+            return Err(InternalError::invalid_input(
+                "Fleet Subnet Root draining operation ID must be nonzero",
+            ));
+        }
+        if started_at_ns == 0 {
+            return Err(InternalError::invalid_input(
+                "Fleet Subnet Root draining start time must be positive",
+            ));
+        }
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        if let Some(existing) = current.root_draining.as_ref() {
+            validate_root_draining_record(&current, existing)?;
+            return if existing.operation_id == operation_id
+                && &existing.active_registry == expected_registry
+            {
+                Ok(root_draining_record_to_view(existing.clone()))
+            } else {
+                Err(InternalError::conflict(
+                    "Fleet Subnet Root is already draining under different authority",
+                ))
+            };
+        }
+        if &current.prepared_against_registry != expected_registry {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root draining request names a different active Registry",
+            ));
+        }
+        let record = RootFleetSubnetDrainingRecord {
+            operation_id,
+            fleet_subnet_root: current.root.fleet_subnet_root,
+            placement_subnet: current.root.placement_subnet,
+            active_registry: current.prepared_against_registry.clone(),
+            component_topology_digest: current.root.component_topology_digest,
+            active_release_set: current.release_set,
+            next_allocation_sequence: current.next_allocation_sequence,
+            reserved_component_instances: current.reserved_component_instances,
+            committed_component_instances: current.committed_component_instances,
+            managed_descendants: current.managed_descendants,
+            known_created_component_canisters: current.known_created_component_canisters,
+            root_registry_encoded_bytes: current.encoded_bytes,
+            started_at_ns,
+        };
+        RootComponentRegistryStore::begin_root_draining(&current, record.clone()).map_err(
+            |error| match error {
+                RootComponentRegistryCommitError::ConflictingState => InternalError::conflict(
+                    "root Component Registry changed before its draining fence committed",
+                ),
+            },
+        )?;
+        Ok(root_draining_record_to_view(record))
+    }
+
+    pub(crate) fn root_draining(
+        operation_id: [u8; 32],
+    ) -> Result<RootFleetSubnetDrainingView, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let record = current.root_draining.as_ref().ok_or_else(|| {
+            InternalError::unavailable("Fleet Subnet Root draining has not begun")
+        })?;
+        validate_root_draining_record(&current, record)?;
+        if record.operation_id != operation_id {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root draining status names a different operation",
+            ));
+        }
+        Ok(root_draining_record_to_view(record.clone()))
+    }
+
     pub(crate) fn seal_initial_inventory(
         fleet_activation_operation_id: [u8; 32],
         sealed_at_ns: u64,
@@ -1117,6 +1197,7 @@ impl ComponentRegistryOps {
             known_created_component_canisters: 0,
             encoded_bytes: 0,
             initial_inventory: None,
+            root_draining: None,
         };
         RootComponentRegistryStore::prepare(record.clone()).map_err(|error| match error {
             RootComponentRegistryCommitError::ConflictingState => InternalError::conflict(
@@ -1150,6 +1231,13 @@ impl ComponentRegistryOps {
         })
     }
 
+    pub(crate) fn require_top_level_allocation_open() -> Result<(), InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        ensure_root_accepts_top_level_allocation(&current)
+    }
+
     pub(crate) fn reserve_allocation(
         decision: TopLevelComponentAllocationDecision,
         operation_id: [u8; 32],
@@ -1179,6 +1267,7 @@ impl ComponentRegistryOps {
                 ))
             };
         }
+        ensure_root_accepts_top_level_allocation(&current)?;
         match (current.initial_inventory.as_ref(), root_runtime_active) {
             (Some(_), false) => {
                 return Err(InternalError::conflict(
@@ -5321,6 +5410,51 @@ fn record_to_view(record: RootComponentRegistryMetaRecord) -> RootComponentRegis
         initial_inventory: record
             .initial_inventory
             .map(initial_inventory_record_to_view),
+        root_draining: record.root_draining.map(root_draining_record_to_view),
+    }
+}
+
+fn validate_root_draining_record(
+    current: &RootComponentRegistryMetaRecord,
+    record: &RootFleetSubnetDrainingRecord,
+) -> Result<(), InternalError> {
+    if !record.is_valid_for_current(current) {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Fleet Subnet Root draining receipt differs from protected root authority",
+        ));
+    }
+    Ok(())
+}
+
+fn ensure_root_accepts_top_level_allocation(
+    current: &RootComponentRegistryMetaRecord,
+) -> Result<(), InternalError> {
+    if current.root_draining.is_some() {
+        return Err(InternalError::conflict(
+            "Fleet Subnet Root is draining and accepts no new top-level Component allocations",
+        ));
+    }
+    Ok(())
+}
+
+fn root_draining_record_to_view(
+    record: RootFleetSubnetDrainingRecord,
+) -> RootFleetSubnetDrainingView {
+    RootFleetSubnetDrainingView {
+        operation_id: record.operation_id,
+        fleet_subnet_root: record.fleet_subnet_root,
+        placement_subnet: record.placement_subnet,
+        active_registry: record.active_registry,
+        component_topology_digest: record.component_topology_digest,
+        active_release_set: record.active_release_set,
+        next_allocation_sequence: record.next_allocation_sequence,
+        reserved_component_instances: record.reserved_component_instances,
+        committed_component_instances: record.committed_component_instances,
+        managed_descendants: record.managed_descendants,
+        known_created_component_canisters: record.known_created_component_canisters,
+        root_registry_encoded_bytes: record.root_registry_encoded_bytes,
+        started_at_ns: record.started_at_ns,
     }
 }
 
@@ -10545,6 +10679,98 @@ mod tests {
     }
 
     #[test]
+    fn root_draining_is_durable_and_fences_only_new_top_level_allocations() {
+        RootComponentRegistryStore::import(RootComponentRegistryData::default());
+        let root = root_binding();
+        let version = FleetRegistryVersion {
+            authority: root.authority.clone(),
+            revision: 4,
+            content_hash: [5; 32],
+        };
+        let release_set = FleetSubnetRootReleaseSet {
+            release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
+                [8; 32],
+            )),
+            manifest_digest: ReleaseSetDigest::from_bytes([9; 32]),
+        };
+        ComponentRegistryOps::prepare(
+            root,
+            version.clone(),
+            release_set,
+            RootStoreBootstrapRequest {
+                manifest_payload_size_bytes: 128,
+            },
+        )
+        .expect("prepare");
+        let existing_decision = TopLevelComponentAllocationDecision {
+            allocation_sequence: 1,
+            component: ComponentInstanceId::from_generated_bytes([10; 32]),
+            component_spec: "projects".parse().expect("Component Spec"),
+            spec_hash: [6; 32],
+            role: CanisterRole::new("project_hub"),
+        };
+        let origin = ComponentProvisioningOrigin::FleetAdministrator {
+            caller: candid::Principal::from_slice(&[11; 29]),
+        };
+        let existing = ComponentRegistryOps::reserve_allocation(
+            existing_decision.clone(),
+            [12; 32],
+            origin.clone(),
+            false,
+        )
+        .expect("reserve before draining");
+
+        let draining =
+            ComponentRegistryOps::begin_root_draining([13; 32], &version, 14).expect("begin");
+        assert_eq!(draining.next_allocation_sequence, 2);
+        assert_eq!(draining.reserved_component_instances, 1);
+        assert_eq!(draining.committed_component_instances, 0);
+        assert_eq!(draining.managed_descendants, 0);
+        assert_eq!(draining.known_created_component_canisters, 0);
+        assert_eq!(draining.active_release_set, release_set);
+
+        restart_component_registry();
+        assert_eq!(
+            ComponentRegistryOps::root_draining([13; 32]).expect("status after restart"),
+            draining
+        );
+        assert_eq!(
+            ComponentRegistryOps::begin_root_draining([13; 32], &version, 99).expect("exact retry"),
+            draining
+        );
+        ComponentRegistryOps::root_draining([15; 32])
+            .expect_err("status must bind the exact operation");
+        ComponentRegistryOps::begin_root_draining([15; 32], &version, 16)
+            .expect_err("different draining intent must conflict");
+
+        let repeated = ComponentRegistryOps::reserve_allocation(
+            existing_decision,
+            [12; 32],
+            origin.clone(),
+            false,
+        )
+        .expect("an existing reservation remains response-idempotent");
+        assert_eq!(repeated, existing);
+
+        let before_rejection = RootComponentRegistryStore::export();
+        let new_decision = TopLevelComponentAllocationDecision {
+            allocation_sequence: 2,
+            component: ComponentInstanceId::from_generated_bytes([16; 32]),
+            component_spec: "projects".parse().expect("Component Spec"),
+            spec_hash: [6; 32],
+            role: CanisterRole::new("project_hub"),
+        };
+        let error = ComponentRegistryOps::reserve_allocation(new_decision, [17; 32], origin, false)
+            .expect_err("draining root must reject a new top-level allocation");
+        assert_eq!(
+            error.public_error().map(|public| public.code),
+            Some(canic_core::dto::error::ErrorCode::Conflict)
+        );
+        assert_eq!(RootComponentRegistryStore::export(), before_rejection);
+        RootComponentRegistryStore::import(RootComponentRegistryData::default());
+    }
+
+    #[test]
     fn component_final_inventory_is_exact_durable_and_response_idempotent() {
         let (partition, draining, fleet) = import_empty_quiescent_component();
         let RootComponentDrainingAdvanceView::DescendantsEmpty {
@@ -12586,6 +12812,7 @@ mod tests {
                 known_created_component_canisters: 2,
                 encoded_bytes: initial_encoded_bytes,
                 initial_inventory: None,
+                root_draining: None,
             }),
             partitions: vec![partition_a.clone(), partition_b.clone()],
             ..RootComponentRegistryData::default()
@@ -12791,6 +13018,7 @@ mod tests {
                 known_created_component_canisters: 1,
                 encoded_bytes: partition.encoded_bytes,
                 initial_inventory: None,
+                root_draining: None,
             }),
             partitions: vec![partition.clone()],
             ..RootComponentRegistryData::default()
@@ -14054,6 +14282,7 @@ mod tests {
                 known_created_component_canisters: 1,
                 encoded_bytes: 0,
                 initial_inventory: None,
+                root_draining: None,
             }),
             partitions: vec![partition.clone()],
             allocations: vec![allocation],
@@ -14538,6 +14767,7 @@ mod tests {
             known_created_component_canisters: 5,
             encoded_bytes: partition.encoded_bytes,
             initial_inventory: None,
+            root_draining: None,
         });
         RootComponentRegistryStore::import(data);
         ActiveComponentTreeFixture {

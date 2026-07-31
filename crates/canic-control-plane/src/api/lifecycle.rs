@@ -10,7 +10,9 @@ use canic_core::{
         FleetSubnetRootRegistrySyncResponse,
     },
     dto::fleet_subnet_root::{
-        FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary, FleetSubnetRootInitArgs,
+        FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary, FleetSubnetRootDrainingRequest,
+        FleetSubnetRootDrainingResponse, FleetSubnetRootDrainingStatusRequest,
+        FleetSubnetRootInitArgs,
     },
     dto::{
         component_registry::{
@@ -95,6 +97,18 @@ impl LifecycleApi {
     pub fn fleet_subnet_root_canister_summary()
     -> Result<FleetSubnetRootCanisterSummary, canic_core::dto::error::Error> {
         crate::workflow::fleet_subnet_root::canister_summary().map_err(Into::into)
+    }
+
+    pub fn begin_fleet_subnet_root_draining(
+        request: FleetSubnetRootDrainingRequest,
+    ) -> Result<FleetSubnetRootDrainingResponse, canic_core::dto::error::Error> {
+        crate::workflow::fleet_subnet_root::begin_draining(request).map_err(Into::into)
+    }
+
+    pub fn fleet_subnet_root_draining_status(
+        request: FleetSubnetRootDrainingStatusRequest,
+    ) -> Result<FleetSubnetRootDrainingResponse, canic_core::dto::error::Error> {
+        crate::workflow::fleet_subnet_root::draining_status(request).map_err(Into::into)
     }
 
     pub async fn synchronize_fleet_registry(
@@ -378,9 +392,11 @@ impl LifecycleApi {
     pub async fn install_component_allocation(
         request: RootComponentInstallRequest,
     ) -> Result<RootComponentAllocationResponse, canic_core::dto::error::Error> {
-        crate::workflow::component_registry::install_allocation(request)
-            .await
-            .map_err(Into::into)
+        Box::pin(crate::workflow::component_registry::install_allocation(
+            request,
+        ))
+        .await
+        .map_err(Into::into)
     }
 
     pub async fn commit_component_allocation(

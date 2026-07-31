@@ -1,9 +1,8 @@
 //! Module: workflow::fleet_subnet_root
 //!
-//! Responsibility: project compact live Fleet Subnet Root operator evidence.
-//! Does not own: Registry mutation, Component lifecycle effects, or CLI aggregation.
-//! Boundary: summaries are emitted only from mutually consistent protected, mirror, Store,
-//! runtime, and Component Registry authority.
+//! Responsibility: validate active root authority, begin local draining and project summaries.
+//! Does not own: durable records, Coordinator Registry mutation, Component effects, or CLI output.
+//! Boundary: root actions require consistent protected, mirror, runtime and Component authority.
 
 use crate::{
     ops::{
@@ -11,7 +10,7 @@ use crate::{
         storage::state::subnet::SubnetStateOps,
     },
     view::{
-        component_registry::RootComponentRegistryView,
+        component_registry::{RootComponentRegistryView, RootFleetSubnetDrainingView},
         fleet_registry_mirror::RootFleetRegistryActiveView,
     },
 };
@@ -22,31 +21,73 @@ use canic_core::{
         ops::{config::ConfigOps, fleet_registry::FleetRegistryOps, ic::IcOps},
     },
     dto::{
-        fleet_registry::{FleetRegistryVersion, FleetSubnetRootEntry, FleetSubnetRootStatus},
-        fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary},
+        fleet_registry::{
+            FleetDirectorySnapshot, FleetRegistryManifest, FleetRegistryVersion,
+            FleetSubnetRootEntry, FleetSubnetRootStatus,
+        },
+        fleet_subnet_root::{
+            FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary,
+            FleetSubnetRootDrainingRequest, FleetSubnetRootDrainingResponse,
+            FleetSubnetRootDrainingStatusRequest,
+        },
     },
+    ids::{FleetSubnetRootBinding, FleetSubnetRootReleaseSet},
 };
+
+struct ValidatedFleetSubnetRootState {
+    fleet_registry: FleetRegistryVersion,
+    root_entry: FleetSubnetRootEntry,
+    component_registry: RootComponentRegistryView,
+}
+
+#[derive(Eq, PartialEq)]
+struct CanonicalRootMirrorEvidence<'a> {
+    manifest: &'a FleetRegistryManifest,
+    version: &'a FleetRegistryVersion,
+    directory: &'a FleetDirectorySnapshot,
+}
+
+#[derive(Eq, PartialEq)]
+struct ComponentRegistrySourceAuthority<'a> {
+    root: &'a FleetSubnetRootBinding,
+    prepared_against_registry: &'a FleetRegistryVersion,
+    release_set: FleetSubnetRootReleaseSet,
+}
+
+/// Durably fence new top-level Component allocation under exact active authority.
+pub fn begin_draining(
+    request: FleetSubnetRootDrainingRequest,
+) -> Result<FleetSubnetRootDrainingResponse, InternalError> {
+    let state = validated_root_state()?;
+    if state.root_entry.status != FleetSubnetRootStatus::Active {
+        return Err(InternalError::conflict(
+            "only an Active Fleet Subnet Root can begin draining",
+        ));
+    }
+    if request.expected_registry != state.fleet_registry {
+        return Err(InternalError::conflict(
+            "Fleet Subnet Root draining request differs from the active Registry mirror",
+        ));
+    }
+    ComponentRegistryOps::begin_root_draining(
+        request.operation_id,
+        &request.expected_registry,
+        IcOps::now_nanos(),
+    )
+    .map(draining_response)
+}
+
+/// Read one exact durable root-local draining fence without mutation.
+pub fn draining_status(
+    request: FleetSubnetRootDrainingStatusRequest,
+) -> Result<FleetSubnetRootDrainingResponse, InternalError> {
+    let _state = validated_root_state()?;
+    ComponentRegistryOps::root_draining(request.operation_id).map(draining_response)
+}
 
 /// Return one compact, fail-closed inventory for this active Fleet Subnet Root.
 pub fn canister_summary() -> Result<FleetSubnetRootCanisterSummary, InternalError> {
-    let authority = FleetActivationApi::root_authority().map_err(InternalError::public)?;
-    FleetActivationApi::require_active().map_err(InternalError::public)?;
-    let root = IcOps::canister_self();
-    if authority.binding.fleet_subnet_root != root {
-        return Err(InternalError::invalid_input(
-            "protected Fleet Subnet Root authority does not name this Canister",
-        ));
-    }
-
-    let mirror = FleetRegistryMirrorOps::current()
-        .active
-        .ok_or_else(|| InternalError::unavailable("root has no active Fleet Registry mirror"))?;
-    let (fleet_registry, root_entry) = validated_registry_authority(&authority, root, &mirror)?;
-    let component_registry = ComponentRegistryOps::current().ok_or_else(|| {
-        InternalError::unavailable("root Component Registry authority has not been prepared")
-    })?;
-    validate_component_registry(&authority, &fleet_registry, &component_registry)?;
-
+    let state = validated_root_state()?;
     let store_canisters = u32::try_from(SubnetStateOps::wasm_stores().len()).map_err(|_| {
         InternalError::invariant(
             InternalErrorOrigin::Storage,
@@ -63,11 +104,45 @@ pub fn canister_summary() -> Result<FleetSubnetRootCanisterSummary, InternalErro
     }
 
     summary(
-        fleet_registry,
-        root_entry,
-        &component_registry,
+        state.fleet_registry,
+        state.root_entry,
+        &state.component_registry,
         store_canisters,
     )
+}
+
+fn validated_root_state() -> Result<ValidatedFleetSubnetRootState, InternalError> {
+    let authority = FleetActivationApi::root_authority().map_err(InternalError::public)?;
+    FleetActivationApi::require_active().map_err(InternalError::public)?;
+    let root = IcOps::canister_self();
+    validate_protected_root(&authority, root)?;
+
+    let mirror = FleetRegistryMirrorOps::current()
+        .active
+        .ok_or_else(|| InternalError::unavailable("root has no active Fleet Registry mirror"))?;
+    let (fleet_registry, root_entry) = validated_registry_authority(&authority, root, &mirror)?;
+    let component_registry = ComponentRegistryOps::current().ok_or_else(|| {
+        InternalError::unavailable("root Component Registry authority has not been prepared")
+    })?;
+    validate_component_registry(&authority, &fleet_registry, &component_registry)?;
+
+    Ok(ValidatedFleetSubnetRootState {
+        fleet_registry,
+        root_entry,
+        component_registry,
+    })
+}
+
+fn validate_protected_root(
+    authority: &FleetSubnetRootAuthority,
+    root: candid::Principal,
+) -> Result<(), InternalError> {
+    if authority.binding.fleet_subnet_root != root {
+        return Err(InternalError::invalid_input(
+            "protected Fleet Subnet Root authority does not name this Canister",
+        ));
+    }
+    Ok(())
 }
 
 fn validated_registry_authority(
@@ -97,10 +172,17 @@ fn validated_registry_authority(
         &mirror.snapshot.registry,
         root,
     )?;
-    if mirror.snapshot.manifest != manifest
-        || mirror.snapshot.version != version
-        || mirror.directory != directory
-    {
+    let current_evidence = CanonicalRootMirrorEvidence {
+        manifest: &mirror.snapshot.manifest,
+        version: &mirror.snapshot.version,
+        directory: &mirror.directory,
+    };
+    let canonical_evidence = CanonicalRootMirrorEvidence {
+        manifest: &manifest,
+        version: &version,
+        directory: &directory,
+    };
+    if current_evidence != canonical_evidence {
         return Err(InternalError::invariant(
             InternalErrorOrigin::Storage,
             "active root Registry mirror evidence is not internally consistent",
@@ -143,10 +225,17 @@ fn validate_component_registry(
     fleet_registry: &FleetRegistryVersion,
     registry: &RootComponentRegistryView,
 ) -> Result<(), InternalError> {
-    if registry.root != authority.binding
-        || &registry.prepared_against_registry != fleet_registry
-        || registry.release_set != authority.initial_release_set
-    {
+    let current = ComponentRegistrySourceAuthority {
+        root: &registry.root,
+        prepared_against_registry: &registry.prepared_against_registry,
+        release_set: registry.release_set,
+    };
+    let expected = ComponentRegistrySourceAuthority {
+        root: &authority.binding,
+        prepared_against_registry: fleet_registry,
+        release_set: authority.initial_release_set,
+    };
+    if current != expected {
         return Err(InternalError::invariant(
             InternalErrorOrigin::Storage,
             "Component Registry authority differs from the active root Registry mirror",
@@ -216,6 +305,24 @@ fn summary(
         component_canisters: registry.known_created_component_canisters,
         total_canisters,
     })
+}
+
+fn draining_response(view: RootFleetSubnetDrainingView) -> FleetSubnetRootDrainingResponse {
+    FleetSubnetRootDrainingResponse {
+        operation_id: view.operation_id,
+        fleet_subnet_root: view.fleet_subnet_root,
+        placement_subnet: view.placement_subnet,
+        active_registry: view.active_registry,
+        component_topology_digest: view.component_topology_digest,
+        active_release_set: view.active_release_set,
+        next_allocation_sequence: view.next_allocation_sequence,
+        reserved_component_instances: view.reserved_component_instances,
+        committed_component_instances: view.committed_component_instances,
+        managed_descendants: view.managed_descendants,
+        known_created_component_canisters: view.known_created_component_canisters,
+        root_registry_encoded_bytes: view.root_registry_encoded_bytes,
+        started_at_ns: view.started_at_ns,
+    }
 }
 
 #[cfg(test)]
@@ -347,6 +454,7 @@ mod tests {
             known_created_component_canisters,
             encoded_bytes: 512,
             initial_inventory: None,
+            root_draining: None,
         }
     }
 

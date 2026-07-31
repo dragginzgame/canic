@@ -377,6 +377,34 @@ fn fleet_subnet_root_canister_summary_is_a_controller_query_on_the_root_surface(
 }
 
 #[test]
+fn fleet_subnet_root_draining_is_controller_guarded_on_the_root_surface() {
+    assert_eq!(
+        canic::protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN,
+        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN
+    );
+    assert_eq!(
+        canic::protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS,
+        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS
+    );
+
+    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
+    let source = read_text(&macro_path);
+    let begin =
+        preceding_attribute_context(&source, "async fn canic_fleet_subnet_root_draining_begin(");
+    let status =
+        preceding_attribute_context(&source, "async fn canic_fleet_subnet_root_draining_status(");
+
+    assert!(
+        begin.contains("canic_update(requires(caller::is_controller()))"),
+        "Fleet Subnet Root draining begin must remain a controller-guarded update"
+    );
+    assert!(
+        status.contains("canic_query(requires(caller::is_controller()))"),
+        "Fleet Subnet Root draining status must remain a controller-guarded query"
+    );
+}
+
+#[test]
 fn fleet_subnet_root_join_is_a_controller_update_on_the_coordinator_surface() {
     assert_eq!(
         canic::protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,

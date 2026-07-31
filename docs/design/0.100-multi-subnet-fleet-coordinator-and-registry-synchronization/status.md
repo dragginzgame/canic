@@ -6,10 +6,10 @@ Date: 2026-07-31
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.62`.
-- Latest published release: `v0.100.62` at
-  `28bff991aec4820ca2e22a8fdda8f750e34ec6bf`.
-- Open patch draft: `0.100.63`; no package-version change has been authorized.
+- Workspace package version: `0.100.63`.
+- Latest published release: `v0.100.63` at
+  `3358a50dcc8b7e899c5ab569275be9849de4af1f`.
+- Open patch draft: `0.100.64`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -137,6 +137,8 @@ Registry slices replace the 0.99 root model.
 - [x] Prove another Fleet may independently use the same physical Subnet.
 - [x] Implement root `Joining`.
 - [x] Implement the initial atomic all-root `Active` transition.
+- [x] Begin root draining with a durable root-local top-level allocation cutoff.
+- [ ] Publish root `Draining` through the Coordinator Registry and mirrors.
 - [ ] Implement root `Draining` and `Removed`.
 - [x] Install initial roots behind the runtime `Prepared` fence.
 - [ ] Enforce Spec, admission, root, topology, limits, active-release-set and
@@ -879,7 +881,7 @@ the complete evidence remains in memory ID 23 under an 8 KiB reinstall-only
 record bound. The Component partition, principal index and root counters remain
 unchanged.
 
-Open 0.100.63 atomically consumes that independently observed `Deleted`
+Released 0.100.63 atomically consumes that independently observed `Deleted`
 receipt. One compare-and-commit removes the exact Component partition and
 top-level principal lookup, advances its unique committed allocation to
 terminal `Removed`, decrements the matching Spec count and root committed and
@@ -889,12 +891,22 @@ authority for exact deletion, removal and status retries. A canonical removal
 hash binds the immutable receipt snapshots without incorrectly pinning later
 unrelated root totals. No new stable-memory domain or ID is allocated.
 
+Open 0.100.64 begins Fleet Subnet Root draining with a root-local durable
+pre-publication fence. A controller operation names the exact active Registry
+and freezes protected root, Subnet, topology, release-set, allocation-sequence,
+inventory-counter, byte-ledger and start-time authority inside the existing
+Component Registry stable domain. Exact retry returns the original receipt.
+New top-level Component allocations fail before admission policy, while exact
+retries and every already admitted Component-tree lifecycle continue; later
+counter changes do not invalidate the frozen cutoff. No management effect,
+Coordinator status transition, Directory publication or new stable-memory ID
+occurs in this boundary.
+
 ## Next Action
 
-Begin the durable Fleet Subnet Root `Active -> Draining` fence. It must reject
-new top-level Component allocation without preventing already admitted
-Components from completing their bounded removal, retain exact Fleet Registry
-and root authority for retry, and perform no management effect. Do not permit
-ordinary root removal until every local Component partition is absent, the
-Store is quiescent and an exact final root inventory exists; an unreachable
-root or Subnet is not removal evidence.
+Publish a locally fenced Fleet Subnet Root as `Draining` through an exact
+Coordinator Registry transition, then synchronize the canonical snapshot into
+root mirrors and Fleet Directories without reopening allocation. Keep ordinary
+root removal gated until every local Component partition is absent, the Store
+is quiescent and an exact final root inventory exists; an unreachable root or
+Subnet is not removal evidence.

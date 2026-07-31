@@ -46,7 +46,9 @@ mod tests {
                 FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootStatus,
             },
             fleet_subnet_root::{
-                FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary, FleetSubnetRootInitArgs,
+                FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary,
+                FleetSubnetRootDrainingRequest, FleetSubnetRootDrainingResponse,
+                FleetSubnetRootDrainingStatusRequest, FleetSubnetRootInitArgs,
             },
             root_store::{
                 ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX,
@@ -71,7 +73,8 @@ mod tests {
             CANIC_FLEET_REGISTRY_MIRROR_STATUS, CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
             CANIC_FLEET_REGISTRY_SYNC_STATUS, CANIC_FLEET_REGISTRY_SYNCHRONIZE,
             CANIC_FLEET_REGISTRY_VERSION, CANIC_FLEET_SUBNET_ROOT_AUTHORITY,
-            CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY, CANIC_FLEET_SUBNET_ROOT_JOIN,
+            CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY, CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN,
+            CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS, CANIC_FLEET_SUBNET_ROOT_JOIN,
             CANIC_PREPARE_FLEET_ACTIVATION, CANIC_RESUME_FLEET_ACTIVATION,
             CANIC_ROOT_COMPONENT_ALLOCATE, CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
             CANIC_ROOT_COMPONENT_CHILD_ALLOCATE, CANIC_ROOT_COMPONENT_CHILD_COMMIT,
@@ -516,9 +519,10 @@ mod tests {
         clippy::too_many_lines,
         reason = "one PocketIC journey proves qualified top-level stop, deletion and membership removal"
     )]
-    fn active_root_removes_one_exact_empty_component() {
+    fn draining_root_removes_one_exact_empty_component() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let fixture = setup_active_component_registry();
+        let root_draining = assert_root_draining_fence(&fixture);
         let partition: Result<ComponentRegistryPartitionResponse, Error> = fixture
             .pic()
             .query_call(
@@ -728,6 +732,20 @@ mod tests {
                 .expect_err("removed Component membership must be absent")
                 .code,
             canic::dto::error::ErrorCode::Unavailable
+        );
+        let durable_fence: Result<FleetSubnetRootDrainingResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.root,
+                CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS,
+                (FleetSubnetRootDrainingStatusRequest {
+                    operation_id: root_draining.operation_id,
+                },),
+            )
+            .expect("query root draining fence after Component removal transport");
+        assert_eq!(
+            durable_fence.expect("root draining fence after Component removal"),
+            root_draining
         );
     }
 
@@ -1015,6 +1033,101 @@ mod tests {
         assert_eq!(summary.infrastructure_canisters, 2);
         assert_eq!(summary.component_canisters, 2);
         assert_eq!(summary.total_canisters, 4);
+    }
+
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "used only by the focused PocketIC removal test")
+    )]
+    fn assert_root_draining_fence(
+        fixture: &ActiveComponentRegistryFixture,
+    ) -> FleetSubnetRootDrainingResponse {
+        let version: Result<canic::dto::fleet_registry::FleetRegistryVersion, Error> = fixture
+            .pic()
+            .query_call(fixture.coordinator, CANIC_FLEET_REGISTRY_VERSION, ())
+            .expect("query Coordinator Registry version before root draining");
+        let request = FleetSubnetRootDrainingRequest {
+            operation_id: [0xd1; 32],
+            expected_registry: version.expect("Coordinator Registry version before root draining"),
+        };
+        let begun: Result<FleetSubnetRootDrainingResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN,
+                (request.clone(),),
+            )
+            .expect("begin Fleet Subnet Root draining transport");
+        let begun = begun.expect("begin Fleet Subnet Root draining");
+        assert_eq!(begun.operation_id, request.operation_id);
+        assert_eq!(begun.active_registry, request.expected_registry);
+        assert_eq!(begun.fleet_subnet_root, fixture.root);
+        assert_eq!(begun.placement_subnet, fixture.verifier.placement_subnet);
+        assert_eq!(begun.next_allocation_sequence, 3);
+        assert_eq!(begun.reserved_component_instances, 0);
+        assert_eq!(begun.committed_component_instances, 2);
+        assert_eq!(begun.managed_descendants, 0);
+        assert_eq!(begun.known_created_component_canisters, 2);
+        assert!(begun.root_registry_encoded_bytes > 0);
+        assert!(begun.started_at_ns > 0);
+
+        let repeated: Result<FleetSubnetRootDrainingResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN,
+                (request,),
+            )
+            .expect("retry Fleet Subnet Root draining transport");
+        assert_eq!(repeated.expect("retry Fleet Subnet Root draining"), begun);
+        let status: Result<FleetSubnetRootDrainingResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.root,
+                CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS,
+                (FleetSubnetRootDrainingStatusRequest {
+                    operation_id: begun.operation_id,
+                },),
+            )
+            .expect("query Fleet Subnet Root draining status transport");
+        assert_eq!(status.expect("Fleet Subnet Root draining status"), begun);
+
+        let existing: Result<RootComponentAllocationResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_ALLOCATE,
+                (RootComponentAllocationRequest {
+                    operation_id: [0xa2; 32],
+                    component_spec: fixture.verifier.component_spec.clone(),
+                },),
+            )
+            .expect("retry existing Component allocation after root draining transport");
+        assert_eq!(
+            existing
+                .expect("retry existing Component allocation after root draining")
+                .phase,
+            RootComponentAllocationPhase::Committed
+        );
+
+        let rejected: Result<RootComponentAllocationResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_ALLOCATE,
+                (RootComponentAllocationRequest {
+                    operation_id: [0xa4; 32],
+                    component_spec: fixture.verifier.component_spec.clone(),
+                },),
+            )
+            .expect("attempt new Component allocation after root draining transport");
+        assert_eq!(
+            rejected
+                .expect_err("root draining must reject a new top-level Component allocation")
+                .code,
+            canic::dto::error::ErrorCode::Conflict
+        );
+        begun
     }
 
     fn install_fixture_coordinator(

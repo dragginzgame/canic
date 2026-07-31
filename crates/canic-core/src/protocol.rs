@@ -15,6 +15,8 @@ pub const CANIC_FLEET_REGISTRY_ACTIVATE: &str = "canic_fleet_registry_activate";
 pub const CANIC_FLEET_SUBNET_ROOT_AUTHORITY: &str = "canic_fleet_subnet_root_authority";
 pub const CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY: &str =
     "canic_fleet_subnet_root_canister_summary";
+pub const CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN: &str = "canic_fleet_subnet_root_draining_begin";
+pub const CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS: &str = "canic_fleet_subnet_root_draining_status";
 pub const CANIC_FLEET_REGISTRY_SYNCHRONIZE: &str = "canic_fleet_registry_synchronize";
 pub const CANIC_FLEET_REGISTRY_SYNC_STATUS: &str = "canic_fleet_registry_sync_status";
 pub const CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR: &str = "canic_fleet_registry_activate_mirror";

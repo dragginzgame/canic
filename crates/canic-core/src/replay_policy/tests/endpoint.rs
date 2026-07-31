@@ -386,6 +386,28 @@ fn root_component_child_reservation_is_response_idempotent() {
 }
 
 #[test]
+fn fleet_subnet_root_draining_fence_is_response_idempotent() {
+    let begin = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_fleet_subnet_root_draining_begin")
+        .expect("Fleet Subnet Root draining begin policy entry");
+    let status = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_fleet_subnet_root_draining_status")
+        .expect("Fleet Subnet Root draining status policy entry");
+
+    assert_eq!(
+        begin.replay_policy,
+        ReplayPolicy::ResponseIdempotent {
+            command_kind: replay_command_kind("fleet_subnet_root.begin_draining.v1"),
+        }
+    );
+    assert_eq!(begin.cost_class, CostClass::None);
+    assert_eq!(status.replay_policy, ReplayPolicy::QueryOrReadOnly);
+    assert_eq!(status.endpoint_kind, EndpointKind::Query);
+}
+
+#[test]
 fn root_component_draining_fence_is_response_idempotent() {
     let begin = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
