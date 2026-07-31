@@ -13,13 +13,15 @@ use crate::{
         RootComponentChildAllocationRecord, RootComponentChildCommitmentRecord,
         RootComponentChildInstallEffectRecord, RootComponentChildMembershipRecord,
         RootComponentCommitmentRecord, RootComponentCreationEffectRecord,
-        RootComponentDrainingRecord, RootComponentFinalInventoryRecord,
-        RootComponentInitialInventoryRecord, RootComponentInstallEffectRecord,
-        RootComponentMembershipRecord, RootComponentQuiescenceProgressRecord,
-        RootComponentQuiescenceStopIntentRecord, RootComponentQuiescentReceiptRecord,
-        RootComponentRegistryCommitError, RootComponentRegistryMetaRecord,
-        RootComponentRegistryStore, RootComponentSubtreeDeleteEffectRecord,
-        RootComponentSubtreeDeletedEffectRecord, RootComponentSubtreeDirectoryConvergenceRecord,
+        RootComponentDeletedReceiptRecord, RootComponentDeletionIntentRecord,
+        RootComponentDeletionProgressRecord, RootComponentDrainingRecord,
+        RootComponentFinalInventoryRecord, RootComponentInitialInventoryRecord,
+        RootComponentInstallEffectRecord, RootComponentMembershipRecord,
+        RootComponentQuiescenceProgressRecord, RootComponentQuiescenceStopIntentRecord,
+        RootComponentQuiescentReceiptRecord, RootComponentRegistryCommitError,
+        RootComponentRegistryMetaRecord, RootComponentRegistryStore,
+        RootComponentSubtreeDeleteEffectRecord, RootComponentSubtreeDeletedEffectRecord,
+        RootComponentSubtreeDirectoryConvergenceRecord,
         RootComponentSubtreeDirectorySynchronizedRecord,
         RootComponentSubtreeMembershipRemovedRecord, RootComponentSubtreeRemovalBeginCommit,
         RootComponentSubtreeRemovalCompletedLeafRecord, RootComponentSubtreeRemovalCompletedRecord,
@@ -34,13 +36,14 @@ use crate::{
         RootComponentChildAllocationView, RootComponentChildCommitmentView,
         RootComponentChildInstallEffectView, RootComponentChildMembershipView,
         RootComponentCommitmentView, RootComponentCreationEffectView,
-        RootComponentDrainingAdvanceView, RootComponentDrainingView,
-        RootComponentFinalInventoryView, RootComponentInitialInventoryView,
-        RootComponentInstallEffectView, RootComponentMembershipView,
-        RootComponentQuiescenceProgressView, RootComponentQuiescenceStopIntentView,
-        RootComponentQuiescentReceiptView, RootComponentRegistryView,
-        RootComponentSubtreeDeleteEffectView, RootComponentSubtreeDeletedEffectView,
-        RootComponentSubtreeDirectoryConvergenceView,
+        RootComponentDeletedReceiptView, RootComponentDeletionIntentView,
+        RootComponentDeletionProgressView, RootComponentDrainingAdvanceView,
+        RootComponentDrainingView, RootComponentFinalInventoryView,
+        RootComponentInitialInventoryView, RootComponentInstallEffectView,
+        RootComponentMembershipView, RootComponentQuiescenceProgressView,
+        RootComponentQuiescenceStopIntentView, RootComponentQuiescentReceiptView,
+        RootComponentRegistryView, RootComponentSubtreeDeleteEffectView,
+        RootComponentSubtreeDeletedEffectView, RootComponentSubtreeDirectoryConvergenceView,
         RootComponentSubtreeDirectorySynchronizedView, RootComponentSubtreeMembershipRemovedView,
         RootComponentSubtreeRemovalCompletedView, RootComponentSubtreeRemovalNodeView,
         RootComponentSubtreeRemovalProgressView, RootComponentSubtreeRemovalView,
@@ -235,6 +238,53 @@ impl RootComponentFinalInventoryAuthority<'_> {
         InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
             "Component final inventory differs from exact empty Registry authority",
+        )
+    }
+}
+
+struct RootComponentDeletionAuthority<'a> {
+    draining: &'a RootComponentDrainingRecord,
+    progress: &'a RootComponentDeletionProgressRecord,
+}
+
+impl RootComponentDeletionAuthority<'_> {
+    fn validate(&self) -> Result<(), InternalError> {
+        let final_inventory = self
+            .draining
+            .final_inventory
+            .as_ref()
+            .ok_or_else(Self::invalid)?;
+        let quiescence = terminal_component_quiescence(self.draining).ok_or_else(Self::invalid)?;
+        let (intent, deleted_at_ns) = match self.progress {
+            RootComponentDeletionProgressRecord::DeleteIntent(intent) => (intent, None),
+            RootComponentDeletionProgressRecord::Deleted(receipt) => {
+                (&receipt.deletion, Some(receipt.deleted_at_ns))
+            }
+        };
+        if intent.final_inventory != *final_inventory {
+            return Err(Self::invalid());
+        }
+        if intent.quiescence != *quiescence {
+            return Err(Self::invalid());
+        }
+        if intent.prepared_at_ns < final_inventory.finalized_at_ns {
+            return Err(Self::invalid());
+        }
+        if deleted_at_ns.is_some_and(|deleted_at_ns| deleted_at_ns < intent.prepared_at_ns) {
+            return Err(Self::invalid());
+        }
+        if RootComponentRegistryStore::component_draining_entry_bytes(self.draining)
+            > quiescence.stop.charged_entry_bytes
+        {
+            return Err(Self::invalid());
+        }
+        Ok(())
+    }
+
+    fn invalid() -> InternalError {
+        InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component deletion progress differs from frozen final authority",
         )
     }
 }
@@ -1755,6 +1805,7 @@ impl ComponentRegistryOps {
             quiescence: None,
             subtree_operation_id: None,
             final_inventory: None,
+            deletion: None,
         };
         let (next_partition, next_meta) = component_draining_state(
             &current,
@@ -2104,6 +2155,111 @@ impl ComponentRegistryOps {
         RootComponentRegistryStore::mark_component_final_inventory(&draining, next_draining)
             .map_err(map_allocation_commit_error)?;
         Ok(component_final_inventory_record_to_view(inventory))
+    }
+
+    pub(crate) fn prepare_component_deletion(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        expected_inventory_hash: [u8; 32],
+        prepared_at_ns: u64,
+    ) -> Result<RootComponentDrainingView, InternalError> {
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        let draining =
+            RootComponentRegistryStore::component_draining(component).ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component draining operation has not been durably fenced",
+                )
+            })?;
+        validate_partition_record(&partition)?;
+        validate_component_draining_record(&partition, &draining)?;
+        ensure_component_deletion_operation(&draining, operation_id)?;
+        if let Some(progress) = &draining.deletion {
+            ensure_component_deletion_inventory(progress, expected_inventory_hash)?;
+            return Ok(component_draining_record_to_view(draining));
+        }
+
+        let final_inventory = draining.final_inventory.clone().ok_or_else(|| {
+            InternalError::unavailable("Component final inventory has not been durably frozen")
+        })?;
+        if final_inventory.inventory_hash != expected_inventory_hash {
+            return Err(InternalError::conflict(
+                "Component deletion request differs from frozen final inventory",
+            ));
+        }
+        let quiescence = terminal_component_quiescence(&draining)
+            .cloned()
+            .ok_or_else(|| {
+                InternalError::unavailable("Component deletion requires terminal quiescence")
+            })?;
+        if prepared_at_ns < final_inventory.finalized_at_ns {
+            return Err(InternalError::invalid_input(
+                "Component deletion preparation time precedes final inventory",
+            ));
+        }
+
+        let mut next_draining = draining.clone();
+        next_draining.deletion = Some(RootComponentDeletionProgressRecord::DeleteIntent(
+            RootComponentDeletionIntentRecord {
+                final_inventory,
+                quiescence,
+                prepared_at_ns,
+            },
+        ));
+        validate_component_draining_record(&partition, &next_draining)?;
+        RootComponentRegistryStore::prepare_component_deletion(&draining, next_draining.clone())
+            .map_err(map_allocation_commit_error)?;
+        Ok(component_draining_record_to_view(next_draining))
+    }
+
+    pub(crate) fn mark_component_deleted(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        expected_inventory_hash: [u8; 32],
+        deleted_at_ns: u64,
+    ) -> Result<RootComponentDrainingView, InternalError> {
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        let draining =
+            RootComponentRegistryStore::component_draining(component).ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component draining operation has not been durably fenced",
+                )
+            })?;
+        validate_partition_record(&partition)?;
+        validate_component_draining_record(&partition, &draining)?;
+        ensure_component_deletion_operation(&draining, operation_id)?;
+        let Some(progress) = &draining.deletion else {
+            return Err(InternalError::unavailable(
+                "Component deletion intent has not been durably prepared",
+            ));
+        };
+        ensure_component_deletion_inventory(progress, expected_inventory_hash)?;
+        let intent = match progress {
+            RootComponentDeletionProgressRecord::DeleteIntent(intent) => intent,
+            RootComponentDeletionProgressRecord::Deleted(_) => {
+                return Ok(component_draining_record_to_view(draining));
+            }
+        };
+        if deleted_at_ns < intent.prepared_at_ns {
+            return Err(InternalError::invalid_input(
+                "Component deletion observation time precedes its durable intent",
+            ));
+        }
+
+        let mut next_draining = draining.clone();
+        next_draining.deletion = Some(RootComponentDeletionProgressRecord::Deleted(
+            RootComponentDeletedReceiptRecord {
+                deletion: intent.clone(),
+                deleted_at_ns,
+            },
+        ));
+        validate_component_draining_record(&partition, &next_draining)?;
+        RootComponentRegistryStore::mark_component_deleted(&draining, next_draining.clone())
+            .map_err(map_allocation_commit_error)?;
+        Ok(component_draining_record_to_view(next_draining))
     }
 
     pub(crate) fn begin_draining_subtree_removal(
@@ -5336,6 +5492,33 @@ fn component_draining_record_to_view(
         final_inventory: record
             .final_inventory
             .map(component_final_inventory_record_to_view),
+        deletion: record.deletion.map(|progress| match progress {
+            RootComponentDeletionProgressRecord::DeleteIntent(intent) => {
+                RootComponentDeletionProgressView::DeleteIntent(
+                    component_deletion_intent_record_to_view(intent),
+                )
+            }
+            RootComponentDeletionProgressRecord::Deleted(receipt) => {
+                RootComponentDeletionProgressView::Deleted(RootComponentDeletedReceiptView {
+                    deletion: component_deletion_intent_record_to_view(receipt.deletion),
+                    deleted_at_ns: receipt.deleted_at_ns,
+                })
+            }
+        }),
+    }
+}
+
+const fn component_deletion_intent_record_to_view(
+    record: RootComponentDeletionIntentRecord,
+) -> RootComponentDeletionIntentView {
+    RootComponentDeletionIntentView {
+        final_inventory: component_final_inventory_record_to_view(record.final_inventory),
+        quiescence: RootComponentQuiescentReceiptView {
+            stop: component_quiescence_stop_intent_record_to_view(record.quiescence.stop),
+            observed_module_hash: record.quiescence.observed_module_hash,
+            quiesced_at_ns: record.quiescence.quiesced_at_ns,
+        },
+        prepared_at_ns: record.prepared_at_ns,
     }
 }
 
@@ -5749,7 +5932,7 @@ fn component_quiescence_terminal_entry_bytes(
         terminal_intent.charged_entry_bytes = charged_entry_bytes;
         let mut terminal = draining.clone();
         terminal.subtree_operation_id = Some([u8::MAX; 32]);
-        terminal.final_inventory = Some(RootComponentFinalInventoryRecord {
+        let final_inventory = RootComponentFinalInventoryRecord {
             registry: ComponentRegistryHead {
                 component: draining.component,
                 revision: u64::MAX,
@@ -5763,12 +5946,24 @@ fn component_quiescence_terminal_entry_bytes(
             directory_authority_hash: [u8::MAX; 32],
             inventory_hash: [u8::MAX; 32],
             finalized_at_ns: u64::MAX,
-        });
+        };
+        let quiescence = RootComponentQuiescentReceiptRecord {
+            stop: terminal_intent,
+            observed_module_hash: intent.expected_module_hash,
+            quiesced_at_ns: u64::MAX,
+        };
+        terminal.final_inventory = Some(final_inventory.clone());
         terminal.quiescence = Some(RootComponentQuiescenceProgressRecord::Quiescent(
-            RootComponentQuiescentReceiptRecord {
-                stop: terminal_intent,
-                observed_module_hash: intent.expected_module_hash,
-                quiesced_at_ns: u64::MAX,
+            quiescence.clone(),
+        ));
+        terminal.deletion = Some(RootComponentDeletionProgressRecord::Deleted(
+            RootComponentDeletedReceiptRecord {
+                deletion: RootComponentDeletionIntentRecord {
+                    final_inventory,
+                    quiescence,
+                    prepared_at_ns: u64::MAX,
+                },
+                deleted_at_ns: u64::MAX,
             },
         ));
         let next = RootComponentRegistryStore::component_draining_entry_bytes(&terminal);
@@ -7797,6 +7992,13 @@ fn validate_component_draining_record(
     if let Some(inventory) = &record.final_inventory {
         validate_component_final_inventory_record(partition, record, inventory)?;
     }
+    if let Some(deletion) = &record.deletion {
+        RootComponentDeletionAuthority {
+            draining: record,
+            progress: deletion,
+        }
+        .validate()?;
+    }
     let valid = record.operation_id != [0; 32]
         && record.component == partition.binding.component
         && record.previous_registry.component == record.component
@@ -7843,10 +8045,18 @@ fn validate_component_final_inventory_record(
 }
 
 const fn terminal_component_quiesced_at_ns(draining: &RootComponentDrainingRecord) -> Option<u64> {
+    let receipt = terminal_component_quiescence(draining);
+    match receipt {
+        Some(receipt) => Some(receipt.quiesced_at_ns),
+        None => None,
+    }
+}
+
+const fn terminal_component_quiescence(
+    draining: &RootComponentDrainingRecord,
+) -> Option<&RootComponentQuiescentReceiptRecord> {
     match &draining.quiescence {
-        Some(RootComponentQuiescenceProgressRecord::Quiescent(receipt)) => {
-            Some(receipt.quiesced_at_ns)
-        }
+        Some(RootComponentQuiescenceProgressRecord::Quiescent(receipt)) => Some(receipt),
         None | Some(RootComponentQuiescenceProgressRecord::StopIntent(_)) => None,
     }
 }
@@ -7968,6 +8178,34 @@ fn ensure_component_final_inventory_fleet_authority(
         ));
     }
     Ok(())
+}
+
+fn ensure_component_deletion_operation(
+    draining: &RootComponentDrainingRecord,
+    operation_id: [u8; 32],
+) -> Result<(), InternalError> {
+    if draining.operation_id == operation_id {
+        return Ok(());
+    }
+    Err(InternalError::conflict(
+        "Component deletion is bound to different draining intent",
+    ))
+}
+
+fn ensure_component_deletion_inventory(
+    progress: &RootComponentDeletionProgressRecord,
+    expected_inventory_hash: [u8; 32],
+) -> Result<(), InternalError> {
+    let intent = match progress {
+        RootComponentDeletionProgressRecord::DeleteIntent(intent) => intent,
+        RootComponentDeletionProgressRecord::Deleted(receipt) => &receipt.deletion,
+    };
+    if intent.final_inventory.inventory_hash == expected_inventory_hash {
+        return Ok(());
+    }
+    Err(InternalError::conflict(
+        "Component deletion differs from durable final inventory authority",
+    ))
 }
 
 fn component_has_terminal_quiescence(
@@ -9822,6 +10060,150 @@ mod tests {
         RootComponentRegistryStore::import(corrupted);
         ComponentRegistryOps::component_draining(partition.binding.component)
             .expect_err("final inventory hash must remain canonical");
+        RootComponentRegistryStore::import(RootComponentRegistryData::default());
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one test proves every durable top-level deletion transition and ledger invariant"
+    )]
+    fn component_deletion_is_prepared_durable_and_absence_idempotent() {
+        let (partition, draining, fleet) = import_empty_quiescent_component();
+        let inventory = ComponentRegistryOps::finalize_component_inventory(
+            partition.binding.component,
+            draining.operation_id,
+            draining.registry,
+            fleet,
+            112,
+        )
+        .expect("freeze exact final Component inventory");
+        let before_preparation = RootComponentRegistryStore::export();
+        ComponentRegistryOps::prepare_component_deletion(
+            partition.binding.component,
+            draining.operation_id,
+            [0; 32],
+            113,
+        )
+        .expect_err("deletion must bind the exact final inventory hash");
+        ComponentRegistryOps::prepare_component_deletion(
+            partition.binding.component,
+            draining.operation_id,
+            inventory.inventory_hash,
+            111,
+        )
+        .expect_err("deletion preparation cannot precede final inventory");
+        assert_eq!(RootComponentRegistryStore::export(), before_preparation);
+
+        let prepared = ComponentRegistryOps::prepare_component_deletion(
+            partition.binding.component,
+            draining.operation_id,
+            inventory.inventory_hash,
+            113,
+        )
+        .expect("prepare top-level Component deletion");
+        let Some(RootComponentDeletionProgressView::DeleteIntent(intent)) = &prepared.deletion
+        else {
+            panic!("durable top-level deletion intent");
+        };
+        assert_eq!(intent.final_inventory, inventory);
+        assert_eq!(
+            intent.quiescence.stop.canister_id,
+            partition.binding.canister_id
+        );
+        assert_eq!(
+            intent.quiescence.stop.controller,
+            partition.binding.fleet_subnet_root
+        );
+        assert_eq!(
+            intent.quiescence.observed_module_hash,
+            intent.quiescence.stop.expected_module_hash
+        );
+        assert_eq!(intent.prepared_at_ns, 113);
+
+        let prepared_snapshot = restart_component_registry();
+        assert_eq!(
+            ComponentRegistryOps::prepare_component_deletion(
+                partition.binding.component,
+                draining.operation_id,
+                inventory.inventory_hash,
+                999,
+            )
+            .expect("exact deletion preparation retry"),
+            prepared
+        );
+        assert_eq!(RootComponentRegistryStore::export(), prepared_snapshot);
+        ComponentRegistryOps::mark_component_deleted(
+            partition.binding.component,
+            draining.operation_id,
+            [0; 32],
+            114,
+        )
+        .expect_err("absence receipt must bind the prepared inventory");
+        ComponentRegistryOps::mark_component_deleted(
+            partition.binding.component,
+            draining.operation_id,
+            inventory.inventory_hash,
+            112,
+        )
+        .expect_err("absence observation cannot precede deletion intent");
+        assert_eq!(RootComponentRegistryStore::export(), prepared_snapshot);
+
+        let deleted = ComponentRegistryOps::mark_component_deleted(
+            partition.binding.component,
+            draining.operation_id,
+            inventory.inventory_hash,
+            114,
+        )
+        .expect("commit independently observed top-level absence");
+        let Some(RootComponentDeletionProgressView::Deleted(receipt)) = &deleted.deletion else {
+            panic!("durable top-level deleted receipt");
+        };
+        assert_eq!(receipt.deletion, *intent);
+        assert_eq!(receipt.deleted_at_ns, 114);
+
+        let deleted_snapshot = restart_component_registry();
+        assert_eq!(
+            ComponentRegistryOps::mark_component_deleted(
+                partition.binding.component,
+                draining.operation_id,
+                inventory.inventory_hash,
+                999,
+            )
+            .expect("exact deleted receipt retry"),
+            deleted
+        );
+        assert_eq!(RootComponentRegistryStore::export(), deleted_snapshot);
+        assert_eq!(
+            ComponentRegistryOps::partition(partition.binding.component)
+                .expect("valid retained partition")
+                .expect("retained partition"),
+            partition
+        );
+        assert_eq!(
+            ComponentRegistryOps::current()
+                .expect("Registry status")
+                .encoded_bytes,
+            exact_registry_entry_bytes(&deleted_snapshot)
+        );
+        assert_eq!(
+            partition.encoded_bytes,
+            exact_component_registry_entry_bytes(&deleted_snapshot, partition.binding.component)
+        );
+
+        let mut corrupted = deleted_snapshot;
+        let RootComponentDeletionProgressRecord::Deleted(receipt) = corrupted
+            .component_drainings
+            .first_mut()
+            .and_then(|draining| draining.deletion.as_mut())
+            .expect("deleted receipt")
+        else {
+            panic!("deleted progress");
+        };
+        receipt.deleted_at_ns = receipt.deletion.prepared_at_ns - 1;
+        RootComponentRegistryStore::import(corrupted);
+        ComponentRegistryOps::component_draining(partition.binding.component)
+            .expect_err("deleted receipt time must remain monotonic");
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
 

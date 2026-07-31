@@ -40,6 +40,7 @@ pub struct RootComponentDrainingView {
     pub started_at_ns: u64,
     pub quiescence: Option<RootComponentQuiescenceProgressView>,
     pub final_inventory: Option<RootComponentFinalInventoryView>,
+    pub deletion: Option<RootComponentDeletionProgressView>,
 }
 
 ///
@@ -59,6 +60,43 @@ pub struct RootComponentFinalInventoryView {
     pub directory_authority_hash: [u8; 32],
     pub inventory_hash: [u8; 32],
     pub finalized_at_ns: u64,
+}
+
+///
+/// RootComponentDeletionIntentView
+///
+/// Read-only complete authority frozen before top-level Component deletion.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentDeletionIntentView {
+    pub final_inventory: RootComponentFinalInventoryView,
+    pub quiescence: RootComponentQuiescentReceiptView,
+    pub prepared_at_ns: u64,
+}
+
+///
+/// RootComponentDeletedReceiptView
+///
+/// Read-only terminal receipt after independently observed top-level absence.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentDeletedReceiptView {
+    pub deletion: RootComponentDeletionIntentView,
+    pub deleted_at_ns: u64,
+}
+
+///
+/// RootComponentDeletionProgressView
+///
+/// Read-only monotonic top-level deletion progress embedded in one draining fence.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RootComponentDeletionProgressView {
+    DeleteIntent(RootComponentDeletionIntentView),
+    Deleted(RootComponentDeletedReceiptView),
 }
 
 ///

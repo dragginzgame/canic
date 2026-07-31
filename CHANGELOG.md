@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.62` reconciles qualified top-level Component deletion through a
+  durable final-inventory-bound intent and typed live absence, retaining the
+  exact deleted receipt without mutating local Registry membership.
+
 - `0.100.61` freezes exact empty Component Registry and current Fleet
   Directory authority in a durable response-idempotent final-inventory receipt
   before any top-level deletion may begin.
