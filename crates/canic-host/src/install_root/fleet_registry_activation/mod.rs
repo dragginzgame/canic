@@ -160,7 +160,7 @@ pub(super) fn activate_and_verify_fleet_registry(
         component_topology: component_topology.clone(),
         joining_registry,
     })?;
-    let icp = coordinator_icp(request.icp_root, request.environment, request.local_replica);
+    let icp = super::install_icp(request.icp_root, request.environment, request.local_replica);
     let current = drive_activation(
         &icp,
         request.coordinator,
@@ -306,14 +306,4 @@ fn require_exact_registry(
         return Err(FleetRegistryActivationError::LiveRegistryMismatch(stage).into());
     }
     Ok(())
-}
-
-fn coordinator_icp(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
-) -> IcpCli {
-    IcpCli::new("icp", Some(environment.to_string()))
-        .with_cwd(icp_root)
-        .with_local_replica(local_replica.cloned())
 }

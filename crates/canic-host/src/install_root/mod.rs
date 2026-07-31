@@ -95,6 +95,16 @@ pub use receipt_io::latest_deployment_truth_receipt_path_from_root;
 use timing::InstallTimingSummary as CurrentInstallTimingSummary;
 pub use truth_check::{check_install_deployment_truth, check_install_execution_preflight};
 
+fn install_icp(
+    icp_root: &Path,
+    environment: &str,
+    local_replica: Option<&crate::icp::LocalReplicaTarget>,
+) -> crate::icp::IcpCli {
+    crate::icp::IcpCli::new("icp", Some(environment.to_string()))
+        .with_cwd(icp_root)
+        .with_local_replica(local_replica.cloned())
+}
+
 #[cfg(test)]
 mod tests;
 

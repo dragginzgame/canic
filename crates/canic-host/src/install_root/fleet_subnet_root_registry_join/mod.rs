@@ -123,7 +123,7 @@ pub(super) fn register_and_verify_fleet_subnet_roots_joining(
     let joining_version =
         FleetRegistryOps::version(&authority, &component_topology, &expected_registry)?;
     let live = query_live_registry(
-        &coordinator_icp(icp_root, environment, local_replica),
+        &super::install_icp(icp_root, environment, local_replica),
         coordinator,
     )?;
     if exact_registry_matches(&authority, &component_topology, &expected_registry, &live)? {
@@ -151,7 +151,7 @@ fn drive_registry_join(
     expected_after: &FleetRegistry,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let coordinator = current.journal.authority.binding.coordinator;
-    let icp = coordinator_icp(icp_root, environment, local_replica);
+    let icp = super::install_icp(icp_root, environment, local_replica);
     let expected_after_version = FleetRegistryOps::version(
         &current.journal.authority,
         component_topology,
@@ -315,14 +315,4 @@ fn exact_registry_matches(
     Ok(live.registry == *expected_registry
         && live.manifest == expected_manifest
         && live.version == expected_version)
-}
-
-fn coordinator_icp(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
-) -> IcpCli {
-    IcpCli::new("icp", Some(environment.to_string()))
-        .with_cwd(icp_root)
-        .with_local_replica(local_replica.cloned())
 }

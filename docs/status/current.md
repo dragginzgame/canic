@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.66`.
-- The latest published release is `v0.100.66` at
-  `bc2f75c483fdc42b1af35a209e932bcde65c3bdc`.
-- Open `0.100.67` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.67`.
+- The latest published release is `v0.100.67` at
+  `8720cb7a2d4b77cb8f42658becca3edf4c91b1ae`.
+- Open `0.100.68` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -552,7 +552,7 @@ Historical detail is archived at:
   the retained state-contract owners, then removes 866 net lines of
   unreachable test support and zero-consumer internal wrappers. It adds no
   stable-memory domain or ID.
-- Open `0.100.67` freezes one terminal Fleet Subnet Root inventory after every
+- Released `0.100.67` freezes one terminal Fleet Subnet Root inventory after every
   allocation is `Removed`, every retained Component removal authority and the
   exact Registry byte ledger validate, live membership and root counters are
   empty, and the sole local Store is at exact GC `Prepared`. That one-way Store
@@ -562,7 +562,7 @@ Historical detail is archived at:
   Registry stable domain, allowing exact recovery across unrelated later
   Registry progress. They add no memory ID, Coordinator mutation, management
   deletion or root Registry transition. Ordinary root removal remains the next
-  explicit boundary. The same draft includes the focused post-0.100.66 host
+  explicit boundary. The same release includes the focused post-0.100.66 host
   module-surface hardening audit and its low-risk helper cleanup.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
@@ -2094,13 +2094,13 @@ cannot reopen across any interruption. The same patch completes the
 repository-wide dead-code surface hardening audit and removes its confirmed
 unreachable test-support and zero-consumer internal surfaces.
 
-Open `0.100.67` freezes the exact final root inventory once every Component
+Released `v0.100.67` freezes the exact final root inventory once every Component
 allocation is terminal, live membership and counters are empty, retained
 history reconstructs the exact Registry ledger and the sole Store is
 write-fenced at exact GC `Prepared`. Its durable local receipt adds no memory
 ID and performs no deletion or Coordinator mutation; a pre-effect intent keeps
 an exact retry recoverable across unrelated later Registry progress. The same
-draft retains the focused post-0.100.66 host module-surface hardening evidence
+release retains the focused post-0.100.66 host module-surface hardening evidence
 and cleanup.
 
 Next, revalidate that receipt and Store fence for ordinary root removal.

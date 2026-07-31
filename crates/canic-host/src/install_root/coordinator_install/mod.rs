@@ -351,7 +351,7 @@ fn verify_live_coordinator_genesis(
     }
 
     let expected = expected_genesis(journal)?;
-    let icp = coordinator_icp(icp_root, environment, local_replica);
+    let icp = super::install_icp(icp_root, environment, local_replica);
     let registry =
         query_coordinator::<FleetRegistry>(&icp, coordinator, protocol::CANIC_FLEET_REGISTRY)?;
     if registry != expected.registry {
@@ -398,7 +398,7 @@ fn verify_live_coordinator_current(
     }
 
     let expected = expected_genesis(journal)?;
-    let icp = coordinator_icp(icp_root, environment, local_replica);
+    let icp = super::install_icp(icp_root, environment, local_replica);
     let registry =
         query_coordinator::<FleetRegistry>(&icp, coordinator, protocol::CANIC_FLEET_REGISTRY)?;
     FleetRegistryOps::validate(
@@ -586,23 +586,13 @@ fn coordinator_init_args(args: &FleetCoordinatorInitArgs) -> Result<String, cand
     Ok(format!("({value})"))
 }
 
-fn coordinator_icp(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
-) -> IcpCli {
-    IcpCli::new("icp", Some(environment.to_string()))
-        .with_cwd(icp_root)
-        .with_local_replica(local_replica.cloned())
-}
-
 fn observed_module_hash(
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
     coordinator: Principal,
 ) -> Result<Option<[u8; 32]>, Box<dyn std::error::Error>> {
-    let report = coordinator_icp(icp_root, environment, local_replica)
+    let report = super::install_icp(icp_root, environment, local_replica)
         .canister_status_report(&coordinator.to_text())?;
     if report.id != coordinator.to_text() {
         return Err(CoordinatorInstallStateError::StatusPrincipal {
