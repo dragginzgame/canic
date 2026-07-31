@@ -94,7 +94,7 @@ fn drive_component_registry_preparation(
         .journal
         .fleet_subnet_root
         .ok_or(RootComponentRegistryPreparationError::LiveEvidenceMismatch)?;
-    let icp = root_icp(icp_root, environment, local_replica);
+    let icp = super::install_icp(icp_root, environment, local_replica);
     for _ in 0..MAX_COMPONENT_REGISTRY_PREPARATION_TRANSITIONS {
         current = match current.journal.phase {
             FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified => {
@@ -182,14 +182,4 @@ where
         )?
     };
     decode_json_result_response(&output).map_err(Into::into)
-}
-
-fn root_icp(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
-) -> IcpCli {
-    IcpCli::new("icp", Some(environment.to_string()))
-        .with_cwd(icp_root)
-        .with_local_replica(local_replica.cloned())
 }

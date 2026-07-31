@@ -389,7 +389,7 @@ fn verify_live_root(
     }
 
     let expected = expected_root_authority(journal)?;
-    let icp = root_icp(icp_root, environment, local_replica);
+    let icp = super::install_icp(icp_root, environment, local_replica);
     let status = query_root::<FleetActivationStatusResponse>(
         &icp,
         fleet_subnet_root,
@@ -528,23 +528,13 @@ fn root_install_command(
     Ok(command)
 }
 
-fn root_icp(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
-) -> IcpCli {
-    IcpCli::new("icp", Some(environment.to_string()))
-        .with_cwd(icp_root)
-        .with_local_replica(local_replica.cloned())
-}
-
 fn observed_module_hash(
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
     fleet_subnet_root: Principal,
 ) -> Result<Option<[u8; 32]>, Box<dyn std::error::Error>> {
-    let report = root_icp(icp_root, environment, local_replica)
+    let report = super::install_icp(icp_root, environment, local_replica)
         .canister_status_report(&fleet_subnet_root.to_text())?;
     if report.id != fleet_subnet_root.to_text() {
         return Err(RootInstallStateError::StatusPrincipal {

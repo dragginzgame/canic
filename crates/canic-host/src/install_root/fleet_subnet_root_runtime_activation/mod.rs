@@ -99,7 +99,7 @@ fn drive_root_runtime_activation(
         .journal
         .fleet_subnet_root
         .ok_or(RootRuntimeActivationError::LiveEvidenceMismatch)?;
-    let icp = root_icp(icp_root, environment, local_replica);
+    let icp = super::install_icp(icp_root, environment, local_replica);
 
     for _ in 0..MAX_ROOT_ACTIVATION_TRANSITIONS {
         current = match current.journal.phase {
@@ -243,14 +243,4 @@ where
         None,
     )?;
     decode_json_result_response(&output).map_err(Into::into)
-}
-
-fn root_icp(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
-) -> IcpCli {
-    IcpCli::new("icp", Some(environment.to_string()))
-        .with_cwd(icp_root)
-        .with_local_replica(local_replica.cloned())
 }

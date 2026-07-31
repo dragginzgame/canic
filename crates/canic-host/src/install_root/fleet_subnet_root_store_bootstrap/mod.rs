@@ -250,7 +250,7 @@ fn stage_release_set(
         .journal
         .fleet_subnet_root
         .expect("Store staging follows verified root installation");
-    let icp = root_icp(icp_root, environment, local_replica);
+    let icp = super::install_icp(icp_root, environment, local_replica);
     let version = TemplateVersion::owned(release_set.manifest.release_build_id.to_string());
     let manifest_template_id = TemplateId::owned(format!(
         "{ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX}{}",
@@ -423,7 +423,7 @@ fn call_store_bootstrap(
         .fleet_subnet_root
         .expect("Store bootstrap follows verified root installation");
     call_text_result(
-        &root_icp(icp_root, environment, local_replica),
+        &super::install_icp(icp_root, environment, local_replica),
         root,
         protocol::CANIC_ROOT_STORE_BOOTSTRAP,
         request,
@@ -443,7 +443,7 @@ fn query_store_bootstrap_status(
         .fleet_subnet_root
         .expect("Store verification follows verified root installation");
     call_text_result(
-        &root_icp(icp_root, environment, local_replica),
+        &super::install_icp(icp_root, environment, local_replica),
         root,
         protocol::CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
         request,
@@ -511,14 +511,4 @@ where
         )?
     };
     decode_json_result_response::<O>(&output).map_err(Into::into)
-}
-
-fn root_icp(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
-) -> IcpCli {
-    IcpCli::new("icp", Some(environment.to_string()))
-        .with_cwd(icp_root)
-        .with_local_replica(local_replica.cloned())
 }

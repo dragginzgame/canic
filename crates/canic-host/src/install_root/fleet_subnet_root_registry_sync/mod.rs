@@ -135,7 +135,7 @@ pub(super) fn synchronize_and_verify_fleet_subnet_roots(
         return Err(RootRegistrySyncError::AcknowledgementSetMismatch.into());
     }
 
-    let coordinator_icp = coordinator_icp(icp_root, environment, local_replica);
+    let coordinator_icp = super::install_icp(icp_root, environment, local_replica);
     let live: Vec<FleetSubnetRootSnapshotAcknowledgement> = query_no_arg(
         &coordinator_icp,
         coordinator,
@@ -195,7 +195,7 @@ fn drive_root_sync(
         .journal
         .fleet_subnet_root
         .expect("Registry synchronization follows root verification");
-    let icp = root_icp(icp_root, environment, local_replica);
+    let icp = super::install_icp(icp_root, environment, local_replica);
     for _ in 0..MAX_SYNC_TRANSITIONS {
         current = match current.journal.phase {
             FleetSubnetRootInstallPhase::RegistryJoinVerified => {
@@ -287,22 +287,4 @@ where
         None,
     )?;
     decode_json_result_response(&output).map_err(Into::into)
-}
-
-fn root_icp(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
-) -> IcpCli {
-    IcpCli::new("icp", Some(environment.to_string()))
-        .with_cwd(icp_root)
-        .with_local_replica(local_replica.cloned())
-}
-
-fn coordinator_icp(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
-) -> IcpCli {
-    root_icp(icp_root, environment, local_replica)
 }
