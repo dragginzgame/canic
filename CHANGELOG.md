@@ -14,7 +14,8 @@ Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
 - `0.100.65` atomically publishes one locally fenced Fleet Subnet Root as
   Coordinator-authoritative `Draining` with durable exact replay and canonical
-  lifecycle-history validation.
+  lifecycle-history validation, and adopts the patched transitive
+  `event-listener 5.4.2` release.
 
 - `0.100.64` adds a durable root-local draining fence that rejects new
   top-level Component allocations while admitted Component trees finish safely.
