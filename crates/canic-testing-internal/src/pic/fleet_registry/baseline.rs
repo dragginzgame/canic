@@ -19,15 +19,7 @@ mod tests {
                 ComponentRegistryPartitionResponse, ComponentRuntimePhase,
                 ComponentRuntimeStatusResponse, RootComponentAllocationPhase,
                 RootComponentAllocationRequest, RootComponentAllocationResponse,
-                RootComponentAllocationStatusRequest, RootComponentChildAllocationRequest,
-                RootComponentChildAllocationResponse, RootComponentChildCommitRequest,
-                RootComponentChildCommitResponse, RootComponentChildCreationRequest,
-                RootComponentChildDirectoryPreparationRequest,
-                RootComponentChildDirectoryPreparationResponse, RootComponentChildInstallRequest,
-                RootComponentChildMembershipActivationRequest,
-                RootComponentChildMembershipActivationResponse,
-                RootComponentChildRuntimeActivationRequest,
-                RootComponentChildRuntimeActivationResponse, RootComponentCommitRequest,
+                RootComponentAllocationStatusRequest, RootComponentCommitRequest,
                 RootComponentCommitResponse, RootComponentCreationRequest,
                 RootComponentDirectoryPreparationRequest,
                 RootComponentDirectoryPreparationResponse, RootComponentInitialInventoryStatus,
@@ -39,18 +31,14 @@ mod tests {
             fleet_registry::{
                 FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistry,
                 FleetRegistryActivationRequest, FleetRegistryActivationResponse,
-                FleetSubnetRootDirectoryEntry, FleetSubnetRootDrainingPublicationRequest,
-                FleetSubnetRootDrainingPublicationResponse, FleetSubnetRootEntry,
-                FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
-                FleetSubnetRootRegistryMirrorActivationRequest,
+                FleetSubnetRootDirectoryEntry, FleetSubnetRootEntry, FleetSubnetRootJoinRequest,
+                FleetSubnetRootJoinResponse, FleetSubnetRootRegistryMirrorActivationRequest,
                 FleetSubnetRootRegistryMirrorActivationResponse,
                 FleetSubnetRootRegistrySyncRequest, FleetSubnetRootRegistrySyncResponse,
                 FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootStatus,
             },
             fleet_subnet_root::{
-                FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary,
-                FleetSubnetRootDrainingRequest, FleetSubnetRootDrainingResponse,
-                FleetSubnetRootDrainingStatusRequest, FleetSubnetRootInitArgs,
+                FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary, FleetSubnetRootInitArgs,
             },
             root_store::{
                 ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX,
@@ -72,25 +60,19 @@ mod tests {
         protocol::{
             CANIC_COMPONENT_RUNTIME_STATUS, CANIC_FLEET_ACTIVATION_STATUS, CANIC_FLEET_REGISTRY,
             CANIC_FLEET_REGISTRY_ACTIVATE, CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
-            CANIC_FLEET_REGISTRY_MIRROR_STATUS, CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,
-            CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS, CANIC_FLEET_REGISTRY_SYNC_STATUS,
-            CANIC_FLEET_REGISTRY_SYNCHRONIZE, CANIC_FLEET_REGISTRY_VERSION,
-            CANIC_FLEET_SUBNET_ROOT_AUTHORITY, CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY,
-            CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN, CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS,
-            CANIC_FLEET_SUBNET_ROOT_JOIN, CANIC_PREPARE_FLEET_ACTIVATION,
-            CANIC_RESUME_FLEET_ACTIVATION, CANIC_ROOT_COMPONENT_ALLOCATE,
-            CANIC_ROOT_COMPONENT_ALLOCATION_STATUS, CANIC_ROOT_COMPONENT_CHILD_ALLOCATE,
-            CANIC_ROOT_COMPONENT_CHILD_COMMIT, CANIC_ROOT_COMPONENT_CHILD_CREATE,
-            CANIC_ROOT_COMPONENT_CHILD_DIRECTORY_PREPARE, CANIC_ROOT_COMPONENT_CHILD_INSTALL,
-            CANIC_ROOT_COMPONENT_CHILD_MEMBERSHIP_ACTIVATE,
-            CANIC_ROOT_COMPONENT_CHILD_RUNTIME_ACTIVATE, CANIC_ROOT_COMPONENT_COMMIT,
-            CANIC_ROOT_COMPONENT_CREATE, CANIC_ROOT_COMPONENT_DIRECTORY_HEAD,
-            CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE, CANIC_ROOT_COMPONENT_INSTALL,
-            CANIC_ROOT_COMPONENT_MEMBERSHIP_ACTIVATE, CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
-            CANIC_ROOT_COMPONENT_REGISTRY_PREPARE, CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
-            CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE, CANIC_ROOT_STORE_BOOTSTRAP,
-            CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
-            CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
+            CANIC_FLEET_REGISTRY_MIRROR_STATUS, CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
+            CANIC_FLEET_REGISTRY_SYNC_STATUS, CANIC_FLEET_REGISTRY_SYNCHRONIZE,
+            CANIC_FLEET_REGISTRY_VERSION, CANIC_FLEET_SUBNET_ROOT_AUTHORITY,
+            CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY, CANIC_FLEET_SUBNET_ROOT_JOIN,
+            CANIC_PREPARE_FLEET_ACTIVATION, CANIC_RESUME_FLEET_ACTIVATION,
+            CANIC_ROOT_COMPONENT_ALLOCATE, CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
+            CANIC_ROOT_COMPONENT_COMMIT, CANIC_ROOT_COMPONENT_CREATE,
+            CANIC_ROOT_COMPONENT_DIRECTORY_HEAD, CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE,
+            CANIC_ROOT_COMPONENT_INSTALL, CANIC_ROOT_COMPONENT_MEMBERSHIP_ACTIVATE,
+            CANIC_ROOT_COMPONENT_REGISTRY_PARTITION, CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
+            CANIC_ROOT_COMPONENT_REGISTRY_STATUS, CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE,
+            CANIC_ROOT_STORE_BOOTSTRAP, CANIC_TEMPLATE_PREPARE_ADMIN,
+            CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN, CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
         },
     };
     use canic_control_plane::{
@@ -124,14 +106,21 @@ mod tests {
     #[cfg(test)]
     use canic::{
         dto::component_registry::{
-            RootComponentDeletionPhase, RootComponentDeletionRequest,
-            RootComponentDeletionResponse, RootComponentDeletionStatusRequest,
-            RootComponentDrainingAdvancePhase, RootComponentDrainingAdvanceRequest,
-            RootComponentDrainingAdvanceResponse, RootComponentDrainingRequest,
-            RootComponentDrainingResponse, RootComponentFinalInventoryRequest,
-            RootComponentFinalInventoryResponse, RootComponentQuiescencePhase,
-            RootComponentQuiescenceRequest, RootComponentQuiescenceResponse,
-            RootComponentSubtreeRemovalAdvanceRequest,
+            RootComponentChildAllocationRequest, RootComponentChildAllocationResponse,
+            RootComponentChildCommitRequest, RootComponentChildCommitResponse,
+            RootComponentChildCreationRequest, RootComponentChildDirectoryPreparationRequest,
+            RootComponentChildDirectoryPreparationResponse, RootComponentChildInstallRequest,
+            RootComponentChildMembershipActivationRequest,
+            RootComponentChildMembershipActivationResponse,
+            RootComponentChildRuntimeActivationRequest,
+            RootComponentChildRuntimeActivationResponse, RootComponentDeletionPhase,
+            RootComponentDeletionRequest, RootComponentDeletionResponse,
+            RootComponentDeletionStatusRequest, RootComponentDrainingAdvancePhase,
+            RootComponentDrainingAdvanceRequest, RootComponentDrainingAdvanceResponse,
+            RootComponentDrainingRequest, RootComponentDrainingResponse,
+            RootComponentFinalInventoryRequest, RootComponentFinalInventoryResponse,
+            RootComponentQuiescencePhase, RootComponentQuiescenceRequest,
+            RootComponentQuiescenceResponse, RootComponentSubtreeRemovalAdvanceRequest,
             RootComponentSubtreeRemovalDeletePreparationRequest,
             RootComponentSubtreeRemovalDeleteRequest, RootComponentSubtreeRemovalPhase,
             RootComponentSubtreeRemovalRequest, RootComponentSubtreeRemovalResponse,
@@ -139,10 +128,22 @@ mod tests {
             RootComponentSubtreeRemovalStopPreparationRequest,
             RootComponentSubtreeRemovalStopRequest,
         },
+        dto::fleet_registry::{
+            FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingPublicationResponse,
+        },
+        dto::fleet_subnet_root::{
+            FleetSubnetRootDrainingRequest, FleetSubnetRootDrainingResponse,
+            FleetSubnetRootDrainingStatusRequest,
+        },
         protocol::{
-            CANIC_ROOT_COMPONENT_DELETE, CANIC_ROOT_COMPONENT_DELETION_STATUS,
-            CANIC_ROOT_COMPONENT_DRAINING_ADVANCE, CANIC_ROOT_COMPONENT_DRAINING_BEGIN,
-            CANIC_ROOT_COMPONENT_DRAINING_INVENTORY_FINALIZE,
+            CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING, CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN,
+            CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS, CANIC_ROOT_COMPONENT_CHILD_ALLOCATE,
+            CANIC_ROOT_COMPONENT_CHILD_COMMIT, CANIC_ROOT_COMPONENT_CHILD_CREATE,
+            CANIC_ROOT_COMPONENT_CHILD_DIRECTORY_PREPARE, CANIC_ROOT_COMPONENT_CHILD_INSTALL,
+            CANIC_ROOT_COMPONENT_CHILD_MEMBERSHIP_ACTIVATE,
+            CANIC_ROOT_COMPONENT_CHILD_RUNTIME_ACTIVATE, CANIC_ROOT_COMPONENT_DELETE,
+            CANIC_ROOT_COMPONENT_DELETION_STATUS, CANIC_ROOT_COMPONENT_DRAINING_ADVANCE,
+            CANIC_ROOT_COMPONENT_DRAINING_BEGIN, CANIC_ROOT_COMPONENT_DRAINING_INVENTORY_FINALIZE,
             CANIC_ROOT_COMPONENT_MEMBERSHIP_REMOVE, CANIC_ROOT_COMPONENT_QUIESCE,
             CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_ADVANCE,
             CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_BEGIN,
@@ -171,6 +172,8 @@ mod tests {
         pub root: Principal,
         pub issuer: ComponentBinding,
         pub verifier: ComponentBinding,
+        #[cfg(test)]
+        store_bootstrap: RootStoreBootstrapRequest,
     }
 
     impl ActiveComponentRegistryFixture {
@@ -526,7 +529,8 @@ mod tests {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let fixture = setup_active_component_registry();
         let root_draining = assert_root_draining_fence(&fixture);
-        assert_coordinator_root_draining_publication(&fixture, &root_draining);
+        let published = assert_coordinator_root_draining_publication(&fixture, &root_draining);
+        assert_root_draining_mirror_activation(&fixture, &root_draining, &published);
         let partition: Result<ComponentRegistryPartitionResponse, Error> = fixture
             .pic()
             .query_call(
@@ -852,15 +856,14 @@ mod tests {
             root: fixture.root_id,
             issuer: components.issuer,
             verifier: components.verifier,
+            #[cfg(test)]
+            store_bootstrap: fixture.request,
         };
         assert_root_canister_summary(&fixture);
         fixture
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "used only by the focused PocketIC removal test")
-    )]
+    #[cfg(test)]
     #[expect(
         clippy::too_many_lines,
         reason = "the fixture must drive every real child lifecycle phase before removal"
@@ -1039,10 +1042,7 @@ mod tests {
         assert_eq!(summary.total_canisters, 4);
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "used only by the focused PocketIC removal test")
-    )]
+    #[cfg(test)]
     fn assert_root_draining_fence(
         fixture: &ActiveComponentRegistryFixture,
     ) -> FleetSubnetRootDrainingResponse {
@@ -1134,14 +1134,11 @@ mod tests {
         begun
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "used only by the focused PocketIC removal test")
-    )]
+    #[cfg(test)]
     fn assert_coordinator_root_draining_publication(
         fixture: &ActiveComponentRegistryFixture,
         root_draining: &FleetSubnetRootDrainingResponse,
-    ) {
+    ) -> FleetSubnetRootDrainingPublicationResponse {
         let request = FleetSubnetRootDrainingPublicationRequest {
             expected_registry: root_draining.active_registry.clone(),
             root_draining: root_draining.clone(),
@@ -1184,6 +1181,118 @@ mod tests {
         assert_eq!(
             registry.fleet_subnet_roots[0].status,
             FleetSubnetRootStatus::Draining
+        );
+        published
+    }
+
+    #[cfg(test)]
+    fn assert_root_draining_mirror_activation(
+        fixture: &ActiveComponentRegistryFixture,
+        root_draining: &FleetSubnetRootDrainingResponse,
+        published: &FleetSubnetRootDrainingPublicationResponse,
+    ) {
+        let registry: Result<FleetRegistry, Error> = fixture
+            .pic()
+            .query_call(fixture.coordinator, CANIC_FLEET_REGISTRY, ())
+            .expect("query Draining Registry for mirror activation transport");
+        let registry = registry.expect("Draining Registry for mirror activation");
+        let directory = FleetDirectorySnapshot {
+            provenance: FleetDirectoryProvenance {
+                registry: published.version.clone(),
+                source_fleet_subnet_root: fixture.root,
+            },
+            fleet_subnet_roots: registry
+                .fleet_subnet_roots
+                .iter()
+                .map(|entry| FleetSubnetRootDirectoryEntry {
+                    placement_subnet: entry.placement_subnet,
+                    fleet_subnet_root: entry.fleet_subnet_root,
+                    status: entry.status,
+                })
+                .collect(),
+        };
+        let request = FleetSubnetRootRegistryMirrorActivationRequest {
+            previous_registry: root_draining.active_registry.clone(),
+            expected_registry: published.version.clone(),
+            expected_directory: directory,
+            store_bootstrap: fixture.store_bootstrap.clone(),
+        };
+        let activated: Result<FleetSubnetRootRegistryMirrorActivationResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
+                (request.clone(),),
+            )
+            .expect("activate Draining root Registry mirror transport");
+        let activated = activated.expect("activate Draining root Registry mirror");
+        assert_eq!(activated.previous_registry, request.previous_registry);
+        assert_eq!(activated.version, request.expected_registry);
+        assert_eq!(activated.directory, request.expected_directory);
+
+        let repeated: Result<FleetSubnetRootRegistryMirrorActivationResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
+                (request.clone(),),
+            )
+            .expect("retry Draining root Registry mirror activation transport");
+        assert_eq!(
+            repeated.expect("retry Draining root Registry mirror activation"),
+            activated
+        );
+        let status: Result<FleetSubnetRootRegistryMirrorActivationResponse, Error> = fixture
+            .pic()
+            .query_call(fixture.root, CANIC_FLEET_REGISTRY_MIRROR_STATUS, (request,))
+            .expect("query Draining root Registry mirror status transport");
+        assert_eq!(
+            status.expect("query Draining root Registry mirror status"),
+            activated
+        );
+
+        let summary: Result<FleetSubnetRootCanisterSummary, Error> = fixture
+            .pic()
+            .query_call(fixture.root, CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY, ())
+            .expect("query Draining root summary transport");
+        let summary = summary.expect("query Draining root summary");
+        assert_eq!(summary.fleet_registry, published.version);
+        assert_eq!(summary.status, FleetSubnetRootStatus::Draining);
+
+        let prepared: Result<RootComponentRegistryStatusResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
+                (RootComponentRegistryPreparationRequest {
+                    store_bootstrap: fixture.store_bootstrap.clone(),
+                    expected_fleet_registry: root_draining.active_registry.clone(),
+                },),
+            )
+            .expect("query Component Registry after mirror advancement transport");
+        assert_eq!(
+            prepared
+                .expect("query Component Registry after mirror advancement")
+                .prepared_against_registry,
+            root_draining.active_registry
+        );
+
+        let rejected: Result<RootComponentAllocationResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_ALLOCATE,
+                (RootComponentAllocationRequest {
+                    operation_id: [0xa5; 32],
+                    component_spec: fixture.verifier.component_spec.clone(),
+                },),
+            )
+            .expect("attempt Component allocation after Draining mirror activation transport");
+        assert_eq!(
+            rejected
+                .expect_err("Draining mirror activation must not reopen root allocation")
+                .code,
+            canic::dto::error::ErrorCode::Conflict
         );
     }
 

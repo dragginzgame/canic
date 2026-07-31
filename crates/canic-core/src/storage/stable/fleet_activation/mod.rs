@@ -361,6 +361,7 @@ impl FleetActivation {
         })
     }
 
+    #[cfg(test)]
     #[must_use]
     pub(crate) fn export() -> FleetActivationData {
         FleetActivationData {

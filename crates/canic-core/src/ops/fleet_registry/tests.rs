@@ -315,7 +315,7 @@ fn draining_transitions_only_one_exact_active_root() {
 }
 
 #[test]
-fn active_directory_is_an_exact_root_sourced_registry_projection() {
+fn directory_is_an_exact_root_sourced_mixed_lifecycle_projection() {
     let topology = topology();
     let authority = authority();
     let mut joining =
@@ -326,14 +326,16 @@ fn active_directory_is_an_exact_root_sourced_registry_projection() {
         root(&topology, 7, 8, &[("alpha", 2), ("beta", 2)]),
     ];
     joining.revision = 3;
-    let active =
+    let mut published =
         FleetRegistryOps::compile_active(&authority, &topology, &joining).expect("active Registry");
-    let directory = active_directory_for_root(&authority, &topology, &active, principal(6))
+    published.revision += 1;
+    published.fleet_subnet_roots[0].status = FleetSubnetRootStatus::Draining;
+    let directory = directory_for_root(&authority, &topology, &published, principal(6))
         .expect("active Fleet Directory");
 
     assert_eq!(
         directory.provenance.registry,
-        FleetRegistryOps::version(&authority, &topology, &active).expect("Registry version")
+        FleetRegistryOps::version(&authority, &topology, &published).expect("Registry version")
     );
     assert_eq!(directory.provenance.source_fleet_subnet_root, principal(6));
     assert_eq!(
@@ -349,17 +351,22 @@ fn active_directory_is_an_exact_root_sourced_registry_projection() {
             })
             .collect::<Vec<_>>(),
         vec![
-            (subnet(5), principal(6), FleetSubnetRootStatus::Active),
+            (subnet(5), principal(6), FleetSubnetRootStatus::Draining),
             (subnet(7), principal(8), FleetSubnetRootStatus::Active)
         ]
     );
 
     std::assert_matches!(
-        active_directory_for_root(&authority, &topology, &joining, principal(6)),
-        Err(FleetRegistryOpsError::FleetDirectoryRequiresAllActive)
+        directory_for_root(&authority, &topology, &joining, principal(6)),
+        Err(FleetRegistryOpsError::FleetDirectoryRequiresPublishedRoots)
     );
     std::assert_matches!(
-        active_directory_for_root(&authority, &topology, &active, principal(9)),
+        directory_for_root(&authority, &topology, &published, principal(9)),
+        Err(FleetRegistryOpsError::FleetDirectorySourceMissing)
+    );
+    published.fleet_subnet_roots[0].status = FleetSubnetRootStatus::Removed;
+    std::assert_matches!(
+        directory_for_root(&authority, &topology, &published, principal(6)),
         Err(FleetRegistryOpsError::FleetDirectorySourceMissing)
     );
 }

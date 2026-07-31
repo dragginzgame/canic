@@ -9,22 +9,16 @@ use crate::{
         component_registry::ComponentRegistryOps, fleet_registry_mirror::FleetRegistryMirrorOps,
         storage::state::subnet::SubnetStateOps,
     },
-    view::{
-        component_registry::{RootComponentRegistryView, RootFleetSubnetDrainingView},
-        fleet_registry_mirror::RootFleetRegistryActiveView,
-    },
+    view::component_registry::{RootComponentRegistryView, RootFleetSubnetDrainingView},
 };
 use canic_core::{
     api::fleet_activation::FleetActivationApi,
     control_plane_support::{
         error::{InternalError, InternalErrorOrigin},
-        ops::{config::ConfigOps, fleet_registry::FleetRegistryOps, ic::IcOps},
+        ops::ic::IcOps,
     },
     dto::{
-        fleet_registry::{
-            FleetDirectorySnapshot, FleetRegistryManifest, FleetRegistryVersion,
-            FleetSubnetRootEntry, FleetSubnetRootStatus,
-        },
+        fleet_registry::{FleetRegistryVersion, FleetSubnetRootEntry, FleetSubnetRootStatus},
         fleet_subnet_root::{
             FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary,
             FleetSubnetRootDrainingRequest, FleetSubnetRootDrainingResponse,
@@ -41,16 +35,8 @@ struct ValidatedFleetSubnetRootState {
 }
 
 #[derive(Eq, PartialEq)]
-struct CanonicalRootMirrorEvidence<'a> {
-    manifest: &'a FleetRegistryManifest,
-    version: &'a FleetRegistryVersion,
-    directory: &'a FleetDirectorySnapshot,
-}
-
-#[derive(Eq, PartialEq)]
 struct ComponentRegistrySourceAuthority<'a> {
     root: &'a FleetSubnetRootBinding,
-    prepared_against_registry: &'a FleetRegistryVersion,
     release_set: FleetSubnetRootReleaseSet,
 }
 
@@ -117,14 +103,14 @@ fn validated_root_state() -> Result<ValidatedFleetSubnetRootState, InternalError
     let root = IcOps::canister_self();
     validate_protected_root(&authority, root)?;
 
-    let mirror = FleetRegistryMirrorOps::current()
-        .active
-        .ok_or_else(|| InternalError::unavailable("root has no active Fleet Registry mirror"))?;
-    let (fleet_registry, root_entry) = validated_registry_authority(&authority, root, &mirror)?;
+    let mirror = FleetRegistryMirrorOps::validated_current(&authority, root)?;
+    let fleet_registry = mirror.active.snapshot.version;
+    let root_entry = mirror.root_entry;
     let component_registry = ComponentRegistryOps::current().ok_or_else(|| {
         InternalError::unavailable("root Component Registry authority has not been prepared")
     })?;
     validate_component_registry(&authority, &fleet_registry, &component_registry)?;
+    validate_draining_evidence(&root_entry, &fleet_registry)?;
 
     Ok(ValidatedFleetSubnetRootState {
         fleet_registry,
@@ -145,81 +131,6 @@ fn validate_protected_root(
     Ok(())
 }
 
-fn validated_registry_authority(
-    authority: &FleetSubnetRootAuthority,
-    root: candid::Principal,
-    mirror: &RootFleetRegistryActiveView,
-) -> Result<(FleetRegistryVersion, FleetSubnetRootEntry), InternalError> {
-    let topology = ConfigOps::component_topology()?;
-    FleetRegistryOps::validate(
-        &authority.binding.authority,
-        &topology,
-        &mirror.snapshot.registry,
-    )?;
-    let manifest = FleetRegistryOps::manifest(
-        &authority.binding.authority,
-        &topology,
-        &mirror.snapshot.registry,
-    )?;
-    let version = FleetRegistryOps::version(
-        &authority.binding.authority,
-        &topology,
-        &mirror.snapshot.registry,
-    )?;
-    let directory = FleetRegistryOps::active_directory_for_root(
-        &authority.binding.authority,
-        &topology,
-        &mirror.snapshot.registry,
-        root,
-    )?;
-    let current_evidence = CanonicalRootMirrorEvidence {
-        manifest: &mirror.snapshot.manifest,
-        version: &mirror.snapshot.version,
-        directory: &mirror.directory,
-    };
-    let canonical_evidence = CanonicalRootMirrorEvidence {
-        manifest: &manifest,
-        version: &version,
-        directory: &directory,
-    };
-    if current_evidence != canonical_evidence {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "active root Registry mirror evidence is not internally consistent",
-        ));
-    }
-
-    let root_entry = mirror
-        .snapshot
-        .registry
-        .fleet_subnet_roots
-        .iter()
-        .find(|entry| entry.fleet_subnet_root == root)
-        .cloned()
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "active root Registry mirror does not contain this root",
-            )
-        })?;
-    let expected = FleetSubnetRootEntry {
-        placement_subnet: authority.binding.placement_subnet,
-        fleet_subnet_root: root,
-        component_admissions: authority.binding.component_admissions.clone(),
-        component_topology_digest: authority.binding.component_topology_digest,
-        active_release_set: authority.initial_release_set,
-        limits: authority.binding.limits.clone(),
-        status: root_entry.status,
-    };
-    if root_entry != expected || root_entry.status == FleetSubnetRootStatus::Removed {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "active root Registry row differs from protected authority or is Removed",
-        ));
-    }
-    Ok((version, root_entry))
-}
-
 fn validate_component_registry(
     authority: &FleetSubnetRootAuthority,
     fleet_registry: &FleetRegistryVersion,
@@ -227,18 +138,21 @@ fn validate_component_registry(
 ) -> Result<(), InternalError> {
     let current = ComponentRegistrySourceAuthority {
         root: &registry.root,
-        prepared_against_registry: &registry.prepared_against_registry,
         release_set: registry.release_set,
     };
     let expected = ComponentRegistrySourceAuthority {
         root: &authority.binding,
-        prepared_against_registry: fleet_registry,
         release_set: authority.initial_release_set,
     };
-    if current != expected {
+    if current != expected
+        || !ComponentRegistryOps::registry_covers_preparation(
+            &registry.prepared_against_registry,
+            fleet_registry,
+        )
+    {
         return Err(InternalError::invariant(
             InternalErrorOrigin::Storage,
-            "Component Registry authority differs from the active root Registry mirror",
+            "Component Registry preparation authority is not covered by the current root mirror",
         ));
     }
 
@@ -258,6 +172,17 @@ fn validate_component_registry(
             "known-created Component Canisters exceed allocated Component-tree capacity",
         ));
     }
+    Ok(())
+}
+
+fn validate_draining_evidence(
+    root_entry: &FleetSubnetRootEntry,
+    fleet_registry: &FleetRegistryVersion,
+) -> Result<(), InternalError> {
+    if root_entry.status != FleetSubnetRootStatus::Draining {
+        return Ok(());
+    }
+    ComponentRegistryOps::validate_published_root_draining(fleet_registry)?;
     Ok(())
 }
 
@@ -376,6 +301,33 @@ mod tests {
         assert!(
             summary(version, entry, &registry, 1).is_err(),
             "Store plus Component Canisters must not exceed the protected managed limit"
+        );
+    }
+
+    #[test]
+    fn component_registry_preparation_remains_valid_under_later_mirror_authority() {
+        let authority = authority();
+        let prepared = version(&authority);
+        let registry = component_registry(&authority, prepared.clone(), 3, 1, 2, 0);
+        let mut current = prepared.clone();
+        current.revision += 3;
+        current.content_hash = [11; 32];
+
+        validate_component_registry(&authority, &current, &registry)
+            .expect("later mirror covers immutable Component Registry preparation");
+
+        let mut conflicting = prepared.clone();
+        conflicting.content_hash = [12; 32];
+        assert!(
+            validate_component_registry(&authority, &conflicting, &registry).is_err(),
+            "an equal Registry revision with a different hash must fail closed"
+        );
+
+        let mut stale = prepared;
+        stale.revision -= 1;
+        assert!(
+            validate_component_registry(&authority, &stale, &registry).is_err(),
+            "a mirror older than immutable preparation authority must fail closed"
         );
     }
 

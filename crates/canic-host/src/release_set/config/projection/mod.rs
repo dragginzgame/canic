@@ -10,7 +10,7 @@ pub(in crate::release_set) use app::{
 pub use components::configured_release_roles_from_config;
 pub(in crate::release_set) use components::{
     configured_bootstrap_roles_from_config, configured_deployable_roles_from_config,
-    configured_local_root_create_cycles_from_config, configured_pool_expectations_from_config,
+    configured_pool_expectations_from_config,
 };
 pub(in crate::release_set) use details::configured_role_details_from_config;
 pub(in crate::release_set) use roles::{

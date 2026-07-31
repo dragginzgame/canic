@@ -4,14 +4,6 @@
 //! Does not own: lifecycle policy, endpoint authorization, or DTO conversion.
 //! Boundary: ops wrap these records before workflow or public API access.
 
-#![cfg_attr(
-    not(feature = "blob-storage"),
-    expect(
-        dead_code,
-        reason = "blob-storage schema remains available to the unconditional state descriptor registry"
-    )
-)]
-
 #[cfg(feature = "blob-storage")]
 use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 #[cfg(feature = "blob-storage")]
@@ -104,6 +96,7 @@ impl BlobRootHashKey {
     }
 
     #[must_use]
+    #[cfg(feature = "blob-storage")]
     pub fn as_str(&self) -> &str {
         self.value.as_ref()
     }
@@ -198,6 +191,7 @@ impl StorageGatewayPrincipalRecord {
     pub const STORABLE_MAX_SIZE: u32 = 96;
 
     #[must_use]
+    #[cfg(feature = "blob-storage")]
     pub const fn new(gateway_principal: Principal, inserted_at_ns: u64) -> Self {
         Self {
             schema_version: BLOB_STORAGE_SCHEMA_VERSION,

@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.64`.
-- The latest published release is `v0.100.64` at
-  `ee8e51f273a2382fd59e007b58708c57b3291c8c`.
-- Open `0.100.65` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.65`.
+- The latest published release is `v0.100.65` at
+  `7a09657fa7043dabccb86f22a629a22dfbcecadb`.
+- Open `0.100.66` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -532,15 +532,26 @@ Historical detail is archived at:
   continue. The immutable receipt survives later counter changes, performs no
   management effect and does not yet publish `Draining` through the
   Coordinator or Fleet Directory.
-- Open `0.100.65` atomically publishes one exact locally fenced root as
+- Released `0.100.65` atomically publishes one exact locally fenced root as
   Coordinator-authoritative `Draining`. The same Coordinator commit advances
   one canonical Registry revision and retains the exact request/response
   receipt; every validated read reconstructs join, activation and ordered
   draining history. Exact replay survives restart and later progress. Root
   mirrors and Fleet Directories intentionally remain on the prior `Active`
-  version until the next synchronization boundary. The same open patch adopts
+  version until the next synchronization boundary. The same release adopts
   transitive `event-listener 5.4.2`, removing RUSTSEC-2026-0221 without
   widening the accepted unmaintained-advisory inventory.
+- Open `0.100.66` completes that synchronization through the existing mirror
+  activation endpoint. Complete mixed-lifecycle snapshots converge
+  monotonically, Fleet Directory and Registry Mirror authority commit
+  atomically, and stale retry returns the later durable version without
+  regression. A root's own `Draining` mirror requires its exact local cutoff;
+  immutable Component Registry preparation remains frozen while current
+  operations prove its exact same-revision hash or a later same-authority
+  mirror. The same patch removes obsolete dead-code suppressions and records
+  the retained state-contract owners, then removes 701 net lines of
+  unreachable test support and zero-consumer internal wrappers. It adds no
+  stable-memory domain or ID.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -2056,17 +2067,24 @@ an immutable active-Registry and inventory-cutoff receipt, preserves exact
 retry and permits already admitted Component trees to complete bounded
 removal without a management effect or new stable-memory ID.
 
-Open `0.100.65` publishes that immutable local receipt through an atomic
+Released `0.100.65` publishes that immutable local receipt through an atomic
 Coordinator Registry `Active -> Draining` transition and retains exact
 restart-safe replay authority. The Coordinator reconstructs the complete
 canonical lifecycle history before accepting its current head and allocates no
 new stable-memory ID.
 
-Next, synchronize the Coordinator's mixed-lifecycle canonical state into root
-mirrors and Fleet Directories without reopening allocation. Ordinary root
-removal remains gated on absent Component partitions, quiescent Store authority
-and exact final root inventory; neither an unreachable root nor a Subnet
-failure is removal evidence.
+Open `0.100.66` synchronizes that mixed-lifecycle canonical state through the
+existing snapshot-convergent mirror endpoint. It advances Registry Mirror and
+Fleet Directory authority atomically, reports the synchronized `Draining`
+summary, preserves immutable Component preparation and requires the published
+local cutoff before accepting the source root's Draining row. Allocation
+cannot reopen across any interruption. The same patch completes the
+repository-wide dead-code surface hardening audit and removes its confirmed
+unreachable test-support and zero-consumer internal surfaces.
+
+Next, freeze the exact final root inventory once every Component partition is
+absent and Store authority is quiescent, then use it for ordinary root removal.
+Neither an unreachable root nor a Subnet failure is removal evidence.
 
 ## Historical Release Detail
 

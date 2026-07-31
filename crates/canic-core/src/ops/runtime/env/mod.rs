@@ -208,13 +208,6 @@ impl EnvOps {
         EnvRecordMapper::record_to_view(&Env::export().record)
     }
 
-    /// Return any missing required fields for a complete environment snapshot.
-    #[must_use]
-    pub fn missing_required_fields() -> Vec<&'static str> {
-        let data = Env::export();
-        required_fields_missing(&data.record)
-    }
-
     pub fn import(data: EnvData) -> Result<(), InternalError> {
         let missing = required_fields_missing(&data.record);
         if !missing.is_empty() {

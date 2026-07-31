@@ -76,7 +76,6 @@ pub mod __reexports {
 /// Consts
 ///
 
-pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 // Canonical hardcoded 1 MiB chunk size for Canic wasm staging/install flows.
 // The management canister wasm chunk store rejects larger payloads.

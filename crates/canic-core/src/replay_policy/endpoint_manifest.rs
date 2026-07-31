@@ -118,7 +118,7 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "canic_fleet_registry_synchronize",
         command_kind("fleet_registry.synchronize_root.v1"),
     ),
-    update_response_idempotent(
+    update_snapshot_convergent(
         "canic_fleet_registry_activate_mirror",
         command_kind("fleet_registry.activate_root_mirror.v1"),
     ),

@@ -9,12 +9,9 @@ use canic::{
     dto::{
         canister::CanisterInfo,
         page::{Page, PageRequest},
-        topology::SubnetRegistryEntry,
-        topology::SubnetRegistryResponse,
     },
     protocol,
 };
-use canic_testing_internal::canister::SCALE_REPLICA;
 use canic_testing_internal::pic::CanicPicExt;
 use ic_testkit::pic::Pic;
 
@@ -36,26 +33,6 @@ pub fn prepare_worker_for_explicit_parent_funding(pic: &Pic, worker_pid: Princip
     pic.add_cycles(worker_pid, 20 * TC);
     pic.advance_time(Duration::from_secs(DEFAULT_FUNDING_COOLDOWN_SECS + 1));
     pic.tick();
-}
-
-/// Count worker canisters registered under a given parent.
-///
-/// # Panics
-///
-/// Panics if the subnet registry query fails.
-#[must_use]
-pub fn count_workers(pic: &Pic, root_id: Principal, parent_pid: Principal) -> usize {
-    let registry: Result<SubnetRegistryResponse, Error> =
-        pic.query_call_or_panic(root_id, protocol::CANIC_SUBNET_REGISTRY, ());
-    let SubnetRegistryResponse(registry): SubnetRegistryResponse =
-        registry.expect("query subnet registry application");
-
-    registry
-        .iter()
-        .filter(|entry: &&SubnetRegistryEntry| {
-            entry.role == SCALE_REPLICA && entry.record.parent_pid == Some(parent_pid)
-        })
-        .count()
 }
 
 /// Wait until the parent's local child view includes the newly created worker.

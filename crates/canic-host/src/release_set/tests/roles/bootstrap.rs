@@ -122,60 +122,6 @@ maximum_instances_per_parent = 20_000
 }
 
 #[test]
-fn configured_local_root_create_cycles_estimates_bootstrap_funding() {
-    let config = r#"
-controllers = []
-[app]
-name = "demo"
-
-[roles.root]
-kind = "root"
-package = "root"
-
-[roles.app]
-kind = "canister"
-package = "app"
-
-[roles.user_hub]
-kind = "canister"
-package = "user_hub"
-
-[roles.user_shard]
-kind = "canister"
-package = "user_shard"
-
-[roles.project_instance]
-kind = "canister"
-package = "project_instance"
-
-[roles.scale_hub]
-kind = "canister"
-package = "scale_hub"
-
-[roles.scale_replica]
-kind = "canister"
-package = "scale"
-
-[roles.role_baseline]
-kind = "canister"
-package = "role_baseline"
-
-[component_specs.app]
-component_role = "app"
-maximum_instances = 1
-initial_cycles = "7T"
-
-[component_specs.user_hub]
-component_role = "user_hub"
-maximum_instances = 1
-"#;
-
-    let cycles = configured_local_root_create_cycles_from_config(&parsed_config(config));
-
-    assert_eq!(cycles, Some(117_000_000_000_000));
-}
-
-#[test]
 fn configured_role_auto_create_lists_component_roles() {
     let config = r#"
 controllers = []

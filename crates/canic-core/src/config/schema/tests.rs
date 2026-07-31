@@ -562,7 +562,7 @@ fn a_component_role_may_also_be_a_potential_child_role() {
 }
 
 #[test]
-fn attached_app_roles_follow_structural_component_and_child_ownership() {
+fn attached_and_deployable_roles_follow_structural_ownership() {
     let mut cfg = ConfigModel::test_default();
     let default_component_spec = cfg
         .component_specs
@@ -610,20 +610,12 @@ fn attached_app_roles_follow_structural_component_and_child_ownership() {
     );
 
     cfg.validate().expect("config should validate");
-    let attached = cfg.attached_app_roles();
+    let attached = cfg.attached_roles();
 
-    assert!(!cfg.attached_roles().contains(&CanisterRole::ROOT));
+    assert!(!attached.contains(&CanisterRole::ROOT));
     assert!(cfg.deployable_roles().contains(&CanisterRole::ROOT));
-    assert!(
-        attached
-            .iter()
-            .any(|role| role.to_string() == "test.user_hub")
-    );
-    assert!(
-        attached
-            .iter()
-            .any(|role| role.to_string() == "test.user_shard")
-    );
+    assert!(attached.contains(&CanisterRole::from("user_hub")));
+    assert!(attached.contains(&CanisterRole::from("user_shard")));
 }
 
 #[test]

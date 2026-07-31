@@ -6,7 +6,7 @@
 
 use canic_core::dto::fleet_registry::{
     FleetDirectorySnapshot, FleetRegistrySnapshotResponse, FleetRegistryVersion,
-    FleetSubnetRootSnapshotAcknowledgement,
+    FleetSubnetRootEntry, FleetSubnetRootSnapshotAcknowledgement,
 };
 
 ///
@@ -32,6 +32,18 @@ pub struct RootFleetRegistryActiveView {
     pub previous_registry: FleetRegistryVersion,
     pub snapshot: FleetRegistrySnapshotResponse,
     pub directory: FleetDirectorySnapshot,
+}
+
+///
+/// ValidatedRootFleetRegistryMirrorView
+///
+/// Canonical current mirror plus this root's protected non-Removed Registry row.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ValidatedRootFleetRegistryMirrorView {
+    pub active: RootFleetRegistryActiveView,
+    pub root_entry: FleetSubnetRootEntry,
 }
 
 ///

@@ -408,6 +408,22 @@ fn fleet_subnet_root_draining_fence_is_response_idempotent() {
 }
 
 #[test]
+fn fleet_registry_mirror_activation_is_snapshot_convergent() {
+    let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_fleet_registry_activate_mirror")
+        .expect("Fleet Registry mirror activation policy entry");
+
+    assert_eq!(
+        entry.replay_policy,
+        ReplayPolicy::SnapshotConvergent {
+            command_kind: replay_command_kind("fleet_registry.activate_root_mirror.v1"),
+        }
+    );
+    assert_eq!(entry.cost_class, CostClass::None);
+}
+
+#[test]
 fn root_component_draining_fence_is_response_idempotent() {
     let begin = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
