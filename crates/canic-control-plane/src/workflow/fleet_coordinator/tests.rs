@@ -454,6 +454,18 @@ fn assert_root_removal_publication(
             .status,
         FleetSubnetRootStatus::Active
     );
+    let removed_snapshot =
+        FleetCoordinatorWorkflow::snapshot_for_root(first_entry.fleet_subnet_root)
+            .expect_err("Removed root cannot fetch a later Registry snapshot");
+    assert_eq!(
+        removed_snapshot.public_error().map(|error| error.code),
+        Some(ErrorCode::Forbidden)
+    );
+    let surviving_snapshot =
+        FleetCoordinatorWorkflow::snapshot_for_root(second_entry.fleet_subnet_root)
+            .expect("surviving root can fetch Registry containing Removed peer");
+    assert_eq!(surviving_snapshot.registry, registry);
+    assert_eq!(surviving_snapshot.version, removed.version);
     assert_later_root_can_drain_after_removal(second_entry, &removed.version);
 }
 

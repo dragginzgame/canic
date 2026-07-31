@@ -1,6 +1,6 @@
 mod access;
 
-use crate::endpoint::{EndpointKind, parse::QueryMode, validate::ValidatedArgs};
+use crate::endpoint::{EndpointKind, parse::QueryMode, returns_fallible, validate::ValidatedArgs};
 use access::{AccessPlan, access_stage, build_access_plan, requires_authenticated};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
@@ -136,20 +136,6 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
 // helpers
 // ============================================================================
 //
-
-fn returns_fallible(sig: &syn::Signature) -> bool {
-    let syn::ReturnType::Type(_, ty) = &sig.output else {
-        return false;
-    };
-    let syn::Type::Path(ty) = &**ty else {
-        return false;
-    };
-
-    ty.path
-        .segments
-        .last()
-        .is_some_and(|seg| seg.ident == "Result")
-}
 
 fn dispatch(kind: EndpointKind, asyncness: bool) -> TokenStream2 {
     match (kind, asyncness) {

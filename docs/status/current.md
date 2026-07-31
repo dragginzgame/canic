@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.68`.
-- The latest published release is `v0.100.68` at
-  `e145e3d6253191fd9bf0b518a45e3261dc435eb8`.
-- Open `0.100.69` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.69`.
+- The latest published release is `v0.100.69` at
+  `c333ccbf636b2be19a88b13e56898e28fab9553b`.
+- Open `0.100.70` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -569,14 +569,23 @@ Historical detail is archived at:
   project root, optional direct-replica target and every role-specific command
   remain unchanged while nine redundant functions and 87 net lines are
   removed.
-- Open `0.100.69` revalidates the retained final inventory against the sole
+- Released `0.100.69` revalidates the retained final inventory against the sole
   live Store at exact GC `Prepared`, then has that root call the Coordinator
   under its own principal. One atomic response-idempotent commit advances only
   its canonical row from `Draining` to `Removed`; both Coordinator and root
   retain exact receipts and reconstruct interleaved root lifecycle history by
   Registry revision. It performs no Store reclamation or physical Canister
-  deletion and adds no memory ID. The same open patch centralizes duplicated
+  deletion and adds no memory ID. The same release centralizes duplicated
   host/CLI utilities under their existing owners.
+- Open `0.100.70` qualifies the existing snapshot-convergent mirror boundary
+  after logical root removal. A surviving current root fetches the complete
+  canonical Registry and atomically activates a matching Fleet Directory that
+  retains the exact `Removed` tombstone, while the removed root is forbidden as
+  a later Coordinator snapshot or Directory source. The same open patch
+  hard-cuts unused core surfaces and consolidates endpoint fallibility,
+  blob-billing conversion and local cycles-balance logic under their existing
+  owners. Physical Store reclamation and infrastructure Canister deletion
+  remain later explicit boundaries.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority

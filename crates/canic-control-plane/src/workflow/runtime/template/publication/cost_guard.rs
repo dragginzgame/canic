@@ -11,7 +11,7 @@ use canic_core::{
         model::replay::CommandKind,
         ops::{
             cost_guard::{CostGuardPermit, CostGuardRequest},
-            ic::{IcOps, mgmt::MgmtOps},
+            ic::IcOps,
         },
         workflow::cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
     },
@@ -48,7 +48,7 @@ impl PublicationCostGuard {
             self_pid,
             self_pid,
             IcOps::now_secs(),
-            MgmtOps::canister_cycle_balance().to_u128(),
+            IcOps::canister_cycle_balance().to_u128(),
         );
         let permit = CostGuardWorkflow::reserve(request).map_err(map_cost_guard_reserve_error)?;
         log!(

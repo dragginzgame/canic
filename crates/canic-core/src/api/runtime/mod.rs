@@ -93,25 +93,6 @@ impl MemoryRuntimeApi {
 pub struct RuntimeIntrospectionApi;
 
 impl RuntimeIntrospectionApi {
-    /// Record one heap-only recent-failure summary for guarded runtime status.
-    pub fn record_recent_failure(
-        occurred_at_ns: u64,
-        subsystem: impl Into<String>,
-        code: impl Into<String>,
-        severity: FailureSeverity,
-        summary: impl Into<String>,
-        correlation_id: Option<String>,
-    ) {
-        RecentFailureOps::record(RecentFailureInput {
-            occurred_at_ns,
-            subsystem: subsystem.into(),
-            code: code.into(),
-            severity,
-            summary: summary.into(),
-            correlation_id,
-        });
-    }
-
     /// Return the minimal health status for a canister that answered the query.
     #[must_use]
     pub fn health(observed_at_ns: Option<u64>) -> CanicHealthStatus {
@@ -912,14 +893,14 @@ mod tests {
     #[test]
     fn runtime_status_includes_recent_failure_snapshot() {
         RecentFailureOps::reset();
-        RuntimeIntrospectionApi::record_recent_failure(
-            77,
-            "runtime",
-            "readiness_failed",
-            FailureSeverity::Error,
-            "bounded failure summary",
-            Some("runtime-check".to_string()),
-        );
+        RecentFailureOps::record(RecentFailureInput {
+            occurred_at_ns: 77,
+            subsystem: "runtime".to_string(),
+            code: "readiness_failed".to_string(),
+            severity: FailureSeverity::Error,
+            summary: "bounded failure summary".to_string(),
+            correlation_id: Some("runtime-check".to_string()),
+        });
 
         let status = RuntimeIntrospectionApi::runtime_status_for(
             Principal::anonymous(),

@@ -16,7 +16,8 @@ use thiserror::Error as ThisError;
 
 #[cfg(feature = "blob-storage-billing")]
 use crate::{
-    cdk::candid::Nat, dto::blob_storage::BlobStorageBillingConfig,
+    dto::blob_storage::BlobStorageBillingConfig,
+    ops::blob_storage::conversion::BlobStorageConversionOps,
     storage::stable::blob_storage::BlobStorageBillingConfigRecord,
     view::blob_storage::BlobStorageBillingConfigView,
 };
@@ -218,16 +219,17 @@ impl BlobStorageLifecycleOps {
     fn billing_config_view_to_dto(view: BlobStorageBillingConfigView) -> BlobStorageBillingConfig {
         BlobStorageBillingConfig {
             cashier_canister_id: view.cashier_canister_id,
-            project_cycles_reserve: Self::nat_from_u128(view.project_cycles_reserve),
-            min_upload_balance: Self::nat_from_u128(view.min_upload_balance),
-            target_upload_balance: Self::nat_from_u128(view.target_upload_balance),
+            project_cycles_reserve: BlobStorageConversionOps::billing_nat_from_u128(
+                view.project_cycles_reserve,
+            ),
+            min_upload_balance: BlobStorageConversionOps::billing_nat_from_u128(
+                view.min_upload_balance,
+            ),
+            target_upload_balance: BlobStorageConversionOps::billing_nat_from_u128(
+                view.target_upload_balance,
+            ),
             gateway_principal_limit: view.gateway_principal_limit,
         }
-    }
-
-    #[cfg(feature = "blob-storage-billing")]
-    fn nat_from_u128(value: u128) -> Nat {
-        Nat::parse(value.to_string().as_bytes()).expect("u128 must encode as Candid nat")
     }
 }
 

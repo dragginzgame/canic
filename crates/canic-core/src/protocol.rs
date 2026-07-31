@@ -112,7 +112,6 @@ pub const CANIC_ACTIVE_DELEGATION_PROOF_STATUS: &str = "canic_active_delegation_
 pub const CANIC_PREPARE_ROLE_ATTESTATION: &str = "canic_prepare_role_attestation";
 pub const CANIC_GET_ROLE_ATTESTATION: &str = "canic_get_role_attestation";
 pub const CANIC_INSTALL_ACTIVE_DELEGATION_PROOF: &str = "canic_install_active_delegation_proof";
-pub const CANIC_BOOTSTRAP_STATUS: &str = "canic_bootstrap_status";
 pub const CANIC_HEALTH: &str = "canic_health";
 pub const CANIC_READINESS: &str = "canic_readiness";
 pub const CANIC_RUNTIME_STATUS: &str = "canic_runtime_status";

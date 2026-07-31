@@ -15,7 +15,7 @@ mod parse;
 mod validate;
 
 use proc_macro::TokenStream;
-use syn::{ItemFn, parse_macro_input};
+use syn::{ItemFn, Signature, parse_macro_input};
 
 ///
 /// EndpointKind
@@ -28,6 +28,20 @@ use syn::{ItemFn, parse_macro_input};
 pub enum EndpointKind {
     Query,
     Update,
+}
+
+fn returns_fallible(sig: &Signature) -> bool {
+    let syn::ReturnType::Type(_, ty) = &sig.output else {
+        return false;
+    };
+    let syn::Type::Path(ty) = &**ty else {
+        return false;
+    };
+
+    ty.path
+        .segments
+        .last()
+        .is_some_and(|segment| segment.ident == "Result")
 }
 
 ///
