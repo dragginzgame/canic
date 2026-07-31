@@ -4,6 +4,7 @@
 //! Does not own: persisted records, validation, allocation, or lifecycle mutation.
 //! Boundary: Component Registry ops construct these values for workflow consumption.
 
+use crate::ids::WasmStoreBinding;
 use canic_core::{
     cdk::types::{Cycles, Principal},
     control_plane_support::config::schema::ComponentChildKind,
@@ -48,6 +49,9 @@ pub struct RootFleetSubnetDrainingView {
     pub removal_publication: Option<RootFleetSubnetRemovalPublicationView>,
     pub store_reclamation_intent: Option<RootFleetSubnetStoreReclamationIntentView>,
     pub store_reclamation: Option<RootFleetSubnetStoreReclamationView>,
+    pub store_binding_finalization_intent:
+        Option<RootFleetSubnetStoreBindingFinalizationIntentView>,
+    pub store_binding_finalization: Option<RootFleetSubnetStoreBindingFinalizationView>,
 }
 
 ///
@@ -129,6 +133,52 @@ pub struct RootFleetSubnetStoreReclamationEvidence {
     pub gc_started_at_secs: u64,
     pub gc_completed_at_secs: u64,
     pub gc_runs_completed: u32,
+}
+
+/// Read-only pre-effect authority for finalizing one reclaimed Store binding.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootFleetSubnetStoreBindingFinalizationIntentView {
+    pub operation_id: [u8; 32],
+    pub final_inventory_hash: [u8; 32],
+    pub reclamation_hash: [u8; 32],
+    pub wasm_store: Principal,
+    pub binding: WasmStoreBinding,
+    pub source_generation: u64,
+    pub prepared_at_ns: u64,
+}
+
+/// Exact active publication binding observed before finalization intent is committed.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootFleetSubnetStoreBindingAuthority {
+    pub wasm_store: Principal,
+    pub binding: WasmStoreBinding,
+    pub source_generation: u64,
+}
+
+/// Read-only terminal receipt for one finalized reclaimed Store binding.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootFleetSubnetStoreBindingFinalizationView {
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+    pub wasm_store: Principal,
+    pub binding: WasmStoreBinding,
+    pub final_inventory_hash: [u8; 32],
+    pub reclamation_hash: [u8; 32],
+    pub source_generation: u64,
+    pub finalized_generation: u64,
+    pub finalized_at_secs: u64,
+    pub completed_at_ns: u64,
+    pub finalization_hash: [u8; 32],
+}
+
+/// Exact local publication-state evidence accepted after binding finalization.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootFleetSubnetStoreBindingFinalizationEvidence {
+    pub wasm_store: Principal,
+    pub binding: WasmStoreBinding,
+    pub source_generation: u64,
+    pub finalized_generation: u64,
+    pub finalized_at_secs: u64,
 }
 
 ///

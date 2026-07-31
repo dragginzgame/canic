@@ -71,6 +71,12 @@ impl WasmStorePublicationWorkflow {
             ))
             .into());
         }
+        let initial_binding = fleet.stores[0].binding.clone();
+        if fleet.reserved_state.active_binding.as_ref() != Some(&initial_binding) {
+            Self::set_current_publication_store_binding(initial_binding.clone())?;
+            fleet.preferred_binding = Some(initial_binding);
+            fleet.reserved_state = SubnetStateOps::publication_store_state();
+        }
         let store_pid = fleet.stores[0].pid;
 
         for manifest in manifests {

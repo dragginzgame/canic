@@ -386,7 +386,7 @@ fn root_component_child_reservation_is_response_idempotent() {
 }
 
 #[test]
-fn fleet_subnet_root_draining_inventory_removal_and_reclamation_are_response_idempotent() {
+fn fleet_subnet_root_removal_store_reclamation_and_binding_finalization_are_idempotent() {
     let begin = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
         .find(|entry| entry.endpoint == "canic_fleet_subnet_root_draining_begin")
@@ -473,6 +473,28 @@ fn fleet_subnet_root_draining_inventory_removal_and_reclamation_are_response_ide
         }
     );
     assert_eq!(coordinator.cost_class, CostClass::None);
+}
+
+#[test]
+fn fleet_subnet_root_store_binding_finalization_is_response_idempotent() {
+    let finalization = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_fleet_subnet_root_store_binding_finalize")
+        .expect("Fleet Subnet Root Store binding finalization policy entry");
+    let status = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_fleet_subnet_root_store_binding_finalization_status")
+        .expect("Fleet Subnet Root Store binding finalization status policy entry");
+
+    assert_eq!(
+        finalization.replay_policy,
+        ReplayPolicy::ResponseIdempotent {
+            command_kind: replay_command_kind("fleet_subnet_root.finalize_store_binding.v1"),
+        }
+    );
+    assert_eq!(finalization.cost_class, CostClass::None);
+    assert_eq!(status.replay_policy, ReplayPolicy::QueryOrReadOnly);
+    assert_eq!(status.endpoint_kind, EndpointKind::Query);
 }
 
 #[test]

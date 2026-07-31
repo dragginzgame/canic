@@ -6,10 +6,10 @@ Date: 2026-07-31
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.70`.
-- Latest published release: `v0.100.70` at
-  `b0ee505e33c05d23ca0e21ebefb26140e5926518`.
-- Open patch draft: `0.100.71`; no package-version change has been authorized.
+- Workspace package version: `0.100.71`.
+- Latest published release: `v0.100.71` at
+  `881901568949d10c87a8802400f48ef635c8c68b`.
+- Open patch draft: `0.100.72`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -932,18 +932,28 @@ root as Coordinator-authoritative `Removed` with durable exact replay at both
 Canisters. Released 0.100.70 allows surviving roots to converge their existing
 Registry Mirror/Fleet Directory boundary on that exact `Removed` tombstone.
 
-Open 0.100.71 adds the next destructive boundary. After exact logical removal,
+Released 0.100.71 adds the next destructive boundary. After exact logical removal,
 the root durably freezes Store-reclamation intent, resumes the retained Store
 from exact GC `Prepared`, `InProgress`, `Clearing` or `Complete` evidence, and
 accepts only one completed run with zero bytes and an empty catalog. The
 terminal receipt is response-idempotent and survives restart; the Store/root
-Canisters and active Store binding remain present. The same open patch retains
+Canisters and active Store binding remain present. The same release retains
 the compatible replay, evidence, CLI target and publication-metric owner
 consolidation already in progress.
 
+Open 0.100.72 explicitly pins the sole initial Store as the active publication
+binding, then finalizes it only after the exact 0.100.71 reclamation receipt is
+durable. One pre-effect intent binds that receipt, Store, canonical binding and
+source generation. Exact retry resumes from active, detached or retired and
+accepts terminal state only when every slot is empty at source generation plus
+three. The Store remains installed and retained in runtime inventory. The same
+open patch consolidates root-authority and active-runtime validation under
+workflow owners.
+
 ## Next Action
 
-Hard-cut the retained active Store binding only after its exact reclamation
-receipt, then freeze and execute physical Store deletion as a separate durable
-boundary. Physical Fleet Subnet Root deletion remains later. An unreachable
-root or Subnet is not deletion evidence.
+Freeze physical Store deletion only after the exact binding-finalization
+receipt, execute it through a durable pre-effect intent and reconcile an
+uncertain management response through independently observed typed absence.
+Physical Fleet Subnet Root deletion remains later. An unreachable root or
+Subnet is not deletion evidence.

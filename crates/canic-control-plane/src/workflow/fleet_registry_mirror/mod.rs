@@ -9,17 +9,12 @@ use crate::{
         component_registry::ComponentRegistryOps, fleet_registry_mirror::FleetRegistryMirrorOps,
     },
     view::fleet_registry_mirror::RootFleetRegistryActiveView,
-    workflow::bootstrap::root_store,
+    workflow::{bootstrap::root_store, root_authority::validated_root_authority},
 };
 use canic_core::{
-    api::fleet_activation::FleetActivationApi,
     control_plane_support::{
         error::InternalError,
-        ops::{
-            config::ConfigOps,
-            fleet_registry::FleetRegistryOps,
-            ic::{IcOps, call::CallOps},
-        },
+        ops::{config::ConfigOps, fleet_registry::FleetRegistryOps, ic::call::CallOps},
     },
     dto::{
         error::Error,
@@ -39,7 +34,7 @@ use canic_core::{
 pub async fn synchronize(
     request: FleetSubnetRootRegistrySyncRequest,
 ) -> Result<FleetSubnetRootRegistrySyncResponse, InternalError> {
-    let (authority, root) = root_authority()?;
+    let (authority, root) = validated_root_authority()?;
     root_store::status(request.store_bootstrap.clone()).await?;
 
     let snapshot = fetch_snapshot(authority.binding.authority.binding.coordinator).await?;
@@ -87,7 +82,7 @@ pub async fn synchronize(
 pub async fn status(
     request: FleetSubnetRootRegistrySyncRequest,
 ) -> Result<FleetSubnetRootRegistrySyncResponse, InternalError> {
-    let (authority, root) = root_authority()?;
+    let (authority, root) = validated_root_authority()?;
     root_store::status(request.store_bootstrap).await?;
     let candidate = FleetRegistryMirrorOps::current()
         .candidate
@@ -112,7 +107,7 @@ pub async fn status(
 pub async fn activate(
     request: FleetSubnetRootRegistryMirrorActivationRequest,
 ) -> Result<FleetSubnetRootRegistryMirrorActivationResponse, InternalError> {
-    let (authority, root) = root_authority()?;
+    let (authority, root) = validated_root_authority()?;
     root_store::status(request.store_bootstrap.clone()).await?;
     validate_transition_request(&authority, &request)?;
 
@@ -176,7 +171,7 @@ pub async fn activate(
 pub async fn active_status(
     request: FleetSubnetRootRegistryMirrorActivationRequest,
 ) -> Result<FleetSubnetRootRegistryMirrorActivationResponse, InternalError> {
-    let (authority, root) = root_authority()?;
+    let (authority, root) = validated_root_authority()?;
     root_store::status(request.store_bootstrap.clone()).await?;
     validate_transition_request(&authority, &request)?;
     let active = validated_active(&authority, root)?;
@@ -422,23 +417,6 @@ fn active_response(
         version: active.snapshot.version.clone(),
         directory: active.directory.clone(),
     }
-}
-
-fn root_authority() -> Result<
-    (
-        canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
-        candid::Principal,
-    ),
-    InternalError,
-> {
-    let authority = FleetActivationApi::root_authority().map_err(InternalError::public)?;
-    let root = IcOps::canister_self();
-    if authority.binding.fleet_subnet_root != root {
-        return Err(InternalError::invalid_input(
-            "protected Fleet Subnet Root authority does not name this Canister",
-        ));
-    }
-    Ok((authority, root))
 }
 
 fn response(

@@ -16,7 +16,10 @@ use crate::{
     ops::storage::state::subnet::SubnetStateOps,
     view::{
         component_registry::{
-            RootFleetSubnetFinalInventoryView, RootFleetSubnetStoreReclamationEvidence,
+            RootFleetSubnetFinalInventoryView, RootFleetSubnetStoreBindingAuthority,
+            RootFleetSubnetStoreBindingFinalizationEvidence,
+            RootFleetSubnetStoreBindingFinalizationIntentView,
+            RootFleetSubnetStoreReclamationEvidence,
         },
         state::{PublicationStoreStateView, WasmStoreView},
     },
@@ -46,6 +49,14 @@ struct StoreGcAuthority {
     started_at: Option<u64>,
     completed_at: Option<u64>,
     runs_completed: u32,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ReclaimedStoreBindingPhase {
+    Active,
+    Detached,
+    Retired,
+    Finalized,
 }
 
 impl StoreGcAuthority {
@@ -263,6 +274,140 @@ impl WasmStorePublicationWorkflow {
             gc_completed_at_secs,
             gc_runs_completed: live.gc.runs_completed,
         })
+    }
+
+    /// Verify the exact active binding for one reclaimed root Store before local finalization.
+    pub async fn verify_single_reclaimed_root_store_binding(
+        inventory: &RootFleetSubnetFinalInventoryView,
+    ) -> Result<RootFleetSubnetStoreBindingAuthority, InternalError> {
+        Self::sync_registered_wasm_store_inventory()?;
+        let stores = SubnetStateOps::wasm_stores();
+        if stores.len() != 1 {
+            return Err(PublicationWorkflowError::InvalidState(format!(
+                "root Store binding finalization requires exactly one local Store, found {}",
+                stores.len()
+            ))
+            .into());
+        }
+        let runtime = stores.into_iter().next().expect("validated one Store");
+        let publication = SubnetStateOps::publication_store_state();
+        let binding_is_exact = [
+            runtime.pid == inventory.wasm_store,
+            publication.active_binding.as_ref() == Some(&runtime.binding),
+            publication.detached_binding.is_none(),
+            publication.retired_binding.is_none(),
+            publication.retired_at == 0,
+            publication.generation > 0,
+            runtime.gc.mode == WasmStoreGcMode::Complete,
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !binding_is_exact {
+            return Err(PublicationWorkflowError::InvalidState(
+                "reclaimed root Store is not the sole exact active publication binding".to_string(),
+            )
+            .into());
+        }
+
+        let live = store_status(runtime.pid).await?;
+        let catalog = store_catalog(runtime.pid).await?;
+        let catalog_entries = u32::try_from(catalog.len()).map_err(|_| {
+            PublicationWorkflowError::InvalidState(
+                "reclaimed root Store catalog exceeds u32".to_string(),
+            )
+        })?;
+        validate_live_reclaimed_store(inventory, &live, catalog_entries)?;
+        if StoreGcAuthority::from_runtime(&runtime)
+            != StoreGcAuthority::from_live(runtime.pid, &live.gc)
+        {
+            return Err(PublicationWorkflowError::InvalidState(
+                "reclaimed root Store runtime GC authority differs from live status".to_string(),
+            )
+            .into());
+        }
+        Ok(RootFleetSubnetStoreBindingAuthority {
+            wasm_store: runtime.pid,
+            binding: runtime.binding,
+            source_generation: publication.generation,
+        })
+    }
+
+    /// Converge one reclaimed Store through active, detached and retired binding slots.
+    pub fn finalize_single_reclaimed_root_store_binding(
+        intent: &RootFleetSubnetStoreBindingFinalizationIntentView,
+    ) -> Result<RootFleetSubnetStoreBindingFinalizationEvidence, InternalError> {
+        let runtime = Self::runtime_store(&intent.binding)?;
+        let runtime_is_exact = [
+            runtime.pid == intent.wasm_store,
+            runtime.gc.mode == WasmStoreGcMode::Complete,
+            runtime.gc.runs_completed == 1,
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !runtime_is_exact {
+            return Err(PublicationWorkflowError::InvalidState(
+                "reclaimed root Store runtime differs from binding finalization intent".to_string(),
+            )
+            .into());
+        }
+
+        for _ in 0..4 {
+            let previous = SubnetStateOps::publication_store_state();
+            match reclaimed_store_binding_phase(&previous, intent)? {
+                ReclaimedStoreBindingPhase::Active => {
+                    let changed_at = IcOps::now_secs();
+                    if !SubnetStateOps::clear_publication_store_binding(changed_at) {
+                        return Err(binding_finalization_transition_error("clear active"));
+                    }
+                    Self::log_publication_state_transition(
+                        "finalize_reclaimed_active_binding",
+                        &previous,
+                        &SubnetStateOps::publication_store_state(),
+                        changed_at,
+                    );
+                }
+                ReclaimedStoreBindingPhase::Detached => {
+                    let changed_at = IcOps::now_secs();
+                    let retired =
+                        SubnetStateOps::retire_detached_publication_store_binding(changed_at);
+                    if retired.as_ref() != Some(&intent.binding) {
+                        return Err(binding_finalization_transition_error("retire detached"));
+                    }
+                    Self::log_publication_state_transition(
+                        "finalize_reclaimed_detached_binding",
+                        &previous,
+                        &SubnetStateOps::publication_store_state(),
+                        changed_at,
+                    );
+                }
+                ReclaimedStoreBindingPhase::Retired => {
+                    let changed_at = IcOps::now_secs();
+                    let finalized =
+                        SubnetStateOps::finalize_retired_publication_store_binding(changed_at);
+                    if finalized.as_ref() != Some(&intent.binding) {
+                        return Err(binding_finalization_transition_error("finalize retired"));
+                    }
+                    Self::log_publication_state_transition(
+                        "finalize_reclaimed_retired_binding",
+                        &previous,
+                        &SubnetStateOps::publication_store_state(),
+                        changed_at,
+                    );
+                }
+                ReclaimedStoreBindingPhase::Finalized => {
+                    return Ok(RootFleetSubnetStoreBindingFinalizationEvidence {
+                        wasm_store: intent.wasm_store,
+                        binding: intent.binding.clone(),
+                        source_generation: intent.source_generation,
+                        finalized_generation: previous.generation,
+                        finalized_at_secs: previous.changed_at,
+                    });
+                }
+            }
+        }
+        Err(binding_finalization_transition_error(
+            "reach terminal state",
+        ))
     }
 
     fn reconcile_single_root_store_gc(
@@ -610,6 +755,70 @@ impl WasmStorePublicationWorkflow {
     }
 }
 
+fn reclaimed_store_binding_phase(
+    state: &PublicationStoreStateView,
+    intent: &RootFleetSubnetStoreBindingFinalizationIntentView,
+) -> Result<ReclaimedStoreBindingPhase, InternalError> {
+    let detached_generation = intent.source_generation.checked_add(1);
+    let retired_generation = intent.source_generation.checked_add(2);
+    let finalized_generation = intent.source_generation.checked_add(3);
+    let is_active = [
+        state.generation == intent.source_generation,
+        state.active_binding.as_ref() == Some(&intent.binding),
+        state.detached_binding.is_none(),
+        state.retired_binding.is_none(),
+        state.retired_at == 0,
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    let is_detached = [
+        Some(state.generation) == detached_generation,
+        state.active_binding.is_none(),
+        state.detached_binding.as_ref() == Some(&intent.binding),
+        state.retired_binding.is_none(),
+        state.retired_at == 0,
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    let is_retired = [
+        Some(state.generation) == retired_generation,
+        state.active_binding.is_none(),
+        state.detached_binding.is_none(),
+        state.retired_binding.as_ref() == Some(&intent.binding),
+        state.retired_at > 0,
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    let is_finalized = [
+        Some(state.generation) == finalized_generation,
+        state.active_binding.is_none(),
+        state.detached_binding.is_none(),
+        state.retired_binding.is_none(),
+        state.retired_at == 0,
+        state.changed_at > 0,
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    match (is_active, is_detached, is_retired, is_finalized) {
+        (true, false, false, false) => Ok(ReclaimedStoreBindingPhase::Active),
+        (false, true, false, false) => Ok(ReclaimedStoreBindingPhase::Detached),
+        (false, false, true, false) => Ok(ReclaimedStoreBindingPhase::Retired),
+        (false, false, false, true) => Ok(ReclaimedStoreBindingPhase::Finalized),
+        _ => Err(PublicationWorkflowError::InvalidState(
+            "publication state differs from durable Store binding finalization progress"
+                .to_string(),
+        )
+        .into()),
+    }
+}
+
+fn binding_finalization_transition_error(transition: &str) -> InternalError {
+    PublicationWorkflowError::InvalidState(format!(
+        "failed to {transition} reclaimed root Store binding"
+    ))
+    .into()
+}
+
 fn validate_live_prepared_store(status: &WasmStoreStatusResponse) -> Result<(), InternalError> {
     let prepared_at = status.gc.prepared_at.unwrap_or_default();
     let evidence_is_exact = [
@@ -861,6 +1070,65 @@ mod tests {
             StoreGcAuthority::from_runtime(&runtime),
             StoreGcAuthority::from_live(pid, &completed)
         );
+    }
+
+    #[test]
+    fn reclaimed_store_binding_finalization_resumes_from_every_durable_slot() {
+        let pid = Principal::from_slice(&[10; 29]);
+        let binding = WasmStoreBinding::owned(pid.to_text());
+        let source_generation = 3;
+        let phases = [
+            (source_generation, Some(binding.clone()), None, None, 0),
+            (source_generation + 1, None, Some(binding.clone()), None, 0),
+            (source_generation + 2, None, None, Some(binding.clone()), 12),
+            (source_generation + 3, None, None, None, 0),
+        ];
+        let intent = RootFleetSubnetStoreBindingFinalizationIntentView {
+            operation_id: [11; 32],
+            final_inventory_hash: [12; 32],
+            reclamation_hash: [13; 32],
+            wasm_store: pid,
+            binding: binding.clone(),
+            source_generation,
+            prepared_at_ns: 14,
+        };
+
+        for (generation, active, detached, retired, retired_at) in phases {
+            SubnetStateOps::import_test_state(
+                PublicationStoreStateTestInput {
+                    active_binding: active,
+                    detached_binding: detached,
+                    retired_binding: retired,
+                    generation,
+                    changed_at: 11,
+                    retired_at,
+                },
+                vec![WasmStoreStateTestInput {
+                    binding: binding.clone(),
+                    pid,
+                    created_at: 9,
+                    gc_mode: WasmStoreGcMode::Complete,
+                    gc_changed_at: 10,
+                    prepared_at: Some(7),
+                    started_at: Some(8),
+                    completed_at: Some(10),
+                    runs_completed: 1,
+                }],
+            );
+            let evidence =
+                WasmStorePublicationWorkflow::finalize_single_reclaimed_root_store_binding(&intent)
+                    .expect("resume exact Store binding finalization");
+            assert_eq!(evidence.wasm_store, pid);
+            assert_eq!(evidence.binding, binding);
+            assert_eq!(evidence.source_generation, source_generation);
+            assert_eq!(evidence.finalized_generation, source_generation + 3);
+            assert!(evidence.finalized_at_secs > 0);
+            let state = SubnetStateOps::publication_store_state();
+            assert_eq!(state.active_binding, None);
+            assert_eq!(state.detached_binding, None);
+            assert_eq!(state.retired_binding, None);
+            assert_eq!(SubnetStateOps::wasm_stores().len(), 1);
+        }
     }
 
     #[test]

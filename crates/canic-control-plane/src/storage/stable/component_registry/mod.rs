@@ -238,6 +238,9 @@ pub struct RootFleetSubnetDrainingRecord {
     pub removal_publication: Option<RootFleetSubnetRemovalPublicationRecord>,
     pub store_reclamation_intent: Option<RootFleetSubnetStoreReclamationIntentRecord>,
     pub store_reclamation: Option<RootFleetSubnetStoreReclamationRecord>,
+    pub store_binding_finalization_intent:
+        Option<RootFleetSubnetStoreBindingFinalizationIntentRecord>,
+    pub store_binding_finalization: Option<RootFleetSubnetStoreBindingFinalizationRecord>,
 }
 
 ///
@@ -328,6 +331,34 @@ pub struct RootFleetSubnetStoreReclamationRecord {
     pub reclamation_hash: [u8; 32],
 }
 
+/// Durable authority frozen before a reclaimed Store is removed from publication binding slots.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootFleetSubnetStoreBindingFinalizationIntentRecord {
+    pub operation_id: [u8; 32],
+    pub final_inventory_hash: [u8; 32],
+    pub reclamation_hash: [u8; 32],
+    pub wasm_store: Principal,
+    pub binding: String,
+    pub source_generation: u64,
+    pub prepared_at_ns: u64,
+}
+
+/// Durable proof that the reclaimed Store no longer occupies a publication binding slot.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootFleetSubnetStoreBindingFinalizationRecord {
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+    pub wasm_store: Principal,
+    pub binding: String,
+    pub final_inventory_hash: [u8; 32],
+    pub reclamation_hash: [u8; 32],
+    pub source_generation: u64,
+    pub finalized_generation: u64,
+    pub finalized_at_secs: u64,
+    pub completed_at_ns: u64,
+    pub finalization_hash: [u8; 32],
+}
+
 #[cfg(feature = "root-control-plane")]
 impl RootFleetSubnetDrainingRecord {
     pub(crate) fn is_valid_for_current(&self, meta: &RootComponentRegistryMetaRecord) -> bool {
@@ -360,6 +391,14 @@ impl RootFleetSubnetDrainingRecord {
             .store_reclamation
             .as_ref()
             .is_none_or(|reclamation| reclamation.is_valid_for_current(self));
+        let store_binding_finalization_intent_is_valid = self
+            .store_binding_finalization_intent
+            .as_ref()
+            .is_none_or(|intent| intent.is_valid_for_current(self));
+        let store_binding_finalization_is_valid = self
+            .store_binding_finalization
+            .as_ref()
+            .is_none_or(|finalization| finalization.is_valid_for_current(self));
         [
             source_is_exact,
             registry_is_covered,
@@ -372,6 +411,8 @@ impl RootFleetSubnetDrainingRecord {
             removal_publication_is_valid,
             store_reclamation_intent_is_valid,
             store_reclamation_is_valid,
+            store_binding_finalization_intent_is_valid,
+            store_binding_finalization_is_valid,
         ]
         .into_iter()
         .all(|valid| valid)
@@ -388,6 +429,8 @@ impl RootFleetSubnetDrainingRecord {
             self.removal_publication.is_none(),
             self.store_reclamation_intent.is_none(),
             self.store_reclamation.is_none(),
+            self.store_binding_finalization_intent.is_none(),
+            self.store_binding_finalization.is_none(),
         ]
         .into_iter()
         .all(|valid| valid)
@@ -538,6 +581,51 @@ impl RootFleetSubnetStoreReclamationRecord {
             self.completed_at_ns >= intent.prepared_at_ns,
             self.completed_at_ns >= publication.recorded_at_ns,
             self.reclamation_hash != [0; 32],
+        ]
+        .into_iter()
+        .all(|valid| valid)
+    }
+}
+
+#[cfg(feature = "root-control-plane")]
+impl RootFleetSubnetStoreBindingFinalizationIntentRecord {
+    fn is_valid_for_current(&self, draining: &RootFleetSubnetDrainingRecord) -> bool {
+        let Some(reclamation) = draining.store_reclamation.as_ref() else {
+            return false;
+        };
+        [
+            self.operation_id == draining.operation_id,
+            self.final_inventory_hash == reclamation.final_inventory_hash,
+            self.reclamation_hash == reclamation.reclamation_hash,
+            self.wasm_store == reclamation.wasm_store,
+            self.binding.as_str() == self.wasm_store.to_text(),
+            self.source_generation > 0,
+            self.prepared_at_ns >= reclamation.completed_at_ns,
+        ]
+        .into_iter()
+        .all(|valid| valid)
+    }
+}
+
+#[cfg(feature = "root-control-plane")]
+impl RootFleetSubnetStoreBindingFinalizationRecord {
+    fn is_valid_for_current(&self, draining: &RootFleetSubnetDrainingRecord) -> bool {
+        let Some(intent) = draining.store_binding_finalization_intent.as_ref() else {
+            return false;
+        };
+        let expected_finalized_generation = intent.source_generation.checked_add(3);
+        [
+            self.operation_id == intent.operation_id,
+            self.fleet_subnet_root == draining.fleet_subnet_root,
+            self.wasm_store == intent.wasm_store,
+            self.binding == intent.binding,
+            self.final_inventory_hash == intent.final_inventory_hash,
+            self.reclamation_hash == intent.reclamation_hash,
+            self.source_generation == intent.source_generation,
+            Some(self.finalized_generation) == expected_finalized_generation,
+            self.finalized_at_secs > 0,
+            self.completed_at_ns >= intent.prepared_at_ns,
+            self.finalization_hash != [0; 32],
         ]
         .into_iter()
         .all(|valid| valid)
@@ -2652,6 +2740,84 @@ impl RootComponentRegistryStore {
                 .as_mut()
                 .expect("validated root draining authority")
                 .store_reclamation = Some(record);
+            state.current = Some(next);
+            cell.set(state);
+            Ok(RootComponentRegistryCommitOutcome::Committed)
+        })
+    }
+
+    pub(crate) fn prepare_root_store_binding_finalization(
+        expected: &RootComponentRegistryMetaRecord,
+        record: RootFleetSubnetStoreBindingFinalizationIntentRecord,
+    ) -> Result<RootComponentRegistryCommitOutcome, RootComponentRegistryCommitError> {
+        ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            let current = state
+                .current
+                .as_ref()
+                .ok_or(RootComponentRegistryCommitError::ConflictingState)?;
+            let draining = current
+                .root_draining
+                .as_ref()
+                .ok_or(RootComponentRegistryCommitError::ConflictingState)?;
+            if draining.store_binding_finalization_intent.as_ref() == Some(&record) {
+                return Ok(RootComponentRegistryCommitOutcome::Existing);
+            }
+            let transition_is_exact = [
+                current == expected,
+                draining.store_binding_finalization_intent.is_none(),
+                draining.store_binding_finalization.is_none(),
+                record.is_valid_for_current(draining),
+            ]
+            .into_iter()
+            .all(|valid| valid);
+            if !transition_is_exact {
+                return Err(RootComponentRegistryCommitError::ConflictingState);
+            }
+            let mut next = current.clone();
+            next.root_draining
+                .as_mut()
+                .expect("validated root draining authority")
+                .store_binding_finalization_intent = Some(record);
+            state.current = Some(next);
+            cell.set(state);
+            Ok(RootComponentRegistryCommitOutcome::Committed)
+        })
+    }
+
+    pub(crate) fn record_root_store_binding_finalization(
+        expected: &RootComponentRegistryMetaRecord,
+        record: RootFleetSubnetStoreBindingFinalizationRecord,
+    ) -> Result<RootComponentRegistryCommitOutcome, RootComponentRegistryCommitError> {
+        ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            let current = state
+                .current
+                .as_ref()
+                .ok_or(RootComponentRegistryCommitError::ConflictingState)?;
+            let draining = current
+                .root_draining
+                .as_ref()
+                .ok_or(RootComponentRegistryCommitError::ConflictingState)?;
+            if draining.store_binding_finalization.as_ref() == Some(&record) {
+                return Ok(RootComponentRegistryCommitOutcome::Existing);
+            }
+            let transition_is_exact = [
+                current == expected,
+                draining.store_binding_finalization_intent.is_some(),
+                draining.store_binding_finalization.is_none(),
+                record.is_valid_for_current(draining),
+            ]
+            .into_iter()
+            .all(|valid| valid);
+            if !transition_is_exact {
+                return Err(RootComponentRegistryCommitError::ConflictingState);
+            }
+            let mut next = current.clone();
+            next.root_draining
+                .as_mut()
+                .expect("validated root draining authority")
+                .store_binding_finalization = Some(record);
             state.current = Some(next);
             cell.set(state);
             Ok(RootComponentRegistryCommitOutcome::Committed)

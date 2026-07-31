@@ -11,7 +11,8 @@ use crate::{
     },
     view::component_registry::{
         RootComponentRegistryView, RootFleetSubnetDrainingView, RootFleetSubnetFinalInventoryView,
-        RootFleetSubnetRemovalPublicationView, RootFleetSubnetStoreReclamationView,
+        RootFleetSubnetRemovalPublicationView, RootFleetSubnetStoreBindingFinalizationView,
+        RootFleetSubnetStoreReclamationView,
     },
     workflow::{
         bootstrap::root_store, runtime::template::publication::WasmStorePublicationWorkflow,
@@ -35,6 +36,9 @@ use canic_core::{
             FleetSubnetRootDrainingStatusRequest, FleetSubnetRootFinalInventoryRequest,
             FleetSubnetRootFinalInventoryResponse, FleetSubnetRootFinalInventoryStatusRequest,
             FleetSubnetRootRemovalRequest, FleetSubnetRootRemovalStatusRequest,
+            FleetSubnetRootStoreBindingFinalizationRequest,
+            FleetSubnetRootStoreBindingFinalizationResponse,
+            FleetSubnetRootStoreBindingFinalizationStatusRequest,
             FleetSubnetRootStoreReclamationRequest, FleetSubnetRootStoreReclamationResponse,
             FleetSubnetRootStoreReclamationStatusRequest,
         },
@@ -275,6 +279,81 @@ pub fn store_reclamation_status(
             InternalError::unavailable("Fleet Subnet Root Store reclamation is not complete")
         })
         .map(store_reclamation_response)
+}
+
+/// Finalize the reclaimed Store's publication binding before physical deletion is prepared.
+pub async fn finalize_store_binding(
+    request: FleetSubnetRootStoreBindingFinalizationRequest,
+) -> Result<FleetSubnetRootStoreBindingFinalizationResponse, InternalError> {
+    let _state = validated_root_state()?;
+    let inventory = removed_root_inventory(request.operation_id)?;
+    let reclamation =
+        ComponentRegistryOps::root_store_reclamation_if_present(request.operation_id)?.ok_or_else(
+            || InternalError::unavailable("Fleet Subnet Root Store reclamation is not complete"),
+        )?;
+    if request.expected_reclamation_hash != reclamation.reclamation_hash {
+        return Err(InternalError::conflict(
+            "Fleet Subnet Root Store binding finalization names a different reclamation receipt",
+        ));
+    }
+    if let Some(existing) =
+        ComponentRegistryOps::root_store_binding_finalization_if_present(request.operation_id)?
+    {
+        return Ok(store_binding_finalization_response(existing));
+    }
+
+    let intent = ComponentRegistryOps::root_store_binding_finalization_intent_if_present(
+        request.operation_id,
+    )?;
+    let intent = if let Some(intent) = intent {
+        let intent_is_exact = [
+            intent.final_inventory_hash == inventory.inventory_hash,
+            intent.reclamation_hash == request.expected_reclamation_hash,
+            intent.wasm_store == inventory.wasm_store,
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !intent_is_exact {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root Store binding finalization differs from its durable intent",
+            ));
+        }
+        intent
+    } else {
+        let source =
+            WasmStorePublicationWorkflow::verify_single_reclaimed_root_store_binding(&inventory)
+                .await?;
+        ComponentRegistryOps::begin_root_store_binding_finalization(
+            request.operation_id,
+            request.expected_reclamation_hash,
+            source.binding,
+            source.source_generation,
+            IcOps::now_nanos(),
+        )?
+    };
+
+    let evidence =
+        WasmStorePublicationWorkflow::finalize_single_reclaimed_root_store_binding(&intent)?;
+    ComponentRegistryOps::record_root_store_binding_finalization(
+        request.operation_id,
+        evidence,
+        IcOps::now_nanos(),
+    )
+    .map(store_binding_finalization_response)
+}
+
+/// Read one durable Store-binding finalization receipt without inter-Canister calls.
+pub fn store_binding_finalization_status(
+    request: FleetSubnetRootStoreBindingFinalizationStatusRequest,
+) -> Result<FleetSubnetRootStoreBindingFinalizationResponse, InternalError> {
+    let _state = validated_root_state()?;
+    ComponentRegistryOps::root_store_binding_finalization_if_present(request.operation_id)?
+        .ok_or_else(|| {
+            InternalError::unavailable(
+                "Fleet Subnet Root Store binding finalization is not complete",
+            )
+        })
+        .map(store_binding_finalization_response)
 }
 
 /// Return one compact, fail-closed inventory for this active Fleet Subnet Root.
@@ -609,6 +688,23 @@ const fn store_reclamation_response(
         gc_runs_completed: view.gc_runs_completed,
         completed_at_ns: view.completed_at_ns,
         reclamation_hash: view.reclamation_hash,
+    }
+}
+
+fn store_binding_finalization_response(
+    view: RootFleetSubnetStoreBindingFinalizationView,
+) -> FleetSubnetRootStoreBindingFinalizationResponse {
+    FleetSubnetRootStoreBindingFinalizationResponse {
+        operation_id: view.operation_id,
+        fleet_subnet_root: view.fleet_subnet_root,
+        wasm_store: view.wasm_store,
+        final_inventory_hash: view.final_inventory_hash,
+        reclamation_hash: view.reclamation_hash,
+        source_generation: view.source_generation,
+        finalized_generation: view.finalized_generation,
+        finalized_at_secs: view.finalized_at_secs,
+        completed_at_ns: view.completed_at_ns,
+        finalization_hash: view.finalization_hash,
     }
 }
 

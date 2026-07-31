@@ -6,7 +6,7 @@
 
 use crate::{
     dto::template::WasmStoreStatusResponse,
-    ids::WasmStoreGcMode,
+    ids::{WasmStoreBinding, WasmStoreGcMode},
     storage::stable::component_registry::{
         ComponentRegistryChildRecord, ComponentRegistryChildTraversalRecord,
         ComponentRegistryParentRoleCountRecord, ComponentRegistryPartitionRecord,
@@ -32,7 +32,9 @@ use crate::{
         RootComponentSubtreeStopEffectRecord, RootComponentSubtreeStoppedEffectRecord,
         RootFleetSubnetDrainingRecord, RootFleetSubnetFinalInventoryIntentRecord,
         RootFleetSubnetFinalInventoryRecord, RootFleetSubnetRemovalPublicationRecord,
-        RootFleetSubnetStoreReclamationIntentRecord, RootFleetSubnetStoreReclamationRecord,
+        RootFleetSubnetStoreBindingFinalizationIntentRecord,
+        RootFleetSubnetStoreBindingFinalizationRecord, RootFleetSubnetStoreReclamationIntentRecord,
+        RootFleetSubnetStoreReclamationRecord,
     },
     view::component_registry::{
         ComponentDirectoryCanonicalCursor, ComponentDirectoryChildView,
@@ -56,7 +58,9 @@ use crate::{
         RootComponentSubtreeRemovalProgressView, RootComponentSubtreeRemovalView,
         RootComponentSubtreeStopEffectView, RootComponentSubtreeStoppedEffectView,
         RootFleetSubnetDrainingView, RootFleetSubnetFinalInventoryView,
-        RootFleetSubnetRemovalPublicationView, RootFleetSubnetStoreReclamationEvidence,
+        RootFleetSubnetRemovalPublicationView, RootFleetSubnetStoreBindingFinalizationEvidence,
+        RootFleetSubnetStoreBindingFinalizationIntentView,
+        RootFleetSubnetStoreBindingFinalizationView, RootFleetSubnetStoreReclamationEvidence,
         RootFleetSubnetStoreReclamationIntentView, RootFleetSubnetStoreReclamationView,
     },
 };
@@ -104,6 +108,8 @@ const ROOT_TERMINAL_COMPONENT_HISTORY_HASH_DOMAIN: &[u8] =
 const ROOT_STORE_FINAL_CATALOG_HASH_DOMAIN: &[u8] = b"canic.fleet-subnet-root.store-catalog.v1";
 const ROOT_FINAL_INVENTORY_HASH_DOMAIN: &[u8] = b"canic.fleet-subnet-root.final-inventory.v1";
 const ROOT_STORE_RECLAMATION_HASH_DOMAIN: &[u8] = b"canic.fleet-subnet-root.store-reclamation.v1";
+const ROOT_STORE_BINDING_FINALIZATION_HASH_DOMAIN: &[u8] =
+    b"canic.fleet-subnet-root.store-binding-finalization.v1";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SubtreeRemovalOrigin {
@@ -215,6 +221,20 @@ struct RootFleetSubnetStoreReclamationHashAuthority {
     gc_started_at_secs: u64,
     gc_completed_at_secs: u64,
     gc_runs_completed: u32,
+    completed_at_ns: u64,
+}
+
+#[derive(CandidType)]
+struct RootFleetSubnetStoreBindingFinalizationHashAuthority<'a> {
+    operation_id: [u8; 32],
+    fleet_subnet_root: Principal,
+    wasm_store: Principal,
+    binding: &'a str,
+    final_inventory_hash: [u8; 32],
+    reclamation_hash: [u8; 32],
+    source_generation: u64,
+    finalized_generation: u64,
+    finalized_at_secs: u64,
     completed_at_ns: u64,
 }
 
@@ -1139,6 +1159,8 @@ impl ComponentRegistryOps {
             removal_publication: None,
             store_reclamation_intent: None,
             store_reclamation: None,
+            store_binding_finalization_intent: None,
+            store_binding_finalization: None,
         };
         RootComponentRegistryStore::begin_root_draining(&current, record.clone()).map_err(
             |error| match error {
@@ -1593,6 +1615,174 @@ impl ComponentRegistryOps {
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Storage,
                 "committed Store reclamation differs from exact terminal authority",
+            ));
+        }
+        Ok(committed)
+    }
+
+    pub(crate) fn root_store_binding_finalization_intent_if_present(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootFleetSubnetStoreBindingFinalizationIntentView>, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining = current.root_draining.as_ref().ok_or_else(|| {
+            InternalError::unavailable("Fleet Subnet Root draining has not begun")
+        })?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root Store binding finalization names a different draining operation",
+            ));
+        }
+        Ok(draining
+            .store_binding_finalization_intent
+            .clone()
+            .map(root_store_binding_finalization_intent_record_to_view))
+    }
+
+    pub(crate) fn begin_root_store_binding_finalization(
+        operation_id: [u8; 32],
+        expected_reclamation_hash: [u8; 32],
+        binding: WasmStoreBinding,
+        source_generation: u64,
+        prepared_at_ns: u64,
+    ) -> Result<RootFleetSubnetStoreBindingFinalizationIntentView, InternalError> {
+        let request_is_valid = [
+            expected_reclamation_hash != [0; 32],
+            !binding.as_str().is_empty(),
+            source_generation > 0,
+            prepared_at_ns > 0,
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !request_is_valid {
+            return Err(InternalError::invalid_input(
+                "Fleet Subnet Root Store binding finalization authority is incomplete",
+            ));
+        }
+        if let Some(existing) =
+            Self::root_store_binding_finalization_intent_if_present(operation_id)?
+        {
+            let retry_is_exact = [
+                existing.reclamation_hash == expected_reclamation_hash,
+                existing.binding == binding,
+                existing.source_generation == source_generation,
+            ]
+            .into_iter()
+            .all(|valid| valid);
+            if retry_is_exact {
+                return Ok(existing);
+            }
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root Store binding finalization differs from its durable intent",
+            ));
+        }
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        let reclamation = draining.store_reclamation.as_ref().ok_or_else(|| {
+            InternalError::unavailable("Fleet Subnet Root Store reclamation is not complete")
+        })?;
+        if reclamation.reclamation_hash != expected_reclamation_hash {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root Store binding finalization names a different reclamation receipt",
+            ));
+        }
+        let record = RootFleetSubnetStoreBindingFinalizationIntentRecord {
+            operation_id,
+            final_inventory_hash: reclamation.final_inventory_hash,
+            reclamation_hash: reclamation.reclamation_hash,
+            wasm_store: reclamation.wasm_store,
+            binding: binding.as_str().to_string(),
+            source_generation,
+            prepared_at_ns,
+        };
+        RootComponentRegistryStore::prepare_root_store_binding_finalization(
+            &current,
+            record,
+        )
+        .map_err(
+            |RootComponentRegistryCommitError::ConflictingState| {
+                InternalError::conflict(
+                    "root Component Registry changed before Store binding finalization intent committed",
+                )
+            },
+        )?;
+        Self::root_store_binding_finalization_intent_if_present(operation_id)?.ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "committed Fleet Subnet Root Store binding finalization intent is missing",
+            )
+        })
+    }
+
+    pub(crate) fn root_store_binding_finalization_if_present(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootFleetSubnetStoreBindingFinalizationView>, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining = current.root_draining.as_ref().ok_or_else(|| {
+            InternalError::unavailable("Fleet Subnet Root draining has not begun")
+        })?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root Store binding finalization names a different draining operation",
+            ));
+        }
+        Ok(draining
+            .store_binding_finalization
+            .clone()
+            .map(root_store_binding_finalization_record_to_view))
+    }
+
+    pub(crate) fn record_root_store_binding_finalization(
+        operation_id: [u8; 32],
+        evidence: RootFleetSubnetStoreBindingFinalizationEvidence,
+        completed_at_ns: u64,
+    ) -> Result<RootFleetSubnetStoreBindingFinalizationView, InternalError> {
+        if let Some(existing) = Self::root_store_binding_finalization_if_present(operation_id)? {
+            return Ok(existing);
+        }
+        if completed_at_ns == 0 {
+            return Err(InternalError::invalid_input(
+                "Fleet Subnet Root Store binding finalization completion time must be positive",
+            ));
+        }
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        let record = root_store_binding_finalization_record(draining, evidence, completed_at_ns)?;
+        RootComponentRegistryStore::record_root_store_binding_finalization(
+            &current,
+            record.clone(),
+        )
+        .map_err(|RootComponentRegistryCommitError::ConflictingState| {
+            InternalError::conflict(
+                "root Component Registry changed before Store binding finalization committed",
+            )
+        })?;
+        let committed = Self::root_store_binding_finalization_if_present(operation_id)?
+            .ok_or_else(|| {
+                InternalError::invariant(
+                    InternalErrorOrigin::Storage,
+                    "committed Fleet Subnet Root Store binding finalization receipt is missing",
+                )
+            })?;
+        if committed != root_store_binding_finalization_record_to_view(record) {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "committed Store binding finalization differs from terminal authority",
             ));
         }
         Ok(committed)
@@ -6060,6 +6250,15 @@ fn validate_root_draining_record(
             ));
         }
     }
+    if let Some(finalization) = record.store_binding_finalization.as_ref() {
+        let expected_hash = root_store_binding_finalization_hash(finalization)?;
+        if finalization.finalization_hash != expected_hash {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "Fleet Subnet Root Store binding finalization hash differs from retained authority",
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -6613,6 +6812,85 @@ fn root_store_reclamation_hash(
     Ok(domain_hash(ROOT_STORE_RECLAMATION_HASH_DOMAIN, &payload))
 }
 
+fn root_store_binding_finalization_record(
+    draining: &RootFleetSubnetDrainingRecord,
+    evidence: RootFleetSubnetStoreBindingFinalizationEvidence,
+    completed_at_ns: u64,
+) -> Result<RootFleetSubnetStoreBindingFinalizationRecord, InternalError> {
+    let intent = draining
+        .store_binding_finalization_intent
+        .as_ref()
+        .ok_or_else(|| {
+            InternalError::unavailable(
+                "Fleet Subnet Root Store binding finalization intent has not been prepared",
+            )
+        })?;
+    let expected_finalized_generation =
+        intent.source_generation.checked_add(3).ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "Store binding finalization generation overflows",
+            )
+        })?;
+    let terminal_binding_is_exact = [
+        evidence.wasm_store == intent.wasm_store,
+        evidence.binding.as_str() == intent.binding,
+        evidence.source_generation == intent.source_generation,
+        evidence.finalized_generation == expected_finalized_generation,
+        evidence.finalized_at_secs > 0,
+        completed_at_ns >= intent.prepared_at_ns,
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    if !terminal_binding_is_exact {
+        return Err(InternalError::conflict(
+            "root publication state does not prove exact Store binding finalization",
+        ));
+    }
+    let mut record = RootFleetSubnetStoreBindingFinalizationRecord {
+        operation_id: draining.operation_id,
+        fleet_subnet_root: draining.fleet_subnet_root,
+        wasm_store: intent.wasm_store,
+        binding: intent.binding.clone(),
+        final_inventory_hash: intent.final_inventory_hash,
+        reclamation_hash: intent.reclamation_hash,
+        source_generation: intent.source_generation,
+        finalized_generation: evidence.finalized_generation,
+        finalized_at_secs: evidence.finalized_at_secs,
+        completed_at_ns,
+        finalization_hash: [0; 32],
+    };
+    record.finalization_hash = root_store_binding_finalization_hash(&record)?;
+    Ok(record)
+}
+
+fn root_store_binding_finalization_hash(
+    finalization: &RootFleetSubnetStoreBindingFinalizationRecord,
+) -> Result<[u8; 32], InternalError> {
+    let payload = candid::encode_one(RootFleetSubnetStoreBindingFinalizationHashAuthority {
+        operation_id: finalization.operation_id,
+        fleet_subnet_root: finalization.fleet_subnet_root,
+        wasm_store: finalization.wasm_store,
+        binding: &finalization.binding,
+        final_inventory_hash: finalization.final_inventory_hash,
+        reclamation_hash: finalization.reclamation_hash,
+        source_generation: finalization.source_generation,
+        finalized_generation: finalization.finalized_generation,
+        finalized_at_secs: finalization.finalized_at_secs,
+        completed_at_ns: finalization.completed_at_ns,
+    })
+    .map_err(|error| {
+        InternalError::invariant(
+            InternalErrorOrigin::Ops,
+            format!("Fleet Subnet Root Store binding finalization cannot be encoded: {error}"),
+        )
+    })?;
+    Ok(domain_hash(
+        ROOT_STORE_BINDING_FINALIZATION_HASH_DOMAIN,
+        &payload,
+    ))
+}
+
 fn domain_hash(domain: &[u8], payload: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(domain);
@@ -6661,6 +6939,12 @@ fn root_draining_record_to_view(
         store_reclamation: record
             .store_reclamation
             .map(root_store_reclamation_record_to_view),
+        store_binding_finalization_intent: record
+            .store_binding_finalization_intent
+            .map(root_store_binding_finalization_intent_record_to_view),
+        store_binding_finalization: record
+            .store_binding_finalization
+            .map(root_store_binding_finalization_record_to_view),
     }
 }
 
@@ -6731,6 +7015,38 @@ const fn root_store_reclamation_record_to_view(
         gc_runs_completed: record.gc_runs_completed,
         completed_at_ns: record.completed_at_ns,
         reclamation_hash: record.reclamation_hash,
+    }
+}
+
+fn root_store_binding_finalization_intent_record_to_view(
+    record: RootFleetSubnetStoreBindingFinalizationIntentRecord,
+) -> RootFleetSubnetStoreBindingFinalizationIntentView {
+    RootFleetSubnetStoreBindingFinalizationIntentView {
+        operation_id: record.operation_id,
+        final_inventory_hash: record.final_inventory_hash,
+        reclamation_hash: record.reclamation_hash,
+        wasm_store: record.wasm_store,
+        binding: WasmStoreBinding::owned(record.binding),
+        source_generation: record.source_generation,
+        prepared_at_ns: record.prepared_at_ns,
+    }
+}
+
+fn root_store_binding_finalization_record_to_view(
+    record: RootFleetSubnetStoreBindingFinalizationRecord,
+) -> RootFleetSubnetStoreBindingFinalizationView {
+    RootFleetSubnetStoreBindingFinalizationView {
+        operation_id: record.operation_id,
+        fleet_subnet_root: record.fleet_subnet_root,
+        wasm_store: record.wasm_store,
+        binding: WasmStoreBinding::owned(record.binding),
+        final_inventory_hash: record.final_inventory_hash,
+        reclamation_hash: record.reclamation_hash,
+        source_generation: record.source_generation,
+        finalized_generation: record.finalized_generation,
+        finalized_at_secs: record.finalized_at_secs,
+        completed_at_ns: record.completed_at_ns,
+        finalization_hash: record.finalization_hash,
     }
 }
 
@@ -12346,6 +12662,70 @@ mod tests {
             ComponentRegistryOps::root_store_reclamation_if_present([10; 32])
                 .expect("Store reclamation status after restart"),
             Some(reclamation)
+        );
+
+        assert_root_store_binding_finalization_is_exact(inventory, reclamation);
+    }
+
+    fn assert_root_store_binding_finalization_is_exact(
+        inventory: &RootFleetSubnetFinalInventoryView,
+        reclamation: RootFleetSubnetStoreReclamationView,
+    ) {
+        let binding = WasmStoreBinding::owned(inventory.wasm_store.to_text());
+        ComponentRegistryOps::begin_root_store_binding_finalization(
+            [10; 32],
+            [28; 32],
+            binding.clone(),
+            4,
+            28,
+        )
+        .expect_err("Store binding finalization must bind the reclamation receipt");
+        let finalization_intent = ComponentRegistryOps::begin_root_store_binding_finalization(
+            [10; 32],
+            reclamation.reclamation_hash,
+            binding.clone(),
+            4,
+            28,
+        )
+        .expect("prepare Store binding finalization intent");
+        restart_component_registry();
+        assert_eq!(
+            ComponentRegistryOps::begin_root_store_binding_finalization(
+                [10; 32],
+                reclamation.reclamation_hash,
+                binding.clone(),
+                4,
+                999,
+            )
+            .expect("exact Store binding finalization intent retry"),
+            finalization_intent
+        );
+        let finalization_evidence = RootFleetSubnetStoreBindingFinalizationEvidence {
+            wasm_store: inventory.wasm_store,
+            binding,
+            source_generation: 4,
+            finalized_generation: 7,
+            finalized_at_secs: 29,
+        };
+        let finalization = ComponentRegistryOps::record_root_store_binding_finalization(
+            [10; 32],
+            finalization_evidence.clone(),
+            30,
+        )
+        .expect("record terminal Store binding finalization");
+        assert_eq!(finalization.reclamation_hash, reclamation.reclamation_hash);
+        assert_eq!(finalization.source_generation, 4);
+        assert_eq!(finalization.finalized_generation, 7);
+        assert_ne!(finalization.finalization_hash, [0; 32]);
+        restart_component_registry();
+        assert_eq!(
+            ComponentRegistryOps::record_root_store_binding_finalization(
+                [10; 32],
+                finalization_evidence,
+                999,
+            )
+            .expect("exact terminal Store binding finalization retry"),
+            finalization
         );
     }
 

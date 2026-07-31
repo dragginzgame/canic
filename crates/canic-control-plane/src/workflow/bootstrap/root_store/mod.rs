@@ -15,10 +15,12 @@ use crate::{
             template::{TemplateChunkedOps, TemplateManifestOps},
         },
     },
-    workflow::runtime::template::{WASM_STORE_BOOTSTRAP_BINDING, WasmStorePublicationWorkflow},
+    workflow::{
+        root_authority::validated_root_authority,
+        runtime::template::{WASM_STORE_BOOTSTRAP_BINDING, WasmStorePublicationWorkflow},
+    },
 };
 use canic_core::{
-    api::fleet_activation::FleetActivationApi,
     cdk::utils::hash::wasm_hash,
     control_plane_support::{
         error::InternalError, ops::config::ConfigOps, workflow::topology::guard::TopologyGuard,
@@ -85,13 +87,7 @@ pub async fn bootstrap(
 ) -> Result<RootStoreBootstrapResponse, InternalError> {
     let _guard = TopologyGuard::try_enter()?;
     ComponentRegistryOps::require_root_store_admin_open()?;
-    let authority = FleetActivationApi::root_authority().map_err(InternalError::public)?;
-    let root = canic_core::control_plane_support::ops::ic::IcOps::canister_self();
-    if authority.binding.fleet_subnet_root != root {
-        return Err(InternalError::invalid_input(
-            "protected Fleet Subnet Root authority does not name this Canister",
-        ));
-    }
+    let (authority, root) = validated_root_authority()?;
 
     let manifest = load_and_validate_manifest(&authority, request)?;
     let module_hashes = artifact_module_hashes(&manifest)?;
@@ -114,13 +110,7 @@ pub async fn bootstrap(
 pub async fn status(
     request: RootStoreBootstrapRequest,
 ) -> Result<RootStoreBootstrapResponse, InternalError> {
-    let authority = FleetActivationApi::root_authority().map_err(InternalError::public)?;
-    let root = canic_core::control_plane_support::ops::ic::IcOps::canister_self();
-    if authority.binding.fleet_subnet_root != root {
-        return Err(InternalError::invalid_input(
-            "protected Fleet Subnet Root authority does not name this Canister",
-        ));
-    }
+    let (authority, root) = validated_root_authority()?;
     let manifest = load_and_validate_manifest(&authority, request)?;
     let module_hashes = artifact_module_hashes(&manifest)?;
     let staged = exact_staged_manifests(&manifest)?;

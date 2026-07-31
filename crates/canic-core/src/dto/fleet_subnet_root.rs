@@ -170,6 +170,34 @@ pub struct FleetSubnetRootStoreReclamationResponse {
     pub reclamation_hash: [u8; 32],
 }
 
+/// Controller command finalizing the reclaimed Store's root-local binding.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootStoreBindingFinalizationRequest {
+    pub operation_id: [u8; 32],
+    pub expected_reclamation_hash: [u8; 32],
+}
+
+/// Read-only lookup key for one durable Store-binding finalization receipt.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootStoreBindingFinalizationStatusRequest {
+    pub operation_id: [u8; 32],
+}
+
+/// Durable proof that the reclaimed Store no longer occupies a publication binding slot.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootStoreBindingFinalizationResponse {
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+    pub wasm_store: Principal,
+    pub final_inventory_hash: [u8; 32],
+    pub reclamation_hash: [u8; 32],
+    pub source_generation: u64,
+    pub finalized_generation: u64,
+    pub finalized_at_secs: u64,
+    pub completed_at_ns: u64,
+    pub finalization_hash: [u8; 32],
+}
+
 ///
 /// FleetSubnetRootFinalInventoryResponse
 ///
@@ -386,6 +414,35 @@ mod tests {
         assert_candid_round_trip(&reclamation_request);
         assert_candid_round_trip(&reclamation_status);
         assert_candid_round_trip(&reclamation_response);
+
+        assert_store_binding_finalization_contract_round_trip(&reclamation_response);
+    }
+
+    fn assert_store_binding_finalization_contract_round_trip(
+        reclamation: &FleetSubnetRootStoreReclamationResponse,
+    ) {
+        let request = FleetSubnetRootStoreBindingFinalizationRequest {
+            operation_id: reclamation.operation_id,
+            expected_reclamation_hash: reclamation.reclamation_hash,
+        };
+        let status = FleetSubnetRootStoreBindingFinalizationStatusRequest {
+            operation_id: request.operation_id,
+        };
+        let response = FleetSubnetRootStoreBindingFinalizationResponse {
+            operation_id: request.operation_id,
+            fleet_subnet_root: reclamation.fleet_subnet_root,
+            wasm_store: reclamation.wasm_store,
+            final_inventory_hash: reclamation.final_inventory_hash,
+            reclamation_hash: request.expected_reclamation_hash,
+            source_generation: 4,
+            finalized_generation: 7,
+            finalized_at_secs: 34,
+            completed_at_ns: 35,
+            finalization_hash: [36; 32],
+        };
+        assert_candid_round_trip(&request);
+        assert_candid_round_trip(&status);
+        assert_candid_round_trip(&response);
     }
 
     fn assert_candid_round_trip<T>(value: &T)

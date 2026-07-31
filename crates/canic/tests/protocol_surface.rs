@@ -410,7 +410,6 @@ fn fleet_subnet_root_draining_is_controller_guarded_on_the_root_surface() {
         canic::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_RECLAMATION_STATUS,
         canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_RECLAMATION_STATUS
     );
-
     let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
     let source = read_text(&macro_path);
     let begin =
@@ -435,7 +434,6 @@ fn fleet_subnet_root_draining_is_controller_guarded_on_the_root_surface() {
         &source,
         "async fn canic_fleet_subnet_root_store_reclamation_status(",
     );
-
     assert!(
         begin.contains("canic_update(requires(caller::is_controller()))"),
         "Fleet Subnet Root draining begin must remain a controller-guarded update"
@@ -467,6 +465,38 @@ fn fleet_subnet_root_draining_is_controller_guarded_on_the_root_surface() {
     assert!(
         store_reclamation_status.contains("canic_query(requires(caller::is_controller()))"),
         "Fleet Subnet Root Store reclamation status must remain a controller-guarded query"
+    );
+}
+
+#[test]
+fn fleet_subnet_root_store_binding_finalization_is_controller_guarded() {
+    assert_eq!(
+        canic::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZE,
+        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZE
+    );
+    assert_eq!(
+        canic::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZATION_STATUS,
+        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZATION_STATUS
+    );
+
+    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
+    let source = read_text(&macro_path);
+    let finalize = preceding_attribute_context(
+        &source,
+        "async fn canic_fleet_subnet_root_store_binding_finalize(",
+    );
+    let status = preceding_attribute_context(
+        &source,
+        "async fn canic_fleet_subnet_root_store_binding_finalization_status(",
+    );
+
+    assert!(
+        finalize.contains("canic_update(requires(caller::is_controller()))"),
+        "Fleet Subnet Root Store binding finalization must remain a controller-guarded update"
+    );
+    assert!(
+        status.contains("canic_query(requires(caller::is_controller()))"),
+        "Fleet Subnet Root Store binding finalization status must remain a controller-guarded query"
     );
 }
 

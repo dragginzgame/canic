@@ -142,6 +142,10 @@ pub mod workflow {
     }
 
     pub mod runtime {
+        pub mod fleet_activation {
+            pub use crate::workflow::runtime::fleet_activation::FleetActivationWorkflow;
+        }
+
         pub mod install {
             pub use crate::workflow::runtime::install::ModuleInstallWorkflow;
         }

@@ -140,6 +140,9 @@ mod tests {
             FleetSubnetRootDrainingStatusRequest, FleetSubnetRootFinalInventoryRequest,
             FleetSubnetRootFinalInventoryResponse, FleetSubnetRootFinalInventoryStatusRequest,
             FleetSubnetRootRemovalRequest, FleetSubnetRootRemovalStatusRequest,
+            FleetSubnetRootStoreBindingFinalizationRequest,
+            FleetSubnetRootStoreBindingFinalizationResponse,
+            FleetSubnetRootStoreBindingFinalizationStatusRequest,
             FleetSubnetRootStoreReclamationRequest, FleetSubnetRootStoreReclamationResponse,
             FleetSubnetRootStoreReclamationStatusRequest,
         },
@@ -148,7 +151,9 @@ mod tests {
             CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_FINALIZE,
             CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_STATUS,
             CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS, CANIC_FLEET_SUBNET_ROOT_REMOVAL_PUBLISH,
-            CANIC_FLEET_SUBNET_ROOT_REMOVAL_STATUS, CANIC_FLEET_SUBNET_ROOT_STORE_RECLAIM,
+            CANIC_FLEET_SUBNET_ROOT_REMOVAL_STATUS,
+            CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZATION_STATUS,
+            CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZE, CANIC_FLEET_SUBNET_ROOT_STORE_RECLAIM,
             CANIC_FLEET_SUBNET_ROOT_STORE_RECLAMATION_STATUS, CANIC_ROOT_COMPONENT_CHILD_ALLOCATE,
             CANIC_ROOT_COMPONENT_CHILD_COMMIT, CANIC_ROOT_COMPONENT_CHILD_CREATE,
             CANIC_ROOT_COMPONENT_CHILD_DIRECTORY_PREPARE, CANIC_ROOT_COMPONENT_CHILD_INSTALL,
@@ -167,7 +172,9 @@ mod tests {
     };
     #[cfg(test)]
     use canic_control_plane::{
-        dto::template::{WasmStoreCatalogEntryResponse, WasmStoreStatusResponse},
+        dto::template::{
+            WasmStoreCatalogEntryResponse, WasmStoreOverviewResponse, WasmStoreStatusResponse,
+        },
         ids::WasmStoreGcMode,
     };
 
@@ -990,6 +997,76 @@ mod tests {
                 .expect("query reclaimed Store catalog")
                 .is_empty()
         );
+
+        let binding_request = FleetSubnetRootStoreBindingFinalizationRequest {
+            operation_id: root_draining.operation_id,
+            expected_reclamation_hash: reclamation.reclamation_hash,
+        };
+        let finalization: Result<FleetSubnetRootStoreBindingFinalizationResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZE,
+                (binding_request,),
+            )
+            .expect("finalize Fleet Subnet Root Store binding transport");
+        let finalization = finalization.expect("finalize Fleet Subnet Root Store binding");
+        assert_eq!(finalization.wasm_store, final_inventory.wasm_store);
+        assert_eq!(
+            finalization.final_inventory_hash,
+            final_inventory.inventory_hash
+        );
+        assert_eq!(finalization.reclamation_hash, reclamation.reclamation_hash);
+        assert_eq!(
+            finalization.finalized_generation,
+            finalization.source_generation + 3
+        );
+        assert!(finalization.finalized_at_secs > 0);
+        assert_ne!(finalization.finalization_hash, [0; 32]);
+
+        let retry: Result<FleetSubnetRootStoreBindingFinalizationResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZE,
+                (binding_request,),
+            )
+            .expect("retry Fleet Subnet Root Store binding finalization transport");
+        assert_eq!(
+            retry.expect("retry Fleet Subnet Root Store binding finalization"),
+            finalization
+        );
+        let durable: Result<FleetSubnetRootStoreBindingFinalizationResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.root,
+                CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZATION_STATUS,
+                (FleetSubnetRootStoreBindingFinalizationStatusRequest {
+                    operation_id: root_draining.operation_id,
+                },),
+            )
+            .expect("query Fleet Subnet Root Store binding finalization transport");
+        assert_eq!(
+            durable.expect("query Fleet Subnet Root Store binding finalization"),
+            finalization
+        );
+
+        let overview: Result<WasmStoreOverviewResponse, Error> = fixture
+            .pic()
+            .query_call(fixture.root, canic::protocol::CANIC_WASM_STORE_OVERVIEW, ())
+            .expect("query finalized Store binding overview transport");
+        let overview = overview.expect("query finalized Store binding overview");
+        assert_eq!(overview.publication.active_binding, None);
+        assert_eq!(overview.publication.detached_binding, None);
+        assert_eq!(overview.publication.retired_binding, None);
+        assert_eq!(
+            overview.publication.generation,
+            finalization.finalized_generation
+        );
+        assert_eq!(overview.stores.len(), 1);
+        assert_eq!(overview.stores[0].pid, final_inventory.wasm_store);
+        assert_eq!(overview.stores[0].publication_slot, None);
+        assert_eq!(overview.stores[0].gc.mode, WasmStoreGcMode::Complete);
     }
 
     #[cfg(test)]

@@ -77,6 +77,20 @@ macro_rules! canic_emit_root_admin_endpoints {
         }
 
         #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_fleet_subnet_root_store_binding_finalize(
+            request: ::canic::dto::fleet_subnet_root::FleetSubnetRootStoreBindingFinalizationRequest,
+        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetRootStoreBindingFinalizationResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::finalize_fleet_subnet_root_store_binding(request).await
+        }
+
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_fleet_subnet_root_store_binding_finalization_status(
+            request: ::canic::dto::fleet_subnet_root::FleetSubnetRootStoreBindingFinalizationStatusRequest,
+        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetRootStoreBindingFinalizationResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_subnet_root_store_binding_finalization_status(request)
+        }
+
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_fleet_registry_synchronize(
             request: ::canic::dto::fleet_registry::FleetSubnetRootRegistrySyncRequest,
         ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootRegistrySyncResponse, ::canic::Error> {
