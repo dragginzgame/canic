@@ -28,16 +28,18 @@ use canic_core::{
             RootComponentChildRuntimeActivationRequest,
             RootComponentChildRuntimeActivationResponse, RootComponentCommitRequest,
             RootComponentCommitResponse, RootComponentCreationRequest,
-            RootComponentDirectoryPreparationRequest, RootComponentDirectoryPreparationResponse,
-            RootComponentDrainingAdvanceRequest, RootComponentDrainingAdvanceResponse,
-            RootComponentDrainingRequest, RootComponentDrainingResponse,
-            RootComponentDrainingStatusRequest, RootComponentFinalInventoryRequest,
-            RootComponentFinalInventoryResponse, RootComponentInstallRequest,
-            RootComponentMembershipActivationRequest, RootComponentMembershipActivationResponse,
-            RootComponentQuiescenceRequest, RootComponentQuiescenceResponse,
-            RootComponentQuiescenceStatusRequest, RootComponentRegistryPreparationRequest,
-            RootComponentRegistryStatusResponse, RootComponentRuntimeActivationRequest,
-            RootComponentRuntimeActivationResponse, RootComponentSubtreeRemovalAdvanceRequest,
+            RootComponentDeletionRequest, RootComponentDeletionResponse,
+            RootComponentDeletionStatusRequest, RootComponentDirectoryPreparationRequest,
+            RootComponentDirectoryPreparationResponse, RootComponentDrainingAdvanceRequest,
+            RootComponentDrainingAdvanceResponse, RootComponentDrainingRequest,
+            RootComponentDrainingResponse, RootComponentDrainingStatusRequest,
+            RootComponentFinalInventoryRequest, RootComponentFinalInventoryResponse,
+            RootComponentInstallRequest, RootComponentMembershipActivationRequest,
+            RootComponentMembershipActivationResponse, RootComponentQuiescenceRequest,
+            RootComponentQuiescenceResponse, RootComponentQuiescenceStatusRequest,
+            RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
+            RootComponentRuntimeActivationRequest, RootComponentRuntimeActivationResponse,
+            RootComponentSubtreeRemovalAdvanceRequest,
             RootComponentSubtreeRemovalDeletePreparationRequest,
             RootComponentSubtreeRemovalDeleteRequest,
             RootComponentSubtreeRemovalDirectorySynchronizationRequest,
@@ -216,6 +218,20 @@ impl LifecycleApi {
         crate::workflow::component_registry::finalize_component_inventory(request)
             .await
             .map_err(Into::into)
+    }
+
+    pub async fn delete_component(
+        request: RootComponentDeletionRequest,
+    ) -> Result<RootComponentDeletionResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::delete_component(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub fn component_deletion_status(
+        request: RootComponentDeletionStatusRequest,
+    ) -> Result<RootComponentDeletionResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::component_deletion_status(request).map_err(Into::into)
     }
 
     pub async fn begin_component_subtree_removal(

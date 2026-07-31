@@ -1,15 +1,15 @@
 # Canic 0.100 Implementation Status
 
-Date: 2026-07-30
+Date: 2026-07-31
 
 - State: implementation in progress.
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.60`.
-- Latest published release: `v0.100.60` at
-  `281bb86d29aec2e6608aaa2f8e3dde0a44629ec2`.
-- Open patch draft: `0.100.61`; no package-version change has been authorized.
+- Workspace package version: `0.100.61`.
+- Latest published release: `v0.100.61` at
+  `92a8af1fbf9658b277b99ed137a32cbd92e25bc6`.
+- Open patch draft: `0.100.62`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -861,7 +861,7 @@ only by the next canonical direct subtree. Caller-selected removal is
 `Active`-only, and the direct cursor avoids repeated scans of completed
 history at the intended 10,000–20,000-descendant scale.
 
-Open 0.100.61 converts the driver's empty observation into durable
+Released 0.100.61 converts the driver's empty observation into durable
 final-inventory authority. It revalidates terminal quiescence, the exact empty
 partition, normalized index absence and terminal lifecycle history, binds the
 current Fleet Directory, and stores a canonical hashed receipt in the existing
@@ -869,10 +869,22 @@ memory-ID-23 draining record. The earlier quiescence reservation covers its
 maximum encoded shape, and the transition performs no deletion or membership
 mutation.
 
+Open 0.100.62 reconciles qualified top-level deletion under that exact final
+inventory. One controller update durably freezes the complete final-inventory
+and quiescent receipts before the destructive call, reverifies the local Store
+module and sole root controller, and commits `Deleted` only after typed live
+absence. Exact retry and a read-only status query return the original receipt.
+The quiescence reservation now covers the largest terminal deletion shape;
+the complete evidence remains in memory ID 23 under an 8 KiB reinstall-only
+record bound. The Component partition, principal index and root counters remain
+unchanged.
+
 ## Next Action
 
-Reconcile deletion and local membership removal of the already-quiescent
-top-level Component under a durable receipt and the frozen final inventory. It
-must not infer removal from an unreachable Canister. Do not introduce nested
-Component declarations, let application Canisters call management effects
-directly or infer authorization from catalog presence alone.
+Atomically remove the independently deleted top-level Component from local
+Registry membership, principal lookup and settled root/Spec counters under its
+exact `Deleted` receipt. Preserve the allocation history needed for exact
+retry, derive the terminal `Removed` authority and do not infer any local
+mutation from Canister absence alone. Do not introduce nested Component
+declarations, let application Canisters call management effects directly or
+infer authorization from catalog presence alone.

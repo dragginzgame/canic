@@ -338,6 +338,31 @@ pub struct RootComponentFinalInventoryRequest {
 }
 
 ///
+/// RootComponentDeletionRequest
+///
+/// Controller command reconciling one top-level deletion from frozen final inventory.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentDeletionRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub expected_inventory_hash: [u8; 32],
+}
+
+///
+/// RootComponentDeletionStatusRequest
+///
+/// Read-only lookup key for one durable top-level Component deletion.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentDeletionStatusRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+}
+
+///
 /// RootComponentChildCreationRequest
 ///
 /// Parent command continuing one already reserved direct-child operation.
@@ -1167,6 +1192,56 @@ pub struct RootComponentFinalInventoryResponse {
 }
 
 ///
+/// RootComponentDeletionIntent
+///
+/// Complete final-inventory and quiescence authority frozen before top-level deletion.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentDeletionIntent {
+    pub final_inventory: RootComponentFinalInventory,
+    pub quiescence: RootComponentQuiescentReceipt,
+    pub prepared_at_ns: u64,
+}
+
+///
+/// RootComponentDeletedReceipt
+///
+/// Terminal authority retained after independently observed top-level absence.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentDeletedReceipt {
+    pub deletion: RootComponentDeletionIntent,
+    pub deleted_at_ns: u64,
+}
+
+///
+/// RootComponentDeletionPhase
+///
+/// Monotonic top-level deletion progress from durable intent to observed absence.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RootComponentDeletionPhase {
+    DeleteIntent(RootComponentDeletionIntent),
+    Deleted(RootComponentDeletedReceipt),
+}
+
+///
+/// RootComponentDeletionResponse
+///
+/// Current durable deletion progress for one finalized top-level Component.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentDeletionResponse {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub phase: RootComponentDeletionPhase,
+}
+
+///
 /// RootComponentChildCommitResponse
 ///
 /// Exact committed child operation, authoritative Component Registry and next Directory head.
@@ -1907,6 +1982,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one wire-contract test keeps final inventory and its deletion authority aligned"
+    )]
     fn component_final_inventory_contracts_round_trip_through_candid() {
         let component = ComponentInstanceId::from_generated_bytes([88; 32]);
         let registry = ComponentRegistryHead {
@@ -1919,26 +1998,75 @@ mod tests {
             component,
             expected_registry: registry.clone(),
         };
+        let inventory = RootComponentFinalInventory {
+            registry,
+            descendant_content_hash: [91; 32],
+            registry_encoded_bytes: 4_096,
+            directory_synchronized_at_ns: 92,
+            covered_fleet_registry_revision: 93,
+            covered_fleet_registry_content_hash: [94; 32],
+            directory_authority_hash: [95; 32],
+            inventory_hash: [96; 32],
+            finalized_at_ns: 97,
+        };
         let response = RootComponentFinalInventoryResponse {
             operation_id: request.operation_id,
             component,
-            inventory: RootComponentFinalInventory {
-                registry,
-                descendant_content_hash: [91; 32],
-                registry_encoded_bytes: 4_096,
-                directory_synchronized_at_ns: 92,
-                covered_fleet_registry_revision: 93,
-                covered_fleet_registry_content_hash: [94; 32],
-                directory_authority_hash: [95; 32],
-                inventory_hash: [96; 32],
-                finalized_at_ns: 97,
+            inventory: inventory.clone(),
+        };
+        let deletion_request = RootComponentDeletionRequest {
+            operation_id: request.operation_id,
+            component,
+            expected_inventory_hash: inventory.inventory_hash,
+        };
+        let deletion_status_request = RootComponentDeletionStatusRequest {
+            operation_id: request.operation_id,
+            component,
+        };
+        let deletion = RootComponentDeletionIntent {
+            final_inventory: inventory,
+            quiescence: RootComponentQuiescentReceipt {
+                stop: RootComponentQuiescenceStopIntent {
+                    registry: response.inventory.registry.clone(),
+                    descendant_count: 0,
+                    descendant_content_hash: response.inventory.descendant_content_hash,
+                    canister_id: Principal::from_slice(&[98; 29]),
+                    controller: Principal::from_slice(&[99; 29]),
+                    expected_module_hash: [100; 32],
+                    covered_fleet_registry_revision: 93,
+                    covered_fleet_registry_content_hash: [94; 32],
+                    covered_authority_hash: [101; 32],
+                    runtime_operation_id: [102; 32],
+                    activation: ComponentRuntimeActivationEvidence {
+                        directory_authority_hash: [103; 32],
+                        activated_at_ns: 104,
+                    },
+                    prepared_at_ns: 105,
+                },
+                observed_module_hash: [100; 32],
+                quiesced_at_ns: 106,
             },
+            prepared_at_ns: 107,
+        };
+        let deletion_response = RootComponentDeletionResponse {
+            operation_id: request.operation_id,
+            component,
+            phase: RootComponentDeletionPhase::Deleted(RootComponentDeletedReceipt {
+                deletion,
+                deleted_at_ns: 108,
+            }),
         };
 
         let request_bytes =
             candid::encode_one(&request).expect("encode Component final inventory request");
         let response_bytes =
             candid::encode_one(&response).expect("encode Component final inventory response");
+        let deletion_request_bytes =
+            candid::encode_one(deletion_request).expect("encode Component deletion request");
+        let deletion_status_bytes = candid::encode_one(deletion_status_request)
+            .expect("encode Component deletion status request");
+        let deletion_response_bytes =
+            candid::encode_one(&deletion_response).expect("encode Component deletion response");
         assert_eq!(
             candid::decode_one::<RootComponentFinalInventoryRequest>(&request_bytes)
                 .expect("decode Component final inventory request"),
@@ -1948,6 +2076,21 @@ mod tests {
             candid::decode_one::<RootComponentFinalInventoryResponse>(&response_bytes)
                 .expect("decode Component final inventory response"),
             response
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentDeletionRequest>(&deletion_request_bytes)
+                .expect("decode Component deletion request"),
+            deletion_request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentDeletionStatusRequest>(&deletion_status_bytes)
+                .expect("decode Component deletion status request"),
+            deletion_status_request
+        );
+        assert_eq!(
+            candid::decode_one::<RootComponentDeletionResponse>(&deletion_response_bytes)
+                .expect("decode Component deletion response"),
+            deletion_response
         );
     }
 

@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-30
+Last updated: 2026-07-31
 
 ## Purpose
 
@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.60`.
-- The latest published release is `v0.100.60` at
-  `281bb86d29aec2e6608aaa2f8e3dde0a44629ec2`.
-- Open `0.100.61` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.61`.
+- The latest published release is `v0.100.61` at
+  `92a8af1fbf9658b277b99ed137a32cbd92e25bc6`.
+- Open `0.100.62` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -505,13 +505,19 @@ Historical detail is archived at:
   removal and advances exactly one existing post-order phase per call.
   Caller-selected subtree removal is now `Active`-only; exact current
   empty-inventory evidence remains distinct from the later final receipt.
-- Open `0.100.61` persists that exact empty observation as final Component
+- Released `0.100.61` persists that exact empty observation as final Component
   inventory authority. It revalidates terminal quiescence, the canonical empty
   partition and normalized indexes, terminal child/removal history and the
   current Fleet Directory, then stores a domain-separated hashed receipt in
   the existing stable-memory-ID-23 draining record. Quiescence precharges its
   maximum shape; finalization changes no Registry byte ledger and performs no
   deletion or membership mutation.
+- Open `0.100.62` durably freezes the complete final-inventory and quiescent
+  receipts before deleting that exact top-level Component. It requires the
+  live Canister to remain stopped under the sole root and verified Store
+  module, commits only typed absence and retains `DeleteIntent -> Deleted`
+  progress in memory ID 23. Exact retry and status are durable; local
+  membership and counters remain unchanged.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1999,17 +2005,26 @@ membership removal until Directory synchronization and finalization, avoiding
 a skipped subtree and repeated completed-history scans at the intended
 10,000–20,000-descendant scale.
 
-Open `0.100.61` freezes the exact empty Component Registry and current Fleet
+Released `0.100.61` freezes the exact empty Component Registry and current Fleet
 Directory as final Component-removal authority. Its response-idempotent receipt
 retains the current head, empty digest, byte ledger, Directory time, Fleet
 coverage, exact Directory hash, canonical inventory hash and finalization
 time. It remains inside memory ID 23 and is fully covered by the earlier
 pre-effect quiescence reservation.
 
-Next, delete and remove the already-quiescent top-level Component under a
-durable receipt bound to that final inventory. An unreachable Canister is
-never evidence of removal. Managed application Canisters must not perform
-management effects or infer authorization from flat catalog presence.
+Open `0.100.62` reconciles that top-level deletion under a durable intent
+embedding the complete final-inventory and quiescent receipts. It independently
+reverifies the active root, Store module, exact stopped Canister and sole root
+controller, then commits `Deleted` only after typed absence. Quiescence
+precharges the maximum terminal record, which remains in memory ID 23 under an
+8 KiB fresh-install bound. The partition, principal index and counters remain
+unchanged.
+
+Next, atomically remove local top-level Component membership and settle its
+principal lookup, root/Spec counters and byte ledgers under that exact deleted
+receipt. An unreachable Canister is never evidence of removal. Managed
+application Canisters must not perform management effects or infer
+authorization from flat catalog presence.
 
 ## Historical Release Detail
 

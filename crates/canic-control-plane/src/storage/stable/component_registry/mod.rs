@@ -53,7 +53,7 @@ const SUBTREE_REMOVAL_HISTORY_KEY_MAX_BYTES: u32 = 256;
 #[cfg(feature = "root-control-plane")]
 const SUBTREE_REMOVAL_HISTORY_RECORD_MAX_BYTES: u32 = 1_024;
 #[cfg(feature = "root-control-plane")]
-const COMPONENT_DRAINING_RECORD_MAX_BYTES: u32 = 4_096;
+const COMPONENT_DRAINING_RECORD_MAX_BYTES: u32 = 8_192;
 
 #[cfg(feature = "root-control-plane")]
 struct RootComponentRegistryState;
@@ -395,6 +395,7 @@ pub struct RootComponentDrainingRecord {
     pub quiescence: Option<RootComponentQuiescenceProgressRecord>,
     pub subtree_operation_id: Option<[u8; 32]>,
     pub final_inventory: Option<RootComponentFinalInventoryRecord>,
+    pub deletion: Option<RootComponentDeletionProgressRecord>,
 }
 
 ///
@@ -414,6 +415,43 @@ pub struct RootComponentFinalInventoryRecord {
     pub directory_authority_hash: [u8; 32],
     pub inventory_hash: [u8; 32],
     pub finalized_at_ns: u64,
+}
+
+///
+/// RootComponentDeletionIntentRecord
+///
+/// Complete final-inventory and quiescence authority frozen before top-level deletion.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentDeletionIntentRecord {
+    pub final_inventory: RootComponentFinalInventoryRecord,
+    pub quiescence: RootComponentQuiescentReceiptRecord,
+    pub prepared_at_ns: u64,
+}
+
+///
+/// RootComponentDeletedReceiptRecord
+///
+/// Durable top-level deletion authority retained after independently observed absence.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentDeletedReceiptRecord {
+    pub deletion: RootComponentDeletionIntentRecord,
+    pub deleted_at_ns: u64,
+}
+
+///
+/// RootComponentDeletionProgressRecord
+///
+/// Monotonic pre-effect or terminal top-level deletion state within one draining record.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RootComponentDeletionProgressRecord {
+    DeleteIntent(RootComponentDeletionIntentRecord),
+    Deleted(RootComponentDeletedReceiptRecord),
 }
 
 ///
@@ -494,13 +532,63 @@ impl<'a> From<&'a RootComponentDrainingRecord> for RootComponentDrainingFenceAut
 }
 
 #[cfg(feature = "root-control-plane")]
+#[derive(Debug, Eq, PartialEq)]
+struct RootComponentDrainingIdentityAuthority<'a> {
+    fence: RootComponentDrainingFenceAuthority<'a>,
+    subtree_operation_id: Option<[u8; 32]>,
+    final_inventory: &'a Option<RootComponentFinalInventoryRecord>,
+    deletion: &'a Option<RootComponentDeletionProgressRecord>,
+}
+
+#[cfg(feature = "root-control-plane")]
+impl<'a> From<&'a RootComponentDrainingRecord> for RootComponentDrainingIdentityAuthority<'a> {
+    fn from(record: &'a RootComponentDrainingRecord) -> Self {
+        Self {
+            fence: RootComponentDrainingFenceAuthority::from(record),
+            subtree_operation_id: record.subtree_operation_id,
+            final_inventory: &record.final_inventory,
+            deletion: &record.deletion,
+        }
+    }
+}
+
+#[cfg(feature = "root-control-plane")]
+#[derive(Debug, Eq, PartialEq)]
+struct RootComponentDrainingDeletionBaseAuthority<'a> {
+    fence: RootComponentDrainingFenceAuthority<'a>,
+    quiescence: &'a Option<RootComponentQuiescenceProgressRecord>,
+    subtree_operation_id: Option<[u8; 32]>,
+    final_inventory: &'a Option<RootComponentFinalInventoryRecord>,
+}
+
+#[cfg(feature = "root-control-plane")]
+impl<'a> From<&'a RootComponentDrainingRecord> for RootComponentDrainingDeletionBaseAuthority<'a> {
+    fn from(record: &'a RootComponentDrainingRecord) -> Self {
+        Self {
+            fence: RootComponentDrainingFenceAuthority::from(record),
+            quiescence: &record.quiescence,
+            subtree_operation_id: record.subtree_operation_id,
+            final_inventory: &record.final_inventory,
+        }
+    }
+}
+
+#[cfg(feature = "root-control-plane")]
 fn component_draining_identity_matches(
     left: &RootComponentDrainingRecord,
     right: &RootComponentDrainingRecord,
 ) -> bool {
-    component_draining_fence_matches(left, right)
-        && left.subtree_operation_id == right.subtree_operation_id
-        && left.final_inventory == right.final_inventory
+    RootComponentDrainingIdentityAuthority::from(left)
+        == RootComponentDrainingIdentityAuthority::from(right)
+}
+
+#[cfg(feature = "root-control-plane")]
+fn component_draining_deletion_base_matches(
+    left: &RootComponentDrainingRecord,
+    right: &RootComponentDrainingRecord,
+) -> bool {
+    RootComponentDrainingDeletionBaseAuthority::from(left)
+        == RootComponentDrainingDeletionBaseAuthority::from(right)
 }
 
 #[cfg(feature = "root-control-plane")]
@@ -520,7 +608,10 @@ const fn component_draining_has_no_progress(record: &RootComponentDrainingRecord
     if record.subtree_operation_id.is_some() {
         return false;
     }
-    record.final_inventory.is_none()
+    if record.final_inventory.is_some() {
+        return false;
+    }
+    record.deletion.is_none()
 }
 
 #[cfg(feature = "root-control-plane")]
@@ -536,6 +627,9 @@ fn component_final_inventory_transition_is_valid(
         return false;
     }
     if expected.subtree_operation_id != next.subtree_operation_id {
+        return false;
+    }
+    if expected.deletion != next.deletion {
         return false;
     }
     if expected.final_inventory.is_some() {
@@ -565,6 +659,9 @@ fn component_draining_cursor_transition_is_valid(
     if expected.final_inventory != next.final_inventory {
         return false;
     }
+    if expected.deletion != next.deletion {
+        return false;
+    }
     if next.subtree_operation_id != Some(removal.operation_id) {
         return false;
     }
@@ -582,6 +679,56 @@ fn component_draining_cursor_transition_is_valid(
         })
         .unwrap_or_default();
     RootComponentRegistryStore::component_draining_entry_bytes(next) <= charged_entry_bytes
+}
+
+#[cfg(feature = "root-control-plane")]
+fn component_deletion_intent_transition_is_valid(
+    expected: &RootComponentDrainingRecord,
+    next: &RootComponentDrainingRecord,
+) -> bool {
+    if !component_draining_deletion_base_matches(expected, next) {
+        return false;
+    }
+    if expected.deletion.is_some() {
+        return false;
+    }
+    let Some(final_inventory) = &expected.final_inventory else {
+        return false;
+    };
+    let Some(RootComponentQuiescenceProgressRecord::Quiescent(quiescence)) = &expected.quiescence
+    else {
+        return false;
+    };
+    let Some(RootComponentDeletionProgressRecord::DeleteIntent(intent)) = &next.deletion else {
+        return false;
+    };
+    let authority_is_exact =
+        intent.final_inventory == *final_inventory && intent.quiescence == *quiescence;
+    let time_is_monotonic = intent.prepared_at_ns >= final_inventory.finalized_at_ns;
+    let fits_precharged_entry = RootComponentRegistryStore::component_draining_entry_bytes(next)
+        <= quiescence.stop.charged_entry_bytes;
+    authority_is_exact && time_is_monotonic && fits_precharged_entry
+}
+
+#[cfg(feature = "root-control-plane")]
+fn component_deleted_transition_is_valid(
+    expected: &RootComponentDrainingRecord,
+    next: &RootComponentDrainingRecord,
+) -> bool {
+    if !component_draining_deletion_base_matches(expected, next) {
+        return false;
+    }
+    let Some(RootComponentDeletionProgressRecord::DeleteIntent(intent)) = &expected.deletion else {
+        return false;
+    };
+    let Some(RootComponentDeletionProgressRecord::Deleted(receipt)) = &next.deletion else {
+        return false;
+    };
+    let receipt_is_exact = receipt.deletion == *intent;
+    let time_is_monotonic = receipt.deleted_at_ns >= intent.prepared_at_ns;
+    let fits_precharged_entry = RootComponentRegistryStore::component_draining_entry_bytes(next)
+        <= intent.quiescence.stop.charged_entry_bytes;
+    receipt_is_exact && time_is_monotonic && fits_precharged_entry
 }
 
 impl RootComponentDrainingRecord {
@@ -3481,6 +3628,43 @@ impl RootComponentRegistryStore {
             return Err(RootComponentAllocationCommitError::ConflictingState);
         }
 
+        ROOT_COMPONENT_DRAINING.with_borrow_mut(|map| {
+            let current = map
+                .get(&key)
+                .ok_or(RootComponentAllocationCommitError::ConflictingState)?;
+            if current != *expected_record {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            map.insert(key, next_record);
+            Ok(())
+        })
+    }
+
+    pub(crate) fn prepare_component_deletion(
+        expected_record: &RootComponentDrainingRecord,
+        next_record: RootComponentDrainingRecord,
+    ) -> Result<(), RootComponentAllocationCommitError> {
+        if !component_deletion_intent_transition_is_valid(expected_record, &next_record) {
+            return Err(RootComponentAllocationCommitError::ConflictingState);
+        }
+        Self::replace_component_draining(expected_record, next_record)
+    }
+
+    pub(crate) fn mark_component_deleted(
+        expected_record: &RootComponentDrainingRecord,
+        next_record: RootComponentDrainingRecord,
+    ) -> Result<(), RootComponentAllocationCommitError> {
+        if !component_deleted_transition_is_valid(expected_record, &next_record) {
+            return Err(RootComponentAllocationCommitError::ConflictingState);
+        }
+        Self::replace_component_draining(expected_record, next_record)
+    }
+
+    fn replace_component_draining(
+        expected_record: &RootComponentDrainingRecord,
+        next_record: RootComponentDrainingRecord,
+    ) -> Result<(), RootComponentAllocationCommitError> {
+        let key = RootComponentDrainingKey::from(expected_record.component);
         ROOT_COMPONENT_DRAINING.with_borrow_mut(|map| {
             let current = map
                 .get(&key)

@@ -586,6 +586,16 @@ fn assert_component_registry_protocol_constants() {
             "canic_root_component_draining_inventory_finalize",
         ),
         (
+            canic::protocol::CANIC_ROOT_COMPONENT_DELETE,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_DELETE,
+            "canic_root_component_delete",
+        ),
+        (
+            canic::protocol::CANIC_ROOT_COMPONENT_DELETION_STATUS,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_DELETION_STATUS,
+            "canic_root_component_deletion_status",
+        ),
+        (
             canic::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_BEGIN,
             canic_core::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_BEGIN,
             "canic_root_component_subtree_removal_begin",
@@ -828,6 +838,7 @@ fn assert_component_draining_guards(root: &str) {
         "async fn canic_root_component_quiesce(",
         "async fn canic_root_component_draining_advance(",
         "async fn canic_root_component_draining_inventory_finalize(",
+        "async fn canic_root_component_delete(",
     ] {
         assert!(
             preceding_attribute_context(root, endpoint)
@@ -838,6 +849,7 @@ fn assert_component_draining_guards(root: &str) {
     for endpoint in [
         "async fn canic_root_component_draining_status(",
         "async fn canic_root_component_quiescence_status(",
+        "async fn canic_root_component_deletion_status(",
     ] {
         assert!(
             preceding_attribute_context(root, endpoint)

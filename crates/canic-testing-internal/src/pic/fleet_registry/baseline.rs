@@ -118,6 +118,13 @@ mod tests {
     #[cfg(test)]
     use canic::{
         dto::component_registry::{
+            RootComponentDeletionPhase, RootComponentDeletionRequest,
+            RootComponentDeletionResponse, RootComponentDeletionStatusRequest,
+            RootComponentDrainingAdvancePhase, RootComponentDrainingAdvanceRequest,
+            RootComponentDrainingAdvanceResponse, RootComponentDrainingRequest,
+            RootComponentDrainingResponse, RootComponentFinalInventoryRequest,
+            RootComponentFinalInventoryResponse, RootComponentQuiescencePhase,
+            RootComponentQuiescenceRequest, RootComponentQuiescenceResponse,
             RootComponentSubtreeRemovalAdvanceRequest,
             RootComponentSubtreeRemovalDeletePreparationRequest,
             RootComponentSubtreeRemovalDeleteRequest, RootComponentSubtreeRemovalPhase,
@@ -127,6 +134,9 @@ mod tests {
             RootComponentSubtreeRemovalStopRequest,
         },
         protocol::{
+            CANIC_ROOT_COMPONENT_DELETE, CANIC_ROOT_COMPONENT_DELETION_STATUS,
+            CANIC_ROOT_COMPONENT_DRAINING_ADVANCE, CANIC_ROOT_COMPONENT_DRAINING_BEGIN,
+            CANIC_ROOT_COMPONENT_DRAINING_INVENTORY_FINALIZE, CANIC_ROOT_COMPONENT_QUIESCE,
             CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_ADVANCE,
             CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_BEGIN,
             CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_DELETE,
@@ -497,6 +507,155 @@ mod tests {
             deleted.target_status,
             ComponentLifecycleStatus::Active,
             "deletion must not silently mutate Registry membership"
+        );
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one PocketIC journey proves qualified top-level stop, final inventory and deletion"
+    )]
+    fn active_root_deletes_one_exact_empty_component_before_membership_removal() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_active_component_registry();
+        let partition: Result<ComponentRegistryPartitionResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
+                (ComponentRegistryPartitionRequest {
+                    component: fixture.verifier.component,
+                },),
+            )
+            .expect("query top-level Component partition transport");
+        let partition = partition.expect("query top-level Component partition");
+        assert_eq!(partition.committed_descendants, 0);
+
+        let operation_id = [0xd2; 32];
+        let drained: Result<RootComponentDrainingResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_DRAINING_BEGIN,
+                (RootComponentDrainingRequest {
+                    operation_id,
+                    component: fixture.verifier.component,
+                    expected_registry: partition.head,
+                },),
+            )
+            .expect("begin top-level Component draining transport");
+        let drained = drained.expect("begin top-level Component draining");
+
+        let quiescent: Result<RootComponentQuiescenceResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_QUIESCE,
+                (RootComponentQuiescenceRequest {
+                    operation_id,
+                    component: fixture.verifier.component,
+                    expected_registry: drained.registry,
+                },),
+            )
+            .expect("quiesce top-level Component transport");
+        let quiescent = quiescent.expect("quiesce top-level Component");
+        let RootComponentQuiescencePhase::Quiescent(quiescence) = &quiescent.phase else {
+            panic!("top-level Component must retain an independently observed stopped receipt");
+        };
+        assert_eq!(quiescence.stop.canister_id, fixture.verifier.canister_id);
+        assert_eq!(quiescence.stop.controller, fixture.root);
+        assert_ne!(quiescence.observed_module_hash, [0; 32]);
+
+        let empty: Result<RootComponentDrainingAdvanceResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_DRAINING_ADVANCE,
+                (RootComponentDrainingAdvanceRequest {
+                    operation_id,
+                    component: fixture.verifier.component,
+                },),
+            )
+            .expect("observe empty top-level Component inventory transport");
+        let empty = empty.expect("observe empty top-level Component inventory");
+        let RootComponentDrainingAdvancePhase::DescendantsEmpty(empty) = empty.phase else {
+            panic!("top-level Component must have exact empty descendant inventory");
+        };
+
+        let final_inventory: Result<RootComponentFinalInventoryResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_DRAINING_INVENTORY_FINALIZE,
+                (RootComponentFinalInventoryRequest {
+                    operation_id,
+                    component: fixture.verifier.component,
+                    expected_registry: empty.registry,
+                },),
+            )
+            .expect("finalize top-level Component inventory transport");
+        let final_inventory = final_inventory.expect("finalize top-level Component inventory");
+        let delete_request = RootComponentDeletionRequest {
+            operation_id,
+            component: fixture.verifier.component,
+            expected_inventory_hash: final_inventory.inventory.inventory_hash,
+        };
+        let deleted: Result<RootComponentDeletionResponse, Error> = fixture
+            .pic()
+            .update_call(fixture.root, CANIC_ROOT_COMPONENT_DELETE, (delete_request,))
+            .expect("delete top-level Component transport");
+        let deleted = deleted.expect("delete top-level Component");
+        let RootComponentDeletionPhase::Deleted(receipt) = &deleted.phase else {
+            panic!("top-level Component must retain independently observed absence");
+        };
+        assert_eq!(receipt.deletion.final_inventory, final_inventory.inventory);
+        assert_eq!(
+            receipt.deletion.quiescence.stop.canister_id,
+            fixture.verifier.canister_id
+        );
+        assert_eq!(receipt.deletion.quiescence.stop.controller, fixture.root);
+        assert!(
+            fixture
+                .pic()
+                .canister_status(fixture.verifier.canister_id, Some(fixture.root))
+                .is_err(),
+            "independently receipted top-level deletion must leave the Canister absent"
+        );
+
+        let retry: Result<RootComponentDeletionResponse, Error> = fixture
+            .pic()
+            .update_call(fixture.root, CANIC_ROOT_COMPONENT_DELETE, (delete_request,))
+            .expect("retry top-level Component deletion transport");
+        assert_eq!(retry.expect("retry top-level Component deletion"), deleted);
+        let durable: Result<RootComponentDeletionResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_DELETION_STATUS,
+                (RootComponentDeletionStatusRequest {
+                    operation_id,
+                    component: fixture.verifier.component,
+                },),
+            )
+            .expect("query top-level Component deletion receipt transport");
+        assert_eq!(
+            durable.expect("query top-level Component deletion receipt"),
+            deleted
+        );
+
+        let retained: Result<ComponentRegistryPartitionResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
+                (ComponentRegistryPartitionRequest {
+                    component: fixture.verifier.component,
+                },),
+            )
+            .expect("query retained Component membership transport");
+        assert_eq!(
+            retained.expect("retained Component membership").status,
+            ComponentLifecycleStatus::Draining
         );
     }
 

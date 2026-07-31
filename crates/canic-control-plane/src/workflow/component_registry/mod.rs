@@ -18,7 +18,8 @@ use crate::{
         RootComponentAllocationView, RootComponentChildAllocationProgressView,
         RootComponentChildAllocationView, RootComponentChildCommitmentView,
         RootComponentChildInstallEffectView, RootComponentChildMembershipView,
-        RootComponentCreationEffectView, RootComponentDrainingAdvanceView,
+        RootComponentCreationEffectView, RootComponentDeletionIntentView,
+        RootComponentDeletionProgressView, RootComponentDrainingAdvanceView,
         RootComponentDrainingView, RootComponentFinalInventoryView,
         RootComponentInitialInventoryView, RootComponentInstallEffectView,
         RootComponentQuiescenceProgressView, RootComponentQuiescenceStopIntentView,
@@ -84,22 +85,24 @@ use canic_core::{
             RootComponentChildRuntimeActivationRequest,
             RootComponentChildRuntimeActivationResponse, RootComponentCommitRequest,
             RootComponentCommitResponse, RootComponentCreationEvidence,
-            RootComponentCreationRequest, RootComponentDirectoryPreparationRequest,
-            RootComponentDirectoryPreparationResponse, RootComponentDrainingAdvancePhase,
-            RootComponentDrainingAdvanceRequest, RootComponentDrainingAdvanceResponse,
-            RootComponentDrainingDescendantsEmpty, RootComponentDrainingRequest,
-            RootComponentDrainingResponse, RootComponentDrainingStatusRequest,
-            RootComponentFinalInventory, RootComponentFinalInventoryRequest,
-            RootComponentFinalInventoryResponse, RootComponentInitialInventoryStatus,
-            RootComponentInstallEvidence, RootComponentInstallRequest,
-            RootComponentMembershipActivationRequest, RootComponentMembershipActivationResponse,
-            RootComponentQuiescencePhase, RootComponentQuiescenceRequest,
-            RootComponentQuiescenceResponse, RootComponentQuiescenceStatusRequest,
-            RootComponentQuiescenceStopIntent, RootComponentQuiescentReceipt,
-            RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
-            RootComponentRuntimeActivationRequest, RootComponentRuntimeActivationResponse,
-            RootComponentSubtreeRemovalAdvanceRequest, RootComponentSubtreeRemovalCompletedReceipt,
-            RootComponentSubtreeRemovalDeleteIntent,
+            RootComponentCreationRequest, RootComponentDeletedReceipt, RootComponentDeletionIntent,
+            RootComponentDeletionPhase, RootComponentDeletionRequest,
+            RootComponentDeletionResponse, RootComponentDeletionStatusRequest,
+            RootComponentDirectoryPreparationRequest, RootComponentDirectoryPreparationResponse,
+            RootComponentDrainingAdvancePhase, RootComponentDrainingAdvanceRequest,
+            RootComponentDrainingAdvanceResponse, RootComponentDrainingDescendantsEmpty,
+            RootComponentDrainingRequest, RootComponentDrainingResponse,
+            RootComponentDrainingStatusRequest, RootComponentFinalInventory,
+            RootComponentFinalInventoryRequest, RootComponentFinalInventoryResponse,
+            RootComponentInitialInventoryStatus, RootComponentInstallEvidence,
+            RootComponentInstallRequest, RootComponentMembershipActivationRequest,
+            RootComponentMembershipActivationResponse, RootComponentQuiescencePhase,
+            RootComponentQuiescenceRequest, RootComponentQuiescenceResponse,
+            RootComponentQuiescenceStatusRequest, RootComponentQuiescenceStopIntent,
+            RootComponentQuiescentReceipt, RootComponentRegistryPreparationRequest,
+            RootComponentRegistryStatusResponse, RootComponentRuntimeActivationRequest,
+            RootComponentRuntimeActivationResponse, RootComponentSubtreeRemovalAdvanceRequest,
+            RootComponentSubtreeRemovalCompletedReceipt, RootComponentSubtreeRemovalDeleteIntent,
             RootComponentSubtreeRemovalDeletePreparationRequest,
             RootComponentSubtreeRemovalDeleteRequest, RootComponentSubtreeRemovalDeletedReceipt,
             RootComponentSubtreeRemovalDirectoryConvergenceEvidence,
@@ -331,6 +334,44 @@ struct PreparedComponentDrainingBoundary {
     topology: canic_core::control_plane_support::config::ComponentTopology,
     maximum_component_registry_bytes: u64,
     fleet_directory: FleetDirectorySnapshot,
+    store: RootStoreBootstrapResponse,
+}
+
+#[derive(Clone, Debug)]
+struct PreparedComponentDeletionPlan {
+    component: ComponentInstanceId,
+    operation_id: [u8; 32],
+    deletion: RootComponentDeletionIntentView,
+    expected_status_module_hash: [u8; 32],
+    already_deleted: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ComponentDeletionRequestAuthority {
+    operation_id: [u8; 32],
+    component: ComponentInstanceId,
+    inventory_hash: [u8; 32],
+}
+
+impl ComponentDeletionRequestAuthority {
+    const fn from_request(request: &RootComponentDeletionRequest) -> Self {
+        Self {
+            operation_id: request.operation_id,
+            component: request.component,
+            inventory_hash: request.expected_inventory_hash,
+        }
+    }
+
+    const fn from_durable(
+        draining: &RootComponentDrainingView,
+        deletion: &RootComponentDeletionIntentView,
+    ) -> Self {
+        Self {
+            operation_id: draining.operation_id,
+            component: draining.component,
+            inventory_hash: deletion.final_inventory.inventory_hash,
+        }
+    }
 }
 
 enum ComponentDrainingRemovalAction {
@@ -888,6 +929,71 @@ pub async fn finalize_component_inventory(
     ))
 }
 
+/// Reconcile one qualified top-level deletion and commit only independently observed absence.
+pub async fn delete_component(
+    request: RootComponentDeletionRequest,
+) -> Result<RootComponentDeletionResponse, InternalError> {
+    let prepared = prepared_component_draining_boundary(request.component).await?;
+    let draining = ComponentRegistryOps::prepare_component_deletion(
+        request.component,
+        request.operation_id,
+        request.expected_inventory_hash,
+        IcOps::now_nanos(),
+    )?;
+    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
+        InternalError::unavailable("Component Registry partition has not been committed")
+    })?;
+    validate_component_draining(&partition, &draining, None, None)?;
+    let plan = prepared_component_deletion_plan(
+        &prepared.root,
+        &prepared.store,
+        &partition,
+        &draining,
+        &request,
+    )?;
+    if plan.already_deleted {
+        return component_deletion_response(draining);
+    }
+
+    observe_or_delete_component(&plan).await?;
+    let deleted = ComponentRegistryOps::mark_component_deleted(
+        plan.component,
+        plan.operation_id,
+        plan.deletion.final_inventory.inventory_hash,
+        IcOps::now_nanos(),
+    )?;
+    validate_component_draining(&partition, &deleted, None, None)?;
+    component_deletion_response(deleted)
+}
+
+/// Read one finalized Component's durable top-level deletion progress without mutation.
+pub fn component_deletion_status(
+    request: RootComponentDeletionStatusRequest,
+) -> Result<RootComponentDeletionResponse, InternalError> {
+    let (authority, _root) = root_authority()?;
+    let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
+        InternalError::unavailable("Component Registry partition has not been committed")
+    })?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &ConfigOps::component_topology()?,
+        &partition,
+    )?;
+    let draining =
+        ComponentRegistryOps::component_draining(request.component)?.ok_or_else(|| {
+            InternalError::unavailable("Component draining operation has not been durably fenced")
+        })?;
+    if request.operation_id != draining.operation_id {
+        return Err(InternalError::conflict(
+            "Component deletion status is bound to different draining intent",
+        ));
+    }
+    validate_component_draining(&partition, &draining, None, None)?;
+    component_deletion_response(draining)
+}
+
 async fn advance_component_draining_boundary(
     request: RootComponentDrainingAdvanceRequest,
 ) -> Result<RootComponentDrainingAdvanceResponse, InternalError> {
@@ -948,7 +1054,7 @@ async fn prepared_component_draining_boundary(
         store_bootstrap: prepared.store_bootstrap,
         expected_fleet_registry: prepared.prepared_against_registry,
     };
-    root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
     let fleet_directory = validate_active_authority(&authority, root, &preparation_request)?;
     if FleetActivationApi::status()
         .map_err(InternalError::public)?
@@ -986,6 +1092,7 @@ async fn prepared_component_draining_boundary(
         topology,
         maximum_component_registry_bytes,
         fleet_directory,
+        store,
     })
 }
 
@@ -4942,17 +5049,61 @@ const fn component_final_inventory_response(
     RootComponentFinalInventoryResponse {
         operation_id,
         component,
-        inventory: RootComponentFinalInventory {
-            registry: inventory.registry,
-            descendant_content_hash: inventory.descendant_content_hash,
-            registry_encoded_bytes: inventory.registry_encoded_bytes,
-            directory_synchronized_at_ns: inventory.directory_synchronized_at_ns,
-            covered_fleet_registry_revision: inventory.covered_fleet_registry_revision,
-            covered_fleet_registry_content_hash: inventory.covered_fleet_registry_content_hash,
-            directory_authority_hash: inventory.directory_authority_hash,
-            inventory_hash: inventory.inventory_hash,
-            finalized_at_ns: inventory.finalized_at_ns,
+        inventory: component_final_inventory(inventory),
+    }
+}
+
+fn component_deletion_response(
+    draining: RootComponentDrainingView,
+) -> Result<RootComponentDeletionResponse, InternalError> {
+    let progress = draining.deletion.ok_or_else(|| {
+        InternalError::unavailable("Component deletion intent has not been durably prepared")
+    })?;
+    let phase = match progress {
+        RootComponentDeletionProgressView::DeleteIntent(intent) => {
+            RootComponentDeletionPhase::DeleteIntent(component_deletion_intent(intent))
+        }
+        RootComponentDeletionProgressView::Deleted(receipt) => {
+            RootComponentDeletionPhase::Deleted(RootComponentDeletedReceipt {
+                deletion: component_deletion_intent(receipt.deletion),
+                deleted_at_ns: receipt.deleted_at_ns,
+            })
+        }
+    };
+    Ok(RootComponentDeletionResponse {
+        operation_id: draining.operation_id,
+        component: draining.component,
+        phase,
+    })
+}
+
+const fn component_deletion_intent(
+    intent: RootComponentDeletionIntentView,
+) -> RootComponentDeletionIntent {
+    RootComponentDeletionIntent {
+        final_inventory: component_final_inventory(intent.final_inventory),
+        quiescence: RootComponentQuiescentReceipt {
+            stop: component_quiescence_stop_intent(intent.quiescence.stop),
+            observed_module_hash: intent.quiescence.observed_module_hash,
+            quiesced_at_ns: intent.quiescence.quiesced_at_ns,
         },
+        prepared_at_ns: intent.prepared_at_ns,
+    }
+}
+
+const fn component_final_inventory(
+    inventory: RootComponentFinalInventoryView,
+) -> RootComponentFinalInventory {
+    RootComponentFinalInventory {
+        registry: inventory.registry,
+        descendant_content_hash: inventory.descendant_content_hash,
+        registry_encoded_bytes: inventory.registry_encoded_bytes,
+        directory_synchronized_at_ns: inventory.directory_synchronized_at_ns,
+        covered_fleet_registry_revision: inventory.covered_fleet_registry_revision,
+        covered_fleet_registry_content_hash: inventory.covered_fleet_registry_content_hash,
+        directory_authority_hash: inventory.directory_authority_hash,
+        inventory_hash: inventory.inventory_hash,
+        finalized_at_ns: inventory.finalized_at_ns,
     }
 }
 
@@ -5514,6 +5665,98 @@ fn prepared_component_quiescence_plan(
     })
 }
 
+fn prepared_component_deletion_plan(
+    root: &FleetSubnetRootBinding,
+    store: &RootStoreBootstrapResponse,
+    partition: &ComponentRegistryPartitionView,
+    draining: &RootComponentDrainingView,
+    request: &RootComponentDeletionRequest,
+) -> Result<PreparedComponentDeletionPlan, InternalError> {
+    let (deletion, already_deleted) = match &draining.deletion {
+        Some(RootComponentDeletionProgressView::DeleteIntent(deletion)) => {
+            (deletion.clone(), false)
+        }
+        Some(RootComponentDeletionProgressView::Deleted(receipt)) => {
+            (receipt.deletion.clone(), true)
+        }
+        None => {
+            return Err(InternalError::unavailable(
+                "Component deletion intent has not been durably prepared",
+            ));
+        }
+    };
+    let request_authority = ComponentDeletionRequestAuthority::from_request(request);
+    let durable_authority = ComponentDeletionRequestAuthority::from_durable(draining, &deletion);
+    if request_authority != durable_authority {
+        return Err(InternalError::conflict(
+            "Component deletion request differs from durable final authority",
+        ));
+    }
+    validate_component_deletion_binding(root, partition, &deletion)?;
+    let expected_status_module_hash =
+        component_deletion_store_module(store, root, partition, &deletion)?;
+    Ok(PreparedComponentDeletionPlan {
+        component: draining.component,
+        operation_id: draining.operation_id,
+        deletion,
+        expected_status_module_hash,
+        already_deleted,
+    })
+}
+
+fn validate_component_deletion_binding(
+    root: &FleetSubnetRootBinding,
+    partition: &ComponentRegistryPartitionView,
+    deletion: &RootComponentDeletionIntentView,
+) -> Result<(), InternalError> {
+    if deletion.quiescence.stop.canister_id != partition.binding.canister_id {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component deletion Canister differs from protected Component binding",
+        ));
+    }
+    if deletion.quiescence.stop.controller != root.fleet_subnet_root {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component deletion controller differs from protected root authority",
+        ));
+    }
+    Ok(())
+}
+
+fn component_deletion_store_module(
+    store: &RootStoreBootstrapResponse,
+    root: &FleetSubnetRootBinding,
+    partition: &ComponentRegistryPartitionView,
+    deletion: &RootComponentDeletionIntentView,
+) -> Result<[u8; 32], InternalError> {
+    if store.fleet_subnet_root != root.fleet_subnet_root {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "verified Store differs from Component deletion root authority",
+        ));
+    }
+    if store.release_set != partition.release_set {
+        return Err(InternalError::conflict(
+            "verified Store release set differs from Component deletion authority",
+        ));
+    }
+    let artifact = exact_store_artifact(store, &partition.binding.role)?;
+    if deletion.quiescence.stop.expected_module_hash != artifact.payload_hash {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component deletion intent differs from verified Store module authority",
+        ));
+    }
+    if deletion.quiescence.observed_module_hash != artifact.payload_hash {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component deletion quiescence differs from verified Store module authority",
+        ));
+    }
+    Ok(artifact.payload_hash)
+}
+
 fn prepared_subtree_leaf_stop_plan(
     root: &canic_core::ids::FleetSubnetRootBinding,
     store: &RootStoreBootstrapResponse,
@@ -5828,6 +6071,63 @@ async fn observe_or_delete_subtree_leaf(
             )),
         },
     }
+}
+
+async fn observe_or_delete_component(
+    plan: &PreparedComponentDeletionPlan,
+) -> Result<(), InternalError> {
+    match observed_component_for_deletion(plan).await? {
+        CanisterStatusObservation::Absent => return Ok(()),
+        CanisterStatusObservation::Present(_) => {}
+    }
+
+    let delete_error = MgmtOps::delete_canister(plan.deletion.quiescence.stop.canister_id)
+        .await
+        .err();
+    match observed_component_for_deletion(plan).await? {
+        CanisterStatusObservation::Absent => Ok(()),
+        CanisterStatusObservation::Present(_) => match delete_error {
+            Some(error) => Err(error),
+            None => Err(InternalError::unavailable(
+                "Component remains present after its deletion call completed",
+            )),
+        },
+    }
+}
+
+async fn observed_component_for_deletion(
+    plan: &PreparedComponentDeletionPlan,
+) -> Result<CanisterStatusObservation, InternalError> {
+    let stop = &plan.deletion.quiescence.stop;
+    let observation = MgmtOps::observe_canister_status(stop.canister_id).await?;
+    let CanisterStatusObservation::Present(status) = &observation else {
+        return Ok(observation);
+    };
+    validate_component_deletion_live_status(status, stop, plan.expected_status_module_hash)?;
+    Ok(observation)
+}
+
+fn validate_component_deletion_live_status(
+    status: &CanisterStatus,
+    stop: &RootComponentQuiescenceStopIntentView,
+    expected_status_module_hash: [u8; 32],
+) -> Result<(), InternalError> {
+    if status.settings.controllers != vec![stop.controller] {
+        return Err(InternalError::conflict(
+            "Component controllers differ from its sole root deletion authority",
+        ));
+    }
+    if status.module_hash.as_deref() != Some(expected_status_module_hash.as_slice()) {
+        return Err(InternalError::conflict(
+            "Component module differs from its verified Store deletion authority",
+        ));
+    }
+    if status.status != CanisterStatusType::Stopped {
+        return Err(InternalError::conflict(
+            "Component is no longer stopped under its deletion authority",
+        ));
+    }
+    Ok(())
 }
 
 async fn observed_subtree_leaf_status(
