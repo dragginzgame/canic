@@ -33,6 +33,7 @@ use canic_core::control_plane_support::{
     workflow::{
         ic::IcWorkflow,
         pool::{PoolWorkflow, query::PoolQuery},
+        runtime::fleet_activation::FleetActivationWorkflow,
         topology::guard::TopologyGuard,
     },
 };
@@ -418,7 +419,7 @@ pub async fn root_import_pool_from_config(wait_for_queued_imports: bool) {
 
 fn fleet_is_prepared() -> bool {
     matches!(
-        canic_core::api::fleet_activation::FleetActivationApi::status(),
+        FleetActivationWorkflow::status(),
         Ok(status) if status.phase == FleetActivationPhase::Prepared
     )
 }

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.72` durably finalizes the reclaimed Store's publication binding before
+  physical deletion, while centralizing protected root-authority loading and
+  active-runtime validation across control-plane workflows.
+
 - `0.100.71` durably reclaims the retained Store after exact logical root
   removal, while consolidating replay, evidence, CLI ICP target and Store metric
   helpers under their existing owners.

@@ -30,13 +30,14 @@ use crate::{
         RootComponentSubtreeStopEffectView, RootComponentSubtreeStoppedEffectView,
     },
     workflow::{
-        bootstrap::root_store, deployment, runtime::template::resolved_root_store_module_source,
+        bootstrap::root_store, deployment,
+        root_authority::validated_root_authority as root_authority,
+        runtime::template::resolved_root_store_module_source,
     },
 };
 use candid::CandidType;
 use canic_core::api::runtime::install::{ApprovedModulePayload, ApprovedModuleSource};
 use canic_core::{
-    api::fleet_activation::FleetActivationApi,
     control_plane_support::{
         config::schema::ComponentChildKind,
         error::{InternalError, InternalErrorOrigin},
@@ -59,7 +60,10 @@ use canic_core::{
                 ComponentRegistryVersionEvidence, reserve_component_child,
             },
         },
-        workflow::{cost_guard::CostGuardWorkflow, runtime::install::ModuleInstallWorkflow},
+        workflow::{
+            cost_guard::CostGuardWorkflow,
+            runtime::{fleet_activation::FleetActivationWorkflow, install::ModuleInstallWorkflow},
+        },
     },
     dto::{
         abi::v1::{CanisterInitAuthority, CanisterInitPayload},
@@ -527,10 +531,7 @@ pub async fn reserve_allocation(
         decision,
         request.operation_id,
         provisioning_origin,
-        FleetActivationApi::status()
-            .map_err(InternalError::public)?
-            .phase
-            == FleetActivationPhase::Active,
+        FleetActivationWorkflow::status()?.phase == FleetActivationPhase::Active,
     )?;
     allocation_response(reserved)
 }
@@ -605,7 +606,7 @@ pub async fn reserve_child_allocation(
         revision: partition.revision,
         content_hash: partition.content_hash,
     };
-    let fleet_activation = FleetActivationApi::status().map_err(InternalError::public)?;
+    let fleet_activation = FleetActivationWorkflow::status()?;
     let readiness = if fleet_activation.phase != FleetActivationPhase::Active {
         ComponentChildAllocationReadiness::RootRuntimeInactive
     } else if partition.status != ComponentLifecycleStatus::Active {
@@ -695,15 +696,7 @@ pub async fn begin_component_draining(
     root_store::status(preparation_request.store_bootstrap.clone()).await?;
     let fleet_directory =
         validate_current_mirror_authority(&authority, root, &preparation_request)?;
-    if FleetActivationApi::status()
-        .map_err(InternalError::public)?
-        .phase
-        != FleetActivationPhase::Active
-    {
-        return Err(InternalError::unavailable(
-            "Component draining requires an Active Fleet Subnet Root runtime",
-        ));
-    }
+    require_active_root_runtime("Component draining requires an Active Fleet Subnet Root runtime")?;
 
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
@@ -1111,15 +1104,7 @@ async fn prepared_component_draining_boundary(
     let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
     let fleet_directory =
         validate_current_mirror_authority(&authority, root, &preparation_request)?;
-    if FleetActivationApi::status()
-        .map_err(InternalError::public)?
-        .phase
-        != FleetActivationPhase::Active
-    {
-        return Err(InternalError::unavailable(
-            "Component draining requires an Active Fleet Subnet Root runtime",
-        ));
-    }
+    require_active_root_runtime("Component draining requires an Active Fleet Subnet Root runtime")?;
 
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(component)?.ok_or_else(|| {
@@ -1323,15 +1308,9 @@ pub async fn begin_subtree_removal(
     };
     root_store::status(preparation_request.store_bootstrap.clone()).await?;
     validate_current_mirror_authority(&authority, root, &preparation_request)?;
-    if FleetActivationApi::status()
-        .map_err(InternalError::public)?
-        .phase
-        != FleetActivationPhase::Active
-    {
-        return Err(InternalError::unavailable(
-            "Component subtree removal requires an Active Fleet Subnet Root runtime",
-        ));
-    }
+    require_active_root_runtime(
+        "Component subtree removal requires an Active Fleet Subnet Root runtime",
+    )?;
 
     let topology = ConfigOps::component_topology()?;
     if let Some(existing) =
@@ -1394,15 +1373,9 @@ pub async fn advance_subtree_removal(
     };
     root_store::status(preparation_request.store_bootstrap.clone()).await?;
     validate_current_mirror_authority(&authority, root, &preparation_request)?;
-    if FleetActivationApi::status()
-        .map_err(InternalError::public)?
-        .phase
-        != FleetActivationPhase::Active
-    {
-        return Err(InternalError::unavailable(
-            "Component subtree traversal requires an Active Fleet Subnet Root runtime",
-        ));
-    }
+    require_active_root_runtime(
+        "Component subtree traversal requires an Active Fleet Subnet Root runtime",
+    )?;
 
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
@@ -1452,15 +1425,9 @@ pub async fn prepare_subtree_leaf_stop(
     };
     root_store::status(preparation_request.store_bootstrap.clone()).await?;
     validate_current_mirror_authority(&authority, root, &preparation_request)?;
-    if FleetActivationApi::status()
-        .map_err(InternalError::public)?
-        .phase
-        != FleetActivationPhase::Active
-    {
-        return Err(InternalError::unavailable(
-            "Component subtree stop preparation requires an Active Fleet Subnet Root runtime",
-        ));
-    }
+    require_active_root_runtime(
+        "Component subtree stop preparation requires an Active Fleet Subnet Root runtime",
+    )?;
 
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
@@ -1512,15 +1479,9 @@ pub async fn stop_subtree_leaf(
     };
     let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
     validate_current_mirror_authority(&authority, root, &preparation_request)?;
-    if FleetActivationApi::status()
-        .map_err(InternalError::public)?
-        .phase
-        != FleetActivationPhase::Active
-    {
-        return Err(InternalError::unavailable(
-            "Component subtree stop requires an Active Fleet Subnet Root runtime",
-        ));
-    }
+    require_active_root_runtime(
+        "Component subtree stop requires an Active Fleet Subnet Root runtime",
+    )?;
 
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
@@ -1606,15 +1567,9 @@ pub async fn prepare_subtree_leaf_delete(
     };
     root_store::status(preparation_request.store_bootstrap.clone()).await?;
     validate_current_mirror_authority(&authority, root, &preparation_request)?;
-    if FleetActivationApi::status()
-        .map_err(InternalError::public)?
-        .phase
-        != FleetActivationPhase::Active
-    {
-        return Err(InternalError::unavailable(
-            "Component subtree deletion preparation requires an Active Fleet Subnet Root runtime",
-        ));
-    }
+    require_active_root_runtime(
+        "Component subtree deletion preparation requires an Active Fleet Subnet Root runtime",
+    )?;
 
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
@@ -1666,15 +1621,9 @@ pub async fn delete_subtree_leaf(
     };
     let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
     validate_current_mirror_authority(&authority, root, &preparation_request)?;
-    if FleetActivationApi::status()
-        .map_err(InternalError::public)?
-        .phase
-        != FleetActivationPhase::Active
-    {
-        return Err(InternalError::unavailable(
-            "Component subtree deletion requires an Active Fleet Subnet Root runtime",
-        ));
-    }
+    require_active_root_runtime(
+        "Component subtree deletion requires an Active Fleet Subnet Root runtime",
+    )?;
 
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
@@ -1760,15 +1709,9 @@ pub async fn remove_subtree_leaf_membership(
     root_store::status(preparation_request.store_bootstrap.clone()).await?;
     let fleet_directory =
         validate_current_mirror_authority(&authority, root, &preparation_request)?;
-    if FleetActivationApi::status()
-        .map_err(InternalError::public)?
-        .phase
-        != FleetActivationPhase::Active
-    {
-        return Err(InternalError::unavailable(
-            "Component subtree membership removal requires an Active Fleet Subnet Root runtime",
-        ));
-    }
+    require_active_root_runtime(
+        "Component subtree membership removal requires an Active Fleet Subnet Root runtime",
+    )?;
 
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
@@ -1827,15 +1770,9 @@ pub async fn synchronize_subtree_leaf_directory(
     root_store::status(preparation_request.store_bootstrap.clone()).await?;
     let fleet_directory =
         validate_current_mirror_authority(&authority, root, &preparation_request)?;
-    if FleetActivationApi::status()
-        .map_err(InternalError::public)?
-        .phase
-        != FleetActivationPhase::Active
-    {
-        return Err(InternalError::unavailable(
-            "Component subtree Directory synchronization requires an Active Fleet Subnet Root runtime",
-        ));
-    }
+    require_active_root_runtime(
+        "Component subtree Directory synchronization requires an Active Fleet Subnet Root runtime",
+    )?;
 
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
@@ -1947,15 +1884,9 @@ pub async fn finalize_subtree_leaf(
     };
     root_store::status(preparation_request.store_bootstrap.clone()).await?;
     validate_current_mirror_authority(&authority, root, &preparation_request)?;
-    if FleetActivationApi::status()
-        .map_err(InternalError::public)?
-        .phase
-        != FleetActivationPhase::Active
-    {
-        return Err(InternalError::unavailable(
-            "Component subtree leaf finalization requires an Active Fleet Subnet Root runtime",
-        ));
-    }
+    require_active_root_runtime(
+        "Component subtree leaf finalization requires an Active Fleet Subnet Root runtime",
+    )?;
 
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
@@ -2029,15 +1960,9 @@ pub async fn create_child_allocation(
     };
     let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
     validate_current_mirror_authority(&authority, root, &preparation_request)?;
-    if FleetActivationApi::status()
-        .map_err(InternalError::public)?
-        .phase
-        != FleetActivationPhase::Active
-    {
-        return Err(InternalError::unavailable(
-            "Component Child creation requires an Active Fleet Subnet Root runtime",
-        ));
-    }
+    require_active_root_runtime(
+        "Component Child creation requires an Active Fleet Subnet Root runtime",
+    )?;
 
     let caller = IcOps::msg_caller();
     let parent =
@@ -2138,15 +2063,9 @@ pub async fn install_child_allocation(
     };
     let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
     validate_current_mirror_authority(&authority, root, &preparation_request)?;
-    if FleetActivationApi::status()
-        .map_err(InternalError::public)?
-        .phase
-        != FleetActivationPhase::Active
-    {
-        return Err(InternalError::unavailable(
-            "Component Child installation requires an Active Fleet Subnet Root runtime",
-        ));
-    }
+    require_active_root_runtime(
+        "Component Child installation requires an Active Fleet Subnet Root runtime",
+    )?;
 
     let caller = IcOps::msg_caller();
     let parent =
@@ -2189,15 +2108,9 @@ pub async fn commit_child_allocation(
     let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
     let fleet_directory =
         validate_current_mirror_authority(&authority, root, &preparation_request)?;
-    if FleetActivationApi::status()
-        .map_err(InternalError::public)?
-        .phase
-        != FleetActivationPhase::Active
-    {
-        return Err(InternalError::unavailable(
-            "Component Child commitment requires an Active Fleet Subnet Root runtime",
-        ));
-    }
+    require_active_root_runtime(
+        "Component Child commitment requires an Active Fleet Subnet Root runtime",
+    )?;
 
     let caller = IcOps::msg_caller();
     let parent =
@@ -3938,15 +3851,9 @@ async fn prepared_child_runtime_plan(
     let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
     let fleet_directory =
         validate_current_mirror_authority(&root_authority, root, &preparation_request)?;
-    if FleetActivationApi::status()
-        .map_err(InternalError::public)?
-        .phase
-        != FleetActivationPhase::Active
-    {
-        return Err(InternalError::unavailable(
-            "Component Child lifecycle requires an Active Fleet Subnet Root runtime",
-        ));
-    }
+    require_active_root_runtime(
+        "Component Child lifecycle requires an Active Fleet Subnet Root runtime",
+    )?;
 
     let caller = IcOps::msg_caller();
     let (parent_binding, parent_status) =
@@ -4892,29 +4799,8 @@ fn validate_current_mirror_authority(
     Ok(mirror.active.directory)
 }
 
-fn root_authority() -> Result<
-    (
-        canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
-        candid::Principal,
-    ),
-    InternalError,
-> {
-    let authority = FleetActivationApi::root_authority().map_err(InternalError::public)?;
-    let root = IcOps::canister_self();
-    if authority.binding.fleet_subnet_root != root {
-        return Err(InternalError::invalid_input(
-            "protected Fleet Subnet Root authority does not name this Canister",
-        ));
-    }
-    Ok((authority, root))
-}
-
 fn require_active_root_runtime(unavailable_message: &'static str) -> Result<(), InternalError> {
-    if FleetActivationApi::status()
-        .map_err(InternalError::public)?
-        .phase
-        != FleetActivationPhase::Active
-    {
+    if FleetActivationWorkflow::status()?.phase != FleetActivationPhase::Active {
         return Err(InternalError::unavailable(unavailable_message));
     }
     Ok(())

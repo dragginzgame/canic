@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.70`.
-- The latest published release is `v0.100.70` at
-  `b0ee505e33c05d23ca0e21ebefb26140e5926518`.
-- Open `0.100.71` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.71`.
+- The latest published release is `v0.100.71` at
+  `881901568949d10c87a8802400f48ef635c8c68b`.
+- Open `0.100.72` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -586,15 +586,24 @@ Historical detail is archived at:
   blob-billing conversion and local cycles-balance logic under their existing
   owners. Physical Store reclamation and infrastructure Canister deletion
   remain later explicit boundaries.
-- Open `0.100.71` adds durable Store reclamation after exact logical root
+- Released `0.100.71` adds durable Store reclamation after exact logical root
   removal. The root reverifies its sole retained Store before committing a
   pre-effect intent, resumes exact GC progress through `Prepared`,
   `InProgress`, interrupted `Clearing` or `Complete`, and commits a terminal
   response-idempotent receipt only for one completed run with zero bytes and an
   empty catalog. The Store/root Canisters and active Store binding remain
   present; binding finalization and physical deletion are later boundaries.
-  The same open draft retains the compatible replay, evidence, CLI ICP target
+  The same release retains the compatible replay, evidence, CLI ICP target
   and Store publication-metric owner consolidation already in progress.
+- Open `0.100.72` explicitly pins a fresh root's sole Store as its active
+  publication binding, then durably finalizes that binding only after the exact
+  `.71` reclamation receipt. One pre-effect intent binds the Store, reclamation
+  hash and source generation; exact retry resumes `active -> detached ->
+  retired -> unbound`, and a terminal hashed receipt requires all slots empty
+  at exactly source generation plus three. The GC-complete Store remains
+  installed and retained in runtime inventory. The same open patch centralizes
+  protected root-authority loading and active-runtime validation under their
+  workflow owners.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -2147,15 +2156,21 @@ Released `0.100.70` converges surviving roots on the later canonical Registry
 containing an exact `Removed` peer and hard-cuts the confirmed unused and
 redundant core surfaces from the focused module-hardening pass.
 
-Open `0.100.71` continues that cleanup by consolidating replay-response
+Released `0.100.71` continues that cleanup by consolidating replay-response
 encoding, evidence success classification, shared CLI ICP target context and
 Wasm Store metric forwarding under existing owners. It also durably reclaims
 the retained Store after exact logical removal, accepting only one completed GC
 run with zero bytes and an empty catalog while leaving both infrastructure
-Canisters installed. Next, hard-cut the active Store binding under that receipt
-and freeze physical Store deletion as its own interruption boundary; root
-deletion remains later. Neither an unreachable root nor a Subnet failure is
-deletion evidence.
+Canisters installed.
+
+Open `0.100.72` centralizes protected root-authority loading and active-runtime
+validation under workflow owners and completes the reclaimed Store-binding
+finalization boundary. Fresh bootstrap pins the sole Store explicitly; after
+the exact `.71` receipt, durable generation-bound retry clears `active`,
+`detached` and `retired` without removing runtime inventory or either
+Canister. Next, freeze and execute physical Store deletion under its own
+intent and independently observed absence receipt. Root deletion remains later
+still. Neither an unreachable root nor a Subnet failure is deletion evidence.
 
 ## Historical Release Detail
 

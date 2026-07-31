@@ -30,6 +30,10 @@ pub const CANIC_FLEET_SUBNET_ROOT_REMOVAL_STATUS: &str = "canic_fleet_subnet_roo
 pub const CANIC_FLEET_SUBNET_ROOT_STORE_RECLAIM: &str = "canic_fleet_subnet_root_store_reclaim";
 pub const CANIC_FLEET_SUBNET_ROOT_STORE_RECLAMATION_STATUS: &str =
     "canic_fleet_subnet_root_store_reclamation_status";
+pub const CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZE: &str =
+    "canic_fleet_subnet_root_store_binding_finalize";
+pub const CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZATION_STATUS: &str =
+    "canic_fleet_subnet_root_store_binding_finalization_status";
 pub const CANIC_FLEET_REGISTRY_SYNCHRONIZE: &str = "canic_fleet_registry_synchronize";
 pub const CANIC_FLEET_REGISTRY_SYNC_STATUS: &str = "canic_fleet_registry_sync_status";
 pub const CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR: &str = "canic_fleet_registry_activate_mirror";

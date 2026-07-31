@@ -15,6 +15,9 @@ use canic_core::{
         FleetSubnetRootFinalInventoryRequest, FleetSubnetRootFinalInventoryResponse,
         FleetSubnetRootFinalInventoryStatusRequest, FleetSubnetRootInitArgs,
         FleetSubnetRootRemovalRequest, FleetSubnetRootRemovalStatusRequest,
+        FleetSubnetRootStoreBindingFinalizationRequest,
+        FleetSubnetRootStoreBindingFinalizationResponse,
+        FleetSubnetRootStoreBindingFinalizationStatusRequest,
         FleetSubnetRootStoreReclamationRequest, FleetSubnetRootStoreReclamationResponse,
         FleetSubnetRootStoreReclamationStatusRequest,
     },
@@ -155,6 +158,23 @@ impl LifecycleApi {
         request: FleetSubnetRootStoreReclamationStatusRequest,
     ) -> Result<FleetSubnetRootStoreReclamationResponse, canic_core::dto::error::Error> {
         crate::workflow::fleet_subnet_root::store_reclamation_status(request).map_err(Into::into)
+    }
+
+    pub async fn finalize_fleet_subnet_root_store_binding(
+        request: FleetSubnetRootStoreBindingFinalizationRequest,
+    ) -> Result<FleetSubnetRootStoreBindingFinalizationResponse, canic_core::dto::error::Error>
+    {
+        crate::workflow::fleet_subnet_root::finalize_store_binding(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub fn fleet_subnet_root_store_binding_finalization_status(
+        request: FleetSubnetRootStoreBindingFinalizationStatusRequest,
+    ) -> Result<FleetSubnetRootStoreBindingFinalizationResponse, canic_core::dto::error::Error>
+    {
+        crate::workflow::fleet_subnet_root::store_binding_finalization_status(request)
+            .map_err(Into::into)
     }
 
     pub async fn synchronize_fleet_registry(
