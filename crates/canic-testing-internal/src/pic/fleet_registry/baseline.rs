@@ -39,8 +39,10 @@ mod tests {
             fleet_registry::{
                 FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistry,
                 FleetRegistryActivationRequest, FleetRegistryActivationResponse,
-                FleetSubnetRootDirectoryEntry, FleetSubnetRootEntry, FleetSubnetRootJoinRequest,
-                FleetSubnetRootJoinResponse, FleetSubnetRootRegistryMirrorActivationRequest,
+                FleetSubnetRootDirectoryEntry, FleetSubnetRootDrainingPublicationRequest,
+                FleetSubnetRootDrainingPublicationResponse, FleetSubnetRootEntry,
+                FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
+                FleetSubnetRootRegistryMirrorActivationRequest,
                 FleetSubnetRootRegistryMirrorActivationResponse,
                 FleetSubnetRootRegistrySyncRequest, FleetSubnetRootRegistrySyncResponse,
                 FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootStatus,
@@ -70,16 +72,17 @@ mod tests {
         protocol::{
             CANIC_COMPONENT_RUNTIME_STATUS, CANIC_FLEET_ACTIVATION_STATUS, CANIC_FLEET_REGISTRY,
             CANIC_FLEET_REGISTRY_ACTIVATE, CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
-            CANIC_FLEET_REGISTRY_MIRROR_STATUS, CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
-            CANIC_FLEET_REGISTRY_SYNC_STATUS, CANIC_FLEET_REGISTRY_SYNCHRONIZE,
-            CANIC_FLEET_REGISTRY_VERSION, CANIC_FLEET_SUBNET_ROOT_AUTHORITY,
-            CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY, CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN,
-            CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS, CANIC_FLEET_SUBNET_ROOT_JOIN,
-            CANIC_PREPARE_FLEET_ACTIVATION, CANIC_RESUME_FLEET_ACTIVATION,
-            CANIC_ROOT_COMPONENT_ALLOCATE, CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
-            CANIC_ROOT_COMPONENT_CHILD_ALLOCATE, CANIC_ROOT_COMPONENT_CHILD_COMMIT,
-            CANIC_ROOT_COMPONENT_CHILD_CREATE, CANIC_ROOT_COMPONENT_CHILD_DIRECTORY_PREPARE,
-            CANIC_ROOT_COMPONENT_CHILD_INSTALL, CANIC_ROOT_COMPONENT_CHILD_MEMBERSHIP_ACTIVATE,
+            CANIC_FLEET_REGISTRY_MIRROR_STATUS, CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,
+            CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS, CANIC_FLEET_REGISTRY_SYNC_STATUS,
+            CANIC_FLEET_REGISTRY_SYNCHRONIZE, CANIC_FLEET_REGISTRY_VERSION,
+            CANIC_FLEET_SUBNET_ROOT_AUTHORITY, CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY,
+            CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN, CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS,
+            CANIC_FLEET_SUBNET_ROOT_JOIN, CANIC_PREPARE_FLEET_ACTIVATION,
+            CANIC_RESUME_FLEET_ACTIVATION, CANIC_ROOT_COMPONENT_ALLOCATE,
+            CANIC_ROOT_COMPONENT_ALLOCATION_STATUS, CANIC_ROOT_COMPONENT_CHILD_ALLOCATE,
+            CANIC_ROOT_COMPONENT_CHILD_COMMIT, CANIC_ROOT_COMPONENT_CHILD_CREATE,
+            CANIC_ROOT_COMPONENT_CHILD_DIRECTORY_PREPARE, CANIC_ROOT_COMPONENT_CHILD_INSTALL,
+            CANIC_ROOT_COMPONENT_CHILD_MEMBERSHIP_ACTIVATE,
             CANIC_ROOT_COMPONENT_CHILD_RUNTIME_ACTIVATE, CANIC_ROOT_COMPONENT_COMMIT,
             CANIC_ROOT_COMPONENT_CREATE, CANIC_ROOT_COMPONENT_DIRECTORY_HEAD,
             CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE, CANIC_ROOT_COMPONENT_INSTALL,
@@ -519,10 +522,11 @@ mod tests {
         clippy::too_many_lines,
         reason = "one PocketIC journey proves qualified top-level stop, deletion and membership removal"
     )]
-    fn draining_root_removes_one_exact_empty_component() {
+    fn published_draining_root_removes_one_exact_empty_component() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let fixture = setup_active_component_registry();
         let root_draining = assert_root_draining_fence(&fixture);
+        assert_coordinator_root_draining_publication(&fixture, &root_draining);
         let partition: Result<ComponentRegistryPartitionResponse, Error> = fixture
             .pic()
             .query_call(
@@ -1128,6 +1132,59 @@ mod tests {
             canic::dto::error::ErrorCode::Conflict
         );
         begun
+    }
+
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "used only by the focused PocketIC removal test")
+    )]
+    fn assert_coordinator_root_draining_publication(
+        fixture: &ActiveComponentRegistryFixture,
+        root_draining: &FleetSubnetRootDrainingResponse,
+    ) {
+        let request = FleetSubnetRootDrainingPublicationRequest {
+            expected_registry: root_draining.active_registry.clone(),
+            root_draining: root_draining.clone(),
+        };
+        let published: Result<FleetSubnetRootDrainingPublicationResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.coordinator,
+                CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,
+                (request.clone(),),
+            )
+            .expect("publish Fleet Subnet Root draining transport");
+        let published = published.expect("publish Fleet Subnet Root draining");
+        assert_eq!(&published.root_draining, root_draining);
+        assert_eq!(published.previous_version, request.expected_registry);
+        assert_eq!(
+            published.version.revision,
+            published.previous_version.revision + 1
+        );
+
+        let repeated: Result<FleetSubnetRootDrainingPublicationResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.coordinator,
+                CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,
+                (request,),
+            )
+            .expect("retry Fleet Subnet Root draining publication transport");
+        assert_eq!(
+            repeated.expect("retry Fleet Subnet Root draining publication"),
+            published
+        );
+        let registry: Result<FleetRegistry, Error> = fixture
+            .pic()
+            .query_call(fixture.coordinator, CANIC_FLEET_REGISTRY, ())
+            .expect("query published Draining Registry transport");
+        let registry = registry.expect("query published Draining Registry");
+        assert_eq!(registry.revision, published.version.revision);
+        assert_eq!(registry.fleet_subnet_roots.len(), 1);
+        assert_eq!(
+            registry.fleet_subnet_roots[0].status,
+            FleetSubnetRootStatus::Draining
+        );
     }
 
     fn install_fixture_coordinator(

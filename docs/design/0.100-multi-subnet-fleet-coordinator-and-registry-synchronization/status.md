@@ -138,7 +138,9 @@ Registry slices replace the 0.99 root model.
 - [x] Implement root `Joining`.
 - [x] Implement the initial atomic all-root `Active` transition.
 - [x] Begin root draining with a durable root-local top-level allocation cutoff.
-- [ ] Publish root `Draining` through the Coordinator Registry and mirrors.
+- [x] Publish root `Draining` through the Coordinator Registry.
+- [ ] Synchronize mixed-lifecycle Registry authority through root mirrors and
+  Fleet Directories.
 - [ ] Implement root `Draining` and `Removed`.
 - [x] Install initial roots behind the runtime `Prepared` fence.
 - [ ] Enforce Spec, admission, root, topology, limits, active-release-set and
@@ -891,7 +893,7 @@ authority for exact deletion, removal and status retries. A canonical removal
 hash binds the immutable receipt snapshots without incorrectly pinning later
 unrelated root totals. No new stable-memory domain or ID is allocated.
 
-Open 0.100.64 begins Fleet Subnet Root draining with a root-local durable
+Released 0.100.64 begins Fleet Subnet Root draining with a root-local durable
 pre-publication fence. A controller operation names the exact active Registry
 and freezes protected root, Subnet, topology, release-set, allocation-sequence,
 inventory-counter, byte-ledger and start-time authority inside the existing
@@ -902,10 +904,19 @@ counter changes do not invalidate the frozen cutoff. No management effect,
 Coordinator status transition, Directory publication or new stable-memory ID
 occurs in this boundary.
 
+Open 0.100.65 publishes that exact local cutoff through one atomic Coordinator
+Registry `Active -> Draining` transition. The Coordinator validates the root,
+Subnet, topology, release set, current Registry and bounded inventory facts,
+then retains the exact request/response receipt in its existing stable domain.
+Lifecycle validation reconstructs genesis, ordered joins, activation and every
+draining publication before accepting the stored head. Exact retry survives
+restart and later revisions; conflicting root or operation authority fails
+closed. Root mirrors and Fleet Directories deliberately remain on the prior
+`Active` version for the next interruption boundary.
+
 ## Next Action
 
-Publish a locally fenced Fleet Subnet Root as `Draining` through an exact
-Coordinator Registry transition, then synchronize the canonical snapshot into
+Synchronize the Coordinator's mixed `Active`/`Draining` canonical snapshot into
 root mirrors and Fleet Directories without reopening allocation. Keep ordinary
 root removal gated until every local Component partition is absent, the Store
 is quiescent and an exact final root inventory exists; an unreachable root or

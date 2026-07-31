@@ -456,6 +456,14 @@ fn fleet_registry_snapshot_synchronization_protocol_and_guards_are_pinned() {
             .contains("canic_update(requires(caller::is_controller()))"),
         "Registry activation must remain a controller-guarded update"
     );
+    assert!(
+        preceding_attribute_context(
+            &coordinator,
+            "async fn canic_fleet_registry_publish_root_draining(",
+        )
+        .contains("canic_update(requires(caller::is_controller()))"),
+        "root Draining publication must remain a controller-guarded update"
+    );
 
     let coordinator_api_path =
         workspace_root().join("crates/canic-control-plane/src/api/fleet_coordinator.rs");
@@ -514,6 +522,11 @@ fn assert_fleet_registry_protocol_constants() {
             canic::protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
             canic_core::protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
             "canic_fleet_registry_activate",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,
+            "canic_fleet_registry_publish_root_draining",
         ),
         (
             canic::protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,

@@ -4,7 +4,9 @@
 //! Does not own: validation, canonical encoding, persistence, or lifecycle transitions.
 //! Boundary: Coordinator and Fleet Subnet Root workflows validate these passive shapes.
 
-use crate::dto::root_store::RootStoreBootstrapRequest;
+use crate::dto::{
+    fleet_subnet_root::FleetSubnetRootDrainingResponse, root_store::RootStoreBootstrapRequest,
+};
 use crate::ids::{
     CanisterRole, ComponentSpecAdmission, ComponentSpecId, ComponentTopologyDigest,
     FleetRegistryAuthority, FleetSubnetRootLimits, FleetSubnetRootReleaseSet, SubnetId,
@@ -141,6 +143,31 @@ pub struct FleetRegistryActivationRequest {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetRegistryActivationResponse {
+    pub previous_version: FleetRegistryVersion,
+    pub version: FleetRegistryVersion,
+}
+
+///
+/// FleetSubnetRootDrainingPublicationRequest
+///
+/// Controller command publishing one root's exact local draining fence to the Coordinator.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDrainingPublicationRequest {
+    pub expected_registry: FleetRegistryVersion,
+    pub root_draining: FleetSubnetRootDrainingResponse,
+}
+
+///
+/// FleetSubnetRootDrainingPublicationResponse
+///
+/// Durable response authority for one root's canonical `Active -> Draining` transition.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDrainingPublicationResponse {
+    pub root_draining: FleetSubnetRootDrainingResponse,
     pub previous_version: FleetRegistryVersion,
     pub version: FleetRegistryVersion,
 }

@@ -273,6 +273,48 @@ fn activation_atomically_transitions_one_nonempty_all_joining_snapshot() {
 }
 
 #[test]
+fn draining_transitions_only_one_exact_active_root() {
+    let topology = topology();
+    let authority = authority();
+    let mut joining =
+        validation::compile_genesis(&AppId::from("demo"), authority.clone(), &topology)
+            .expect("valid genesis Registry");
+    joining.fleet_subnet_roots = vec![
+        root(&topology, 5, 6, &[("alpha", 1)]),
+        root(&topology, 7, 8, &[("alpha", 2), ("beta", 2)]),
+    ];
+    joining.revision = 3;
+    let active = FleetRegistryOps::compile_active(&authority, &topology, &joining)
+        .expect("activate complete root set");
+
+    let draining = FleetRegistryOps::compile_draining(&authority, &topology, &active, principal(6))
+        .expect("drain one active root");
+
+    assert_eq!(draining.revision, active.revision + 1);
+    assert_eq!(
+        draining
+            .fleet_subnet_roots
+            .iter()
+            .map(|entry| entry.status)
+            .collect::<Vec<_>>(),
+        vec![
+            FleetSubnetRootStatus::Draining,
+            FleetSubnetRootStatus::Active
+        ]
+    );
+    let mut expected = active.clone();
+    expected.revision += 1;
+    expected.fleet_subnet_roots[0].status = FleetSubnetRootStatus::Draining;
+    assert_eq!(draining, expected);
+    assert!(
+        FleetRegistryOps::compile_draining(&authority, &topology, &draining, principal(6)).is_err()
+    );
+    assert!(
+        FleetRegistryOps::compile_draining(&authority, &topology, &active, principal(9)).is_err()
+    );
+}
+
+#[test]
 fn active_directory_is_an_exact_root_sourced_registry_projection() {
     let topology = topology();
     let authority = authority();

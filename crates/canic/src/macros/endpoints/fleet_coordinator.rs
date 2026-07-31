@@ -67,5 +67,14 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
                 request,
             )
         }
+
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_fleet_registry_publish_root_draining(
+            request: ::canic::dto::fleet_registry::FleetSubnetRootDrainingPublicationRequest,
+        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootDrainingPublicationResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::publish_root_draining(
+                request,
+            )
+        }
     };
 }

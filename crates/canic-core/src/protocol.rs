@@ -12,6 +12,8 @@ pub const CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT: &str = "canic_fleet_registry_ac
 pub const CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS: &str =
     "canic_fleet_registry_root_acknowledgements";
 pub const CANIC_FLEET_REGISTRY_ACTIVATE: &str = "canic_fleet_registry_activate";
+pub const CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING: &str =
+    "canic_fleet_registry_publish_root_draining";
 pub const CANIC_FLEET_SUBNET_ROOT_AUTHORITY: &str = "canic_fleet_subnet_root_authority";
 pub const CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY: &str =
     "canic_fleet_subnet_root_canister_summary";

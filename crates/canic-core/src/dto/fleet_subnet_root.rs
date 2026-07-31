@@ -109,7 +109,80 @@ mod tests {
 
     #[test]
     fn canister_summary_and_draining_contracts_round_trip_through_candid() {
-        let summary = FleetSubnetRootCanisterSummary {
+        let summary = canister_summary();
+        let candid = candid::encode_one(&summary).expect("encode Canister summary");
+        let decoded: FleetSubnetRootCanisterSummary =
+            candid::decode_one(&candid).expect("decode Canister summary");
+
+        assert_eq!(decoded, summary);
+
+        let draining = draining_response(&summary);
+        let request = FleetSubnetRootDrainingRequest {
+            operation_id: draining.operation_id,
+            expected_registry: draining.active_registry.clone(),
+        };
+        let status = FleetSubnetRootDrainingStatusRequest {
+            operation_id: draining.operation_id,
+        };
+        let request_bytes = candid::encode_one(&request).expect("encode root draining request");
+        let status_bytes = candid::encode_one(status).expect("encode root draining status");
+        let response_bytes = candid::encode_one(&draining).expect("encode root draining response");
+        assert_eq!(
+            candid::decode_one::<FleetSubnetRootDrainingRequest>(&request_bytes)
+                .expect("decode root draining request"),
+            request
+        );
+        assert_eq!(
+            candid::decode_one::<FleetSubnetRootDrainingStatusRequest>(&status_bytes)
+                .expect("decode root draining status"),
+            status
+        );
+        assert_eq!(
+            candid::decode_one::<FleetSubnetRootDrainingResponse>(&response_bytes)
+                .expect("decode root draining response"),
+            draining
+        );
+    }
+
+    #[test]
+    fn draining_publication_contracts_round_trip_through_candid() {
+        let draining = draining_response(&canister_summary());
+        let publication = crate::dto::fleet_registry::FleetSubnetRootDrainingPublicationRequest {
+            expected_registry: draining.active_registry.clone(),
+            root_draining: draining.clone(),
+        };
+        let publication_response =
+            crate::dto::fleet_registry::FleetSubnetRootDrainingPublicationResponse {
+                root_draining: draining,
+                previous_version: publication.expected_registry.clone(),
+                version: FleetRegistryVersion {
+                    authority: publication.expected_registry.authority.clone(),
+                    revision: publication.expected_registry.revision + 1,
+                    content_hash: [19; 32],
+                },
+            };
+        let publication_bytes =
+            candid::encode_one(&publication).expect("encode root draining publication");
+        let publication_response_bytes = candid::encode_one(&publication_response)
+            .expect("encode root draining publication response");
+        assert_eq!(
+            candid::decode_one::<
+                crate::dto::fleet_registry::FleetSubnetRootDrainingPublicationRequest,
+            >(&publication_bytes)
+            .expect("decode root draining publication"),
+            publication
+        );
+        assert_eq!(
+            candid::decode_one::<
+                crate::dto::fleet_registry::FleetSubnetRootDrainingPublicationResponse,
+            >(&publication_response_bytes)
+            .expect("decode root draining publication response"),
+            publication_response
+        );
+    }
+
+    fn canister_summary() -> FleetSubnetRootCanisterSummary {
+        FleetSubnetRootCanisterSummary {
             fleet_registry: FleetRegistryVersion {
                 authority: FleetRegistryAuthority {
                     binding: FleetCoordinatorBinding {
@@ -136,18 +209,17 @@ mod tests {
             infrastructure_canisters: 2,
             component_canisters: 3,
             total_canisters: 5,
-        };
-        let candid = candid::encode_one(&summary).expect("encode Canister summary");
-        let decoded: FleetSubnetRootCanisterSummary =
-            candid::decode_one(&candid).expect("decode Canister summary");
+        }
+    }
 
-        assert_eq!(decoded, summary);
-
-        let draining = FleetSubnetRootDrainingResponse {
+    fn draining_response(
+        summary: &FleetSubnetRootCanisterSummary,
+    ) -> FleetSubnetRootDrainingResponse {
+        FleetSubnetRootDrainingResponse {
             operation_id: [8; 32],
             fleet_subnet_root: summary.fleet_subnet_root,
             placement_subnet: summary.placement_subnet,
-            active_registry: summary.fleet_registry,
+            active_registry: summary.fleet_registry.clone(),
             component_topology_digest: ComponentTopologyDigest::from_bytes([9; 32]),
             active_release_set: FleetSubnetRootReleaseSet {
                 release_build_id: crate::ids::ReleaseBuildId::from_nonce(
@@ -162,31 +234,6 @@ mod tests {
             known_created_component_canisters: 16,
             root_registry_encoded_bytes: 17_000,
             started_at_ns: 18,
-        };
-        let request = FleetSubnetRootDrainingRequest {
-            operation_id: draining.operation_id,
-            expected_registry: draining.active_registry.clone(),
-        };
-        let status = FleetSubnetRootDrainingStatusRequest {
-            operation_id: draining.operation_id,
-        };
-        let request_bytes = candid::encode_one(&request).expect("encode root draining request");
-        let status_bytes = candid::encode_one(status).expect("encode root draining status");
-        let response_bytes = candid::encode_one(&draining).expect("encode root draining response");
-        assert_eq!(
-            candid::decode_one::<FleetSubnetRootDrainingRequest>(&request_bytes)
-                .expect("decode root draining request"),
-            request
-        );
-        assert_eq!(
-            candid::decode_one::<FleetSubnetRootDrainingStatusRequest>(&status_bytes)
-                .expect("decode root draining status"),
-            status
-        );
-        assert_eq!(
-            candid::decode_one::<FleetSubnetRootDrainingResponse>(&response_bytes)
-                .expect("decode root draining response"),
-            draining
-        );
+        }
     }
 }

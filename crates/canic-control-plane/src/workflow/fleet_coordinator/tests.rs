@@ -13,9 +13,10 @@ use canic_core::{
     dto::{
         error::ErrorCode,
         fleet_registry::{
-            FleetRegistryActivationRequest, FleetSubnetRootEntry, FleetSubnetRootJoinRequest,
-            FleetSubnetRootStatus,
+            FleetRegistryActivationRequest, FleetSubnetRootDrainingPublicationRequest,
+            FleetSubnetRootEntry, FleetSubnetRootJoinRequest, FleetSubnetRootStatus,
         },
+        fleet_subnet_root::FleetSubnetRootDrainingResponse,
     },
     ids::{
         AppId, CanonicalNetworkId, ComponentSpecAdmission, CyclesFundingBudget, FleetBinding,
@@ -165,7 +166,9 @@ fn root_join_compare_and_commit_retains_exact_response_receipts() {
         vec![second_entry.placement_subnet, first_entry.placement_subnet]
     );
 
-    assert_snapshot_acknowledgements(&registry, &first_entry, &second_entry, &second.version);
+    let active_version =
+        assert_snapshot_acknowledgements(&registry, &first_entry, &second_entry, &second.version);
+    assert_root_draining_publication(&first_entry, &second_entry, &active_version);
 
     let stale = FleetCoordinatorWorkflow::join_root(FleetSubnetRootJoinRequest {
         expected_registry: genesis,
@@ -208,7 +211,7 @@ fn assert_snapshot_acknowledgements(
     first_entry: &FleetSubnetRootEntry,
     second_entry: &FleetSubnetRootEntry,
     version: &FleetRegistryVersion,
-) {
+) -> FleetRegistryVersion {
     let snapshot = FleetCoordinatorWorkflow::snapshot_for_root(first_entry.fleet_subnet_root)
         .expect("registered root snapshot");
     assert_eq!(&snapshot.registry, registry);
@@ -273,6 +276,100 @@ fn assert_snapshot_acknowledgements(
             .expect("cleared acknowledgements")
             .is_empty()
     );
+    activated.version
+}
+
+fn assert_root_draining_publication(
+    first_entry: &FleetSubnetRootEntry,
+    second_entry: &FleetSubnetRootEntry,
+    active_version: &FleetRegistryVersion,
+) {
+    let request = FleetSubnetRootDrainingPublicationRequest {
+        expected_registry: active_version.clone(),
+        root_draining: FleetSubnetRootDrainingResponse {
+            operation_id: [21; 32],
+            fleet_subnet_root: first_entry.fleet_subnet_root,
+            placement_subnet: first_entry.placement_subnet,
+            active_registry: active_version.clone(),
+            component_topology_digest: first_entry.component_topology_digest,
+            active_release_set: first_entry.active_release_set,
+            next_allocation_sequence: 3,
+            reserved_component_instances: 1,
+            committed_component_instances: 1,
+            managed_descendants: 2,
+            known_created_component_canisters: 3,
+            root_registry_encoded_bytes: 1_024,
+            started_at_ns: 22,
+        },
+    };
+    let before_invalid = FleetCoordinatorRegistryStore::export();
+    let mut oversized = request.clone();
+    oversized.root_draining.root_registry_encoded_bytes =
+        first_entry.limits.maximum_registry_bytes + 1;
+    let invalid = FleetCoordinatorWorkflow::publish_root_draining(oversized)
+        .expect_err("reject root draining receipt outside protected limits");
+    assert_eq!(
+        invalid.public_error().map(|error| error.code),
+        Some(ErrorCode::InvalidInput)
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), before_invalid);
+
+    let published = FleetCoordinatorWorkflow::publish_root_draining(request.clone())
+        .expect("publish root Draining");
+    assert_eq!(&published.previous_version, active_version);
+    assert_eq!(published.version.revision, active_version.revision + 1);
+
+    let durable = FleetCoordinatorRegistryStore::export();
+    FleetCoordinatorRegistryStore::import(durable);
+    assert_eq!(
+        FleetCoordinatorWorkflow::publish_root_draining(request.clone())
+            .expect("exact publication retry after restart"),
+        published
+    );
+    let registry = FleetCoordinatorWorkflow::registry().expect("Draining Registry");
+    assert_eq!(
+        registry
+            .fleet_subnet_roots
+            .iter()
+            .find(|entry| entry.fleet_subnet_root == first_entry.fleet_subnet_root)
+            .expect("first root")
+            .status,
+        FleetSubnetRootStatus::Draining
+    );
+    assert_eq!(
+        registry
+            .fleet_subnet_roots
+            .iter()
+            .find(|entry| entry.fleet_subnet_root == second_entry.fleet_subnet_root)
+            .expect("second root")
+            .status,
+        FleetSubnetRootStatus::Active
+    );
+
+    let mut conflicting = request;
+    conflicting.root_draining.operation_id[0] ^= 1;
+    let conflict = FleetCoordinatorWorkflow::publish_root_draining(conflicting)
+        .expect_err("one root cannot publish different draining authority");
+    assert_eq!(
+        conflict.public_error().map(|error| error.code),
+        Some(ErrorCode::Conflict)
+    );
+
+    let valid = FleetCoordinatorRegistryStore::export();
+    let mut corrupted = valid.clone();
+    corrupted
+        .current
+        .as_mut()
+        .expect("Coordinator state")
+        .root_draining_publication_receipts[0]
+        .response
+        .version
+        .content_hash[0] ^= 1;
+    FleetCoordinatorRegistryStore::import(corrupted);
+    let invalid = crate::api::fleet_coordinator::FleetCoordinatorApi::registry()
+        .expect_err("reject corrupted root Draining publication receipt");
+    assert_eq!(invalid.code, ErrorCode::InvariantViolation);
+    FleetCoordinatorRegistryStore::import(valid);
 }
 
 fn joining_entry(
