@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.64` adds a durable root-local draining fence that rejects new
+  top-level Component allocations while admitted Component trees finish safely.
+
 - `0.100.63` atomically removes an independently deleted top-level Component
   from local Registry membership, settles its retained allocation and exact
   root/Spec capacity accounting, and preserves canonical terminal retry authority.

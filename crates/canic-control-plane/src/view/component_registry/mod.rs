@@ -1,6 +1,6 @@
 //! Module: view::component_registry
 //!
-//! Responsibility: model read-only Component Registry authority and allocation reservations.
+//! Responsibility: model read-only Component Registry authority, lifecycle and root fences.
 //! Does not own: persisted records, validation, allocation, or lifecycle mutation.
 //! Boundary: Component Registry ops construct these values for workflow consumption.
 
@@ -18,9 +18,33 @@ use canic_core::{
     },
     ids::{
         CanisterRole, ComponentBinding, ComponentChildBinding, ComponentInstanceId,
-        ComponentSpecId, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
+        ComponentSpecId, ComponentTopologyDigest, FleetSubnetRootBinding,
+        FleetSubnetRootReleaseSet, SubnetId,
     },
 };
+
+///
+/// RootFleetSubnetDrainingView
+///
+/// Read-only root-local cutoff for new top-level Component allocation.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootFleetSubnetDrainingView {
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+    pub placement_subnet: SubnetId,
+    pub active_registry: FleetRegistryVersion,
+    pub component_topology_digest: ComponentTopologyDigest,
+    pub active_release_set: FleetSubnetRootReleaseSet,
+    pub next_allocation_sequence: u64,
+    pub reserved_component_instances: u32,
+    pub committed_component_instances: u32,
+    pub managed_descendants: u32,
+    pub known_created_component_canisters: u32,
+    pub root_registry_encoded_bytes: u64,
+    pub started_at_ns: u64,
+}
 
 ///
 /// RootComponentDrainingView
@@ -205,6 +229,7 @@ pub struct RootComponentRegistryView {
     pub known_created_component_canisters: u32,
     pub encoded_bytes: u64,
     pub initial_inventory: Option<RootComponentInitialInventoryView>,
+    pub root_draining: Option<RootFleetSubnetDrainingView>,
 }
 
 ///

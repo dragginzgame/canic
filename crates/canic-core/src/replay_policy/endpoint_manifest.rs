@@ -125,6 +125,11 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     query_read_only("canic_root_component_registry_status"),
     query_read_only("canic_fleet_subnet_root_canister_summary"),
     update_response_idempotent(
+        "canic_fleet_subnet_root_draining_begin",
+        command_kind("fleet_subnet_root.begin_draining.v1"),
+    ),
+    query_read_only("canic_fleet_subnet_root_draining_status"),
+    update_response_idempotent(
         "canic_root_component_allocate",
         command_kind("component_registry.allocate_top_level.v1"),
     ),

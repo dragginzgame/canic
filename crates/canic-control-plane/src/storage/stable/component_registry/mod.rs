@@ -33,7 +33,8 @@ use canic_core::{
     },
     ids::{
         CanisterRole, ComponentBinding, ComponentChildBinding, ComponentInstanceId,
-        ComponentSpecId, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
+        ComponentSpecId, ComponentTopologyDigest, FleetSubnetRootBinding,
+        FleetSubnetRootReleaseSet, SubnetId,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -192,6 +193,7 @@ pub struct RootComponentRegistryMetaRecord {
     pub known_created_component_canisters: u32,
     pub encoded_bytes: u64,
     pub initial_inventory: Option<RootComponentInitialInventoryRecord>,
+    pub root_draining: Option<RootFleetSubnetDrainingRecord>,
 }
 
 ///
@@ -208,6 +210,128 @@ pub struct RootComponentInitialInventoryRecord {
     pub sealed_at_ns: u64,
     pub directories_converged: bool,
     pub root_runtime_activated: bool,
+}
+
+///
+/// RootFleetSubnetDrainingRecord
+///
+/// Durable root-local cutoff for new top-level Component allocation.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootFleetSubnetDrainingRecord {
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+    pub placement_subnet: SubnetId,
+    pub active_registry: FleetRegistryVersion,
+    pub component_topology_digest: ComponentTopologyDigest,
+    pub active_release_set: FleetSubnetRootReleaseSet,
+    pub next_allocation_sequence: u64,
+    pub reserved_component_instances: u32,
+    pub committed_component_instances: u32,
+    pub managed_descendants: u32,
+    pub known_created_component_canisters: u32,
+    pub root_registry_encoded_bytes: u64,
+    pub started_at_ns: u64,
+}
+
+#[cfg(feature = "root-control-plane")]
+impl RootFleetSubnetDrainingRecord {
+    pub(crate) fn is_valid_for_current(&self, meta: &RootComponentRegistryMetaRecord) -> bool {
+        let source_is_exact = RootFleetSubnetDrainingSourceAuthority::from_record(self)
+            == RootFleetSubnetDrainingSourceAuthority::from_meta(meta);
+        let operation_is_valid = self.operation_id != [0; 32];
+        let time_is_valid = self.started_at_ns > 0;
+        let sequence_is_valid = self.next_allocation_sequence > 0;
+        let bytes_are_bounded =
+            self.root_registry_encoded_bytes <= meta.root.limits.maximum_registry_bytes;
+        [
+            source_is_exact,
+            operation_is_valid,
+            time_is_valid,
+            sequence_is_valid,
+            bytes_are_bounded,
+        ]
+        .into_iter()
+        .all(|valid| valid)
+    }
+
+    fn matches_begin_meta(&self, meta: &RootComponentRegistryMetaRecord) -> bool {
+        let inventory_is_exact = RootFleetSubnetDrainingInventoryAuthority::from_record(self)
+            == RootFleetSubnetDrainingInventoryAuthority::from_meta(meta);
+        [self.is_valid_for_current(meta), inventory_is_exact]
+            .into_iter()
+            .all(|valid| valid)
+    }
+}
+
+#[cfg(feature = "root-control-plane")]
+#[derive(Debug, Eq, PartialEq)]
+struct RootFleetSubnetDrainingSourceAuthority<'a> {
+    fleet_subnet_root: Principal,
+    placement_subnet: SubnetId,
+    active_registry: &'a FleetRegistryVersion,
+    component_topology_digest: ComponentTopologyDigest,
+    active_release_set: FleetSubnetRootReleaseSet,
+}
+
+#[cfg(feature = "root-control-plane")]
+impl<'a> RootFleetSubnetDrainingSourceAuthority<'a> {
+    const fn from_record(record: &'a RootFleetSubnetDrainingRecord) -> Self {
+        Self {
+            fleet_subnet_root: record.fleet_subnet_root,
+            placement_subnet: record.placement_subnet,
+            active_registry: &record.active_registry,
+            component_topology_digest: record.component_topology_digest,
+            active_release_set: record.active_release_set,
+        }
+    }
+
+    const fn from_meta(meta: &'a RootComponentRegistryMetaRecord) -> Self {
+        Self {
+            fleet_subnet_root: meta.root.fleet_subnet_root,
+            placement_subnet: meta.root.placement_subnet,
+            active_registry: &meta.prepared_against_registry,
+            component_topology_digest: meta.root.component_topology_digest,
+            active_release_set: meta.release_set,
+        }
+    }
+}
+
+#[cfg(feature = "root-control-plane")]
+#[derive(Debug, Eq, PartialEq)]
+struct RootFleetSubnetDrainingInventoryAuthority {
+    next_allocation_sequence: u64,
+    reserved_component_instances: u32,
+    committed_component_instances: u32,
+    managed_descendants: u32,
+    known_created_component_canisters: u32,
+    root_registry_encoded_bytes: u64,
+}
+
+#[cfg(feature = "root-control-plane")]
+impl RootFleetSubnetDrainingInventoryAuthority {
+    const fn from_record(record: &RootFleetSubnetDrainingRecord) -> Self {
+        Self {
+            next_allocation_sequence: record.next_allocation_sequence,
+            reserved_component_instances: record.reserved_component_instances,
+            committed_component_instances: record.committed_component_instances,
+            managed_descendants: record.managed_descendants,
+            known_created_component_canisters: record.known_created_component_canisters,
+            root_registry_encoded_bytes: record.root_registry_encoded_bytes,
+        }
+    }
+
+    const fn from_meta(meta: &RootComponentRegistryMetaRecord) -> Self {
+        Self {
+            next_allocation_sequence: meta.next_allocation_sequence,
+            reserved_component_instances: meta.reserved_component_instances,
+            committed_component_instances: meta.committed_component_instances,
+            managed_descendants: meta.managed_descendants,
+            known_created_component_canisters: meta.known_created_component_canisters,
+            root_registry_encoded_bytes: meta.encoded_bytes,
+        }
+    }
 }
 
 ///
@@ -2021,6 +2145,33 @@ impl RootComponentRegistryStore {
         })
     }
 
+    pub(crate) fn begin_root_draining(
+        expected: &RootComponentRegistryMetaRecord,
+        record: RootFleetSubnetDrainingRecord,
+    ) -> Result<RootComponentRegistryCommitOutcome, RootComponentRegistryCommitError> {
+        if !record.matches_begin_meta(expected) {
+            return Err(RootComponentRegistryCommitError::ConflictingState);
+        }
+        ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            let current = state
+                .current
+                .as_ref()
+                .ok_or(RootComponentRegistryCommitError::ConflictingState)?;
+            if current.root_draining.as_ref() == Some(&record) {
+                return Ok(RootComponentRegistryCommitOutcome::Existing);
+            }
+            if current != expected || current.root_draining.is_some() {
+                return Err(RootComponentRegistryCommitError::ConflictingState);
+            }
+            let mut next = current.clone();
+            next.root_draining = Some(record);
+            state.current = Some(next);
+            cell.set(state);
+            Ok(RootComponentRegistryCommitOutcome::Committed)
+        })
+    }
+
     #[must_use]
     #[cfg(test)]
     pub(crate) fn export() -> RootComponentRegistryData {
@@ -2530,6 +2681,11 @@ impl RootComponentRegistryStore {
                 };
             }
             if current != expected_meta {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            let root_accepts_allocations = current.root_draining.is_none();
+            let draining_fence_is_preserved = next_meta.root_draining == current.root_draining;
+            if !root_accepts_allocations || !draining_fence_is_preserved {
                 return Err(RootComponentAllocationCommitError::ConflictingState);
             }
             if ROOT_COMPONENT_ALLOCATIONS.with_borrow(|map| {

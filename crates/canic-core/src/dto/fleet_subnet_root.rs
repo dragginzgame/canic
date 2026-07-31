@@ -1,13 +1,12 @@
 //! Module: dto::fleet_subnet_root
 //!
-//! Responsibility: carry protected fresh-install Fleet Subnet Root authority.
+//! Responsibility: carry protected Fleet Subnet Root authority and controller lifecycle DTOs.
 //! Does not own: validation, persistence, topology compilation, or lifecycle effects.
-//! Boundary: the root lifecycle adapter passes init authority to workflow; controller queries
-//! return the exact persisted authority without granting mutation rights.
+//! Boundary: lifecycle adapters pass init/command authority to workflow and return passive data.
 
 use crate::{
     dto::fleet_registry::{FleetRegistryVersion, FleetSubnetRootStatus},
-    ids::{FleetSubnetRootBinding, FleetSubnetRootReleaseSet, SubnetId},
+    ids::{ComponentTopologyDigest, FleetSubnetRootBinding, FleetSubnetRootReleaseSet, SubnetId},
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
@@ -43,6 +42,52 @@ pub struct FleetSubnetRootCanisterSummary {
 }
 
 ///
+/// FleetSubnetRootDrainingRequest
+///
+/// Controller command fencing new top-level Component allocation under exact active authority.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDrainingRequest {
+    pub operation_id: [u8; 32],
+    pub expected_registry: FleetRegistryVersion,
+}
+
+///
+/// FleetSubnetRootDrainingStatusRequest
+///
+/// Read-only lookup key for one durable root-draining fence.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDrainingStatusRequest {
+    pub operation_id: [u8; 32],
+}
+
+///
+/// FleetSubnetRootDrainingResponse
+///
+/// Durable root-local admission cutoff and exact active authority frozen at that boundary.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDrainingResponse {
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+    pub placement_subnet: SubnetId,
+    pub active_registry: FleetRegistryVersion,
+    pub component_topology_digest: ComponentTopologyDigest,
+    pub active_release_set: FleetSubnetRootReleaseSet,
+    pub next_allocation_sequence: u64,
+    pub reserved_component_instances: u32,
+    pub committed_component_instances: u32,
+    pub managed_descendants: u32,
+    pub known_created_component_canisters: u32,
+    pub root_registry_encoded_bytes: u64,
+    pub started_at_ns: u64,
+}
+
+///
 /// FleetSubnetRootInitArgs
 ///
 /// Fresh-install authority plus the reinstall-local activation operation identity.
@@ -63,7 +108,7 @@ mod tests {
     };
 
     #[test]
-    fn canister_summary_round_trips_through_candid() {
+    fn canister_summary_and_draining_contracts_round_trip_through_candid() {
         let summary = FleetSubnetRootCanisterSummary {
             fleet_registry: FleetRegistryVersion {
                 authority: FleetRegistryAuthority {
@@ -97,5 +142,51 @@ mod tests {
             candid::decode_one(&candid).expect("decode Canister summary");
 
         assert_eq!(decoded, summary);
+
+        let draining = FleetSubnetRootDrainingResponse {
+            operation_id: [8; 32],
+            fleet_subnet_root: summary.fleet_subnet_root,
+            placement_subnet: summary.placement_subnet,
+            active_registry: summary.fleet_registry,
+            component_topology_digest: ComponentTopologyDigest::from_bytes([9; 32]),
+            active_release_set: FleetSubnetRootReleaseSet {
+                release_build_id: crate::ids::ReleaseBuildId::from_nonce(
+                    crate::ids::ReleaseBuildNonce::from_random_bytes([10; 32]),
+                ),
+                manifest_digest: crate::ids::ReleaseSetDigest::from_bytes([11; 32]),
+            },
+            next_allocation_sequence: 12,
+            reserved_component_instances: 13,
+            committed_component_instances: 14,
+            managed_descendants: 15,
+            known_created_component_canisters: 16,
+            root_registry_encoded_bytes: 17_000,
+            started_at_ns: 18,
+        };
+        let request = FleetSubnetRootDrainingRequest {
+            operation_id: draining.operation_id,
+            expected_registry: draining.active_registry.clone(),
+        };
+        let status = FleetSubnetRootDrainingStatusRequest {
+            operation_id: draining.operation_id,
+        };
+        let request_bytes = candid::encode_one(&request).expect("encode root draining request");
+        let status_bytes = candid::encode_one(status).expect("encode root draining status");
+        let response_bytes = candid::encode_one(&draining).expect("encode root draining response");
+        assert_eq!(
+            candid::decode_one::<FleetSubnetRootDrainingRequest>(&request_bytes)
+                .expect("decode root draining request"),
+            request
+        );
+        assert_eq!(
+            candid::decode_one::<FleetSubnetRootDrainingStatusRequest>(&status_bytes)
+                .expect("decode root draining status"),
+            status
+        );
+        assert_eq!(
+            candid::decode_one::<FleetSubnetRootDrainingResponse>(&response_bytes)
+                .expect("decode root draining response"),
+            draining
+        );
     }
 }
