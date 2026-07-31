@@ -3,7 +3,8 @@ use crate::{
         clap::{flag_arg, parse_matches, render_usage, required_string, typed_option, value_arg},
         globals::{internal_environment_arg, internal_icp_arg},
     },
-    cycles::{CyclesCommandError, wallet::IcpTargetOptions},
+    cycles::CyclesCommandError,
+    support::icp_target::IcpTargetOptions,
 };
 use canic_core::cdk::utils::hash::decode_hex;
 use clap::Command as ClapCommand;

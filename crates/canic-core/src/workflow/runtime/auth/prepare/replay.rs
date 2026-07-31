@@ -241,7 +241,7 @@ fn map_auth_prepare_replay_store_error(
 pub(super) fn encode_token_prepare_response(
     response: &DelegatedTokenPrepareResponse,
 ) -> Result<Vec<u8>, InternalError> {
-    replay_ops::encode_delegated_token_prepare_replay_response(response).map_err(|err| match err {
+    replay_ops::encode_replay_response(response).map_err(|err| match err {
         replay_ops::ReplayCommitError::EncodeFailed(message) => InternalError::workflow(
             InternalErrorOrigin::Workflow,
             format!("failed to encode delegated token prepare replay response: {message}"),
@@ -321,7 +321,7 @@ pub(super) fn map_role_attestation_replay_store_error(
 pub(super) fn encode_role_attestation_prepare_response(
     response: &RoleAttestationPrepareResponse,
 ) -> Result<Vec<u8>, InternalError> {
-    replay_ops::encode_role_attestation_prepare_replay_response(response).map_err(|err| match err {
+    replay_ops::encode_replay_response(response).map_err(|err| match err {
         replay_ops::ReplayCommitError::EncodeFailed(message) => InternalError::workflow(
             InternalErrorOrigin::Workflow,
             format!("failed to encode role attestation prepare replay response: {message}"),

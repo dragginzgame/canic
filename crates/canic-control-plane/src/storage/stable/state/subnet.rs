@@ -389,6 +389,35 @@ impl SubnetState {
         })
     }
 
+    pub(crate) fn reconcile_wasm_store_gc(
+        binding: &WasmStoreBinding,
+        pid: Principal,
+        next: WasmStoreGcRecord,
+    ) -> bool {
+        if !wasm_store_gc_record_is_valid(&next) {
+            return false;
+        }
+        SUBNET_STATE.with_borrow_mut(|cell| {
+            let mut data = cell.get().clone();
+            let Some(record) = data
+                .wasm_stores
+                .iter_mut()
+                .find(|record| &record.binding == binding && record.pid == pid)
+            else {
+                return false;
+            };
+            if !wasm_store_gc_reconciliation_is_monotonic(&record.gc, &next) {
+                return false;
+            }
+            if record.gc == next {
+                return true;
+            }
+            record.gc = next;
+            cell.set(data);
+            true
+        })
+    }
+
     pub(crate) fn remove_wasm_store(binding: &WasmStoreBinding) -> Option<WasmStoreRecord> {
         SUBNET_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
@@ -466,6 +495,100 @@ impl SubnetState {
             record: SUBNET_STATE.with_borrow(|cell| cell.get().clone()),
         }
     }
+}
+
+fn wasm_store_gc_record_is_valid(record: &WasmStoreGcRecord) -> bool {
+    match record.mode {
+        WasmStoreGcMode::Normal => [
+            record.prepared_at.is_none(),
+            record.started_at.is_none(),
+            record.completed_at.is_none(),
+            record.runs_completed == 0,
+        ]
+        .into_iter()
+        .all(|valid| valid),
+        WasmStoreGcMode::Prepared => record.prepared_at.is_some_and(|prepared_at| {
+            [
+                prepared_at > 0,
+                record.changed_at == prepared_at,
+                record.started_at.is_none(),
+                record.completed_at.is_none(),
+                record.runs_completed == 0,
+            ]
+            .into_iter()
+            .all(|valid| valid)
+        }),
+        WasmStoreGcMode::InProgress | WasmStoreGcMode::Clearing => {
+            let Some(prepared_at) = record.prepared_at else {
+                return false;
+            };
+            let Some(started_at) = record.started_at else {
+                return false;
+            };
+            [
+                prepared_at > 0,
+                started_at >= prepared_at,
+                record.changed_at >= started_at,
+                record.completed_at.is_none(),
+                record.runs_completed == 0,
+            ]
+            .into_iter()
+            .all(|valid| valid)
+        }
+        WasmStoreGcMode::Complete => {
+            let Some(prepared_at) = record.prepared_at else {
+                return false;
+            };
+            let Some(started_at) = record.started_at else {
+                return false;
+            };
+            let Some(completed_at) = record.completed_at else {
+                return false;
+            };
+            [
+                prepared_at > 0,
+                started_at >= prepared_at,
+                completed_at >= started_at,
+                record.changed_at == completed_at,
+                record.runs_completed == 1,
+            ]
+            .into_iter()
+            .all(|valid| valid)
+        }
+    }
+}
+
+fn wasm_store_gc_reconciliation_is_monotonic(
+    current: &WasmStoreGcRecord,
+    next: &WasmStoreGcRecord,
+) -> bool {
+    let mode_is_monotonic = match (current.mode, next.mode) {
+        (left, right) if left == right => true,
+        (WasmStoreGcMode::Normal, WasmStoreGcMode::Prepared)
+        | (
+            WasmStoreGcMode::Prepared | WasmStoreGcMode::Clearing,
+            WasmStoreGcMode::InProgress | WasmStoreGcMode::Complete,
+        )
+        | (WasmStoreGcMode::InProgress, WasmStoreGcMode::Clearing | WasmStoreGcMode::Complete) => {
+            true
+        }
+        _ => false,
+    };
+    let prepared_at_is_stable = current
+        .prepared_at
+        .is_none_or(|prepared_at| next.prepared_at == Some(prepared_at));
+    let started_at_is_stable = current
+        .started_at
+        .is_none_or(|started_at| next.started_at == Some(started_at));
+    [
+        mode_is_monotonic,
+        prepared_at_is_stable,
+        started_at_is_stable,
+        next.changed_at >= current.changed_at,
+        next.runs_completed >= current.runs_completed,
+    ]
+    .into_iter()
+    .all(|valid| valid)
 }
 
 #[cfg(all(test, feature = "root-control-plane"))]

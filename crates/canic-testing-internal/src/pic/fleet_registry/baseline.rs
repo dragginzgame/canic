@@ -102,7 +102,10 @@ mod tests {
     use ic_testkit::artifacts::{read_wasm, test_target_dir, workspace_root_for};
 
     #[cfg(test)]
-    use canic::protocol::{CANIC_ROOT_STORE_BOOTSTRAP_STATUS, CANIC_WASM_STORE_PREPARE};
+    use canic::protocol::{
+        CANIC_ROOT_STORE_BOOTSTRAP_STATUS, CANIC_WASM_STORE_CATALOG, CANIC_WASM_STORE_PREPARE,
+        CANIC_WASM_STORE_STATUS,
+    };
     #[cfg(test)]
     use canic::{
         dto::component_registry::{
@@ -137,13 +140,16 @@ mod tests {
             FleetSubnetRootDrainingStatusRequest, FleetSubnetRootFinalInventoryRequest,
             FleetSubnetRootFinalInventoryResponse, FleetSubnetRootFinalInventoryStatusRequest,
             FleetSubnetRootRemovalRequest, FleetSubnetRootRemovalStatusRequest,
+            FleetSubnetRootStoreReclamationRequest, FleetSubnetRootStoreReclamationResponse,
+            FleetSubnetRootStoreReclamationStatusRequest,
         },
         protocol::{
             CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING, CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN,
             CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_FINALIZE,
             CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_STATUS,
             CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS, CANIC_FLEET_SUBNET_ROOT_REMOVAL_PUBLISH,
-            CANIC_FLEET_SUBNET_ROOT_REMOVAL_STATUS, CANIC_ROOT_COMPONENT_CHILD_ALLOCATE,
+            CANIC_FLEET_SUBNET_ROOT_REMOVAL_STATUS, CANIC_FLEET_SUBNET_ROOT_STORE_RECLAIM,
+            CANIC_FLEET_SUBNET_ROOT_STORE_RECLAMATION_STATUS, CANIC_ROOT_COMPONENT_CHILD_ALLOCATE,
             CANIC_ROOT_COMPONENT_CHILD_COMMIT, CANIC_ROOT_COMPONENT_CHILD_CREATE,
             CANIC_ROOT_COMPONENT_CHILD_DIRECTORY_PREPARE, CANIC_ROOT_COMPONENT_CHILD_INSTALL,
             CANIC_ROOT_COMPONENT_CHILD_MEMBERSHIP_ACTIVATE,
@@ -158,6 +164,11 @@ mod tests {
             CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STATUS, CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STOP,
             CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STOP_PREPARE,
         },
+    };
+    #[cfg(test)]
+    use canic_control_plane::{
+        dto::template::{WasmStoreCatalogEntryResponse, WasmStoreStatusResponse},
+        ids::WasmStoreGcMode,
     };
 
     const COORDINATOR_PACKAGE: &str = "fleet_coordinator_stub";
@@ -877,6 +888,107 @@ mod tests {
         assert_eq!(
             registry.fleet_subnet_roots[0].status,
             FleetSubnetRootStatus::Removed
+        );
+
+        let reclamation_request = FleetSubnetRootStoreReclamationRequest {
+            operation_id: root_draining.operation_id,
+            expected_final_inventory_hash: final_inventory.inventory_hash,
+        };
+        let reclamation: Result<FleetSubnetRootStoreReclamationResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_FLEET_SUBNET_ROOT_STORE_RECLAIM,
+                (reclamation_request,),
+            )
+            .expect("reclaim Fleet Subnet Root Store transport");
+        let reclamation = reclamation.expect("reclaim Fleet Subnet Root Store");
+        assert_eq!(reclamation.wasm_store, final_inventory.wasm_store);
+        assert_eq!(
+            reclamation.final_inventory_hash,
+            final_inventory.inventory_hash
+        );
+        assert_eq!(
+            reclamation.reclaimed_store_bytes,
+            final_inventory.wasm_store_occupied_bytes
+        );
+        assert_eq!(
+            reclamation.reclaimed_catalog_entries,
+            final_inventory.wasm_store_catalog_entries
+        );
+        assert_eq!(
+            reclamation.reclaimed_template_count,
+            final_inventory.wasm_store_template_count
+        );
+        assert_eq!(
+            reclamation.reclaimed_release_count,
+            final_inventory.wasm_store_release_count
+        );
+        assert_eq!(
+            reclamation.gc_prepared_at_secs,
+            final_inventory.wasm_store_gc_prepared_at_secs
+        );
+        assert!(reclamation.gc_started_at_secs >= reclamation.gc_prepared_at_secs);
+        assert!(reclamation.gc_completed_at_secs >= reclamation.gc_started_at_secs);
+        assert_eq!(reclamation.gc_runs_completed, 1);
+        assert_ne!(reclamation.reclamation_hash, [0; 32]);
+
+        let retry: Result<FleetSubnetRootStoreReclamationResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_FLEET_SUBNET_ROOT_STORE_RECLAIM,
+                (reclamation_request,),
+            )
+            .expect("retry Fleet Subnet Root Store reclamation transport");
+        assert_eq!(
+            retry.expect("retry Fleet Subnet Root Store reclamation"),
+            reclamation
+        );
+        let durable: Result<FleetSubnetRootStoreReclamationResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.root,
+                CANIC_FLEET_SUBNET_ROOT_STORE_RECLAMATION_STATUS,
+                (FleetSubnetRootStoreReclamationStatusRequest {
+                    operation_id: root_draining.operation_id,
+                },),
+            )
+            .expect("query Fleet Subnet Root Store reclamation transport");
+        assert_eq!(
+            durable.expect("query Fleet Subnet Root Store reclamation"),
+            reclamation
+        );
+
+        let store_status: Result<WasmStoreStatusResponse, Error> = fixture
+            .pic()
+            .query_call_as(
+                final_inventory.wasm_store,
+                fixture.root,
+                CANIC_WASM_STORE_STATUS,
+                (),
+            )
+            .expect("query reclaimed Store status transport");
+        let store_status = store_status.expect("query reclaimed Store status");
+        assert_eq!(store_status.gc.mode, WasmStoreGcMode::Complete);
+        assert_eq!(store_status.gc.runs_completed, 1);
+        assert_eq!(store_status.occupied_store_bytes, 0);
+        assert_eq!(store_status.template_count, 0);
+        assert_eq!(store_status.release_count, 0);
+        assert!(store_status.templates.is_empty());
+        let store_catalog: Result<Vec<WasmStoreCatalogEntryResponse>, Error> = fixture
+            .pic()
+            .query_call_as(
+                final_inventory.wasm_store,
+                fixture.root,
+                CANIC_WASM_STORE_CATALOG,
+                (),
+            )
+            .expect("query reclaimed Store catalog transport");
+        assert!(
+            store_catalog
+                .expect("query reclaimed Store catalog")
+                .is_empty()
         );
     }
 

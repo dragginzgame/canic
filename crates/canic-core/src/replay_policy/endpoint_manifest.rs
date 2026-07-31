@@ -143,6 +143,11 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     ),
     query_read_only("canic_fleet_subnet_root_removal_status"),
     update_response_idempotent(
+        "canic_fleet_subnet_root_store_reclaim",
+        command_kind("fleet_subnet_root.reclaim_store.v1"),
+    ),
+    query_read_only("canic_fleet_subnet_root_store_reclamation_status"),
+    update_response_idempotent(
         "canic_fleet_subnet_root_draining_inventory_finalize",
         command_kind("fleet_subnet_root.finalize_inventory.v1"),
     ),

@@ -28,7 +28,7 @@ use crate::{
     },
     ops::storage::replay::ReplayReceiptOps,
 };
-use candid::{decode_one, encode_one};
+use candid::{CandidType, decode_one, encode_one};
 
 pub const DELEGATED_TOKEN_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 pub const ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
@@ -197,15 +197,6 @@ pub fn decode_root_replay_response(bytes: &[u8]) -> Result<Response, ReplayDecod
     decode_one(bytes).map_err(|err| ReplayDecodeError::DecodeFailed(err.to_string()))
 }
 
-/// encode_delegated_token_prepare_replay_response
-///
-/// Encode the delegated-token prepare response payload stored in shared replay receipts.
-pub fn encode_delegated_token_prepare_replay_response(
-    response: &DelegatedTokenPrepareResponse,
-) -> Result<Vec<u8>, ReplayCommitError> {
-    encode_one(response).map_err(|err| ReplayCommitError::EncodeFailed(err.to_string()))
-}
-
 /// decode_delegated_token_prepare_replay_response
 ///
 /// Decode a committed delegated-token prepare response from shared replay receipts.
@@ -224,15 +215,6 @@ pub fn decode_delegated_token_prepare_replay_response(
     })
 }
 
-/// encode_icp_refill_replay_response
-///
-/// Encode the ICP refill response payload stored in shared replay receipts.
-pub fn encode_icp_refill_replay_response(
-    response: &IcpRefillResponse,
-) -> Result<Vec<u8>, ReplayCommitError> {
-    encode_one(response).map_err(|err| ReplayCommitError::EncodeFailed(err.to_string()))
-}
-
 /// decode_icp_refill_replay_response
 ///
 /// Decode a committed ICP refill response payload from shared replay receipts.
@@ -249,15 +231,6 @@ pub fn decode_icp_refill_replay_response(
             "failed to decode ICP refill replay response: {err}"
         ))
     })
-}
-
-/// encode_pool_create_empty_replay_response
-///
-/// Encode the pool create-empty response payload stored in shared replay receipts.
-pub fn encode_pool_create_empty_replay_response(
-    response: &PoolAdminResponse,
-) -> Result<Vec<u8>, ReplayCommitError> {
-    encode_one(response).map_err(|err| ReplayCommitError::EncodeFailed(err.to_string()))
 }
 
 /// decode_pool_create_empty_replay_response
@@ -284,12 +257,8 @@ pub fn decode_pool_create_empty_replay_response(
     }
 }
 
-/// encode_role_attestation_prepare_replay_response
-///
-/// Encode the role-attestation prepare response payload stored in shared replay receipts.
-pub fn encode_role_attestation_prepare_replay_response(
-    response: &RoleAttestationPrepareResponse,
-) -> Result<Vec<u8>, ReplayCommitError> {
+/// Encode one typed response payload stored in shared replay receipts.
+pub fn encode_replay_response<T: CandidType>(response: &T) -> Result<Vec<u8>, ReplayCommitError> {
     encode_one(response).map_err(|err| ReplayCommitError::EncodeFailed(err.to_string()))
 }
 

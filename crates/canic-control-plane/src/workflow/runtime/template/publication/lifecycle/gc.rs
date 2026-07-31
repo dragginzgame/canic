@@ -8,13 +8,18 @@ use super::super::super::store_pid_for_binding;
 use super::super::{
     WasmStorePublicationWorkflow,
     error::PublicationWorkflowError,
-    store::{store_begin_gc, store_complete_gc, store_prepare_gc, store_status},
+    store::{store_begin_gc, store_catalog, store_complete_gc, store_prepare_gc, store_status},
 };
 use crate::{
     dto::template::{WasmStoreGcStatusResponse, WasmStoreStatusResponse},
     ids::{WasmStoreBinding, WasmStoreGcMode},
     ops::storage::state::subnet::SubnetStateOps,
-    view::state::{PublicationStoreStateView, WasmStoreView},
+    view::{
+        component_registry::{
+            RootFleetSubnetFinalInventoryView, RootFleetSubnetStoreReclamationEvidence,
+        },
+        state::{PublicationStoreStateView, WasmStoreView},
+    },
 };
 use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{
@@ -33,7 +38,7 @@ thread_local! {
 struct LifecycleOperationGuard;
 
 #[derive(Debug, Eq, PartialEq)]
-struct PreparedStoreGcAuthority {
+struct StoreGcAuthority {
     pid: Principal,
     mode: WasmStoreGcMode,
     changed_at: u64,
@@ -43,7 +48,7 @@ struct PreparedStoreGcAuthority {
     runs_completed: u32,
 }
 
-impl PreparedStoreGcAuthority {
+impl StoreGcAuthority {
     const fn from_runtime(store: &WasmStoreView) -> Self {
         Self {
             pid: store.pid,
@@ -143,8 +148,8 @@ impl WasmStorePublicationWorkflow {
             }
         }
         let persisted = Self::runtime_store(&runtime.binding)?;
-        let runtime_is_exact = PreparedStoreGcAuthority::from_runtime(&persisted)
-            == PreparedStoreGcAuthority::from_live(runtime.pid, &live.gc);
+        let runtime_is_exact = StoreGcAuthority::from_runtime(&persisted)
+            == StoreGcAuthority::from_live(runtime.pid, &live.gc);
         if !runtime_is_exact {
             return Err(PublicationWorkflowError::InvalidState(format!(
                 "persisted GC authority for '{}' differs from its live Store",
@@ -171,8 +176,8 @@ impl WasmStorePublicationWorkflow {
         let runtime = stores.into_iter().next().expect("validated one Store");
         let live = store_status(runtime.pid).await?;
         validate_live_prepared_store(&live)?;
-        let runtime_is_exact = PreparedStoreGcAuthority::from_runtime(&runtime)
-            == PreparedStoreGcAuthority::from_live(runtime.pid, &live.gc);
+        let runtime_is_exact = StoreGcAuthority::from_runtime(&runtime)
+            == StoreGcAuthority::from_live(runtime.pid, &live.gc);
         if !runtime_is_exact {
             return Err(PublicationWorkflowError::InvalidState(format!(
                 "persisted GC authority for '{}' differs from its live Store",
@@ -181,6 +186,112 @@ impl WasmStorePublicationWorkflow {
             .into());
         }
         Ok((runtime.pid, live))
+    }
+
+    /// Reclaim the sole retained Store after its exact final inventory was logically removed.
+    pub async fn reclaim_single_root_store(
+        inventory: &RootFleetSubnetFinalInventoryView,
+    ) -> Result<RootFleetSubnetStoreReclamationEvidence, InternalError> {
+        let _guard = LifecycleOperationGuard::try_enter()?;
+        Self::reclaim_single_root_store_inner(inventory).await
+    }
+
+    async fn reclaim_single_root_store_inner(
+        inventory: &RootFleetSubnetFinalInventoryView,
+    ) -> Result<RootFleetSubnetStoreReclamationEvidence, InternalError> {
+        Self::sync_registered_wasm_store_inventory()?;
+        let stores = SubnetStateOps::wasm_stores();
+        if stores.len() != 1 {
+            return Err(PublicationWorkflowError::InvalidState(format!(
+                "root Store reclamation requires exactly one local wasm store, found {}",
+                stores.len()
+            ))
+            .into());
+        }
+        let runtime = stores.into_iter().next().expect("validated one Store");
+        if runtime.pid != inventory.wasm_store {
+            return Err(PublicationWorkflowError::InvalidState(
+                "root Store reclamation target differs from final inventory".to_string(),
+            )
+            .into());
+        }
+
+        let mut live = store_status(runtime.pid).await?;
+        validate_live_store_gc_lineage(inventory, &live)?;
+        if live.gc.mode == WasmStoreGcMode::Clearing {
+            store_begin_gc(runtime.pid).await?;
+            live = store_status(runtime.pid).await?;
+            validate_live_store_gc_lineage(inventory, &live)?;
+        }
+        if live.gc.mode == WasmStoreGcMode::Prepared {
+            store_begin_gc(runtime.pid).await?;
+            live = store_status(runtime.pid).await?;
+            validate_live_store_gc_lineage(inventory, &live)?;
+        }
+        if live.gc.mode == WasmStoreGcMode::InProgress {
+            Self::reconcile_single_root_store_gc(&runtime, &live.gc)?;
+            store_complete_gc(runtime.pid).await?;
+            live = store_status(runtime.pid).await?;
+            validate_live_store_gc_lineage(inventory, &live)?;
+        }
+        if live.gc.mode != WasmStoreGcMode::Complete {
+            return Err(PublicationWorkflowError::InvalidState(format!(
+                "root Store reclamation did not reach GC Complete; live={:?}",
+                live.gc.mode
+            ))
+            .into());
+        }
+
+        Self::reconcile_single_root_store_gc(&runtime, &live.gc)?;
+        let catalog = store_catalog(runtime.pid).await?;
+        let catalog_entries = u32::try_from(catalog.len()).map_err(|_| {
+            PublicationWorkflowError::InvalidState(
+                "reclaimed root Store catalog exceeds u32".to_string(),
+            )
+        })?;
+        validate_live_reclaimed_store(inventory, &live, catalog_entries)?;
+        let gc_started_at_secs = live.gc.started_at.expect("validated GC start time");
+        let gc_completed_at_secs = live.gc.completed_at.expect("validated GC completion time");
+        Ok(RootFleetSubnetStoreReclamationEvidence {
+            wasm_store: runtime.pid,
+            occupied_store_bytes: live.occupied_store_bytes,
+            catalog_entries,
+            template_count: live.template_count,
+            release_count: live.release_count,
+            gc_prepared_at_secs: inventory.wasm_store_gc_prepared_at_secs,
+            gc_started_at_secs,
+            gc_completed_at_secs,
+            gc_runs_completed: live.gc.runs_completed,
+        })
+    }
+
+    fn reconcile_single_root_store_gc(
+        runtime: &WasmStoreView,
+        live: &WasmStoreGcStatusResponse,
+    ) -> Result<(), InternalError> {
+        let runtime_is_exact = StoreGcAuthority::from_runtime(runtime)
+            == StoreGcAuthority::from_live(runtime.pid, live);
+        if runtime_is_exact {
+            return Ok(());
+        }
+        if !SubnetStateOps::reconcile_wasm_store_gc(&runtime.binding, runtime.pid, live) {
+            return Err(PublicationWorkflowError::InvalidState(format!(
+                "failed to reconcile root Store GC authority for '{}'",
+                runtime.binding
+            ))
+            .into());
+        }
+        let persisted = Self::runtime_store(&runtime.binding)?;
+        if StoreGcAuthority::from_runtime(&persisted)
+            != StoreGcAuthority::from_live(runtime.pid, live)
+        {
+            return Err(PublicationWorkflowError::InvalidState(format!(
+                "reconciled GC authority for '{}' differs from its live Store",
+                runtime.binding
+            ))
+            .into());
+        }
+        Ok(())
     }
 
     // Resolve one binding from authoritative runtime inventory.
@@ -521,6 +632,84 @@ fn validate_live_prepared_store(status: &WasmStoreStatusResponse) -> Result<(), 
     Ok(())
 }
 
+fn validate_live_store_gc_lineage(
+    inventory: &RootFleetSubnetFinalInventoryView,
+    status: &WasmStoreStatusResponse,
+) -> Result<(), InternalError> {
+    let prepared_at = status.gc.prepared_at.unwrap_or_default();
+    let lineage_is_exact = match status.gc.mode {
+        WasmStoreGcMode::Normal => false,
+        WasmStoreGcMode::Prepared => {
+            validate_live_prepared_store(status)?;
+            true
+        }
+        WasmStoreGcMode::InProgress | WasmStoreGcMode::Clearing => {
+            let started_at = status.gc.started_at.unwrap_or_default();
+            [
+                started_at >= prepared_at,
+                status.gc.changed_at >= started_at,
+                status.gc.completed_at.is_none(),
+                status.gc.runs_completed == 0,
+            ]
+            .into_iter()
+            .all(|valid| valid)
+        }
+        WasmStoreGcMode::Complete => {
+            let started_at = status.gc.started_at.unwrap_or_default();
+            let completed_at = status.gc.completed_at.unwrap_or_default();
+            [
+                started_at >= prepared_at,
+                completed_at >= started_at,
+                status.gc.changed_at == completed_at,
+                status.gc.runs_completed == 1,
+            ]
+            .into_iter()
+            .all(|valid| valid)
+        }
+    };
+    let inventory_is_exact = [
+        prepared_at > 0,
+        prepared_at == inventory.wasm_store_gc_prepared_at_secs,
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    if ![lineage_is_exact, inventory_is_exact]
+        .into_iter()
+        .all(|valid| valid)
+    {
+        return Err(PublicationWorkflowError::InvalidState(
+            "root Store GC lineage differs from retained final inventory".to_string(),
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn validate_live_reclaimed_store(
+    inventory: &RootFleetSubnetFinalInventoryView,
+    status: &WasmStoreStatusResponse,
+    catalog_entries: u32,
+) -> Result<(), InternalError> {
+    validate_live_store_gc_lineage(inventory, status)?;
+    let store_is_empty = [
+        status.gc.mode == WasmStoreGcMode::Complete,
+        status.occupied_store_bytes == 0,
+        catalog_entries == 0,
+        status.template_count == 0,
+        status.release_count == 0,
+        status.templates.is_empty(),
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    if !store_is_empty {
+        return Err(PublicationWorkflowError::InvalidState(
+            "root Store GC completed without an exact empty inventory".to_string(),
+        )
+        .into());
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -613,6 +802,65 @@ mod tests {
         );
         let store = WasmStorePublicationWorkflow::runtime_store(&binding).expect("runtime store");
         assert_eq!(store.gc.mode, WasmStoreGcMode::Prepared);
+    }
+
+    #[test]
+    fn root_store_gc_reconciliation_preserves_live_retry_lineage() {
+        let binding = WasmStoreBinding::new("root");
+        let pid = Principal::from_slice(&[9; 29]);
+        SubnetStateOps::import_test_state(
+            PublicationStoreStateTestInput {
+                active_binding: Some(binding.clone()),
+                detached_binding: None,
+                retired_binding: None,
+                generation: 1,
+                changed_at: 10,
+                retired_at: 0,
+            },
+            vec![WasmStoreStateTestInput {
+                binding: binding.clone(),
+                pid,
+                created_at: 9,
+                gc_mode: WasmStoreGcMode::Prepared,
+                gc_changed_at: 11,
+                prepared_at: Some(11),
+                started_at: None,
+                completed_at: None,
+                runs_completed: 0,
+            }],
+        );
+        let runtime = WasmStorePublicationWorkflow::runtime_store(&binding).expect("runtime Store");
+        let recovered = WasmStoreGcStatusResponse {
+            mode: WasmStoreGcMode::InProgress,
+            changed_at: 14,
+            prepared_at: Some(11),
+            started_at: Some(12),
+            completed_at: None,
+            runs_completed: 0,
+        };
+        WasmStorePublicationWorkflow::reconcile_single_root_store_gc(&runtime, &recovered)
+            .expect("reconcile recovered in-progress GC");
+        let runtime = WasmStorePublicationWorkflow::runtime_store(&binding).expect("runtime Store");
+        assert_eq!(
+            StoreGcAuthority::from_runtime(&runtime),
+            StoreGcAuthority::from_live(pid, &recovered)
+        );
+
+        let completed = WasmStoreGcStatusResponse {
+            mode: WasmStoreGcMode::Complete,
+            changed_at: 15,
+            prepared_at: Some(11),
+            started_at: Some(12),
+            completed_at: Some(15),
+            runs_completed: 1,
+        };
+        WasmStorePublicationWorkflow::reconcile_single_root_store_gc(&runtime, &completed)
+            .expect("reconcile completed GC");
+        let runtime = WasmStorePublicationWorkflow::runtime_store(&binding).expect("runtime Store");
+        assert_eq!(
+            StoreGcAuthority::from_runtime(&runtime),
+            StoreGcAuthority::from_live(pid, &completed)
+        );
     }
 
     #[test]

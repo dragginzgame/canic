@@ -17,7 +17,7 @@ use command::{compare_usage, evidence_command, gate_usage, usage};
 use compare::{
     EvidenceCompareStatus, compare_envelope_files, render_compare_differences, write_compare_report,
 };
-use gate::{evaluate_gate_files, is_success_exit_class, render_gate_findings, write_gate_report};
+use gate::{evaluate_gate_files, render_gate_findings, write_gate_report};
 use options::{EvidenceCompareOptions, EvidenceGateOptions};
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
@@ -96,7 +96,7 @@ fn run_gate(args: Vec<OsString>) -> Result<(), EvidenceCommandError> {
     let options = EvidenceGateOptions::parse(args)?;
     let report = evaluate_gate_files(&options)?;
     write_gate_report(&options, &report)?;
-    if !is_success_exit_class(report.gate_exit_class()) {
+    if !report.gate_exit_class().is_success() {
         return Err(EvidenceCommandError::PolicyGateFailed {
             exit_class: report.gate_exit_class(),
             findings: render_gate_findings(&report),

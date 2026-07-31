@@ -386,7 +386,7 @@ fn root_component_child_reservation_is_response_idempotent() {
 }
 
 #[test]
-fn fleet_subnet_root_draining_inventory_and_removal_are_response_idempotent() {
+fn fleet_subnet_root_draining_inventory_removal_and_reclamation_are_response_idempotent() {
     let begin = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
         .find(|entry| entry.endpoint == "canic_fleet_subnet_root_draining_begin")
@@ -411,6 +411,14 @@ fn fleet_subnet_root_draining_inventory_and_removal_are_response_idempotent() {
         .iter()
         .find(|entry| entry.endpoint == "canic_fleet_subnet_root_removal_status")
         .expect("Fleet Subnet Root removal status policy entry");
+    let reclamation = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_fleet_subnet_root_store_reclaim")
+        .expect("Fleet Subnet Root Store reclamation policy entry");
+    let reclamation_status = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_fleet_subnet_root_store_reclamation_status")
+        .expect("Fleet Subnet Root Store reclamation status policy entry");
     let coordinator = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
         .find(|entry| entry.endpoint == "canic_fleet_registry_publish_root_removed")
@@ -446,6 +454,18 @@ fn fleet_subnet_root_draining_inventory_and_removal_are_response_idempotent() {
     assert_eq!(removal.cost_class, CostClass::None);
     assert_eq!(removal_status.replay_policy, ReplayPolicy::QueryOrReadOnly);
     assert_eq!(removal_status.endpoint_kind, EndpointKind::Query);
+    assert_eq!(
+        reclamation.replay_policy,
+        ReplayPolicy::ResponseIdempotent {
+            command_kind: replay_command_kind("fleet_subnet_root.reclaim_store.v1"),
+        }
+    );
+    assert_eq!(reclamation.cost_class, CostClass::None);
+    assert_eq!(
+        reclamation_status.replay_policy,
+        ReplayPolicy::QueryOrReadOnly
+    );
+    assert_eq!(reclamation_status.endpoint_kind, EndpointKind::Query);
     assert_eq!(
         coordinator.replay_policy,
         ReplayPolicy::ResponseIdempotent {

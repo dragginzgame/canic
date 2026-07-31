@@ -12,7 +12,7 @@ use crate::{
     support::candid::role_candid_path,
 };
 use canic_core::cdk::utils::hash::hex_bytes;
-use canic_host::{icp::IcpCli, icp_config::resolve_current_canic_icp_root};
+use canic_host::icp_config::resolve_current_canic_icp_root;
 use operation::{
     OperationIdSource, current_unix_nanos, mark_pending_operation_completed,
     pending_operation_input, resolve_operation_id, write_generated_operation_id_notice,
@@ -48,11 +48,7 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
         canister_id: installed.topology.root_canister_id,
         role: Some("root".to_string()),
     };
-    let icp = IcpCli::new(
-        &options.target.icp,
-        Some(options.target.environment.clone()),
-    )
-    .with_cwd(&root);
+    let icp = options.target.icp_cli(&root);
 
     let now_nanos = current_unix_nanos();
     let pending_input = pending_operation_input(&root, options, &root_target, now_nanos);

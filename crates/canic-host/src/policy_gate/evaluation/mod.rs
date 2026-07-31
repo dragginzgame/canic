@@ -142,7 +142,7 @@ impl PolicyReportBuilder {
     fn evaluate_exit_class(&mut self, policy: &CiPolicyV1, envelope: &EvidenceEnvelopeV1) {
         let requirement_id = "exit_class.allowed";
         let actual = envelope.exit_class;
-        if policy.exit_class.allowed.contains(&actual) && is_success_exit_class(actual) {
+        if policy.exit_class.allowed.contains(&actual) && actual.is_success() {
             self.pass(requirement_id);
             return;
         }
@@ -518,13 +518,6 @@ impl PolicyReportBuilder {
             finding_codes: vec![finding_code],
         });
     }
-}
-
-const fn is_success_exit_class(exit_class: ExitClassV1) -> bool {
-    matches!(
-        exit_class,
-        ExitClassV1::Success | ExitClassV1::SuccessWithWarnings
-    )
 }
 
 fn message_codes(messages: &[EvidenceMessageV1]) -> Vec<String> {

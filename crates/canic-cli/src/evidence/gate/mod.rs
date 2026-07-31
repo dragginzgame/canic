@@ -103,10 +103,3 @@ pub(super) fn write_gate_report(
         }
     }
 }
-
-pub(super) const fn is_success_exit_class(exit_class: ExitClassV1) -> bool {
-    matches!(
-        exit_class,
-        ExitClassV1::Success | ExitClassV1::SuccessWithWarnings
-    )
-}

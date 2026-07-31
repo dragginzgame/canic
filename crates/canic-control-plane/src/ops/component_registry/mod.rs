@@ -32,6 +32,7 @@ use crate::{
         RootComponentSubtreeStopEffectRecord, RootComponentSubtreeStoppedEffectRecord,
         RootFleetSubnetDrainingRecord, RootFleetSubnetFinalInventoryIntentRecord,
         RootFleetSubnetFinalInventoryRecord, RootFleetSubnetRemovalPublicationRecord,
+        RootFleetSubnetStoreReclamationIntentRecord, RootFleetSubnetStoreReclamationRecord,
     },
     view::component_registry::{
         ComponentDirectoryCanonicalCursor, ComponentDirectoryChildView,
@@ -55,7 +56,8 @@ use crate::{
         RootComponentSubtreeRemovalProgressView, RootComponentSubtreeRemovalView,
         RootComponentSubtreeStopEffectView, RootComponentSubtreeStoppedEffectView,
         RootFleetSubnetDrainingView, RootFleetSubnetFinalInventoryView,
-        RootFleetSubnetRemovalPublicationView,
+        RootFleetSubnetRemovalPublicationView, RootFleetSubnetStoreReclamationEvidence,
+        RootFleetSubnetStoreReclamationIntentView, RootFleetSubnetStoreReclamationView,
     },
 };
 use candid::CandidType;
@@ -101,6 +103,7 @@ const ROOT_TERMINAL_COMPONENT_HISTORY_HASH_DOMAIN: &[u8] =
     b"canic.fleet-subnet-root.terminal-component-history.v1";
 const ROOT_STORE_FINAL_CATALOG_HASH_DOMAIN: &[u8] = b"canic.fleet-subnet-root.store-catalog.v1";
 const ROOT_FINAL_INVENTORY_HASH_DOMAIN: &[u8] = b"canic.fleet-subnet-root.final-inventory.v1";
+const ROOT_STORE_RECLAMATION_HASH_DOMAIN: &[u8] = b"canic.fleet-subnet-root.store-reclamation.v1";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SubtreeRemovalOrigin {
@@ -196,6 +199,23 @@ struct RootFleetSubnetFinalInventoryHashAuthority<'a> {
     wasm_store_release_count: u32,
     wasm_store_gc_prepared_at_secs: u64,
     finalized_at_ns: u64,
+}
+
+#[derive(CandidType)]
+struct RootFleetSubnetStoreReclamationHashAuthority {
+    operation_id: [u8; 32],
+    fleet_subnet_root: Principal,
+    wasm_store: Principal,
+    final_inventory_hash: [u8; 32],
+    reclaimed_store_bytes: u64,
+    reclaimed_catalog_entries: u32,
+    reclaimed_template_count: u32,
+    reclaimed_release_count: u32,
+    gc_prepared_at_secs: u64,
+    gc_started_at_secs: u64,
+    gc_completed_at_secs: u64,
+    gc_runs_completed: u32,
+    completed_at_ns: u64,
 }
 
 #[derive(CandidType)]
@@ -1117,6 +1137,8 @@ impl ComponentRegistryOps {
             final_inventory_intent: None,
             final_inventory: None,
             removal_publication: None,
+            store_reclamation_intent: None,
+            store_reclamation: None,
         };
         RootComponentRegistryStore::begin_root_draining(&current, record.clone()).map_err(
             |error| match error {
@@ -1426,6 +1448,154 @@ impl ComponentRegistryOps {
                 "committed root removal publication is missing",
             )
         })
+    }
+
+    pub(crate) fn root_store_reclamation_intent_if_present(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootFleetSubnetStoreReclamationIntentView>, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining = current.root_draining.as_ref().ok_or_else(|| {
+            InternalError::unavailable("Fleet Subnet Root draining has not begun")
+        })?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root Store reclamation names a different draining operation",
+            ));
+        }
+        Ok(draining
+            .store_reclamation_intent
+            .map(root_store_reclamation_intent_record_to_view))
+    }
+
+    pub(crate) fn begin_root_store_reclamation(
+        operation_id: [u8; 32],
+        expected_final_inventory_hash: [u8; 32],
+        prepared_at_ns: u64,
+    ) -> Result<RootFleetSubnetStoreReclamationIntentView, InternalError> {
+        if expected_final_inventory_hash == [0; 32] {
+            return Err(InternalError::invalid_input(
+                "Fleet Subnet Root Store reclamation inventory hash must be nonzero",
+            ));
+        }
+        if prepared_at_ns == 0 {
+            return Err(InternalError::invalid_input(
+                "Fleet Subnet Root Store reclamation preparation time must be positive",
+            ));
+        }
+        if let Some(existing) = Self::root_store_reclamation_intent_if_present(operation_id)? {
+            if existing.final_inventory_hash == expected_final_inventory_hash {
+                return Ok(existing);
+            }
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root Store reclamation differs from its durable intent",
+            ));
+        }
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        let inventory = draining.final_inventory.as_ref().ok_or_else(|| {
+            InternalError::unavailable("Fleet Subnet Root final inventory is not complete")
+        })?;
+        if draining.removal_publication.is_none() {
+            return Err(InternalError::unavailable(
+                "Fleet Subnet Root logical removal has not been published",
+            ));
+        }
+        if inventory.inventory_hash != expected_final_inventory_hash {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root Store reclamation names a different final inventory",
+            ));
+        }
+        let record = RootFleetSubnetStoreReclamationIntentRecord {
+            operation_id,
+            final_inventory_hash: inventory.inventory_hash,
+            wasm_store: inventory.wasm_store,
+            prepared_at_ns,
+        };
+        RootComponentRegistryStore::prepare_root_store_reclamation(&current, record).map_err(
+            |RootComponentRegistryCommitError::ConflictingState| {
+                InternalError::conflict(
+                    "root Component Registry changed before Store reclamation intent committed",
+                )
+            },
+        )?;
+        Self::root_store_reclamation_intent_if_present(operation_id)?.ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "committed Fleet Subnet Root Store reclamation intent is missing",
+            )
+        })
+    }
+
+    pub(crate) fn root_store_reclamation_if_present(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootFleetSubnetStoreReclamationView>, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining = current.root_draining.as_ref().ok_or_else(|| {
+            InternalError::unavailable("Fleet Subnet Root draining has not begun")
+        })?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root Store reclamation names a different draining operation",
+            ));
+        }
+        Ok(draining
+            .store_reclamation
+            .map(root_store_reclamation_record_to_view))
+    }
+
+    pub(crate) fn record_root_store_reclamation(
+        operation_id: [u8; 32],
+        evidence: RootFleetSubnetStoreReclamationEvidence,
+        completed_at_ns: u64,
+    ) -> Result<RootFleetSubnetStoreReclamationView, InternalError> {
+        if let Some(existing) = Self::root_store_reclamation_if_present(operation_id)? {
+            return Ok(existing);
+        }
+        if completed_at_ns == 0 {
+            return Err(InternalError::invalid_input(
+                "Fleet Subnet Root Store reclamation completion time must be positive",
+            ));
+        }
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        let record = root_store_reclamation_record(draining, evidence, completed_at_ns)?;
+        RootComponentRegistryStore::record_root_store_reclamation(&current, record).map_err(
+            |RootComponentRegistryCommitError::ConflictingState| {
+                InternalError::conflict(
+                    "root Component Registry changed before Store reclamation committed",
+                )
+            },
+        )?;
+        let committed =
+            Self::root_store_reclamation_if_present(operation_id)?.ok_or_else(|| {
+                InternalError::invariant(
+                    InternalErrorOrigin::Storage,
+                    "committed Fleet Subnet Root Store reclamation receipt is missing",
+                )
+            })?;
+        if committed != root_store_reclamation_record_to_view(record) {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "committed Store reclamation differs from exact terminal authority",
+            ));
+        }
+        Ok(committed)
     }
 
     pub(crate) fn finalize_root_inventory(
@@ -5881,6 +6051,15 @@ fn validate_root_draining_record(
             "Fleet Subnet Root draining receipt differs from protected root authority",
         ));
     }
+    if let Some(reclamation) = record.store_reclamation.as_ref() {
+        let expected_hash = root_store_reclamation_hash(reclamation)?;
+        if reclamation.reclamation_hash != expected_hash {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "Fleet Subnet Root Store reclamation hash differs from retained authority",
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -6354,6 +6533,86 @@ fn root_final_inventory_hash(
     Ok(domain_hash(ROOT_FINAL_INVENTORY_HASH_DOMAIN, &payload))
 }
 
+fn root_store_reclamation_record(
+    draining: &RootFleetSubnetDrainingRecord,
+    evidence: RootFleetSubnetStoreReclamationEvidence,
+    completed_at_ns: u64,
+) -> Result<RootFleetSubnetStoreReclamationRecord, InternalError> {
+    let inventory = draining
+        .final_inventory
+        .as_ref()
+        .expect("validated final root inventory");
+    let intent = draining.store_reclamation_intent.as_ref().ok_or_else(|| {
+        InternalError::unavailable(
+            "Fleet Subnet Root Store reclamation intent has not been prepared",
+        )
+    })?;
+    let terminal_store_is_exact = [
+        evidence.wasm_store == intent.wasm_store,
+        evidence.occupied_store_bytes == 0,
+        evidence.catalog_entries == 0,
+        evidence.template_count == 0,
+        evidence.release_count == 0,
+        evidence.gc_prepared_at_secs == inventory.wasm_store_gc_prepared_at_secs,
+        evidence.gc_started_at_secs >= evidence.gc_prepared_at_secs,
+        evidence.gc_completed_at_secs >= evidence.gc_started_at_secs,
+        evidence.gc_runs_completed == 1,
+        completed_at_ns >= intent.prepared_at_ns,
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    if !terminal_store_is_exact {
+        return Err(InternalError::conflict(
+            "live root Store does not prove exact completed reclamation",
+        ));
+    }
+    let mut record = RootFleetSubnetStoreReclamationRecord {
+        operation_id: draining.operation_id,
+        fleet_subnet_root: draining.fleet_subnet_root,
+        wasm_store: intent.wasm_store,
+        final_inventory_hash: intent.final_inventory_hash,
+        reclaimed_store_bytes: inventory.wasm_store_occupied_bytes,
+        reclaimed_catalog_entries: inventory.wasm_store_catalog_entries,
+        reclaimed_template_count: inventory.wasm_store_template_count,
+        reclaimed_release_count: inventory.wasm_store_release_count,
+        gc_prepared_at_secs: evidence.gc_prepared_at_secs,
+        gc_started_at_secs: evidence.gc_started_at_secs,
+        gc_completed_at_secs: evidence.gc_completed_at_secs,
+        gc_runs_completed: evidence.gc_runs_completed,
+        completed_at_ns,
+        reclamation_hash: [0; 32],
+    };
+    record.reclamation_hash = root_store_reclamation_hash(&record)?;
+    Ok(record)
+}
+
+fn root_store_reclamation_hash(
+    reclamation: &RootFleetSubnetStoreReclamationRecord,
+) -> Result<[u8; 32], InternalError> {
+    let payload = candid::encode_one(RootFleetSubnetStoreReclamationHashAuthority {
+        operation_id: reclamation.operation_id,
+        fleet_subnet_root: reclamation.fleet_subnet_root,
+        wasm_store: reclamation.wasm_store,
+        final_inventory_hash: reclamation.final_inventory_hash,
+        reclaimed_store_bytes: reclamation.reclaimed_store_bytes,
+        reclaimed_catalog_entries: reclamation.reclaimed_catalog_entries,
+        reclaimed_template_count: reclamation.reclaimed_template_count,
+        reclaimed_release_count: reclamation.reclaimed_release_count,
+        gc_prepared_at_secs: reclamation.gc_prepared_at_secs,
+        gc_started_at_secs: reclamation.gc_started_at_secs,
+        gc_completed_at_secs: reclamation.gc_completed_at_secs,
+        gc_runs_completed: reclamation.gc_runs_completed,
+        completed_at_ns: reclamation.completed_at_ns,
+    })
+    .map_err(|error| {
+        InternalError::invariant(
+            InternalErrorOrigin::Ops,
+            format!("Fleet Subnet Root Store reclamation cannot be encoded: {error}"),
+        )
+    })?;
+    Ok(domain_hash(ROOT_STORE_RECLAMATION_HASH_DOMAIN, &payload))
+}
+
 fn domain_hash(domain: &[u8], payload: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(domain);
@@ -6396,6 +6655,12 @@ fn root_draining_record_to_view(
         removal_publication: record
             .removal_publication
             .map(root_removal_publication_record_to_view),
+        store_reclamation_intent: record
+            .store_reclamation_intent
+            .map(root_store_reclamation_intent_record_to_view),
+        store_reclamation: record
+            .store_reclamation
+            .map(root_store_reclamation_record_to_view),
     }
 }
 
@@ -6434,6 +6699,38 @@ fn root_removal_publication_record_to_view(
         previous_registry: record.previous_registry,
         registry: record.registry,
         recorded_at_ns: record.recorded_at_ns,
+    }
+}
+
+const fn root_store_reclamation_intent_record_to_view(
+    record: RootFleetSubnetStoreReclamationIntentRecord,
+) -> RootFleetSubnetStoreReclamationIntentView {
+    RootFleetSubnetStoreReclamationIntentView {
+        operation_id: record.operation_id,
+        final_inventory_hash: record.final_inventory_hash,
+        wasm_store: record.wasm_store,
+        prepared_at_ns: record.prepared_at_ns,
+    }
+}
+
+const fn root_store_reclamation_record_to_view(
+    record: RootFleetSubnetStoreReclamationRecord,
+) -> RootFleetSubnetStoreReclamationView {
+    RootFleetSubnetStoreReclamationView {
+        operation_id: record.operation_id,
+        fleet_subnet_root: record.fleet_subnet_root,
+        wasm_store: record.wasm_store,
+        final_inventory_hash: record.final_inventory_hash,
+        reclaimed_store_bytes: record.reclaimed_store_bytes,
+        reclaimed_catalog_entries: record.reclaimed_catalog_entries,
+        reclaimed_template_count: record.reclaimed_template_count,
+        reclaimed_release_count: record.reclaimed_release_count,
+        gc_prepared_at_secs: record.gc_prepared_at_secs,
+        gc_started_at_secs: record.gc_started_at_secs,
+        gc_completed_at_secs: record.gc_completed_at_secs,
+        gc_runs_completed: record.gc_runs_completed,
+        completed_at_ns: record.completed_at_ns,
+        reclamation_hash: record.reclamation_hash,
     }
 }
 
@@ -11958,12 +12255,14 @@ mod tests {
         inventory: &RootFleetSubnetFinalInventoryView,
         published_registry: &FleetRegistryVersion,
     ) {
+        ComponentRegistryOps::begin_root_store_reclamation([10; 32], inventory.inventory_hash, 21)
+            .expect_err("Store reclamation must require logical root removal");
         assert_eq!(
             ComponentRegistryOps::verify_root_final_inventory_store([10; 32], store, &status)
                 .expect("revalidate retained Store"),
             inventory.clone()
         );
-        let mut changed_status = status;
+        let mut changed_status = status.clone();
         changed_status.occupied_store_bytes += 1;
         ComponentRegistryOps::verify_root_final_inventory_store([10; 32], store, &changed_status)
             .expect_err("changed Store inventory must fail closed");
@@ -11991,6 +12290,63 @@ mod tests {
         conflicting.version.content_hash[0] ^= 1;
         ComponentRegistryOps::record_root_removal_publication([10; 32], &conflicting, 23)
             .expect_err("conflicting removal publication must fail closed");
+
+        ComponentRegistryOps::begin_root_store_reclamation([10; 32], [24; 32], 24)
+            .expect_err("Store reclamation must bind the exact final inventory");
+        let intent = ComponentRegistryOps::begin_root_store_reclamation(
+            [10; 32],
+            inventory.inventory_hash,
+            24,
+        )
+        .expect("prepare Store reclamation intent");
+        assert_eq!(intent.wasm_store, inventory.wasm_store);
+        assert_eq!(intent.final_inventory_hash, inventory.inventory_hash);
+        restart_component_registry();
+        assert_eq!(
+            ComponentRegistryOps::begin_root_store_reclamation(
+                [10; 32],
+                inventory.inventory_hash,
+                99,
+            )
+            .expect("exact Store reclamation intent retry"),
+            intent
+        );
+
+        let evidence = RootFleetSubnetStoreReclamationEvidence {
+            wasm_store: inventory.wasm_store,
+            occupied_store_bytes: 0,
+            catalog_entries: 0,
+            template_count: 0,
+            release_count: 0,
+            gc_prepared_at_secs: status.gc.prepared_at.expect("prepared time"),
+            gc_started_at_secs: 25,
+            gc_completed_at_secs: 26,
+            gc_runs_completed: 1,
+        };
+        let reclamation =
+            ComponentRegistryOps::record_root_store_reclamation([10; 32], evidence, 27)
+                .expect("record terminal Store reclamation");
+        assert_eq!(
+            reclamation.reclaimed_store_bytes,
+            inventory.wasm_store_occupied_bytes
+        );
+        assert_eq!(
+            reclamation.reclaimed_catalog_entries,
+            inventory.wasm_store_catalog_entries
+        );
+        assert_eq!(reclamation.gc_runs_completed, 1);
+        assert_ne!(reclamation.reclamation_hash, [0; 32]);
+        restart_component_registry();
+        assert_eq!(
+            ComponentRegistryOps::record_root_store_reclamation([10; 32], evidence, 999)
+                .expect("exact terminal Store reclamation retry"),
+            reclamation
+        );
+        assert_eq!(
+            ComponentRegistryOps::root_store_reclamation_if_present([10; 32])
+                .expect("Store reclamation status after restart"),
+            Some(reclamation)
+        );
     }
 
     fn final_inventory_dto(

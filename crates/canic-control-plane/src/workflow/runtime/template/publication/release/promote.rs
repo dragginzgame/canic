@@ -2,8 +2,12 @@ use crate::{
     dto::template::{TemplateManifestInput, TemplateManifestResponse},
     ids::{TemplateChunkingMode, TemplateManifestState, WasmStoreBinding},
     ops::storage::template::TemplateManifestOps,
-    workflow::runtime::template::publication::{
-        WasmStorePublicationWorkflow, fleet::PublicationStoreSnapshot, store::store_stage_manifest,
+    workflow::runtime::template::{
+        publication::{
+            WasmStorePublicationWorkflow, fleet::PublicationStoreSnapshot,
+            store::store_stage_manifest,
+        },
+        record_wasm_store_metric,
     },
 };
 use canic_core::api::lifecycle::metrics::{
@@ -15,9 +19,7 @@ use canic_core::control_plane_support::{
     ops::{cost_guard::CostGuardPermit, ic::IcOps},
 };
 
-use super::metrics::{
-    WasmStorePublicationError, record_wasm_store_metric, record_wasm_store_publish_failed,
-};
+use super::metrics::{WasmStorePublicationError, record_wasm_store_publish_failed};
 
 impl WasmStorePublicationWorkflow {
     // Promote the manifest into the target store and mirror the approved root state.

@@ -46,6 +46,8 @@ pub struct RootFleetSubnetDrainingView {
     pub started_at_ns: u64,
     pub final_inventory: Option<RootFleetSubnetFinalInventoryView>,
     pub removal_publication: Option<RootFleetSubnetRemovalPublicationView>,
+    pub store_reclamation_intent: Option<RootFleetSubnetStoreReclamationIntentView>,
+    pub store_reclamation: Option<RootFleetSubnetStoreReclamationView>,
 }
 
 ///
@@ -85,6 +87,48 @@ pub struct RootFleetSubnetRemovalPublicationView {
     pub previous_registry: FleetRegistryVersion,
     pub registry: FleetRegistryVersion,
     pub recorded_at_ns: u64,
+}
+
+/// Read-only pre-effect authority for reclaiming one logically removed root Store.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RootFleetSubnetStoreReclamationIntentView {
+    pub operation_id: [u8; 32],
+    pub final_inventory_hash: [u8; 32],
+    pub wasm_store: Principal,
+    pub prepared_at_ns: u64,
+}
+
+/// Read-only terminal receipt for one reclaimed root Store.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RootFleetSubnetStoreReclamationView {
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+    pub wasm_store: Principal,
+    pub final_inventory_hash: [u8; 32],
+    pub reclaimed_store_bytes: u64,
+    pub reclaimed_catalog_entries: u32,
+    pub reclaimed_template_count: u32,
+    pub reclaimed_release_count: u32,
+    pub gc_prepared_at_secs: u64,
+    pub gc_started_at_secs: u64,
+    pub gc_completed_at_secs: u64,
+    pub gc_runs_completed: u32,
+    pub completed_at_ns: u64,
+    pub reclamation_hash: [u8; 32],
+}
+
+/// Exact live terminal Store evidence accepted by Component Registry ops.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RootFleetSubnetStoreReclamationEvidence {
+    pub wasm_store: Principal,
+    pub occupied_store_bytes: u64,
+    pub catalog_entries: u32,
+    pub template_count: u32,
+    pub release_count: u32,
+    pub gc_prepared_at_secs: u64,
+    pub gc_started_at_secs: u64,
+    pub gc_completed_at_secs: u64,
+    pub gc_runs_completed: u32,
 }
 
 ///

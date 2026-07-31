@@ -5,17 +5,14 @@
 //! Boundary: parses token command options and delegates resolved commands to the configured ICP CLI.
 
 use crate::{
-    cli::clap::{
-        flag_arg, parse_matches, render_usage, required_string, string_option,
-        string_option_or_else, value_arg,
-    },
-    cli::defaults::{default_icp, local_environment},
+    cli::clap::{flag_arg, parse_matches, render_usage, required_string, string_option, value_arg},
     cli::globals::{internal_environment_arg, internal_icp_arg},
     cli::help::print_help_or_version,
+    support::icp_target::IcpTargetOptions,
     version_text,
 };
 use canic_host::{
-    icp::{IcpCli, IcpCommandError, command_display, run_output_with_stderr},
+    icp::{IcpCommandError, command_display, run_output_with_stderr},
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
     installed_fleet::{
         InstalledFleetError, InstalledFleetRequest, resolve_installed_fleet_from_root,
@@ -78,14 +75,6 @@ pub enum TokenCommandError {
 
     #[error(transparent)]
     Registry(#[from] RegistryParseError),
-}
-
-/// Parsed ICP CLI target context shared by token subcommands.
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct IcpTargetOptions {
-    environment: String,
-    icp: String,
 }
 
 /// Split token command request with optional token symbol prefix.
@@ -202,15 +191,6 @@ fn split_token_command(args: Vec<OsString>) -> Result<TokenCommandRequest, Token
     })
 }
 
-impl IcpTargetOptions {
-    fn parse(matches: &clap::ArgMatches) -> Self {
-        Self {
-            environment: string_option_or_else(matches, "environment", local_environment),
-            icp: string_option_or_else(matches, "icp", default_icp),
-        }
-    }
-}
-
 impl TokenBalanceOptions {
     fn parse(token: String, args: Vec<OsString>) -> Result<Self, TokenCommandError> {
         let matches = parse_matches(balance_command(), args)
@@ -247,7 +227,7 @@ impl TokenTransferOptions {
 
 fn run_balance(options: &TokenBalanceOptions) -> Result<(), TokenCommandError> {
     let root = resolve_current_canic_icp_root().map_err(TokenCommandError::IcpRoot)?;
-    let mut command = icp_command(&options.target, &root);
+    let mut command = options.target.icp_cli(&root).command();
     command.args(["token", &options.token, "balance"]);
     append_optional_arg(&mut command, "--subaccount", options.subaccount.as_deref());
     append_optional_arg(
@@ -257,14 +237,14 @@ fn run_balance(options: &TokenBalanceOptions) -> Result<(), TokenCommandError> {
     );
     append_flag(&mut command, "--json", options.json);
     append_flag(&mut command, "--quiet", options.quiet);
-    append_target_args(&mut command, &options.target);
+    options.target.append_target_args(&mut command);
     run_or_print_command(&mut command, false)
 }
 
 fn run_transfer(options: &TokenTransferOptions) -> Result<(), TokenCommandError> {
     let root = resolve_current_canic_icp_root().map_err(TokenCommandError::IcpRoot)?;
     let receiver = transfer_receiver(&options.target, &root, &options.receiver)?;
-    let mut command = icp_command(&options.target, &root);
+    let mut command = options.target.icp_cli(&root).command();
     command.args(["token", &options.token, "transfer"]);
     command.arg(&options.amount);
     command.arg(receiver);
@@ -280,7 +260,7 @@ fn run_transfer(options: &TokenTransferOptions) -> Result<(), TokenCommandError>
     );
     append_flag(&mut command, "--json", options.json);
     append_flag(&mut command, "--quiet", options.quiet);
-    append_target_args(&mut command, &options.target);
+    options.target.append_target_args(&mut command);
     run_or_print_command(&mut command, options.dry_run)
 }
 
@@ -355,15 +335,6 @@ fn resolve_role_principal(
             role: role.to_string(),
         }),
     }
-}
-
-fn icp_command(target: &IcpTargetOptions, root: &Path) -> std::process::Command {
-    let icp = IcpCli::new(&target.icp, Some(target.environment.clone())).with_cwd(root);
-    icp.command()
-}
-
-fn append_target_args(command: &mut std::process::Command, target: &IcpTargetOptions) {
-    canic_host::icp::add_target_args(command, Some(&target.environment), None);
 }
 
 fn run_or_print_command(

@@ -618,7 +618,7 @@ fn refill_retry_finishes_cost_settlement_without_ledger_call() {
     stage_receipt_response(
         &token,
         crate::ops::replay::ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION,
-        crate::ops::replay::encode_icp_refill_replay_response(&response).expect("response bytes"),
+        crate::ops::replay::encode_replay_response(&response).expect("response bytes"),
         1_001,
     )
     .expect("stage response");
@@ -665,7 +665,7 @@ fn refill_retry_promotes_staged_response_without_ledger_call() {
     stage_receipt_response(
         &token,
         crate::ops::replay::ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION,
-        crate::ops::replay::encode_icp_refill_replay_response(&response).expect("response bytes"),
+        crate::ops::replay::encode_replay_response(&response).expect("response bytes"),
         1_001,
     )
     .expect("stage response");
