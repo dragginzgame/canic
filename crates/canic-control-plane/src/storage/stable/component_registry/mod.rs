@@ -290,6 +290,12 @@ pub enum RootComponentAllocationProgressRecord {
         installation: RootComponentInstallEffectRecord,
         commitment: RootComponentCommitmentRecord,
     },
+    Removed {
+        creation: RootComponentCreationEffectRecord,
+        canister: Principal,
+        installation: RootComponentInstallEffectRecord,
+        commitment: RootComponentCommitmentRecord,
+    },
 }
 
 ///
@@ -443,15 +449,34 @@ pub struct RootComponentDeletedReceiptRecord {
 }
 
 ///
+/// RootComponentMembershipRemovedRecord
+///
+/// Terminal local-membership and settled root/Spec accounting authority.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentMembershipRemovedRecord {
+    pub deleted: RootComponentDeletedReceiptRecord,
+    pub allocation_operation_id: [u8; 32],
+    pub remaining_spec_committed_instances: u32,
+    pub root_committed_component_instances: u32,
+    pub root_known_created_component_canisters: u32,
+    pub root_registry_encoded_bytes: u64,
+    pub removed_at_ns: u64,
+    pub removal_hash: [u8; 32],
+}
+
+///
 /// RootComponentDeletionProgressRecord
 ///
-/// Monotonic pre-effect or terminal top-level deletion state within one draining record.
+/// Monotonic deletion and local-membership state within one draining record.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RootComponentDeletionProgressRecord {
     DeleteIntent(RootComponentDeletionIntentRecord),
     Deleted(RootComponentDeletedReceiptRecord),
+    MembershipRemoved(RootComponentMembershipRemovedRecord),
 }
 
 ///
@@ -729,6 +754,94 @@ fn component_deleted_transition_is_valid(
     let fits_precharged_entry = RootComponentRegistryStore::component_draining_entry_bytes(next)
         <= intent.quiescence.stop.charged_entry_bytes;
     receipt_is_exact && time_is_monotonic && fits_precharged_entry
+}
+
+#[cfg(feature = "root-control-plane")]
+fn component_membership_removed_transition_is_valid(
+    expected: &RootComponentDrainingRecord,
+    next: &RootComponentDrainingRecord,
+    allocation_operation_id: [u8; 32],
+    next_meta: &RootComponentRegistryMetaRecord,
+) -> bool {
+    if !component_draining_deletion_base_matches(expected, next) {
+        return false;
+    }
+    let Some(RootComponentDeletionProgressRecord::Deleted(deleted)) = &expected.deletion else {
+        return false;
+    };
+    let Some(RootComponentDeletionProgressRecord::MembershipRemoved(receipt)) = &next.deletion
+    else {
+        return false;
+    };
+    let receipt_authority_is_exact =
+        receipt.deleted == *deleted && receipt.allocation_operation_id == allocation_operation_id;
+    let receipt_is_hashed = receipt.removal_hash != [0; 32];
+    let settled_root_authority_is_exact =
+        RootComponentRemovalSettlementAuthority::from_receipt(receipt)
+            == RootComponentRemovalSettlementAuthority::from_meta(next_meta);
+    let time_is_monotonic = receipt.removed_at_ns >= deleted.deleted_at_ns;
+    let fits_precharged_entry = RootComponentRegistryStore::component_draining_entry_bytes(next)
+        <= deleted.deletion.quiescence.stop.charged_entry_bytes;
+    [
+        receipt_authority_is_exact,
+        receipt_is_hashed,
+        settled_root_authority_is_exact,
+        time_is_monotonic,
+        fits_precharged_entry,
+    ]
+    .into_iter()
+    .all(|valid| valid)
+}
+
+#[cfg(feature = "root-control-plane")]
+#[derive(Debug, Eq, PartialEq)]
+struct RootComponentRemovalSettlementAuthority {
+    committed_component_instances: u32,
+    known_created_component_canisters: u32,
+    encoded_bytes: u64,
+}
+
+#[cfg(feature = "root-control-plane")]
+impl RootComponentRemovalSettlementAuthority {
+    const fn from_receipt(receipt: &RootComponentMembershipRemovedRecord) -> Self {
+        Self {
+            committed_component_instances: receipt.root_committed_component_instances,
+            known_created_component_canisters: receipt.root_known_created_component_canisters,
+            encoded_bytes: receipt.root_registry_encoded_bytes,
+        }
+    }
+
+    const fn from_meta(meta: &RootComponentRegistryMetaRecord) -> Self {
+        Self {
+            committed_component_instances: meta.committed_component_instances,
+            known_created_component_canisters: meta.known_created_component_canisters,
+            encoded_bytes: meta.encoded_bytes,
+        }
+    }
+}
+
+#[cfg(feature = "root-control-plane")]
+fn component_allocation_removed_transition_is_valid(
+    expected: &RootComponentAllocationRecord,
+    next: &RootComponentAllocationRecord,
+) -> bool {
+    let RootComponentAllocationProgressRecord::Committed {
+        creation,
+        canister,
+        installation,
+        commitment,
+    } = &expected.progress
+    else {
+        return false;
+    };
+    let mut terminal = expected.clone();
+    terminal.progress = RootComponentAllocationProgressRecord::Removed {
+        creation: creation.clone(),
+        canister: *canister,
+        installation: installation.clone(),
+        commitment: commitment.clone(),
+    };
+    &terminal == next
 }
 
 impl RootComponentDrainingRecord {
@@ -1644,6 +1757,179 @@ pub struct RootComponentSubtreeRemovalBeginCommit<'a> {
     pub next_draining: Option<RootComponentDrainingRecord>,
 }
 
+///
+/// RootComponentMembershipRemovalCommit
+///
+/// Exact stable compare-and-commit authority for terminal top-level membership removal.
+///
+
+#[cfg(feature = "root-control-plane")]
+pub struct RootComponentMembershipRemovalCommit<'a> {
+    pub expected_meta: &'a RootComponentRegistryMetaRecord,
+    pub next_meta: RootComponentRegistryMetaRecord,
+    pub expected_partition: &'a ComponentRegistryPartitionRecord,
+    pub expected_allocation: &'a RootComponentAllocationRecord,
+    pub next_allocation: RootComponentAllocationRecord,
+    pub expected_draining: &'a RootComponentDrainingRecord,
+    pub next_draining: RootComponentDrainingRecord,
+}
+
+#[cfg(feature = "root-control-plane")]
+#[derive(Debug, Eq, PartialEq)]
+struct RootComponentRemovalPartitionAuthority<'a> {
+    registry: ComponentRegistryHead,
+    descendant_content_hash: [u8; 32],
+    registry_encoded_bytes: u64,
+    directory_synchronized_at_ns: u64,
+    binding: &'a ComponentBinding,
+    provisioning_origin: &'a ComponentProvisioningOrigin,
+    release_set: FleetSubnetRootReleaseSet,
+}
+
+#[cfg(feature = "root-control-plane")]
+impl<'a> RootComponentRemovalPartitionAuthority<'a> {
+    const fn from_partition(partition: &'a ComponentRegistryPartitionRecord) -> Self {
+        Self {
+            registry: ComponentRegistryHead {
+                component: partition.binding.component,
+                revision: partition.revision,
+                content_hash: partition.content_hash,
+            },
+            descendant_content_hash: partition.descendant_content_hash,
+            registry_encoded_bytes: partition.encoded_bytes,
+            directory_synchronized_at_ns: partition.directory_synchronized_at_ns,
+            binding: &partition.binding,
+            provisioning_origin: &partition.provisioning_origin,
+            release_set: partition.release_set,
+        }
+    }
+
+    fn from_commit(commit: &'a RootComponentMembershipRemovalCommit<'a>) -> Option<Self> {
+        let receipt = commit.receipt()?;
+        let RootComponentAllocationProgressRecord::Committed {
+            canister,
+            installation,
+            ..
+        } = &commit.expected_allocation.progress
+        else {
+            return None;
+        };
+        if *canister != installation.binding.canister_id {
+            return None;
+        }
+        let inventory = &receipt.deleted.deletion.final_inventory;
+        Some(Self {
+            registry: inventory.registry.clone(),
+            descendant_content_hash: inventory.descendant_content_hash,
+            registry_encoded_bytes: inventory.registry_encoded_bytes,
+            directory_synchronized_at_ns: inventory.directory_synchronized_at_ns,
+            binding: &installation.binding,
+            provisioning_origin: &commit.expected_allocation.provisioning_origin,
+            release_set: commit.expected_allocation.release_set,
+        })
+    }
+}
+
+#[cfg(feature = "root-control-plane")]
+impl RootComponentMembershipRemovalCommit<'_> {
+    const fn receipt(&self) -> Option<&RootComponentMembershipRemovedRecord> {
+        match &self.next_draining.deletion {
+            Some(RootComponentDeletionProgressRecord::MembershipRemoved(receipt)) => Some(receipt),
+            None
+            | Some(
+                RootComponentDeletionProgressRecord::DeleteIntent(_)
+                | RootComponentDeletionProgressRecord::Deleted(_),
+            ) => None,
+        }
+    }
+
+    fn meta_transition_is_valid(&self) -> bool {
+        let partition_bytes =
+            RootComponentRegistryStore::partition_entry_bytes(self.expected_partition);
+        let principal_bytes = RootComponentRegistryStore::principal_index_entry_bytes(
+            self.expected_partition.binding.canister_id,
+            self.expected_partition.binding.component,
+        );
+        let previous_allocation_bytes =
+            RootComponentRegistryStore::allocation_entry_bytes(self.expected_allocation);
+        let next_allocation_bytes =
+            RootComponentRegistryStore::allocation_entry_bytes(&self.next_allocation);
+        let Some(next_encoded_bytes) = self
+            .expected_meta
+            .encoded_bytes
+            .checked_sub(partition_bytes)
+            .and_then(|bytes| bytes.checked_sub(principal_bytes))
+            .and_then(|bytes| bytes.checked_sub(previous_allocation_bytes))
+            .and_then(|bytes| bytes.checked_add(next_allocation_bytes))
+        else {
+            return false;
+        };
+        let mut expected_next = self.expected_meta.clone();
+        let Some(committed_component_instances) =
+            expected_next.committed_component_instances.checked_sub(1)
+        else {
+            return false;
+        };
+        let Some(known_created_component_canisters) = expected_next
+            .known_created_component_canisters
+            .checked_sub(1)
+        else {
+            return false;
+        };
+        expected_next.committed_component_instances = committed_component_instances;
+        expected_next.known_created_component_canisters = known_created_component_canisters;
+        expected_next.encoded_bytes = next_encoded_bytes;
+        self.next_meta == expected_next
+    }
+
+    fn shape_is_valid(&self) -> bool {
+        let Some(receipt) = self.receipt() else {
+            return false;
+        };
+        let component = self.expected_partition.binding.component;
+        let component_identity_is_exact = [
+            self.expected_allocation.component,
+            self.expected_draining.component,
+            self.next_draining.component,
+        ]
+        .into_iter()
+        .all(|candidate| candidate == component);
+        let allocation_operation_is_exact =
+            receipt.allocation_operation_id == self.expected_allocation.operation_id;
+        let partition_is_empty_and_draining = self.expected_partition.status
+            == ComponentLifecycleStatus::Draining
+            && self.expected_partition.reserved_descendants == 0
+            && self.expected_partition.committed_descendants == 0;
+        let partition_authority_is_exact =
+            RootComponentRemovalPartitionAuthority::from_commit(self)
+                == Some(RootComponentRemovalPartitionAuthority::from_partition(
+                    self.expected_partition,
+                ));
+        let meta_transition_is_valid = self.meta_transition_is_valid();
+        let allocation_transition_is_valid = component_allocation_removed_transition_is_valid(
+            self.expected_allocation,
+            &self.next_allocation,
+        );
+        let draining_transition_is_valid = component_membership_removed_transition_is_valid(
+            self.expected_draining,
+            &self.next_draining,
+            self.expected_allocation.operation_id,
+            &self.next_meta,
+        );
+        [
+            component_identity_is_exact,
+            allocation_operation_is_exact,
+            partition_is_empty_and_draining,
+            partition_authority_is_exact,
+            meta_transition_is_valid,
+            allocation_transition_is_valid,
+            draining_transition_is_valid,
+        ]
+        .into_iter()
+        .all(|valid| valid)
+    }
+}
+
 #[cfg(feature = "root-control-plane")]
 impl RootComponentSubtreeRemovalBeginCommit<'_> {
     fn draining_transition_is_valid(&self) -> bool {
@@ -1886,6 +2172,11 @@ impl RootComponentRegistryStore {
                     RootComponentAllocationProgressRecord::Committed { .. }
                 ) {
                     (reserved, committed + 1)
+                } else if matches!(
+                    record.progress,
+                    RootComponentAllocationProgressRecord::Removed { .. }
+                ) {
+                    (reserved, committed)
                 } else {
                     (reserved + 1, committed)
                 }
@@ -2210,6 +2501,12 @@ impl RootComponentRegistryStore {
                     .count()
                     == 1
             })
+    }
+
+    #[must_use]
+    pub(crate) fn component_principal_inventory_is_empty(component: ComponentInstanceId) -> bool {
+        COMPONENT_REGISTRY_PRINCIPAL_INDEX
+            .with_borrow(|map| map.iter().all(|entry| entry.value().component != component))
     }
 
     pub(crate) fn reserve_allocation(
@@ -3658,6 +3955,92 @@ impl RootComponentRegistryStore {
             return Err(RootComponentAllocationCommitError::ConflictingState);
         }
         Self::replace_component_draining(expected_record, next_record)
+    }
+
+    pub(crate) fn remove_component_membership(
+        commit: RootComponentMembershipRemovalCommit<'_>,
+    ) -> Result<(), RootComponentAllocationCommitError> {
+        if !commit.shape_is_valid() {
+            return Err(RootComponentAllocationCommitError::ConflictingState);
+        }
+        let receipt = commit
+            .receipt()
+            .ok_or(RootComponentAllocationCommitError::ConflictingState)?;
+        let (_, current_spec_committed) =
+            Self::allocation_counts(&commit.expected_allocation.component_spec);
+        if current_spec_committed.checked_sub(1)
+            != usize::try_from(receipt.remaining_spec_committed_instances).ok()
+        {
+            return Err(RootComponentAllocationCommitError::ConflictingState);
+        }
+
+        let component = commit.expected_partition.binding.component;
+        let partition_key = ComponentRegistryEntryKey::partition(component);
+        let principal_key =
+            ComponentRegistryPrincipalKey::from(commit.expected_partition.binding.canister_id);
+        let allocation_key =
+            RootComponentAllocationOperationKey::from(commit.expected_allocation.operation_id);
+        let draining_key = RootComponentDrainingKey::from(component);
+
+        ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            let current_meta = state
+                .current
+                .as_ref()
+                .ok_or(RootComponentAllocationCommitError::Uninitialized)?;
+            if current_meta != commit.expected_meta {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            let current_partition = COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
+                map.get(&partition_key).and_then(|entry| match entry {
+                    ComponentRegistryEntryRecord::Partition(partition) => Some(partition),
+                    _ => None,
+                })
+            });
+            let current_allocation =
+                ROOT_COMPONENT_ALLOCATIONS.with_borrow(|map| map.get(&allocation_key));
+            let current_draining =
+                ROOT_COMPONENT_DRAINING.with_borrow(|map| map.get(&draining_key));
+            let partition_is_exact = current_partition.as_ref() == Some(commit.expected_partition);
+            let allocation_is_exact =
+                current_allocation.as_ref() == Some(commit.expected_allocation);
+            let draining_is_exact = current_draining.as_ref() == Some(commit.expected_draining);
+            if ![partition_is_exact, allocation_is_exact, draining_is_exact]
+                .into_iter()
+                .all(|exact| exact)
+            {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+            let principal_is_exact = COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow(|map| {
+                let indexed_component_is_exact = map
+                    .get(&principal_key)
+                    .is_some_and(|indexed| indexed.component == component);
+                let component_principal_count = map
+                    .iter()
+                    .filter(|entry| entry.value().component == component)
+                    .count();
+                indexed_component_is_exact && component_principal_count == 1
+            });
+            if !principal_is_exact || !Self::component_live_inventory_is_empty(component) {
+                return Err(RootComponentAllocationCommitError::ConflictingState);
+            }
+
+            COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(|map| {
+                map.remove(&partition_key);
+            });
+            COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow_mut(|map| {
+                map.remove(&principal_key);
+            });
+            ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(|map| {
+                map.insert(allocation_key, commit.next_allocation);
+            });
+            ROOT_COMPONENT_DRAINING.with_borrow_mut(|map| {
+                map.insert(draining_key, commit.next_draining);
+            });
+            state.current = Some(commit.next_meta);
+            cell.set(state);
+            Ok(())
+        })
     }
 
     fn replace_component_draining(

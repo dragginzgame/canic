@@ -156,6 +156,10 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "canic_root_component_delete",
         command_kind("management.control_plane.component_delete.v1"),
     ),
+    update_response_idempotent(
+        "canic_root_component_membership_remove",
+        command_kind("component_registry.remove_component_membership.v1"),
+    ),
     query_read_only("canic_root_component_deletion_status"),
     update_response_idempotent(
         "canic_root_component_subtree_removal_begin",

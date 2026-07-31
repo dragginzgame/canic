@@ -22,9 +22,9 @@ use crate::{
         RootComponentDeletionProgressView, RootComponentDrainingAdvanceView,
         RootComponentDrainingView, RootComponentFinalInventoryView,
         RootComponentInitialInventoryView, RootComponentInstallEffectView,
-        RootComponentQuiescenceProgressView, RootComponentQuiescenceStopIntentView,
-        RootComponentRegistryView, RootComponentSubtreeDeleteEffectView,
-        RootComponentSubtreeDirectoryConvergenceView,
+        RootComponentMembershipRemovedView, RootComponentQuiescenceProgressView,
+        RootComponentQuiescenceStopIntentView, RootComponentRegistryView,
+        RootComponentSubtreeDeleteEffectView, RootComponentSubtreeDirectoryConvergenceView,
         RootComponentSubtreeDirectorySynchronizedView, RootComponentSubtreeMembershipRemovedView,
         RootComponentSubtreeRemovalProgressView, RootComponentSubtreeRemovalView,
         RootComponentSubtreeStopEffectView, RootComponentSubtreeStoppedEffectView,
@@ -96,13 +96,14 @@ use canic_core::{
             RootComponentFinalInventoryRequest, RootComponentFinalInventoryResponse,
             RootComponentInitialInventoryStatus, RootComponentInstallEvidence,
             RootComponentInstallRequest, RootComponentMembershipActivationRequest,
-            RootComponentMembershipActivationResponse, RootComponentQuiescencePhase,
-            RootComponentQuiescenceRequest, RootComponentQuiescenceResponse,
-            RootComponentQuiescenceStatusRequest, RootComponentQuiescenceStopIntent,
-            RootComponentQuiescentReceipt, RootComponentRegistryPreparationRequest,
-            RootComponentRegistryStatusResponse, RootComponentRuntimeActivationRequest,
-            RootComponentRuntimeActivationResponse, RootComponentSubtreeRemovalAdvanceRequest,
-            RootComponentSubtreeRemovalCompletedReceipt, RootComponentSubtreeRemovalDeleteIntent,
+            RootComponentMembershipActivationResponse, RootComponentMembershipRemovedReceipt,
+            RootComponentQuiescencePhase, RootComponentQuiescenceRequest,
+            RootComponentQuiescenceResponse, RootComponentQuiescenceStatusRequest,
+            RootComponentQuiescenceStopIntent, RootComponentQuiescentReceipt,
+            RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
+            RootComponentRuntimeActivationRequest, RootComponentRuntimeActivationResponse,
+            RootComponentSubtreeRemovalAdvanceRequest, RootComponentSubtreeRemovalCompletedReceipt,
+            RootComponentSubtreeRemovalDeleteIntent,
             RootComponentSubtreeRemovalDeletePreparationRequest,
             RootComponentSubtreeRemovalDeleteRequest, RootComponentSubtreeRemovalDeletedReceipt,
             RootComponentSubtreeRemovalDirectoryConvergenceEvidence,
@@ -372,6 +373,29 @@ impl ComponentDeletionRequestAuthority {
             inventory_hash: deletion.final_inventory.inventory_hash,
         }
     }
+}
+
+fn terminal_component_membership_removal_response(
+    request: &RootComponentDeletionRequest,
+) -> Result<Option<RootComponentDeletionResponse>, InternalError> {
+    let Some(draining) = ComponentRegistryOps::component_draining(request.component)? else {
+        return Ok(None);
+    };
+    let Some(RootComponentDeletionProgressView::MembershipRemoved(receipt)) = &draining.deletion
+    else {
+        return Ok(None);
+    };
+    let (authority, _root) = root_authority()?;
+    let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let request_authority = ComponentDeletionRequestAuthority::from_request(request);
+    let durable_authority =
+        ComponentDeletionRequestAuthority::from_durable(&draining, &receipt.deleted.deletion);
+    if request_authority != durable_authority {
+        return Err(InternalError::conflict(
+            "Component deletion request differs from terminal removal authority",
+        ));
+    }
+    component_deletion_response(draining).map(Some)
 }
 
 enum ComponentDrainingRemovalAction {
@@ -933,6 +957,9 @@ pub async fn finalize_component_inventory(
 pub async fn delete_component(
     request: RootComponentDeletionRequest,
 ) -> Result<RootComponentDeletionResponse, InternalError> {
+    if let Some(response) = terminal_component_membership_removal_response(&request)? {
+        return Ok(response);
+    }
     let prepared = prepared_component_draining_boundary(request.component).await?;
     let draining = ComponentRegistryOps::prepare_component_deletion(
         request.component,
@@ -966,21 +993,35 @@ pub async fn delete_component(
     component_deletion_response(deleted)
 }
 
+/// Atomically remove one independently deleted Component from local membership.
+pub fn remove_component_membership(
+    request: RootComponentDeletionRequest,
+) -> Result<RootComponentDeletionResponse, InternalError> {
+    let (authority, _root) = root_authority()?;
+    let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    if let Some(partition) = ComponentRegistryOps::partition(request.component)? {
+        validate_partition(
+            &authority.binding,
+            authority.initial_release_set,
+            &ConfigOps::component_topology()?,
+            &partition,
+        )?;
+    }
+    let removed = ComponentRegistryOps::remove_component_membership(
+        request.component,
+        request.operation_id,
+        request.expected_inventory_hash,
+        IcOps::now_nanos(),
+    )?;
+    component_deletion_response(removed)
+}
+
 /// Read one finalized Component's durable top-level deletion progress without mutation.
 pub fn component_deletion_status(
     request: RootComponentDeletionStatusRequest,
 ) -> Result<RootComponentDeletionResponse, InternalError> {
     let (authority, _root) = root_authority()?;
     let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
-    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
-        InternalError::unavailable("Component Registry partition has not been committed")
-    })?;
-    validate_partition(
-        &authority.binding,
-        authority.initial_release_set,
-        &ConfigOps::component_topology()?,
-        &partition,
-    )?;
     let draining =
         ComponentRegistryOps::component_draining(request.component)?.ok_or_else(|| {
             InternalError::unavailable("Component draining operation has not been durably fenced")
@@ -990,7 +1031,23 @@ pub fn component_deletion_status(
             "Component deletion status is bound to different draining intent",
         ));
     }
-    validate_component_draining(&partition, &draining, None, None)?;
+    if let Some(partition) = ComponentRegistryOps::partition(request.component)? {
+        validate_partition(
+            &authority.binding,
+            authority.initial_release_set,
+            &ConfigOps::component_topology()?,
+            &partition,
+        )?;
+        validate_component_draining(&partition, &draining, None, None)?;
+    } else if !matches!(
+        draining.deletion,
+        Some(RootComponentDeletionProgressView::MembershipRemoved(_))
+    ) {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component deletion authority has no live partition or terminal removal receipt",
+        ));
+    }
     component_deletion_response(draining)
 }
 
@@ -2960,7 +3017,8 @@ async fn advance_creation(
         | RootComponentAllocationProgressView::InstallIntent { .. }
         | RootComponentAllocationProgressView::Installed { .. }
         | RootComponentAllocationProgressView::Verified { .. }
-        | RootComponentAllocationProgressView::Committed { .. } => {
+        | RootComponentAllocationProgressView::Committed { .. }
+        | RootComponentAllocationProgressView::Removed { .. } => {
             return Err(CostGuardWorkflow::recover_after_failure(
                 &cost_permit,
                 IcOps::now_secs(),
@@ -3111,6 +3169,9 @@ fn reconcile_existing_creation(
             creation: effect, ..
         }
         | RootComponentAllocationProgressView::Committed {
+            creation: effect, ..
+        }
+        | RootComponentAllocationProgressView::Removed {
             creation: effect, ..
         } => {
             validate_creation_effect(effect, plan)?;
@@ -3568,6 +3629,25 @@ async fn verify_installed_child(plan: &ComponentChildInstallPlan) -> Result<(), 
     Ok(())
 }
 
+fn removed_allocation_response(
+    allocation: RootComponentAllocationView,
+    plan: &ComponentInstallPlan,
+) -> Result<RootComponentAllocationResponse, InternalError> {
+    let RootComponentAllocationProgressView::Removed { installation, .. } = &allocation.progress
+    else {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "removed Component response requires removed allocation authority",
+        ));
+    };
+    validate_install_effect(installation, &plan.durable)?;
+    CostGuardWorkflow::recover_replay_settlement(
+        &installation.cost_guard_settlement,
+        IcOps::now_secs(),
+    )?;
+    allocation_response(allocation)
+}
+
 async fn advance_install(
     operation_id: [u8; 32],
     allocation: RootComponentAllocationView,
@@ -3667,6 +3747,9 @@ async fn advance_install(
             )?;
             verify_installed_component(&plan).await?;
             allocation_response(allocation)
+        }
+        RootComponentAllocationProgressView::Removed { .. } => {
+            removed_allocation_response(allocation, &plan)
         }
     }
 }
@@ -4616,6 +4699,9 @@ fn allocation_creation_and_canister(
         }
         | RootComponentAllocationProgressView::Committed {
             creation, canister, ..
+        }
+        | RootComponentAllocationProgressView::Removed {
+            creation, canister, ..
         } => Ok((creation, *canister)),
         RootComponentAllocationProgressView::Reserved
         | RootComponentAllocationProgressView::CreationIntent(_) => Err(InternalError::conflict(
@@ -4937,6 +5023,16 @@ fn allocation_response(
             Some(creation_evidence(creation, Some(canister))),
             Some(install_evidence(installation)),
         ),
+        RootComponentAllocationProgressView::Removed {
+            creation,
+            canister,
+            installation,
+            ..
+        } => (
+            RootComponentAllocationPhase::Removed,
+            Some(creation_evidence(creation, Some(canister))),
+            Some(install_evidence(installation)),
+        ),
     };
     Ok(RootComponentAllocationResponse {
         operation_id: allocation.operation_id,
@@ -5069,12 +5165,35 @@ fn component_deletion_response(
                 deleted_at_ns: receipt.deleted_at_ns,
             })
         }
+        RootComponentDeletionProgressView::MembershipRemoved(receipt) => {
+            RootComponentDeletionPhase::MembershipRemoved(component_membership_removed_receipt(
+                receipt,
+            ))
+        }
     };
     Ok(RootComponentDeletionResponse {
         operation_id: draining.operation_id,
         component: draining.component,
         phase,
     })
+}
+
+const fn component_membership_removed_receipt(
+    receipt: RootComponentMembershipRemovedView,
+) -> RootComponentMembershipRemovedReceipt {
+    RootComponentMembershipRemovedReceipt {
+        deleted: RootComponentDeletedReceipt {
+            deletion: component_deletion_intent(receipt.deleted.deletion),
+            deleted_at_ns: receipt.deleted.deleted_at_ns,
+        },
+        allocation_operation_id: receipt.allocation_operation_id,
+        remaining_spec_committed_instances: receipt.remaining_spec_committed_instances,
+        root_committed_component_instances: receipt.root_committed_component_instances,
+        root_known_created_component_canisters: receipt.root_known_created_component_canisters,
+        root_registry_encoded_bytes: receipt.root_registry_encoded_bytes,
+        removed_at_ns: receipt.removed_at_ns,
+        removal_hash: receipt.removal_hash,
+    }
 }
 
 const fn component_deletion_intent(
@@ -5678,6 +5797,9 @@ fn prepared_component_deletion_plan(
         }
         Some(RootComponentDeletionProgressView::Deleted(receipt)) => {
             (receipt.deletion.clone(), true)
+        }
+        Some(RootComponentDeletionProgressView::MembershipRemoved(receipt)) => {
+            (receipt.deleted.deletion.clone(), true)
         }
         None => {
             return Err(InternalError::unavailable(

@@ -6,10 +6,10 @@ Date: 2026-07-31
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.61`.
-- Latest published release: `v0.100.61` at
-  `92a8af1fbf9658b277b99ed137a32cbd92e25bc6`.
-- Open patch draft: `0.100.62`; no package-version change has been authorized.
+- Workspace package version: `0.100.62`.
+- Latest published release: `v0.100.62` at
+  `28bff991aec4820ca2e22a8fdda8f750e34ec6bf`.
+- Open patch draft: `0.100.63`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -869,7 +869,7 @@ memory-ID-23 draining record. The earlier quiescence reservation covers its
 maximum encoded shape, and the transition performs no deletion or membership
 mutation.
 
-Open 0.100.62 reconciles qualified top-level deletion under that exact final
+Released 0.100.62 reconciles qualified top-level deletion under that exact final
 inventory. One controller update durably freezes the complete final-inventory
 and quiescent receipts before the destructive call, reverifies the local Store
 module and sole root controller, and commits `Deleted` only after typed live
@@ -879,12 +879,22 @@ the complete evidence remains in memory ID 23 under an 8 KiB reinstall-only
 record bound. The Component partition, principal index and root counters remain
 unchanged.
 
+Open 0.100.63 atomically consumes that independently observed `Deleted`
+receipt. One compare-and-commit removes the exact Component partition and
+top-level principal lookup, advances its unique committed allocation to
+terminal `Removed`, decrements the matching Spec count and root committed and
+known-created counts, and settles the exact root Registry byte ledger. The
+retained allocation and memory-ID-23 draining history preserve complete
+authority for exact deletion, removal and status retries. A canonical removal
+hash binds the immutable receipt snapshots without incorrectly pinning later
+unrelated root totals. No new stable-memory domain or ID is allocated.
+
 ## Next Action
 
-Atomically remove the independently deleted top-level Component from local
-Registry membership, principal lookup and settled root/Spec counters under its
-exact `Deleted` receipt. Preserve the allocation history needed for exact
-retry, derive the terminal `Removed` authority and do not infer any local
-mutation from Canister absence alone. Do not introduce nested Component
-declarations, let application Canisters call management effects directly or
-infer authorization from catalog presence alone.
+Begin the durable Fleet Subnet Root `Active -> Draining` fence. It must reject
+new top-level Component allocation without preventing already admitted
+Components from completing their bounded removal, retain exact Fleet Registry
+and root authority for retry, and perform no management effect. Do not permit
+ordinary root removal until every local Component partition is absent, the
+Store is quiescent and an exact final root inventory exists; an unreachable
+root or Subnet is not removal evidence.

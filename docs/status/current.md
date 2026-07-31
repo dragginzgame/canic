@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.61`.
-- The latest published release is `v0.100.61` at
-  `92a8af1fbf9658b277b99ed137a32cbd92e25bc6`.
-- Open `0.100.62` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.62`.
+- The latest published release is `v0.100.62` at
+  `28bff991aec4820ca2e22a8fdda8f750e34ec6bf`.
+- Open `0.100.63` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -512,12 +512,18 @@ Historical detail is archived at:
   the existing stable-memory-ID-23 draining record. Quiescence precharges its
   maximum shape; finalization changes no Registry byte ledger and performs no
   deletion or membership mutation.
-- Open `0.100.62` durably freezes the complete final-inventory and quiescent
+- Released `0.100.62` durably freezes the complete final-inventory and quiescent
   receipts before deleting that exact top-level Component. It requires the
   live Canister to remain stopped under the sole root and verified Store
   module, commits only typed absence and retains `DeleteIntent -> Deleted`
   progress in memory ID 23. Exact retry and status are durable; local
   membership and counters remain unchanged.
+- Open `0.100.63` atomically consumes that `Deleted` receipt, removes the exact
+  top-level Component partition and principal lookup, advances its unique
+  allocation to terminal `Removed`, settles matching Spec and root counts plus
+  the exact root Registry byte ledger, and retains canonical deletion/removal
+  history for exact update and status retry. It adds no stable-memory domain
+  or ID and does not mutate Fleet Directory authority.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -2012,7 +2018,7 @@ coverage, exact Directory hash, canonical inventory hash and finalization
 time. It remains inside memory ID 23 and is fully covered by the earlier
 pre-effect quiescence reservation.
 
-Open `0.100.62` reconciles that top-level deletion under a durable intent
+Released `0.100.62` reconciles that top-level deletion under a durable intent
 embedding the complete final-inventory and quiescent receipts. It independently
 reverifies the active root, Store module, exact stopped Canister and sole root
 controller, then commits `Deleted` only after typed absence. Quiescence
@@ -2020,11 +2026,18 @@ precharges the maximum terminal record, which remains in memory ID 23 under an
 8 KiB fresh-install bound. The partition, principal index and counters remain
 unchanged.
 
-Next, atomically remove local top-level Component membership and settle its
-principal lookup, root/Spec counters and byte ledgers under that exact deleted
-receipt. An unreachable Canister is never evidence of removal. Managed
-application Canisters must not perform management effects or infer
-authorization from flat catalog presence.
+Open `0.100.63` atomically removes that local top-level membership under the
+exact deleted receipt. The same commit removes the partition and principal
+lookup, advances its retained allocation to `Removed`, settles the Spec/root
+counts and exact root byte ledger, and stores canonical terminal removal
+authority. Exact deletion, removal and status retries remain valid after later
+unrelated root mutations.
+
+Next, add the durable Fleet Subnet Root `Active -> Draining` fence that blocks
+new Component allocation while admitted Components finish bounded removal.
+Ordinary root removal must remain gated on absent Component partitions,
+quiescent Store authority and exact final root inventory; neither an
+unreachable root nor a Subnet failure is removal evidence.
 
 ## Historical Release Detail
 

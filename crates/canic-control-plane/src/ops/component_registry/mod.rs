@@ -17,6 +17,7 @@ use crate::{
         RootComponentDeletionProgressRecord, RootComponentDrainingRecord,
         RootComponentFinalInventoryRecord, RootComponentInitialInventoryRecord,
         RootComponentInstallEffectRecord, RootComponentMembershipRecord,
+        RootComponentMembershipRemovalCommit, RootComponentMembershipRemovedRecord,
         RootComponentQuiescenceProgressRecord, RootComponentQuiescenceStopIntentRecord,
         RootComponentQuiescentReceiptRecord, RootComponentRegistryCommitError,
         RootComponentRegistryMetaRecord, RootComponentRegistryStore,
@@ -40,10 +41,11 @@ use crate::{
         RootComponentDeletionProgressView, RootComponentDrainingAdvanceView,
         RootComponentDrainingView, RootComponentFinalInventoryView,
         RootComponentInitialInventoryView, RootComponentInstallEffectView,
-        RootComponentMembershipView, RootComponentQuiescenceProgressView,
-        RootComponentQuiescenceStopIntentView, RootComponentQuiescentReceiptView,
-        RootComponentRegistryView, RootComponentSubtreeDeleteEffectView,
-        RootComponentSubtreeDeletedEffectView, RootComponentSubtreeDirectoryConvergenceView,
+        RootComponentMembershipRemovedView, RootComponentMembershipView,
+        RootComponentQuiescenceProgressView, RootComponentQuiescenceStopIntentView,
+        RootComponentQuiescentReceiptView, RootComponentRegistryView,
+        RootComponentSubtreeDeleteEffectView, RootComponentSubtreeDeletedEffectView,
+        RootComponentSubtreeDirectoryConvergenceView,
         RootComponentSubtreeDirectorySynchronizedView, RootComponentSubtreeMembershipRemovedView,
         RootComponentSubtreeRemovalCompletedView, RootComponentSubtreeRemovalNodeView,
         RootComponentSubtreeRemovalProgressView, RootComponentSubtreeRemovalView,
@@ -84,6 +86,7 @@ const SUBTREE_REMOVAL_TRAVERSAL_BATCH_SIZE: u32 = 64;
 const COMPONENT_DRAINING_SUBTREE_OPERATION_DOMAIN: &[u8] =
     b"canic.component-draining.subtree-operation.v1";
 const COMPONENT_FINAL_INVENTORY_HASH_DOMAIN: &[u8] = b"canic.component.final-inventory.v1";
+const COMPONENT_MEMBERSHIP_REMOVAL_HASH_DOMAIN: &[u8] = b"canic.component.membership-removal.v1";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SubtreeRemovalOrigin {
@@ -160,6 +163,20 @@ struct RootComponentFinalInventoryHashAuthority {
     covered_fleet_registry_content_hash: [u8; 32],
     directory_authority_hash: [u8; 32],
     finalized_at_ns: u64,
+}
+
+#[derive(CandidType)]
+struct RootComponentMembershipRemovalHashAuthority {
+    operation_id: [u8; 32],
+    component: ComponentInstanceId,
+    final_inventory_hash: [u8; 32],
+    deleted_at_ns: u64,
+    allocation_operation_id: [u8; 32],
+    remaining_spec_committed_instances: u32,
+    root_committed_component_instances: u32,
+    root_known_created_component_canisters: u32,
+    root_registry_encoded_bytes: u64,
+    removed_at_ns: u64,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -247,6 +264,80 @@ struct RootComponentDeletionAuthority<'a> {
     progress: &'a RootComponentDeletionProgressRecord,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+struct ComponentAllocationPartitionAuthority<'a> {
+    component: ComponentInstanceId,
+    component_spec: &'a ComponentSpecId,
+    spec_hash: [u8; 32],
+    role: &'a CanisterRole,
+    provisioning_origin: &'a ComponentProvisioningOrigin,
+    release_set: FleetSubnetRootReleaseSet,
+    binding: &'a ComponentBinding,
+    canister: Principal,
+}
+
+impl<'a> ComponentAllocationPartitionAuthority<'a> {
+    const fn from_partition(partition: &'a ComponentRegistryPartitionRecord) -> Self {
+        Self {
+            component: partition.binding.component,
+            component_spec: &partition.binding.component_spec,
+            spec_hash: partition.binding.spec_hash,
+            role: &partition.binding.role,
+            provisioning_origin: &partition.provisioning_origin,
+            release_set: partition.release_set,
+            binding: &partition.binding,
+            canister: partition.binding.canister_id,
+        }
+    }
+
+    const fn from_committed_allocation(record: &'a RootComponentAllocationRecord) -> Option<Self> {
+        let RootComponentAllocationProgressRecord::Committed {
+            canister,
+            installation,
+            ..
+        } = &record.progress
+        else {
+            return None;
+        };
+        Some(Self::from_allocation(record, installation, *canister))
+    }
+
+    const fn from_removed_allocation(record: &'a RootComponentAllocationRecord) -> Option<Self> {
+        let RootComponentAllocationProgressRecord::Removed {
+            canister,
+            installation,
+            ..
+        } = &record.progress
+        else {
+            return None;
+        };
+        Some(Self::from_allocation(record, installation, *canister))
+    }
+
+    const fn from_allocation(
+        record: &'a RootComponentAllocationRecord,
+        installation: &'a RootComponentInstallEffectRecord,
+        canister: Principal,
+    ) -> Self {
+        Self {
+            component: record.component,
+            component_spec: &record.component_spec,
+            spec_hash: record.spec_hash,
+            role: &record.role,
+            provisioning_origin: &record.provisioning_origin,
+            release_set: record.release_set,
+            binding: &installation.binding,
+            canister,
+        }
+    }
+}
+
+struct ComponentMembershipRemovalRecords {
+    next_meta: RootComponentRegistryMetaRecord,
+    next_allocation: RootComponentAllocationRecord,
+    next_draining: RootComponentDrainingRecord,
+}
+
 impl RootComponentDeletionAuthority<'_> {
     fn validate(&self) -> Result<(), InternalError> {
         let final_inventory = self
@@ -255,11 +346,16 @@ impl RootComponentDeletionAuthority<'_> {
             .as_ref()
             .ok_or_else(Self::invalid)?;
         let quiescence = terminal_component_quiescence(self.draining).ok_or_else(Self::invalid)?;
-        let (intent, deleted_at_ns) = match self.progress {
-            RootComponentDeletionProgressRecord::DeleteIntent(intent) => (intent, None),
+        let (intent, deleted_at_ns, removed_at_ns) = match self.progress {
+            RootComponentDeletionProgressRecord::DeleteIntent(intent) => (intent, None, None),
             RootComponentDeletionProgressRecord::Deleted(receipt) => {
-                (&receipt.deletion, Some(receipt.deleted_at_ns))
+                (&receipt.deletion, Some(receipt.deleted_at_ns), None)
             }
+            RootComponentDeletionProgressRecord::MembershipRemoved(receipt) => (
+                &receipt.deleted.deletion,
+                Some(receipt.deleted.deleted_at_ns),
+                Some(receipt.removed_at_ns),
+            ),
         };
         if intent.final_inventory != *final_inventory {
             return Err(Self::invalid());
@@ -271,6 +367,12 @@ impl RootComponentDeletionAuthority<'_> {
             return Err(Self::invalid());
         }
         if deleted_at_ns.is_some_and(|deleted_at_ns| deleted_at_ns < intent.prepared_at_ns) {
+            return Err(Self::invalid());
+        }
+        if removed_at_ns
+            .zip(deleted_at_ns)
+            .is_some_and(|(removed_at_ns, deleted_at_ns)| removed_at_ns < deleted_at_ns)
+        {
             return Err(Self::invalid());
         }
         if RootComponentRegistryStore::component_draining_entry_bytes(self.draining)
@@ -1234,12 +1336,16 @@ impl ComponentRegistryOps {
             }
             | RootComponentAllocationProgressRecord::Committed {
                 canister: existing, ..
+            }
+            | RootComponentAllocationProgressRecord::Removed {
+                canister: existing, ..
             } if existing == &canister => return Ok(allocation_record_to_view(record)),
             RootComponentAllocationProgressRecord::Created { .. }
             | RootComponentAllocationProgressRecord::InstallIntent { .. }
             | RootComponentAllocationProgressRecord::Installed { .. }
             | RootComponentAllocationProgressRecord::Verified { .. }
-            | RootComponentAllocationProgressRecord::Committed { .. } => {
+            | RootComponentAllocationProgressRecord::Committed { .. }
+            | RootComponentAllocationProgressRecord::Removed { .. } => {
                 return Err(InternalError::conflict(
                     "Component allocation is already bound to a different created Canister",
                 ));
@@ -1685,14 +1791,15 @@ impl ComponentRegistryOps {
         let Some(record) = RootComponentRegistryStore::component_draining(component) else {
             return Ok(None);
         };
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component draining authority has no Registry partition",
-            )
-        })?;
-        validate_partition_record(&partition)?;
-        validate_component_draining_record(&partition, &record)?;
+        match RootComponentRegistryStore::partition(component) {
+            Some(partition) => {
+                validate_partition_record(&partition)?;
+                validate_component_draining_record(&partition, &record)?;
+            }
+            None => {
+                validate_removed_component_authority(&record)?;
+            }
+        }
         Ok(Some(component_draining_record_to_view(record)))
     }
 
@@ -2239,7 +2346,8 @@ impl ComponentRegistryOps {
         ensure_component_deletion_inventory(progress, expected_inventory_hash)?;
         let intent = match progress {
             RootComponentDeletionProgressRecord::DeleteIntent(intent) => intent,
-            RootComponentDeletionProgressRecord::Deleted(_) => {
+            RootComponentDeletionProgressRecord::Deleted(_)
+            | RootComponentDeletionProgressRecord::MembershipRemoved(_) => {
                 return Ok(component_draining_record_to_view(draining));
             }
         };
@@ -2260,6 +2368,74 @@ impl ComponentRegistryOps {
         RootComponentRegistryStore::mark_component_deleted(&draining, next_draining.clone())
             .map_err(map_allocation_commit_error)?;
         Ok(component_draining_record_to_view(next_draining))
+    }
+
+    pub(crate) fn remove_component_membership(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        expected_inventory_hash: [u8; 32],
+        removed_at_ns: u64,
+    ) -> Result<RootComponentDrainingView, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining =
+            RootComponentRegistryStore::component_draining(component).ok_or_else(|| {
+                InternalError::unavailable(
+                    "Component draining operation has not been durably fenced",
+                )
+            })?;
+        ensure_component_deletion_operation(&draining, operation_id)?;
+        let progress = draining.deletion.as_ref().ok_or_else(|| {
+            InternalError::unavailable("Component deletion intent has not been durably prepared")
+        })?;
+        ensure_component_deletion_inventory(progress, expected_inventory_hash)?;
+        if matches!(
+            progress,
+            RootComponentDeletionProgressRecord::MembershipRemoved(_)
+        ) {
+            validate_removed_component_authority(&draining)?;
+            return Ok(component_draining_record_to_view(draining));
+        }
+        let RootComponentDeletionProgressRecord::Deleted(deleted) = progress else {
+            return Err(InternalError::unavailable(
+                "Component deletion has not been independently observed",
+            ));
+        };
+        if removed_at_ns < deleted.deleted_at_ns {
+            return Err(InternalError::invalid_input(
+                "Component membership removal time precedes deletion authority",
+            ));
+        }
+
+        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
+            InternalError::unavailable("Component Registry partition has not been committed")
+        })?;
+        validate_partition_record(&partition)?;
+        validate_component_draining_record(&partition, &draining)?;
+        let allocation = committed_component_allocation(&partition)?;
+        let records = component_membership_removal_records(
+            &current,
+            &partition,
+            &allocation,
+            &draining,
+            deleted,
+            removed_at_ns,
+        )?;
+        RootComponentRegistryStore::remove_component_membership(
+            RootComponentMembershipRemovalCommit {
+                expected_meta: &current,
+                next_meta: records.next_meta,
+                expected_partition: &partition,
+                expected_allocation: &allocation,
+                next_allocation: records.next_allocation,
+                expected_draining: &draining,
+                next_draining: records.next_draining.clone(),
+            },
+        )
+        .map_err(map_allocation_commit_error)?;
+        validate_removed_component_authority(&records.next_draining)?;
+        Ok(component_draining_record_to_view(records.next_draining))
     }
 
     pub(crate) fn begin_draining_subtree_removal(
@@ -5224,6 +5400,17 @@ fn allocation_record_to_view(record: RootComponentAllocationRecord) -> RootCompo
                 installation: install_effect_record_to_view(installation),
                 commitment: commitment_record_to_view(commitment),
             },
+            RootComponentAllocationProgressRecord::Removed {
+                creation,
+                canister,
+                installation,
+                commitment,
+            } => RootComponentAllocationProgressView::Removed {
+                creation: creation_effect_record_to_view(creation),
+                canister,
+                installation: install_effect_record_to_view(installation),
+                commitment: commitment_record_to_view(commitment),
+            },
         },
     }
 }
@@ -5503,6 +5690,28 @@ fn component_draining_record_to_view(
                     deletion: component_deletion_intent_record_to_view(receipt.deletion),
                     deleted_at_ns: receipt.deleted_at_ns,
                 })
+            }
+            RootComponentDeletionProgressRecord::MembershipRemoved(receipt) => {
+                RootComponentDeletionProgressView::MembershipRemoved(
+                    RootComponentMembershipRemovedView {
+                        deleted: RootComponentDeletedReceiptView {
+                            deletion: component_deletion_intent_record_to_view(
+                                receipt.deleted.deletion,
+                            ),
+                            deleted_at_ns: receipt.deleted.deleted_at_ns,
+                        },
+                        allocation_operation_id: receipt.allocation_operation_id,
+                        remaining_spec_committed_instances: receipt
+                            .remaining_spec_committed_instances,
+                        root_committed_component_instances: receipt
+                            .root_committed_component_instances,
+                        root_known_created_component_canisters: receipt
+                            .root_known_created_component_canisters,
+                        root_registry_encoded_bytes: receipt.root_registry_encoded_bytes,
+                        removed_at_ns: receipt.removed_at_ns,
+                        removal_hash: receipt.removal_hash,
+                    },
+                )
             }
         }),
     }
@@ -5956,14 +6165,23 @@ fn component_quiescence_terminal_entry_bytes(
         terminal.quiescence = Some(RootComponentQuiescenceProgressRecord::Quiescent(
             quiescence.clone(),
         ));
-        terminal.deletion = Some(RootComponentDeletionProgressRecord::Deleted(
-            RootComponentDeletedReceiptRecord {
-                deletion: RootComponentDeletionIntentRecord {
-                    final_inventory,
-                    quiescence,
-                    prepared_at_ns: u64::MAX,
+        terminal.deletion = Some(RootComponentDeletionProgressRecord::MembershipRemoved(
+            RootComponentMembershipRemovedRecord {
+                deleted: RootComponentDeletedReceiptRecord {
+                    deletion: RootComponentDeletionIntentRecord {
+                        final_inventory,
+                        quiescence,
+                        prepared_at_ns: u64::MAX,
+                    },
+                    deleted_at_ns: u64::MAX,
                 },
-                deleted_at_ns: u64::MAX,
+                allocation_operation_id: [u8::MAX; 32],
+                remaining_spec_committed_instances: u32::MAX,
+                root_committed_component_instances: u32::MAX,
+                root_known_created_component_canisters: u32::MAX,
+                root_registry_encoded_bytes: u64::MAX,
+                removed_at_ns: u64::MAX,
+                removal_hash: [u8::MAX; 32],
             },
         ));
         let next = RootComponentRegistryStore::component_draining_entry_bytes(&terminal);
@@ -8199,6 +8417,9 @@ fn ensure_component_deletion_inventory(
     let intent = match progress {
         RootComponentDeletionProgressRecord::DeleteIntent(intent) => intent,
         RootComponentDeletionProgressRecord::Deleted(receipt) => &receipt.deletion,
+        RootComponentDeletionProgressRecord::MembershipRemoved(receipt) => {
+            &receipt.deleted.deletion
+        }
     };
     if intent.final_inventory.inventory_hash == expected_inventory_hash {
         return Ok(());
@@ -8206,6 +8427,352 @@ fn ensure_component_deletion_inventory(
     Err(InternalError::conflict(
         "Component deletion differs from durable final inventory authority",
     ))
+}
+
+fn committed_component_allocation(
+    partition: &ComponentRegistryPartitionRecord,
+) -> Result<RootComponentAllocationRecord, InternalError> {
+    let mut allocations = RootComponentRegistryStore::allocations()
+        .into_iter()
+        .filter(|allocation| allocation.component == partition.binding.component);
+    let allocation = allocations.next().ok_or_else(|| {
+        InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component Registry partition has no allocation history",
+        )
+    })?;
+    if allocations.next().is_some() {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component Registry partition has duplicate allocation history",
+        ));
+    }
+    if ComponentAllocationPartitionAuthority::from_committed_allocation(&allocation)
+        != Some(ComponentAllocationPartitionAuthority::from_partition(
+            partition,
+        ))
+    {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component allocation history differs from its draining partition",
+        ));
+    }
+    let RootComponentAllocationProgressRecord::Committed { commitment, .. } = &allocation.progress
+    else {
+        unreachable!("authority comparison accepts only committed allocations");
+    };
+    let membership_is_terminal = commitment.runtime_activated
+        && commitment
+            .membership
+            .as_ref()
+            .is_some_and(|membership| membership.directory_synchronized);
+    if !commitment.directory_prepared || !membership_is_terminal {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "draining Component allocation lacks terminal activation authority",
+        ));
+    }
+    Ok(allocation)
+}
+
+fn removed_component_allocation(
+    allocation: &RootComponentAllocationRecord,
+) -> Result<RootComponentAllocationRecord, InternalError> {
+    let RootComponentAllocationProgressRecord::Committed {
+        creation,
+        canister,
+        installation,
+        commitment,
+    } = &allocation.progress
+    else {
+        return Err(InternalError::conflict(
+            "Component allocation is not committed for membership removal",
+        ));
+    };
+    let mut removed = allocation.clone();
+    removed.progress = RootComponentAllocationProgressRecord::Removed {
+        creation: creation.clone(),
+        canister: *canister,
+        installation: installation.clone(),
+        commitment: commitment.clone(),
+    };
+    if RootComponentRegistryStore::allocation_entry_bytes(&removed)
+        > RootComponentRegistryStore::allocation_record_max_bytes() + 128
+    {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "terminal Component allocation exceeds its stable record bound",
+        ));
+    }
+    Ok(removed)
+}
+
+fn component_membership_removal_records(
+    current: &RootComponentRegistryMetaRecord,
+    partition: &ComponentRegistryPartitionRecord,
+    allocation: &RootComponentAllocationRecord,
+    draining: &RootComponentDrainingRecord,
+    deleted: &RootComponentDeletedReceiptRecord,
+    removed_at_ns: u64,
+) -> Result<ComponentMembershipRemovalRecords, InternalError> {
+    let next_allocation = removed_component_allocation(allocation)?;
+    let (_, committed) = RootComponentRegistryStore::allocation_counts(&allocation.component_spec);
+    let remaining_spec_committed_instances = committed
+        .checked_sub(1)
+        .and_then(|count| u32::try_from(count).ok())
+        .ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component Spec committed count cannot settle membership removal",
+            )
+        })?;
+    let mut next_meta = current.clone();
+    next_meta.committed_component_instances = next_meta
+        .committed_component_instances
+        .checked_sub(1)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "root committed Component count is empty before membership removal",
+            )
+        })?;
+    next_meta.known_created_component_canisters = next_meta
+        .known_created_component_canisters
+        .checked_sub(1)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "root known-created Canister count is empty before membership removal",
+            )
+        })?;
+    next_meta.encoded_bytes =
+        removed_component_root_registry_bytes(current, partition, allocation, &next_allocation)?;
+
+    let mut receipt = RootComponentMembershipRemovedRecord {
+        deleted: deleted.clone(),
+        allocation_operation_id: allocation.operation_id,
+        remaining_spec_committed_instances,
+        root_committed_component_instances: next_meta.committed_component_instances,
+        root_known_created_component_canisters: next_meta.known_created_component_canisters,
+        root_registry_encoded_bytes: next_meta.encoded_bytes,
+        removed_at_ns,
+        removal_hash: [0; 32],
+    };
+    receipt.removal_hash = component_membership_removal_hash(draining, &receipt)?;
+    let mut next_draining = draining.clone();
+    next_draining.deletion = Some(RootComponentDeletionProgressRecord::MembershipRemoved(
+        receipt,
+    ));
+    if RootComponentRegistryStore::component_draining_entry_bytes(&next_draining)
+        > deleted.deletion.quiescence.stop.charged_entry_bytes
+    {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component membership-removal receipt exceeds its precharged stable footprint",
+        ));
+    }
+    Ok(ComponentMembershipRemovalRecords {
+        next_meta,
+        next_allocation,
+        next_draining,
+    })
+}
+
+fn removed_component_allocation_for_receipt(
+    component: ComponentInstanceId,
+    receipt: &RootComponentMembershipRemovedRecord,
+) -> Result<RootComponentAllocationRecord, InternalError> {
+    let mut allocations = RootComponentRegistryStore::allocations()
+        .into_iter()
+        .filter(|allocation| allocation.component == component);
+    let allocation = allocations.next().ok_or_else(|| {
+        InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "terminal Component receipt has no retained allocation history",
+        )
+    })?;
+    if allocations.next().is_some() || allocation.operation_id != receipt.allocation_operation_id {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "terminal Component receipt differs from unique allocation history",
+        ));
+    }
+    Ok(allocation)
+}
+
+fn removed_component_root_registry_bytes(
+    current: &RootComponentRegistryMetaRecord,
+    partition: &ComponentRegistryPartitionRecord,
+    allocation: &RootComponentAllocationRecord,
+    removed_allocation: &RootComponentAllocationRecord,
+) -> Result<u64, InternalError> {
+    let partition_bytes = RootComponentRegistryStore::partition_entry_bytes(partition);
+    let principal_bytes = RootComponentRegistryStore::principal_index_entry_bytes(
+        partition.binding.canister_id,
+        partition.binding.component,
+    );
+    current
+        .encoded_bytes
+        .checked_sub(partition_bytes)
+        .and_then(|bytes| bytes.checked_sub(principal_bytes))
+        .and_then(|bytes| {
+            bytes.checked_sub(RootComponentRegistryStore::allocation_entry_bytes(
+                allocation,
+            ))
+        })
+        .and_then(|bytes| {
+            bytes.checked_add(RootComponentRegistryStore::allocation_entry_bytes(
+                removed_allocation,
+            ))
+        })
+        .ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "root Registry byte ledger cannot settle Component membership removal",
+            )
+        })
+}
+
+fn validate_removed_component_authority(
+    draining: &RootComponentDrainingRecord,
+) -> Result<(), InternalError> {
+    let Some(progress) = draining.deletion.as_ref() else {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "absent Component partition lacks terminal membership-removal authority",
+        ));
+    };
+    let RootComponentDeletionProgressRecord::MembershipRemoved(receipt) = progress else {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "absent Component partition lacks terminal membership-removal authority",
+        ));
+    };
+    let allocation = removed_component_allocation_for_receipt(draining.component, receipt)?;
+    let partition = removed_component_partition(&allocation, receipt)?;
+    if ComponentAllocationPartitionAuthority::from_removed_allocation(&allocation)
+        != Some(ComponentAllocationPartitionAuthority::from_partition(
+            &partition,
+        ))
+    {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "removed Component allocation differs from terminal membership authority",
+        ));
+    }
+    let partition_is_absent = RootComponentRegistryStore::partition(draining.component).is_none();
+    let live_inventory_is_empty =
+        RootComponentRegistryStore::component_live_inventory_is_empty(draining.component);
+    let principal_inventory_is_empty =
+        RootComponentRegistryStore::component_principal_inventory_is_empty(draining.component);
+    if ![
+        partition_is_absent,
+        live_inventory_is_empty,
+        principal_inventory_is_empty,
+    ]
+    .into_iter()
+    .all(|empty| empty)
+    {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "removed Component retains live Registry membership",
+        ));
+    }
+    if component_membership_removal_hash(draining, receipt)? != receipt.removal_hash {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "removed Component receipt has a noncanonical authority hash",
+        ));
+    }
+    validate_partition_shape(&partition)?;
+    validate_removed_component_final_inventory(&partition, draining, receipt)?;
+    RootComponentDeletionAuthority { draining, progress }.validate()
+}
+
+fn removed_component_partition(
+    allocation: &RootComponentAllocationRecord,
+    receipt: &RootComponentMembershipRemovedRecord,
+) -> Result<ComponentRegistryPartitionRecord, InternalError> {
+    let RootComponentAllocationProgressRecord::Removed { installation, .. } = &allocation.progress
+    else {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "terminal Component receipt points to non-removed allocation history",
+        ));
+    };
+    let inventory = &receipt.deleted.deletion.final_inventory;
+    Ok(ComponentRegistryPartitionRecord {
+        binding: installation.binding.clone(),
+        provisioning_origin: allocation.provisioning_origin.clone(),
+        release_set: allocation.release_set,
+        status: ComponentLifecycleStatus::Draining,
+        revision: inventory.registry.revision,
+        content_hash: inventory.registry.content_hash,
+        descendant_content_hash: inventory.descendant_content_hash,
+        directory_synchronized_at_ns: inventory.directory_synchronized_at_ns,
+        reserved_descendants: 0,
+        committed_descendants: 0,
+        encoded_bytes: inventory.registry_encoded_bytes,
+    })
+}
+
+fn validate_removed_component_final_inventory(
+    partition: &ComponentRegistryPartitionRecord,
+    draining: &RootComponentDrainingRecord,
+    receipt: &RootComponentMembershipRemovedRecord,
+) -> Result<(), InternalError> {
+    let inventory = &receipt.deleted.deletion.final_inventory;
+    let inventory_shape_is_exact =
+        RootComponentFinalInventorySnapshotAuthority::from_inventory(inventory)
+            == RootComponentFinalInventorySnapshotAuthority::from_partition(partition);
+    let inventory_hash_is_exact =
+        inventory.inventory_hash == component_final_inventory_hash(partition, inventory)?;
+    let time_is_monotonic = receipt.removed_at_ns >= receipt.deleted.deleted_at_ns;
+    let cursor_is_terminal = component_draining_cursor_is_terminal(draining);
+    if ![
+        inventory_shape_is_exact,
+        inventory_hash_is_exact,
+        time_is_monotonic,
+        cursor_is_terminal,
+    ]
+    .into_iter()
+    .all(|valid| valid)
+    {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "removed Component differs from frozen final inventory",
+        ));
+    }
+    ensure_component_lifecycle_history_is_terminal(partition)
+}
+
+fn component_membership_removal_hash(
+    draining: &RootComponentDrainingRecord,
+    receipt: &RootComponentMembershipRemovedRecord,
+) -> Result<[u8; 32], InternalError> {
+    let payload = candid::encode_one(RootComponentMembershipRemovalHashAuthority {
+        operation_id: draining.operation_id,
+        component: draining.component,
+        final_inventory_hash: receipt.deleted.deletion.final_inventory.inventory_hash,
+        deleted_at_ns: receipt.deleted.deleted_at_ns,
+        allocation_operation_id: receipt.allocation_operation_id,
+        remaining_spec_committed_instances: receipt.remaining_spec_committed_instances,
+        root_committed_component_instances: receipt.root_committed_component_instances,
+        root_known_created_component_canisters: receipt.root_known_created_component_canisters,
+        root_registry_encoded_bytes: receipt.root_registry_encoded_bytes,
+        removed_at_ns: receipt.removed_at_ns,
+    })
+    .map_err(|error| {
+        InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
+            format!("Component membership-removal hash input cannot be encoded: {error}"),
+        )
+    })?;
+    let mut hasher = Sha256::new();
+    hasher.update(COMPONENT_MEMBERSHIP_REMOVAL_HASH_DOMAIN);
+    hasher.update((payload.len() as u64).to_be_bytes());
+    hasher.update(payload);
+    Ok(hasher.finalize().into())
 }
 
 fn component_has_terminal_quiescence(
@@ -8228,6 +8795,21 @@ fn component_has_terminal_quiescence(
 fn validate_partition_snapshot(
     partition: &ComponentRegistryPartitionRecord,
 ) -> Result<(), InternalError> {
+    validate_partition_shape(partition)?;
+    if RootComponentRegistryStore::component_for_principal(partition.binding.canister_id)
+        != Some(partition.binding.component)
+    {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component Registry partition principal index differs from its binding",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_partition_shape(
+    partition: &ComponentRegistryPartitionRecord,
+) -> Result<(), InternalError> {
     let empty_descendant_hash =
         empty_component_descendant_content_hash(partition.binding.component);
     let descendant_hash_matches_count = match partition.committed_descendants {
@@ -8243,22 +8825,15 @@ fn validate_partition_snapshot(
         partition.descendant_content_hash,
         partition.committed_descendants,
     )?;
-    let principal_index_matches =
-        RootComponentRegistryStore::component_for_principal(partition.binding.canister_id)
-            == Some(partition.binding.component);
     let head_is_versioned = partition.revision > 0;
     let directory_is_synchronized = partition.directory_synchronized_at_ns > 0;
     let content_is_canonical = partition.descendant_content_hash != [0; 32]
         && descendant_hash_matches_count
         && partition.content_hash == expected_content_hash;
-    if !head_is_versioned
-        || !directory_is_synchronized
-        || !content_is_canonical
-        || !principal_index_matches
-    {
+    if !head_is_versioned || !directory_is_synchronized || !content_is_canonical {
         return Err(InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component Registry partition has invalid head, Directory time or principal index",
+            "Component Registry partition has invalid head or Directory authority",
         ));
     }
     Ok(())
@@ -9722,10 +10297,16 @@ mod tests {
         data: &RootComponentRegistryData,
         component: ComponentInstanceId,
     ) -> u64 {
-        data.partitions
+        data.allocations
             .iter()
-            .filter(|partition| partition.binding.component == component)
-            .map(RootComponentRegistryStore::partition_entry_bytes)
+            .filter(|allocation| allocation.component == component)
+            .map(RootComponentRegistryStore::allocation_entry_bytes)
+            .chain(
+                data.partitions
+                    .iter()
+                    .filter(|partition| partition.binding.component == component)
+                    .map(RootComponentRegistryStore::partition_entry_bytes),
+            )
             .chain(
                 data.partitions
                     .iter()
@@ -10204,6 +10785,168 @@ mod tests {
         RootComponentRegistryStore::import(corrupted);
         ComponentRegistryOps::component_draining(partition.binding.component)
             .expect_err("deleted receipt time must remain monotonic");
+        RootComponentRegistryStore::import(RootComponentRegistryData::default());
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one test proves the atomic top-level membership and accounting settlement"
+    )]
+    fn component_membership_removal_is_atomic_settled_and_response_idempotent() {
+        let (partition, draining, fleet) = import_empty_quiescent_component();
+        let inventory = ComponentRegistryOps::finalize_component_inventory(
+            partition.binding.component,
+            draining.operation_id,
+            draining.registry,
+            fleet,
+            112,
+        )
+        .expect("freeze exact final Component inventory");
+        ComponentRegistryOps::prepare_component_deletion(
+            partition.binding.component,
+            draining.operation_id,
+            inventory.inventory_hash,
+            113,
+        )
+        .expect("prepare top-level deletion");
+        ComponentRegistryOps::mark_component_deleted(
+            partition.binding.component,
+            draining.operation_id,
+            inventory.inventory_hash,
+            114,
+        )
+        .expect("observe top-level absence");
+        let deleted = RootComponentRegistryStore::export();
+
+        ComponentRegistryOps::remove_component_membership(
+            partition.binding.component,
+            [1; 32],
+            inventory.inventory_hash,
+            115,
+        )
+        .expect_err("membership removal must bind the draining operation");
+        ComponentRegistryOps::remove_component_membership(
+            partition.binding.component,
+            draining.operation_id,
+            [0; 32],
+            115,
+        )
+        .expect_err("membership removal must bind the frozen inventory");
+        ComponentRegistryOps::remove_component_membership(
+            partition.binding.component,
+            draining.operation_id,
+            inventory.inventory_hash,
+            113,
+        )
+        .expect_err("membership removal cannot precede observed deletion");
+        assert_eq!(RootComponentRegistryStore::export(), deleted);
+
+        let removed = ComponentRegistryOps::remove_component_membership(
+            partition.binding.component,
+            draining.operation_id,
+            inventory.inventory_hash,
+            115,
+        )
+        .expect("atomically remove top-level Component membership");
+        let Some(RootComponentDeletionProgressView::MembershipRemoved(receipt)) = &removed.deletion
+        else {
+            panic!("terminal top-level membership-removal receipt");
+        };
+        assert_eq!(receipt.deleted.deleted_at_ns, 114);
+        assert_eq!(receipt.allocation_operation_id, [12; 32]);
+        assert_eq!(receipt.remaining_spec_committed_instances, 0);
+        assert_eq!(receipt.root_committed_component_instances, 0);
+        assert_eq!(receipt.root_known_created_component_canisters, 0);
+        assert_eq!(receipt.removed_at_ns, 115);
+        assert_ne!(receipt.removal_hash, [0; 32]);
+        assert_eq!(
+            ComponentRegistryOps::partition(partition.binding.component)
+                .expect("removed partition lookup"),
+            None
+        );
+        assert_eq!(
+            RootComponentRegistryStore::component_for_principal(partition.binding.canister_id),
+            None
+        );
+        assert!(
+            RootComponentRegistryStore::component_principal_inventory_is_empty(
+                partition.binding.component
+            )
+        );
+        assert!(matches!(
+            ComponentRegistryOps::allocation([12; 32])
+                .expect("retained allocation history")
+                .progress,
+            RootComponentAllocationProgressView::Removed { .. }
+        ));
+        assert_eq!(
+            ComponentRegistryOps::component_spec_counts(&partition.binding.component_spec)
+                .expect("settled Spec counts"),
+            ComponentSpecInstanceCounts {
+                reserved: 0,
+                committed: 0,
+            }
+        );
+
+        let terminal = restart_component_registry();
+        let current = ComponentRegistryOps::current().expect("settled Registry status");
+        assert_eq!(current.committed_component_instances, 0);
+        assert_eq!(current.known_created_component_canisters, 0);
+        assert_eq!(current.encoded_bytes, receipt.root_registry_encoded_bytes);
+        assert_eq!(current.encoded_bytes, exact_registry_entry_bytes(&terminal));
+        assert_eq!(terminal.partitions, Vec::new());
+        assert_eq!(
+            ComponentRegistryOps::component_draining(partition.binding.component)
+                .expect("valid terminal authority")
+                .expect("retained terminal authority"),
+            removed
+        );
+        ComponentRegistryOps::reserve_allocation(
+            TopLevelComponentAllocationDecision {
+                allocation_sequence: 2,
+                component: ComponentInstanceId::from_generated_bytes([122; 32]),
+                component_spec: partition.binding.component_spec.clone(),
+                spec_hash: partition.binding.spec_hash,
+                role: partition.binding.role.clone(),
+            },
+            [123; 32],
+            partition.provisioning_origin.clone(),
+            false,
+        )
+        .expect("unrelated later allocation");
+        let evolved = RootComponentRegistryStore::export();
+        assert_ne!(
+            ComponentRegistryOps::current()
+                .expect("evolved Registry status")
+                .encoded_bytes,
+            receipt.root_registry_encoded_bytes
+        );
+        assert_eq!(
+            ComponentRegistryOps::remove_component_membership(
+                partition.binding.component,
+                draining.operation_id,
+                inventory.inventory_hash,
+                999,
+            )
+            .expect("exact membership-removal retry"),
+            removed
+        );
+        assert_eq!(RootComponentRegistryStore::export(), evolved);
+
+        let mut corrupted = evolved;
+        let RootComponentDeletionProgressRecord::MembershipRemoved(receipt) = corrupted
+            .component_drainings
+            .first_mut()
+            .and_then(|draining| draining.deletion.as_mut())
+            .expect("membership-removal receipt")
+        else {
+            panic!("terminal membership-removal progress");
+        };
+        receipt.root_committed_component_instances = 1;
+        RootComponentRegistryStore::import(corrupted);
+        ComponentRegistryOps::component_draining(partition.binding.component)
+            .expect_err("terminal receipt must remain bound to settled root accounting");
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
 
@@ -13284,23 +14027,15 @@ mod tests {
         assert_eq!(inventory.finalized_at_ns, 112);
     }
 
-    fn import_empty_quiescent_component() -> (
-        ComponentRegistryPartitionView,
-        RootComponentDrainingView,
-        FleetDirectorySnapshot,
-    ) {
-        RootComponentRegistryStore::import(RootComponentRegistryData::default());
-        let root = root_binding();
-        let release_set = FleetSubnetRootReleaseSet {
-            release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
-                [8; 32],
-            )),
-            manifest_digest: ReleaseSetDigest::from_bytes([9; 32]),
-        };
-        let component = ComponentInstanceId::from_generated_bytes([97; 32]);
-        let canister = candid::Principal::from_slice(&[98; 29]);
-        let partition = active_component_partition(&root, release_set, component, canister);
-        RootComponentRegistryStore::import(RootComponentRegistryData {
+    fn active_single_component_registry_data(
+        root: &FleetSubnetRootBinding,
+        release_set: FleetSubnetRootReleaseSet,
+        component: ComponentInstanceId,
+        canister: candid::Principal,
+    ) -> RootComponentRegistryData {
+        let mut partition = active_component_partition(root, release_set, component, canister);
+        let allocation = active_component_allocation(&partition);
+        let mut data = RootComponentRegistryData {
             current: Some(RootComponentRegistryMetaRecord {
                 root: root.clone(),
                 prepared_against_registry: FleetRegistryVersion {
@@ -13317,17 +14052,57 @@ mod tests {
                 committed_component_instances: 1,
                 managed_descendants: 0,
                 known_created_component_canisters: 1,
-                encoded_bytes: partition.encoded_bytes,
+                encoded_bytes: 0,
                 initial_inventory: None,
             }),
             partitions: vec![partition.clone()],
+            allocations: vec![allocation],
             ..RootComponentRegistryData::default()
-        });
+        };
+        partition.encoded_bytes = 0;
+        for _ in 0..8 {
+            data.partitions[0] = partition.clone();
+            let encoded_bytes = exact_component_registry_entry_bytes(&data, component);
+            if partition.encoded_bytes == encoded_bytes {
+                break;
+            }
+            partition.encoded_bytes = encoded_bytes;
+        }
+        data.partitions[0] = partition;
+        data.current.as_mut().expect("Registry meta").encoded_bytes =
+            exact_registry_entry_bytes(&data);
+        data
+    }
+
+    fn import_empty_quiescent_component() -> (
+        ComponentRegistryPartitionView,
+        RootComponentDrainingView,
+        FleetDirectorySnapshot,
+    ) {
+        RootComponentRegistryStore::import(RootComponentRegistryData::default());
+        let root = root_binding();
+        let release_set = FleetSubnetRootReleaseSet {
+            release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
+                [8; 32],
+            )),
+            manifest_digest: ReleaseSetDigest::from_bytes([9; 32]),
+        };
+        let component = ComponentInstanceId::from_generated_bytes([97; 32]);
+        let canister = candid::Principal::from_slice(&[98; 29]);
+        let data = active_single_component_registry_data(&root, release_set, component, canister);
+        RootComponentRegistryStore::import(data);
         let fleet = fleet_directory(&root);
+        let active_partition = ComponentRegistryOps::partition(component)
+            .expect("active partition read")
+            .expect("active partition");
         let draining = ComponentRegistryOps::begin_component_draining(
             component,
             [99; 32],
-            component_registry_head(&partition),
+            ComponentRegistryHead {
+                component,
+                revision: active_partition.revision,
+                content_hash: active_partition.content_hash,
+            },
             100,
             16_777_216,
             fleet.clone(),
@@ -13931,6 +14706,62 @@ mod tests {
             RootComponentRegistryStore::partition_entry_bytes(&partition) + principal_index_bytes
         );
         partition
+    }
+
+    fn active_component_allocation(
+        partition: &ComponentRegistryPartitionRecord,
+    ) -> RootComponentAllocationRecord {
+        let creation = RootComponentCreationEffectRecord {
+            wasm_store: candid::Principal::from_slice(&[13; 29]),
+            payload_hash: [14; 32],
+            payload_size_bytes: 4_096,
+            initial_cycles: Cycles::new(5_000_000_000_000),
+            controller: partition.binding.fleet_subnet_root,
+            cost_guard_settlement: ReplayCostGuardSettlement {
+                quota_intent_id: IntentId(16),
+                reservation_intent_id: IntentId(17),
+            },
+            charged_entry_bytes: 4_096,
+        };
+        let installation = RootComponentInstallEffectRecord {
+            raw_module_hash: [19; 32],
+            chunk_hashes: vec![vec![20; 32]],
+            binding: partition.binding.clone(),
+            cost_guard_settlement: ReplayCostGuardSettlement {
+                quota_intent_id: IntentId(21),
+                reservation_intent_id: IntentId(22),
+            },
+            charged_entry_bytes: 16_777_216,
+        };
+        RootComponentAllocationRecord {
+            operation_id: [12; 32],
+            allocation_sequence: 1,
+            component: partition.binding.component,
+            component_spec: partition.binding.component_spec.clone(),
+            spec_hash: partition.binding.spec_hash,
+            role: partition.binding.role.clone(),
+            provisioning_origin: partition.provisioning_origin.clone(),
+            release_set: partition.release_set,
+            progress: RootComponentAllocationProgressRecord::Committed {
+                creation,
+                canister: partition.binding.canister_id,
+                installation,
+                commitment: RootComponentCommitmentRecord {
+                    registry: component_partition_head(partition),
+                    prepared_registry_encoded_bytes: partition.encoded_bytes,
+                    directory_synchronized_at_ns: partition.directory_synchronized_at_ns,
+                    directory_authority_hash: [23; 32],
+                    directory_prepared: true,
+                    runtime_activated: true,
+                    membership: Some(RootComponentMembershipRecord {
+                        registry_encoded_bytes: partition.encoded_bytes,
+                        directory_synchronized_at_ns: partition.directory_synchronized_at_ns,
+                        directory_authority_hash: [24; 32],
+                        directory_synchronized: true,
+                    }),
+                },
+            },
+        }
     }
 
     fn child_allocation_decision(

@@ -88,6 +88,24 @@ pub struct RootComponentDeletedReceiptView {
 }
 
 ///
+/// RootComponentMembershipRemovedView
+///
+/// Read-only terminal local-membership and settled accounting receipt.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentMembershipRemovedView {
+    pub deleted: RootComponentDeletedReceiptView,
+    pub allocation_operation_id: [u8; 32],
+    pub remaining_spec_committed_instances: u32,
+    pub root_committed_component_instances: u32,
+    pub root_known_created_component_canisters: u32,
+    pub root_registry_encoded_bytes: u64,
+    pub removed_at_ns: u64,
+    pub removal_hash: [u8; 32],
+}
+
+///
 /// RootComponentDeletionProgressView
 ///
 /// Read-only monotonic top-level deletion progress embedded in one draining fence.
@@ -97,6 +115,7 @@ pub struct RootComponentDeletedReceiptView {
 pub enum RootComponentDeletionProgressView {
     DeleteIntent(RootComponentDeletionIntentView),
     Deleted(RootComponentDeletedReceiptView),
+    MembershipRemoved(RootComponentMembershipRemovedView),
 }
 
 ///
@@ -586,6 +605,12 @@ pub enum RootComponentAllocationProgressView {
         installation: RootComponentInstallEffectView,
     },
     Committed {
+        creation: RootComponentCreationEffectView,
+        canister: Principal,
+        installation: RootComponentInstallEffectView,
+        commitment: RootComponentCommitmentView,
+    },
+    Removed {
         creation: RootComponentCreationEffectView,
         canister: Principal,
         installation: RootComponentInstallEffectView,

@@ -228,6 +228,13 @@ impl LifecycleApi {
             .map_err(Into::into)
     }
 
+    pub fn remove_component_membership(
+        request: RootComponentDeletionRequest,
+    ) -> Result<RootComponentDeletionResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::remove_component_membership(request)
+            .map_err(Into::into)
+    }
+
     pub fn component_deletion_status(
         request: RootComponentDeletionStatusRequest,
     ) -> Result<RootComponentDeletionResponse, canic_core::dto::error::Error> {

@@ -34,6 +34,7 @@ pub const CANIC_ROOT_COMPONENT_DRAINING_ADVANCE: &str = "canic_root_component_dr
 pub const CANIC_ROOT_COMPONENT_DRAINING_INVENTORY_FINALIZE: &str =
     "canic_root_component_draining_inventory_finalize";
 pub const CANIC_ROOT_COMPONENT_DELETE: &str = "canic_root_component_delete";
+pub const CANIC_ROOT_COMPONENT_MEMBERSHIP_REMOVE: &str = "canic_root_component_membership_remove";
 pub const CANIC_ROOT_COMPONENT_DELETION_STATUS: &str = "canic_root_component_deletion_status";
 pub const CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_BEGIN: &str =
     "canic_root_component_subtree_removal_begin";
