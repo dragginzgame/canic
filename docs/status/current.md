@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.63`.
-- The latest published release is `v0.100.63` at
-  `3358a50dcc8b7e899c5ab569275be9849de4af1f`.
-- Open `0.100.64` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.64`.
+- The latest published release is `v0.100.64` at
+  `ee8e51f273a2382fd59e007b58708c57b3291c8c`.
+- Open `0.100.65` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -524,7 +524,7 @@ Historical detail is archived at:
   the exact root Registry byte ledger, and retains canonical deletion/removal
   history for exact update and status retry. It adds no stable-memory domain
   or ID and does not mutate Fleet Directory authority.
-- Open `0.100.64` adds a root-local durable pre-publication draining fence.
+- Released `0.100.64` adds a root-local durable pre-publication draining fence.
   It freezes the exact active Registry, protected root/Subnet/topology/release
   set and current allocation/inventory cutoff inside existing Component
   Registry authority. New top-level allocation fails before admission policy,
@@ -532,6 +532,13 @@ Historical detail is archived at:
   continue. The immutable receipt survives later counter changes, performs no
   management effect and does not yet publish `Draining` through the
   Coordinator or Fleet Directory.
+- Open `0.100.65` atomically publishes one exact locally fenced root as
+  Coordinator-authoritative `Draining`. The same Coordinator commit advances
+  one canonical Registry revision and retains the exact request/response
+  receipt; every validated read reconstructs join, activation and ordered
+  draining history. Exact replay survives restart and later progress. Root
+  mirrors and Fleet Directories intentionally remain on the prior `Active`
+  version until the next synchronization boundary.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -2041,18 +2048,23 @@ counts and exact root byte ledger, and stores canonical terminal removal
 authority. Exact deletion, removal and status retries remain valid after later
 unrelated root mutations.
 
-Open `0.100.64` durably fences new top-level Component allocation in the local
+Released `0.100.64` durably fences new top-level Component allocation in the local
 Component Registry before publishing a root lifecycle transition. It retains
 an immutable active-Registry and inventory-cutoff receipt, preserves exact
 retry and permits already admitted Component trees to complete bounded
 removal without a management effect or new stable-memory ID.
 
-Next, publish the locally fenced root as `Draining` through an exact
-Coordinator Registry transition and synchronize that canonical state into
-root mirrors and Fleet Directories without reopening allocation. Ordinary
-root removal remains gated on absent Component partitions, quiescent Store
-authority and exact final root inventory; neither an unreachable root nor a
-Subnet failure is removal evidence.
+Open `0.100.65` publishes that immutable local receipt through an atomic
+Coordinator Registry `Active -> Draining` transition and retains exact
+restart-safe replay authority. The Coordinator reconstructs the complete
+canonical lifecycle history before accepting its current head and allocates no
+new stable-memory ID.
+
+Next, synchronize the Coordinator's mixed-lifecycle canonical state into root
+mirrors and Fleet Directories without reopening allocation. Ordinary root
+removal remains gated on absent Component partitions, quiescent Store authority
+and exact final root inventory; neither an unreachable root nor a Subnet
+failure is removal evidence.
 
 ## Historical Release Detail
 

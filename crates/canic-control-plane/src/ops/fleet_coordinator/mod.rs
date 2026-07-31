@@ -9,7 +9,7 @@ use crate::{
     storage::stable::fleet_coordinator::{
         FleetCoordinatorCommitError, FleetCoordinatorCommitOutcome, FleetCoordinatorRegistryRecord,
         FleetCoordinatorRegistryStore, FleetRegistryActivationReceiptRecord,
-        FleetSubnetRootJoinReceiptRecord,
+        FleetSubnetRootDrainingPublicationReceiptRecord, FleetSubnetRootJoinReceiptRecord,
     },
 };
 use candid::Principal;
@@ -21,10 +21,12 @@ use canic_core::{
     dto::fleet_registry::{
         FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
         FleetRegistryManifest, FleetRegistrySnapshotResponse, FleetRegistryVersion,
+        FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingPublicationResponse,
         FleetSubnetRootEntry, FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
         FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
         FleetSubnetRootStatus,
     },
+    ids::{ComponentTopologyDigest, FleetSubnetRootReleaseSet, SubnetId},
 };
 
 ///
@@ -61,6 +63,7 @@ impl FleetCoordinatorOps {
             root_join_receipts: Vec::new(),
             root_snapshot_acknowledgements: Vec::new(),
             registry_activation_receipt: None,
+            root_draining_publication_receipts: Vec::new(),
         })
     }
 
@@ -274,6 +277,69 @@ impl FleetCoordinatorOps {
         Ok(response)
     }
 
+    pub(crate) fn publish_root_draining(
+        request: FleetSubnetRootDrainingPublicationRequest,
+    ) -> Result<FleetSubnetRootDrainingPublicationResponse, InternalError> {
+        let current = Self::current()?;
+        if let Some(receipt) = current
+            .root_draining_publication_receipts
+            .iter()
+            .find(|receipt| draining_publication_identity_matches(receipt, &request))
+        {
+            if receipt.request == request {
+                return Ok(receipt.response.clone());
+            }
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root draining publication identity already has different authority",
+            ));
+        }
+        if current.registry_activation_receipt.is_none() {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root draining publication requires an active Fleet Registry",
+            ));
+        }
+        let previous_version = FleetRegistryOps::version(
+            &current.authority,
+            &current.component_topology,
+            &current.registry,
+        )?;
+        if request.expected_registry != previous_version {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root draining publication expected Registry version is stale",
+            ));
+        }
+        validate_draining_publication_request(&current.registry, &previous_version, &request)
+            .map_err(InternalError::invalid_input)?;
+
+        let next_registry = FleetRegistryOps::compile_draining(
+            &current.authority,
+            &current.component_topology,
+            &current.registry,
+            request.root_draining.fleet_subnet_root,
+        )?;
+        let version = FleetRegistryOps::version(
+            &current.authority,
+            &current.component_topology,
+            &next_registry,
+        )?;
+        let response = FleetSubnetRootDrainingPublicationResponse {
+            root_draining: request.root_draining.clone(),
+            previous_version,
+            version,
+        };
+        let mut next = current.clone();
+        next.registry = next_registry;
+        next.root_draining_publication_receipts.push(
+            FleetSubnetRootDrainingPublicationReceiptRecord {
+                request,
+                response: response.clone(),
+            },
+        );
+        let next = Self::validate_current(next)?;
+        Self::commit_transition(&current, next)?;
+        Ok(response)
+    }
+
     pub(crate) fn root_snapshot_acknowledgements()
     -> Result<Vec<FleetSubnetRootSnapshotAcknowledgement>, InternalError> {
         Ok(Self::current()?.root_snapshot_acknowledgements)
@@ -319,7 +385,7 @@ impl FleetCoordinatorOps {
         )?;
         validate_root_join_receipts(&current)?;
         validate_root_snapshot_acknowledgements(&current)?;
-        validate_registry_activation_receipt(&current)?;
+        validate_registry_lifecycle_history(&current)?;
         Ok(current)
     }
 
@@ -439,16 +505,12 @@ fn require_complete_snapshot_acknowledgements(
     Ok(())
 }
 
-fn validate_registry_activation_receipt(
+fn validate_registry_lifecycle_history(
     current: &FleetCoordinatorRegistryRecord,
 ) -> Result<(), InternalError> {
+    let joining = historical_joining_registry(current)?;
     let Some(receipt) = &current.registry_activation_receipt else {
-        if current
-            .registry
-            .fleet_subnet_roots
-            .iter()
-            .any(|entry| entry.status != FleetSubnetRootStatus::Joining)
-        {
+        if !current.root_draining_publication_receipts.is_empty() || current.registry != joining {
             return Err(receipt_invariant(
                 "Fleet Registry contains transitioned roots without an activation receipt",
             ));
@@ -460,23 +522,80 @@ fn validate_registry_activation_receipt(
             "active Fleet Registry retains stale Joining acknowledgements",
         ));
     }
-    let joining = historical_joining_registry(current)?;
     let previous_version =
         FleetRegistryOps::version(&current.authority, &current.component_topology, &joining)
             .map_err(|_| receipt_invariant("activation source version cannot be derived"))?;
-    let active =
+    let mut historical_registry =
         FleetRegistryOps::compile_active(&current.authority, &current.component_topology, &joining)
             .map_err(|_| receipt_invariant("activation target Registry cannot be derived"))?;
-    let version =
-        FleetRegistryOps::version(&current.authority, &current.component_topology, &active)
-            .map_err(|_| receipt_invariant("activation target version cannot be derived"))?;
+    let version = FleetRegistryOps::version(
+        &current.authority,
+        &current.component_topology,
+        &historical_registry,
+    )
+    .map_err(|_| receipt_invariant("activation target version cannot be derived"))?;
     if receipt.request.expected_registry != previous_version
         || receipt.response.previous_version != previous_version
         || receipt.response.version != version
-        || current.registry != active
     {
         return Err(receipt_invariant(
             "Fleet Registry activation receipt differs from canonical history",
+        ));
+    }
+    let mut draining_identities =
+        Vec::with_capacity(current.root_draining_publication_receipts.len());
+    for receipt in &current.root_draining_publication_receipts {
+        let identity = FleetSubnetRootDrainingPublicationIdentity::from_request(&receipt.request);
+        if draining_identities
+            .iter()
+            .any(|existing| identity.conflicts_with(*existing))
+        {
+            return Err(receipt_invariant(
+                "root draining publication identity is not unique",
+            ));
+        }
+        draining_identities.push(identity);
+        let previous_version = FleetRegistryOps::version(
+            &current.authority,
+            &current.component_topology,
+            &historical_registry,
+        )
+        .map_err(|_| receipt_invariant("root draining source version cannot be derived"))?;
+        validate_draining_publication_request(
+            &historical_registry,
+            &previous_version,
+            &receipt.request,
+        )
+        .map_err(|_| {
+            receipt_invariant("root draining publication request differs from canonical history")
+        })?;
+        historical_registry = FleetRegistryOps::compile_draining(
+            &current.authority,
+            &current.component_topology,
+            &historical_registry,
+            receipt.request.root_draining.fleet_subnet_root,
+        )
+        .map_err(|_| receipt_invariant("root draining target Registry cannot be derived"))?;
+        let version = FleetRegistryOps::version(
+            &current.authority,
+            &current.component_topology,
+            &historical_registry,
+        )
+        .map_err(|_| receipt_invariant("root draining target version cannot be derived"))?;
+        let expected_response = FleetSubnetRootDrainingPublicationResponse {
+            root_draining: receipt.request.root_draining.clone(),
+            previous_version,
+            version,
+        };
+        if receipt.response != expected_response {
+            return Err(receipt_invariant(
+                "root draining publication response differs from canonical history",
+            ));
+        }
+    }
+    if current.registry != historical_registry {
+        return Err(receipt_invariant(
+            "Fleet Registry head differs from its canonical lifecycle history",
         ));
     }
     Ok(())
@@ -553,13 +672,149 @@ fn historical_joining_registry(
     Ok(historical_registry)
 }
 
+#[derive(Eq, PartialEq)]
+struct FleetSubnetRootImmutableAuthority<'a> {
+    placement_subnet: SubnetId,
+    fleet_subnet_root: Principal,
+    component_admissions: &'a [canic_core::ids::ComponentSpecAdmission],
+    component_topology_digest: ComponentTopologyDigest,
+    active_release_set: FleetSubnetRootReleaseSet,
+    limits: &'a canic_core::ids::FleetSubnetRootLimits,
+}
+
+impl<'a> From<&'a FleetSubnetRootEntry> for FleetSubnetRootImmutableAuthority<'a> {
+    fn from(entry: &'a FleetSubnetRootEntry) -> Self {
+        Self {
+            placement_subnet: entry.placement_subnet,
+            fleet_subnet_root: entry.fleet_subnet_root,
+            component_admissions: &entry.component_admissions,
+            component_topology_digest: entry.component_topology_digest,
+            active_release_set: entry.active_release_set,
+            limits: &entry.limits,
+        }
+    }
+}
+
 fn same_root_authority(left: &FleetSubnetRootEntry, right: &FleetSubnetRootEntry) -> bool {
-    left.placement_subnet == right.placement_subnet
-        && left.fleet_subnet_root == right.fleet_subnet_root
-        && left.component_admissions == right.component_admissions
-        && left.component_topology_digest == right.component_topology_digest
-        && left.active_release_set == right.active_release_set
-        && left.limits == right.limits
+    FleetSubnetRootImmutableAuthority::from(left) == FleetSubnetRootImmutableAuthority::from(right)
+}
+
+#[derive(Eq, PartialEq)]
+struct FleetSubnetRootDrainingAuthority<'a> {
+    fleet_subnet_root: Principal,
+    placement_subnet: SubnetId,
+    active_registry: &'a FleetRegistryVersion,
+    component_topology_digest: ComponentTopologyDigest,
+    active_release_set: FleetSubnetRootReleaseSet,
+}
+
+impl<'a> FleetSubnetRootDrainingAuthority<'a> {
+    const fn from_registry(
+        entry: &'a FleetSubnetRootEntry,
+        version: &'a FleetRegistryVersion,
+    ) -> Self {
+        Self {
+            fleet_subnet_root: entry.fleet_subnet_root,
+            placement_subnet: entry.placement_subnet,
+            active_registry: version,
+            component_topology_digest: entry.component_topology_digest,
+            active_release_set: entry.active_release_set,
+        }
+    }
+
+    const fn from_publication(request: &'a FleetSubnetRootDrainingPublicationRequest) -> Self {
+        let draining = &request.root_draining;
+        Self {
+            fleet_subnet_root: draining.fleet_subnet_root,
+            placement_subnet: draining.placement_subnet,
+            active_registry: &draining.active_registry,
+            component_topology_digest: draining.component_topology_digest,
+            active_release_set: draining.active_release_set,
+        }
+    }
+}
+
+fn draining_publication_identity_matches(
+    receipt: &FleetSubnetRootDrainingPublicationReceiptRecord,
+    request: &FleetSubnetRootDrainingPublicationRequest,
+) -> bool {
+    FleetSubnetRootDrainingPublicationIdentity::from_request(&receipt.request).conflicts_with(
+        FleetSubnetRootDrainingPublicationIdentity::from_request(request),
+    )
+}
+
+#[derive(Clone, Copy)]
+struct FleetSubnetRootDrainingPublicationIdentity {
+    fleet_subnet_root: Principal,
+    operation_id: [u8; 32],
+}
+
+impl FleetSubnetRootDrainingPublicationIdentity {
+    const fn from_request(request: &FleetSubnetRootDrainingPublicationRequest) -> Self {
+        Self {
+            fleet_subnet_root: request.root_draining.fleet_subnet_root,
+            operation_id: request.root_draining.operation_id,
+        }
+    }
+
+    fn conflicts_with(self, other: Self) -> bool {
+        self.fleet_subnet_root == other.fleet_subnet_root || self.operation_id == other.operation_id
+    }
+}
+
+fn validate_draining_publication_request(
+    registry: &FleetRegistry,
+    version: &FleetRegistryVersion,
+    request: &FleetSubnetRootDrainingPublicationRequest,
+) -> Result<(), &'static str> {
+    let draining = &request.root_draining;
+    if request.expected_registry != *version || draining.active_registry != *version {
+        return Err("Fleet Subnet Root draining publication names stale Registry authority");
+    }
+    let target = registry
+        .fleet_subnet_roots
+        .iter()
+        .find(|entry| entry.fleet_subnet_root == draining.fleet_subnet_root)
+        .ok_or("Fleet Subnet Root draining publication target is missing")?;
+    if target.status != FleetSubnetRootStatus::Active {
+        return Err("Fleet Subnet Root draining publication target is not Active");
+    }
+    let expected_authority = FleetSubnetRootDrainingAuthority::from_registry(target, version);
+    if FleetSubnetRootDrainingAuthority::from_publication(request) != expected_authority {
+        return Err("Fleet Subnet Root draining receipt differs from Registry root authority");
+    }
+    if draining.operation_id == [0; 32]
+        || draining.started_at_ns == 0
+        || draining.next_allocation_sequence == 0
+    {
+        return Err("Fleet Subnet Root draining receipt contains non-positive operation facts");
+    }
+    let component_instances = draining
+        .reserved_component_instances
+        .checked_add(draining.committed_component_instances)
+        .ok_or("Fleet Subnet Root draining Component Instance count overflowed")?;
+    if component_instances > target.limits.maximum_component_instances {
+        return Err("Fleet Subnet Root draining Component Instance count exceeds its limit");
+    }
+    if draining.next_allocation_sequence <= u64::from(component_instances) {
+        return Err("Fleet Subnet Root draining allocation sequence precedes its live instances");
+    }
+    let allocated_canisters = component_instances
+        .checked_add(draining.managed_descendants)
+        .ok_or("Fleet Subnet Root draining managed canister count overflowed")?;
+    if draining.known_created_component_canisters > allocated_canisters {
+        return Err("Fleet Subnet Root draining created canisters exceed allocated canisters");
+    }
+    let managed_canisters = allocated_canisters
+        .checked_add(1)
+        .ok_or("Fleet Subnet Root draining managed canister count overflowed")?;
+    if managed_canisters > target.limits.maximum_managed_canisters {
+        return Err("Fleet Subnet Root draining managed canisters exceed the root limit");
+    }
+    if draining.root_registry_encoded_bytes > target.limits.maximum_registry_bytes {
+        return Err("Fleet Subnet Root draining Registry bytes exceed the root limit");
+    }
+    Ok(())
 }
 
 fn receipt_invariant(message: &'static str) -> InternalError {

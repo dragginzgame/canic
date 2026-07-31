@@ -90,6 +90,12 @@ pub enum FleetRegistryOpsError {
     #[error("Fleet Registry activation requires a non-empty all-Joining root set")]
     FleetSubnetRootActivationRequiresAllJoining,
 
+    #[error("Fleet Registry root draining requires an Active target")]
+    FleetSubnetRootDrainingRequiresActive,
+
+    #[error("Fleet Registry root draining target {fleet_subnet_root} is missing")]
+    FleetSubnetRootDrainingTargetMissing { fleet_subnet_root: Principal },
+
     #[error("Fleet Directory activation requires a non-empty all-Active root set")]
     FleetDirectoryRequiresAllActive,
 
@@ -168,6 +174,18 @@ impl FleetRegistryOps {
         current: &FleetRegistry,
     ) -> Result<FleetRegistry, InternalError> {
         compile_active(expected_authority, topology, current)
+            .map_err(OpsError::from)
+            .map_err(InternalError::from)
+    }
+
+    /// Construct the next canonical snapshot with one exact active root marked `Draining`.
+    pub fn compile_draining(
+        expected_authority: &FleetRegistryAuthority,
+        topology: &ComponentTopology,
+        current: &FleetRegistry,
+        fleet_subnet_root: Principal,
+    ) -> Result<FleetRegistry, InternalError> {
+        compile_draining(expected_authority, topology, current, fleet_subnet_root)
             .map_err(OpsError::from)
             .map_err(InternalError::from)
     }
@@ -349,6 +367,32 @@ fn compile_active(
     for root in &mut next.fleet_subnet_roots {
         root.status = FleetSubnetRootStatus::Active;
     }
+    validation::validate(expected_authority, topology, &next)?;
+    Ok(next)
+}
+
+fn compile_draining(
+    expected_authority: &FleetRegistryAuthority,
+    topology: &ComponentTopology,
+    current: &FleetRegistry,
+    fleet_subnet_root: Principal,
+) -> Result<FleetRegistry, FleetRegistryOpsError> {
+    validation::validate(expected_authority, topology, current)?;
+    let target_index = current
+        .fleet_subnet_roots
+        .iter()
+        .position(|entry| entry.fleet_subnet_root == fleet_subnet_root)
+        .ok_or(FleetRegistryOpsError::FleetSubnetRootDrainingTargetMissing { fleet_subnet_root })?;
+    if current.fleet_subnet_roots[target_index].status != FleetSubnetRootStatus::Active {
+        return Err(FleetRegistryOpsError::FleetSubnetRootDrainingRequiresActive);
+    }
+
+    let mut next = current.clone();
+    next.revision = next
+        .revision
+        .checked_add(1)
+        .ok_or(FleetRegistryOpsError::RevisionExhausted)?;
+    next.fleet_subnet_roots[target_index].status = FleetSubnetRootStatus::Draining;
     validation::validate(expected_authority, topology, &next)?;
     Ok(next)
 }

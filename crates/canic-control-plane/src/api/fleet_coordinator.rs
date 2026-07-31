@@ -16,6 +16,7 @@ use canic_core::{
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
             FleetRegistryManifest, FleetRegistrySnapshotResponse, FleetRegistryVersion,
+            FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingPublicationResponse,
             FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
             FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
         },
@@ -78,6 +79,12 @@ impl FleetCoordinatorApi {
         request: FleetRegistryActivationRequest,
     ) -> Result<FleetRegistryActivationResponse, Error> {
         FleetCoordinatorWorkflow::activate_registry(request).map_err(Into::into)
+    }
+
+    pub fn publish_root_draining(
+        request: FleetSubnetRootDrainingPublicationRequest,
+    ) -> Result<FleetSubnetRootDrainingPublicationResponse, Error> {
+        FleetCoordinatorWorkflow::publish_root_draining(request).map_err(Into::into)
     }
 
     pub fn version() -> Result<FleetRegistryVersion, Error> {
