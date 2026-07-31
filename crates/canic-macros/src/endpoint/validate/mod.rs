@@ -1,6 +1,7 @@
 use crate::endpoint::{
     EndpointKind,
     parse::{AccessExprAst, AccessPredicateAst, BuiltinPredicate, ParsedArgs, QueryMode},
+    returns_fallible,
 };
 use proc_macro2::TokenStream as TokenStream2;
 use syn::{FnArg, LitStr, Signature, Type};
@@ -106,21 +107,6 @@ pub fn validate(
         internal: parsed.internal,
         query_mode: parsed.query_mode,
     })
-}
-
-fn returns_fallible(sig: &Signature) -> bool {
-    let syn::ReturnType::Type(_, ty) = &sig.output else {
-        return false;
-    };
-
-    let syn::Type::Path(ty) = &**ty else {
-        return false;
-    };
-
-    ty.path
-        .segments
-        .last()
-        .is_some_and(|seg| seg.ident == "Result")
 }
 
 fn requires_authenticated(requires: &[AccessExprAst]) -> bool {

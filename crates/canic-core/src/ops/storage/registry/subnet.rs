@@ -14,7 +14,7 @@ use crate::{
     },
     view::topology::RegisteredCanisterView,
 };
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use thiserror::Error as ThisError;
 
 ///
@@ -273,35 +273,6 @@ impl SubnetRegistryOps {
         SubnetRegistryResponse(entries)
     }
 
-    /// Group direct root children by role for root-owned Directory validation.
-    #[must_use]
-    pub fn direct_root_roles() -> BTreeMap<CanisterRole, Vec<Principal>> {
-        let mut root_pid = None;
-        SubnetRegistry::for_each(|pid, record| {
-            if root_pid.is_none()
-                && record.role == CanisterRole::ROOT
-                && record.parent_pid.is_none()
-            {
-                root_pid = Some(pid);
-            }
-        });
-
-        let Some(root_pid) = root_pid else {
-            return BTreeMap::new();
-        };
-
-        let mut roles = BTreeMap::<CanisterRole, Vec<Principal>>::new();
-        SubnetRegistry::for_each(|pid, record| {
-            if record.parent_pid == Some(root_pid) {
-                roles.entry(record.role).or_default().push(pid);
-            }
-        });
-        for pids in roles.values_mut() {
-            pids.sort();
-        }
-        roles
-    }
-
     /// Resolve registration metadata for one role in deterministic canister-id order.
     #[must_use]
     pub fn registrations_for_role(role: &CanisterRole) -> Vec<RegisteredCanisterView> {
@@ -418,29 +389,5 @@ mod tests {
                 },
             ]
         );
-    }
-
-    #[test]
-    fn direct_root_roles_excludes_nested_matching_roles() {
-        seed_registry();
-        SubnetRegistry::register(
-            p(89),
-            &CanisterRole::new("alpha_registry_test"),
-            p(93),
-            vec![5],
-            5,
-        );
-
-        let roles = SubnetRegistryOps::direct_root_roles();
-
-        assert_eq!(
-            roles.get(&CanisterRole::new("alpha_registry_test")),
-            Some(&vec![p(90), p(92)])
-        );
-        assert_eq!(
-            roles.get(&CanisterRole::new("beta_registry_test")),
-            Some(&vec![p(93)])
-        );
-        assert!(!roles.values().flatten().any(|pid| pid == &p(89)));
     }
 }

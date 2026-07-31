@@ -16,9 +16,15 @@ mod tests {
             error::{Error, ErrorCode},
             fleet_registry::{
                 FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
-                FleetRegistrySnapshotResponse, FleetSubnetRootEntry, FleetSubnetRootJoinRequest,
-                FleetSubnetRootJoinResponse, FleetSubnetRootSnapshotAcknowledgement,
+                FleetRegistrySnapshotResponse, FleetSubnetRootDrainingPublicationRequest,
+                FleetSubnetRootDrainingPublicationResponse, FleetSubnetRootEntry,
+                FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
+                FleetSubnetRootRemovalPublicationRequest,
+                FleetSubnetRootRemovalPublicationResponse, FleetSubnetRootSnapshotAcknowledgement,
                 FleetSubnetRootSnapshotAcknowledgementRequest, FleetSubnetRootStatus,
+            },
+            fleet_subnet_root::{
+                FleetSubnetRootDrainingResponse, FleetSubnetRootFinalInventoryResponse,
             },
         },
         ids::{
@@ -215,14 +221,15 @@ mod tests {
         assert_eq!(acknowledgements.len(), 2);
         assert!(acknowledgements.iter().all(|ack| &ack.version == version));
 
-        assert_registry_activation(pic, coordinator, version);
+        let active = assert_registry_activation(pic, coordinator, version);
+        assert_removed_root_snapshot_exclusion(pic, coordinator, registry, &active.version);
     }
 
     fn assert_registry_activation(
         pic: &Pic,
         coordinator: Principal,
         version: &canic_core::dto::fleet_registry::FleetRegistryVersion,
-    ) {
+    ) -> FleetRegistryActivationResponse {
         let activation_request = FleetRegistryActivationRequest {
             expected_registry: version.clone(),
         };
@@ -271,6 +278,131 @@ mod tests {
                 .iter()
                 .all(|entry| entry.status == FleetSubnetRootStatus::Active)
         );
+        activated
+    }
+
+    fn assert_removed_root_snapshot_exclusion(
+        pic: &Pic,
+        coordinator: Principal,
+        joining_registry: &FleetRegistry,
+        active_version: &canic_core::dto::fleet_registry::FleetRegistryVersion,
+    ) {
+        let removed_root = principal(21);
+        let surviving_root = principal(22);
+        let removed = publish_logical_root_removal(
+            pic,
+            coordinator,
+            joining_registry,
+            active_version,
+            removed_root,
+        );
+
+        let rejected: Result<FleetRegistrySnapshotResponse, Error> = pic
+            .update_call_as(
+                coordinator,
+                removed_root,
+                protocol::CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT,
+                (),
+            )
+            .expect("Removed root snapshot transport");
+        assert_eq!(
+            rejected
+                .expect_err("Removed root must not remain a snapshot source")
+                .code,
+            ErrorCode::Forbidden
+        );
+        let surviving: Result<FleetRegistrySnapshotResponse, Error> = pic
+            .update_call_as(
+                coordinator,
+                surviving_root,
+                protocol::CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT,
+                (),
+            )
+            .expect("surviving root snapshot transport");
+        let surviving = surviving.expect("surviving root snapshot");
+        assert_eq!(surviving.version, removed.version);
+        assert_eq!(
+            surviving
+                .registry
+                .fleet_subnet_roots
+                .iter()
+                .find(|entry| entry.fleet_subnet_root == removed_root)
+                .expect("Removed peer row")
+                .status,
+            FleetSubnetRootStatus::Removed
+        );
+    }
+
+    fn publish_logical_root_removal(
+        pic: &Pic,
+        coordinator: Principal,
+        joining_registry: &FleetRegistry,
+        active_version: &canic_core::dto::fleet_registry::FleetRegistryVersion,
+        removed_root: Principal,
+    ) -> FleetSubnetRootRemovalPublicationResponse {
+        let removed_entry = joining_registry
+            .fleet_subnet_roots
+            .iter()
+            .find(|entry| entry.fleet_subnet_root == removed_root)
+            .expect("removed root entry");
+        let draining: Result<FleetSubnetRootDrainingPublicationResponse, Error> = pic
+            .update_call(
+                coordinator,
+                protocol::CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,
+                (FleetSubnetRootDrainingPublicationRequest {
+                    expected_registry: active_version.clone(),
+                    root_draining: FleetSubnetRootDrainingResponse {
+                        operation_id: [31; 32],
+                        fleet_subnet_root: removed_root,
+                        placement_subnet: removed_entry.placement_subnet,
+                        active_registry: active_version.clone(),
+                        component_topology_digest: removed_entry.component_topology_digest,
+                        active_release_set: removed_entry.active_release_set,
+                        next_allocation_sequence: 1,
+                        reserved_component_instances: 0,
+                        committed_component_instances: 0,
+                        managed_descendants: 0,
+                        known_created_component_canisters: 0,
+                        root_registry_encoded_bytes: 0,
+                        started_at_ns: 32,
+                    },
+                },),
+            )
+            .expect("publish root Draining transport");
+        let draining = draining.expect("publish root Draining");
+        let final_inventory = FleetSubnetRootFinalInventoryResponse {
+            operation_id: [31; 32],
+            fleet_subnet_root: removed_root,
+            placement_subnet: removed_entry.placement_subnet,
+            registry: draining.version.clone(),
+            component_topology_digest: removed_entry.component_topology_digest,
+            active_release_set: removed_entry.active_release_set,
+            next_allocation_sequence: 1,
+            removed_component_instances: 0,
+            terminal_component_history_hash: [33; 32],
+            root_registry_encoded_bytes: 0,
+            wasm_store: principal(23),
+            wasm_store_catalog_hash: [34; 32],
+            wasm_store_catalog_entries: 1,
+            wasm_store_occupied_bytes: 1_024,
+            wasm_store_template_count: 1,
+            wasm_store_release_count: 1,
+            wasm_store_gc_prepared_at_secs: 35,
+            finalized_at_ns: 36,
+            inventory_hash: [37; 32],
+        };
+        let removed: Result<FleetSubnetRootRemovalPublicationResponse, Error> = pic
+            .update_call_as(
+                coordinator,
+                removed_root,
+                protocol::CANIC_FLEET_REGISTRY_PUBLISH_ROOT_REMOVED,
+                (FleetSubnetRootRemovalPublicationRequest {
+                    expected_registry: draining.version,
+                    final_inventory,
+                },),
+            )
+            .expect("publish root Removed transport");
+        removed.expect("publish root Removed")
     }
 
     fn init_args(coordinator: Principal) -> FleetCoordinatorInitArgs {

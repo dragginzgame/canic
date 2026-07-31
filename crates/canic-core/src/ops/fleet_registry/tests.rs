@@ -393,6 +393,19 @@ fn directory_is_an_exact_root_sourced_mixed_lifecycle_projection() {
         directory_for_root(&authority, &topology, &published, principal(6)),
         Err(FleetRegistryOpsError::FleetDirectorySourceMissing)
     );
+    let surviving_directory = directory_for_root(&authority, &topology, &published, principal(8))
+        .expect("surviving root Directory with Removed peer");
+    assert_eq!(
+        surviving_directory
+            .fleet_subnet_roots
+            .iter()
+            .map(|entry| entry.status)
+            .collect::<Vec<_>>(),
+        vec![
+            FleetSubnetRootStatus::Removed,
+            FleetSubnetRootStatus::Active
+        ]
+    );
 }
 
 #[test]

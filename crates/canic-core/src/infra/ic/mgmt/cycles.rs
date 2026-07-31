@@ -15,12 +15,6 @@ use crate::{
 use super::{MgmtInfra, MgmtInfraError, types::InfraCanisterIdRecord};
 
 impl MgmtInfra {
-    /// Return the local canister's cycle balance.
-    #[must_use]
-    pub fn canister_cycle_balance() -> Cycles {
-        ic_cdk::api::canister_cycle_balance().into()
-    }
-
     /// Deposit cycles into a canister through the management canister.
     pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(), IcInfraError> {
         let args = InfraCanisterIdRecord {

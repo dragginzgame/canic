@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.70` qualifies surviving-root convergence on an exact `Removed` peer,
+  hard-cuts unused core surfaces and consolidates endpoint fallibility,
+  blob-billing conversion and local cycle-balance logic under existing owners.
+
 - `0.100.69` root-authenticates one live Store-revalidated
   `Draining -> Removed` Registry transition with durable exact replay, and
   centralizes duplicated host/CLI utilities under their existing owners.

@@ -8,12 +8,6 @@ use super::*;
 use crate::ops::cost_guard::CostGuardPermit;
 
 impl MgmtOps {
-    /// Returns the local canister's cycle balance (cheap).
-    #[must_use]
-    pub fn canister_cycle_balance() -> Cycles {
-        MgmtInfra::canister_cycle_balance()
-    }
-
     /// Deposits cycles into a canister and records metrics.
     pub async fn deposit_cycles(
         canister_pid: Principal,

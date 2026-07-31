@@ -19,13 +19,5 @@ pub fn policy_can_enter_pool(
         return Err(PoolPolicyError::RegisteredInSubnet(pid));
     }
 
-    policy_is_importable_on_local(pid, importable_on_local)
-}
-
-/// Convenience helper when you only want the local-routability decision (no registry check).
-pub fn policy_is_importable_on_local(
-    pid: Principal,
-    importable_on_local: Result<(), String>,
-) -> Result<(), PoolPolicyError> {
     importable_on_local.map_err(|details| PoolPolicyError::NonImportableOnLocal { pid, details })
 }

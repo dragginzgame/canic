@@ -7,7 +7,7 @@ use canic_core::{
         ops::{
             config::ConfigOps,
             cost_guard::{CostGuardPermit, CostGuardRequest},
-            ic::{IcOps, mgmt::MgmtOps},
+            ic::IcOps,
         },
         workflow::canister_lifecycle::{
             CanisterLifecycleEvent, CanisterLifecycleResult, CanisterLifecycleWorkflow,
@@ -132,7 +132,7 @@ fn reserve_control_plane_deployment_cost_guard(
         now_secs: IcOps::now_secs(),
         quota_window_secs: CONTROL_PLANE_DEPLOYMENT_QUOTA_WINDOW_SECONDS,
         max_operations_per_window: MAX_CONTROL_PLANE_DEPLOYMENT_OPERATIONS_PER_WINDOW,
-        current_cycle_balance: MgmtOps::canister_cycle_balance().to_u128(),
+        current_cycle_balance: IcOps::canister_cycle_balance().to_u128(),
         cycle_reservation_cycles,
         min_cycles_after_reservation: MIN_CONTROL_PLANE_CYCLES_AFTER_RESERVATION,
     })

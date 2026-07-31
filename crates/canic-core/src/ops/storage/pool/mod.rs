@@ -9,10 +9,7 @@ pub mod mapper;
 use crate::{
     InternalError,
     ops::{prelude::*, storage::registry::subnet::SubnetRegistryOps},
-    storage::{
-        canister::CanisterRecord,
-        stable::pool::{CanisterPoolData, PoolRecord, PoolStatus, PoolStore},
-    },
+    storage::stable::pool::{CanisterPoolData, PoolRecord, PoolStatus, PoolStore},
     view::pool::{PoolPendingResetCursor, PoolPendingResetPage},
 };
 
@@ -30,17 +27,12 @@ pub struct PoolRegistrationMetadata {
 
 impl PoolRegistrationMetadata {
     #[must_use]
-    pub fn from_canister_record(record: &CanisterRecord) -> Self {
-        Self {
-            role: Some(record.role.clone()),
-            parent: record.parent_pid,
-            module_hash: record.module_hash.clone(),
-        }
-    }
-
-    #[must_use]
     pub fn from_subnet_registry(pid: Principal) -> Option<Self> {
-        SubnetRegistryOps::get(pid).map(|record| Self::from_canister_record(&record))
+        SubnetRegistryOps::get(pid).map(|record| Self {
+            role: Some(record.role),
+            parent: record.parent_pid,
+            module_hash: record.module_hash,
+        })
     }
 }
 
