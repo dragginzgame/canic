@@ -10,7 +10,11 @@ use crate::{
             UpgradeCanisterRequest,
         },
     },
-    ids::CanisterRole,
+    ids::{
+        AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentChildBinding,
+        ComponentInstanceId, FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey,
+        FleetRegistryAuthority, ManagedCanisterBinding, SubnetId,
+    },
     model::replay::{
         CommandKind, ExternalEffectDescriptor, OperationId, REPLAY_PAYLOAD_HASH_SCHEMA_VERSION,
         REPLAY_RECEIPT_SCHEMA_VERSION, RecoveryReason, ReplayActor, ReplayReceiptStatus,
@@ -27,16 +31,16 @@ use crate::{
                 CyclesFundingDeniedReason, CyclesFundingMetricKey, CyclesFundingMetrics,
             },
         },
-        storage::{
-            intent::IntentStoreOps, registry::subnet::SubnetRegistryOps, replay::ReplayReceiptOps,
-            state::fleet::FleetStateOps,
-        },
+        storage::{intent::IntentStoreOps, replay::ReplayReceiptOps, state::fleet::FleetStateOps},
     },
     replay_policy::CostClass,
     storage::stable::env::{Env, EnvData, EnvRecord},
     storage::stable::replay::ReplayReceiptRecord,
     storage::stable::state::fleet::{FleetMode, FleetStateData, FleetStateRecord},
     test::config::ConfigTestBuilder,
+    workflow::rpc::{
+        RootCapabilityCallerAuthority, RootCapabilityMemberAuthority, RootCapabilityParentAuthority,
+    },
 };
 use candid::encode_one;
 use std::collections::HashMap;
@@ -50,6 +54,83 @@ fn meta(id: u8, ttl_ns: u64) -> RootRequestMetadata {
         request_id: [id; 32],
         ttl_ns,
     }
+}
+
+fn component_binding(
+    root: Principal,
+    canister: Principal,
+    role: CanisterRole,
+    marker: u8,
+) -> ComponentBinding {
+    ComponentBinding {
+        authority: FleetRegistryAuthority {
+            binding: FleetCoordinatorBinding {
+                fleet: FleetBinding {
+                    fleet: FleetKey {
+                        canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+                        fleet_id: FleetId::from_generated_bytes([marker; 32]),
+                    },
+                    app: AppId::from("rpc-handler-test"),
+                },
+                coordinator_subnet: SubnetId::from_principal(p(240)),
+                coordinator: p(241),
+            },
+            epoch: 1,
+        },
+        component: ComponentInstanceId::from_generated_bytes([marker; 32]),
+        component_spec: "rpc_test".parse().expect("Component Spec"),
+        spec_hash: [marker; 32],
+        role,
+        placement_subnet: SubnetId::from_principal(p(242)),
+        fleet_subnet_root: root,
+        canister_id: canister,
+    }
+}
+
+fn component_member(
+    root: Principal,
+    canister: Principal,
+    role: CanisterRole,
+    marker: u8,
+) -> ManagedCanisterBinding {
+    ManagedCanisterBinding::Component(component_binding(root, canister, role, marker))
+}
+
+fn component_child_member(
+    component: ComponentBinding,
+    parent: Principal,
+    canister: Principal,
+    role: CanisterRole,
+) -> ManagedCanisterBinding {
+    ManagedCanisterBinding::ComponentChild(ComponentChildBinding {
+        component,
+        parent_canister_id: parent,
+        role,
+        canister_id: canister,
+    })
+}
+
+fn root_authority(root: Principal) -> RootCapabilityAuthority {
+    RootCapabilityAuthority::new(RootCapabilityCallerAuthority::FleetSubnetRoot {
+        canister_id: root,
+    })
+}
+
+fn root_provision_authority(root: Principal) -> RootCapabilityAuthority {
+    root_authority(root)
+        .with_provision_parent(RootCapabilityParentAuthority::FleetSubnetRoot { canister_id: root })
+}
+
+fn component_authority(member: ManagedCanisterBinding) -> RootCapabilityAuthority {
+    RootCapabilityAuthority::new(RootCapabilityCallerAuthority::ComponentMember(
+        member.into(),
+    ))
+}
+
+fn provision_authority(member: ManagedCanisterBinding) -> RootCapabilityAuthority {
+    let parent =
+        RootCapabilityParentAuthority::from(RootCapabilityMemberAuthority::from(member.clone()));
+    component_authority(member).with_provision_parent(parent)
 }
 
 fn seed_root_replay_receipt(
@@ -262,27 +343,19 @@ fn root_capability_metadata_projection_covers_replay_protected_families() {
 fn authorize_recycle_rejects_non_child_caller() {
     let root_pid = p(70);
     let _restore = configure_root_env(root_pid);
-    SubnetRegistryOps::register_root_with_module_hash(root_pid, 1, None);
 
     let caller = p(71);
     let child = p(72);
     let other_parent = p(73);
-    SubnetRegistryOps::register_unchecked(
+    let caller_binding = component_binding(root_pid, caller, CanisterRole::new("project_hub"), 70);
+    let target = component_child_member(
+        caller_binding.clone(),
         other_parent,
-        &CanisterRole::new("project_hub"),
-        root_pid,
-        vec![],
-        2,
-    )
-    .expect("register sibling parent");
-    SubnetRegistryOps::register_unchecked(
         child,
-        &CanisterRole::new("project_instance"),
-        other_parent,
-        vec![],
-        3,
-    )
-    .expect("register child");
+        CanisterRole::new("project_instance"),
+    );
+    let authority =
+        component_authority(ManagedCanisterBinding::Component(caller_binding)).with_target(target);
 
     let ctx = RootContext {
         caller,
@@ -296,7 +369,8 @@ fn authorize_recycle_rejects_non_child_caller() {
         metadata: None,
     });
 
-    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+    let err =
+        RootResponseWorkflow::authorize(&ctx, &capability, &authority).expect_err("must deny");
     assert_eq!(err.class(), crate::InternalErrorClass::Workflow);
 }
 
@@ -304,26 +378,18 @@ fn authorize_recycle_rejects_non_child_caller() {
 fn authorize_recycle_allows_direct_child_caller() {
     let root_pid = p(80);
     let _restore = configure_root_env(root_pid);
-    SubnetRegistryOps::register_root_with_module_hash(root_pid, 1, None);
 
     let caller = p(81);
     let child = p(82);
-    SubnetRegistryOps::register_unchecked(
+    let caller_binding = component_binding(root_pid, caller, CanisterRole::new("project_hub"), 80);
+    let target = component_child_member(
+        caller_binding.clone(),
         caller,
-        &CanisterRole::new("project_hub"),
-        root_pid,
-        vec![],
-        2,
-    )
-    .expect("register parent");
-    SubnetRegistryOps::register_unchecked(
         child,
-        &CanisterRole::new("project_instance"),
-        caller,
-        vec![],
-        3,
-    )
-    .expect("register child");
+        CanisterRole::new("project_instance"),
+    );
+    let authority =
+        component_authority(ManagedCanisterBinding::Component(caller_binding)).with_target(target);
 
     let ctx = RootContext {
         caller,
@@ -337,8 +403,36 @@ fn authorize_recycle_allows_direct_child_caller() {
         metadata: None,
     });
 
-    RootResponseWorkflow::authorize(&ctx, &capability)
+    RootResponseWorkflow::authorize(&ctx, &capability, &authority)
         .expect("direct child recycle must authorize");
+}
+
+#[test]
+fn authorize_recycle_rejects_a_fresh_request_without_target_authority() {
+    let root_pid = p(83);
+    let caller = p(84);
+    let authority = component_authority(component_member(
+        root_pid,
+        caller,
+        CanisterRole::new("project_hub"),
+        83,
+    ));
+    let ctx = RootContext {
+        caller,
+        self_pid: root_pid,
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 5,
+    };
+    let capability = RootCapability::RecycleCanister(RecycleCanisterRequest {
+        canister_pid: p(85),
+        metadata: None,
+    });
+
+    let error = RootResponseWorkflow::authorize(&ctx, &capability, &authority)
+        .expect_err("fresh recycle without exact target authority must reject");
+
+    assert_eq!(error.class(), crate::InternalErrorClass::Workflow);
 }
 
 #[test]
@@ -357,7 +451,14 @@ fn authorize_denies_non_root_context() {
         metadata: None,
     });
 
-    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+    let authority = component_authority(component_member(
+        ctx.self_pid,
+        ctx.caller,
+        CanisterRole::new("app"),
+        1,
+    ));
+    let err =
+        RootResponseWorkflow::authorize(&ctx, &capability, &authority).expect_err("must deny");
     assert_eq!(err.origin(), crate::InternalErrorOrigin::Ops);
 }
 
@@ -373,27 +474,21 @@ fn authorize_allows_provision_in_root_context() {
     };
     let capability = RootCapability::ProvisionCanister(CreateCanisterRequest {
         canister_role: CanisterRole::new("app"),
-        parent: CreateCanisterParent::Root,
+        parent: CreateCanisterParent::ThisCanister,
         extra_arg: None,
         metadata: None,
     });
 
-    RootResponseWorkflow::authorize(&ctx, &capability).expect("must authorize");
+    RootResponseWorkflow::authorize(&ctx, &capability, &root_provision_authority(root_pid))
+        .expect("must authorize");
 }
 
 #[test]
 fn authorize_allows_structural_child_provision_for_registered_caller() {
     let root_pid = p(11);
     let caller = p(12);
-    SubnetRegistryOps::register_root_with_module_hash(root_pid, 1, None);
-    SubnetRegistryOps::register_unchecked(
-        caller,
-        &CanisterRole::new("user_hub"),
-        root_pid,
-        vec![],
-        2,
-    )
-    .expect("register caller");
+    let caller_member = component_member(root_pid, caller, CanisterRole::new("user_hub"), 11);
+    let authority = provision_authority(caller_member);
 
     let ctx = RootContext {
         caller,
@@ -409,22 +504,20 @@ fn authorize_allows_structural_child_provision_for_registered_caller() {
         metadata: None,
     });
 
-    RootResponseWorkflow::authorize(&ctx, &capability).expect("must authorize child provision");
+    RootResponseWorkflow::authorize(&ctx, &capability, &authority)
+        .expect("must authorize child provision");
 }
 
 #[test]
 fn authorize_rejects_structural_child_provision_with_root_parent() {
     let root_pid = p(13);
     let caller = p(14);
-    SubnetRegistryOps::register_root_with_module_hash(root_pid, 1, None);
-    SubnetRegistryOps::register_unchecked(
-        caller,
-        &CanisterRole::new("user_hub"),
-        root_pid,
-        vec![],
-        2,
-    )
-    .expect("register caller");
+    let caller_member = component_member(root_pid, caller, CanisterRole::new("user_hub"), 13);
+    let authority = component_authority(caller_member).with_provision_parent(
+        RootCapabilityParentAuthority::FleetSubnetRoot {
+            canister_id: root_pid,
+        },
+    );
 
     let ctx = RootContext {
         caller,
@@ -440,7 +533,8 @@ fn authorize_rejects_structural_child_provision_with_root_parent() {
         metadata: None,
     });
 
-    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+    let err =
+        RootResponseWorkflow::authorize(&ctx, &capability, &authority).expect_err("must deny");
     assert_eq!(
         err.public_error()
             .expect("structural parent denial is public")
@@ -551,7 +645,13 @@ fn preflight_validates_replay_before_policy() {
         metadata: None,
     });
 
-    let err = RootResponseWorkflow::preflight(&ctx, &capability)
+    let authority = component_authority(component_member(
+        ctx.self_pid,
+        ctx.caller,
+        CanisterRole::new("test"),
+        20,
+    ));
+    let err = RootResponseWorkflow::preflight(&ctx, &capability, &authority)
         .expect_err("preflight should validate replay first");
     let public = err
         .public_error()
@@ -575,7 +675,13 @@ fn preflight_aborts_reserved_replay_on_policy_denial() {
         metadata: Some(meta(7, secs_to_ns(60))),
     });
 
-    RootResponseWorkflow::preflight(&ctx, &capability)
+    let authority = component_authority(component_member(
+        ctx.self_pid,
+        ctx.caller,
+        CanisterRole::new("test"),
+        21,
+    ));
+    RootResponseWorkflow::preflight(&ctx, &capability, &authority)
         .expect_err("policy denial should fail preflight");
 
     let replay = RootResponseWorkflow::check_replay(&ctx, &capability)
@@ -590,14 +696,14 @@ fn preflight_aborts_reserved_replay_on_policy_denial() {
 }
 
 #[test]
-fn authorize_request_cycles_records_requested_and_child_not_found_denial_metrics() {
+fn authorize_root_self_cycles_records_requested_and_child_not_found_denial_metrics() {
     CyclesFundingMetrics::reset();
     CyclesFundingLedgerOps::reset_for_tests();
 
     let child = p(71);
     let ctx = RootContext {
         caller: child,
-        self_pid: p(9),
+        self_pid: child,
         is_root_env: true,
         subnet_id: p(2),
         now: 5,
@@ -607,7 +713,8 @@ fn authorize_request_cycles_records_requested_and_child_not_found_denial_metrics
         metadata: Some(meta(22, secs_to_ns(60))),
     });
 
-    RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+    RootResponseWorkflow::authorize(&ctx, &capability, &root_authority(child))
+        .expect_err("must deny");
 
     let map = cycles_funding_snapshot_map();
     assert_eq!(
@@ -647,9 +754,12 @@ fn authorize_request_cycles_records_kill_switch_denial_metrics() {
 
     let self_pid = p(90);
     let child = p(91);
-    SubnetRegistryOps::register_root_with_module_hash(self_pid, 1, None);
-    SubnetRegistryOps::register_unchecked(child, &CanisterRole::new("test"), self_pid, vec![], 2)
-        .expect("register child");
+    let authority = component_authority(component_member(
+        self_pid,
+        child,
+        CanisterRole::new("test"),
+        90,
+    ));
 
     FleetStateOps::import(FleetStateData {
         record: FleetStateRecord {
@@ -670,7 +780,8 @@ fn authorize_request_cycles_records_kill_switch_denial_metrics() {
         metadata: Some(meta(23, secs_to_ns(60))),
     });
 
-    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+    let err =
+        RootResponseWorkflow::authorize(&ctx, &capability, &authority).expect_err("must deny");
     assert_eq!(
         err.public_error()
             .expect("kill-switch denial is public")
@@ -732,9 +843,7 @@ fn root_cycles_funding_uses_child_role_policy_without_a_component_spec() {
         .with_default_canister(child_role.clone(), child_cfg)
         .install();
 
-    SubnetRegistryOps::register_root_with_module_hash(self_pid, 1, None);
-    SubnetRegistryOps::register_unchecked(child, &child_role, self_pid, vec![], 2)
-        .expect("register child");
+    let authority = component_authority(component_member(self_pid, child, child_role, 95));
 
     FleetStateOps::import(FleetStateData {
         record: FleetStateRecord {
@@ -757,7 +866,7 @@ fn root_cycles_funding_uses_child_role_policy_without_a_component_spec() {
         metadata: Some(meta(24, secs_to_ns(60))),
     };
 
-    let err = nonroot_cycles::authorize_root_request_cycles_plan(&ctx, &req)
+    let err = nonroot_cycles::authorize_root_request_cycles_plan(&ctx, &req, &authority)
         .expect_err("configured child budget must deny");
     assert_eq!(
         err.public_error()
@@ -788,9 +897,7 @@ fn authorize_request_cycles_rejects_a_competing_pending_child_operation() {
         .with_default_canister(child_role.clone(), child_cfg)
         .install();
 
-    SubnetRegistryOps::register_root_with_module_hash(self_pid, 1, None);
-    SubnetRegistryOps::register_unchecked(child, &child_role, self_pid, vec![], 2)
-        .expect("register child");
+    let authority = component_authority(component_member(self_pid, child, child_role, 97));
     FleetStateOps::import(FleetStateData {
         record: FleetStateRecord {
             mode: FleetMode::Enabled,
@@ -811,7 +918,7 @@ fn authorize_request_cycles_rejects_a_competing_pending_child_operation() {
         metadata: Some(meta(41, secs_to_ns(60))),
     };
 
-    let err = nonroot_cycles::authorize_root_request_cycles_plan(&ctx, &req)
+    let err = nonroot_cycles::authorize_root_request_cycles_plan(&ctx, &req, &authority)
         .expect_err("a second child funding operation must reject before ledger mutation");
 
     assert_eq!(
@@ -1025,7 +1132,7 @@ fn payload_hash_ignores_metadata() {
 
 #[test]
 fn payload_hash_includes_capability_variant_discriminant() {
-    let capability_hash = RootCapability::RequestCycles(CyclesRequest {
+    let payload_hash = RootCapability::RequestCycles(CyclesRequest {
         cycles: 42,
         metadata: None,
     })
@@ -1037,11 +1144,11 @@ fn payload_hash_includes_capability_variant_discriminant() {
             metadata: None,
         })
         .expect("encode");
-        hash_domain_separated(REPLAY_PAYLOAD_HASH_DOMAIN, &bytes)
+        replay::hash_domain_separated(REPLAY_PAYLOAD_HASH_DOMAIN, &bytes)
     };
 
     assert_ne!(
-        capability_hash, struct_only_hash,
+        payload_hash, struct_only_hash,
         "capability payload hash must include variant discriminant"
     );
 }
@@ -1438,11 +1545,17 @@ fn response_commit_retry_promotes_staged_response_without_reexecution() {
     replay::mark_recovery_required(&pending, RecoveryReason::ResponseCommitFailed)
         .expect("mark response recovery");
 
-    let recovered = RootResponseWorkflow::check_replay(&ctx, &capability)
+    let authority = component_authority(component_member(
+        ctx.self_pid,
+        ctx.caller,
+        CanisterRole::new("placement_index"),
+        5,
+    ));
+    let recovered = RootResponseWorkflow::preflight(&ctx, &capability, &authority)
         .expect("identical retry should promote staged response");
     assert!(matches!(
         recovered,
-        replay::ReplayPreflight::Cached(Response::RecycleCanister)
+        RootPreflight::Cached(Response::RecycleCanister)
     ));
     let receipt = ReplayReceiptOps::get(pending.receipt_token.key())
         .expect("receipt")

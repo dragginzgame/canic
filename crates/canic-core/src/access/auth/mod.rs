@@ -87,14 +87,6 @@ pub fn resolve_authenticated_identity(
     identity::resolve_authenticated_identity(transport_caller)
 }
 
-#[cfg(test)]
-pub(crate) fn resolve_authenticated_identity_at(
-    transport_caller: Principal,
-    now_secs: u64,
-) -> ResolvedAuthenticatedIdentity {
-    identity::resolve_authenticated_identity_at(transport_caller, now_secs)
-}
-
 /// validate_delegated_session_subject
 ///
 /// Reject obvious canister and infrastructure identities for delegated user sessions.
@@ -109,19 +101,6 @@ pub(crate) fn delegated_token_verified(
     required_scope: Option<&str>,
 ) -> Result<Principal, AccessError> {
     token::delegated_token_verified(authenticated_subject, required_scope)
-}
-
-#[cfg(test)]
-fn enforce_subject_binding(sub: Principal, caller: Principal) -> Result<(), AccessError> {
-    token::enforce_subject_binding(sub, caller)
-}
-
-#[cfg(test)]
-fn enforce_required_scope(
-    required_scope: Option<&str>,
-    token_scopes: &[String],
-) -> Result<(), AccessError> {
-    token::enforce_required_scope(required_scope, token_scopes)
 }
 
 // -----------------------------------------------------------------------------
@@ -227,34 +206,36 @@ mod tests {
     fn subject_binding_allows_matching_subject_and_caller() {
         let sub = p(1);
         let caller = p(1);
-        assert!(enforce_subject_binding(sub, caller).is_ok());
+        assert!(token::enforce_subject_binding(sub, caller).is_ok());
     }
 
     #[test]
     fn subject_binding_rejects_mismatched_subject_and_caller() {
         let sub = p(1);
         let caller = p(2);
-        let err = enforce_subject_binding(sub, caller).expect_err("expected subject mismatch");
+        let err =
+            token::enforce_subject_binding(sub, caller).expect_err("expected subject mismatch");
         assert!(matches!(err, AccessError::Denied(_)));
     }
 
     #[test]
     fn required_scope_allows_when_scope_present() {
         let scopes = vec![cap::READ.to_string(), cap::VERIFY.to_string()];
-        assert!(enforce_required_scope(Some(cap::VERIFY), &scopes).is_ok());
+        assert!(token::enforce_required_scope(Some(cap::VERIFY), &scopes).is_ok());
     }
 
     #[test]
     fn required_scope_rejects_when_scope_missing() {
         let scopes = vec![cap::READ.to_string()];
-        let err = enforce_required_scope(Some(cap::VERIFY), &scopes).expect_err("expected denial");
+        let err =
+            token::enforce_required_scope(Some(cap::VERIFY), &scopes).expect_err("expected denial");
         assert!(matches!(err, AccessError::Denied(_)));
     }
 
     #[test]
     fn required_scope_none_is_allowed() {
         let scopes = vec![cap::READ.to_string()];
-        assert!(enforce_required_scope(None, &scopes).is_ok());
+        assert!(token::enforce_required_scope(None, &scopes).is_ok());
     }
 
     #[test]
@@ -289,7 +270,7 @@ mod tests {
             100,
         );
 
-        let resolved = resolve_authenticated_identity_at(wallet, 150);
+        let resolved = identity::resolve_authenticated_identity_at(wallet, 150);
         assert_eq!(resolved.transport_caller, wallet);
         assert_eq!(resolved.authenticated_subject, delegated);
         assert_eq!(
@@ -322,7 +303,7 @@ mod tests {
             100,
         );
 
-        let resolved = resolve_authenticated_identity_at(wallet, 121);
+        let resolved = identity::resolve_authenticated_identity_at(wallet, 121);
         assert_eq!(resolved.authenticated_subject, wallet);
         assert_eq!(
             resolved.identity_source,
@@ -354,7 +335,7 @@ mod tests {
             100,
         );
 
-        let resolved = resolve_authenticated_identity_at(wallet, 120);
+        let resolved = identity::resolve_authenticated_identity_at(wallet, 120);
         assert_eq!(resolved.authenticated_subject, wallet);
         assert_eq!(
             resolved.identity_source,
@@ -387,7 +368,7 @@ mod tests {
         );
         crate::ops::storage::auth::AuthStateOps::clear_delegated_session(wallet);
 
-        let resolved = resolve_authenticated_identity_at(wallet, 100);
+        let resolved = identity::resolve_authenticated_identity_at(wallet, 100);
         assert_eq!(resolved.authenticated_subject, wallet);
         assert_eq!(
             resolved.identity_source,
@@ -415,7 +396,7 @@ mod tests {
             10,
         );
 
-        let resolved = resolve_authenticated_identity_at(wallet, 20);
+        let resolved = identity::resolve_authenticated_identity_at(wallet, 20);
         assert_eq!(resolved.authenticated_subject, wallet);
         assert_eq!(
             resolved.identity_source,

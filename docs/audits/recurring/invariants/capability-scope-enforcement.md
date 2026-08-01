@@ -116,7 +116,7 @@ git log --name-only -n 20 -- crates/
 | `access/auth/token.rs` | `verify_token`, `enforce_subject_binding`, `enforce_required_scope` | subject/scope ordering enforcement | High |
 | `ops/auth/delegated/verify.rs` | `verify_delegated_token`, `verify_audience_and_grants`, `verify_scopes` | delegated-token claim, audience, local-role grant, freshness, and scope verifier | High |
 | `workflow/rpc/capability/envelope.rs` | `validate_root_capability_envelope` | root capability service/version/proof validation before dispatch | Medium |
-| `workflow/rpc/capability/verifier.rs` | `verify_root_capability_proof` | active runtime proof-mode routing; current root proof mode is structural-only | Medium |
+| `workflow/rpc/capability/mod.rs` | `verify_root_capability_proof` | active runtime proof-mode routing; current root proof mode is structural-only | Medium |
 | `workflow/rpc/capability/proof.rs` | `verify_root_structural_proof`, `verify_nonroot_structural_cycles_proof` | structural proof constraints that must not become identity substitutes | Medium |
 | `workflow/rpc/request/handler/authorize.rs` | `authorize` | authorization decision surface | Medium |
 | `workflow/rpc/request/handler/mod.rs` | `preflight`, replay/authorization pipeline | replay reservation, authorization denial, execution, and replay commit ordering | Medium |

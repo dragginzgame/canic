@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.82` moves root capability proof, authorization, structural parent
+  binding and root cycles funding onto exact active Component Registry
+  authority, and aligns role-attestation issuance with the accepted active
+  Component-or-Component-Child contract. It also hard-cuts the inactive
+  capability-hash stack and collapses residual test/build/auth forwarding
+  namespaces without changing the maintained protocol.
+
 - `0.100.81` moves root-owned Component authentication onto exact active
   Component Registry membership, including descendants, while retaining
   top-level-only role-attestation issuance, and removes residual test-only

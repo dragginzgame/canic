@@ -165,10 +165,10 @@ git log --name-only -n 20 -- crates/
 | `workflow/runtime/auth/root_issuer/mod.rs` | issuer policy and renewal-template upsert | resolves the protected Fleet and applies pure admission before mutation | High |
 | `ops/auth/delegation/chain_key_batch.rs` | `build_chain_key_batch_leaf`, `prepare_due_chain_key_root_delegation_batch` | maps root renewal templates into root issuer policy decisions before preparing canonical chain-key batch leaves | High |
 | `ops/auth/delegated/chain_key.rs` | `verify_cert_leaf_binding` | rejects root proofs whose signed leaf audience/grants/issuer binding do not exactly match the embedded delegation cert | High |
-| `ops/auth/verify/attestation.rs` | `verify_role_attestation_claims` | role-attestation subject, timing, audience, subnet, and epoch checks | High |
-| `ops/rpc/capability.rs` | `root_capability_hash` | canonical root capability hash binding to target canister, capability version, service, and canonical payload | High |
-| `workflow/rpc/capability/proof.rs` | `verify_capability_hash_binding`, structural proof helpers | test-visible target hash verification and runtime structural proof checks | Medium |
-| `workflow/rpc/capability/verifier.rs` | `verify_root_capability_proof` | active proof-mode routing; current runtime accepts structural proof mode only | Medium |
+| `ops/auth/verify/mod.rs` | `verify_role_attestation_claims` | role-attestation subject, timing, audience, subnet, and epoch checks | High |
+| `canic-control-plane/workflow/component_rpc/mod.rs` | `root_capability_authority` | resolves the exact active caller, structural parent, and lifecycle target before core orchestration | High |
+| `workflow/rpc/authority.rs` | `RootCapabilityAuthority` | carries immutable caller, immediate-parent, role, provision-parent, and lifecycle-target evidence | High |
+| `workflow/rpc/capability/proof.rs` | structural proof helpers | requires request structure to agree with the resolved protected authority | Medium |
 | `workflow/rpc/capability/root.rs` | `response_capability_v1_root` | validates envelopes, verifies structural proof mode, then dispatches root capability requests | Medium |
 | `dto/auth`, `dto/capability/proof.rs` | delegated claim structs | Fleet audience and capability target field definitions | Medium |
 
@@ -270,8 +270,8 @@ bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib
 bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib chain_key_batch_root_proof_rejects_wrong_audience -- --nocapture
 bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib chain_key_batch_root_proof_rejects_wrong_grants -- --nocapture
 bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib role_attestation_claims_reject -- --nocapture
-bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib root_capability_hash_binds_target_canister -- --nocapture
-bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib verify_capability_hash_binding -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-control-plane --lib structural_provision_binds_the_exact_caller_as_parent -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib authorize_recycle_rejects_a_fresh_request_without_target_authority -- --nocapture
 bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib role_attestation_claims -- --nocapture
 bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib role_attestation_verifier -- --nocapture
 ```

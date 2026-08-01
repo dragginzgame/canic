@@ -158,11 +158,11 @@ impl RuntimeAuthWorkflow {
     /// Prepare a root-certified role attestation from the local root update path.
     pub fn prepare_component_role_attestation_root(
         request: RoleAttestationRequest,
-        component: &crate::ids::ComponentBinding,
+        member: &crate::ids::ManagedCanisterBinding,
     ) -> Result<RoleAttestationPrepareResponse, InternalError> {
         EnvOps::require_root()?;
         let caller = IcOps::msg_caller();
-        validate_role_attestation_request(caller, &request, component)?;
+        validate_role_attestation_request(caller, &request, member)?;
         let metadata = role_attestation_replay_metadata(request.metadata)?;
         let command_kind = role_attestation_replay_command_kind();
         let actor = ReplayActor::direct_caller(caller);

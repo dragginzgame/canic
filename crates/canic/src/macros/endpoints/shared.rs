@@ -231,11 +231,13 @@ macro_rules! canic_emit_metrics_endpoints {
 macro_rules! canic_emit_auth_attestation_endpoints {
     () => {
         #[cfg(canic_is_root)]
-        #[$crate::canic_update(internal, requires(caller::is_registered_to_subnet()))]
+        #[$crate::canic_update(internal, requires(custom(
+            $crate::__internal::control_plane::api::component_rpc::RootCapabilityCallerPredicate
+        )))]
         async fn canic_response_capability_v1(
             envelope: ::canic::dto::capability::RootCapabilityEnvelopeV1,
         ) -> Result<::canic::dto::capability::RootCapabilityResponseV1, ::canic::Error> {
-            $crate::__internal::core::api::rpc::RpcApi::response_capability_v1_root(envelope).await
+            $crate::__internal::control_plane::api::component_rpc::ComponentRpcApi::response_capability_v1_root(envelope).await
         }
 
         #[cfg(not(canic_is_root))]

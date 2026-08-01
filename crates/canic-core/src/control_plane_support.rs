@@ -169,6 +169,13 @@ pub mod workflow {
         }
     }
 
+    pub mod rpc {
+        pub use crate::workflow::rpc::{
+            RootCapabilityAuthority, RootCapabilityCallerAuthority, RootCapabilityMemberAuthority,
+            RootCapabilityParentAuthority,
+        };
+    }
+
     pub mod topology {
         pub mod guard {
             pub use crate::workflow::topology::guard::TopologyGuard;

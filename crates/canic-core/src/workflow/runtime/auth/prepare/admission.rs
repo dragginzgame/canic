@@ -14,16 +14,16 @@ use crate::{
         auth::{DelegatedRoleGrant, DelegatedTokenPrepareRequest, RoleAttestationRequest},
         error::Error,
     },
-    ids::ComponentBinding,
+    ids::{CanisterRole, ManagedCanisterBinding, SubnetId},
     ops::config::ConfigOps,
 };
 
 pub(super) fn validate_role_attestation_request(
     caller: Principal,
     request: &RoleAttestationRequest,
-    component: &ComponentBinding,
+    member: &ManagedCanisterBinding,
 ) -> Result<(), InternalError> {
-    validate_active_component_subject(caller, request, component)?;
+    validate_active_component_subject(caller, request, member)?;
 
     let max_ttl_ns = role_attestation_max_ttl_ns()?;
     if request.ttl_ns == 0 || request.ttl_ns > max_ttl_ns {
@@ -39,8 +39,9 @@ pub(super) fn validate_role_attestation_request(
 fn validate_active_component_subject(
     caller: Principal,
     request: &RoleAttestationRequest,
-    component: &ComponentBinding,
+    member: &ManagedCanisterBinding,
 ) -> Result<(), InternalError> {
+    let authority = RoleAttestationMemberAuthority::from(member);
     if request.subject != caller {
         return Err(InternalError::public(Error::forbidden(format!(
             "role attestation subject {} must match caller {}",
@@ -48,29 +49,52 @@ fn validate_active_component_subject(
         ))));
     }
 
-    if component.canister_id != caller {
+    if authority.canister_id != caller {
         return Err(InternalError::public(Error::forbidden(format!(
-            "role attestation caller {} differs from active Component {}",
-            caller, component.canister_id
+            "role attestation caller {} differs from active Component Registry member {}",
+            caller, authority.canister_id
         ))));
     }
-    if component.role != request.role {
+    if authority.role != &request.role {
         return Err(InternalError::public(Error::forbidden(format!(
             "role attestation role mismatch for subject {}: requested {}, registered {}",
-            request.subject, request.role, component.role
+            request.subject, request.role, authority.role
         ))));
     }
 
     if let Some(requested_subnet) = request.subnet_id
-        && requested_subnet != component.placement_subnet.into_principal()
+        && requested_subnet != authority.placement_subnet.into_principal()
     {
         return Err(InternalError::public(Error::forbidden(format!(
             "role attestation subnet mismatch for subject {}: requested {}, local {}",
-            request.subject, requested_subnet, component.placement_subnet
+            request.subject, requested_subnet, authority.placement_subnet
         ))));
     }
 
     Ok(())
+}
+
+struct RoleAttestationMemberAuthority<'a> {
+    canister_id: Principal,
+    role: &'a CanisterRole,
+    placement_subnet: &'a SubnetId,
+}
+
+impl<'a> From<&'a ManagedCanisterBinding> for RoleAttestationMemberAuthority<'a> {
+    fn from(member: &'a ManagedCanisterBinding) -> Self {
+        match member {
+            ManagedCanisterBinding::Component(component) => Self {
+                canister_id: component.canister_id,
+                role: &component.role,
+                placement_subnet: &component.placement_subnet,
+            },
+            ManagedCanisterBinding::ComponentChild(child) => Self {
+                canister_id: child.canister_id,
+                role: &child.role,
+                placement_subnet: &child.component.placement_subnet,
+            },
+        }
+    }
 }
 
 fn role_attestation_max_ttl_ns() -> Result<u64, InternalError> {
@@ -112,8 +136,9 @@ mod tests {
     use crate::{
         dto::error::ErrorCode,
         ids::{
-            AppId, CanisterRole, CanonicalNetworkId, ComponentInstanceId, FleetBinding,
-            FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, SubnetId,
+            AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentChildBinding,
+            ComponentInstanceId, FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey,
+            FleetRegistryAuthority, ManagedCanisterBinding, SubnetId,
         },
     };
 
@@ -162,14 +187,40 @@ mod tests {
     #[test]
     fn role_attestation_subject_accepts_exact_component_binding() {
         let component = component();
+        let member = ManagedCanisterBinding::Component(component.clone());
 
-        validate_active_component_subject(component.canister_id, &request(&component), &component)
+        validate_active_component_subject(component.canister_id, &request(&component), &member)
             .expect("exact active Component binding");
+    }
+
+    #[test]
+    fn role_attestation_subject_accepts_exact_component_child_binding() {
+        let component = component();
+        let child = ComponentChildBinding {
+            component: component.clone(),
+            parent_canister_id: component.canister_id,
+            role: CanisterRole::from("project_instance"),
+            canister_id: p(12),
+        };
+        let request = RoleAttestationRequest {
+            subject: child.canister_id,
+            role: child.role.clone(),
+            subnet_id: Some(component.placement_subnet.into_principal()),
+            audience: p(9),
+            ttl_ns: 60_000_000_000,
+            epoch: component.authority.epoch,
+            metadata: None,
+        };
+        let member = ManagedCanisterBinding::ComponentChild(child.clone());
+
+        validate_active_component_subject(child.canister_id, &request, &member)
+            .expect("exact active Component Child binding");
     }
 
     #[test]
     fn role_attestation_subject_rejects_caller_or_role_drift() {
         let component = component();
+        let member = ManagedCanisterBinding::Component(component.clone());
         let mut subject_drift = request(&component);
         subject_drift.subject = p(10);
         let mut role_drift = request(&component);
@@ -180,7 +231,7 @@ mod tests {
             (p(10), request(&component)),
             (component.canister_id, role_drift),
         ] {
-            let error = validate_active_component_subject(caller, &request, &component)
+            let error = validate_active_component_subject(caller, &request, &member)
                 .expect_err("binding drift must fail closed");
             assert_eq!(
                 error.public_error().expect("public rejection").code,
@@ -192,10 +243,11 @@ mod tests {
     #[test]
     fn role_attestation_subject_rejects_placement_subnet_drift() {
         let component = component();
+        let member = ManagedCanisterBinding::Component(component.clone());
         let mut request = request(&component);
         request.subnet_id = Some(p(11));
 
-        let error = validate_active_component_subject(component.canister_id, &request, &component)
+        let error = validate_active_component_subject(component.canister_id, &request, &member)
             .expect_err("placement Subnet drift must fail closed");
 
         assert_eq!(

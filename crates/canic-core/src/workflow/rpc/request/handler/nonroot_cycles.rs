@@ -31,16 +31,13 @@ use crate::{
                 },
             },
         },
-        storage::{
-            children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps,
-            replay::ReplayReceiptOps,
-        },
+        storage::{children::CanisterChildrenOps, replay::ReplayReceiptOps},
     },
     replay_policy::CostClass,
     workflow::{
         cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
         replay::mark_recovery_required_after_failure,
-        rpc::RpcWorkflowError,
+        rpc::{RootCapabilityAuthority, RpcWorkflowError},
     },
 };
 
@@ -88,33 +85,25 @@ impl NonrootCyclesCapabilityWorkflow {
     pub(in crate::workflow::rpc) async fn response_replay_first(
         req: CyclesRequest,
     ) -> Result<CyclesResponse, InternalError> {
-        response_replay_first_with_planner(
-            extract_cycles_context(false)?,
-            req,
-            authorize_request_cycles_plan,
-        )
-        .await
+        let ctx = extract_cycles_context(false)?;
+        let child = direct_child_record(ctx.caller);
+        response_replay_first_with_child(ctx, req, child).await
     }
 }
 
 pub(super) async fn response_replay_first_root(
     req: CyclesRequest,
+    authority: &RootCapabilityAuthority,
 ) -> Result<CyclesResponse, InternalError> {
-    response_replay_first_with_planner(
-        extract_cycles_context(true)?,
-        req,
-        authorize_root_request_cycles_plan,
-    )
-    .await
+    let ctx = extract_cycles_context(true)?;
+    let child = component_registry_child_record(&ctx, authority);
+    response_replay_first_with_child(ctx, req, child).await
 }
 
-async fn response_replay_first_with_planner(
+async fn response_replay_first_with_child(
     ctx: RootContext,
     req: CyclesRequest,
-    authorize_plan: fn(
-        &RootContext,
-        &CyclesRequest,
-    ) -> Result<AuthorizedCyclesGrant, InternalError>,
+    child: Option<ResolvedCyclesChild>,
 ) -> Result<CyclesResponse, InternalError> {
     let capability = RootCapability::RequestCycles(req.clone());
     let pending = match replay::check_replay(&ctx, &capability)? {
@@ -130,7 +119,7 @@ async fn response_replay_first_with_planner(
         }
     };
 
-    let grant = match authorize_plan(&ctx, &req) {
+    let grant = match authorize_request_cycles_with_child(&ctx, &req, child) {
         Ok(grant) => grant,
         Err(err) => {
             return Err(replay::abort_replay_after_failure(pending, err));
@@ -190,8 +179,9 @@ pub(super) fn authorize_request_cycles(
 pub(super) fn authorize_root_request_cycles(
     ctx: &RootContext,
     req: &CyclesRequest,
+    authority: &RootCapabilityAuthority,
 ) -> Result<(), InternalError> {
-    authorize_root_request_cycles_plan(ctx, req).map(|_| ())
+    authorize_root_request_cycles_plan(ctx, req, authority).map(|_| ())
 }
 
 /// Resolve an approved non-root cycles grant in one authorization pass.
@@ -199,23 +189,24 @@ pub(super) fn authorize_request_cycles_plan(
     ctx: &RootContext,
     req: &CyclesRequest,
 ) -> Result<AuthorizedCyclesGrant, InternalError> {
-    authorize_request_cycles_with_resolver(ctx, req, direct_child_record)
+    authorize_request_cycles_with_child(ctx, req, direct_child_record(ctx.caller))
 }
 
 /// Resolve an approved root cycles grant in one authorization pass.
 pub(super) fn authorize_root_request_cycles_plan(
     ctx: &RootContext,
     req: &CyclesRequest,
+    authority: &RootCapabilityAuthority,
 ) -> Result<AuthorizedCyclesGrant, InternalError> {
-    authorize_request_cycles_with_resolver(ctx, req, registry_child_record)
+    authorize_request_cycles_with_child(ctx, req, component_registry_child_record(ctx, authority))
 }
 
-fn authorize_request_cycles_with_resolver(
+fn authorize_request_cycles_with_child(
     ctx: &RootContext,
     req: &CyclesRequest,
-    resolve_child: fn(Principal) -> Option<ResolvedCyclesChild>,
+    child: Option<ResolvedCyclesChild>,
 ) -> Result<AuthorizedCyclesGrant, InternalError> {
-    let decision = authorize_request_cycles_inner(ctx, req, resolve_child);
+    let decision = authorize_request_cycles_inner(ctx, req, child);
 
     match &decision {
         Ok(_) => {
@@ -255,11 +246,11 @@ fn authorize_request_cycles_with_resolver(
 fn authorize_request_cycles_inner(
     ctx: &RootContext,
     req: &CyclesRequest,
-    resolve_child: fn(Principal) -> Option<ResolvedCyclesChild>,
+    child: Option<ResolvedCyclesChild>,
 ) -> Result<AuthorizedCyclesGrant, InternalError> {
     CyclesFundingMetrics::record_requested(ctx.caller, req.cycles);
 
-    let Some(child) = resolve_child(ctx.caller) else {
+    let Some(child) = child else {
         CyclesFundingMetrics::record_denied(
             ctx.caller,
             req.cycles,
@@ -375,8 +366,9 @@ pub(super) async fn execute_root_request_cycles(
     ctx: &RootContext,
     pending: &ReplayPending,
     req: &CyclesRequest,
+    authority: &RootCapabilityAuthority,
 ) -> Result<CyclesResponse, InternalError> {
-    let grant = authorize_root_request_cycles_plan(ctx, req)?;
+    let grant = authorize_root_request_cycles_plan(ctx, req, authority)?;
     execute_authorized_request_cycles(ctx, pending, grant).await
 }
 
@@ -452,9 +444,17 @@ fn direct_child_record(pid: Principal) -> Option<ResolvedCyclesChild> {
         .map(|(role, parent_pid)| ResolvedCyclesChild { role, parent_pid })
 }
 
-fn registry_child_record(pid: Principal) -> Option<ResolvedCyclesChild> {
-    SubnetRegistryOps::role_parent(pid)
-        .map(|(role, parent_pid)| ResolvedCyclesChild { role, parent_pid })
+fn component_registry_child_record(
+    ctx: &RootContext,
+    authority: &RootCapabilityAuthority,
+) -> Option<ResolvedCyclesChild> {
+    if authority.caller_canister_id() != ctx.caller {
+        return None;
+    }
+    Some(ResolvedCyclesChild {
+        role: authority.caller_role()?.clone(),
+        parent_pid: authority.caller_parent_canister_id(),
+    })
 }
 
 fn map_funding_policy_violation(

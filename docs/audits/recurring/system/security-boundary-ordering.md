@@ -195,15 +195,18 @@ Expected:
 ### 5. Capability Envelope And Attestation Cache
 
 ```bash
-rg -n 'capability_hash|RootCapabilityEnvelope|NonrootCyclesCapabilityEnvelope|attestation|cache|cached_root_response_attestation|CapabilityProof::' crates/canic-core/src/ops/rpc crates/canic-core/src/workflow/rpc crates/canic-core/src/dto/capability -g '*.rs'
+rg -n 'RootCapabilityAuthority|root_capability_authority|RootCapabilityEnvelope|NonrootCyclesCapabilityEnvelope|attestation|cache|cached_root_response_attestation|CapabilityProof::' crates/canic-control-plane/src/workflow/component_rpc crates/canic-core/src/ops/rpc crates/canic-core/src/workflow/rpc crates/canic-core/src/dto/capability -g '*.rs'
 ```
 
 Expected:
 
-- capability envelope hash covers the target canister and canonical request;
+- the root capability envelope validates service, version, and structural proof
+  before dispatch;
+- one protected Component Registry authority binds the exact caller, structural
+  parent, and lifecycle target consumed by core proof and authorization;
 - retained root-issued attestation caches, if any, are reuse-only and check
   root, audience, subject, role, epoch, and expiry before reuse;
-- cached attestations do not skip target capability hash construction.
+- cached attestations do not substitute for request-bound Component authority.
 
 ## Output Requirements
 
