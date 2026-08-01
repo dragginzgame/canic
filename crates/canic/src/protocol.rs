@@ -81,7 +81,6 @@ pub const CANIC_FLEET_ADMIN: &str = "canic_fleet_admin";
 pub const CANIC_CANISTER_UPGRADE: &str = "canic_canister_upgrade";
 pub const CANIC_CANISTER_STATUS: &str = "canic_canister_status";
 pub const CANIC_CONFIG: &str = "canic_config";
-pub const CANIC_SUBNET_REGISTRY: &str = "canic_subnet_registry";
 pub const CANIC_POOL_LIST: &str = "canic_pool_list";
 pub const CANIC_POOL_ADMIN: &str = "canic_pool_admin";
 pub const CANIC_WASM_STORE_ADMIN: &str = "canic_wasm_store_admin";

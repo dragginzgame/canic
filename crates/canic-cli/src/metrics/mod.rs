@@ -16,7 +16,6 @@ use crate::{
 use canic_backup::discovery::DiscoveryError;
 use canic_host::{
     icp::IcpCommandError, icp_config::IcpConfigError, installed_fleet::InstalledFleetError,
-    registry::RegistryParseError,
 };
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
@@ -54,9 +53,6 @@ pub enum MetricsCommandError {
 
     #[error(transparent)]
     Discovery(#[from] DiscoveryError),
-
-    #[error(transparent)]
-    Registry(#[from] RegistryParseError),
 }
 
 pub fn run_info<I>(args: I) -> Result<(), MetricsCommandError>

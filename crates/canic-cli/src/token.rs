@@ -17,7 +17,7 @@ use canic_host::{
     installed_fleet::{
         InstalledFleetError, InstalledFleetRequest, resolve_installed_fleet_from_root,
     },
-    registry::{RegistryEntry, RegistryParseError},
+    registry::RegistryEntry,
 };
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, path::Path};
@@ -72,9 +72,6 @@ pub enum TokenCommandError {
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
-
-    #[error(transparent)]
-    Registry(#[from] RegistryParseError),
 }
 
 /// Split token command request with optional token symbol prefix.

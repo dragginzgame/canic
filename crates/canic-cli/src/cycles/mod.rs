@@ -22,7 +22,6 @@ use canic_backup::discovery::DiscoveryError;
 use canic_core::{cdk::utils::hash::DecodeHexError, dto::error::ErrorCode};
 use canic_host::{
     icp::IcpCommandError, icp_config::IcpConfigError, installed_fleet::InstalledFleetError,
-    registry::RegistryParseError,
 };
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
@@ -83,9 +82,6 @@ pub enum CyclesCommandError {
 
     #[error(transparent)]
     Discovery(#[from] DiscoveryError),
-
-    #[error(transparent)]
-    Registry(#[from] RegistryParseError),
 }
 
 pub fn run<I>(args: I) -> Result<(), CyclesCommandError>

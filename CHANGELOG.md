@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.80` hard-cuts the obsolete public Subnet Registry and its host/backup
+  transport, and collapses stranded Directory mapper layers while retaining
+  a fail-closed Component Registry discovery boundary.
+
 - `0.100.79` hard-cuts the obsolete public Fleet/Subnet Directory query family
   and removes redundant CLI wrappers, retaining the protected Fleet/Component
   Directory authorities and all CLI behavior.

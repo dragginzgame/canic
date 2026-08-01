@@ -1,18 +1,18 @@
 //! Module: ops::storage::directory
 //!
-//! Responsibility: validate Fleet/Subnet Directory data before stable replacement.
+//! Responsibility: convert and validate Fleet/Subnet Directory data before stable replacement.
 //! Does not own: stable Directory schemas, workflow orchestration, or DTO policy.
 //! Boundary: storage ops between canonical snapshots and stable Directory records.
 
 pub mod fleet;
-pub mod mapper;
 pub mod subnet;
 
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::topology::DirectoryProvenance,
+    dto::topology::{DirectoryEntryInput, DirectoryProvenance},
     ids::{CanisterRole, FleetBinding},
+    model::topology::TopologyDirectoryEntry,
     ops::storage::StorageOpsError,
     storage::stable::directory::DirectoryEntryRecord,
 };
@@ -86,6 +86,38 @@ impl From<DirectoryOpsError> for InternalError {
     fn from(err: DirectoryOpsError) -> Self {
         StorageOpsError::from(err).into()
     }
+}
+
+pub(in crate::ops) fn records_to_input_entries(
+    entries: Vec<DirectoryEntryRecord>,
+) -> Vec<DirectoryEntryInput> {
+    entries
+        .into_iter()
+        .map(|entry| DirectoryEntryInput {
+            role: entry.role,
+            pid: entry.pid,
+        })
+        .collect()
+}
+
+fn input_entries_to_records(entries: Vec<DirectoryEntryInput>) -> Vec<DirectoryEntryRecord> {
+    entries
+        .into_iter()
+        .map(|entry| DirectoryEntryRecord {
+            role: entry.role,
+            pid: entry.pid,
+        })
+        .collect()
+}
+
+fn records_to_topology_entries(entries: &[DirectoryEntryRecord]) -> Vec<TopologyDirectoryEntry> {
+    entries
+        .iter()
+        .map(|entry| TopologyDirectoryEntry {
+            role: entry.role.clone(),
+            pid: entry.pid,
+        })
+        .collect()
 }
 
 pub(super) fn ensure_unique_roles(

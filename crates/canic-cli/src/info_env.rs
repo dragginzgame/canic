@@ -23,7 +23,7 @@ use canic_host::{
         InstalledFleetError, InstalledFleetRequest, InstalledFleetResolution,
         resolve_installed_fleet_from_root,
     },
-    registry::{RegistryEntry, RegistryParseError},
+    registry::RegistryEntry,
 };
 use clap::Command as ClapCommand;
 use serde::Serialize;
@@ -66,9 +66,6 @@ pub enum InfoEnvCommandError {
 
     #[error(transparent)]
     Json(#[from] serde_json::Error),
-
-    #[error(transparent)]
-    Registry(#[from] RegistryParseError),
 }
 
 /// Renderable installed-Fleet canister ID export payload.

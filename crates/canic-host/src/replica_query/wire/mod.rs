@@ -9,17 +9,9 @@ mod tests;
 
 use super::ReplicaQueryError;
 use candid::Decode;
-use canic_core::dto::{error::Error as CanicError, topology::SubnetRegistryResponse};
+use canic_core::dto::error::Error as CanicError;
 
 pub(super) fn decode_cycle_balance_response(bytes: &[u8]) -> Result<u128, ReplicaQueryError> {
     let result = Decode!(bytes, Result<u128, CanicError>).map_err(ReplicaQueryError::Candid)?;
-    result.map_err(ReplicaQueryError::Canister)
-}
-
-pub(super) fn decode_subnet_registry_response(
-    bytes: &[u8],
-) -> Result<SubnetRegistryResponse, ReplicaQueryError> {
-    let result = Decode!(bytes, Result<SubnetRegistryResponse, CanicError>)
-        .map_err(ReplicaQueryError::Candid)?;
     result.map_err(ReplicaQueryError::Canister)
 }

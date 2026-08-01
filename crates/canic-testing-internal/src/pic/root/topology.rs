@@ -2,23 +2,28 @@ use super::{
     InitializedRootTopology, RootBaselineMetadata, RootBaselineSpec, progress, progress_elapsed,
 };
 use candid::Principal;
-use canic::{dto::topology::SubnetRegistryResponse, ids::CanisterRole};
+use canic::{
+    Error,
+    dto::{
+        canister::CanisterInfo,
+        page::{Page, PageRequest},
+    },
+    ids::CanisterRole,
+    protocol,
+};
 use canic_control_plane::dto::template::WasmStoreOverviewResponse;
 use ic_testkit::pic::{Pic, PicBuilder, PicStartError};
-use std::{
-    collections::{BTreeSet, HashMap},
-    time::Instant,
-};
+use std::{collections::HashMap, time::Instant};
 
 use crate::pic::CanicPicExt;
 
-/// Install root, stage one ordinary release profile, resume bootstrap, and fetch the subnet map.
+/// Install root, stage one ordinary release profile, resume bootstrap, and fetch root children.
 ///
 /// # Panics
 ///
 /// Panics if PocketIC cannot be started after the configured retry attempts, if
 /// root install/bootstrap fails, if release staging or bootstrap resume fails,
-/// or if required root/child registry queries fail.
+/// or if required root child queries fail.
 #[must_use]
 pub fn setup_root_topology(
     spec: &RootBaselineSpec<'_>,
@@ -75,25 +80,29 @@ pub fn setup_root_topology(
         wait_for_bootstrap(spec, &pic, root_id);
         progress_elapsed(spec, "root bootstrap ready", root_wait_started_at);
 
-        progress(spec, "fetching Subnet Directory");
+        progress(spec, "fetching root child inventory");
         let directory_started_at = Instant::now();
-        let subnet_directory = fetch_subnet_directory(&pic, root_id);
-        progress_elapsed(spec, "fetched Subnet Directory", directory_started_at);
+        let root_children = fetch_root_children(&pic, root_id);
+        let component_canisters = root_children
+            .iter()
+            .filter(|entry| !entry.role.is_wasm_store())
+            .map(|entry| (entry.role.clone(), entry.pid))
+            .collect();
+        progress_elapsed(spec, "fetched root child inventory", directory_started_at);
 
         progress(spec, "waiting for child canisters ready");
         let child_wait_started_at = Instant::now();
-        wait_for_children_ready(spec, &pic, &subnet_directory);
+        wait_for_children_ready(spec, &pic, &component_canisters);
         progress_elapsed(spec, "child canisters ready", child_wait_started_at);
 
-        progress(spec, "fetching registered child snapshots");
+        progress(spec, "fetching root child snapshots");
         let snapshot_started_at = Instant::now();
-        let snapshot_pids = fetch_snapshot_pids(&pic, root_id);
+        let snapshot_pids = root_children
+            .iter()
+            .map(|entry| entry.pid)
+            .collect::<Vec<_>>();
         wait_for_snapshot_pids_ready(spec, &pic, &snapshot_pids);
-        progress_elapsed(
-            spec,
-            "registered child snapshots ready",
-            snapshot_started_at,
-        );
+        progress_elapsed(spec, "root child snapshots ready", snapshot_started_at);
 
         let managed_store_pids = fetch_managed_store_pids(&pic, root_id);
 
@@ -101,7 +110,7 @@ pub fn setup_root_topology(
             pic,
             metadata: RootBaselineMetadata {
                 root_id,
-                subnet_directory,
+                component_canisters,
                 snapshot_pids,
                 managed_store_pids,
             },
@@ -120,13 +129,10 @@ pub(super) fn wait_for_bootstrap(spec: &RootBaselineSpec<'_>, pic: &Pic, root_id
 pub(super) fn wait_for_children_ready(
     spec: &RootBaselineSpec<'_>,
     pic: &Pic,
-    subnet_directory: &HashMap<CanisterRole, Principal>,
+    component_canisters: &HashMap<CanisterRole, Principal>,
 ) {
     pic.wait_for_all_ready(
-        subnet_directory
-            .iter()
-            .filter(|(role, _)| !role.is_root())
-            .map(|(_, pid)| *pid),
+        component_canisters.values().copied(),
         spec.bootstrap_tick_limit,
         "root children bootstrap",
     );
@@ -168,38 +174,34 @@ const fn should_retry_root_pic_start(
         )
 }
 
-// Fetch the authoritative subnet registry from root and project it into the
-// role → principal map used by the root harness metadata.
-fn fetch_subnet_directory(pic: &Pic, root_id: Principal) -> HashMap<CanisterRole, Principal> {
-    let registry: Result<SubnetRegistryResponse, canic::Error> = pic
-        .query_call(root_id, canic::protocol::CANIC_SUBNET_REGISTRY, ())
-        .expect("query subnet registry transport");
+// Read every direct root child through the maintained bounded child view.
+fn fetch_root_children(pic: &Pic, root_id: Principal) -> Vec<CanisterInfo> {
+    const PAGE_LIMIT: u64 = 1_000;
 
-    let registry = registry.expect("query subnet registry application");
-
-    registry
-        .0
-        .into_iter()
-        .filter(|entry| !entry.role.is_root() && !entry.role.is_wasm_store())
-        .map(|entry| (entry.role, entry.pid))
-        .collect()
-}
-
-// Fetch every non-root PID in root's registry so cached baselines include replicas.
-fn fetch_snapshot_pids(pic: &Pic, root_id: Principal) -> Vec<Principal> {
-    let registry: Result<SubnetRegistryResponse, canic::Error> = pic
-        .query_call(root_id, canic::protocol::CANIC_SUBNET_REGISTRY, ())
-        .expect("query subnet registry transport");
-
-    registry
-        .expect("query subnet registry application")
-        .0
-        .into_iter()
-        .filter(|entry| !entry.role.is_root())
-        .map(|entry| entry.pid)
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect()
+    let mut entries = Vec::new();
+    let mut offset = 0;
+    loop {
+        let page: Result<Page<CanisterInfo>, Error> = pic
+            .query_call(
+                root_id,
+                protocol::CANIC_CANISTER_CHILDREN,
+                (PageRequest {
+                    limit: PAGE_LIMIT,
+                    offset,
+                },),
+            )
+            .expect("query root children transport");
+        let page = page.expect("query root children application");
+        assert!(
+            !page.entries.is_empty() || offset >= page.total,
+            "root child pagination made no progress at offset {offset}"
+        );
+        entries.extend(page.entries);
+        offset = u64::try_from(entries.len()).expect("root child inventory exceeds u64");
+        if offset >= page.total {
+            return entries;
+        }
+    }
 }
 
 // Fetch the currently tracked managed wasm_store canister ids from root-owned state.

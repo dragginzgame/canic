@@ -6,10 +6,10 @@ Date: 2026-08-01
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.78`.
-- Latest published release: `v0.100.78` at
-  `69a4bf1d1cc3069f49872e535d24067974680020`.
-- Open patch draft: `0.100.79`; no package-version change has been authorized.
+- Workspace package version: `0.100.79`.
+- Latest published release: `v0.100.79` at
+  `cae39e5d80291404cb4d2fff5f9a8dd00d4c3017`.
+- Open patch draft: `0.100.80`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -1016,20 +1016,29 @@ decoder remains in maintained source. The same release removes one-field host
 Subnet Registry and peer-provisioning policy result wrappers; their callers
 now consume the existing Registry-entry vector and approved grant directly.
 
-Open 0.100.79 hard-cuts the obsolete public Fleet/Subnet Directory query
+Released 0.100.79 hard-cuts the obsolete public Fleet/Subnet Directory query
 family: its Candid endpoints, Rust facade, protocol constants, page DTOs,
 query workflow, projection view and endpoint-only build flag are absent rather
 than aliased. The protected Fleet Directory activation authority and each
 authenticated Fleet Subnet Root's Component Directory page remain the
-maintained runtime boundaries. The same draft removes redundant internal CLI
+maintained runtime boundaries. The same release removes redundant internal CLI
 wrappers without changing command behavior.
+
+Open 0.100.80 hard-cuts the obsolete public Subnet Registry query family and
+its host, backup, audit and testing transports with no alias. Backup execution
+fails closed until Coordinator-backed Component Registry topology discovery
+can revalidate its plan. Root baseline discovery uses the bounded direct-child
+view, while the still-live internal Subnet Registry/Directory storage and
+cascade authorities remain private for the next replacement slice. The same
+draft removes stranded Directory snapshot and mapper layers without changing
+prepared cascade validation.
 
 ## Next Action
 
-Remove the false public `SubnetRegistry` boundary, then hard-cut the remaining
-internal `SubnetRegistry`/`SubnetDirectory` storage and cascade layer to the
-root-owned Component Registry/Directory authority. Complete the reinstall-only
-decoder audit, then run
+Replace the remaining internal `SubnetRegistry`/`SubnetDirectory` consumers
+across authentication, RPC, placement, lifecycle and cascade with root-owned
+Component Registry/Directory authority, then delete their stable storage and
+cascade schemas. Complete the reinstall-only decoder audit, then run
 preparation and execution as separate processes against one explicitly
 selected disposable real-network root. Verify the surviving Coordinator
 terminal receipt and exact replay before closing 0.100 against the final

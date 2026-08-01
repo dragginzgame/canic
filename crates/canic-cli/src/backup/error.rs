@@ -11,7 +11,6 @@ use canic_backup::{
 };
 use canic_host::{
     icp::IcpCommandError, icp_config::IcpConfigError, installed_fleet::InstalledFleetError,
-    registry::RegistryParseError, replica_query::ReplicaQueryError,
 };
 use thiserror::Error as ThisError;
 
@@ -60,9 +59,6 @@ pub enum BackupCommandError {
     #[error(transparent)]
     InstalledFleet(#[from] InstalledFleetError),
 
-    #[error("local replica query failed: {0}")]
-    ReplicaQuery(#[source] ReplicaQueryError),
-
     #[error("failed to read Canic Fleet state: {0}")]
     IcpRoot(#[source] IcpConfigError),
 
@@ -77,9 +73,6 @@ pub enum BackupCommandError {
 
     #[error(transparent)]
     Json(#[from] serde_json::Error),
-
-    #[error(transparent)]
-    Registry(#[from] RegistryParseError),
 
     #[error(transparent)]
     Persistence(#[from] PersistenceError),

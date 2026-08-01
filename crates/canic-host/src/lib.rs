@@ -37,7 +37,6 @@ pub mod release_set;
 pub mod replica_query;
 pub mod role_contract;
 pub mod state_manifest;
-pub mod subnet_registry;
 pub mod table;
 #[cfg(test)]
 mod test_support;

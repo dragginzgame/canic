@@ -5,8 +5,6 @@
 //! Boundary: maps runner preflight and snapshot operations onto host ICP commands.
 
 mod errors;
-mod preflight;
-mod registry;
 #[cfg(test)]
 mod tests;
 
@@ -23,24 +21,19 @@ use canic_host::icp::{IcpCanisterStatusReport, IcpCli};
 use std::path::{Path, PathBuf};
 
 use errors::runner_icp_error;
-use preflight::build_preflight_receipts;
 
 ///
 /// BackupIcpRunnerExecutor
 ///
 
 pub(super) struct BackupIcpRunnerExecutor {
-    options: BackupCreateOptions,
-    icp_root: PathBuf,
     icp: IcpCli,
 }
 
 impl BackupIcpRunnerExecutor {
     pub(super) fn new(options: &BackupCreateOptions, icp_root: PathBuf) -> Self {
         Self {
-            options: options.clone(),
             icp: IcpCli::new(&options.icp, Some(options.environment.clone())).with_cwd(&icp_root),
-            icp_root,
         }
     }
 
@@ -54,20 +47,12 @@ impl BackupIcpRunnerExecutor {
 impl BackupRunnerExecutor for BackupIcpRunnerExecutor {
     fn preflight_receipts(
         &mut self,
-        plan: &BackupPlan,
-        preflight_id: &str,
-        validated_at: &str,
-        expires_at: &str,
+        _plan: &BackupPlan,
+        _preflight_id: &str,
+        _validated_at: &str,
+        _expires_at: &str,
     ) -> Result<BackupExecutionPreflightReceipts, BackupRunnerCommandError> {
-        build_preflight_receipts(
-            &self.icp,
-            &self.options,
-            &self.icp_root,
-            plan,
-            preflight_id,
-            validated_at,
-            expires_at,
-        )
+        Err(component_topology_preflight_unavailable())
     }
 
     fn canister_status(
@@ -146,6 +131,13 @@ impl BackupRunnerExecutor for BackupIcpRunnerExecutor {
             .snapshot_download(canister_id, snapshot_id, artifact_path)
             .map_err(runner_icp_error)
     }
+}
+
+fn component_topology_preflight_unavailable() -> BackupRunnerCommandError {
+    BackupRunnerCommandError::failed(
+        "preflight",
+        "Coordinator-backed Component Registry preflight is not implemented",
+    )
 }
 
 fn runner_canister_status(

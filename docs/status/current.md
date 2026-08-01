@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.78`.
-- The latest published release is `v0.100.78` at
-  `69a4bf1d1cc3069f49872e535d24067974680020`.
-- Open `0.100.79` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.79`.
+- The latest published release is `v0.100.79` at
+  `cae39e5d80291404cb4d2fff5f9a8dd00d4c3017`.
+- Open `0.100.80` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -658,10 +658,14 @@ Historical detail is archived at:
   Fleet Subnet Root directly, with no old alias or transition decoder. The
   same release removes one-field host Registry-query and peer-provisioning
   policy result wrappers.
-- Open `0.100.79` hard-cuts the obsolete public Fleet/Subnet Directory query,
+- Released `0.100.79` hard-cuts the obsolete public Fleet/Subnet Directory query,
   facade, protocol, page-response and workflow family with no compatibility
   alias. It also removes redundant test-only parser aliases and one-field
   cycles-command and status-inventory wrappers without changing CLI behavior.
+- Open `0.100.80` hard-cuts the public Subnet Registry query and its
+  facade/DTO/workflow plus host, backup and audit transports. It also removes
+  obsolete Directory snapshot methods and unit mapper types while retaining
+  narrow storage-ops conversion and prepared cascade commit boundaries.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -2292,13 +2296,21 @@ surfaces. The old generic field, predicate and package identity are absent
 rather than decoded or aliased. One-field host Registry-query and
 peer-provisioning policy result wrappers are also removed; their callers
 consume the existing vector and approved grant directly.
-Open `0.100.79` removes the old public Fleet/Subnet Directory queries and their
+Released `0.100.79` removes the old public Fleet/Subnet Directory queries and their
 Rust facade, protocol constants, page DTOs and now-dead query/projection path.
 The maintained runtime keeps protected Fleet Directory activation authority
-and authenticated root-served Component Directory pages. The same draft
+and authenticated root-served Component Directory pages. The same release
 removes redundant test-only parser aliases and one-field cycles-command and
 status-inventory wrappers while retaining typed wallet dispatch and all CLI
 behavior.
+Open `0.100.80` removes the public `canic_subnet_registry` endpoint, facade,
+protocol constant, response DTO/query projection and host ICP/replica decoder.
+The obsolete backup preflight fails closed pending Coordinator-backed
+Component Registry topology discovery; root test setup uses the bounded child
+view instead. The same draft removes obsolete Directory snapshot-argument
+methods and three unit mapper types. Three narrow conversion helpers remain in
+storage ops, and the validated prepared-import boundary still protects cascade
+application.
 
 ## Historical Release Detail
 
