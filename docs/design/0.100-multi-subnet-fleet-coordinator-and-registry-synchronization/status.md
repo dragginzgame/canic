@@ -6,10 +6,10 @@ Date: 2026-08-01
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.77`.
-- Latest published release: `v0.100.77` at
-  `b92255a006283f10c3b071afc6b7cae0a5dfac59`.
-- Open patch draft: `0.100.78`; no package-version change has been authorized.
+- Workspace package version: `0.100.78`.
+- Latest published release: `v0.100.78` at
+  `69a4bf1d1cc3069f49872e535d24067974680020`.
+- Open patch draft: `0.100.79`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -1006,21 +1006,30 @@ Component-to-root journey, exact retry, absence of parentage and exhausted
 grant rejection. The same release contains role-owned control-plane compilation
 cleanup recorded in the release changelog.
 
-Open 0.100.78 hard-cuts the remaining generic Fleet Root contract to Fleet
+Released 0.100.78 hard-cuts the remaining generic Fleet Root contract to Fleet
 Subnet Root. Environment/stable/Candid state now uses
 `fleet_subnet_root_pid`; the endpoint access DSL uses
 `env::is_fleet_subnet_root()`; topology validation, the maintained demo
 package, CLI wording and runtime errors use the same exact term. No old field,
 predicate, enum variant, accessor, package identity, alias or transition
-decoder remains in maintained source. The same draft removes one-field host
+decoder remains in maintained source. The same release removes one-field host
 Subnet Registry and peer-provisioning policy result wrappers; their callers
 now consume the existing Registry-entry vector and approved grant directly.
 
+Open 0.100.79 hard-cuts the obsolete public Fleet/Subnet Directory query
+family: its Candid endpoints, Rust facade, protocol constants, page DTOs,
+query workflow, projection view and endpoint-only build flag are absent rather
+than aliased. The protected Fleet Directory activation authority and each
+authenticated Fleet Subnet Root's Component Directory page remain the
+maintained runtime boundaries. The same draft removes redundant internal CLI
+wrappers without changing command behavior.
+
 ## Next Action
 
-Hard-cut the remaining local `SubnetRegistry`/`SubnetDirectory` layer to the
-root-owned Component Registry/Directory authority and complete the
-reinstall-only decoder audit, then run
+Remove the false public `SubnetRegistry` boundary, then hard-cut the remaining
+internal `SubnetRegistry`/`SubnetDirectory` storage and cascade layer to the
+root-owned Component Registry/Directory authority. Complete the reinstall-only
+decoder audit, then run
 preparation and execution as separate processes against one explicitly
 selected disposable real-network root. Verify the surviving Coordinator
 terminal receipt and exact replay before closing 0.100 against the final

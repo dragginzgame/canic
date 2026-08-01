@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.79` hard-cuts the obsolete public Fleet/Subnet Directory query family
+  and removes redundant CLI wrappers, retaining the protected Fleet/Component
+  Directory authorities and all CLI behavior.
+
 - `0.100.78` hard-cuts generic Fleet Root terminology and two redundant Rust
   result wrappers from maintained APIs, with no pre-1.0 aliases and no CLI or
   runtime behavior change.

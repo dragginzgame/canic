@@ -4,19 +4,7 @@
 //! Does not own: stable records, endpoint DTOs, or topology decisions.
 //! Boundary: storage ops map persisted topology state into these views before workflow use.
 
-use crate::{cdk::types::Principal, ids::CanisterRole};
-
-///
-/// DirectoryEntryView
-///
-/// Internal read-only projection of one Fleet or Subnet Directory entry.
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DirectoryEntryView {
-    pub role: CanisterRole,
-    pub pid: Principal,
-}
+use crate::cdk::types::Principal;
 
 ///
 /// RegisteredCanisterView

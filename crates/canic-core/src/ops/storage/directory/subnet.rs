@@ -2,7 +2,7 @@
 //!
 //! Responsibility: provide deterministic access to the Subnet Directory stable record.
 //! Does not own: stable schema, topology workflow, or endpoint DTOs.
-//! Boundary: storage ops facade used by topology workflows and queries.
+//! Boundary: storage ops facade used by topology workflows.
 
 use crate::{
     InternalError,
@@ -17,7 +17,6 @@ use crate::{
         },
     },
     storage::stable::directory::subnet::{SubnetDirectory, SubnetDirectoryData},
-    view::topology::DirectoryEntryView,
 };
 
 ///
@@ -53,11 +52,6 @@ impl SubnetDirectoryOps {
     #[must_use]
     pub(crate) fn data() -> SubnetDirectoryData {
         SubnetDirectory::export()
-    }
-
-    #[must_use]
-    pub fn entry_projections() -> Vec<DirectoryEntryView> {
-        DirectoryEntryMapper::records_to_projections(SubnetDirectory::export().entries)
     }
 
     #[must_use]

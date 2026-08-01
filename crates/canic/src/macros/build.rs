@@ -131,7 +131,6 @@ macro_rules! __canic_build_internal {
         println!("cargo:rustc-check-cfg=cfg(canic_metrics_storage)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_auth_attestation)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_state)");
-        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_directory)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_children)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_placement)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_nonroot_sync_topology)");
@@ -139,7 +138,6 @@ macro_rules! __canic_build_internal {
             // Default builds ship the slimmer demo/reference surface; internal
             // observability and topology test endpoints opt back in explicitly.
             println!("cargo:rustc-cfg=canic_disable_bundle_observability_env");
-            println!("cargo:rustc-cfg=canic_disable_bundle_topology_directory");
         }
         if !$crate::__build::role_normal_dependency_metrics_enabled(std::path::Path::new(
             &manifest_dir,

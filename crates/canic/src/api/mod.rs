@@ -46,12 +46,6 @@ pub mod canister {
         pub use crate::__internal::core::api::topology::children::CanisterChildrenApi;
     }
 
-    pub mod directory {
-        pub use crate::__internal::core::api::topology::directory::{
-            FleetDirectoryApi, SubnetDirectoryApi,
-        };
-    }
-
     pub mod registry {
         pub use crate::__internal::core::api::topology::registry::SubnetRegistryApi;
     }

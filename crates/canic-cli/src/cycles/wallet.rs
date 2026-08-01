@@ -19,11 +19,6 @@ use canic_host::{
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, path::Path};
 
-#[derive(Clone, Copy)]
-struct WalletCommand {
-    kind: WalletCommandKind,
-}
-
 ///
 /// WalletCommandKind
 ///
@@ -60,22 +55,12 @@ impl WalletCommandKind {
     }
 }
 
-const WALLET_COMMANDS: &[WalletCommand] = &[
-    WalletCommand {
-        kind: WalletCommandKind::Balance,
-    },
-    WalletCommand {
-        kind: WalletCommandKind::Convert,
-    },
-    WalletCommand {
-        kind: WalletCommandKind::Mint,
-    },
-    WalletCommand {
-        kind: WalletCommandKind::Transfer,
-    },
-    WalletCommand {
-        kind: WalletCommandKind::Topup,
-    },
+const WALLET_COMMANDS: &[WalletCommandKind] = &[
+    WalletCommandKind::Balance,
+    WalletCommandKind::Convert,
+    WalletCommandKind::Mint,
+    WalletCommandKind::Transfer,
+    WalletCommandKind::Topup,
 ];
 
 const AMOUNT_ARG: &str = "amount";
@@ -228,16 +213,16 @@ pub(super) fn run_cycles_command(
 pub(super) fn cycles_command() -> ClapCommand {
     WALLET_COMMANDS.iter().fold(
         ClapCommand::new("cycles").bin_name("canic cycles"),
-        |command, spec| command.subcommand(wallet_passthrough_command(*spec)),
+        |command, kind| {
+            command.subcommand(passthrough_subcommand(
+                ClapCommand::new(kind.label()).disable_help_flag(true),
+            ))
+        },
     )
 }
 
 pub(super) fn cycles_usage() -> String {
     CYCLES_USAGE.to_string()
-}
-
-fn wallet_passthrough_command(spec: WalletCommand) -> ClapCommand {
-    passthrough_subcommand(ClapCommand::new(spec.kind.label()).disable_help_flag(true))
 }
 
 impl BalanceOptions {

@@ -136,7 +136,7 @@ maximum_instances = 1
     .expect("write config");
 
     let inventory = load_status_apps(&root, std::slice::from_ref(&config));
-    let row = inventory.rows.first().expect("status App row");
+    let row = inventory.first().expect("status App row");
 
     fs::remove_dir_all(root).expect("remove temp root");
     assert_eq!(row.app, "toko");

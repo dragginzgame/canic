@@ -164,14 +164,6 @@ impl DeleteAppOptions {
 }
 
 impl AppCheckOptions {
-    #[cfg(test)]
-    pub(super) fn parse_test<I>(args: I) -> Result<Self, AppCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        Self::parse(args)
-    }
-
     pub(super) fn parse<I>(args: I) -> Result<Self, AppCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -186,14 +178,6 @@ impl AppCheckOptions {
 }
 
 impl RoleListOptions {
-    #[cfg(test)]
-    pub(super) fn parse_test<I>(args: I) -> Result<Self, AppCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        Self::parse(args)
-    }
-
     pub(super) fn parse<I>(args: I) -> Result<Self, AppCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -208,14 +192,6 @@ impl RoleListOptions {
 }
 
 impl RoleInspectOptions {
-    #[cfg(test)]
-    pub(super) fn parse_test<I>(args: I) -> Result<Self, AppCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        Self::parse(args)
-    }
-
     pub(super) fn parse<I>(args: I) -> Result<Self, AppCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -231,14 +207,6 @@ impl RoleInspectOptions {
 }
 
 impl RoleDeclareOptions {
-    #[cfg(test)]
-    pub(super) fn parse_test<I>(args: I) -> Result<Self, AppCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        Self::parse(args)
-    }
-
     pub(super) fn parse<I>(args: I) -> Result<Self, AppCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -256,14 +224,6 @@ impl RoleDeclareOptions {
 }
 
 impl RoleAttachOptions {
-    #[cfg(test)]
-    pub(super) fn parse_test<I>(args: I) -> Result<Self, AppCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        Self::parse(args)
-    }
-
     pub(super) fn parse<I>(args: I) -> Result<Self, AppCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -282,14 +242,6 @@ impl RoleAttachOptions {
 }
 
 impl RoleRenameOptions {
-    #[cfg(test)]
-    pub(super) fn parse_test<I>(args: I) -> Result<Self, AppCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        Self::parse(args)
-    }
-
     pub(super) fn parse<I>(args: I) -> Result<Self, AppCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -307,14 +259,6 @@ impl RoleRenameOptions {
 }
 
 impl AdoptionReportOptions {
-    #[cfg(test)]
-    pub(super) fn parse_test<I>(args: I) -> Result<Self, AppCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        Self::parse(args)
-    }
-
     pub(super) fn parse<I>(args: I) -> Result<Self, AppCommandError>
     where
         I: IntoIterator<Item = OsString>,

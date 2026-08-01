@@ -5,18 +5,13 @@
 //! Boundary: storage ops conversion layer for topology Directory snapshots.
 
 use crate::{
-    dto::{
-        page::Page,
-        topology::{
-            DirectoryEntryInput, DirectoryEntryResponse, DirectoryProvenance, FleetDirectoryInput,
-            SubnetDirectoryInput,
-        },
+    dto::topology::{
+        DirectoryEntryInput, DirectoryProvenance, FleetDirectoryInput, SubnetDirectoryInput,
     },
     model::topology::TopologyDirectoryEntry,
     storage::stable::directory::{
         DirectoryEntryRecord, fleet::FleetDirectoryData, subnet::SubnetDirectoryData,
     },
-    view::topology::DirectoryEntryView,
 };
 
 // -----------------------------------------------------------------------------
@@ -111,34 +106,6 @@ pub struct DirectoryEntryMapper;
 
 impl DirectoryEntryMapper {
     #[must_use]
-    pub fn records_to_projections(entries: Vec<DirectoryEntryRecord>) -> Vec<DirectoryEntryView> {
-        entries
-            .into_iter()
-            .map(|entry| DirectoryEntryView {
-                role: entry.role,
-                pid: entry.pid,
-            })
-            .collect()
-    }
-
-    #[must_use]
-    pub fn projection_page_to_response(
-        page: Page<DirectoryEntryView>,
-    ) -> Page<DirectoryEntryResponse> {
-        Page {
-            entries: page
-                .entries
-                .into_iter()
-                .map(|entry| DirectoryEntryResponse {
-                    role: entry.role,
-                    pid: entry.pid,
-                })
-                .collect(),
-            total: page.total,
-        }
-    }
-
-    #[must_use]
     pub fn records_to_topology_entries(
         entries: &[DirectoryEntryRecord],
     ) -> Vec<TopologyDirectoryEntry> {
@@ -149,31 +116,5 @@ impl DirectoryEntryMapper {
                 pid: entry.pid,
             })
             .collect()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{cdk::types::Principal, ids::CanisterRole};
-
-    #[test]
-    fn records_project_before_response_mapping() {
-        let pid = Principal::from_slice(&[1]);
-        let projections =
-            DirectoryEntryMapper::records_to_projections(vec![DirectoryEntryRecord {
-                role: CanisterRole::new("app"),
-                pid,
-            }]);
-
-        let response = DirectoryEntryMapper::projection_page_to_response(Page {
-            entries: projections,
-            total: 1,
-        });
-
-        assert_eq!(response.total, 1);
-        assert_eq!(response.entries.len(), 1);
-        assert_eq!(response.entries[0].role, CanisterRole::new("app"));
-        assert_eq!(response.entries[0].pid, pid);
     }
 }

@@ -90,17 +90,9 @@ fn candid_type_env<T: candid::CandidType>() -> String {
 }
 
 #[test]
-fn fleet_state_and_cascade_candid_shapes_use_the_current_contract() {
+fn fleet_state_and_internal_cascade_candid_shapes_use_the_current_contract() {
     assert_eq!(canic::protocol::CANIC_FLEET_ADMIN, "canic_fleet_admin");
     assert_eq!(canic::protocol::CANIC_FLEET_STATE, "canic_fleet_state");
-    assert_eq!(
-        canic::protocol::CANIC_FLEET_DIRECTORY,
-        "canic_fleet_directory"
-    );
-    assert_eq!(
-        canic::protocol::CANIC_SUBNET_DIRECTORY,
-        "canic_subnet_directory"
-    );
 
     let command_env = candid_type_env::<FleetCommand>();
     assert!(command_env.contains("FleetCommand"));
