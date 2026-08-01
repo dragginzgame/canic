@@ -10,16 +10,11 @@ pub const DEFAULT_UPDATE_INGRESS_MAX_BYTES: usize = 16 * 1024;
 
 static UPDATE_LIMITS: Mutex<Vec<UpdatePayloadLimit>> = Mutex::new(Vec::new());
 
-///
-/// UpdatePayloadLimit
-///
-/// Payload byte limit registered for one update method.
-///
-
+// Payload byte limit registered for one update method.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct UpdatePayloadLimit {
-    pub method: &'static str,
-    pub max_bytes: usize,
+struct UpdatePayloadLimit {
+    method: &'static str,
+    max_bytes: usize,
 }
 
 /// Register one update endpoint payload limit.
@@ -65,14 +60,9 @@ pub fn inspect_update_message() {
     }
 }
 
-///
-/// DuplicateUpdatePayloadLimit
-///
-/// Error returned when more than one limit is registered for the same method.
-///
-
+// Error returned when more than one limit is registered for the same method.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct DuplicateUpdatePayloadLimit;
+struct DuplicateUpdatePayloadLimit;
 
 // Return one unique limit for a method, treating duplicate metadata as invalid.
 fn unique_limit_for(
@@ -89,6 +79,10 @@ fn unique_limit_for(
 
     Ok(found)
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

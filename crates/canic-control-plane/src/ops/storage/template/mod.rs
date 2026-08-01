@@ -4,12 +4,13 @@ mod gc;
 pub use chunked::TemplateChunkedOps;
 pub use gc::WasmStoreGcOps;
 
-use crate::ids::TemplateChunkKey;
+#[cfg(feature = "wasm-store-canister")]
+use crate::schema::WasmStoreConfig;
 use crate::{
     dto::template::{
         TemplateManifestInput, TemplateManifestResponse, WasmStoreCatalogEntryResponse,
     },
-    ids::{TemplateId, TemplateManifestState, TemplateReleaseKey},
+    ids::{TemplateChunkKey, TemplateId, TemplateManifestState, TemplateReleaseKey},
     storage::stable::template::{TemplateManifestRecord, TemplateManifestStateStore},
 };
 #[cfg(feature = "root-control-plane")]
@@ -146,6 +147,17 @@ pub struct WasmStoreLimits {
     pub max_store_bytes: u64,
     pub max_templates: Option<u32>,
     pub max_template_versions_per_template: Option<u16>,
+}
+
+#[cfg(feature = "wasm-store-canister")]
+impl From<&WasmStoreConfig> for WasmStoreLimits {
+    fn from(config: &WasmStoreConfig) -> Self {
+        Self {
+            max_store_bytes: config.max_store_bytes(),
+            max_templates: config.max_templates(),
+            max_template_versions_per_template: config.max_template_versions_per_template(),
+        }
+    }
 }
 
 ///
@@ -426,6 +438,10 @@ fn projected_template_versions_for_manifests(
 
     template_versions
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

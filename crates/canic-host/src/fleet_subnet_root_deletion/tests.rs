@@ -192,6 +192,48 @@ fn full_execution_prepares_stops_deletes_and_attests_exact_absence() {
 }
 
 #[test]
+fn preparation_only_retains_execution_intent_without_management_effects() {
+    let mut adapter = ScriptedAdapter::with_observations([
+        present(CanisterLifecycle::Running, 500_000_000_000),
+        present(CanisterLifecycle::Running, 100_000_000_000),
+    ]);
+
+    let prepared = resolve_execution_intent(&mut adapter, coordinator(), root(), OPERATION_ID)
+        .expect("prepare root deletion execution intent");
+
+    assert_eq!(prepared, execution());
+    assert_eq!(
+        adapter.events,
+        [
+            "executor_identity",
+            "execution_status",
+            "preparation_status",
+            "observe",
+            "store_deletion_status",
+            "prepare",
+            "observe",
+            "begin_execution",
+        ]
+    );
+    assert!(!adapter.events.contains(&"stop"));
+    assert!(!adapter.events.contains(&"delete"));
+    assert!(!adapter.events.contains(&"complete"));
+}
+
+#[test]
+fn repeated_preparation_returns_retained_execution_without_root_calls() {
+    let expected = execution();
+    let mut adapter = ScriptedAdapter::with_observations([]);
+    adapter.execution = Some(expected.clone());
+
+    let prepared = resolve_execution_intent(&mut adapter, coordinator(), root(), OPERATION_ID)
+        .expect("return retained root deletion execution intent");
+
+    assert_eq!(prepared, expected);
+    assert_eq!(adapter.events, ["executor_identity", "execution_status"]);
+}
+
+#[test]
 fn durable_execution_resumes_from_stopped_without_replaying_preparation_or_stop() {
     let mut adapter = ScriptedAdapter::with_observations([
         present(CanisterLifecycle::Stopped, 100_000_000_000),

@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.76` splits physical Fleet Subnet Root deletion into explicit durable
+  preparation and destructive execution phases, with a guarded maintainer
+  runner for proving fresh-process recovery from Coordinator authority; it
+  also removes stale Store-config and core conversion wrappers without
+  changing maintained behavior.
+
 - `0.100.75` adds the resumable host executor for physical Fleet Subnet Root
   deletion, reconciling exact management status through stop, no-shim delete
   and typed absence before the surviving Coordinator records completion, and

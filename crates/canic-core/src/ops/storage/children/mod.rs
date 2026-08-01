@@ -4,15 +4,13 @@
 //! Does not own: topology cascade workflow, subnet registry truth, or endpoint DTOs.
 //! Boundary: storage ops facade over child cache records.
 
-mod mapper;
-
 use crate::{
     dto::canister::CanisterInfo,
     ops::{
         ic::IcOps,
         prelude::*,
         runtime::env::EnvOps,
-        storage::{children::mapper::CanisterRecordMapper, registry::subnet::SubnetRegistryOps},
+        storage::{canister::record_to_info, registry::subnet::SubnetRegistryOps},
     },
     storage::{
         canister::{CanisterEntryRecord, CanisterRecord},
@@ -64,7 +62,7 @@ impl CanisterChildrenOps {
     pub fn infos() -> Vec<CanisterInfo> {
         Self::records()
             .into_iter()
-            .map(|entry| CanisterRecordMapper::record_to_response(entry.pid, entry.record))
+            .map(|entry| record_to_info(entry.pid, entry.record))
             .collect()
     }
 

@@ -7,12 +7,8 @@
 use crate::{InternalError, InternalErrorOrigin};
 use std::cell::Cell;
 
-///
-/// TopologyState
-///
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TopologyState {
+enum TopologyState {
     Stable,
     Mutating,
 }

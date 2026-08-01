@@ -40,8 +40,8 @@ use thiserror::Error as ThisError;
 
 const SECONDS_PER_DAY: u128 = 86_400;
 
-/// Exact host and durable Canister authority for one root-deletion execution.
-pub struct ExecuteFleetSubnetRootDeletionRequest<'a> {
+/// Exact host and durable Canister authority for one root-deletion operation.
+pub struct FleetSubnetRootDeletionHostRequest<'a> {
     pub icp_executable: &'a str,
     pub icp_root: &'a Path,
     pub environment: &'a str,
@@ -192,19 +192,10 @@ struct IcpFleetSubnetRootDeletionAdapter {
 
 /// Execute or resume one physical Fleet Subnet Root deletion from durable remote authority.
 pub fn execute_fleet_subnet_root_deletion(
-    request: ExecuteFleetSubnetRootDeletionRequest<'_>,
+    request: FleetSubnetRootDeletionHostRequest<'_>,
 ) -> Result<FleetSubnetRootDeletionResponse, FleetSubnetRootDeletionError> {
     validate_request(&request)?;
-    let icp = IcpCli::new(
-        request.icp_executable,
-        Some(request.environment.to_string()),
-    )
-    .with_cwd(request.icp_root)
-    .with_local_replica(request.local_replica.cloned());
-    let mut adapter = IcpFleetSubnetRootDeletionAdapter {
-        icp,
-        coordinator: request.coordinator,
-    };
+    let mut adapter = icp_adapter(&request);
     execute_with_adapter(
         &mut adapter,
         request.coordinator,
@@ -213,8 +204,41 @@ pub fn execute_fleet_subnet_root_deletion(
     )
 }
 
+/// Prepare and retain the Coordinator execution intent without stopping the root.
+///
+/// A later `execute_fleet_subnet_root_deletion` call resumes exclusively from
+/// this durable remote authority. Repeating preparation returns the same
+/// execution intent without replaying a root call or issuing a management-canister effect.
+pub fn prepare_fleet_subnet_root_deletion_execution(
+    request: FleetSubnetRootDeletionHostRequest<'_>,
+) -> Result<FleetSubnetRootDeletionExecutionResponse, FleetSubnetRootDeletionError> {
+    validate_request(&request)?;
+    let mut adapter = icp_adapter(&request);
+    resolve_execution_intent(
+        &mut adapter,
+        request.coordinator,
+        request.fleet_subnet_root,
+        request.operation_id,
+    )
+}
+
+fn icp_adapter(
+    request: &FleetSubnetRootDeletionHostRequest<'_>,
+) -> IcpFleetSubnetRootDeletionAdapter {
+    let icp = IcpCli::new(
+        request.icp_executable,
+        Some(request.environment.to_string()),
+    )
+    .with_cwd(request.icp_root)
+    .with_local_replica(request.local_replica.cloned());
+    IcpFleetSubnetRootDeletionAdapter {
+        icp,
+        coordinator: request.coordinator,
+    }
+}
+
 fn validate_request(
-    request: &ExecuteFleetSubnetRootDeletionRequest<'_>,
+    request: &FleetSubnetRootDeletionHostRequest<'_>,
 ) -> Result<(), FleetSubnetRootDeletionError> {
     if request.icp_executable.trim().is_empty() || request.environment.trim().is_empty() {
         return Err(FleetSubnetRootDeletionError::InvalidRequest(
@@ -256,8 +280,21 @@ fn execute_with_adapter(
         return Ok(terminal);
     }
 
-    let executor_identity = adapter.executor_identity()?;
+    let execution = resolve_execution_intent(adapter, coordinator, root, operation_id)?;
+    drive_management_deletion(adapter, coordinator, root, operation_id, execution)
+}
 
+fn resolve_execution_intent(
+    adapter: &mut impl FleetSubnetRootDeletionAdapter,
+    coordinator: Principal,
+    root: Principal,
+    operation_id: [u8; 32],
+) -> Result<FleetSubnetRootDeletionExecutionResponse, FleetSubnetRootDeletionError> {
+    let executor_identity = adapter.executor_identity()?;
+    let status_request = FleetSubnetRootDeletionStatusRequest {
+        operation_id,
+        fleet_subnet_root: root,
+    };
     let execution = match adapter.execution_status(status_request)? {
         Some(execution) => {
             validate_execution_identity(&execution, root, operation_id)?;
@@ -271,7 +308,7 @@ fn execute_with_adapter(
             observed: executor_identity,
         });
     }
-    drive_management_deletion(adapter, coordinator, root, operation_id, execution)
+    Ok(execution)
 }
 
 fn prepare_execution(

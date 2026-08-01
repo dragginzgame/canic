@@ -6,8 +6,11 @@
 
 use crate::{
     InternalError,
-    dto::topology::SubnetRegistryResponse,
-    ops::{prelude::*, storage::StorageOpsError},
+    dto::topology::{SubnetRegistryEntry, SubnetRegistryResponse},
+    ops::{
+        prelude::*,
+        storage::{StorageOpsError, canister::record_to_info},
+    },
     storage::{
         canister::{CanisterEntryRecord, CanisterRecord},
         stable::registry::subnet::{SubnetRegistry, SubnetRegistryData},
@@ -284,8 +287,12 @@ impl SubnetRegistryOps {
         let mut entries = Vec::with_capacity(SubnetRegistry::len());
 
         SubnetRegistry::for_each(|pid, record| {
-            entries
-                .push(super::mapper::SubnetRegistryResponseMapper::record_to_response(pid, record));
+            let record = record_to_info(pid, record);
+            entries.push(SubnetRegistryEntry {
+                pid,
+                role: record.role.clone(),
+                record,
+            });
         });
 
         SubnetRegistryResponse(entries)
