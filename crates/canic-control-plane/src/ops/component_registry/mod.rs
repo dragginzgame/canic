@@ -161,6 +161,18 @@ pub struct ComponentSpecInstanceCounts {
 }
 
 ///
+/// PeerComponentInstanceCounts
+///
+/// Root-local live target counts attributed to one exact requester Component.
+///
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct PeerComponentInstanceCounts {
+    pub reserved: u32,
+    pub committed: u32,
+}
+
+///
 /// RootComponentInitialInventoryPlan
 ///
 /// Exact sealed initial Component operations consumed by root activation workflow.
@@ -2636,6 +2648,28 @@ impl ComponentRegistryOps {
                 InternalError::invariant(
                     canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
                     "root committed Component count exceeds u32",
+                )
+            })?,
+        })
+    }
+
+    pub(crate) fn peer_component_counts(
+        requester: &ComponentBinding,
+        target_component_spec: &ComponentSpecId,
+    ) -> Result<PeerComponentInstanceCounts, InternalError> {
+        let (reserved, committed) =
+            RootComponentRegistryStore::peer_allocation_counts(requester, target_component_spec);
+        Ok(PeerComponentInstanceCounts {
+            reserved: u32::try_from(reserved).map_err(|_| {
+                InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "peer Component reservation count exceeds u32",
+                )
+            })?,
+            committed: u32::try_from(committed).map_err(|_| {
+                InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "peer committed Component count exceeds u32",
                 )
             })?,
         })
@@ -13108,6 +13142,87 @@ mod tests {
                 false,
             )
             .is_err()
+        );
+        RootComponentRegistryStore::import(RootComponentRegistryData::default());
+    }
+
+    #[test]
+    fn peer_allocation_counts_are_scoped_to_exact_requester_and_target() {
+        RootComponentRegistryStore::import(RootComponentRegistryData::default());
+        let root = root_binding();
+        let release_set = FleetSubnetRootReleaseSet {
+            release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
+                [8; 32],
+            )),
+            manifest_digest: ReleaseSetDigest::from_bytes([9; 32]),
+        };
+        ComponentRegistryOps::prepare(
+            root.clone(),
+            FleetRegistryVersion {
+                authority: root.authority.clone(),
+                revision: 4,
+                content_hash: [5; 32],
+            },
+            release_set,
+            RootStoreBootstrapRequest {
+                manifest_payload_size_bytes: 128,
+            },
+        )
+        .expect("prepare");
+        let requester_spec: ComponentSpecId = "projects".parse().expect("requester Component Spec");
+        let target_spec: ComponentSpecId = "users".parse().expect("target Component Spec");
+        let requester = ComponentBinding {
+            authority: root.authority,
+            component: ComponentInstanceId::from_generated_bytes([20; 32]),
+            component_spec: requester_spec.clone(),
+            spec_hash: [6; 32],
+            role: CanisterRole::new("project_hub"),
+            placement_subnet: root.placement_subnet,
+            fleet_subnet_root: root.fleet_subnet_root,
+            canister_id: candid::Principal::from_slice(&[21; 29]),
+        };
+        let origin = ComponentProvisioningOrigin::Component {
+            requester: Box::new(requester.clone()),
+            grant: Box::new(
+                canic_core::control_plane_support::config::ComponentProvisioningGrant {
+                    requester_component_spec: requester_spec,
+                    target_component_spec: target_spec.clone(),
+                    maximum_instances_per_requester_per_root: 2,
+                },
+            ),
+        };
+        for (sequence, operation_seed) in [(1, 22), (2, 23)] {
+            ComponentRegistryOps::reserve_allocation(
+                TopLevelComponentAllocationDecision {
+                    allocation_sequence: sequence,
+                    component: ComponentInstanceId::from_generated_bytes([operation_seed; 32]),
+                    component_spec: target_spec.clone(),
+                    spec_hash: [24; 32],
+                    role: CanisterRole::new("user_hub"),
+                },
+                [operation_seed; 32],
+                origin.clone(),
+                false,
+            )
+            .expect("reserve peer allocation");
+        }
+
+        assert_eq!(
+            ComponentRegistryOps::peer_component_counts(&requester, &target_spec)
+                .expect("peer counts"),
+            PeerComponentInstanceCounts {
+                reserved: 2,
+                committed: 0,
+            }
+        );
+        let other_requester = ComponentBinding {
+            canister_id: candid::Principal::from_slice(&[25; 29]),
+            ..requester
+        };
+        assert_eq!(
+            ComponentRegistryOps::peer_component_counts(&other_requester, &target_spec)
+                .expect("other requester counts"),
+            PeerComponentInstanceCounts::default()
         );
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }

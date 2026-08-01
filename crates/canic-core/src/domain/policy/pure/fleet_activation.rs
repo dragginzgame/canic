@@ -36,6 +36,7 @@ use crate::protocol::{
     CANIC_ROOT_COMPONENT_CHILD_COMMIT, CANIC_ROOT_COMPONENT_CHILD_CREATE,
     CANIC_ROOT_COMPONENT_CHILD_DIRECTORY_PREPARE, CANIC_ROOT_COMPONENT_CHILD_INSTALL,
     CANIC_ROOT_COMPONENT_CHILD_MEMBERSHIP_ACTIVATE, CANIC_ROOT_COMPONENT_CHILD_RUNTIME_ACTIVATE,
+    CANIC_ROOT_PEER_COMPONENT_ALLOCATE,
 };
 
 ///
@@ -234,6 +235,7 @@ mod tests {
             (CANIC_SYNC_STATE, EndpointCallKind::Update),
             ("canic_upsert_root_issuer_policy", EndpointCallKind::Update),
             (CANIC_FLEET_ACTIVATION_STATUS, EndpointCallKind::Update),
+            (CANIC_ROOT_PEER_COMPONENT_ALLOCATE, EndpointCallKind::Update),
             (
                 CANIC_ROOT_COMPONENT_CHILD_ALLOCATE,
                 EndpointCallKind::Update,

@@ -45,9 +45,12 @@ delegated_token_issuer = true
 delegated_token_verifier = true
 role_attestation_cache = true
 
+[component_specs.issuer.provisions.projects]
+maximum_instances_per_requester_per_root = 1
+
 [component_specs.projects]
 component_role = "project_hub"
-maximum_instances = 1
+maximum_instances = 2
 initial_cycles = "1T"
 
 [component_specs.projects.index.pools.projects]

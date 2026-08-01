@@ -12,6 +12,10 @@ use canic_core::{
         DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, cell::Cell, memory::VirtualMemory,
         storable::Storable,
     },
+    dto::fleet_subnet_root::{
+        FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
+        FLEET_SUBNET_ROOT_DELETION_MAXIMUM_RETAINED_CYCLES,
+    },
     eager_static,
     role_contract::allocation::memory::control_plane::{
         ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_DRAINING_ID,
@@ -29,10 +33,6 @@ use canic_core::{
             ComponentRuntimeActivationEvidence,
         },
         fleet_registry::FleetRegistryVersion,
-        fleet_subnet_root::{
-            FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
-            FLEET_SUBNET_ROOT_DELETION_MAXIMUM_RETAINED_CYCLES,
-        },
         root_store::RootStoreBootstrapRequest,
     },
     ids::{
@@ -1040,12 +1040,14 @@ impl RootComponentAllocationRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "RootComponentAllocationRecord";
 }
 
+#[cfg(feature = "root-control-plane")]
 #[derive(Debug, Eq, PartialEq)]
 struct RootComponentAllocationIdentity<'a> {
     operation_id: &'a [u8; 32],
     component: &'a ComponentInstanceId,
 }
 
+#[cfg(feature = "root-control-plane")]
 impl<'a> From<&'a RootComponentAllocationRecord> for RootComponentAllocationIdentity<'a> {
     fn from(record: &'a RootComponentAllocationRecord) -> Self {
         Self {
@@ -1662,6 +1664,7 @@ impl_storable_bounded!(
     false
 );
 
+#[cfg(feature = "root-control-plane")]
 #[derive(Debug, Eq, PartialEq)]
 struct ComponentPartitionStableAuthority<'a> {
     binding: &'a ComponentBinding,
@@ -1669,6 +1672,7 @@ struct ComponentPartitionStableAuthority<'a> {
     release_set: &'a FleetSubnetRootReleaseSet,
 }
 
+#[cfg(feature = "root-control-plane")]
 impl<'a> From<&'a ComponentRegistryPartitionRecord> for ComponentPartitionStableAuthority<'a> {
     fn from(partition: &'a ComponentRegistryPartitionRecord) -> Self {
         Self {
@@ -1679,6 +1683,7 @@ impl<'a> From<&'a ComponentRegistryPartitionRecord> for ComponentPartitionStable
     }
 }
 
+#[cfg(feature = "root-control-plane")]
 #[derive(Debug, Eq, PartialEq)]
 struct ComponentPartitionSnapshotAuthority<'a> {
     stable: ComponentPartitionStableAuthority<'a>,
@@ -1690,6 +1695,7 @@ struct ComponentPartitionSnapshotAuthority<'a> {
     committed_descendants: u32,
 }
 
+#[cfg(feature = "root-control-plane")]
 impl<'a> From<&'a ComponentRegistryPartitionRecord> for ComponentPartitionSnapshotAuthority<'a> {
     fn from(partition: &'a ComponentRegistryPartitionRecord) -> Self {
         Self {
@@ -1726,6 +1732,7 @@ pub struct RootComponentChildAllocationRecord {
     pub progress: RootComponentChildAllocationProgressRecord,
 }
 
+#[cfg(feature = "root-control-plane")]
 #[derive(Debug, Eq, PartialEq)]
 struct RootComponentChildReservation<'a> {
     operation_id: &'a [u8; 32],
@@ -1741,6 +1748,7 @@ struct RootComponentChildReservation<'a> {
     release_set: &'a FleetSubnetRootReleaseSet,
 }
 
+#[cfg(feature = "root-control-plane")]
 impl<'a> From<&'a RootComponentChildAllocationRecord> for RootComponentChildReservation<'a> {
     fn from(record: &'a RootComponentChildAllocationRecord) -> Self {
         Self {
@@ -1759,6 +1767,7 @@ impl<'a> From<&'a RootComponentChildAllocationRecord> for RootComponentChildRese
     }
 }
 
+#[cfg(feature = "root-control-plane")]
 impl RootComponentChildAllocationRecord {
     pub(crate) fn has_same_reservation(&self, other: &Self) -> bool {
         RootComponentChildReservation::from(self) == RootComponentChildReservation::from(other)
@@ -1824,6 +1833,7 @@ pub struct RootComponentSubtreeRemovalRecord {
     pub progress: RootComponentSubtreeRemovalProgressRecord,
 }
 
+#[cfg(feature = "root-control-plane")]
 #[derive(Debug, Eq, PartialEq)]
 struct RootComponentSubtreeFence<'a> {
     operation_id: &'a [u8; 32],
@@ -1833,6 +1843,7 @@ struct RootComponentSubtreeFence<'a> {
     maximum_completed_leaves: u32,
 }
 
+#[cfg(feature = "root-control-plane")]
 impl<'a> From<&'a RootComponentSubtreeRemovalRecord> for RootComponentSubtreeFence<'a> {
     fn from(record: &'a RootComponentSubtreeRemovalRecord) -> Self {
         Self {
@@ -1845,6 +1856,7 @@ impl<'a> From<&'a RootComponentSubtreeRemovalRecord> for RootComponentSubtreeFen
     }
 }
 
+#[cfg(feature = "root-control-plane")]
 impl RootComponentSubtreeRemovalRecord {
     pub(crate) fn has_same_fence(&self, other: &Self) -> bool {
         RootComponentSubtreeFence::from(self) == RootComponentSubtreeFence::from(other)
@@ -2122,6 +2134,7 @@ pub struct ComponentRegistryChildTraversalRecord {
     pub canister_id: Principal,
 }
 
+#[cfg(feature = "root-control-plane")]
 #[derive(Debug, Eq, PartialEq)]
 struct ComponentParentRoleAuthority<'a> {
     component: &'a ComponentInstanceId,
@@ -2129,6 +2142,7 @@ struct ComponentParentRoleAuthority<'a> {
     child_role: &'a CanisterRole,
 }
 
+#[cfg(feature = "root-control-plane")]
 impl<'a> ComponentParentRoleAuthority<'a> {
     const fn from_count(record: &'a ComponentRegistryParentRoleCountRecord) -> Self {
         Self {
@@ -2147,6 +2161,7 @@ impl<'a> ComponentParentRoleAuthority<'a> {
     }
 }
 
+#[cfg(feature = "root-control-plane")]
 #[derive(Debug, Eq, PartialEq)]
 struct ComponentChildIndexAuthority<'a> {
     component: &'a ComponentInstanceId,
@@ -2155,6 +2170,7 @@ struct ComponentChildIndexAuthority<'a> {
     canister_id: Principal,
 }
 
+#[cfg(feature = "root-control-plane")]
 impl<'a> ComponentChildIndexAuthority<'a> {
     const fn from_child(record: &'a ComponentRegistryChildRecord) -> Self {
         Self {
@@ -2236,12 +2252,15 @@ impl ComponentRegistryPrincipalIndexRecord {
 #[cfg(feature = "root-control-plane")]
 impl_storable_bounded!(ComponentRegistryPrincipalIndexRecord, 128, false);
 
+#[cfg(feature = "root-control-plane")]
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 struct RootComponentAllocationOperationKey([u8; 32]);
 
+#[cfg(feature = "root-control-plane")]
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 struct RootComponentDrainingKey([u8; 32]);
 
+#[cfg(feature = "root-control-plane")]
 impl From<ComponentInstanceId> for RootComponentDrainingKey {
     fn from(value: ComponentInstanceId) -> Self {
         Self(*value.as_bytes())
@@ -2251,6 +2270,7 @@ impl From<ComponentInstanceId> for RootComponentDrainingKey {
 #[cfg(feature = "root-control-plane")]
 impl_storable_bounded!(RootComponentDrainingKey, 128, false);
 
+#[cfg(feature = "root-control-plane")]
 impl From<[u8; 32]> for RootComponentAllocationOperationKey {
     fn from(value: [u8; 32]) -> Self {
         Self(value)
@@ -2260,6 +2280,7 @@ impl From<[u8; 32]> for RootComponentAllocationOperationKey {
 #[cfg(feature = "root-control-plane")]
 impl_storable_bounded!(RootComponentAllocationOperationKey, 128, false);
 
+#[cfg(feature = "root-control-plane")]
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 struct RootComponentSubtreeRemovalHistoryKey {
     component: [u8; 32],
@@ -2267,6 +2288,7 @@ struct RootComponentSubtreeRemovalHistoryKey {
     traversal_steps: u32,
 }
 
+#[cfg(feature = "root-control-plane")]
 impl RootComponentSubtreeRemovalHistoryKey {
     const fn new(
         component: ComponentInstanceId,
@@ -2288,9 +2310,11 @@ impl_storable_bounded!(
     false
 );
 
+#[cfg(feature = "root-control-plane")]
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 struct ComponentRegistryPrincipalKey(Vec<u8>);
 
+#[cfg(feature = "root-control-plane")]
 impl From<Principal> for ComponentRegistryPrincipalKey {
     fn from(value: Principal) -> Self {
         Self(value.as_slice().to_vec())
@@ -2300,12 +2324,14 @@ impl From<Principal> for ComponentRegistryPrincipalKey {
 #[cfg(feature = "root-control-plane")]
 impl_storable_bounded!(ComponentRegistryPrincipalKey, 128, false);
 
+#[cfg(feature = "root-control-plane")]
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 struct ComponentRegistryEntryKey {
     component: [u8; 32],
     index: ComponentRegistryEntryIndexKey,
 }
 
+#[cfg(feature = "root-control-plane")]
 impl ComponentRegistryEntryKey {
     const fn partition(component: ComponentInstanceId) -> Self {
         Self {
@@ -2464,6 +2490,7 @@ impl ComponentRegistryEntryKey {
     }
 }
 
+#[cfg(feature = "root-control-plane")]
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 enum ComponentRegistryEntryIndexKey {
     Partition,
@@ -2540,6 +2567,7 @@ impl RootComponentRegistryData {
 /// Result of preparing the one root-local Component Registry authority.
 ///
 
+#[cfg(feature = "root-control-plane")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RootComponentRegistryCommitOutcome {
     Committed,
@@ -2780,6 +2808,7 @@ impl RootComponentSubtreeRemovalBeginCommit<'_> {
 /// Rejection when preparation conflicts with already durable authority.
 ///
 
+#[cfg(feature = "root-control-plane")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RootComponentRegistryCommitError {
     ConflictingState,
@@ -2791,6 +2820,7 @@ pub enum RootComponentRegistryCommitError {
 /// Stable-store rejection for one top-level Component identity reservation.
 ///
 
+#[cfg(feature = "root-control-plane")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RootComponentAllocationCommitError {
     ComponentIdentityConflict,
@@ -2805,6 +2835,7 @@ pub enum RootComponentAllocationCommitError {
 }
 
 /// Narrow stable owner for root-local Component Registry meta authority.
+#[cfg(feature = "root-control-plane")]
 pub struct RootComponentRegistryStore;
 
 #[cfg(feature = "root-control-plane")]
@@ -3541,6 +3572,43 @@ impl RootComponentRegistryStore {
             map.iter().fold((0, 0), |(reserved, committed), entry| {
                 let record = entry.value();
                 if &record.component_spec != component_spec {
+                    return (reserved, committed);
+                }
+                if matches!(
+                    record.progress,
+                    RootComponentAllocationProgressRecord::Committed { .. }
+                ) {
+                    (reserved, committed + 1)
+                } else if matches!(
+                    record.progress,
+                    RootComponentAllocationProgressRecord::Removed { .. }
+                ) {
+                    (reserved, committed)
+                } else {
+                    (reserved + 1, committed)
+                }
+            })
+        })
+    }
+
+    #[must_use]
+    pub(crate) fn peer_allocation_counts(
+        requester: &ComponentBinding,
+        target_component_spec: &ComponentSpecId,
+    ) -> (usize, usize) {
+        ROOT_COMPONENT_ALLOCATIONS.with_borrow(|map| {
+            map.iter().fold((0, 0), |(reserved, committed), entry| {
+                let record = entry.value();
+                let ComponentProvisioningOrigin::Component {
+                    requester: recorded_requester,
+                    ..
+                } = &record.provisioning_origin
+                else {
+                    return (reserved, committed);
+                };
+                if recorded_requester.as_ref() != requester
+                    || &record.component_spec != target_component_spec
+                {
                     return (reserved, committed);
                 }
                 if matches!(

@@ -508,7 +508,13 @@ pub struct RootComponentMembershipActivationRequest {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum ComponentProvisioningOrigin {
-    FleetAdministrator { caller: Principal },
+    FleetAdministrator {
+        caller: Principal,
+    },
+    Component {
+        requester: Box<ComponentBinding>,
+        grant: Box<crate::config::ComponentProvisioningGrant>,
+    },
 }
 
 ///
@@ -1642,6 +1648,38 @@ mod tests {
             candid::decode_one::<RootComponentCreationRequest>(&bytes)
                 .expect("decode creation request"),
             request
+        );
+    }
+
+    #[test]
+    fn peer_component_provisioning_origin_round_trips_through_candid() {
+        let authority = fleet_registry_authority();
+        let requester_spec: ComponentSpecId =
+            "projects".parse().expect("requester Component Spec ID");
+        let target_spec: ComponentSpecId = "users".parse().expect("target Component Spec ID");
+        let origin = ComponentProvisioningOrigin::Component {
+            requester: Box::new(ComponentBinding {
+                authority,
+                component: ComponentInstanceId::from_generated_bytes([20; 32]),
+                component_spec: requester_spec.clone(),
+                spec_hash: [21; 32],
+                role: CanisterRole::new("project_hub"),
+                placement_subnet: SubnetId::from_principal(Principal::from_slice(&[22; 29])),
+                fleet_subnet_root: Principal::from_slice(&[23; 29]),
+                canister_id: Principal::from_slice(&[24; 29]),
+            }),
+            grant: Box::new(crate::config::ComponentProvisioningGrant {
+                requester_component_spec: requester_spec,
+                target_component_spec: target_spec,
+                maximum_instances_per_requester_per_root: 3,
+            }),
+        };
+        let bytes = candid::encode_one(&origin).expect("encode peer provisioning origin");
+
+        assert_eq!(
+            candid::decode_one::<ComponentProvisioningOrigin>(&bytes)
+                .expect("decode peer provisioning origin"),
+            origin
         );
     }
 

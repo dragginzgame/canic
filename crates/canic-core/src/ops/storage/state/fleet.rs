@@ -9,10 +9,7 @@ use crate::{
     dto::state::{
         FleetCommand, FleetCommandResponse, FleetStateInput, FleetStateResponse, SetStateResponse,
     },
-    ops::{
-        prelude::*,
-        storage::state::mapper::{FleetStateCommandMapper, FleetStateMapper},
-    },
+    ops::{prelude::*, storage::state::mapper::FleetStateMapper},
     storage::stable::state::fleet::{FleetMode, FleetState, FleetStateData, FleetStateRecord},
 };
 
@@ -116,7 +113,12 @@ impl FleetStateOps {
     }
 
     pub fn apply_command(cmd: FleetCommand) -> FleetCommandResponse {
-        let internal = FleetStateCommandMapper::dto_to_record(cmd);
+        let internal = match cmd {
+            FleetCommand::SetStatus(status) => FleetStateCommand::SetStatus(status),
+            FleetCommand::SetCyclesFundingEnabled(enabled) => {
+                FleetStateCommand::SetCyclesFundingEnabled(enabled)
+            }
+        };
         Self::execute_command(internal)
     }
 

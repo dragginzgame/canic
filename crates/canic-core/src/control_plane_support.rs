@@ -7,7 +7,7 @@ pub mod config {
         pub use crate::config::schema::{CanisterPool, ComponentChildKind};
     }
 
-    pub use crate::config::ComponentTopology;
+    pub use crate::config::{ComponentProvisioningGrant, ComponentTopology};
 }
 
 pub mod format {
@@ -29,8 +29,10 @@ pub mod model {
 pub mod policy {
     pub mod component_allocation {
         pub use crate::domain::policy::pure::component_allocation::{
-            ComponentAllocationPolicyError, TopLevelComponentAllocationDecision,
-            TopLevelComponentAllocationInput, reserve_top_level_component,
+            ComponentAllocationPolicyError, PeerComponentProvisioningDecision,
+            PeerComponentProvisioningInput, PeerComponentProvisioningReadiness,
+            TopLevelComponentAllocationDecision, TopLevelComponentAllocationInput,
+            authorize_peer_component_provisioning, reserve_top_level_component,
         };
     }
 

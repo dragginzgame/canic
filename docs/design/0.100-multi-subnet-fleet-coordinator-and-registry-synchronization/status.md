@@ -6,10 +6,10 @@ Date: 2026-08-01
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.75`.
-- Latest published release: `v0.100.75` at
-  `82460d22ee644a0142672a7c9194716d3ad5822e`.
-- Open patch draft: `0.100.76`; no package-version change has been authorized.
+- Workspace package version: `0.100.76`.
+- Latest published release: `v0.100.76` at
+  `b76cb202e7e1a240a144b636dbfbc9e3727f7b89`.
+- Open patch draft: `0.100.77`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -141,9 +141,9 @@ Registry slices replace the 0.99 root model.
 - [x] Publish root `Draining` through the Coordinator Registry.
 - [x] Synchronize mixed-lifecycle Registry authority through root mirrors and
   Fleet Directories.
-- [ ] Implement root `Draining` and `Removed`.
+- [x] Implement root `Draining` and `Removed`.
 - [x] Install initial roots behind the runtime `Prepared` fence.
-- [ ] Enforce Spec, admission, root, topology, limits, active-release-set and
+- [x] Enforce Spec, admission, root, topology, limits, active-release-set and
   tombstone rules.
 
 ## Slice 4 — Component Lifecycle, Mirrors and Directories
@@ -154,7 +154,7 @@ Registry slices replace the 0.99 root model.
 - [x] Implement admitted direct Component Canister creation through the root.
 - [x] Install and independently verify an admitted direct Component from its
   exact root-local Store under an immutable `ComponentBinding`.
-- [ ] Implement same-root grant-checked peer Component provisioning while
+- [x] Implement same-root grant-checked peer Component provisioning while
   retaining causal origin without parentage.
 - [x] Freeze one pure direct-child reservation decision for direct Component
   and registered descendant parents with exact Registry, spawn-grant and
@@ -166,9 +166,9 @@ Registry slices replace the 0.99 root model.
 - [x] Implement Store-backed child installation and independent binding
   verification at arbitrary depth.
 - [x] Implement child Registry commitment at arbitrary depth.
-- [ ] Make the Fleet Subnet Root the required lifecycle controller and retain
+- [x] Make the Fleet Subnet Root the required lifecycle controller and retain
   authoritative idempotent receipts.
-- [ ] Resolve lifecycle artifacts only through the active release set.
+- [x] Resolve lifecycle artifacts only through the active release set.
 - [x] Implement bounded Fleet snapshot synchronization once per root.
 - [x] Atomically activate the Fleet Registry Mirror and Fleet Directory.
 - [x] Store logical Component Registries in one bounded root-local collection
@@ -987,16 +987,29 @@ retained root reserve is burned and no cycles are redirected to the executor.
 The same release carries the exact host-only `ic-query 0.21.1` dependency
 correction; Canic's consumed `subnet_catalog` Rust boundary is unchanged.
 
-Open 0.100.76 splits that maintained host boundary into explicit preparation
+Released 0.100.76 splits that maintained host boundary into explicit preparation
 and execution phases. Preparation may return excess root cycles and durably
 freeze the Coordinator executor intent, but does not stop or delete the root.
 The guarded maintainer runner can then exit and resume destructive execution
 in a fresh process from remote authority alone; it adds no host journal or
 general operator command.
 
+Open 0.100.77 implements same-root Component Provisioning Grants through one
+public root lifecycle family. A new reservation authenticates an exact Active
+top-level Component, retains its exact binding plus compiled grant as causal
+origin, enforces the per-requester/root ceiling across live reservations and
+committed targets, and then reuses ordinary target admission, Store-backed
+installation and root-owned Registry/Directory activation. Every later public
+phase reauthenticates the exact Active requester; controller-only endpoints
+remain the recovery authority. PocketIC proves the complete installed
+Component-to-root journey, exact retry, absence of parentage and exhausted
+grant rejection. The same draft contains role-owned control-plane compilation
+cleanup recorded in the release changelog.
+
 ## Next Action
 
-Run preparation and execution as separate processes against one explicitly
-selected disposable real-network root, verify the surviving Coordinator
-terminal receipt and its exact replay, then close the 0.100 implementation
-against the final design before beginning 0.101.
+Finish the remaining terminology and reinstall-only decoder audit, then run
+preparation and execution as separate processes against one explicitly
+selected disposable real-network root. Verify the surviving Coordinator
+terminal receipt and exact replay before closing 0.100 against the final
+design and beginning 0.101.

@@ -32,6 +32,7 @@ use canic_core::control_plane_support::{
 #[cfg(test)]
 use canic_core::dto::error::ErrorCode;
 use ic_cdk::api::canister_self;
+#[cfg(feature = "root-control-plane")]
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -203,24 +204,12 @@ impl TemplateChunkedOps {
     }
 
     // Prepare one chunk-set metadata record before chunk-by-chunk publication begins.
+    #[cfg(feature = "root-control-plane")]
     pub fn prepare_chunk_set_from_input(
         input: TemplateChunkSetPrepareInput,
         created_at: u64,
     ) -> Result<TemplateChunkSetInfoResponse, InternalError> {
-        let release = TemplateReleaseKey::new(input.template_id, input.version);
-        if input.chunk_hashes.is_empty() {
-            return Err(TemplateManifestOpsError::TemplateChunkSetEmpty(release).into());
-        }
-
-        let chunk_count = u32::try_from(input.chunk_hashes.len())
-            .map_err(|_| TemplateManifestOpsError::ChunkIndexOverflow(release.clone()))?;
-        let info_record = TemplateChunkSetRecord {
-            payload_hash: input.payload_hash,
-            payload_size_bytes: input.payload_size_bytes,
-            chunk_count,
-            chunk_hashes: input.chunk_hashes,
-            created_at,
-        };
+        let (release, info_record) = chunk_set_record_from_input(input, created_at)?;
 
         TemplateChunkSetStateStore::upsert(release, info_record.clone());
 
@@ -233,20 +222,7 @@ impl TemplateChunkedOps {
         created_at: u64,
         limits: WasmStoreLimits,
     ) -> Result<TemplateChunkSetInfoResponse, InternalError> {
-        let release = TemplateReleaseKey::new(input.template_id.clone(), input.version.clone());
-        if input.chunk_hashes.is_empty() {
-            return Err(TemplateManifestOpsError::TemplateChunkSetEmpty(release).into());
-        }
-
-        let chunk_count = u32::try_from(input.chunk_hashes.len())
-            .map_err(|_| TemplateManifestOpsError::ChunkIndexOverflow(release.clone()))?;
-        let info_record = TemplateChunkSetRecord {
-            payload_hash: input.payload_hash,
-            payload_size_bytes: input.payload_size_bytes,
-            chunk_count,
-            chunk_hashes: input.chunk_hashes,
-            created_at,
-        };
+        let (release, info_record) = chunk_set_record_from_input(input, created_at)?;
 
         let projected_manifests = TemplateManifestStateStore::export().entries;
         let projected_chunk_sets = replace_chunk_set_entry(release.clone(), info_record.clone());
@@ -263,29 +239,12 @@ impl TemplateChunkedOps {
     }
 
     // Publish one chunk into an already prepared local template release.
+    #[cfg(feature = "root-control-plane")]
     pub fn publish_chunk_from_input(input: TemplateChunkInput) -> Result<(), InternalError> {
-        let release = TemplateReleaseKey::new(input.template_id, input.version);
-        let info = TemplateChunkSetStateStore::get(&release)
-            .ok_or_else(|| TemplateManifestOpsError::TemplateChunkSetMissing(release.clone()))?;
-
-        if input.chunk_index >= info.chunk_count {
-            return Err(TemplateManifestOpsError::TemplateChunkIndexOutOfRange(
-                release,
-                input.chunk_index,
-            )
-            .into());
-        }
-
-        let expected_hash = &info.chunk_hashes[input.chunk_index as usize];
-        let actual_hash = wasm_hash(&input.bytes);
-        let chunk_key = TemplateChunkKey::new(release, input.chunk_index);
-
-        if actual_hash != *expected_hash {
-            return Err(TemplateManifestOpsError::TemplateChunkHashMismatch(chunk_key).into());
-        }
+        let (chunk_key, record) = validated_chunk_record_from_input(input)?;
         canic_core::perf!("publish_stage_validate_chunk");
 
-        TemplateChunkStore::upsert(chunk_key, TemplateChunkRecord { bytes: input.bytes });
+        TemplateChunkStore::upsert(chunk_key, record);
         canic_core::perf!("publish_stage_upsert_chunk");
 
         Ok(())
@@ -296,30 +255,11 @@ impl TemplateChunkedOps {
         input: TemplateChunkInput,
         limits: WasmStoreLimits,
     ) -> Result<(), InternalError> {
-        let release = TemplateReleaseKey::new(input.template_id.clone(), input.version.clone());
-        let info = TemplateChunkSetStateStore::get(&release)
-            .ok_or_else(|| TemplateManifestOpsError::TemplateChunkSetMissing(release.clone()))?;
-
-        if input.chunk_index >= info.chunk_count {
-            return Err(TemplateManifestOpsError::TemplateChunkIndexOutOfRange(
-                release,
-                input.chunk_index,
-            )
-            .into());
-        }
-
-        let expected_hash = &info.chunk_hashes[input.chunk_index as usize];
-        let actual_hash = wasm_hash(&input.bytes);
-        let chunk_key = TemplateChunkKey::new(release, input.chunk_index);
-
-        if actual_hash != *expected_hash {
-            return Err(TemplateManifestOpsError::TemplateChunkHashMismatch(chunk_key).into());
-        }
+        let (chunk_key, new_record) = validated_chunk_record_from_input(input)?;
         canic_core::perf!("publish_store_validate_chunk");
 
         // Manifest/template-version limits are fixed by the earlier manifest + prepare phases.
         // Publishing one chunk can only change the occupied-byte total for this store.
-        let new_record = TemplateChunkRecord { bytes: input.bytes };
         let current_store_bytes = TemplateManifestStateStore::occupied_bytes()
             + TemplateChunkSetStateStore::occupied_bytes()
             + TemplateChunkStore::occupied_bytes();
@@ -505,6 +445,50 @@ impl TemplateChunkedOps {
             cleared_chunk_store_hash_count: chunk_store_hash_count,
         })
     }
+}
+
+fn chunk_set_record_from_input(
+    input: TemplateChunkSetPrepareInput,
+    created_at: u64,
+) -> Result<(TemplateReleaseKey, TemplateChunkSetRecord), InternalError> {
+    let release = TemplateReleaseKey::new(input.template_id, input.version);
+    if input.chunk_hashes.is_empty() {
+        return Err(TemplateManifestOpsError::TemplateChunkSetEmpty(release).into());
+    }
+
+    let chunk_count = u32::try_from(input.chunk_hashes.len())
+        .map_err(|_| TemplateManifestOpsError::ChunkIndexOverflow(release.clone()))?;
+    let record = TemplateChunkSetRecord {
+        payload_hash: input.payload_hash,
+        payload_size_bytes: input.payload_size_bytes,
+        chunk_count,
+        chunk_hashes: input.chunk_hashes,
+        created_at,
+    };
+    Ok((release, record))
+}
+
+fn validated_chunk_record_from_input(
+    input: TemplateChunkInput,
+) -> Result<(TemplateChunkKey, TemplateChunkRecord), InternalError> {
+    let release = TemplateReleaseKey::new(input.template_id, input.version);
+    let info = TemplateChunkSetStateStore::get(&release)
+        .ok_or_else(|| TemplateManifestOpsError::TemplateChunkSetMissing(release.clone()))?;
+
+    if input.chunk_index >= info.chunk_count {
+        return Err(TemplateManifestOpsError::TemplateChunkIndexOutOfRange(
+            release,
+            input.chunk_index,
+        )
+        .into());
+    }
+
+    let chunk_key = TemplateChunkKey::new(release, input.chunk_index);
+    if wasm_hash(&input.bytes) != info.chunk_hashes[input.chunk_index as usize] {
+        return Err(TemplateManifestOpsError::TemplateChunkHashMismatch(chunk_key).into());
+    }
+
+    Ok((chunk_key, TemplateChunkRecord { bytes: input.bytes }))
 }
 
 // Map one stored chunk-set record into the public metadata response.

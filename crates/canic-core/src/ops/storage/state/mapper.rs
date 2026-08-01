@@ -5,8 +5,7 @@
 //! Boundary: storage ops conversion layer for state records.
 
 use crate::{
-    dto::state::{FleetCommand, FleetStateInput, FleetStateResponse},
-    ops::storage::state::fleet::FleetStateCommand,
+    dto::state::{FleetStateInput, FleetStateResponse},
     storage::stable::state::fleet::FleetStateRecord,
 };
 
@@ -48,26 +47,6 @@ impl FleetStateMapper {
         FleetStateRecord {
             mode: view.mode,
             cycles_funding_enabled: view.cycles_funding_enabled,
-        }
-    }
-}
-
-///
-/// FleetStateCommandMapper
-///
-/// Storage-ops mapper for Fleet-state commands.
-///
-
-pub struct FleetStateCommandMapper;
-
-impl FleetStateCommandMapper {
-    #[must_use]
-    pub const fn dto_to_record(cmd: FleetCommand) -> FleetStateCommand {
-        match cmd {
-            FleetCommand::SetStatus(status) => FleetStateCommand::SetStatus(status),
-            FleetCommand::SetCyclesFundingEnabled(enabled) => {
-                FleetStateCommand::SetCyclesFundingEnabled(enabled)
-            }
         }
     }
 }

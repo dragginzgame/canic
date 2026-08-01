@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.75`.
-- The latest published release is `v0.100.75` at
-  `82460d22ee644a0142672a7c9194716d3ad5822e`.
-- Open `0.100.76` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.76`.
+- The latest published release is `v0.100.76` at
+  `b76cb202e7e1a240a144b636dbfbc9e3727f7b89`.
+- Open `0.100.77` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -634,15 +634,24 @@ Historical detail is archived at:
   canisters onto the endpoint-level local-build predicate, removes the stranded
   local-network facade helper, collapses two one-call wrappers and narrows
   same-file-only implementation surfaces.
-- Open `0.100.76` separates durable physical-root preparation from destructive
+- Released `0.100.76` separates durable physical-root preparation from destructive
   execution at the maintained host boundary. A guarded maintainer runner can
   prepare the exact Coordinator intent, exit, and resume stop/delete from a
   fresh process without a local journal. First preparation remains mutating
   because it may return root cycles; execution remains irreversible and needs
-  one explicitly selected disposable real-network target. The same draft
+  one explicitly selected disposable real-network target. The same release
   collapses the implicit Store policy to its one nonserialized production
   shape and removes redundant record, topology and upgrade wrappers without a
   maintained surface change.
+- Open `0.100.77` implements grant-checked same-root peer Component
+  provisioning through public root endpoints. The exact Active requester and
+  compiled grant become durable causal origin, never parentage; per-requester
+  live capacity intersects ordinary target admission and root limits, while
+  the root remains sole Store resolver, controller, Registry owner and
+  lifecycle executor. Exact replay and every phase are proven in PocketIC.
+  The same draft narrows role-only control-plane builds, centralizes duplicate
+  template chunk validation and removes the final one-use Fleet command
+  mapper.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1938,11 +1947,12 @@ First primary results:
 
 ## Next Action
 
-Run the guarded host preparation and execution phases as separate processes
-against one explicitly selected disposable real-network root, then verify the
-surviving Coordinator terminal receipt and exact replay. Close 0.100 against
-the accepted design before beginning 0.101. The retained implementation detail
-remains in the
+Finish the remaining terminology and reinstall-only decoder audit, then run
+the guarded host preparation and execution phases as separate processes
+against one explicitly selected disposable real-network root. Verify the
+surviving Coordinator terminal receipt and exact replay before closing 0.100
+against the accepted design and beginning 0.101. The retained implementation
+detail remains in the
 [implementation tracker](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md).
 Fresh installation now journals and verifies the Coordinator, every planned
 Fleet Subnet Root, each root's exact topology-admitted local Store, and every
@@ -2246,13 +2256,24 @@ The same release moves reference canisters onto the endpoint-level local-build
 predicate, removes the stranded local-network facade helper, collapses two
 one-call wrappers and narrows same-file-only runtime, control-plane and test
 support surfaces without changing maintained behavior.
-Open `0.100.76` adds an explicit durable-prepare host boundary and guarded
+Released `0.100.76` adds an explicit durable-prepare host boundary and guarded
 maintainer runner. Preparation and destructive execution can now run in
 separate processes while the Coordinator intent remains the sole recovery
-authority. The same draft removes the stale serializable implicit-Store policy
+authority. The same release removes the stale serializable implicit-Store policy
 wrapper and redundant record, topology and upgrade mapping wrappers. The next
 evidence is one explicitly selected disposable real-network deletion,
 terminal-receipt replay and 0.100 closeout against the accepted design.
+Open `0.100.77` implements the same-root Component Provisioning Grant runtime
+contract. An exact Active top-level Component can drive a target Component
+through root-owned reservation, Store-backed creation/install, Registry
+commitment and Directory/runtime/membership activation. Durable origin records
+the requester and exact compiled grant without adding parentage, and the
+per-requester/root ceiling counts reservations plus committed non-Removed
+targets. PocketIC proves the complete public caller journey, exact replay and
+ceiling exhaustion. The same draft narrows role-only control-plane
+compilation, centralizes duplicate template chunk conversion/validation and
+removes the one-use Fleet command mapper. No compatibility path or
+package-version change is introduced.
 
 ## Historical Release Detail
 

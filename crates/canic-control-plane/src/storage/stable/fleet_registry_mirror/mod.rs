@@ -84,6 +84,7 @@ impl RootFleetRegistryMirrorData {
 }
 
 /// Narrow stable-storage owner used by the root synchronization workflow.
+#[cfg(feature = "root-control-plane")]
 pub struct RootFleetRegistryMirrorStore;
 
 #[cfg(feature = "root-control-plane")]

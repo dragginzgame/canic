@@ -54,7 +54,11 @@ use canic_core::{
             },
         },
         policy::{
-            component_allocation::{TopLevelComponentAllocationInput, reserve_top_level_component},
+            component_allocation::{
+                PeerComponentProvisioningInput, PeerComponentProvisioningReadiness,
+                TopLevelComponentAllocationDecision, TopLevelComponentAllocationInput,
+                authorize_peer_component_provisioning, reserve_top_level_component,
+            },
             component_child_allocation::{
                 ComponentChildAllocationInput, ComponentChildAllocationReadiness,
                 ComponentRegistryVersionEvidence, reserve_component_child,
@@ -536,6 +540,187 @@ pub async fn reserve_allocation(
     allocation_response(reserved)
 }
 
+/// Durably reserve one same-root peer Component for its exact registered requester caller.
+pub async fn reserve_peer_allocation(
+    request: RootComponentAllocationRequest,
+) -> Result<RootComponentAllocationResponse, InternalError> {
+    let (authority, root) = root_authority()?;
+    let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let preparation_request = RootComponentRegistryPreparationRequest {
+        store_bootstrap: prepared.store_bootstrap.clone(),
+        expected_fleet_registry: prepared.prepared_against_registry.clone(),
+    };
+    root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    validate_current_mirror_authority(&authority, root, &preparation_request)?;
+
+    let topology = ConfigOps::component_topology()?;
+    let requester = peer_component_requester(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        IcOps::msg_caller(),
+    )?;
+    let provisioning_origin =
+        peer_provisioning_origin(&topology, &requester.binding, &request.component_spec)?;
+    if let Some(response) = replay_peer_allocation(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &request,
+        &provisioning_origin,
+    )? {
+        return Ok(response);
+    }
+
+    ComponentRegistryOps::require_top_level_allocation_open()?;
+    authorize_new_peer_allocation(
+        &authority.binding,
+        &topology,
+        &requester,
+        &request.component_spec,
+        &provisioning_origin,
+    )?;
+    let decision =
+        top_level_allocation_decision(&authority.binding, &topology, &prepared, &request)?;
+    let reserved = ComponentRegistryOps::reserve_allocation(
+        decision,
+        request.operation_id,
+        provisioning_origin,
+        true,
+    )?;
+    allocation_response(reserved)
+}
+
+fn peer_component_requester(
+    root: &canic_core::ids::FleetSubnetRootBinding,
+    release_set: canic_core::ids::FleetSubnetRootReleaseSet,
+    topology: &canic_core::control_plane_support::config::ComponentTopology,
+    caller: candid::Principal,
+) -> Result<ComponentRegistryPartitionView, InternalError> {
+    let requester_component =
+        ComponentRegistryOps::component_for_principal(caller).ok_or_else(|| {
+            InternalError::public(Error::forbidden(format!(
+                "caller {caller} is not a registered Component"
+            )))
+        })?;
+    let requester = ComponentRegistryOps::partition(requester_component)?.ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "registered peer-provisioning requester has no Component Registry partition",
+        )
+    })?;
+    if requester.binding.canister_id != caller {
+        return Err(InternalError::public(Error::forbidden(format!(
+            "caller {caller} is a Component Child and cannot provision a peer Component"
+        ))));
+    }
+    validate_partition(root, release_set, topology, &requester)?;
+    Ok(requester)
+}
+
+fn peer_provisioning_origin(
+    topology: &canic_core::control_plane_support::config::ComponentTopology,
+    requester: &canic_core::ids::ComponentBinding,
+    target_component_spec: &canic_core::ids::ComponentSpecId,
+) -> Result<ComponentProvisioningOrigin, InternalError> {
+    let grant = topology
+        .provisioning_grant(&requester.component_spec, target_component_spec)
+        .ok_or_else(|| {
+            InternalError::forbidden(format!(
+                "Component Spec '{}' has no provisioning grant for peer Spec '{target_component_spec}'",
+                requester.component_spec
+            ))
+        })?;
+    Ok(ComponentProvisioningOrigin::Component {
+        requester: Box::new(requester.clone()),
+        grant: Box::new(grant.clone()),
+    })
+}
+
+fn replay_peer_allocation(
+    root: &canic_core::ids::FleetSubnetRootBinding,
+    release_set: canic_core::ids::FleetSubnetRootReleaseSet,
+    topology: &canic_core::control_plane_support::config::ComponentTopology,
+    request: &RootComponentAllocationRequest,
+    provisioning_origin: &ComponentProvisioningOrigin,
+) -> Result<Option<RootComponentAllocationResponse>, InternalError> {
+    let Some(existing) = ComponentRegistryOps::allocation(request.operation_id) else {
+        return Ok(None);
+    };
+    if existing.component_spec != request.component_spec
+        || &existing.provisioning_origin != provisioning_origin
+    {
+        return Err(InternalError::conflict(
+            "peer Component allocation operation is already bound to different intent",
+        ));
+    }
+    validate_allocation_record(root, release_set, topology, &existing, request.operation_id)?;
+    allocation_response(existing).map(Some)
+}
+
+fn authorize_new_peer_allocation(
+    root: &canic_core::ids::FleetSubnetRootBinding,
+    topology: &canic_core::control_plane_support::config::ComponentTopology,
+    requester: &ComponentRegistryPartitionView,
+    target_component_spec: &canic_core::ids::ComponentSpecId,
+    provisioning_origin: &ComponentProvisioningOrigin,
+) -> Result<(), InternalError> {
+    let readiness = match (FleetActivationWorkflow::status()?.phase, requester.status) {
+        (FleetActivationPhase::Active, ComponentLifecycleStatus::Active) => {
+            PeerComponentProvisioningReadiness::Ready
+        }
+        (FleetActivationPhase::Active, _) => {
+            PeerComponentProvisioningReadiness::RequesterRegistryMemberInactive
+        }
+        _ => PeerComponentProvisioningReadiness::RootRuntimeInactive,
+    };
+    let counts =
+        ComponentRegistryOps::peer_component_counts(&requester.binding, target_component_spec)?;
+    let decision = authorize_peer_component_provisioning(PeerComponentProvisioningInput {
+        requester: &requester.binding,
+        target_component_spec,
+        root,
+        topology,
+        readiness,
+        reserved_peer_instances: counts.reserved,
+        committed_peer_instances: counts.committed,
+    })
+    .map_err(InternalError::from)?;
+    let expected = ComponentProvisioningOrigin::Component {
+        requester: Box::new(requester.binding.clone()),
+        grant: Box::new(decision.grant),
+    };
+    if provisioning_origin != &expected {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "peer Component provisioning decision differs from protected topology",
+        ));
+    }
+    Ok(())
+}
+
+fn top_level_allocation_decision(
+    root: &canic_core::ids::FleetSubnetRootBinding,
+    topology: &canic_core::control_plane_support::config::ComponentTopology,
+    prepared: &RootComponentRegistryView,
+    request: &RootComponentAllocationRequest,
+) -> Result<TopLevelComponentAllocationDecision, InternalError> {
+    let counts = ComponentRegistryOps::component_spec_counts(&request.component_spec)?;
+    reserve_top_level_component(TopLevelComponentAllocationInput {
+        operation_id: request.operation_id,
+        component_spec: &request.component_spec,
+        root,
+        topology,
+        next_allocation_sequence: prepared.next_allocation_sequence,
+        reserved_component_instances: prepared.reserved_component_instances,
+        committed_component_instances: prepared.committed_component_instances,
+        managed_descendants: prepared.managed_descendants,
+        reserved_spec_instances: counts.reserved,
+        committed_spec_instances: counts.committed,
+    })
+    .map_err(InternalError::from)
+}
+
 /// Read one durable top-level Component allocation reservation without mutation.
 pub fn allocation_status(
     request: RootComponentAllocationStatusRequest,
@@ -554,6 +739,14 @@ pub fn allocation_status(
         request.operation_id,
     )?;
     allocation_response(allocation)
+}
+
+/// Read one peer allocation for its exact active requester caller.
+pub fn peer_allocation_status(
+    request: RootComponentAllocationStatusRequest,
+) -> Result<RootComponentAllocationResponse, InternalError> {
+    require_active_peer_allocation_caller(request.operation_id)?;
+    allocation_status(request)
 }
 
 /// Durably reserve one direct child for the exact registered parent caller.
@@ -2021,6 +2214,14 @@ pub async fn create_allocation(
     advance_creation(request.operation_id, allocation, plan).await
 }
 
+/// Advance peer Component creation for its exact active requester caller.
+pub async fn create_peer_allocation(
+    request: RootComponentCreationRequest,
+) -> Result<RootComponentAllocationResponse, InternalError> {
+    require_active_peer_allocation_caller(request.operation_id)?;
+    create_allocation(request).await
+}
+
 /// Advance one created top-level Component through exact installation and verification.
 pub async fn install_allocation(
     request: RootComponentInstallRequest,
@@ -2049,6 +2250,14 @@ pub async fn install_allocation(
     let plan = component_install_plan(&authority.binding, &store, &allocation).await?;
 
     advance_install(request.operation_id, allocation, plan).await
+}
+
+/// Advance peer Component installation for its exact active requester caller.
+pub async fn install_peer_allocation(
+    request: RootComponentInstallRequest,
+) -> Result<RootComponentAllocationResponse, InternalError> {
+    require_active_peer_allocation_caller(request.operation_id)?;
+    Box::pin(install_allocation(request)).await
 }
 
 /// Install and independently verify one exactly created direct child through its root.
@@ -2412,6 +2621,14 @@ pub async fn commit_allocation(
     commit_response(committed, partition)
 }
 
+/// Commit one verified peer Component for its exact active requester caller.
+pub async fn commit_peer_allocation(
+    request: RootComponentCommitRequest,
+) -> Result<RootComponentCommitResponse, InternalError> {
+    require_active_peer_allocation_caller(request.operation_id)?;
+    commit_allocation(request).await
+}
+
 /// Distribute and independently verify exact Directories for one committed Component.
 pub async fn prepare_component_directories(
     request: RootComponentDirectoryPreparationRequest,
@@ -2464,6 +2681,14 @@ pub async fn prepare_component_directories(
     })
 }
 
+/// Prepare one peer Component's Directories for its exact active requester caller.
+pub async fn prepare_peer_component_directories(
+    request: RootComponentDirectoryPreparationRequest,
+) -> Result<RootComponentDirectoryPreparationResponse, InternalError> {
+    require_active_peer_allocation_caller(request.operation_id)?;
+    prepare_component_directories(request).await
+}
+
 /// Activate and independently verify one exact Directory-prepared Component runtime.
 pub async fn activate_component_runtime(
     request: RootComponentRuntimeActivationRequest,
@@ -2497,6 +2722,14 @@ pub async fn activate_component_runtime(
         committed: commit_response(allocation, plan.partition)?,
         target: response_target,
     })
+}
+
+/// Activate one peer Component runtime for its exact active requester caller.
+pub async fn activate_peer_component_runtime(
+    request: RootComponentRuntimeActivationRequest,
+) -> Result<RootComponentRuntimeActivationResponse, InternalError> {
+    require_active_peer_allocation_caller(request.operation_id)?;
+    activate_component_runtime(request).await
 }
 
 /// Activate Registry membership and converge one runtime-active Component on its current Directory.
@@ -2567,6 +2800,14 @@ pub async fn activate_component_membership(
         active_authority_hash,
     )
     .await
+}
+
+/// Activate one peer Component's membership for its exact active requester caller.
+pub async fn activate_peer_component_membership(
+    request: RootComponentMembershipActivationRequest,
+) -> Result<RootComponentMembershipActivationResponse, InternalError> {
+    require_active_peer_allocation_caller(request.operation_id)?;
+    activate_component_membership(request).await
 }
 
 async fn synchronize_active_membership(
@@ -6178,13 +6419,65 @@ fn validate_subtree_leaf_live_status(
 fn validate_allocation_caller(
     allocation: &RootComponentAllocationView,
 ) -> Result<(), InternalError> {
-    let expected = ComponentProvisioningOrigin::FleetAdministrator {
-        caller: IcOps::msg_caller(),
-    };
-    if allocation.provisioning_origin != expected {
+    if let ComponentProvisioningOrigin::FleetAdministrator { caller } =
+        &allocation.provisioning_origin
+        && *caller != IcOps::msg_caller()
+    {
         return Err(InternalError::conflict(
             "Component creation caller differs from its reserved administrator origin",
         ));
+    }
+    Ok(())
+}
+
+#[derive(Clone, Copy)]
+struct PeerRequesterAccessEvidence<'a> {
+    caller: candid::Principal,
+    indexed_component: Option<canic_core::ids::ComponentInstanceId>,
+    retained: &'a canic_core::ids::ComponentBinding,
+    current: &'a canic_core::ids::ComponentBinding,
+    current_status: ComponentLifecycleStatus,
+}
+
+impl PeerRequesterAccessEvidence<'_> {
+    fn is_exact_active(&self) -> bool {
+        let caller_is_retained = self.retained.canister_id == self.caller;
+        let index_is_retained = self.indexed_component == Some(self.retained.component);
+        let current_is_retained = self.current == self.retained;
+        caller_is_retained
+            && index_is_retained
+            && current_is_retained
+            && self.current_status == ComponentLifecycleStatus::Active
+    }
+}
+
+fn require_active_peer_allocation_caller(operation_id: [u8; 32]) -> Result<(), InternalError> {
+    let caller = IcOps::msg_caller();
+    let allocation = ComponentRegistryOps::allocation(operation_id).ok_or_else(|| {
+        InternalError::unavailable("peer Component allocation operation has not been reserved")
+    })?;
+    let ComponentProvisioningOrigin::Component { requester, .. } = &allocation.provisioning_origin
+    else {
+        return Err(InternalError::public(Error::forbidden(
+            "Component allocation was not requested through peer provisioning",
+        )));
+    };
+    let current = ComponentRegistryOps::partition(requester.component)?.ok_or_else(|| {
+        InternalError::public(Error::forbidden(
+            "peer Component allocation requester is no longer registered",
+        ))
+    })?;
+    let evidence = PeerRequesterAccessEvidence {
+        caller,
+        indexed_component: ComponentRegistryOps::component_for_principal(caller),
+        retained: requester,
+        current: &current.binding,
+        current_status: current.status,
+    };
+    if !evidence.is_exact_active() {
+        return Err(InternalError::public(Error::forbidden(
+            "peer Component allocation requester is no longer an exact Active Component",
+        )));
     }
     Ok(())
 }
@@ -6327,6 +6620,36 @@ fn validate_allocation_record(
             InternalErrorOrigin::Storage,
             "stored Component allocation role differs from its protected Spec",
         ));
+    }
+    validate_provisioning_origin(root, topology, allocation)?;
+    Ok(())
+}
+
+fn validate_provisioning_origin(
+    root: &canic_core::ids::FleetSubnetRootBinding,
+    topology: &canic_core::control_plane_support::config::ComponentTopology,
+    allocation: &RootComponentAllocationView,
+) -> Result<(), InternalError> {
+    match &allocation.provisioning_origin {
+        ComponentProvisioningOrigin::FleetAdministrator { .. } => {}
+        ComponentProvisioningOrigin::Component { requester, grant } => {
+            topology
+                .validate_component_binding(root, requester)
+                .map_err(|error| {
+                    InternalError::invariant(
+                        InternalErrorOrigin::Storage,
+                        format!("stored peer Component requester binding is invalid: {error}"),
+                    )
+                })?;
+            let expected =
+                topology.provisioning_grant(&requester.component_spec, &allocation.component_spec);
+            if expected != Some(grant.as_ref()) {
+                return Err(InternalError::invariant(
+                    InternalErrorOrigin::Storage,
+                    "stored peer Component provisioning origin differs from protected topology",
+                ));
+            }
+        }
     }
     Ok(())
 }
@@ -6739,34 +7062,48 @@ mod tests {
     }
 
     #[test]
-    fn component_directory_cursor_is_opaque_and_bound_to_head_and_filters() {
-        let root = candid::Principal::from_slice(&[1; 29]);
-        let component = ComponentInstanceId::from_generated_bytes([2; 32]);
-        let binding = ComponentBinding {
-            authority: FleetRegistryAuthority {
-                binding: FleetCoordinatorBinding {
-                    fleet: FleetBinding {
-                        fleet: FleetKey {
-                            canonical_network_id: CanonicalNetworkId::ic_mainnet(),
-                            fleet_id: FleetId::from_generated_bytes([3; 32]),
-                        },
-                        app: AppId::from("toko"),
-                    },
-                    coordinator_subnet: SubnetId::from_principal(candid::Principal::from_slice(
-                        &[4; 29],
-                    )),
-                    coordinator: candid::Principal::from_slice(&[5; 29]),
-                },
-                epoch: 1,
-            },
-            component,
-            component_spec: "projects".parse().expect("Component Spec"),
-            spec_hash: [6; 32],
-            role: CanisterRole::new("project_hub"),
-            placement_subnet: SubnetId::from_principal(candid::Principal::from_slice(&[7; 29])),
-            fleet_subnet_root: root,
-            canister_id: candid::Principal::from_slice(&[8; 29]),
+    fn peer_requester_access_requires_exact_active_top_level_component() {
+        let requester = component_binding();
+        let caller = requester.canister_id;
+        let exact = PeerRequesterAccessEvidence {
+            caller,
+            indexed_component: Some(requester.component),
+            retained: &requester,
+            current: &requester,
+            current_status: ComponentLifecycleStatus::Active,
         };
+        assert!(exact.is_exact_active());
+
+        let foreign_caller = PeerRequesterAccessEvidence {
+            caller: candid::Principal::from_slice(&[9; 29]),
+            ..exact
+        };
+        assert!(!foreign_caller.is_exact_active());
+        let missing_index = PeerRequesterAccessEvidence {
+            indexed_component: None,
+            ..exact
+        };
+        assert!(!missing_index.is_exact_active());
+        let drifted_binding = ComponentBinding {
+            canister_id: candid::Principal::from_slice(&[10; 29]),
+            ..requester.clone()
+        };
+        let drifted = PeerRequesterAccessEvidence {
+            current: &drifted_binding,
+            ..exact
+        };
+        assert!(!drifted.is_exact_active());
+        let draining = PeerRequesterAccessEvidence {
+            current_status: ComponentLifecycleStatus::Draining,
+            ..exact
+        };
+        assert!(!draining.is_exact_active());
+    }
+
+    #[test]
+    fn component_directory_cursor_is_opaque_and_bound_to_head_and_filters() {
+        let binding = component_binding();
+        let root = binding.fleet_subnet_root;
         let mut request = ComponentDirectoryPageRequest {
             directory: ComponentDirectoryHead {
                 provenance: ComponentDirectoryProvenance {
@@ -6803,5 +7140,34 @@ mod tests {
         let mut malformed = request;
         malformed.cursor = Some(ComponentDirectoryPageCursor(vec![1, 2, 3]));
         assert!(decode_component_directory_cursor(&malformed).is_err());
+    }
+
+    fn component_binding() -> ComponentBinding {
+        let root = candid::Principal::from_slice(&[1; 29]);
+        ComponentBinding {
+            authority: FleetRegistryAuthority {
+                binding: FleetCoordinatorBinding {
+                    fleet: FleetBinding {
+                        fleet: FleetKey {
+                            canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+                            fleet_id: FleetId::from_generated_bytes([3; 32]),
+                        },
+                        app: AppId::from("toko"),
+                    },
+                    coordinator_subnet: SubnetId::from_principal(candid::Principal::from_slice(
+                        &[4; 29],
+                    )),
+                    coordinator: candid::Principal::from_slice(&[5; 29]),
+                },
+                epoch: 1,
+            },
+            component: ComponentInstanceId::from_generated_bytes([2; 32]),
+            component_spec: "projects".parse().expect("Component Spec"),
+            spec_hash: [6; 32],
+            role: CanisterRole::new("project_hub"),
+            placement_subnet: SubnetId::from_principal(candid::Principal::from_slice(&[7; 29])),
+            fleet_subnet_root: root,
+            canister_id: candid::Principal::from_slice(&[8; 29]),
+        }
     }
 }
