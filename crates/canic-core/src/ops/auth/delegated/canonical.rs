@@ -26,15 +26,10 @@ const ROOT_KEY_POLICY_DOMAIN: &[u8] = b"CANIC_ROOT_KEY_POLICY_V1";
 const DELEGATED_AUTH_REGISTRY_DOMAIN: &[u8] = b"CANIC_DELEGATED_AUTH_REGISTRY_SNAPSHOT_V1";
 pub const MAX_TOKEN_EXT_BYTES: usize = 4096;
 
-///
-/// CanonicalDomain
-///
-/// Domain byte assigned to one delegated auth canonical payload family.
-///
-
+// Domain byte assigned to one delegated-auth canonical payload family.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CanonicalDomain {
+enum CanonicalDomain {
     DelegationCert = 1,
     DelegatedTokenClaims = 2,
     DelegationProof = 3,
@@ -570,6 +565,10 @@ fn encode_len(out: &mut Vec<u8>, len: usize) {
     let len = u32::try_from(len).expect("delegated auth canonical vector length exceeds u32");
     out.extend_from_slice(&len.to_be_bytes());
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

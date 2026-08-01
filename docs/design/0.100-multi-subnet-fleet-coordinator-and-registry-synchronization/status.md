@@ -6,10 +6,10 @@ Date: 2026-08-01
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.74`.
-- Latest published release: `v0.100.74` at
-  `41d878b128fd21d7304ecbd045ea2b5ecaf89dfe`.
-- Open patch draft: `0.100.75`; no package-version change has been authorized.
+- Workspace package version: `0.100.75`.
+- Latest published release: `v0.100.75` at
+  `82460d22ee644a0142672a7c9194716d3ad5822e`.
+- Open patch draft: `0.100.76`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -973,7 +973,7 @@ cycle evidence before stop/delete; only that executor may attest typed absence
 and create the surviving terminal receipt. The Coordinator never becomes the
 root controller, and no new memory ID or compatibility decoder is added.
 
-Open 0.100.75 adds that maintained host executor. It resumes from terminal,
+Released 0.100.75 adds that maintained host executor. It resumes from terminal,
 execution and root-preparation status rather than inventing a host journal,
 requires complete controller-private management evidence and revalidates the
 frozen module/controller/cycle authority before stop and delete. The active
@@ -984,12 +984,19 @@ status. Only destination-invalid/`IC0301` Canister-not-found for the exact root
 is absence; all transport, reachability and Subnet failures remain errors. The
 delete disables ICP CLI's temporary cycle-recovery Wasm, so only the bounded
 retained root reserve is burned and no cycles are redirected to the executor.
-The same draft carries the exact host-only `ic-query 0.21.1` dependency
+The same release carries the exact host-only `ic-query 0.21.1` dependency
 correction; Canic's consumed `subnet_catalog` Rust boundary is unchanged.
+
+Open 0.100.76 splits that maintained host boundary into explicit preparation
+and execution phases. Preparation may return excess root cycles and durably
+freeze the Coordinator executor intent, but does not stop or delete the root.
+The guarded maintainer runner can then exit and resume destructive execution
+in a fresh process from remote authority alone; it adds no host journal or
+general operator command.
 
 ## Next Action
 
-Exercise the maintained host executor through one disposable real-network
-root deletion, including restart from a retained execution intent and the
-surviving Coordinator terminal receipt. Then close the 0.100 implementation
+Run preparation and execution as separate processes against one explicitly
+selected disposable real-network root, verify the surviving Coordinator
+terminal receipt and its exact replay, then close the 0.100 implementation
 against the final design before beginning 0.101.

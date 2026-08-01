@@ -114,11 +114,7 @@ fn local_store_status(
     gc: WasmStoreGcStatus,
 ) -> Result<crate::dto::template::WasmStoreStatusResponse, InternalError> {
     let store = config::current_wasm_store()?;
-    let limits = WasmStoreLimits {
-        max_store_bytes: store.max_store_bytes(),
-        max_templates: store.max_templates(),
-        max_template_versions_per_template: store.max_template_versions_per_template(),
-    };
+    let limits = WasmStoreLimits::from(&store);
     Ok(TemplateChunkedOps::store_status_response(
         limits,
         store.headroom_bytes(),

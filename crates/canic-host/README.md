@@ -61,8 +61,9 @@ Current 0.100 installation flow:
   Registry as all-`Active`
 - atomically activate and independently verify every root's exact all-`Active`
   Registry Mirror and Registry-derived Fleet Directory
-- keep every root runtime-`Prepared` and stop before Component creation,
-  runtime activation, or terminal Fleet-catalog publication
+- seal each root's exact empty initial Component inventory, independently
+  activate its runtime, and publish the terminal Coordinator-anchored Fleet
+  catalog only after every root is reverified
 
 The local driver permits one clean local `icp` restart attempt when
 `icp ping local` fails. Exact journals own same-release interruption recovery;
@@ -103,3 +104,29 @@ local and connected profiles resolve only through the exact root key and
 enrollment record under `.canic/networks/<canonical-network-id>/`; the
 environment profile is revalidated as a non-authoritative lookup on every
 resolution.
+
+## Disposable physical-root deletion proof
+
+The `fleet_subnet_root_deletion` example exists for the bounded 0.100
+real-network proof. It is not a general operator command. Both phases mutate
+the selected Fleet: `prepare` may return excess root cycles and durably freezes
+the Coordinator execution intent; `execute` stops and irreversibly deletes the
+exact root before recording typed absence at the surviving Coordinator.
+
+Use it only after the selected disposable root has completed logical removal,
+Store deletion, and retained the same nonzero operation ID. Run preparation
+and execution as separate processes to prove recovery from remote authority:
+
+```text
+cargo run -p canic-host --example fleet_subnet_root_deletion -- \
+  prepare --confirm-disposable-root-deletion \
+  icp . <environment> <coordinator> <root> <64-hex-operation-id>
+
+cargo run -p canic-host --example fleet_subnet_root_deletion -- \
+  execute --confirm-disposable-root-deletion \
+  icp . <environment> <coordinator> <root> <64-hex-operation-id>
+```
+
+The prepare output is the exact Coordinator execution receipt. The execute
+output is its terminal deletion receipt; repeating execute returns that same
+terminal receipt without another root effect.

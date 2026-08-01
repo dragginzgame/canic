@@ -5,6 +5,7 @@
 //! Boundary: ops layer between workflows and stable storage facades.
 
 pub mod auth;
+mod canister;
 pub mod children;
 pub mod cycles;
 pub mod directory;

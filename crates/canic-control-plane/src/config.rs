@@ -12,7 +12,7 @@ use std::collections::BTreeSet;
 /// Return the implicit store policy used by the Fleet Subnet Root.
 #[cfg(feature = "root-control-plane")]
 #[must_use]
-pub fn fleet_subnet_root_default_wasm_store() -> WasmStoreConfig {
+pub const fn fleet_subnet_root_default_wasm_store() -> WasmStoreConfig {
     WasmStoreConfig::implicit()
 }
 

@@ -14,7 +14,7 @@ use crate::{
     },
     domain::policy::pure::{
         topology::{TopologyPolicy, TopologyPolicyError},
-        upgrade::plan_upgrade,
+        upgrade::should_upgrade,
     },
     dto::cascade::{StateSnapshotInput, TopologySnapshotInput},
     ids::CanisterRole,
@@ -238,11 +238,11 @@ impl CanisterLifecycleWorkflow {
         let module_source = upgrade_module_source(&role).await?;
         let target_hash = module_source.module_hash().to_vec();
         let current_hash = upgrade_current_hash(pid, &role).await?;
-        let plan = plan_upgrade(current_hash, target_hash.clone());
+        let should_upgrade = should_upgrade(current_hash.as_deref(), &target_hash);
 
         assert_upgrade_parent(pid, parent_pid, &role)?;
 
-        if !plan.should_upgrade {
+        if !should_upgrade {
             log!(
                 Topic::CanisterLifecycle,
                 Info,
@@ -734,6 +734,10 @@ fn assert_registered_immediate_parent(
         .into())
     }
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

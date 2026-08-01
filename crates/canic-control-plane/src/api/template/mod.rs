@@ -359,11 +359,7 @@ async fn publication_admin(cmd: WasmStoreAdminCommand) -> Result<WasmStoreAdminR
 #[cfg(feature = "root-control-plane")]
 fn publication_overview() -> WasmStoreOverviewResponse {
     let store = config::fleet_subnet_root_default_wasm_store();
-    let limits = WasmStoreLimits {
-        max_store_bytes: store.max_store_bytes(),
-        max_templates: store.max_templates(),
-        max_template_versions_per_template: store.max_template_versions_per_template(),
-    };
+    let limits = WasmStoreLimits::from(&store);
     let headroom_bytes = store.headroom_bytes();
     let publication = SubnetStateOps::publication_store_state_response();
     let stores = SubnetStateOps::wasm_stores()
@@ -412,11 +408,7 @@ fn local_template_catalog() -> Vec<WasmStoreCatalogEntryResponse> {
 #[cfg(feature = "wasm-store-canister")]
 fn local_template_status(gc: WasmStoreGcStatus) -> Result<WasmStoreStatusResponse, Error> {
     let store = config::current_wasm_store().map_err(Error::from)?;
-    let limits = WasmStoreLimits {
-        max_store_bytes: store.max_store_bytes(),
-        max_templates: store.max_templates(),
-        max_template_versions_per_template: store.max_template_versions_per_template(),
-    };
+    let limits = WasmStoreLimits::from(&store);
     Ok(TemplateChunkedOps::store_status_response(
         limits,
         store.headroom_bytes(),
@@ -430,11 +422,7 @@ fn local_prepare_chunk_set(
 ) -> Result<TemplateChunkSetInfoResponse, Error> {
     WasmStoreGcOps::require_writable()?;
     let store = config::current_wasm_store().map_err(Error::from)?;
-    let limits = WasmStoreLimits {
-        max_store_bytes: store.max_store_bytes(),
-        max_templates: store.max_templates(),
-        max_template_versions_per_template: store.max_template_versions_per_template(),
-    };
+    let limits = WasmStoreLimits::from(&store);
     TemplateChunkedOps::prepare_chunk_set_in_store_from_input(request, now_secs(), limits)
         .map_err(Error::from)
 }
@@ -443,11 +431,7 @@ fn local_prepare_chunk_set(
 fn local_stage_manifest(request: TemplateManifestInput) -> Result<(), Error> {
     WasmStoreGcOps::require_writable()?;
     let store = config::current_wasm_store().map_err(Error::from)?;
-    let limits = WasmStoreLimits {
-        max_store_bytes: store.max_store_bytes(),
-        max_templates: store.max_templates(),
-        max_template_versions_per_template: store.max_template_versions_per_template(),
-    };
+    let limits = WasmStoreLimits::from(&store);
     TemplateChunkedOps::replace_approved_in_store_from_input(request, limits).map_err(Error::from)
 }
 
@@ -455,11 +439,7 @@ fn local_stage_manifest(request: TemplateManifestInput) -> Result<(), Error> {
 fn local_publish_chunk(request: TemplateChunkInput) -> Result<(), Error> {
     WasmStoreGcOps::require_writable()?;
     let store = config::current_wasm_store().map_err(Error::from)?;
-    let limits = WasmStoreLimits {
-        max_store_bytes: store.max_store_bytes(),
-        max_templates: store.max_templates(),
-        max_template_versions_per_template: store.max_template_versions_per_template(),
-    };
+    let limits = WasmStoreLimits::from(&store);
     TemplateChunkedOps::publish_chunk_in_store_from_input(request, limits).map_err(Error::from)
 }
 

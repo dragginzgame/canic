@@ -5,30 +5,9 @@
 //! Boundary: ops mapper used by topology workflows.
 
 use crate::{
-    cdk::types::Principal,
     model::topology::{TopologyEntry, TopologyRegistry},
-    storage::{canister::CanisterRecord, stable::registry::subnet::SubnetRegistryData},
+    storage::stable::registry::subnet::SubnetRegistryData,
 };
-
-///
-/// TopologyEntryMapper
-///
-/// Operations-layer mapper for canister records and topology policy inputs.
-///
-
-pub struct TopologyEntryMapper;
-
-impl TopologyEntryMapper {
-    #[must_use]
-    pub fn record_to_entry(pid: Principal, record: CanisterRecord) -> TopologyEntry {
-        TopologyEntry {
-            pid,
-            role: record.role,
-            parent_pid: record.parent_pid,
-            module_hash: record.module_hash,
-        }
-    }
-}
 
 ///
 /// TopologyRegistryMapper
@@ -45,7 +24,12 @@ impl TopologyRegistryMapper {
             entries: data
                 .entries
                 .into_iter()
-                .map(|entry| TopologyEntryMapper::record_to_entry(entry.pid, entry.record))
+                .map(|entry| TopologyEntry {
+                    pid: entry.pid,
+                    role: entry.record.role,
+                    parent_pid: entry.record.parent_pid,
+                    module_hash: entry.record.module_hash,
+                })
                 .collect(),
         }
     }
