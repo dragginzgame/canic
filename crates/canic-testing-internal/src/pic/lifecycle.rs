@@ -135,7 +135,7 @@ pub fn invalid_init_args() -> Vec<u8> {
         authority: CanisterInitAuthority::Infrastructure {
             fleet: identity.fleet,
             env: EnvBootstrapArgs {
-                fleet_root_pid: None,
+                fleet_subnet_root_pid: None,
                 component_spec: None,
                 subnet_pid: None,
                 root_pid: None,

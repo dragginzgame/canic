@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.76`.
-- The latest published release is `v0.100.76` at
-  `b76cb202e7e1a240a144b636dbfbc9e3727f7b89`.
-- Open `0.100.77` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.77`.
+- The latest published release is `v0.100.77` at
+  `b92255a006283f10c3b071afc6b7cae0a5dfac59`.
+- Open `0.100.78` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -643,15 +643,21 @@ Historical detail is archived at:
   collapses the implicit Store policy to its one nonserialized production
   shape and removes redundant record, topology and upgrade wrappers without a
   maintained surface change.
-- Open `0.100.77` implements grant-checked same-root peer Component
+- Released `0.100.77` implements grant-checked same-root peer Component
   provisioning through public root endpoints. The exact Active requester and
   compiled grant become durable causal origin, never parentage; per-requester
   live capacity intersects ordinary target admission and root limits, while
   the root remains sole Store resolver, controller, Registry owner and
   lifecycle executor. Exact replay and every phase are proven in PocketIC.
-  The same draft narrows role-only control-plane builds, centralizes duplicate
+  The same release narrows role-only control-plane builds, centralizes duplicate
   template chunk validation and removes the final one-use Fleet command
   mapper.
+- Open `0.100.78` hard-cuts generic Fleet Root terminology from maintained
+  contracts. Runtime/stable/Candid environment state, the endpoint access
+  DSL, topology validators, the demo package and operator wording now use
+  Fleet Subnet Root directly, with no old alias or transition decoder. The
+  same draft removes one-field host Registry-query and peer-provisioning
+  policy result wrappers.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -682,7 +688,7 @@ Historical detail is archived at:
   release-set manifest for each root. A separate exact Canic infrastructure
   manifest qualifies the Coordinator, Fleet Subnet Root and Wasm Store. The
   host installs the Coordinator and roots directly; each root bootstraps only
-  its own verified local Store. The Coordinator manages Fleet roots and
+  its own verified local Store. The Coordinator manages Fleet Subnet Roots and
   publication, not ordinary Component inventories.
 - The required 0.100 closeout operator surface now includes
   `canic info subnets <fleet> [--json]`. It resolves the Coordinator from the
@@ -1947,8 +1953,10 @@ First primary results:
 
 ## Next Action
 
-Finish the remaining terminology and reinstall-only decoder audit, then run
-the guarded host preparation and execution phases as separate processes
+Hard-cut the remaining local `SubnetRegistry`/`SubnetDirectory` layer to the
+root-owned Component Registry/Directory authority and complete the
+reinstall-only decoder audit, then run the guarded host preparation and
+execution phases as separate processes
 against one explicitly selected disposable real-network root. Verify the
 surviving Coordinator terminal receipt and exact replay before closing 0.100
 against the accepted design and beginning 0.101. The retained implementation
@@ -2263,17 +2271,23 @@ authority. The same release removes the stale serializable implicit-Store policy
 wrapper and redundant record, topology and upgrade mapping wrappers. The next
 evidence is one explicitly selected disposable real-network deletion,
 terminal-receipt replay and 0.100 closeout against the accepted design.
-Open `0.100.77` implements the same-root Component Provisioning Grant runtime
+Released `0.100.77` implements the same-root Component Provisioning Grant runtime
 contract. An exact Active top-level Component can drive a target Component
 through root-owned reservation, Store-backed creation/install, Registry
 commitment and Directory/runtime/membership activation. Durable origin records
 the requester and exact compiled grant without adding parentage, and the
 per-requester/root ceiling counts reservations plus committed non-Removed
 targets. PocketIC proves the complete public caller journey, exact replay and
-ceiling exhaustion. The same draft narrows role-only control-plane
+ceiling exhaustion. The same release narrows role-only control-plane
 compilation, centralizes duplicate template chunk conversion/validation and
 removes the one-use Fleet command mapper. No compatibility path or
 package-version change is introduced.
+Open `0.100.78` completes the Fleet Subnet Root terminology hard cut across
+maintained environment, access-DSL, topology, package, CLI and fixture
+surfaces. The old generic field, predicate and package identity are absent
+rather than decoded or aliased. One-field host Registry-query and
+peer-provisioning policy result wrappers are also removed; their callers
+consume the existing vector and approved grant directly.
 
 ## Historical Release Detail
 

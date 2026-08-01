@@ -62,7 +62,7 @@ impl ComponentTopology {
     }
 
     /// Validate every root in one Fleet plan, including uniqueness and admission sums.
-    pub fn validate_fleet_root_bindings(
+    pub fn validate_fleet_subnet_root_bindings(
         &self,
         bindings: &[FleetSubnetRootBinding],
     ) -> Result<(), ComponentTopologyError> {

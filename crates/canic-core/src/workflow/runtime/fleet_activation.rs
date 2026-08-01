@@ -185,7 +185,7 @@ impl FleetActivationWorkflow {
             && let Err(error) = crate::workflow::runtime::RuntimeWorkflow::start_all_root()
         {
             IcOps::trap(format!(
-                "Fleet root activation could not establish runtime services: {error}"
+                "Fleet Subnet Root activation could not establish runtime services: {error}"
             ));
         }
         Ok(transition)

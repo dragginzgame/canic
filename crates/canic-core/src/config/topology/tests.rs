@@ -656,7 +656,7 @@ fn protected_bindings_validate_exact_root_component_and_multilevel_child_shape()
 }
 
 #[test]
-fn fleet_root_bindings_enforce_one_root_per_fleet_subnet_and_admission_sums() {
+fn fleet_subnet_root_bindings_enforce_one_root_per_fleet_subnet_and_admission_sums() {
     let topology = topology();
     let first = root_binding(
         &topology,
@@ -678,20 +678,20 @@ fn fleet_root_bindings_enforce_one_root_per_fleet_subnet_and_admission_sums() {
     );
 
     topology
-        .validate_fleet_root_bindings(&[first.clone(), second.clone()])
+        .validate_fleet_subnet_root_bindings(&[first.clone(), second.clone()])
         .expect("distinct roots and Subnets");
 
     let mut duplicate_subnet = second.clone();
     duplicate_subnet.placement_subnet = first.placement_subnet;
     std::assert_matches!(
-        topology.validate_fleet_root_bindings(&[first.clone(), duplicate_subnet]),
+        topology.validate_fleet_subnet_root_bindings(&[first.clone(), duplicate_subnet]),
         Err(ComponentTopologyError::DuplicateFleetSubnetRootSubnet { .. })
     );
 
     let mut duplicate_root = second;
     duplicate_root.fleet_subnet_root = first.fleet_subnet_root;
     std::assert_matches!(
-        topology.validate_fleet_root_bindings(&[first, duplicate_root]),
+        topology.validate_fleet_subnet_root_bindings(&[first, duplicate_root]),
         Err(ComponentTopologyError::DuplicateFleetSubnetRootPrincipal { .. })
     );
 }

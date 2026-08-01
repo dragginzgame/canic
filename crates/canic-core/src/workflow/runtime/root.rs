@@ -69,16 +69,16 @@ pub fn init_root_canister(args: FleetSubnetRootInitArgs) -> Result<(), InternalE
     log_memory_summary();
 
     let subnet_pid = self_pid;
-    let fleet_root_pid = self_pid;
+    let fleet_subnet_root_pid = self_pid;
     let module_hash = Some(args.authority.expected_module_hash.to_vec());
 
     let input = EnvInput {
-        fleet_root_pid: Some(fleet_root_pid),
+        fleet_subnet_root_pid: Some(fleet_subnet_root_pid),
         component_spec: None,
         subnet_pid: Some(subnet_pid),
         root_pid: Some(self_pid),
         canister_role: Some(CanisterRole::ROOT),
-        parent_pid: Some(fleet_root_pid),
+        parent_pid: Some(fleet_subnet_root_pid),
     };
 
     let build_network = BuildNetworkOps::build_network().ok_or_else(|| {

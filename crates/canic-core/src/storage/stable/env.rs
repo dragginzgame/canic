@@ -21,7 +21,7 @@ eager_static! {
 ///
 /// EnvRecord
 ///
-/// `fleet_root_pid` : passed to the root during install arguments.
+/// `fleet_subnet_root_pid` : passed to the root during install arguments.
 /// `parent_pid`     : passed to the root during install arguments.
 ///
 /// All other fields are derived during install/upgrade and cached locally so
@@ -36,7 +36,7 @@ pub struct EnvRecord {
     pub managed_binding: Option<ManagedCanisterBinding>,
 
     // fleet
-    pub fleet_root_pid: Option<Principal>,
+    pub fleet_subnet_root_pid: Option<Principal>,
 
     // Component declaration and physical Subnet placement
     pub component_spec: Option<ComponentSpecId>,
@@ -77,8 +77,8 @@ pub struct Env;
 
 impl Env {
     #[must_use]
-    pub(crate) fn get_fleet_root_pid() -> Option<Principal> {
-        ENV.with_borrow(|cell| cell.get().fleet_root_pid)
+    pub(crate) fn get_fleet_subnet_root_pid() -> Option<Principal> {
+        ENV.with_borrow(|cell| cell.get().fleet_subnet_root_pid)
     }
 
     #[must_use]

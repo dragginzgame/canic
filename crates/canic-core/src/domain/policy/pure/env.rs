@@ -11,7 +11,7 @@ use thiserror::Error as ThisError;
 
 #[derive(Clone, Debug)]
 pub struct EnvInput {
-    pub fleet_root_pid: Option<Principal>,
+    pub fleet_subnet_root_pid: Option<Principal>,
     pub component_spec: Option<ComponentSpecId>,
     pub subnet_pid: Option<Principal>,
     pub root_pid: Option<Principal>,
@@ -31,8 +31,8 @@ pub enum EnvPolicyError {
 
 pub fn validate_or_default(raw_env: EnvInput) -> Result<ValidatedEnv, EnvPolicyError> {
     let mut missing = Vec::new();
-    if raw_env.fleet_root_pid.is_none() {
-        missing.push("fleet_root_pid");
+    if raw_env.fleet_subnet_root_pid.is_none() {
+        missing.push("fleet_subnet_root_pid");
     }
     if raw_env.subnet_pid.is_none() {
         missing.push("subnet_pid");
@@ -59,9 +59,9 @@ pub fn validate_or_default(raw_env: EnvInput) -> Result<ValidatedEnv, EnvPolicyE
         return Err(EnvPolicyError::MissingEnvFields(missing.join(", ")));
     }
 
-    let fleet_root_pid = raw_env
-        .fleet_root_pid
-        .ok_or_else(|| EnvPolicyError::MissingEnvFields("fleet_root_pid".to_string()))?;
+    let fleet_subnet_root_pid = raw_env
+        .fleet_subnet_root_pid
+        .ok_or_else(|| EnvPolicyError::MissingEnvFields("fleet_subnet_root_pid".to_string()))?;
     let component_spec = raw_env.component_spec;
     let subnet_pid = raw_env
         .subnet_pid
@@ -78,7 +78,7 @@ pub fn validate_or_default(raw_env: EnvInput) -> Result<ValidatedEnv, EnvPolicyE
 
     Ok(ValidatedEnv {
         managed_binding: None,
-        fleet_root_pid,
+        fleet_subnet_root_pid,
         component_spec,
         subnet_pid,
         root_pid,
@@ -94,7 +94,7 @@ mod tests {
     fn input(role: CanisterRole, component_spec: Option<ComponentSpecId>) -> EnvInput {
         let principal = Principal::from_slice(&[1; 29]);
         EnvInput {
-            fleet_root_pid: Some(principal),
+            fleet_subnet_root_pid: Some(principal),
             component_spec,
             subnet_pid: Some(principal),
             root_pid: Some(principal),

@@ -26,7 +26,6 @@ pub(super) fn call_subnet_registry(
         Some(icp_root),
         candid_path.as_deref(),
     )
-    .map(|query| query.entries)
     .map_err(backup_subnet_registry_error)
 }
 

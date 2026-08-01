@@ -41,8 +41,8 @@ Canic treats config/env identity as startup invariants. Missing env data is a fa
   `CurrentRootInstallIdentity` without a registry lookup.
   - The Fleet Subnet Root sits outside every Component Spec.
   - One root may manage several admitted Component Specs.
-  - The transitional `fleet_root_pid` env field identifies the exact owning
-    Fleet Subnet Root, not a Fleet-wide singleton root.
+  - The protected `fleet_subnet_root_pid` env field identifies the exact
+    owning Fleet Subnet Root, not a Fleet-wide singleton root.
 - Non-root env: children must receive a complete `EnvBootstrapArgs` in `CanisterInitPayload` from root.
   - The current transitional selector names the exact owning Component Spec;
     the frozen protected `ComponentBinding` replaces it when root-local

@@ -16,15 +16,6 @@ const CANIC_SUBNET_REGISTRY_METHOD: &str = "canic_subnet_registry";
 const ICP_JSON_OUTPUT: &str = "json";
 
 ///
-/// SubnetRegistryQuery
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SubnetRegistryQuery {
-    pub entries: Vec<RegistryEntry>,
-}
-
-///
 /// SubnetRegistryQueryError
 ///
 
@@ -47,7 +38,7 @@ pub fn query_subnet_registry(
     environment: &str,
     icp_root: Option<&Path>,
     candid_path: Option<&Path>,
-) -> Result<SubnetRegistryQuery, SubnetRegistryQueryError> {
+) -> Result<Vec<RegistryEntry>, SubnetRegistryQueryError> {
     if replica_query::should_use_local_replica_query(Some(environment)) {
         return query_local_subnet_registry(root, environment, icp_root);
     }
@@ -58,16 +49,17 @@ pub fn query_subnet_registry(
         Some(ICP_JSON_OUTPUT),
         candid_path,
     )?;
-    Ok(SubnetRegistryQuery {
-        entries: parse_registry_entries(&output)?,
-    })
+    Ok(parse_registry_entries(&output)?)
 }
 
 fn query_local_subnet_registry(
     root: &str,
     environment: &str,
     icp_root: Option<&Path>,
-) -> Result<SubnetRegistryQuery, SubnetRegistryQueryError> {
-    let entries = replica_query::query_subnet_registry_entries(Some(environment), root, icp_root)?;
-    Ok(SubnetRegistryQuery { entries })
+) -> Result<Vec<RegistryEntry>, SubnetRegistryQueryError> {
+    Ok(replica_query::query_subnet_registry_entries(
+        Some(environment),
+        root,
+        icp_root,
+    )?)
 }

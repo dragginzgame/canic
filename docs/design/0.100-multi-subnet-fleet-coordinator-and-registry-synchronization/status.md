@@ -6,10 +6,10 @@ Date: 2026-08-01
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.76`.
-- Latest published release: `v0.100.76` at
-  `b76cb202e7e1a240a144b636dbfbc9e3727f7b89`.
-- Open patch draft: `0.100.77`; no package-version change has been authorized.
+- Workspace package version: `0.100.77`.
+- Latest published release: `v0.100.77` at
+  `b92255a006283f10c3b071afc6b7cae0a5dfac59`.
+- Open patch draft: `0.100.78`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -87,7 +87,7 @@ Registry slices replace the 0.99 root model.
   Component admissions, root limits and protected Component/child bindings.
 - [x] Bind every Component Child to its immediate Component-tree parent so
   protected identity can represent arbitrary runtime depth.
-- [ ] Hard-cut Fleet Root to Fleet Subnet Root.
+- [x] Hard-cut Fleet Root to Fleet Subnet Root.
 - [ ] Hard-cut local `SubnetRegistry` and `SubnetDirectory` to root-owned
   per-Component `ComponentRegistry` and `ComponentDirectory`.
 - [x] Split Fleet and Component Directory provenance.
@@ -378,7 +378,7 @@ each exact placement and funding effect, creates and installs the qualified
 root Wasm, then verifies the live module hash, empty `Prepared` activation
 status and protected Fleet/Coordinator/Subnet/admission/limit/release-set
 authority. Only after all roots are verified does it validate the complete
-Fleet root-binding set and reach the next explicit fence. The obsolete
+Fleet Subnet Root-binding set and reach the next explicit fence. The obsolete
 single-root activation journal and its root creation, cycles and catalog-write
 paths are hard-cut; one small Fleet install session retains only shared
 identity and finalized release evidence.
@@ -994,7 +994,7 @@ The guarded maintainer runner can then exit and resume destructive execution
 in a fresh process from remote authority alone; it adds no host journal or
 general operator command.
 
-Open 0.100.77 implements same-root Component Provisioning Grants through one
+Released 0.100.77 implements same-root Component Provisioning Grants through one
 public root lifecycle family. A new reservation authenticates an exact Active
 top-level Component, retains its exact binding plus compiled grant as causal
 origin, enforces the per-requester/root ceiling across live reservations and
@@ -1003,12 +1003,24 @@ installation and root-owned Registry/Directory activation. Every later public
 phase reauthenticates the exact Active requester; controller-only endpoints
 remain the recovery authority. PocketIC proves the complete installed
 Component-to-root journey, exact retry, absence of parentage and exhausted
-grant rejection. The same draft contains role-owned control-plane compilation
+grant rejection. The same release contains role-owned control-plane compilation
 cleanup recorded in the release changelog.
+
+Open 0.100.78 hard-cuts the remaining generic Fleet Root contract to Fleet
+Subnet Root. Environment/stable/Candid state now uses
+`fleet_subnet_root_pid`; the endpoint access DSL uses
+`env::is_fleet_subnet_root()`; topology validation, the maintained demo
+package, CLI wording and runtime errors use the same exact term. No old field,
+predicate, enum variant, accessor, package identity, alias or transition
+decoder remains in maintained source. The same draft removes one-field host
+Subnet Registry and peer-provisioning policy result wrappers; their callers
+now consume the existing Registry-entry vector and approved grant directly.
 
 ## Next Action
 
-Finish the remaining terminology and reinstall-only decoder audit, then run
+Hard-cut the remaining local `SubnetRegistry`/`SubnetDirectory` layer to the
+root-owned Component Registry/Directory authority and complete the
+reinstall-only decoder audit, then run
 preparation and execution as separate processes against one explicitly
 selected disposable real-network root. Verify the surviving Coordinator
 terminal receipt and exact replay before closing 0.100 against the final

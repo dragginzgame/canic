@@ -117,7 +117,7 @@ pub fn import_test_env(
         canister_role: Some(canister_role.into()),
         component_spec: Some(component_spec.into()),
         root_pid: Some(root_pid),
-        fleet_root_pid: Some(root_pid),
+        fleet_subnet_root_pid: Some(root_pid),
         subnet_pid: Some(root_pid),
         parent_pid: Some(root_pid),
     };

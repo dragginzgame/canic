@@ -57,7 +57,7 @@ pub enum DelegatedSessionSubjectRejection {
     RootCanister,
     ParentCanister,
     SubnetCanister,
-    FleetRootCanister,
+    FleetSubnetRootCanister,
     RegisteredCanister,
 }
 
@@ -70,7 +70,7 @@ impl fmt::Display for DelegatedSessionSubjectRejection {
             Self::RootCanister => "root canister principal is not allowed",
             Self::ParentCanister => "parent canister principal is not allowed",
             Self::SubnetCanister => "subnet principal is not allowed",
-            Self::FleetRootCanister => "Fleet root principal is not allowed",
+            Self::FleetSubnetRootCanister => "Fleet Subnet Root principal is not allowed",
             Self::RegisteredCanister => "subnet-registered canister principal is not allowed",
         };
         f.write_str(reason)

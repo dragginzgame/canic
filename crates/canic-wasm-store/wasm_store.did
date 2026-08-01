@@ -47,7 +47,7 @@ type CyclesRequest = record {
 };
 type CyclesResponse = record { cycles_transferred : nat };
 type EnvBootstrapArgs = record {
-  fleet_root_pid : opt principal;
+  fleet_subnet_root_pid : opt principal;
   canister_role : opt text;
   subnet_slot : opt text;
   root_pid : opt principal;

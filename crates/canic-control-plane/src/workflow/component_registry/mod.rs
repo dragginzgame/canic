@@ -676,7 +676,7 @@ fn authorize_new_peer_allocation(
     };
     let counts =
         ComponentRegistryOps::peer_component_counts(&requester.binding, target_component_spec)?;
-    let decision = authorize_peer_component_provisioning(PeerComponentProvisioningInput {
+    let grant = authorize_peer_component_provisioning(PeerComponentProvisioningInput {
         requester: &requester.binding,
         target_component_spec,
         root,
@@ -688,7 +688,7 @@ fn authorize_new_peer_allocation(
     .map_err(InternalError::from)?;
     let expected = ComponentProvisioningOrigin::Component {
         requester: Box::new(requester.binding.clone()),
-        grant: Box::new(decision.grant),
+        grant: Box::new(grant),
     };
     if provisioning_origin != &expected {
         return Err(InternalError::invariant(

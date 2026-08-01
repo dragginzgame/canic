@@ -219,8 +219,8 @@ fn expr_from_builtin(pred: &BuiltinPredicate) -> TokenStream2 {
         BuiltinPredicate::FleetIsQueryable => {
             quote!(::canic::__internal::core::access::expr::fleet::is_queryable())
         }
-        BuiltinPredicate::SelfIsFleetRoot => {
-            quote!(::canic::__internal::core::access::expr::env::is_fleet_root())
+        BuiltinPredicate::SelfIsFleetSubnetRoot => {
+            quote!(::canic::__internal::core::access::expr::env::is_fleet_subnet_root())
         }
         BuiltinPredicate::CallerIsController => {
             quote!(::canic::__internal::core::access::expr::caller::is_controller())

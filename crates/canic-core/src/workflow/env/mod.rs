@@ -42,7 +42,7 @@ impl EnvWorkflow {
         })?;
 
         let input = EnvInput {
-            fleet_root_pid: env_args.fleet_root_pid,
+            fleet_subnet_root_pid: env_args.fleet_subnet_root_pid,
             component_spec: env_args.component_spec,
             subnet_pid: env_args.subnet_pid,
             root_pid: env_args.root_pid,
@@ -81,7 +81,7 @@ impl EnvWorkflow {
 
         EnvOps::import_validated(ValidatedEnv {
             managed_binding: Some(ManagedCanisterBinding::Component(binding.clone())),
-            fleet_root_pid: root.fleet_subnet_root,
+            fleet_subnet_root_pid: root.fleet_subnet_root,
             component_spec: Some(binding.component_spec),
             subnet_pid: root.fleet_subnet_root,
             root_pid: root.fleet_subnet_root,
@@ -108,7 +108,7 @@ impl EnvWorkflow {
 
         EnvOps::import_validated(ValidatedEnv {
             managed_binding: Some(ManagedCanisterBinding::ComponentChild(binding.clone())),
-            fleet_root_pid: root.fleet_subnet_root,
+            fleet_subnet_root_pid: root.fleet_subnet_root,
             component_spec: Some(binding.component.component_spec),
             subnet_pid: root.fleet_subnet_root,
             root_pid: root.fleet_subnet_root,

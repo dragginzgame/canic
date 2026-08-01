@@ -1,6 +1,6 @@
 //! Module: component_topology::tests
 //!
-//! Responsibility: verify host finalization of immutable Fleet root topology bindings.
+//! Responsibility: verify host finalization of immutable Fleet Subnet Root topology bindings.
 //! Does not own: network discovery, root creation, release-set construction, or installation.
 //! Boundary: exercises canonicalization and Fleet-scoped admission/placement invariants.
 

@@ -163,7 +163,7 @@ pub(super) fn install_and_verify_fleet_subnet_roots(
         .iter()
         .map(|authority| authority.binding.clone())
         .collect::<Vec<_>>();
-    component_topology.validate_fleet_root_bindings(&bindings)?;
+    component_topology.validate_fleet_subnet_root_bindings(&bindings)?;
     Ok(())
 }
 

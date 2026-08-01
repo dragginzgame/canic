@@ -129,7 +129,7 @@ macro_rules! __canic_start_local_lifecycle_core {
             let root_pid = __canic_local_principal(1);
             let subnet_pid = __canic_local_principal(2);
             ::canic::dto::env::EnvBootstrapArgs {
-                fleet_root_pid: Some(root_pid),
+                fleet_subnet_root_pid: Some(root_pid),
                 component_spec: Some(component_spec),
                 subnet_pid: Some(subnet_pid),
                 root_pid: Some(root_pid),

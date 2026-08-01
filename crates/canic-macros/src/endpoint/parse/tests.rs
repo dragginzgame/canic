@@ -76,7 +76,7 @@ fn fleet_state_predicates_parse_as_builtins() {
 
 #[test]
 fn current_environment_predicates_parse_as_builtins() {
-    let parsed = parse_args(quote!(requires(env::is_fleet_root())))
+    let parsed = parse_args(quote!(requires(env::is_fleet_subnet_root())))
         .expect("current environment predicates should parse");
 
     assert!(matches!(
@@ -85,7 +85,7 @@ fn current_environment_predicates_parse_as_builtins() {
             if matches!(
                 &predicates[..],
                 [AccessExprAst::Pred(AccessPredicateAst::Builtin(
-                    BuiltinPredicate::SelfIsFleetRoot
+                    BuiltinPredicate::SelfIsFleetSubnetRoot
                 ))]
             )
     ));

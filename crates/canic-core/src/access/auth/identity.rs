@@ -81,8 +81,12 @@ pub(super) fn validate_delegated_session_subject(
     if env.record.subnet_pid.is_some_and(|pid| pid == subject) {
         return Err(DelegatedSessionSubjectRejection::SubnetCanister);
     }
-    if env.record.fleet_root_pid.is_some_and(|pid| pid == subject) {
-        return Err(DelegatedSessionSubjectRejection::FleetRootCanister);
+    if env
+        .record
+        .fleet_subnet_root_pid
+        .is_some_and(|pid| pid == subject)
+    {
+        return Err(DelegatedSessionSubjectRejection::FleetSubnetRootCanister);
     }
     if SubnetRegistryOps::is_registered(subject) {
         return Err(DelegatedSessionSubjectRejection::RegisteredCanister);
