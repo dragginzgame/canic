@@ -498,6 +498,28 @@ fn fleet_subnet_root_store_binding_finalization_is_response_idempotent() {
 }
 
 #[test]
+fn fleet_subnet_root_store_deletion_is_response_idempotent() {
+    let deletion = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_fleet_subnet_root_store_delete")
+        .expect("Fleet Subnet Root Store deletion policy entry");
+    let status = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_fleet_subnet_root_store_deletion_status")
+        .expect("Fleet Subnet Root Store deletion status policy entry");
+
+    assert_eq!(
+        deletion.replay_policy,
+        ReplayPolicy::ResponseIdempotent {
+            command_kind: replay_command_kind("fleet_subnet_root.delete_store.v1"),
+        }
+    );
+    assert_eq!(deletion.cost_class, CostClass::None);
+    assert_eq!(status.replay_policy, ReplayPolicy::QueryOrReadOnly);
+    assert_eq!(status.endpoint_kind, EndpointKind::Query);
+}
+
+#[test]
 fn fleet_registry_mirror_activation_is_snapshot_convergent() {
     let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()

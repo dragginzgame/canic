@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.73` returns excess cycles to the root and physically deletes the
+  reclaimed, unbound Store only after durable live-authority and independently
+  observed balance/absence evidence, retaining exact retry/status authority.
+
 - `0.100.72` durably finalizes the reclaimed Store's publication binding before
   physical deletion, while centralizing protected root-authority loading and
   active-runtime validation across control-plane workflows.

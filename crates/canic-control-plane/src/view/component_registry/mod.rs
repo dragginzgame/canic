@@ -52,6 +52,8 @@ pub struct RootFleetSubnetDrainingView {
     pub store_binding_finalization_intent:
         Option<RootFleetSubnetStoreBindingFinalizationIntentView>,
     pub store_binding_finalization: Option<RootFleetSubnetStoreBindingFinalizationView>,
+    pub store_deletion_intent: Option<RootFleetSubnetStoreDeletionIntentView>,
+    pub store_deletion: Option<RootFleetSubnetStoreDeletionView>,
 }
 
 ///
@@ -179,6 +181,74 @@ pub struct RootFleetSubnetStoreBindingFinalizationEvidence {
     pub source_generation: u64,
     pub finalized_generation: u64,
     pub finalized_at_secs: u64,
+}
+
+/// Exact live Store authority observed before physical deletion intent is committed.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootFleetSubnetStoreDeletionAuthority {
+    pub wasm_store: Principal,
+    pub binding: WasmStoreBinding,
+    pub observed_module_hash: [u8; 32],
+    pub observed_controllers: Vec<Principal>,
+    pub observed_cycles_before_reclamation: u128,
+    pub maximum_cycles_to_retain: u128,
+}
+
+/// Read-only authority retained before stopping and deleting the reclaimed Store.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootFleetSubnetStoreDeletionIntentView {
+    pub operation_id: [u8; 32],
+    pub binding_finalization_hash: [u8; 32],
+    pub wasm_store: Principal,
+    pub binding: WasmStoreBinding,
+    pub observed_module_hash: [u8; 32],
+    pub observed_controllers: Vec<Principal>,
+    pub observed_cycles_before_reclamation: u128,
+    pub maximum_cycles_to_retain: u128,
+    pub observed_cycles_after_reclamation: Option<u128>,
+    pub cycles_reclaimed_at_ns: Option<u64>,
+    pub prepared_at_ns: u64,
+}
+
+/// Exact live cycle-balance evidence recorded before Store stop/delete may begin.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RootFleetSubnetStoreCycleReclamationEvidence {
+    pub observed_cycles_after_reclamation: u128,
+    pub cycles_reclaimed_at_ns: u64,
+}
+
+/// Exact independently observed Store absence accepted by Component Registry ops.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootFleetSubnetStoreDeletionEvidence {
+    pub wasm_store: Principal,
+    pub binding: WasmStoreBinding,
+    pub observed_module_hash: [u8; 32],
+    pub observed_controllers: Vec<Principal>,
+    pub observed_cycles_before_reclamation: u128,
+    pub maximum_cycles_to_retain: u128,
+    pub observed_cycles_after_reclamation: u128,
+    pub cycles_reclaimed_at_ns: u64,
+    pub observed_absent_at_ns: u64,
+}
+
+/// Read-only terminal receipt for one physically deleted root Store.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootFleetSubnetStoreDeletionView {
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+    pub wasm_store: Principal,
+    pub binding: WasmStoreBinding,
+    pub binding_finalization_hash: [u8; 32],
+    pub observed_module_hash: [u8; 32],
+    pub observed_controllers: Vec<Principal>,
+    pub observed_cycles_before_reclamation: u128,
+    pub maximum_cycles_to_retain: u128,
+    pub observed_cycles_after_reclamation: u128,
+    pub cycles_reclaimed_at_ns: u64,
+    pub prepared_at_ns: u64,
+    pub observed_absent_at_ns: u64,
+    pub completed_at_ns: u64,
+    pub deletion_hash: [u8; 32],
 }
 
 ///

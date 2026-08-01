@@ -21,7 +21,8 @@ use super::{
 };
 use crate::protocol::{
     CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
-    CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN, CANIC_WASM_STORE_ROOT_UPDATE_METHODS,
+    CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN, CANIC_WASM_STORE_RECLAIM_DELETION_CYCLES,
+    CANIC_WASM_STORE_ROOT_UPDATE_METHODS,
 };
 use std::collections::BTreeSet;
 
@@ -44,14 +45,16 @@ fn durable_publish_endpoint_names() -> BTreeSet<&'static str> {
 }
 
 fn guarded_publication_effect_endpoint_names() -> BTreeSet<&'static str> {
-    [
+    let mut endpoints = [
         CANIC_TEMPLATE_PREPARE_ADMIN,
         CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
         CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
     ]
     .into_iter()
     .chain(CANIC_WASM_STORE_ROOT_UPDATE_METHODS.iter().copied())
-    .collect()
+    .collect::<BTreeSet<_>>();
+    endpoints.remove(CANIC_WASM_STORE_RECLAIM_DELETION_CYCLES);
+    endpoints
 }
 
 fn release_candidate_manifest_blockers() -> BTreeSet<String> {

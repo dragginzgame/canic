@@ -42,6 +42,9 @@ pub enum SubnetRegistryOpsError {
 
     #[error("parent canister {0} not found in subnet registry")]
     ParentNotFound(Principal),
+
+    #[error("canister {0} registration differs from expected role and parent")]
+    RegistrationAuthorityConflict(Principal),
 }
 
 impl From<SubnetRegistryOpsError> for InternalError {
@@ -157,6 +160,21 @@ impl SubnetRegistryOps {
 
     pub(crate) fn remove_and_return_role(pid: &Principal) -> Option<CanisterRole> {
         SubnetRegistry::remove(pid).map(|record| record.role)
+    }
+
+    /// Remove one registration only when its role and parent remain exact.
+    pub fn unregister_exact(
+        pid: Principal,
+        expected_role: &CanisterRole,
+        expected_parent: Principal,
+    ) -> Result<bool, InternalError> {
+        let Some(record) = Self::get(pid) else {
+            return Ok(false);
+        };
+        if &record.role != expected_role || record.parent_pid != Some(expected_parent) {
+            return Err(SubnetRegistryOpsError::RegistrationAuthorityConflict(pid).into());
+        }
+        Ok(SubnetRegistry::remove(&pid).is_some())
     }
 
     // ---------------------------------------------------------------------
@@ -388,6 +406,30 @@ mod tests {
                     created_at: 2,
                 },
             ]
+        );
+    }
+
+    #[test]
+    fn unregister_exact_requires_matching_role_and_parent_and_is_idempotent() {
+        seed_registry();
+        let role = CanisterRole::new("alpha_registry_test");
+
+        SubnetRegistryOps::unregister_exact(p(92), &CanisterRole::new("wrong_role"), p(91))
+            .expect_err("different role must fail closed");
+        SubnetRegistryOps::unregister_exact(p(92), &role, p(89))
+            .expect_err("different parent must fail closed");
+        assert_eq!(
+            SubnetRegistryOps::role_parent(p(92)),
+            Some((role.clone(), Some(p(91))))
+        );
+
+        assert!(
+            SubnetRegistryOps::unregister_exact(p(92), &role, p(91))
+                .expect("remove exact registration")
+        );
+        assert!(
+            !SubnetRegistryOps::unregister_exact(p(92), &role, p(91))
+                .expect("exact absence is idempotent")
         );
     }
 }

@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-31
+Last updated: 2026-08-01
 
 ## Purpose
 
@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.71`.
-- The latest published release is `v0.100.71` at
-  `881901568949d10c87a8802400f48ef635c8c68b`.
-- Open `0.100.72` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.72`.
+- The latest published release is `v0.100.72` at
+  `6f9659686990e3a4b30936527e98d8e931b458b6`.
+- Open `0.100.73` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -595,15 +595,24 @@ Historical detail is archived at:
   present; binding finalization and physical deletion are later boundaries.
   The same release retains the compatible replay, evidence, CLI ICP target
   and Store publication-metric owner consolidation already in progress.
-- Open `0.100.72` explicitly pins a fresh root's sole Store as its active
+- Released `0.100.72` explicitly pins a fresh root's sole Store as its active
   publication binding, then durably finalizes that binding only after the exact
   `.71` reclamation receipt. One pre-effect intent binds the Store, reclamation
   hash and source generation; exact retry resumes `active -> detached ->
   retired -> unbound`, and a terminal hashed receipt requires all slots empty
   at exactly source generation plus three. The GC-complete Store remains
-  installed and retained in runtime inventory. The same open patch centralizes
+  installed and retained in runtime inventory. The same release centralizes
   protected root-authority loading and active-runtime validation under their
   workflow owners.
+- Open `0.100.73` durably binds that exact finalization receipt plus the live
+  Store module, complete canonical controller set and pre-reclamation cycle
+  balance before any management effect. The empty Store returns excess cycles
+  to the root under a value-transfer guard; the root independently observes
+  and durably records a balance within the freezing-plus-execution ceiling
+  before stop. It then resumes through running, stopped or typed-absent status,
+  accepts completion only from independently observed absence and removes the
+  exact Store from both local inventories while retaining the Fleet Subnet
+  Root and its complete removal history.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -2163,14 +2172,23 @@ the retained Store after exact logical removal, accepting only one completed GC
 run with zero bytes and an empty catalog while leaving both infrastructure
 Canisters installed.
 
-Open `0.100.72` centralizes protected root-authority loading and active-runtime
-validation under workflow owners and completes the reclaimed Store-binding
-finalization boundary. Fresh bootstrap pins the sole Store explicitly; after
-the exact `.71` receipt, durable generation-bound retry clears `active`,
-`detached` and `retired` without removing runtime inventory or either
-Canister. Next, freeze and execute physical Store deletion under its own
-intent and independently observed absence receipt. Root deletion remains later
-still. Neither an unreachable root nor a Subnet failure is deletion evidence.
+Released `0.100.72` centralizes protected root-authority loading and
+active-runtime validation under workflow owners and completes the reclaimed
+Store-binding finalization boundary. Fresh bootstrap pins the sole Store
+explicitly; after the exact `.71` receipt, durable generation-bound retry
+clears `active`, `detached` and `retired` without removing runtime inventory or
+either Canister.
+
+Open `0.100.73` freezes the exact `.72` receipt plus the Store's live module
+and complete canonical controller set before stopping it. It first returns the
+empty Store's excess cycles to the root and durably records an independently
+observed post-transfer balance within the live freezing-plus-execution ceiling.
+Retry then reconciles running, stopped and typed-absent management state; only
+independently observed absence permits removal from the Subnet Registry and
+runtime Store inventory and one terminal hashed receipt. The Fleet Subnet Root
+remains installed with the complete removal history. Next, freeze physical root
+deletion under its own intent and external executor authority. Neither an
+unreachable root nor a Subnet failure is deletion evidence.
 
 ## Historical Release Detail
 

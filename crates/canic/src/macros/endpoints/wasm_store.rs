@@ -65,6 +65,13 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
         }
 
         #[$crate::canic_update(internal, requires(caller::is_root()))]
+        async fn canic_wasm_store_reclaim_deletion_cycles(
+            request: ::canic::dto::template::WasmStoreDeletionCycleReclamationRequest,
+        ) -> Result<::canic::dto::template::WasmStoreDeletionCycleReclamationResponse, ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreCanisterApi::reclaim_deletion_cycles(request).await
+        }
+
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
         async fn canic_wasm_store_chunk(
             template_id: ::canic::ids::TemplateId,
             version: ::canic::ids::TemplateVersion,

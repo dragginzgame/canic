@@ -198,6 +198,38 @@ pub struct FleetSubnetRootStoreBindingFinalizationResponse {
     pub finalization_hash: [u8; 32],
 }
 
+/// Controller command physically deleting the reclaimed and unbound Store.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootStoreDeletionRequest {
+    pub operation_id: [u8; 32],
+    pub expected_binding_finalization_hash: [u8; 32],
+}
+
+/// Read-only lookup key for one durable Store-deletion receipt.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootStoreDeletionStatusRequest {
+    pub operation_id: [u8; 32],
+}
+
+/// Durable proof that the root's reclaimed and unbound Store is physically absent.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootStoreDeletionResponse {
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+    pub wasm_store: Principal,
+    pub binding_finalization_hash: [u8; 32],
+    pub observed_module_hash: [u8; 32],
+    pub observed_controllers: Vec<Principal>,
+    pub observed_cycles_before_reclamation: u128,
+    pub maximum_cycles_to_retain: u128,
+    pub observed_cycles_after_reclamation: u128,
+    pub cycles_reclaimed_at_ns: u64,
+    pub prepared_at_ns: u64,
+    pub observed_absent_at_ns: u64,
+    pub completed_at_ns: u64,
+    pub deletion_hash: [u8; 32],
+}
+
 ///
 /// FleetSubnetRootFinalInventoryResponse
 ///
@@ -415,12 +447,14 @@ mod tests {
         assert_candid_round_trip(&reclamation_status);
         assert_candid_round_trip(&reclamation_response);
 
-        assert_store_binding_finalization_contract_round_trip(&reclamation_response);
+        let finalization =
+            assert_store_binding_finalization_contract_round_trip(&reclamation_response);
+        assert_store_deletion_contract_round_trip(&finalization);
     }
 
     fn assert_store_binding_finalization_contract_round_trip(
         reclamation: &FleetSubnetRootStoreReclamationResponse,
-    ) {
+    ) -> FleetSubnetRootStoreBindingFinalizationResponse {
         let request = FleetSubnetRootStoreBindingFinalizationRequest {
             operation_id: reclamation.operation_id,
             expected_reclamation_hash: reclamation.reclamation_hash,
@@ -439,6 +473,38 @@ mod tests {
             finalized_at_secs: 34,
             completed_at_ns: 35,
             finalization_hash: [36; 32],
+        };
+        assert_candid_round_trip(&request);
+        assert_candid_round_trip(&status);
+        assert_candid_round_trip(&response);
+        response
+    }
+
+    fn assert_store_deletion_contract_round_trip(
+        finalization: &FleetSubnetRootStoreBindingFinalizationResponse,
+    ) {
+        let request = FleetSubnetRootStoreDeletionRequest {
+            operation_id: finalization.operation_id,
+            expected_binding_finalization_hash: finalization.finalization_hash,
+        };
+        let status = FleetSubnetRootStoreDeletionStatusRequest {
+            operation_id: request.operation_id,
+        };
+        let response = FleetSubnetRootStoreDeletionResponse {
+            operation_id: request.operation_id,
+            fleet_subnet_root: finalization.fleet_subnet_root,
+            wasm_store: finalization.wasm_store,
+            binding_finalization_hash: finalization.finalization_hash,
+            observed_module_hash: [37; 32],
+            observed_controllers: vec![finalization.fleet_subnet_root],
+            observed_cycles_before_reclamation: 500,
+            maximum_cycles_to_retain: 100,
+            observed_cycles_after_reclamation: 90,
+            cycles_reclaimed_at_ns: 38,
+            prepared_at_ns: 38,
+            observed_absent_at_ns: 39,
+            completed_at_ns: 40,
+            deletion_hash: [41; 32],
         };
         assert_candid_round_trip(&request);
         assert_candid_round_trip(&status);

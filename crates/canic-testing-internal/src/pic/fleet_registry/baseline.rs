@@ -143,17 +143,20 @@ mod tests {
             FleetSubnetRootStoreBindingFinalizationRequest,
             FleetSubnetRootStoreBindingFinalizationResponse,
             FleetSubnetRootStoreBindingFinalizationStatusRequest,
-            FleetSubnetRootStoreReclamationRequest, FleetSubnetRootStoreReclamationResponse,
-            FleetSubnetRootStoreReclamationStatusRequest,
+            FleetSubnetRootStoreDeletionRequest, FleetSubnetRootStoreDeletionResponse,
+            FleetSubnetRootStoreDeletionStatusRequest, FleetSubnetRootStoreReclamationRequest,
+            FleetSubnetRootStoreReclamationResponse, FleetSubnetRootStoreReclamationStatusRequest,
         },
         protocol::{
-            CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING, CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN,
+            CANIC_CYCLE_BALANCE, CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,
+            CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN,
             CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_FINALIZE,
             CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_STATUS,
             CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS, CANIC_FLEET_SUBNET_ROOT_REMOVAL_PUBLISH,
             CANIC_FLEET_SUBNET_ROOT_REMOVAL_STATUS,
             CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZATION_STATUS,
-            CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZE, CANIC_FLEET_SUBNET_ROOT_STORE_RECLAIM,
+            CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZE, CANIC_FLEET_SUBNET_ROOT_STORE_DELETE,
+            CANIC_FLEET_SUBNET_ROOT_STORE_DELETION_STATUS, CANIC_FLEET_SUBNET_ROOT_STORE_RECLAIM,
             CANIC_FLEET_SUBNET_ROOT_STORE_RECLAMATION_STATUS, CANIC_ROOT_COMPONENT_CHILD_ALLOCATE,
             CANIC_ROOT_COMPONENT_CHILD_COMMIT, CANIC_ROOT_COMPONENT_CHILD_CREATE,
             CANIC_ROOT_COMPONENT_CHILD_DIRECTORY_PREPARE, CANIC_ROOT_COMPONENT_CHILD_INSTALL,
@@ -1067,6 +1070,97 @@ mod tests {
         assert_eq!(overview.stores[0].pid, final_inventory.wasm_store);
         assert_eq!(overview.stores[0].publication_slot, None);
         assert_eq!(overview.stores[0].gc.mode, WasmStoreGcMode::Complete);
+
+        let root_cycles_before_deletion = canister_cycle_balance(fixture.pic(), fixture.root);
+        let store_cycles_before_deletion =
+            canister_cycle_balance(fixture.pic(), final_inventory.wasm_store);
+        let deletion_request = FleetSubnetRootStoreDeletionRequest {
+            operation_id: root_draining.operation_id,
+            expected_binding_finalization_hash: finalization.finalization_hash,
+        };
+        let deletion: Result<FleetSubnetRootStoreDeletionResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_FLEET_SUBNET_ROOT_STORE_DELETE,
+                (deletion_request,),
+            )
+            .expect("delete Fleet Subnet Root Store transport");
+        let deletion = deletion.expect("delete Fleet Subnet Root Store");
+        assert_eq!(deletion.wasm_store, final_inventory.wasm_store);
+        assert_eq!(
+            deletion.binding_finalization_hash,
+            finalization.finalization_hash
+        );
+        assert_ne!(deletion.observed_module_hash, [0; 32]);
+        assert!(deletion.observed_controllers.contains(&fixture.root));
+        assert!(deletion.observed_cycles_before_reclamation <= store_cycles_before_deletion);
+        assert!(deletion.observed_cycles_before_reclamation > deletion.maximum_cycles_to_retain);
+        assert!(deletion.observed_cycles_after_reclamation <= deletion.maximum_cycles_to_retain);
+        assert!(deletion.cycles_reclaimed_at_ns >= deletion.prepared_at_ns);
+        assert!(deletion.observed_absent_at_ns >= deletion.prepared_at_ns);
+        assert!(deletion.completed_at_ns >= deletion.observed_absent_at_ns);
+        assert_ne!(deletion.deletion_hash, [0; 32]);
+        assert!(
+            fixture
+                .pic()
+                .canister_status(final_inventory.wasm_store, Some(fixture.root))
+                .is_err(),
+            "Store deletion receipt requires typed physical absence"
+        );
+        assert!(
+            canister_cycle_balance(fixture.pic(), fixture.root) > root_cycles_before_deletion,
+            "Store deletion must return excess cycles to the surviving root"
+        );
+
+        let retry: Result<FleetSubnetRootStoreDeletionResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_FLEET_SUBNET_ROOT_STORE_DELETE,
+                (deletion_request,),
+            )
+            .expect("retry Fleet Subnet Root Store deletion transport");
+        assert_eq!(
+            retry.expect("retry Fleet Subnet Root Store deletion"),
+            deletion
+        );
+        let durable: Result<FleetSubnetRootStoreDeletionResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.root,
+                CANIC_FLEET_SUBNET_ROOT_STORE_DELETION_STATUS,
+                (FleetSubnetRootStoreDeletionStatusRequest {
+                    operation_id: root_draining.operation_id,
+                },),
+            )
+            .expect("query Fleet Subnet Root Store deletion transport");
+        assert_eq!(
+            durable.expect("query Fleet Subnet Root Store deletion"),
+            deletion
+        );
+
+        let overview: Result<WasmStoreOverviewResponse, Error> = fixture
+            .pic()
+            .query_call(fixture.root, canic::protocol::CANIC_WASM_STORE_OVERVIEW, ())
+            .expect("query deleted Store overview transport");
+        let overview = overview.expect("query deleted Store overview");
+        assert_eq!(
+            overview.publication.generation,
+            finalization.finalized_generation
+        );
+        assert_eq!(overview.publication.active_binding, None);
+        assert_eq!(overview.publication.detached_binding, None);
+        assert_eq!(overview.publication.retired_binding, None);
+        assert!(overview.stores.is_empty());
+    }
+
+    #[cfg(test)]
+    fn canister_cycle_balance(pic: &Pic, canister_id: Principal) -> u128 {
+        let response: Result<u128, Error> = pic
+            .query_call(canister_id, CANIC_CYCLE_BALANCE, ())
+            .expect("query Canister cycle balance transport");
+        response.expect("query Canister cycle balance")
     }
 
     #[cfg(test)]

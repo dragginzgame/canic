@@ -34,6 +34,9 @@ pub const CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZE: &str =
     "canic_fleet_subnet_root_store_binding_finalize";
 pub const CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZATION_STATUS: &str =
     "canic_fleet_subnet_root_store_binding_finalization_status";
+pub const CANIC_FLEET_SUBNET_ROOT_STORE_DELETE: &str = "canic_fleet_subnet_root_store_delete";
+pub const CANIC_FLEET_SUBNET_ROOT_STORE_DELETION_STATUS: &str =
+    "canic_fleet_subnet_root_store_deletion_status";
 pub const CANIC_FLEET_REGISTRY_SYNCHRONIZE: &str = "canic_fleet_registry_synchronize";
 pub const CANIC_FLEET_REGISTRY_SYNC_STATUS: &str = "canic_fleet_registry_sync_status";
 pub const CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR: &str = "canic_fleet_registry_activate_mirror";
@@ -132,6 +135,8 @@ pub const CANIC_WASM_STORE_STATUS: &str = "canic_wasm_store_status";
 pub const CANIC_WASM_STORE_PREPARE_GC: &str = "canic_wasm_store_prepare_gc";
 pub const CANIC_WASM_STORE_BEGIN_GC: &str = "canic_wasm_store_begin_gc";
 pub const CANIC_WASM_STORE_COMPLETE_GC: &str = "canic_wasm_store_complete_gc";
+pub const CANIC_WASM_STORE_RECLAIM_DELETION_CYCLES: &str =
+    "canic_wasm_store_reclaim_deletion_cycles";
 pub const CANIC_WASM_STORE_PREPARE: &str = "canic_wasm_store_prepare";
 pub const CANIC_WASM_STORE_CHUNK: &str = "canic_wasm_store_chunk";
 pub const CANIC_WASM_STORE_PUBLISH_CHUNK: &str = "canic_wasm_store_publish_chunk";
@@ -164,6 +169,7 @@ pub const CANIC_WASM_STORE_ROOT_UPDATE_METHODS: &[&str] = &[
     CANIC_WASM_STORE_BEGIN_GC,
     CANIC_WASM_STORE_CHUNK,
     CANIC_WASM_STORE_COMPLETE_GC,
+    CANIC_WASM_STORE_RECLAIM_DELETION_CYCLES,
     CANIC_WASM_STORE_INFO,
     CANIC_WASM_STORE_PREPARE,
     CANIC_WASM_STORE_PREPARE_GC,

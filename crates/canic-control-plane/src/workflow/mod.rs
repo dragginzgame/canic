@@ -18,3 +18,5 @@ mod root_authority;
 pub mod runtime;
 #[cfg(feature = "root-control-plane")]
 pub mod state;
+#[cfg(feature = "wasm-store-canister")]
+pub mod wasm_store;

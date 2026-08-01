@@ -6,12 +6,19 @@
 
 use super::super::super::store_pid_for_binding;
 use super::super::{
-    WasmStorePublicationWorkflow,
+    WASM_STORE_ROLE, WasmStorePublicationWorkflow,
     error::PublicationWorkflowError,
-    store::{store_begin_gc, store_catalog, store_complete_gc, store_prepare_gc, store_status},
+    store::{
+        store_begin_gc, store_catalog, store_complete_gc, store_prepare_gc,
+        store_reclaim_deletion_cycles, store_status,
+    },
 };
 use crate::{
-    dto::template::{WasmStoreGcStatusResponse, WasmStoreStatusResponse},
+    dto::template::{
+        WASM_STORE_DELETION_EXECUTION_RESERVE_CYCLES, WASM_STORE_DELETION_MAXIMUM_RETAINED_CYCLES,
+        WasmStoreDeletionCycleReclamationResponse, WasmStoreGcStatusResponse,
+        WasmStoreStatusResponse,
+    },
     ids::{WasmStoreBinding, WasmStoreGcMode},
     ops::storage::state::subnet::SubnetStateOps,
     view::{
@@ -19,19 +26,31 @@ use crate::{
             RootFleetSubnetFinalInventoryView, RootFleetSubnetStoreBindingAuthority,
             RootFleetSubnetStoreBindingFinalizationEvidence,
             RootFleetSubnetStoreBindingFinalizationIntentView,
+            RootFleetSubnetStoreBindingFinalizationView,
+            RootFleetSubnetStoreCycleReclamationEvidence, RootFleetSubnetStoreDeletionAuthority,
+            RootFleetSubnetStoreDeletionEvidence, RootFleetSubnetStoreDeletionIntentView,
             RootFleetSubnetStoreReclamationEvidence,
         },
         state::{PublicationStoreStateView, WasmStoreView},
     },
 };
+use canic_core::cdk::candid::Nat;
 use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{
     error::{InternalError, InternalErrorOrigin},
-    ops::ic::IcOps,
+    ops::{
+        ic::{
+            IcOps,
+            mgmt::{CanisterStatus, CanisterStatusObservation, CanisterStatusType, MgmtOps},
+        },
+        storage::registry::subnet::SubnetRegistryOps,
+    },
     workflow::ic::provision::ProvisionWorkflow,
 };
 use canic_core::{log, log::Topic};
 use std::cell::Cell;
+
+const SECONDS_PER_DAY: u128 = 86_400;
 
 thread_local! {
     static LIFECYCLE_OPERATION_IN_FLIGHT: Cell<bool> = const { Cell::new(false) };
@@ -49,6 +68,12 @@ struct StoreGcAuthority {
     started_at: Option<u64>,
     completed_at: Option<u64>,
     runs_completed: u32,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct StoreManagementAuthority {
+    module_hash: [u8; 32],
+    controllers: Vec<Principal>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -410,6 +435,174 @@ impl WasmStorePublicationWorkflow {
         ))
     }
 
+    /// Reverify one reclaimed, unbound Store before physical deletion intent is committed.
+    pub async fn verify_single_finalized_root_store_for_deletion(
+        inventory: &RootFleetSubnetFinalInventoryView,
+        finalization: &RootFleetSubnetStoreBindingFinalizationView,
+    ) -> Result<RootFleetSubnetStoreDeletionAuthority, InternalError> {
+        let _guard = LifecycleOperationGuard::try_enter()?;
+        validate_store_deletion_lineage(inventory, finalization)?;
+        Self::sync_registered_wasm_store_inventory()?;
+        let runtime = single_finalized_runtime_store(finalization)?;
+
+        let live = store_status(runtime.pid).await?;
+        let catalog = store_catalog(runtime.pid).await?;
+        let catalog_entries = u32::try_from(catalog.len()).map_err(|_| {
+            PublicationWorkflowError::InvalidState(
+                "reclaimed root Store catalog exceeds u32".to_string(),
+            )
+        })?;
+        validate_live_reclaimed_store(inventory, &live, catalog_entries)?;
+        if StoreGcAuthority::from_runtime(&runtime)
+            != StoreGcAuthority::from_live(runtime.pid, &live.gc)
+        {
+            return Err(PublicationWorkflowError::InvalidState(
+                "finalized root Store runtime GC authority differs from live status".to_string(),
+            )
+            .into());
+        }
+
+        let root = IcOps::canister_self();
+        require_exact_store_registration(runtime.pid, root)?;
+        let observation = MgmtOps::observe_canister_status(runtime.pid).await?;
+        let CanisterStatusObservation::Present(status) = observation else {
+            return Err(PublicationWorkflowError::InvalidState(
+                "root Store disappeared before deletion intent was durable".to_string(),
+            )
+            .into());
+        };
+        let management = store_management_authority(&status, root)?;
+        let (observed_cycles_before_reclamation, maximum_cycles_to_retain) =
+            store_deletion_cycle_authority(&status)?;
+        if status.status != CanisterStatusType::Running {
+            return Err(PublicationWorkflowError::InvalidState(
+                "root Store is not running before deletion intent".to_string(),
+            )
+            .into());
+        }
+        Ok(RootFleetSubnetStoreDeletionAuthority {
+            wasm_store: runtime.pid,
+            binding: runtime.binding,
+            observed_module_hash: management.module_hash,
+            observed_controllers: management.controllers,
+            observed_cycles_before_reclamation,
+            maximum_cycles_to_retain,
+        })
+    }
+
+    /// Return excess Store cycles to the root and independently freeze the remaining balance.
+    pub async fn reclaim_single_finalized_root_store_cycles(
+        intent: &RootFleetSubnetStoreDeletionIntentView,
+        finalization: &RootFleetSubnetStoreBindingFinalizationView,
+    ) -> Result<RootFleetSubnetStoreCycleReclamationEvidence, InternalError> {
+        let _guard = LifecycleOperationGuard::try_enter()?;
+        validate_store_deletion_intent_lineage(intent, finalization)?;
+        if intent.observed_cycles_after_reclamation.is_some()
+            || intent.cycles_reclaimed_at_ns.is_some()
+        {
+            return Err(PublicationWorkflowError::InvalidState(
+                "root Store cycle reclamation is already durable".to_string(),
+            )
+            .into());
+        }
+        let root = IcOps::canister_self();
+        if !validate_deletion_runtime_inventory(intent, finalization)?
+            || !optional_exact_store_registration(intent.wasm_store, root)?
+        {
+            return Err(PublicationWorkflowError::InvalidState(
+                "root Store cycle reclamation requires exact local deletion inventory".to_string(),
+            )
+            .into());
+        }
+
+        let status = present_running_store_for_cycle_reclamation(intent, root).await?;
+        let cycles_before_call = status_cycles(&status.cycles, "Store balance")?;
+        if cycles_before_call > intent.observed_cycles_before_reclamation {
+            return Err(PublicationWorkflowError::InvalidState(
+                "root Store balance increased after deletion intent".to_string(),
+            )
+            .into());
+        }
+        if cycles_before_call > intent.maximum_cycles_to_retain {
+            let response =
+                store_reclaim_deletion_cycles(intent.wasm_store, intent.maximum_cycles_to_retain)
+                    .await?;
+            validate_store_cycle_reclamation_response(intent, root, &response)?;
+        }
+
+        let observed = present_running_store_for_cycle_reclamation(intent, root).await?;
+        let observed_cycles_after_reclamation =
+            status_cycles(&observed.cycles, "post-reclamation Store balance")?;
+        let balance_is_reclaimed = [
+            observed_cycles_after_reclamation <= intent.observed_cycles_before_reclamation,
+            observed_cycles_after_reclamation <= intent.maximum_cycles_to_retain,
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !balance_is_reclaimed {
+            return Err(PublicationWorkflowError::InvalidState(format!(
+                "root Store still exceeds its durable deletion cycle reserve: observed={observed_cycles_after_reclamation} maximum={}",
+                intent.maximum_cycles_to_retain
+            ))
+            .into());
+        }
+        Ok(RootFleetSubnetStoreCycleReclamationEvidence {
+            observed_cycles_after_reclamation,
+            cycles_reclaimed_at_ns: IcOps::now_nanos(),
+        })
+    }
+
+    /// Stop and delete one Store, accepting completion only from typed live absence.
+    pub async fn delete_single_finalized_root_store(
+        intent: &RootFleetSubnetStoreDeletionIntentView,
+        finalization: &RootFleetSubnetStoreBindingFinalizationView,
+    ) -> Result<RootFleetSubnetStoreDeletionEvidence, InternalError> {
+        let _guard = LifecycleOperationGuard::try_enter()?;
+        validate_store_deletion_intent_lineage(intent, finalization)?;
+        require_durable_store_cycle_reclamation(intent)?;
+        let root = IcOps::canister_self();
+        let runtime_present = validate_deletion_runtime_inventory(intent, finalization)?;
+        let registration_present = optional_exact_store_registration(intent.wasm_store, root)?;
+        let observation = MgmtOps::observe_canister_status(intent.wasm_store).await?;
+
+        let observed_absent_at_ns = match observation {
+            CanisterStatusObservation::Absent => IcOps::now_nanos(),
+            CanisterStatusObservation::Present(status) => {
+                if !runtime_present || !registration_present {
+                    return Err(PublicationWorkflowError::InvalidState(
+                        "present root Store is missing exact local deletion inventory".to_string(),
+                    )
+                    .into());
+                }
+                stop_store_for_deletion(intent, root, *status).await?;
+                delete_store_and_observe_absence(intent, root).await?
+            }
+        };
+        reconcile_deleted_store_inventory(intent, finalization, root)?;
+        log!(
+            Topic::Wasm,
+            Ok,
+            "ws physically deleted {} ({})",
+            intent.binding,
+            intent.wasm_store
+        );
+        Ok(RootFleetSubnetStoreDeletionEvidence {
+            wasm_store: intent.wasm_store,
+            binding: intent.binding.clone(),
+            observed_module_hash: intent.observed_module_hash,
+            observed_controllers: intent.observed_controllers.clone(),
+            observed_cycles_before_reclamation: intent.observed_cycles_before_reclamation,
+            maximum_cycles_to_retain: intent.maximum_cycles_to_retain,
+            observed_cycles_after_reclamation: intent
+                .observed_cycles_after_reclamation
+                .expect("validated Store cycle reclamation"),
+            cycles_reclaimed_at_ns: intent
+                .cycles_reclaimed_at_ns
+                .expect("validated Store cycle-reclamation time"),
+            observed_absent_at_ns,
+        })
+    }
+
     fn reconcile_single_root_store_gc(
         runtime: &WasmStoreView,
         live: &WasmStoreGcStatusResponse,
@@ -436,6 +629,69 @@ impl WasmStorePublicationWorkflow {
             ))
             .into());
         }
+        Ok(())
+    }
+
+    fn ensure_finalized_store_is_deletable(
+        binding: &WasmStoreBinding,
+        store_pid: Principal,
+    ) -> Result<(), InternalError> {
+        let state = SubnetStateOps::publication_store_state();
+        let is_unbound = [
+            state.active_binding.as_ref() != Some(binding),
+            state.detached_binding.as_ref() != Some(binding),
+            state.retired_binding.as_ref() != Some(binding),
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        let runtime = Self::runtime_store(binding)?;
+        let runtime_is_exact = [
+            runtime.pid == store_pid,
+            runtime.gc.mode == WasmStoreGcMode::Complete,
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !is_unbound || !runtime_is_exact {
+            return Err(PublicationWorkflowError::InvalidState(format!(
+                "ws '{binding}' is not exact finalized deletion authority"
+            ))
+            .into());
+        }
+        Ok(())
+    }
+
+    // Delete one ordinary finalized publication Store through the existing admin surface.
+    pub async fn delete_finalized_publication_store(
+        binding: WasmStoreBinding,
+        store_pid: Principal,
+    ) -> Result<(), InternalError> {
+        let _guard = LifecycleOperationGuard::try_enter()?;
+        Self::ensure_finalized_store_is_deletable(&binding, store_pid)?;
+
+        let store = store_status(store_pid).await?;
+        let store_is_empty = [
+            store.gc.mode == WasmStoreGcMode::Complete,
+            store.occupied_store_bytes == 0,
+            store.template_count == 0,
+            store.release_count == 0,
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !store_is_empty {
+            return Err(PublicationWorkflowError::InvalidState(format!(
+                "finalized ws '{binding}' is not empty and GC-complete"
+            ))
+            .into());
+        }
+
+        ProvisionWorkflow::uninstall_and_delete_canister(store_pid).await?;
+        if !SubnetStateOps::remove_wasm_store(&binding) {
+            return Err(PublicationWorkflowError::InvalidState(format!(
+                "deleted ws '{binding}' was missing from runtime inventory"
+            ))
+            .into());
+        }
+        log!(Topic::Wasm, Ok, "ws deleted {} ({})", binding, store_pid);
         Ok(())
     }
 
@@ -510,42 +766,6 @@ impl WasmStorePublicationWorkflow {
             return Err(PublicationWorkflowError::InvalidState(format!(
                 "failed to persist gc mode {next:?} for '{binding}'"
             ))
-            .into());
-        }
-
-        Ok(())
-    }
-
-    // Require an exact finalized inventory entry before destructive canister deletion.
-    fn ensure_finalized_store_is_deletable(
-        binding: &WasmStoreBinding,
-        store_pid: Principal,
-    ) -> Result<(), InternalError> {
-        let state = SubnetStateOps::publication_store_state();
-        if state.active_binding.as_ref() == Some(binding)
-            || state.detached_binding.as_ref() == Some(binding)
-            || state.retired_binding.as_ref() == Some(binding)
-        {
-            return Err(PublicationWorkflowError::InvalidState(format!(
-                "ws '{binding}' is still referenced"
-            ))
-            .into());
-        }
-
-        let store = Self::runtime_store(binding)?;
-        if store.pid != store_pid {
-            return Err(PublicationWorkflowError::InvalidState(format!(
-                "ws binding '{binding}' resolves to {}, not deletion target {store_pid}",
-                store.pid
-            ))
-            .into());
-        }
-        if store.gc.mode != WasmStoreGcMode::Complete {
-            return Err(PublicationWorkflowError::StoreGcStateChanged {
-                binding: binding.clone(),
-                expected: WasmStoreGcMode::Complete,
-                actual: store.gc.mode,
-            }
             .into());
         }
 
@@ -708,51 +928,482 @@ impl WasmStorePublicationWorkflow {
 
         Ok(Some((finalized_binding, store_pid)))
     }
+}
 
-    // Delete one previously finalized retired publication store after local GC and root finalization complete.
-    pub async fn delete_finalized_publication_store(
-        binding: WasmStoreBinding,
-        store_pid: Principal,
-    ) -> Result<(), InternalError> {
-        let _guard = LifecycleOperationGuard::try_enter()?;
-        Self::ensure_finalized_store_is_deletable(&binding, store_pid)?;
-
-        let store = store_status(store_pid).await?;
-
-        if store.gc.mode != WasmStoreGcMode::Complete {
-            return Err(InternalError::workflow(
-                InternalErrorOrigin::Workflow,
-                format!(
-                    "finalized ws '{}' not ready for delete; gc={:?}",
-                    binding, store.gc.mode
-                ),
-            ));
-        }
-
-        if store.occupied_store_bytes != 0 || store.template_count != 0 || store.release_count != 0
-        {
-            return Err(InternalError::workflow(
-                InternalErrorOrigin::Workflow,
-                format!(
-                    "finalized ws '{}' not empty after gc; bytes={} templates={} releases={}",
-                    binding, store.occupied_store_bytes, store.template_count, store.release_count
-                ),
-            ));
-        }
-
-        Self::ensure_finalized_store_is_deletable(&binding, store_pid)?;
-        ProvisionWorkflow::uninstall_and_delete_canister(store_pid).await?;
-        if !SubnetStateOps::remove_wasm_store(&binding) {
-            return Err(PublicationWorkflowError::InvalidState(format!(
-                "deleted ws '{binding}' was missing from runtime inventory"
-            ))
-            .into());
-        }
-
-        log!(Topic::Wasm, Ok, "ws deleted {} ({})", binding, store_pid);
-
-        Ok(())
+fn validate_store_deletion_lineage(
+    inventory: &RootFleetSubnetFinalInventoryView,
+    finalization: &RootFleetSubnetStoreBindingFinalizationView,
+) -> Result<(), InternalError> {
+    let expected_finalized_generation = finalization.source_generation.checked_add(3);
+    let lineage_is_exact = [
+        finalization.operation_id == inventory.operation_id,
+        finalization.fleet_subnet_root == inventory.fleet_subnet_root,
+        finalization.wasm_store == inventory.wasm_store,
+        finalization.final_inventory_hash == inventory.inventory_hash,
+        finalization.binding.as_str() == finalization.wasm_store.to_text(),
+        Some(finalization.finalized_generation) == expected_finalized_generation,
+        finalization.finalized_at_secs > 0,
+        finalization.finalization_hash != [0; 32],
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    if !lineage_is_exact {
+        return Err(PublicationWorkflowError::InvalidState(
+            "Store deletion lineage differs from exact binding finalization".to_string(),
+        )
+        .into());
     }
+    validate_finalized_publication_state(finalization)
+}
+
+fn validate_store_deletion_intent_lineage(
+    intent: &RootFleetSubnetStoreDeletionIntentView,
+    finalization: &RootFleetSubnetStoreBindingFinalizationView,
+) -> Result<(), InternalError> {
+    let cycle_reclamation_is_valid = match (
+        intent.observed_cycles_after_reclamation,
+        intent.cycles_reclaimed_at_ns,
+    ) {
+        (None, None) => true,
+        (Some(observed_after), Some(reclaimed_at_ns)) => [
+            observed_after <= intent.observed_cycles_before_reclamation,
+            observed_after <= intent.maximum_cycles_to_retain,
+            reclaimed_at_ns >= intent.prepared_at_ns,
+        ]
+        .into_iter()
+        .all(|valid| valid),
+        _ => false,
+    };
+    let intent_is_exact = [
+        intent.operation_id == finalization.operation_id,
+        intent.binding_finalization_hash == finalization.finalization_hash,
+        intent.wasm_store == finalization.wasm_store,
+        intent.binding == finalization.binding,
+        intent.observed_module_hash != [0; 32],
+        canonical_controller_set(&intent.observed_controllers),
+        intent
+            .observed_controllers
+            .contains(&finalization.fleet_subnet_root),
+        intent.observed_cycles_before_reclamation > 0,
+        intent.maximum_cycles_to_retain > 0,
+        intent.maximum_cycles_to_retain <= WASM_STORE_DELETION_MAXIMUM_RETAINED_CYCLES,
+        cycle_reclamation_is_valid,
+        intent.prepared_at_ns >= finalization.completed_at_ns,
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    if !intent_is_exact {
+        return Err(PublicationWorkflowError::InvalidState(
+            "Store deletion intent differs from exact binding finalization".to_string(),
+        )
+        .into());
+    }
+    validate_finalized_publication_state(finalization)
+}
+
+fn validate_finalized_publication_state(
+    finalization: &RootFleetSubnetStoreBindingFinalizationView,
+) -> Result<(), InternalError> {
+    let state = SubnetStateOps::publication_store_state();
+    let state_is_exact = [
+        state.active_binding.is_none(),
+        state.detached_binding.is_none(),
+        state.retired_binding.is_none(),
+        state.retired_at == 0,
+        state.generation == finalization.finalized_generation,
+        state.changed_at == finalization.finalized_at_secs,
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    if !state_is_exact {
+        return Err(PublicationWorkflowError::InvalidState(
+            "publication state differs from terminal Store binding authority".to_string(),
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn single_finalized_runtime_store(
+    finalization: &RootFleetSubnetStoreBindingFinalizationView,
+) -> Result<WasmStoreView, InternalError> {
+    validate_finalized_publication_state(finalization)?;
+    let stores = SubnetStateOps::wasm_stores();
+    if stores.len() != 1 {
+        return Err(PublicationWorkflowError::InvalidState(format!(
+            "Store deletion preparation requires exactly one runtime Store, found {}",
+            stores.len()
+        ))
+        .into());
+    }
+    let runtime = stores.into_iter().next().expect("validated one Store");
+    let runtime_is_exact = [
+        runtime.pid == finalization.wasm_store,
+        runtime.binding == finalization.binding,
+        runtime.gc.mode == WasmStoreGcMode::Complete,
+        runtime.gc.runs_completed == 1,
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    if !runtime_is_exact {
+        return Err(PublicationWorkflowError::InvalidState(
+            "runtime Store differs from terminal binding authority".to_string(),
+        )
+        .into());
+    }
+    Ok(runtime)
+}
+
+fn validate_deletion_runtime_inventory(
+    intent: &RootFleetSubnetStoreDeletionIntentView,
+    finalization: &RootFleetSubnetStoreBindingFinalizationView,
+) -> Result<bool, InternalError> {
+    validate_finalized_publication_state(finalization)?;
+    let stores = SubnetStateOps::wasm_stores();
+    match stores.as_slice() {
+        [] => Ok(false),
+        [runtime]
+            if [
+                runtime.pid == intent.wasm_store,
+                runtime.binding == intent.binding,
+                runtime.gc.mode == WasmStoreGcMode::Complete,
+                runtime.gc.runs_completed == 1,
+            ]
+            .into_iter()
+            .all(|valid| valid) =>
+        {
+            Ok(true)
+        }
+        _ => Err(PublicationWorkflowError::InvalidState(
+            "runtime Store inventory differs from physical deletion intent".to_string(),
+        )
+        .into()),
+    }
+}
+
+fn require_exact_store_registration(
+    wasm_store: Principal,
+    root: Principal,
+) -> Result<(), InternalError> {
+    if optional_exact_store_registration(wasm_store, root)? {
+        return Ok(());
+    }
+    Err(PublicationWorkflowError::InvalidState(
+        "root Store is missing from exact Subnet Registry authority".to_string(),
+    )
+    .into())
+}
+
+fn optional_exact_store_registration(
+    wasm_store: Principal,
+    root: Principal,
+) -> Result<bool, InternalError> {
+    match SubnetRegistryOps::role_parent(wasm_store) {
+        None => Ok(false),
+        Some((role, parent)) if role == WASM_STORE_ROLE && parent == Some(root) => Ok(true),
+        Some(_) => Err(PublicationWorkflowError::InvalidState(
+            "root Store Subnet Registry authority differs from deletion intent".to_string(),
+        )
+        .into()),
+    }
+}
+
+fn store_management_authority(
+    status: &CanisterStatus,
+    root: Principal,
+) -> Result<StoreManagementAuthority, InternalError> {
+    let mut controllers = status.settings.controllers.clone();
+    controllers.sort();
+    controllers.dedup();
+    if !controllers.contains(&root) {
+        return Err(PublicationWorkflowError::InvalidState(
+            "root Store controllers omit protected root deletion authority".to_string(),
+        )
+        .into());
+    }
+    let module_hash = status
+        .module_hash
+        .as_deref()
+        .and_then(|hash| <[u8; 32]>::try_from(hash).ok())
+        .filter(|hash| hash != &[0; 32])
+        .ok_or_else(|| {
+            PublicationWorkflowError::InvalidState(
+                "root Store deletion requires one installed module hash".to_string(),
+            )
+        })?;
+    Ok(StoreManagementAuthority {
+        module_hash,
+        controllers,
+    })
+}
+
+fn require_store_management_authority(
+    status: &CanisterStatus,
+    root: Principal,
+    intent: &RootFleetSubnetStoreDeletionIntentView,
+) -> Result<(), InternalError> {
+    let observed = store_management_authority(status, root)?;
+    let expected = StoreManagementAuthority {
+        module_hash: intent.observed_module_hash,
+        controllers: intent.observed_controllers.clone(),
+    };
+    if observed != expected {
+        return Err(PublicationWorkflowError::InvalidState(
+            "root Store module or controllers differ from durable deletion authority".to_string(),
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn store_deletion_cycle_authority(status: &CanisterStatus) -> Result<(u128, u128), InternalError> {
+    require_no_reserved_store_cycles(status)?;
+    let observed_cycles = status_cycles(&status.cycles, "Store balance")?;
+    if observed_cycles == 0 {
+        return Err(PublicationWorkflowError::InvalidState(
+            "root Store has no cycle balance to retain for deletion".to_string(),
+        )
+        .into());
+    }
+    let idle_cycles_burned_per_day = status_cycles(
+        &status.idle_cycles_burned_per_day,
+        "Store idle cycles burned per day",
+    )?;
+    let freezing_threshold_seconds = status_cycles(
+        &status.settings.freezing_threshold,
+        "Store freezing threshold",
+    )?;
+    let freezing_reserve = idle_cycles_burned_per_day
+        .checked_mul(freezing_threshold_seconds)
+        .ok_or_else(|| {
+            PublicationWorkflowError::InvalidState(
+                "root Store freezing reserve overflows u128".to_string(),
+            )
+        })?
+        .div_ceil(SECONDS_PER_DAY);
+    let maximum_cycles_to_retain = freezing_reserve
+        .checked_add(WASM_STORE_DELETION_EXECUTION_RESERVE_CYCLES)
+        .ok_or_else(|| {
+            PublicationWorkflowError::InvalidState(
+                "root Store deletion cycle reserve overflows u128".to_string(),
+            )
+        })?;
+    if maximum_cycles_to_retain > WASM_STORE_DELETION_MAXIMUM_RETAINED_CYCLES {
+        return Err(PublicationWorkflowError::InvalidState(
+            "root Store deletion cycle reserve exceeds the supported ceiling".to_string(),
+        )
+        .into());
+    }
+    Ok((observed_cycles, maximum_cycles_to_retain))
+}
+
+fn status_cycles(value: &Nat, label: &str) -> Result<u128, InternalError> {
+    u128::try_from(value.0.clone())
+        .map_err(|_| PublicationWorkflowError::InvalidState(format!("{label} exceeds u128")).into())
+}
+
+fn require_no_reserved_store_cycles(status: &CanisterStatus) -> Result<(), InternalError> {
+    if status_cycles(&status.reserved_cycles, "Store reserved cycles")? != 0 {
+        return Err(PublicationWorkflowError::InvalidState(
+            "root Store has reserved cycles that cannot be reclaimed before deletion".to_string(),
+        )
+        .into());
+    }
+    Ok(())
+}
+
+async fn present_running_store_for_cycle_reclamation(
+    intent: &RootFleetSubnetStoreDeletionIntentView,
+    root: Principal,
+) -> Result<CanisterStatus, InternalError> {
+    let CanisterStatusObservation::Present(status) =
+        MgmtOps::observe_canister_status(intent.wasm_store).await?
+    else {
+        return Err(PublicationWorkflowError::InvalidState(
+            "root Store disappeared before cycle reclamation was durable".to_string(),
+        )
+        .into());
+    };
+    require_store_management_authority(&status, root, intent)?;
+    require_no_reserved_store_cycles(&status)?;
+    if status.status != CanisterStatusType::Running {
+        return Err(PublicationWorkflowError::InvalidState(
+            "root Store must remain running through cycle reclamation".to_string(),
+        )
+        .into());
+    }
+    Ok(*status)
+}
+
+fn validate_store_cycle_reclamation_response(
+    intent: &RootFleetSubnetStoreDeletionIntentView,
+    root: Principal,
+    response: &WasmStoreDeletionCycleReclamationResponse,
+) -> Result<(), InternalError> {
+    let response_is_exact = [
+        response.destination == root,
+        response.maximum_cycles_to_retain == intent.maximum_cycles_to_retain,
+        response.cycles_before <= intent.observed_cycles_before_reclamation,
+        response.cycles_transferred <= response.cycles_before,
+        response.cycles_after <= intent.maximum_cycles_to_retain,
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    if !response_is_exact {
+        return Err(PublicationWorkflowError::InvalidState(
+            "root Store cycle-reclamation response differs from durable authority".to_string(),
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn require_durable_store_cycle_reclamation(
+    intent: &RootFleetSubnetStoreDeletionIntentView,
+) -> Result<(), InternalError> {
+    if !matches!(
+        (
+            intent.observed_cycles_after_reclamation,
+            intent.cycles_reclaimed_at_ns,
+        ),
+        (Some(_), Some(_))
+    ) {
+        return Err(PublicationWorkflowError::InvalidState(
+            "root Store cannot stop before cycle reclamation is durable".to_string(),
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn require_store_deletion_authority(
+    status: &CanisterStatus,
+    root: Principal,
+    intent: &RootFleetSubnetStoreDeletionIntentView,
+) -> Result<(), InternalError> {
+    require_store_management_authority(status, root, intent)?;
+    require_no_reserved_store_cycles(status)?;
+    let observed_after = intent
+        .observed_cycles_after_reclamation
+        .expect("validated Store cycle reclamation");
+    if status_cycles(&status.cycles, "Store deletion balance")? > observed_after {
+        return Err(PublicationWorkflowError::InvalidState(
+            "root Store balance increased after cycle reclamation".to_string(),
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn canonical_controller_set(controllers: &[Principal]) -> bool {
+    !controllers.is_empty() && controllers.windows(2).all(|pair| pair[0] < pair[1])
+}
+
+async fn stop_store_for_deletion(
+    intent: &RootFleetSubnetStoreDeletionIntentView,
+    root: Principal,
+    status: CanisterStatus,
+) -> Result<(), InternalError> {
+    require_store_deletion_authority(&status, root, intent)?;
+    match status.status {
+        CanisterStatusType::Stopped => return Ok(()),
+        CanisterStatusType::Stopping => {
+            return Err(InternalError::unavailable(
+                "root Store deletion stop is still in progress",
+            ));
+        }
+        CanisterStatusType::Running => {}
+    }
+
+    let stop_error = MgmtOps::stop_canister(intent.wasm_store).await.err();
+    match MgmtOps::observe_canister_status(intent.wasm_store).await? {
+        CanisterStatusObservation::Absent => Ok(()),
+        CanisterStatusObservation::Present(status) => {
+            require_store_deletion_authority(&status, root, intent)?;
+            match status.status {
+                CanisterStatusType::Stopped => Ok(()),
+                CanisterStatusType::Stopping => Err(InternalError::unavailable(
+                    "root Store deletion stop is still in progress",
+                )),
+                CanisterStatusType::Running => match stop_error {
+                    Some(error) => Err(error),
+                    None => Err(InternalError::unavailable(
+                        "root Store remains running after its stop call completed",
+                    )),
+                },
+            }
+        }
+    }
+}
+
+async fn delete_store_and_observe_absence(
+    intent: &RootFleetSubnetStoreDeletionIntentView,
+    root: Principal,
+) -> Result<u64, InternalError> {
+    match MgmtOps::observe_canister_status(intent.wasm_store).await? {
+        CanisterStatusObservation::Absent => return Ok(IcOps::now_nanos()),
+        CanisterStatusObservation::Present(status) => {
+            require_store_deletion_authority(&status, root, intent)?;
+            if status.status != CanisterStatusType::Stopped {
+                return Err(PublicationWorkflowError::InvalidState(
+                    "root Store is not stopped under deletion authority".to_string(),
+                )
+                .into());
+            }
+        }
+    }
+
+    let delete_error = MgmtOps::delete_canister(intent.wasm_store).await.err();
+    match MgmtOps::observe_canister_status(intent.wasm_store).await? {
+        CanisterStatusObservation::Absent => Ok(IcOps::now_nanos()),
+        CanisterStatusObservation::Present(status) => {
+            require_store_deletion_authority(&status, root, intent)?;
+            match delete_error {
+                Some(error) => Err(error),
+                None => Err(InternalError::unavailable(
+                    "root Store remains present after its deletion call completed",
+                )),
+            }
+        }
+    }
+}
+
+fn reconcile_deleted_store_inventory(
+    intent: &RootFleetSubnetStoreDeletionIntentView,
+    finalization: &RootFleetSubnetStoreBindingFinalizationView,
+    root: Principal,
+) -> Result<(), InternalError> {
+    let runtime_present = validate_deletion_runtime_inventory(intent, finalization)?;
+    let registration_present = optional_exact_store_registration(intent.wasm_store, root)?;
+    if registration_present
+        && !SubnetRegistryOps::unregister_exact(intent.wasm_store, &WASM_STORE_ROLE, root)?
+    {
+        return Err(PublicationWorkflowError::InvalidState(
+            "root Store registration disappeared before deletion reconciliation".to_string(),
+        )
+        .into());
+    }
+    if runtime_present && !SubnetStateOps::remove_wasm_store(&intent.binding) {
+        return Err(PublicationWorkflowError::InvalidState(
+            "root Store runtime inventory disappeared before deletion reconciliation".to_string(),
+        )
+        .into());
+    }
+    let inventory_is_empty = [
+        SubnetStateOps::wasm_stores().is_empty(),
+        SubnetStateOps::wasm_store_pid(&intent.binding).is_none(),
+        SubnetStateOps::wasm_store_binding_for_pid(intent.wasm_store).is_none(),
+        SubnetRegistryOps::role_parent(intent.wasm_store).is_none(),
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    if !inventory_is_empty {
+        return Err(PublicationWorkflowError::InvalidState(
+            "deleted root Store remains in local runtime inventory".to_string(),
+        )
+        .into());
+    }
+    Ok(())
 }
 
 fn reclaimed_store_binding_phase(

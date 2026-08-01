@@ -5,7 +5,7 @@
 //! Boundary: converts stable records into read-only views before workflow use.
 
 use crate::{
-    dto::template::WasmStoreStatusResponse,
+    dto::template::{WASM_STORE_DELETION_MAXIMUM_RETAINED_CYCLES, WasmStoreStatusResponse},
     ids::{WasmStoreBinding, WasmStoreGcMode},
     storage::stable::component_registry::{
         ComponentRegistryChildRecord, ComponentRegistryChildTraversalRecord,
@@ -33,7 +33,8 @@ use crate::{
         RootFleetSubnetDrainingRecord, RootFleetSubnetFinalInventoryIntentRecord,
         RootFleetSubnetFinalInventoryRecord, RootFleetSubnetRemovalPublicationRecord,
         RootFleetSubnetStoreBindingFinalizationIntentRecord,
-        RootFleetSubnetStoreBindingFinalizationRecord, RootFleetSubnetStoreReclamationIntentRecord,
+        RootFleetSubnetStoreBindingFinalizationRecord, RootFleetSubnetStoreDeletionIntentRecord,
+        RootFleetSubnetStoreDeletionRecord, RootFleetSubnetStoreReclamationIntentRecord,
         RootFleetSubnetStoreReclamationRecord,
     },
     view::component_registry::{
@@ -60,8 +61,11 @@ use crate::{
         RootFleetSubnetDrainingView, RootFleetSubnetFinalInventoryView,
         RootFleetSubnetRemovalPublicationView, RootFleetSubnetStoreBindingFinalizationEvidence,
         RootFleetSubnetStoreBindingFinalizationIntentView,
-        RootFleetSubnetStoreBindingFinalizationView, RootFleetSubnetStoreReclamationEvidence,
-        RootFleetSubnetStoreReclamationIntentView, RootFleetSubnetStoreReclamationView,
+        RootFleetSubnetStoreBindingFinalizationView, RootFleetSubnetStoreCycleReclamationEvidence,
+        RootFleetSubnetStoreDeletionAuthority, RootFleetSubnetStoreDeletionEvidence,
+        RootFleetSubnetStoreDeletionIntentView, RootFleetSubnetStoreDeletionView,
+        RootFleetSubnetStoreReclamationEvidence, RootFleetSubnetStoreReclamationIntentView,
+        RootFleetSubnetStoreReclamationView,
     },
 };
 use candid::CandidType;
@@ -110,6 +114,7 @@ const ROOT_FINAL_INVENTORY_HASH_DOMAIN: &[u8] = b"canic.fleet-subnet-root.final-
 const ROOT_STORE_RECLAMATION_HASH_DOMAIN: &[u8] = b"canic.fleet-subnet-root.store-reclamation.v1";
 const ROOT_STORE_BINDING_FINALIZATION_HASH_DOMAIN: &[u8] =
     b"canic.fleet-subnet-root.store-binding-finalization.v1";
+const ROOT_STORE_DELETION_HASH_DOMAIN: &[u8] = b"canic.fleet-subnet-root.store-deletion.v1";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SubtreeRemovalOrigin {
@@ -235,6 +240,24 @@ struct RootFleetSubnetStoreBindingFinalizationHashAuthority<'a> {
     source_generation: u64,
     finalized_generation: u64,
     finalized_at_secs: u64,
+    completed_at_ns: u64,
+}
+
+#[derive(CandidType)]
+struct RootFleetSubnetStoreDeletionHashAuthority<'a> {
+    operation_id: [u8; 32],
+    fleet_subnet_root: Principal,
+    wasm_store: Principal,
+    binding: &'a str,
+    binding_finalization_hash: [u8; 32],
+    observed_module_hash: [u8; 32],
+    observed_controllers: &'a [Principal],
+    observed_cycles_before_reclamation: u128,
+    maximum_cycles_to_retain: u128,
+    observed_cycles_after_reclamation: u128,
+    cycles_reclaimed_at_ns: u64,
+    prepared_at_ns: u64,
+    observed_absent_at_ns: u64,
     completed_at_ns: u64,
 }
 
@@ -1161,6 +1184,8 @@ impl ComponentRegistryOps {
             store_reclamation: None,
             store_binding_finalization_intent: None,
             store_binding_finalization: None,
+            store_deletion_intent: None,
+            store_deletion: None,
         };
         RootComponentRegistryStore::begin_root_draining(&current, record.clone()).map_err(
             |error| match error {
@@ -1783,6 +1808,258 @@ impl ComponentRegistryOps {
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Storage,
                 "committed Store binding finalization differs from terminal authority",
+            ));
+        }
+        Ok(committed)
+    }
+
+    pub(crate) fn root_store_deletion_intent_if_present(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootFleetSubnetStoreDeletionIntentView>, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining = current.root_draining.as_ref().ok_or_else(|| {
+            InternalError::unavailable("Fleet Subnet Root draining has not begun")
+        })?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root Store deletion names a different draining operation",
+            ));
+        }
+        Ok(draining
+            .store_deletion_intent
+            .clone()
+            .map(root_store_deletion_intent_record_to_view))
+    }
+
+    pub(crate) fn begin_root_store_deletion(
+        operation_id: [u8; 32],
+        expected_binding_finalization_hash: [u8; 32],
+        authority: RootFleetSubnetStoreDeletionAuthority,
+        prepared_at_ns: u64,
+    ) -> Result<RootFleetSubnetStoreDeletionIntentView, InternalError> {
+        validate_root_store_deletion_authority(
+            expected_binding_finalization_hash,
+            &authority,
+            prepared_at_ns,
+        )?;
+        let RootFleetSubnetStoreDeletionAuthority {
+            wasm_store,
+            binding,
+            observed_module_hash,
+            observed_controllers,
+            observed_cycles_before_reclamation,
+            maximum_cycles_to_retain,
+        } = authority;
+        if let Some(existing) = Self::root_store_deletion_intent_if_present(operation_id)? {
+            let retry_is_exact = [
+                existing.binding_finalization_hash == expected_binding_finalization_hash,
+                existing.wasm_store == wasm_store,
+                existing.binding == binding,
+                existing.observed_module_hash == observed_module_hash,
+                existing.observed_controllers == observed_controllers,
+                existing.observed_cycles_before_reclamation == observed_cycles_before_reclamation,
+                existing.maximum_cycles_to_retain == maximum_cycles_to_retain,
+            ]
+            .into_iter()
+            .all(|valid| valid);
+            if retry_is_exact {
+                return Ok(existing);
+            }
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root Store deletion differs from its durable intent",
+            ));
+        }
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        let finalization = draining
+            .store_binding_finalization
+            .as_ref()
+            .ok_or_else(|| {
+                InternalError::unavailable(
+                    "Fleet Subnet Root Store binding finalization is not complete",
+                )
+            })?;
+        if finalization.finalization_hash != expected_binding_finalization_hash {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root Store deletion names a different binding finalization receipt",
+            ));
+        }
+        if finalization.binding != binding.as_str() {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root Store deletion binding differs from finalization authority",
+            ));
+        }
+        if finalization.wasm_store != wasm_store {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root Store deletion Canister differs from finalization authority",
+            ));
+        }
+        if !observed_controllers.contains(&draining.fleet_subnet_root) {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root Store deletion controllers omit protected root authority",
+            ));
+        }
+        let record = RootFleetSubnetStoreDeletionIntentRecord {
+            operation_id,
+            binding_finalization_hash: finalization.finalization_hash,
+            wasm_store: finalization.wasm_store,
+            binding: finalization.binding.clone(),
+            observed_module_hash,
+            observed_controllers,
+            observed_cycles_before_reclamation,
+            maximum_cycles_to_retain,
+            observed_cycles_after_reclamation: None,
+            cycles_reclaimed_at_ns: None,
+            prepared_at_ns,
+        };
+        RootComponentRegistryStore::prepare_root_store_deletion(&current, record).map_err(
+            |RootComponentRegistryCommitError::ConflictingState| {
+                InternalError::conflict(
+                    "root Component Registry changed before Store deletion intent committed",
+                )
+            },
+        )?;
+        Self::root_store_deletion_intent_if_present(operation_id)?.ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "committed Fleet Subnet Root Store deletion intent is missing",
+            )
+        })
+    }
+
+    pub(crate) fn record_root_store_cycle_reclamation(
+        operation_id: [u8; 32],
+        evidence: RootFleetSubnetStoreCycleReclamationEvidence,
+    ) -> Result<RootFleetSubnetStoreDeletionIntentView, InternalError> {
+        let existing =
+            Self::root_store_deletion_intent_if_present(operation_id)?.ok_or_else(|| {
+                InternalError::unavailable(
+                    "Fleet Subnet Root Store deletion intent has not been prepared",
+                )
+            })?;
+        if existing.observed_cycles_after_reclamation.is_some() {
+            let retry_is_exact = [
+                existing.observed_cycles_after_reclamation
+                    == Some(evidence.observed_cycles_after_reclamation),
+                existing.cycles_reclaimed_at_ns == Some(evidence.cycles_reclaimed_at_ns),
+            ]
+            .into_iter()
+            .all(|valid| valid);
+            if retry_is_exact {
+                return Ok(existing);
+            }
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root Store cycle reclamation differs from its durable receipt",
+            ));
+        }
+        let evidence_is_valid = [
+            evidence.observed_cycles_after_reclamation
+                <= existing.observed_cycles_before_reclamation,
+            evidence.observed_cycles_after_reclamation <= existing.maximum_cycles_to_retain,
+            evidence.cycles_reclaimed_at_ns >= existing.prepared_at_ns,
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !evidence_is_valid {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root Store cycle reclamation exceeds its durable authority",
+            ));
+        }
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        let mut record = draining
+            .store_deletion_intent
+            .clone()
+            .expect("validated Store deletion intent");
+        record.observed_cycles_after_reclamation = Some(evidence.observed_cycles_after_reclamation);
+        record.cycles_reclaimed_at_ns = Some(evidence.cycles_reclaimed_at_ns);
+        RootComponentRegistryStore::record_root_store_cycle_reclamation(&current, record).map_err(
+            |RootComponentRegistryCommitError::ConflictingState| {
+                InternalError::conflict(
+                    "root Component Registry changed before Store cycle reclamation committed",
+                )
+            },
+        )?;
+        Self::root_store_deletion_intent_if_present(operation_id)?.ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "committed Fleet Subnet Root Store cycle reclamation is missing",
+            )
+        })
+    }
+
+    pub(crate) fn root_store_deletion_if_present(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootFleetSubnetStoreDeletionView>, InternalError> {
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining = current.root_draining.as_ref().ok_or_else(|| {
+            InternalError::unavailable("Fleet Subnet Root draining has not begun")
+        })?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root Store deletion names a different draining operation",
+            ));
+        }
+        Ok(draining
+            .store_deletion
+            .clone()
+            .map(root_store_deletion_record_to_view))
+    }
+
+    pub(crate) fn record_root_store_deletion(
+        operation_id: [u8; 32],
+        evidence: RootFleetSubnetStoreDeletionEvidence,
+        completed_at_ns: u64,
+    ) -> Result<RootFleetSubnetStoreDeletionView, InternalError> {
+        if let Some(existing) = Self::root_store_deletion_if_present(operation_id)? {
+            return Ok(existing);
+        }
+        if completed_at_ns == 0 {
+            return Err(InternalError::invalid_input(
+                "Fleet Subnet Root Store deletion completion time must be positive",
+            ));
+        }
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        let record = root_store_deletion_record(draining, evidence, completed_at_ns)?;
+        RootComponentRegistryStore::record_root_store_deletion(&current, record.clone()).map_err(
+            |RootComponentRegistryCommitError::ConflictingState| {
+                InternalError::conflict(
+                    "root Component Registry changed before Store deletion committed",
+                )
+            },
+        )?;
+        let committed = Self::root_store_deletion_if_present(operation_id)?.ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "committed Fleet Subnet Root Store deletion receipt is missing",
+            )
+        })?;
+        if committed != root_store_deletion_record_to_view(record) {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "committed Store deletion differs from terminal absence authority",
             ));
         }
         Ok(committed)
@@ -6259,6 +6536,15 @@ fn validate_root_draining_record(
             ));
         }
     }
+    if let Some(deletion) = record.store_deletion.as_ref() {
+        let expected_hash = root_store_deletion_hash(deletion)?;
+        if deletion.deletion_hash != expected_hash {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "Fleet Subnet Root Store deletion hash differs from retained authority",
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -6891,12 +7177,128 @@ fn root_store_binding_finalization_hash(
     ))
 }
 
+fn root_store_deletion_record(
+    draining: &RootFleetSubnetDrainingRecord,
+    evidence: RootFleetSubnetStoreDeletionEvidence,
+    completed_at_ns: u64,
+) -> Result<RootFleetSubnetStoreDeletionRecord, InternalError> {
+    let intent = draining.store_deletion_intent.as_ref().ok_or_else(|| {
+        InternalError::unavailable("Fleet Subnet Root Store deletion intent has not been prepared")
+    })?;
+    let observed_cycles_after_reclamation =
+        intent.observed_cycles_after_reclamation.ok_or_else(|| {
+            InternalError::unavailable(
+                "Fleet Subnet Root Store cycle reclamation has not been recorded",
+            )
+        })?;
+    let cycles_reclaimed_at_ns = intent.cycles_reclaimed_at_ns.ok_or_else(|| {
+        InternalError::unavailable(
+            "Fleet Subnet Root Store cycle-reclamation time has not been recorded",
+        )
+    })?;
+    let terminal_absence_is_exact = [
+        evidence.wasm_store == intent.wasm_store,
+        evidence.binding.as_str() == intent.binding,
+        evidence.observed_module_hash == intent.observed_module_hash,
+        evidence.observed_controllers == intent.observed_controllers,
+        evidence.observed_cycles_before_reclamation == intent.observed_cycles_before_reclamation,
+        evidence.maximum_cycles_to_retain == intent.maximum_cycles_to_retain,
+        evidence.observed_cycles_after_reclamation == observed_cycles_after_reclamation,
+        evidence.cycles_reclaimed_at_ns == cycles_reclaimed_at_ns,
+        evidence.observed_absent_at_ns >= cycles_reclaimed_at_ns,
+        completed_at_ns >= evidence.observed_absent_at_ns,
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    if !terminal_absence_is_exact {
+        return Err(InternalError::conflict(
+            "root Store deletion evidence differs from durable intent",
+        ));
+    }
+    let mut record = RootFleetSubnetStoreDeletionRecord {
+        operation_id: draining.operation_id,
+        fleet_subnet_root: draining.fleet_subnet_root,
+        wasm_store: intent.wasm_store,
+        binding: intent.binding.clone(),
+        binding_finalization_hash: intent.binding_finalization_hash,
+        observed_module_hash: intent.observed_module_hash,
+        observed_controllers: intent.observed_controllers.clone(),
+        observed_cycles_before_reclamation: intent.observed_cycles_before_reclamation,
+        maximum_cycles_to_retain: intent.maximum_cycles_to_retain,
+        observed_cycles_after_reclamation,
+        cycles_reclaimed_at_ns,
+        prepared_at_ns: intent.prepared_at_ns,
+        observed_absent_at_ns: evidence.observed_absent_at_ns,
+        completed_at_ns,
+        deletion_hash: [0; 32],
+    };
+    record.deletion_hash = root_store_deletion_hash(&record)?;
+    Ok(record)
+}
+
+fn root_store_deletion_hash(
+    deletion: &RootFleetSubnetStoreDeletionRecord,
+) -> Result<[u8; 32], InternalError> {
+    let payload = candid::encode_one(RootFleetSubnetStoreDeletionHashAuthority {
+        operation_id: deletion.operation_id,
+        fleet_subnet_root: deletion.fleet_subnet_root,
+        wasm_store: deletion.wasm_store,
+        binding: &deletion.binding,
+        binding_finalization_hash: deletion.binding_finalization_hash,
+        observed_module_hash: deletion.observed_module_hash,
+        observed_controllers: &deletion.observed_controllers,
+        observed_cycles_before_reclamation: deletion.observed_cycles_before_reclamation,
+        maximum_cycles_to_retain: deletion.maximum_cycles_to_retain,
+        observed_cycles_after_reclamation: deletion.observed_cycles_after_reclamation,
+        cycles_reclaimed_at_ns: deletion.cycles_reclaimed_at_ns,
+        prepared_at_ns: deletion.prepared_at_ns,
+        observed_absent_at_ns: deletion.observed_absent_at_ns,
+        completed_at_ns: deletion.completed_at_ns,
+    })
+    .map_err(|error| {
+        InternalError::invariant(
+            InternalErrorOrigin::Ops,
+            format!("Fleet Subnet Root Store deletion cannot be encoded: {error}"),
+        )
+    })?;
+    Ok(domain_hash(ROOT_STORE_DELETION_HASH_DOMAIN, &payload))
+}
+
 fn domain_hash(domain: &[u8], payload: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(domain);
     hasher.update((payload.len() as u64).to_be_bytes());
     hasher.update(payload);
     hasher.finalize().into()
+}
+
+fn canonical_controller_set(controllers: &[Principal]) -> bool {
+    !controllers.is_empty() && controllers.windows(2).all(|pair| pair[0] < pair[1])
+}
+
+fn validate_root_store_deletion_authority(
+    expected_binding_finalization_hash: [u8; 32],
+    authority: &RootFleetSubnetStoreDeletionAuthority,
+    prepared_at_ns: u64,
+) -> Result<(), InternalError> {
+    let authority_is_complete = [
+        expected_binding_finalization_hash != [0; 32],
+        !authority.binding.as_str().is_empty(),
+        authority.observed_module_hash != [0; 32],
+        canonical_controller_set(&authority.observed_controllers),
+        authority.observed_cycles_before_reclamation > 0,
+        authority.maximum_cycles_to_retain > 0,
+        authority.maximum_cycles_to_retain <= WASM_STORE_DELETION_MAXIMUM_RETAINED_CYCLES,
+        prepared_at_ns > 0,
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    if !authority_is_complete {
+        return Err(InternalError::invalid_input(
+            "Fleet Subnet Root Store deletion authority is incomplete",
+        ));
+    }
+    Ok(())
 }
 
 fn ensure_root_accepts_top_level_allocation(
@@ -6945,6 +7347,12 @@ fn root_draining_record_to_view(
         store_binding_finalization: record
             .store_binding_finalization
             .map(root_store_binding_finalization_record_to_view),
+        store_deletion_intent: record
+            .store_deletion_intent
+            .map(root_store_deletion_intent_record_to_view),
+        store_deletion: record
+            .store_deletion
+            .map(root_store_deletion_record_to_view),
     }
 }
 
@@ -7047,6 +7455,46 @@ fn root_store_binding_finalization_record_to_view(
         finalized_at_secs: record.finalized_at_secs,
         completed_at_ns: record.completed_at_ns,
         finalization_hash: record.finalization_hash,
+    }
+}
+
+fn root_store_deletion_intent_record_to_view(
+    record: RootFleetSubnetStoreDeletionIntentRecord,
+) -> RootFleetSubnetStoreDeletionIntentView {
+    RootFleetSubnetStoreDeletionIntentView {
+        operation_id: record.operation_id,
+        binding_finalization_hash: record.binding_finalization_hash,
+        wasm_store: record.wasm_store,
+        binding: WasmStoreBinding::owned(record.binding),
+        observed_module_hash: record.observed_module_hash,
+        observed_controllers: record.observed_controllers,
+        observed_cycles_before_reclamation: record.observed_cycles_before_reclamation,
+        maximum_cycles_to_retain: record.maximum_cycles_to_retain,
+        observed_cycles_after_reclamation: record.observed_cycles_after_reclamation,
+        cycles_reclaimed_at_ns: record.cycles_reclaimed_at_ns,
+        prepared_at_ns: record.prepared_at_ns,
+    }
+}
+
+fn root_store_deletion_record_to_view(
+    record: RootFleetSubnetStoreDeletionRecord,
+) -> RootFleetSubnetStoreDeletionView {
+    RootFleetSubnetStoreDeletionView {
+        operation_id: record.operation_id,
+        fleet_subnet_root: record.fleet_subnet_root,
+        wasm_store: record.wasm_store,
+        binding: WasmStoreBinding::owned(record.binding),
+        binding_finalization_hash: record.binding_finalization_hash,
+        observed_module_hash: record.observed_module_hash,
+        observed_controllers: record.observed_controllers,
+        observed_cycles_before_reclamation: record.observed_cycles_before_reclamation,
+        maximum_cycles_to_retain: record.maximum_cycles_to_retain,
+        observed_cycles_after_reclamation: record.observed_cycles_after_reclamation,
+        cycles_reclaimed_at_ns: record.cycles_reclaimed_at_ns,
+        prepared_at_ns: record.prepared_at_ns,
+        observed_absent_at_ns: record.observed_absent_at_ns,
+        completed_at_ns: record.completed_at_ns,
+        deletion_hash: record.deletion_hash,
     }
 }
 
@@ -12726,6 +13174,102 @@ mod tests {
             )
             .expect("exact terminal Store binding finalization retry"),
             finalization
+        );
+        assert_root_store_deletion_is_exact(inventory, finalization);
+    }
+
+    fn assert_root_store_deletion_is_exact(
+        inventory: &RootFleetSubnetFinalInventoryView,
+        finalization: RootFleetSubnetStoreBindingFinalizationView,
+    ) {
+        let binding = WasmStoreBinding::owned(inventory.wasm_store.to_text());
+        let deletion_authority = || RootFleetSubnetStoreDeletionAuthority {
+            wasm_store: inventory.wasm_store,
+            binding: binding.clone(),
+            observed_module_hash: [32; 32],
+            observed_controllers: vec![inventory.fleet_subnet_root],
+            observed_cycles_before_reclamation: 500,
+            maximum_cycles_to_retain: 100,
+        };
+        ComponentRegistryOps::begin_root_store_deletion(
+            [10; 32],
+            [31; 32],
+            deletion_authority(),
+            31,
+        )
+        .expect_err("Store deletion must bind the finalization receipt");
+        let intent = ComponentRegistryOps::begin_root_store_deletion(
+            [10; 32],
+            finalization.finalization_hash,
+            deletion_authority(),
+            31,
+        )
+        .expect("prepare Store deletion intent");
+        assert_eq!(intent.wasm_store, inventory.wasm_store);
+        restart_component_registry();
+        assert_eq!(
+            ComponentRegistryOps::begin_root_store_deletion(
+                [10; 32],
+                finalization.finalization_hash,
+                deletion_authority(),
+                999,
+            )
+            .expect("exact Store deletion intent retry"),
+            intent
+        );
+
+        let intent = ComponentRegistryOps::record_root_store_cycle_reclamation(
+            [10; 32],
+            RootFleetSubnetStoreCycleReclamationEvidence {
+                observed_cycles_after_reclamation: 90,
+                cycles_reclaimed_at_ns: 32,
+            },
+        )
+        .expect("record Store cycle reclamation");
+        assert_eq!(intent.observed_cycles_after_reclamation, Some(90));
+        restart_component_registry();
+        assert_eq!(
+            ComponentRegistryOps::record_root_store_cycle_reclamation(
+                [10; 32],
+                RootFleetSubnetStoreCycleReclamationEvidence {
+                    observed_cycles_after_reclamation: 90,
+                    cycles_reclaimed_at_ns: 32,
+                },
+            )
+            .expect("exact Store cycle-reclamation retry"),
+            intent
+        );
+
+        let evidence = RootFleetSubnetStoreDeletionEvidence {
+            wasm_store: inventory.wasm_store,
+            binding,
+            observed_module_hash: [32; 32],
+            observed_controllers: vec![inventory.fleet_subnet_root],
+            observed_cycles_before_reclamation: 500,
+            maximum_cycles_to_retain: 100,
+            observed_cycles_after_reclamation: 90,
+            cycles_reclaimed_at_ns: 32,
+            observed_absent_at_ns: 33,
+        };
+        let deletion =
+            ComponentRegistryOps::record_root_store_deletion([10; 32], evidence.clone(), 34)
+                .expect("record terminal Store deletion");
+        assert_eq!(
+            deletion.binding_finalization_hash,
+            finalization.finalization_hash
+        );
+        assert_eq!(deletion.observed_module_hash, [32; 32]);
+        assert_ne!(deletion.deletion_hash, [0; 32]);
+        restart_component_registry();
+        assert_eq!(
+            ComponentRegistryOps::record_root_store_deletion([10; 32], evidence, 999)
+                .expect("exact terminal Store deletion retry"),
+            deletion
+        );
+        assert_eq!(
+            ComponentRegistryOps::root_store_deletion_if_present([10; 32])
+                .expect("Store deletion status after restart"),
+            Some(deletion)
         );
     }
 

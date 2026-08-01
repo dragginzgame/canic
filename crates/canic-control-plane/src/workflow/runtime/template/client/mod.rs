@@ -1,7 +1,9 @@
 use crate::{
     dto::template::{
         TemplateChunkResponse, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
-        TemplateManifestInput, WasmStoreCatalogEntryResponse, WasmStoreStatusResponse,
+        TemplateManifestInput, WasmStoreCatalogEntryResponse,
+        WasmStoreDeletionCycleReclamationRequest, WasmStoreDeletionCycleReclamationResponse,
+        WasmStoreStatusResponse,
     },
     ids::{TemplateId, TemplateVersion},
 };
@@ -32,6 +34,7 @@ impl WasmStoreInternalClient {
     const PREPARE: &str = protocol::CANIC_WASM_STORE_PREPARE;
     const PREPARE_GC: &str = protocol::CANIC_WASM_STORE_PREPARE_GC;
     const PUBLISH_CHUNK: &str = protocol::CANIC_WASM_STORE_PUBLISH_CHUNK;
+    const RECLAIM_DELETION_CYCLES: &str = protocol::CANIC_WASM_STORE_RECLAIM_DELETION_CYCLES;
     const STAGE_MANIFEST: &str = protocol::CANIC_WASM_STORE_STAGE_MANIFEST;
     const STATUS: &str = protocol::CANIC_WASM_STORE_STATUS;
     #[cfg(test)]
@@ -44,6 +47,7 @@ impl WasmStoreInternalClient {
         Self::PREPARE,
         Self::PREPARE_GC,
         Self::PUBLISH_CHUNK,
+        Self::RECLAIM_DELETION_CYCLES,
         Self::STAGE_MANIFEST,
         Self::STATUS,
     ];
@@ -123,6 +127,14 @@ impl WasmStoreInternalClient {
 
     pub(super) async fn complete_gc(&self) -> Result<(), InternalError> {
         self.call_result(Self::COMPLETE_GC, ()).await
+    }
+
+    pub(super) async fn reclaim_deletion_cycles(
+        &self,
+        request: WasmStoreDeletionCycleReclamationRequest,
+    ) -> Result<WasmStoreDeletionCycleReclamationResponse, InternalError> {
+        self.call_result(Self::RECLAIM_DELETION_CYCLES, (request,))
+            .await
     }
 
     pub(super) async fn chunk(

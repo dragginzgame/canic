@@ -12,7 +12,7 @@ use crate::{
     view::component_registry::{
         RootComponentRegistryView, RootFleetSubnetDrainingView, RootFleetSubnetFinalInventoryView,
         RootFleetSubnetRemovalPublicationView, RootFleetSubnetStoreBindingFinalizationView,
-        RootFleetSubnetStoreReclamationView,
+        RootFleetSubnetStoreDeletionView, RootFleetSubnetStoreReclamationView,
     },
     workflow::{
         bootstrap::root_store, runtime::template::publication::WasmStorePublicationWorkflow,
@@ -39,8 +39,9 @@ use canic_core::{
             FleetSubnetRootStoreBindingFinalizationRequest,
             FleetSubnetRootStoreBindingFinalizationResponse,
             FleetSubnetRootStoreBindingFinalizationStatusRequest,
-            FleetSubnetRootStoreReclamationRequest, FleetSubnetRootStoreReclamationResponse,
-            FleetSubnetRootStoreReclamationStatusRequest,
+            FleetSubnetRootStoreDeletionRequest, FleetSubnetRootStoreDeletionResponse,
+            FleetSubnetRootStoreDeletionStatusRequest, FleetSubnetRootStoreReclamationRequest,
+            FleetSubnetRootStoreReclamationResponse, FleetSubnetRootStoreReclamationStatusRequest,
         },
     },
     ids::{FleetSubnetRootBinding, FleetSubnetRootReleaseSet},
@@ -354,6 +355,94 @@ pub fn store_binding_finalization_status(
             )
         })
         .map(store_binding_finalization_response)
+}
+
+/// Physically delete the reclaimed Store after exact binding finalization is durable.
+pub async fn delete_store(
+    request: FleetSubnetRootStoreDeletionRequest,
+) -> Result<FleetSubnetRootStoreDeletionResponse, InternalError> {
+    let _state = validated_root_state()?;
+    let inventory = removed_root_inventory(request.operation_id)?;
+    let finalization =
+        ComponentRegistryOps::root_store_binding_finalization_if_present(request.operation_id)?
+            .ok_or_else(|| {
+                InternalError::unavailable(
+                    "Fleet Subnet Root Store binding finalization is not complete",
+                )
+            })?;
+    if request.expected_binding_finalization_hash != finalization.finalization_hash {
+        return Err(InternalError::conflict(
+            "Fleet Subnet Root Store deletion names a different binding finalization receipt",
+        ));
+    }
+    if let Some(existing) =
+        ComponentRegistryOps::root_store_deletion_if_present(request.operation_id)?
+    {
+        return Ok(store_deletion_response(existing));
+    }
+
+    let intent = ComponentRegistryOps::root_store_deletion_intent_if_present(request.operation_id)?;
+    let intent = if let Some(intent) = intent {
+        let intent_is_exact = [
+            intent.binding_finalization_hash == request.expected_binding_finalization_hash,
+            intent.wasm_store == finalization.wasm_store,
+            intent.binding == finalization.binding,
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !intent_is_exact {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root Store deletion differs from its durable intent",
+            ));
+        }
+        intent
+    } else {
+        let authority =
+            WasmStorePublicationWorkflow::verify_single_finalized_root_store_for_deletion(
+                &inventory,
+                &finalization,
+            )
+            .await?;
+        ComponentRegistryOps::begin_root_store_deletion(
+            request.operation_id,
+            request.expected_binding_finalization_hash,
+            authority,
+            IcOps::now_nanos(),
+        )?
+    };
+
+    let intent = if intent.observed_cycles_after_reclamation.is_some() {
+        intent
+    } else {
+        let evidence = WasmStorePublicationWorkflow::reclaim_single_finalized_root_store_cycles(
+            &intent,
+            &finalization,
+        )
+        .await?;
+        ComponentRegistryOps::record_root_store_cycle_reclamation(request.operation_id, evidence)?
+    };
+
+    let evidence =
+        WasmStorePublicationWorkflow::delete_single_finalized_root_store(&intent, &finalization)
+            .await?;
+    ComponentRegistryOps::record_root_store_deletion(
+        request.operation_id,
+        evidence,
+        IcOps::now_nanos(),
+    )
+    .map(store_deletion_response)
+}
+
+/// Read one durable Store-deletion receipt without a management or Store call.
+pub fn store_deletion_status(
+    request: FleetSubnetRootStoreDeletionStatusRequest,
+) -> Result<FleetSubnetRootStoreDeletionResponse, InternalError> {
+    let _state = validated_root_state()?;
+    ComponentRegistryOps::root_store_deletion_if_present(request.operation_id)?
+        .ok_or_else(|| {
+            InternalError::unavailable("Fleet Subnet Root Store deletion is not complete")
+        })
+        .map(store_deletion_response)
 }
 
 /// Return one compact, fail-closed inventory for this active Fleet Subnet Root.
@@ -705,6 +794,27 @@ fn store_binding_finalization_response(
         finalized_at_secs: view.finalized_at_secs,
         completed_at_ns: view.completed_at_ns,
         finalization_hash: view.finalization_hash,
+    }
+}
+
+fn store_deletion_response(
+    view: RootFleetSubnetStoreDeletionView,
+) -> FleetSubnetRootStoreDeletionResponse {
+    FleetSubnetRootStoreDeletionResponse {
+        operation_id: view.operation_id,
+        fleet_subnet_root: view.fleet_subnet_root,
+        wasm_store: view.wasm_store,
+        binding_finalization_hash: view.binding_finalization_hash,
+        observed_module_hash: view.observed_module_hash,
+        observed_controllers: view.observed_controllers,
+        observed_cycles_before_reclamation: view.observed_cycles_before_reclamation,
+        maximum_cycles_to_retain: view.maximum_cycles_to_retain,
+        observed_cycles_after_reclamation: view.observed_cycles_after_reclamation,
+        cycles_reclaimed_at_ns: view.cycles_reclaimed_at_ns,
+        prepared_at_ns: view.prepared_at_ns,
+        observed_absent_at_ns: view.observed_absent_at_ns,
+        completed_at_ns: view.completed_at_ns,
+        deletion_hash: view.deletion_hash,
     }
 }
 

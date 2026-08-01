@@ -501,6 +501,36 @@ fn fleet_subnet_root_store_binding_finalization_is_controller_guarded() {
 }
 
 #[test]
+fn fleet_subnet_root_store_deletion_is_controller_guarded() {
+    assert_eq!(
+        canic::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_DELETE,
+        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_DELETE
+    );
+    assert_eq!(
+        canic::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_DELETION_STATUS,
+        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_DELETION_STATUS
+    );
+
+    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
+    let source = read_text(&macro_path);
+    let deletion =
+        preceding_attribute_context(&source, "async fn canic_fleet_subnet_root_store_delete(");
+    let status = preceding_attribute_context(
+        &source,
+        "async fn canic_fleet_subnet_root_store_deletion_status(",
+    );
+
+    assert!(
+        deletion.contains("canic_update(requires(caller::is_controller()))"),
+        "Fleet Subnet Root Store deletion must remain a controller-guarded update"
+    );
+    assert!(
+        status.contains("canic_query(requires(caller::is_controller()))"),
+        "Fleet Subnet Root Store deletion status must remain a controller-guarded query"
+    );
+}
+
+#[test]
 fn fleet_subnet_root_join_is_a_controller_update_on_the_coordinator_surface() {
     assert_eq!(
         canic::protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
@@ -1159,6 +1189,21 @@ fn public_protocol_reexports_wasm_store_root_update_manifest() {
     assert_eq!(
         canic::protocol::CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS,
         canic_core::protocol::CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS
+    );
+    assert_eq!(
+        canic::protocol::CANIC_WASM_STORE_RECLAIM_DELETION_CYCLES,
+        "canic_wasm_store_reclaim_deletion_cycles"
+    );
+
+    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/wasm_store.rs");
+    let source = read_text(&macro_path);
+    let attribute = preceding_attribute_context(
+        &source,
+        "async fn canic_wasm_store_reclaim_deletion_cycles(",
+    );
+    assert!(
+        attribute.contains("canic_update(internal, requires(caller::is_root()))"),
+        "Store deletion cycle reclamation must remain guarded by the protected root"
     );
 }
 
