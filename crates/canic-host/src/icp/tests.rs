@@ -183,6 +183,16 @@ fn renders_canister_top_up() {
     );
 }
 
+#[test]
+fn root_deletion_burns_only_the_bounded_reserve_without_installing_a_recovery_shim() {
+    let icp = IcpCli::new("icp", Some("ic".to_string()));
+
+    assert_eq!(
+        icp.delete_canister_without_cycle_recovery_display("aaaaa-aa"),
+        "icp canister delete --no-recover-cycles aaaaa-aa -e ic"
+    );
+}
+
 // Ensure current ICP CLI snapshot JSON metadata parses into the typed host shape.
 #[test]
 fn parses_snapshot_json() {

@@ -252,7 +252,7 @@ fn authorize_request_cycles_with_resolver(
 }
 
 /// Apply the existing cycles funding policy and structural child checks.
-pub(super) fn authorize_request_cycles_inner(
+fn authorize_request_cycles_inner(
     ctx: &RootContext,
     req: &CyclesRequest,
     resolve_child: fn(Principal) -> Option<ResolvedCyclesChild>,

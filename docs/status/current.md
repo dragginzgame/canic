@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.73`.
-- The latest published release is `v0.100.73` at
-  `3a4cd3b34c942a8d537adf3169aeafae1f41ac85`.
-- Open `0.100.74` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.74`.
+- The latest published release is `v0.100.74` at
+  `41d878b128fd21d7304ecbd045ea2b5ecaf89dfe`.
+- Open `0.100.75` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -613,7 +613,7 @@ Historical detail is archived at:
   accepts completion only from independently observed absence and removes the
   exact Store from both local inventories while retaining the Fleet Subnet
   Root and its complete removal history.
-- Open `0.100.74` adds the durable external-executor handoff for that retained
+- Released `0.100.74` adds the durable external-executor handoff for that retained
   root. Before returning cycles, root and Coordinator freeze the exact `.73`
   receipt and validate the controller-observed reserved cycles, idle-burn rate,
   freezing threshold and derived deletion ceiling. Coordinator readiness is
@@ -621,8 +621,18 @@ Historical detail is archived at:
   one executor plus the live module, canonical controllers and bounded cycle
   evidence before external stop/delete. Only that executor may attest typed
   absence and create the surviving terminal Coordinator receipt. No controller
-  transfer or new memory ID is introduced; the maintained host effect adapter
-  remains next.
+  transfer or new memory ID is introduced.
+- Open `0.100.75` adds the maintained host effect executor without a competing
+  local journal. It resumes from root/Coordinator status, requires complete
+  controller-private module/controller/cycle evidence, revalidates that frozen
+  authority before stop/delete and requires the active ICP identity to equal
+  the Coordinator's frozen executor. Lost responses advance only from later
+  exact observation. Only exact destination-invalid/`IC0301` root absence may
+  be attested; `Stopping`, transport and Subnet failures remain nonterminal.
+  ICP CLI deletion disables its temporary recovery Wasm, so no retained cycles
+  are redirected to the executor's ledger. The same draft removes the stranded
+  local-network facade helper, collapses two one-call wrappers and narrows
+  same-file-only implementation surfaces.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -2198,17 +2208,31 @@ independently observed absence permits removal from the Subnet Registry and
 runtime Store inventory and one terminal hashed receipt. The Fleet Subnet Root
 remains installed with the complete removal history.
 
-Open `0.100.74` adds the durable physical-root deletion handoff described
+Released `0.100.74` adds the durable physical-root deletion handoff described
 above, including pre-transfer ceiling validation, root-authenticated
 Coordinator readiness, guarded cycle return and one controller-bound execution
 intent/terminal receipt. The Coordinator does not become the root controller;
 typed absence is the authenticated executor's attestation, and neither an
-unreachable root nor a Subnet failure is deletion evidence. The same open
-patch removes one-caller host/CLI helpers, orphaned subnet-query provenance and
+unreachable root nor a Subnet failure is deletion evidence. The same release
+removes one-caller host/CLI helpers, orphaned subnet-query provenance and
 dead installed-Fleet request/error residue plus two stale deployment-truth text
 renderer branches, totaling 462 net Rust lines, while narrowing nineteen
 functions and nine constants to their declaration files. The retained legacy
 resolver still fails closed at the Coordinator boundary.
+Open `0.100.75` adds the resumable host physical-root executor. Remote root and
+Coordinator receipts remain the sole recovery journal; exact private status is
+revalidated before each management mutation, the active identity must match
+the frozen executor, only typed `IC0301` absence may complete the operation and
+ICP CLI's temporary cycle-recovery Wasm is disabled.
+The same open patch advances the embedded `ic-query` host library from
+`0.14.1` to `0.21.1`; Canic's consumed `subnet_catalog` Rust API is unchanged,
+and the upstream CLI-only `--format json` to `--json` hard cut requires no
+Canic command or adapter change.
+The same draft removes the stranded local-network facade helper, collapses two
+one-call wrappers and narrows same-file-only runtime, control-plane and test
+support surfaces without changing maintained behavior.
+The next evidence slice is one disposable real-network deletion followed by
+0.100 closeout against the accepted design.
 
 ## Historical Release Detail
 

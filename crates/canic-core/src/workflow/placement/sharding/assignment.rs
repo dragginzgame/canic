@@ -58,7 +58,7 @@ impl ShardingWorkflow {
     }
 
     #[expect(clippy::too_many_lines)]
-    pub async fn assign_with_policy(
+    async fn assign_with_policy(
         canister_role: &CanisterRole,
         pool: &str,
         partition_key: &str,

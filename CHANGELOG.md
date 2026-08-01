@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.75` adds the resumable host executor for physical Fleet Subnet Root
+  deletion, reconciling exact management status through stop, no-shim delete
+  and typed absence before the surviving Coordinator records completion, and
+  advances the embedded `ic-query` host library to `0.21.1`; it also removes a
+  stranded local-access facade and tightens same-file-only internal surfaces.
+
 - `0.100.74` durably hands a removed Fleet Subnet Root to one external
   controller/executor and returns excess cycles to the surviving Coordinator
   only after exact deletion preflight; it also hard-cuts dead installed-Fleet,

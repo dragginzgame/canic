@@ -31,7 +31,7 @@ impl WasmStorePublicationWorkflow {
     }
 
     // Resolve deterministic chunk-set metadata for one manifest from its authoritative source.
-    pub(super) async fn source_chunk_set_info_for_manifest(
+    async fn source_chunk_set_info_for_manifest(
         publication_permit: &CostGuardPermit,
         manifest: &TemplateManifestResponse,
     ) -> Result<TemplateChunkSetInfoResponse, InternalError> {
@@ -53,7 +53,7 @@ impl WasmStorePublicationWorkflow {
     }
 
     // Resolve one deterministic chunk for one manifest from its authoritative source.
-    pub(super) async fn source_chunk_for_manifest(
+    async fn source_chunk_for_manifest(
         publication_permit: &CostGuardPermit,
         manifest: &TemplateManifestResponse,
         chunk_index: u32,

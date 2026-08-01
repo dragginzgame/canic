@@ -78,7 +78,7 @@ pub(in crate::workflow) async fn resolved_root_store_module_source(
 }
 
 // Convert one approved manifest into the neutral chunk-backed install source contract.
-pub async fn approved_module_source_from_manifest(
+async fn approved_module_source_from_manifest(
     manifest: &TemplateManifestResponse,
 ) -> Result<ApprovedModuleSource, InternalError> {
     match manifest.chunking_mode {

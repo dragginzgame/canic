@@ -51,7 +51,7 @@ impl SubnetStateMapper {
 
     // Map one stored wasm-store record into the DTO response shape.
     #[must_use]
-    pub fn wasm_store_record_to_response(data: WasmStoreRecord) -> WasmStoreStateResponse {
+    fn wasm_store_record_to_response(data: WasmStoreRecord) -> WasmStoreStateResponse {
         WasmStoreStateResponse {
             binding: data.binding,
             pid: data.pid,

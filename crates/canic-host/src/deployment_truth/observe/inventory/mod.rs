@@ -66,7 +66,7 @@ pub fn collect_local_deployment_inventory(
         &mut unresolved_observations,
     );
     // A terminal catalog row discovers the Coordinator only. It is not
-    // evidence for one legacy deployment root or Subnet Registry inventory.
+    // evidence for a Fleet Subnet Root or root-local Registry inventory.
     let observed_canisters = Vec::new();
     let observed_pool = Vec::new();
     let observed_root = None;

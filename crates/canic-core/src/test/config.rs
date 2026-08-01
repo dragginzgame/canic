@@ -59,7 +59,7 @@ impl ConfigTestBuilder {
     }
 
     #[must_use]
-    pub fn with_component_spec_canister(
+    fn with_component_spec_canister(
         mut self,
         component_spec: ComponentSpecId,
         role: impl Into<CanisterRole>,

@@ -430,6 +430,7 @@ fn call_store_bootstrap(
         &request,
         false,
     )
+    .map_err(Into::into)
 }
 
 fn query_store_bootstrap_status(
@@ -450,6 +451,7 @@ fn query_store_bootstrap_status(
         &request,
         true,
     )
+    .map_err(Into::into)
 }
 
 fn call_binary_result<I, O>(

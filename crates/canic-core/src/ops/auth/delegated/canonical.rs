@@ -159,7 +159,7 @@ pub fn cert_bytes(cert: &DelegationCert) -> Result<Vec<u8>, CanonicalAuthError> 
     Ok(out)
 }
 
-pub fn claims_bytes(claims: &DelegatedTokenClaims) -> Result<Vec<u8>, CanonicalAuthError> {
+fn claims_bytes(claims: &DelegatedTokenClaims) -> Result<Vec<u8>, CanonicalAuthError> {
     let mut out = domain_bytes(CanonicalDomain::DelegatedTokenClaims);
 
     encode_principal(&mut out, claims.subject);
@@ -175,7 +175,7 @@ pub fn claims_bytes(claims: &DelegatedTokenClaims) -> Result<Vec<u8>, CanonicalA
     Ok(out)
 }
 
-pub fn proof_bytes(proof: &DelegationProof) -> Result<Vec<u8>, CanonicalAuthError> {
+fn proof_bytes(proof: &DelegationProof) -> Result<Vec<u8>, CanonicalAuthError> {
     let mut out = domain_bytes(CanonicalDomain::DelegationProof);
 
     out.extend_from_slice(&cert_bytes(&proof.cert)?);
@@ -184,7 +184,7 @@ pub fn proof_bytes(proof: &DelegationProof) -> Result<Vec<u8>, CanonicalAuthErro
     Ok(out)
 }
 
-pub fn issuer_proof_bytes(proof: &IssuerProof) -> Vec<u8> {
+fn issuer_proof_bytes(proof: &IssuerProof) -> Vec<u8> {
     let mut out = domain_bytes(CanonicalDomain::IssuerProof);
     encode_issuer_proof(&mut out, proof);
     out

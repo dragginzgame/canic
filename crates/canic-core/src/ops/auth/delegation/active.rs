@@ -104,7 +104,7 @@ const fn validate_root_proof_epoch_floors(
     Ok(())
 }
 
-pub(super) fn active_delegation_proof_status_response(
+fn active_delegation_proof_status_response(
     now_ns: u64,
     proof: Option<ActiveDelegationProof>,
 ) -> ActiveDelegationProofStatusResponse {

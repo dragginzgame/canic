@@ -15,7 +15,7 @@ use crate::dto::page::{Page, PageRequest};
 pub const PAGE_REQUEST_MAX_LIMIT: u64 = 1_000;
 
 #[must_use]
-pub fn clamp_page_request(request: PageRequest) -> PageRequest {
+fn clamp_page_request(request: PageRequest) -> PageRequest {
     let limit = request.limit.min(PAGE_REQUEST_MAX_LIMIT);
     PageRequest {
         limit,

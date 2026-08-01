@@ -137,7 +137,7 @@ pub fn prepare_delegation_cert(
 
 /// Combine a prepared certificate with its root proof.
 #[cfg(test)]
-pub fn finish_delegation_proof(
+fn finish_delegation_proof(
     prepared: PreparedDelegationCert,
     root_proof: RootProof,
 ) -> FinalizedDelegationProof {

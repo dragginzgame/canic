@@ -2,6 +2,7 @@ mod canister;
 mod command;
 mod diagnostic;
 mod error;
+mod identity;
 mod model;
 mod replica;
 mod response;

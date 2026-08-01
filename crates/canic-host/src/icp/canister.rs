@@ -144,6 +144,30 @@ impl IcpCli {
         run_status(&mut command)
     }
 
+    /// Delete one stopped canister without installing ICP CLI's cycle-recovery shim.
+    pub fn delete_canister_without_cycle_recovery(
+        &self,
+        canister: &str,
+    ) -> Result<(), IcpCommandError> {
+        let mut command = self.delete_canister_without_cycle_recovery_command(canister);
+        run_status(&mut command)
+    }
+
+    #[cfg(test)]
+    pub(super) fn delete_canister_without_cycle_recovery_display(&self, canister: &str) -> String {
+        command_display(&self.delete_canister_without_cycle_recovery_command(canister))
+    }
+
+    fn delete_canister_without_cycle_recovery_command(
+        &self,
+        canister: &str,
+    ) -> std::process::Command {
+        let mut command = self.canister_command();
+        command.args(["delete", "--no-recover-cycles", canister]);
+        self.add_target_args(&mut command);
+        command
+    }
+
     /// Start one canister.
     pub fn start_canister(&self, canister: &str) -> Result<(), IcpCommandError> {
         let mut command = self.canister_command();

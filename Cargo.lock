@@ -2212,14 +2212,15 @@ dependencies = [
 
 [[package]]
 name = "ic-query"
-version = "0.14.1"
+version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72abf6464934a304e2043e79969e17e31131ce7d3837f798517722ea076144ae"
+checksum = "6172b0e68e05c4d917fdb16fdce69643fe7a0acecff40983747231f86f2e32fa"
 dependencies = [
  "candid",
  "futures",
  "ic-agent",
  "prost",
+ "reqwest 0.13.4",
  "serde",
  "serde_cbor",
  "serde_json",
@@ -2227,6 +2228,7 @@ dependencies = [
  "thiserror 2.0.19",
  "tokio",
  "unicode-width 0.2.2",
+ "url",
 ]
 
 [[package]]

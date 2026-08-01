@@ -302,31 +302,17 @@ fn fetch_ready(pic: &Pic, canister_id: Principal) -> bool {
     }
 }
 
-pub fn install_root_args(
+fn install_root_args(
     root_id: Principal,
     wasm: &[u8],
     config_path: &Path,
-) -> Result<Vec<u8>, Error> {
-    install_root_args_with_release_set_digest(
-        root_id,
-        wasm,
-        config_path,
-        ReleaseSetDigest::from_bytes([0x44; 32]),
-    )
-}
-
-pub(super) fn install_root_args_with_release_set_digest(
-    root_id: Principal,
-    wasm: &[u8],
-    config_path: &Path,
-    release_set_digest: ReleaseSetDigest,
 ) -> Result<Vec<u8>, Error> {
     install_root_args_with_release_set_digest_and_coordinator(
         root_id,
         Principal::from_slice(&[0x41; 29]),
         wasm,
         config_path,
-        release_set_digest,
+        ReleaseSetDigest::from_bytes([0x44; 32]),
     )
 }
 
