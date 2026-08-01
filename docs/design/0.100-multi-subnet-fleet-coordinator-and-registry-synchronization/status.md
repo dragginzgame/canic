@@ -1024,22 +1024,30 @@ authenticated Fleet Subnet Root's Component Directory page remain the
 maintained runtime boundaries. The same release removes redundant internal CLI
 wrappers without changing command behavior.
 
-Open 0.100.80 hard-cuts the obsolete public Subnet Registry query family and
+Released 0.100.80 hard-cuts the obsolete public Subnet Registry query family and
 its host, backup, audit and testing transports with no alias. Backup execution
 fails closed until Coordinator-backed Component Registry topology discovery
 can revalidate its plan. Root baseline discovery uses the bounded direct-child
 view, while the still-live internal Subnet Registry/Directory storage and
 cascade authorities remain private for the next replacement slice. The same
-draft removes stranded Directory snapshot and mapper layers without changing
+release removes stranded Directory snapshot and mapper layers without changing
 prepared cascade validation.
+
+Open 0.100.81 introduces one exact active Component Registry member resolver
+for top-level Components and descendants. The root chain-key proof endpoint
+uses it through a custom endpoint predicate; role-attestation admission reuses
+it and then retains its top-level-only issuer rule. Both paths also require an
+Active Fleet Subnet Root. Root capability RPC deliberately retains its legacy
+guard until structural proof, authorization, parent resolution and cycles
+funding can move as one consistent boundary.
 
 ## Next Action
 
-Replace the remaining internal `SubnetRegistry`/`SubnetDirectory` consumers
-across authentication, RPC, placement, lifecycle and cascade with root-owned
-Component Registry/Directory authority, then delete their stable storage and
-cascade schemas. Complete the reinstall-only decoder audit, then run
-preparation and execution as separate processes against one explicitly
-selected disposable real-network root. Verify the surviving Coordinator
-terminal receipt and exact replay before closing 0.100 against the final
-design and beginning 0.101.
+Move root capability proof, authorization, parent resolution and root cycles
+funding together onto root-owned Component Registry/Directory authority. Then
+replace the remaining placement, lifecycle and cascade consumers, delete the
+legacy stable storage and cascade schemas, and complete the reinstall-only
+decoder audit. Then run preparation and execution as separate processes
+against one explicitly selected disposable real-network root. Verify the
+surviving Coordinator terminal receipt and exact replay before closing 0.100
+against the final design and beginning 0.101.

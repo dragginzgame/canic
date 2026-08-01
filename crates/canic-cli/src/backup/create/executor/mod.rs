@@ -4,7 +4,6 @@
 //! Does not own: backup planning, layout persistence, or command option parsing.
 //! Boundary: maps runner preflight and snapshot operations onto host ICP commands.
 
-mod errors;
 #[cfg(test)]
 mod tests;
 
@@ -17,10 +16,8 @@ use canic_backup::{
         BackupRunnerSnapshot,
     },
 };
-use canic_host::icp::{IcpCanisterStatusReport, IcpCli};
+use canic_host::icp::{IcpCanisterStatusReport, IcpCli, IcpCommandError};
 use std::path::{Path, PathBuf};
-
-use errors::runner_icp_error;
 
 ///
 /// BackupIcpRunnerExecutor
@@ -138,6 +135,10 @@ fn component_topology_preflight_unavailable() -> BackupRunnerCommandError {
         "preflight",
         "Coordinator-backed Component Registry preflight is not implemented",
     )
+}
+
+fn runner_icp_error(error: IcpCommandError) -> BackupRunnerCommandError {
+    BackupRunnerCommandError::failed("icp", error.to_string())
 }
 
 fn runner_canister_status(

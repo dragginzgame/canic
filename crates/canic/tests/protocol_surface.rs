@@ -1925,9 +1925,11 @@ fn assert_root_delegation_macro_guards(source: &str) {
     assert!(
         lazy_repair_attr.contains("canic_update")
             && lazy_repair_attr.contains("internal")
-            && lazy_repair_attr.contains("caller::is_registered_to_subnet()")
+            && lazy_repair_attr.contains("ActiveComponentMemberPredicate")
+            && lazy_repair_attr.contains("custom(")
+            && !lazy_repair_attr.contains("caller::is_registered_to_subnet()")
             && !lazy_repair_attr.contains("caller::is_controller()"),
-        "root chain-key lazy repair must remain an internal subnet-issuer update"
+        "root chain-key lazy repair must remain an internal active-Component update"
     );
 }
 

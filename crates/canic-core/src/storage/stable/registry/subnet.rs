@@ -92,11 +92,6 @@ impl SubnetRegistry {
         Self::insert(pid, record);
     }
 
-    /// Registers the root canister.
-    pub(crate) fn register_root(pid: Principal, created_at: u64) {
-        Self::register_root_with_module_hash(pid, created_at, None);
-    }
-
     /// Registers the root canister with optional installed module identity.
     pub(crate) fn register_root_with_module_hash(
         pid: Principal,
@@ -257,7 +252,7 @@ mod tests {
     fn seed_simple_tree() {
         clear_registry();
 
-        SubnetRegistry::register_root(p(1), 1);
+        SubnetRegistry::register_root_with_module_hash(p(1), 1, None);
         SubnetRegistry::register(p(2), &CanisterRole::new("alpha"), p(1), vec![], 2);
         SubnetRegistry::register(p(3), &CanisterRole::new("beta"), p(1), vec![], 3);
     }

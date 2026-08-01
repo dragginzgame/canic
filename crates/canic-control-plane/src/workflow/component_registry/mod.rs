@@ -2912,10 +2912,10 @@ pub fn root_runtime_activation_receipt_complete() -> bool {
         .is_some_and(|receipt| receipt.directories_converged && receipt.root_runtime_activated)
 }
 
-/// Resolve one active top-level Component from current protected Registry authority.
-pub fn active_component_binding(
+/// Resolve one active member from current protected Component Registry authority.
+pub fn active_component_member(
     canister: candid::Principal,
-) -> Result<ComponentBinding, InternalError> {
+) -> Result<ManagedCanisterBinding, InternalError> {
     let (authority, _) = root_authority()?;
     prepared_registry(&authority.binding, authority.initial_release_set)?;
     let component = ComponentRegistryOps::component_for_principal(canister).ok_or_else(|| {
@@ -2935,14 +2935,21 @@ pub fn active_component_binding(
         &ConfigOps::component_topology()?,
         &partition,
     )?;
+    let (member, member_status) = ComponentRegistryOps::registered_parent(component, canister)?
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "Component principal index has no registered member",
+            )
+        })?;
     if partition.status != ComponentLifecycleStatus::Active
-        || partition.binding.canister_id != canister
+        || member_status != ComponentLifecycleStatus::Active
     {
         return Err(InternalError::public(Error::forbidden(format!(
             "caller {canister} is not an active Component Registry member"
         ))));
     }
-    Ok(partition.binding)
+    Ok(member)
 }
 
 async fn verify_initial_component_convergence(operation_id: [u8; 32]) -> Result<(), InternalError> {

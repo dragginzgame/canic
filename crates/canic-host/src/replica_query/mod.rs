@@ -6,10 +6,11 @@
 
 mod cbor;
 mod status;
+#[cfg(test)]
+mod tests;
 mod transport;
-mod wire;
 
-use self::{transport::local_query, wire::decode_cycle_balance_response};
+use self::transport::local_query;
 use std::path::Path;
 
 use candid::Decode;
@@ -24,6 +25,11 @@ pub(crate) use self::{
 fn nonempty_text(text: &str) -> Option<String> {
     let trimmed = text.trim();
     (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
+fn decode_cycle_balance_response(bytes: &[u8]) -> Result<u128, ReplicaQueryError> {
+    let result = Decode!(bytes, Result<u128, CanicError>).map_err(ReplicaQueryError::Candid)?;
+    result.map_err(ReplicaQueryError::Canister)
 }
 
 ///
