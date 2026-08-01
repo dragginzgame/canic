@@ -2,6 +2,8 @@
 
 #[cfg(feature = "root-control-plane")]
 pub mod component_auth;
+#[cfg(feature = "root-control-plane")]
+pub mod component_rpc;
 #[cfg(feature = "fleet-coordinator-canister")]
 pub mod fleet_coordinator;
 #[cfg(feature = "root-control-plane")]

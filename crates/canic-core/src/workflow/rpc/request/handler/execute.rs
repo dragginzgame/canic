@@ -10,11 +10,10 @@ use super::{
 use crate::{
     InternalError,
     cdk::types::{Principal, TC},
-    domain::policy::pure::topology::TopologyPolicyError,
     dto::error::Error,
     dto::rpc::{
-        AcknowledgePlacementReceiptRequest, CreateCanisterParent, CreateCanisterRequest,
-        CreateCanisterResponse, RecycleCanisterRequest, Response, UpgradeCanisterRequest,
+        AcknowledgePlacementReceiptRequest, CreateCanisterRequest, CreateCanisterResponse,
+        RecycleCanisterRequest, Response, UpgradeCanisterRequest,
     },
     log,
     log::Topic,
@@ -28,7 +27,6 @@ use crate::{
             guard::{ReplayPending, secs_to_ns},
             receipt::PlacementReceiptAcknowledgementDecision,
         },
-        storage::{directory::subnet::SubnetDirectoryOps, registry::subnet::SubnetRegistryOps},
     },
     replay_policy::CostClass,
     workflow::{
@@ -38,7 +36,7 @@ use crate::{
         cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
         pool::PoolWorkflow,
         replay::mark_recovery_required_after_failure,
-        rpc::RpcWorkflowError,
+        rpc::{RootCapabilityAuthority, RpcWorkflowError},
     },
 };
 
@@ -51,6 +49,7 @@ pub(super) async fn execute_root_capability(
     pending: &ReplayPending,
     capability: RootCapability,
     authorized_cycles: Option<AuthorizedCyclesGrant>,
+    authority: &RootCapabilityAuthority,
 ) -> Result<Response, InternalError> {
     let descriptor = capability.descriptor();
     let capability_name = descriptor.name;
@@ -60,7 +59,7 @@ pub(super) async fn execute_root_capability(
             unreachable!("receipt acknowledgement bypasses replay execution")
         }
         RootCapability::AllocatePlacementChild(req) | RootCapability::ProvisionCanister(req) => {
-            execute_provision(ctx, pending, &req, descriptor.command_kind).await
+            execute_provision(ctx, pending, &req, descriptor.command_kind, authority).await
         }
         RootCapability::UpgradeCanister(req) => execute_upgrade(ctx, pending, &req).await,
         RootCapability::RecycleCanister(req) => execute_recycle(pending, &req).await,
@@ -68,7 +67,7 @@ pub(super) async fn execute_root_capability(
             let response = if let Some(grant) = authorized_cycles {
                 nonroot_cycles::execute_authorized_request_cycles(ctx, pending, grant).await
             } else if ctx.is_root_env {
-                nonroot_cycles::execute_root_request_cycles(ctx, pending, &req).await
+                nonroot_cycles::execute_root_request_cycles(ctx, pending, &req, authority).await
             } else {
                 nonroot_cycles::execute_request_cycles(ctx, pending, &req).await
             }?;
@@ -126,9 +125,9 @@ async fn execute_provision(
     pending: &ReplayPending,
     req: &CreateCanisterRequest,
     command_kind: &'static str,
+    authority: &RootCapabilityAuthority,
 ) -> Result<Response, InternalError> {
-    let parent_pid = resolve_provision_parent(ctx, req)?;
-    preflight_provision_parent_registered(parent_pid)?;
+    let parent_pid = resolve_provision_parent(authority)?;
     let reservation_cycles = root_provision_cycle_reservation_cycles(req)?;
     let cost_permit = reserve_root_provision_cost_guard(ctx, reservation_cycles, command_kind)?;
     if let Err(err) = mark_root_provision_external_effect(
@@ -215,26 +214,14 @@ async fn execute_provision(
 }
 
 fn resolve_provision_parent(
-    ctx: &RootContext,
-    req: &CreateCanisterRequest,
-) -> Result<Principal, InternalError> {
-    match &req.parent {
-        CreateCanisterParent::Canister(pid) => Ok(*pid),
-        CreateCanisterParent::Root => Ok(IcOps::canister_self()),
-        CreateCanisterParent::ThisCanister => Ok(ctx.caller),
-        CreateCanisterParent::Parent => SubnetRegistryOps::get_parent(ctx.caller)
-            .ok_or_else(|| RpcWorkflowError::ParentNotFound(ctx.caller).into()),
-        CreateCanisterParent::Directory(role) => SubnetDirectoryOps::get(role)
-            .ok_or_else(|| RpcWorkflowError::CanisterRoleNotFound(role.clone()).into()),
-    }
-}
-
-fn preflight_provision_parent_registered(parent_pid: Principal) -> Result<(), InternalError> {
-    if SubnetRegistryOps::is_registered(parent_pid) {
-        Ok(())
-    } else {
-        Err(TopologyPolicyError::ParentNotFound(parent_pid).into())
-    }
+    authority: &RootCapabilityAuthority,
+) -> Result<crate::cdk::types::Principal, InternalError> {
+    authority.provision_parent_canister_id().ok_or_else(|| {
+        InternalError::invariant(
+            crate::InternalErrorOrigin::Workflow,
+            "authorized provision request has no protected parent authority",
+        )
+    })
 }
 
 fn root_provision_cycle_reservation_cycles(

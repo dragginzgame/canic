@@ -15,20 +15,16 @@ mod tests;
 
 use crate::{
     InternalError,
-    cdk::types::Principal,
     dto::{
         capability::{
             CapabilityProof, CapabilityRequestMetadata, CapabilityService,
             NonrootCyclesCapabilityEnvelopeV1, NonrootCyclesCapabilityResponseV1,
         },
         error::Error,
-        rpc::{Request, RootRequestMetadata},
+        rpc::RootRequestMetadata,
     },
-    ops::{
-        rpc::capability::root_capability_hash as compute_root_capability_hash,
-        runtime::metrics::root_capability::RootCapabilityMetricProofMode,
-    },
-    workflow::rpc::request::handler::capability::RootCapability,
+    ops::runtime::metrics::root_capability::RootCapabilityMetricProofMode,
+    workflow::rpc::{RootCapabilityAuthority, request::handler::capability::RootCapability},
 };
 
 const MAX_CAPABILITY_CLOCK_SKEW_NS: u64 = 30_000_000_000;
@@ -51,8 +47,9 @@ pub async fn response_capability_v1_nonroot(
 /// Handle a v1 root capability envelope.
 pub async fn response_capability_v1_root(
     envelope: crate::dto::capability::RootCapabilityEnvelopeV1,
+    authority: RootCapabilityAuthority,
 ) -> Result<crate::dto::capability::RootCapabilityResponseV1, InternalError> {
-    root::response_capability_v1_root(envelope)
+    root::response_capability_v1_root(envelope, authority)
         .await
         .map_err(InternalError::public)
 }
@@ -73,36 +70,15 @@ fn validate_nonroot_cycles_envelope(
     envelope::validate_root_capability_envelope(service, capability_version, proof)
 }
 
-fn verify_root_capability_proof(capability: &RootCapability) -> Result<(), Error> {
-    proof::verify_root_structural_proof(capability)
+fn verify_root_capability_proof(
+    capability: &RootCapability,
+    authority: &RootCapabilityAuthority,
+) -> Result<(), Error> {
+    proof::verify_root_structural_proof(capability, authority)
 }
 
 fn verify_nonroot_cycles_proof() -> Result<(), Error> {
     proof::verify_nonroot_structural_cycles_proof()
-}
-
-#[cfg(test)]
-fn verify_capability_hash_binding(
-    target_canister: Principal,
-    capability_version: u16,
-    capability: &Request,
-    capability_hash: [u8; 32],
-) -> Result<(), Error> {
-    proof::verify_capability_hash_binding(
-        target_canister,
-        capability_version,
-        capability,
-        capability_hash,
-    )
-}
-
-/// Compute the canonical root capability hash for proof binding.
-pub fn root_capability_hash(
-    target_canister: Principal,
-    capability_version: u16,
-    capability: &Request,
-) -> Result<[u8; 32], Error> {
-    compute_root_capability_hash(target_canister, capability_version, capability)
 }
 
 const fn with_root_request_metadata(

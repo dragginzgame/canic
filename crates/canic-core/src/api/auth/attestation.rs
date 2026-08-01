@@ -20,9 +20,9 @@ impl AuthApi {
     /// Prepare a root-certified role attestation from the local root update path.
     pub fn prepare_component_role_attestation_root(
         request: RoleAttestationRequest,
-        component: &crate::ids::ComponentBinding,
+        member: &crate::ids::ManagedCanisterBinding,
     ) -> Result<RoleAttestationPrepareResponse, Error> {
-        RuntimeAuthWorkflow::prepare_component_role_attestation_root(request, component)
+        RuntimeAuthWorkflow::prepare_component_role_attestation_root(request, member)
             .map_err(Self::map_auth_error)
     }
 

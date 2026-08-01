@@ -1033,7 +1033,7 @@ cascade authorities remain private for the next replacement slice. The same
 release removes stranded Directory snapshot and mapper layers without changing
 prepared cascade validation.
 
-Open 0.100.81 introduces one exact active Component Registry member resolver
+Released 0.100.81 introduces one exact active Component Registry member resolver
 for top-level Components and descendants. The root chain-key proof endpoint
 uses it through a custom endpoint predicate; role-attestation admission reuses
 it and then retains its top-level-only issuer rule. Both paths also require an
@@ -1041,11 +1041,24 @@ Active Fleet Subnet Root. Root capability RPC deliberately retains its legacy
 guard until structural proof, authorization, parent resolution and cycles
 funding can move as one consistent boundary.
 
+Open 0.100.82 completes that atomic root capability cutover. One control-plane
+workflow resolves the active root or exact active Component Registry caller,
+structural `ThisCanister` parent, catalog role and lifecycle target into a
+compact immutable authority. Core proof, authorization, execution and root
+cycles funding consume that same authority without Subnet Registry/Directory
+reads. Exact committed recycle replay may recover after the target leaves live
+membership, but every fresh lifecycle request still requires an exact active
+direct child. The same draft removes 0.100.81's narrower role-attestation rule:
+prepare now accepts the exact active Component or Component Child required by
+the accepted design. The same draft hard-cuts the inactive capability-hash
+stack and its hash-only tests because the maintained structural envelope has
+no hash field, then folds residual auth/build forwarding namespaces into their
+owners without adding a compatibility path.
+
 ## Next Action
 
-Move root capability proof, authorization, parent resolution and root cycles
-funding together onto root-owned Component Registry/Directory authority. Then
-replace the remaining placement, lifecycle and cascade consumers, delete the
+Replace the remaining placement, lifecycle and cascade consumers of the
+legacy Subnet Registry/Directory, delete the
 legacy stable storage and cascade schemas, and complete the reinstall-only
 decoder audit. Then run preparation and execution as separate processes
 against one explicitly selected disposable real-network root. Verify the

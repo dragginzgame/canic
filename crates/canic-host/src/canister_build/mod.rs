@@ -4,7 +4,6 @@ mod candid;
 mod context;
 mod model;
 mod process;
-mod wasm_store;
 
 pub use crate::build_profile::CanisterBuildProfile;
 pub use artifact::{build_workspace_canister_artifact, copy_icp_wasm_output};

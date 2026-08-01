@@ -2,72 +2,115 @@
 //!
 //! Responsibility: verify structural capability proof constraints.
 //! Does not own: envelope validation, metrics, request dispatch, or replay metadata.
-//! Boundary: checks caller topology and canonical capability hash bindings.
+//! Boundary: checks caller topology against protected root capability authority.
 
 use crate::{
     cdk::types::Principal,
     dto::{error::Error, rpc::CreateCanisterParent},
-    ops::{
-        ic::IcOps, storage::children::CanisterChildrenOps,
-        storage::registry::subnet::SubnetRegistryOps,
-    },
-    workflow::rpc::request::handler::capability::RootCapability,
+    ops::{ic::IcOps, storage::children::CanisterChildrenOps},
+    workflow::rpc::{RootCapabilityAuthority, request::handler::capability::RootCapability},
 };
-
-#[cfg(test)]
-use crate::dto::rpc::Request;
 
 /// verify_root_structural_proof
 ///
 /// Verify structural proof constraints for capability families that allow it.
-pub(super) fn verify_root_structural_proof(capability: &RootCapability) -> Result<(), Error> {
+pub(super) fn verify_root_structural_proof(
+    capability: &RootCapability,
+    authority: &RootCapabilityAuthority,
+) -> Result<(), Error> {
     let caller = IcOps::msg_caller();
-
-    if !SubnetRegistryOps::is_registered(caller) {
+    if authority.caller_canister_id() != caller {
         return Err(Error::forbidden(
-            "structural proof requires caller to be registered in subnet registry",
+            "structural proof caller differs from protected root capability authority",
         ));
     }
 
     match capability {
-        RootCapability::AcknowledgePlacementReceipt(_) | RootCapability::RequestCycles(_) => Ok(()),
+        RootCapability::AcknowledgePlacementReceipt(_) | RootCapability::RequestCycles(_) => {
+            require_no_scoped_authority(authority)
+        }
         RootCapability::AllocatePlacementChild(request)
-        | RootCapability::ProvisionCanister(request) => verify_root_structural_create(request),
+        | RootCapability::ProvisionCanister(request) => {
+            verify_root_structural_create(request, authority)
+        }
         RootCapability::UpgradeCanister(request) => {
-            verify_root_structural_child_target(caller, request.canister_pid, "upgrade")
+            verify_root_structural_child_target(caller, request.canister_pid, "upgrade", authority)
         }
         RootCapability::RecycleCanister(request) => {
-            verify_root_structural_child_target(caller, request.canister_pid, "recycle")
+            verify_replayable_recycle_target(caller, request.canister_pid, authority)
         }
     }
 }
 
-fn verify_root_structural_create(
-    request: &crate::dto::rpc::CreateCanisterRequest,
+fn verify_replayable_recycle_target(
+    caller: Principal,
+    target_pid: Principal,
+    authority: &RootCapabilityAuthority,
 ) -> Result<(), Error> {
-    if matches!(&request.parent, CreateCanisterParent::ThisCanister) {
+    require_no_provision_parent_authority(authority)?;
+    if !authority.has_target() {
         return Ok(());
     }
+    verify_root_structural_child_target(caller, target_pid, "recycle", authority)
+}
 
-    Err(Error::forbidden(
-        "structural provision proof requires parent=ThisCanister",
-    ))
+fn verify_root_structural_create(
+    request: &crate::dto::rpc::CreateCanisterRequest,
+    authority: &RootCapabilityAuthority,
+) -> Result<(), Error> {
+    if !matches!(&request.parent, CreateCanisterParent::ThisCanister) {
+        return Err(Error::forbidden(
+            "structural provision proof requires parent=ThisCanister",
+        ));
+    }
+    require_no_target_authority(authority)?;
+    if authority.provision_parent_canister_id() != Some(authority.caller_canister_id()) {
+        return Err(Error::forbidden(
+            "structural provision parent differs from the protected caller authority",
+        ));
+    }
+    Ok(())
 }
 
 fn verify_root_structural_child_target(
     caller: Principal,
     target_pid: Principal,
     operation: &str,
+    authority: &RootCapabilityAuthority,
 ) -> Result<(), Error> {
-    let (_, target_parent) = SubnetRegistryOps::role_parent(target_pid).ok_or_else(|| {
-        Error::forbidden(format!(
-            "structural proof requires registered {operation} target"
-        ))
-    })?;
-    if target_parent != Some(caller) {
+    require_no_provision_parent_authority(authority)?;
+    if authority.target_canister_id() != Some(target_pid) {
+        return Err(Error::forbidden(format!(
+            "structural proof requires an exact active {operation} target"
+        )));
+    }
+    if authority.target_parent_canister_id() != Some(caller) {
         return Err(Error::forbidden(format!(
             "structural proof requires {operation} target to be a direct child of caller"
         )));
+    }
+    Ok(())
+}
+
+fn require_no_scoped_authority(authority: &RootCapabilityAuthority) -> Result<(), Error> {
+    require_no_target_authority(authority)?;
+    require_no_provision_parent_authority(authority)
+}
+
+fn require_no_target_authority(authority: &RootCapabilityAuthority) -> Result<(), Error> {
+    if authority.has_target() {
+        return Err(Error::forbidden(
+            "root capability carries unexpected target authority",
+        ));
+    }
+    Ok(())
+}
+
+fn require_no_provision_parent_authority(authority: &RootCapabilityAuthority) -> Result<(), Error> {
+    if authority.has_provision_parent() {
+        return Err(Error::forbidden(
+            "root capability carries unexpected provision-parent authority",
+        ));
     }
     Ok(())
 }
@@ -81,30 +124,6 @@ pub(super) fn verify_nonroot_structural_cycles_proof() -> Result<(), Error> {
     if !CanisterChildrenOps::contains_pid(&caller) {
         return Err(Error::forbidden(
             "structural proof requires caller to be a direct child of receiver",
-        ));
-    }
-
-    Ok(())
-}
-
-/// verify_capability_hash_binding
-///
-/// Ensure the proof hash matches canonical capability payload bytes.
-#[cfg(test)]
-pub(super) fn verify_capability_hash_binding(
-    target_canister: Principal,
-    capability_version: u16,
-    capability: &Request,
-    capability_hash: [u8; 32],
-) -> Result<(), Error> {
-    let expected = crate::workflow::rpc::capability::root_capability_hash(
-        target_canister,
-        capability_version,
-        capability,
-    )?;
-    if capability_hash != expected {
-        return Err(Error::invalid(
-            "capability_hash does not match capability payload",
         ));
     }
 

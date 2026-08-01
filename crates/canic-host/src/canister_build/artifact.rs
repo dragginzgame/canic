@@ -26,14 +26,20 @@ use super::{
         ArtifactTransformKind, ArtifactTransformOutput, CanisterArtifactBuildOutput,
         CanisterArtifactBuildSpec, ROOT_ROLE, WASM_STORE_ROLE, WASM_TARGET,
     },
-    wasm_store::build_hidden_wasm_store_artifact,
 };
 
 pub fn build_workspace_canister_artifact(
     context: &WorkspaceBuildContext,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
     if context.role == WASM_STORE_ROLE {
-        return build_hidden_wasm_store_artifact(context);
+        let output = build_bootstrap_wasm_store_artifact(context)?;
+        return Ok(CanisterArtifactBuildOutput {
+            artifact_root: output.artifact_root,
+            wasm_path: output.wasm_path,
+            wasm_gz_path: output.wasm_gz_path,
+            did_path: output.did_path,
+            transforms: output.transforms,
+        });
     }
 
     let config = AppConfigSnapshot::load(&context.config_path)?;

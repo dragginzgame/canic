@@ -19,9 +19,8 @@ use crate::{
     ops::{
         runtime::env::EnvOps,
         runtime::metrics::root_capability::{RootCapabilityMetricOutcome, RootCapabilityMetrics},
-        storage::registry::subnet::SubnetRegistryOps,
     },
-    workflow::rpc::RpcWorkflowError,
+    workflow::rpc::{RootCapabilityAuthority, RpcWorkflowError},
 };
 
 /// authorize
@@ -30,12 +29,15 @@ use crate::{
 pub(super) fn authorize(
     ctx: &RootContext,
     capability: &RootCapability,
+    authority: &RootCapabilityAuthority,
 ) -> Result<(), InternalError> {
+    require_exact_caller_authority(ctx, authority)?;
+
     // RequestCycles already owns its authorization metrics/logging in the
     // shared cycles helper so root and non-root paths stay aligned.
     if let RootCapability::RequestCycles(req) = capability {
         return if ctx.is_root_env {
-            nonroot_cycles::authorize_root_request_cycles(ctx, req)
+            nonroot_cycles::authorize_root_request_cycles(ctx, req, authority)
         } else {
             nonroot_cycles::authorize_request_cycles(ctx, req)
         };
@@ -47,13 +49,13 @@ pub(super) fn authorize(
             authorize_placement_receipt_acknowledgement(ctx)
         }
         RootCapability::AllocatePlacementChild(req) | RootCapability::ProvisionCanister(req) => {
-            authorize_provision(ctx, req)
+            authorize_provision(ctx, req, authority)
         }
         RootCapability::UpgradeCanister(req) => {
-            authorize_root_only(ctx).and_then(|()| authorize_upgrade(ctx, req))
+            authorize_root_only(ctx).and_then(|()| authorize_upgrade(ctx, req, authority))
         }
         RootCapability::RecycleCanister(req) => {
-            authorize_root_only(ctx).and_then(|()| authorize_recycle(ctx, req))
+            authorize_root_only(ctx).and_then(|()| authorize_recycle(ctx, req, authority))
         }
         RootCapability::RequestCycles(_) => unreachable!("handled before generic authorization"),
     };
@@ -103,36 +105,27 @@ fn authorize_placement_receipt_acknowledgement(ctx: &RootContext) -> Result<(), 
         return EnvOps::require_root();
     }
 
-    if !SubnetRegistryOps::is_registered(ctx.caller) {
-        return Err(InternalError::public(Error::forbidden(
-            "placement receipt acknowledgement requires caller to be registered in subnet registry",
-        )));
-    }
-
     Ok(())
 }
 
 fn authorize_provision(
     ctx: &RootContext,
     req: &CreateCanisterRequest,
+    authority: &RootCapabilityAuthority,
 ) -> Result<(), InternalError> {
-    if ctx.caller == ctx.self_pid {
-        return Ok(());
-    }
-
     if !ctx.is_root_env {
         return EnvOps::require_root();
     }
 
     if !matches!(&req.parent, CreateCanisterParent::ThisCanister) {
         return Err(InternalError::public(Error::forbidden(
-            "non-root structural provision requires parent=ThisCanister",
+            "structural provision requires parent=ThisCanister",
         )));
     }
 
-    if !SubnetRegistryOps::is_registered(ctx.caller) {
+    if authority.provision_parent_canister_id() != Some(ctx.caller) {
         return Err(InternalError::public(Error::forbidden(
-            "non-root structural provision requires caller to be registered in subnet registry",
+            "structural provision requires exact caller parent authority",
         )));
     }
 
@@ -147,25 +140,60 @@ fn authorize_root_only(ctx: &RootContext) -> Result<(), InternalError> {
     }
 }
 
-fn authorize_upgrade(ctx: &RootContext, req: &UpgradeCanisterRequest) -> Result<(), InternalError> {
-    let (_, parent_pid) = SubnetRegistryOps::role_parent(req.canister_pid)
-        .ok_or(RpcWorkflowError::ChildNotFound(req.canister_pid))?;
-
-    if parent_pid != Some(ctx.caller) {
+fn authorize_upgrade(
+    ctx: &RootContext,
+    req: &UpgradeCanisterRequest,
+    authority: &RootCapabilityAuthority,
+) -> Result<(), InternalError> {
+    require_exact_target(req.canister_pid, authority)?;
+    if authority.target_parent_canister_id() != Some(ctx.caller) {
         return Err(RpcWorkflowError::NotChildOfCaller(req.canister_pid, ctx.caller).into());
     }
 
     Ok(())
 }
 
-fn authorize_recycle(ctx: &RootContext, req: &RecycleCanisterRequest) -> Result<(), InternalError> {
-    let Some((_, parent_pid)) = SubnetRegistryOps::role_parent(req.canister_pid) else {
-        return Ok(());
-    };
-
-    if ctx.caller != ctx.self_pid && parent_pid != Some(ctx.caller) {
+fn authorize_recycle(
+    ctx: &RootContext,
+    req: &RecycleCanisterRequest,
+    authority: &RootCapabilityAuthority,
+) -> Result<(), InternalError> {
+    require_exact_target(req.canister_pid, authority)?;
+    if authority.target_parent_canister_id() != Some(ctx.caller) {
         return Err(RpcWorkflowError::NotChildOfCaller(req.canister_pid, ctx.caller).into());
     }
 
+    Ok(())
+}
+
+fn require_exact_caller_authority(
+    ctx: &RootContext,
+    authority: &RootCapabilityAuthority,
+) -> Result<(), InternalError> {
+    if authority.caller_canister_id() != ctx.caller {
+        return Err(InternalError::public(Error::forbidden(
+            "root capability caller differs from protected Component Registry authority",
+        )));
+    }
+    if ctx.caller == ctx.self_pid && !authority.caller_is_fleet_subnet_root() {
+        return Err(InternalError::public(Error::forbidden(
+            "Fleet Subnet Root self-call lacks root caller authority",
+        )));
+    }
+    if ctx.caller != ctx.self_pid && authority.caller_is_fleet_subnet_root() {
+        return Err(InternalError::public(Error::forbidden(
+            "Component caller cannot use Fleet Subnet Root caller authority",
+        )));
+    }
+    Ok(())
+}
+
+fn require_exact_target(
+    target: crate::cdk::types::Principal,
+    authority: &RootCapabilityAuthority,
+) -> Result<(), InternalError> {
+    if authority.target_canister_id() != Some(target) {
+        return Err(RpcWorkflowError::ChildNotFound(target).into());
+    }
     Ok(())
 }

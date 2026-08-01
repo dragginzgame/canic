@@ -10,7 +10,7 @@ use canic_core::{
         AccessError,
         expr::{AccessContext, AsyncAccessPredicate},
     },
-    api::{auth::AuthApi, fleet_activation::FleetActivationApi},
+    api::auth::AuthApi,
     control_plane_support::ops::ic::IcOps,
     dto::{
         auth::{
@@ -18,9 +18,8 @@ use canic_core::{
             SignedRoleAttestation,
         },
         error::Error,
-        fleet_activation::FleetActivationPhase,
     },
-    ids::{ComponentBinding, ManagedCanisterBinding},
+    ids::ManagedCanisterBinding,
 };
 
 ///
@@ -34,7 +33,7 @@ pub struct ActiveComponentMemberPredicate;
 #[async_trait]
 impl AsyncAccessPredicate for ActiveComponentMemberPredicate {
     async fn eval(&self, ctx: &AccessContext) -> Result<(), AccessError> {
-        active_component_member(ctx.transport_caller())
+        crate::workflow::component_auth::active_component_member(ctx.transport_caller())
             .map(|_| ())
             .map_err(|_| {
                 AccessError::Denied(format!(
@@ -58,12 +57,12 @@ impl AsyncAccessPredicate for ActiveComponentMemberPredicate {
 pub struct ComponentAuthApi;
 
 impl ComponentAuthApi {
-    /// Prepare a role attestation for the exact calling active Component.
+    /// Prepare a role attestation for the exact active Component Registry caller.
     pub fn prepare_role_attestation(
         request: RoleAttestationRequest,
     ) -> Result<RoleAttestationPrepareResponse, Error> {
-        let component = active_component_caller()?;
-        AuthApi::prepare_component_role_attestation_root(request, &component)
+        let member = active_component_caller()?;
+        AuthApi::prepare_component_role_attestation_root(request, &member)
     }
 
     /// Retrieve caller-bound proof only while the Component remains active.
@@ -75,22 +74,6 @@ impl ComponentAuthApi {
     }
 }
 
-fn active_component_caller() -> Result<ComponentBinding, Error> {
-    let caller = IcOps::msg_caller();
-    match active_component_member(caller)? {
-        ManagedCanisterBinding::Component(binding) => Ok(binding),
-        ManagedCanisterBinding::ComponentChild(_) => Err(Error::forbidden(format!(
-            "caller {caller} is a Component Child, not a top-level Component"
-        ))),
-    }
-}
-
-fn active_component_member(caller: candid::Principal) -> Result<ManagedCanisterBinding, Error> {
-    let activation = FleetActivationApi::status()?;
-    if activation.phase != FleetActivationPhase::Active {
-        return Err(Error::unavailable(
-            "active Component membership requires an Active Fleet Subnet Root",
-        ));
-    }
-    crate::workflow::component_registry::active_component_member(caller).map_err(Into::into)
+fn active_component_caller() -> Result<ManagedCanisterBinding, Error> {
+    crate::workflow::component_auth::active_component_member(IcOps::msg_caller())
 }

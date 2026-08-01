@@ -10,6 +10,8 @@ const ROOT_INSTALL_CYCLES: u128 = 80_000_000_000_000;
 mod tests {
     use super::*;
     use candid::{decode_one, encode_one};
+    #[cfg(test)]
+    use canic::ids::ComponentChildBinding;
     use canic::{
         CANIC_WASM_CHUNK_BYTES,
         dto::{
@@ -330,13 +332,24 @@ mod tests {
     }
 
     #[test]
-    fn prepared_root_activates_only_after_complete_initial_component_inventory() {
+    fn active_registry_issues_component_and_component_child_role_attestations() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let fixture = setup_active_component_registry();
         super::super::role_attestation::assert_registry_bound_role_attestation(
             fixture.pic(),
             fixture.root,
             &fixture.issuer,
+        );
+        let (child, _) = create_active_project_instance(&fixture);
+        super::super::role_attestation::assert_registry_bound_child_role_attestation(
+            fixture.pic(),
+            fixture.root,
+            &ComponentChildBinding {
+                component: fixture.verifier.clone(),
+                parent_canister_id: fixture.verifier.canister_id,
+                role: CanisterRole::new("project_instance"),
+                canister_id: child,
+            },
         );
     }
 

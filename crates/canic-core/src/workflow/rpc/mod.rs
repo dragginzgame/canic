@@ -4,6 +4,7 @@
 //! Does not own: endpoint DTOs, stable records, or low-level IC calls.
 //! Boundary: exposes request and capability workflow modules to endpoints.
 
+mod authority;
 pub mod capability;
 pub mod request;
 
@@ -14,6 +15,11 @@ use crate::{
     ids::CanisterRole,
 };
 use thiserror::Error as ThisError;
+
+pub use authority::{
+    RootCapabilityAuthority, RootCapabilityCallerAuthority, RootCapabilityMemberAuthority,
+    RootCapabilityParentAuthority,
+};
 
 ///
 /// RpcWorkflowError

@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.80`.
-- The latest published release is `v0.100.80` at
-  `adecf00a3b3b4147e134e93cf8aa3fc0fd20ec64`.
-- Open `0.100.81` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.81`.
+- The latest published release is `v0.100.81` at
+  `117f4f7fa166e0262133f94dbf76fffbe8f56735`.
+- Open `0.100.82` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -666,14 +666,24 @@ Historical detail is archived at:
   facade/DTO/workflow plus host, backup and audit transports. It also removes
   obsolete Directory snapshot methods and unit mapper types while retaining
   narrow storage-ops conversion and prepared cascade commit boundaries.
-- Open `0.100.81` moves root-owned authentication toward the Component
+- Released `0.100.81` moves root-owned authentication toward the Component
   Registry. One exact active-member resolver covers top-level Components and
   descendants, the chain-key proof endpoint uses it through an endpoint-level
-  custom predicate, and role-attestation admission reuses it before enforcing
-  its top-level-only issuer contract. Root capability RPC retains its legacy
-  guard and internal topology reads for the next atomic RPC slice. The same
-  draft removes residual test-only parser and root-registration aliases and
-  collapses one-function backup/replica namespaces without behavior change.
+  custom predicate, and role-attestation admission reuses it while retaining
+  the release's narrower top-level-only rule. The same release removes
+  residual test-only parser and root-registration aliases and collapses
+  one-function backup/replica namespaces without behavior change.
+- Open `0.100.82` moves the complete root capability boundary from legacy
+  Subnet Registry/Directory reads to one request-bound authority resolved from
+  exact active Component Registry membership. Structural provision binds
+  `ThisCanister`, root cycles use the protected member role and immediate
+  parent, and lifecycle targets are exact active direct children. Recycle
+  replay remains recoverable after its live target disappears, while fresh
+  requests without target authority fail closed. The same draft corrects
+  role-attestation issuance to admit both active Components and Component
+  Children as required by the accepted design. It also hard-cuts the inactive
+  capability-hash stack and residual forwarding namespaces; the maintained
+  structural envelope carries no hash field or compatibility path.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1969,11 +1979,10 @@ First primary results:
 
 ## Next Action
 
-Move root capability proof, authorization, parent resolution and root cycles
-funding together from `SubnetRegistry`/`SubnetDirectory` to exact Component
-Registry/Directory authority. Then hard-cut the remaining placement,
-lifecycle and cascade consumers and complete the reinstall-only decoder audit,
-then run the guarded host preparation and execution phases as separate
+Hard-cut the remaining placement, lifecycle and cascade consumers of the
+legacy Subnet Registry/Directory, delete their stable/cascade schemas once no
+maintained reader remains and complete the reinstall-only decoder audit. Then
+run the guarded host preparation and execution phases as separate
 processes against one explicitly selected disposable real-network root. Verify
 the surviving Coordinator terminal receipt and exact replay before closing 0.100
 against the accepted design and beginning 0.101. The retained implementation
@@ -2320,14 +2329,21 @@ view instead. The same release removes obsolete Directory snapshot-argument
 methods and three unit mapper types. Three narrow conversion helpers remain in
 storage ops, and the validated prepared-import boundary still protects cascade
 application.
-Open `0.100.81` replaces the root chain-key proof endpoint's legacy Registry
-guard with exact active Component Registry member admission. The shared
-resolver validates both the owning active partition and the exact top-level or
-descendant member; role attestation reuses it while retaining top-level-only
-issuance. Root capability RPC remains the next internally consistent
-replacement boundary. The same draft removes residual test-only parser and
-root-registration aliases and folds one-function backup ICP-error and replica
-Candid decoder namespaces into their owning modules without behavior change.
+Released `0.100.81` replaces the root chain-key proof endpoint's legacy
+Registry guard with exact active Component Registry member admission. The
+shared resolver validates both the owning active partition and the exact
+top-level or descendant member; role attestation reuses it while retaining
+that release's top-level-only issuance. The same release removes residual
+test-only parser and root-registration aliases and folds one-function backup
+ICP-error and replica Candid decoder namespaces into their owning modules.
+Open `0.100.82` moves root capability proof, authorization, structural parent
+binding and root cycles funding onto one compact active Component Registry
+authority. Fresh lifecycle requests require exact active direct-child targets,
+while committed recycle replay remains recoverable after target disappearance.
+Role-attestation issuance now admits exact active Components and Component
+Children, matching the accepted design. The same draft removes the inactive
+capability-hash stack, its hash-only tests and residual one-function forwarding
+namespaces without changing the maintained structural protocol.
 
 ## Historical Release Detail
 

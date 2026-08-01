@@ -27,6 +27,7 @@ use crate::{
             metrics::root_capability::{RootCapabilityMetricOutcome, RootCapabilityMetrics},
         },
     },
+    workflow::rpc::RootCapabilityAuthority,
 };
 
 use capability::{RootCapability, RootReplayInput};
@@ -90,24 +91,28 @@ impl RootResponseWorkflow {
     /// Handle a capability already mapped by the envelope workflow.
     pub(in crate::workflow::rpc) async fn response_capability_replay_first(
         capability: RootCapability,
+        authority: &RootCapabilityAuthority,
     ) -> Result<Response, InternalError> {
         if let RootCapability::RequestCycles(req) = capability {
-            let response = nonroot_cycles::response_replay_first_root(req).await?;
+            let response = nonroot_cycles::response_replay_first_root(req, authority).await?;
             return Ok(Response::Cycles(response));
         }
         if matches!(capability, RootCapability::AcknowledgePlacementReceipt(_)) {
-            return Self::response_idempotent(capability);
+            return Self::response_idempotent(capability, authority);
         }
 
-        Self::response(capability).await
+        Self::response(capability, authority).await
     }
 
-    fn response_idempotent(capability: RootCapability) -> Result<Response, InternalError> {
+    fn response_idempotent(
+        capability: RootCapability,
+        authority: &RootCapabilityAuthority,
+    ) -> Result<Response, InternalError> {
         let ctx = Self::extract_root_context()?;
         crate::perf!("extract_context");
         let descriptor = capability.descriptor();
         crate::perf!("map_request");
-        Self::authorize(&ctx, &capability)?;
+        Self::authorize(&ctx, &capability, authority)?;
         crate::perf!("authorize");
 
         let RootCapability::AcknowledgePlacementReceipt(req) = capability else {
@@ -142,13 +147,16 @@ impl RootResponseWorkflow {
         }
     }
 
-    async fn response(capability: RootCapability) -> Result<Response, InternalError> {
+    async fn response(
+        capability: RootCapability,
+        authority: &RootCapabilityAuthority,
+    ) -> Result<Response, InternalError> {
         let ctx = Self::extract_root_context()?;
         crate::perf!("extract_context");
         let descriptor = capability.descriptor();
         crate::perf!("map_request");
 
-        let preflight = Self::preflight(&ctx, &capability)?;
+        let preflight = Self::preflight(&ctx, &capability, authority)?;
         crate::perf!("preflight");
         let prepared = match preflight {
             RootPreflight::Fresh(prepared) => prepared,
@@ -160,6 +168,7 @@ impl RootResponseWorkflow {
             &prepared.pending,
             capability,
             prepared.authorized_cycles,
+            authority,
         )
         .await
         {
@@ -210,10 +219,12 @@ impl RootResponseWorkflow {
     fn preflight(
         ctx: &RootContext,
         capability: &RootCapability,
+        authority: &RootCapabilityAuthority,
     ) -> Result<RootPreflight, InternalError> {
         match Self::check_replay(ctx, capability)? {
             replay::ReplayPreflight::Fresh(pending) => {
-                let authorized_cycles = match Self::authorize_with_hint(ctx, capability) {
+                let authorized_cycles = match Self::authorize_with_hint(ctx, capability, authority)
+                {
                     Ok(authorized_cycles) => authorized_cycles,
                     Err(err) => {
                         return Err(Self::abort_replay_after_failure(pending, err));
@@ -231,21 +242,26 @@ impl RootResponseWorkflow {
     fn authorize_with_hint(
         ctx: &RootContext,
         capability: &RootCapability,
+        authority: &RootCapabilityAuthority,
     ) -> Result<Option<nonroot_cycles::AuthorizedCyclesGrant>, InternalError> {
         if let RootCapability::RequestCycles(req) = capability {
             return if ctx.is_root_env {
-                nonroot_cycles::authorize_root_request_cycles_plan(ctx, req).map(Some)
+                nonroot_cycles::authorize_root_request_cycles_plan(ctx, req, authority).map(Some)
             } else {
                 nonroot_cycles::authorize_request_cycles_plan(ctx, req).map(Some)
             };
         }
 
-        Self::authorize(ctx, capability)?;
+        Self::authorize(ctx, capability, authority)?;
         Ok(None)
     }
 
-    fn authorize(ctx: &RootContext, capability: &RootCapability) -> Result<(), InternalError> {
-        authorize::authorize(ctx, capability)
+    fn authorize(
+        ctx: &RootContext,
+        capability: &RootCapability,
+        authority: &RootCapabilityAuthority,
+    ) -> Result<(), InternalError> {
+        authorize::authorize(ctx, capability, authority)
     }
 
     async fn execute_root_capability(
@@ -253,8 +269,10 @@ impl RootResponseWorkflow {
         pending: &ReplayPending,
         capability: RootCapability,
         authorized_cycles: Option<nonroot_cycles::AuthorizedCyclesGrant>,
+        authority: &RootCapabilityAuthority,
     ) -> Result<Response, InternalError> {
-        execute::execute_root_capability(ctx, pending, capability, authorized_cycles).await
+        execute::execute_root_capability(ctx, pending, capability, authorized_cycles, authority)
+            .await
     }
 
     fn check_replay(
@@ -288,9 +306,4 @@ impl RootResponseWorkflow {
             now: IcOps::now_secs(),
         })
     }
-}
-
-#[cfg(test)]
-fn hash_domain_separated(domain: &[u8], payload: &[u8]) -> [u8; 32] {
-    replay::hash_domain_separated(domain, payload)
 }

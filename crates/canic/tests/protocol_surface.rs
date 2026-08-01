@@ -160,6 +160,25 @@ fn root_rpc_commands_without_result_data_use_unit_variants() {
     assert!(env.contains("RecycleCanister"));
 }
 
+#[test]
+fn root_capability_surface_uses_component_registry_authority() {
+    assert_eq!(
+        canic::protocol::CANIC_RESPONSE_CAPABILITY_V1,
+        "canic_response_capability_v1"
+    );
+
+    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/shared.rs");
+    let source = read_text(&macro_path);
+    let attribute = preceding_attribute_context(&source, "fn canic_response_capability_v1(");
+    assert!(attribute.contains("canic_update(internal, requires(custom("));
+    assert!(attribute.contains("RootCapabilityCallerPredicate"));
+    assert!(!attribute.contains("caller::is_registered_to_subnet()"));
+    assert!(
+        source.contains("ComponentRpcApi::response_capability_v1_root(envelope)"),
+        "root capability endpoint must delegate through the control-plane authority facade"
+    );
+}
+
 fn consent_message_request(method: &str) -> ConsentMessageRequest {
     ConsentMessageRequest {
         method: method.to_string(),
