@@ -12,7 +12,7 @@ fn root_registry_hint_explains_empty_root_canister() {
 
 // Ensure missing-root hints use the installed Fleet and source App identities.
 #[test]
-fn root_registry_hint_explains_missing_fleet_root() {
+fn root_registry_hint_explains_missing_fleet_subnet_root() {
     let hint = root_registry_hint("Cannot find canister id")
         .expect("missing canister hint should be available");
 

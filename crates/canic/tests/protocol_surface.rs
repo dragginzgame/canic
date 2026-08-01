@@ -133,15 +133,15 @@ fn fleet_state_and_cascade_candid_shapes_use_the_current_contract() {
 }
 
 #[test]
-fn environment_candid_shapes_use_fleet_root_and_component_spec() {
+fn environment_candid_shapes_use_fleet_subnet_root_and_component_spec() {
     for env in [
         candid_type_env::<EnvBootstrapArgs>(),
         candid_type_env::<EnvSnapshotResponse>(),
     ] {
         assert!(
-            env.contains("fleet_root_pid : opt principal")
+            env.contains("fleet_subnet_root_pid : opt principal")
                 && env.contains("component_spec : opt text"),
-            "environment Candid must expose Fleet root and Component Spec identity:\n{env}"
+            "environment Candid must expose Fleet Subnet Root and Component Spec identity:\n{env}"
         );
     }
 }
@@ -1321,7 +1321,7 @@ fn nonroot_runtime_activation_mutations_are_guarded_by_the_exact_root() {
         let attribute = preceding_attribute_context(&source, signature);
         assert!(
             attribute.contains("canic_update(internal, requires(caller::is_root()))"),
-            "{signature} must remain guarded by the protected Fleet root"
+            "{signature} must remain guarded by the protected Fleet Subnet Root"
         );
     }
 }

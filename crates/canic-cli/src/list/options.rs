@@ -81,7 +81,7 @@ pub(super) enum ListSource {
 
 fn list_command(bin_name: &'static str, help_after: &'static str) -> ClapCommand {
     base_list_options(ClapCommand::new("list").bin_name(bin_name))
-        .about("List canisters registered by an installed Fleet root")
+        .about("List canisters registered by an installed Fleet Subnet Root")
         .arg(
             value_arg("fleet")
                 .value_name("fleet")

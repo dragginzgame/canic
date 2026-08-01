@@ -99,7 +99,7 @@ Usage: canic cycles <command> [OPTIONS]
 
 Commands:
   balance   Display the selected identity cycles balance
-  convert   Convert ICP held by an installed Fleet root to cycles for that root
+  convert   Convert ICP held by an installed Fleet Subnet Root to cycles for that root
   mint      Convert ICP to cycles
   transfer  Transfer cycles to a principal or Canic Fleet target
   topup     Top up an installed Fleet canister

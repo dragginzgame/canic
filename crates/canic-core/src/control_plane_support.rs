@@ -29,10 +29,10 @@ pub mod model {
 pub mod policy {
     pub mod component_allocation {
         pub use crate::domain::policy::pure::component_allocation::{
-            ComponentAllocationPolicyError, PeerComponentProvisioningDecision,
-            PeerComponentProvisioningInput, PeerComponentProvisioningReadiness,
-            TopLevelComponentAllocationDecision, TopLevelComponentAllocationInput,
-            authorize_peer_component_provisioning, reserve_top_level_component,
+            ComponentAllocationPolicyError, PeerComponentProvisioningInput,
+            PeerComponentProvisioningReadiness, TopLevelComponentAllocationDecision,
+            TopLevelComponentAllocationInput, authorize_peer_component_provisioning,
+            reserve_top_level_component,
         };
     }
 

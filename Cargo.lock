@@ -1225,7 +1225,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "demo_fleet_root"
+name = "demo_fleet_subnet_root"
 version = "0.100.77"
 dependencies = [
  "candid",

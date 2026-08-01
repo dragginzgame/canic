@@ -580,12 +580,12 @@ pub enum ComponentTopologyError {
     #[error("protected Component principal must differ from its Coordinator and root")]
     ComponentPrincipalConflictsWithAuthority,
 
-    #[error("Fleet root set contains duplicate root principal {fleet_subnet_root}")]
+    #[error("Fleet Subnet Root set contains duplicate root principal {fleet_subnet_root}")]
     DuplicateFleetSubnetRootPrincipal {
         fleet_subnet_root: candid::Principal,
     },
 
-    #[error("Fleet root set contains duplicate placement Subnet {placement_subnet}")]
+    #[error("Fleet Subnet Root set contains duplicate placement Subnet {placement_subnet}")]
     DuplicateFleetSubnetRootSubnet {
         placement_subnet: crate::ids::SubnetId,
     },
@@ -602,7 +602,7 @@ pub enum ComponentTopologyError {
         maximum_fleet_instances: u32,
     },
 
-    #[error("Component Spec '{component_spec}' has no positive Fleet root admission")]
+    #[error("Component Spec '{component_spec}' has no positive Fleet Subnet Root admission")]
     MissingFleetAdmission { component_spec: ComponentSpecId },
 
     #[error(

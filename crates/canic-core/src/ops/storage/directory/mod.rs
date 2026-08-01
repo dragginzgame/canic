@@ -54,7 +54,7 @@ pub enum DirectoryOpsError {
     },
 
     #[error(
-        "Directory source root does not match protected Fleet root (expected {expected}, received {received})"
+        "Directory source root does not match protected Fleet Subnet Root (expected {expected}, received {received})"
     )]
     SourceRootMismatch {
         expected: Principal,

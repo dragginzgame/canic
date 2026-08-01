@@ -35,8 +35,8 @@ pub enum EnvOpsError {
     #[error("env missing required fields: {0}")]
     MissingFields(String),
 
-    #[error("failed to determine current Fleet root principal")]
-    FleetRootPidUnavailable,
+    #[error("failed to determine current Fleet Subnet Root principal")]
+    FleetSubnetRootPidUnavailable,
 
     #[error("failed to determine current root principal")]
     RootPidUnavailable,
@@ -97,15 +97,15 @@ impl EnvOps {
     }
 
     #[must_use]
-    pub fn is_fleet_root() -> bool {
-        let Some(fleet_root) = Env::get_fleet_root_pid() else {
+    pub fn is_fleet_subnet_root() -> bool {
+        let Some(fleet_subnet_root) = Env::get_fleet_subnet_root_pid() else {
             return false;
         };
         let Some(root_pid) = Env::get_root_pid() else {
             return false;
         };
 
-        fleet_root == root_pid
+        fleet_subnet_root == root_pid
     }
 
     #[must_use]
@@ -168,8 +168,9 @@ impl EnvOps {
         Env::get_parent_pid().ok_or_else(|| EnvOpsError::ParentPidUnavailable.into())
     }
 
-    pub fn fleet_root_pid() -> Result<Principal, InternalError> {
-        Env::get_fleet_root_pid().ok_or_else(|| EnvOpsError::FleetRootPidUnavailable.into())
+    pub fn fleet_subnet_root_pid() -> Result<Principal, InternalError> {
+        Env::get_fleet_subnet_root_pid()
+            .ok_or_else(|| EnvOpsError::FleetSubnetRootPidUnavailable.into())
     }
 
     // ---------------------------------------------------------------------
@@ -298,8 +299,8 @@ impl EnvOps {
 fn required_fields_missing(data: &EnvRecord) -> Vec<&'static str> {
     let mut missing = Vec::new();
 
-    if data.fleet_root_pid.is_none() {
-        missing.push("fleet_root_pid");
+    if data.fleet_subnet_root_pid.is_none() {
+        missing.push("fleet_subnet_root_pid");
     }
     if data
         .canister_role
@@ -359,7 +360,7 @@ mod tests {
         EnvData {
             record: EnvRecord {
                 managed_binding: None,
-                fleet_root_pid: Some(root_pid),
+                fleet_subnet_root_pid: Some(root_pid),
                 component_spec: Some("default".parse().expect("default Component Spec ID")),
                 subnet_pid: Some(root_pid),
                 root_pid: Some(root_pid),

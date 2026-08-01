@@ -14,15 +14,15 @@ use crate::{
 // Env Checks
 // -----------------------------------------------------------------------------
 
-/// is_fleet_root
+/// is_fleet_subnet_root
 ///
-/// Permit access only from the configured Fleet root canister.
-pub fn is_fleet_root() -> Result<(), AccessError> {
-    if EnvOps::is_fleet_root() {
+/// Permit access only from the configured Fleet Subnet Root canister.
+pub fn is_fleet_subnet_root() -> Result<(), AccessError> {
+    if EnvOps::is_fleet_subnet_root() {
         Ok(())
     } else {
         Err(AccessError::Denied(
-            "this endpoint is only available on the Fleet root".to_string(),
+            "this endpoint is only available on the Fleet Subnet Root".to_string(),
         ))
     }
 }

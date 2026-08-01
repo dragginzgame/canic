@@ -40,7 +40,7 @@ fn invalid_init_args_encode_incomplete_infrastructure_authority() {
         panic!("invalid fixture must carry incomplete infrastructure authority");
     };
     assert_eq!(fleet, identity.fleet);
-    assert!(env.fleet_root_pid.is_none());
+    assert!(env.fleet_subnet_root_pid.is_none());
     assert!(env.component_spec.is_none());
     assert!(env.subnet_pid.is_none());
     assert!(env.root_pid.is_none());

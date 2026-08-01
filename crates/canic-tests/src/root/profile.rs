@@ -61,12 +61,16 @@ fn workspace_root() -> PathBuf {
 }
 
 fn profile_build_config_path(profile: RootSetupProfile, workspace_root: &Path) -> PathBuf {
-    let test_fleet_root = workspace_root.join("apps").join("test");
+    let test_fleet_subnet_root = workspace_root.join("apps").join("test");
     match profile {
-        RootSetupProfile::Topology => test_fleet_root.join("canic.toml"),
-        RootSetupProfile::Capability => test_fleet_root.join("test-configs/root-capability.toml"),
-        RootSetupProfile::Scaling => test_fleet_root.join("test-configs/root-scaling.toml"),
-        RootSetupProfile::Sharding => test_fleet_root.join("test-configs/root-sharding.toml"),
+        RootSetupProfile::Topology => test_fleet_subnet_root.join("canic.toml"),
+        RootSetupProfile::Capability => {
+            test_fleet_subnet_root.join("test-configs/root-capability.toml")
+        }
+        RootSetupProfile::Scaling => test_fleet_subnet_root.join("test-configs/root-scaling.toml"),
+        RootSetupProfile::Sharding => {
+            test_fleet_subnet_root.join("test-configs/root-sharding.toml")
+        }
     }
 }
 

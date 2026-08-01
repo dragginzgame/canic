@@ -77,17 +77,6 @@ pub struct PeerComponentProvisioningInput<'a> {
 }
 
 ///
-/// PeerComponentProvisioningDecision
-///
-/// Exact compiled non-parent grant approved for one requester and target Spec.
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PeerComponentProvisioningDecision {
-    pub grant: ComponentProvisioningGrant,
-}
-
-///
 /// ComponentAllocationPolicyError
 ///
 /// Typed rejection before any root-local allocation mutation.
@@ -166,7 +155,7 @@ pub enum ComponentAllocationPolicyError {
 /// Authorize one exact same-root peer Component request without creating parentage.
 pub fn authorize_peer_component_provisioning(
     input: PeerComponentProvisioningInput<'_>,
-) -> Result<PeerComponentProvisioningDecision, ComponentAllocationPolicyError> {
+) -> Result<ComponentProvisioningGrant, ComponentAllocationPolicyError> {
     input
         .topology
         .validate_component_binding(input.root, input.requester)
@@ -203,9 +192,7 @@ pub fn authorize_peer_component_provisioning(
         );
     }
 
-    Ok(PeerComponentProvisioningDecision {
-        grant: grant.clone(),
-    })
+    Ok(grant.clone())
 }
 
 /// Decide one exact top-level Component identity reservation without mutation.
@@ -467,17 +454,14 @@ mod tests {
     fn peer_provisioning_returns_the_exact_non_parent_grant() {
         let (topology, root, requester, target) = peer_fixture();
 
-        let decision = authorize_peer_component_provisioning(peer_input(
+        let grant = authorize_peer_component_provisioning(peer_input(
             &topology, &root, &requester, &target,
         ))
         .expect("peer provisioning decision");
 
-        assert_eq!(
-            decision.grant.requester_component_spec,
-            requester.component_spec
-        );
-        assert_eq!(decision.grant.target_component_spec, target);
-        assert_eq!(decision.grant.maximum_instances_per_requester_per_root, 2);
+        assert_eq!(grant.requester_component_spec, requester.component_spec);
+        assert_eq!(grant.target_component_spec, target);
+        assert_eq!(grant.maximum_instances_per_requester_per_root, 2);
     }
 
     #[test]

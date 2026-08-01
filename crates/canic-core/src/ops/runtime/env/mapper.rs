@@ -20,7 +20,7 @@ impl EnvRecordMapper {
     #[must_use]
     pub fn record_to_view(record: &EnvRecord) -> EnvSnapshotResponse {
         EnvSnapshotResponse {
-            fleet_root_pid: record.fleet_root_pid,
+            fleet_subnet_root_pid: record.fleet_subnet_root_pid,
             component_spec: record.component_spec.clone(),
             subnet_pid: record.subnet_pid,
             root_pid: record.root_pid,
@@ -32,7 +32,7 @@ impl EnvRecordMapper {
     pub fn validated_to_record(validated: ValidatedEnv) -> EnvRecord {
         EnvRecord {
             managed_binding: validated.managed_binding,
-            fleet_root_pid: Some(validated.fleet_root_pid),
+            fleet_subnet_root_pid: Some(validated.fleet_subnet_root_pid),
             component_spec: validated.component_spec,
             subnet_pid: Some(validated.subnet_pid),
             root_pid: Some(validated.root_pid),

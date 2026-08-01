@@ -147,7 +147,7 @@ fn list_and_config_usage_explain_app_and_subtree_options() {
     let list = info_usage();
     let config = config_usage();
 
-    assert!(list.contains("List canisters registered by an installed Fleet root"));
+    assert!(list.contains("List canisters registered by an installed Fleet Subnet Root"));
     assert!(list.contains("Usage: canic info list [OPTIONS] <fleet>"));
     assert!(list.contains("<fleet>"));
     assert!(list.contains("Installed Fleet name to inspect"));

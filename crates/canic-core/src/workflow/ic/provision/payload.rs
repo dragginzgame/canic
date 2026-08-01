@@ -31,7 +31,7 @@ impl ProvisionWorkflow {
             ));
         }
         let env = EnvBootstrapArgs {
-            fleet_root_pid: Some(EnvOps::fleet_root_pid()?),
+            fleet_subnet_root_pid: Some(EnvOps::fleet_subnet_root_pid()?),
             component_spec: None,
             subnet_pid: Some(EnvOps::subnet_pid()?),
             root_pid: Some(EnvOps::root_pid()?),

@@ -1,5 +1,5 @@
 [package]
-name = "demo_fleet_root"
+name = "demo_fleet_subnet_root"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }

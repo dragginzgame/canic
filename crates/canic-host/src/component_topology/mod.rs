@@ -1,6 +1,6 @@
 //! Module: component_topology
 //!
-//! Responsibility: finalize Fleet root topology bindings from config and explicit host input.
+//! Responsibility: finalize Fleet Subnet Root topology bindings from config and explicit host input.
 //! Does not own: Subnet selection, Canister creation, release sets, Registry commit, or runtime.
 //! Boundary: accepts resolved authority/placement facts and emits validated immutable bindings.
 
@@ -196,7 +196,7 @@ pub fn plan_fleet_topology(
             .then_with(|| left.fleet_subnet_root.cmp(&right.fleet_subnet_root))
     });
 
-    component_topology.validate_fleet_root_bindings(&fleet_subnet_roots)?;
+    component_topology.validate_fleet_subnet_root_bindings(&fleet_subnet_roots)?;
     Ok(FleetTopologyPlan {
         component_topology,
         fleet_subnet_roots,

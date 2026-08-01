@@ -73,7 +73,7 @@ pub(super) enum TerminalFleetCatalogPublicationError {
     #[error("terminal Fleet Registry validation failed: {0}")]
     RegistryValidation(#[source] InternalError),
 
-    #[error("terminal Fleet root count or immutable root plan differs from the Registry")]
+    #[error("terminal Fleet Subnet Root count or immutable root plan differs from the Registry")]
     RootSetMismatch,
 
     #[error("terminal evidence for Fleet Subnet Root {root} is incomplete or contradictory")]
