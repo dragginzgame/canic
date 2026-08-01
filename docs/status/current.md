@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.81`.
-- The latest published release is `v0.100.81` at
-  `117f4f7fa166e0262133f94dbf76fffbe8f56735`.
-- Open `0.100.82` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.82`.
+- The latest published release is `v0.100.82` at
+  `6b7e11117e8b693e8bf87b19939625996984dccf`.
+- Open `0.100.83` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -673,7 +673,7 @@ Historical detail is archived at:
   the release's narrower top-level-only rule. The same release removes
   residual test-only parser and root-registration aliases and collapses
   one-function backup/replica namespaces without behavior change.
-- Open `0.100.82` moves the complete root capability boundary from legacy
+- Released `0.100.82` moves the complete root capability boundary from legacy
   Subnet Registry/Directory reads to one request-bound authority resolved from
   exact active Component Registry membership. Structural provision binds
   `ThisCanister`, root cycles use the protected member role and immediate
@@ -684,6 +684,14 @@ Historical detail is archived at:
   Children as required by the accepted design. It also hard-cuts the inactive
   capability-hash stack and residual forwarding namespaces; the maintained
   structural envelope carries no hash field or compatibility path.
+- Open `0.100.83` makes the cascaded local direct-child cache the sole child
+  authority for application topology and placement. Placement Index no longer
+  cross-checks roles or abandoned children against the legacy Subnet Registry,
+  and Fleet Subnet Roots no longer substitute that Registry behind the local
+  child abstraction. Root Component membership remains a separate protected
+  Component Registry concern. The same draft hard-cuts the orphaned
+  control-plane subnet-state query, DTO and mapper vertical, which had no
+  endpoint, protocol constant or facade consumer.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1979,8 +1987,8 @@ First primary results:
 
 ## Next Action
 
-Hard-cut the remaining placement, lifecycle and cascade consumers of the
-legacy Subnet Registry/Directory, delete their stable/cascade schemas once no
+Hard-cut the remaining lifecycle and cascade consumers of the legacy Subnet
+Registry/Directory, delete their stable/cascade schemas once no
 maintained reader remains and complete the reinstall-only decoder audit. Then
 run the guarded host preparation and execution phases as separate
 processes against one explicitly selected disposable real-network root. Verify
@@ -2336,7 +2344,7 @@ top-level or descendant member; role attestation reuses it while retaining
 that release's top-level-only issuance. The same release removes residual
 test-only parser and root-registration aliases and folds one-function backup
 ICP-error and replica Candid decoder namespaces into their owning modules.
-Open `0.100.82` moves root capability proof, authorization, structural parent
+Released `0.100.82` moves root capability proof, authorization, structural parent
 binding and root cycles funding onto one compact active Component Registry
 authority. Fresh lifecycle requests require exact active direct-child targets,
 while committed recycle replay remains recoverable after target disappearance.
@@ -2344,6 +2352,12 @@ Role-attestation issuance now admits exact active Components and Component
 Children, matching the accepted design. The same draft removes the inactive
 capability-hash stack, its hash-only tests and residual one-function forwarding
 namespaces without changing the maintained structural protocol.
+Open `0.100.83` removes the legacy Registry from local-child and placement
+authority. Placement binding, role validation and stale-child cleanup now use
+one cascaded direct-child record, and the shared child facade no longer swaps
+to subnet-wide Registry semantics on Fleet Subnet Roots. The same draft
+deletes the unexposed control-plane subnet-state query family while retaining
+stable state, internal views and template-publication responses.
 
 ## Historical Release Detail
 

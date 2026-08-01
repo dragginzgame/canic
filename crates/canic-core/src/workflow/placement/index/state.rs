@@ -12,10 +12,7 @@ use crate::{
     ops::{
         ic::IcOps,
         runtime::metrics::placement_index::PlacementIndexMetricReason as MetricReason,
-        storage::{
-            children::CanisterChildrenOps, placement::index::PlacementIndexRegistryOps,
-            registry::subnet::SubnetRegistryOps,
-        },
+        storage::{children::CanisterChildrenOps, placement::index::PlacementIndexRegistryOps},
     },
 };
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -47,9 +44,6 @@ pub(super) enum PlacementIndexWorkflowError {
         expected: CanisterRole,
         actual: CanisterRole,
     },
-
-    #[error("index instance {0} is not present in the subnet registry")]
-    RegistryEntryMissing(Principal),
 }
 
 impl From<PlacementIndexWorkflowError> for InternalError {
@@ -119,21 +113,10 @@ pub(super) fn validate_bind_target_with_reason(
     pid: Principal,
     expected_role: &CanisterRole,
 ) -> Result<(), (InternalError, MetricReason)> {
-    if !CanisterChildrenOps::data()
-        .entries
-        .iter()
-        .any(|entry| entry.pid == pid)
-    {
+    let Some((actual_role, _)) = CanisterChildrenOps::role_parent(pid) else {
         return Err((
             PlacementIndexWorkflowError::InstanceNotDirectChild(pid).into(),
             MetricReason::InvalidChild,
-        ));
-    }
-
-    let Some((actual_role, _)) = SubnetRegistryOps::role_parent(pid) else {
-        return Err((
-            PlacementIndexWorkflowError::RegistryEntryMissing(pid).into(),
-            MetricReason::RegistryMissing,
         ));
     };
 

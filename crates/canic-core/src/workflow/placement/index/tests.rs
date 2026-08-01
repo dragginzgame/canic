@@ -13,7 +13,6 @@ use crate::{
         storage::placement::index::{
             PlacementIndexClaimResult, PlacementIndexPendingClaim, PlacementIndexRegistryOps,
         },
-        storage::registry::subnet::SubnetRegistryOps,
     },
     test::{
         config::ConfigTestBuilder,
@@ -53,12 +52,6 @@ fn index_hub_config(instance_role: &CanisterRole) -> CanisterConfig {
     }
 }
 
-fn clear_subnet_registry() {
-    for entry in SubnetRegistryOps::data().entries {
-        let _ = SubnetRegistryOps::unregister(&entry.pid);
-    }
-}
-
 fn install_index_test_context(child_role: &CanisterRole, child_pid: Principal) {
     let root_pid = p(1);
     let hub_pid = p(2);
@@ -77,23 +70,9 @@ fn install_index_test_context(child_role: &CanisterRole, child_pid: Principal) {
         root_pid,
     );
 
-    clear_subnet_registry();
     PlacementIndexRegistryOps::clear_for_test();
     IntentStoreOps::reset_for_tests();
     CanisterChildrenOps::import_direct_children(hub_pid, vec![(child_pid, child_role.clone())]);
-
-    let created_at = 0;
-    SubnetRegistryOps::register_root_with_module_hash(root_pid, created_at, None);
-    SubnetRegistryOps::register_unchecked(
-        hub_pid,
-        &CanisterRole::new("project_hub"),
-        root_pid,
-        vec![],
-        created_at,
-    )
-    .expect("register hub");
-    SubnetRegistryOps::register_unchecked(child_pid, child_role, hub_pid, vec![], created_at)
-        .expect("register child");
 }
 
 #[test]
@@ -131,22 +110,8 @@ fn bind_instance_rejects_role_mismatch() {
     let actual_role = CanisterRole::new("wrong_instance_role");
     let child_pid = p(3);
     install_index_test_context(&configured_role, child_pid);
-    clear_subnet_registry();
-
-    let root_pid = p(1);
     let hub_pid = p(2);
-    let created_at = 0;
-    SubnetRegistryOps::register_root_with_module_hash(root_pid, created_at, None);
-    SubnetRegistryOps::register_unchecked(
-        hub_pid,
-        &CanisterRole::new("project_hub"),
-        root_pid,
-        vec![],
-        created_at,
-    )
-    .expect("register hub");
-    SubnetRegistryOps::register_unchecked(child_pid, &actual_role, hub_pid, vec![], created_at)
-        .expect("register mismatched child");
+    CanisterChildrenOps::import_direct_children(hub_pid, vec![(child_pid, actual_role)]);
 
     PlacementIndexWorkflow::bind_instance("projects", "alpha", child_pid)
         .expect_err("bind should reject mismatched child role");

@@ -3,10 +3,7 @@ use crate::storage::stable::state::subnet::{
     ControlPlaneSubnetStateData, PublicationStoreStateRecord, SubnetStateRecord, WasmStoreRecord,
 };
 use crate::{
-    dto::{
-        state::SubnetStateResponse,
-        template::{WasmStoreGcStatusResponse, WasmStorePublicationStateResponse},
-    },
+    dto::template::{WasmStoreGcStatusResponse, WasmStorePublicationStateResponse},
     ids::{WasmStoreBinding, WasmStoreGcMode},
     ops::storage::state::mapper::SubnetStateMapper,
     storage::stable::state::subnet::{
@@ -64,12 +61,6 @@ impl SubnetStateOps {
     // -------------------------------------------------------------
     // Canonical data access
     // -------------------------------------------------------------
-
-    /// Export the current subnet state as a response snapshot.
-    #[must_use]
-    pub fn snapshot_response() -> SubnetStateResponse {
-        SubnetStateMapper::data_to_response(SubnetState::export())
-    }
 
     /// Return the current root-owned publication binding, if one is pinned.
     #[must_use]

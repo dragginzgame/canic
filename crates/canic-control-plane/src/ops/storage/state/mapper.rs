@@ -1,11 +1,6 @@
 use crate::{
-    dto::{
-        state::{SubnetStateResponse, WasmStoreStateResponse},
-        template::WasmStorePublicationStateResponse,
-    },
-    storage::stable::state::subnet::{
-        ControlPlaneSubnetStateData, PublicationStoreStateRecord, WasmStoreRecord,
-    },
+    dto::template::WasmStorePublicationStateResponse,
+    storage::stable::state::subnet::{PublicationStoreStateRecord, WasmStoreRecord},
     view::state::{PublicationStoreStateView, WasmStoreGcView, WasmStoreView},
 };
 
@@ -46,29 +41,6 @@ impl SubnetStateMapper {
             generation: record.generation,
             changed_at: record.changed_at,
             retired_at: record.retired_at,
-        }
-    }
-
-    // Map one stored wasm-store record into the DTO response shape.
-    #[must_use]
-    fn wasm_store_record_to_response(data: WasmStoreRecord) -> WasmStoreStateResponse {
-        WasmStoreStateResponse {
-            binding: data.binding,
-            pid: data.pid,
-            created_at: data.created_at,
-        }
-    }
-
-    // Map the stored subnet-state snapshot into the public response shape.
-    #[must_use]
-    pub fn data_to_response(data: ControlPlaneSubnetStateData) -> SubnetStateResponse {
-        SubnetStateResponse {
-            wasm_stores: data
-                .record
-                .wasm_stores
-                .into_iter()
-                .map(Self::wasm_store_record_to_response)
-                .collect(),
         }
     }
 
