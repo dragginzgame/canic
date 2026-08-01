@@ -198,6 +198,113 @@ pub struct FleetSubnetRootRemovalPublicationResponse {
     pub version: FleetRegistryVersion,
 }
 
+/// Root-authenticated command freezing its pre-transfer physical-deletion readiness authority.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDeletionReadinessIntentRequest {
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+    pub final_inventory_hash: [u8; 32],
+    pub store_deletion_hash: [u8; 32],
+    pub observed_cycles_before_reclamation: u128,
+    pub maximum_cycles_to_retain: u128,
+    pub observed_reserved_cycles: u128,
+    pub observed_idle_cycles_burned_per_day: u128,
+    pub observed_freezing_threshold_seconds: u128,
+    pub prepared_at_ns: u64,
+}
+
+/// Coordinator receipt proving root-deletion readiness intent is durable before cycle transfer.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDeletionReadinessIntentResponse {
+    pub request: FleetSubnetRootDeletionReadinessIntentRequest,
+    pub coordinator: Principal,
+    pub recorded_at_ns: u64,
+    pub intent_hash: [u8; 32],
+}
+
+/// Root-authenticated command recording its converged post-transfer cycle balance.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDeletionReadinessRequest {
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+    pub expected_intent_hash: [u8; 32],
+    pub observed_cycles_after_reclamation: u128,
+    pub cycles_reclaimed_at_ns: u64,
+}
+
+/// Coordinator receipt proving one removed root is ready for an external executor.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDeletionReadinessResponse {
+    pub request: FleetSubnetRootDeletionReadinessRequest,
+    pub coordinator: Principal,
+    pub final_inventory_hash: [u8; 32],
+    pub store_deletion_hash: [u8; 32],
+    pub observed_cycles_before_reclamation: u128,
+    pub maximum_cycles_to_retain: u128,
+    pub observed_reserved_cycles: u128,
+    pub observed_idle_cycles_burned_per_day: u128,
+    pub observed_freezing_threshold_seconds: u128,
+    pub prepared_at_ns: u64,
+    pub recorded_at_ns: u64,
+    pub readiness_hash: [u8; 32],
+}
+
+/// Controller command freezing independently observed root authority before stop/delete.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDeletionExecutionRequest {
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+    pub expected_readiness_hash: [u8; 32],
+    pub observed_module_hash: [u8; 32],
+    pub observed_controllers: Vec<Principal>,
+    pub observed_cycles_after_reclamation: u128,
+    pub observed_reserved_cycles: u128,
+    pub observed_idle_cycles_burned_per_day: u128,
+    pub observed_freezing_threshold_seconds: u128,
+}
+
+/// Durable Coordinator intent binding one authenticated external root-deletion executor.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDeletionExecutionResponse {
+    pub request: FleetSubnetRootDeletionExecutionRequest,
+    pub executor: Principal,
+    pub prepared_at_ns: u64,
+    pub execution_hash: [u8; 32],
+}
+
+/// Controller request confirming typed root absence under one durable execution intent.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDeletionCompletionRequest {
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+    pub expected_execution_hash: [u8; 32],
+    pub observed_absent_at_ns: u64,
+}
+
+/// Read-only lookup key for one durable root-deletion execution intent or receipt.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDeletionStatusRequest {
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+}
+
+/// Terminal Coordinator receipt for externally observed Fleet Subnet Root absence.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDeletionResponse {
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+    pub coordinator: Principal,
+    pub executor: Principal,
+    pub readiness_hash: [u8; 32],
+    pub execution_hash: [u8; 32],
+    pub observed_module_hash: [u8; 32],
+    pub observed_controllers: Vec<Principal>,
+    pub observed_cycles_after_reclamation: u128,
+    pub observed_absent_at_ns: u64,
+    pub completed_at_ns: u64,
+    pub deletion_hash: [u8; 32],
+}
+
 ///
 /// FleetRegistrySnapshotResponse
 ///

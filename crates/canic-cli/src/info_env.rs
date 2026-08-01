@@ -149,8 +149,6 @@ fn resolve_info_env_fleet(
         &InstalledFleetRequest {
             fleet: options.fleet.clone(),
             environment: options.environment.clone(),
-            icp: options.icp.clone(),
-            detect_lost_local_root: false,
         },
         icp_root,
     )

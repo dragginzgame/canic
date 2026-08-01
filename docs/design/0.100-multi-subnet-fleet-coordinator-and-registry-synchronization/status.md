@@ -6,10 +6,10 @@ Date: 2026-08-01
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.72`.
-- Latest published release: `v0.100.72` at
-  `6f9659686990e3a4b30936527e98d8e931b458b6`.
-- Open patch draft: `0.100.73`; no package-version change has been authorized.
+- Workspace package version: `0.100.73`.
+- Latest published release: `v0.100.73` at
+  `3a4cd3b34c942a8d537adf3169aeafae1f41ac85`.
+- Open patch draft: `0.100.74`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -950,7 +950,7 @@ three. The Store remains installed and retained in runtime inventory. The same
 release consolidates root-authority and active-runtime validation under
 workflow owners.
 
-Open 0.100.73 freezes that exact binding-finalization receipt plus the Store's
+Released 0.100.73 freezes that exact binding-finalization receipt plus the Store's
 installed module hash, complete canonical controller set and pre-reclamation
 cycle balance before a management effect. The empty Store returns excess
 cycles to the root under a value-transfer guard, and the root durably records
@@ -960,10 +960,23 @@ removes the Store from both local inventories only after independently observed
 absence, and retains one response-idempotent terminal receipt. The Fleet Subnet
 Root remains installed with its complete removal history.
 
+Open 0.100.74 adds the durable physical-root deletion handoff. The root and
+Coordinator validate the controller-observed reserved-cycle, idle-burn and
+freezing-threshold inputs and derive the exact deletion ceiling before any
+value transfer. The root first retains local intent, the Coordinator then
+retains root-authenticated readiness intent, and only then may the root return
+excess cycles to the surviving Coordinator under a value-transfer guard.
+Durable post-transfer readiness tolerates only the bounded refund rebound
+below the exact ceiling. A controller-only Coordinator transition freezes the
+external executor plus live root module, canonical controllers and management
+cycle evidence before stop/delete; only that executor may attest typed absence
+and create the surviving terminal receipt. The Coordinator never becomes the
+root controller, and no new memory ID or compatibility decoder is added.
+
 ## Next Action
 
-Freeze physical Fleet Subnet Root deletion only after the exact Store-deletion
-receipt. Because a root cannot durably receipt its own disappearance, bind one
-external executor to a pre-effect intent and require independently observed
-typed absence before terminal completion. An unreachable root or Subnet is not
-deletion evidence.
+Add the maintained host executor for the frozen status/stop/delete/typed-
+absence sequence. It must use the exact Coordinator execution intent, preserve
+the bound executor identity across retry and never turn root unreachability or
+Subnet failure into terminal absence. Then close the 0.100 implementation
+against the final design before beginning 0.101.

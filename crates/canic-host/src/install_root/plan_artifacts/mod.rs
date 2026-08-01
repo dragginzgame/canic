@@ -32,8 +32,6 @@ use canic_core::ids::{CanisterRole, ReleaseBuildId};
 
 #[cfg(test)]
 use crate::release_set::artifact_root_path;
-#[cfg(test)]
-use std::path::PathBuf;
 
 pub(super) use prepared::PreparedPlanArtifacts;
 
@@ -179,13 +177,6 @@ fn application_file_build_outputs(
         .collect()
 }
 
-#[cfg(test)]
-pub(super) fn normal_install_root_wasm(icp_root: &Path, root_build_target: &str) -> PathBuf {
-    artifact_root_path(icp_root, "local")
-        .join(root_build_target)
-        .join(format!("{root_build_target}.wasm"))
-}
-
 // -----------------------------------------------------------------------------
 // Tests
 // -----------------------------------------------------------------------------
@@ -216,7 +207,9 @@ mod tests {
         let icp_root = temp_dir("canic-install-root-artifact-authority");
 
         assert_eq!(
-            normal_install_root_wasm(&icp_root, "root"),
+            artifact_root_path(&icp_root, "local")
+                .join("root")
+                .join("root.wasm"),
             icp_root.join(".icp/local/canisters/root/root.wasm")
         );
         let _ = fs::remove_dir_all(icp_root);

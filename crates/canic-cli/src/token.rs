@@ -276,8 +276,6 @@ fn transfer_receiver(
         &InstalledFleetRequest {
             fleet: fleet.to_string(),
             environment: target.environment.clone(),
-            icp: target.icp.clone(),
-            detect_lost_local_root: true,
         },
         root,
     )

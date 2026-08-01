@@ -30,7 +30,7 @@ pub(super) fn call_subnet_registry(
     .map_err(backup_subnet_registry_error)
 }
 
-pub(super) fn backup_subnet_registry_error(error: SubnetRegistryQueryError) -> BackupCommandError {
+fn backup_subnet_registry_error(error: SubnetRegistryQueryError) -> BackupCommandError {
     match error {
         SubnetRegistryQueryError::Replica(err) => BackupCommandError::ReplicaQuery(err),
         SubnetRegistryQueryError::Icp(err) => BackupCommandError::Icp(err),

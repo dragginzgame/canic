@@ -13,12 +13,16 @@ use canic_core::{
     dto::{
         error::ErrorCode,
         fleet_registry::{
-            FleetRegistryActivationRequest, FleetSubnetRootDrainingPublicationRequest,
-            FleetSubnetRootEntry, FleetSubnetRootJoinRequest,
-            FleetSubnetRootRemovalPublicationRequest, FleetSubnetRootStatus,
+            FleetRegistryActivationRequest, FleetSubnetRootDeletionCompletionRequest,
+            FleetSubnetRootDeletionExecutionRequest, FleetSubnetRootDeletionReadinessIntentRequest,
+            FleetSubnetRootDeletionReadinessRequest, FleetSubnetRootDeletionStatusRequest,
+            FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootEntry,
+            FleetSubnetRootJoinRequest, FleetSubnetRootRemovalPublicationRequest,
+            FleetSubnetRootStatus,
         },
         fleet_subnet_root::{
-            FleetSubnetRootDrainingResponse, FleetSubnetRootFinalInventoryResponse,
+            FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES, FleetSubnetRootDrainingResponse,
+            FleetSubnetRootFinalInventoryResponse,
         },
     },
     ids::{
@@ -466,7 +470,143 @@ fn assert_root_removal_publication(
             .expect("surviving root can fetch Registry containing Removed peer");
     assert_eq!(surviving_snapshot.registry, registry);
     assert_eq!(surviving_snapshot.version, removed.version);
+    assert_root_deletion_lifecycle(first_entry, &removed);
     assert_later_root_can_drain_after_removal(second_entry, &removed.version);
+}
+
+fn assert_root_deletion_lifecycle(
+    root: &FleetSubnetRootEntry,
+    removal: &canic_core::dto::fleet_registry::FleetSubnetRootRemovalPublicationResponse,
+) {
+    let coordinator = removal.version.authority.binding.coordinator;
+    let operation_id = removal.final_inventory.operation_id;
+    let maximum_cycles_to_retain = FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES + 1;
+    let intent_request = FleetSubnetRootDeletionReadinessIntentRequest {
+        operation_id,
+        fleet_subnet_root: root.fleet_subnet_root,
+        final_inventory_hash: removal.final_inventory.inventory_hash,
+        store_deletion_hash: [41; 32],
+        observed_cycles_before_reclamation: 500_000_000_000,
+        maximum_cycles_to_retain,
+        observed_reserved_cycles: 0,
+        observed_idle_cycles_burned_per_day: 86_400,
+        observed_freezing_threshold_seconds: 1,
+        prepared_at_ns: 28,
+    };
+    let intent =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::prepare_root_deletion_readiness(
+            root.fleet_subnet_root,
+            coordinator,
+            intent_request.clone(),
+            29,
+        )
+        .expect("prepare root-deletion readiness intent");
+    assert_ne!(intent.intent_hash, [0; 32]);
+    assert_eq!(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::prepare_root_deletion_readiness(
+            root.fleet_subnet_root,
+            coordinator,
+            intent_request,
+            999,
+        )
+        .expect("exact readiness-intent retry"),
+        intent
+    );
+
+    let readiness_request = FleetSubnetRootDeletionReadinessRequest {
+        operation_id,
+        fleet_subnet_root: root.fleet_subnet_root,
+        expected_intent_hash: intent.intent_hash,
+        observed_cycles_after_reclamation: 90_000_000_000,
+        cycles_reclaimed_at_ns: 30,
+    };
+    let readiness =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::record_root_deletion_readiness(
+            root.fleet_subnet_root,
+            coordinator,
+            readiness_request,
+            31,
+        )
+        .expect("record root-deletion readiness");
+    assert_ne!(readiness.readiness_hash, [0; 32]);
+
+    assert_root_deletion_execution(root, coordinator, operation_id, readiness.readiness_hash);
+}
+
+fn assert_root_deletion_execution(
+    root: &FleetSubnetRootEntry,
+    coordinator: Principal,
+    operation_id: [u8; 32],
+    readiness_hash: [u8; 32],
+) {
+    let executor = principal(4);
+    let execution_request = FleetSubnetRootDeletionExecutionRequest {
+        operation_id,
+        fleet_subnet_root: root.fleet_subnet_root,
+        expected_readiness_hash: readiness_hash,
+        observed_module_hash: [42; 32],
+        observed_controllers: vec![executor],
+        observed_cycles_after_reclamation: 90_000_000_000,
+        observed_reserved_cycles: 0,
+        observed_idle_cycles_burned_per_day: 86_400,
+        observed_freezing_threshold_seconds: 1,
+    };
+    let execution =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::begin_root_deletion_execution(
+            executor,
+            coordinator,
+            execution_request,
+            32,
+        )
+        .expect("begin external root deletion");
+    assert_ne!(execution.execution_hash, [0; 32]);
+    assert_eq!(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::root_deletion_execution_status(
+            FleetSubnetRootDeletionStatusRequest {
+                operation_id,
+                fleet_subnet_root: root.fleet_subnet_root,
+            },
+        )
+        .expect("read root deletion execution"),
+        execution
+    );
+
+    let completion_request = FleetSubnetRootDeletionCompletionRequest {
+        operation_id,
+        fleet_subnet_root: root.fleet_subnet_root,
+        expected_execution_hash: execution.execution_hash,
+        observed_absent_at_ns: 33,
+    };
+    let deletion = crate::ops::fleet_coordinator::FleetCoordinatorOps::complete_root_deletion(
+        executor,
+        coordinator,
+        completion_request,
+        34,
+    )
+    .expect("complete external root deletion");
+    assert_ne!(deletion.deletion_hash, [0; 32]);
+    let durable = FleetCoordinatorRegistryStore::export();
+    FleetCoordinatorRegistryStore::import(durable);
+    assert_eq!(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::complete_root_deletion(
+            executor,
+            coordinator,
+            completion_request,
+            999,
+        )
+        .expect("exact root deletion retry after restart"),
+        deletion
+    );
+    assert_eq!(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::root_deletion_status(
+            FleetSubnetRootDeletionStatusRequest {
+                operation_id,
+                fleet_subnet_root: root.fleet_subnet_root,
+            },
+        )
+        .expect("durable root deletion status"),
+        deletion
+    );
 }
 
 fn assert_later_root_can_drain_after_removal(

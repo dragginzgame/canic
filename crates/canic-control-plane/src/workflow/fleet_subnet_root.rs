@@ -10,7 +10,9 @@ use crate::{
         storage::state::subnet::SubnetStateOps,
     },
     view::component_registry::{
-        RootComponentRegistryView, RootFleetSubnetDrainingView, RootFleetSubnetFinalInventoryView,
+        RootComponentRegistryView, RootFleetSubnetDeletionPreparationAuthority,
+        RootFleetSubnetDeletionPreparationIntentView, RootFleetSubnetDeletionPreparationView,
+        RootFleetSubnetDrainingView, RootFleetSubnetFinalInventoryView,
         RootFleetSubnetRemovalPublicationView, RootFleetSubnetStoreBindingFinalizationView,
         RootFleetSubnetStoreDeletionView, RootFleetSubnetStoreReclamationView,
     },
@@ -22,21 +24,33 @@ use canic_core::{
     api::fleet_activation::FleetActivationApi,
     control_plane_support::{
         error::{InternalError, InternalErrorOrigin},
-        ops::ic::{IcOps, call::CallOps},
+        model::replay::CommandKind,
+        ops::{
+            cost_guard::{CostGuardPermit, CostGuardRequest},
+            ic::{IcOps, call::CallOps, mgmt::MgmtOps},
+        },
+        workflow::cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
     },
     dto::{
         error::Error,
         fleet_registry::{
-            FleetRegistryVersion, FleetSubnetRootEntry, FleetSubnetRootRemovalPublicationRequest,
+            FleetRegistryVersion, FleetSubnetRootDeletionReadinessIntentRequest,
+            FleetSubnetRootDeletionReadinessIntentResponse,
+            FleetSubnetRootDeletionReadinessRequest, FleetSubnetRootDeletionReadinessResponse,
+            FleetSubnetRootEntry, FleetSubnetRootRemovalPublicationRequest,
             FleetSubnetRootRemovalPublicationResponse, FleetSubnetRootStatus,
         },
         fleet_subnet_root::{
-            FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary,
-            FleetSubnetRootDrainingRequest, FleetSubnetRootDrainingResponse,
-            FleetSubnetRootDrainingStatusRequest, FleetSubnetRootFinalInventoryRequest,
-            FleetSubnetRootFinalInventoryResponse, FleetSubnetRootFinalInventoryStatusRequest,
-            FleetSubnetRootRemovalRequest, FleetSubnetRootRemovalStatusRequest,
-            FleetSubnetRootStoreBindingFinalizationRequest,
+            FLEET_SUBNET_ROOT_DELETION_CALL_REFUND_HEADROOM_CYCLES,
+            FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
+            FLEET_SUBNET_ROOT_DELETION_MAXIMUM_RETAINED_CYCLES, FleetSubnetRootAuthority,
+            FleetSubnetRootCanisterSummary, FleetSubnetRootDeletionPreparationRequest,
+            FleetSubnetRootDeletionPreparationResponse,
+            FleetSubnetRootDeletionPreparationStatusRequest, FleetSubnetRootDrainingRequest,
+            FleetSubnetRootDrainingResponse, FleetSubnetRootDrainingStatusRequest,
+            FleetSubnetRootFinalInventoryRequest, FleetSubnetRootFinalInventoryResponse,
+            FleetSubnetRootFinalInventoryStatusRequest, FleetSubnetRootRemovalRequest,
+            FleetSubnetRootRemovalStatusRequest, FleetSubnetRootStoreBindingFinalizationRequest,
             FleetSubnetRootStoreBindingFinalizationResponse,
             FleetSubnetRootStoreBindingFinalizationStatusRequest,
             FleetSubnetRootStoreDeletionRequest, FleetSubnetRootStoreDeletionResponse,
@@ -46,7 +60,13 @@ use canic_core::{
     },
     ids::{FleetSubnetRootBinding, FleetSubnetRootReleaseSet},
     protocol,
+    replay_policy::CostClass,
 };
+
+const ROOT_DELETION_CYCLE_RECLAMATION_COMMAND_KIND: &str =
+    "fleet_subnet_root.reclaim_deletion_cycles.v1";
+const VALUE_TRANSFER_QUOTA_WINDOW_SECONDS: u64 = 60;
+const MAX_VALUE_TRANSFERS_PER_WINDOW: u64 = 60;
 
 struct ValidatedFleetSubnetRootState {
     fleet_registry: FleetRegistryVersion,
@@ -445,6 +465,100 @@ pub fn store_deletion_status(
         .map(store_deletion_response)
 }
 
+/// Return excess root cycles to the Coordinator and publish external-deletion readiness.
+pub async fn prepare_deletion(
+    request: FleetSubnetRootDeletionPreparationRequest,
+) -> Result<FleetSubnetRootDeletionPreparationResponse, InternalError> {
+    let state = validated_root_state()?;
+    if let Some(existing) =
+        ComponentRegistryOps::root_deletion_preparation_if_present(request.operation_id)?
+    {
+        return validate_deletion_preparation_retry(&request, existing);
+    }
+    let store_deletion =
+        ComponentRegistryOps::root_store_deletion_if_present(request.operation_id)?.ok_or_else(
+            || InternalError::unavailable("Fleet Subnet Root Store deletion is not complete"),
+        )?;
+    if request.expected_store_deletion_hash != store_deletion.deletion_hash {
+        return Err(InternalError::conflict(
+            "Fleet Subnet Root deletion preparation names a different Store deletion receipt",
+        ));
+    }
+    validate_root_deletion_cycle_reserve(&request)?;
+    let coordinator = state.fleet_registry.authority.binding.coordinator;
+    let observed_cycles_before_reclamation = IcOps::canister_cycle_balance().to_u128();
+    let intent = ComponentRegistryOps::begin_root_deletion_preparation(
+        request.operation_id,
+        RootFleetSubnetDeletionPreparationAuthority {
+            store_deletion_hash: request.expected_store_deletion_hash,
+            coordinator,
+            observed_cycles_before_reclamation,
+            maximum_cycles_to_retain: request.maximum_cycles_to_retain,
+            observed_reserved_cycles: request.observed_reserved_cycles,
+            observed_idle_cycles_burned_per_day: request.observed_idle_cycles_burned_per_day,
+            observed_freezing_threshold_seconds: request.observed_freezing_threshold_seconds,
+        },
+        IcOps::now_nanos(),
+    )?;
+
+    let intent = if intent.coordinator_intent_hash.is_some() {
+        intent
+    } else {
+        let coordinator_intent_request = root_deletion_readiness_intent_request(&intent);
+        let coordinator_intent = prepare_root_deletion_readiness_with_coordinator(
+            coordinator,
+            coordinator_intent_request.clone(),
+        )
+        .await?;
+        validate_root_deletion_readiness_intent_response(
+            coordinator,
+            &coordinator_intent_request,
+            &coordinator_intent,
+        )?;
+        let observed_cycles_after_reclamation = reclaim_root_deletion_cycles(
+            coordinator,
+            intent.maximum_cycles_to_retain,
+            intent.observed_cycles_before_reclamation,
+        )
+        .await?;
+        ComponentRegistryOps::record_root_deletion_cycle_reclamation(
+            request.operation_id,
+            coordinator_intent.intent_hash,
+            observed_cycles_after_reclamation,
+            IcOps::now_nanos(),
+        )?
+    };
+
+    let readiness_request = root_deletion_readiness_request(&intent)?;
+    let readiness =
+        record_root_deletion_readiness_with_coordinator(coordinator, readiness_request.clone())
+            .await?;
+    validate_root_deletion_readiness_response(
+        coordinator,
+        &intent,
+        &readiness_request,
+        &readiness,
+    )?;
+    ComponentRegistryOps::record_root_deletion_preparation(
+        request.operation_id,
+        readiness.readiness_hash,
+        IcOps::now_nanos(),
+    )
+    .map(deletion_preparation_response)
+}
+
+/// Read the root-local readiness receipt without a Coordinator or management call.
+pub fn deletion_preparation_status(
+    request: FleetSubnetRootDeletionPreparationStatusRequest,
+) -> Result<FleetSubnetRootDeletionPreparationResponse, InternalError> {
+    let _state = validated_root_state()?;
+    ComponentRegistryOps::root_deletion_preparation_if_present(request.operation_id)?
+        .ok_or_else(|| {
+            InternalError::unavailable("Fleet Subnet Root deletion preparation is not complete")
+        })
+        .map(deletion_preparation_response)
+}
+
 /// Return one compact, fail-closed inventory for this active Fleet Subnet Root.
 pub fn canister_summary() -> Result<FleetSubnetRootCanisterSummary, InternalError> {
     let state = validated_root_state()?;
@@ -818,6 +932,275 @@ fn store_deletion_response(
     }
 }
 
+fn validate_deletion_preparation_retry(
+    request: &FleetSubnetRootDeletionPreparationRequest,
+    existing: RootFleetSubnetDeletionPreparationView,
+) -> Result<FleetSubnetRootDeletionPreparationResponse, InternalError> {
+    let retry_is_exact = [
+        request.expected_store_deletion_hash == existing.store_deletion_hash,
+        request.maximum_cycles_to_retain == existing.maximum_cycles_to_retain,
+        request.observed_reserved_cycles == existing.observed_reserved_cycles,
+        request.observed_idle_cycles_burned_per_day == existing.observed_idle_cycles_burned_per_day,
+        request.observed_freezing_threshold_seconds == existing.observed_freezing_threshold_seconds,
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    if !retry_is_exact {
+        return Err(InternalError::conflict(
+            "Fleet Subnet Root deletion preparation differs from its durable receipt",
+        ));
+    }
+    Ok(deletion_preparation_response(existing))
+}
+
+const fn deletion_preparation_response(
+    view: RootFleetSubnetDeletionPreparationView,
+) -> FleetSubnetRootDeletionPreparationResponse {
+    FleetSubnetRootDeletionPreparationResponse {
+        operation_id: view.operation_id,
+        fleet_subnet_root: view.fleet_subnet_root,
+        coordinator: view.coordinator,
+        final_inventory_hash: view.final_inventory_hash,
+        store_deletion_hash: view.store_deletion_hash,
+        observed_cycles_before_reclamation: view.observed_cycles_before_reclamation,
+        maximum_cycles_to_retain: view.maximum_cycles_to_retain,
+        observed_reserved_cycles: view.observed_reserved_cycles,
+        observed_idle_cycles_burned_per_day: view.observed_idle_cycles_burned_per_day,
+        observed_freezing_threshold_seconds: view.observed_freezing_threshold_seconds,
+        observed_cycles_after_reclamation: view.observed_cycles_after_reclamation,
+        cycles_reclaimed_at_ns: view.cycles_reclaimed_at_ns,
+        coordinator_intent_hash: view.coordinator_intent_hash,
+        coordinator_readiness_hash: view.coordinator_readiness_hash,
+        prepared_at_ns: view.prepared_at_ns,
+        completed_at_ns: view.completed_at_ns,
+    }
+}
+
+fn validate_root_deletion_cycle_reserve(
+    request: &FleetSubnetRootDeletionPreparationRequest,
+) -> Result<(), InternalError> {
+    let maximum_cycles_to_retain = request
+        .observed_idle_cycles_burned_per_day
+        .checked_mul(request.observed_freezing_threshold_seconds)
+        .map(|reserve| reserve.div_ceil(86_400))
+        .and_then(|reserve| {
+            reserve.checked_add(FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES)
+        });
+    if maximum_cycles_to_retain != Some(request.maximum_cycles_to_retain)
+        || request.observed_reserved_cycles != 0
+        || request.maximum_cycles_to_retain
+            <= FLEET_SUBNET_ROOT_DELETION_CALL_REFUND_HEADROOM_CYCLES
+        || request.maximum_cycles_to_retain > FLEET_SUBNET_ROOT_DELETION_MAXIMUM_RETAINED_CYCLES
+    {
+        return Err(InternalError::invalid_input(
+            "Fleet Subnet Root deletion cycle reserve is outside the supported range",
+        ));
+    }
+    Ok(())
+}
+
+fn root_deletion_readiness_intent_request(
+    intent: &RootFleetSubnetDeletionPreparationIntentView,
+) -> FleetSubnetRootDeletionReadinessIntentRequest {
+    FleetSubnetRootDeletionReadinessIntentRequest {
+        operation_id: intent.operation_id,
+        fleet_subnet_root: IcOps::canister_self(),
+        final_inventory_hash: intent.final_inventory_hash,
+        store_deletion_hash: intent.store_deletion_hash,
+        observed_cycles_before_reclamation: intent.observed_cycles_before_reclamation,
+        maximum_cycles_to_retain: intent.maximum_cycles_to_retain,
+        observed_reserved_cycles: intent.observed_reserved_cycles,
+        observed_idle_cycles_burned_per_day: intent.observed_idle_cycles_burned_per_day,
+        observed_freezing_threshold_seconds: intent.observed_freezing_threshold_seconds,
+        prepared_at_ns: intent.prepared_at_ns,
+    }
+}
+
+fn root_deletion_readiness_request(
+    intent: &RootFleetSubnetDeletionPreparationIntentView,
+) -> Result<FleetSubnetRootDeletionReadinessRequest, InternalError> {
+    Ok(FleetSubnetRootDeletionReadinessRequest {
+        operation_id: intent.operation_id,
+        fleet_subnet_root: IcOps::canister_self(),
+        expected_intent_hash: intent.coordinator_intent_hash.ok_or_else(|| {
+            InternalError::unavailable(
+                "Coordinator root-deletion readiness intent has not been recorded",
+            )
+        })?,
+        observed_cycles_after_reclamation: intent.observed_cycles_after_reclamation.ok_or_else(
+            || {
+                InternalError::unavailable(
+                    "Fleet Subnet Root cycle reclamation has not been recorded",
+                )
+            },
+        )?,
+        cycles_reclaimed_at_ns: intent.cycles_reclaimed_at_ns.ok_or_else(|| {
+            InternalError::unavailable(
+                "Fleet Subnet Root cycle-reclamation time has not been recorded",
+            )
+        })?,
+    })
+}
+
+async fn prepare_root_deletion_readiness_with_coordinator(
+    coordinator: candid::Principal,
+    request: FleetSubnetRootDeletionReadinessIntentRequest,
+) -> Result<FleetSubnetRootDeletionReadinessIntentResponse, InternalError> {
+    let call = CallOps::unbounded_wait(
+        coordinator,
+        protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_READINESS_PREPARE,
+    )
+    .with_arg(request)?
+    .execute()
+    .await?;
+    let result: Result<FleetSubnetRootDeletionReadinessIntentResponse, Error> = call.candid()?;
+    result.map_err(InternalError::public)
+}
+
+async fn record_root_deletion_readiness_with_coordinator(
+    coordinator: candid::Principal,
+    request: FleetSubnetRootDeletionReadinessRequest,
+) -> Result<FleetSubnetRootDeletionReadinessResponse, InternalError> {
+    let call = CallOps::unbounded_wait(
+        coordinator,
+        protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_READY,
+    )
+    .with_arg(request)?
+    .execute()
+    .await?;
+    let result: Result<FleetSubnetRootDeletionReadinessResponse, Error> = call.candid()?;
+    result.map_err(InternalError::public)
+}
+
+fn validate_root_deletion_readiness_intent_response(
+    coordinator: candid::Principal,
+    request: &FleetSubnetRootDeletionReadinessIntentRequest,
+    response: &FleetSubnetRootDeletionReadinessIntentResponse,
+) -> Result<(), InternalError> {
+    let response_is_exact = [
+        response.request == *request,
+        response.coordinator == coordinator,
+        response.recorded_at_ns >= request.prepared_at_ns,
+        response.intent_hash != [0; 32],
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    if !response_is_exact {
+        return Err(InternalError::invalid_input(
+            "Coordinator root-deletion readiness intent response differs from request",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_root_deletion_readiness_response(
+    coordinator: candid::Principal,
+    intent: &RootFleetSubnetDeletionPreparationIntentView,
+    request: &FleetSubnetRootDeletionReadinessRequest,
+    response: &FleetSubnetRootDeletionReadinessResponse,
+) -> Result<(), InternalError> {
+    let response_is_exact = [
+        response.request == *request,
+        response.coordinator == coordinator,
+        response.final_inventory_hash == intent.final_inventory_hash,
+        response.store_deletion_hash == intent.store_deletion_hash,
+        response.observed_cycles_before_reclamation == intent.observed_cycles_before_reclamation,
+        response.maximum_cycles_to_retain == intent.maximum_cycles_to_retain,
+        response.observed_reserved_cycles == intent.observed_reserved_cycles,
+        response.observed_idle_cycles_burned_per_day == intent.observed_idle_cycles_burned_per_day,
+        response.observed_freezing_threshold_seconds == intent.observed_freezing_threshold_seconds,
+        response.prepared_at_ns == intent.prepared_at_ns,
+        response.recorded_at_ns >= request.cycles_reclaimed_at_ns,
+        response.readiness_hash != [0; 32],
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    if !response_is_exact {
+        return Err(InternalError::invalid_input(
+            "Coordinator root-deletion readiness response differs from local authority",
+        ));
+    }
+    Ok(())
+}
+
+async fn reclaim_root_deletion_cycles(
+    coordinator: candid::Principal,
+    maximum_cycles_to_retain: u128,
+    observed_cycles_before_reclamation: u128,
+) -> Result<u128, InternalError> {
+    let current_cycles = IcOps::canister_cycle_balance().to_u128();
+    if current_cycles > observed_cycles_before_reclamation {
+        return Err(InternalError::conflict(
+            "Fleet Subnet Root cycle balance increased after deletion intent",
+        ));
+    }
+    let target_cycles_to_retain = maximum_cycles_to_retain
+        .saturating_sub(FLEET_SUBNET_ROOT_DELETION_CALL_REFUND_HEADROOM_CYCLES);
+    let maximum_transfer = current_cycles.saturating_sub(target_cycles_to_retain);
+    if maximum_transfer > 0 {
+        let permit = reserve_root_deletion_cycle_reclamation(
+            coordinator,
+            maximum_transfer,
+            target_cycles_to_retain,
+            current_cycles,
+        )?;
+        let cycles_before_transfer = IcOps::canister_cycle_balance().to_u128();
+        let cycles_to_transfer = cycles_before_transfer.saturating_sub(target_cycles_to_retain);
+        let result =
+            MgmtOps::deposit_cycles_with_permit(&permit, coordinator, cycles_to_transfer).await;
+        settle_root_deletion_cycle_reclamation(&permit, result)?;
+    }
+    let observed_after = IcOps::canister_cycle_balance().to_u128();
+    let balance_is_reclaimed = [
+        observed_after <= observed_cycles_before_reclamation,
+        observed_after <= maximum_cycles_to_retain,
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    if !balance_is_reclaimed {
+        return Err(InternalError::conflict(
+            "Fleet Subnet Root still exceeds its durable deletion cycle reserve",
+        ));
+    }
+    Ok(observed_after)
+}
+
+fn reserve_root_deletion_cycle_reclamation(
+    coordinator: candid::Principal,
+    maximum_transfer: u128,
+    retained_cycles: u128,
+    current_cycle_balance: u128,
+) -> Result<CostGuardPermit, InternalError> {
+    CostGuardWorkflow::reserve(CostGuardRequest {
+        cost_class: CostClass::ValueTransfer,
+        command_kind: CommandKind::new(ROOT_DELETION_CYCLE_RECLAMATION_COMMAND_KIND)
+            .expect("root deletion cycle-reclamation command kind is valid"),
+        quota_subject: coordinator,
+        payer: IcOps::canister_self(),
+        now_secs: IcOps::now_secs(),
+        quota_window_secs: VALUE_TRANSFER_QUOTA_WINDOW_SECONDS,
+        max_operations_per_window: MAX_VALUE_TRANSFERS_PER_WINDOW,
+        current_cycle_balance,
+        cycle_reservation_cycles: maximum_transfer,
+        min_cycles_after_reservation: retained_cycles,
+    })
+    .map_err(map_cost_guard_reserve_error)
+}
+
+fn settle_root_deletion_cycle_reclamation(
+    permit: &CostGuardPermit,
+    result: Result<(), InternalError>,
+) -> Result<(), InternalError> {
+    match result {
+        Ok(()) => CostGuardWorkflow::complete(permit, IcOps::now_secs()),
+        Err(error) => Err(CostGuardWorkflow::recover_after_failure(
+            permit,
+            IcOps::now_secs(),
+            error,
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -896,6 +1279,34 @@ mod tests {
         assert!(
             validate_component_registry(&authority, &stale, &registry).is_err(),
             "a mirror older than immutable preparation authority must fail closed"
+        );
+    }
+
+    #[test]
+    fn root_deletion_cycle_reserve_must_match_live_preflight_evidence() {
+        let valid = FleetSubnetRootDeletionPreparationRequest {
+            operation_id: [1; 32],
+            expected_store_deletion_hash: [2; 32],
+            maximum_cycles_to_retain: FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES + 1,
+            observed_reserved_cycles: 0,
+            observed_idle_cycles_burned_per_day: 86_400,
+            observed_freezing_threshold_seconds: 1,
+        };
+        validate_root_deletion_cycle_reserve(&valid)
+            .expect("exact live freezing reserve plus execution reserve is valid");
+
+        let mut wrong_ceiling = valid;
+        wrong_ceiling.maximum_cycles_to_retain += 1;
+        assert!(
+            validate_root_deletion_cycle_reserve(&wrong_ceiling).is_err(),
+            "caller cannot choose a deletion reserve different from live evidence"
+        );
+
+        let mut reserved_cycles = valid;
+        reserved_cycles.observed_reserved_cycles = 1;
+        assert!(
+            validate_root_deletion_cycle_reserve(&reserved_cycles).is_err(),
+            "reserved cycles must be cleared before the irreversible transfer"
         );
     }
 

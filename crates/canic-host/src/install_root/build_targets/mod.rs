@@ -82,7 +82,7 @@ pub(super) fn run_canic_build_targets(
     Ok(outputs)
 }
 
-pub(super) fn planned_build_artifact_root(icp_root: &Path) -> PathBuf {
+fn planned_build_artifact_root(icp_root: &Path) -> PathBuf {
     artifact_root_path(icp_root, "local")
 }
 

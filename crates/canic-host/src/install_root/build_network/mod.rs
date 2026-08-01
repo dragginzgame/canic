@@ -31,10 +31,7 @@ pub(super) fn resolve_install_build_context(
     })
 }
 
-pub(super) fn local_replica_icp_target(
-    environment: &str,
-    icp_root: &Path,
-) -> Option<LocalReplicaTarget> {
+fn local_replica_icp_target(environment: &str, icp_root: &Path) -> Option<LocalReplicaTarget> {
     if !replica_query::should_use_local_replica_query(Some(environment)) {
         return None;
     }

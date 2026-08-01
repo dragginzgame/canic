@@ -36,7 +36,12 @@ pub(super) fn render_app_list(
     choices: &[PathBuf],
     environment: &str,
 ) -> String {
-    render_app_rows(app_list_rows(workspace_root, choices, environment))
+    render_app_rows(
+        choices
+            .iter()
+            .map(|path| app_list_row(workspace_root, path, environment))
+            .collect(),
+    )
 }
 
 pub(super) fn render_app_rows(rows: Vec<AppListRow>) -> String {
@@ -54,13 +59,6 @@ pub(super) fn render_app_rows(rows: Vec<AppListRow>) -> String {
         &rows,
         &[ColumnAlign::Left; 4],
     )
-}
-
-fn app_list_rows(workspace_root: &Path, choices: &[PathBuf], environment: &str) -> Vec<AppListRow> {
-    choices
-        .iter()
-        .map(|path| app_list_row(workspace_root, path, environment))
-        .collect()
 }
 
 fn app_list_row(workspace_root: &Path, path: &Path, environment: &str) -> AppListRow {

@@ -117,6 +117,24 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "canic_fleet_registry_publish_root_removed",
         command_kind("fleet_registry.publish_root_removed.v1"),
     ),
+    update_response_idempotent(
+        "canic_fleet_registry_root_deletion_readiness_prepare",
+        command_kind("fleet_registry.prepare_root_deletion_readiness.v1"),
+    ),
+    update_response_idempotent(
+        "canic_fleet_registry_root_deletion_ready",
+        command_kind("fleet_registry.record_root_deletion_readiness.v1"),
+    ),
+    update_response_idempotent(
+        "canic_fleet_registry_root_deletion_execution_begin",
+        command_kind("fleet_registry.begin_root_deletion_execution.v1"),
+    ),
+    query_read_only("canic_fleet_registry_root_deletion_execution_status"),
+    update_response_idempotent(
+        "canic_fleet_registry_root_deletion_complete",
+        command_kind("fleet_registry.complete_root_deletion.v1"),
+    ),
+    query_read_only("canic_fleet_registry_root_deletion_status"),
     update_read_only("canic_fleet_registry_snapshot_for_root"),
     update_response_idempotent(
         "canic_fleet_registry_synchronize",
@@ -157,6 +175,14 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         command_kind("fleet_subnet_root.delete_store.v1"),
     ),
     query_read_only("canic_fleet_subnet_root_store_deletion_status"),
+    update_costed_response_idempotent(
+        "canic_fleet_subnet_root_deletion_prepare",
+        command_kind("fleet_subnet_root.prepare_deletion.v1"),
+        CostClass::ValueTransfer,
+        Some(VALUE_TRANSFER_QUOTA_V1),
+        Some(VALUE_TRANSFER_RESERVE_V1),
+    ),
+    query_read_only("canic_fleet_subnet_root_deletion_preparation_status"),
     update_response_idempotent(
         "canic_fleet_subnet_root_draining_inventory_finalize",
         command_kind("fleet_subnet_root.finalize_inventory.v1"),

@@ -54,6 +54,8 @@ pub struct RootFleetSubnetDrainingView {
     pub store_binding_finalization: Option<RootFleetSubnetStoreBindingFinalizationView>,
     pub store_deletion_intent: Option<RootFleetSubnetStoreDeletionIntentView>,
     pub store_deletion: Option<RootFleetSubnetStoreDeletionView>,
+    pub root_deletion_preparation_intent: Option<RootFleetSubnetDeletionPreparationIntentView>,
+    pub root_deletion_preparation: Option<RootFleetSubnetDeletionPreparationView>,
 }
 
 ///
@@ -249,6 +251,57 @@ pub struct RootFleetSubnetStoreDeletionView {
     pub observed_absent_at_ns: u64,
     pub completed_at_ns: u64,
     pub deletion_hash: [u8; 32],
+}
+
+/// Root-local preflight evidence frozen before returning cycles to the Coordinator.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootFleetSubnetDeletionPreparationAuthority {
+    pub store_deletion_hash: [u8; 32],
+    pub coordinator: Principal,
+    pub observed_cycles_before_reclamation: u128,
+    pub maximum_cycles_to_retain: u128,
+    pub observed_reserved_cycles: u128,
+    pub observed_idle_cycles_burned_per_day: u128,
+    pub observed_freezing_threshold_seconds: u128,
+}
+
+/// Read-only root-local authority frozen before returning cycles to the Coordinator.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootFleetSubnetDeletionPreparationIntentView {
+    pub operation_id: [u8; 32],
+    pub coordinator: Principal,
+    pub final_inventory_hash: [u8; 32],
+    pub store_deletion_hash: [u8; 32],
+    pub observed_cycles_before_reclamation: u128,
+    pub maximum_cycles_to_retain: u128,
+    pub observed_reserved_cycles: u128,
+    pub observed_idle_cycles_burned_per_day: u128,
+    pub observed_freezing_threshold_seconds: u128,
+    pub coordinator_intent_hash: Option<[u8; 32]>,
+    pub observed_cycles_after_reclamation: Option<u128>,
+    pub cycles_reclaimed_at_ns: Option<u64>,
+    pub prepared_at_ns: u64,
+}
+
+/// Read-only local receipt proving the removed root is externally deletable.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootFleetSubnetDeletionPreparationView {
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+    pub coordinator: Principal,
+    pub final_inventory_hash: [u8; 32],
+    pub store_deletion_hash: [u8; 32],
+    pub observed_cycles_before_reclamation: u128,
+    pub maximum_cycles_to_retain: u128,
+    pub observed_reserved_cycles: u128,
+    pub observed_idle_cycles_burned_per_day: u128,
+    pub observed_freezing_threshold_seconds: u128,
+    pub observed_cycles_after_reclamation: u128,
+    pub cycles_reclaimed_at_ns: u64,
+    pub coordinator_intent_hash: [u8; 32],
+    pub coordinator_readiness_hash: [u8; 32],
+    pub prepared_at_ns: u64,
+    pub completed_at_ns: u64,
 }
 
 ///

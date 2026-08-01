@@ -181,12 +181,7 @@ fn run_fleet_checks(options: &MedicOptions, context: &FleetMedicContext) -> Vec<
     };
 
     if let Some(state) = state.as_ref() {
-        checks.extend(installed_fleet_checks(
-            options,
-            icp_root,
-            state,
-            environment,
-        ));
+        checks.extend(installed_fleet_checks(icp_root, state, environment));
     }
 
     if let Some(canister) = &options.blob_storage {

@@ -531,6 +531,82 @@ fn fleet_subnet_root_store_deletion_is_controller_guarded() {
 }
 
 #[test]
+fn fleet_subnet_root_physical_deletion_handoff_has_exact_authority_guards() {
+    for (facade, core) in [
+        (
+            canic::protocol::CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARE,
+            canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARE,
+        ),
+        (
+            canic::protocol::CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARATION_STATUS,
+            canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARATION_STATUS,
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_READINESS_PREPARE,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_READINESS_PREPARE,
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_READY,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_READY,
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_BEGIN,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_BEGIN,
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_STATUS,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_STATUS,
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_COMPLETE,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_COMPLETE,
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_STATUS,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_STATUS,
+        ),
+    ] {
+        assert_eq!(facade, core);
+    }
+
+    let root = read_text(&workspace_root().join("crates/canic/src/macros/endpoints/root.rs"));
+    for signature in [
+        "async fn canic_fleet_subnet_root_deletion_prepare(",
+        "async fn canic_fleet_subnet_root_deletion_preparation_status(",
+    ] {
+        assert!(
+            preceding_attribute_context(&root, signature)
+                .contains("requires(caller::is_controller())"),
+            "{signature} must remain controller guarded"
+        );
+    }
+
+    let coordinator =
+        read_text(&workspace_root().join("crates/canic/src/macros/endpoints/fleet_coordinator.rs"));
+    for signature in [
+        "async fn canic_fleet_registry_root_deletion_readiness_prepare(",
+        "async fn canic_fleet_registry_root_deletion_ready(",
+    ] {
+        assert!(
+            preceding_attribute_context(&coordinator, signature).contains("canic_update(public)"),
+            "{signature} must remain callable by the authenticated root"
+        );
+    }
+    for signature in [
+        "async fn canic_fleet_registry_root_deletion_execution_begin(",
+        "async fn canic_fleet_registry_root_deletion_execution_status(",
+        "async fn canic_fleet_registry_root_deletion_complete(",
+        "async fn canic_fleet_registry_root_deletion_status(",
+    ] {
+        assert!(
+            preceding_attribute_context(&coordinator, signature)
+                .contains("requires(caller::is_controller())"),
+            "{signature} must remain controller guarded"
+        );
+    }
+}
+
+#[test]
 fn fleet_subnet_root_join_is_a_controller_update_on_the_coordinator_surface() {
     assert_eq!(
         canic::protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,

@@ -105,14 +105,12 @@ pub(in crate::deployment_truth) const DEPLOYMENT_MANIFEST_MISMATCH_CODE: &str =
     "deployment_manifest_mismatch";
 pub(in crate::deployment_truth) const OBSERVATION_GAP_CODE: &str = "observation_gap";
 pub(in crate::deployment_truth) const PLAN_ASSUMPTION_CODE: &str = "plan_assumption";
-pub(in crate::deployment_truth) const IDENTITY_UNOBSERVED_CODE: &str = "identity_unobserved";
-pub(in crate::deployment_truth) const ENVIRONMENT_MISMATCH_CODE: &str = "environment_mismatch";
+const IDENTITY_UNOBSERVED_CODE: &str = "identity_unobserved";
+const ENVIRONMENT_MISMATCH_CODE: &str = "environment_mismatch";
 pub(in crate::deployment_truth) const FLEET_IDENTITY_MISMATCH_CODE: &str =
     "fleet_identity_mismatch";
-pub(in crate::deployment_truth) const ROOT_TRUST_ANCHOR_MISMATCH_CODE: &str =
-    "root_trust_anchor_mismatch";
-pub(in crate::deployment_truth) const DEPLOYMENT_MANIFEST_UNOBSERVED_CODE: &str =
-    "deployment_manifest_unobserved";
+const ROOT_TRUST_ANCHOR_MISMATCH_CODE: &str = "root_trust_anchor_mismatch";
+const DEPLOYMENT_MANIFEST_UNOBSERVED_CODE: &str = "deployment_manifest_unobserved";
 
 #[must_use]
 pub fn is_evidence_conflict_finding_code(code: &str) -> bool {

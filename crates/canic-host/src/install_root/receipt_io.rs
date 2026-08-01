@@ -67,7 +67,7 @@ pub fn latest_deployment_truth_receipt_path_from_root(
     Ok(latest)
 }
 
-pub(super) fn install_deployment_truth_receipts_dir(icp_root: &Path, fleet: FleetKey) -> PathBuf {
+fn install_deployment_truth_receipts_dir(icp_root: &Path, fleet: FleetKey) -> PathBuf {
     icp_root
         .join(".canic")
         .join("networks")

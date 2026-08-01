@@ -468,8 +468,6 @@ pub(super) fn resolve_fleet(
         &InstalledFleetRequest {
             fleet: fleet.to_string(),
             environment: target.environment.clone(),
-            icp: target.icp.clone(),
-            detect_lost_local_root: true,
         },
         root,
     )
@@ -506,7 +504,7 @@ fn resolve_role_entry<'a>(
     }
 }
 
-pub(super) fn resolve_canister_target(
+fn resolve_canister_target(
     fleet: &str,
     target: &str,
     root_canister_id: &str,
@@ -559,7 +557,7 @@ fn append_long_flag(command: &mut std::process::Command, name: &str, enabled: bo
     }
 }
 
-pub(super) fn parse_cycle_amount(value: &str) -> Result<u128, String> {
+fn parse_cycle_amount(value: &str) -> Result<u128, String> {
     let value = value.trim();
     let compact = value.replace('_', "");
     let digits_len = compact
@@ -593,7 +591,7 @@ fn invalid_cycle_amount(value: &str) -> String {
     format!("invalid cycles amount {value}; use a positive amount such as 4T, 500B, or 1000000")
 }
 
-pub(super) fn target_label(role: Option<&str>, canister_id: &str) -> String {
+fn target_label(role: Option<&str>, canister_id: &str) -> String {
     role.map_or_else(
         || format!("canister {canister_id}"),
         |role| format!("role {role} ({canister_id})"),

@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.72`.
-- The latest published release is `v0.100.72` at
-  `6f9659686990e3a4b30936527e98d8e931b458b6`.
-- Open `0.100.73` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.73`.
+- The latest published release is `v0.100.73` at
+  `3a4cd3b34c942a8d537adf3169aeafae1f41ac85`.
+- Open `0.100.74` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -604,7 +604,7 @@ Historical detail is archived at:
   installed and retained in runtime inventory. The same release centralizes
   protected root-authority loading and active-runtime validation under their
   workflow owners.
-- Open `0.100.73` durably binds that exact finalization receipt plus the live
+- Released `0.100.73` durably binds that exact finalization receipt plus the live
   Store module, complete canonical controller set and pre-reclamation cycle
   balance before any management effect. The empty Store returns excess cycles
   to the root under a value-transfer guard; the root independently observes
@@ -613,6 +613,16 @@ Historical detail is archived at:
   accepts completion only from independently observed absence and removes the
   exact Store from both local inventories while retaining the Fleet Subnet
   Root and its complete removal history.
+- Open `0.100.74` adds the durable external-executor handoff for that retained
+  root. Before returning cycles, root and Coordinator freeze the exact `.73`
+  receipt and validate the controller-observed reserved cycles, idle-burn rate,
+  freezing threshold and derived deletion ceiling. Coordinator readiness is
+  durable before the guarded transfer; a later controller-only intent binds
+  one executor plus the live module, canonical controllers and bounded cycle
+  evidence before external stop/delete. Only that executor may attest typed
+  absence and create the surviving terminal Coordinator receipt. No controller
+  transfer or new memory ID is introduced; the maintained host effect adapter
+  remains next.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -2179,16 +2189,26 @@ explicitly; after the exact `.71` receipt, durable generation-bound retry
 clears `active`, `detached` and `retired` without removing runtime inventory or
 either Canister.
 
-Open `0.100.73` freezes the exact `.72` receipt plus the Store's live module
+Released `0.100.73` freezes the exact `.72` receipt plus the Store's live module
 and complete canonical controller set before stopping it. It first returns the
 empty Store's excess cycles to the root and durably records an independently
 observed post-transfer balance within the live freezing-plus-execution ceiling.
 Retry then reconciles running, stopped and typed-absent management state; only
 independently observed absence permits removal from the Subnet Registry and
 runtime Store inventory and one terminal hashed receipt. The Fleet Subnet Root
-remains installed with the complete removal history. Next, freeze physical root
-deletion under its own intent and external executor authority. Neither an
-unreachable root nor a Subnet failure is deletion evidence.
+remains installed with the complete removal history.
+
+Open `0.100.74` adds the durable physical-root deletion handoff described
+above, including pre-transfer ceiling validation, root-authenticated
+Coordinator readiness, guarded cycle return and one controller-bound execution
+intent/terminal receipt. The Coordinator does not become the root controller;
+typed absence is the authenticated executor's attestation, and neither an
+unreachable root nor a Subnet failure is deletion evidence. The same open
+patch removes one-caller host/CLI helpers, orphaned subnet-query provenance and
+dead installed-Fleet request/error residue plus two stale deployment-truth text
+renderer branches, totaling 462 net Rust lines, while narrowing nineteen
+functions and nine constants to their declaration files. The retained legacy
+resolver still fails closed at the Coordinator boundary.
 
 ## Historical Release Detail
 

@@ -11,7 +11,11 @@ pub(super) fn render_action_result(result: &BlobStorageActionResult) -> String {
         format!(
             "Blob storage {} {}",
             result.action.name.label(),
-            action_status_label(result.action.dry_run)
+            if result.action.dry_run {
+                "dry run"
+            } else {
+                "completed"
+            }
         ),
         format!("Fleet: {}", result.fleet),
         format!("Target: {}", result.target.input),
@@ -52,16 +56,15 @@ pub(super) fn render_dry_run_command(result: &BlobStorageActionResult) -> String
     format!("Command: {}", result.action.command)
 }
 
-const fn action_status_label(dry_run: bool) -> &'static str {
-    if dry_run { "dry run" } else { "completed" }
-}
-
 pub(super) fn render_status_result(result: &BlobStorageStatusResult) -> String {
     let mut lines = vec![
         format!("Blob storage status: {}", result.target.input),
         format!("Fleet: {}", result.fleet),
         format!("Target: {}", result.target.canister_id),
-        format!("Configured: {}", yes_no(result.configured)),
+        format!(
+            "Configured: {}",
+            if result.configured { "yes" } else { "no" }
+        ),
         format!(
             "Cashier: {}",
             result.cashier.canister_id.as_deref().unwrap_or("-")
@@ -120,10 +123,6 @@ fn append_list(lines: &mut Vec<String>, label: &str, values: &[String]) {
     for value in values {
         lines.push(format!("  - {value}"));
     }
-}
-
-const fn yes_no(value: bool) -> &'static str {
-    if value { "yes" } else { "no" }
 }
 
 fn cycles_or_dash(value: Option<&str>) -> &str {

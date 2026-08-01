@@ -36,8 +36,6 @@ pub(super) fn backup_create(
         &InstalledFleetRequest {
             fleet: options.fleet.clone(),
             environment: options.environment.clone(),
-            icp: options.icp.clone(),
-            detect_lost_local_root: true,
         },
         &icp_root,
     )

@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.74` durably hands a removed Fleet Subnet Root to one external
+  controller/executor and returns excess cycles to the surviving Coordinator
+  only after exact deletion preflight; it also hard-cuts dead installed-Fleet,
+  subnet-query and one-caller host/CLI internals and deletes two text renderer
+  branches orphaned by the earlier deploy-command removal, without visible
+  behavior changes.
+
 - `0.100.73` returns excess cycles to the root and physically deletes the
   reclaimed, unbound Store only after durable live-authority and independently
   observed balance/absence evidence, retaining exact retry/status authority.

@@ -72,8 +72,6 @@ fn coordinator_catalog_rejects_the_removed_single_root_topology_resolver() {
     let request = InstalledFleetRequest {
         fleet: "demo".to_string(),
         environment: "staging".to_string(),
-        icp: "icp".to_string(),
-        detect_lost_local_root: false,
     };
 
     let error = resolve_installed_fleet_from_root(&request, &root)
