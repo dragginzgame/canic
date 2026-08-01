@@ -6,14 +6,14 @@
 
 use crate::{
     InternalError,
-    dto::topology::{DirectoryProvenance, SubnetDirectoryInput},
+    dto::topology::SubnetDirectoryInput,
     model::topology::TopologyDirectoryEntry,
     ops::{
         config::ConfigOps,
         prelude::*,
         storage::directory::{
             ensure_allowed_roles, ensure_required_roles, ensure_unique_roles,
-            mapper::{DirectoryEntryMapper, SubnetDirectoryDataMapper},
+            input_entries_to_records, records_to_topology_entries,
         },
     },
     storage::stable::directory::subnet::{SubnetDirectory, SubnetDirectoryData},
@@ -56,12 +56,7 @@ impl SubnetDirectoryOps {
 
     #[must_use]
     pub(crate) fn topology_entries() -> Vec<TopologyDirectoryEntry> {
-        DirectoryEntryMapper::records_to_topology_entries(&SubnetDirectory::export().entries)
-    }
-
-    #[must_use]
-    pub fn snapshot_args(provenance: DirectoryProvenance) -> SubnetDirectoryInput {
-        SubnetDirectoryDataMapper::data_to_input(SubnetDirectory::export(), provenance)
+        records_to_topology_entries(&SubnetDirectory::export().entries)
     }
 
     pub(crate) fn filter_args_for_local_config(
@@ -91,7 +86,9 @@ impl SubnetDirectoryOps {
     pub(crate) fn prepare_args_allow_incomplete(
         args: SubnetDirectoryInput,
     ) -> Result<PreparedSubnetDirectoryImport, InternalError> {
-        let data = SubnetDirectoryDataMapper::input_to_data(args);
+        let data = SubnetDirectoryData {
+            entries: input_entries_to_records(args.entries),
+        };
         ensure_unique_roles(&data.entries, "Subnet")?;
         let allowed = ConfigOps::current_subnet_directory_roles()?;
         ensure_allowed_roles(&data.entries, "Subnet", &allowed)?;

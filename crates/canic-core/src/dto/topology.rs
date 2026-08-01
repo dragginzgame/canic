@@ -1,7 +1,4 @@
-use crate::{
-    dto::{canister::CanisterInfo, prelude::*},
-    ids::FleetBinding,
-};
+use crate::{dto::prelude::*, ids::FleetBinding};
 use serde::{
     Deserializer,
     de::{self, SeqAccess, Visitor},
@@ -12,28 +9,6 @@ use std::fmt;
 pub const DIRECTORY_CASCADE_MAX_BYTES: usize = 16_384;
 /// Maximum entries accepted in one Directory cascade or page.
 pub const DIRECTORY_ENTRY_MAX_COUNT: usize = 1_000;
-
-//
-// SubnetRegistryResponse
-//
-// External subnet registry view.
-//
-
-#[derive(CandidType, Deserialize)]
-pub struct SubnetRegistryResponse(pub Vec<SubnetRegistryEntry>);
-
-//
-// SubnetRegistryEntry
-//
-// Subnet registry entry.
-//
-
-#[derive(CandidType, Deserialize)]
-pub struct SubnetRegistryEntry {
-    pub pid: Principal,
-    pub role: CanisterRole,
-    pub record: CanisterInfo,
-}
 
 //
 // FleetDirectoryInput

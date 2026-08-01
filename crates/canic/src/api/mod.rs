@@ -46,10 +46,6 @@ pub mod canister {
         pub use crate::__internal::core::api::topology::children::CanisterChildrenApi;
     }
 
-    pub mod registry {
-        pub use crate::__internal::core::api::topology::registry::SubnetRegistryApi;
-    }
-
     pub mod placement {
         pub use crate::__internal::core::api::placement::index::PlacementIndexApi;
         pub use crate::__internal::core::api::placement::scaling::ScalingApi;

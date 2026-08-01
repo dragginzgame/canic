@@ -1,22 +1,11 @@
 use super::*;
-use candid::{Encode, Principal};
-use canic_core::{
-    cdk::utils::hash::{decode_hex, hex_bytes},
-    dto::{
-        canister::CanisterInfo,
-        error::Error as CanicError,
-        topology::{SubnetRegistryEntry, SubnetRegistryResponse},
-    },
-    ids::CanisterRole,
-};
 use canic_host::table::{ColumnAlign, render_separator, render_table_row};
 use canic_host::{
-    registry::parse_registry_entries,
+    registry::RegistryEntry,
     release_set::{AppConfigDeclaration, AppConfigError},
 };
 use options::ListSource;
 use render::ReadyStatus;
-use serde_json::json;
 use std::{collections::BTreeMap, path::PathBuf};
 
 const ROOT: &str = "aaaaa-aa";
@@ -163,7 +152,7 @@ fn list_and_config_usage_explain_app_and_subtree_options() {
 // Ensure registry entries render as a stable whitespace table.
 #[test]
 fn renders_registry_table() {
-    let registry = parse_registry_entries(&registry_json()).expect("parse registry");
+    let registry = registry_entries();
     let readiness = readiness_map();
     let module_hashes = module_hash_map();
     let empty = BTreeMap::new();
@@ -213,7 +202,7 @@ fn renders_registry_table() {
 // Ensure verbose registry output shows full module hashes.
 #[test]
 fn renders_verbose_registry_table_with_full_module_hashes() {
-    let registry = parse_registry_entries(&registry_json()).expect("parse registry");
+    let registry = registry_entries();
     let readiness = readiness_map();
     let module_hashes = module_hash_map();
     let empty = BTreeMap::new();
@@ -235,7 +224,7 @@ fn renders_verbose_registry_table_with_full_module_hashes() {
 // Ensure different roles are not colored just because they use different modules.
 #[test]
 fn module_hash_color_ignores_cross_role_differences() {
-    let registry = parse_registry_entries(&registry_json()).expect("parse registry");
+    let registry = registry_entries();
     let readiness = readiness_map();
     let module_hashes = BTreeMap::from([
         (ROOT.to_string(), VARIANT_HASH.to_string()),
@@ -259,8 +248,7 @@ fn module_hash_color_ignores_cross_role_differences() {
 // Ensure module coloring flags drift only within one repeated role.
 #[test]
 fn module_hash_color_flags_same_role_differences() {
-    let registry = parse_registry_entries(&same_role_variant_registry_json())
-        .expect("parse same-role registry");
+    let registry = same_role_variant_registry_entries();
     let readiness = readiness_map();
     let module_hashes = BTreeMap::from([
         (APP.to_string(), HASH.to_string()),
@@ -285,7 +273,7 @@ fn module_hash_color_flags_same_role_differences() {
 // Ensure one selected subtree can be rendered without siblings.
 #[test]
 fn renders_selected_subtree() {
-    let registry = parse_registry_entries(&registry_json()).expect("parse registry");
+    let registry = registry_entries();
     let readiness = readiness_map();
     let module_hashes = module_hash_map();
     let empty = BTreeMap::new();
@@ -330,7 +318,7 @@ fn renders_selected_subtree() {
 // Ensure selected subtrees can be anchored by a unique role name.
 #[test]
 fn renders_selected_subtree_by_role_name() {
-    let registry = parse_registry_entries(&registry_json()).expect("parse registry");
+    let registry = registry_entries();
     let readiness = readiness_map();
     let module_hashes = module_hash_map();
     let empty = BTreeMap::new();
@@ -375,8 +363,7 @@ fn renders_selected_subtree_by_role_name() {
 // Ensure repeated role names require a concrete principal.
 #[test]
 fn selected_subtree_rejects_ambiguous_role_name() {
-    let registry = parse_registry_entries(&same_role_variant_registry_json())
-        .expect("parse same-role registry");
+    let registry = same_role_variant_registry_entries();
     let readiness = BTreeMap::new();
     let empty = BTreeMap::new();
     let columns = RegistryColumnData {
@@ -402,7 +389,7 @@ fn selected_subtree_rejects_ambiguous_role_name() {
 // Ensure the full list output names the selected Fleet before the tree table.
 #[test]
 fn renders_list_output_with_fleet_title() {
-    let registry = parse_registry_entries(&registry_json()).expect("parse registry");
+    let registry = registry_entries();
     let title = ListTitle {
         source: ListTitleSource::Fleet,
         name: "demo".to_string(),
@@ -429,7 +416,7 @@ fn renders_list_output_with_fleet_title() {
 
 #[test]
 fn renders_list_output_with_wasm_size_and_missing_roles() {
-    let registry = parse_registry_entries(&registry_json()).expect("parse registry");
+    let registry = registry_entries();
     let title = ListTitle {
         source: ListTitleSource::Fleet,
         name: "demo".to_string(),
@@ -512,21 +499,21 @@ fn renders_config_output_with_app_roles() {
     );
 }
 
-fn registry_json() -> String {
-    registry_response_json(vec![
+fn registry_entries() -> Vec<RegistryEntry> {
+    vec![
         registry_entry(ROOT, "root", None, HASH),
         registry_entry(APP, "app", Some(ROOT), HASH),
         registry_entry(MINIMAL, "minimal", Some(ROOT), HASH),
         registry_entry(WORKER, "worker", Some(APP), HASH),
-    ])
+    ]
 }
 
-fn same_role_variant_registry_json() -> String {
-    registry_response_json(vec![
+fn same_role_variant_registry_entries() -> Vec<RegistryEntry> {
+    vec![
         registry_entry(ROOT, "root", None, HASH),
         registry_entry(APP, "app", Some(ROOT), HASH),
         registry_entry(APP_VARIANT, "app", Some(ROOT), VARIANT_HASH),
-    ])
+    ]
 }
 
 fn registry_entry(
@@ -534,27 +521,13 @@ fn registry_entry(
     role: &str,
     parent_pid: Option<&str>,
     module_hash: &str,
-) -> SubnetRegistryEntry {
-    let pid = Principal::from_text(pid).expect("registry principal");
-    let role = CanisterRole::owned(role.to_string());
-    SubnetRegistryEntry {
-        pid,
-        role: role.clone(),
-        record: CanisterInfo {
-            pid,
-            role,
-            parent_pid: parent_pid
-                .map(|parent| Principal::from_text(parent).expect("registry parent principal")),
-            module_hash: Some(decode_hex(module_hash).expect("registry module hash")),
-            created_at: 1,
-        },
+) -> RegistryEntry {
+    RegistryEntry {
+        pid: pid.to_string(),
+        role: Some(role.to_string()),
+        parent_pid: parent_pid.map(str::to_string),
+        module_hash: Some(module_hash.to_string()),
     }
-}
-
-fn registry_response_json(entries: Vec<SubnetRegistryEntry>) -> String {
-    let response = Ok::<_, CanicError>(SubnetRegistryResponse(entries));
-    let bytes = Encode!(&response).expect("encode registry response");
-    json!({ "response_bytes": hex_bytes(bytes) }).to_string()
 }
 
 fn readiness_map() -> BTreeMap<String, ReadyStatus> {

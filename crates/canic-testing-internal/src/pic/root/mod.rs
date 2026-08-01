@@ -47,7 +47,7 @@ pub struct RootBaselineSpec<'a> {
 
 pub struct RootBaselineMetadata {
     pub root_id: Principal,
-    pub subnet_directory: HashMap<CanisterRole, Principal>,
+    pub component_canisters: HashMap<CanisterRole, Principal>,
     pub snapshot_pids: Vec<Principal>,
     pub managed_store_pids: Vec<Principal>,
 }

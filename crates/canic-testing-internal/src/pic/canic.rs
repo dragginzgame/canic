@@ -11,7 +11,6 @@ use canic::{
             FleetActivationPhase, FleetActivationResumeRequest, FleetActivationStatusResponse,
         },
         fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
-        topology::SubnetRegistryResponse,
     },
     ids::{
         CanisterRole, ComponentSpecAdmission, CyclesFundingBudget, FleetCoordinatorBinding,
@@ -166,38 +165,6 @@ pub fn wait_until_ready(pic: &Pic, canister_id: Principal, tick_limit: usize) {
     }
 
     panic!("canister did not report ready in time: {canister_id}");
-}
-
-/// Resolve one role principal from root's subnet registry, polling until present.
-///
-/// # Panics
-///
-/// Panics if the requested role is not present in root's subnet registry within
-/// `tick_limit` ticks.
-#[must_use]
-pub fn role_pid(pic: &Pic, root_id: Principal, role: &'static str, tick_limit: usize) -> Principal {
-    for _ in 0..tick_limit {
-        let registry: Result<Result<SubnetRegistryResponse, Error>, _> = pic.query_call_as(
-            root_id,
-            Principal::anonymous(),
-            protocol::CANIC_SUBNET_REGISTRY,
-            (),
-        );
-
-        if let Ok(Ok(registry)) = registry
-            && let Some(pid) = registry
-                .0
-                .into_iter()
-                .find(|entry| entry.role == CanisterRole::new(role))
-                .map(|entry| entry.pid)
-        {
-            return pid;
-        }
-
-        pic.tick();
-    }
-
-    panic!("{role} canister must be registered");
 }
 
 /// Install one non-root Canic canister into a fresh PocketIC instance.

@@ -182,7 +182,7 @@ fn caller_not_registered_denial(caller: Principal) -> AccessError {
     AccessError::Denied(format!(
         "authentication error: caller '{caller}' is not registered on the subnet registry \
          (root='{root}', registry_entries={registry_count}); verify caller root routing and \
-         canic_subnet_registry state"
+         root-local registry state"
     ))
 }
 

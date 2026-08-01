@@ -39,3 +39,11 @@ fn backup_status_mapping_rejects_wrong_identity_and_unknown_state() {
     assert_eq!(wrong_id.status, "icp-status");
     assert_eq!(unknown.status, "icp-status");
 }
+
+#[test]
+fn backup_preflight_fails_closed_without_component_topology_discovery() {
+    let error = component_topology_preflight_unavailable();
+
+    assert_eq!(error.status, "preflight");
+    assert!(error.message.contains("Component Registry preflight"));
+}

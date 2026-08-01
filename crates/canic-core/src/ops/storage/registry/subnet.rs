@@ -2,15 +2,11 @@
 //!
 //! Responsibility: provide deterministic access to subnet canister registry records.
 //! Does not own: stable registry schema, topology workflow, or endpoint DTOs.
-//! Boundary: storage ops facade used by topology workflows and queries.
+//! Boundary: storage ops facade used by root-local auth, RPC, placement, and lifecycle workflows.
 
 use crate::{
     InternalError,
-    dto::topology::{SubnetRegistryEntry, SubnetRegistryResponse},
-    ops::{
-        prelude::*,
-        storage::{StorageOpsError, canister::record_to_info},
-    },
+    ops::{prelude::*, storage::StorageOpsError},
     storage::{
         canister::{CanisterEntryRecord, CanisterRecord},
         stable::registry::subnet::{SubnetRegistry, SubnetRegistryData},
@@ -282,22 +278,6 @@ impl SubnetRegistryOps {
         SubnetRegistry::export()
     }
 
-    #[must_use]
-    pub fn response() -> SubnetRegistryResponse {
-        let mut entries = Vec::with_capacity(SubnetRegistry::len());
-
-        SubnetRegistry::for_each(|pid, record| {
-            let record = record_to_info(pid, record);
-            entries.push(SubnetRegistryEntry {
-                pid,
-                role: record.role.clone(),
-                record,
-            });
-        });
-
-        SubnetRegistryResponse(entries)
-    }
-
     /// Resolve registration metadata for one role in deterministic canister-id order.
     #[must_use]
     pub fn registrations_for_role(role: &CanisterRole) -> Vec<RegisteredCanisterView> {
@@ -356,28 +336,6 @@ mod tests {
             vec![4],
             4,
         );
-    }
-
-    #[test]
-    fn response_builds_registry_view_without_export_snapshot() {
-        seed_registry();
-
-        let response = SubnetRegistryOps::response();
-        let alpha = response
-            .0
-            .iter()
-            .find(|entry| entry.pid == p(92))
-            .expect("alpha entry present");
-        let beta = response
-            .0
-            .iter()
-            .find(|entry| entry.pid == p(93))
-            .expect("beta entry present");
-
-        assert!(response.0.iter().any(|entry| entry.pid == p(91)));
-        assert_eq!(alpha.role, CanisterRole::new("alpha_registry_test"));
-        assert_eq!(alpha.record.parent_pid, Some(p(91)));
-        assert_eq!(beta.record.module_hash, Some(vec![3]));
     }
 
     #[test]

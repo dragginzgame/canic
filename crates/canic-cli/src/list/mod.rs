@@ -7,8 +7,7 @@ mod render;
 use canic_backup::discovery::DiscoveryError;
 use canic_host::{
     icp::IcpCommandError, icp_config::IcpConfigError, install_root::ConfigDiscoveryError,
-    installed_fleet::InstalledFleetError, registry::RegistryParseError,
-    release_set::AppConfigError,
+    installed_fleet::InstalledFleetError, release_set::AppConfigError,
 };
 use config::{load_config_role_rows, missing_config_roles};
 use live::{
@@ -72,9 +71,6 @@ pub enum ListCommandError {
 
     #[error(transparent)]
     Discovery(#[from] DiscoveryError),
-
-    #[error(transparent)]
-    Registry(#[from] RegistryParseError),
 }
 
 /// Run the deployed canister listing command under `canic info`.

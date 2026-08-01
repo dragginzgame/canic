@@ -536,12 +536,6 @@ macro_rules! canic_emit_root_admin_endpoints {
         }
 
         #[$crate::canic_query(public)]
-        fn canic_subnet_registry()
-        -> Result<::canic::dto::topology::SubnetRegistryResponse, ::canic::Error> {
-            Ok($crate::__internal::core::api::topology::registry::SubnetRegistryApi::registry())
-        }
-
-        #[$crate::canic_query(public)]
         async fn canic_pool_list()
         -> Result<::canic::dto::pool::CanisterPoolResponse, ::canic::Error> {
             Ok($crate::__internal::core::api::pool::CanisterPoolApi::list())

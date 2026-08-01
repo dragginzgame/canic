@@ -15,9 +15,7 @@ use crate::{
         storage::{
             StorageOpsError,
             directory::{
-                ensure_provenance,
-                fleet::FleetDirectoryOps,
-                mapper::{FleetDirectoryDataMapper, SubnetDirectoryDataMapper},
+                ensure_provenance, fleet::FleetDirectoryOps, records_to_input_entries,
                 subnet::SubnetDirectoryOps,
             },
             fleet_activation::FleetActivationOps,
@@ -50,10 +48,11 @@ impl FleetDirectoryResolver {
     }
 
     pub fn resolve_input() -> Result<FleetDirectoryInput, InternalError> {
-        Ok(FleetDirectoryDataMapper::data_to_input(
-            Self::resolve()?,
-            current_provenance()?,
-        ))
+        let data = Self::resolve()?;
+        Ok(FleetDirectoryInput {
+            provenance: current_provenance()?,
+            entries: records_to_input_entries(data.entries),
+        })
     }
 }
 
@@ -78,10 +77,11 @@ impl SubnetDirectoryResolver {
     }
 
     pub fn resolve_input() -> Result<SubnetDirectoryInput, InternalError> {
-        Ok(SubnetDirectoryDataMapper::data_to_input(
-            Self::resolve()?,
-            current_provenance()?,
-        ))
+        let data = Self::resolve()?;
+        Ok(SubnetDirectoryInput {
+            provenance: current_provenance()?,
+            entries: records_to_input_entries(data.entries),
+        })
     }
 }
 

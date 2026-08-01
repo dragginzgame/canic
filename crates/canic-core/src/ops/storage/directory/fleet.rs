@@ -6,14 +6,14 @@
 
 use crate::{
     InternalError,
-    dto::topology::{DirectoryProvenance, FleetDirectoryInput},
+    dto::topology::FleetDirectoryInput,
     model::topology::TopologyDirectoryEntry,
     ops::{
         config::ConfigOps,
         prelude::*,
         storage::directory::{
             ensure_allowed_roles, ensure_required_roles, ensure_unique_roles,
-            mapper::{DirectoryEntryMapper, FleetDirectoryDataMapper},
+            input_entries_to_records, records_to_topology_entries,
         },
     },
     storage::stable::directory::fleet::{FleetDirectory, FleetDirectoryData},
@@ -54,12 +54,7 @@ impl FleetDirectoryOps {
 
     #[must_use]
     pub(crate) fn topology_entries() -> Vec<TopologyDirectoryEntry> {
-        DirectoryEntryMapper::records_to_topology_entries(&FleetDirectory::export().entries)
-    }
-
-    #[must_use]
-    pub fn snapshot_args(provenance: DirectoryProvenance) -> FleetDirectoryInput {
-        FleetDirectoryDataMapper::data_to_input(FleetDirectory::export(), provenance)
+        records_to_topology_entries(&FleetDirectory::export().entries)
     }
 
     pub(crate) fn filter_args_for_local_config(
@@ -89,7 +84,9 @@ impl FleetDirectoryOps {
     pub(crate) fn prepare_args_allow_incomplete(
         args: FleetDirectoryInput,
     ) -> Result<PreparedFleetDirectoryImport, InternalError> {
-        let data = FleetDirectoryDataMapper::input_to_data(args);
+        let data = FleetDirectoryData {
+            entries: input_entries_to_records(args.entries),
+        };
         ensure_unique_roles(&data.entries, "Fleet")?;
         let allowed = ConfigOps::get()?.fleet_directory_roles();
         ensure_allowed_roles(&data.entries, "Fleet", &allowed)?;

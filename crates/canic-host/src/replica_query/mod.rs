@@ -1,7 +1,7 @@
 //! Module: replica_query
 //!
 //! Responsibility: query maintained Canic endpoints through a direct local replica transport.
-//! Does not own: endpoint DTOs, registry projection, or ICP CLI command execution.
+//! Does not own: endpoint DTOs, topology projection, or ICP CLI command execution.
 //! Boundary: decodes canonical Candid responses and preserves typed transport and endpoint errors.
 
 mod cbor;
@@ -9,11 +9,7 @@ mod status;
 mod transport;
 mod wire;
 
-use self::{
-    transport::local_query,
-    wire::{decode_cycle_balance_response, decode_subnet_registry_response},
-};
-use crate::registry::{RegistryEntry, RegistryParseError, registry_entries_from_response};
+use self::{transport::local_query, wire::decode_cycle_balance_response};
 use std::path::Path;
 
 use candid::Decode;
@@ -51,9 +47,6 @@ pub enum ReplicaQueryError {
     #[error("{0}")]
     Query(String),
 
-    #[error(transparent)]
-    Registry(#[from] RegistryParseError),
-
     #[error("local replica rejected query: code={code} message={message}")]
     Rejected { code: u64, message: String },
 }
@@ -90,15 +83,4 @@ pub(crate) fn query_cycle_balance(
 ) -> Result<u128, ReplicaQueryError> {
     let bytes = local_query(environment, canister, "canic_cycle_balance", icp_root)?;
     decode_cycle_balance_response(&bytes)
-}
-
-/// Query `canic_subnet_registry` and return validated host entries.
-pub(crate) fn query_subnet_registry_entries(
-    environment: Option<&str>,
-    root: &str,
-    icp_root: Option<&Path>,
-) -> Result<Vec<RegistryEntry>, ReplicaQueryError> {
-    let bytes = local_query(environment, root, "canic_subnet_registry", icp_root)?;
-    let response = decode_subnet_registry_response(&bytes)?;
-    registry_entries_from_response(response).map_err(Into::into)
 }
