@@ -77,40 +77,6 @@ pub struct DirectoryEntryInput {
     pub pid: Principal,
 }
 
-//
-// DirectoryEntryResponse
-//
-
-#[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
-pub struct DirectoryEntryResponse {
-    pub role: CanisterRole,
-    pub pid: Principal,
-}
-
-//
-// FleetDirectoryPageResponse
-//
-
-#[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
-pub struct FleetDirectoryPageResponse {
-    pub provenance: DirectoryProvenance,
-    #[serde(deserialize_with = "deserialize_directory_responses")]
-    pub entries: Vec<DirectoryEntryResponse>,
-    pub total: u64,
-}
-
-//
-// SubnetDirectoryPageResponse
-//
-
-#[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
-pub struct SubnetDirectoryPageResponse {
-    pub provenance: DirectoryProvenance,
-    #[serde(deserialize_with = "deserialize_directory_responses")]
-    pub entries: Vec<DirectoryEntryResponse>,
-    pub total: u64,
-}
-
 fn deserialize_directory_entries<'de, D>(
     deserializer: D,
 ) -> Result<Vec<DirectoryEntryInput>, D::Error>
@@ -118,15 +84,6 @@ where
     D: Deserializer<'de>,
 {
     deserializer.deserialize_seq(BoundedDirectoryVisitor::<DirectoryEntryInput>::new())
-}
-
-fn deserialize_directory_responses<'de, D>(
-    deserializer: D,
-) -> Result<Vec<DirectoryEntryResponse>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    deserializer.deserialize_seq(BoundedDirectoryVisitor::<DirectoryEntryResponse>::new())
 }
 
 struct BoundedDirectoryVisitor<T> {

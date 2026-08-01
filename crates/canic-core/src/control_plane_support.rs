@@ -128,7 +128,7 @@ pub mod view {
     }
 
     pub mod topology {
-        pub use crate::view::topology::{DirectoryEntryView, RegisteredCanisterView};
+        pub use crate::view::topology::RegisteredCanisterView;
     }
 }
 

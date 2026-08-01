@@ -42,8 +42,7 @@ fn parses_delete_app_dry_run_option() {
 // Ensure app check requires one app name.
 #[test]
 fn parses_check_app() {
-    let options =
-        AppCheckOptions::parse_test([OsString::from("test")]).expect("parse check options");
+    let options = AppCheckOptions::parse([OsString::from("test")]).expect("parse check options");
 
     assert_eq!(options.app, "test");
 }
@@ -74,7 +73,7 @@ fn app_config_dispatch_preserves_list_error() {
 #[test]
 fn parses_role_list_app() {
     let options =
-        RoleListOptions::parse_test([OsString::from("demo")]).expect("parse role list options");
+        RoleListOptions::parse([OsString::from("demo")]).expect("parse role list options");
 
     assert_eq!(options.app, "demo");
 }
@@ -82,7 +81,7 @@ fn parses_role_list_app() {
 // Ensure role inspect requires app and role names.
 #[test]
 fn parses_role_inspect_app_and_role() {
-    let options = RoleInspectOptions::parse_test([OsString::from("demo"), OsString::from("app")])
+    let options = RoleInspectOptions::parse([OsString::from("demo"), OsString::from("app")])
         .expect("parse role inspect options");
 
     assert_eq!(options.app, "demo");
@@ -92,7 +91,7 @@ fn parses_role_inspect_app_and_role() {
 // Ensure role declaration requires app, role, and package path.
 #[test]
 fn parses_role_declare_app_role_and_package() {
-    let options = RoleDeclareOptions::parse_test([
+    let options = RoleDeclareOptions::parse([
         OsString::from("demo"),
         OsString::from("store"),
         OsString::from("--package"),
@@ -109,7 +108,7 @@ fn parses_role_declare_app_role_and_package() {
 // Ensure role declaration supports config-write preview mode.
 #[test]
 fn parses_role_declare_dry_run_option() {
-    let options = RoleDeclareOptions::parse_test([
+    let options = RoleDeclareOptions::parse([
         OsString::from("demo"),
         OsString::from("store"),
         OsString::from("--package"),
@@ -124,7 +123,7 @@ fn parses_role_declare_dry_run_option() {
 // Ensure role attachment requires App, role, and Component Spec and defaults to singleton.
 #[test]
 fn parses_role_attach_app_role_and_component_spec() {
-    let options = RoleAttachOptions::parse_test([
+    let options = RoleAttachOptions::parse([
         OsString::from("demo"),
         OsString::from("store"),
         OsString::from("--component-spec"),
@@ -142,7 +141,7 @@ fn parses_role_attach_app_role_and_component_spec() {
 // Ensure role attachment accepts explicit non-singleton kind.
 #[test]
 fn parses_role_attach_kind() {
-    let options = RoleAttachOptions::parse_test([
+    let options = RoleAttachOptions::parse([
         OsString::from("demo"),
         OsString::from("worker"),
         OsString::from("--component-spec"),
@@ -158,7 +157,7 @@ fn parses_role_attach_kind() {
 // Ensure role attachment supports config-write preview mode.
 #[test]
 fn parses_role_attach_dry_run_option() {
-    let options = RoleAttachOptions::parse_test([
+    let options = RoleAttachOptions::parse([
         OsString::from("demo"),
         OsString::from("store"),
         OsString::from("--component-spec"),
@@ -173,7 +172,7 @@ fn parses_role_attach_dry_run_option() {
 // Ensure role rename requires app, old role, and new role names.
 #[test]
 fn parses_role_rename_app_old_role_and_new_role() {
-    let options = RoleRenameOptions::parse_test([
+    let options = RoleRenameOptions::parse([
         OsString::from("demo"),
         OsString::from("hub"),
         OsString::from("router"),
@@ -189,7 +188,7 @@ fn parses_role_rename_app_old_role_and_new_role() {
 // Ensure role rename supports config/package metadata preview mode.
 #[test]
 fn parses_role_rename_dry_run_option() {
-    let options = RoleRenameOptions::parse_test([
+    let options = RoleRenameOptions::parse([
         OsString::from("demo"),
         OsString::from("hub"),
         OsString::from("router"),
@@ -203,7 +202,7 @@ fn parses_role_rename_dry_run_option() {
 // Ensure adoption report requires explicit app and profile, with text output by default.
 #[test]
 fn parses_adoption_report_app_profile_and_default_text() {
-    let options = AdoptionReportOptions::parse_test([
+    let options = AdoptionReportOptions::parse([
         OsString::from("demo"),
         OsString::from("--profile"),
         OsString::from("brownfield"),
@@ -225,7 +224,7 @@ fn parses_adoption_report_app_profile_and_default_text() {
 // Ensure adoption report can read explicit evidence paths and emit JSON output.
 #[test]
 fn parses_adoption_report_json_output() {
-    let options = AdoptionReportOptions::parse_test([
+    let options = AdoptionReportOptions::parse([
         OsString::from("demo"),
         OsString::from("--profile"),
         OsString::from("minimal"),
@@ -261,7 +260,7 @@ fn parses_adoption_report_json_output() {
 // Ensure adoption report accepts stable envelope JSON without changing raw JSON.
 #[test]
 fn parses_adoption_report_envelope_json_output() {
-    let options = AdoptionReportOptions::parse_test([
+    let options = AdoptionReportOptions::parse([
         OsString::from("demo"),
         OsString::from("--profile"),
         OsString::from("minimal"),
@@ -275,7 +274,7 @@ fn parses_adoption_report_envelope_json_output() {
 // Ensure build provenance evidence is accepted only for stable envelope output.
 #[test]
 fn parses_adoption_report_build_provenance_envelope_input() {
-    let options = AdoptionReportOptions::parse_test([
+    let options = AdoptionReportOptions::parse([
         OsString::from("demo"),
         OsString::from("--profile"),
         OsString::from("minimal"),
@@ -294,7 +293,7 @@ fn parses_adoption_report_build_provenance_envelope_input() {
 // Ensure adoption report can read cargo metadata evidence from an explicit path.
 #[test]
 fn parses_adoption_report_cargo_metadata_path() {
-    let options = AdoptionReportOptions::parse_test([
+    let options = AdoptionReportOptions::parse([
         OsString::from("demo"),
         OsString::from("--profile"),
         OsString::from("partial"),
@@ -313,7 +312,7 @@ fn parses_adoption_report_cargo_metadata_path() {
 // Ensure adoption report rejects ambiguous inventory evidence sources at parse time.
 #[test]
 fn rejects_adoption_report_inventory_and_deployment_check_together() {
-    let err = AdoptionReportOptions::parse_test([
+    let err = AdoptionReportOptions::parse([
         OsString::from("demo"),
         OsString::from("--profile"),
         OsString::from("partial"),
@@ -330,7 +329,7 @@ fn rejects_adoption_report_inventory_and_deployment_check_together() {
 // Ensure adoption report rejects ambiguous package metadata sources at parse time.
 #[test]
 fn rejects_adoption_report_package_metadata_and_cargo_metadata_together() {
-    let err = AdoptionReportOptions::parse_test([
+    let err = AdoptionReportOptions::parse([
         OsString::from("demo"),
         OsString::from("--profile"),
         OsString::from("partial"),
@@ -347,7 +346,7 @@ fn rejects_adoption_report_package_metadata_and_cargo_metadata_together() {
 // Ensure unsupported adoption profiles fail before any report generation.
 #[test]
 fn rejects_unknown_adoption_profile() {
-    let err = AdoptionReportOptions::parse_test([
+    let err = AdoptionReportOptions::parse([
         OsString::from("demo"),
         OsString::from("--profile"),
         OsString::from("import"),
@@ -360,7 +359,7 @@ fn rejects_unknown_adoption_profile() {
 // Ensure raw JSON and envelope artifact modes are mutually exclusive.
 #[test]
 fn rejects_ambiguous_adoption_report_output_modes() {
-    let err = AdoptionReportOptions::parse_test([
+    let err = AdoptionReportOptions::parse([
         OsString::from("demo"),
         OsString::from("--profile"),
         OsString::from("brownfield"),
@@ -375,7 +374,7 @@ fn rejects_ambiguous_adoption_report_output_modes() {
 // Ensure provenance evidence cannot silently no-op on raw adoption report output.
 #[test]
 fn rejects_adoption_report_build_provenance_without_envelope_output() {
-    let err = AdoptionReportOptions::parse_test([
+    let err = AdoptionReportOptions::parse([
         OsString::from("demo"),
         OsString::from("--profile"),
         OsString::from("minimal"),
@@ -390,8 +389,7 @@ fn rejects_adoption_report_build_provenance_without_envelope_output() {
 // Ensure unknown app check options fail through usage.
 #[test]
 fn rejects_unknown_check_option() {
-    let err =
-        AppCheckOptions::parse_test([OsString::from("--unknown")]).expect_err("parse should fail");
+    let err = AppCheckOptions::parse([OsString::from("--unknown")]).expect_err("parse should fail");
 
     std::assert_matches!(err, AppCommandError::Usage(_));
 }

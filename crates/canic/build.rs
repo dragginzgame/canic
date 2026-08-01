@@ -23,7 +23,6 @@ fn main() {
     println!("cargo:rustc-check-cfg=cfg(canic_metrics_storage)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_auth_attestation)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_state)");
-    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_directory)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_children)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_placement)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_nonroot_sync_topology)");
@@ -34,7 +33,6 @@ fn main() {
         // Default builds ship the slimmer demo/reference surface; internal
         // observability and topology test endpoints opt back in explicitly.
         println!("cargo:rustc-cfg=canic_disable_bundle_observability_env");
-        println!("cargo:rustc-cfg=canic_disable_bundle_topology_directory");
     }
     if std::env::var_os("CARGO_FEATURE_METRICS").is_none() {
         println!("cargo:rustc-cfg=canic_disable_bundle_metrics");

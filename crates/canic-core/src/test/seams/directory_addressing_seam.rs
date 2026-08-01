@@ -18,7 +18,6 @@ use crate::{
         seams::{lock, p},
         support::import_test_env,
     },
-    workflow::topology::directory::query::SubnetDirectoryQuery,
 };
 
 fn provenance() -> DirectoryProvenance {
@@ -80,7 +79,7 @@ fn directory_addressing_prefers_index_over_registry_duplicates() {
     })
     .expect("import Subnet Directory");
 
-    let resolved = SubnetDirectoryQuery::get(role.clone()).expect("Directory role missing");
+    let resolved = SubnetDirectoryOps::get(&role).expect("Directory role missing");
     assert_eq!(resolved, pid_b);
 
     let duplicates = SubnetRegistryOps::data()
@@ -113,7 +112,7 @@ fn directory_addressing_does_not_fallback_to_registry() {
     SubnetRegistryOps::register_unchecked(pid, &role, root_pid, vec![], created_at)
         .expect("register canister");
 
-    let resolved = SubnetDirectoryQuery::get(role.clone());
+    let resolved = SubnetDirectoryOps::get(&role);
     assert!(resolved.is_none());
 
     let registry_count = SubnetRegistryOps::data()

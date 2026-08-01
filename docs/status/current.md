@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.77`.
-- The latest published release is `v0.100.77` at
-  `b92255a006283f10c3b071afc6b7cae0a5dfac59`.
-- Open `0.100.78` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.78`.
+- The latest published release is `v0.100.78` at
+  `69a4bf1d1cc3069f49872e535d24067974680020`.
+- Open `0.100.79` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -652,12 +652,16 @@ Historical detail is archived at:
   The same release narrows role-only control-plane builds, centralizes duplicate
   template chunk validation and removes the final one-use Fleet command
   mapper.
-- Open `0.100.78` hard-cuts generic Fleet Root terminology from maintained
+- Released `0.100.78` hard-cuts generic Fleet Root terminology from maintained
   contracts. Runtime/stable/Candid environment state, the endpoint access
   DSL, topology validators, the demo package and operator wording now use
   Fleet Subnet Root directly, with no old alias or transition decoder. The
-  same draft removes one-field host Registry-query and peer-provisioning
+  same release removes one-field host Registry-query and peer-provisioning
   policy result wrappers.
+- Open `0.100.79` hard-cuts the obsolete public Fleet/Subnet Directory query,
+  facade, protocol, page-response and workflow family with no compatibility
+  alias. It also removes redundant test-only parser aliases and one-field
+  cycles-command and status-inventory wrappers without changing CLI behavior.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -2282,12 +2286,19 @@ ceiling exhaustion. The same release narrows role-only control-plane
 compilation, centralizes duplicate template chunk conversion/validation and
 removes the one-use Fleet command mapper. No compatibility path or
 package-version change is introduced.
-Open `0.100.78` completes the Fleet Subnet Root terminology hard cut across
+Released `0.100.78` completes the Fleet Subnet Root terminology hard cut across
 maintained environment, access-DSL, topology, package, CLI and fixture
 surfaces. The old generic field, predicate and package identity are absent
 rather than decoded or aliased. One-field host Registry-query and
 peer-provisioning policy result wrappers are also removed; their callers
 consume the existing vector and approved grant directly.
+Open `0.100.79` removes the old public Fleet/Subnet Directory queries and their
+Rust facade, protocol constants, page DTOs and now-dead query/projection path.
+The maintained runtime keeps protected Fleet Directory activation authority
+and authenticated root-served Component Directory pages. The same draft
+removes redundant test-only parser aliases and one-field cycles-command and
+status-inventory wrappers while retaining typed wallet dispatch and all CLI
+behavior.
 
 ## Historical Release Detail
 

@@ -104,12 +104,6 @@ struct StatusAppRow {
     canisters: String,
 }
 
-/// App rows compiled independently from terminal Fleet discovery.
-
-struct StatusAppInventory {
-    rows: Vec<StatusAppRow>,
-}
-
 /// One independently discovered canonical Fleet catalog row.
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -179,7 +173,7 @@ fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCom
         icp_cli,
         icp_project,
         canonical_network_id: catalog.canonical_network_id.to_string(),
-        apps: apps.rows,
+        apps,
         fleets,
     })
 }
@@ -230,7 +224,7 @@ fn load_icp_project_config_status(icp_root: &Path, choices: &[std::path::PathBuf
     }
 }
 
-fn load_status_apps(workspace_root: &Path, paths: &[std::path::PathBuf]) -> StatusAppInventory {
+fn load_status_apps(workspace_root: &Path, paths: &[std::path::PathBuf]) -> Vec<StatusAppRow> {
     let mut rows = Vec::with_capacity(paths.len());
     for path in paths {
         match AppConfigSnapshot::load(path) {
@@ -250,7 +244,7 @@ fn load_status_apps(workspace_root: &Path, paths: &[std::path::PathBuf]) -> Stat
         }
     }
     rows.sort_by(|left, right| left.app.cmp(&right.app));
-    StatusAppInventory { rows }
+    rows
 }
 
 fn status_fleet_row(fleet: &FleetCatalogEntryV1) -> StatusFleetRow {

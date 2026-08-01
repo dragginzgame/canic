@@ -2,7 +2,7 @@
 //!
 //! Responsibility: provide deterministic access to the Fleet Directory stable record.
 //! Does not own: stable schema, topology workflow, or endpoint DTOs.
-//! Boundary: storage ops facade used by topology workflows and queries.
+//! Boundary: storage ops facade used by topology workflows.
 
 use crate::{
     InternalError,
@@ -17,7 +17,6 @@ use crate::{
         },
     },
     storage::stable::directory::fleet::{FleetDirectory, FleetDirectoryData},
-    view::topology::DirectoryEntryView,
 };
 
 ///
@@ -51,11 +50,6 @@ impl FleetDirectoryOps {
     #[must_use]
     pub(crate) fn data() -> FleetDirectoryData {
         FleetDirectory::export()
-    }
-
-    #[must_use]
-    pub fn entry_projections() -> Vec<DirectoryEntryView> {
-        DirectoryEntryMapper::records_to_projections(FleetDirectory::export().entries)
     }
 
     #[must_use]
