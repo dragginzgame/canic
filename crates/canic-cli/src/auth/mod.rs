@@ -121,12 +121,9 @@ impl AuthCommandError {
             | Self::Usage(_)
             | Self::Json(_)
             | Self::InstalledFleet(
-                InstalledFleetError::Icp(IcpCommandError::Io(_))
-                | InstalledFleetError::NoInstalledFleet { .. }
+                InstalledFleetError::NoInstalledFleet { .. }
                 | InstalledFleetError::FleetCatalog(_)
-                | InstalledFleetError::CoordinatorAnchoredTopologyUnavailable { .. }
-                | InstalledFleetError::Registry(_)
-                | InstalledFleetError::Io(_),
+                | InstalledFleetError::CoordinatorAnchoredTopologyUnavailable { .. },
             )
             | Self::IcpRoot(_)
             | Self::CandidUnavailable { .. }
@@ -135,12 +132,7 @@ impl AuthCommandError {
             | Self::CandidParse { .. }
             | Self::MethodUnavailable { .. }
             | Self::MethodModeMismatch { .. } => 1,
-            Self::InstalledFleet(
-                InstalledFleetError::ReplicaQuery(_)
-                | InstalledFleetError::LostLocalFleet { .. }
-                | InstalledFleetError::Icp(_),
-            )
-            | Self::Icp(_) => 2,
+            Self::Icp(_) => 2,
             Self::ResponseParse(_) => 3,
         }
     }
@@ -617,8 +609,6 @@ fn resolve_auth_root_call_target(
         &InstalledFleetRequest {
             fleet: fleet.to_string(),
             environment: options.environment.clone(),
-            icp: options.icp.clone(),
-            detect_lost_local_root: true,
         },
         &icp_root,
     )

@@ -57,8 +57,6 @@ pub(super) fn resolve_blob_storage_call_target(
         &InstalledFleetRequest {
             fleet: fleet.to_string(),
             environment: options.environment.clone(),
-            icp: options.icp.clone(),
-            detect_lost_local_root: true,
         },
         &icp_root,
     )

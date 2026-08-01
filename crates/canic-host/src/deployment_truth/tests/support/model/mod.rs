@@ -130,7 +130,7 @@ pub(in crate::deployment_truth::tests) fn sample_matching_inventory() -> Deploym
     }
 }
 
-pub(in crate::deployment_truth::tests) fn sample_root_observation() -> DeploymentRootObservationV1 {
+fn sample_root_observation() -> DeploymentRootObservationV1 {
     DeploymentRootObservationV1 {
         canonical_network_id: CanonicalNetworkId::ic_mainnet(),
         fleet_id: FleetId::from_generated_bytes([7; 32]),

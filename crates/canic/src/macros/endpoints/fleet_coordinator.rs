@@ -86,5 +86,47 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
                 request,
             )
         }
+
+        #[$crate::canic_update(public)]
+        async fn canic_fleet_registry_root_deletion_readiness_prepare(
+            request: ::canic::dto::fleet_registry::FleetSubnetRootDeletionReadinessIntentRequest,
+        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootDeletionReadinessIntentResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::prepare_root_deletion_readiness(request)
+        }
+
+        #[$crate::canic_update(public)]
+        async fn canic_fleet_registry_root_deletion_ready(
+            request: ::canic::dto::fleet_registry::FleetSubnetRootDeletionReadinessRequest,
+        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootDeletionReadinessResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::record_root_deletion_readiness(request)
+        }
+
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_fleet_registry_root_deletion_execution_begin(
+            request: ::canic::dto::fleet_registry::FleetSubnetRootDeletionExecutionRequest,
+        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootDeletionExecutionResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::begin_root_deletion_execution(request)
+        }
+
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_fleet_registry_root_deletion_execution_status(
+            request: ::canic::dto::fleet_registry::FleetSubnetRootDeletionStatusRequest,
+        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootDeletionExecutionResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::root_deletion_execution_status(request)
+        }
+
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_fleet_registry_root_deletion_complete(
+            request: ::canic::dto::fleet_registry::FleetSubnetRootDeletionCompletionRequest,
+        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootDeletionResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::complete_root_deletion(request)
+        }
+
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_fleet_registry_root_deletion_status(
+            request: ::canic::dto::fleet_registry::FleetSubnetRootDeletionStatusRequest,
+        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootDeletionResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::root_deletion_status(request)
+        }
     };
 }

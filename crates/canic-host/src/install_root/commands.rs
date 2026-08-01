@@ -16,7 +16,7 @@ pub(super) fn parse_created_canister_id(output: &str) -> Option<String> {
         .map(ToString::to_string)
 }
 
-pub(super) fn parse_canister_id_json(value: &JsonValue) -> Option<String> {
+fn parse_canister_id_json(value: &JsonValue) -> Option<String> {
     match value {
         JsonValue::String(text) if Principal::from_text(text).is_ok() => Some(text.clone()),
         JsonValue::Array(values) => values.iter().find_map(parse_canister_id_json),

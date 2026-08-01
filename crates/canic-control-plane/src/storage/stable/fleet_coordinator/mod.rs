@@ -14,7 +14,9 @@ use canic_core::{
     control_plane_support::config::ComponentTopology,
     dto::fleet_registry::{
         FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
-        FleetRegistryVersion, FleetSubnetRootDrainingPublicationRequest,
+        FleetRegistryVersion, FleetSubnetRootDeletionExecutionResponse,
+        FleetSubnetRootDeletionReadinessIntentResponse, FleetSubnetRootDeletionReadinessResponse,
+        FleetSubnetRootDeletionResponse, FleetSubnetRootDrainingPublicationRequest,
         FleetSubnetRootDrainingPublicationResponse, FleetSubnetRootEntry,
         FleetSubnetRootRemovalPublicationRequest, FleetSubnetRootRemovalPublicationResponse,
         FleetSubnetRootSnapshotAcknowledgement,
@@ -67,6 +69,10 @@ pub struct FleetCoordinatorRegistryRecord {
     pub registry_activation_receipt: Option<FleetRegistryActivationReceiptRecord>,
     pub root_draining_publication_receipts: Vec<FleetSubnetRootDrainingPublicationReceiptRecord>,
     pub root_removal_publication_receipts: Vec<FleetSubnetRootRemovalPublicationReceiptRecord>,
+    pub root_deletion_readiness_intents: Vec<FleetSubnetRootDeletionReadinessIntentResponse>,
+    pub root_deletion_readiness_receipts: Vec<FleetSubnetRootDeletionReadinessResponse>,
+    pub root_deletion_execution_intents: Vec<FleetSubnetRootDeletionExecutionResponse>,
+    pub root_deletion_receipts: Vec<FleetSubnetRootDeletionResponse>,
 }
 
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]

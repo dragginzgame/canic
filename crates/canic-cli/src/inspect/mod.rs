@@ -286,8 +286,6 @@ fn resolve_fleet_target(
         &InstalledFleetRequest {
             fleet: fleet.to_string(),
             environment: environment.to_string(),
-            icp: icp.to_string(),
-            detect_lost_local_root: false,
         },
         &root,
     )

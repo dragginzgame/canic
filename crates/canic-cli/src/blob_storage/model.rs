@@ -12,7 +12,7 @@ pub(super) const BLOB_STORAGE_ERROR_KIND: &str = "blob_storage_error";
 pub(super) const BLOB_STORAGE_CANDID_SOURCE_INSTALLED_FLEET: &str = "installed_fleet";
 pub(super) const BLOB_STORAGE_READINESS_BLOCKED: &str = "blocked";
 pub(super) const BLOB_STORAGE_READINESS_READY: &str = "ready";
-pub(super) const BLOB_STORAGE_READINESS_WARNING: &str = "warning";
+const BLOB_STORAGE_READINESS_WARNING: &str = "warning";
 pub(super) const BLOB_STORAGE_CODE_NOT_CONFIGURED: &str = "not_configured";
 pub(super) const BLOB_STORAGE_CODE_FUNDING_NEEDED: &str = "funding_needed";
 pub(super) const BLOB_STORAGE_CODE_GATEWAY_PRINCIPALS_EMPTY: &str = "gateway_principals_empty";
@@ -22,7 +22,7 @@ pub(super) const BLOB_STORAGE_CODE_CASHIER_BALANCE_UNAVAILABLE: &str =
 pub(super) const BLOB_STORAGE_CODE_CASHIER_RESPONSE_MALFORMED: &str = "cashier_response_malformed";
 pub(super) const BLOB_STORAGE_CODE_PROJECT_CYCLES_RESERVE_BLOCKS_FUNDING: &str =
     "project_cycles_reserve_blocks_funding";
-pub(super) const BLOB_STORAGE_CODE_NOT_NEEDED: &str = "not_needed";
+const BLOB_STORAGE_CODE_NOT_NEEDED: &str = "not_needed";
 pub(super) const BLOB_STORAGE_CODE_NOT_REQUESTED: &str = "not_requested";
 pub(super) const BLOB_STORAGE_CODE_SKIPPED_CONFIG_MISSING: &str = "skipped_config_missing";
 pub(super) const BLOB_STORAGE_CODE_SKIPPED_READ_ONLY_STATUS: &str = "skipped_read_only_status";

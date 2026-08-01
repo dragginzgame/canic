@@ -134,12 +134,9 @@ impl BlobStorageCommandError {
             | Self::InvalidCycles(_)
             | Self::Json(_)
             | Self::InstalledFleet(
-                InstalledFleetError::Icp(IcpCommandError::Io(_))
-                | InstalledFleetError::NoInstalledFleet { .. }
+                InstalledFleetError::NoInstalledFleet { .. }
                 | InstalledFleetError::FleetCatalog(_)
-                | InstalledFleetError::CoordinatorAnchoredTopologyUnavailable { .. }
-                | InstalledFleetError::Registry(_)
-                | InstalledFleetError::Io(_),
+                | InstalledFleetError::CoordinatorAnchoredTopologyUnavailable { .. },
             )
             | Self::IcpRoot(_)
             | Self::UnknownTarget { .. }
@@ -148,12 +145,7 @@ impl BlobStorageCommandError {
             | Self::CandidRead { .. }
             | Self::CandidParse { .. }
             | Self::MethodUnavailable { .. } => 1,
-            Self::InstalledFleet(
-                InstalledFleetError::ReplicaQuery(_)
-                | InstalledFleetError::LostLocalFleet { .. }
-                | InstalledFleetError::Icp(_),
-            )
-            | Self::Icp(_) => 2,
+            Self::Icp(_) => 2,
             Self::Response(_) | Self::ResponseValueOutOfRange { .. } => 3,
             Self::ReadinessCheckFailed { .. } => 4,
         }
@@ -181,10 +173,7 @@ impl BlobStorageCommandError {
             | Self::InstalledFleet(
                 InstalledFleetError::NoInstalledFleet { .. }
                 | InstalledFleetError::FleetCatalog(_)
-                | InstalledFleetError::CoordinatorAnchoredTopologyUnavailable { .. }
-                | InstalledFleetError::Registry(_)
-                | InstalledFleetError::Io(_)
-                | InstalledFleetError::Icp(IcpCommandError::Io(_)),
+                | InstalledFleetError::CoordinatorAnchoredTopologyUnavailable { .. },
             )
             | Self::UnknownTarget { .. }
             | Self::AmbiguousRole { .. }
@@ -193,12 +182,7 @@ impl BlobStorageCommandError {
                 BLOB_STORAGE_ERROR_CODE_CANDID_UNAVAILABLE
             }
             Self::MethodUnavailable { .. } => BLOB_STORAGE_ERROR_CODE_METHOD_UNAVAILABLE,
-            Self::InstalledFleet(
-                InstalledFleetError::ReplicaQuery(_)
-                | InstalledFleetError::LostLocalFleet { .. }
-                | InstalledFleetError::Icp(_),
-            )
-            | Self::Icp(_) => BLOB_STORAGE_ERROR_CODE_TRANSPORT_FAILED,
+            Self::Icp(_) => BLOB_STORAGE_ERROR_CODE_TRANSPORT_FAILED,
             Self::Response(_) | Self::ResponseValueOutOfRange { .. } => {
                 BLOB_STORAGE_ERROR_CODE_RESPONSE_PARSE_FAILED
             }

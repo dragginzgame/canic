@@ -28,7 +28,7 @@ pub(super) fn sample_authority_check() -> DeploymentCheckV1 {
     }
 }
 
-pub(super) fn sample_deployment_identity() -> DeploymentIdentityV1 {
+fn sample_deployment_identity() -> DeploymentIdentityV1 {
     DeploymentIdentityV1 {
         canonical_network_id: Some(CanonicalNetworkId::ic_mainnet()),
         fleet_id: Some(FleetId::from_generated_bytes([2; 32])),
@@ -48,7 +48,7 @@ pub(super) fn sample_deployment_identity() -> DeploymentIdentityV1 {
     }
 }
 
-pub(super) fn sample_deployment_plan(identity: DeploymentIdentityV1) -> DeploymentPlanV1 {
+fn sample_deployment_plan(identity: DeploymentIdentityV1) -> DeploymentPlanV1 {
     DeploymentPlanV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         plan_id: "plan-1".to_string(),
@@ -143,7 +143,7 @@ pub(super) fn temp_json_path(name: &str) -> PathBuf {
     ))
 }
 
-pub(super) fn sample_deployment_inventory(identity: DeploymentIdentityV1) -> DeploymentInventoryV1 {
+fn sample_deployment_inventory(identity: DeploymentIdentityV1) -> DeploymentInventoryV1 {
     DeploymentInventoryV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         inventory_id: "inventory-1".to_string(),
@@ -176,7 +176,7 @@ pub(super) fn sample_deployment_inventory(identity: DeploymentIdentityV1) -> Dep
     }
 }
 
-pub(super) fn sample_deployment_diff(
+fn sample_deployment_diff(
     plan: &DeploymentPlanV1,
     inventory: &DeploymentInventoryV1,
 ) -> DeploymentDiffV1 {
@@ -200,7 +200,7 @@ pub(super) fn sample_deployment_diff(
     }
 }
 
-pub(super) fn sample_safety_report() -> SafetyReportV1 {
+fn sample_safety_report() -> SafetyReportV1 {
     SafetyReportV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         report_id: "safety-report-1".to_string(),

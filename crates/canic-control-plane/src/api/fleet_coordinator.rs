@@ -16,6 +16,12 @@ use canic_core::{
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
             FleetRegistryManifest, FleetRegistrySnapshotResponse, FleetRegistryVersion,
+            FleetSubnetRootDeletionCompletionRequest, FleetSubnetRootDeletionExecutionRequest,
+            FleetSubnetRootDeletionExecutionResponse,
+            FleetSubnetRootDeletionReadinessIntentRequest,
+            FleetSubnetRootDeletionReadinessIntentResponse,
+            FleetSubnetRootDeletionReadinessRequest, FleetSubnetRootDeletionReadinessResponse,
+            FleetSubnetRootDeletionResponse, FleetSubnetRootDeletionStatusRequest,
             FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingPublicationResponse,
             FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
             FleetSubnetRootRemovalPublicationRequest, FleetSubnetRootRemovalPublicationResponse,
@@ -92,6 +98,58 @@ impl FleetCoordinatorApi {
         request: FleetSubnetRootRemovalPublicationRequest,
     ) -> Result<FleetSubnetRootRemovalPublicationResponse, Error> {
         FleetCoordinatorWorkflow::publish_root_removed(msg_caller(), request).map_err(Into::into)
+    }
+
+    pub fn prepare_root_deletion_readiness(
+        request: FleetSubnetRootDeletionReadinessIntentRequest,
+    ) -> Result<FleetSubnetRootDeletionReadinessIntentResponse, Error> {
+        FleetCoordinatorWorkflow::prepare_root_deletion_readiness(
+            msg_caller(),
+            canister_self(),
+            request,
+        )
+        .map_err(Into::into)
+    }
+
+    pub fn record_root_deletion_readiness(
+        request: FleetSubnetRootDeletionReadinessRequest,
+    ) -> Result<FleetSubnetRootDeletionReadinessResponse, Error> {
+        FleetCoordinatorWorkflow::record_root_deletion_readiness(
+            msg_caller(),
+            canister_self(),
+            request,
+        )
+        .map_err(Into::into)
+    }
+
+    pub fn begin_root_deletion_execution(
+        request: FleetSubnetRootDeletionExecutionRequest,
+    ) -> Result<FleetSubnetRootDeletionExecutionResponse, Error> {
+        FleetCoordinatorWorkflow::begin_root_deletion_execution(
+            msg_caller(),
+            canister_self(),
+            request,
+        )
+        .map_err(Into::into)
+    }
+
+    pub fn root_deletion_execution_status(
+        request: FleetSubnetRootDeletionStatusRequest,
+    ) -> Result<FleetSubnetRootDeletionExecutionResponse, Error> {
+        FleetCoordinatorWorkflow::root_deletion_execution_status(request).map_err(Into::into)
+    }
+
+    pub fn complete_root_deletion(
+        request: FleetSubnetRootDeletionCompletionRequest,
+    ) -> Result<FleetSubnetRootDeletionResponse, Error> {
+        FleetCoordinatorWorkflow::complete_root_deletion(msg_caller(), canister_self(), request)
+            .map_err(Into::into)
+    }
+
+    pub fn root_deletion_status(
+        request: FleetSubnetRootDeletionStatusRequest,
+    ) -> Result<FleetSubnetRootDeletionResponse, Error> {
+        FleetCoordinatorWorkflow::root_deletion_status(request).map_err(Into::into)
     }
 
     pub fn version() -> Result<FleetRegistryVersion, Error> {

@@ -1,8 +1,6 @@
 use crate::{
     fleet_catalog::{FleetCatalogEntryV1, FleetCatalogError, read_fleet_catalog_entry_from_root},
-    icp::IcpCommandError,
-    registry::{RegistryEntry, RegistryParseError},
-    replica_query::ReplicaQueryError,
+    registry::RegistryEntry,
 };
 use std::{collections::BTreeMap, path::Path};
 use thiserror::Error as ThisError;
@@ -15,8 +13,6 @@ use thiserror::Error as ThisError;
 pub struct InstalledFleetRequest {
     pub fleet: String,
     pub environment: String,
-    pub icp: String,
-    pub detect_lost_local_root: bool,
 }
 
 ///
@@ -74,31 +70,10 @@ pub enum InstalledFleetError {
     #[error("failed to read the canonical-network Fleet catalog: {0}")]
     FleetCatalog(#[from] FleetCatalogError),
 
-    #[error("local replica query failed: {0}")]
-    ReplicaQuery(#[source] ReplicaQueryError),
-
-    #[error(transparent)]
-    Icp(#[from] IcpCommandError),
-
-    #[error(
-        "Fleet {fleet} points to root {root}, but that canister is not present on environment {environment}"
-    )]
-    LostLocalFleet {
-        fleet: String,
-        environment: String,
-        root: String,
-    },
-
     #[error(
         "Fleet {fleet} is Coordinator-anchored at {coordinator}; the removed single-root topology resolver cannot serve this operation"
     )]
     CoordinatorAnchoredTopologyUnavailable { fleet: String, coordinator: String },
-
-    #[error(transparent)]
-    Registry(#[from] RegistryParseError),
-
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
 }
 
 pub fn resolve_installed_fleet_from_root(

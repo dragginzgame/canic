@@ -16,8 +16,8 @@ use super::{
     RestoreRunOptions, RestoreStatusOptions,
 };
 
-pub(super) const RESTORE_PLAN_FILE: &str = "restore-plan.json";
-pub(super) const RESTORE_APPLY_JOURNAL_FILE: &str = "restore-apply-journal.json";
+const RESTORE_PLAN_FILE: &str = "restore-plan.json";
+const RESTORE_APPLY_JOURNAL_FILE: &str = "restore-apply-journal.json";
 
 ///
 /// RestorePrepareReport
@@ -70,7 +70,7 @@ pub(super) fn read_manifest_source(
         .map_err(RestoreCommandError::from)
 }
 
-pub(super) fn restore_plan_backup_dir(
+fn restore_plan_backup_dir(
     options: &RestorePlanOptions,
 ) -> Result<Option<PathBuf>, RestoreCommandError> {
     restore_backup_dir(options.backup_ref.as_deref(), options.backup_dir.as_deref())
@@ -251,11 +251,6 @@ fn comparable_path(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
-pub(super) fn write_plan_file(path: &Path, plan: &RestorePlan) -> Result<(), RestoreCommandError> {
-    write_restore_plan(path, plan)?;
-    Ok(())
-}
-
 pub(super) fn create_or_adopt_prepare_documents(
     plan_path: &Path,
     plan: &RestorePlan,
@@ -281,7 +276,8 @@ pub(super) fn write_plan(
     plan: &RestorePlan,
 ) -> Result<(), RestoreCommandError> {
     if let Some(path) = options.out.as_deref() {
-        return write_plan_file(path, plan);
+        write_restore_plan(path, plan)?;
+        return Ok(());
     }
     output::write_pretty_json(None, plan)
 }

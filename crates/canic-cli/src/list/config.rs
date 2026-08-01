@@ -90,7 +90,7 @@ pub(super) fn missing_config_roles(
         .collect()
 }
 
-pub(super) fn selected_config_path(options: &ListOptions) -> Result<PathBuf, ListCommandError> {
+fn selected_config_path(options: &ListOptions) -> Result<PathBuf, ListCommandError> {
     let app = &options.target;
     let choices = discover_current_canic_config_choices()?;
     select_discovered_app_config_path(&choices, app)?

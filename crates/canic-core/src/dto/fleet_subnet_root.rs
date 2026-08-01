@@ -11,6 +11,15 @@ use crate::{
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 
+/// Execution balance retained while a removed root completes its deletion handoff.
+pub const FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES: u128 = 100_000_000_000;
+
+/// Margin for management-call refunds that become visible after a cycle transfer returns.
+pub const FLEET_SUBNET_ROOT_DELETION_CALL_REFUND_HEADROOM_CYCLES: u128 = 50_000_000_000;
+
+/// Fail-closed ceiling for cycles intentionally left on a root that will be deleted.
+pub const FLEET_SUBNET_ROOT_DELETION_MAXIMUM_RETAINED_CYCLES: u128 = 1_000_000_000_000;
+
 ///
 /// FleetSubnetRootAuthority
 ///
@@ -228,6 +237,44 @@ pub struct FleetSubnetRootStoreDeletionResponse {
     pub observed_absent_at_ns: u64,
     pub completed_at_ns: u64,
     pub deletion_hash: [u8; 32],
+}
+
+/// Controller command preparing a removed root for external physical deletion.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDeletionPreparationRequest {
+    pub operation_id: [u8; 32],
+    pub expected_store_deletion_hash: [u8; 32],
+    pub maximum_cycles_to_retain: u128,
+    pub observed_reserved_cycles: u128,
+    pub observed_idle_cycles_burned_per_day: u128,
+    pub observed_freezing_threshold_seconds: u128,
+}
+
+/// Read-only lookup key for the root's durable external-deletion readiness receipt.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDeletionPreparationStatusRequest {
+    pub operation_id: [u8; 32],
+}
+
+/// Durable proof that a removed root returned excess cycles and is ready for its executor.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDeletionPreparationResponse {
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+    pub coordinator: Principal,
+    pub final_inventory_hash: [u8; 32],
+    pub store_deletion_hash: [u8; 32],
+    pub observed_cycles_before_reclamation: u128,
+    pub maximum_cycles_to_retain: u128,
+    pub observed_reserved_cycles: u128,
+    pub observed_idle_cycles_burned_per_day: u128,
+    pub observed_freezing_threshold_seconds: u128,
+    pub observed_cycles_after_reclamation: u128,
+    pub cycles_reclaimed_at_ns: u64,
+    pub coordinator_intent_hash: [u8; 32],
+    pub coordinator_readiness_hash: [u8; 32],
+    pub prepared_at_ns: u64,
+    pub completed_at_ns: u64,
 }
 
 ///
@@ -509,6 +556,159 @@ mod tests {
         assert_candid_round_trip(&request);
         assert_candid_round_trip(&status);
         assert_candid_round_trip(&response);
+        assert_root_deletion_handoff_contract_round_trip(
+            &response,
+            finalization.final_inventory_hash,
+        );
+    }
+
+    fn assert_root_deletion_handoff_contract_round_trip(
+        store_deletion: &FleetSubnetRootStoreDeletionResponse,
+        final_inventory_hash: [u8; 32],
+    ) {
+        use crate::dto::fleet_registry::{
+            FleetSubnetRootDeletionReadinessIntentRequest,
+            FleetSubnetRootDeletionReadinessIntentResponse,
+            FleetSubnetRootDeletionReadinessRequest, FleetSubnetRootDeletionReadinessResponse,
+        };
+
+        let preparation_request = FleetSubnetRootDeletionPreparationRequest {
+            operation_id: store_deletion.operation_id,
+            expected_store_deletion_hash: store_deletion.deletion_hash,
+            maximum_cycles_to_retain: 100_000_000_001,
+            observed_reserved_cycles: 0,
+            observed_idle_cycles_burned_per_day: 86_400,
+            observed_freezing_threshold_seconds: 1,
+        };
+        let preparation_status = FleetSubnetRootDeletionPreparationStatusRequest {
+            operation_id: store_deletion.operation_id,
+        };
+        let intent_request = FleetSubnetRootDeletionReadinessIntentRequest {
+            operation_id: store_deletion.operation_id,
+            fleet_subnet_root: store_deletion.fleet_subnet_root,
+            final_inventory_hash,
+            store_deletion_hash: store_deletion.deletion_hash,
+            observed_cycles_before_reclamation: 500_000_000_000,
+            maximum_cycles_to_retain: 100_000_000_001,
+            observed_reserved_cycles: 0,
+            observed_idle_cycles_burned_per_day: 86_400,
+            observed_freezing_threshold_seconds: 1,
+            prepared_at_ns: 42,
+        };
+        let intent = FleetSubnetRootDeletionReadinessIntentResponse {
+            request: intent_request.clone(),
+            coordinator: Principal::from_slice(&[43; 29]),
+            recorded_at_ns: 44,
+            intent_hash: [45; 32],
+        };
+        let readiness_request = FleetSubnetRootDeletionReadinessRequest {
+            operation_id: store_deletion.operation_id,
+            fleet_subnet_root: store_deletion.fleet_subnet_root,
+            expected_intent_hash: intent.intent_hash,
+            observed_cycles_after_reclamation: 90_000_000_000,
+            cycles_reclaimed_at_ns: 46,
+        };
+        let readiness = FleetSubnetRootDeletionReadinessResponse {
+            request: readiness_request.clone(),
+            coordinator: intent.coordinator,
+            final_inventory_hash,
+            store_deletion_hash: store_deletion.deletion_hash,
+            observed_cycles_before_reclamation: 500_000_000_000,
+            maximum_cycles_to_retain: 100_000_000_001,
+            observed_reserved_cycles: 0,
+            observed_idle_cycles_burned_per_day: 86_400,
+            observed_freezing_threshold_seconds: 1,
+            prepared_at_ns: intent.request.prepared_at_ns,
+            recorded_at_ns: 47,
+            readiness_hash: [48; 32],
+        };
+        assert_root_deletion_execution_contract_round_trip(store_deletion, &readiness);
+
+        let preparation = FleetSubnetRootDeletionPreparationResponse {
+            operation_id: store_deletion.operation_id,
+            fleet_subnet_root: store_deletion.fleet_subnet_root,
+            coordinator: intent.coordinator,
+            final_inventory_hash,
+            store_deletion_hash: store_deletion.deletion_hash,
+            observed_cycles_before_reclamation: 500_000_000_000,
+            maximum_cycles_to_retain: 100_000_000_001,
+            observed_reserved_cycles: 0,
+            observed_idle_cycles_burned_per_day: 86_400,
+            observed_freezing_threshold_seconds: 1,
+            observed_cycles_after_reclamation: 90_000_000_000,
+            cycles_reclaimed_at_ns: readiness_request.cycles_reclaimed_at_ns,
+            coordinator_intent_hash: intent.intent_hash,
+            coordinator_readiness_hash: readiness.readiness_hash,
+            prepared_at_ns: intent.request.prepared_at_ns,
+            completed_at_ns: 56,
+        };
+
+        assert_candid_round_trip(&preparation_request);
+        assert_candid_round_trip(&preparation_status);
+        assert_candid_round_trip(&preparation);
+        assert_candid_round_trip(&intent_request);
+        assert_candid_round_trip(&intent);
+        assert_candid_round_trip(&readiness_request);
+        assert_candid_round_trip(&readiness);
+    }
+
+    fn assert_root_deletion_execution_contract_round_trip(
+        store_deletion: &FleetSubnetRootStoreDeletionResponse,
+        readiness: &crate::dto::fleet_registry::FleetSubnetRootDeletionReadinessResponse,
+    ) {
+        use crate::dto::fleet_registry::{
+            FleetSubnetRootDeletionCompletionRequest, FleetSubnetRootDeletionExecutionRequest,
+            FleetSubnetRootDeletionExecutionResponse, FleetSubnetRootDeletionResponse,
+            FleetSubnetRootDeletionStatusRequest,
+        };
+
+        let executor = Principal::from_slice(&[49; 29]);
+        let execution_request = FleetSubnetRootDeletionExecutionRequest {
+            operation_id: store_deletion.operation_id,
+            fleet_subnet_root: store_deletion.fleet_subnet_root,
+            expected_readiness_hash: readiness.readiness_hash,
+            observed_module_hash: [50; 32],
+            observed_controllers: vec![executor],
+            observed_cycles_after_reclamation: 90_000_000_000,
+            observed_reserved_cycles: 0,
+            observed_idle_cycles_burned_per_day: 86_400,
+            observed_freezing_threshold_seconds: 1,
+        };
+        let execution = FleetSubnetRootDeletionExecutionResponse {
+            request: execution_request.clone(),
+            executor,
+            prepared_at_ns: 51,
+            execution_hash: [52; 32],
+        };
+        let completion_request = FleetSubnetRootDeletionCompletionRequest {
+            operation_id: store_deletion.operation_id,
+            fleet_subnet_root: store_deletion.fleet_subnet_root,
+            expected_execution_hash: execution.execution_hash,
+            observed_absent_at_ns: 53,
+        };
+        let status = FleetSubnetRootDeletionStatusRequest {
+            operation_id: store_deletion.operation_id,
+            fleet_subnet_root: store_deletion.fleet_subnet_root,
+        };
+        let deletion = FleetSubnetRootDeletionResponse {
+            operation_id: store_deletion.operation_id,
+            fleet_subnet_root: store_deletion.fleet_subnet_root,
+            coordinator: readiness.coordinator,
+            executor,
+            readiness_hash: readiness.readiness_hash,
+            execution_hash: execution.execution_hash,
+            observed_module_hash: execution_request.observed_module_hash,
+            observed_controllers: execution_request.observed_controllers.clone(),
+            observed_cycles_after_reclamation: 90_000_000_000,
+            observed_absent_at_ns: completion_request.observed_absent_at_ns,
+            completed_at_ns: 54,
+            deletion_hash: [55; 32],
+        };
+        assert_candid_round_trip(&execution_request);
+        assert_candid_round_trip(&execution);
+        assert_candid_round_trip(&completion_request);
+        assert_candid_round_trip(&status);
+        assert_candid_round_trip(&deletion);
     }
 
     fn assert_candid_round_trip<T>(value: &T)

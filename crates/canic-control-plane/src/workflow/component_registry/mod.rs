@@ -912,7 +912,7 @@ pub async fn advance_component_draining(
     match ComponentRegistryOps::advance_component_draining(request.component, request.operation_id)?
     {
         RootComponentDrainingAdvanceView::DescendantRemoval(removal) => {
-            let removal = advance_draining_removal_phase(*removal).await?;
+            let removal = Box::pin(advance_draining_removal_phase(*removal)).await?;
             Ok(component_draining_advance_removal_response(
                 request, removal,
             ))

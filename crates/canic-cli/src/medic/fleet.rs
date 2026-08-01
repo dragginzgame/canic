@@ -73,7 +73,6 @@ pub(super) fn fleet_environment_selection(options: &MedicOptions) -> (String, Me
 }
 
 pub(super) fn installed_fleet_checks(
-    options: &MedicOptions,
     icp_root: Option<&Path>,
     fleet: &FleetCatalogEntryV1,
     environment: &str,
@@ -84,13 +83,7 @@ pub(super) fn installed_fleet_checks(
     vec![
         check_config_path(icp_root, fleet),
         coordinator,
-        check_fleet_registry_observation(
-            options,
-            icp_root,
-            fleet,
-            environment,
-            coordinator_present,
-        ),
+        check_fleet_registry_observation(icp_root, fleet, environment, coordinator_present),
         check_coordinator_readiness_not_evaluated(coordinator_present),
     ]
 }
@@ -132,7 +125,6 @@ fn check_config_path(icp_root: Option<&Path>, fleet: &FleetCatalogEntryV1) -> Me
 }
 
 fn check_fleet_registry_observation(
-    options: &MedicOptions,
     icp_root: Option<&Path>,
     fleet: &FleetCatalogEntryV1,
     environment: &str,
@@ -156,8 +148,6 @@ fn check_fleet_registry_observation(
     let request = InstalledFleetRequest {
         fleet: fleet.fleet_name.to_string(),
         environment: environment.to_string(),
-        icp: options.icp.clone(),
-        detect_lost_local_root: true,
     };
 
     match resolve_installed_fleet_from_root(&request, root) {
@@ -183,7 +173,7 @@ pub(super) fn check_fleet_registry_not_evaluated(coordinator_present: bool) -> M
     )
 }
 
-pub(super) fn fleet_registry_observed_check(resolution: &InstalledFleetResolution) -> MedicCheck {
+fn fleet_registry_observed_check(resolution: &InstalledFleetResolution) -> MedicCheck {
     let entries = resolution.registry.entries.len();
     let roles = resolution.topology.roles_by_canister.len();
     let detail = format!(
@@ -276,25 +266,13 @@ const fn installed_fleet_source_for_medic(source: InstalledFleetSource) -> Medic
 }
 
 fn fleet_registry_error_check(error: InstalledFleetError) -> MedicCheck {
-    let source = match error {
-        InstalledFleetError::ReplicaQuery(_) | InstalledFleetError::LostLocalFleet { .. } => {
-            MedicSource::LocalReplica
-        }
-        InstalledFleetError::Icp(_) => MedicSource::IcpCli,
-        InstalledFleetError::NoInstalledFleet { .. }
-        | InstalledFleetError::FleetCatalog(_)
-        | InstalledFleetError::CoordinatorAnchoredTopologyUnavailable { .. }
-        | InstalledFleetError::Registry(_)
-        | InstalledFleetError::Io(_) => MedicSource::InstalledFleet,
-    };
-
     MedicCheck::fail(
         MedicCategory::Topology,
         "fleet_registry_unavailable",
         "registry",
         error.to_string(),
         "run canic status, then rerun canic medic fleet <fleet>",
-        source,
+        MedicSource::InstalledFleet,
     )
 }
 

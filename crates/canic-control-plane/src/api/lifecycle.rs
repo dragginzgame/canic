@@ -10,7 +10,9 @@ use canic_core::{
         FleetSubnetRootRegistrySyncResponse, FleetSubnetRootRemovalPublicationResponse,
     },
     dto::fleet_subnet_root::{
-        FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary, FleetSubnetRootDrainingRequest,
+        FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary,
+        FleetSubnetRootDeletionPreparationRequest, FleetSubnetRootDeletionPreparationResponse,
+        FleetSubnetRootDeletionPreparationStatusRequest, FleetSubnetRootDrainingRequest,
         FleetSubnetRootDrainingResponse, FleetSubnetRootDrainingStatusRequest,
         FleetSubnetRootFinalInventoryRequest, FleetSubnetRootFinalInventoryResponse,
         FleetSubnetRootFinalInventoryStatusRequest, FleetSubnetRootInitArgs,
@@ -190,6 +192,20 @@ impl LifecycleApi {
         request: FleetSubnetRootStoreDeletionStatusRequest,
     ) -> Result<FleetSubnetRootStoreDeletionResponse, canic_core::dto::error::Error> {
         crate::workflow::fleet_subnet_root::store_deletion_status(request).map_err(Into::into)
+    }
+
+    pub async fn prepare_fleet_subnet_root_deletion(
+        request: FleetSubnetRootDeletionPreparationRequest,
+    ) -> Result<FleetSubnetRootDeletionPreparationResponse, canic_core::dto::error::Error> {
+        crate::workflow::fleet_subnet_root::prepare_deletion(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub fn fleet_subnet_root_deletion_preparation_status(
+        request: FleetSubnetRootDeletionPreparationStatusRequest,
+    ) -> Result<FleetSubnetRootDeletionPreparationResponse, canic_core::dto::error::Error> {
+        crate::workflow::fleet_subnet_root::deletion_preparation_status(request).map_err(Into::into)
     }
 
     pub async fn synchronize_fleet_registry(

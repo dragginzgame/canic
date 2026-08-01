@@ -60,7 +60,7 @@ pub(super) fn write_completed_install_phase_receipt(
     receipt_scope.write_receipt(&receipt)
 }
 
-pub(super) fn completed_phase_role_receipt(
+fn completed_phase_role_receipt(
     check: &DeploymentCheckV1,
     phase: InstallPhaseLabel,
     role: &str,
@@ -166,10 +166,7 @@ struct PhaseReceiptInput<'a> {
 }
 
 impl InstallReceiptScope<'_> {
-    pub(super) fn with_execution_context(
-        self,
-        receipt: DeploymentReceiptV1,
-    ) -> DeploymentReceiptV1 {
+    fn with_execution_context(self, receipt: DeploymentReceiptV1) -> DeploymentReceiptV1 {
         match self.execution_context {
             Some(context) => receipt_with_execution_context(receipt, context),
             None => receipt,

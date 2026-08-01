@@ -1,8 +1,7 @@
 use super::super::*;
 use super::shared::sorted_unique;
 
-pub(in crate::deployment_truth) const AUTHORITY_PROFILE_OVERLAP_CODE: &str =
-    "authority_profile_overlap";
+const AUTHORITY_PROFILE_OVERLAP_CODE: &str = "authority_profile_overlap";
 
 pub(super) fn authority_profile_overlap_findings(plan: &DeploymentPlanV1) -> Vec<SafetyFindingV1> {
     let expected = sorted_unique(plan.authority_profile.expected_controllers.clone());

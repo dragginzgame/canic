@@ -21,18 +21,7 @@ const ICP_JSON_OUTPUT: &str = "json";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SubnetRegistryQuery {
-    pub(crate) source: SubnetRegistryQuerySource,
     pub entries: Vec<RegistryEntry>,
-}
-
-///
-/// SubnetRegistryQuerySource
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum SubnetRegistryQuerySource {
-    IcpCli,
-    LocalReplica,
 }
 
 ///
@@ -70,7 +59,6 @@ pub fn query_subnet_registry(
         candid_path,
     )?;
     Ok(SubnetRegistryQuery {
-        source: SubnetRegistryQuerySource::IcpCli,
         entries: parse_registry_entries(&output)?,
     })
 }
@@ -81,8 +69,5 @@ fn query_local_subnet_registry(
     icp_root: Option<&Path>,
 ) -> Result<SubnetRegistryQuery, SubnetRegistryQueryError> {
     let entries = replica_query::query_subnet_registry_entries(Some(environment), root, icp_root)?;
-    Ok(SubnetRegistryQuery {
-        source: SubnetRegistryQuerySource::LocalReplica,
-        entries,
-    })
+    Ok(SubnetRegistryQuery { entries })
 }

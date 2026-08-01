@@ -520,6 +520,56 @@ fn fleet_subnet_root_store_deletion_is_response_idempotent() {
 }
 
 #[test]
+fn fleet_subnet_root_physical_deletion_handoff_is_durable_and_costed() {
+    let root_prepare = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_fleet_subnet_root_deletion_prepare")
+        .expect("Fleet Subnet Root deletion preparation policy entry");
+    assert_eq!(
+        root_prepare.replay_policy,
+        ReplayPolicy::ResponseIdempotent {
+            command_kind: replay_command_kind("fleet_subnet_root.prepare_deletion.v1"),
+        }
+    );
+    assert_eq!(root_prepare.cost_class, CostClass::ValueTransfer);
+    assert_eq!(root_prepare.quota_policy, Some(VALUE_TRANSFER_QUOTA_V1));
+    assert_eq!(
+        root_prepare.cycle_reserve_policy,
+        Some(VALUE_TRANSFER_RESERVE_V1)
+    );
+
+    for endpoint in [
+        "canic_fleet_registry_root_deletion_readiness_prepare",
+        "canic_fleet_registry_root_deletion_ready",
+        "canic_fleet_registry_root_deletion_execution_begin",
+        "canic_fleet_registry_root_deletion_complete",
+    ] {
+        let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == endpoint)
+            .unwrap_or_else(|| panic!("missing root-deletion endpoint {endpoint}"));
+        assert!(matches!(
+            entry.replay_policy,
+            ReplayPolicy::ResponseIdempotent { .. }
+        ));
+        assert_eq!(entry.cost_class, CostClass::None);
+    }
+
+    for endpoint in [
+        "canic_fleet_subnet_root_deletion_preparation_status",
+        "canic_fleet_registry_root_deletion_execution_status",
+        "canic_fleet_registry_root_deletion_status",
+    ] {
+        let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == endpoint)
+            .unwrap_or_else(|| panic!("missing root-deletion status endpoint {endpoint}"));
+        assert_eq!(entry.endpoint_kind, EndpointKind::Query);
+        assert_eq!(entry.replay_policy, ReplayPolicy::QueryOrReadOnly);
+    }
+}
+
+#[test]
 fn fleet_registry_mirror_activation_is_snapshot_convergent() {
     let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()

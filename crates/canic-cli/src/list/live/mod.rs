@@ -10,8 +10,7 @@ use canic_host::{
     icp::{IcpCli, IcpDiagnostic, classify_icp_diagnostic},
     icp_config::resolve_current_canic_icp_root,
     installed_fleet::{
-        InstalledFleetError, InstalledFleetRequest, InstalledFleetResolution,
-        resolve_installed_fleet_from_root,
+        InstalledFleetRequest, InstalledFleetResolution, resolve_installed_fleet_from_root,
     },
     registry::RegistryEntry,
     release_set::artifact_root_path,
@@ -263,8 +262,6 @@ fn resolve_list_fleet(options: &ListOptions) -> Result<InstalledFleetResolution,
         &InstalledFleetRequest {
             fleet: options.target.clone(),
             environment: state_environment(options),
-            icp: options.icp.clone(),
-            detect_lost_local_root: true,
         },
         &icp_root,
     )
@@ -283,15 +280,6 @@ fn add_root_registry_hint(error: ListCommandError) -> ListCommandError {
                 return ListCommandError::Icp(source);
             };
             ListCommandError::IcpHint { source, hint }
-        }
-        ListCommandError::InstalledFleet(InstalledFleetError::Icp(source)) => {
-            let Some(hint) = source.external_output().and_then(root_registry_hint) else {
-                return ListCommandError::InstalledFleet(InstalledFleetError::Icp(source));
-            };
-            ListCommandError::InstalledFleetHint {
-                source: InstalledFleetError::Icp(source),
-                hint,
-            }
         }
         error => error,
     }

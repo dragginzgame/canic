@@ -12,14 +12,19 @@ use crate::{
 };
 use candid::Principal;
 use canic_core::{
-    control_plane_support::error::InternalError,
+    control_plane_support::{error::InternalError, ops::ic::IcOps},
     dto::fleet_registry::{
         FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
         FleetRegistryManifest, FleetRegistrySnapshotResponse, FleetRegistryVersion,
-        FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingPublicationResponse,
-        FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
-        FleetSubnetRootRemovalPublicationRequest, FleetSubnetRootRemovalPublicationResponse,
-        FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
+        FleetSubnetRootDeletionCompletionRequest, FleetSubnetRootDeletionExecutionRequest,
+        FleetSubnetRootDeletionExecutionResponse, FleetSubnetRootDeletionReadinessIntentRequest,
+        FleetSubnetRootDeletionReadinessIntentResponse, FleetSubnetRootDeletionReadinessRequest,
+        FleetSubnetRootDeletionReadinessResponse, FleetSubnetRootDeletionResponse,
+        FleetSubnetRootDeletionStatusRequest, FleetSubnetRootDrainingPublicationRequest,
+        FleetSubnetRootDrainingPublicationResponse, FleetSubnetRootJoinRequest,
+        FleetSubnetRootJoinResponse, FleetSubnetRootRemovalPublicationRequest,
+        FleetSubnetRootRemovalPublicationResponse, FleetSubnetRootSnapshotAcknowledgement,
+        FleetSubnetRootSnapshotAcknowledgementRequest,
     },
 };
 
@@ -97,6 +102,70 @@ impl FleetCoordinatorWorkflow {
         request: FleetSubnetRootRemovalPublicationRequest,
     ) -> Result<FleetSubnetRootRemovalPublicationResponse, InternalError> {
         FleetCoordinatorOps::publish_root_removed(caller, request)
+    }
+
+    pub(crate) fn prepare_root_deletion_readiness(
+        caller: Principal,
+        coordinator: Principal,
+        request: FleetSubnetRootDeletionReadinessIntentRequest,
+    ) -> Result<FleetSubnetRootDeletionReadinessIntentResponse, InternalError> {
+        FleetCoordinatorOps::prepare_root_deletion_readiness(
+            caller,
+            coordinator,
+            request,
+            IcOps::now_nanos(),
+        )
+    }
+
+    pub(crate) fn record_root_deletion_readiness(
+        caller: Principal,
+        coordinator: Principal,
+        request: FleetSubnetRootDeletionReadinessRequest,
+    ) -> Result<FleetSubnetRootDeletionReadinessResponse, InternalError> {
+        FleetCoordinatorOps::record_root_deletion_readiness(
+            caller,
+            coordinator,
+            request,
+            IcOps::now_nanos(),
+        )
+    }
+
+    pub(crate) fn begin_root_deletion_execution(
+        executor: Principal,
+        coordinator: Principal,
+        request: FleetSubnetRootDeletionExecutionRequest,
+    ) -> Result<FleetSubnetRootDeletionExecutionResponse, InternalError> {
+        FleetCoordinatorOps::begin_root_deletion_execution(
+            executor,
+            coordinator,
+            request,
+            IcOps::now_nanos(),
+        )
+    }
+
+    pub(crate) fn root_deletion_execution_status(
+        request: FleetSubnetRootDeletionStatusRequest,
+    ) -> Result<FleetSubnetRootDeletionExecutionResponse, InternalError> {
+        FleetCoordinatorOps::root_deletion_execution_status(request)
+    }
+
+    pub(crate) fn complete_root_deletion(
+        executor: Principal,
+        coordinator: Principal,
+        request: FleetSubnetRootDeletionCompletionRequest,
+    ) -> Result<FleetSubnetRootDeletionResponse, InternalError> {
+        FleetCoordinatorOps::complete_root_deletion(
+            executor,
+            coordinator,
+            request,
+            IcOps::now_nanos(),
+        )
+    }
+
+    pub(crate) fn root_deletion_status(
+        request: FleetSubnetRootDeletionStatusRequest,
+    ) -> Result<FleetSubnetRootDeletionResponse, InternalError> {
+        FleetCoordinatorOps::root_deletion_status(request)
     }
 
     pub(crate) fn version() -> Result<FleetRegistryVersion, InternalError> {

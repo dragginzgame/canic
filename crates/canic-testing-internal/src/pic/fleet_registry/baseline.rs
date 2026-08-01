@@ -132,15 +132,18 @@ mod tests {
             RootComponentSubtreeRemovalStopRequest,
         },
         dto::fleet_registry::{
-            FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingPublicationResponse,
-            FleetSubnetRootRemovalPublicationResponse,
+            FleetSubnetRootDeletionExecutionRequest, FleetSubnetRootDeletionExecutionResponse,
+            FleetSubnetRootDeletionStatusRequest, FleetSubnetRootDrainingPublicationRequest,
+            FleetSubnetRootDrainingPublicationResponse, FleetSubnetRootRemovalPublicationResponse,
         },
         dto::fleet_subnet_root::{
-            FleetSubnetRootDrainingRequest, FleetSubnetRootDrainingResponse,
-            FleetSubnetRootDrainingStatusRequest, FleetSubnetRootFinalInventoryRequest,
-            FleetSubnetRootFinalInventoryResponse, FleetSubnetRootFinalInventoryStatusRequest,
-            FleetSubnetRootRemovalRequest, FleetSubnetRootRemovalStatusRequest,
-            FleetSubnetRootStoreBindingFinalizationRequest,
+            FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
+            FleetSubnetRootDeletionPreparationRequest, FleetSubnetRootDeletionPreparationResponse,
+            FleetSubnetRootDeletionPreparationStatusRequest, FleetSubnetRootDrainingRequest,
+            FleetSubnetRootDrainingResponse, FleetSubnetRootDrainingStatusRequest,
+            FleetSubnetRootFinalInventoryRequest, FleetSubnetRootFinalInventoryResponse,
+            FleetSubnetRootFinalInventoryStatusRequest, FleetSubnetRootRemovalRequest,
+            FleetSubnetRootRemovalStatusRequest, FleetSubnetRootStoreBindingFinalizationRequest,
             FleetSubnetRootStoreBindingFinalizationResponse,
             FleetSubnetRootStoreBindingFinalizationStatusRequest,
             FleetSubnetRootStoreDeletionRequest, FleetSubnetRootStoreDeletionResponse,
@@ -149,7 +152,10 @@ mod tests {
         },
         protocol::{
             CANIC_CYCLE_BALANCE, CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,
-            CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN,
+            CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_BEGIN,
+            CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_STATUS,
+            CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARATION_STATUS,
+            CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARE, CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN,
             CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_FINALIZE,
             CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_STATUS,
             CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS, CANIC_FLEET_SUBNET_ROOT_REMOVAL_PUBLISH,
@@ -1153,6 +1159,164 @@ mod tests {
         assert_eq!(overview.publication.detached_binding, None);
         assert_eq!(overview.publication.retired_binding, None);
         assert!(overview.stores.is_empty());
+
+        assert_root_deletion_is_prepared_for_external_executor(
+            &fixture,
+            root_draining.operation_id,
+            final_inventory.inventory_hash,
+            deletion.deletion_hash,
+        );
+    }
+
+    #[cfg(test)]
+    fn assert_root_deletion_is_prepared_for_external_executor(
+        fixture: &ActiveComponentRegistryFixture,
+        operation_id: [u8; 32],
+        final_inventory_hash: [u8; 32],
+        store_deletion_hash: [u8; 32],
+    ) {
+        let status = fixture
+            .pic()
+            .canister_status(fixture.root, Some(Principal::anonymous()))
+            .expect("observe root before external deletion");
+        let idle_cycles_burned_per_day = nat_u128(&status.idle_cycles_burned_per_day);
+        let freezing_threshold_seconds = nat_u128(&status.settings.freezing_threshold);
+        let freezing_reserve = idle_cycles_burned_per_day
+            .checked_mul(freezing_threshold_seconds)
+            .expect("root freezing reserve")
+            .div_ceil(86_400);
+        let maximum_cycles_to_retain = freezing_reserve
+            .checked_add(FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES)
+            .expect("root deletion reserve");
+        let coordinator_cycles_before =
+            management_cycle_balance(fixture.pic(), fixture.coordinator);
+        let preparation_request = FleetSubnetRootDeletionPreparationRequest {
+            operation_id,
+            expected_store_deletion_hash: store_deletion_hash,
+            maximum_cycles_to_retain,
+            observed_reserved_cycles: nat_u128(&status.reserved_cycles),
+            observed_idle_cycles_burned_per_day: idle_cycles_burned_per_day,
+            observed_freezing_threshold_seconds: freezing_threshold_seconds,
+        };
+        let preparation: Result<FleetSubnetRootDeletionPreparationResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARE,
+                (preparation_request,),
+            )
+            .expect("prepare Fleet Subnet Root deletion transport");
+        let preparation = preparation.expect("prepare Fleet Subnet Root deletion");
+        assert_eq!(preparation.fleet_subnet_root, fixture.root);
+        assert_eq!(preparation.coordinator, fixture.coordinator);
+        assert_eq!(preparation.final_inventory_hash, final_inventory_hash);
+        assert_eq!(preparation.store_deletion_hash, store_deletion_hash);
+        assert!(
+            preparation.observed_cycles_before_reclamation > preparation.maximum_cycles_to_retain
+        );
+        assert!(
+            preparation.observed_cycles_after_reclamation <= preparation.maximum_cycles_to_retain
+        );
+        assert_ne!(preparation.coordinator_intent_hash, [0; 32]);
+        assert_ne!(preparation.coordinator_readiness_hash, [0; 32]);
+        assert!(
+            management_cycle_balance(fixture.pic(), fixture.coordinator)
+                > coordinator_cycles_before,
+            "root deletion must return excess cycles to the surviving Coordinator"
+        );
+        let durable: Result<FleetSubnetRootDeletionPreparationResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.root,
+                CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARATION_STATUS,
+                (FleetSubnetRootDeletionPreparationStatusRequest { operation_id },),
+            )
+            .expect("query root deletion preparation transport");
+        assert_eq!(
+            durable.expect("query root deletion preparation"),
+            preparation
+        );
+
+        assert_root_deletion_executor_intent(
+            fixture,
+            operation_id,
+            &preparation,
+            idle_cycles_burned_per_day,
+            freezing_threshold_seconds,
+        );
+    }
+
+    #[cfg(test)]
+    fn assert_root_deletion_executor_intent(
+        fixture: &ActiveComponentRegistryFixture,
+        operation_id: [u8; 32],
+        preparation: &FleetSubnetRootDeletionPreparationResponse,
+        idle_cycles_burned_per_day: u128,
+        freezing_threshold_seconds: u128,
+    ) {
+        let status = fixture
+            .pic()
+            .canister_status(fixture.root, Some(Principal::anonymous()))
+            .expect("independently observe deletion-ready root");
+        let mut controllers = status.settings.controllers.clone();
+        controllers.sort();
+        controllers.dedup();
+        let observed_module_hash: [u8; 32] = status
+            .module_hash
+            .as_deref()
+            .expect("installed root module")
+            .try_into()
+            .expect("root module hash");
+        let execution_request = FleetSubnetRootDeletionExecutionRequest {
+            operation_id,
+            fleet_subnet_root: fixture.root,
+            expected_readiness_hash: preparation.coordinator_readiness_hash,
+            observed_module_hash,
+            observed_controllers: controllers,
+            observed_cycles_after_reclamation: nat_u128(&status.cycles),
+            observed_reserved_cycles: nat_u128(&status.reserved_cycles),
+            observed_idle_cycles_burned_per_day: idle_cycles_burned_per_day,
+            observed_freezing_threshold_seconds: freezing_threshold_seconds,
+        };
+        let execution: Result<FleetSubnetRootDeletionExecutionResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.coordinator,
+                CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_BEGIN,
+                (execution_request,),
+            )
+            .expect("begin external root deletion transport");
+        let execution = execution.expect("begin external root deletion");
+        assert_eq!(execution.executor, Principal::anonymous());
+        assert_ne!(execution.execution_hash, [0; 32]);
+        let execution_status: Result<FleetSubnetRootDeletionExecutionResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.coordinator,
+                CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_STATUS,
+                (FleetSubnetRootDeletionStatusRequest {
+                    operation_id,
+                    fleet_subnet_root: fixture.root,
+                },),
+            )
+            .expect("query external root deletion intent transport");
+        assert_eq!(
+            execution_status.expect("query external root deletion intent"),
+            execution
+        );
+    }
+
+    #[cfg(test)]
+    fn nat_u128(value: &candid::Nat) -> u128 {
+        u128::try_from(value.0.clone()).expect("management cycle value fits u128")
+    }
+
+    #[cfg(test)]
+    fn management_cycle_balance(pic: &Pic, canister_id: Principal) -> u128 {
+        let status = pic
+            .canister_status(canister_id, Some(Principal::anonymous()))
+            .expect("observe Canister cycle balance through management status");
+        nat_u128(&status.cycles)
     }
 
     #[cfg(test)]

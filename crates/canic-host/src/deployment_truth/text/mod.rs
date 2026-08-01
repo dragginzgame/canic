@@ -1,12 +1,8 @@
 use super::*;
 
-mod authority;
 mod comparison;
-mod execution_preflight;
 
-pub use authority::*;
 pub use comparison::*;
-pub use execution_preflight::*;
 
 fn append_hard_failure_items(lines: &mut Vec<String>, label: &str, failures: &[SafetyFindingV1]) {
     if failures.is_empty() {

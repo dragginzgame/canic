@@ -16,6 +16,18 @@ pub const CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING: &str =
     "canic_fleet_registry_publish_root_draining";
 pub const CANIC_FLEET_REGISTRY_PUBLISH_ROOT_REMOVED: &str =
     "canic_fleet_registry_publish_root_removed";
+pub const CANIC_FLEET_REGISTRY_ROOT_DELETION_READINESS_PREPARE: &str =
+    "canic_fleet_registry_root_deletion_readiness_prepare";
+pub const CANIC_FLEET_REGISTRY_ROOT_DELETION_READY: &str =
+    "canic_fleet_registry_root_deletion_ready";
+pub const CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_BEGIN: &str =
+    "canic_fleet_registry_root_deletion_execution_begin";
+pub const CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_STATUS: &str =
+    "canic_fleet_registry_root_deletion_execution_status";
+pub const CANIC_FLEET_REGISTRY_ROOT_DELETION_COMPLETE: &str =
+    "canic_fleet_registry_root_deletion_complete";
+pub const CANIC_FLEET_REGISTRY_ROOT_DELETION_STATUS: &str =
+    "canic_fleet_registry_root_deletion_status";
 pub const CANIC_FLEET_SUBNET_ROOT_AUTHORITY: &str = "canic_fleet_subnet_root_authority";
 pub const CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY: &str =
     "canic_fleet_subnet_root_canister_summary";
@@ -37,6 +49,10 @@ pub const CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZATION_STATUS: &str =
 pub const CANIC_FLEET_SUBNET_ROOT_STORE_DELETE: &str = "canic_fleet_subnet_root_store_delete";
 pub const CANIC_FLEET_SUBNET_ROOT_STORE_DELETION_STATUS: &str =
     "canic_fleet_subnet_root_store_deletion_status";
+pub const CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARE: &str =
+    "canic_fleet_subnet_root_deletion_prepare";
+pub const CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARATION_STATUS: &str =
+    "canic_fleet_subnet_root_deletion_preparation_status";
 pub const CANIC_FLEET_REGISTRY_SYNCHRONIZE: &str = "canic_fleet_registry_synchronize";
 pub const CANIC_FLEET_REGISTRY_SYNC_STATUS: &str = "canic_fleet_registry_sync_status";
 pub const CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR: &str = "canic_fleet_registry_activate_mirror";

@@ -97,8 +97,6 @@ fn load_fleet_registry(
     let request = InstalledFleetRequest {
         fleet: options.fleet.clone(),
         environment: state_environment(options),
-        icp: options.icp.clone(),
-        detect_lost_local_root: false,
     };
     let root = resolve_endpoint_icp_root()?;
     Ok(resolve_installed_fleet_from_root(&request, &root)?

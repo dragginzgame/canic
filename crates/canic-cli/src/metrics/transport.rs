@@ -248,8 +248,6 @@ fn resolve_metrics_fleet(
         &InstalledFleetRequest {
             fleet: options.fleet.clone(),
             environment: options.environment.clone(),
-            icp: options.icp.clone(),
-            detect_lost_local_root: false,
         },
         &root,
     )

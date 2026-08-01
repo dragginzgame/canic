@@ -52,12 +52,6 @@ pub enum ListCommandError {
     #[error(transparent)]
     InstalledFleet(#[from] InstalledFleetError),
 
-    #[error("{source}\nHint: {hint}")]
-    InstalledFleetHint {
-        source: InstalledFleetError,
-        hint: &'static str,
-    },
-
     #[error("failed to resolve ICP project root: {0}")]
     IcpRoot(#[from] IcpConfigError),
 

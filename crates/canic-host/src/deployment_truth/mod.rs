@@ -68,9 +68,7 @@ pub use report::{
     LocalDeploymentCheckRequest, check_local_deployment, compare_plan_inventory_and_receipt,
     compare_plan_to_inventory, is_evidence_conflict_finding_code, safety_report_from_diff,
 };
-pub use text::{
-    authority_plan_text, deployment_comparison_report_text, deployment_execution_preflight_text,
-};
+pub use text::deployment_comparison_report_text;
 
 pub const DEPLOYMENT_TRUTH_SCHEMA_VERSION: u32 = 1;
 const ROOT_ROLE: &str = "root";
