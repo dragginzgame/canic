@@ -1009,7 +1009,7 @@ impl IcpRefillRecordOps {
         })
     }
 
-    pub fn mark_cycles_sent_overflow(
+    fn mark_cycles_sent_overflow(
         id: u64,
         error_message: String,
         now_ns: u64,

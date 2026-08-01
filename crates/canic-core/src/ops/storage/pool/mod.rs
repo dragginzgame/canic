@@ -84,7 +84,7 @@ impl PoolOps {
         );
     }
 
-    pub fn register_pending_reset(
+    fn register_pending_reset(
         pid: Principal,
         role: Option<CanisterRole>,
         parent: Option<Principal>,

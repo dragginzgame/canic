@@ -61,7 +61,7 @@ pub struct ShardingPolicy;
 
 impl ShardingPolicy {
     #[must_use]
-    pub const fn can_create(metrics: PoolMetrics, max_shards: u32) -> bool {
+    const fn can_create(metrics: PoolMetrics, max_shards: u32) -> bool {
         metrics.active_count < max_shards
     }
 

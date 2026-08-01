@@ -198,7 +198,7 @@ fn map_existing_replay_decision(
     }
 }
 
-pub(super) fn recover_staged_response(
+fn recover_staged_response(
     ctx: &RootContext,
     pending: &ReplayPending,
     reason: RecoveryReason,

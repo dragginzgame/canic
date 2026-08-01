@@ -127,7 +127,7 @@ pub fn validate_public_delegated_token_prepare(
 
 /// Return whether a scope is safe to issue from the open prepare endpoint.
 #[must_use]
-pub fn public_delegated_token_prepare_scope(scope: &str) -> bool {
+fn public_delegated_token_prepare_scope(scope: &str) -> bool {
     scope == cap::SESSION || scope == cap::VERIFY
 }
 

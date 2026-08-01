@@ -45,7 +45,7 @@ impl TemplateChunkedOps {
     // Return staged-release status for every approved manifest in deterministic role order.
     #[cfg(feature = "root-control-plane")]
     #[must_use]
-    pub fn approved_staging_status_responses() -> Vec<TemplateStagingStatusResponse> {
+    fn approved_staging_status_responses() -> Vec<TemplateStagingStatusResponse> {
         let chunk_counts = TemplateChunkStore::count_by_release();
         let mut staged = TemplateManifestOps::approved_manifests_response()
             .into_iter()

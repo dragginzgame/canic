@@ -393,7 +393,7 @@ pub(super) fn log_icp_refill_replay_conflict(operation_id: [u8; 32], decision: &
     );
 }
 
-pub(super) fn log_icp_refill_resumable_abort(operation: &IcpRefillOperation) {
+fn log_icp_refill_resumable_abort(operation: &IcpRefillOperation) {
     crate::log!(
         crate::log::Topic::Cycles,
         Info,
@@ -412,7 +412,7 @@ pub(super) fn operation_id_display(operation_id: [u8; 32]) -> String {
     OperationId::from_bytes(operation_id).to_string()
 }
 
-pub(super) fn log_icp_refill_commit(operation: &IcpRefillOperation) {
+fn log_icp_refill_commit(operation: &IcpRefillOperation) {
     crate::log!(
         crate::log::Topic::Cycles,
         Ok,

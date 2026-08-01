@@ -13,6 +13,7 @@
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum IcpDiagnostic {
     AlreadyInstalled,
+    CanisterNotFound { canister: String },
     ProjectManifestMissing,
     LocalNetworkNotRunning,
     MethodMissing,
@@ -36,6 +37,9 @@ pub fn classify_icp_diagnostic(message: &str) -> Option<IcpDiagnostic> {
         || message.contains("the local network for this project is not running")
     {
         return Some(IcpDiagnostic::LocalNetworkNotRunning);
+    }
+    if let Some(canister) = replica_canister_not_found(message) {
+        return Some(IcpDiagnostic::CanisterNotFound { canister });
     }
     if message.contains("has no query method")
         || message.contains("method not found")
@@ -62,6 +66,21 @@ pub fn classify_icp_diagnostic(message: &str) -> Option<IcpDiagnostic> {
     }
 
     None
+}
+
+fn replica_canister_not_found(message: &str) -> Option<String> {
+    const CANISTER_PREFIX: &str = "Canister ";
+    const SUFFIX: &str = " not found";
+
+    if !message.contains("IC0301") && !message.contains("code=3 message=Canister ") {
+        return None;
+    }
+    let start = message.find(CANISTER_PREFIX)? + CANISTER_PREFIX.len();
+    let rest = &message[start..];
+    let end = rest.find(SUFFIX)?;
+    let canister = &rest[..end];
+    (!canister.is_empty() && !canister.chars().any(char::is_whitespace))
+        .then(|| canister.to_string())
 }
 
 fn foreign_local_replica_owner(message: &str) -> Option<(String, String)> {
@@ -121,6 +140,18 @@ mod tests {
                 IcpDiagnostic::CanisterIdMissing,
             ),
             (
+                "local replica rejected query: code=3 message=Canister uxrrr-q7777-77774-qaaaq-cai not found",
+                IcpDiagnostic::CanisterNotFound {
+                    canister: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
+                },
+            ),
+            (
+                "replica rejected management status: IC0301: Canister uxrrr-q7777-77774-qaaaq-cai not found",
+                IcpDiagnostic::CanisterNotFound {
+                    canister: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
+                },
+            ),
+            (
                 "canister contains no Wasm module",
                 IcpDiagnostic::CanisterWasmMissing,
             ),
@@ -148,6 +179,16 @@ mod tests {
     fn leaves_unknown_diagnostics_unclassified() {
         assert_eq!(
             classify_icp_diagnostic("unexpected transport failure"),
+            None
+        );
+        assert_eq!(
+            classify_icp_diagnostic(
+                "transport failure while checking whether Canister uxrrr-q7777-77774-qaaaq-cai was not found"
+            ),
+            None
+        );
+        assert_eq!(
+            classify_icp_diagnostic("Canister uxrrr-q7777-77774-qaaaq-cai not found"),
             None
         );
     }

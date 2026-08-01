@@ -141,7 +141,7 @@ impl ConfigOps {
     }
 
     /// Resolve the unique Component Spec structurally containing one role.
-    pub(crate) fn try_get_component_spec_id_by_role(
+    fn try_get_component_spec_id_by_role(
         canister_role: &CanisterRole,
     ) -> Result<ComponentSpecId, InternalError> {
         let config = Config::get()?;
@@ -202,7 +202,7 @@ impl ConfigOps {
     /// Fetch the configuration record for the current Component.
     ///
     /// Requires that environment initialization has completed.
-    pub fn current_component_spec() -> Result<ComponentSpecConfig, InternalError> {
+    fn current_component_spec() -> Result<ComponentSpecConfig, InternalError> {
         let component_spec = EnvOps::component_spec()?;
 
         Self::try_get_component_spec(&component_spec)

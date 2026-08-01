@@ -163,7 +163,7 @@ impl ModuleSourceRuntimeApi {
     ///
     /// Panics when the same role has already been registered with a different
     /// embedded module source in this process.
-    pub fn register_embedded_module_source(role: CanisterRole, source: ApprovedModuleSource) {
+    fn register_embedded_module_source(role: CanisterRole, source: ApprovedModuleSource) {
         let sources = EMBEDDED_MODULE_SOURCES.get_or_init(|| Mutex::new(BTreeMap::new()));
         let mut sources = sources
             .lock()

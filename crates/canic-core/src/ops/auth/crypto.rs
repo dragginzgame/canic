@@ -5,31 +5,17 @@
 //! Boundary: private auth helper for canonical payload hashing.
 
 use super::ROLE_ATTESTATION_PROOF_HASH_DOMAIN;
-use crate::{
-    InternalError,
-    dto::auth::RoleAttestation,
-    ops::{auth::AuthValidationError, prelude::*},
-};
+use crate::{InternalError, dto::auth::RoleAttestation, ops::auth::AuthValidationError};
 use candid::encode_one;
 use sha2::{Digest, Sha256};
-
-pub(super) fn encode_candid<T: CandidType>(
-    context: &'static str,
-    value: &T,
-) -> Result<Vec<u8>, InternalError> {
-    encode_one(value).map_err(|err| {
-        AuthValidationError::EncodeFailed {
-            context,
-            source: err,
-        }
-        .into()
-    })
-}
 
 pub(super) fn role_attestation_hash(
     attestation: &RoleAttestation,
 ) -> Result<[u8; 32], InternalError> {
-    let payload = encode_candid("role attestation", attestation)?;
+    let payload = encode_one(attestation).map_err(|err| AuthValidationError::EncodeFailed {
+        context: "role attestation",
+        source: err,
+    })?;
     Ok(domain_separated_hash(
         ROLE_ATTESTATION_PROOF_HASH_DOMAIN,
         payload,

@@ -1035,7 +1035,7 @@ impl IntentStore {
         }
     }
 
-    pub(crate) fn import_meta(data: IntentMetaData) {
+    fn import_meta(data: IntentMetaData) {
         Self::set_meta(data.record);
     }
 
@@ -1099,7 +1099,7 @@ impl IntentStore {
         }
     }
 
-    pub(crate) fn import_pending(data: IntentPendingData) {
+    fn import_pending(data: IntentPendingData) {
         INTENT_PENDING.with_borrow_mut(|map| {
             map.clear_new();
             for entry in data.entries {
@@ -1122,7 +1122,7 @@ impl IntentStore {
         }
     }
 
-    pub(crate) fn import_expiry_index(data: IntentExpiryIndexData) {
+    fn import_expiry_index(data: IntentExpiryIndexData) {
         INTENT_EXPIRY_INDEX.with_borrow_mut(|map| {
             map.clear_new();
             for entry in data.entries {

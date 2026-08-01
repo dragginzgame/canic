@@ -401,7 +401,7 @@ pub async fn root_set_subnet_id() -> Result<(), InternalError> {
 /// Import any statically configured pool canisters for this subnet.
 ///
 /// Failures are summarized so bootstrap can continue.
-pub async fn root_import_pool_from_config(wait_for_queued_imports: bool) {
+async fn root_import_pool_from_config(wait_for_queued_imports: bool) {
     let data = match RootBootstrapContext::load() {
         Ok(data) => data,
         Err(err) => {

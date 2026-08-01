@@ -39,7 +39,7 @@ pub fn register_update_limit(method: &'static str, max_bytes: usize) {
 /// # Panics
 ///
 /// Panics if the process-local update payload limit registry mutex is poisoned.
-pub fn update_limit_for(method: &str) -> Result<Option<usize>, DuplicateUpdatePayloadLimit> {
+fn update_limit_for(method: &str) -> Result<Option<usize>, DuplicateUpdatePayloadLimit> {
     let limits = UPDATE_LIMITS
         .lock()
         .expect("update payload limit registry poisoned");

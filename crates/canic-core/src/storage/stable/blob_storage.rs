@@ -102,7 +102,7 @@ impl BlobRootHashKey {
     }
 
     #[cfg(all(test, feature = "blob-storage"))]
-    pub fn into_hash(self) -> Result<BlobRootHash, crate::model::blob_storage::BlobRootHashError> {
+    fn into_hash(self) -> Result<BlobRootHash, crate::model::blob_storage::BlobRootHashError> {
         BlobRootHash::try_from(self.value.into_string())
     }
 }
@@ -534,7 +534,7 @@ impl BlobStorageStore {
     }
 
     #[cfg(test)]
-    pub(crate) fn import_stored_blobs(data: StoredBlobsData) {
+    fn import_stored_blobs(data: StoredBlobsData) {
         STORED_BLOBS.with_borrow_mut(|map| {
             map.clear_new();
             for entry in data.entries {
@@ -544,7 +544,7 @@ impl BlobStorageStore {
     }
 
     #[cfg(test)]
-    pub(crate) fn import_pending_deletions(data: BlobDeletionPendingData) {
+    fn import_pending_deletions(data: BlobDeletionPendingData) {
         BLOB_DELETION_PENDING.with_borrow_mut(|map| {
             map.clear_new();
             for entry in data.entries {
@@ -554,7 +554,7 @@ impl BlobStorageStore {
     }
 
     #[cfg(test)]
-    pub(crate) fn import_gateway_principals(data: StorageGatewayPrincipalsData) {
+    fn import_gateway_principals(data: StorageGatewayPrincipalsData) {
         STORAGE_GATEWAY_PRINCIPALS.with_borrow_mut(|map| {
             map.clear_new();
             for record in data.entries {
