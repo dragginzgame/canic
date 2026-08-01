@@ -16,7 +16,8 @@ Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
   deletion, reconciling exact management status through stop, no-shim delete
   and typed absence before the surviving Coordinator records completion, and
   advances the embedded `ic-query` host library to `0.21.1`; it also removes a
-  stranded local-access facade and tightens same-file-only internal surfaces.
+  stranded local-access facade after moving reference canisters onto the
+  endpoint access DSL, and tightens same-file-only internal surfaces.
 
 - `0.100.74` durably hands a removed Fleet Subnet Root to one external
   controller/executor and returns excess cycles to the surviving Coordinator
