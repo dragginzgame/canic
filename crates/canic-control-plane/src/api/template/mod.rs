@@ -14,7 +14,9 @@ use crate::{
 #[cfg(feature = "wasm-store-canister")]
 use crate::{
     dto::template::{
-        TemplateChunkResponse, WasmStoreCatalogEntryResponse, WasmStoreStatusResponse,
+        TemplateChunkResponse, WasmStoreCatalogEntryResponse,
+        WasmStoreDeletionCycleReclamationRequest, WasmStoreDeletionCycleReclamationResponse,
+        WasmStoreStatusResponse,
     },
     ids::{TemplateVersion, WasmStoreGcMode},
     ops::storage::template::{WasmStoreGcExecutionStats, WasmStoreGcOps},
@@ -297,6 +299,15 @@ impl WasmStoreCanisterApi {
         );
 
         Ok(())
+    }
+
+    // Return transferable cycles to the authenticated root before physical Store deletion.
+    pub async fn reclaim_deletion_cycles(
+        request: WasmStoreDeletionCycleReclamationRequest,
+    ) -> Result<WasmStoreDeletionCycleReclamationResponse, Error> {
+        crate::workflow::wasm_store::reclaim_deletion_cycles(request)
+            .await
+            .map_err(Error::from)
     }
 
     // Return one deterministic chunk for one local template release.

@@ -121,3 +121,21 @@ fn publication_effect_endpoints_delegate_cost_admission_to_root_workflow() {
         assert_eq!(entry.cycle_reserve_policy, None);
     }
 }
+
+#[test]
+fn store_deletion_cycle_reclamation_is_guarded_and_convergent() {
+    let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == CANIC_WASM_STORE_RECLAIM_DELETION_CYCLES)
+        .expect("Store deletion cycle-reclamation entry");
+
+    assert_eq!(entry.endpoint_kind, EndpointKind::Update);
+    assert!(matches!(
+        entry.replay_policy,
+        ReplayPolicy::SnapshotConvergent { command_kind }
+            if command_kind.as_str() == "wasm_store.reclaim_deletion_cycles.v1"
+    ));
+    assert_eq!(entry.cost_class, CostClass::ValueTransfer);
+    assert_eq!(entry.quota_policy, Some(VALUE_TRANSFER_QUOTA_V1));
+    assert_eq!(entry.cycle_reserve_policy, Some(VALUE_TRANSFER_RESERVE_V1));
+}

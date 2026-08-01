@@ -1,6 +1,7 @@
 use crate::{
     dto::template::{
         TemplateChunkSetInfoResponse, TemplateManifestInput, WasmStoreCatalogEntryResponse,
+        WasmStoreDeletionCycleReclamationRequest, WasmStoreDeletionCycleReclamationResponse,
         WasmStoreStatusResponse,
     },
     ids::{TemplateId, TemplateVersion, WasmStoreBinding},
@@ -62,6 +63,18 @@ pub(super) async fn store_begin_gc(store_pid: Principal) -> Result<(), InternalE
 // Mark one local wasm store as having completed the current local GC pass.
 pub(super) async fn store_complete_gc(store_pid: Principal) -> Result<(), InternalError> {
     WasmStoreInternalClient::new(store_pid).complete_gc().await
+}
+
+// Return transferable cycles from one empty GC-complete Store to its authenticated root.
+pub(super) async fn store_reclaim_deletion_cycles(
+    store_pid: Principal,
+    maximum_cycles_to_retain: u128,
+) -> Result<WasmStoreDeletionCycleReclamationResponse, InternalError> {
+    WasmStoreInternalClient::new(store_pid)
+        .reclaim_deletion_cycles(WasmStoreDeletionCycleReclamationRequest {
+            maximum_cycles_to_retain,
+        })
+        .await
 }
 
 // Fetch one deterministic chunk for one release from one wasm store.

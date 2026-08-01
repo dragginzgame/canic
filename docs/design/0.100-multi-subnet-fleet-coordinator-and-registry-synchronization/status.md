@@ -1,15 +1,15 @@
 # Canic 0.100 Implementation Status
 
-Date: 2026-07-31
+Date: 2026-08-01
 
 - State: implementation in progress.
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.71`.
-- Latest published release: `v0.100.71` at
-  `881901568949d10c87a8802400f48ef635c8c68b`.
-- Open patch draft: `0.100.72`; no package-version change has been authorized.
+- Workspace package version: `0.100.72`.
+- Latest published release: `v0.100.72` at
+  `6f9659686990e3a4b30936527e98d8e931b458b6`.
+- Open patch draft: `0.100.73`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -941,19 +941,29 @@ Canisters and active Store binding remain present. The same release retains
 the compatible replay, evidence, CLI target and publication-metric owner
 consolidation already in progress.
 
-Open 0.100.72 explicitly pins the sole initial Store as the active publication
+Released 0.100.72 explicitly pins the sole initial Store as the active publication
 binding, then finalizes it only after the exact 0.100.71 reclamation receipt is
 durable. One pre-effect intent binds that receipt, Store, canonical binding and
 source generation. Exact retry resumes from active, detached or retired and
 accepts terminal state only when every slot is empty at source generation plus
 three. The Store remains installed and retained in runtime inventory. The same
-open patch consolidates root-authority and active-runtime validation under
+release consolidates root-authority and active-runtime validation under
 workflow owners.
+
+Open 0.100.73 freezes that exact binding-finalization receipt plus the Store's
+installed module hash, complete canonical controller set and pre-reclamation
+cycle balance before a management effect. The empty Store returns excess
+cycles to the root under a value-transfer guard, and the root durably records
+an independently observed balance within its freezing-plus-execution ceiling
+before stop. It then resumes from exact running, stopped or typed-absent state,
+removes the Store from both local inventories only after independently observed
+absence, and retains one response-idempotent terminal receipt. The Fleet Subnet
+Root remains installed with its complete removal history.
 
 ## Next Action
 
-Freeze physical Store deletion only after the exact binding-finalization
-receipt, execute it through a durable pre-effect intent and reconcile an
-uncertain management response through independently observed typed absence.
-Physical Fleet Subnet Root deletion remains later. An unreachable root or
-Subnet is not deletion evidence.
+Freeze physical Fleet Subnet Root deletion only after the exact Store-deletion
+receipt. Because a root cannot durably receipt its own disappearance, bind one
+external executor to a pre-effect intent and require independently observed
+typed absence before terminal completion. An unreachable root or Subnet is not
+deletion evidence.

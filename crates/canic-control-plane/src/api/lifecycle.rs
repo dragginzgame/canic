@@ -17,7 +17,8 @@ use canic_core::{
         FleetSubnetRootRemovalRequest, FleetSubnetRootRemovalStatusRequest,
         FleetSubnetRootStoreBindingFinalizationRequest,
         FleetSubnetRootStoreBindingFinalizationResponse,
-        FleetSubnetRootStoreBindingFinalizationStatusRequest,
+        FleetSubnetRootStoreBindingFinalizationStatusRequest, FleetSubnetRootStoreDeletionRequest,
+        FleetSubnetRootStoreDeletionResponse, FleetSubnetRootStoreDeletionStatusRequest,
         FleetSubnetRootStoreReclamationRequest, FleetSubnetRootStoreReclamationResponse,
         FleetSubnetRootStoreReclamationStatusRequest,
     },
@@ -177,6 +178,20 @@ impl LifecycleApi {
             .map_err(Into::into)
     }
 
+    pub async fn delete_fleet_subnet_root_store(
+        request: FleetSubnetRootStoreDeletionRequest,
+    ) -> Result<FleetSubnetRootStoreDeletionResponse, canic_core::dto::error::Error> {
+        crate::workflow::fleet_subnet_root::delete_store(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub fn fleet_subnet_root_store_deletion_status(
+        request: FleetSubnetRootStoreDeletionStatusRequest,
+    ) -> Result<FleetSubnetRootStoreDeletionResponse, canic_core::dto::error::Error> {
+        crate::workflow::fleet_subnet_root::store_deletion_status(request).map_err(Into::into)
+    }
+
     pub async fn synchronize_fleet_registry(
         request: FleetSubnetRootRegistrySyncRequest,
     ) -> Result<FleetSubnetRootRegistrySyncResponse, canic_core::dto::error::Error> {
@@ -287,7 +302,7 @@ impl LifecycleApi {
     pub async fn advance_component_draining(
         request: RootComponentDrainingAdvanceRequest,
     ) -> Result<RootComponentDrainingAdvanceResponse, canic_core::dto::error::Error> {
-        crate::workflow::component_registry::advance_component_draining(request)
+        Box::pin(crate::workflow::component_registry::advance_component_draining(request))
             .await
             .map_err(Into::into)
     }

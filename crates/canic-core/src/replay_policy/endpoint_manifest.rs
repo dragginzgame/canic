@@ -153,6 +153,11 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     ),
     query_read_only("canic_fleet_subnet_root_store_binding_finalization_status"),
     update_response_idempotent(
+        "canic_fleet_subnet_root_store_delete",
+        command_kind("fleet_subnet_root.delete_store.v1"),
+    ),
+    query_read_only("canic_fleet_subnet_root_store_deletion_status"),
+    update_response_idempotent(
         "canic_fleet_subnet_root_draining_inventory_finalize",
         command_kind("fleet_subnet_root.finalize_inventory.v1"),
     ),
@@ -370,6 +375,13 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     update_monotonic_transition(
         "canic_wasm_store_prepare_gc",
         command_kind("wasm_store.prepare_gc.v1"),
+    ),
+    update_costed_snapshot_convergent(
+        "canic_wasm_store_reclaim_deletion_cycles",
+        command_kind("wasm_store.reclaim_deletion_cycles.v1"),
+        CostClass::ValueTransfer,
+        Some(VALUE_TRANSFER_QUOTA_V1),
+        Some(VALUE_TRANSFER_RESERVE_V1),
     ),
     update_monotonic_transition(
         "canic_wasm_store_publish_chunk",
