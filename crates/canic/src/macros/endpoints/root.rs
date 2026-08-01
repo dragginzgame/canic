@@ -167,6 +167,20 @@ macro_rules! canic_emit_root_admin_endpoints {
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::reserve_component_allocation(request).await
         }
 
+        #[$crate::canic_update(internal, public)]
+        async fn canic_root_peer_component_allocate(
+            request: ::canic::dto::component_registry::RootComponentAllocationRequest,
+        ) -> Result<::canic::dto::component_registry::RootComponentAllocationResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::reserve_peer_component_allocation(request).await
+        }
+
+        #[$crate::canic_query(internal, public)]
+        async fn canic_root_peer_component_allocation_status(
+            request: ::canic::dto::component_registry::RootComponentAllocationStatusRequest,
+        ) -> Result<::canic::dto::component_registry::RootComponentAllocationResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::peer_component_allocation_status(request)
+        }
+
         #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_root_component_allocation_status(
             request: ::canic::dto::component_registry::RootComponentAllocationStatusRequest,
@@ -370,11 +384,25 @@ macro_rules! canic_emit_root_admin_endpoints {
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::create_component_allocation(request).await
         }
 
+        #[$crate::canic_update(internal, public)]
+        async fn canic_root_peer_component_create(
+            request: ::canic::dto::component_registry::RootComponentCreationRequest,
+        ) -> Result<::canic::dto::component_registry::RootComponentAllocationResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::create_peer_component_allocation(request).await
+        }
+
         #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_root_component_install(
             request: ::canic::dto::component_registry::RootComponentInstallRequest,
         ) -> Result<::canic::dto::component_registry::RootComponentAllocationResponse, ::canic::Error> {
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::install_component_allocation(request).await
+        }
+
+        #[$crate::canic_update(internal, public)]
+        async fn canic_root_peer_component_install(
+            request: ::canic::dto::component_registry::RootComponentInstallRequest,
+        ) -> Result<::canic::dto::component_registry::RootComponentAllocationResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::install_peer_component_allocation(request).await
         }
 
         #[$crate::canic_update(requires(caller::is_controller()))]
@@ -384,11 +412,25 @@ macro_rules! canic_emit_root_admin_endpoints {
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::commit_component_allocation(request).await
         }
 
+        #[$crate::canic_update(internal, public)]
+        async fn canic_root_peer_component_commit(
+            request: ::canic::dto::component_registry::RootComponentCommitRequest,
+        ) -> Result<::canic::dto::component_registry::RootComponentCommitResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::commit_peer_component_allocation(request).await
+        }
+
         #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_root_component_directory_prepare(
             request: ::canic::dto::component_registry::RootComponentDirectoryPreparationRequest,
         ) -> Result<::canic::dto::component_registry::RootComponentDirectoryPreparationResponse, ::canic::Error> {
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_component_directories(request).await
+        }
+
+        #[$crate::canic_update(internal, public)]
+        async fn canic_root_peer_component_directory_prepare(
+            request: ::canic::dto::component_registry::RootComponentDirectoryPreparationRequest,
+        ) -> Result<::canic::dto::component_registry::RootComponentDirectoryPreparationResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_peer_component_directories(request).await
         }
 
         #[$crate::canic_update(requires(caller::is_controller()))]
@@ -398,11 +440,25 @@ macro_rules! canic_emit_root_admin_endpoints {
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::activate_component_runtime(request).await
         }
 
+        #[$crate::canic_update(internal, public)]
+        async fn canic_root_peer_component_runtime_activate(
+            request: ::canic::dto::component_registry::RootComponentRuntimeActivationRequest,
+        ) -> Result<::canic::dto::component_registry::RootComponentRuntimeActivationResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::activate_peer_component_runtime(request).await
+        }
+
         #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_root_component_membership_activate(
             request: ::canic::dto::component_registry::RootComponentMembershipActivationRequest,
         ) -> Result<::canic::dto::component_registry::RootComponentMembershipActivationResponse, ::canic::Error> {
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::activate_component_membership(request).await
+        }
+
+        #[$crate::canic_update(internal, public)]
+        async fn canic_root_peer_component_membership_activate(
+            request: ::canic::dto::component_registry::RootComponentMembershipActivationRequest,
+        ) -> Result<::canic::dto::component_registry::RootComponentMembershipActivationResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::activate_peer_component_membership(request).await
         }
 
         #[$crate::canic_query(requires(caller::is_controller()))]

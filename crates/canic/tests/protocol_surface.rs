@@ -804,6 +804,16 @@ fn assert_component_registry_protocol_constants() {
             "canic_root_component_allocation_status",
         ),
         (
+            canic::protocol::CANIC_ROOT_PEER_COMPONENT_ALLOCATE,
+            canic_core::protocol::CANIC_ROOT_PEER_COMPONENT_ALLOCATE,
+            "canic_root_peer_component_allocate",
+        ),
+        (
+            canic::protocol::CANIC_ROOT_PEER_COMPONENT_ALLOCATION_STATUS,
+            canic_core::protocol::CANIC_ROOT_PEER_COMPONENT_ALLOCATION_STATUS,
+            "canic_root_peer_component_allocation_status",
+        ),
+        (
             canic::protocol::CANIC_ROOT_COMPONENT_CHILD_ALLOCATE,
             canic_core::protocol::CANIC_ROOT_COMPONENT_CHILD_ALLOCATE,
             "canic_root_component_child_allocate",
@@ -969,6 +979,36 @@ fn assert_component_registry_protocol_constants() {
             "canic_root_component_membership_activate",
         ),
         (
+            canic::protocol::CANIC_ROOT_PEER_COMPONENT_CREATE,
+            canic_core::protocol::CANIC_ROOT_PEER_COMPONENT_CREATE,
+            "canic_root_peer_component_create",
+        ),
+        (
+            canic::protocol::CANIC_ROOT_PEER_COMPONENT_INSTALL,
+            canic_core::protocol::CANIC_ROOT_PEER_COMPONENT_INSTALL,
+            "canic_root_peer_component_install",
+        ),
+        (
+            canic::protocol::CANIC_ROOT_PEER_COMPONENT_COMMIT,
+            canic_core::protocol::CANIC_ROOT_PEER_COMPONENT_COMMIT,
+            "canic_root_peer_component_commit",
+        ),
+        (
+            canic::protocol::CANIC_ROOT_PEER_COMPONENT_DIRECTORY_PREPARE,
+            canic_core::protocol::CANIC_ROOT_PEER_COMPONENT_DIRECTORY_PREPARE,
+            "canic_root_peer_component_directory_prepare",
+        ),
+        (
+            canic::protocol::CANIC_ROOT_PEER_COMPONENT_RUNTIME_ACTIVATE,
+            canic_core::protocol::CANIC_ROOT_PEER_COMPONENT_RUNTIME_ACTIVATE,
+            "canic_root_peer_component_runtime_activate",
+        ),
+        (
+            canic::protocol::CANIC_ROOT_PEER_COMPONENT_MEMBERSHIP_ACTIVATE,
+            canic_core::protocol::CANIC_ROOT_PEER_COMPONENT_MEMBERSHIP_ACTIVATE,
+            "canic_root_peer_component_membership_activate",
+        ),
+        (
             canic::protocol::CANIC_COMPONENT_RUNTIME_DIRECTORY_PREPARE,
             canic_core::protocol::CANIC_COMPONENT_RUNTIME_DIRECTORY_PREPARE,
             "canic_component_runtime_directory_prepare",
@@ -1035,6 +1075,7 @@ fn assert_root_registry_mirror_guards(root: &str) {
             .contains("canic_update(requires(caller::is_controller()))"),
         "root Component allocation must remain a controller-guarded update"
     );
+    assert_peer_component_guards(root);
     assert!(
         preceding_attribute_context(root, "async fn canic_root_component_allocation_status(")
             .contains("canic_query(requires(caller::is_controller()))"),
@@ -1093,6 +1134,35 @@ fn assert_root_registry_mirror_guards(root: &str) {
             .contains("canic_query(internal, public)"),
         "root Component Directory pages must remain public queries authenticated by workflow"
     );
+}
+
+fn assert_peer_component_guards(root: &str) {
+    assert!(
+        preceding_attribute_context(root, "async fn canic_root_peer_component_allocate(")
+            .contains("canic_update(internal, public)"),
+        "peer Component allocation must remain a public update authenticated by workflow"
+    );
+    assert!(
+        preceding_attribute_context(
+            root,
+            "async fn canic_root_peer_component_allocation_status("
+        )
+        .contains("canic_query(internal, public)"),
+        "peer Component allocation status must remain a public query authenticated by workflow"
+    );
+    for endpoint in [
+        "async fn canic_root_peer_component_create(",
+        "async fn canic_root_peer_component_install(",
+        "async fn canic_root_peer_component_commit(",
+        "async fn canic_root_peer_component_directory_prepare(",
+        "async fn canic_root_peer_component_runtime_activate(",
+        "async fn canic_root_peer_component_membership_activate(",
+    ] {
+        assert!(
+            preceding_attribute_context(root, endpoint).contains("canic_update(internal, public)"),
+            "{endpoint} must remain a public update authenticated by workflow"
+        );
+    }
 }
 
 fn assert_component_draining_guards(root: &str) {

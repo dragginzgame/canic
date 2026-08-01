@@ -103,6 +103,10 @@ mod tests {
 
     #[cfg(test)]
     use canic::protocol::{
+        CANIC_ROOT_PEER_COMPONENT_ALLOCATE, CANIC_ROOT_PEER_COMPONENT_ALLOCATION_STATUS,
+        CANIC_ROOT_PEER_COMPONENT_COMMIT, CANIC_ROOT_PEER_COMPONENT_CREATE,
+        CANIC_ROOT_PEER_COMPONENT_DIRECTORY_PREPARE, CANIC_ROOT_PEER_COMPONENT_INSTALL,
+        CANIC_ROOT_PEER_COMPONENT_MEMBERSHIP_ACTIVATE, CANIC_ROOT_PEER_COMPONENT_RUNTIME_ACTIVATE,
         CANIC_ROOT_STORE_BOOTSTRAP_STATUS, CANIC_WASM_STORE_CATALOG, CANIC_WASM_STORE_PREPARE,
         CANIC_WASM_STORE_STATUS,
     };
@@ -333,6 +337,216 @@ mod tests {
             fixture.pic(),
             fixture.root,
             &fixture.issuer,
+        );
+    }
+
+    #[test]
+    fn active_component_provisions_one_same_root_peer_without_parentage() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_active_component_registry();
+        let requester = fixture.issuer.clone();
+        let operation_id = [0xb1; 32];
+        let reserved = reserve_peer_component(&fixture, &requester, operation_id);
+        let membership = activate_peer_component(&fixture, &requester, operation_id, &reserved);
+        assert_eq!(membership.registry.status, ComponentLifecycleStatus::Active);
+        assert_eq!(
+            membership.registry.provisioning_origin,
+            reserved.provisioning_origin
+        );
+        assert_ne!(membership.registry.binding.component, requester.component);
+        assert_eq!(membership.registry.binding.fleet_subnet_root, fixture.root);
+        assert_peer_grant_exhausted(&fixture, &requester);
+    }
+
+    #[cfg(test)]
+    fn reserve_peer_component(
+        fixture: &ActiveComponentRegistryFixture,
+        requester: &ComponentBinding,
+        operation_id: [u8; 32],
+    ) -> RootComponentAllocationResponse {
+        let allocation_request = RootComponentAllocationRequest {
+            operation_id,
+            component_spec: "projects".parse().expect("projects Component Spec"),
+        };
+        let denied: Result<RootComponentAllocationResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_ROOT_PEER_COMPONENT_ALLOCATE,
+                (allocation_request.clone(),),
+            )
+            .expect("anonymous peer Component reservation transport");
+        assert_eq!(
+            denied
+                .expect_err("anonymous caller must not reserve a peer Component")
+                .code,
+            canic::dto::error::ErrorCode::Forbidden
+        );
+        let reserved: Result<RootComponentAllocationResponse, Error> = fixture
+            .pic()
+            .update_call_as(
+                fixture.root,
+                requester.canister_id,
+                CANIC_ROOT_PEER_COMPONENT_ALLOCATE,
+                (allocation_request.clone(),),
+            )
+            .expect("reserve peer Component transport");
+        let reserved = reserved.expect("reserve peer Component");
+        let ComponentProvisioningOrigin::Component {
+            requester: recorded_requester,
+            grant,
+        } = &reserved.provisioning_origin
+        else {
+            panic!("peer reservation must retain its Component origin");
+        };
+        assert_eq!(recorded_requester.as_ref(), requester);
+        assert_eq!(grant.requester_component_spec, requester.component_spec);
+        assert_eq!(
+            grant.target_component_spec,
+            allocation_request.component_spec
+        );
+        assert_eq!(grant.maximum_instances_per_requester_per_root, 1);
+        assert_eq!(reserved.phase, RootComponentAllocationPhase::Reserved);
+        let retried: Result<RootComponentAllocationResponse, Error> = fixture
+            .pic()
+            .update_call_as(
+                fixture.root,
+                requester.canister_id,
+                CANIC_ROOT_PEER_COMPONENT_ALLOCATE,
+                (allocation_request,),
+            )
+            .expect("retry peer Component reservation transport");
+        assert_eq!(retried.expect("retry peer Component reservation"), reserved);
+        let status: Result<RootComponentAllocationResponse, Error> = fixture
+            .pic()
+            .query_call_as(
+                fixture.root,
+                requester.canister_id,
+                CANIC_ROOT_PEER_COMPONENT_ALLOCATION_STATUS,
+                (RootComponentAllocationStatusRequest { operation_id },),
+            )
+            .expect("query peer Component reservation transport");
+        assert_eq!(status.expect("peer Component reservation status"), reserved);
+        reserved
+    }
+
+    #[cfg(test)]
+    fn activate_peer_component(
+        fixture: &ActiveComponentRegistryFixture,
+        requester: &ComponentBinding,
+        operation_id: [u8; 32],
+        reserved: &RootComponentAllocationResponse,
+    ) -> RootComponentMembershipActivationResponse {
+        let created: Result<RootComponentAllocationResponse, Error> = fixture
+            .pic()
+            .update_call_as(
+                fixture.root,
+                requester.canister_id,
+                CANIC_ROOT_PEER_COMPONENT_CREATE,
+                (RootComponentCreationRequest { operation_id },),
+            )
+            .expect("create peer Component transport");
+        assert_eq!(
+            created.expect("create peer Component").phase,
+            RootComponentAllocationPhase::Created
+        );
+        let installed: Result<RootComponentAllocationResponse, Error> = fixture
+            .pic()
+            .update_call_as(
+                fixture.root,
+                requester.canister_id,
+                CANIC_ROOT_PEER_COMPONENT_INSTALL,
+                (RootComponentInstallRequest { operation_id },),
+            )
+            .expect("install peer Component transport");
+        assert_eq!(
+            installed.expect("install peer Component").phase,
+            RootComponentAllocationPhase::Verified
+        );
+        let committed: Result<RootComponentCommitResponse, Error> = fixture
+            .pic()
+            .update_call_as(
+                fixture.root,
+                requester.canister_id,
+                CANIC_ROOT_PEER_COMPONENT_COMMIT,
+                (RootComponentCommitRequest { operation_id },),
+            )
+            .expect("commit peer Component transport");
+        let committed = committed.expect("commit peer Component");
+        assert_eq!(
+            committed.registry.provisioning_origin,
+            reserved.provisioning_origin
+        );
+        assert_eq!(
+            committed.registry.status,
+            ComponentLifecycleStatus::Prepared
+        );
+        let prepared: Result<RootComponentDirectoryPreparationResponse, Error> = fixture
+            .pic()
+            .update_call_as(
+                fixture.root,
+                requester.canister_id,
+                CANIC_ROOT_PEER_COMPONENT_DIRECTORY_PREPARE,
+                (RootComponentDirectoryPreparationRequest { operation_id },),
+            )
+            .expect("prepare peer Component Directory transport");
+        assert_eq!(
+            prepared
+                .expect("prepare peer Component Directory")
+                .target
+                .phase,
+            ComponentRuntimePhase::DirectoryPrepared
+        );
+        let activated: Result<RootComponentRuntimeActivationResponse, Error> = fixture
+            .pic()
+            .update_call_as(
+                fixture.root,
+                requester.canister_id,
+                CANIC_ROOT_PEER_COMPONENT_RUNTIME_ACTIVATE,
+                (RootComponentRuntimeActivationRequest { operation_id },),
+            )
+            .expect("activate peer Component runtime transport");
+        assert_eq!(
+            activated
+                .expect("activate peer Component runtime")
+                .target
+                .phase,
+            ComponentRuntimePhase::Active
+        );
+        let membership: Result<RootComponentMembershipActivationResponse, Error> = fixture
+            .pic()
+            .update_call_as(
+                fixture.root,
+                requester.canister_id,
+                CANIC_ROOT_PEER_COMPONENT_MEMBERSHIP_ACTIVATE,
+                (RootComponentMembershipActivationRequest { operation_id },),
+            )
+            .expect("activate peer Component membership transport");
+        membership.expect("activate peer Component membership")
+    }
+
+    #[cfg(test)]
+    fn assert_peer_grant_exhausted(
+        fixture: &ActiveComponentRegistryFixture,
+        requester: &ComponentBinding,
+    ) {
+        let exhausted: Result<RootComponentAllocationResponse, Error> = fixture
+            .pic()
+            .update_call_as(
+                fixture.root,
+                requester.canister_id,
+                CANIC_ROOT_PEER_COMPONENT_ALLOCATE,
+                (RootComponentAllocationRequest {
+                    operation_id: [0xb2; 32],
+                    component_spec: "projects".parse().expect("projects Component Spec"),
+                },),
+            )
+            .expect("exhausted peer Component reservation transport");
+        assert_eq!(
+            exhausted
+                .expect_err("peer provisioning grant must be exhausted")
+                .code,
+            canic::dto::error::ErrorCode::ResourceExhausted
         );
     }
 

@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.77` adds grant-checked same-root peer Component provisioning with
+  durable causal origin and root-owned lifecycle execution, while narrowing
+  role-only control-plane builds and consolidating duplicate template and
+  Fleet mapping helpers.
+
 - `0.100.76` splits physical Fleet Subnet Root deletion into explicit durable
   preparation and destructive execution phases, with a guarded maintainer
   runner for proving fresh-process recovery from Coordinator authority; it

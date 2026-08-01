@@ -192,6 +192,11 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "canic_root_component_allocate",
         command_kind("component_registry.allocate_top_level.v1"),
     ),
+    update_response_idempotent(
+        "canic_root_peer_component_allocate",
+        command_kind("component_registry.allocate_peer.v1"),
+    ),
+    query_read_only("canic_root_peer_component_allocation_status"),
     query_read_only("canic_root_component_allocation_status"),
     update_response_idempotent(
         "canic_root_component_child_allocate",
@@ -300,8 +305,22 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         Some(DEPLOYMENT_RESERVE_V1),
     ),
     update_costed_response_idempotent(
+        "canic_root_peer_component_create",
+        command_kind("management.control_plane.peer_component_create.v1"),
+        CostClass::ManagementDeployment,
+        Some(DEPLOYMENT_QUOTA_V1),
+        Some(DEPLOYMENT_RESERVE_V1),
+    ),
+    update_costed_response_idempotent(
         "canic_root_component_install",
         command_kind("management.control_plane.component_install.v1"),
+        CostClass::ManagementDeployment,
+        Some(DEPLOYMENT_QUOTA_V1),
+        Some(DEPLOYMENT_RESERVE_V1),
+    ),
+    update_costed_response_idempotent(
+        "canic_root_peer_component_install",
+        command_kind("management.control_plane.peer_component_install.v1"),
         CostClass::ManagementDeployment,
         Some(DEPLOYMENT_QUOTA_V1),
         Some(DEPLOYMENT_RESERVE_V1),
@@ -311,16 +330,32 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         command_kind("component_registry.commit_top_level.v1"),
     ),
     update_response_idempotent(
+        "canic_root_peer_component_commit",
+        command_kind("component_registry.commit_peer.v1"),
+    ),
+    update_response_idempotent(
         "canic_root_component_directory_prepare",
         command_kind("component_registry.prepare_component_directory.v1"),
+    ),
+    update_response_idempotent(
+        "canic_root_peer_component_directory_prepare",
+        command_kind("component_registry.prepare_peer_directory.v1"),
     ),
     update_response_idempotent(
         "canic_root_component_runtime_activate",
         command_kind("component_registry.activate_component_runtime.v1"),
     ),
     update_response_idempotent(
+        "canic_root_peer_component_runtime_activate",
+        command_kind("component_registry.activate_peer_runtime.v1"),
+    ),
+    update_response_idempotent(
         "canic_root_component_membership_activate",
         command_kind("component_registry.activate_component_membership.v1"),
+    ),
+    update_response_idempotent(
+        "canic_root_peer_component_membership_activate",
+        command_kind("component_registry.activate_peer_membership.v1"),
     ),
     query_read_only("canic_root_component_registry_partition"),
     query_read_only("canic_root_component_directory_head"),

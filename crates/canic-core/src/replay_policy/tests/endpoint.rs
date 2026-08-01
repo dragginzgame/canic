@@ -386,6 +386,23 @@ fn root_component_child_reservation_is_response_idempotent() {
 }
 
 #[test]
+fn root_peer_component_reservation_is_response_idempotent() {
+    let reservation = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_root_peer_component_allocate")
+        .expect("root peer Component reservation policy entry");
+
+    assert_eq!(
+        reservation.replay_policy,
+        ReplayPolicy::ResponseIdempotent {
+            command_kind: replay_command_kind("component_registry.allocate_peer.v1"),
+        }
+    );
+    assert_eq!(reservation.cost_class, CostClass::None);
+    assert_eq!(reservation.endpoint_kind, EndpointKind::Update);
+}
+
+#[test]
 fn fleet_subnet_root_removal_store_reclamation_and_binding_finalization_are_idempotent() {
     let begin = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()

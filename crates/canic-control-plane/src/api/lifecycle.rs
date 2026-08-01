@@ -266,6 +266,20 @@ impl LifecycleApi {
             .map_err(Into::into)
     }
 
+    pub async fn reserve_peer_component_allocation(
+        request: RootComponentAllocationRequest,
+    ) -> Result<RootComponentAllocationResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::reserve_peer_allocation(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub fn peer_component_allocation_status(
+        request: RootComponentAllocationStatusRequest,
+    ) -> Result<RootComponentAllocationResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::peer_allocation_status(request).map_err(Into::into)
+    }
+
     pub fn component_allocation_status(
         request: RootComponentAllocationStatusRequest,
     ) -> Result<RootComponentAllocationResponse, canic_core::dto::error::Error> {
@@ -486,6 +500,14 @@ impl LifecycleApi {
             .map_err(Into::into)
     }
 
+    pub async fn create_peer_component_allocation(
+        request: RootComponentCreationRequest,
+    ) -> Result<RootComponentAllocationResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::create_peer_allocation(request)
+            .await
+            .map_err(Into::into)
+    }
+
     pub async fn install_component_allocation(
         request: RootComponentInstallRequest,
     ) -> Result<RootComponentAllocationResponse, canic_core::dto::error::Error> {
@@ -496,10 +518,26 @@ impl LifecycleApi {
         .map_err(Into::into)
     }
 
+    pub async fn install_peer_component_allocation(
+        request: RootComponentInstallRequest,
+    ) -> Result<RootComponentAllocationResponse, canic_core::dto::error::Error> {
+        Box::pin(crate::workflow::component_registry::install_peer_allocation(request))
+            .await
+            .map_err(Into::into)
+    }
+
     pub async fn commit_component_allocation(
         request: RootComponentCommitRequest,
     ) -> Result<RootComponentCommitResponse, canic_core::dto::error::Error> {
         crate::workflow::component_registry::commit_allocation(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn commit_peer_component_allocation(
+        request: RootComponentCommitRequest,
+    ) -> Result<RootComponentCommitResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::commit_peer_allocation(request)
             .await
             .map_err(Into::into)
     }
@@ -512,6 +550,14 @@ impl LifecycleApi {
             .map_err(Into::into)
     }
 
+    pub async fn prepare_peer_component_directories(
+        request: RootComponentDirectoryPreparationRequest,
+    ) -> Result<RootComponentDirectoryPreparationResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::prepare_peer_component_directories(request)
+            .await
+            .map_err(Into::into)
+    }
+
     pub async fn activate_component_runtime(
         request: RootComponentRuntimeActivationRequest,
     ) -> Result<RootComponentRuntimeActivationResponse, canic_core::dto::error::Error> {
@@ -520,10 +566,26 @@ impl LifecycleApi {
             .map_err(Into::into)
     }
 
+    pub async fn activate_peer_component_runtime(
+        request: RootComponentRuntimeActivationRequest,
+    ) -> Result<RootComponentRuntimeActivationResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::activate_peer_component_runtime(request)
+            .await
+            .map_err(Into::into)
+    }
+
     pub async fn activate_component_membership(
         request: RootComponentMembershipActivationRequest,
     ) -> Result<RootComponentMembershipActivationResponse, canic_core::dto::error::Error> {
         crate::workflow::component_registry::activate_component_membership(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn activate_peer_component_membership(
+        request: RootComponentMembershipActivationRequest,
+    ) -> Result<RootComponentMembershipActivationResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::activate_peer_component_membership(request)
             .await
             .map_err(Into::into)
     }

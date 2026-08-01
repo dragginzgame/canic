@@ -218,13 +218,21 @@ impl From<ComponentAllocationPolicyError> for InternalError {
             | ComponentAllocationPolicyError::ComponentSpecCountOverflow(_)
             | ComponentAllocationPolicyError::ComponentSpecCapacityExhausted(_)
             | ComponentAllocationPolicyError::ManagedCanisterCountOverflow
-            | ComponentAllocationPolicyError::ManagedCanisterCapacityExhausted => {
+            | ComponentAllocationPolicyError::ManagedCanisterCapacityExhausted
+            | ComponentAllocationPolicyError::PeerProvisioningCountOverflow
+            | ComponentAllocationPolicyError::PeerProvisioningCapacityExhausted { .. } => {
                 Self::resource_exhausted(message)
             }
             ComponentAllocationPolicyError::InvalidRootTopologyProjection
             | ComponentAllocationPolicyError::RootTopologyDigestMismatch
-            | ComponentAllocationPolicyError::ComponentSpecHashMismatch(_) => {
+            | ComponentAllocationPolicyError::ComponentSpecHashMismatch(_)
+            | ComponentAllocationPolicyError::InvalidPeerRequesterBinding => {
                 Self::invariant(InternalErrorOrigin::Domain, message)
+            }
+            ComponentAllocationPolicyError::PeerRootRuntimeInactive => Self::unavailable(message),
+            ComponentAllocationPolicyError::PeerRequesterRegistryMemberInactive
+            | ComponentAllocationPolicyError::PeerProvisioningGrantMissing { .. } => {
+                Self::forbidden(message)
             }
         }
     }

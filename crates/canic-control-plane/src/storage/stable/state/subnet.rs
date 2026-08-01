@@ -497,6 +497,7 @@ impl SubnetState {
     }
 }
 
+#[cfg(feature = "root-control-plane")]
 fn wasm_store_gc_record_is_valid(record: &WasmStoreGcRecord) -> bool {
     match record.mode {
         WasmStoreGcMode::Normal => [
@@ -558,6 +559,7 @@ fn wasm_store_gc_record_is_valid(record: &WasmStoreGcRecord) -> bool {
     }
 }
 
+#[cfg(feature = "root-control-plane")]
 fn wasm_store_gc_reconciliation_is_monotonic(
     current: &WasmStoreGcRecord,
     next: &WasmStoreGcRecord,
