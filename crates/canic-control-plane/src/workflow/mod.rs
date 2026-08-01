@@ -1,4 +1,4 @@
-//! Control-plane workflows for bootstrap, publication runtime, and state queries.
+//! Control-plane workflows for bootstrap and publication runtime.
 
 #[cfg(feature = "root-control-plane")]
 pub mod bootstrap;
@@ -20,7 +20,5 @@ pub mod fleet_subnet_root;
 mod root_authority;
 #[cfg(feature = "root-control-plane")]
 pub mod runtime;
-#[cfg(feature = "root-control-plane")]
-pub mod state;
 #[cfg(feature = "wasm-store-canister")]
 pub mod wasm_store;

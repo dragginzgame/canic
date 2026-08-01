@@ -3,10 +3,10 @@
 //! Stable-memory–backed projection of direct child canisters for the
 //! current canister.
 //!
-//! This is not an authoritative registry. Canonical child derivation lives in
-//! `SubnetRegistry::children` / `SubnetRegistryOps::children`; entries here are
-//! populated via topology snapshot import during cascade workflows and represent
-//! a cached projection of the global subnet registry.
+//! This is not a subnet-wide Registry. It is the per-canister direct-child
+//! evidence consumed by local topology and placement workflows. Entries are
+//! populated only through validated topology cascade application. Fleet Subnet
+//! Root Component membership remains a separate control-plane authority.
 //!
 //! The contents are replaced wholesale on import.
 

@@ -1,17 +1,12 @@
 //! Module: ops::storage::children
 //!
-//! Responsibility: expose deterministic direct-child cache reads and imports.
-//! Does not own: topology cascade workflow, subnet registry truth, or endpoint DTOs.
+//! Responsibility: expose deterministic local direct-child cache reads and imports.
+//! Does not own: topology cascade workflow, root Component Registry truth, or endpoint DTOs.
 //! Boundary: storage ops facade over child cache records.
 
 use crate::{
     dto::canister::CanisterInfo,
-    ops::{
-        ic::IcOps,
-        prelude::*,
-        runtime::env::EnvOps,
-        storage::{canister::record_to_info, registry::subnet::SubnetRegistryOps},
-    },
+    ops::{prelude::*, storage::canister::record_to_info},
     storage::{
         canister::{CanisterEntryRecord, CanisterRecord},
         stable::children::{CanisterChildren, CanisterChildrenData},
@@ -35,11 +30,7 @@ impl CanisterChildrenOps {
 
     #[must_use]
     pub fn get(pid: Principal) -> Option<CanisterRecord> {
-        if EnvOps::is_root() {
-            SubnetRegistryOps::get(pid)
-        } else {
-            CanisterChildren::get(pid)
-        }
+        CanisterChildren::get(pid)
     }
 
     #[must_use]
@@ -49,13 +40,7 @@ impl CanisterChildrenOps {
 
     #[must_use]
     pub fn contains_pid(pid: &Principal) -> bool {
-        if EnvOps::is_root() {
-            SubnetRegistryOps::children(IcOps::canister_self())
-                .iter()
-                .any(|entry| &entry.pid == pid)
-        } else {
-            Self::data().entries.iter().any(|entry| &entry.pid == pid)
-        }
+        CanisterChildren::get(*pid).is_some()
     }
 
     #[must_use]
@@ -68,11 +53,7 @@ impl CanisterChildrenOps {
 
     #[must_use]
     fn records() -> Vec<CanisterEntryRecord> {
-        if EnvOps::is_root() {
-            SubnetRegistryOps::children(IcOps::canister_self())
-        } else {
-            Self::data().entries
-        }
+        Self::data().entries
     }
 
     #[must_use]
@@ -93,7 +74,8 @@ impl CanisterChildrenOps {
         parent_pid: Principal,
         children: Vec<(Principal, CanisterRole)>,
     ) {
-        // Cache entries omit module hash/created_at; canonical data lives in the registry.
+        // Cache entries omit module hash/created_at; canonical data lives at the Fleet Subnet
+        // Root and reaches this canister through the topology cascade.
         let data = CanisterChildrenData {
             entries: children
                 .into_iter()

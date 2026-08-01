@@ -1041,7 +1041,7 @@ Active Fleet Subnet Root. Root capability RPC deliberately retains its legacy
 guard until structural proof, authorization, parent resolution and cycles
 funding can move as one consistent boundary.
 
-Open 0.100.82 completes that atomic root capability cutover. One control-plane
+Released 0.100.82 completes that atomic root capability cutover. One control-plane
 workflow resolves the active root or exact active Component Registry caller,
 structural `ThisCanister` parent, catalog role and lifecycle target into a
 compact immutable authority. Core proof, authorization, execution and root
@@ -1055,10 +1055,22 @@ stack and its hash-only tests because the maintained structural envelope has
 no hash field, then folds residual auth/build forwarding namespaces into their
 owners without adding a compatibility path.
 
+Open 0.100.83 removes legacy Registry authority from the local-child and
+placement boundary. `CanisterChildrenOps` now always reads the executing
+canister's cascaded direct-child cache; it no longer changes meaning on a Fleet
+Subnet Root by substituting the subnet-wide Registry. Placement Index bind,
+role validation and abandoned-child cleanup consume the same local child
+record, and the obsolete Registry-missing metric branch and Registry-backed
+test setup are removed. Root Component membership remains owned by the
+control-plane Component Registry rather than this application-local cache.
+The same draft hard-cuts the orphaned control-plane subnet-state query/API/DTO
+vertical, which had no endpoint, protocol constant or facade consumer; stable
+state, internal views and template-publication responses remain maintained.
+
 ## Next Action
 
-Replace the remaining placement, lifecycle and cascade consumers of the
-legacy Subnet Registry/Directory, delete the
+Replace the remaining lifecycle and cascade consumers of the legacy Subnet
+Registry/Directory, delete the
 legacy stable storage and cascade schemas, and complete the reinstall-only
 decoder audit. Then run preparation and execution as separate processes
 against one explicitly selected disposable real-network root. Verify the

@@ -20,10 +20,10 @@ use crate::{
             recording::PlacementIndexMetricEvent as MetricEvent,
         },
         storage::{
+            children::CanisterChildrenOps,
             placement::index::{
                 PlacementIndexPendingClaim, PlacementIndexRegistryOps, PlacementIndexReleaseResult,
             },
-            registry::subnet::SubnetRegistryOps,
         },
     },
     workflow::placement::{
@@ -72,10 +72,10 @@ impl PlacementIndexWorkflow {
 
     // Delegate orphan disposition to the root pool lifecycle instead of encoding pool logic here.
     pub(super) async fn recycle_abandoned_child(pid: Principal) -> Result<(), InternalError> {
-        if !SubnetRegistryOps::is_registered(pid) {
+        if !CanisterChildrenOps::contains_pid(&pid) {
             MetricEvent::skipped(
                 MetricOperation::RecycleAbandoned,
-                MetricReason::RegistryMissing,
+                MetricReason::InvalidChild,
             );
             return Ok(());
         }

@@ -1,4 +1,4 @@
-//! Public control-plane APIs for lifecycle, state, and template publication.
+//! Public control-plane APIs for lifecycle and template publication.
 
 #[cfg(feature = "root-control-plane")]
 pub mod component_auth;
@@ -8,7 +8,5 @@ pub mod component_rpc;
 pub mod fleet_coordinator;
 #[cfg(feature = "root-control-plane")]
 pub mod lifecycle;
-#[cfg(feature = "root-control-plane")]
-pub mod state;
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 pub mod template;
