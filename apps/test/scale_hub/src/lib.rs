@@ -12,18 +12,16 @@ async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 
 /// Create a new worker in the configured pool.
-#[canic_update(public)]
+#[canic_update(requires(env::build_local_only()))]
 async fn create_worker() -> Result<Principal, Error> {
-    canic::access::require_local()?;
     let worker_pid = ScalingApi::create_worker(POOL_NAME).await?;
 
     Ok(worker_pid)
 }
 
 /// Dry-run the worker creation decision using config-driven policy.
-#[canic_query(public)]
+#[canic_query(requires(env::build_local_only()))]
 async fn plan_create_worker() -> Result<bool, Error> {
-    canic::access::require_local()?;
     ScalingApi::plan_create_worker(POOL_NAME)
 }
 

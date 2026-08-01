@@ -48,10 +48,8 @@ async fn demo_user_hub_plan(partition_key: String) -> Result<String, Error> {
     ))
 }
 
-#[canic_update(public)]
+#[canic_update(requires(env::build_local_only()))]
 async fn demo_user_hub_assign(partition_key: String) -> Result<String, Error> {
-    canic::access::require_local()?;
-
     let before = ShardingApi::lookup_partition_key(POOL_NAME, &partition_key);
     let plan = ShardingApi::plan_assign_to_pool(POOL_NAME, &partition_key)?;
     let shard = ShardingApi::assign_to_pool(POOL_NAME, &partition_key).await?;

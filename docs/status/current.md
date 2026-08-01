@@ -630,7 +630,8 @@ Historical detail is archived at:
   exact observation. Only exact destination-invalid/`IC0301` root absence may
   be attested; `Stopping`, transport and Subnet failures remain nonterminal.
   ICP CLI deletion disables its temporary recovery Wasm, so no retained cycles
-  are redirected to the executor's ledger. The same draft removes the stranded
+  are redirected to the executor's ledger. The same draft moves reference
+  canisters onto the endpoint-level local-build predicate, removes the stranded
   local-network facade helper, collapses two one-call wrappers and narrows
   same-file-only implementation surfaces.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
@@ -2228,7 +2229,8 @@ The same open patch advances the embedded `ic-query` host library from
 `0.14.1` to `0.21.1`; Canic's consumed `subnet_catalog` Rust API is unchanged,
 and the upstream CLI-only `--format json` to `--json` hard cut requires no
 Canic command or adapter change.
-The same draft removes the stranded local-network facade helper, collapses two
+The same draft moves reference canisters onto the endpoint-level local-build
+predicate, removes the stranded local-network facade helper, collapses two
 one-call wrappers and narrows same-file-only runtime, control-plane and test
 support surfaces without changing maintained behavior.
 The next evidence slice is one disposable real-network deletion followed by
