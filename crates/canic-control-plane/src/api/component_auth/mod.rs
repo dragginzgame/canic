@@ -4,7 +4,12 @@
 //! Does not own: Component Registry state, proof state, or attestation policy.
 //! Boundary: resolves protected caller authority, then delegates to core auth workflow.
 
+use async_trait::async_trait;
 use canic_core::{
+    access::{
+        AccessError,
+        expr::{AccessContext, AsyncAccessPredicate},
+    },
     api::{auth::AuthApi, fleet_activation::FleetActivationApi},
     control_plane_support::ops::ic::IcOps,
     dto::{
@@ -15,8 +20,34 @@ use canic_core::{
         error::Error,
         fleet_activation::FleetActivationPhase,
     },
-    ids::ComponentBinding,
+    ids::{ComponentBinding, ManagedCanisterBinding},
 };
+
+///
+/// ActiveComponentMemberPredicate
+///
+/// Endpoint predicate backed by exact active Component Registry membership.
+///
+
+pub struct ActiveComponentMemberPredicate;
+
+#[async_trait]
+impl AsyncAccessPredicate for ActiveComponentMemberPredicate {
+    async fn eval(&self, ctx: &AccessContext) -> Result<(), AccessError> {
+        active_component_member(ctx.transport_caller())
+            .map(|_| ())
+            .map_err(|_| {
+                AccessError::Denied(format!(
+                    "caller '{}' is not an active Component Registry member",
+                    ctx.transport_caller()
+                ))
+            })
+    }
+
+    fn name(&self) -> &'static str {
+        "caller_is_active_component_member"
+    }
+}
 
 ///
 /// ComponentAuthApi
@@ -45,12 +76,21 @@ impl ComponentAuthApi {
 }
 
 fn active_component_caller() -> Result<ComponentBinding, Error> {
+    let caller = IcOps::msg_caller();
+    match active_component_member(caller)? {
+        ManagedCanisterBinding::Component(binding) => Ok(binding),
+        ManagedCanisterBinding::ComponentChild(_) => Err(Error::forbidden(format!(
+            "caller {caller} is a Component Child, not a top-level Component"
+        ))),
+    }
+}
+
+fn active_component_member(caller: candid::Principal) -> Result<ManagedCanisterBinding, Error> {
     let activation = FleetActivationApi::status()?;
     if activation.phase != FleetActivationPhase::Active {
         return Err(Error::unavailable(
-            "role attestation requires an Active Fleet Subnet Root",
+            "active Component membership requires an Active Fleet Subnet Root",
         ));
     }
-    crate::workflow::component_registry::active_component_binding(IcOps::msg_caller())
-        .map_err(Into::into)
+    crate::workflow::component_registry::active_component_member(caller).map_err(Into::into)
 }

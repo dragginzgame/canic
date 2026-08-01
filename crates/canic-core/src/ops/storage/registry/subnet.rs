@@ -137,10 +137,6 @@ impl SubnetRegistryOps {
         Ok(())
     }
 
-    pub fn register_root(pid: Principal, created_at: u64) {
-        SubnetRegistry::register_root(pid, created_at);
-    }
-
     pub fn register_root_with_module_hash(
         pid: Principal,
         created_at: u64,
@@ -314,7 +310,7 @@ mod tests {
         let _ = SubnetRegistry::remove(&p(92));
         let _ = SubnetRegistry::remove(&p(91));
 
-        SubnetRegistry::register_root(p(91), 1);
+        SubnetRegistry::register_root_with_module_hash(p(91), 1, None);
         SubnetRegistry::register(
             p(92),
             &CanisterRole::new("alpha_registry_test"),

@@ -150,7 +150,7 @@ mod tests {
         PoolOps::remove(&pid);
         let _ = SubnetRegistryOps::unregister(&pid);
         let _ = SubnetRegistryOps::unregister(&root);
-        SubnetRegistryOps::register_root(root, 100);
+        SubnetRegistryOps::register_root_with_module_hash(root, 100, None);
         SubnetRegistryOps::register_unchecked(pid, &role, root, module_hash.clone(), 101)
             .expect("child registered");
 
@@ -192,7 +192,7 @@ mod tests {
         PoolOps::remove(&pid);
         let _ = SubnetRegistryOps::unregister(&pid);
         let _ = SubnetRegistryOps::unregister(&root);
-        SubnetRegistryOps::register_root(root, 200);
+        SubnetRegistryOps::register_root_with_module_hash(root, 200, None);
         SubnetRegistryOps::register_unchecked(pid, &role, root, module_hash.clone(), 201)
             .expect("child registered");
 

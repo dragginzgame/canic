@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.79`.
-- The latest published release is `v0.100.79` at
-  `cae39e5d80291404cb4d2fff5f9a8dd00d4c3017`.
-- Open `0.100.80` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.80`.
+- The latest published release is `v0.100.80` at
+  `adecf00a3b3b4147e134e93cf8aa3fc0fd20ec64`.
+- Open `0.100.81` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -662,10 +662,18 @@ Historical detail is archived at:
   facade, protocol, page-response and workflow family with no compatibility
   alias. It also removes redundant test-only parser aliases and one-field
   cycles-command and status-inventory wrappers without changing CLI behavior.
-- Open `0.100.80` hard-cuts the public Subnet Registry query and its
+- Released `0.100.80` hard-cuts the public Subnet Registry query and its
   facade/DTO/workflow plus host, backup and audit transports. It also removes
   obsolete Directory snapshot methods and unit mapper types while retaining
   narrow storage-ops conversion and prepared cascade commit boundaries.
+- Open `0.100.81` moves root-owned authentication toward the Component
+  Registry. One exact active-member resolver covers top-level Components and
+  descendants, the chain-key proof endpoint uses it through an endpoint-level
+  custom predicate, and role-attestation admission reuses it before enforcing
+  its top-level-only issuer contract. Root capability RPC retains its legacy
+  guard and internal topology reads for the next atomic RPC slice. The same
+  draft removes residual test-only parser and root-registration aliases and
+  collapses one-function backup/replica namespaces without behavior change.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1961,12 +1969,13 @@ First primary results:
 
 ## Next Action
 
-Hard-cut the remaining local `SubnetRegistry`/`SubnetDirectory` layer to the
-root-owned Component Registry/Directory authority and complete the
-reinstall-only decoder audit, then run the guarded host preparation and
-execution phases as separate processes
-against one explicitly selected disposable real-network root. Verify the
-surviving Coordinator terminal receipt and exact replay before closing 0.100
+Move root capability proof, authorization, parent resolution and root cycles
+funding together from `SubnetRegistry`/`SubnetDirectory` to exact Component
+Registry/Directory authority. Then hard-cut the remaining placement,
+lifecycle and cascade consumers and complete the reinstall-only decoder audit,
+then run the guarded host preparation and execution phases as separate
+processes against one explicitly selected disposable real-network root. Verify
+the surviving Coordinator terminal receipt and exact replay before closing 0.100
 against the accepted design and beginning 0.101. The retained implementation
 detail remains in the
 [implementation tracker](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md).
@@ -2303,14 +2312,22 @@ and authenticated root-served Component Directory pages. The same release
 removes redundant test-only parser aliases and one-field cycles-command and
 status-inventory wrappers while retaining typed wallet dispatch and all CLI
 behavior.
-Open `0.100.80` removes the public `canic_subnet_registry` endpoint, facade,
+Released `0.100.80` removes the public `canic_subnet_registry` endpoint, facade,
 protocol constant, response DTO/query projection and host ICP/replica decoder.
 The obsolete backup preflight fails closed pending Coordinator-backed
 Component Registry topology discovery; root test setup uses the bounded child
-view instead. The same draft removes obsolete Directory snapshot-argument
+view instead. The same release removes obsolete Directory snapshot-argument
 methods and three unit mapper types. Three narrow conversion helpers remain in
 storage ops, and the validated prepared-import boundary still protects cascade
 application.
+Open `0.100.81` replaces the root chain-key proof endpoint's legacy Registry
+guard with exact active Component Registry member admission. The shared
+resolver validates both the owning active partition and the exact top-level or
+descendant member; role attestation reuses it while retaining top-level-only
+issuance. Root capability RPC remains the next internally consistent
+replacement boundary. The same draft removes residual test-only parser and
+root-registration aliases and folds one-function backup ICP-error and replica
+Candid decoder namespaces into their owning modules without behavior change.
 
 ## Historical Release Detail
 

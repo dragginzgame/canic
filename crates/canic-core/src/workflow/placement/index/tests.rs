@@ -83,7 +83,7 @@ fn install_index_test_context(child_role: &CanisterRole, child_pid: Principal) {
     CanisterChildrenOps::import_direct_children(hub_pid, vec![(child_pid, child_role.clone())]);
 
     let created_at = 0;
-    SubnetRegistryOps::register_root(root_pid, created_at);
+    SubnetRegistryOps::register_root_with_module_hash(root_pid, created_at, None);
     SubnetRegistryOps::register_unchecked(
         hub_pid,
         &CanisterRole::new("project_hub"),
@@ -136,7 +136,7 @@ fn bind_instance_rejects_role_mismatch() {
     let root_pid = p(1);
     let hub_pid = p(2);
     let created_at = 0;
-    SubnetRegistryOps::register_root(root_pid, created_at);
+    SubnetRegistryOps::register_root_with_module_hash(root_pid, created_at, None);
     SubnetRegistryOps::register_unchecked(
         hub_pid,
         &CanisterRole::new("project_hub"),

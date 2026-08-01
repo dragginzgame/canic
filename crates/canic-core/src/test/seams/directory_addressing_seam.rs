@@ -65,7 +65,7 @@ fn directory_addressing_prefers_index_over_registry_duplicates() {
     let pid_b = p(12);
 
     let created_at = 1;
-    SubnetRegistryOps::register_root(root_pid, created_at);
+    SubnetRegistryOps::register_root_with_module_hash(root_pid, created_at, None);
     SubnetRegistryOps::register_unchecked(pid_a, &role, root_pid, vec![], created_at)
         .expect("register first canister");
     SubnetRegistryOps::register_unchecked(pid_b, &role, root_pid, vec![], created_at)
@@ -108,7 +108,7 @@ fn directory_addressing_does_not_fallback_to_registry() {
     let pid = p(14);
     let created_at = 1;
 
-    SubnetRegistryOps::register_root(root_pid, created_at);
+    SubnetRegistryOps::register_root_with_module_hash(root_pid, created_at, None);
     SubnetRegistryOps::register_unchecked(pid, &role, root_pid, vec![], created_at)
         .expect("register canister");
 

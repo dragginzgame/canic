@@ -577,7 +577,7 @@ macro_rules! canic_emit_root_auth_attestation_endpoints {
             $crate::__internal::core::api::auth::AuthApi::root_issuer_renewal_status_root(request)
         }
 
-        #[$crate::canic_update(internal, requires(caller::is_registered_to_subnet()))]
+        #[$crate::canic_update(internal, requires(custom(::canic::__internal::control_plane::api::component_auth::ActiveComponentMemberPredicate)))]
         async fn canic_get_or_create_chain_key_delegation_proof(
         ) -> Result<::canic::dto::auth::RootDelegationProofBatchProof, ::canic::Error> {
             $crate::__internal::core::api::auth::AuthApi::get_or_create_chain_key_delegation_proof_root()

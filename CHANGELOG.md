@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.81` moves root-owned Component authentication onto exact active
+  Component Registry membership, including descendants, while retaining
+  top-level-only role-attestation issuance, and removes residual test-only
+  aliases and one-function backup/replica namespaces without changing
+  maintained behavior.
+
 - `0.100.80` hard-cuts the obsolete public Subnet Registry and its host/backup
   transport, and collapses stranded Directory mapper layers while retaining
   a fail-closed Component Registry discovery boundary.

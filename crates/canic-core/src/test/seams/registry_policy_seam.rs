@@ -285,7 +285,7 @@ fn registry_kind_policy_blocks_but_ops_allows() {
     assert_eq!(public.code, ErrorCode::PolicyRoleAlreadyRegistered);
 
     let created_at = 1;
-    SubnetRegistryOps::register_root(root_pid, created_at);
+    SubnetRegistryOps::register_root_with_module_hash(root_pid, created_at, None);
     SubnetRegistryOps::register_unchecked(existing_pid, &role, root_pid, vec![], created_at)
         .expect("register first canister");
     let duplicate_pid = p(3);

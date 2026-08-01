@@ -6,7 +6,7 @@ use super::*;
 
 #[test]
 fn deploy_catalog_options_parse_list_defaults_to_text() {
-    let options = deploy_catalog::DeployCatalogOptions::parse_list_test([
+    let options = deploy_catalog::DeployCatalogOptions::parse_list([
         OsString::from("--__canic-environment"),
         OsString::from("local"),
     ])
@@ -20,7 +20,7 @@ fn deploy_catalog_options_parse_list_defaults_to_text() {
 
 #[test]
 fn deploy_catalog_options_parse_inspect_json_output() {
-    let options = deploy_catalog::DeployCatalogOptions::parse_inspect_test([
+    let options = deploy_catalog::DeployCatalogOptions::parse_inspect([
         OsString::from("demo-local"),
         OsString::from("--json"),
         OsString::from("--output"),

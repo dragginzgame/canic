@@ -171,23 +171,7 @@ fn request(options: &DeployCatalogOptions) -> Result<FleetCatalogRequest, Deploy
 }
 
 impl DeployCatalogOptions {
-    #[cfg(test)]
-    pub(super) fn parse_list_test<I>(args: I) -> Result<Self, DeployCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        Self::parse_list(args)
-    }
-
-    #[cfg(test)]
-    pub(super) fn parse_inspect_test<I>(args: I) -> Result<Self, DeployCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        Self::parse_inspect(args)
-    }
-
-    fn parse_list<I>(args: I) -> Result<Self, DeployCommandError>
+    pub(super) fn parse_list<I>(args: I) -> Result<Self, DeployCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
@@ -201,7 +185,7 @@ impl DeployCatalogOptions {
         })
     }
 
-    fn parse_inspect<I>(args: I) -> Result<Self, DeployCommandError>
+    pub(super) fn parse_inspect<I>(args: I) -> Result<Self, DeployCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {

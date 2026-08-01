@@ -262,7 +262,7 @@ fn root_capability_metadata_projection_covers_replay_protected_families() {
 fn authorize_recycle_rejects_non_child_caller() {
     let root_pid = p(70);
     let _restore = configure_root_env(root_pid);
-    SubnetRegistryOps::register_root(root_pid, 1);
+    SubnetRegistryOps::register_root_with_module_hash(root_pid, 1, None);
 
     let caller = p(71);
     let child = p(72);
@@ -304,7 +304,7 @@ fn authorize_recycle_rejects_non_child_caller() {
 fn authorize_recycle_allows_direct_child_caller() {
     let root_pid = p(80);
     let _restore = configure_root_env(root_pid);
-    SubnetRegistryOps::register_root(root_pid, 1);
+    SubnetRegistryOps::register_root_with_module_hash(root_pid, 1, None);
 
     let caller = p(81);
     let child = p(82);
@@ -385,7 +385,7 @@ fn authorize_allows_provision_in_root_context() {
 fn authorize_allows_structural_child_provision_for_registered_caller() {
     let root_pid = p(11);
     let caller = p(12);
-    SubnetRegistryOps::register_root(root_pid, 1);
+    SubnetRegistryOps::register_root_with_module_hash(root_pid, 1, None);
     SubnetRegistryOps::register_unchecked(
         caller,
         &CanisterRole::new("user_hub"),
@@ -416,7 +416,7 @@ fn authorize_allows_structural_child_provision_for_registered_caller() {
 fn authorize_rejects_structural_child_provision_with_root_parent() {
     let root_pid = p(13);
     let caller = p(14);
-    SubnetRegistryOps::register_root(root_pid, 1);
+    SubnetRegistryOps::register_root_with_module_hash(root_pid, 1, None);
     SubnetRegistryOps::register_unchecked(
         caller,
         &CanisterRole::new("user_hub"),
@@ -647,7 +647,7 @@ fn authorize_request_cycles_records_kill_switch_denial_metrics() {
 
     let self_pid = p(90);
     let child = p(91);
-    SubnetRegistryOps::register_root(self_pid, 1);
+    SubnetRegistryOps::register_root_with_module_hash(self_pid, 1, None);
     SubnetRegistryOps::register_unchecked(child, &CanisterRole::new("test"), self_pid, vec![], 2)
         .expect("register child");
 
@@ -732,7 +732,7 @@ fn root_cycles_funding_uses_child_role_policy_without_a_component_spec() {
         .with_default_canister(child_role.clone(), child_cfg)
         .install();
 
-    SubnetRegistryOps::register_root(self_pid, 1);
+    SubnetRegistryOps::register_root_with_module_hash(self_pid, 1, None);
     SubnetRegistryOps::register_unchecked(child, &child_role, self_pid, vec![], 2)
         .expect("register child");
 
@@ -788,7 +788,7 @@ fn authorize_request_cycles_rejects_a_competing_pending_child_operation() {
         .with_default_canister(child_role.clone(), child_cfg)
         .install();
 
-    SubnetRegistryOps::register_root(self_pid, 1);
+    SubnetRegistryOps::register_root_with_module_hash(self_pid, 1, None);
     SubnetRegistryOps::register_unchecked(child, &child_role, self_pid, vec![], 2)
         .expect("register child");
     FleetStateOps::import(FleetStateData {
