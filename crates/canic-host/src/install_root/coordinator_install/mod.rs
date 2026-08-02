@@ -18,8 +18,8 @@ use super::{
     },
     operations::{
         CreationEffectRequest, EffectAction, InstallArtifact, InstallEffectRequest,
-        execute_or_observe_creation, execute_or_observe_install, module_hash_text,
-        observe_module_hash, query_live_registry, resolve_install_artifact,
+        execute_or_observe_creation, execute_or_observe_install, query_live_registry,
+        require_expected_module_hash, resolve_install_artifact,
     },
 };
 use crate::{
@@ -64,15 +64,6 @@ struct CoordinatorCreationOutcomeUnknownError {
 
 #[derive(Debug, ThisError)]
 enum CoordinatorInstallStateError {
-    #[error("Coordinator {coordinator} already has unexpected module hash {observed}")]
-    UnexpectedModule {
-        coordinator: Principal,
-        observed: String,
-    },
-
-    #[error("Coordinator {coordinator} has no installed module")]
-    MissingModule { coordinator: Principal },
-
     #[error("Coordinator Registry query differs from exact genesis authority")]
     RegistryMismatch,
 
@@ -247,17 +238,12 @@ fn verify_live_coordinator_genesis(
         .coordinator
         .expect("verified Coordinator phases retain a principal");
     let icp = super::install_icp(icp_root, environment, local_replica);
-    match observe_module_hash(&icp, coordinator)? {
-        Some(observed) if observed == journal.expected_module_hash => {}
-        Some(observed) => {
-            return Err(CoordinatorInstallStateError::UnexpectedModule {
-                coordinator,
-                observed: module_hash_text(observed),
-            }
-            .into());
-        }
-        None => return Err(CoordinatorInstallStateError::MissingModule { coordinator }.into()),
-    }
+    require_expected_module_hash(
+        &icp,
+        coordinator,
+        journal.expected_module_hash,
+        "Coordinator",
+    )?;
 
     let expected = expected_genesis(journal)?;
     let live = query_live_registry(&icp, coordinator)?;
@@ -283,17 +269,12 @@ fn verify_live_coordinator_current(
         .coordinator
         .expect("verified Coordinator phases retain a principal");
     let icp = super::install_icp(icp_root, environment, local_replica);
-    match observe_module_hash(&icp, coordinator)? {
-        Some(observed) if observed == journal.expected_module_hash => {}
-        Some(observed) => {
-            return Err(CoordinatorInstallStateError::UnexpectedModule {
-                coordinator,
-                observed: module_hash_text(observed),
-            }
-            .into());
-        }
-        None => return Err(CoordinatorInstallStateError::MissingModule { coordinator }.into()),
-    }
+    require_expected_module_hash(
+        &icp,
+        coordinator,
+        journal.expected_module_hash,
+        "Coordinator",
+    )?;
 
     let expected = expected_genesis(journal)?;
     let live = query_live_registry(&icp, coordinator)?;

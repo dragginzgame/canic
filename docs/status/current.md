@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.88`.
-- The latest published release is `v0.100.88` at
-  `6340cc04b834da4be1b9e7f36c3dac627e09bd49`.
-- Open `0.100.89` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.89`.
+- The latest published release is `v0.100.89` at
+  `6418713d13614f61b093d03d19618a087efa6b9e`.
+- Open `0.100.90` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -736,12 +736,17 @@ Historical detail is archived at:
   IC-native live Subnet alongside subject, audience, expiry and role epoch.
   Verification is local, performs no inter-Canister authorization call and
   does not trust arbitrary co-resident Canisters.
-- Open `0.100.89` consolidates fresh host installation's
+- Released `0.100.89` consolidates fresh host installation's
   journal-authorized observe/execute/reconcile effect and moves root Fleet
   activation off legacy Subnet Registry inventory. After independently
   sealing the current Component inventory, the root derives the exact
   Store-only infrastructure manifest from root-owned Store state; Components
   retain their separate Component Runtime and Directory lifecycle.
+- Open `0.100.90` makes Store garbage collection and physical-deletion
+  decisions consume root-owned Store inventory, durable removal receipts and
+  exact live evidence rather than Registry identity. It also centralizes
+  strict installed-module verification across fresh Coordinator and root host
+  workflows.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -2038,7 +2043,7 @@ First primary results:
 ## Next Action
 
 Replace the legacy Subnet Registry's remaining propagation and Store
-publication/garbage-collection, provisioning and pool-recovery consumers with
+creation/publication recovery, provisioning and pool-recovery consumers with
 root-owned Component Registry and direct-child authority. Then delete its
 stable/cascade schema once no maintained reader remains, complete the
 reinstall-only decoder audit and run the
@@ -2449,12 +2454,18 @@ bounded local verification of a root-signed caller role attestation. Its
 required physical-Subnet claim must match the receiver's live IC Subnet, so
 managed Components can authenticate same-Subnet role calls without an extra
 authorization call or ambient Subnet Registry authority.
-Open `0.100.89` makes fresh root Fleet activation consume an explicit exact
+Released `0.100.89` makes fresh root Fleet activation consume an explicit exact
 Store projection after independently sealing Component Registry inventory.
 The infrastructure cascade and topology manifest contains only that direct
 Store leaf and no longer consults legacy Subnet Registry state; Component
-Runtime activation remains a separate root-owned protocol. The same draft
+Runtime activation remains a separate root-owned protocol. The same release
 consolidates fresh host installation's journal-authorized effect execution.
+Open `0.100.90` removes legacy Registry identity from Store GC and
+physical-deletion acceptance. Durable root-owned lifecycle receipts and Store
+inventory plus exact live management evidence now form the recovery chain;
+the transitional Registry row is only discarded after typed absence so the
+current Store-creation importer cannot resurrect the deleted Canister. The
+same draft consolidates fresh-install module verification in the host.
 
 ## Historical Release Detail
 

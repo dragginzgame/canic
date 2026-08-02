@@ -10,7 +10,7 @@ mod registry;
 pub(super) use crate::canister_protocol::{
     call_no_arg, call_with_arg, query_no_arg, query_with_arg,
 };
-pub(super) use activation::{module_hash_text, observe_module_hash};
+pub(super) use activation::{module_hash_text, require_expected_module_hash};
 pub(super) use artifact::{InstallArtifact, resolve_install_artifact};
 pub(super) use creation::{CreationEffectRequest, execute_or_observe_creation};
 pub(super) use installation::{InstallEffectRequest, execute_or_observe_install};

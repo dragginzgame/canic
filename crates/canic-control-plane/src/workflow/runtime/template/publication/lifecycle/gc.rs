@@ -6,7 +6,7 @@
 
 use super::super::super::store_pid_for_binding;
 use super::super::{
-    WASM_STORE_ROLE, WasmStorePublicationWorkflow,
+    WasmStorePublicationWorkflow,
     error::PublicationWorkflowError,
     store::{
         store_begin_gc, store_catalog, store_complete_gc, store_prepare_gc,
@@ -143,7 +143,6 @@ impl WasmStorePublicationWorkflow {
     pub async fn quiesce_single_root_store_for_final_inventory()
     -> Result<(Principal, WasmStoreStatusResponse), InternalError> {
         let _guard = LifecycleOperationGuard::try_enter()?;
-        Self::sync_registered_wasm_store_inventory()?;
         let stores = SubnetStateOps::wasm_stores();
         if stores.len() != 1 {
             return Err(PublicationWorkflowError::InvalidState(format!(
@@ -200,7 +199,6 @@ impl WasmStorePublicationWorkflow {
     pub async fn verify_single_root_store_for_removal()
     -> Result<(Principal, WasmStoreStatusResponse), InternalError> {
         let _guard = LifecycleOperationGuard::try_enter()?;
-        Self::sync_registered_wasm_store_inventory()?;
         let stores = SubnetStateOps::wasm_stores();
         if stores.len() != 1 {
             return Err(PublicationWorkflowError::InvalidState(format!(
@@ -235,7 +233,6 @@ impl WasmStorePublicationWorkflow {
     async fn reclaim_single_root_store_inner(
         inventory: &RootFleetSubnetFinalInventoryView,
     ) -> Result<RootFleetSubnetStoreReclamationEvidence, InternalError> {
-        Self::sync_registered_wasm_store_inventory()?;
         let stores = SubnetStateOps::wasm_stores();
         if stores.len() != 1 {
             return Err(PublicationWorkflowError::InvalidState(format!(
@@ -305,7 +302,6 @@ impl WasmStorePublicationWorkflow {
     pub async fn verify_single_reclaimed_root_store_binding(
         inventory: &RootFleetSubnetFinalInventoryView,
     ) -> Result<RootFleetSubnetStoreBindingAuthority, InternalError> {
-        Self::sync_registered_wasm_store_inventory()?;
         let stores = SubnetStateOps::wasm_stores();
         if stores.len() != 1 {
             return Err(PublicationWorkflowError::InvalidState(format!(
@@ -442,7 +438,6 @@ impl WasmStorePublicationWorkflow {
     ) -> Result<RootFleetSubnetStoreDeletionAuthority, InternalError> {
         let _guard = LifecycleOperationGuard::try_enter()?;
         validate_store_deletion_lineage(inventory, finalization)?;
-        Self::sync_registered_wasm_store_inventory()?;
         let runtime = single_finalized_runtime_store(finalization)?;
 
         let live = store_status(runtime.pid).await?;
@@ -461,9 +456,7 @@ impl WasmStorePublicationWorkflow {
             )
             .into());
         }
-
         let root = IcOps::canister_self();
-        require_exact_store_registration(runtime.pid, root)?;
         let observation = MgmtOps::observe_canister_status(runtime.pid).await?;
         let CanisterStatusObservation::Present(status) = observation else {
             return Err(PublicationWorkflowError::InvalidState(
@@ -506,11 +499,10 @@ impl WasmStorePublicationWorkflow {
             .into());
         }
         let root = IcOps::canister_self();
-        if !validate_deletion_runtime_inventory(intent, finalization)?
-            || !optional_exact_store_registration(intent.wasm_store, root)?
-        {
+        if !validate_deletion_runtime_inventory(intent, finalization)? {
             return Err(PublicationWorkflowError::InvalidState(
-                "root Store cycle reclamation requires exact local deletion inventory".to_string(),
+                "root Store cycle reclamation requires exact root-owned deletion inventory"
+                    .to_string(),
             )
             .into());
         }
@@ -562,15 +554,15 @@ impl WasmStorePublicationWorkflow {
         require_durable_store_cycle_reclamation(intent)?;
         let root = IcOps::canister_self();
         let runtime_present = validate_deletion_runtime_inventory(intent, finalization)?;
-        let registration_present = optional_exact_store_registration(intent.wasm_store, root)?;
         let observation = MgmtOps::observe_canister_status(intent.wasm_store).await?;
 
         let observed_absent_at_ns = match observation {
             CanisterStatusObservation::Absent => IcOps::now_nanos(),
             CanisterStatusObservation::Present(status) => {
-                if !runtime_present || !registration_present {
+                if !runtime_present {
                     return Err(PublicationWorkflowError::InvalidState(
-                        "present root Store is missing exact local deletion inventory".to_string(),
+                        "present root Store is missing exact root-owned deletion inventory"
+                            .to_string(),
                     )
                     .into());
                 }
@@ -578,7 +570,7 @@ impl WasmStorePublicationWorkflow {
                 delete_store_and_observe_absence(intent, root).await?
             }
         };
-        reconcile_deleted_store_inventory(intent, finalization, root)?;
+        reconcile_deleted_store_inventory(intent, finalization)?;
         log!(
             Topic::Wasm,
             Ok,
@@ -1081,33 +1073,6 @@ fn validate_deletion_runtime_inventory(
     }
 }
 
-fn require_exact_store_registration(
-    wasm_store: Principal,
-    root: Principal,
-) -> Result<(), InternalError> {
-    if optional_exact_store_registration(wasm_store, root)? {
-        return Ok(());
-    }
-    Err(PublicationWorkflowError::InvalidState(
-        "root Store is missing from exact Subnet Registry authority".to_string(),
-    )
-    .into())
-}
-
-fn optional_exact_store_registration(
-    wasm_store: Principal,
-    root: Principal,
-) -> Result<bool, InternalError> {
-    match SubnetRegistryOps::role_parent(wasm_store) {
-        None => Ok(false),
-        Some((role, parent)) if role == WASM_STORE_ROLE && parent == Some(root) => Ok(true),
-        Some(_) => Err(PublicationWorkflowError::InvalidState(
-            "root Store Subnet Registry authority differs from deletion intent".to_string(),
-        )
-        .into()),
-    }
-}
-
 fn store_management_authority(
     status: &CanisterStatus,
     root: Principal,
@@ -1371,18 +1336,11 @@ async fn delete_store_and_observe_absence(
 fn reconcile_deleted_store_inventory(
     intent: &RootFleetSubnetStoreDeletionIntentView,
     finalization: &RootFleetSubnetStoreBindingFinalizationView,
-    root: Principal,
 ) -> Result<(), InternalError> {
     let runtime_present = validate_deletion_runtime_inventory(intent, finalization)?;
-    let registration_present = optional_exact_store_registration(intent.wasm_store, root)?;
-    if registration_present
-        && !SubnetRegistryOps::unregister_exact(intent.wasm_store, &WASM_STORE_ROLE, root)?
-    {
-        return Err(PublicationWorkflowError::InvalidState(
-            "root Store registration disappeared before deletion reconciliation".to_string(),
-        )
-        .into());
-    }
+    // Publication creation still writes one transitional Registry row. Once typed
+    // absence is proven, discard that row without consulting it as GC authority.
+    let _ = SubnetRegistryOps::unregister(&intent.wasm_store);
     if runtime_present && !SubnetStateOps::remove_wasm_store(&intent.binding) {
         return Err(PublicationWorkflowError::InvalidState(
             "root Store runtime inventory disappeared before deletion reconciliation".to_string(),
@@ -1393,7 +1351,6 @@ fn reconcile_deleted_store_inventory(
         SubnetStateOps::wasm_stores().is_empty(),
         SubnetStateOps::wasm_store_pid(&intent.binding).is_none(),
         SubnetStateOps::wasm_store_binding_for_pid(intent.wasm_store).is_none(),
-        SubnetRegistryOps::role_parent(intent.wasm_store).is_none(),
     ]
     .into_iter()
     .all(|valid| valid);
@@ -1800,5 +1757,68 @@ mod tests {
             err.public_error().map(|public| public.code),
             Some(ErrorCode::InvariantViolation)
         );
+    }
+
+    #[test]
+    fn deleted_store_inventory_reconciliation_is_root_owned_and_idempotent() {
+        let root = Principal::from_slice(&[12; 29]);
+        let pid = Principal::from_slice(&[13; 29]);
+        let binding = WasmStoreBinding::owned(pid.to_text());
+        SubnetStateOps::import_test_state(
+            PublicationStoreStateTestInput {
+                active_binding: None,
+                detached_binding: None,
+                retired_binding: None,
+                generation: 6,
+                changed_at: 40,
+                retired_at: 0,
+            },
+            vec![WasmStoreStateTestInput {
+                binding: binding.clone(),
+                pid,
+                created_at: 10,
+                gc_mode: WasmStoreGcMode::Complete,
+                gc_changed_at: 30,
+                prepared_at: Some(20),
+                started_at: Some(21),
+                completed_at: Some(30),
+                runs_completed: 1,
+            }],
+        );
+        let finalization = RootFleetSubnetStoreBindingFinalizationView {
+            operation_id: [1; 32],
+            fleet_subnet_root: root,
+            wasm_store: pid,
+            binding: binding.clone(),
+            final_inventory_hash: [2; 32],
+            reclamation_hash: [3; 32],
+            source_generation: 3,
+            finalized_generation: 6,
+            finalized_at_secs: 40,
+            completed_at_ns: 41,
+            finalization_hash: [4; 32],
+        };
+        let intent = RootFleetSubnetStoreDeletionIntentView {
+            operation_id: [1; 32],
+            binding_finalization_hash: [4; 32],
+            wasm_store: pid,
+            binding: binding.clone(),
+            observed_module_hash: [5; 32],
+            observed_controllers: vec![root],
+            observed_cycles_before_reclamation: 10,
+            maximum_cycles_to_retain: 5,
+            observed_cycles_after_reclamation: Some(5),
+            cycles_reclaimed_at_ns: Some(42),
+            prepared_at_ns: 41,
+        };
+
+        reconcile_deleted_store_inventory(&intent, &finalization)
+            .expect("root-owned inventory should reconcile after live deletion");
+        reconcile_deleted_store_inventory(&intent, &finalization)
+            .expect("exact retry should accept already-empty root-owned inventory");
+
+        assert!(SubnetStateOps::wasm_stores().is_empty());
+        assert_eq!(SubnetStateOps::wasm_store_pid(&binding), None);
+        assert_eq!(SubnetStateOps::wasm_store_binding_for_pid(pid), None);
     }
 }
