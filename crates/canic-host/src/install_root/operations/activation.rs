@@ -4,7 +4,96 @@
 //! Does not own: install commands, activation transitions, or Fleet authority.
 //! Boundary: journalled Coordinator and Fleet Subnet Root workflows share this strict projection.
 
-pub(in crate::install_root) fn parse_module_hash(value: &str) -> Option<[u8; 32]> {
+use crate::icp::{IcpCli, IcpCommandError};
+use candid::Principal;
+use thiserror::Error as ThisError;
+
+#[derive(Debug, ThisError)]
+pub(in crate::install_root) enum ModuleHashObservationError {
+    #[error("failed to query status for Canister {canister}: {source}")]
+    Invocation {
+        canister: Principal,
+        #[source]
+        source: IcpCommandError,
+    },
+
+    #[error("Canister status returned {observed} for expected principal {expected}")]
+    PrincipalMismatch {
+        expected: Principal,
+        observed: String,
+    },
+
+    #[error("Canister {canister} status returned invalid module hash {observed}")]
+    InvalidHash {
+        canister: Principal,
+        observed: String,
+    },
+}
+
+#[derive(Debug, ThisError)]
+pub(in crate::install_root) enum CreatedCanisterStateError {
+    #[error("{subject} {canister} already has its expected module before install intent")]
+    ExpectedModulePresent {
+        subject: &'static str,
+        canister: Principal,
+    },
+
+    #[error("{subject} {canister} already has unexpected module hash {observed}")]
+    UnexpectedModule {
+        subject: &'static str,
+        canister: Principal,
+        observed: String,
+    },
+
+    #[error(transparent)]
+    Observation(#[from] ModuleHashObservationError),
+}
+
+pub(in crate::install_root) fn observe_module_hash(
+    icp: &IcpCli,
+    canister: Principal,
+) -> Result<Option<[u8; 32]>, ModuleHashObservationError> {
+    let report = icp
+        .canister_status_report(&canister.to_text())
+        .map_err(|source| ModuleHashObservationError::Invocation { canister, source })?;
+    if report.id != canister.to_text() {
+        return Err(ModuleHashObservationError::PrincipalMismatch {
+            expected: canister,
+            observed: report.id,
+        });
+    }
+    report
+        .module_hash
+        .as_deref()
+        .map(|value| {
+            parse_module_hash(value).ok_or_else(|| ModuleHashObservationError::InvalidHash {
+                canister,
+                observed: value.to_string(),
+            })
+        })
+        .transpose()
+}
+
+pub(in crate::install_root) fn require_uninstalled_created_canister(
+    icp: &IcpCli,
+    canister: Principal,
+    expected_module_hash: [u8; 32],
+    subject: &'static str,
+) -> Result<(), CreatedCanisterStateError> {
+    match observe_module_hash(icp, canister)? {
+        None => Ok(()),
+        Some(observed) if observed == expected_module_hash => {
+            Err(CreatedCanisterStateError::ExpectedModulePresent { subject, canister })
+        }
+        Some(observed) => Err(CreatedCanisterStateError::UnexpectedModule {
+            subject,
+            canister,
+            observed: module_hash_text(observed),
+        }),
+    }
+}
+
+fn parse_module_hash(value: &str) -> Option<[u8; 32]> {
     let value = value
         .strip_prefix("0x")
         .or_else(|| value.strip_prefix("0X"))

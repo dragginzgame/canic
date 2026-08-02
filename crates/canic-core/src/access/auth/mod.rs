@@ -8,11 +8,7 @@ mod identity;
 mod predicates;
 mod token;
 
-use crate::{
-    access::AccessError,
-    cdk::types::Principal,
-    ops::{runtime::env::EnvOps, storage::registry::subnet::SubnetRegistryOps},
-};
+use crate::{access::AccessError, cdk::types::Principal};
 use std::fmt;
 
 ///
@@ -58,7 +54,7 @@ pub enum DelegatedSessionSubjectRejection {
     ParentCanister,
     SubnetCanister,
     FleetSubnetRootCanister,
-    RegisteredCanister,
+    DirectChildCanister,
 }
 
 impl fmt::Display for DelegatedSessionSubjectRejection {
@@ -71,7 +67,7 @@ impl fmt::Display for DelegatedSessionSubjectRejection {
             Self::ParentCanister => "parent canister principal is not allowed",
             Self::SubnetCanister => "subnet principal is not allowed",
             Self::FleetSubnetRootCanister => "Fleet Subnet Root principal is not allowed",
-            Self::RegisteredCanister => "subnet-registered canister principal is not allowed",
+            Self::DirectChildCanister => "direct child canister principal is not allowed",
         };
         f.write_str(reason)
     }
@@ -139,30 +135,8 @@ pub async fn is_same_canister(caller: Principal) -> Result<(), AccessError> {
     predicates::is_same_canister(caller).await
 }
 
-/// Require that the caller is registered as a canister on this subnet.
-pub async fn is_registered_to_subnet(caller: Principal) -> Result<(), AccessError> {
-    predicates::is_registered_to_subnet(caller).await
-}
-
 fn dependency_unavailable(detail: &str) -> AccessError {
     AccessError::Denied(format!("access dependency unavailable: {detail}"))
-}
-
-fn non_root_subnet_registry_predicate_denial() -> AccessError {
-    AccessError::Denied(
-        "authentication error: illegal access to subnet registry predicate from non-root canister"
-            .to_string(),
-    )
-}
-
-fn caller_not_registered_denial(caller: Principal) -> AccessError {
-    let root = EnvOps::root_pid().map_or_else(|_| "unavailable".to_string(), |pid| pid.to_string());
-    let registry_count = SubnetRegistryOps::data().entries.len();
-    AccessError::Denied(format!(
-        "authentication error: caller '{caller}' is not registered on the subnet registry \
-         (root='{root}', registry_entries={registry_count}); verify caller root routing and \
-         root-local registry state"
-    ))
 }
 
 // -----------------------------------------------------------------------------
@@ -173,7 +147,7 @@ fn caller_not_registered_denial(caller: Principal) -> AccessError {
 mod tests {
     use super::*;
     use crate::{
-        ids::cap,
+        ids::{CanisterRole, cap},
         ops::runtime::metrics::auth::{
             AuthMetricOperation, AuthMetricOutcome, AuthMetricReason, AuthMetricSurface,
             AuthMetrics,
@@ -430,5 +404,21 @@ mod tests {
         let err = validate_delegated_session_subject(Principal::management_canister())
             .expect_err("management canister must be rejected");
         assert_eq!(err, DelegatedSessionSubjectRejection::ManagementCanister);
+    }
+
+    #[test]
+    fn validate_delegated_session_subject_rejects_direct_child() {
+        let _guard = seams::lock();
+        let child = p(31);
+        crate::ops::storage::children::CanisterChildrenOps::import_direct_children(
+            p(30),
+            vec![(child, CanisterRole::new("session_subject_child"))],
+        );
+
+        let err = validate_delegated_session_subject(child)
+            .expect_err("direct child canister must be rejected");
+        assert_eq!(err, DelegatedSessionSubjectRejection::DirectChildCanister);
+
+        crate::ops::storage::children::CanisterChildrenOps::import_direct_children(p(30), vec![]);
     }
 }

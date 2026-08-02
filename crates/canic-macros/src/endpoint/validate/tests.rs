@@ -17,20 +17,6 @@ fn parsed_authenticated() -> ParsedArgs {
     }
 }
 
-fn parsed_registered_to_subnet(internal: bool) -> ParsedArgs {
-    ParsedArgs {
-        forwarded: Vec::new(),
-        export_name: None,
-        payload_max_bytes: None,
-        requires: vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
-            BuiltinPredicate::CallerIsRegisteredToSubnet,
-        ))],
-        internal,
-        public: false,
-        query_mode: QueryMode::Plain,
-    }
-}
-
 #[test]
 fn authenticated_requires_first_argument() {
     let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
@@ -60,34 +46,6 @@ fn authenticated_rejects_wrong_first_arg_type() {
         err.to_string()
             .contains("authenticated(...) requires a first argument")
     );
-}
-
-#[test]
-fn registered_to_subnet_requires_internal_endpoint() {
-    let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
-    let err = validate(
-        EndpointKind::Update,
-        parsed_registered_to_subnet(false),
-        &sig,
-        true,
-    )
-    .unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("caller topology predicates are internal-only")
-    );
-}
-
-#[test]
-fn registered_to_subnet_is_allowed_for_internal_endpoint() {
-    let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
-    validate(
-        EndpointKind::Update,
-        parsed_registered_to_subnet(true),
-        &sig,
-        true,
-    )
-    .expect("internal predicate ok");
 }
 
 #[test]

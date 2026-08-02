@@ -60,6 +60,30 @@ fn local_canister_command_uses_http_target_when_configured() {
 }
 
 #[test]
+fn creation_result_decoding_accepts_icp_json_and_plain_principal() {
+    let canister = candid::Principal::from_slice(&[43]);
+    let root = temp_dir("canic-creation-result-decoding");
+    let path = root.join("created.json");
+    fs::create_dir_all(&root).expect("create temp root");
+    fs::write(
+        &path,
+        serde_json::json!({ "canister_id": canister.to_text() }).to_string(),
+    )
+    .expect("write creation result");
+
+    assert_eq!(
+        read_created_canister(&path).expect("read creation result"),
+        Some(canister)
+    );
+    fs::write(&path, canister.to_text()).expect("write plain creation result");
+    assert_eq!(
+        read_created_canister(&path).expect("read plain creation result"),
+        Some(canister)
+    );
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
 fn install_command_uses_binary_candid_file() {
     let canister = candid::Principal::from_slice(&[44]);
     let command = icp_canister_install_binary_args_command(

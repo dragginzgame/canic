@@ -14,7 +14,7 @@ use crate::{
         runtime::metrics::auth::{
             record_session_fallback_invalid_subject, record_session_fallback_raw_caller,
         },
-        storage::{auth::AuthStateOps, registry::subnet::SubnetRegistryOps},
+        storage::{auth::AuthStateOps, children::CanisterChildrenOps},
     },
 };
 
@@ -88,8 +88,8 @@ pub(super) fn validate_delegated_session_subject(
     {
         return Err(DelegatedSessionSubjectRejection::FleetSubnetRootCanister);
     }
-    if SubnetRegistryOps::is_registered(subject) {
-        return Err(DelegatedSessionSubjectRejection::RegisteredCanister);
+    if CanisterChildrenOps::contains_pid(&subject) {
+        return Err(DelegatedSessionSubjectRejection::DirectChildCanister);
     }
 
     Ok(())

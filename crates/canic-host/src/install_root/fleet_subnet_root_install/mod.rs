@@ -7,9 +7,8 @@
 
 use super::{
     commands::{
-        icp_canister_create_command, icp_canister_install_binary_args_command,
-        open_creation_result_for_effect, parse_created_canister_id, prepare_creation_result,
-        run_command, write_candid_args,
+        icp_canister_install_binary_args_command, prepare_creation_result, run_command,
+        write_candid_args,
     },
     fleet_subnet_root_install_journal::{
         FleetSubnetRootInstallJournal, FleetSubnetRootInstallPhase,
@@ -18,15 +17,17 @@ use super::{
         plan_fleet_subnet_root_install, record_root_created, record_root_installed,
         record_root_verified, validate_live_root_activation_status,
     },
-    operations::{module_hash_text, parse_module_hash, query_no_arg},
+    operations::{
+        CreationEffectAction, CreationEffectRequest, InstallArtifact, execute_or_observe_creation,
+        module_hash_text, observe_module_hash, query_no_arg, resolve_install_artifact,
+    },
 };
 use crate::{
-    durable_io::{RegularFileReadError, read_optional_regular_bytes},
     fleet_install_plan::PersistedFleetInstallPlan,
-    icp::{LocalReplicaTarget, run_output_to_file},
+    icp::LocalReplicaTarget,
     release_set::{
         AppConfigSnapshot, CanicInfrastructureRole,
-        load_persisted_canic_infrastructure_artifact_manifest, resolve_release_artifact_path,
+        load_persisted_canic_infrastructure_artifact_manifest,
     },
 };
 use candid::Principal;
@@ -37,9 +38,6 @@ use canic_core::{
     },
     protocol,
 };
-use sha2::{Digest, Sha256};
-#[cfg(not(unix))]
-use std::io;
 use std::path::{Path, PathBuf};
 use thiserror::Error as ThisError;
 
@@ -67,38 +65,6 @@ struct RootInstallOutcomeUnknownError {
 
 #[derive(Debug, ThisError)]
 enum RootInstallStateError {
-    #[error("Fleet Subnet Root artifact {path} is missing")]
-    ArtifactMissing { path: PathBuf },
-
-    #[error("Fleet Subnet Root artifact is not a regular no-follow file: {path}")]
-    ArtifactUnsafe { path: PathBuf },
-
-    #[error("Fleet Subnet Root artifact {path} has size {actual}, expected {expected}")]
-    ArtifactSize {
-        path: PathBuf,
-        expected: u64,
-        actual: usize,
-    },
-
-    #[error("Fleet Subnet Root artifact {path} has SHA-256 {actual}, expected {expected}")]
-    ArtifactHash {
-        path: PathBuf,
-        expected: String,
-        actual: String,
-    },
-
-    #[error("Fleet Subnet Root creation result is not a regular no-follow file: {path}")]
-    CreationResultUnsafe { path: PathBuf },
-
-    #[error("Fleet Subnet Root creation result is invalid: {path}")]
-    InvalidCreationResult { path: PathBuf },
-
-    #[error("created Fleet Subnet Root {observed} differs from status principal {expected}")]
-    StatusPrincipal {
-        expected: Principal,
-        observed: String,
-    },
-
     #[error("Fleet Subnet Root {fleet_subnet_root} already has unexpected module {observed}")]
     UnexpectedModule {
         fleet_subnet_root: Principal,
@@ -118,10 +84,6 @@ enum RootInstallStateError {
     TransitionBoundExceeded,
 }
 
-struct RootArtifact {
-    wasm_path: PathBuf,
-}
-
 pub(super) fn install_and_verify_fleet_subnet_roots(
     icp_root: &Path,
     environment: &str,
@@ -137,7 +99,12 @@ pub(super) fn install_and_verify_fleet_subnet_roots(
         icp_root,
         fleet_install_plan.plan.release_build_id,
     )?;
-    let artifact = resolve_root_artifact(icp_root, fleet_install_plan, &infrastructure_manifest)?;
+    let artifact = resolve_install_artifact(
+        icp_root,
+        &infrastructure_manifest,
+        CanicInfrastructureRole::FleetSubnetRoot,
+        fleet_install_plan.plan.release_build_id,
+    )?;
     let mut roots = Vec::with_capacity(fleet_install_plan.plan.fleet_subnet_roots.len());
 
     for root_plan in &fleet_install_plan.plan.fleet_subnet_roots {
@@ -170,7 +137,7 @@ fn drive_root_install(
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
-    artifact: &RootArtifact,
+    artifact: &InstallArtifact,
     mut current: ResolvedFleetSubnetRootInstall,
 ) -> Result<FleetSubnetRootAuthority, Box<dyn std::error::Error>> {
     for _ in 0..MAX_ROOT_TRANSITIONS {
@@ -241,38 +208,33 @@ fn recover_or_create_root(
     current: &ResolvedFleetSubnetRootInstall,
 ) -> Result<ResolvedFleetSubnetRootInstall, Box<dyn std::error::Error>> {
     let result_path = create_result_path(&current.path);
-    let mut command_error = None;
-    if current.advanced {
-        let result = open_creation_result_for_effect(&result_path, "Fleet Subnet Root")?;
-        let mut command = icp_canister_create_command(
-            icp_root,
-            environment,
-            local_replica,
-            current.journal.root_plan.placement_subnet,
-            &current.journal.root_plan.creation_funding,
-        );
-        if let Err(error) = run_output_to_file(&mut command, &result) {
-            command_error = Some(error.to_string());
-        }
-    }
-    let Some(fleet_subnet_root) = read_created_root(&result_path)? else {
+    let action = if current.advanced {
+        CreationEffectAction::Execute
+    } else {
+        CreationEffectAction::ObserveOnly
+    };
+    let evidence = execute_or_observe_creation(CreationEffectRequest {
+        icp_root,
+        environment,
+        local_replica,
+        result_path: &result_path,
+        subject: "Fleet Subnet Root",
+        placement_subnet: current.journal.root_plan.placement_subnet,
+        funding: &current.journal.root_plan.creation_funding,
+        action,
+        expected_module_hash: current.journal.expected_module_hash,
+    })?;
+    let Some(fleet_subnet_root) = evidence.canister else {
         return Err(RootCreationOutcomeUnknownError {
             placement_subnet: current.journal.root_plan.placement_subnet,
             result_path,
-            detail: command_error.unwrap_or_else(|| {
+            detail: evidence.command_error.unwrap_or_else(|| {
                 "the journal is already creation_in_flight and has no recoverable principal"
                     .to_string()
             }),
         }
         .into());
     };
-    observe_created_root(
-        icp_root,
-        environment,
-        local_replica,
-        fleet_subnet_root,
-        current.journal.expected_module_hash,
-    )?;
     record_root_created(current, fleet_subnet_root).map_err(Into::into)
 }
 
@@ -280,14 +242,15 @@ fn recover_or_install_root(
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
-    artifact: &RootArtifact,
+    artifact: &InstallArtifact,
     current: &ResolvedFleetSubnetRootInstall,
 ) -> Result<ResolvedFleetSubnetRootInstall, Box<dyn std::error::Error>> {
     let fleet_subnet_root = current
         .journal
         .fleet_subnet_root
         .expect("validated InstallInFlight journal retains its root");
-    match observed_module_hash(icp_root, environment, local_replica, fleet_subnet_root)? {
+    let icp = super::install_icp(icp_root, environment, local_replica);
+    match observe_module_hash(&icp, fleet_subnet_root)? {
         Some(observed) if observed == current.journal.expected_module_hash => {
             return record_root_installed(current, observed).map_err(Into::into);
         }
@@ -321,7 +284,7 @@ fn recover_or_install_root(
         &args_path,
     );
     let command_result = run_command(&mut install);
-    match observed_module_hash(icp_root, environment, local_replica, fleet_subnet_root) {
+    match observe_module_hash(&icp, fleet_subnet_root) {
         Ok(Some(observed)) if observed == current.journal.expected_module_hash => {
             record_root_installed(current, observed).map_err(Into::into)
         }
@@ -379,7 +342,8 @@ fn verify_live_root(
     let fleet_subnet_root = journal
         .fleet_subnet_root
         .expect("installed root journal retains its principal");
-    match observed_module_hash(icp_root, environment, local_replica, fleet_subnet_root)? {
+    let icp = super::install_icp(icp_root, environment, local_replica);
+    match observe_module_hash(&icp, fleet_subnet_root)? {
         Some(observed) if observed == journal.expected_module_hash => {}
         Some(observed) => {
             return Err(RootInstallStateError::UnexpectedModule {
@@ -394,7 +358,6 @@ fn verify_live_root(
     }
 
     let expected = expected_root_authority(journal)?;
-    let icp = super::install_icp(icp_root, environment, local_replica);
     let status = query_no_arg::<FleetActivationStatusResponse>(
         &icp,
         fleet_subnet_root,
@@ -420,140 +383,4 @@ fn root_install_args(
         authority: expected_root_authority(journal)?,
         install_id: journal.install_operation_id,
     })
-}
-
-fn resolve_root_artifact(
-    icp_root: &Path,
-    fleet_install_plan: &PersistedFleetInstallPlan,
-    infrastructure_manifest: &crate::release_set::PersistedCanicInfrastructureArtifactManifest,
-) -> Result<RootArtifact, Box<dyn std::error::Error>> {
-    let entry = infrastructure_manifest
-        .manifest
-        .entries
-        .iter()
-        .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
-        .expect("validated infrastructure manifest has one root entry");
-    let wasm_path = resolve_release_artifact_path(icp_root, &entry.wasm_relative_path)?;
-    let wasm = match read_optional_regular_bytes(&wasm_path) {
-        Ok(Some(bytes)) => bytes,
-        Ok(None) => return Err(RootInstallStateError::ArtifactMissing { path: wasm_path }.into()),
-        Err(RegularFileReadError::NotRegular) => {
-            return Err(RootInstallStateError::ArtifactUnsafe { path: wasm_path }.into());
-        }
-        Err(RegularFileReadError::Io(source)) => return Err(source.into()),
-        #[cfg(not(unix))]
-        Err(RegularFileReadError::UnsupportedPlatform) => {
-            return Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "Fleet Subnet Root artifact reads are unsupported",
-            )
-            .into());
-        }
-    };
-    if wasm.len() as u64 != entry.wasm_size_bytes {
-        return Err(RootInstallStateError::ArtifactSize {
-            path: wasm_path,
-            expected: entry.wasm_size_bytes,
-            actual: wasm.len(),
-        }
-        .into());
-    }
-    let actual_hash = module_hash_text(Sha256::digest(&wasm).into());
-    if actual_hash != entry.wasm_sha256_hex {
-        return Err(RootInstallStateError::ArtifactHash {
-            path: wasm_path,
-            expected: entry.wasm_sha256_hex.clone(),
-            actual: actual_hash,
-        }
-        .into());
-    }
-    if entry.release_build_id != fleet_install_plan.plan.release_build_id {
-        return Err("root artifact release build differs from Fleet install plan".into());
-    }
-    Ok(RootArtifact { wasm_path })
-}
-
-fn observed_module_hash(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
-    fleet_subnet_root: Principal,
-) -> Result<Option<[u8; 32]>, Box<dyn std::error::Error>> {
-    let report = super::install_icp(icp_root, environment, local_replica)
-        .canister_status_report(&fleet_subnet_root.to_text())?;
-    if report.id != fleet_subnet_root.to_text() {
-        return Err(RootInstallStateError::StatusPrincipal {
-            expected: fleet_subnet_root,
-            observed: report.id,
-        }
-        .into());
-    }
-    report
-        .module_hash
-        .as_deref()
-        .map(|value| {
-            parse_module_hash(value).ok_or_else(|| {
-                RootInstallStateError::UnexpectedModule {
-                    fleet_subnet_root,
-                    observed: value.to_string(),
-                }
-                .into()
-            })
-        })
-        .transpose()
-}
-
-fn observe_created_root(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
-    fleet_subnet_root: Principal,
-    expected_module_hash: [u8; 32],
-) -> Result<(), Box<dyn std::error::Error>> {
-    match observed_module_hash(icp_root, environment, local_replica, fleet_subnet_root)? {
-        None => Ok(()),
-        Some(observed) if observed == expected_module_hash => {
-            Err("root module exists before journalled install intent".into())
-        }
-        Some(observed) => Err(RootInstallStateError::UnexpectedModule {
-            fleet_subnet_root,
-            observed: module_hash_text(observed),
-        }
-        .into()),
-    }
-}
-
-fn read_created_root(path: &Path) -> Result<Option<Principal>, Box<dyn std::error::Error>> {
-    let bytes = match read_optional_regular_bytes(path) {
-        Ok(Some(bytes)) => bytes,
-        Ok(None) => return Ok(None),
-        Err(RegularFileReadError::NotRegular) => {
-            return Err(RootInstallStateError::CreationResultUnsafe {
-                path: path.to_path_buf(),
-            }
-            .into());
-        }
-        Err(RegularFileReadError::Io(source)) => return Err(source.into()),
-        #[cfg(not(unix))]
-        Err(RegularFileReadError::UnsupportedPlatform) => {
-            return Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "Fleet Subnet Root creation result reads are unsupported",
-            )
-            .into());
-        }
-    };
-    if bytes.is_empty() {
-        return Ok(None);
-    }
-    let output =
-        std::str::from_utf8(&bytes).map_err(|_| RootInstallStateError::InvalidCreationResult {
-            path: path.to_path_buf(),
-        })?;
-    let principal = parse_created_canister_id(output)
-        .and_then(|value| Principal::from_text(value).ok())
-        .ok_or_else(|| RootInstallStateError::InvalidCreationResult {
-            path: path.to_path_buf(),
-        })?;
-    Ok(Some(principal))
 }

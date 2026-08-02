@@ -146,7 +146,6 @@ pub enum CallerPredicate {
     IsChild,
     IsRoot,
     IsSameCanister,
-    IsRegisteredToSubnet,
     IsWhitelisted,
 }
 
@@ -254,13 +253,6 @@ pub mod caller {
     #[must_use]
     pub const fn is_same_canister() -> AccessExpr {
         builtin(BuiltinPredicate::Caller(CallerPredicate::IsSameCanister))
-    }
-
-    #[must_use]
-    pub const fn is_registered_to_subnet() -> AccessExpr {
-        builtin(BuiltinPredicate::Caller(
-            CallerPredicate::IsRegisteredToSubnet,
-        ))
     }
 
     #[must_use]

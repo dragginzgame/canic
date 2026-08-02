@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.85`.
-- The latest published release is `v0.100.85` at
-  `9481846a7df78bbbb09125f03432eb0249f746e6`.
-- Open `0.100.86` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.86`.
+- The latest published release is `v0.100.86` at
+  `edfd33ac729dfbd2b9c1cb1b9058e13dc21b914c`.
+- Open `0.100.87` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -711,7 +711,7 @@ Historical detail is archived at:
   that journal after membership removal. Placement cleanup derives one stable
   child-bound disposal operation so it resumes the same nested and outer
   receipts.
-- Open `0.100.86` narrows management code installation to the maintained
+- Released `0.100.86` narrows management code installation to the maintained
   fresh-install path and removes the stranded reinstall/upgrade modes, flag
   records, metric variants and uncalled generic workflow entry point. It also
   hard-cuts the redundant local Subnet Directory storage and cascade slot;
@@ -721,6 +721,15 @@ Historical detail is archived at:
   files for Coordinator/root init, resolves named environments through their
   backing network, generates the required local acceptance Fleet input from
   live topology and builds on macOS without Linux-only entropy or FIFO APIs.
+- Open `0.100.87` consolidates Coordinator/root artifact validation,
+  creation-result decoding and live module-hash observation behind typed
+  shared helpers while preserving independent install journals and recovery
+  decisions. Paid creation execution, durable result capture and the
+  pre-install empty-module fence now have one shared operation. It also
+  hard-cuts the unused subnet-registration caller
+  predicate and replaces delegated-session validation's legacy Registry read
+  with the maintained local direct-child cache. Host-only `ic-query` advances
+  to `0.25.12` through the unchanged focused Subnet Catalog feature.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -2405,7 +2414,7 @@ Durable journal authority permits exact continuation after live membership is
 removed, while fresh operations still require an active direct child of the
 calling Component. Placement cleanup uses a stable child-bound operation ID so
 all retries converge on the same receipts.
-Open `0.100.86` narrows management code installation to fresh installs and
+Released `0.100.86` narrows management code installation to fresh installs and
 removes the orphaned reinstall/upgrade modes, flags, metrics and generic
 workflow surface left behind by the completed upgrade hard cut. It also fixes
 fresh Coordinator/root installation with typed binary Candid, makes named
@@ -2414,6 +2423,15 @@ install acceptance input and removes Linux-only host entropy/test imports. The
 host protocol path now exposes explicit typed query/update operations through
 shared mode-aware ICP command builders; durable install arguments remain
 separate from transient call arguments because their recovery lifetimes differ.
+Open `0.100.87` removes the remaining duplicate Coordinator/root artifact,
+creation-evidence and module-hash observation paths without merging their
+durable journals or domain-specific recovery fences. Paid creation execution,
+result capture and pre-install module rejection now have one shared owner. The
+same draft hard-cuts
+the unused subnet-registration caller predicate and rejects delegated direct
+child identities through the maintained local child cache rather than the
+legacy Subnet Registry. The focused host-only Subnet Catalog dependency is
+source-compatible at `ic-query 0.25.12`.
 
 ## Historical Release Detail
 
