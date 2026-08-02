@@ -2,7 +2,8 @@
 //!
 //! Responsibility: invoke typed Canic Candid methods through the maintained ICP CLI adapter.
 //! Does not own: domain sequencing, endpoint authorization, or management-Canister effects.
-//! Boundary: domain workflows supply exact Canister, method, arguments, and query/update intent.
+//! Boundary: domain workflows supply exact Canister, method, and arguments through explicit
+//! query or update operations.
 
 use crate::icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response};
 use candid::{CandidType, Principal};
@@ -21,6 +22,12 @@ use thiserror::Error as ThisError;
 const ICP_JSON_OUTPUT: &str = "json";
 const MAX_ARGUMENT_FILE_ATTEMPTS: usize = 32;
 static NEXT_ARGUMENT_FILE: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Clone, Copy)]
+enum ProtocolCallMode {
+    Query,
+    Update,
+}
 
 #[derive(Debug, ThisError)]
 pub enum CanisterProtocolError {
@@ -79,20 +86,7 @@ pub fn call_no_arg<O>(
 where
     O: CandidType + DeserializeOwned,
 {
-    let output = icp
-        .canister_call_arg_output_with_candid(
-            &canister.to_text(),
-            method,
-            "()",
-            Some(ICP_JSON_OUTPUT),
-            None,
-        )
-        .map_err(|source| CanisterProtocolError::Invocation {
-            canister,
-            method,
-            source,
-        })?;
-    decode_response(canister, method, &output)
+    invoke_no_arg(icp, canister, method, ProtocolCallMode::Update)
 }
 
 pub fn call_with_arg<I, O>(
@@ -100,7 +94,77 @@ pub fn call_with_arg<I, O>(
     canister: Principal,
     method: &'static str,
     input: &I,
-    query: bool,
+) -> Result<O, CanisterProtocolError>
+where
+    I: CandidType,
+    O: CandidType + DeserializeOwned,
+{
+    invoke_with_arg(icp, canister, method, input, ProtocolCallMode::Update)
+}
+
+pub fn query_no_arg<O>(
+    icp: &IcpCli,
+    canister: Principal,
+    method: &'static str,
+) -> Result<O, CanisterProtocolError>
+where
+    O: CandidType + DeserializeOwned,
+{
+    invoke_no_arg(icp, canister, method, ProtocolCallMode::Query)
+}
+
+pub fn query_with_arg<I, O>(
+    icp: &IcpCli,
+    canister: Principal,
+    method: &'static str,
+    input: &I,
+) -> Result<O, CanisterProtocolError>
+where
+    I: CandidType,
+    O: CandidType + DeserializeOwned,
+{
+    invoke_with_arg(icp, canister, method, input, ProtocolCallMode::Query)
+}
+
+fn invoke_no_arg<O>(
+    icp: &IcpCli,
+    canister: Principal,
+    method: &'static str,
+    mode: ProtocolCallMode,
+) -> Result<O, CanisterProtocolError>
+where
+    O: CandidType + DeserializeOwned,
+{
+    let canister_text = canister.to_text();
+    let output = match mode {
+        ProtocolCallMode::Query => icp.canister_query_output_with_candid(
+            &canister_text,
+            method,
+            Some(ICP_JSON_OUTPUT),
+            None,
+        ),
+        ProtocolCallMode::Update => icp.canister_call_arg_output_with_candid(
+            &canister_text,
+            method,
+            "()",
+            Some(ICP_JSON_OUTPUT),
+            None,
+        ),
+    }
+    .map_err(|source| CanisterProtocolError::Invocation {
+        canister,
+        method,
+        source,
+    })?;
+    decode_response(canister, method, &output)
+}
+
+fn invoke_with_arg<I, O>(
+    icp: &IcpCli,
+    canister: Principal,
+    method: &'static str,
+    input: &I,
+    mode: ProtocolCallMode,
 ) -> Result<O, CanisterProtocolError>
 where
     I: CandidType,
@@ -118,22 +182,22 @@ where
             method,
             source,
         })?;
-    let output = if query {
-        icp.canister_query_binary_args_output_with_candid(
-            &canister.to_text(),
+    let canister_text = canister.to_text();
+    let output = match mode {
+        ProtocolCallMode::Query => icp.canister_query_binary_args_output_with_candid(
+            &canister_text,
             method,
             &args_path,
             Some(ICP_JSON_OUTPUT),
             None,
-        )
-    } else {
-        icp.canister_call_binary_args_output_with_candid(
-            &canister.to_text(),
+        ),
+        ProtocolCallMode::Update => icp.canister_call_binary_args_output_with_candid(
+            &canister_text,
             method,
             &args_path,
             Some(ICP_JSON_OUTPUT),
             None,
-        )
+        ),
     };
     let cleanup = fs::remove_file(&args_path);
     let output = output.map_err(|source| CanisterProtocolError::Invocation {
@@ -181,24 +245,6 @@ fn create_argument_file(path: &std::path::Path, bytes: &[u8]) -> io::Result<()> 
         return Err(source);
     }
     Ok(())
-}
-
-pub fn query_no_arg<O>(
-    icp: &IcpCli,
-    canister: Principal,
-    method: &'static str,
-) -> Result<O, CanisterProtocolError>
-where
-    O: CandidType + DeserializeOwned,
-{
-    let output = icp
-        .canister_query_output_with_candid(&canister.to_text(), method, Some(ICP_JSON_OUTPUT), None)
-        .map_err(|source| CanisterProtocolError::Invocation {
-            canister,
-            method,
-            source,
-        })?;
-    decode_response(canister, method, &output)
 }
 
 fn decode_response<O>(

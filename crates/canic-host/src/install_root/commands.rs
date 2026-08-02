@@ -1,11 +1,15 @@
 use crate::{
-    durable_io::write_bytes,
+    durable_io::{
+        RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
+        write_bytes,
+    },
+    fleet_install_plan::PlannedCanisterCreationFunding,
     icp::{self, LocalReplicaTarget},
 };
 use candid::CandidType;
-use canic_core::cdk::types::Principal;
+use canic_core::{cdk::types::Principal, ids::SubnetId};
 use serde_json::Value as JsonValue;
-use std::{path::Path, process::Command};
+use std::{fs::File, io, path::Path, process::Command};
 
 pub(super) fn parse_created_canister_id(output: &str) -> Option<String> {
     if let Ok(value) = serde_json::from_str::<JsonValue>(output) {
@@ -39,6 +43,96 @@ pub(super) fn write_candid_args<T: CandidType>(
     Ok(())
 }
 
+pub(super) fn prepare_creation_result(path: &Path, subject: &str) -> io::Result<()> {
+    match create_new_bytes_with_parents(path, &[]) {
+        Ok(()) => Ok(()),
+        Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {
+            match read_optional_regular_bytes(path) {
+                Ok(Some(bytes)) if bytes.is_empty() => Ok(()),
+                Ok(Some(_)) => Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("{subject} creation result exists before creation intent"),
+                )),
+                Ok(None) => Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!("{subject} creation result disappeared"),
+                )),
+                Err(RegularFileReadError::NotRegular) => Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("{subject} creation result is not a regular file"),
+                )),
+                Err(RegularFileReadError::Io(source)) => Err(source),
+                #[cfg(not(unix))]
+                Err(RegularFileReadError::UnsupportedPlatform) => Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    format!("{subject} creation result reads are unsupported"),
+                )),
+            }
+        }
+        Err(source) => Err(source),
+    }
+}
+
+#[cfg(unix)]
+pub(super) fn open_creation_result_for_effect(path: &Path, subject: &str) -> io::Result<File> {
+    use rustix::{
+        fd::OwnedFd,
+        fs::{FileType, Mode, OFlags, fstat, open},
+    };
+
+    let bytes = match read_optional_regular_bytes(path) {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("{subject} creation result is missing"),
+            ));
+        }
+        Err(RegularFileReadError::NotRegular) => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("{subject} creation result is not a regular file"),
+            ));
+        }
+        Err(RegularFileReadError::Io(source)) => return Err(source),
+    };
+    if !bytes.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!("{subject} creation result already contains evidence"),
+        ));
+    }
+    let fd: OwnedFd = open(
+        path,
+        OFlags::WRONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
+        Mode::empty(),
+    )
+    .map_err(|source| io::Error::from_raw_os_error(source.raw_os_error()))?;
+    let metadata =
+        fstat(&fd).map_err(|source| io::Error::from_raw_os_error(source.raw_os_error()))?;
+    if FileType::from_raw_mode(metadata.st_mode) != FileType::RegularFile {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("{subject} creation result is not a regular file"),
+        ));
+    }
+    if metadata.st_size != 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!("{subject} creation result already contains evidence"),
+        ));
+    }
+    Ok(File::from(fd))
+}
+
+#[cfg(not(unix))]
+pub(super) fn open_creation_result_for_effect(_path: &Path, subject: &str) -> io::Result<File> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        format!("{subject} creation result capture is unsupported"),
+    ))
+}
+
 pub(super) fn run_command(command: &mut Command) -> Result<(), Box<dyn std::error::Error>> {
     icp::run_status(command).map_err(Into::into)
 }
@@ -46,6 +140,52 @@ pub(super) fn run_command(command: &mut Command) -> Result<(), Box<dyn std::erro
 pub(super) fn icp_canister_command(icp_root: &Path) -> Command {
     let mut command = icp::default_command_in(icp_root);
     command.arg("canister");
+    command
+}
+
+pub(super) fn icp_canister_create_command(
+    icp_root: &Path,
+    environment: &str,
+    local_replica: Option<&LocalReplicaTarget>,
+    subnet: SubnetId,
+    funding: &PlannedCanisterCreationFunding,
+) -> Command {
+    let mut command = icp_canister_command(icp_root);
+    command.args(["create", "--detached", "--json", "--subnet"]);
+    command.arg(subnet.to_string());
+    match funding {
+        PlannedCanisterCreationFunding::Cycles { cycles } => {
+            command.args(["--cycles", &cycles.to_string()]);
+        }
+        PlannedCanisterCreationFunding::Icp { e8s } => {
+            command.args(["--with-icp", &icp_e8s_text(*e8s)]);
+        }
+    }
+    add_icp_environment_target(&mut command, environment, local_replica);
+    command
+}
+
+pub(super) fn icp_canister_install_binary_args_command(
+    icp_root: &Path,
+    environment: &str,
+    local_replica: Option<&LocalReplicaTarget>,
+    canister: Principal,
+    wasm_path: &Path,
+    args_path: &Path,
+) -> Command {
+    let mut command = icp_canister_command(icp_root);
+    command.args([
+        "install",
+        &canister.to_text(),
+        "--mode=install",
+        "-y",
+        "--wasm",
+    ]);
+    command.arg(wasm_path);
+    command.arg("--args-file");
+    command.arg(args_path);
+    command.args(["--args-format", "bin"]);
+    add_icp_environment_target(&mut command, environment, local_replica);
     command
 }
 

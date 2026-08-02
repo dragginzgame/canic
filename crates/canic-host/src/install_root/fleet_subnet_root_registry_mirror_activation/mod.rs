@@ -12,7 +12,7 @@ use super::{
         record_registry_mirror_activation_verified,
     },
     fleet_subnet_root_store_bootstrap::canonical_manifest_bytes,
-    operations::call_with_arg,
+    operations::{call_with_arg, query_with_arg},
 };
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
@@ -151,17 +151,15 @@ fn drive_root_mirror_activation(
                     root,
                     protocol::CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
                     &request,
-                    false,
                 )?;
                 record_registry_mirror_activated(&current, response)?
             }
             FleetSubnetRootInstallPhase::RegistryMirrorActivated => {
-                let response = call_with_arg(
+                let response = query_with_arg(
                     &icp,
                     root,
                     protocol::CANIC_FLEET_REGISTRY_MIRROR_STATUS,
                     &request,
-                    true,
                 )?;
                 record_registry_mirror_activation_verified(&current, response)?
             }
@@ -174,12 +172,11 @@ fn drive_root_mirror_activation(
             | FleetSubnetRootInstallPhase::RootActivationInFlight
             | FleetSubnetRootInstallPhase::RootActivated
             | FleetSubnetRootInstallPhase::RootActivationVerified => {
-                let response = call_with_arg(
+                let response = query_with_arg(
                     &icp,
                     root,
                     protocol::CANIC_FLEET_REGISTRY_MIRROR_STATUS,
                     &request,
-                    true,
                 )?;
                 if current.journal.registry_mirror_activation_response.as_ref() != Some(&response) {
                     return Err(RootRegistryMirrorActivationError::LiveEvidenceMismatch.into());

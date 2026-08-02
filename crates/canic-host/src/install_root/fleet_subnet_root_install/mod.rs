@@ -7,7 +7,8 @@
 
 use super::{
     commands::{
-        add_icp_environment_target, icp_canister_command, icp_e8s_text, parse_created_canister_id,
+        icp_canister_create_command, icp_canister_install_binary_args_command,
+        open_creation_result_for_effect, parse_created_canister_id, prepare_creation_result,
         run_command, write_candid_args,
     },
     fleet_subnet_root_install_journal::{
@@ -20,10 +21,8 @@ use super::{
     operations::{module_hash_text, parse_module_hash, query_no_arg},
 };
 use crate::{
-    durable_io::{
-        RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
-    },
-    fleet_install_plan::{PersistedFleetInstallPlan, PlannedCanisterCreationFunding},
+    durable_io::{RegularFileReadError, read_optional_regular_bytes},
+    fleet_install_plan::PersistedFleetInstallPlan,
     icp::{LocalReplicaTarget, run_output_to_file},
     release_set::{
         AppConfigSnapshot, CanicInfrastructureRole,
@@ -39,10 +38,9 @@ use canic_core::{
     protocol,
 };
 use sha2::{Digest, Sha256};
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
-};
+#[cfg(not(unix))]
+use std::io;
+use std::path::{Path, PathBuf};
 use thiserror::Error as ThisError;
 
 const MAX_ROOT_TRANSITIONS: usize = 8;
@@ -178,7 +176,7 @@ fn drive_root_install(
     for _ in 0..MAX_ROOT_TRANSITIONS {
         current = match current.journal.phase {
             FleetSubnetRootInstallPhase::Planned => {
-                prepare_creation_result(&create_result_path(&current.path))?;
+                prepare_creation_result(&create_result_path(&current.path), "Fleet Subnet Root")?;
                 begin_root_creation(&current)?
             }
             FleetSubnetRootInstallPhase::CreationInFlight => {
@@ -245,9 +243,14 @@ fn recover_or_create_root(
     let result_path = create_result_path(&current.path);
     let mut command_error = None;
     if current.advanced {
-        let result = open_creation_result_for_effect(&result_path)?;
-        let mut command =
-            root_create_command(icp_root, environment, local_replica, &current.journal);
+        let result = open_creation_result_for_effect(&result_path, "Fleet Subnet Root")?;
+        let mut command = icp_canister_create_command(
+            icp_root,
+            environment,
+            local_replica,
+            current.journal.root_plan.placement_subnet,
+            &current.journal.root_plan.creation_funding,
+        );
         if let Err(error) = run_output_to_file(&mut command, &result) {
             command_error = Some(error.to_string());
         }
@@ -309,7 +312,7 @@ fn recover_or_install_root(
     let init_args = root_install_args(&current.journal)?;
     let args_path = current.path.with_file_name(ROOT_INSTALL_ARGS_FILE);
     write_candid_args(&args_path, &init_args)?;
-    let mut install = root_install_command(
+    let mut install = icp_canister_install_binary_args_command(
         icp_root,
         environment,
         local_replica,
@@ -470,51 +473,6 @@ fn resolve_root_artifact(
     Ok(RootArtifact { wasm_path })
 }
 
-fn root_create_command(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
-    journal: &FleetSubnetRootInstallJournal,
-) -> std::process::Command {
-    let mut command = icp_canister_command(icp_root);
-    command.args(["create", "--detached", "--json", "--subnet"]);
-    command.arg(journal.root_plan.placement_subnet.to_string());
-    match journal.root_plan.creation_funding {
-        PlannedCanisterCreationFunding::Cycles { cycles } => {
-            command.args(["--cycles", &cycles.to_string()]);
-        }
-        PlannedCanisterCreationFunding::Icp { e8s } => {
-            command.args(["--with-icp", &icp_e8s_text(e8s)]);
-        }
-    }
-    add_icp_environment_target(&mut command, environment, local_replica);
-    command
-}
-
-fn root_install_command(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
-    fleet_subnet_root: Principal,
-    wasm_path: &Path,
-    args_path: &Path,
-) -> std::process::Command {
-    let mut command = icp_canister_command(icp_root);
-    command.args([
-        "install",
-        &fleet_subnet_root.to_text(),
-        "--mode=install",
-        "-y",
-        "--wasm",
-    ]);
-    command.arg(wasm_path);
-    command.arg("--args-file");
-    command.arg(args_path);
-    command.args(["--args-format", "bin"]);
-    add_icp_environment_target(&mut command, environment, local_replica);
-    command
-}
-
 fn observed_module_hash(
     icp_root: &Path,
     environment: &str,
@@ -565,36 +523,6 @@ fn observe_created_root(
     }
 }
 
-fn prepare_creation_result(path: &Path) -> io::Result<()> {
-    match create_new_bytes_with_parents(path, &[]) {
-        Ok(()) => Ok(()),
-        Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {
-            match read_optional_regular_bytes(path) {
-                Ok(Some(bytes)) if bytes.is_empty() => Ok(()),
-                Ok(Some(_)) => Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "Fleet Subnet Root creation result exists before creation intent",
-                )),
-                Ok(None) => Err(io::Error::new(
-                    io::ErrorKind::NotFound,
-                    "Fleet Subnet Root creation result disappeared",
-                )),
-                Err(RegularFileReadError::NotRegular) => Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "Fleet Subnet Root creation result is not a regular file",
-                )),
-                Err(RegularFileReadError::Io(source)) => Err(source),
-                #[cfg(not(unix))]
-                Err(RegularFileReadError::UnsupportedPlatform) => Err(io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    "Fleet Subnet Root creation result reads are unsupported",
-                )),
-            }
-        }
-        Err(source) => Err(source),
-    }
-}
-
 fn read_created_root(path: &Path) -> Result<Option<Principal>, Box<dyn std::error::Error>> {
     let bytes = match read_optional_regular_bytes(path) {
         Ok(Some(bytes)) => bytes,
@@ -628,89 +556,4 @@ fn read_created_root(path: &Path) -> Result<Option<Principal>, Box<dyn std::erro
             path: path.to_path_buf(),
         })?;
     Ok(Some(principal))
-}
-
-#[cfg(unix)]
-fn open_creation_result_for_effect(path: &Path) -> io::Result<fs::File> {
-    use rustix::{
-        fd::OwnedFd,
-        fs::{FileType, Mode, OFlags, fstat, open},
-    };
-
-    let bytes = match read_optional_regular_bytes(path) {
-        Ok(Some(bytes)) => bytes,
-        Ok(None) => {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                "Fleet Subnet Root creation result is missing",
-            ));
-        }
-        Err(RegularFileReadError::NotRegular) => {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "Fleet Subnet Root creation result is not a regular file",
-            ));
-        }
-        Err(RegularFileReadError::Io(source)) => return Err(source),
-    };
-    if !bytes.is_empty() {
-        return Err(io::Error::new(
-            io::ErrorKind::AlreadyExists,
-            "Fleet Subnet Root creation result already contains evidence",
-        ));
-    }
-    let fd: OwnedFd = open(
-        path,
-        OFlags::WRONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
-        Mode::empty(),
-    )
-    .map_err(|source| io::Error::from_raw_os_error(source.raw_os_error()))?;
-    let metadata =
-        fstat(&fd).map_err(|source| io::Error::from_raw_os_error(source.raw_os_error()))?;
-    if FileType::from_raw_mode(metadata.st_mode) != FileType::RegularFile {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Fleet Subnet Root creation result is not a regular file",
-        ));
-    }
-    if metadata.st_size != 0 {
-        return Err(io::Error::new(
-            io::ErrorKind::AlreadyExists,
-            "Fleet Subnet Root creation result already contains evidence",
-        ));
-    }
-    Ok(fs::File::from(fd))
-}
-
-#[cfg(not(unix))]
-fn open_creation_result_for_effect(_path: &Path) -> io::Result<fs::File> {
-    Err(io::Error::new(
-        io::ErrorKind::Unsupported,
-        "Fleet Subnet Root creation result capture is unsupported",
-    ))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn root_install_command_uses_binary_candid_file() {
-        let fleet_subnet_root = Principal::from_slice(&[44]);
-        let command = root_install_command(
-            Path::new("/workspace"),
-            "caelum-backend",
-            None,
-            fleet_subnet_root,
-            Path::new("/artifacts/root.wasm"),
-            Path::new("/state/root-install-args.bin"),
-        );
-
-        assert_eq!(
-            crate::icp::command_display(&command),
-            format!(
-                "icp --project-root-override /workspace canister install {fleet_subnet_root} --mode=install -y --wasm /artifacts/root.wasm --args-file /state/root-install-args.bin --args-format bin -e caelum-backend"
-            )
-        );
-    }
 }

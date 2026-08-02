@@ -2410,7 +2410,10 @@ removes the orphaned reinstall/upgrade modes, flags, metrics and generic
 workflow surface left behind by the completed upgrade hard cut. It also fixes
 fresh Coordinator/root installation with typed binary Candid, makes named
 local environments authoritative by backing network, repairs the local Fleet
-install acceptance input and removes Linux-only host entropy/test imports.
+install acceptance input and removes Linux-only host entropy/test imports. The
+host protocol path now exposes explicit typed query/update operations through
+shared mode-aware ICP command builders; durable install arguments remain
+separate from transient call arguments because their recovery lifetimes differ.
 
 ## Historical Release Detail
 

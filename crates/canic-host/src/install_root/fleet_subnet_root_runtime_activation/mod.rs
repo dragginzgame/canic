@@ -10,7 +10,7 @@ use super::fleet_subnet_root_install_journal::{
     record_root_activated, record_root_activation_prepared, record_root_activation_verified,
     validate_live_root_activation_status,
 };
-use super::operations::{call_no_arg, call_with_arg, query_no_arg};
+use super::operations::{call_no_arg, call_with_arg, query_no_arg, query_with_arg};
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
     icp::LocalReplicaTarget,
@@ -134,30 +134,27 @@ fn drive_root_runtime_activation(
                     root,
                     protocol::CANIC_RESUME_FLEET_ACTIVATION,
                     &request,
-                    false,
                 )?;
                 record_root_activated(&current, response)?
             }
             FleetSubnetRootInstallPhase::RootActivated => {
                 let response = query_no_arg(&icp, root, protocol::CANIC_FLEET_ACTIVATION_STATUS)?;
-                let component_registry = call_with_arg(
+                let component_registry = query_with_arg(
                     &icp,
                     root,
                     protocol::CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
                     &component_registry_request,
-                    true,
                 )?;
                 record_root_activation_verified(&current, response, component_registry)?
             }
             FleetSubnetRootInstallPhase::RootActivationVerified => {
                 let response: FleetActivationStatusResponse =
                     query_no_arg(&icp, root, protocol::CANIC_FLEET_ACTIVATION_STATUS)?;
-                let component_registry: RootComponentRegistryStatusResponse = call_with_arg(
+                let component_registry: RootComponentRegistryStatusResponse = query_with_arg(
                     &icp,
                     root,
                     protocol::CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
                     &component_registry_request,
-                    true,
                 )?;
                 if current.journal.root_activation_response.as_ref() != Some(&response)
                     || current

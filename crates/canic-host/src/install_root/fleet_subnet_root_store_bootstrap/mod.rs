@@ -10,7 +10,7 @@ use super::fleet_subnet_root_install_journal::{
     begin_store_bootstrap, begin_store_staging, plan_fleet_subnet_root_install,
     record_store_bootstrapped, record_store_staged, record_store_verified,
 };
-use super::operations::call_with_arg;
+use super::operations::{call_with_arg, query_with_arg};
 use crate::{
     durable_io::{RegularFileReadError, read_optional_regular_bytes},
     fleet_install_plan::{PersistedFleetInstallPlan, PersistedFleetSubnetRootReleaseSet},
@@ -284,7 +284,6 @@ fn stage_release_set(
                 approved_at: Some(0),
                 created_at: 0,
             },
-            false,
         )?;
         stage_chunk_set(
             &icp,
@@ -384,7 +383,6 @@ fn stage_chunk_set(
             payload_size_bytes: bytes.len() as u64,
             chunk_hashes: chunk_hashes.clone(),
         },
-        false,
     )?;
     if prepared.chunk_hashes != chunk_hashes {
         return Err(RootStoreBootstrapError::PreparedChunkSetMismatch.into());
@@ -400,7 +398,6 @@ fn stage_chunk_set(
                 chunk_index: u32::try_from(chunk_index)?,
                 bytes,
             },
-            false,
         )?;
     }
     Ok(())
@@ -422,7 +419,6 @@ fn call_store_bootstrap(
         root,
         protocol::CANIC_ROOT_STORE_BOOTSTRAP,
         &request,
-        false,
     )
     .map_err(Into::into)
 }
@@ -438,12 +434,11 @@ fn query_store_bootstrap_status(
         .journal
         .fleet_subnet_root
         .expect("Store verification follows verified root installation");
-    call_with_arg(
+    query_with_arg(
         &super::install_icp(icp_root, environment, local_replica),
         root,
         protocol::CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
         &request,
-        true,
     )
     .map_err(Into::into)
 }

@@ -7,6 +7,12 @@ use super::{
     run::{run_json, run_output, run_output_with_stderr, run_status},
 };
 
+#[derive(Clone, Copy)]
+enum CanisterCallMode {
+    Query,
+    Update,
+}
+
 impl IcpCli {
     /// Call one canister method with raw binary Candid arguments from a file.
     pub fn canister_call_binary_args_output_with_candid(
@@ -23,7 +29,7 @@ impl IcpCli {
             args_file,
             output,
             candid_path,
-            false,
+            CanisterCallMode::Update,
         );
         run_output(&mut command)
     }
@@ -43,7 +49,7 @@ impl IcpCli {
             args_file,
             output,
             candid_path,
-            true,
+            CanisterCallMode::Query,
         );
         run_output(&mut command)
     }
@@ -55,13 +61,13 @@ impl IcpCli {
         args_file: &Path,
         output: Option<&str>,
         candid_path: Option<&Path>,
-        query: bool,
+        mode: CanisterCallMode,
     ) -> std::process::Command {
         let mut command = self.canister_command();
         command.args(["call", canister, method, "--args-file"]);
         command.arg(args_file);
         command.args(["--args-format", "bin"]);
-        if query {
+        if matches!(mode, CanisterCallMode::Query) {
             command.arg("--query");
         }
         add_candid_arg(&mut command, candid_path);
@@ -81,14 +87,14 @@ impl IcpCli {
         output: Option<&str>,
         candid_path: Option<&Path>,
     ) -> Result<String, IcpCommandError> {
-        let mut command = self.canister_command();
-        command.args(["call", canister, method]);
-        command.arg(arg);
-        add_candid_arg(&mut command, candid_path);
-        if let Some(output) = output {
-            add_output_arg(&mut command, output);
-        }
-        self.add_target_args(&mut command);
+        let mut command = self.canister_text_args_command(
+            canister,
+            method,
+            arg,
+            output,
+            candid_path,
+            CanisterCallMode::Update,
+        );
         run_output(&mut command)
     }
 
@@ -100,15 +106,14 @@ impl IcpCli {
         output: Option<&str>,
         candid_path: Option<&Path>,
     ) -> Result<String, IcpCommandError> {
-        let mut command = self.canister_command();
-        command.args(["call", canister, method]);
-        command.arg("()");
-        command.arg("--query");
-        add_candid_arg(&mut command, candid_path);
-        if let Some(output) = output {
-            add_output_arg(&mut command, output);
-        }
-        self.add_target_args(&mut command);
+        let mut command = self.canister_text_args_command(
+            canister,
+            method,
+            "()",
+            output,
+            candid_path,
+            CanisterCallMode::Query,
+        );
         run_output(&mut command)
     }
 
@@ -121,16 +126,38 @@ impl IcpCli {
         output: Option<&str>,
         candid_path: Option<&Path>,
     ) -> Result<String, IcpCommandError> {
+        let mut command = self.canister_text_args_command(
+            canister,
+            method,
+            arg,
+            output,
+            candid_path,
+            CanisterCallMode::Query,
+        );
+        run_output(&mut command)
+    }
+
+    fn canister_text_args_command(
+        &self,
+        canister: &str,
+        method: &str,
+        arg: &str,
+        output: Option<&str>,
+        candid_path: Option<&Path>,
+        mode: CanisterCallMode,
+    ) -> std::process::Command {
         let mut command = self.canister_command();
         command.args(["call", canister, method]);
         command.arg(arg);
-        command.arg("--query");
+        if matches!(mode, CanisterCallMode::Query) {
+            command.arg("--query");
+        }
         add_candid_arg(&mut command, candid_path);
         if let Some(output) = output {
             add_output_arg(&mut command, output);
         }
         self.add_target_args(&mut command);
-        run_output(&mut command)
+        command
     }
 
     /// Read one canister metadata section.
@@ -240,15 +267,14 @@ impl IcpCli {
         output: Option<&str>,
         candid_path: Option<&Path>,
     ) -> String {
-        let mut command = self.canister_command();
-        command.args(["call", canister, method]);
-        command.arg(arg);
-        command.arg("--query");
-        add_candid_arg(&mut command, candid_path);
-        if let Some(output) = output {
-            add_output_arg(&mut command, output);
-        }
-        self.add_target_args(&mut command);
+        let command = self.canister_text_args_command(
+            canister,
+            method,
+            arg,
+            output,
+            candid_path,
+            CanisterCallMode::Query,
+        );
         command_display(&command)
     }
 
@@ -262,14 +288,14 @@ impl IcpCli {
         output: Option<&str>,
         candid_path: Option<&Path>,
     ) -> String {
-        let mut command = self.canister_command();
-        command.args(["call", canister, method]);
-        command.arg(arg);
-        add_candid_arg(&mut command, candid_path);
-        if let Some(output) = output {
-            add_output_arg(&mut command, output);
-        }
-        self.add_target_args(&mut command);
+        let command = self.canister_text_args_command(
+            canister,
+            method,
+            arg,
+            output,
+            candid_path,
+            CanisterCallMode::Update,
+        );
         command_display(&command)
     }
 }
@@ -287,7 +313,7 @@ mod binary_args_tests {
             Path::new("/state/args.bin"),
             Some("json"),
             None,
-            true,
+            CanisterCallMode::Query,
         );
 
         assert_eq!(
