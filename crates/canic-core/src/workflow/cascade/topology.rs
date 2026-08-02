@@ -171,12 +171,18 @@ impl TopologyCascadeWorkflow {
         }
     }
 
-    pub(crate) fn root_snapshot_input_for_target(
-        target_pid: Principal,
+    pub(crate) fn root_wasm_store_snapshot_input(
+        wasm_store: Principal,
     ) -> Result<TopologySnapshotInput, InternalError> {
         EnvOps::require_root()?;
-        let snapshot = TopologySnapshotBuilder::for_target(target_pid)?.build();
-        Self::snapshot_input_for_target(target_pid, &snapshot)
+        let root_pid = IcOps::canister_self();
+        let snapshot = TopologySnapshotBuilder::for_direct_leaf(
+            root_pid,
+            wasm_store,
+            crate::ids::CanisterRole::WASM_STORE,
+        )?
+        .build();
+        Self::snapshot_input_for_target(wasm_store, &snapshot)
     }
 
     fn snapshot_input_for_target(

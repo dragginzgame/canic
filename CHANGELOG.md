@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.89` gives fresh Coordinator and Fleet Subnet Root installation one
+  journal-authorized observe/execute/reconcile operation, removing duplicate
+  effect and recovery branches while preserving single-effect retry safety and
+  typed binary Candid arguments. It also makes fresh root Fleet activation
+  consume the exact root-owned Store inventory directly, eliminating its
+  legacy Subnet Registry authority while keeping Component Runtime activation
+  independent.
+
 - `0.100.88` adds bounded, proof-carrying local-Subnet endpoint
   authentication, allowing one managed Component to verify another's
   root-attested placement against the receiver's live IC Subnet without an

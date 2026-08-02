@@ -161,6 +161,50 @@ impl TopologySnapshotBuilder {
         })
     }
 
+    pub(crate) fn for_direct_leaf(
+        root_pid: Principal,
+        target_pid: Principal,
+        target_role: CanisterRole,
+    ) -> Result<Self, InternalError> {
+        if target_pid == Principal::anonymous() {
+            return Err(InternalError::invalid_input(
+                "Fleet activation child Canister is anonymous",
+            ));
+        }
+        if target_pid == root_pid {
+            return Err(InternalError::invalid_input(
+                "Fleet activation child equals the Fleet Subnet Root",
+            ));
+        }
+
+        Ok(Self {
+            snapshot: TopologySnapshot {
+                parents: vec![
+                    TopologyPathNode {
+                        pid: root_pid,
+                        role: CanisterRole::ROOT,
+                        parent_pid: None,
+                    },
+                    TopologyPathNode {
+                        pid: target_pid,
+                        role: target_role.clone(),
+                        parent_pid: Some(root_pid),
+                    },
+                ],
+                children_map: HashMap::from([
+                    (
+                        root_pid,
+                        vec![TopologyDirectChild {
+                            pid: target_pid,
+                            role: target_role,
+                        }],
+                    ),
+                    (target_pid, Vec::new()),
+                ]),
+            },
+        })
+    }
+
     #[must_use]
     pub fn build(self) -> TopologySnapshot {
         self.snapshot
@@ -191,8 +235,10 @@ pub fn state_snapshot_debug(snapshot: &StateSnapshot) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::StateSnapshot;
+    use super::{StateSnapshot, TopologySnapshotBuilder};
+    use crate::cdk::types::Principal;
     use crate::dto::state::{FleetMode, FleetStateInput};
+    use crate::ids::CanisterRole;
 
     #[test]
     fn state_snapshot_debug_reports_current_slots() {
@@ -205,5 +251,23 @@ mod tests {
         };
 
         assert_eq!(super::state_snapshot_debug(&snapshot), "[fs ..]");
+    }
+
+    #[test]
+    fn direct_leaf_topology_has_one_root_child_and_no_descendants() {
+        let root = Principal::from_slice(&[1]);
+        let store = Principal::from_slice(&[2]);
+        let snapshot =
+            TopologySnapshotBuilder::for_direct_leaf(root, store, CanisterRole::WASM_STORE)
+                .expect("direct leaf topology")
+                .build();
+
+        assert_eq!(snapshot.parents.len(), 2);
+        assert_eq!(snapshot.parents[0].pid, root);
+        assert_eq!(snapshot.parents[1].pid, store);
+        assert_eq!(snapshot.parents[1].parent_pid, Some(root));
+        assert_eq!(snapshot.children_map[&root].len(), 1);
+        assert_eq!(snapshot.children_map[&root][0].pid, store);
+        assert!(snapshot.children_map[&store].is_empty());
     }
 }

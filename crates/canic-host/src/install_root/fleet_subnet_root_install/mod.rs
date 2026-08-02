@@ -6,10 +6,7 @@
 //! in explicit durable in-flight phases and are observed rather than blindly replayed.
 
 use super::{
-    commands::{
-        icp_canister_install_binary_args_command, prepare_creation_result, run_command,
-        write_candid_args,
-    },
+    commands::prepare_creation_result,
     fleet_subnet_root_install_journal::{
         FleetSubnetRootInstallJournal, FleetSubnetRootInstallPhase,
         PlanFleetSubnetRootInstallRequest, ResolvedFleetSubnetRootInstall, begin_root_creation,
@@ -18,8 +15,9 @@ use super::{
         record_root_verified, validate_live_root_activation_status,
     },
     operations::{
-        CreationEffectAction, CreationEffectRequest, InstallArtifact, execute_or_observe_creation,
-        module_hash_text, observe_module_hash, query_no_arg, resolve_install_artifact,
+        CreationEffectRequest, EffectAction, InstallArtifact, InstallEffectRequest,
+        execute_or_observe_creation, execute_or_observe_install, module_hash_text,
+        observe_module_hash, query_no_arg, resolve_install_artifact,
     },
 };
 use crate::{
@@ -51,15 +49,6 @@ const ROOT_INSTALL_ARGS_FILE: &str = "root-install-args.bin";
 struct RootCreationOutcomeUnknownError {
     placement_subnet: canic_core::ids::SubnetId,
     result_path: PathBuf,
-    detail: String,
-}
-
-#[derive(Debug, ThisError)]
-#[error(
-    "Fleet Subnet Root install outcome for {fleet_subnet_root} is unknown; no second install was attempted. Retry only after the original ICP command has settled: {detail}"
-)]
-struct RootInstallOutcomeUnknownError {
-    fleet_subnet_root: Principal,
     detail: String,
 }
 
@@ -208,11 +197,6 @@ fn recover_or_create_root(
     current: &ResolvedFleetSubnetRootInstall,
 ) -> Result<ResolvedFleetSubnetRootInstall, Box<dyn std::error::Error>> {
     let result_path = create_result_path(&current.path);
-    let action = if current.advanced {
-        CreationEffectAction::Execute
-    } else {
-        CreationEffectAction::ObserveOnly
-    };
     let evidence = execute_or_observe_creation(CreationEffectRequest {
         icp_root,
         environment,
@@ -221,7 +205,7 @@ fn recover_or_create_root(
         subject: "Fleet Subnet Root",
         placement_subnet: current.journal.root_plan.placement_subnet,
         funding: &current.journal.root_plan.creation_funding,
-        action,
+        action: EffectAction::from_advanced(current.advanced),
         expected_module_hash: current.journal.expected_module_hash,
     })?;
     let Some(fleet_subnet_root) = evidence.canister else {
@@ -249,71 +233,22 @@ fn recover_or_install_root(
         .journal
         .fleet_subnet_root
         .expect("validated InstallInFlight journal retains its root");
-    let icp = super::install_icp(icp_root, environment, local_replica);
-    match observe_module_hash(&icp, fleet_subnet_root)? {
-        Some(observed) if observed == current.journal.expected_module_hash => {
-            return record_root_installed(current, observed).map_err(Into::into);
-        }
-        Some(observed) => {
-            return Err(RootInstallStateError::UnexpectedModule {
-                fleet_subnet_root,
-                observed: module_hash_text(observed),
-            }
-            .into());
-        }
-        None if !current.advanced => {
-            return Err(RootInstallOutcomeUnknownError {
-                fleet_subnet_root,
-                detail: "the journal is already install_in_flight and the expected module is not observable"
-                    .to_string(),
-            }
-            .into());
-        }
-        None => {}
-    }
-
-    let init_args = root_install_args(&current.journal)?;
     let args_path = current.path.with_file_name(ROOT_INSTALL_ARGS_FILE);
-    write_candid_args(&args_path, &init_args)?;
-    let mut install = icp_canister_install_binary_args_command(
-        icp_root,
-        environment,
-        local_replica,
-        fleet_subnet_root,
-        &artifact.wasm_path,
-        &args_path,
-    );
-    let command_result = run_command(&mut install);
-    match observe_module_hash(&icp, fleet_subnet_root) {
-        Ok(Some(observed)) if observed == current.journal.expected_module_hash => {
-            record_root_installed(current, observed).map_err(Into::into)
-        }
-        Ok(Some(observed)) => Err(RootInstallStateError::UnexpectedModule {
-            fleet_subnet_root,
-            observed: module_hash_text(observed),
-        }
-        .into()),
-        Ok(None) => Err(RootInstallOutcomeUnknownError {
-            fleet_subnet_root,
-            detail: command_result.err().map_or_else(
-                || "install command completed but no module is observable".to_string(),
-                |error| error.to_string(),
-            ),
-        }
-        .into()),
-        Err(observation) => Err(RootInstallOutcomeUnknownError {
-            fleet_subnet_root,
-            detail: match command_result {
-                Ok(()) => format!("post-install observation failed: {observation}"),
-                Err(command) => {
-                    format!(
-                        "install command failed: {command}; reconciliation failed: {observation}"
-                    )
-                }
-            },
-        }
-        .into()),
-    }
+    let module_hash = execute_or_observe_install(
+        InstallEffectRequest {
+            icp_root,
+            environment,
+            local_replica,
+            subject: "Fleet Subnet Root",
+            canister: fleet_subnet_root,
+            wasm_path: &artifact.wasm_path,
+            args_path: &args_path,
+            expected_module_hash: current.journal.expected_module_hash,
+            action: EffectAction::from_advanced(current.advanced),
+        },
+        || root_install_args(&current.journal),
+    )?;
+    record_root_installed(current, module_hash).map_err(Into::into)
 }
 
 fn verify_and_record_root(
