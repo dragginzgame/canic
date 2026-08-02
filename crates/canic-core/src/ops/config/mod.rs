@@ -169,7 +169,7 @@ impl ConfigOps {
         Ok(cfg)
     }
 
-    pub(crate) fn controllers() -> Result<Vec<Principal>, InternalError> {
+    pub fn controllers() -> Result<Vec<Principal>, InternalError> {
         Ok(Config::get()?.controllers.clone())
     }
 

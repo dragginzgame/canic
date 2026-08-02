@@ -7,7 +7,7 @@
 use crate::{
     ids::{BuildNetwork, CanisterRole},
     ops::{component_registry::ComponentRegistryOps, storage::template::TemplateChunkedOps},
-    workflow::{deployment, runtime::template::WasmStorePublicationWorkflow},
+    workflow::runtime::template::WasmStorePublicationWorkflow,
 };
 use canic_core::api::lifecycle::metrics::{
     CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
@@ -22,7 +22,7 @@ use canic_core::control_plane_support::{
     error::{InternalError, InternalErrorOrigin},
     ops::{
         config::ConfigOps,
-        ic::{IcOps, build_network::BuildNetworkOps},
+        ic::build_network::BuildNetworkOps,
         runtime::{
             bootstrap::{BootstrapPhaseLabel, BootstrapStatusOps},
             env::EnvOps,
@@ -682,32 +682,30 @@ async fn root_reconcile_wasm_store() -> Result<(), InternalError> {
 pub(super) async fn ensure_required_wasm_store_canister() -> Result<(), InternalError> {
     let role = CanisterRole::WASM_STORE;
 
-    let existing_bindings = WasmStorePublicationWorkflow::sync_registered_wasm_store_inventory()?;
+    let had_store = !crate::ops::storage::state::subnet::SubnetStateOps::wasm_stores().is_empty();
+    let existing_bindings = WasmStorePublicationWorkflow::ensure_bootstrap_wasm_store().await?;
     if !existing_bindings.is_empty() {
         CanisterOpsMetricsApi::record(
             CanisterOpsMetricOperation::Create,
             &role,
-            CanisterOpsMetricOutcome::Skipped,
-            CanisterOpsMetricReason::AlreadyExists,
+            if had_store {
+                CanisterOpsMetricOutcome::Skipped
+            } else {
+                CanisterOpsMetricOutcome::Completed
+            },
+            if had_store {
+                CanisterOpsMetricReason::AlreadyExists
+            } else {
+                CanisterOpsMetricReason::Ok
+            },
         );
-        log!(Topic::Init, Info, "ws: {role} present; skip");
+        log!(Topic::Init, Info, "ws: {role} present");
         return Ok(());
     }
-
-    log!(Topic::Init, Info, "ws: create {role}");
-
-    deployment::create_canister_with_deployment_guard(
-        deployment::BOOTSTRAP_WASM_STORE_CREATE_COMMAND_KIND,
-        role,
-        IcOps::canister_self(),
-        None,
-    )
-    .await?;
-    canic_core::perf!("bootstrap_create_wasm_store");
-    let _ = WasmStorePublicationWorkflow::sync_registered_wasm_store_inventory()?;
-    canic_core::perf!("bootstrap_sync_store_inventory");
-
-    Ok(())
+    Err(InternalError::invariant(
+        InternalErrorOrigin::Storage,
+        "Wasm Store bootstrap completed without root-owned inventory",
+    ))
 }
 
 async fn import_default_wasm_store_catalog() -> Result<(), InternalError> {

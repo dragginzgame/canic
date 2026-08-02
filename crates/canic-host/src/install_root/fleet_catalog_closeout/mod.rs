@@ -10,15 +10,13 @@ use super::fleet_catalog_publication::{
     validate_terminal_fleet_registry,
 };
 use crate::{
+    canister_protocol::{CanisterProtocolError, query_no_arg},
     fleet_catalog::CommittedFleetCatalog,
     fleet_install_plan::PersistedFleetInstallPlan,
-    icp::{
-        IcpCli, IcpCommandError, IcpJsonResponseError, LocalReplicaTarget,
-        decode_json_result_response,
-    },
+    icp::{IcpCli, LocalReplicaTarget},
     release_set::AppConfigSnapshot,
 };
-use candid::{CandidType, Principal};
+use candid::Principal;
 use canic_core::{
     dto::{
         fleet_registry::{
@@ -30,15 +28,12 @@ use canic_core::{
     ids::FleetName,
     protocol,
 };
-use serde::de::DeserializeOwned;
 use std::{
     path::Path,
     thread,
     time::{SystemTime, SystemTimeError, UNIX_EPOCH},
 };
 use thiserror::Error as ThisError;
-
-const ICP_JSON_OUTPUT: &str = "json";
 
 ///
 /// PublishInstalledFleetCatalogRequest
@@ -64,21 +59,8 @@ pub(super) struct PublishInstalledFleetCatalogRequest<'a> {
 
 #[derive(Debug, ThisError)]
 enum FleetCatalogCloseoutError {
-    #[error("failed to query {method} on Canister {canister}: {source}")]
-    Query {
-        canister: String,
-        method: &'static str,
-        #[source]
-        source: IcpCommandError,
-    },
-
-    #[error("invalid {method} response from Canister {canister}: {source}")]
-    Response {
-        canister: String,
-        method: &'static str,
-        #[source]
-        source: IcpJsonResponseError,
-    },
+    #[error(transparent)]
+    Protocol(#[from] CanisterProtocolError),
 
     #[error("terminal summary worker for Fleet Subnet Root {root} panicked")]
     SummaryWorkerPanicked { root: Principal },
@@ -129,13 +111,13 @@ fn query_registry(
     coordinator: Principal,
 ) -> Result<FleetRegistrySnapshotResponse, FleetCatalogCloseoutError> {
     Ok(FleetRegistrySnapshotResponse {
-        registry: query_result::<FleetRegistry>(icp, coordinator, protocol::CANIC_FLEET_REGISTRY)?,
-        manifest: query_result::<FleetRegistryManifest>(
+        registry: query_no_arg::<FleetRegistry>(icp, coordinator, protocol::CANIC_FLEET_REGISTRY)?,
+        manifest: query_no_arg::<FleetRegistryManifest>(
             icp,
             coordinator,
             protocol::CANIC_FLEET_REGISTRY_MANIFEST,
         )?,
-        version: query_result::<FleetRegistryVersion>(
+        version: query_no_arg::<FleetRegistryVersion>(
             icp,
             coordinator,
             protocol::CANIC_FLEET_REGISTRY_VERSION,
@@ -152,7 +134,7 @@ fn query_root_summaries(
         let root = registered.fleet_subnet_root;
         let worker_icp = icp.clone();
         let worker = thread::spawn(move || {
-            query_result::<FleetSubnetRootCanisterSummary>(
+            query_no_arg::<FleetSubnetRootCanisterSummary>(
                 &worker_icp,
                 root,
                 protocol::CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY,
@@ -167,29 +149,7 @@ fn query_root_summaries(
             worker
                 .join()
                 .map_err(|_| FleetCatalogCloseoutError::SummaryWorkerPanicked { root })?
+                .map_err(Into::into)
         })
         .collect()
-}
-
-fn query_result<T>(
-    icp: &IcpCli,
-    canister: Principal,
-    method: &'static str,
-) -> Result<T, FleetCatalogCloseoutError>
-where
-    T: CandidType + DeserializeOwned,
-{
-    let canister = canister.to_text();
-    let output = icp
-        .canister_query_output_with_candid(&canister, method, Some(ICP_JSON_OUTPUT), None)
-        .map_err(|source| FleetCatalogCloseoutError::Query {
-            canister: canister.clone(),
-            method,
-            source,
-        })?;
-    decode_json_result_response(&output).map_err(|source| FleetCatalogCloseoutError::Response {
-        canister,
-        method,
-        source,
-    })
 }

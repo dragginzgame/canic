@@ -6,10 +6,10 @@ Date: 2026-08-02
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.89`.
-- Latest published release: `v0.100.89` at
-  `6418713d13614f61b093d03d19618a087efa6b9e`.
-- Open patch draft: `0.100.90`; no package-version change has been authorized.
+- Workspace package version: `0.100.90`.
+- Latest published release: `v0.100.90` at
+  `d646889be88328f272f6ff36978d97e96c3e2923`.
+- Open patch draft: `0.100.91`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -92,9 +92,12 @@ Registry slices replace the 0.99 root model.
   projection while retaining independent Component Runtime activation.
 - [x] Hard-cut Store garbage-collection and physical-deletion decisions to
   root-owned Store lifecycle authority and typed live management evidence.
+- [x] Hard-cut Store creation/publication recovery to one durable root-owned
+  create/install journal and direct Store activation, with no Registry row or
+  inventory importer.
 - [ ] Hard-cut local `SubnetRegistry` to root-owned per-Component
-  `ComponentRegistry` and direct-child authority for its remaining propagation,
-  Store creation/publication recovery, provisioning and pool consumers.
+  `ComponentRegistry` and direct-child authority for its remaining
+  propagation, provisioning and pool consumers.
 - [x] Hard-cut local `SubnetDirectory`; root-owned `ComponentDirectory` is the
   sole component-local directory projection.
 - [x] Split Fleet and Component Directory provenance.
@@ -1131,20 +1134,29 @@ Component Runtime and Directory lifecycle. The same release consolidates
 fresh host installation's journal-authorized observe/execute/reconcile effect
 without merging Coordinator and root recovery journals.
 
-Open 0.100.90 makes every Store GC and physical-deletion decision consume the
+Released 0.100.90 makes every Store GC and physical-deletion decision consume the
 durable root-owned Store inventory, removal receipts and exact live Store and
-management evidence. GC no longer re-imports Registry inventory or requires a
-Registry role/parent row. Until Store creation moves to its own recovery
-journal, terminal typed-absence reconciliation still discards that
-non-authoritative legacy row so bootstrap cannot resurrect the deleted Store.
-The same draft centralizes exact installed-module verification across fresh
+management evidence. GC no longer imports Registry inventory or requires a
+Registry role/parent row, and terminal typed-absence reconciliation mutates
+only root-owned Store inventory.
+The same release centralizes exact installed-module verification across fresh
 Coordinator and root host workflows.
+
+Open 0.100.91 moves bootstrap and publication Store creation onto one durable
+root-owned `CreationIntent -> Created -> InstallIntent -> Installed` journal.
+It freezes exact artifact, controller, cycles and cost-guard authority before
+paid effects, never repeats an unresolved creation, reconciles uncertain
+installation from live module state, activates the Store as a direct root leaf
+and atomically commits runtime inventory. No Store creation, recovery or
+deletion path writes, imports or cleans a legacy Registry row. The same draft
+routes terminal host Fleet catalog queries through the canonical typed
+Canister protocol boundary and removes residual one-call wrappers.
 
 ## Next Action
 
-Replace the legacy Subnet Registry's remaining propagation, Store
-creation/publication recovery, provisioning and pool-recovery consumers with
-root-owned Component Registry and direct-child authority. Then delete its
+Replace the legacy Subnet Registry's remaining propagation, provisioning and
+pool-recovery consumers with root-owned Component Registry and direct-child
+authority. Then delete its
 stable/cascade schema and complete the reinstall-only decoder audit before
 running preparation and execution
 as separate processes against one explicitly selected disposable real-network

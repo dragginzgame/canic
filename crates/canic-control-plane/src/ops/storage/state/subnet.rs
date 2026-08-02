@@ -4,17 +4,36 @@ use crate::storage::stable::state::subnet::{
 };
 use crate::{
     dto::template::{WasmStoreGcStatusResponse, WasmStorePublicationStateResponse},
-    ids::{WasmStoreBinding, WasmStoreGcMode},
+    ids::{WasmStoreBinding, WasmStoreCreationPurpose, WasmStoreGcMode},
     ops::storage::state::mapper::SubnetStateMapper,
     storage::stable::state::subnet::{
-        SubnetState, WasmStoreGcRecord, WasmStoreInventoryConflict, WasmStoreUpsertOutcome,
+        SubnetState, WasmStoreCreationProgressRecord, WasmStoreCreationRecord, WasmStoreGcRecord,
     },
-    view::state::{PublicationStoreStateView, WasmStoreView},
+    view::state::{PublicationStoreStateView, WasmStoreCreationView, WasmStoreView},
 };
 use canic_core::{
     cdk::types::Principal,
-    control_plane_support::error::{InternalError, InternalErrorOrigin},
+    control_plane_support::{
+        error::{InternalError, InternalErrorOrigin},
+        model::replay::ReplayCostGuardSettlement,
+    },
 };
+
+///
+/// WasmStoreCreationPlan
+///
+/// Ops-owned immutable authority frozen before one root-owned Store creation effect.
+/// Consumed by the Store creation workflow and persisted as a stable record.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WasmStoreCreationPlan {
+    pub purpose: WasmStoreCreationPurpose,
+    pub expected_module_hash: [u8; 32],
+    pub payload_size_bytes: u64,
+    pub controllers: Vec<Principal>,
+    pub initial_cycles: u128,
+}
 
 ///
 /// PublicationStoreStateTestInput
@@ -83,6 +102,89 @@ impl SubnetStateOps {
             .collect()
     }
 
+    #[must_use]
+    pub fn wasm_store_creation() -> Option<WasmStoreCreationView> {
+        SubnetState::wasm_store_creation()
+            .map(SubnetStateMapper::wasm_store_creation_record_to_view)
+    }
+
+    pub fn begin_wasm_store_creation(
+        plan: &WasmStoreCreationPlan,
+        creation_cost_guard_settlement: ReplayCostGuardSettlement,
+        prepared_at: u64,
+    ) -> Result<WasmStoreCreationView, InternalError> {
+        SubnetState::begin_wasm_store_creation(WasmStoreCreationRecord {
+            sequence: 0,
+            purpose: plan.purpose,
+            expected_module_hash: plan.expected_module_hash,
+            payload_size_bytes: plan.payload_size_bytes,
+            controllers: plan.controllers.clone(),
+            initial_cycles: plan.initial_cycles,
+            creation_cost_guard_settlement,
+            prepared_at,
+            progress: WasmStoreCreationProgressRecord::CreationIntent,
+        })
+        .map(SubnetStateMapper::wasm_store_creation_record_to_view)
+        .map_err(|reason| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                format!("failed to begin root-owned Wasm Store creation: {reason:?}"),
+            )
+        })
+    }
+
+    pub fn mark_wasm_store_created(
+        sequence: u64,
+        pid: Principal,
+        created_at: u64,
+    ) -> Result<WasmStoreCreationView, InternalError> {
+        SubnetState::mark_wasm_store_created(sequence, pid, created_at)
+            .map(SubnetStateMapper::wasm_store_creation_record_to_view)
+            .ok_or_else(|| Self::store_creation_transition_error("record created Canister"))
+    }
+
+    pub fn begin_wasm_store_install(
+        sequence: u64,
+        settlement: ReplayCostGuardSettlement,
+    ) -> Result<WasmStoreCreationView, InternalError> {
+        SubnetState::begin_wasm_store_install(sequence, settlement)
+            .map(SubnetStateMapper::wasm_store_creation_record_to_view)
+            .ok_or_else(|| Self::store_creation_transition_error("begin install"))
+    }
+
+    pub fn renew_wasm_store_install(
+        sequence: u64,
+        settlement: ReplayCostGuardSettlement,
+    ) -> Result<WasmStoreCreationView, InternalError> {
+        SubnetState::renew_wasm_store_install(sequence, settlement)
+            .map(SubnetStateMapper::wasm_store_creation_record_to_view)
+            .ok_or_else(|| Self::store_creation_transition_error("renew install"))
+    }
+
+    pub fn mark_wasm_store_installed(
+        sequence: u64,
+    ) -> Result<WasmStoreCreationView, InternalError> {
+        SubnetState::mark_wasm_store_installed(sequence)
+            .map(SubnetStateMapper::wasm_store_creation_record_to_view)
+            .ok_or_else(|| Self::store_creation_transition_error("record installed Canister"))
+    }
+
+    pub fn commit_wasm_store_creation(
+        sequence: u64,
+        binding: WasmStoreBinding,
+    ) -> Result<WasmStoreView, InternalError> {
+        SubnetState::commit_wasm_store_creation(sequence, binding)
+            .map(SubnetStateMapper::wasm_store_record_to_view)
+            .ok_or_else(|| Self::store_creation_transition_error("commit Store inventory"))
+    }
+
+    fn store_creation_transition_error(transition: &str) -> InternalError {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            format!("failed to {transition} for root-owned Wasm Store creation"),
+        )
+    }
+
     /// Resolve one runtime-managed wasm store principal by logical binding.
     #[must_use]
     pub fn wasm_store_pid(binding: &WasmStoreBinding) -> Option<Principal> {
@@ -93,33 +195,6 @@ impl SubnetStateOps {
     #[must_use]
     pub fn wasm_store_binding_for_pid(pid: Principal) -> Option<WasmStoreBinding> {
         SubnetState::wasm_store_binding_for_pid(pid)
-    }
-
-    /// Persist one runtime-managed wasm store record.
-    pub fn upsert_wasm_store(
-        binding: WasmStoreBinding,
-        pid: Principal,
-        created_at: u64,
-    ) -> Result<(), InternalError> {
-        match SubnetState::upsert_wasm_store(binding, pid, created_at) {
-            WasmStoreUpsertOutcome::Inserted | WasmStoreUpsertOutcome::Existing => Ok(()),
-            WasmStoreUpsertOutcome::Conflict(conflict) => {
-                Err(Self::wasm_store_inventory_conflict_error(conflict))
-            }
-        }
-    }
-
-    fn wasm_store_inventory_conflict_error(conflict: WasmStoreInventoryConflict) -> InternalError {
-        InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!(
-                "wasm store inventory conflict: existing binding '{}' / pid {}; requested binding '{}' / pid {}",
-                conflict.existing_binding,
-                conflict.existing_pid,
-                conflict.requested_binding,
-                conflict.requested_pid,
-            ),
-        )
     }
 
     /// Remove one runtime-managed wasm store record by binding.
@@ -222,6 +297,8 @@ impl SubnetStateOps {
                         },
                     })
                     .collect(),
+                next_wasm_store_creation_sequence: 0,
+                wasm_store_creation: None,
             },
         });
     }

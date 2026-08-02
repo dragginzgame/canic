@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.91` gives root-owned Wasm Store creation and installation a durable
+  Registry-independent recovery journal, and consolidates terminal Fleet
+  catalog queries on the canonical typed Canister protocol boundary.
+
 - `0.100.90` centralizes exact installed-module verification across fresh
   Coordinator and Fleet Subnet Root workflows. It also moves Store garbage
   collection and physical-deletion recovery onto durable root-owned Store
