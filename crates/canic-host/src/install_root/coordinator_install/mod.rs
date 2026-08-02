@@ -7,8 +7,8 @@
 
 use super::{
     commands::{
-        add_icp_environment_target, candid_arg, icp_canister_command, icp_e8s_text,
-        parse_created_canister_id, run_command,
+        add_icp_environment_target, icp_canister_command, icp_e8s_text, parse_created_canister_id,
+        run_command, write_candid_args,
     },
     coordinator_install_journal::{
         FleetCoordinatorInstallJournal, FleetCoordinatorInstallPhase,
@@ -45,6 +45,7 @@ use std::{
 use thiserror::Error as ThisError;
 
 const MAX_COORDINATOR_TRANSITIONS: usize = 8;
+const COORDINATOR_INSTALL_ARGS_FILE: &str = "coordinator-install-args.bin";
 
 ///
 /// VerifiedFleetCoordinator
@@ -276,14 +277,16 @@ fn recover_or_install_coordinator(
     }
 
     let genesis = expected_genesis(&current.journal)?;
+    let args_path = current.path.with_file_name(COORDINATOR_INSTALL_ARGS_FILE);
+    write_candid_args(&args_path, &genesis.init_args)?;
     let mut install = coordinator_install_command(
         icp_root,
         environment,
         local_replica,
         coordinator,
         &artifact.wasm_path,
-        &genesis.init_args,
-    )?;
+        &args_path,
+    );
     let command_result = run_command(&mut install);
     match observed_module_hash(icp_root, environment, local_replica, coordinator) {
         Ok(Some(observed)) if observed == current.journal.expected_module_hash => {
@@ -525,8 +528,8 @@ fn coordinator_install_command(
     local_replica: Option<&LocalReplicaTarget>,
     coordinator: Principal,
     wasm_path: &Path,
-    init_args: &FleetCoordinatorInitArgs,
-) -> Result<std::process::Command, candid::Error> {
+    args_path: &Path,
+) -> std::process::Command {
     let mut command = icp_canister_command(icp_root);
     command.args([
         "install",
@@ -536,9 +539,11 @@ fn coordinator_install_command(
         "--wasm",
     ]);
     command.arg(wasm_path);
-    command.args(["--args", &candid_arg(init_args)?]);
+    command.arg("--args-file");
+    command.arg(args_path);
+    command.args(["--args-format", "bin"]);
     add_icp_environment_target(&mut command, environment, local_replica);
-    Ok(command)
+    command
 }
 
 fn observed_module_hash(
@@ -759,6 +764,65 @@ mod tests {
                 "icp --project-root-override /workspace canister create --detached --json --subnet {subnet} --with-icp 0.00000001 -e ic"
             )
         );
+    }
+
+    #[test]
+    fn coordinator_install_command_uses_binary_candid_file() {
+        let coordinator = Principal::from_slice(&[43]);
+        let command = coordinator_install_command(
+            Path::new("/workspace"),
+            "staging",
+            None,
+            coordinator,
+            Path::new("/artifacts/coordinator.wasm"),
+            Path::new("/state/coordinator-install-args.bin"),
+        );
+
+        assert_eq!(
+            crate::icp::command_display(&command),
+            format!(
+                "icp --project-root-override /workspace canister install {coordinator} --mode=install -y --wasm /artifacts/coordinator.wasm --args-file /state/coordinator-install-args.bin --args-format bin -e staging"
+            )
+        );
+    }
+
+    #[test]
+    fn coordinator_init_args_with_empty_topology_are_binary_candid() {
+        let coordinator = Principal::from_slice(&[45]);
+        let coordinator_subnet = SubnetId::from_principal(Principal::from_slice(&[46]));
+        let configured_app = AppId::from("test");
+        let fleet = FleetBinding {
+            fleet: FleetKey {
+                canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+                fleet_id: FleetId::from_generated_bytes([47; 32]),
+            },
+            app: configured_app.clone(),
+        };
+        let init_args = FleetCoordinatorInitArgs {
+            configured_app,
+            authority: FleetRegistryAuthority {
+                binding: FleetCoordinatorBinding {
+                    fleet,
+                    coordinator_subnet,
+                    coordinator,
+                },
+                epoch: 1,
+            },
+            component_topology: canic_core::bootstrap::compiled::ComponentTopology {
+                component_specs: Vec::new(),
+                provisioning_grants: Vec::new(),
+            },
+        };
+        let root = crate::test_support::temp_dir("canic-binary-coordinator-install-args");
+        let path = root.join(COORDINATOR_INSTALL_ARGS_FILE);
+
+        write_candid_args(&path, &init_args).expect("write Coordinator init args");
+        let decoded: FleetCoordinatorInitArgs =
+            candid::decode_one(&fs::read(&path).expect("read Coordinator init args"))
+                .expect("decode Coordinator init args");
+
+        assert_eq!(decoded, init_args);
+        fs::remove_dir_all(root).expect("remove temp root");
     }
 
     fn command_journal(

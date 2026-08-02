@@ -6,42 +6,17 @@
 
 use crate::{
     infra::ic::mgmt::{
-        InfraCanisterInstallMode, InfraCanisterSettings, InfraCanisterStatusResult,
-        InfraCanisterStatusType, InfraDefiniteCanisterSettings, InfraEcdsaCurve, InfraEcdsaKeyId,
-        InfraEcdsaPublicKeyArgs, InfraEcdsaPublicKeyResult, InfraEnvironmentVariable,
-        InfraLogVisibility, InfraMemoryMetrics, InfraQueryStats, InfraSignWithEcdsaArgs,
-        InfraSignWithEcdsaResult, InfraUpdateSettingsArgs, InfraUpgradeFlags,
-        InfraWasmMemoryPersistence,
+        InfraCanisterSettings, InfraCanisterStatusResult, InfraCanisterStatusType,
+        InfraDefiniteCanisterSettings, InfraEcdsaCurve, InfraEcdsaKeyId, InfraEcdsaPublicKeyArgs,
+        InfraEcdsaPublicKeyResult, InfraEnvironmentVariable, InfraLogVisibility,
+        InfraMemoryMetrics, InfraQueryStats, InfraSignWithEcdsaArgs, InfraSignWithEcdsaResult,
+        InfraUpdateSettingsArgs,
     },
     ops::prelude::*,
 };
 use candid::Nat;
 
 pub use crate::domain::canister::{CanisterStatusType, LogVisibility};
-
-///
-/// CanisterInstallMode
-///
-/// Operations-layer install mode for management canister code installation.
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CanisterInstallMode {
-    Install,
-    Reinstall,
-    Upgrade(Option<UpgradeFlags>),
-}
-
-///
-/// UpgradeFlags
-///
-/// Operations-layer upgrade flags for management canister code installation.
-///
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct UpgradeFlags {
-    pub skip_pre_upgrade: Option<bool>,
-}
 
 ///
 /// EnvironmentVariable
@@ -306,23 +281,6 @@ fn query_stats_from_infra(stats: InfraQueryStats) -> QueryStatsSnapshot {
         num_instructions_total: stats.num_instructions_total,
         request_payload_bytes_total: stats.request_payload_bytes_total,
         response_payload_bytes_total: stats.response_payload_bytes_total,
-    }
-}
-
-pub(super) fn install_mode_to_infra(mode: CanisterInstallMode) -> InfraCanisterInstallMode {
-    match mode {
-        CanisterInstallMode::Install => InfraCanisterInstallMode::Install,
-        CanisterInstallMode::Reinstall => InfraCanisterInstallMode::Reinstall,
-        CanisterInstallMode::Upgrade(flags) => {
-            InfraCanisterInstallMode::Upgrade(flags.map(upgrade_flags_to_infra))
-        }
-    }
-}
-
-const fn upgrade_flags_to_infra(flags: UpgradeFlags) -> InfraUpgradeFlags {
-    InfraUpgradeFlags {
-        skip_pre_upgrade: flags.skip_pre_upgrade,
-        wasm_memory_persistence: Option::<InfraWasmMemoryPersistence>::None,
     }
 }
 

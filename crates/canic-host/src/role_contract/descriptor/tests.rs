@@ -64,7 +64,7 @@ fn materialization_joins_only_selected_allocations() {
         allocations: vec![ResolvedStateAllocation {
             key: StateAllocationKey::StoredBlobs,
             owner: AllocationOwner::CanicCore,
-            memory_ids: vec![MemoryId::new(59)],
+            memory_ids: vec![MemoryId::new(58)],
             selected_by: BTreeSet::from([SelectionProvenance::EffectiveFeature(
                 canic_core::role_contract::CanicFeatureKey::BlobStorage,
             )]),

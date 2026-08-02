@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.84`.
-- The latest published release is `v0.100.84` at
-  `d584cc5b85706da92eb7c2ec981ca6beb8365ed7`.
-- Open `0.100.85` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.85`.
+- The latest published release is `v0.100.85` at
+  `9481846a7df78bbbb09125f03432eb0249f746e6`.
+- Open `0.100.86` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -704,13 +704,23 @@ Historical detail is archived at:
   `ic-query` to `0.25.3` through its focused `subnet-catalog-host` feature;
   Canic's consumed API remains source-compatible and `ic-query` is no longer
   an immediate introducer of the accepted transitive `serde_cbor` advisory.
-- Open `0.100.85` hard-cuts the unused root Component Child upgrade vertical
+- Released `0.100.85` hard-cuts the unused root Component Child upgrade vertical
   under the reinstall-only boundary. Retained recycle now executes the owning
   Component Registry partition's bounded durable subtree-removal phases rather
   than generic pool recycling, and exact retries recover target authority from
   that journal after membership removal. Placement cleanup derives one stable
   child-bound disposal operation so it resumes the same nested and outer
   receipts.
+- Open `0.100.86` narrows management code installation to the maintained
+  fresh-install path and removes the stranded reinstall/upgrade modes, flag
+  records, metric variants and uncalled generic workflow entry point. It also
+  hard-cuts the redundant local Subnet Directory storage and cascade slot;
+  root-owned Component Directory is the sole component-local directory
+  authority, and the reinstall-only stable-memory ledger is compacted around
+  the surviving domains. Fresh host installation now uses typed binary Candid
+  files for Coordinator/root init, resolves named environments through their
+  backing network, generates the required local acceptance Fleet input from
+  live topology and builds on macOS without Linux-only entropy or FIFO APIs.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -2006,9 +2016,11 @@ First primary results:
 
 ## Next Action
 
-Remove the remaining cascade consumers of the legacy Subnet
-Registry/Directory, delete their stable/cascade schemas once no maintained
-reader remains and complete the reinstall-only decoder audit. Then run the
+Replace the legacy Subnet Registry's remaining activation, propagation, Store
+publication/garbage-collection, provisioning and pool-recovery consumers with
+root-owned Component Registry and direct-child authority. Then delete its
+stable/cascade schema once no maintained reader remains, complete the
+reinstall-only decoder audit and run the
 guarded host preparation and execution phases as separate processes against
 one explicitly selected disposable real-network root. Verify the surviving
 Coordinator terminal receipt and exact replay before closing 0.100 against the
@@ -2387,12 +2399,18 @@ immediate parent's local child caches only after active membership commits.
 It also advances host-only `ic-query` to `0.25.3` through the focused Subnet
 Catalog feature without changing Canic call sites, and removes `ic-query` from
 the immediate-introducer inventory for transitive `serde_cbor`.
-Open `0.100.85` hard-cuts the unused root child-upgrade protocol and routes
+Released `0.100.85` hard-cuts the unused root child-upgrade protocol and routes
 retained child recycle through bounded Component Registry subtree removal.
 Durable journal authority permits exact continuation after live membership is
 removed, while fresh operations still require an active direct child of the
 calling Component. Placement cleanup uses a stable child-bound operation ID so
 all retries converge on the same receipts.
+Open `0.100.86` narrows management code installation to fresh installs and
+removes the orphaned reinstall/upgrade modes, flags, metrics and generic
+workflow surface left behind by the completed upgrade hard cut. It also fixes
+fresh Coordinator/root installation with typed binary Candid, makes named
+local environments authoritative by backing network, repairs the local Fleet
+install acceptance input and removes Linux-only host entropy/test imports.
 
 ## Historical Release Detail
 

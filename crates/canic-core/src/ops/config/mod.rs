@@ -19,7 +19,7 @@ use crate::{
     ops::{OpsError, prelude::*, runtime::env::EnvOps},
     storage::stable::state::fleet::FleetMode,
 };
-use std::{collections::BTreeSet, sync::Arc};
+use std::sync::Arc;
 use thiserror::Error as ThisError;
 
 ///
@@ -197,30 +197,6 @@ impl ConfigOps {
         };
 
         Ok(mode)
-    }
-
-    /// Fetch the configuration record for the current Component.
-    ///
-    /// Requires that environment initialization has completed.
-    fn current_component_spec() -> Result<ComponentSpecConfig, InternalError> {
-        let component_spec = EnvOps::component_spec()?;
-
-        Self::try_get_component_spec(&component_spec)
-    }
-
-    /// Resolve the exact role set visible through the current canister's
-    /// root-local Subnet Directory projection.
-    pub(crate) fn current_subnet_directory_roles() -> Result<BTreeSet<CanisterRole>, InternalError>
-    {
-        let canister_role = EnvOps::canister_role()?;
-        if canister_role.is_wasm_store() {
-            return Ok(BTreeSet::new());
-        }
-        if canister_role.is_root() {
-            return Ok(Config::get()?.fleet_directory_roles());
-        }
-
-        Ok(Self::current_component_spec()?.component_directory_roles())
     }
 
     /// Fetch the configuration record for the *current* canister.

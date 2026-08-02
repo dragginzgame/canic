@@ -12,15 +12,15 @@ use super::fleet_subnet_root_install_journal::{
 };
 use super::operations::call_with_arg;
 use crate::{
-    durable_io::{RegularFileReadError, read_optional_regular_bytes, write_bytes},
+    durable_io::{RegularFileReadError, read_optional_regular_bytes},
     fleet_install_plan::{PersistedFleetInstallPlan, PersistedFleetSubnetRootReleaseSet},
-    icp::{IcpCli, LocalReplicaTarget, decode_json_result_response},
+    icp::{IcpCli, LocalReplicaTarget},
     release_set::{
         AppConfigSnapshot, ApplicationArtifactEntry,
         load_persisted_canic_infrastructure_artifact_manifest, resolve_release_artifact_path,
     },
 };
-use candid::{CandidType, Principal};
+use candid::Principal;
 use canic_control_plane::{
     dto::template::{
         TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
@@ -42,14 +42,11 @@ use canic_core::{
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
-    fs,
     path::{Path, PathBuf},
 };
 use thiserror::Error as ThisError;
 
-const ICP_JSON_OUTPUT: &str = "json";
 const MAX_STORE_TRANSITIONS: usize = 8;
-const CALL_ARGS_FILE: &str = "store-call-args.bin";
 
 #[derive(Debug, ThisError)]
 enum RootStoreBootstrapError {
@@ -260,7 +257,6 @@ fn stage_release_set(
     stage_chunk_set(
         &icp,
         root,
-        &current.path,
         manifest_template_id,
         version.clone(),
         release_set.digest.as_bytes().to_vec(),
@@ -272,11 +268,10 @@ fn stage_release_set(
         let bytes = load_artifact_bytes(icp_root, artifact)?;
         let template_id = TemplateId::owned(format!("{ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX}{role}"));
         let payload_hash = wasm_hash(&bytes);
-        call_binary_result::<_, ()>(
+        call_with_arg::<_, ()>(
             &icp,
             root,
             protocol::CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
-            &current.path,
             &TemplateManifestInput {
                 template_id: template_id.clone(),
                 role,
@@ -289,11 +284,11 @@ fn stage_release_set(
                 approved_at: Some(0),
                 created_at: 0,
             },
+            false,
         )?;
         stage_chunk_set(
             &icp,
             root,
-            &current.path,
             template_id,
             version.clone(),
             payload_hash,
@@ -365,7 +360,6 @@ fn load_artifact_bytes(
 fn stage_chunk_set(
     icp: &IcpCli,
     root: Principal,
-    journal_path: &Path,
     template_id: TemplateId,
     version: TemplateVersion,
     payload_hash: Vec<u8>,
@@ -379,11 +373,10 @@ fn stage_chunk_set(
         .iter()
         .map(|chunk| wasm_hash(chunk))
         .collect::<Vec<_>>();
-    let prepared = call_binary_result::<_, TemplateChunkSetInfoResponse>(
+    let prepared = call_with_arg::<_, TemplateChunkSetInfoResponse>(
         icp,
         root,
         protocol::CANIC_TEMPLATE_PREPARE_ADMIN,
-        journal_path,
         &TemplateChunkSetPrepareInput {
             template_id: template_id.clone(),
             version: version.clone(),
@@ -391,22 +384,23 @@ fn stage_chunk_set(
             payload_size_bytes: bytes.len() as u64,
             chunk_hashes: chunk_hashes.clone(),
         },
+        false,
     )?;
     if prepared.chunk_hashes != chunk_hashes {
         return Err(RootStoreBootstrapError::PreparedChunkSetMismatch.into());
     }
     for (chunk_index, bytes) in chunks.into_iter().enumerate() {
-        call_binary_result::<_, ()>(
+        call_with_arg::<_, ()>(
             icp,
             root,
             protocol::CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
-            journal_path,
             &TemplateChunkInput {
                 template_id: template_id.clone(),
                 version: version.clone(),
                 chunk_index: u32::try_from(chunk_index)?,
                 bytes,
             },
+            false,
         )?;
     }
     Ok(())
@@ -452,33 +446,4 @@ fn query_store_bootstrap_status(
         true,
     )
     .map_err(Into::into)
-}
-
-fn call_binary_result<I, O>(
-    icp: &IcpCli,
-    root: Principal,
-    method: &str,
-    journal_path: &Path,
-    input: &I,
-) -> Result<O, Box<dyn std::error::Error>>
-where
-    I: CandidType,
-    O: CandidType + serde::de::DeserializeOwned,
-{
-    let args_path = journal_path
-        .parent()
-        .expect("validated root journal has a parent")
-        .join(CALL_ARGS_FILE);
-    write_bytes(&args_path, &candid::encode_one(input)?)?;
-    let result = icp.canister_call_binary_args_output_with_candid(
-        &root.to_text(),
-        method,
-        &args_path,
-        Some(ICP_JSON_OUTPUT),
-        None,
-    );
-    let cleanup = fs::remove_file(&args_path);
-    let output = result?;
-    cleanup?;
-    decode_json_result_response::<O>(&output).map_err(Into::into)
 }

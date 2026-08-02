@@ -9,6 +9,7 @@ mod tests;
 
 use crate::{
     icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response},
+    icp_config::IcpConfigError,
     replica_query::{self, ReplicaQueryError},
 };
 use std::path::Path;
@@ -24,6 +25,9 @@ const ICP_JSON_OUTPUT: &str = "json";
 
 #[derive(Debug, ThisError)]
 pub enum CycleBalanceQueryError {
+    #[error(transparent)]
+    IcpConfig(#[from] IcpConfigError),
+
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
 
@@ -42,7 +46,7 @@ pub fn query_cycle_balance(
     icp_root: Option<&Path>,
     candid_path: Option<&Path>,
 ) -> Result<u128, CycleBalanceQueryError> {
-    if replica_query::should_use_local_replica_query(Some(environment)) {
+    if replica_query::uses_local_replica_transport(Some(environment), icp_root)? {
         return replica_query::query_cycle_balance(Some(environment), canister_id, icp_root)
             .map_err(Into::into);
     }

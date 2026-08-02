@@ -11,12 +11,10 @@ mod status_settings;
 mod types;
 
 pub use types::{
-    InfraCanisterInstallMode, InfraCanisterSettings, InfraCanisterStatusResult,
-    InfraCanisterStatusType, InfraDefiniteCanisterSettings, InfraEcdsaCurve, InfraEcdsaKeyId,
-    InfraEcdsaPublicKeyArgs, InfraEcdsaPublicKeyResult, InfraEnvironmentVariable,
-    InfraLogVisibility, InfraMemoryMetrics, InfraQueryStats, InfraSignWithEcdsaArgs,
-    InfraSignWithEcdsaResult, InfraUpdateSettingsArgs, InfraUpgradeFlags,
-    InfraWasmMemoryPersistence,
+    InfraCanisterSettings, InfraCanisterStatusResult, InfraCanisterStatusType,
+    InfraDefiniteCanisterSettings, InfraEcdsaCurve, InfraEcdsaKeyId, InfraEcdsaPublicKeyArgs,
+    InfraEcdsaPublicKeyResult, InfraEnvironmentVariable, InfraLogVisibility, InfraMemoryMetrics,
+    InfraQueryStats, InfraSignWithEcdsaArgs, InfraSignWithEcdsaResult, InfraUpdateSettingsArgs,
 };
 
 use thiserror::Error as ThisError;

@@ -85,7 +85,6 @@ impl FleetActivationWorkflow {
         let state_snapshot = StateSnapshotBuilder::new()?
             .with_fleet_state()
             .with_fleet_directory()?
-            .with_subnet_directory()?
             .build();
         let state_input = StateSnapshotAdapter::to_input(&state_snapshot);
         let state_snapshot_hash = FleetActivationEvidenceOps::state_snapshot_hash(&state_input)?;

@@ -92,8 +92,7 @@ fn install_timing_summary_uses_standard_table_format() {
 }
 
 #[test]
-fn root_init_args_roundtrip_the_exact_protected_authority() {
-    use candid::{CandidType, TypeEnv};
+fn root_init_args_are_written_as_binary_candid() {
     use canic_core::{
         cdk::types::Cycles,
         dto::fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
@@ -143,15 +142,15 @@ fn root_init_args_roundtrip_the_exact_protected_authority() {
         install_id: activation.operation_id,
     };
 
-    let args = candid_arg(&identity).expect("build init args");
-    let parsed = candid_parser::parse_idl_args(&args).expect("parse textual Candid");
-    let bytes = parsed
-        .to_bytes_with_types(&TypeEnv::new(), &[FleetSubnetRootInitArgs::ty()])
-        .expect("encode typed textual Candid");
+    let root = temp_dir("canic-binary-root-install-args");
+    let path = root.join("root-install-args.bin");
+    write_candid_args(&path, &identity).expect("write binary init args");
+    let bytes = fs::read(&path).expect("read binary init args");
     let decoded: FleetSubnetRootInitArgs =
         candid::decode_one(&bytes).expect("decode init identity");
 
     assert_eq!(decoded, identity);
+    fs::remove_dir_all(root).expect("remove temp root");
 }
 
 #[test]

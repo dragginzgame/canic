@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(unix)]
+use crate::test_support::create_fifo;
 use crate::test_support::temp_dir;
 use std::{fmt::Write as _, fs};
 
@@ -278,11 +280,9 @@ fn enrollment_rejects_symlinked_root_key_input_without_writing() {
 #[cfg(unix)]
 #[test]
 fn enrollment_rejects_fifo_root_key_input_without_writing() {
-    use rustix::fs::{CWD, Mode, mkfifoat};
-
     let (root, _, _, fingerprint) = fixture("fifo-input");
     let fifo_path = root.join("root-key.fifo");
-    mkfifoat(CWD, &fifo_path, Mode::from_raw_mode(0o600)).expect("create FIFO");
+    create_fifo(&fifo_path);
 
     let fifo_error = enroll_network(enroll(&root, "local", &fifo_path, &fingerprint))
         .expect_err("special input must reject");

@@ -15,7 +15,7 @@ use crate::{
     log::Topic,
     ops::{
         cost_guard::CostGuardPermit,
-        ic::{IcOps, mgmt::CanisterInstallMode},
+        ic::IcOps,
         runtime::install_source::ApprovedModuleSource,
         runtime::metrics::provisioning::{
             ProvisioningMetricOperation, ProvisioningMetricOutcome, ProvisioningMetricReason,
@@ -99,7 +99,6 @@ pub(super) async fn install_canister(
 
     if let Err(err) = ModuleInstallWorkflow::install_with_payload_with_permit(
         deployment_permit,
-        CanisterInstallMode::Install,
         pid,
         module_source,
         payload,

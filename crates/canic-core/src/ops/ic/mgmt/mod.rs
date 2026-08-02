@@ -34,16 +34,11 @@ use crate::{
 };
 use std::future::Future;
 
-#[expect(
-    unused_imports,
-    reason = "part of the public management ops type surface"
-)]
-pub use types::UpgradeFlags;
 pub use types::{
-    CanisterInstallMode, CanisterSettings, CanisterSettingsSnapshot, CanisterStatus,
-    CanisterStatusObservation, EcdsaKeyId, EcdsaPublicKeyArgs, EcdsaPublicKeyResult,
-    EnvironmentVariable, MemoryMetricsSnapshot, QueryStatsSnapshot, SignWithEcdsaArgs,
-    SignWithEcdsaResult, UpdateSettingsArgs,
+    CanisterSettings, CanisterSettingsSnapshot, CanisterStatus, CanisterStatusObservation,
+    EcdsaKeyId, EcdsaPublicKeyArgs, EcdsaPublicKeyResult, EnvironmentVariable,
+    MemoryMetricsSnapshot, QueryStatsSnapshot, SignWithEcdsaArgs, SignWithEcdsaResult,
+    UpdateSettingsArgs,
 };
 #[expect(
     unused_imports,
@@ -53,8 +48,7 @@ pub use types::{CanisterStatusType, LogVisibility};
 
 use types::{
     canister_status_from_infra, ecdsa_public_key_args_to_infra, ecdsa_public_key_from_infra,
-    install_mode_to_infra, sign_with_ecdsa_args_to_infra, sign_with_ecdsa_from_infra,
-    update_settings_to_infra,
+    sign_with_ecdsa_args_to_infra, sign_with_ecdsa_from_infra, update_settings_to_infra,
 };
 
 ///

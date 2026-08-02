@@ -29,10 +29,8 @@ use crate::{
             },
         },
         storage::{
-            children::CanisterChildrenOps,
-            directory::{fleet::FleetDirectoryOps, subnet::SubnetDirectoryOps},
-            fleet_activation::FleetActivationOps,
-            registry::subnet::SubnetRegistryOps,
+            children::CanisterChildrenOps, directory::fleet::FleetDirectoryOps,
+            fleet_activation::FleetActivationOps, registry::subnet::SubnetRegistryOps,
             state::fleet::FleetStateOps,
         },
         topology::directory::validate_provenance,
@@ -300,10 +298,6 @@ impl StateCascadeWorkflow {
         if let Some(directory) = &snapshot.fleet_directory {
             validate_provenance(&directory.provenance)?;
         }
-        if let Some(directory) = &snapshot.subnet_directory {
-            validate_provenance(&directory.provenance)?;
-        }
-
         let fleet_directory = snapshot
             .fleet_directory
             .as_ref()
@@ -312,25 +306,12 @@ impl StateCascadeWorkflow {
                 FleetDirectoryOps::prepare_args_allow_incomplete(filtered)
             })
             .transpose()?;
-        let subnet_directory = snapshot
-            .subnet_directory
-            .as_ref()
-            .map(|directory| {
-                let filtered = SubnetDirectoryOps::filter_args_for_local_config(directory.clone())?;
-                SubnetDirectoryOps::prepare_args_allow_incomplete(filtered)
-            })
-            .transpose()?;
-
         if let Some(fleet) = snapshot.fleet_state {
             FleetStateOps::import_input(fleet);
         }
 
         if let Some(directory) = fleet_directory {
             FleetDirectoryOps::commit_prepared(directory);
-        }
-
-        if let Some(directory) = subnet_directory {
-            SubnetDirectoryOps::commit_prepared(directory);
         }
 
         Ok(())
@@ -381,17 +362,14 @@ mod state_apply_tests {
         config::schema::CanisterKind,
         dto::{
             state::{FleetMode, FleetStateInput},
-            topology::{
-                DirectoryEntryInput, DirectoryProvenance, FleetDirectoryInput, SubnetDirectoryInput,
-            },
+            topology::{DirectoryEntryInput, DirectoryProvenance, FleetDirectoryInput},
         },
         ids::{
             AppId, CanisterRole, CanonicalNetworkId, ComponentSpecId, FleetBinding, FleetId,
             FleetKey, ReleaseBuildId, ReleaseBuildNonce,
         },
         ops::storage::{
-            directory::{fleet::FleetDirectoryOps, subnet::SubnetDirectoryOps},
-            fleet_activation::FleetActivationOps,
+            directory::fleet::FleetDirectoryOps, fleet_activation::FleetActivationOps,
             state::fleet::FleetStateOps,
         },
         test::{
@@ -408,9 +386,6 @@ mod state_apply_tests {
         let root = p(1);
         let original = p(2);
         let replacement = p(3);
-        let missing_component_spec = "missing"
-            .parse::<ComponentSpecId>()
-            .expect("missing Component Spec ID");
         let fleet = FleetBinding {
             fleet: FleetKey {
                 canonical_network_id: CanonicalNetworkId::ic_mainnet(),
@@ -457,39 +432,31 @@ mod state_apply_tests {
             }],
         })
         .expect("seed Fleet Directory");
-        SubnetDirectoryOps::import_args_allow_incomplete(SubnetDirectoryInput {
-            provenance: provenance.clone(),
-            entries: vec![DirectoryEntryInput {
-                role: service.clone(),
-                pid: original,
-            }],
-        })
-        .expect("seed Subnet Directory");
-        import_test_env(service.clone(), missing_component_spec, root);
         let snapshot = StateSnapshot {
             fleet_state: Some(FleetStateInput {
                 mode: FleetMode::Enabled,
                 cycles_funding_enabled: true,
             }),
             fleet_directory: Some(FleetDirectoryInput {
-                provenance: provenance.clone(),
-                entries: vec![DirectoryEntryInput {
-                    role: service.clone(),
-                    pid: replacement,
-                }],
-            }),
-            subnet_directory: Some(SubnetDirectoryInput {
                 provenance,
-                entries: Vec::new(),
+                entries: vec![
+                    DirectoryEntryInput {
+                        role: service.clone(),
+                        pid: replacement,
+                    },
+                    DirectoryEntryInput {
+                        role: service.clone(),
+                        pid: p(4),
+                    },
+                ],
             }),
         };
 
         StateCascadeWorkflow::apply_state_with_activation(&snapshot, Some([7; 32]))
-            .expect_err("unknown local Component Spec must reject the complete snapshot");
+            .expect_err("duplicate Fleet Directory role must reject the complete snapshot");
 
         assert_eq!(FleetStateOps::snapshot_input(), original_state);
         assert_eq!(FleetDirectoryOps::get(&service), Some(original));
-        assert_eq!(SubnetDirectoryOps::get(&service), Some(original));
         assert!(!FleetActivationOps::has_partial_snapshot_evidence_for_tests());
     }
 }

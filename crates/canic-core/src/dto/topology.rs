@@ -22,17 +22,6 @@ pub struct FleetDirectoryInput {
 }
 
 //
-// SubnetDirectoryInput
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct SubnetDirectoryInput {
-    pub provenance: DirectoryProvenance,
-    #[serde(deserialize_with = "deserialize_directory_entries")]
-    pub entries: Vec<DirectoryEntryInput>,
-}
-
-//
 // DirectoryProvenance
 //
 

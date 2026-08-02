@@ -31,7 +31,7 @@ use crate::role_contract::allocation::memory::{
         SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID,
     },
     pool::CANISTER_POOL_ID,
-    topology::{CANISTER_CHILDREN_ID, FLEET_DIRECTORY_ID, SUBNET_DIRECTORY_ID, SUBNET_REGISTRY_ID},
+    topology::{CANISTER_CHILDREN_ID, FLEET_DIRECTORY_ID, SUBNET_REGISTRY_ID},
 };
 use crate::role_contract::{AllocationOwner, StateAllocationKey};
 
@@ -408,9 +408,7 @@ fn runtime_topology_domains() -> Vec<StateDomainManifest> {
         canister::CanisterEntryRecord,
         stable::{
             children::CanisterChildrenData,
-            directory::{
-                DirectoryEntryRecord, fleet::FleetDirectoryData, subnet::SubnetDirectoryData,
-            },
+            directory::{DirectoryEntryRecord, fleet::FleetDirectoryData},
             registry::subnet::SubnetRegistryData,
         },
     };
@@ -423,14 +421,6 @@ fn runtime_topology_domains() -> Vec<StateDomainManifest> {
             FleetDirectoryData::STATE_CONTRACT_NAME,
             10,
             "fleet_directory_import_restores_unique_roles",
-        ),
-        state_domain(
-            "subnet_directory",
-            SUBNET_DIRECTORY_ID,
-            DirectoryEntryRecord::STATE_CONTRACT_NAME,
-            SubnetDirectoryData::STATE_CONTRACT_NAME,
-            15,
-            "subnet_directory_import_restores_unique_roles",
         ),
         state_domain(
             "subnet_registry",
@@ -741,7 +731,6 @@ mod tests {
         for expected in [
             CANISTER_CHILDREN_ID,
             FLEET_DIRECTORY_ID,
-            SUBNET_DIRECTORY_ID,
             SUBNET_REGISTRY_ID,
             ENV_ID,
             FLEET_STATE_ID,
@@ -780,9 +769,7 @@ mod tests {
 
     #[test]
     fn topology_directory_descriptors_reference_canonical_data_types() {
-        use crate::storage::stable::directory::{
-            DirectoryEntryRecord, fleet::FleetDirectoryData, subnet::SubnetDirectoryData,
-        };
+        use crate::storage::stable::directory::{DirectoryEntryRecord, fleet::FleetDirectoryData};
 
         let descriptors = canic_state_descriptors();
         let topology = descriptors
@@ -790,21 +777,19 @@ mod tests {
             .find(|descriptor| descriptor.allocation == StateAllocationKey::CoreRuntimeTopology)
             .expect("runtime topology descriptor");
 
-        for (domain, snapshot) in [
-            ("fleet_directory", FleetDirectoryData::STATE_CONTRACT_NAME),
-            ("subnet_directory", SubnetDirectoryData::STATE_CONTRACT_NAME),
-        ] {
-            let declaration = topology
-                .state
-                .iter()
-                .find(|declaration| declaration.domain == domain)
-                .expect("topology Directory declaration");
-            assert_eq!(
-                declaration.record,
-                DirectoryEntryRecord::STATE_CONTRACT_NAME
-            );
-            assert_eq!(declaration.snapshot, snapshot);
-        }
+        let declaration = topology
+            .state
+            .iter()
+            .find(|declaration| declaration.domain == "fleet_directory")
+            .expect("Fleet Directory declaration");
+        assert_eq!(
+            declaration.record,
+            DirectoryEntryRecord::STATE_CONTRACT_NAME
+        );
+        assert_eq!(
+            declaration.snapshot,
+            FleetDirectoryData::STATE_CONTRACT_NAME
+        );
     }
 
     #[test]

@@ -1,8 +1,4 @@
-use crate::dto::{
-    prelude::*,
-    state::FleetStateInput,
-    topology::{FleetDirectoryInput, SubnetDirectoryInput},
-};
+use crate::dto::{prelude::*, state::FleetStateInput, topology::FleetDirectoryInput};
 //
 // StateSnapshotInput
 //
@@ -13,7 +9,6 @@ use crate::dto::{
 pub struct StateSnapshotInput {
     pub fleet_state: Option<FleetStateInput>,
     pub fleet_directory: Option<FleetDirectoryInput>,
-    pub subnet_directory: Option<SubnetDirectoryInput>,
 }
 
 //

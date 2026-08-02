@@ -95,9 +95,8 @@ impl MgmtInfra {
         Ok(())
     }
 
-    /// Install or upgrade a canister from chunks stored in a same-subnet store canister.
+    /// Install a canister from chunks stored in a same-subnet store canister.
     pub async fn install_chunked_code<T: ArgumentEncoder>(
-        mode: InfraCanisterInstallMode,
         target_canister: Principal,
         store_canister: Principal,
         chunk_hashes_list: Vec<Vec<u8>>,
@@ -106,7 +105,7 @@ impl MgmtInfra {
     ) -> Result<(), IcInfraError> {
         let arg = encode_args(args).map_err(IcInfraError::from)?;
         let install_args = InfraInstallChunkedCodeArgs {
-            mode,
+            mode: InfraCanisterInstallMode::Install,
             target_canister,
             store_canister: Some(store_canister),
             chunk_hashes_list: chunk_hashes_list
@@ -126,16 +125,15 @@ impl MgmtInfra {
         Ok(())
     }
 
-    /// Install or upgrade a canister from an embedded wasm payload.
+    /// Install a canister from an embedded wasm payload.
     pub async fn install_code<T: ArgumentEncoder>(
-        mode: InfraCanisterInstallMode,
         canister_id: Principal,
         wasm_module: Vec<u8>,
         args: T,
     ) -> Result<(), IcInfraError> {
         let arg = encode_args(args).map_err(IcInfraError::from)?;
         let install_args = InfraInstallCodeArgs {
-            mode,
+            mode: InfraCanisterInstallMode::Install,
             canister_id,
             wasm_module,
             arg,

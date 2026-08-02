@@ -477,9 +477,9 @@ mod tests {
             role.state
                 .iter()
                 .filter_map(|domain| domain.memory_id)
-                .filter(|memory_id| (59..=62).contains(memory_id))
+                .filter(|memory_id| (58..=61).contains(memory_id))
                 .collect::<Vec<_>>(),
-            vec![60, 62, 61, 59]
+            vec![59, 61, 60, 58]
         );
         assert!(role.state.iter().all(|domain| domain.owner == "canic-core"));
     }
@@ -489,16 +489,16 @@ mod tests {
         let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
 
         for (config_path, role, expected_ids) in [
-            ("apps/test/canic.toml", "user_hub", vec![53, 56, 57, 58]),
+            ("apps/test/canic.toml", "user_hub", vec![52, 55, 56, 57]),
             (
                 "canisters/audit/scaling_probe/canic.toml",
                 "scale_hub",
-                vec![53, 54],
+                vec![52, 53],
             ),
             (
                 "canisters/test/project_hub_stub/canic.toml",
                 "project_hub",
-                vec![53, 55],
+                vec![52, 54],
             ),
         ] {
             let config = workspace.join(config_path);
@@ -510,7 +510,7 @@ mod tests {
                 .state
                 .iter()
                 .filter_map(|domain| domain.memory_id)
-                .filter(|memory_id| (53..=58).contains(memory_id))
+                .filter(|memory_id| (52..=57).contains(memory_id))
                 .collect::<Vec<_>>();
             actual_ids.sort_unstable();
 
@@ -540,8 +540,8 @@ mod tests {
         assert_eq!(
             ids,
             vec![
-                10, 11, 12, 13, 15, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47,
-                48, 49, 50, 51, 52,
+                10, 11, 12, 13, 15, 30, 31, 32, 33, 34, 36, 37, 38, 39, 40, 41, 43, 44, 45, 46, 47,
+                48, 49, 50, 51,
             ]
         );
         assert_eq!(

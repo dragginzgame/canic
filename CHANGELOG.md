@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.86` hard-cuts obsolete management-install and Subnet Directory
+  authorities, fixes fresh Fleet installation encoding and named-local
+  targeting, and makes host entropy and special-file tests portable across
+  Linux and macOS builds.
+
 - `0.100.85` hard-cuts the unused root Component Child upgrade protocol and
   moves retained recycle execution onto resumable Component Registry subtree
   removal, with durable recovery and stable placement-cleanup identity.

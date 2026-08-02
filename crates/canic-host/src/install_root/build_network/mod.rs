@@ -4,6 +4,7 @@ use crate::{
     icp_config::resolve_icp_build_network_from_root,
     replica_query,
 };
+use canic_core::ids::BuildNetwork;
 use std::path::Path;
 
 pub(super) fn resolve_install_build_context(
@@ -25,14 +26,18 @@ pub(super) fn resolve_install_build_context(
         workspace_root: workspace_root.to_path_buf(),
         icp_root: icp_root.to_path_buf(),
         config_path: config_path.to_path_buf(),
-        local_replica: local_replica_icp_target(environment, icp_root),
+        local_replica: local_replica_icp_target(environment, icp_root, build_network),
         refresh_canonical_wasm_store_did: false,
         release_build_id: None,
     })
 }
 
-fn local_replica_icp_target(environment: &str, icp_root: &Path) -> Option<LocalReplicaTarget> {
-    if !replica_query::should_use_local_replica_query(Some(environment)) {
+fn local_replica_icp_target(
+    environment: &str,
+    icp_root: &Path,
+    build_network: BuildNetwork,
+) -> Option<LocalReplicaTarget> {
+    if build_network != BuildNetwork::Local {
         return None;
     }
     if icp_ping(icp_root, environment).unwrap_or(false) {
@@ -54,7 +59,7 @@ pub(super) fn ensure_icp_environment_ready(
     if icp_ping(icp_root, environment)? {
         return Ok(());
     }
-    if replica_query::should_use_local_replica_query(Some(environment))
+    if resolve_icp_build_network_from_root(icp_root, environment)? == BuildNetwork::Local
         && replica_query::local_replica_status_reachable_from_root(Some(environment), icp_root)
     {
         println!(

@@ -75,8 +75,7 @@ pub mod ops {
 
         pub mod mgmt {
             pub use crate::ops::ic::mgmt::{
-                CanisterInstallMode, CanisterStatus, CanisterStatusObservation, CanisterStatusType,
-                MgmtOps,
+                CanisterStatus, CanisterStatusObservation, CanisterStatusType, MgmtOps,
             };
         }
 
@@ -103,10 +102,6 @@ pub mod ops {
         pub mod directory {
             pub mod fleet {
                 pub use crate::ops::storage::directory::fleet::FleetDirectoryOps;
-            }
-
-            pub mod subnet {
-                pub use crate::ops::storage::directory::subnet::SubnetDirectoryOps;
             }
         }
 

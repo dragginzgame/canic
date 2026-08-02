@@ -9,8 +9,9 @@ use crate::ops::cost_guard::CostGuardPermit;
 use candid::utils::ArgumentEncoder;
 
 impl MgmtOps {
-    /// Create a canister with explicit controllers and an initial cycle balance.
-    pub async fn create_canister(
+    /// Create a canister after a cost guard has reserved deployment quota and cycles.
+    pub async fn create_canister_with_permit(
+        _permit: &CostGuardPermit,
         controllers: Vec<Principal>,
         cycles: Cycles,
     ) -> Result<Principal, InternalError> {
@@ -25,39 +26,9 @@ impl MgmtOps {
         Ok(pid)
     }
 
-    /// Create a canister after a cost guard has reserved deployment quota and cycles.
-    pub async fn create_canister_with_permit(
-        _permit: &CostGuardPermit,
-        controllers: Vec<Principal>,
-        cycles: Cycles,
-    ) -> Result<Principal, InternalError> {
-        Self::create_canister(controllers, cycles).await
-    }
-
-    /// Install or upgrade chunked code after a cost guard has reserved deployment quota and cycles.
+    /// Install chunked code after a cost guard has reserved deployment quota and cycles.
     pub async fn install_chunked_code_with_permit<T: ArgumentEncoder>(
         _permit: &CostGuardPermit,
-        mode: CanisterInstallMode,
-        target_canister: Principal,
-        store_canister: Principal,
-        chunk_hashes_list: Vec<Vec<u8>>,
-        wasm_module_hash: Vec<u8>,
-        args: T,
-    ) -> Result<(), InternalError> {
-        Self::install_chunked_code(
-            mode,
-            target_canister,
-            store_canister,
-            chunk_hashes_list,
-            wasm_module_hash,
-            args,
-        )
-        .await
-    }
-
-    /// Install or upgrade a canister from chunks stored in one same-subnet store canister.
-    pub async fn install_chunked_code<T: ArgumentEncoder>(
-        mode: CanisterInstallMode,
         target_canister: Principal,
         store_canister: Principal,
         chunk_hashes_list: Vec<Vec<u8>>,
@@ -68,7 +39,6 @@ impl MgmtOps {
         management_call(
             ManagementCallMetricOperation::InstallChunkedCode,
             MgmtInfra::install_chunked_code(
-                install_mode_to_infra(mode),
                 target_canister,
                 store_canister,
                 chunk_hashes_list,
@@ -78,36 +48,20 @@ impl MgmtOps {
         )
         .await?;
 
-        let metric_kind = match mode {
-            CanisterInstallMode::Install => SystemMetricKind::InstallCode,
-            CanisterInstallMode::Reinstall => SystemMetricKind::ReinstallCode,
-            CanisterInstallMode::Upgrade(_) => SystemMetricKind::UpgradeCode,
-        };
-        SystemMetrics::increment(metric_kind);
+        SystemMetrics::increment(SystemMetricKind::InstallCode);
 
         log!(
             Topic::CanisterLifecycle,
             Ok,
-            "install_chunked_code: {target_canister} mode={mode:?} store={store_canister} chunks={chunk_count}"
+            "install_chunked_code: {target_canister} store={store_canister} chunks={chunk_count}"
         );
 
         Ok(())
     }
 
-    /// Install or upgrade embedded code after a cost guard has reserved deployment quota and cycles.
+    /// Install embedded code after a cost guard has reserved deployment quota and cycles.
     pub async fn install_code_with_permit<T: ArgumentEncoder>(
         _permit: &CostGuardPermit,
-        mode: CanisterInstallMode,
-        target_canister: Principal,
-        wasm_module: Vec<u8>,
-        args: T,
-    ) -> Result<(), InternalError> {
-        Self::install_code(mode, target_canister, wasm_module, args).await
-    }
-
-    /// Install or upgrade a canister from an embedded wasm payload.
-    pub async fn install_code<T: ArgumentEncoder>(
-        mode: CanisterInstallMode,
         target_canister: Principal,
         wasm_module: Vec<u8>,
         args: T,
@@ -115,26 +69,16 @@ impl MgmtOps {
         let payload_size_bytes = wasm_module.len();
         management_call(
             ManagementCallMetricOperation::InstallCode,
-            MgmtInfra::install_code(
-                install_mode_to_infra(mode),
-                target_canister,
-                wasm_module,
-                args,
-            ),
+            MgmtInfra::install_code(target_canister, wasm_module, args),
         )
         .await?;
 
-        let metric_kind = match mode {
-            CanisterInstallMode::Install => SystemMetricKind::InstallCode,
-            CanisterInstallMode::Reinstall => SystemMetricKind::ReinstallCode,
-            CanisterInstallMode::Upgrade(_) => SystemMetricKind::UpgradeCode,
-        };
-        SystemMetrics::increment(metric_kind);
+        SystemMetrics::increment(SystemMetricKind::InstallCode);
 
         log!(
             Topic::CanisterLifecycle,
             Ok,
-            "install_code: {target_canister} mode={mode:?} embedded_bytes={payload_size_bytes}"
+            "install_code: {target_canister} embedded_bytes={payload_size_bytes}"
         );
 
         Ok(())

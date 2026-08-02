@@ -1,5 +1,8 @@
-use crate::icp::{self, LocalReplicaTarget};
-use candid::{CandidType, IDLValue};
+use crate::{
+    durable_io::write_bytes,
+    icp::{self, LocalReplicaTarget},
+};
+use candid::CandidType;
 use canic_core::cdk::types::Principal;
 use serde_json::Value as JsonValue;
 use std::{path::Path, process::Command};
@@ -28,9 +31,12 @@ fn parse_canister_id_json(value: &JsonValue) -> Option<String> {
     }
 }
 
-pub(super) fn candid_arg<T: CandidType>(args: &T) -> Result<String, candid::Error> {
-    let value = IDLValue::try_from_candid_type(args)?;
-    Ok(format!("({value})"))
+pub(super) fn write_candid_args<T: CandidType>(
+    path: &Path,
+    args: &T,
+) -> Result<(), Box<dyn std::error::Error>> {
+    write_bytes(path, &candid::encode_one(args)?)?;
+    Ok(())
 }
 
 pub(super) fn run_command(command: &mut Command) -> Result<(), Box<dyn std::error::Error>> {

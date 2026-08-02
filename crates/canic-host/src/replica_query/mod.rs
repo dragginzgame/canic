@@ -14,8 +14,12 @@ use self::transport::local_query;
 use std::path::Path;
 
 use candid::Decode;
-use canic_core::dto::error::Error as CanicError;
+use canic_core::{dto::error::Error as CanicError, ids::BuildNetwork};
 use thiserror::Error as ThisError;
+
+use crate::icp_config::{
+    IcpConfigError, resolve_current_canic_icp_root, resolve_icp_build_network_from_root,
+};
 
 pub use self::status::local_replica_status_reachable_from_root;
 pub(crate) use self::{
@@ -64,11 +68,26 @@ impl From<cbor::CborError> for ReplicaQueryError {
     }
 }
 
-/// Return whether the selected environment should use direct local replica queries.
-#[must_use]
-pub fn should_use_local_replica_query(environment: Option<&str>) -> bool {
-    environment
-        .is_none_or(|environment| environment == "local" || environment.starts_with("http://"))
+/// Resolve whether the selected environment uses the direct replica transport.
+pub fn uses_local_replica_transport(
+    environment: Option<&str>,
+    icp_root: Option<&Path>,
+) -> Result<bool, IcpConfigError> {
+    let Some(environment) = environment else {
+        return Ok(true);
+    };
+    if environment.starts_with("http://") {
+        return Ok(true);
+    }
+
+    let discovered_root;
+    let root = if let Some(root) = icp_root {
+        root
+    } else {
+        discovered_root = resolve_current_canic_icp_root()?;
+        &discovered_root
+    };
+    Ok(resolve_icp_build_network_from_root(root, environment)? == BuildNetwork::Local)
 }
 
 /// Query `canic_ready` directly through the local replica HTTP API.

@@ -1,5 +1,4 @@
 pub mod fleet;
-pub mod subnet;
 
 use crate::{cdk::types::Principal, ids::CanisterRole};
 

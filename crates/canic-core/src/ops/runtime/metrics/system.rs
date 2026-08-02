@@ -103,7 +103,7 @@ mod tests {
     fn reset_clears_all_metrics() {
         SystemMetrics::reset();
 
-        SystemMetrics::increment(SystemMetricKind::UpgradeCode);
+        SystemMetrics::increment(SystemMetricKind::InstallCode);
         SystemMetrics::increment(SystemMetricKind::UpdateSettings);
 
         SystemMetrics::reset();
