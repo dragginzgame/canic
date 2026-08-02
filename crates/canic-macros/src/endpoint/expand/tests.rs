@@ -195,3 +195,23 @@ fn authenticated_endpoint_expansion_fences_before_access_and_dispatch() {
     assert!(access < dispatch);
     assert!(dispatch < impl_call);
 }
+
+#[test]
+fn attested_local_subnet_expands_to_the_local_proof_guard() {
+    let args = make_args(vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
+        BuiltinPredicate::AttestedLocalSubnet,
+    ))]);
+    let func: ItemFn = syn::parse_quote!(
+        async fn local_call(
+            attestation: ::canic::dto::auth::SignedRoleAttestation,
+        ) -> Result<(), ::canic::Error> {
+            Ok(())
+        }
+    );
+
+    let expanded = expand(EndpointKind::Update, args, func).to_string();
+    let compact = expanded.split_whitespace().collect::<String>();
+
+    assert!(compact.contains("access::expr::auth::attested_local_subnet()"));
+    assert!(compact.contains("let_=&attestation"));
+}

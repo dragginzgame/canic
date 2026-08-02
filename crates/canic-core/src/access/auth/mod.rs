@@ -4,6 +4,7 @@
 //! Does not own: endpoint response mapping, operation replay safety, or storage schema.
 //! Boundary: access expressions call auth predicates before endpoint workflow execution.
 
+mod attestation;
 mod identity;
 mod predicates;
 mod token;
@@ -133,6 +134,11 @@ pub async fn is_root(caller: Principal) -> Result<(), AccessError> {
 /// Require that the caller is the currently executing canister.
 pub async fn is_same_canister(caller: Principal) -> Result<(), AccessError> {
     predicates::is_same_canister(caller).await
+}
+
+/// Require a root-signed caller attestation bound to this canister's live Subnet.
+pub async fn is_attested_local_subnet(caller: Principal) -> Result<(), AccessError> {
+    attestation::is_attested_local_subnet(caller).await
 }
 
 fn dependency_unavailable(detail: &str) -> AccessError {

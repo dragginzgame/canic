@@ -42,4 +42,14 @@ impl AuthApi {
             .await
             .map_err(Self::map_auth_error)
     }
+
+    /// Verify a role attestation that explicitly binds the caller to this live Subnet.
+    pub async fn verify_local_subnet_role_attestation(
+        attestation: &SignedRoleAttestation,
+        min_accepted_epoch: u64,
+    ) -> Result<(), Error> {
+        RuntimeAuthWorkflow::verify_local_subnet_role_attestation(attestation, min_accepted_epoch)
+            .await
+            .map_err(Self::map_auth_error)
+    }
 }

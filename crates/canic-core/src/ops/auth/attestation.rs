@@ -10,13 +10,16 @@ use super::{
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::auth::{RoleAttestation, SignedRoleAttestation},
+    dto::auth::{RoleAttestation, RoleAttestationRootProof, SignedRoleAttestation},
     ops::{
         auth::{AuthOpsError, AuthSignatureError, AuthValidationError},
         ic::IcOps,
     },
 };
 use std::{cell::RefCell, collections::BTreeMap};
+
+const ROLE_ATTESTATION_SIGNATURE_CBOR_MAX_BYTES: usize = 256 * 1024;
+const ROLE_ATTESTATION_PUBLIC_KEY_DER_MAX_BYTES: usize = 4 * 1024;
 
 thread_local! {
     static PENDING_ROLE_ATTESTATIONS: RefCell<BTreeMap<PendingRoleAttestationKey, PreparedRootRoleAttestation>> =
@@ -113,17 +116,7 @@ impl AuthOps {
         now_ns: u64,
         min_accepted_epoch: u64,
     ) -> Result<RoleAttestation, AuthOpsError> {
-        let payload_hash = crypto::role_attestation_hash(&attestation.payload)
-            .map_err(|err| AuthSignatureError::AttestationProofInvalid(err.to_string()))?;
-        let verifier_cfg = Self::auth_proof_verifier_config()
-            .map_err(|err| AuthValidationError::Auth(err.to_string()))?;
-        Self::verify_root_canister_signature_proof(
-            payload_hash,
-            &attestation.root_proof,
-            verifier_cfg.root_canister_id,
-            &verifier_cfg.ic_root_public_key_raw,
-        )
-        .map_err(|err| AuthSignatureError::AttestationProofInvalid(err.to_string()))?;
+        verify_role_attestation_proof(attestation)?;
 
         verify::verify_role_attestation_claims(
             &attestation.payload,
@@ -136,6 +129,75 @@ impl AuthOps {
 
         Ok(attestation.payload.clone())
     }
+
+    pub(crate) fn verify_local_subnet_role_attestation_cached(
+        attestation: &SignedRoleAttestation,
+        caller: Principal,
+        self_pid: Principal,
+        verifier_subnet: Principal,
+        now_ns: u64,
+        min_accepted_epoch: u64,
+    ) -> Result<RoleAttestation, AuthOpsError> {
+        verify_role_attestation_proof(attestation)?;
+
+        verify::verify_local_subnet_role_attestation_claims(
+            &attestation.payload,
+            caller,
+            self_pid,
+            verifier_subnet,
+            now_ns,
+            min_accepted_epoch,
+        )?;
+
+        Ok(attestation.payload.clone())
+    }
+}
+
+fn verify_role_attestation_proof(attestation: &SignedRoleAttestation) -> Result<(), AuthOpsError> {
+    validate_role_attestation_proof_bounds(&attestation.root_proof)?;
+    let payload_hash = crypto::role_attestation_hash(&attestation.payload)
+        .map_err(|err| AuthSignatureError::AttestationProofInvalid(err.to_string()))?;
+    let verifier_cfg = AuthOps::auth_proof_verifier_config()
+        .map_err(|err| AuthValidationError::Auth(err.to_string()))?;
+    AuthOps::verify_root_canister_signature_proof(
+        payload_hash,
+        &attestation.root_proof,
+        verifier_cfg.root_canister_id,
+        &verifier_cfg.ic_root_public_key_raw,
+    )
+    .map_err(|err| AuthSignatureError::AttestationProofInvalid(err.to_string()))?;
+    Ok(())
+}
+
+fn validate_role_attestation_proof_bounds(
+    proof: &RoleAttestationRootProof,
+) -> Result<(), AuthValidationError> {
+    let RoleAttestationRootProof::IcCanisterSignatureV1(proof) = proof;
+    require_proof_field_bound(
+        "signature_cbor",
+        proof.signature_cbor.len(),
+        ROLE_ATTESTATION_SIGNATURE_CBOR_MAX_BYTES,
+    )?;
+    require_proof_field_bound(
+        "public_key_der",
+        proof.public_key_der.len(),
+        ROLE_ATTESTATION_PUBLIC_KEY_DER_MAX_BYTES,
+    )
+}
+
+const fn require_proof_field_bound(
+    field: &'static str,
+    actual_bytes: usize,
+    max_bytes: usize,
+) -> Result<(), AuthValidationError> {
+    if actual_bytes > max_bytes {
+        return Err(AuthValidationError::AttestationProofFieldTooLarge {
+            field,
+            actual_bytes,
+            max_bytes,
+        });
+    }
+    Ok(())
 }
 
 // -----------------------------------------------------------------------------
@@ -216,5 +278,39 @@ mod tests {
 
         AuthOps::verify_role_attestation_cached(&attestation, p(2), p(3), None, 15, 0)
             .expect_err("local verifier must fail before proof acceptance without root key");
+    }
+
+    #[test]
+    fn role_attestation_proof_bounds_reject_oversized_fields_before_crypto() {
+        let oversized_signature =
+            RoleAttestationRootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
+                signature_cbor: vec![0; ROLE_ATTESTATION_SIGNATURE_CBOR_MAX_BYTES + 1],
+                public_key_der: Vec::new(),
+            });
+
+        let err = validate_role_attestation_proof_bounds(&oversized_signature)
+            .expect_err("oversized signature proof must fail before verification");
+        std::assert_matches!(
+            err,
+            AuthValidationError::AttestationProofFieldTooLarge {
+                field: "signature_cbor",
+                ..
+            }
+        );
+
+        let oversized_key =
+            RoleAttestationRootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
+                signature_cbor: Vec::new(),
+                public_key_der: vec![0; ROLE_ATTESTATION_PUBLIC_KEY_DER_MAX_BYTES + 1],
+            });
+        let err = validate_role_attestation_proof_bounds(&oversized_key)
+            .expect_err("oversized public key must fail before verification");
+        std::assert_matches!(
+            err,
+            AuthValidationError::AttestationProofFieldTooLarge {
+                field: "public_key_der",
+                ..
+            }
+        );
     }
 }

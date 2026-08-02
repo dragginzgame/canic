@@ -41,6 +41,12 @@ impl IcOps {
         ic_cdk::api::msg_caller()
     }
 
+    /// Return the physical Subnet currently executing this canister.
+    #[must_use]
+    pub fn subnet_self() -> Principal {
+        ic_cdk::api::subnet_self()
+    }
+
     /// Return a metadata-hash caller principal on both IC and host targets.
     #[must_use]
     #[cfg_attr(

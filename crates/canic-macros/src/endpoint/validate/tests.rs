@@ -17,6 +17,20 @@ fn parsed_authenticated() -> ParsedArgs {
     }
 }
 
+fn parsed_attested_local_subnet() -> ParsedArgs {
+    ParsedArgs {
+        forwarded: Vec::new(),
+        export_name: None,
+        payload_max_bytes: None,
+        requires: vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
+            BuiltinPredicate::AttestedLocalSubnet,
+        ))],
+        internal: false,
+        public: false,
+        query_mode: QueryMode::Plain,
+    }
+}
+
 #[test]
 fn authenticated_requires_first_argument() {
     let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
@@ -46,6 +60,34 @@ fn authenticated_rejects_wrong_first_arg_type() {
         err.to_string()
             .contains("authenticated(...) requires a first argument")
     );
+}
+
+#[test]
+fn attested_local_subnet_requires_signed_role_attestation_first() {
+    let missing: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
+    let err = validate(
+        EndpointKind::Update,
+        parsed_attested_local_subnet(),
+        &missing,
+        true,
+    )
+    .expect_err("missing attestation argument must fail");
+    assert!(err.to_string().contains(
+        "attested_local_subnet() requires a first argument of type `SignedRoleAttestation`"
+    ));
+
+    let accepted: Signature = syn::parse_quote!(
+        async fn hello(
+            attestation: ::canic::dto::auth::SignedRoleAttestation,
+        ) -> Result<(), ::canic::Error>
+    );
+    validate(
+        EndpointKind::Update,
+        parsed_attested_local_subnet(),
+        &accepted,
+        true,
+    )
+    .expect("signed role attestation should satisfy local-Subnet auth shape");
 }
 
 #[test]

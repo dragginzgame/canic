@@ -28,15 +28,16 @@ pub(super) const fn name(pred: &BuiltinPredicate) -> &'static str {
         BuiltinPredicate::Environment(EnvironmentPredicate::BuildIcOnly) => "build_ic_only",
         BuiltinPredicate::Environment(EnvironmentPredicate::BuildLocalOnly) => "build_local_only",
         BuiltinPredicate::Authenticated { .. } => "authenticated",
+        BuiltinPredicate::AttestedLocalSubnet => "attested_local_subnet",
     }
 }
 
 pub(super) const fn metric_kind(pred: &BuiltinPredicate) -> AccessMetricKind {
     match pred {
         BuiltinPredicate::Fleet(_) => AccessMetricKind::Guard,
-        BuiltinPredicate::Caller(_) | BuiltinPredicate::Authenticated { .. } => {
-            AccessMetricKind::Auth
-        }
+        BuiltinPredicate::Caller(_)
+        | BuiltinPredicate::Authenticated { .. }
+        | BuiltinPredicate::AttestedLocalSubnet => AccessMetricKind::Auth,
         BuiltinPredicate::Environment(EnvironmentPredicate::SelfIsFleetSubnetRoot) => {
             AccessMetricKind::Env
         }
@@ -87,6 +88,9 @@ pub(super) async fn evaluate(
                 access::auth::delegated_token_verified(ctx.authenticated_caller, *required_scope)?;
             DelegatedAuthMetrics::record_authority(issuer_pid);
             Ok(())
+        }
+        BuiltinPredicate::AttestedLocalSubnet => {
+            access::auth::is_attested_local_subnet(ctx.caller).await
         }
     }
 }

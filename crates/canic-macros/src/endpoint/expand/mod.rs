@@ -1,7 +1,7 @@
 mod access;
 
 use crate::endpoint::{EndpointKind, parse::QueryMode, returns_fallible, validate::ValidatedArgs};
-use access::{AccessPlan, access_stage, build_access_plan, requires_authenticated};
+use access::{AccessPlan, access_stage, build_access_plan, requires_decoded_auth_argument};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use syn::{ItemFn, Signature};
@@ -39,10 +39,10 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     let impl_name = format_ident!("__canic_impl_{}", orig_name);
     func.sig.ident = impl_name.clone();
 
-    if requires_authenticated(&args.requires)
+    if requires_decoded_auth_argument(&args.requires)
         && let Some(first_arg_ident) = first_typed_arg_ident(&orig_sig)
     {
-        // authenticated([scope]) decodes ingress arg0 directly; keep the function arg lint-clean.
+        // Proof-bearing auth predicates decode ingress arg0 before dispatch.
         let keepalive: syn::Stmt = syn::parse_quote!(let _ = &#first_arg_ident;);
         func.block.stmts.insert(0, keepalive);
     }

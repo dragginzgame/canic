@@ -179,6 +179,19 @@ fn authenticated_allows_no_scope_argument() {
 }
 
 #[test]
+fn attested_local_subnet_is_a_builtin_auth_predicate() {
+    let parsed = parse_args(quote!(requires(auth::attested_local_subnet()))).expect("parse args");
+    let AccessExprAst::All(exprs) = &parsed.requires[0] else {
+        panic!("expected requires(all)");
+    };
+    let AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::AttestedLocalSubnet)) =
+        &exprs[0]
+    else {
+        panic!("expected attested local-Subnet predicate");
+    };
+}
+
+#[test]
 fn grouped_access_expression_is_unwrapped() {
     let parsed = parse_args(quote!(requires((caller::is_controller())))).expect("parse args");
     let AccessExprAst::All(exprs) = &parsed.requires[0] else {

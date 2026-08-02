@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.86`.
-- The latest published release is `v0.100.86` at
-  `edfd33ac729dfbd2b9c1cb1b9058e13dc21b914c`.
-- Open `0.100.87` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.87`.
+- The latest published release is `v0.100.87` at
+  `b4e3d1a04920f58828767f47337ccbfe4b007104`.
+- Open `0.100.88` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -721,7 +721,7 @@ Historical detail is archived at:
   files for Coordinator/root init, resolves named environments through their
   backing network, generates the required local acceptance Fleet input from
   live topology and builds on macOS without Linux-only entropy or FIFO APIs.
-- Open `0.100.87` consolidates Coordinator/root artifact validation,
+- Released `0.100.87` consolidates Coordinator/root artifact validation,
   creation-result decoding and live module-hash observation behind typed
   shared helpers while preserving independent install journals and recovery
   decisions. Paid creation execution, durable result capture and the
@@ -730,6 +730,12 @@ Historical detail is archived at:
   predicate and replaces delegated-session validation's legacy Registry read
   with the maintained local direct-child cache. Host-only `ic-query` advances
   to `0.25.12` through the unchanged focused Subnet Catalog feature.
+- Open `0.100.88` adds bounded proof-carrying local-Subnet endpoint
+  authentication. A managed caller presents one root-signed role attestation
+  whose explicit physical-Subnet claim is checked against the receiver's
+  IC-native live Subnet alongside subject, audience, expiry and role epoch.
+  Verification is local, performs no inter-Canister authorization call and
+  does not trust arbitrary co-resident Canisters.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -2423,7 +2429,7 @@ install acceptance input and removes Linux-only host entropy/test imports. The
 host protocol path now exposes explicit typed query/update operations through
 shared mode-aware ICP command builders; durable install arguments remain
 separate from transient call arguments because their recovery lifetimes differ.
-Open `0.100.87` removes the remaining duplicate Coordinator/root artifact,
+Released `0.100.87` removes the remaining duplicate Coordinator/root artifact,
 creation-evidence and module-hash observation paths without merging their
 durable journals or domain-specific recovery fences. Paid creation execution,
 result capture and pre-install module rejection now have one shared owner. The
@@ -2432,6 +2438,11 @@ the unused subnet-registration caller predicate and rejects delegated direct
 child identities through the maintained local child cache rather than the
 legacy Subnet Registry. The focused host-only Subnet Catalog dependency is
 source-compatible at `ic-query 0.25.12`.
+Open `0.100.88` adds an endpoint access predicate and explicit Auth API for
+bounded local verification of a root-signed caller role attestation. Its
+required physical-Subnet claim must match the receiver's live IC Subnet, so
+managed Components can authenticate same-Subnet role calls without an extra
+authorization call or ambient Subnet Registry authority.
 
 ## Historical Release Detail
 
