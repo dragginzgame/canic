@@ -7,9 +7,8 @@
 
 use super::{
     commands::{
-        icp_canister_create_command, icp_canister_install_binary_args_command,
-        open_creation_result_for_effect, parse_created_canister_id, prepare_creation_result,
-        run_command, write_candid_args,
+        icp_canister_install_binary_args_command, prepare_creation_result, run_command,
+        write_candid_args,
     },
     coordinator_install_journal::{
         FleetCoordinatorInstallJournal, FleetCoordinatorInstallPhase,
@@ -18,15 +17,17 @@ use super::{
         plan_fleet_coordinator_install, record_coordinator_created, record_coordinator_installed,
         record_coordinator_verified,
     },
-    operations::{module_hash_text, parse_module_hash, query_live_registry},
+    operations::{
+        CreationEffectAction, CreationEffectRequest, InstallArtifact, execute_or_observe_creation,
+        module_hash_text, observe_module_hash, query_live_registry, resolve_install_artifact,
+    },
 };
 use crate::{
-    durable_io::{RegularFileReadError, read_optional_regular_bytes},
     fleet_install_plan::PersistedFleetInstallPlan,
-    icp::{LocalReplicaTarget, run_output_to_file},
+    icp::LocalReplicaTarget,
     release_set::{
         AppConfigSnapshot, CanicInfrastructureRole,
-        load_persisted_canic_infrastructure_artifact_manifest, resolve_release_artifact_path,
+        load_persisted_canic_infrastructure_artifact_manifest,
     },
 };
 use candid::Principal;
@@ -36,11 +37,8 @@ use canic_core::{
     dto::fleet_registry::{FleetRegistry, FleetRegistryManifest, FleetRegistryVersion},
     ids::{FleetCoordinatorBinding, FleetRegistryAuthority},
 };
-use sha2::{Digest, Sha256};
 #[cfg(test)]
 use std::fs;
-#[cfg(not(unix))]
-use std::io;
 use std::path::{Path, PathBuf};
 use thiserror::Error as ThisError;
 
@@ -75,38 +73,6 @@ struct CoordinatorInstallOutcomeUnknownError {
 
 #[derive(Debug, ThisError)]
 enum CoordinatorInstallStateError {
-    #[error("Coordinator artifact {path} is missing")]
-    ArtifactMissing { path: PathBuf },
-
-    #[error("Coordinator artifact is not a regular no-follow file: {path}")]
-    ArtifactUnsafe { path: PathBuf },
-
-    #[error("Coordinator artifact {path} has size {actual}, expected {expected}")]
-    ArtifactSize {
-        path: PathBuf,
-        expected: u64,
-        actual: usize,
-    },
-
-    #[error("Coordinator artifact {path} has SHA-256 {actual}, expected {expected}")]
-    ArtifactHash {
-        path: PathBuf,
-        expected: String,
-        actual: String,
-    },
-
-    #[error("Coordinator creation result is not a regular no-follow file: {path}")]
-    CreationResultUnsafe { path: PathBuf },
-
-    #[error("Coordinator creation result is invalid: {path}")]
-    InvalidCreationResult { path: PathBuf },
-
-    #[error("created Coordinator {observed} does not match status principal {expected}")]
-    StatusPrincipal {
-        expected: Principal,
-        observed: String,
-    },
-
     #[error("Coordinator {coordinator} already has unexpected module hash {observed}")]
     UnexpectedModule {
         coordinator: Principal,
@@ -127,10 +93,6 @@ enum CoordinatorInstallStateError {
 
     #[error("Coordinator installation exceeded its bounded phase transitions")]
     TransitionBoundExceeded,
-}
-
-struct CoordinatorArtifact {
-    wasm_path: PathBuf,
 }
 
 struct ExpectedCoordinatorGenesis {
@@ -154,8 +116,12 @@ pub(super) fn install_and_verify_fleet_coordinator(
         icp_root,
         fleet_install_plan.plan.release_build_id,
     )?;
-    let artifact =
-        resolve_coordinator_artifact(icp_root, fleet_install_plan, &infrastructure_manifest)?;
+    let artifact = resolve_install_artifact(
+        icp_root,
+        &infrastructure_manifest,
+        CanicInfrastructureRole::FleetCoordinator,
+        fleet_install_plan.plan.release_build_id,
+    )?;
     let mut current = plan_fleet_coordinator_install(PlanFleetCoordinatorInstallRequest {
         fleet_install_plan,
         infrastructure_manifest: &infrastructure_manifest,
@@ -216,38 +182,32 @@ fn recover_or_create_coordinator(
     current: &ResolvedFleetCoordinatorInstall,
 ) -> Result<ResolvedFleetCoordinatorInstall, Box<dyn std::error::Error>> {
     let result_path = coordinator_create_result_path(&fleet_install_plan.path);
-    let mut command_error = None;
-    if current.advanced {
-        let result = open_creation_result_for_effect(&result_path, "Coordinator")?;
-        let mut command = icp_canister_create_command(
-            icp_root,
-            environment,
-            local_replica,
-            current.journal.coordinator_subnet,
-            &current.journal.creation_funding,
-        );
-        if let Err(error) = run_output_to_file(&mut command, &result) {
-            command_error = Some(error.to_string());
-        }
-    }
-
-    let Some(coordinator) = read_created_coordinator(&result_path)? else {
+    let action = if current.advanced {
+        CreationEffectAction::Execute
+    } else {
+        CreationEffectAction::ObserveOnly
+    };
+    let evidence = execute_or_observe_creation(CreationEffectRequest {
+        icp_root,
+        environment,
+        local_replica,
+        result_path: &result_path,
+        subject: "Coordinator",
+        placement_subnet: current.journal.coordinator_subnet,
+        funding: &current.journal.creation_funding,
+        action,
+        expected_module_hash: current.journal.expected_module_hash,
+    })?;
+    let Some(coordinator) = evidence.canister else {
         return Err(CoordinatorCreationOutcomeUnknownError {
             result_path,
-            detail: command_error.unwrap_or_else(|| {
+            detail: evidence.command_error.unwrap_or_else(|| {
                 "the journal is already creation_in_flight and contains no recoverable principal"
                     .to_string()
             }),
         }
         .into());
     };
-    observe_created_canister(
-        icp_root,
-        environment,
-        local_replica,
-        coordinator,
-        current.journal.expected_module_hash,
-    )?;
     record_coordinator_created(current, coordinator).map_err(Into::into)
 }
 
@@ -255,14 +215,15 @@ fn recover_or_install_coordinator(
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
-    artifact: &CoordinatorArtifact,
+    artifact: &InstallArtifact,
     current: &ResolvedFleetCoordinatorInstall,
 ) -> Result<ResolvedFleetCoordinatorInstall, Box<dyn std::error::Error>> {
     let coordinator = current
         .journal
         .coordinator
         .expect("validated InstallInFlight journal retains its Coordinator");
-    match observed_module_hash(icp_root, environment, local_replica, coordinator)? {
+    let icp = super::install_icp(icp_root, environment, local_replica);
+    match observe_module_hash(&icp, coordinator)? {
         Some(observed) if observed == current.journal.expected_module_hash => {
             return record_coordinator_installed(current, observed).map_err(Into::into);
         }
@@ -296,7 +257,7 @@ fn recover_or_install_coordinator(
         &args_path,
     );
     let command_result = run_command(&mut install);
-    match observed_module_hash(icp_root, environment, local_replica, coordinator) {
+    match observe_module_hash(&icp, coordinator) {
         Ok(Some(observed)) if observed == current.journal.expected_module_hash => {
             record_coordinator_installed(current, observed).map_err(Into::into)
         }
@@ -348,7 +309,8 @@ fn verify_live_coordinator_genesis(
     let coordinator = journal
         .coordinator
         .expect("verified Coordinator phases retain a principal");
-    match observed_module_hash(icp_root, environment, local_replica, coordinator)? {
+    let icp = super::install_icp(icp_root, environment, local_replica);
+    match observe_module_hash(&icp, coordinator)? {
         Some(observed) if observed == journal.expected_module_hash => {}
         Some(observed) => {
             return Err(CoordinatorInstallStateError::UnexpectedModule {
@@ -361,7 +323,6 @@ fn verify_live_coordinator_genesis(
     }
 
     let expected = expected_genesis(journal)?;
-    let icp = super::install_icp(icp_root, environment, local_replica);
     let live = query_live_registry(&icp, coordinator)?;
     if live.registry != expected.registry {
         return Err(CoordinatorInstallStateError::RegistryMismatch.into());
@@ -384,7 +345,8 @@ fn verify_live_coordinator_current(
     let coordinator = journal
         .coordinator
         .expect("verified Coordinator phases retain a principal");
-    match observed_module_hash(icp_root, environment, local_replica, coordinator)? {
+    let icp = super::install_icp(icp_root, environment, local_replica);
+    match observe_module_hash(&icp, coordinator)? {
         Some(observed) if observed == journal.expected_module_hash => {}
         Some(observed) => {
             return Err(CoordinatorInstallStateError::UnexpectedModule {
@@ -397,7 +359,6 @@ fn verify_live_coordinator_current(
     }
 
     let expected = expected_genesis(journal)?;
-    let icp = super::install_icp(icp_root, environment, local_replica);
     let live = query_live_registry(&icp, coordinator)?;
     FleetRegistryOps::validate(
         &expected.init_args.authority,
@@ -454,145 +415,6 @@ fn expected_genesis(
         manifest,
         version,
     })
-}
-
-fn resolve_coordinator_artifact(
-    icp_root: &Path,
-    fleet_install_plan: &PersistedFleetInstallPlan,
-    infrastructure_manifest: &crate::release_set::PersistedCanicInfrastructureArtifactManifest,
-) -> Result<CoordinatorArtifact, Box<dyn std::error::Error>> {
-    let entry = infrastructure_manifest
-        .manifest
-        .entries
-        .iter()
-        .find(|entry| entry.role == CanicInfrastructureRole::FleetCoordinator)
-        .expect("validated infrastructure manifest has one Coordinator entry");
-    let wasm_path = resolve_release_artifact_path(icp_root, &entry.wasm_relative_path)?;
-    let wasm = match read_optional_regular_bytes(&wasm_path) {
-        Ok(Some(bytes)) => bytes,
-        Ok(None) => {
-            return Err(CoordinatorInstallStateError::ArtifactMissing { path: wasm_path }.into());
-        }
-        Err(RegularFileReadError::NotRegular) => {
-            return Err(CoordinatorInstallStateError::ArtifactUnsafe { path: wasm_path }.into());
-        }
-        Err(RegularFileReadError::Io(source)) => return Err(source.into()),
-        #[cfg(not(unix))]
-        Err(RegularFileReadError::UnsupportedPlatform) => {
-            return Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "Coordinator artifact reads are unsupported",
-            )
-            .into());
-        }
-    };
-    if wasm.len() as u64 != entry.wasm_size_bytes {
-        return Err(CoordinatorInstallStateError::ArtifactSize {
-            path: wasm_path,
-            expected: entry.wasm_size_bytes,
-            actual: wasm.len(),
-        }
-        .into());
-    }
-    let actual_hash = module_hash_text(Sha256::digest(&wasm).into());
-    if actual_hash != entry.wasm_sha256_hex {
-        return Err(CoordinatorInstallStateError::ArtifactHash {
-            path: wasm_path,
-            expected: entry.wasm_sha256_hex.clone(),
-            actual: actual_hash,
-        }
-        .into());
-    }
-    if entry.release_build_id != fleet_install_plan.plan.release_build_id {
-        return Err("Coordinator artifact release build differs from Fleet install plan".into());
-    }
-    Ok(CoordinatorArtifact { wasm_path })
-}
-
-fn observed_module_hash(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
-    coordinator: Principal,
-) -> Result<Option<[u8; 32]>, Box<dyn std::error::Error>> {
-    let report = super::install_icp(icp_root, environment, local_replica)
-        .canister_status_report(&coordinator.to_text())?;
-    if report.id != coordinator.to_text() {
-        return Err(CoordinatorInstallStateError::StatusPrincipal {
-            expected: coordinator,
-            observed: report.id,
-        }
-        .into());
-    }
-    report
-        .module_hash
-        .as_deref()
-        .map(|value| {
-            parse_module_hash(value).ok_or_else(|| {
-                CoordinatorInstallStateError::UnexpectedModule {
-                    coordinator,
-                    observed: value.to_string(),
-                }
-                .into()
-            })
-        })
-        .transpose()
-}
-
-fn observe_created_canister(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
-    coordinator: Principal,
-    expected_module_hash: [u8; 32],
-) -> Result<(), Box<dyn std::error::Error>> {
-    match observed_module_hash(icp_root, environment, local_replica, coordinator)? {
-        None => Ok(()),
-        Some(observed) if observed == expected_module_hash => {
-            Err("Coordinator module exists before its journalled install intent".into())
-        }
-        Some(observed) => Err(CoordinatorInstallStateError::UnexpectedModule {
-            coordinator,
-            observed: module_hash_text(observed),
-        }
-        .into()),
-    }
-}
-
-fn read_created_coordinator(path: &Path) -> Result<Option<Principal>, Box<dyn std::error::Error>> {
-    let bytes = match read_optional_regular_bytes(path) {
-        Ok(Some(bytes)) => bytes,
-        Ok(None) => return Ok(None),
-        Err(RegularFileReadError::NotRegular) => {
-            return Err(CoordinatorInstallStateError::CreationResultUnsafe {
-                path: path.to_path_buf(),
-            }
-            .into());
-        }
-        Err(RegularFileReadError::Io(source)) => return Err(source.into()),
-        #[cfg(not(unix))]
-        Err(RegularFileReadError::UnsupportedPlatform) => {
-            return Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "Coordinator creation result reads are unsupported",
-            )
-            .into());
-        }
-    };
-    if bytes.is_empty() {
-        return Ok(None);
-    }
-    let output = std::str::from_utf8(&bytes).map_err(|_| {
-        CoordinatorInstallStateError::InvalidCreationResult {
-            path: path.to_path_buf(),
-        }
-    })?;
-    let principal = parse_created_canister_id(output)
-        .and_then(|value| Principal::from_text(value).ok())
-        .ok_or_else(|| CoordinatorInstallStateError::InvalidCreationResult {
-            path: path.to_path_buf(),
-        })?;
-    Ok(Some(principal))
 }
 
 #[cfg(test)]

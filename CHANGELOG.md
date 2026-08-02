@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.87` consolidates fresh-install artifact validation, creation-result
+  decoding and live module-hash observation across Coordinator and root
+  workflows while preserving their separate durable recovery authority. It
+  also hard-cuts the unused subnet-registration caller predicate and makes the
+  maintained direct-child cache reject delegated canister subjects, while
+  advancing the focused host-only `ic-query` dependency to `0.25.12`.
+
 - `0.100.86` hard-cuts obsolete management-install and Subnet Directory
   authorities, fixes fresh Fleet installation encoding and named-local
   targeting, and makes host entropy and special-file tests portable across

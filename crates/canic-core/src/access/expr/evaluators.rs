@@ -21,9 +21,6 @@ pub(super) const fn name(pred: &BuiltinPredicate) -> &'static str {
         BuiltinPredicate::Caller(CallerPredicate::IsChild) => "caller_is_child",
         BuiltinPredicate::Caller(CallerPredicate::IsRoot) => "caller_is_root",
         BuiltinPredicate::Caller(CallerPredicate::IsSameCanister) => "caller_is_same_canister",
-        BuiltinPredicate::Caller(CallerPredicate::IsRegisteredToSubnet) => {
-            "caller_is_registered_to_subnet"
-        }
         BuiltinPredicate::Caller(CallerPredicate::IsWhitelisted) => "caller_is_whitelisted",
         BuiltinPredicate::Environment(EnvironmentPredicate::SelfIsFleetSubnetRoot) => {
             "self_is_fleet_subnet_root"
@@ -72,9 +69,6 @@ pub(super) async fn evaluate(
         }
         BuiltinPredicate::Caller(CallerPredicate::IsSameCanister) => {
             access::auth::is_same_canister(ctx.caller).await
-        }
-        BuiltinPredicate::Caller(CallerPredicate::IsRegisteredToSubnet) => {
-            access::auth::is_registered_to_subnet(ctx.caller).await
         }
         BuiltinPredicate::Caller(CallerPredicate::IsWhitelisted) => {
             access::auth::is_whitelisted(ctx.caller).await

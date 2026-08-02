@@ -6,10 +6,10 @@ Date: 2026-08-02
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.85`.
-- Latest published release: `v0.100.85` at
-  `9481846a7df78bbbb09125f03432eb0249f746e6`.
-- Open patch draft: `0.100.86`; no package-version change has been authorized.
+- Workspace package version: `0.100.86`.
+- Latest published release: `v0.100.86` at
+  `edfd33ac729dfbd2b9c1cb1b9058e13dc21b914c`.
+- Open patch draft: `0.100.87`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -1092,7 +1092,7 @@ bound to an active direct child of the calling Component. Placement cleanup
 derives one stable child-bound disposal operation ID so interrupted attempts
 resume the same nested and outer receipts.
 
-Open 0.100.86 narrows management code installation to the maintained
+Released 0.100.86 narrows management code installation to the maintained
 fresh-install operation and removes the orphaned reinstall/upgrade modes,
 flags, metrics and uncalled generic workflow entry point left after the
 Component Child upgrade hard cut. It also removes the legacy Subnet Directory
@@ -1103,6 +1103,12 @@ installation now passes typed binary Candid files, named local environments
 resolve from their declared backing network, the local Fleet acceptance target
 generates its strict input from live topology, and Unix host entropy/FIFO tests
 no longer depend on Linux-only `rustix` modules.
+
+Open 0.100.87 hard-cuts the unused subnet-registration caller predicate from
+the endpoint macro and runtime access system. Root endpoints retain their
+exact custom Component Registry predicates, while delegated-session subject
+validation rejects known direct child Canisters through the maintained local
+child cache rather than legacy Subnet Registry state.
 
 ## Next Action
 

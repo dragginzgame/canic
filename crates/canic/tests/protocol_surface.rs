@@ -166,7 +166,6 @@ fn root_capability_surface_uses_component_registry_authority() {
     let attribute = preceding_attribute_context(&source, "fn canic_response_capability_v1(");
     assert!(attribute.contains("canic_update(internal, requires(custom("));
     assert!(attribute.contains("RootCapabilityCallerPredicate"));
-    assert!(!attribute.contains("caller::is_registered_to_subnet()"));
     assert!(
         source.contains("ComponentRpcApi::response_capability_v1_root(envelope)"),
         "root capability endpoint must delegate through the control-plane authority facade"
@@ -1931,8 +1930,7 @@ fn assert_root_delegation_macro_guards(source: &str) {
     assert!(
         renewal_status_attr.contains("canic_query")
             && renewal_status_attr.contains("caller::is_controller()")
-            && !renewal_status_attr.contains("internal")
-            && !renewal_status_attr.contains("caller::is_registered_to_subnet()"),
+            && !renewal_status_attr.contains("internal"),
         "root issuer renewal status must remain a public controller-gated query"
     );
     assert!(
@@ -1940,7 +1938,6 @@ fn assert_root_delegation_macro_guards(source: &str) {
             && lazy_repair_attr.contains("internal")
             && lazy_repair_attr.contains("ActiveComponentMemberPredicate")
             && lazy_repair_attr.contains("custom(")
-            && !lazy_repair_attr.contains("caller::is_registered_to_subnet()")
             && !lazy_repair_attr.contains("caller::is_controller()"),
         "root chain-key lazy repair must remain an internal active-Component update"
     );
@@ -2233,9 +2230,7 @@ fn root_role_attestation_prepare_get_surface_is_pinned() {
     let get_attribute = preceding_attribute(&source, "fn canic_get_role_attestation(");
     assert!(
         prepare_attribute.contains("canic_update(internal, public)")
-            && !prepare_attribute.contains("caller::is_registered_to_subnet()")
-            && get_attribute.contains("canic_query(internal, public)")
-            && !get_attribute.contains("caller::is_registered_to_subnet()"),
+            && get_attribute.contains("canic_query(internal, public)"),
         "role-attestation endpoints must defer to active Component Registry admission"
     );
     assert!(

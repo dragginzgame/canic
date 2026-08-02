@@ -237,9 +237,6 @@ fn expr_from_builtin(pred: &BuiltinPredicate) -> TokenStream2 {
         BuiltinPredicate::CallerIsSameCanister => {
             quote!(::canic::__internal::core::access::expr::caller::is_same_canister())
         }
-        BuiltinPredicate::CallerIsRegisteredToSubnet => {
-            quote!(::canic::__internal::core::access::expr::caller::is_registered_to_subnet())
-        }
         BuiltinPredicate::CallerIsWhitelisted => {
             quote!(::canic::__internal::core::access::expr::caller::is_whitelisted())
         }

@@ -2,7 +2,8 @@ use super::build_network::resolve_install_build_context;
 use super::build_snapshot::{InstallBuildTarget, resolve_install_snapshot};
 use super::commands::{
     add_icp_environment_target, icp_canister_command, icp_canister_create_command,
-    icp_canister_install_binary_args_command, icp_e8s_text, write_candid_args,
+    icp_canister_install_binary_args_command, icp_e8s_text, read_created_canister,
+    write_candid_args,
 };
 use super::config_selection::{
     config_selection_error, discover_canic_config_choices, discover_project_canic_config_choices,

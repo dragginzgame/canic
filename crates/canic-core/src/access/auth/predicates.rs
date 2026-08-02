@@ -4,17 +4,11 @@
 //! Does not own: delegated token verification, app mode, or environment predicates.
 //! Boundary: `access::auth` exposes these checks to access expressions.
 
-use super::{
-    caller_not_registered_denial, dependency_unavailable, non_root_subnet_registry_predicate_denial,
-};
+use super::dependency_unavailable;
 use crate::{
     access::AccessError,
     cdk::types::Principal,
-    ops::{
-        config::ConfigOps,
-        runtime::env::EnvOps,
-        storage::{children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps},
-    },
+    ops::{config::ConfigOps, runtime::env::EnvOps, storage::children::CanisterChildrenOps},
 };
 use ic_cdk::api::{canister_self, is_controller as caller_is_controller};
 
@@ -100,19 +94,5 @@ pub(super) async fn is_same_canister(caller: Principal) -> Result<(), AccessErro
         Err(AccessError::Denied(format!(
             "caller '{caller}' is not the current canister"
         )))
-    }
-}
-
-/// Require that the caller is registered as a canister on this subnet.
-#[expect(clippy::unused_async)]
-pub(super) async fn is_registered_to_subnet(caller: Principal) -> Result<(), AccessError> {
-    if !EnvOps::is_root() {
-        return Err(non_root_subnet_registry_predicate_denial());
-    }
-
-    if SubnetRegistryOps::is_registered(caller) {
-        Ok(())
-    } else {
-        Err(caller_not_registered_denial(caller))
     }
 }

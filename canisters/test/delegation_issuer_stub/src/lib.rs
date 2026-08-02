@@ -68,9 +68,4 @@ async fn issuer_guard_is_parent() -> Result<(), Error> {
     Ok(())
 }
 
-#[canic_update(internal, requires(caller::is_registered_to_subnet()))]
-async fn issuer_guard_is_registered_to_subnet() -> Result<(), Error> {
-    Ok(())
-}
-
 canic::finish!();

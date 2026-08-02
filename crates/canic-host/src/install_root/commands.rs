@@ -9,9 +9,35 @@ use crate::{
 use candid::CandidType;
 use canic_core::{cdk::types::Principal, ids::SubnetId};
 use serde_json::Value as JsonValue;
-use std::{fs::File, io, path::Path, process::Command};
+use std::{
+    fs::File,
+    io,
+    path::{Path, PathBuf},
+    process::Command,
+};
+use thiserror::Error as ThisError;
 
-pub(super) fn parse_created_canister_id(output: &str) -> Option<String> {
+#[derive(Debug, ThisError)]
+pub(super) enum CreationResultReadError {
+    #[error("Canister creation result is not a regular no-follow file: {path}")]
+    Unsafe { path: PathBuf },
+
+    #[error("Canister creation result is invalid: {path}")]
+    Invalid { path: PathBuf },
+
+    #[error("failed to read Canister creation result {path}: {source}")]
+    Io {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
+
+    #[cfg(not(unix))]
+    #[error("Canister creation result reads are unsupported: {path}")]
+    UnsupportedPlatform { path: PathBuf },
+}
+
+fn parse_created_canister_id(output: &str) -> Option<Principal> {
     if let Ok(value) = serde_json::from_str::<JsonValue>(output) {
         return parse_canister_id_json(&value);
     }
@@ -19,13 +45,49 @@ pub(super) fn parse_created_canister_id(output: &str) -> Option<String> {
     output
         .lines()
         .map(str::trim)
-        .find(|line| Principal::from_text(*line).is_ok())
-        .map(ToString::to_string)
+        .find_map(|line| Principal::from_text(line).ok())
 }
 
-fn parse_canister_id_json(value: &JsonValue) -> Option<String> {
+pub(super) fn read_created_canister(
+    path: &Path,
+) -> Result<Option<Principal>, CreationResultReadError> {
+    let bytes = match read_optional_regular_bytes(path) {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => return Ok(None),
+        Err(RegularFileReadError::NotRegular) => {
+            return Err(CreationResultReadError::Unsafe {
+                path: path.to_path_buf(),
+            });
+        }
+        Err(RegularFileReadError::Io(source)) => {
+            return Err(CreationResultReadError::Io {
+                path: path.to_path_buf(),
+                source,
+            });
+        }
+        #[cfg(not(unix))]
+        Err(RegularFileReadError::UnsupportedPlatform) => {
+            return Err(CreationResultReadError::UnsupportedPlatform {
+                path: path.to_path_buf(),
+            });
+        }
+    };
+    if bytes.is_empty() {
+        return Ok(None);
+    }
+    let output = std::str::from_utf8(&bytes).map_err(|_| CreationResultReadError::Invalid {
+        path: path.to_path_buf(),
+    })?;
+    let principal =
+        parse_created_canister_id(output).ok_or_else(|| CreationResultReadError::Invalid {
+            path: path.to_path_buf(),
+        })?;
+    Ok(Some(principal))
+}
+
+fn parse_canister_id_json(value: &JsonValue) -> Option<Principal> {
     match value {
-        JsonValue::String(text) if Principal::from_text(text).is_ok() => Some(text.clone()),
+        JsonValue::String(text) => Principal::from_text(text).ok(),
         JsonValue::Array(values) => values.iter().find_map(parse_canister_id_json),
         JsonValue::Object(object) => ["canister_id", "id", "principal"]
             .iter()

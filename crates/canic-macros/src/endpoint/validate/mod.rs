@@ -92,13 +92,6 @@ pub fn validate(
         validate_authenticated_args(sig)?;
     }
 
-    if !parsed.internal && contains_internal_only_caller_predicate(&parsed.requires) {
-        return Err(syn::Error::new_spanned(
-            &sig.ident,
-            "caller topology predicates are internal-only; mark the endpoint as `internal` or use caller::is_parent()/caller::is_child()/caller::is_root()",
-        ));
-    }
-
     Ok(ValidatedArgs {
         forwarded: parsed.forwarded,
         export_name: parsed.export_name,
@@ -156,29 +149,9 @@ fn access_expr_contains_identity_predicate(expr: &AccessExprAst) -> bool {
                     | BuiltinPredicate::CallerIsChild
                     | BuiltinPredicate::CallerIsRoot
                     | BuiltinPredicate::CallerIsSameCanister
-                    | BuiltinPredicate::CallerIsRegisteredToSubnet
                     | BuiltinPredicate::CallerIsWhitelisted
                     | BuiltinPredicate::Authenticated { .. }
             )
-        }
-        AccessExprAst::Pred(AccessPredicateAst::Custom(_)) => false,
-    }
-}
-
-fn contains_internal_only_caller_predicate(requires: &[AccessExprAst]) -> bool {
-    requires
-        .iter()
-        .any(access_expr_contains_internal_only_caller_predicate)
-}
-
-fn access_expr_contains_internal_only_caller_predicate(expr: &AccessExprAst) -> bool {
-    match expr {
-        AccessExprAst::All(exprs) | AccessExprAst::Any(exprs) => exprs
-            .iter()
-            .any(access_expr_contains_internal_only_caller_predicate),
-        AccessExprAst::Not(expr) => access_expr_contains_internal_only_caller_predicate(expr),
-        AccessExprAst::Pred(AccessPredicateAst::Builtin(builtin)) => {
-            matches!(builtin, BuiltinPredicate::CallerIsRegisteredToSubnet)
         }
         AccessExprAst::Pred(AccessPredicateAst::Custom(_)) => false,
     }

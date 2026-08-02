@@ -1,0 +1,109 @@
+//! Module: install_root::operations::creation
+//!
+//! Responsibility: execute or observe one journal-authorized initial Canister creation effect.
+//! Does not own: journal transitions, unknown-outcome policy, or role-specific authority.
+//! Boundary: callers decide whether this process owns the paid effect and commit returned evidence.
+
+use super::super::{
+    commands::{
+        icp_canister_create_command, open_creation_result_for_effect, read_created_canister,
+    },
+    install_icp,
+};
+use crate::{
+    fleet_install_plan::PlannedCanisterCreationFunding,
+    icp::{LocalReplicaTarget, run_output_to_file},
+};
+use candid::Principal;
+use canic_core::ids::SubnetId;
+use std::path::Path;
+
+use super::activation::require_uninstalled_created_canister;
+
+#[derive(Clone, Copy)]
+pub(in crate::install_root) enum CreationEffectAction {
+    Execute,
+    ObserveOnly,
+}
+
+pub(in crate::install_root) struct CreationEffectEvidence {
+    pub canister: Option<Principal>,
+    pub command_error: Option<String>,
+}
+
+pub(in crate::install_root) struct CreationEffectRequest<'a> {
+    pub icp_root: &'a Path,
+    pub environment: &'a str,
+    pub local_replica: Option<&'a LocalReplicaTarget>,
+    pub result_path: &'a Path,
+    pub subject: &'static str,
+    pub placement_subnet: SubnetId,
+    pub funding: &'a PlannedCanisterCreationFunding,
+    pub action: CreationEffectAction,
+    pub expected_module_hash: [u8; 32],
+}
+
+pub(in crate::install_root) fn execute_or_observe_creation(
+    request: CreationEffectRequest<'_>,
+) -> Result<CreationEffectEvidence, Box<dyn std::error::Error>> {
+    let mut command_error = None;
+    if matches!(request.action, CreationEffectAction::Execute) {
+        let result = open_creation_result_for_effect(request.result_path, request.subject)?;
+        let mut command = icp_canister_create_command(
+            request.icp_root,
+            request.environment,
+            request.local_replica,
+            request.placement_subnet,
+            request.funding,
+        );
+        if let Err(error) = run_output_to_file(&mut command, &result) {
+            command_error = Some(error.to_string());
+        }
+    }
+
+    let canister = read_created_canister(request.result_path)?;
+    if let Some(canister) = canister {
+        require_uninstalled_created_canister(
+            &install_icp(request.icp_root, request.environment, request.local_replica),
+            canister,
+            request.expected_module_hash,
+            request.subject,
+        )?;
+    }
+    Ok(CreationEffectEvidence {
+        canister,
+        command_error,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::install_root::commands::prepare_creation_result;
+    use std::fs;
+
+    #[test]
+    fn observe_only_reads_evidence_without_reissuing_creation() {
+        let root = crate::test_support::temp_dir("canic-observe-creation-evidence");
+        let result_path = root.join("created.json");
+        prepare_creation_result(&result_path, "test Canister").expect("prepare result");
+        let funding = PlannedCanisterCreationFunding::Cycles { cycles: 1 };
+
+        let evidence = execute_or_observe_creation(CreationEffectRequest {
+            icp_root: &root,
+            environment: "local",
+            local_replica: None,
+            result_path: &result_path,
+            subject: "test Canister",
+            placement_subnet: SubnetId::from_principal(Principal::from_slice(&[42])),
+            funding: &funding,
+            action: CreationEffectAction::ObserveOnly,
+            expected_module_hash: [0; 32],
+        })
+        .expect("observe creation evidence");
+
+        assert_eq!(evidence.canister, None);
+        assert_eq!(evidence.command_error, None);
+        fs::remove_dir_all(root).expect("remove temp root");
+    }
+}
