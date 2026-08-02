@@ -5,11 +5,10 @@
 //! Boundary: exact plan/artifact authority drives one journalled effect at a time; an existing
 //! in-flight phase is observed but never blindly replayed.
 
+#[cfg(test)]
+use super::commands::write_candid_args;
 use super::{
-    commands::{
-        icp_canister_install_binary_args_command, prepare_creation_result, run_command,
-        write_candid_args,
-    },
+    commands::prepare_creation_result,
     coordinator_install_journal::{
         FleetCoordinatorInstallJournal, FleetCoordinatorInstallPhase,
         PlanFleetCoordinatorInstallRequest, ResolvedFleetCoordinatorInstall,
@@ -18,8 +17,9 @@ use super::{
         record_coordinator_verified,
     },
     operations::{
-        CreationEffectAction, CreationEffectRequest, InstallArtifact, execute_or_observe_creation,
-        module_hash_text, observe_module_hash, query_live_registry, resolve_install_artifact,
+        CreationEffectRequest, EffectAction, InstallArtifact, InstallEffectRequest,
+        execute_or_observe_creation, execute_or_observe_install, module_hash_text,
+        observe_module_hash, query_live_registry, resolve_install_artifact,
     },
 };
 use crate::{
@@ -59,15 +59,6 @@ pub(super) struct VerifiedFleetCoordinator {
 )]
 struct CoordinatorCreationOutcomeUnknownError {
     result_path: PathBuf,
-    detail: String,
-}
-
-#[derive(Debug, ThisError)]
-#[error(
-    "Coordinator install outcome for {coordinator} is unknown; no second install was attempted. Retry only after the original ICP command has settled: {detail}"
-)]
-struct CoordinatorInstallOutcomeUnknownError {
-    coordinator: Principal,
     detail: String,
 }
 
@@ -182,11 +173,6 @@ fn recover_or_create_coordinator(
     current: &ResolvedFleetCoordinatorInstall,
 ) -> Result<ResolvedFleetCoordinatorInstall, Box<dyn std::error::Error>> {
     let result_path = coordinator_create_result_path(&fleet_install_plan.path);
-    let action = if current.advanced {
-        CreationEffectAction::Execute
-    } else {
-        CreationEffectAction::ObserveOnly
-    };
     let evidence = execute_or_observe_creation(CreationEffectRequest {
         icp_root,
         environment,
@@ -195,7 +181,7 @@ fn recover_or_create_coordinator(
         subject: "Coordinator",
         placement_subnet: current.journal.coordinator_subnet,
         funding: &current.journal.creation_funding,
-        action,
+        action: EffectAction::from_advanced(current.advanced),
         expected_module_hash: current.journal.expected_module_hash,
     })?;
     let Some(coordinator) = evidence.canister else {
@@ -222,71 +208,22 @@ fn recover_or_install_coordinator(
         .journal
         .coordinator
         .expect("validated InstallInFlight journal retains its Coordinator");
-    let icp = super::install_icp(icp_root, environment, local_replica);
-    match observe_module_hash(&icp, coordinator)? {
-        Some(observed) if observed == current.journal.expected_module_hash => {
-            return record_coordinator_installed(current, observed).map_err(Into::into);
-        }
-        Some(observed) => {
-            return Err(CoordinatorInstallStateError::UnexpectedModule {
-                coordinator,
-                observed: module_hash_text(observed),
-            }
-            .into());
-        }
-        None if !current.advanced => {
-            return Err(CoordinatorInstallOutcomeUnknownError {
-                coordinator,
-                detail: "the journal is already install_in_flight and the expected module is not yet observable"
-                    .to_string(),
-            }
-            .into());
-        }
-        None => {}
-    }
-
-    let genesis = expected_genesis(&current.journal)?;
     let args_path = current.path.with_file_name(COORDINATOR_INSTALL_ARGS_FILE);
-    write_candid_args(&args_path, &genesis.init_args)?;
-    let mut install = icp_canister_install_binary_args_command(
-        icp_root,
-        environment,
-        local_replica,
-        coordinator,
-        &artifact.wasm_path,
-        &args_path,
-    );
-    let command_result = run_command(&mut install);
-    match observe_module_hash(&icp, coordinator) {
-        Ok(Some(observed)) if observed == current.journal.expected_module_hash => {
-            record_coordinator_installed(current, observed).map_err(Into::into)
-        }
-        Ok(Some(observed)) => Err(CoordinatorInstallStateError::UnexpectedModule {
-            coordinator,
-            observed: module_hash_text(observed),
-        }
-        .into()),
-        Ok(None) => Err(CoordinatorInstallOutcomeUnknownError {
-            coordinator,
-            detail: command_result.err().map_or_else(
-                || "install command completed but no module is observable".to_string(),
-                |error| error.to_string(),
-            ),
-        }
-        .into()),
-        Err(observation) => Err(CoordinatorInstallOutcomeUnknownError {
-            coordinator,
-            detail: match command_result {
-                Ok(()) => format!("post-install observation failed: {observation}"),
-                Err(command) => {
-                    format!(
-                        "install command failed: {command}; reconciliation failed: {observation}"
-                    )
-                }
-            },
-        }
-        .into()),
-    }
+    let module_hash = execute_or_observe_install(
+        InstallEffectRequest {
+            icp_root,
+            environment,
+            local_replica,
+            subject: "Coordinator",
+            canister: coordinator,
+            wasm_path: &artifact.wasm_path,
+            args_path: &args_path,
+            expected_module_hash: current.journal.expected_module_hash,
+            action: EffectAction::from_advanced(current.advanced),
+        },
+        || Ok(expected_genesis(&current.journal)?.init_args),
+    )?;
+    record_coordinator_installed(current, module_hash).map_err(Into::into)
 }
 
 fn verify_and_record_coordinator(

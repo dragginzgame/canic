@@ -6,10 +6,10 @@ Date: 2026-08-02
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.87`.
-- Latest published release: `v0.100.87` at
-  `b4e3d1a04920f58828767f47337ccbfe4b007104`.
-- Open patch draft: `0.100.88`; no package-version change has been authorized.
+- Workspace package version: `0.100.88`.
+- Latest published release: `v0.100.88` at
+  `6340cc04b834da4be1b9e7f36c3dac627e09bd49`.
+- Open patch draft: `0.100.89`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -88,9 +88,11 @@ Registry slices replace the 0.99 root model.
 - [x] Bind every Component Child to its immediate Component-tree parent so
   protected identity can represent arbitrary runtime depth.
 - [x] Hard-cut Fleet Root to Fleet Subnet Root.
+- [x] Hard-cut fresh Fleet activation inventory to the exact root-owned Store
+  projection while retaining independent Component Runtime activation.
 - [ ] Hard-cut local `SubnetRegistry` to root-owned per-Component
-  `ComponentRegistry` and direct-child authority for its remaining activation,
-  propagation, Store, provisioning and pool consumers.
+  `ComponentRegistry` and direct-child authority for its remaining propagation,
+  Store publication/garbage-collection, provisioning and pool consumers.
 - [x] Hard-cut local `SubnetDirectory`; root-owned `ComponentDirectory` is the
   sole component-local directory projection.
 - [x] Split Fleet and Component Directory provenance.
@@ -1110,7 +1112,7 @@ exact custom Component Registry predicates, while delegated-session subject
 validation rejects known direct child Canisters through the maintained local
 child cache rather than legacy Subnet Registry state.
 
-Open 0.100.88 adds bounded proof-carrying local-Subnet authentication to the
+Released 0.100.88 adds bounded proof-carrying local-Subnet authentication to the
 endpoint DSL and explicit Auth API. A managed caller supplies one root-signed
 role attestation with an explicit physical-Subnet claim; the receiver verifies
 that claim against its IC-native live Subnet together with the exact subject,
@@ -1118,9 +1120,18 @@ audience, time window and role epoch. The request-path decision is local,
 performs no inter-Canister authorization call and grants no ambient authority
 to arbitrary co-resident Canisters.
 
+Open 0.100.89 moves the generic Fleet activation boundary off the legacy
+Subnet Registry. After the root independently seals its complete initial
+Component inventory, activation projects exactly one infrastructure child
+from root-owned Store state, freezes its direct-leaf topology and fans state
+out only to that Store. Application Components continue to use their separate
+Component Runtime and Directory lifecycle. The same patch draft consolidates
+fresh host installation's journal-authorized observe/execute/reconcile effect
+without merging Coordinator and root recovery journals.
+
 ## Next Action
 
-Replace the legacy Subnet Registry's remaining activation, propagation, Store
+Replace the legacy Subnet Registry's remaining propagation, Store
 publication/garbage-collection, provisioning and pool-recovery consumers with
 root-owned Component Registry and direct-child authority. Then delete its
 stable/cascade schema and complete the reinstall-only decoder audit before

@@ -6,11 +6,27 @@ use super::super::{
 };
 use crate::{ids::WasmStoreBinding, ops::storage::state::subnet::SubnetStateOps};
 use canic_core::control_plane_support::{
-    error::InternalError,
+    error::{InternalError, InternalErrorOrigin},
     ops::{cost_guard::CostGuardPermit, storage::registry::subnet::SubnetRegistryOps},
+    view::fleet_activation::FleetActivationWasmStoreView,
 };
 
 impl WasmStorePublicationWorkflow {
+    /// Project the authoritative root-owned Store inventory for fresh Fleet activation.
+    pub fn root_activation_wasm_store() -> Result<FleetActivationWasmStoreView, InternalError> {
+        let stores = SubnetStateOps::wasm_stores();
+        let [store] = stores.as_slice() else {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                format!(
+                    "fresh Fleet activation requires exactly one root-owned Wasm Store, found {}",
+                    stores.len()
+                ),
+            ));
+        };
+        Ok(FleetActivationWasmStoreView { pid: store.pid })
+    }
+
     // Import any already-registered wasm stores into runtime subnet state.
     pub fn sync_registered_wasm_store_inventory() -> Result<Vec<WasmStoreBinding>, InternalError> {
         let mut bindings = Vec::new();

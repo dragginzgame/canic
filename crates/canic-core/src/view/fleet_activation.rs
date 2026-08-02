@@ -4,10 +4,17 @@
 //! Does not own: activation mutation, runtime startup, or endpoint serialization.
 //! Boundary: storage ops report whether one exact transition committed; workflows consume it once.
 
+use crate::cdk::types::Principal;
 use crate::dto::{
     component_registry::ComponentRuntimeStatusResponse,
     fleet_activation::FleetActivationStatusResponse,
 };
+
+/// The exact root-owned Wasm Store included in fresh Fleet activation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FleetActivationWasmStoreView {
+    pub pid: Principal,
+}
 
 ///
 /// FleetActivationTransition

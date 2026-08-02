@@ -71,12 +71,6 @@ impl FleetActivationApi {
         FleetActivationWorkflow::root_authority().map_err(Error::from)
     }
 
-    pub async fn prepare_root() -> Result<FleetActivationStatusResponse, Error> {
-        FleetActivationWorkflow::prepare_root()
-            .await
-            .map_err(Error::from)
-    }
-
     pub async fn resume_root(
         request: FleetActivationResumeRequest,
     ) -> Result<FleetActivationTransition, Error> {

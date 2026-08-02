@@ -2678,6 +2678,12 @@ mod tests {
             .expect("prepare root Fleet activation transport");
         let prepared = prepared.expect("prepare root Fleet activation");
         assert_eq!(prepared.phase, FleetActivationPhase::Prepared);
+        let manifest = prepared
+            .cascade_manifest
+            .as_ref()
+            .expect("prepared root infrastructure cascade manifest");
+        assert_eq!(manifest.len(), 1);
+        assert_eq!(manifest[0].principal, fixture.response.wasm_store);
         let credential = prepared
             .credential
             .expect("prepared root credential generation");

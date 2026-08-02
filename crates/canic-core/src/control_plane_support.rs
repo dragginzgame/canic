@@ -119,7 +119,9 @@ pub mod ops {
 
 pub mod view {
     pub mod fleet_activation {
-        pub use crate::view::fleet_activation::FleetActivationTransition;
+        pub use crate::view::fleet_activation::{
+            FleetActivationTransition, FleetActivationWasmStoreView,
+        };
     }
 
     pub mod topology {

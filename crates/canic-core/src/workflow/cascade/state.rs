@@ -89,6 +89,20 @@ impl StateCascadeWorkflow {
     /// No-op if the snapshot is empty.
     pub async fn root_cascade_state(snapshot: &StateSnapshot) -> Result<(), InternalError> {
         EnvOps::require_root()?;
+        let root_pid = IcOps::canister_self();
+        let children = SubnetRegistryOps::children(root_pid)
+            .into_iter()
+            .map(|entry| entry.pid)
+            .collect::<Vec<_>>();
+        Self::root_cascade_state_to(snapshot, &children).await
+    }
+
+    /// Cascade a state snapshot to one explicit root-owned direct-child inventory.
+    pub(crate) async fn root_cascade_state_to(
+        snapshot: &StateSnapshot,
+        children: &[Principal],
+    ) -> Result<(), InternalError> {
+        EnvOps::require_root()?;
 
         if state_snapshot_is_empty(snapshot) {
             CascadeMetrics::record(
@@ -119,14 +133,11 @@ impl StateCascadeWorkflow {
             state_snapshot_debug(snapshot)
         );
 
-        let root_pid = IcOps::canister_self();
-        let children = SubnetRegistryOps::children(root_pid);
         warn_if_large("root state cascade", children.len());
 
         let mut failures = FanoutFailures::default();
 
-        for entry in children {
-            let pid = entry.pid;
+        for &pid in children {
             if let Err(err) = Self::send_snapshot(pid, snapshot).await {
                 log!(
                     Topic::Sync,

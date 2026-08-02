@@ -18,13 +18,7 @@ use candid::Principal;
 use canic_core::ids::SubnetId;
 use std::path::Path;
 
-use super::activation::require_uninstalled_created_canister;
-
-#[derive(Clone, Copy)]
-pub(in crate::install_root) enum CreationEffectAction {
-    Execute,
-    ObserveOnly,
-}
+use super::{EffectAction, activation::require_uninstalled_created_canister};
 
 pub(in crate::install_root) struct CreationEffectEvidence {
     pub canister: Option<Principal>,
@@ -39,7 +33,7 @@ pub(in crate::install_root) struct CreationEffectRequest<'a> {
     pub subject: &'static str,
     pub placement_subnet: SubnetId,
     pub funding: &'a PlannedCanisterCreationFunding,
-    pub action: CreationEffectAction,
+    pub action: EffectAction,
     pub expected_module_hash: [u8; 32],
 }
 
@@ -47,7 +41,7 @@ pub(in crate::install_root) fn execute_or_observe_creation(
     request: CreationEffectRequest<'_>,
 ) -> Result<CreationEffectEvidence, Box<dyn std::error::Error>> {
     let mut command_error = None;
-    if matches!(request.action, CreationEffectAction::Execute) {
+    if matches!(request.action, EffectAction::Execute) {
         let result = open_creation_result_for_effect(request.result_path, request.subject)?;
         let mut command = icp_canister_create_command(
             request.icp_root,
@@ -97,7 +91,7 @@ mod tests {
             subject: "test Canister",
             placement_subnet: SubnetId::from_principal(Principal::from_slice(&[42])),
             funding: &funding,
-            action: CreationEffectAction::ObserveOnly,
+            action: EffectAction::ObserveOnly,
             expected_module_hash: [0; 32],
         })
         .expect("observe creation evidence");
