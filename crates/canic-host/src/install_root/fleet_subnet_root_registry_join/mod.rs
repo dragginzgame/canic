@@ -10,32 +10,23 @@ use super::fleet_subnet_root_install_journal::{
     begin_registry_join, expected_registry_join_entry, plan_fleet_subnet_root_install,
     record_registry_join_verified, record_registry_joined,
 };
-use super::operations::{LiveRegistryEvidence, query_live_registry};
+use super::operations::{LiveRegistryEvidence, call_with_arg, query_live_registry};
 use crate::{
-    durable_io::write_bytes,
     fleet_install_plan::PersistedFleetInstallPlan,
-    icp::{IcpCli, LocalReplicaTarget, decode_json_result_response},
+    icp::LocalReplicaTarget,
     release_set::{AppConfigSnapshot, load_persisted_canic_infrastructure_artifact_manifest},
 };
 use candid::Principal;
 use canic_core::{
     control_plane_support::{config::ComponentTopology, ops::fleet_registry::FleetRegistryOps},
-    dto::fleet_registry::{
-        FleetRegistry, FleetRegistryVersion, FleetSubnetRootJoinRequest,
-        FleetSubnetRootJoinResponse,
-    },
+    dto::fleet_registry::{FleetRegistry, FleetRegistryVersion, FleetSubnetRootJoinResponse},
     ids::{FleetCoordinatorBinding, FleetRegistryAuthority},
     protocol,
 };
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::path::Path;
 use thiserror::Error as ThisError;
 
-const ICP_JSON_OUTPUT: &str = "json";
 const MAX_REGISTRY_JOIN_TRANSITIONS: usize = 4;
-const CALL_ARGS_FILE: &str = "registry-call-args.bin";
 
 #[derive(Debug, ThisError)]
 enum RootRegistryJoinError {
@@ -53,9 +44,6 @@ enum RootRegistryJoinError {
 
     #[error("root Registry join workflow exceeded its bounded phase transitions")]
     TransitionBoundExceeded,
-
-    #[error("root Registry join arguments are not a regular file: {0}")]
-    UnsafeArgumentsFile(PathBuf),
 }
 
 pub(super) fn register_and_verify_fleet_subnet_roots_joining(
@@ -172,7 +160,13 @@ fn drive_registry_join(
                     .registry_join_request
                     .clone()
                     .ok_or(RootRegistryJoinError::MissingJoinRequest)?;
-                let response = call_registry_join(&icp, coordinator, &current.path, &request)?;
+                let response: FleetSubnetRootJoinResponse = call_with_arg(
+                    &icp,
+                    coordinator,
+                    protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
+                    &request,
+                    false,
+                )?;
                 if response.entry != request.entry || response.version != expected_after_version {
                     return Err(RootRegistryJoinError::JoinResponseMismatch.into());
                 }
@@ -223,30 +217,6 @@ fn drive_registry_join(
         };
     }
     Err(RootRegistryJoinError::TransitionBoundExceeded.into())
-}
-
-fn call_registry_join(
-    icp: &IcpCli,
-    coordinator: Principal,
-    journal_path: &Path,
-    request: &FleetSubnetRootJoinRequest,
-) -> Result<FleetSubnetRootJoinResponse, Box<dyn std::error::Error>> {
-    let args_path = journal_path
-        .parent()
-        .expect("validated root journal has a parent")
-        .join(CALL_ARGS_FILE);
-    write_bytes(&args_path, &candid::encode_one(request)?)?;
-    let result = icp.canister_call_binary_args_output_with_candid(
-        &coordinator.to_text(),
-        protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
-        &args_path,
-        Some(ICP_JSON_OUTPUT),
-        None,
-    );
-    let cleanup = fs::remove_file(&args_path);
-    let output = result?;
-    cleanup.map_err(|_| RootRegistryJoinError::UnsafeArgumentsFile(args_path))?;
-    decode_json_result_response(&output).map_err(Into::into)
 }
 
 fn require_exact_registry(

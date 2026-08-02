@@ -1,6 +1,6 @@
 //! Module: ops::topology::directory
 //!
-//! Responsibility: resolve Fleet and Subnet Directory snapshots for the current role.
+//! Responsibility: resolve Fleet Directory snapshots for the current role.
 //! Does not own: Directory storage, topology policy, or endpoint DTO schemas.
 //! Boundary: ops resolver between workflow queries and storage/root registry state.
 
@@ -8,24 +8,21 @@ pub mod builder;
 
 use crate::{
     InternalError,
-    dto::topology::{DirectoryProvenance, FleetDirectoryInput, SubnetDirectoryInput},
+    dto::topology::{DirectoryProvenance, FleetDirectoryInput},
     ops::{
         config::ConfigOps,
         runtime::env::EnvOps,
         storage::{
             StorageOpsError,
-            directory::{
-                ensure_provenance, fleet::FleetDirectoryOps, records_to_input_entries,
-                subnet::SubnetDirectoryOps,
-            },
+            directory::{ensure_provenance, fleet::FleetDirectoryOps, records_to_input_entries},
             fleet_activation::FleetActivationOps,
             registry::subnet::SubnetRegistryOps,
         },
     },
-    storage::stable::directory::{fleet::FleetDirectoryData, subnet::SubnetDirectoryData},
+    storage::stable::directory::fleet::FleetDirectoryData,
 };
 
-use self::builder::{RootFleetDirectoryBuilder, RootSubnetDirectoryBuilder};
+use self::builder::RootFleetDirectoryBuilder;
 
 ///
 /// FleetDirectoryResolver
@@ -50,35 +47,6 @@ impl FleetDirectoryResolver {
     pub fn resolve_input() -> Result<FleetDirectoryInput, InternalError> {
         let data = Self::resolve()?;
         Ok(FleetDirectoryInput {
-            provenance: current_provenance()?,
-            entries: records_to_input_entries(data.entries),
-        })
-    }
-}
-
-///
-/// SubnetDirectoryResolver
-///
-/// Operations-layer resolver for Subnet Directory snapshots.
-///
-
-pub struct SubnetDirectoryResolver;
-
-impl SubnetDirectoryResolver {
-    pub fn resolve() -> Result<SubnetDirectoryData, InternalError> {
-        if EnvOps::is_root() {
-            let registry = SubnetRegistryOps::data();
-            let roles = ConfigOps::current_subnet_directory_roles()?;
-
-            RootSubnetDirectoryBuilder::build(&registry, &roles)
-        } else {
-            Ok(SubnetDirectoryOps::data())
-        }
-    }
-
-    pub fn resolve_input() -> Result<SubnetDirectoryInput, InternalError> {
-        let data = Self::resolve()?;
-        Ok(SubnetDirectoryInput {
             provenance: current_provenance()?,
             entries: records_to_input_entries(data.entries),
         })

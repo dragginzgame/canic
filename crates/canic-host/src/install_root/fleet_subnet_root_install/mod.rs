@@ -7,8 +7,8 @@
 
 use super::{
     commands::{
-        add_icp_environment_target, candid_arg, icp_canister_command, icp_e8s_text,
-        parse_created_canister_id, run_command,
+        add_icp_environment_target, icp_canister_command, icp_e8s_text, parse_created_canister_id,
+        run_command, write_candid_args,
     },
     fleet_subnet_root_install_journal::{
         FleetSubnetRootInstallJournal, FleetSubnetRootInstallPhase,
@@ -46,6 +46,7 @@ use std::{
 use thiserror::Error as ThisError;
 
 const MAX_ROOT_TRANSITIONS: usize = 8;
+const ROOT_INSTALL_ARGS_FILE: &str = "root-install-args.bin";
 
 #[derive(Debug, ThisError)]
 #[error(
@@ -306,14 +307,16 @@ fn recover_or_install_root(
     }
 
     let init_args = root_install_args(&current.journal)?;
+    let args_path = current.path.with_file_name(ROOT_INSTALL_ARGS_FILE);
+    write_candid_args(&args_path, &init_args)?;
     let mut install = root_install_command(
         icp_root,
         environment,
         local_replica,
         fleet_subnet_root,
         &artifact.wasm_path,
-        &init_args,
-    )?;
+        &args_path,
+    );
     let command_result = run_command(&mut install);
     match observed_module_hash(icp_root, environment, local_replica, fleet_subnet_root) {
         Ok(Some(observed)) if observed == current.journal.expected_module_hash => {
@@ -494,8 +497,8 @@ fn root_install_command(
     local_replica: Option<&LocalReplicaTarget>,
     fleet_subnet_root: Principal,
     wasm_path: &Path,
-    init_args: &FleetSubnetRootInitArgs,
-) -> Result<std::process::Command, candid::Error> {
+    args_path: &Path,
+) -> std::process::Command {
     let mut command = icp_canister_command(icp_root);
     command.args([
         "install",
@@ -505,9 +508,11 @@ fn root_install_command(
         "--wasm",
     ]);
     command.arg(wasm_path);
-    command.args(["--args", &candid_arg(init_args)?]);
+    command.arg("--args-file");
+    command.arg(args_path);
+    command.args(["--args-format", "bin"]);
     add_icp_environment_target(&mut command, environment, local_replica);
-    Ok(command)
+    command
 }
 
 fn observed_module_hash(
@@ -683,4 +688,29 @@ fn open_creation_result_for_effect(_path: &Path) -> io::Result<fs::File> {
         io::ErrorKind::Unsupported,
         "Fleet Subnet Root creation result capture is unsupported",
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn root_install_command_uses_binary_candid_file() {
+        let fleet_subnet_root = Principal::from_slice(&[44]);
+        let command = root_install_command(
+            Path::new("/workspace"),
+            "caelum-backend",
+            None,
+            fleet_subnet_root,
+            Path::new("/artifacts/root.wasm"),
+            Path::new("/state/root-install-args.bin"),
+        );
+
+        assert_eq!(
+            crate::icp::command_display(&command),
+            format!(
+                "icp --project-root-override /workspace canister install {fleet_subnet_root} --mode=install -y --wasm /artifacts/root.wasm --args-file /state/root-install-args.bin --args-format bin -e caelum-backend"
+            )
+        );
+    }
 }

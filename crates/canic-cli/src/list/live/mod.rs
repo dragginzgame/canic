@@ -46,11 +46,12 @@ pub(super) fn list_ready_statuses(
     registry: &[RegistryEntry],
     canister: Option<&str>,
 ) -> Result<BTreeMap<String, ReadyStatus>, ListCommandError> {
-    if replica_query::should_use_local_replica_query(options.environment.as_deref()) {
-        return local_ready_statuses(options, registry, canister);
+    let icp_root = resolve_live_icp_root()?;
+    if replica_query::uses_local_replica_transport(options.environment.as_deref(), Some(&icp_root))?
+    {
+        return local_ready_statuses(options, registry, canister, &icp_root);
     }
 
-    let icp_root = resolve_live_icp_root()?;
     let mut statuses = BTreeMap::new();
     for entry in visible_entries(registry, canister)? {
         statuses.insert(
@@ -168,9 +169,10 @@ fn local_ready_statuses(
     options: &ListOptions,
     registry: &[RegistryEntry],
     canister: Option<&str>,
+    icp_root: &Path,
 ) -> Result<BTreeMap<String, ReadyStatus>, ListCommandError> {
     let environment = options.environment.clone();
-    let icp_root = resolve_live_icp_root()?;
+    let icp_root = icp_root.to_path_buf();
     collect_visible_entry_values(registry, canister, ReadyStatus::Error, move |entry| {
         match query_local_canister_ready(
             environment.as_deref().unwrap_or("local"),

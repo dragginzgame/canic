@@ -6,10 +6,10 @@ Date: 2026-08-02
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.84`.
-- Latest published release: `v0.100.84` at
-  `d584cc5b85706da92eb7c2ec981ca6beb8365ed7`.
-- Open patch draft: `0.100.85`; no package-version change has been authorized.
+- Workspace package version: `0.100.85`.
+- Latest published release: `v0.100.85` at
+  `9481846a7df78bbbb09125f03432eb0249f746e6`.
+- Open patch draft: `0.100.86`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -88,8 +88,11 @@ Registry slices replace the 0.99 root model.
 - [x] Bind every Component Child to its immediate Component-tree parent so
   protected identity can represent arbitrary runtime depth.
 - [x] Hard-cut Fleet Root to Fleet Subnet Root.
-- [ ] Hard-cut local `SubnetRegistry` and `SubnetDirectory` to root-owned
-  per-Component `ComponentRegistry` and `ComponentDirectory`.
+- [ ] Hard-cut local `SubnetRegistry` to root-owned per-Component
+  `ComponentRegistry` and direct-child authority for its remaining activation,
+  propagation, Store, provisioning and pool consumers.
+- [x] Hard-cut local `SubnetDirectory`; root-owned `ComponentDirectory` is the
+  sole component-local directory projection.
 - [x] Split Fleet and Component Directory provenance.
 - [ ] Prove no prior-release transition reader or decoder exists.
 
@@ -1080,7 +1083,7 @@ membership is Active. The same draft advances host-only `ic-query` to `0.25.3`
 and selects its focused `subnet-catalog-host` feature; the consumed Subnet
 Catalog contract remains source-compatible.
 
-Open 0.100.85 hard-cuts the unused root Component Child upgrade protocol under
+Released 0.100.85 hard-cuts the unused root Component Child upgrade protocol under
 the reinstall-only boundary. Retained `RecycleCanister` execution now drives
 the owning Component Registry partition's durable, bounded post-order removal
 phases rather than generic pool recycling. Exact retries recover the target and
@@ -1089,11 +1092,25 @@ bound to an active direct child of the calling Component. Placement cleanup
 derives one stable child-bound disposal operation ID so interrupted attempts
 resume the same nested and outer receipts.
 
+Open 0.100.86 narrows management code installation to the maintained
+fresh-install operation and removes the orphaned reinstall/upgrade modes,
+flags, metrics and uncalled generic workflow entry point left after the
+Component Child upgrade hard cut. It also removes the legacy Subnet Directory
+DTO, stable storage and cascade slot, leaves Component Directory as the sole
+component-local directory authority and compacts the reinstall-only stable
+memory ledger around its surviving domains. Fresh Coordinator and root
+installation now passes typed binary Candid files, named local environments
+resolve from their declared backing network, the local Fleet acceptance target
+generates its strict input from live topology, and Unix host entropy/FIFO tests
+no longer depend on Linux-only `rustix` modules.
+
 ## Next Action
 
-Replace the remaining cascade consumers of the legacy Subnet
-Registry/Directory, delete the legacy stable storage and cascade schemas, and
-complete the reinstall-only decoder audit. Then run preparation and execution
+Replace the legacy Subnet Registry's remaining activation, propagation, Store
+publication/garbage-collection, provisioning and pool-recovery consumers with
+root-owned Component Registry and direct-child authority. Then delete its
+stable/cascade schema and complete the reinstall-only decoder audit before
+running preparation and execution
 as separate processes against one explicitly selected disposable real-network
 root. Verify the surviving Coordinator terminal receipt and exact replay
 before closing 0.100 against the final design and beginning 0.101.

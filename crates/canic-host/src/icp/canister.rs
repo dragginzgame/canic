@@ -17,16 +17,59 @@ impl IcpCli {
         output: Option<&str>,
         candid_path: Option<&Path>,
     ) -> Result<String, IcpCommandError> {
+        let mut command = self.canister_binary_args_command(
+            canister,
+            method,
+            args_file,
+            output,
+            candid_path,
+            false,
+        );
+        run_output(&mut command)
+    }
+
+    /// Query one canister method with raw binary Candid arguments from a file.
+    pub fn canister_query_binary_args_output_with_candid(
+        &self,
+        canister: &str,
+        method: &str,
+        args_file: &Path,
+        output: Option<&str>,
+        candid_path: Option<&Path>,
+    ) -> Result<String, IcpCommandError> {
+        let mut command = self.canister_binary_args_command(
+            canister,
+            method,
+            args_file,
+            output,
+            candid_path,
+            true,
+        );
+        run_output(&mut command)
+    }
+
+    fn canister_binary_args_command(
+        &self,
+        canister: &str,
+        method: &str,
+        args_file: &Path,
+        output: Option<&str>,
+        candid_path: Option<&Path>,
+        query: bool,
+    ) -> std::process::Command {
         let mut command = self.canister_command();
         command.args(["call", canister, method, "--args-file"]);
         command.arg(args_file);
         command.args(["--args-format", "bin"]);
+        if query {
+            command.arg("--query");
+        }
         add_candid_arg(&mut command, candid_path);
         if let Some(output) = output {
             add_output_arg(&mut command, output);
         }
         self.add_target_args(&mut command);
-        run_output(&mut command)
+        command
     }
 
     /// Call one canister method with an explicit Candid argument, optional local Candid, and optional JSON output.
@@ -228,5 +271,28 @@ impl IcpCli {
         }
         self.add_target_args(&mut command);
         command_display(&command)
+    }
+}
+
+#[cfg(test)]
+mod binary_args_tests {
+    use super::*;
+
+    #[test]
+    fn binary_query_command_keeps_file_format_and_query_mode() {
+        let icp = IcpCli::new("icp", Some("local".to_string()));
+        let command = icp.canister_binary_args_command(
+            "root",
+            "canic_status",
+            Path::new("/state/args.bin"),
+            Some("json"),
+            None,
+            true,
+        );
+
+        assert_eq!(
+            command_display(&command),
+            "icp canister call root canic_status --args-file /state/args.bin --args-format bin --query --json -e local"
+        );
     }
 }

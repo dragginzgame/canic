@@ -15,6 +15,16 @@ pub fn temp_dir(prefix: &str) -> PathBuf {
     std::env::temp_dir().join(format!("{prefix}-{}-{unique}", std::process::id()))
 }
 
+#[cfg(unix)]
+pub fn create_fifo(path: &Path) {
+    let status = std::process::Command::new("mkfifo")
+        .args(["-m", "600"])
+        .arg(path)
+        .status()
+        .expect("run mkfifo");
+    assert!(status.success(), "mkfifo failed with {status}");
+}
+
 // Write one deterministic local-network authority for tests that exercise
 // environment-profile resolution without contacting a live replica.
 pub fn write_local_network_authority(project_root: &Path, environment: &str) -> CanonicalNetworkId {

@@ -1,11 +1,10 @@
 //! Module: ops::storage::directory
 //!
-//! Responsibility: convert and validate Fleet/Subnet Directory data before stable replacement.
+//! Responsibility: convert and validate Fleet Directory data before stable replacement.
 //! Does not own: stable Directory schemas, workflow orchestration, or DTO policy.
 //! Boundary: storage ops between canonical snapshots and stable Directory records.
 
 pub mod fleet;
-pub mod subnet;
 
 use crate::{
     InternalError,

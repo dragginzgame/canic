@@ -18,17 +18,19 @@ pub enum EntropyError {
 
 /// Read one exact 32-byte cryptographic value from the operating system.
 pub fn random_bytes_32() -> Result<[u8; 32], EntropyError> {
-    #[cfg(not(windows))]
+    #[cfg(unix)]
     {
-        use rustix::rand::{GetRandomFlags, getrandom};
+        use std::{fs::File, io::Read};
 
+        let mut source = File::open("/dev/urandom").map_err(EntropyError::Io)?;
         let mut bytes = [0; 32];
         let mut filled = 0;
         while filled < bytes.len() {
-            let current =
-                getrandom(&mut bytes[filled..], GetRandomFlags::empty()).map_err(|source| {
-                    EntropyError::Io(io::Error::from_raw_os_error(source.raw_os_error()))
-                })?;
+            let current = match source.read(&mut bytes[filled..]) {
+                Ok(current) => current,
+                Err(source) if source.kind() == io::ErrorKind::Interrupted => continue,
+                Err(source) => return Err(EntropyError::Io(source)),
+            };
             if current == 0 {
                 return Err(EntropyError::ShortRead { actual: filled });
             }
@@ -37,11 +39,11 @@ pub fn random_bytes_32() -> Result<[u8; 32], EntropyError> {
         Ok(bytes)
     }
 
-    #[cfg(windows)]
+    #[cfg(not(unix))]
     {
         Err(EntropyError::Io(io::Error::new(
             io::ErrorKind::Unsupported,
-            "cryptographic identity generation is unsupported on Windows",
+            "cryptographic identity generation requires a Unix entropy source",
         )))
     }
 }

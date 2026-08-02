@@ -12,16 +12,12 @@ pub mod adapter;
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::{
-        cascade::StateSnapshotInput,
-        state::FleetStateInput,
-        topology::{FleetDirectoryInput, SubnetDirectoryInput},
-    },
+    dto::{cascade::StateSnapshotInput, state::FleetStateInput, topology::FleetDirectoryInput},
     ids::CanisterRole,
     ops::{
         runtime::env::EnvOps,
         storage::{registry::subnet::SubnetRegistryOps, state::fleet::FleetStateOps},
-        topology::directory::{FleetDirectoryResolver, SubnetDirectoryResolver},
+        topology::directory::FleetDirectoryResolver,
     },
 };
 use std::collections::HashMap;
@@ -35,7 +31,6 @@ use std::collections::HashMap;
 pub struct StateSnapshot {
     pub fleet_state: Option<FleetStateInput>,
     pub fleet_directory: Option<FleetDirectoryInput>,
-    pub subnet_directory: Option<SubnetDirectoryInput>,
 }
 
 ///
@@ -70,11 +65,6 @@ impl StateSnapshotBuilder {
         Ok(self)
     }
 
-    pub fn with_subnet_directory(mut self) -> Result<Self, InternalError> {
-        self.snapshot.subnet_directory = Some(SubnetDirectoryResolver::resolve_input()?);
-        Ok(self)
-    }
-
     #[must_use]
     pub fn build(self) -> StateSnapshot {
         self.snapshot
@@ -86,7 +76,6 @@ impl From<StateSnapshotInput> for StateSnapshot {
         Self {
             fleet_state: snapshot.fleet_state,
             fleet_directory: snapshot.fleet_directory,
-            subnet_directory: snapshot.subnet_directory,
         }
     }
 }
@@ -184,9 +173,7 @@ impl TopologySnapshotBuilder {
 
 #[must_use]
 pub const fn state_snapshot_is_empty(snapshot: &StateSnapshot) -> bool {
-    snapshot.fleet_state.is_none()
-        && snapshot.fleet_directory.is_none()
-        && snapshot.subnet_directory.is_none()
+    snapshot.fleet_state.is_none() && snapshot.fleet_directory.is_none()
 }
 
 #[must_use]
@@ -196,10 +183,9 @@ pub fn state_snapshot_debug(snapshot: &StateSnapshot) -> String {
     }
 
     format!(
-        "[{} {} {}]",
+        "[{} {}]",
         fmt(snapshot.fleet_state.is_some(), "fs"),
         fmt(snapshot.fleet_directory.is_some(), "fd"),
-        fmt(snapshot.subnet_directory.is_some(), "sd"),
     )
 }
 
@@ -216,9 +202,8 @@ mod tests {
                 cycles_funding_enabled: true,
             }),
             fleet_directory: None,
-            subnet_directory: None,
         };
 
-        assert_eq!(super::state_snapshot_debug(&snapshot), "[fs .. ..]");
+        assert_eq!(super::state_snapshot_debug(&snapshot), "[fs ..]");
     }
 }

@@ -48,10 +48,7 @@ use canic_core::{
             ic::{
                 IcOps,
                 call::CallOps,
-                mgmt::{
-                    CanisterInstallMode, CanisterStatus, CanisterStatusObservation,
-                    CanisterStatusType, MgmtOps,
-                },
+                mgmt::{CanisterStatus, CanisterStatusObservation, CanisterStatusType, MgmtOps},
             },
         },
         policy::{
@@ -3842,7 +3839,6 @@ async fn perform_child_install(
 ) -> Result<RootComponentChildAllocationResponse, InternalError> {
     if let Err(error) = ModuleInstallWorkflow::install_with_payload_with_permit(
         permit,
-        CanisterInstallMode::Install,
         plan.canister,
         &plan.source,
         plan.payload.clone(),
@@ -4057,7 +4053,6 @@ async fn perform_install(
 ) -> Result<RootComponentAllocationResponse, InternalError> {
     if let Err(error) = ModuleInstallWorkflow::install_with_payload_with_permit(
         permit,
-        CanisterInstallMode::Install,
         plan.canister,
         &plan.source,
         plan.payload.clone(),

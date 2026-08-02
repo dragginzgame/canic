@@ -68,35 +68,9 @@ pub(super) struct InfraCanisterIdRecordExtended {
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub enum InfraCanisterInstallMode {
+pub(super) enum InfraCanisterInstallMode {
     #[serde(rename = "install")]
     Install,
-    #[serde(rename = "reinstall")]
-    Reinstall,
-    #[serde(rename = "upgrade")]
-    Upgrade(Option<InfraUpgradeFlags>),
-}
-
-//
-// InfraUpgradeFlags
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
-pub struct InfraUpgradeFlags {
-    pub skip_pre_upgrade: Option<bool>,
-    pub wasm_memory_persistence: Option<InfraWasmMemoryPersistence>,
-}
-
-//
-// InfraWasmMemoryPersistence
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub enum InfraWasmMemoryPersistence {
-    #[serde(rename = "keep")]
-    Keep,
-    #[serde(rename = "replace")]
-    Replace,
 }
 
 //

@@ -6,6 +6,7 @@
 
 use crate::{
     icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_response},
+    icp_config::IcpConfigError,
     replica_query::{self, ReplicaQueryError},
 };
 use std::path::Path;
@@ -20,6 +21,9 @@ const ICP_JSON_OUTPUT: &str = "json";
 
 #[derive(Debug, ThisError)]
 pub enum CanisterReadyQueryError {
+    #[error(transparent)]
+    IcpConfig(#[from] IcpConfigError),
+
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
 
@@ -38,7 +42,7 @@ pub fn query_canister_ready(
     icp_root: Option<&Path>,
     candid_path: Option<&Path>,
 ) -> Result<bool, CanisterReadyQueryError> {
-    if replica_query::should_use_local_replica_query(Some(environment)) {
+    if replica_query::uses_local_replica_transport(Some(environment), icp_root)? {
         return query_local_canister_ready(environment, canister_id, icp_root).map_err(Into::into);
     }
 

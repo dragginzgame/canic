@@ -11,10 +11,7 @@ use crate::{
     dto::cascade::{StateSnapshotInput, TopologySnapshotInput},
     ids::CanisterRole,
     ops::{
-        storage::{
-            directory::{fleet::FleetDirectoryOps, subnet::SubnetDirectoryOps},
-            registry::subnet::SubnetRegistryOps,
-        },
+        storage::{directory::fleet::FleetDirectoryOps, registry::subnet::SubnetRegistryOps},
         topology::input::mapper::TopologyRegistryMapper,
     },
     workflow::{
@@ -61,17 +58,10 @@ impl PropagationWorkflow {
         let registry_data = SubnetRegistryOps::data();
         let registry_input = TopologyRegistryMapper::data_to_registry(registry_data);
         let app_policy_input = FleetDirectoryOps::topology_entries();
-        let subnet_policy_input = SubnetDirectoryOps::topology_entries();
 
         TopologyPolicy::assert_directory_consistent_with_registry(
             &registry_input,
             &app_policy_input,
-        )
-        .map_err(InternalError::from)?;
-
-        TopologyPolicy::assert_directory_consistent_with_registry(
-            &registry_input,
-            &subnet_policy_input,
         )
         .map_err(InternalError::from)?;
 

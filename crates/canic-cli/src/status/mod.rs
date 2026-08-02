@@ -188,16 +188,21 @@ fn load_icp_cli_version(options: &StatusOptions) -> String {
 fn load_replica_status(options: &StatusOptions, icp_root: &Path) -> ReplicaStatus {
     match IcpCli::new(&options.icp, None).local_replica_project_running_in(icp_root, false) {
         Ok(true) => ReplicaStatus::Running,
-        Ok(false)
-            if replica_query::should_use_local_replica_query(Some(&options.environment))
-                && replica_query::local_replica_status_reachable_from_root(
+        Ok(false) => match replica_query::uses_local_replica_transport(
+            Some(&options.environment),
+            Some(icp_root),
+        ) {
+            Ok(true)
+                if replica_query::local_replica_status_reachable_from_root(
                     Some(&options.environment),
                     icp_root,
                 ) =>
-        {
-            ReplicaStatus::RunningHttpFallback
-        }
-        Ok(false) => ReplicaStatus::Stopped,
+            {
+                ReplicaStatus::RunningHttpFallback
+            }
+            Ok(_) => ReplicaStatus::Stopped,
+            Err(err) => ReplicaStatus::Error(err.to_string()),
+        },
         Err(err) => ReplicaStatus::Error(err.to_string()),
     }
 }

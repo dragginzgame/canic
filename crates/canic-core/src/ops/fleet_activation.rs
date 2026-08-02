@@ -17,9 +17,7 @@ use crate::{
             MAX_FLEET_ACTIVATION_CANISTERS, MAX_FLEET_CREDENTIAL_MANIFEST_ENTRIES,
         },
         state::FleetStateInput,
-        topology::{
-            DirectoryEntryInput, DirectoryProvenance, FleetDirectoryInput, SubnetDirectoryInput,
-        },
+        topology::{DirectoryEntryInput, DirectoryProvenance, FleetDirectoryInput},
     },
     ids::{FleetBinding, FleetKey},
 };
@@ -136,13 +134,6 @@ fn encode_state_snapshot(value: &StateSnapshotInput) -> Result<Value, InternalEr
                 .map(encode_fleet_directory)
                 .transpose()?,
         ),
-        encode_optional(
-            value
-                .subnet_directory
-                .as_ref()
-                .map(encode_subnet_directory)
-                .transpose()?,
-        ),
     ]))
 }
 
@@ -163,14 +154,6 @@ fn encode_fleet_directory(value: &FleetDirectoryInput) -> Result<Value, Internal
         &value.provenance,
         &value.entries,
         "Fleet Directory snapshot",
-    )
-}
-
-fn encode_subnet_directory(value: &SubnetDirectoryInput) -> Result<Value, InternalError> {
-    encode_directory(
-        &value.provenance,
-        &value.entries,
-        "Subnet Directory snapshot",
     )
 }
 
@@ -449,12 +432,11 @@ mod tests {
         let value = StateSnapshotInput {
             fleet_state: None,
             fleet_directory: None,
-            subnet_directory: None,
         };
 
         assert_eq!(
             encode_value(&encode_state_snapshot(&value).expect("encode state snapshot")),
-            [0x83, 0xf6, 0xf6, 0xf6]
+            [0x82, 0xf6, 0xf6]
         );
     }
 

@@ -34,7 +34,6 @@ impl StateSnapshotAdapter {
         StateSnapshotInput {
             fleet_state: snapshot.fleet_state,
             fleet_directory: snapshot.fleet_directory.clone(),
-            subnet_directory: snapshot.subnet_directory.clone(),
         }
     }
 

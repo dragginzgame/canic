@@ -47,7 +47,7 @@ use canic::{
         RuntimeFieldVisibility,
     },
     dto::state::{FleetCommand, FleetCommandResponse, FleetMode, FleetStateResponse},
-    dto::topology::{FleetDirectoryInput, SubnetDirectoryInput},
+    dto::topology::FleetDirectoryInput,
     ids::{CanisterRole, CanonicalNetworkId, FleetId, FleetKey},
 };
 
@@ -103,22 +103,18 @@ fn fleet_state_and_internal_cascade_candid_shapes_use_the_current_contract() {
     assert!(state_env.contains("FleetMode"));
 
     let cascade_env = candid_type_env::<StateSnapshotInput>();
-    for field in ["fleet_state", "fleet_directory", "subnet_directory"] {
+    for field in ["fleet_state", "fleet_directory"] {
         assert!(
             cascade_env.contains(field),
             "state cascade Candid must contain {field}"
         );
     }
-    for directory_env in [
-        candid_type_env::<FleetDirectoryInput>(),
-        candid_type_env::<SubnetDirectoryInput>(),
-    ] {
-        for field in ["provenance", "fleet", "source_root", "entries"] {
-            assert!(
-                directory_env.contains(field),
-                "Directory Candid must contain {field}"
-            );
-        }
+    let directory_env = candid_type_env::<FleetDirectoryInput>();
+    for field in ["provenance", "fleet", "source_root", "entries"] {
+        assert!(
+            directory_env.contains(field),
+            "Directory Candid must contain {field}"
+        );
     }
 
     assert_candid_roundtrip(FleetMode::Readonly);

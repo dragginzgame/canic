@@ -224,7 +224,7 @@ test-installed-canic-cli:
 
 test-fleet-install:
 	@mkdir -p "$(TEST_TMPDIR)"
-	TMPDIR="$(TEST_TMPDIR)" CARGO_INCREMENTAL=0 $(CARGO_ENV) cargo run -q --profile fast -p canic-cli --bin canic -- install --profile fast test test-local
+	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) bash scripts/ci/test-fleet-install.sh
 
 test: blob-storage-inventory-gate blob-storage-cashier-inventory-gate test-unit
 

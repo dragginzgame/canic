@@ -8,8 +8,9 @@ use super::*;
 use crate::ops::cost_guard::CostGuardPermit;
 
 impl MgmtOps {
-    /// Deposits cycles into a canister and records metrics.
-    pub async fn deposit_cycles(
+    /// Deposits cycles after a cost guard has reserved value-transfer quota and cycles.
+    pub async fn deposit_cycles_with_permit(
+        _permit: &CostGuardPermit,
         canister_pid: Principal,
         cycles: u128,
     ) -> Result<(), InternalError> {
@@ -23,16 +24,6 @@ impl MgmtOps {
 
         Ok(())
     }
-
-    /// Deposits cycles after a cost guard has reserved value-transfer quota and cycles.
-    pub async fn deposit_cycles_with_permit(
-        _permit: &CostGuardPermit,
-        canister_pid: Principal,
-        cycles: u128,
-    ) -> Result<(), InternalError> {
-        Self::deposit_cycles(canister_pid, cycles).await
-    }
-
     /// Gets a canister's cycle balance (expensive: calls mgmt canister).
     pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, InternalError> {
         let cycles = management_call(

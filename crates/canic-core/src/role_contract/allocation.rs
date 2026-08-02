@@ -41,61 +41,60 @@ pub mod memory {
     pub mod topology {
         pub const CANISTER_CHILDREN_ID: u8 = 30;
         pub const FLEET_DIRECTORY_ID: u8 = 31;
-        pub const SUBNET_DIRECTORY_ID: u8 = 32;
-        pub const SUBNET_REGISTRY_ID: u8 = 33;
+        pub const SUBNET_REGISTRY_ID: u8 = 32;
     }
 
     pub mod env {
-        pub const ENV_ID: u8 = 34;
-        pub const FLEET_STATE_ID: u8 = 35;
+        pub const ENV_ID: u8 = 33;
+        pub const FLEET_STATE_ID: u8 = 34;
     }
 
     pub mod auth {
-        pub const AUTH_STATE_ID: u8 = 36;
-        pub const REPLAY_RECEIPTS_ID: u8 = 37;
+        pub const AUTH_STATE_ID: u8 = 35;
+        pub const REPLAY_RECEIPTS_ID: u8 = 36;
     }
 
     pub mod activation {
-        pub const FLEET_ACTIVATION_ID: u8 = 38;
+        pub const FLEET_ACTIVATION_ID: u8 = 37;
     }
 
     pub mod observability {
-        pub const CYCLE_TRACKER_ID: u8 = 39;
-        pub const CYCLE_TOPUP_EVENTS_ID: u8 = 40;
-        pub const CYCLES_FUNDING_LEDGER_ID: u8 = 41;
-        pub const LOG_ENTRIES_ID: u8 = 42;
-        pub const ICP_REFILL_RECORDS_ID: u8 = 43;
+        pub const CYCLE_TRACKER_ID: u8 = 38;
+        pub const CYCLE_TOPUP_EVENTS_ID: u8 = 39;
+        pub const CYCLES_FUNDING_LEDGER_ID: u8 = 40;
+        pub const LOG_ENTRIES_ID: u8 = 41;
+        pub const ICP_REFILL_RECORDS_ID: u8 = 42;
     }
 
     pub mod intent {
-        pub const INTENT_META_ID: u8 = 44;
-        pub const INTENT_RECORDS_ID: u8 = 45;
-        pub const INTENT_TOTALS_ID: u8 = 46;
-        pub const INTENT_PENDING_ID: u8 = 47;
-        pub const RECEIPT_BACKED_INTENT_RECORDS_ID: u8 = 48;
-        pub const INTENT_EXPIRY_INDEX_ID: u8 = 49;
-        pub const PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID: u8 = 50;
-        pub const APPLICATION_RECEIPT_REPLAY_ID: u8 = 51;
-        pub const APPLICATION_RECEIPT_ELIGIBILITY_ID: u8 = 52;
+        pub const INTENT_META_ID: u8 = 43;
+        pub const INTENT_RECORDS_ID: u8 = 44;
+        pub const INTENT_TOTALS_ID: u8 = 45;
+        pub const INTENT_PENDING_ID: u8 = 46;
+        pub const RECEIPT_BACKED_INTENT_RECORDS_ID: u8 = 47;
+        pub const INTENT_EXPIRY_INDEX_ID: u8 = 48;
+        pub const PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID: u8 = 49;
+        pub const APPLICATION_RECEIPT_REPLAY_ID: u8 = 50;
+        pub const APPLICATION_RECEIPT_ELIGIBILITY_ID: u8 = 51;
     }
 
     pub mod pool {
-        pub const CANISTER_POOL_ID: u8 = 53;
+        pub const CANISTER_POOL_ID: u8 = 52;
     }
 
     pub mod placement {
-        pub const SCALING_REGISTRY_ID: u8 = 54;
-        pub const PLACEMENT_INDEX_REGISTRY_ID: u8 = 55;
-        pub const SHARDING_REGISTRY_ID: u8 = 56;
-        pub const SHARDING_ASSIGNMENT_ID: u8 = 57;
-        pub const SHARDING_ACTIVE_SET_ID: u8 = 58;
+        pub const SCALING_REGISTRY_ID: u8 = 53;
+        pub const PLACEMENT_INDEX_REGISTRY_ID: u8 = 54;
+        pub const SHARDING_REGISTRY_ID: u8 = 55;
+        pub const SHARDING_ASSIGNMENT_ID: u8 = 56;
+        pub const SHARDING_ACTIVE_SET_ID: u8 = 57;
     }
 
     pub mod blob_storage {
-        pub const STORED_BLOBS_ID: u8 = 59;
-        pub const BLOB_DELETION_PENDING_ID: u8 = 60;
-        pub const STORAGE_GATEWAY_PRINCIPALS_ID: u8 = 61;
-        pub const BLOB_STORAGE_BILLING_ID: u8 = 62;
+        pub const STORED_BLOBS_ID: u8 = 58;
+        pub const BLOB_DELETION_PENDING_ID: u8 = 59;
+        pub const STORAGE_GATEWAY_PRINCIPALS_ID: u8 = 60;
+        pub const BLOB_STORAGE_BILLING_ID: u8 = 61;
     }
 }
 
@@ -129,13 +128,12 @@ use memory::{
         SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID,
     },
     pool::CANISTER_POOL_ID,
-    topology::{CANISTER_CHILDREN_ID, FLEET_DIRECTORY_ID, SUBNET_DIRECTORY_ID, SUBNET_REGISTRY_ID},
+    topology::{CANISTER_CHILDREN_ID, FLEET_DIRECTORY_ID, SUBNET_REGISTRY_ID},
 };
 
 const CORE_RUNTIME_TOPOLOGY_IDS: &[MemoryId] = &[
     MemoryId::new(CANISTER_CHILDREN_ID),
     MemoryId::new(FLEET_DIRECTORY_ID),
-    MemoryId::new(SUBNET_DIRECTORY_ID),
     MemoryId::new(SUBNET_REGISTRY_ID),
 ];
 const CORE_RUNTIME_ENVIRONMENT_IDS: &[MemoryId] =

@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(unix)]
+use crate::test_support::create_fifo;
 use crate::test_support::temp_dir;
 use std::fs;
 
@@ -286,13 +288,11 @@ fn catalog_rejects_symlinked_authority() {
 #[cfg(unix)]
 #[test]
 fn catalog_rejects_special_file_authority() {
-    use rustix::fs::{CWD, Mode, mkfifoat};
-
     let root = fixture("special-file");
     let network = CanonicalNetworkId::ic_mainnet();
     let path = fleet_catalog_path(&root, network);
     fs::create_dir_all(path.parent().expect("catalog parent")).expect("catalog directory");
-    mkfifoat(CWD, &path, Mode::from_raw_mode(0o600)).expect("catalog FIFO");
+    create_fifo(&path);
 
     assert!(matches!(
         build_fleet_catalog_report(&request(&root, "staging")),
