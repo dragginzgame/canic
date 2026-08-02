@@ -1,15 +1,15 @@
 # Canic 0.100 Implementation Status
 
-Date: 2026-08-01
+Date: 2026-08-02
 
 - State: implementation in progress.
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.83`.
-- Latest published release: `v0.100.83` at
-  `2e685da2c34c8195e5cd6d5609916095eeb73416`.
-- Open patch draft: `0.100.84`; no package-version change has been authorized.
+- Workspace package version: `0.100.84`.
+- Latest published release: `v0.100.84` at
+  `d584cc5b85706da92eb7c2ec981ca6beb8365ed7`.
+- Open patch draft: `0.100.85`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -1067,7 +1067,7 @@ The same release hard-cuts the orphaned control-plane subnet-state query/API/DTO
 vertical, which had no endpoint, protocol constant or facade consumer; stable
 state, internal views and template-publication responses remain maintained.
 
-Open 0.100.84 routes structural root provisioning through the root-owned
+Released 0.100.84 routes structural root provisioning through the root-owned
 Component Child lifecycle. An exact active Component member can create only a
 catalog-admitted direct child beneath itself; the durable reservation binds the
 application init payload and the nested lifecycle owns every deployment cost
@@ -1080,13 +1080,20 @@ membership is Active. The same draft advances host-only `ic-query` to `0.25.3`
 and selects its focused `subnet-catalog-host` feature; the consumed Subnet
 Catalog contract remains source-compatible.
 
+Open 0.100.85 hard-cuts the unused root Component Child upgrade protocol under
+the reinstall-only boundary. Retained `RecycleCanister` execution now drives
+the owning Component Registry partition's durable, bounded post-order removal
+phases rather than generic pool recycling. Exact retries recover the target and
+parent from that journal after membership removal, while fresh requests remain
+bound to an active direct child of the calling Component. Placement cleanup
+derives one stable child-bound disposal operation ID so interrupted attempts
+resume the same nested and outer receipts.
+
 ## Next Action
 
-Hard-cut the unused root capability upgrade path and move retained
-recycle/reinstall recovery onto Component Registry-owned child authority.
-Then replace the remaining cascade consumers of the legacy Subnet
+Replace the remaining cascade consumers of the legacy Subnet
 Registry/Directory, delete the legacy stable storage and cascade schemas, and
-complete the reinstall-only decoder audit. Then run preparation and execution as separate processes
-against one explicitly selected disposable real-network root. Verify the
-surviving Coordinator terminal receipt and exact replay before closing 0.100
-against the final design and beginning 0.101.
+complete the reinstall-only decoder audit. Then run preparation and execution
+as separate processes against one explicitly selected disposable real-network
+root. Verify the surviving Coordinator terminal receipt and exact replay
+before closing 0.100 against the final design and beginning 0.101.

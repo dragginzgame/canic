@@ -251,7 +251,6 @@ fn registry_kind_policy_blocks_but_ops_allows() {
             pid: existing_pid,
             role: role.clone(),
             parent_pid: Some(root_pid),
-            module_hash: None,
         }],
     };
 
@@ -313,7 +312,6 @@ fn registry_service_policy_blocks_duplicate_role() {
             pid: existing_pid,
             role: role.clone(),
             parent_pid: Some(root_pid),
-            module_hash: None,
         }],
     };
 
@@ -391,7 +389,6 @@ fn registry_singleton_policy_blocks_under_parent() {
             pid: existing_pid,
             role: role.clone(),
             parent_pid: Some(parent_pid),
-            module_hash: None,
         }],
     };
 
@@ -443,7 +440,6 @@ fn registry_wasm_store_policy_allows_multiple_under_same_parent() {
             pid: existing_pid,
             role: role.clone(),
             parent_pid: Some(parent_pid),
-            module_hash: None,
         }],
     };
 

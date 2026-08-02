@@ -11,7 +11,6 @@ pub enum Request {
     AcknowledgePlacementReceipt(AcknowledgePlacementReceiptRequest),
     AllocatePlacementChild(CreateCanisterRequest),
     CreateCanister(CreateCanisterRequest),
-    UpgradeCanister(UpgradeCanisterRequest),
     RecycleCanister(RecycleCanisterRequest),
     Cycles(CyclesRequest),
 }
@@ -41,14 +40,6 @@ impl Request {
     #[must_use]
     pub const fn create_canister(request: CreateCanisterRequest) -> Self {
         Self::CreateCanister(request)
-    }
-
-    // upgrade_canister
-    //
-    // Build a root request for upgrading an existing canister.
-    #[must_use]
-    pub const fn upgrade_canister(request: UpgradeCanisterRequest) -> Self {
-        Self::UpgradeCanister(request)
     }
 
     // recycle_canister
@@ -124,18 +115,6 @@ pub enum CreateCanisterParent {
 }
 
 //
-// UpgradeCanisterRequest
-//
-// Upgrade-canister payload.
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct UpgradeCanisterRequest {
-    pub canister_pid: Principal,
-    pub metadata: Option<RootRequestMetadata>,
-}
-
-//
 // RecycleCanisterRequest
 //
 // Recycle-one-child payload.
@@ -169,7 +148,6 @@ pub struct CyclesRequest {
 pub enum Response {
     AcknowledgePlacementReceipt,
     CreateCanister(CreateCanisterResponse),
-    UpgradeCanister,
     RecycleCanister,
     Cycles(CyclesResponse),
 }

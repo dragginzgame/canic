@@ -133,13 +133,13 @@ fn canister_ops_metrics_are_exposed_with_stable_labels() {
         CanisterOpsMetricReason::Ok,
     );
     CanisterOpsMetrics::record(
-        CanisterOpsMetricOperation::Upgrade,
+        CanisterOpsMetricOperation::Reinstall,
         &CanisterRole::new("worker"),
         CanisterOpsMetricOutcome::Failed,
         CanisterOpsMetricReason::ManagementCall,
     );
     CanisterOpsMetrics::record(
-        CanisterOpsMetricOperation::Upgrade,
+        CanisterOpsMetricOperation::Reinstall,
         &CanisterRole::new("worker"),
         CanisterOpsMetricOutcome::Failed,
         CanisterOpsMetricReason::ManagementCall,
@@ -168,7 +168,7 @@ fn canister_ops_metrics_are_exposed_with_stable_labels() {
         &entries,
         &[
             "canister_ops",
-            "upgrade",
+            "reinstall",
             "worker",
             "failed",
             "management_call",

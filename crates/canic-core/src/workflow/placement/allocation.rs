@@ -68,6 +68,15 @@ pub struct PlacementAllocationPermit {
 pub struct PlacementAllocationWorkflow;
 
 impl PlacementAllocationWorkflow {
+    /// Derive the stable root operation for disposing one returned child.
+    #[must_use]
+    pub fn disposed_child_operation_id(
+        permit: &PlacementAllocationPermit,
+        child_pid: Principal,
+    ) -> OperationId {
+        permit.identity.disposed_child_operation_id(child_pid)
+    }
+
     /// Return the current committed allocation sequence for one capacity resource.
     ///
     /// Pending callers deliberately reuse this value so retries and concurrent

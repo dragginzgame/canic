@@ -11,7 +11,7 @@ use crate::{
     dto::rpc::{
         AcknowledgePlacementReceiptRequest, CreateCanisterParent, CreateCanisterRequest,
         CreateCanisterResponse, CyclesRequest, CyclesResponse, RecycleCanisterRequest, Request,
-        Response, RootRequestMetadata, UpgradeCanisterRequest,
+        Response, RootRequestMetadata,
     },
     ops::{
         ic::IcOps,
@@ -144,27 +144,17 @@ impl RequestOps {
         .await
     }
 
-    /// Dispatch an upgrade request for a child canister through root RPC.
-    pub async fn upgrade_canister(canister_pid: Principal) -> Result<(), InternalError> {
-        let root_pid = EnvOps::root_pid()?;
-        RpcOps::execute_response_rpc(
-            root_pid,
-            UpgradeCanisterRpc {
-                canister_pid,
-                metadata: Some(new_request_metadata()),
-            },
-        )
-        .await
-    }
-
     /// Dispatch a recycle request for a child canister through root RPC.
-    pub async fn recycle_canister(canister_pid: Principal) -> Result<(), InternalError> {
+    pub(crate) async fn recycle_canister(
+        canister_pid: Principal,
+        operation_id: OperationId,
+    ) -> Result<(), InternalError> {
         let root_pid = EnvOps::root_pid()?;
         RpcOps::execute_response_rpc(
             root_pid,
             RecycleCanisterRpc {
                 canister_pid,
-                metadata: Some(new_request_metadata()),
+                metadata: Some(operation_request_metadata(operation_id)),
             },
         )
         .await
@@ -251,35 +241,6 @@ impl Rpc for CreateCanisterRpc {
     fn try_from_response(resp: Response) -> Result<Self::Response, InternalError> {
         match resp {
             Response::CreateCanister(r) => Ok(r),
-            _ => Err(RequestOpsError::InvalidResponseType.into()),
-        }
-    }
-}
-
-///
-/// UpgradeCanisterRpc
-///
-/// Internal command adapter for upgrade-canister RPCs.
-///
-
-struct UpgradeCanisterRpc {
-    canister_pid: Principal,
-    metadata: Option<RootRequestMetadata>,
-}
-
-impl Rpc for UpgradeCanisterRpc {
-    type Response = ();
-
-    fn into_request(self) -> Request {
-        Request::upgrade_canister(UpgradeCanisterRequest {
-            canister_pid: self.canister_pid,
-            metadata: self.metadata,
-        })
-    }
-
-    fn try_from_response(resp: Response) -> Result<Self::Response, InternalError> {
-        match resp {
-            Response::UpgradeCanister => Ok(()),
             _ => Err(RequestOpsError::InvalidResponseType.into()),
         }
     }
@@ -389,34 +350,6 @@ mod tests {
             request_id: [id; 32],
             ttl_ns: 123_000_000_000,
         }
-    }
-
-    #[test]
-    fn upgrade_canister_rpc_carries_replay_metadata_into_request() {
-        let canister_pid = p(42);
-        let metadata = metadata(7);
-
-        let request = UpgradeCanisterRpc {
-            canister_pid,
-            metadata: Some(metadata),
-        }
-        .into_request();
-
-        let Request::UpgradeCanister(request) = request else {
-            panic!("upgrade RPC must encode an upgrade request");
-        };
-
-        assert_eq!(request.canister_pid, canister_pid);
-        assert_eq!(request.metadata, Some(metadata));
-    }
-
-    #[test]
-    fn upgrade_canister_rpc_accepts_only_upgrade_response() {
-        UpgradeCanisterRpc::try_from_response(Response::UpgradeCanister)
-            .expect("upgrade response accepted");
-
-        UpgradeCanisterRpc::try_from_response(Response::RecycleCanister)
-            .expect_err("wrong response variant rejected");
     }
 
     #[test]

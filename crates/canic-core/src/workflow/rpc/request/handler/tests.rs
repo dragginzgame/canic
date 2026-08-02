@@ -8,7 +8,6 @@ use crate::{
         rpc::{
             AcknowledgePlacementReceiptRequest, CreateCanisterParent, CreateCanisterRequest,
             CyclesRequest, CyclesResponse, RecycleCanisterRequest, Request, RootRequestMetadata,
-            UpgradeCanisterRequest,
         },
     },
     ids::{
@@ -271,17 +270,6 @@ fn root_capability_from_request_maps_placement_allocation() {
 }
 
 #[test]
-fn root_capability_from_request_maps_upgrade() {
-    let req = Request::UpgradeCanister(UpgradeCanisterRequest {
-        canister_pid: p(1),
-        metadata: None,
-    });
-
-    let mapped = RootCapability::from_request(req);
-    assert_eq!(mapped.descriptor().name, "Upgrade");
-}
-
-#[test]
 fn root_capability_from_request_maps_recycle_canister() {
     let req = Request::RecycleCanister(RecycleCanisterRequest {
         canister_pid: p(4),
@@ -319,12 +307,8 @@ fn root_capability_metadata_projection_covers_replay_protected_families() {
             extra_arg: None,
             metadata: None,
         }),
-        Request::UpgradeCanister(UpgradeCanisterRequest {
-            canister_pid: p(2),
-            metadata: None,
-        }),
         Request::RecycleCanister(RecycleCanisterRequest {
-            canister_pid: p(3),
+            canister_pid: p(2),
             metadata: None,
         }),
         Request::Cycles(CyclesRequest {
@@ -1541,7 +1525,7 @@ fn check_replay_rejects_cross_variant_same_request_id() {
         subnet_id: p(4),
         now: 2_000,
     };
-    let upgrade = RootCapability::UpgradeCanister(UpgradeCanisterRequest {
+    let recycle = RootCapability::RecycleCanister(RecycleCanisterRequest {
         canister_pid: p(9),
         metadata: Some(meta(8, secs_to_ns(60))),
     });
@@ -1550,11 +1534,11 @@ fn check_replay_rejects_cross_variant_same_request_id() {
         metadata: Some(meta(8, secs_to_ns(60))),
     });
 
-    let pending = match RootResponseWorkflow::check_replay(&ctx, &upgrade).expect("first replay") {
+    let pending = match RootResponseWorkflow::check_replay(&ctx, &recycle).expect("first replay") {
         replay::ReplayPreflight::Fresh(pending) => pending,
         replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
     };
-    replay::stage_response(&pending, &Response::UpgradeCanister).expect("stage response");
+    replay::stage_response(&pending, &Response::RecycleCanister).expect("stage response");
     RootResponseWorkflow::commit_replay(&pending).expect("commit");
 
     RootResponseWorkflow::check_replay(&ctx, &cycles).expect_err("must conflict");
@@ -1564,11 +1548,11 @@ fn check_replay_rejects_cross_variant_same_request_id() {
 fn replay_purge_respects_limit_and_keeps_unexpired_entries() {
     ReplayReceiptOps::reset_for_tests();
 
-    let ok = encode_one(Response::UpgradeCanister).expect("encode");
+    let ok = encode_one(Response::RecycleCanister).expect("encode");
 
     for i in 0..5u8 {
         seed_root_replay_receipt(
-            "root.upgrade.v1",
+            "root.recycle_canister.v1",
             p(i),
             [i; 32],
             [i; 32],
@@ -1579,7 +1563,7 @@ fn replay_purge_respects_limit_and_keeps_unexpired_entries() {
 
     for i in 200..202u8 {
         seed_root_replay_receipt(
-            "root.upgrade.v1",
+            "root.recycle_canister.v1",
             p(i),
             [i; 32],
             [i; 32],

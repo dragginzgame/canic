@@ -186,28 +186,6 @@ fn runtime_introspection_endpoints_are_manifested_as_read_only_queries() {
 }
 
 #[test]
-fn canister_upgrade_is_manifested_as_implemented_response_idempotent() {
-    let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
-        .iter()
-        .find(|entry| entry.endpoint == "canic_canister_upgrade")
-        .expect("canister upgrade policy entry");
-
-    assert_eq!(
-        entry.implementation_status,
-        ReplayImplementationStatus::Implemented
-    );
-    assert_eq!(
-        entry.replay_policy,
-        ReplayPolicy::ResponseIdempotent {
-            command_kind: replay_command_kind("management.canister_upgrade.v1"),
-        }
-    );
-    assert_eq!(entry.cost_class, CostClass::ManagementDeployment);
-    assert_eq!(entry.quota_policy, Some(DEPLOYMENT_QUOTA_V1));
-    assert_eq!(entry.cycle_reserve_policy, Some(DEPLOYMENT_RESERVE_V1));
-}
-
-#[test]
 fn root_component_creation_is_costed_and_response_idempotent() {
     let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()

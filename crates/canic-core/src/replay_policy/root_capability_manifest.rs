@@ -39,14 +39,6 @@ pub const ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST: &[RootCapabilityComman
         Some(DEPLOYMENT_RESERVE_V1),
     ),
     root_capability_replay_protected(
-        "UpgradeCanister",
-        command_kind("root.upgrade.v1"),
-        ReplayImplementationStatus::Implemented,
-        CostClass::ManagementDeployment,
-        Some(DEPLOYMENT_QUOTA_V1),
-        Some(DEPLOYMENT_RESERVE_V1),
-    ),
-    root_capability_replay_protected(
         "RecycleCanister",
         command_kind("root.recycle_canister.v1"),
         ReplayImplementationStatus::Implemented,

@@ -19,7 +19,6 @@ pub mod log;
 pub mod placement;
 pub mod pool;
 pub mod topology;
-pub mod upgrade;
 
 use crate::{InternalError, InternalErrorOrigin};
 use thiserror::Error as ThisError;

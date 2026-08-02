@@ -33,25 +33,10 @@ pub(super) fn verify_root_structural_proof(
         | RootCapability::ProvisionCanister(request) => {
             verify_root_structural_create(request, authority)
         }
-        RootCapability::UpgradeCanister(request) => {
-            verify_root_structural_child_target(caller, request.canister_pid, "upgrade", authority)
-        }
         RootCapability::RecycleCanister(request) => {
-            verify_replayable_recycle_target(caller, request.canister_pid, authority)
+            verify_root_structural_child_target(caller, request.canister_pid, "recycle", authority)
         }
     }
-}
-
-fn verify_replayable_recycle_target(
-    caller: Principal,
-    target_pid: Principal,
-    authority: &RootCapabilityAuthority,
-) -> Result<(), Error> {
-    require_no_provision_parent_authority(authority)?;
-    if !authority.has_target() {
-        return Ok(());
-    }
-    verify_root_structural_child_target(caller, target_pid, "recycle", authority)
 }
 
 fn verify_root_structural_create(

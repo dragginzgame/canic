@@ -9,9 +9,7 @@ use canic_core::{
             cost_guard::{CostGuardPermit, CostGuardRequest},
             ic::IcOps,
         },
-        workflow::canister_lifecycle::{
-            CanisterLifecycleEvent, CanisterLifecycleResult, CanisterLifecycleWorkflow,
-        },
+        workflow::canister_lifecycle::{CanisterLifecycleResult, CanisterLifecycleWorkflow},
         workflow::cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
     },
     log,
@@ -62,13 +60,7 @@ pub async fn create_canister_with_deployment_guard(
         payer
     );
 
-    let result = CanisterLifecycleWorkflow::apply(CanisterLifecycleEvent::Create {
-        deployment_permit: &cost_permit,
-        role,
-        parent,
-        extra_arg,
-    })
-    .await;
+    let result = CanisterLifecycleWorkflow::create(&cost_permit, role, parent, extra_arg).await;
 
     match result {
         Ok(result) => {

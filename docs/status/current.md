@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.83`.
-- The latest published release is `v0.100.83` at
-  `2e685da2c34c8195e5cd6d5609916095eeb73416`.
-- Open `0.100.84` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.84`.
+- The latest published release is `v0.100.84` at
+  `d584cc5b85706da92eb7c2ec981ca6beb8365ed7`.
+- Open `0.100.85` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -692,7 +692,7 @@ Historical detail is archived at:
   Component Registry concern. The same release hard-cuts the orphaned
   control-plane subnet-state query, DTO and mapper vertical, which had no
   endpoint, protocol constant or facade consumer.
-- Open `0.100.84` routes structural root provisioning through the durable
+- Released `0.100.84` routes structural root provisioning through the durable
   Component Child lifecycle. The exact active Component member remains the
   immediate parent; application init bytes are frozen into reservation and
   install authority; and interrupted exact retries resume the nested
@@ -704,6 +704,13 @@ Historical detail is archived at:
   `ic-query` to `0.25.3` through its focused `subnet-catalog-host` feature;
   Canic's consumed API remains source-compatible and `ic-query` is no longer
   an immediate introducer of the accepted transitive `serde_cbor` advisory.
+- Open `0.100.85` hard-cuts the unused root Component Child upgrade vertical
+  under the reinstall-only boundary. Retained recycle now executes the owning
+  Component Registry partition's bounded durable subtree-removal phases rather
+  than generic pool recycling, and exact retries recover target authority from
+  that journal after membership removal. Placement cleanup derives one stable
+  child-bound disposal operation so it resumes the same nested and outer
+  receipts.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1999,16 +2006,14 @@ First primary results:
 
 ## Next Action
 
-Hard-cut the unused root capability upgrade path and move retained
-recycle/reinstall recovery onto Component Registry-owned child authority.
-Then remove the remaining cascade consumers of the legacy Subnet
+Remove the remaining cascade consumers of the legacy Subnet
 Registry/Directory, delete their stable/cascade schemas once no maintained
-reader remains and complete the reinstall-only decoder audit. Then
-run the guarded host preparation and execution phases as separate
-processes against one explicitly selected disposable real-network root. Verify
-the surviving Coordinator terminal receipt and exact replay before closing 0.100
-against the accepted design and beginning 0.101. The retained implementation
-detail remains in the
+reader remains and complete the reinstall-only decoder audit. Then run the
+guarded host preparation and execution phases as separate processes against
+one explicitly selected disposable real-network root. Verify the surviving
+Coordinator terminal receipt and exact replay before closing 0.100 against the
+accepted design and beginning 0.101. The retained implementation detail
+remains in the
 [implementation tracker](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md).
 Fresh installation now journals and verifies the Coordinator, every planned
 Fleet Subnet Root, each root's exact topology-admitted local Store, and every
@@ -2372,7 +2377,7 @@ one cascaded direct-child record, and the shared child facade no longer swaps
 to subnet-wide Registry semantics on Fleet Subnet Roots. The same draft
 deletes the unexposed control-plane subnet-state query family while retaining
 stable state, internal views and template-publication responses.
-Open `0.100.84` makes root structural provisioning execute the durable
+Released `0.100.84` makes root structural provisioning execute the durable
 Component Child lifecycle under exact active Component Registry authority.
 Reservation and installation retain the application init payload, exact replay
 resumes incomplete nested phases without a duplicate deployment charge, and
@@ -2382,6 +2387,12 @@ immediate parent's local child caches only after active membership commits.
 It also advances host-only `ic-query` to `0.25.3` through the focused Subnet
 Catalog feature without changing Canic call sites, and removes `ic-query` from
 the immediate-introducer inventory for transitive `serde_cbor`.
+Open `0.100.85` hard-cuts the unused root child-upgrade protocol and routes
+retained child recycle through bounded Component Registry subtree removal.
+Durable journal authority permits exact continuation after live membership is
+removed, while fresh operations still require an active direct child of the
+calling Component. Placement cleanup uses a stable child-bound operation ID so
+all retries converge on the same receipts.
 
 ## Historical Release Detail
 

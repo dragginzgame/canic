@@ -28,6 +28,27 @@ pub struct RootComponentChildProvisionRequest {
 }
 
 ///
+/// RootComponentChildRecycleRequest
+///
+/// Exact replay-bound Component Child subtree-removal authority.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentChildRecycleRequest {
+    pub operation_id: [u8; 32],
+    pub component: ComponentInstanceId,
+    pub expected_registry: ComponentRegistryHead,
+    pub target_canister_id: Principal,
+}
+
+/// Bounded result of one resumable Component Child recycle invocation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RootComponentChildRecycleOutcome {
+    Completed,
+    InProgress,
+}
+
+///
 /// RootCapabilityLifecycleExecutor
 ///
 /// Driver implemented by the root control plane for Component-bound lifecycle effects.
@@ -40,4 +61,10 @@ pub trait RootCapabilityLifecycleExecutor: Send + Sync {
         &self,
         request: RootComponentChildProvisionRequest,
     ) -> Result<Principal, InternalError>;
+
+    /// Advance one exact Component Child subtree removal through a bounded work slice.
+    async fn recycle_component_child(
+        &self,
+        request: RootComponentChildRecycleRequest,
+    ) -> Result<RootComponentChildRecycleOutcome, InternalError>;
 }

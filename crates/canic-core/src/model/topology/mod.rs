@@ -9,8 +9,8 @@ use crate::{domain::value::Principal, ids::CanisterRole};
 pub struct TopologyEntry {
     pub pid: Principal,
     pub role: CanisterRole,
+    #[cfg(test)]
     pub parent_pid: Option<Principal>,
-    pub module_hash: Option<Vec<u8>>,
 }
 
 /// Complete observed subnet topology used for invariant evaluation.

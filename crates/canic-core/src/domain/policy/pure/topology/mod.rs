@@ -1,7 +1,6 @@
 pub mod registry;
 
 use crate::{
-    InternalError,
     domain::value::Principal,
     ids::CanisterRole,
     model::topology::{TopologyDirectoryEntry, TopologyEntry, TopologyRegistry},
@@ -31,9 +30,6 @@ pub enum TopologyPolicyError {
         expected: Principal,
         found: Option<Principal>,
     },
-
-    #[error("module hash mismatch for {0}")]
-    ModuleHashMismatch(Principal),
 
     #[error("parent {0} not found in registry")]
     ParentNotFound(Principal),
@@ -65,53 +61,6 @@ impl TopologyPolicy {
             .iter()
             .find(|entry| entry.pid == pid)
             .ok_or(TopologyPolicyError::RegistryEntryMissing(pid))
-    }
-
-    // -------------------------------------------------------------
-    // Assertions
-    // -------------------------------------------------------------
-
-    pub(crate) fn assert_parent_exists(
-        registry: &TopologyRegistry,
-        parent_pid: Principal,
-    ) -> Result<(), InternalError> {
-        if registry.entries.iter().any(|entry| entry.pid == parent_pid) {
-            Ok(())
-        } else {
-            Err(TopologyPolicyError::ParentNotFound(parent_pid).into())
-        }
-    }
-
-    pub(crate) fn assert_module_hash(
-        registry: &TopologyRegistry,
-        pid: Principal,
-        expected_hash: &[u8],
-    ) -> Result<(), InternalError> {
-        let record = Self::registry_record(registry, pid)?;
-
-        if record.module_hash.as_deref() == Some(expected_hash) {
-            Ok(())
-        } else {
-            Err(TopologyPolicyError::ModuleHashMismatch(pid).into())
-        }
-    }
-
-    pub(crate) fn assert_immediate_parent(
-        registry: &TopologyRegistry,
-        pid: Principal,
-        expected_parent: Principal,
-    ) -> Result<(), InternalError> {
-        let record = Self::registry_record(registry, pid)?;
-
-        match record.parent_pid {
-            Some(pp) if pp == expected_parent => Ok(()),
-            other => Err(TopologyPolicyError::ImmediateParentMismatch {
-                pid,
-                expected: expected_parent,
-                found: other,
-            }
-            .into()),
-        }
     }
 
     pub fn assert_directory_consistent_with_registry(

@@ -1,5 +1,5 @@
 use crate::{
-    cdk::{candid::CandidType, types::Principal},
+    cdk::candid::CandidType,
     dto::{
         capability::{
             NonrootCyclesCapabilityEnvelopeV1, NonrootCyclesCapabilityResponseV1,
@@ -66,12 +66,6 @@ impl RpcApi {
         A: CandidType + Send + Sync,
     {
         RpcRequestWorkflow::create_canister_request(canister_role, parent, extra)
-            .await
-            .map_err(Error::from)
-    }
-
-    pub async fn upgrade_canister_request(canister_pid: Principal) -> Result<(), Error> {
-        RpcRequestWorkflow::upgrade_canister_request(canister_pid)
             .await
             .map_err(Error::from)
     }

@@ -9,13 +9,18 @@ use canic_core::{
     control_plane_support::{
         error::{InternalError, InternalErrorOrigin},
         ops::ic::IcOps,
-        workflow::rpc::{RootCapabilityLifecycleExecutor, RootComponentChildProvisionRequest},
+        workflow::rpc::{
+            RootCapabilityLifecycleExecutor, RootComponentChildProvisionRequest,
+            RootComponentChildRecycleOutcome, RootComponentChildRecycleRequest,
+        },
     },
     dto::component_registry::{
         RootComponentChildAllocationRequest, RootComponentChildCommitRequest,
         RootComponentChildCreationRequest, RootComponentChildDirectoryPreparationRequest,
         RootComponentChildInstallRequest, RootComponentChildMembershipActivationRequest,
-        RootComponentChildRuntimeActivationRequest,
+        RootComponentChildRuntimeActivationRequest, RootComponentSubtreeRemovalPhase,
+        RootComponentSubtreeRemovalRequest, RootComponentSubtreeRemovalResponse,
+        RootComponentSubtreeRemovalStatusRequest,
     },
     ids::{CanisterRole, ComponentChildBinding, ComponentInstanceId, ManagedCanisterBinding},
 };
@@ -41,7 +46,16 @@ impl RootCapabilityLifecycleExecutor for ComponentChildLifecycleExecutor {
     ) -> Result<candid::Principal, InternalError> {
         Box::pin(provision_component_child(request)).await
     }
+
+    async fn recycle_component_child(
+        &self,
+        request: RootComponentChildRecycleRequest,
+    ) -> Result<RootComponentChildRecycleOutcome, InternalError> {
+        Box::pin(recycle_component_child(request)).await
+    }
 }
+
+const MAX_RECYCLE_PHASES_PER_INVOCATION: usize = 16;
 
 #[derive(Debug, Eq, PartialEq)]
 struct ProvisionedChildIdentity {
@@ -127,4 +141,68 @@ async fn provision_component_child(
         ));
     }
     Ok(binding.canister_id)
+}
+
+async fn recycle_component_child(
+    request: RootComponentChildRecycleRequest,
+) -> Result<RootComponentChildRecycleOutcome, InternalError> {
+    let status_request = RootComponentSubtreeRemovalStatusRequest {
+        operation_id: request.operation_id,
+        component: request.component,
+    };
+    let mut removal = match component_registry::existing_subtree_removal(status_request)? {
+        Some(removal) => removal,
+        None => {
+            component_registry::begin_subtree_removal(RootComponentSubtreeRemovalRequest {
+                operation_id: request.operation_id,
+                component: request.component,
+                target_canister_id: request.target_canister_id,
+                expected_registry: request.expected_registry.clone(),
+            })
+            .await?
+        }
+    };
+    require_expected_recycle_identity(&request, &removal)?;
+    let starting_completed_leaves = removal.completed_leaves;
+
+    for _ in 0..MAX_RECYCLE_PHASES_PER_INVOCATION {
+        if matches!(
+            &removal.phase,
+            RootComponentSubtreeRemovalPhase::Completed(_)
+        ) {
+            return Ok(RootComponentChildRecycleOutcome::Completed);
+        }
+        if removal.completed_leaves > starting_completed_leaves {
+            return Ok(RootComponentChildRecycleOutcome::InProgress);
+        }
+        removal = component_registry::advance_existing_subtree_removal(status_request).await?;
+        require_expected_recycle_identity(&request, &removal)?;
+    }
+
+    Ok(RootComponentChildRecycleOutcome::InProgress)
+}
+
+fn require_expected_recycle_identity(
+    request: &RootComponentChildRecycleRequest,
+    removal: &RootComponentSubtreeRemovalResponse,
+) -> Result<(), InternalError> {
+    if removal.component != request.component {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "Component Child recycle returned a different Component",
+        ));
+    }
+    if removal.target_canister_id != request.target_canister_id {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "Component Child recycle returned a different target",
+        ));
+    }
+    if removal.target_parent_canister_id != IcOps::msg_caller() {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "Component Child recycle target is no longer bound to the requesting parent",
+        ));
+    }
+    Ok(())
 }

@@ -7,8 +7,6 @@
 use crate::{InternalError, InternalErrorClass, InternalErrorOrigin, ids::CanisterRole};
 use std::{cell::RefCell, collections::HashMap};
 
-const UNKNOWN_ROLE_LABEL: &str = "unknown";
-
 thread_local! {
     static PROVISIONING_METRICS: RefCell<HashMap<ProvisioningMetricKey, u64>> =
         RefCell::new(HashMap::new());
@@ -29,7 +27,6 @@ pub enum ProvisioningMetricOperation {
     PropagateState,
     PropagateTopology,
     ResolveModule,
-    Upgrade,
 }
 
 ///
@@ -43,7 +40,6 @@ pub enum ProvisioningMetricOperation {
 pub enum ProvisioningMetricOutcome {
     Completed,
     Failed,
-    Skipped,
     Started,
 }
 
@@ -56,12 +52,10 @@ pub enum ProvisioningMetricOutcome {
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum ProvisioningMetricReason {
-    AlreadyCurrent,
     InvalidState,
     ManagementCall,
     MissingWasm,
     NewAllocation,
-    NotFound,
     Ok,
     PolicyDenied,
     PoolReuse,
@@ -123,15 +117,6 @@ impl ProvisioningMetrics {
         reason: ProvisioningMetricReason,
     ) {
         Self::record_role_label(operation, role.as_str(), outcome, reason);
-    }
-
-    /// Record one provisioning workflow event when role lookup failed.
-    pub fn record_unknown_role(
-        operation: ProvisioningMetricOperation,
-        outcome: ProvisioningMetricOutcome,
-        reason: ProvisioningMetricReason,
-    ) {
-        Self::record_role_label(operation, UNKNOWN_ROLE_LABEL, outcome, reason);
     }
 
     // Increment one provisioning counter with a bounded role label.
@@ -207,12 +192,6 @@ mod tests {
             ProvisioningMetricOutcome::Failed,
             ProvisioningMetricReason::MissingWasm,
         );
-        ProvisioningMetrics::record_unknown_role(
-            ProvisioningMetricOperation::Upgrade,
-            ProvisioningMetricOutcome::Failed,
-            ProvisioningMetricReason::NotFound,
-        );
-
         let map = snapshot_map();
         assert_eq!(
             map.get(&ProvisioningMetricKey {
@@ -231,15 +210,6 @@ mod tests {
                 reason: ProvisioningMetricReason::MissingWasm,
             }),
             Some(&2)
-        );
-        assert_eq!(
-            map.get(&ProvisioningMetricKey {
-                operation: ProvisioningMetricOperation::Upgrade,
-                role: UNKNOWN_ROLE_LABEL.to_string(),
-                outcome: ProvisioningMetricOutcome::Failed,
-                reason: ProvisioningMetricReason::NotFound,
-            }),
-            Some(&1)
         );
     }
 }

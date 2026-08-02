@@ -21,7 +21,10 @@ pub use authority::{
     RootCapabilityAuthority, RootCapabilityCallerAuthority, RootCapabilityMemberAuthority,
     RootCapabilityParentAuthority,
 };
-pub use lifecycle::{RootCapabilityLifecycleExecutor, RootComponentChildProvisionRequest};
+pub use lifecycle::{
+    RootCapabilityLifecycleExecutor, RootComponentChildProvisionRequest,
+    RootComponentChildRecycleOutcome, RootComponentChildRecycleRequest,
+};
 
 ///
 /// RpcWorkflowError

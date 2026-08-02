@@ -13,7 +13,7 @@ use crate::{
     dto::error::Error,
     dto::rpc::{
         AcknowledgePlacementReceiptRequest, CreateCanisterRequest, CreateCanisterResponse,
-        RecycleCanisterRequest, Response, UpgradeCanisterRequest,
+        RecycleCanisterRequest, Response,
     },
     log,
     log::Topic,
@@ -27,14 +27,11 @@ use crate::{
         },
     },
     workflow::{
-        canister_lifecycle::{
-            CanisterLifecycleEvent, CanisterLifecycleWorkflow, CanisterUpgradeCostContext,
-        },
-        pool::PoolWorkflow,
         replay::mark_recovery_required_after_failure,
         rpc::{
             RootCapabilityAuthority, RootCapabilityLifecycleExecutor,
-            RootComponentChildProvisionRequest,
+            RootComponentChildProvisionRequest, RootComponentChildRecycleOutcome,
+            RootComponentChildRecycleRequest,
         },
     },
 };
@@ -65,8 +62,9 @@ pub(super) async fn execute_root_capability(
             )
             .await
         }
-        RootCapability::UpgradeCanister(req) => execute_upgrade(ctx, pending, &req).await,
-        RootCapability::RecycleCanister(req) => execute_recycle(pending, &req).await,
+        RootCapability::RecycleCanister(req) => {
+            execute_recycle(ctx, pending, &req, authority, lifecycle).await
+        }
         RootCapability::RequestCycles(req) => {
             let response = if let Some(grant) = authorized_cycles {
                 nonroot_cycles::execute_authorized_request_cycles(ctx, pending, grant).await
@@ -262,35 +260,107 @@ fn preserve_root_provision_recovery_required(
     err
 }
 
-async fn execute_upgrade(
+async fn execute_recycle(
     ctx: &RootContext,
     pending: &ReplayPending,
-    req: &UpgradeCanisterRequest,
+    req: &RecycleCanisterRequest,
+    authority: &RootCapabilityAuthority,
+    lifecycle: &dyn RootCapabilityLifecycleExecutor,
 ) -> Result<Response, InternalError> {
-    let response = Response::UpgradeCanister;
-    replay::stage_response(pending, &response)?;
-    let event = CanisterLifecycleEvent::Upgrade {
-        cost_context: CanisterUpgradeCostContext {
-            quota_subject: ctx.caller,
-            payer: ctx.self_pid,
-            now_secs: ctx.now,
+    let recycle = component_child_recycle_request(pending, req, authority)?;
+    replay::mark_external_effect_in_flight(
+        pending,
+        ExternalEffectDescriptor::ManagementCall {
+            canister: req.canister_pid,
+            method: "component_subtree_removal".to_string(),
         },
-        pid: req.canister_pid,
-        replay_pending: pending,
-    };
+    )?;
+    match lifecycle.recycle_component_child(recycle).await {
+        Ok(RootComponentChildRecycleOutcome::Completed) => {}
+        Ok(RootComponentChildRecycleOutcome::InProgress) => {
+            let error = InternalError::public(Error::unavailable(
+                "Component Child recycle is still in progress; retry the exact operation",
+            ));
+            return Err(preserve_root_recycle_recovery_required(
+                pending,
+                ctx,
+                req.canister_pid,
+                error,
+                RecoveryReason::ComponentChildLifecycleInterrupted,
+            ));
+        }
+        Err(error) => {
+            return Err(preserve_root_recycle_recovery_required(
+                pending,
+                ctx,
+                req.canister_pid,
+                error,
+                RecoveryReason::ComponentChildLifecycleInterrupted,
+            ));
+        }
+    }
 
-    CanisterLifecycleWorkflow::apply(event).await?;
+    let response = Response::RecycleCanister;
+    if let Err(error) = replay::stage_response(pending, &response) {
+        return Err(preserve_root_recycle_recovery_required(
+            pending,
+            ctx,
+            req.canister_pid,
+            error,
+            RecoveryReason::ResponseCommitFailed,
+        ));
+    }
 
     Ok(response)
 }
 
-async fn execute_recycle(
+fn component_child_recycle_request(
     pending: &ReplayPending,
     req: &RecycleCanisterRequest,
-) -> Result<Response, InternalError> {
-    let response = Response::RecycleCanister;
-    replay::stage_response(pending, &response)?;
-    PoolWorkflow::pool_recycle_canister(req.canister_pid).await?;
+    authority: &RootCapabilityAuthority,
+) -> Result<RootComponentChildRecycleRequest, InternalError> {
+    let component = authority.caller_component().ok_or_else(|| {
+        InternalError::public(Error::forbidden(
+            "Fleet Subnet Root cannot recycle a top-level Component as a Component Child",
+        ))
+    })?;
+    let expected_registry = authority.caller_registry().cloned().ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "authorized Component caller has no protected Registry head",
+        )
+    })?;
+    Ok(RootComponentChildRecycleRequest {
+        operation_id: pending.receipt_token.receipt().operation_id.into_bytes(),
+        component,
+        expected_registry,
+        target_canister_id: req.canister_pid,
+    })
+}
 
-    Ok(response)
+fn preserve_root_recycle_recovery_required(
+    pending: &ReplayPending,
+    ctx: &RootContext,
+    target: Principal,
+    error: InternalError,
+    reason: RecoveryReason,
+) -> InternalError {
+    let (error_class, error_origin) = error.log_fields();
+    let error = mark_recovery_required_after_failure(
+        &pending.receipt_token,
+        reason,
+        secs_to_ns(IcOps::now_secs()),
+        error,
+        "root recycle replay recovery marker failed",
+    );
+    log!(
+        Topic::Rpc,
+        Error,
+        "root recycle replay recovery required effect=component_subtree_removal caller={} target={} error_class={} error_origin={}",
+        ctx.caller,
+        target,
+        error_class,
+        error_origin
+    );
+    error
 }

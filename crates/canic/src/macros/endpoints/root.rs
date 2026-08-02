@@ -510,13 +510,6 @@ macro_rules! canic_emit_root_admin_endpoints {
         }
 
         #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_canister_upgrade(
-            canister_pid: ::canic::__internal::cdk::Principal,
-        ) -> Result<(), ::canic::Error> {
-            $crate::__internal::core::api::rpc::RpcApi::upgrade_canister_request(canister_pid).await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_canister_status(
             pid: ::canic::__internal::cdk::Principal,
         ) -> Result<::canic::dto::canister::CanisterStatusResponse, ::canic::Error> {

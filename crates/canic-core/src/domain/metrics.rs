@@ -40,7 +40,6 @@ pub enum CanisterOpsMetricOperation {
     Delete,
     Install,
     Reinstall,
-    Upgrade,
 }
 
 impl CanisterOpsMetricOperation {
@@ -52,7 +51,6 @@ impl CanisterOpsMetricOperation {
             Self::Delete => "delete",
             Self::Install => "install",
             Self::Reinstall => "reinstall",
-            Self::Upgrade => "upgrade",
         }
     }
 }

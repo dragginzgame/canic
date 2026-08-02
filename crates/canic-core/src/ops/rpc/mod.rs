@@ -179,7 +179,6 @@ const fn uses_structural_capability_proof(request: &Request) -> bool {
             matches!(&req.parent, CreateCanisterParent::ThisCanister)
         }
         Request::AcknowledgePlacementReceipt(_)
-        | Request::UpgradeCanister(_)
         | Request::RecycleCanister(_)
         | Request::Cycles(_) => true,
     }
@@ -216,7 +215,7 @@ mod tests {
     use super::*;
     use crate::dto::rpc::{
         AcknowledgePlacementReceiptRequest, CreateCanisterRequest, CyclesRequest,
-        RecycleCanisterRequest, RootRequestMetadata, UpgradeCanisterRequest,
+        RecycleCanisterRequest, RootRequestMetadata,
     };
 
     fn p(id: u8) -> Principal {
@@ -270,14 +269,8 @@ mod tests {
             },
         )));
         assert!(uses_structural_capability_proof(
-            &Request::upgrade_canister(UpgradeCanisterRequest {
-                canister_pid: p(1),
-                metadata: None,
-            },)
-        ));
-        assert!(uses_structural_capability_proof(
             &Request::recycle_canister(RecycleCanisterRequest {
-                canister_pid: p(2),
+                canister_pid: p(1),
                 metadata: None,
             },)
         ));

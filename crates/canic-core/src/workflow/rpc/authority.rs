@@ -72,6 +72,11 @@ impl RootCapabilityMemberAuthority {
     pub const fn canister_id(&self) -> Principal {
         self.canister_id
     }
+
+    #[must_use]
+    pub const fn component(&self) -> ComponentInstanceId {
+        self.component
+    }
 }
 
 ///
@@ -131,6 +136,20 @@ impl RootCapabilityAuthority {
     #[must_use]
     pub fn with_target(mut self, target: ManagedCanisterBinding) -> Self {
         self.target = Some(RootCapabilityTargetAuthority::from(target));
+        self
+    }
+
+    /// Attach target authority recovered from the exact durable removal journal.
+    #[must_use]
+    pub const fn with_recovery_target(
+        mut self,
+        canister_id: Principal,
+        parent_canister_id: Principal,
+    ) -> Self {
+        self.target = Some(RootCapabilityTargetAuthority {
+            canister_id,
+            parent_canister_id,
+        });
         self
     }
 
