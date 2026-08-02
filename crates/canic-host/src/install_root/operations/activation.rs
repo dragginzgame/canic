@@ -31,12 +31,21 @@ pub(in crate::install_root) enum ModuleHashObservationError {
 }
 
 #[derive(Debug, ThisError)]
-pub(in crate::install_root) enum CreatedCanisterStateError {
+pub(in crate::install_root) enum CanisterModuleStateError {
     #[error("{subject} {canister} already has its expected module before install intent")]
     ExpectedModulePresent {
         subject: &'static str,
         canister: Principal,
     },
+
+    #[error("{subject} {canister} has no installed module")]
+    MissingModule {
+        subject: &'static str,
+        canister: Principal,
+    },
+
+    #[error(transparent)]
+    Observation(#[from] ModuleHashObservationError),
 
     #[error("{subject} {canister} already has unexpected module hash {observed}")]
     UnexpectedModule {
@@ -44,9 +53,6 @@ pub(in crate::install_root) enum CreatedCanisterStateError {
         canister: Principal,
         observed: String,
     },
-
-    #[error(transparent)]
-    Observation(#[from] ModuleHashObservationError),
 }
 
 pub(in crate::install_root) fn observe_module_hash(
@@ -79,17 +85,34 @@ pub(in crate::install_root) fn require_uninstalled_created_canister(
     canister: Principal,
     expected_module_hash: [u8; 32],
     subject: &'static str,
-) -> Result<(), CreatedCanisterStateError> {
+) -> Result<(), CanisterModuleStateError> {
     match observe_module_hash(icp, canister)? {
         None => Ok(()),
         Some(observed) if observed == expected_module_hash => {
-            Err(CreatedCanisterStateError::ExpectedModulePresent { subject, canister })
+            Err(CanisterModuleStateError::ExpectedModulePresent { subject, canister })
         }
-        Some(observed) => Err(CreatedCanisterStateError::UnexpectedModule {
+        Some(observed) => Err(CanisterModuleStateError::UnexpectedModule {
             subject,
             canister,
             observed: module_hash_text(observed),
         }),
+    }
+}
+
+pub(in crate::install_root) fn require_expected_module_hash(
+    icp: &IcpCli,
+    canister: Principal,
+    expected_module_hash: [u8; 32],
+    subject: &'static str,
+) -> Result<(), CanisterModuleStateError> {
+    match observe_module_hash(icp, canister)? {
+        Some(observed) if observed == expected_module_hash => Ok(()),
+        Some(observed) => Err(CanisterModuleStateError::UnexpectedModule {
+            subject,
+            canister,
+            observed: module_hash_text(observed),
+        }),
+        None => Err(CanisterModuleStateError::MissingModule { subject, canister }),
     }
 }
 

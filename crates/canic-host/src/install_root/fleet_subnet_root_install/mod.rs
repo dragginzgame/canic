@@ -16,8 +16,8 @@ use super::{
     },
     operations::{
         CreationEffectRequest, EffectAction, InstallArtifact, InstallEffectRequest,
-        execute_or_observe_creation, execute_or_observe_install, module_hash_text,
-        observe_module_hash, query_no_arg, resolve_install_artifact,
+        execute_or_observe_creation, execute_or_observe_install, query_no_arg,
+        require_expected_module_hash, resolve_install_artifact,
     },
 };
 use crate::{
@@ -54,15 +54,6 @@ struct RootCreationOutcomeUnknownError {
 
 #[derive(Debug, ThisError)]
 enum RootInstallStateError {
-    #[error("Fleet Subnet Root {fleet_subnet_root} already has unexpected module {observed}")]
-    UnexpectedModule {
-        fleet_subnet_root: Principal,
-        observed: String,
-    },
-
-    #[error("Fleet Subnet Root {fleet_subnet_root} has no installed module")]
-    MissingModule { fleet_subnet_root: Principal },
-
     #[error("Fleet Subnet Root activation status differs from exact Prepared install authority")]
     ActivationStatusMismatch,
 
@@ -278,19 +269,12 @@ fn verify_live_root(
         .fleet_subnet_root
         .expect("installed root journal retains its principal");
     let icp = super::install_icp(icp_root, environment, local_replica);
-    match observe_module_hash(&icp, fleet_subnet_root)? {
-        Some(observed) if observed == journal.expected_module_hash => {}
-        Some(observed) => {
-            return Err(RootInstallStateError::UnexpectedModule {
-                fleet_subnet_root,
-                observed: module_hash_text(observed),
-            }
-            .into());
-        }
-        None => {
-            return Err(RootInstallStateError::MissingModule { fleet_subnet_root }.into());
-        }
-    }
+    require_expected_module_hash(
+        &icp,
+        fleet_subnet_root,
+        journal.expected_module_hash,
+        "Fleet Subnet Root",
+    )?;
 
     let expected = expected_root_authority(journal)?;
     let status = query_no_arg::<FleetActivationStatusResponse>(

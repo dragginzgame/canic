@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.90` centralizes exact installed-module verification across fresh
+  Coordinator and Fleet Subnet Root workflows. It also moves Store garbage
+  collection and physical-deletion recovery onto durable root-owned Store
+  inventory, lifecycle receipts and exact live management evidence instead of
+  legacy Subnet Registry authority.
+
 - `0.100.89` gives fresh Coordinator and Fleet Subnet Root installation one
   journal-authorized observe/execute/reconcile operation, removing duplicate
   effect and recovery branches while preserving single-effect retry safety and

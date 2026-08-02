@@ -6,10 +6,10 @@ Date: 2026-08-02
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.88`.
-- Latest published release: `v0.100.88` at
-  `6340cc04b834da4be1b9e7f36c3dac627e09bd49`.
-- Open patch draft: `0.100.89`; no package-version change has been authorized.
+- Workspace package version: `0.100.89`.
+- Latest published release: `v0.100.89` at
+  `6418713d13614f61b093d03d19618a087efa6b9e`.
+- Open patch draft: `0.100.90`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -90,9 +90,11 @@ Registry slices replace the 0.99 root model.
 - [x] Hard-cut Fleet Root to Fleet Subnet Root.
 - [x] Hard-cut fresh Fleet activation inventory to the exact root-owned Store
   projection while retaining independent Component Runtime activation.
+- [x] Hard-cut Store garbage-collection and physical-deletion decisions to
+  root-owned Store lifecycle authority and typed live management evidence.
 - [ ] Hard-cut local `SubnetRegistry` to root-owned per-Component
   `ComponentRegistry` and direct-child authority for its remaining propagation,
-  Store publication/garbage-collection, provisioning and pool consumers.
+  Store creation/publication recovery, provisioning and pool consumers.
 - [x] Hard-cut local `SubnetDirectory`; root-owned `ComponentDirectory` is the
   sole component-local directory projection.
 - [x] Split Fleet and Component Directory provenance.
@@ -1120,19 +1122,28 @@ audience, time window and role epoch. The request-path decision is local,
 performs no inter-Canister authorization call and grants no ambient authority
 to arbitrary co-resident Canisters.
 
-Open 0.100.89 moves the generic Fleet activation boundary off the legacy
+Released 0.100.89 moves the generic Fleet activation boundary off the legacy
 Subnet Registry. After the root independently seals its complete initial
 Component inventory, activation projects exactly one infrastructure child
 from root-owned Store state, freezes its direct-leaf topology and fans state
 out only to that Store. Application Components continue to use their separate
-Component Runtime and Directory lifecycle. The same patch draft consolidates
+Component Runtime and Directory lifecycle. The same release consolidates
 fresh host installation's journal-authorized observe/execute/reconcile effect
 without merging Coordinator and root recovery journals.
+
+Open 0.100.90 makes every Store GC and physical-deletion decision consume the
+durable root-owned Store inventory, removal receipts and exact live Store and
+management evidence. GC no longer re-imports Registry inventory or requires a
+Registry role/parent row. Until Store creation moves to its own recovery
+journal, terminal typed-absence reconciliation still discards that
+non-authoritative legacy row so bootstrap cannot resurrect the deleted Store.
+The same draft centralizes exact installed-module verification across fresh
+Coordinator and root host workflows.
 
 ## Next Action
 
 Replace the legacy Subnet Registry's remaining propagation, Store
-publication/garbage-collection, provisioning and pool-recovery consumers with
+creation/publication recovery, provisioning and pool-recovery consumers with
 root-owned Component Registry and direct-child authority. Then delete its
 stable/cascade schema and complete the reinstall-only decoder audit before
 running preparation and execution
