@@ -1076,7 +1076,9 @@ membership activation rather than issuing a second generic create effect. The
 protected Component Directory now carries a canonical hashed direct-child
 projection, and activation converges both the owning Component and immediate
 parent so their local child caches become authoritative only after the new
-membership is Active.
+membership is Active. The same draft advances host-only `ic-query` to `0.25.3`
+and selects its focused `subnet-catalog-host` feature; the consumed Subnet
+Catalog contract remains source-compatible.
 
 ## Next Action
 
