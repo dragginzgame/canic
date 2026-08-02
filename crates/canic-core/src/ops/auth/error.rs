@@ -51,6 +51,16 @@ pub enum AuthValidationError {
     #[error("attestation subnet was set but verifier subnet is unavailable")]
     AttestationSubnetUnavailable,
 
+    #[error("local-Subnet attestation requires an explicit subnet claim")]
+    AttestationSubnetRequired,
+
+    #[error("attestation proof field '{field}' exceeds {max_bytes} bytes (found {actual_bytes})")]
+    AttestationProofFieldTooLarge {
+        field: &'static str,
+        actual_bytes: usize,
+        max_bytes: usize,
+    },
+
     #[error(
         "attestation expires_at_ns ({expires_at_ns}) must be greater than issued_at_ns ({issued_at_ns})"
     )]

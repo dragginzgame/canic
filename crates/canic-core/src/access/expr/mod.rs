@@ -101,6 +101,7 @@ pub enum BuiltinPredicate {
     Authenticated {
         required_scope: Option<&'static str>,
     },
+    AttestedLocalSubnet,
 }
 
 impl BuiltinPredicate {
@@ -288,6 +289,11 @@ pub mod env {
 
 pub mod auth {
     use super::{AccessExpr, BuiltinPredicate, builtin};
+
+    #[must_use]
+    pub const fn attested_local_subnet() -> AccessExpr {
+        builtin(BuiltinPredicate::AttestedLocalSubnet)
+    }
 
     #[must_use]
     pub const fn authenticated(required_scope: Option<&'static str>) -> AccessExpr {

@@ -68,6 +68,31 @@ fn role_attestation_claims_reject_subject_audience_subnet_and_epoch_drift() {
 }
 
 #[test]
+fn local_subnet_role_attestation_requires_an_exact_subnet_claim() {
+    let payload = role_attestation();
+    super::verify_local_subnet_role_attestation_claims(&payload, p(1), p(2), p(3), 15, 4)
+        .expect("exact local-Subnet claim should verify");
+
+    let mut missing = payload.clone();
+    missing.subnet_id = None;
+    let missing =
+        super::verify_local_subnet_role_attestation_claims(&missing, p(1), p(2), p(3), 15, 4)
+            .expect_err("local-Subnet verification must reject a missing claim");
+    std::assert_matches!(
+        missing,
+        AuthOpsError::Validation(AuthValidationError::AttestationSubnetRequired)
+    );
+
+    let mismatch =
+        super::verify_local_subnet_role_attestation_claims(&payload, p(1), p(2), p(9), 15, 4)
+            .expect_err("local-Subnet verification must reject a different receiver Subnet");
+    std::assert_matches!(
+        mismatch,
+        AuthOpsError::Scope(AuthScopeError::AttestationSubnetMismatch { .. })
+    );
+}
+
+#[test]
 fn role_attestation_claims_reject_future_issued_at_beyond_skew() {
     let mut payload = role_attestation();
     payload.issued_at_ns = 15 + AUTH_TIME_SKEW_ALLOWANCE_NS + 1;

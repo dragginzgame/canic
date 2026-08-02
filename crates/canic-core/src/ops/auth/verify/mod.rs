@@ -66,6 +66,29 @@ pub(super) fn verify_role_attestation_claims(
     Ok(())
 }
 
+// Require an explicit attested Subnet and bind it to the receiver's live Subnet.
+pub(super) fn verify_local_subnet_role_attestation_claims(
+    payload: &RoleAttestation,
+    caller: Principal,
+    self_pid: Principal,
+    verifier_subnet: Principal,
+    now_ns: u64,
+    min_accepted_epoch: u64,
+) -> Result<(), AuthOpsError> {
+    if payload.subnet_id.is_none() {
+        return Err(AuthValidationError::AttestationSubnetRequired.into());
+    }
+
+    verify_role_attestation_claims(
+        payload,
+        caller,
+        self_pid,
+        Some(verifier_subnet),
+        now_ns,
+        min_accepted_epoch,
+    )
+}
+
 fn verify_attestation_time_window(
     issued_at_ns: u64,
     expires_at_ns: u64,

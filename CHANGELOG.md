@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.88` adds bounded, proof-carrying local-Subnet endpoint
+  authentication, allowing one managed Component to verify another's
+  root-attested placement against the receiver's live IC Subnet without an
+  inter-Canister authorization call.
+
 - `0.100.87` consolidates fresh-install artifact validation, creation-result
   decoding and live module-hash observation across Coordinator and root
   workflows while preserving their separate durable recovery authority. It

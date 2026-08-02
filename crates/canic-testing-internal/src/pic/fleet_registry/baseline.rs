@@ -6,6 +6,8 @@ use ic_testkit::pic::Pic;
 use std::path::Path;
 
 const ROOT_INSTALL_CYCLES: u128 = 80_000_000_000_000;
+const POCKET_IC_APPLICATION_SUBNET: &str =
+    "j3hn4-tfek2-2dzwi-2fiwt-yl43g-lljef-o5tyt-oi44t-pnvrw-tbquz-bae";
 
 mod tests {
     use super::*;
@@ -51,7 +53,7 @@ mod tests {
         },
         ids::{
             CanisterRole, ComponentBinding, ComponentInstanceId, ManagedCanisterBinding,
-            ReleaseSetDigest,
+            ReleaseSetDigest, SubnetId,
         },
     };
     use canic::{
@@ -357,6 +359,7 @@ mod tests {
             fixture.pic(),
             fixture.root,
             &fixture.issuer,
+            &fixture.verifier,
         );
         let (child, _) = create_active_project_instance(&fixture);
         super::super::role_attestation::assert_registry_bound_child_role_attestation(
@@ -3459,8 +3462,20 @@ mod tests {
             digest,
         )
         .expect("encode exact root authority");
-        let init_args =
+        let mut init_args =
             decode_one::<FleetSubnetRootInitArgs>(&init_bytes).expect("decode root init authority");
+        let physical_subnet = SubnetId::from_principal(
+            Principal::from_text(POCKET_IC_APPLICATION_SUBNET)
+                .expect("PocketIC 14 Application Subnet identity"),
+        );
+        init_args.authority.binding.placement_subnet = physical_subnet;
+        init_args
+            .authority
+            .binding
+            .authority
+            .binding
+            .coordinator_subnet = physical_subnet;
+        let init_bytes = encode_one(&init_args).expect("encode live PocketIC root authority");
         pic.install_canister(root_id, root_wasm, init_bytes, None);
         assert_prepared(pic, root_id);
 

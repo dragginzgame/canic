@@ -169,32 +169,80 @@ impl RuntimeAuthWorkflow {
         // This verifier is intentionally local. The await preserves the async
         // endpoint shape; do not add root, issuer, or management-canister calls here.
         std::future::ready(()).await;
-        let configured_min_accepted_epoch = ConfigOps::role_attestation_config()?
-            .min_accepted_epoch_by_role
-            .get(attestation.payload.role.as_str())
-            .copied();
-        let min_accepted_epoch =
-            resolve_min_accepted_epoch(min_accepted_epoch, configured_min_accepted_epoch);
-
-        let caller = IcOps::msg_caller();
-        let self_pid = IcOps::canister_self();
-        let now_ns = IcOps::now_nanos();
+        let context = role_attestation_verification_context(attestation, min_accepted_epoch)?;
         let verifier_subnet = Some(role_attestation_verifier_subnet()?);
-
-        match AuthOps::verify_role_attestation_cached(
+        let result = AuthOps::verify_role_attestation_cached(
             attestation,
-            caller,
-            self_pid,
+            context.caller,
+            context.self_pid,
             verifier_subnet,
-            now_ns,
+            context.now_ns,
+            context.min_accepted_epoch,
+        )
+        .map(|_| ());
+        finish_role_attestation_verification(result, attestation, context)
+    }
+
+    /// Require a root-signed role attestation bound to the receiver's live Subnet.
+    pub async fn verify_local_subnet_role_attestation(
+        attestation: &SignedRoleAttestation,
+        min_accepted_epoch: u64,
+    ) -> Result<(), InternalError> {
+        // Proof verification and Subnet comparison are local runtime work.
+        std::future::ready(()).await;
+        let context = role_attestation_verification_context(attestation, min_accepted_epoch)?;
+        let result = AuthOps::verify_local_subnet_role_attestation_cached(
+            attestation,
+            context.caller,
+            context.self_pid,
+            IcOps::subnet_self(),
+            context.now_ns,
+            context.min_accepted_epoch,
+        )
+        .map(|_| ());
+        finish_role_attestation_verification(result, attestation, context)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct RoleAttestationVerificationContext {
+    caller: Principal,
+    self_pid: Principal,
+    now_ns: u64,
+    min_accepted_epoch: u64,
+}
+
+fn role_attestation_verification_context(
+    attestation: &SignedRoleAttestation,
+    min_accepted_epoch: u64,
+) -> Result<RoleAttestationVerificationContext, InternalError> {
+    let configured_min_accepted_epoch = ConfigOps::role_attestation_config()?
+        .min_accepted_epoch_by_role
+        .get(attestation.payload.role.as_str())
+        .copied();
+
+    Ok(RoleAttestationVerificationContext {
+        caller: IcOps::msg_caller(),
+        self_pid: IcOps::canister_self(),
+        now_ns: IcOps::now_nanos(),
+        min_accepted_epoch: resolve_min_accepted_epoch(
             min_accepted_epoch,
-        ) {
-            Ok(_) => Ok(()),
-            Err(err) => {
-                record_attestation_verifier_rejection(&err);
-                log_attestation_verifier_rejection(&err, attestation, caller, self_pid);
-                Err(err.into())
-            }
+            configured_min_accepted_epoch,
+        ),
+    })
+}
+
+fn finish_role_attestation_verification(
+    result: Result<(), AuthOpsError>,
+    attestation: &SignedRoleAttestation,
+    context: RoleAttestationVerificationContext,
+) -> Result<(), InternalError> {
+    match result {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            record_attestation_verifier_rejection(&err);
+            log_attestation_verifier_rejection(&err, attestation, context.caller, context.self_pid);
+            Err(err.into())
         }
     }
 }
@@ -239,7 +287,7 @@ fn log_attestation_verifier_rejection(
     log!(
         Topic::Auth,
         Warn,
-        "role attestation rejected local={} caller={} subject={} role={} audience={} component_spec={} issued_at={} expires_at={} epoch={} error={}",
+        "role attestation rejected local={} caller={} subject={} role={} audience={} subnet={} issued_at={} expires_at={} epoch={} error={}",
         self_pid,
         caller,
         attestation.payload.subject,

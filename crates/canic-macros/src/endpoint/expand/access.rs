@@ -257,6 +257,9 @@ fn expr_from_builtin(pred: &BuiltinPredicate) -> TokenStream2 {
                 )
             ),
         },
+        BuiltinPredicate::AttestedLocalSubnet => {
+            quote!(::canic::__internal::core::access::expr::auth::attested_local_subnet())
+        }
         BuiltinPredicate::BuildIcOnly => {
             quote!(::canic::__internal::core::access::expr::env::build_ic_only())
         }
@@ -270,19 +273,22 @@ fn exprs_have_fleet_state_predicate(exprs: &[AccessExprAst]) -> bool {
     exprs.iter().any(expr_has_fleet_state_predicate)
 }
 
-pub(super) fn requires_authenticated(exprs: &[AccessExprAst]) -> bool {
-    exprs.iter().any(expr_has_authenticated_predicate)
+pub(super) fn requires_decoded_auth_argument(exprs: &[AccessExprAst]) -> bool {
+    exprs.iter().any(expr_has_decoded_auth_argument)
 }
 
-fn expr_has_authenticated_predicate(expr: &AccessExprAst) -> bool {
+fn expr_has_decoded_auth_argument(expr: &AccessExprAst) -> bool {
     match expr {
         AccessExprAst::All(exprs) | AccessExprAst::Any(exprs) => {
-            exprs.iter().any(expr_has_authenticated_predicate)
+            exprs.iter().any(expr_has_decoded_auth_argument)
         }
-        AccessExprAst::Not(expr) => expr_has_authenticated_predicate(expr),
+        AccessExprAst::Not(expr) => expr_has_decoded_auth_argument(expr),
         AccessExprAst::Pred(pred) => match pred {
             AccessPredicateAst::Builtin(builtin) => {
-                matches!(builtin, BuiltinPredicate::Authenticated { .. })
+                matches!(
+                    builtin,
+                    BuiltinPredicate::Authenticated { .. } | BuiltinPredicate::AttestedLocalSubnet
+                )
             }
             AccessPredicateAst::Custom(_) => false,
         },

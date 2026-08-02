@@ -28,9 +28,10 @@ pub(super) fn assert_registry_bound_role_attestation(
     pic: &Pic,
     root: Principal,
     issuer: &ComponentBinding,
+    verifier: &ComponentBinding,
 ) {
     assert_role_attestation_admission(pic, root, issuer);
-    assert_role_attestation_verification(pic, root, issuer);
+    assert_role_attestation_verification(pic, root, issuer, verifier);
     assert_issuer_guard_metrics(pic, root, issuer.canister_id);
 }
 
@@ -100,17 +101,43 @@ fn assert_role_attestation_admission(pic: &Pic, root: Principal, issuer: &Compon
     assert_role_prepare_forbidden(pic, root, Principal::anonymous(), unregistered);
 }
 
-fn assert_role_attestation_verification(pic: &Pic, root: Principal, issuer: &ComponentBinding) {
+fn assert_role_attestation_verification(
+    pic: &Pic,
+    root: Principal,
+    issuer: &ComponentBinding,
+    verifier: &ComponentBinding,
+) {
     let attestation =
-        issue_role_attestation(pic, root, issuer, issuer.canister_id, 60_000_000_000, 21);
-    verify_role_attestation(pic, issuer.canister_id, issuer.canister_id, attestation, 0)
-        .expect("fresh Registry-bound role attestation");
+        issue_role_attestation(pic, root, issuer, verifier.canister_id, 60_000_000_000, 21);
+    verify_role_attestation(
+        pic,
+        verifier.canister_id,
+        issuer.canister_id,
+        attestation.clone(),
+        0,
+    )
+    .expect("fresh Registry-bound role attestation");
+    require_attested_local_subnet(pic, verifier.canister_id, issuer.canister_id, attestation)
+        .expect("attested caller placement must match the receiver's live Subnet");
+
+    let mut without_subnet =
+        role_attestation_request(issuer, verifier.canister_id, 60_000_000_000, 26);
+    without_subnet.subnet_id = None;
+    let without_subnet = issue_requested_role_attestation(pic, root, issuer, without_subnet);
+    let missing_subnet = require_attested_local_subnet(
+        pic,
+        verifier.canister_id,
+        issuer.canister_id,
+        without_subnet,
+    )
+    .expect_err("local-Subnet access must reject an attestation without a Subnet claim");
+    assert_eq!(missing_subnet.code, ErrorCode::Unauthorized);
 
     let attestation =
-        issue_role_attestation(pic, root, issuer, issuer.canister_id, 60_000_000_000, 22);
+        issue_role_attestation(pic, root, issuer, verifier.canister_id, 60_000_000_000, 22);
     let caller_mismatch = verify_role_attestation(
         pic,
-        issuer.canister_id,
+        verifier.canister_id,
         Principal::anonymous(),
         attestation,
         0,
@@ -119,16 +146,21 @@ fn assert_role_attestation_verification(pic: &Pic, root: Principal, issuer: &Com
     assert_eq!(caller_mismatch.code, ErrorCode::Internal);
 
     let attestation = issue_role_attestation(pic, root, issuer, root, 60_000_000_000, 23);
-    let audience_mismatch =
-        verify_role_attestation(pic, issuer.canister_id, issuer.canister_id, attestation, 0)
-            .expect_err("role attestation audience mismatch must fail");
+    let audience_mismatch = verify_role_attestation(
+        pic,
+        verifier.canister_id,
+        issuer.canister_id,
+        attestation,
+        0,
+    )
+    .expect_err("role attestation audience mismatch must fail");
     assert_eq!(audience_mismatch.code, ErrorCode::Internal);
 
     let attestation =
-        issue_role_attestation(pic, root, issuer, issuer.canister_id, 60_000_000_000, 24);
+        issue_role_attestation(pic, root, issuer, verifier.canister_id, 60_000_000_000, 24);
     let epoch_mismatch = verify_role_attestation(
         pic,
-        issuer.canister_id,
+        verifier.canister_id,
         issuer.canister_id,
         attestation,
         issuer.authority.epoch.saturating_add(1),
@@ -137,12 +169,17 @@ fn assert_role_attestation_verification(pic: &Pic, root: Principal, issuer: &Com
     assert_eq!(epoch_mismatch.code, ErrorCode::Internal);
 
     let attestation =
-        issue_role_attestation(pic, root, issuer, issuer.canister_id, 1_000_000_000, 25);
+        issue_role_attestation(pic, root, issuer, verifier.canister_id, 1_000_000_000, 25);
     pic.advance_time(Duration::from_secs(2));
     pic.tick();
-    let expired =
-        verify_role_attestation(pic, issuer.canister_id, issuer.canister_id, attestation, 0)
-            .expect_err("expired role attestation must fail");
+    let expired = verify_role_attestation(
+        pic,
+        verifier.canister_id,
+        issuer.canister_id,
+        attestation,
+        0,
+    )
+    .expect_err("expired role attestation must fail");
     assert_eq!(expired.code, ErrorCode::Internal);
 }
 
@@ -191,17 +228,26 @@ fn issue_role_attestation(
     ttl_ns: u64,
     request_id_seed: u8,
 ) -> SignedRoleAttestation {
+    issue_requested_role_attestation(
+        pic,
+        root,
+        issuer,
+        role_attestation_request(issuer, audience, ttl_ns, request_id_seed),
+    )
+}
+
+fn issue_requested_role_attestation(
+    pic: &Pic,
+    root: Principal,
+    issuer: &ComponentBinding,
+    request: RoleAttestationRequest,
+) -> SignedRoleAttestation {
     let prepared: Result<RoleAttestationPrepareResponse, Error> = pic
         .update_call_as(
             root,
             issuer.canister_id,
             CANIC_PREPARE_ROLE_ATTESTATION,
-            (role_attestation_request(
-                issuer,
-                audience,
-                ttl_ns,
-                request_id_seed,
-            ),),
+            (request,),
         )
         .expect("role attestation prepare transport");
     let prepared = prepared.expect("role attestation prepare");
@@ -218,17 +264,32 @@ fn issue_role_attestation(
     signed.expect("role attestation retrieval")
 }
 
+fn require_attested_local_subnet(
+    pic: &Pic,
+    verifier: Principal,
+    caller: Principal,
+    attestation: SignedRoleAttestation,
+) -> Result<(), Error> {
+    pic.update_call_as(
+        verifier,
+        caller,
+        "verifier_require_attested_local_subnet",
+        (attestation,),
+    )
+    .expect("attested local-Subnet access transport")
+}
+
 fn verify_role_attestation(
     pic: &Pic,
-    issuer: Principal,
+    verifier: Principal,
     caller: Principal,
     attestation: SignedRoleAttestation,
     minimum_epoch: u64,
 ) -> Result<(), Error> {
     pic.update_call_as(
-        issuer,
+        verifier,
         caller,
-        "issuer_verify_role_attestation",
+        "verifier_verify_role_attestation",
         (attestation, minimum_epoch),
     )
     .expect("role attestation verification transport")

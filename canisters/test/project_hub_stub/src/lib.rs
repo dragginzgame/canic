@@ -59,6 +59,14 @@ async fn verifier_verify_role_attestation(
     AuthApi::verify_role_attestation(&attestation, min_accepted_epoch).await
 }
 
+#[canic_update(requires(auth::attested_local_subnet()))]
+async fn verifier_require_attested_local_subnet(
+    attestation: SignedRoleAttestation,
+) -> Result<(), Error> {
+    let _ = attestation;
+    Ok(())
+}
+
 /// Resolve one logical project key to a dedicated instance, creating it when absent.
 #[canic_update(public)]
 async fn resolve_project(project_key: String) -> Result<PlacementIndexStatusResponse, Error> {

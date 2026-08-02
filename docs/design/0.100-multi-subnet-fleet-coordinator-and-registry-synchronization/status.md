@@ -6,10 +6,10 @@ Date: 2026-08-02
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.86`.
-- Latest published release: `v0.100.86` at
-  `edfd33ac729dfbd2b9c1cb1b9058e13dc21b914c`.
-- Open patch draft: `0.100.87`; no package-version change has been authorized.
+- Workspace package version: `0.100.87`.
+- Latest published release: `v0.100.87` at
+  `b4e3d1a04920f58828767f47337ccbfe4b007104`.
+- Open patch draft: `0.100.88`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -1104,11 +1104,19 @@ resolve from their declared backing network, the local Fleet acceptance target
 generates its strict input from live topology, and Unix host entropy/FIFO tests
 no longer depend on Linux-only `rustix` modules.
 
-Open 0.100.87 hard-cuts the unused subnet-registration caller predicate from
+Released 0.100.87 hard-cuts the unused subnet-registration caller predicate from
 the endpoint macro and runtime access system. Root endpoints retain their
 exact custom Component Registry predicates, while delegated-session subject
 validation rejects known direct child Canisters through the maintained local
 child cache rather than legacy Subnet Registry state.
+
+Open 0.100.88 adds bounded proof-carrying local-Subnet authentication to the
+endpoint DSL and explicit Auth API. A managed caller supplies one root-signed
+role attestation with an explicit physical-Subnet claim; the receiver verifies
+that claim against its IC-native live Subnet together with the exact subject,
+audience, time window and role epoch. The request-path decision is local,
+performs no inter-Canister authorization call and grants no ambient authority
+to arbitrary co-resident Canisters.
 
 ## Next Action
 
