@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-01
+Last updated: 2026-08-02
 
 ## Purpose
 
@@ -700,7 +700,10 @@ Historical detail is archived at:
   a second deployment charge. Active Directory synchronization now carries a
   canonical hashed direct-child projection, so the owning Component and
   immediate parent replace their local child caches only after the new child
-  has Active Registry membership.
+  has Active Registry membership. The same draft advances host-only
+  `ic-query` to `0.25.3` through its focused `subnet-catalog-host` feature;
+  Canic's consumed API remains source-compatible and `ic-query` is no longer
+  an immediate introducer of the accepted transitive `serde_cbor` advisory.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -2376,6 +2379,9 @@ resumes incomplete nested phases without a duplicate deployment charge, and
 root self-provision is absent. Protected Directory synchronization now binds a
 canonical direct-child projection and refreshes the owning Component and
 immediate parent's local child caches only after active membership commits.
+It also advances host-only `ic-query` to `0.25.3` through the focused Subnet
+Catalog feature without changing Canic call sites, and removes `ic-query` from
+the immediate-introducer inventory for transitive `serde_cbor`.
 
 ## Historical Release Detail
 

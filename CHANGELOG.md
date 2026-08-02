@@ -15,7 +15,8 @@ Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 - `0.100.84` routes structural root provisioning through the resumable
   Component Child lifecycle with exact init-payload and Registry authority,
   then synchronizes each active member's canonical direct-child projection
-  into its local child cache.
+  into its local child cache. It also advances host-only `ic-query` to
+  `0.25.3` through its focused Subnet Catalog feature.
 
 - `0.100.83` makes each canister's cascaded direct-child cache the sole local
   child authority for placement, topology and structural child checks, and

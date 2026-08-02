@@ -78,7 +78,7 @@ ic-cdk = "0.20.2"
 ic-cdk-timers = "1.0"
 ic-certification = "3.0"
 ic-memory = "0.12.3"
-ic-query = { version = "0.21.1", default-features = false, features = ["host"] }
+ic-query = { version = "0.25.3", default-features = false, features = ["subnet-catalog-host"] }
 ic-signature-verification = "0.3.0"
 ic-stable-structures = "0.7.2"
 ic-testkit = "0.1.11"
