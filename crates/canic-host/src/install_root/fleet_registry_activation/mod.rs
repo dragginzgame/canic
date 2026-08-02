@@ -205,7 +205,6 @@ fn drive_activation(
                     coordinator,
                     protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
                     &current.journal.request,
-                    false,
                 )?;
                 record_registry_activated(&current, response)?
             }

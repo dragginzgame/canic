@@ -9,7 +9,7 @@
 mod tests;
 
 use crate::{
-    canister_protocol::{CanisterProtocolError, call_with_arg},
+    canister_protocol::{CanisterProtocolError, call_with_arg, query_with_arg},
     icp::{IcpCanisterStatusReport, IcpCli, IcpDiagnostic, LocalReplicaTarget},
 };
 use candid::Principal;
@@ -779,12 +779,11 @@ impl FleetSubnetRootDeletionAdapter for IcpFleetSubnetRootDeletionAdapter {
         root: Principal,
         request: FleetSubnetRootStoreDeletionStatusRequest,
     ) -> Result<FleetSubnetRootStoreDeletionResponse, FleetSubnetRootDeletionError> {
-        call_protocol(
+        query_protocol(
             &self.icp,
             root,
             protocol::CANIC_FLEET_SUBNET_ROOT_STORE_DELETION_STATUS,
             &request,
-            true,
             FleetSubnetRootDeletionProtocolStage::StoreDeletionStatus,
         )
     }
@@ -799,7 +798,6 @@ impl FleetSubnetRootDeletionAdapter for IcpFleetSubnetRootDeletionAdapter {
             root,
             protocol::CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARE,
             &request,
-            false,
             FleetSubnetRootDeletionProtocolStage::Preparation,
         )
     }
@@ -813,7 +811,6 @@ impl FleetSubnetRootDeletionAdapter for IcpFleetSubnetRootDeletionAdapter {
             self.coordinator,
             protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_BEGIN,
             &request,
-            false,
             FleetSubnetRootDeletionProtocolStage::ExecutionBegin,
         )
     }
@@ -827,7 +824,6 @@ impl FleetSubnetRootDeletionAdapter for IcpFleetSubnetRootDeletionAdapter {
             self.coordinator,
             protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_COMPLETE,
             &request,
-            false,
             FleetSubnetRootDeletionProtocolStage::Completion,
         )
     }
@@ -888,7 +884,7 @@ where
     I: candid::CandidType,
     O: candid::CandidType + serde::de::DeserializeOwned,
 {
-    match call_with_arg(icp, canister, method, input, true) {
+    match query_with_arg(icp, canister, method, input) {
         Ok(response) => Ok(Some(response)),
         Err(error) if error.is_rejected_with(ErrorCode::Unavailable) => Ok(None),
         Err(error) => Err(protocol_error(stage, error)),
@@ -900,14 +896,27 @@ fn call_protocol<I, O>(
     canister: Principal,
     method: &'static str,
     input: &I,
-    query: bool,
     stage: FleetSubnetRootDeletionProtocolStage,
 ) -> Result<O, FleetSubnetRootDeletionError>
 where
     I: candid::CandidType,
     O: candid::CandidType + serde::de::DeserializeOwned,
 {
-    call_with_arg(icp, canister, method, input, query).map_err(|error| protocol_error(stage, error))
+    call_with_arg(icp, canister, method, input).map_err(|error| protocol_error(stage, error))
+}
+
+fn query_protocol<I, O>(
+    icp: &IcpCli,
+    canister: Principal,
+    method: &'static str,
+    input: &I,
+    stage: FleetSubnetRootDeletionProtocolStage,
+) -> Result<O, FleetSubnetRootDeletionError>
+where
+    I: candid::CandidType,
+    O: candid::CandidType + serde::de::DeserializeOwned,
+{
+    query_with_arg(icp, canister, method, input).map_err(|error| protocol_error(stage, error))
 }
 
 fn parse_status_report(

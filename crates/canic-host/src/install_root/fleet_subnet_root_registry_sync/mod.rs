@@ -12,7 +12,7 @@ use super::{
         record_registry_synchronized,
     },
     fleet_subnet_root_store_bootstrap::canonical_manifest_bytes,
-    operations::{call_with_arg, query_live_registry, query_no_arg},
+    operations::{call_with_arg, query_live_registry, query_no_arg, query_with_arg},
 };
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
@@ -190,17 +190,15 @@ fn drive_root_sync(
                     root,
                     protocol::CANIC_FLEET_REGISTRY_SYNCHRONIZE,
                     &request,
-                    false,
                 )?;
                 record_registry_synchronized(&current, response)?
             }
             FleetSubnetRootInstallPhase::RegistrySynchronized => {
-                let response = call_with_arg(
+                let response = query_with_arg(
                     &icp,
                     root,
                     protocol::CANIC_FLEET_REGISTRY_SYNC_STATUS,
                     &request,
-                    true,
                 )?;
                 record_registry_sync_verified(&current, response)?
             }

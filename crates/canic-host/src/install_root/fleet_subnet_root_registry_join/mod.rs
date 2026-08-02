@@ -165,7 +165,6 @@ fn drive_registry_join(
                     coordinator,
                     protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
                     &request,
-                    false,
                 )?;
                 if response.entry != request.entry || response.version != expected_after_version {
                     return Err(RootRegistryJoinError::JoinResponseMismatch.into());

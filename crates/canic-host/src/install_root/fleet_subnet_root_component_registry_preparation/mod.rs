@@ -9,7 +9,7 @@ use super::fleet_subnet_root_install_journal::{
     begin_component_registry_preparation, plan_fleet_subnet_root_install,
     record_component_registry_preparation_verified, record_component_registry_prepared,
 };
-use super::operations::call_with_arg;
+use super::operations::{call_with_arg, query_with_arg};
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
     icp::LocalReplicaTarget,
@@ -106,27 +106,24 @@ fn drive_component_registry_preparation(
                     root,
                     protocol::CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
                     &request,
-                    false,
                 )?;
                 record_component_registry_prepared(&current, response)?
             }
             FleetSubnetRootInstallPhase::ComponentRegistryPrepared => {
-                let response = call_with_arg(
+                let response = query_with_arg(
                     &icp,
                     root,
                     protocol::CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
                     &request,
-                    true,
                 )?;
                 record_component_registry_preparation_verified(&current, response)?
             }
             FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified => {
-                let response = call_with_arg(
+                let response = query_with_arg(
                     &icp,
                     root,
                     protocol::CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
                     &request,
-                    true,
                 )?;
                 if current
                     .journal

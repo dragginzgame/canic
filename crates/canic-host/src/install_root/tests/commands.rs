@@ -60,6 +60,66 @@ fn local_canister_command_uses_http_target_when_configured() {
 }
 
 #[test]
+fn install_command_uses_binary_candid_file() {
+    let canister = candid::Principal::from_slice(&[44]);
+    let command = icp_canister_install_binary_args_command(
+        Path::new("/workspace"),
+        "caelum-backend",
+        None,
+        canister,
+        Path::new("/artifacts/root.wasm"),
+        Path::new("/state/root-install-args.bin"),
+    );
+
+    assert_eq!(
+        crate::icp::command_display(&command),
+        format!(
+            "icp --project-root-override /workspace canister install {canister} --mode=install -y --wasm /artifacts/root.wasm --args-file /state/root-install-args.bin --args-format bin -e caelum-backend"
+        )
+    );
+}
+
+#[test]
+fn create_command_binds_subnet_and_exact_cycles() {
+    let subnet = canic_core::ids::SubnetId::from_principal(candid::Principal::from_slice(&[41]));
+    let command = icp_canister_create_command(
+        Path::new("/workspace"),
+        "staging",
+        None,
+        subnet,
+        &crate::fleet_install_plan::PlannedCanisterCreationFunding::Cycles {
+            cycles: 2_000_000_000_000,
+        },
+    );
+
+    assert_eq!(
+        crate::icp::command_display(&command),
+        format!(
+            "icp --project-root-override /workspace canister create --detached --json --subnet {subnet} --cycles 2000000000000 -e staging"
+        )
+    );
+}
+
+#[test]
+fn create_command_preserves_exact_icp_e8s() {
+    let subnet = canic_core::ids::SubnetId::from_principal(candid::Principal::from_slice(&[42]));
+    let command = icp_canister_create_command(
+        Path::new("/workspace"),
+        "ic",
+        None,
+        subnet,
+        &crate::fleet_install_plan::PlannedCanisterCreationFunding::Icp { e8s: 1 },
+    );
+
+    assert_eq!(
+        crate::icp::command_display(&command),
+        format!(
+            "icp --project-root-override /workspace canister create --detached --json --subnet {subnet} --with-icp 0.00000001 -e ic"
+        )
+    );
+}
+
+#[test]
 fn install_timing_summary_uses_standard_table_format() {
     let timings = InstallTimingSummary {
         create_canisters: Duration::from_millis(1200),
