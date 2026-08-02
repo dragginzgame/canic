@@ -145,8 +145,7 @@ impl SubnetRegistryOps {
         SubnetRegistry::register_root_with_module_hash(pid, created_at, module_hash);
     }
 
-    #[must_use]
-    pub fn unregister(pid: &Principal) -> bool {
+    pub(crate) fn unregister(pid: &Principal) -> bool {
         SubnetRegistry::remove(pid).is_some()
     }
 

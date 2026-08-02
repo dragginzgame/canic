@@ -5,9 +5,9 @@
 //! Boundary: callers supply typed init authority and commit the reconciled module hash.
 
 use crate::{
-    icp::LocalReplicaTarget,
+    icp::{self, LocalReplicaTarget},
     install_root::{
-        commands::{icp_canister_install_binary_args_command, run_command, write_candid_args},
+        commands::{icp_canister_install_binary_args_command, write_candid_args},
         install_icp,
     },
 };
@@ -75,7 +75,7 @@ where
         request.wasm_path,
         request.args_path,
     );
-    let command_result = run_command(&mut command);
+    let command_result = icp::run_status(&mut command);
     match observe_module_hash(&icp, request.canister) {
         Ok(Some(module_hash)) if module_hash == request.expected_module_hash => Ok(module_hash),
         Ok(Some(module_hash)) => Err(effect_error(

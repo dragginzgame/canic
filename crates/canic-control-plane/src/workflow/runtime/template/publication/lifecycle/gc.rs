@@ -38,12 +38,9 @@ use canic_core::cdk::candid::Nat;
 use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{
     error::{InternalError, InternalErrorOrigin},
-    ops::{
-        ic::{
-            IcOps,
-            mgmt::{CanisterStatus, CanisterStatusObservation, CanisterStatusType, MgmtOps},
-        },
-        storage::registry::subnet::SubnetRegistryOps,
+    ops::ic::{
+        IcOps,
+        mgmt::{CanisterStatus, CanisterStatusObservation, CanisterStatusType, MgmtOps},
     },
     workflow::ic::provision::ProvisionWorkflow,
 };
@@ -1338,9 +1335,6 @@ fn reconcile_deleted_store_inventory(
     finalization: &RootFleetSubnetStoreBindingFinalizationView,
 ) -> Result<(), InternalError> {
     let runtime_present = validate_deletion_runtime_inventory(intent, finalization)?;
-    // Publication creation still writes one transitional Registry row. Once typed
-    // absence is proven, discard that row without consulting it as GC authority.
-    let _ = SubnetRegistryOps::unregister(&intent.wasm_store);
     if runtime_present && !SubnetStateOps::remove_wasm_store(&intent.binding) {
         return Err(PublicationWorkflowError::InvalidState(
             "root Store runtime inventory disappeared before deletion reconciliation".to_string(),

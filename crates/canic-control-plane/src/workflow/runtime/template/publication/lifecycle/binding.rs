@@ -199,7 +199,7 @@ impl WasmStorePublicationWorkflow {
     }
 
     // Return the oldest known runtime-managed wasm-store binding for this subnet.
-    pub(in crate::workflow::runtime::template::publication::lifecycle) fn oldest_registered_store_binding()
+    pub(in crate::workflow::runtime::template::publication::lifecycle) fn oldest_runtime_store_binding()
     -> Option<WasmStoreBinding> {
         SubnetStateOps::wasm_stores()
             .into_iter()
@@ -229,10 +229,10 @@ impl WasmStorePublicationWorkflow {
             changed_at,
         );
 
-        Self::oldest_registered_store_binding().ok_or_else(|| {
+        Self::oldest_runtime_store_binding().ok_or_else(|| {
             InternalError::workflow(
                 InternalErrorOrigin::Workflow,
-                "no registered wasm stores after clearing stale publication binding",
+                "no root-owned Wasm Stores remain after clearing stale publication binding",
             )
         })
     }

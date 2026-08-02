@@ -90,7 +90,7 @@ pub(super) async fn store_chunk(
         .await
 }
 
-// Resolve the configured logical binding for one registered store canister id.
+// Resolve the root-owned logical binding for one Store Canister ID.
 pub(super) fn store_binding_for_pid(
     store_pid: Principal,
 ) -> Result<WasmStoreBinding, InternalError> {

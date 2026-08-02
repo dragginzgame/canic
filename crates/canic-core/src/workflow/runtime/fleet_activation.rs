@@ -292,6 +292,23 @@ impl FleetActivationWorkflow {
         Ok(())
     }
 
+    /// Cascade and activate one newly installed root-owned Store without Registry topology.
+    pub async fn complete_provisioned_wasm_store_activation(
+        wasm_store: Principal,
+    ) -> Result<(), InternalError> {
+        EnvOps::require_root()?;
+        let root = IcOps::canister_self();
+        require_root_activation_wasm_store(root, wasm_store)?;
+
+        let state_snapshot = StateSnapshotBuilder::new()?.with_fleet_state().build();
+        let state_input = StateSnapshotAdapter::to_input(&state_snapshot);
+        let topology = TopologyCascadeWorkflow::root_wasm_store_snapshot_input(wasm_store)?;
+
+        StateCascadeWorkflow::root_cascade_state_to(&state_snapshot, &[wasm_store]).await?;
+        CascadeOps::send_topology_snapshot(wasm_store, topology.clone()).await?;
+        Self::complete_provisioned_nonroot_activation(wasm_store, state_input, topology).await
+    }
+
     /// Enforce the activation phase before a managed endpoint handler runs.
     pub fn require_endpoint_allowed(call: EndpointCall) -> Result<(), InternalError> {
         if EnvOps::is_fleet_coordinator_runtime() {

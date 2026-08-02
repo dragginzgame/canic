@@ -195,10 +195,6 @@ pub(super) fn open_creation_result_for_effect(_path: &Path, subject: &str) -> io
     ))
 }
 
-pub(super) fn run_command(command: &mut Command) -> Result<(), Box<dyn std::error::Error>> {
-    icp::run_status(command).map_err(Into::into)
-}
-
 pub(super) fn icp_canister_command(icp_root: &Path) -> Command {
     let mut command = icp::default_command_in(icp_root);
     command.arg("canister");
