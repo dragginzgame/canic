@@ -9,7 +9,10 @@ use crate::{
         rpc::{CreateCanisterParent, CreateCanisterResponse, CyclesResponse},
     },
     ids::CanisterRole,
-    workflow::rpc::{RootCapabilityAuthority, capability, request::RpcRequestWorkflow},
+    workflow::rpc::{
+        RootCapabilityAuthority, RootCapabilityLifecycleExecutor, capability,
+        request::RpcRequestWorkflow,
+    },
 };
 
 ///
@@ -38,8 +41,9 @@ impl RpcApi {
     pub async fn response_capability_v1_root(
         envelope: RootCapabilityEnvelopeV1,
         authority: RootCapabilityAuthority,
+        lifecycle: &dyn RootCapabilityLifecycleExecutor,
     ) -> Result<RootCapabilityResponseV1, Error> {
-        capability::response_capability_v1_root(envelope, authority)
+        capability::response_capability_v1_root(envelope, authority, lifecycle)
             .await
             .map_err(Error::from)
     }

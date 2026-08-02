@@ -4,12 +4,15 @@
 //! Does not own: endpoint predicates, capability replay, or Component Registry persistence.
 //! Boundary: binds one admitted caller/request to exact authority before core orchestration.
 
+mod lifecycle;
+
 use canic_core::{
     api::rpc::RpcApi,
     control_plane_support::{
         ops::ic::IcOps,
         workflow::rpc::{
-            RootCapabilityAuthority, RootCapabilityCallerAuthority, RootCapabilityParentAuthority,
+            RootCapabilityAuthority, RootCapabilityCallerAuthority, RootCapabilityMemberAuthority,
+            RootCapabilityParentAuthority,
         },
     },
     dto::{
@@ -25,7 +28,12 @@ pub async fn response_capability_v1_root(
     envelope: RootCapabilityEnvelopeV1,
 ) -> Result<RootCapabilityResponseV1, Error> {
     let authority = root_capability_authority(IcOps::msg_caller(), &envelope.capability)?;
-    RpcApi::response_capability_v1_root(envelope, authority).await
+    RpcApi::response_capability_v1_root(
+        envelope,
+        authority,
+        &lifecycle::COMPONENT_CHILD_LIFECYCLE_EXECUTOR,
+    )
+    .await
 }
 
 fn root_capability_authority(
@@ -69,9 +77,12 @@ fn caller_authority(
     if caller == root {
         return Ok(RootCapabilityCallerAuthority::FleetSubnetRoot { canister_id: root });
     }
-    Ok(RootCapabilityCallerAuthority::ComponentMember(
-        resolve_active_member(caller)?.into(),
-    ))
+    let active = super::component_registry::active_component_member_authority(caller)
+        .map_err(Error::from)?;
+    let member =
+        RootCapabilityMemberAuthority::try_from_active_member(active.binding, active.registry)
+            .map_err(Error::from)?;
+    Ok(RootCapabilityCallerAuthority::ComponentMember(member))
 }
 
 /// Resolve membership after the enclosing request has established active-root authority.
@@ -88,17 +99,11 @@ fn resolve_provision_parent(
             "root structural provision requires parent=ThisCanister",
         ));
     }
-    Ok(caller_parent(caller))
-}
-
-fn caller_parent(caller: &RootCapabilityCallerAuthority) -> RootCapabilityParentAuthority {
     match caller {
-        RootCapabilityCallerAuthority::FleetSubnetRoot { canister_id } => {
-            RootCapabilityParentAuthority::FleetSubnetRoot {
-                canister_id: *canister_id,
-            }
-        }
-        RootCapabilityCallerAuthority::ComponentMember(member) => member.clone().into(),
+        RootCapabilityCallerAuthority::FleetSubnetRoot { .. } => Err(Error::forbidden(
+            "Fleet Subnet Root cannot provision application children through Component RPC",
+        )),
+        RootCapabilityCallerAuthority::ComponentMember(member) => Ok(member.clone().into()),
     }
 }
 
@@ -116,16 +121,13 @@ mod tests {
     }
 
     #[test]
-    fn structural_provision_binds_the_exact_caller_as_parent() {
+    fn structural_provision_rejects_fleet_subnet_root_as_application_parent() {
         let caller = RootCapabilityCallerAuthority::FleetSubnetRoot { canister_id: p(1) };
 
-        let parent = resolve_provision_parent(&caller, &CreateCanisterParent::ThisCanister)
-            .expect("ThisCanister parent");
+        let error = resolve_provision_parent(&caller, &CreateCanisterParent::ThisCanister)
+            .expect_err("infrastructure root cannot own an application child");
 
-        assert_eq!(
-            parent,
-            RootCapabilityParentAuthority::FleetSubnetRoot { canister_id: p(1) }
-        );
+        assert_eq!(error.code, ErrorCode::Forbidden);
     }
 
     #[test]

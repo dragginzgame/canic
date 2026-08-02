@@ -27,7 +27,7 @@ use crate::{
             metrics::root_capability::{RootCapabilityMetricOutcome, RootCapabilityMetrics},
         },
     },
-    workflow::rpc::RootCapabilityAuthority,
+    workflow::rpc::{RootCapabilityAuthority, RootCapabilityLifecycleExecutor},
 };
 
 use capability::{RootCapability, RootReplayInput};
@@ -92,6 +92,7 @@ impl RootResponseWorkflow {
     pub(in crate::workflow::rpc) async fn response_capability_replay_first(
         capability: RootCapability,
         authority: &RootCapabilityAuthority,
+        lifecycle: &dyn RootCapabilityLifecycleExecutor,
     ) -> Result<Response, InternalError> {
         if let RootCapability::RequestCycles(req) = capability {
             let response = nonroot_cycles::response_replay_first_root(req, authority).await?;
@@ -101,7 +102,7 @@ impl RootResponseWorkflow {
             return Self::response_idempotent(capability, authority);
         }
 
-        Self::response(capability, authority).await
+        Self::response(capability, authority, lifecycle).await
     }
 
     fn response_idempotent(
@@ -150,6 +151,7 @@ impl RootResponseWorkflow {
     async fn response(
         capability: RootCapability,
         authority: &RootCapabilityAuthority,
+        lifecycle: &dyn RootCapabilityLifecycleExecutor,
     ) -> Result<Response, InternalError> {
         let ctx = Self::extract_root_context()?;
         crate::perf!("extract_context");
@@ -169,6 +171,7 @@ impl RootResponseWorkflow {
             capability,
             prepared.authorized_cycles,
             authority,
+            lifecycle,
         )
         .await
         {
@@ -270,9 +273,17 @@ impl RootResponseWorkflow {
         capability: RootCapability,
         authorized_cycles: Option<nonroot_cycles::AuthorizedCyclesGrant>,
         authority: &RootCapabilityAuthority,
+        lifecycle: &dyn RootCapabilityLifecycleExecutor,
     ) -> Result<Response, InternalError> {
-        execute::execute_root_capability(ctx, pending, capability, authorized_cycles, authority)
-            .await
+        execute::execute_root_capability(
+            ctx,
+            pending,
+            capability,
+            authorized_cycles,
+            authority,
+            lifecycle,
+        )
+        .await
     }
 
     fn check_replay(

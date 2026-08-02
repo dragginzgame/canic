@@ -18,7 +18,7 @@ use crate::{
 ///
 /// Storage-ops facade for the direct-child cache.
 ///
-/// Invariant: the children cache is updated only via the topology cascade workflow.
+/// Invariant: the children cache is replaced only from one validated directory projection.
 ///
 
 pub struct CanisterChildrenOps;
@@ -75,7 +75,7 @@ impl CanisterChildrenOps {
         children: Vec<(Principal, CanisterRole)>,
     ) {
         // Cache entries omit module hash/created_at; canonical data lives at the Fleet Subnet
-        // Root and reaches this canister through the topology cascade.
+        // Root and reaches this canister through validated Directory synchronization.
         let data = CanisterChildrenData {
             entries: children
                 .into_iter()

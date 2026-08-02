@@ -104,6 +104,8 @@ mod tests {
     use ic_testkit::artifacts::{read_wasm, test_target_dir, workspace_root_for};
 
     #[cfg(test)]
+    use crate::pic::CanicPicExt;
+    #[cfg(test)]
     use canic::protocol::{
         CANIC_ROOT_PEER_COMPONENT_ALLOCATE, CANIC_ROOT_PEER_COMPONENT_ALLOCATION_STATUS,
         CANIC_ROOT_PEER_COMPONENT_COMMIT, CANIC_ROOT_PEER_COMPONENT_CREATE,
@@ -184,6 +186,21 @@ mod tests {
             CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STATUS, CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STOP,
             CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STOP_PREPARE,
         },
+    };
+    #[cfg(test)]
+    use canic::{
+        dto::{
+            canister::CanisterInfo,
+            capability::{
+                CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata,
+                CapabilityService, RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
+            },
+            page::{Page, PageRequest},
+            rpc::{
+                CreateCanisterParent, CreateCanisterRequest, Request, Response, RootRequestMetadata,
+            },
+        },
+        protocol::{CANIC_CANISTER_CHILDREN, CANIC_RESPONSE_CAPABILITY_V1},
     };
     #[cfg(test)]
     use canic_control_plane::{
@@ -351,6 +368,85 @@ mod tests {
                 canister_id: child,
             },
         );
+    }
+
+    #[test]
+    fn active_component_provisions_a_registered_child_through_root_capability() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_active_component_registry();
+        let request_id = [0xd1; 32];
+        let ttl_ns = 60_000_000_000;
+        let envelope = RootCapabilityEnvelopeV1 {
+            service: CapabilityService::Root,
+            capability_version: CAPABILITY_VERSION_V1,
+            capability: Request::CreateCanister(CreateCanisterRequest {
+                canister_role: CanisterRole::new("project_instance"),
+                parent: CreateCanisterParent::ThisCanister,
+                extra_arg: Some(vec![9, 8, 7]),
+                metadata: Some(RootRequestMetadata { request_id, ttl_ns }),
+            }),
+            proof: CapabilityProof::Structural,
+            metadata: CapabilityRequestMetadata {
+                request_id,
+                issued_at_ns: fixture.pic().current_time_nanos(),
+                ttl_ns,
+            },
+        };
+
+        let provisioned = root_capability_response(&fixture, envelope.clone());
+        let Response::CreateCanister(provisioned) = provisioned.response else {
+            panic!("root capability must return a create-Canister response");
+        };
+        let child = provisioned.new_canister_pid;
+        let repeated = root_capability_response(&fixture, envelope);
+        let Response::CreateCanister(repeated) = repeated.response else {
+            panic!("root capability retry must return a create-Canister response");
+        };
+        assert_eq!(
+            repeated.new_canister_pid, child,
+            "exact retry must return the original Component Child"
+        );
+
+        fixture
+            .pic()
+            .wait_for_ready(child, 50, "root-capability Component Child");
+        let children: Result<Page<CanisterInfo>, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.verifier.canister_id,
+                CANIC_CANISTER_CHILDREN,
+                (PageRequest {
+                    limit: 100,
+                    offset: 0,
+                },),
+            )
+            .expect("query Component local children transport");
+        assert!(
+            children
+                .expect("query Component local children")
+                .entries
+                .into_iter()
+                .any(|entry| entry.pid == child
+                    && entry.role == CanisterRole::new("project_instance")),
+            "activated child must converge into its parent's local child cache"
+        );
+    }
+
+    #[cfg(test)]
+    fn root_capability_response(
+        fixture: &ActiveComponentRegistryFixture,
+        envelope: RootCapabilityEnvelopeV1,
+    ) -> RootCapabilityResponseV1 {
+        let response: Result<RootCapabilityResponseV1, Error> = fixture
+            .pic()
+            .update_call_as(
+                fixture.root,
+                fixture.verifier.canister_id,
+                CANIC_RESPONSE_CAPABILITY_V1,
+                (envelope,),
+            )
+            .expect("root capability transport");
+        response.expect("root capability application")
     }
 
     #[test]
@@ -1793,6 +1889,7 @@ mod tests {
                     component: fixture.verifier.component,
                     expected_registry: partition.head,
                     child_role: CanisterRole::new("project_instance"),
+                    application_init_args: None,
                 },),
             )
             .expect("reserve project instance transport");

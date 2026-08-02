@@ -1727,6 +1727,7 @@ pub struct RootComponentChildAllocationRecord {
     pub maximum_instances_per_parent: u32,
     pub maximum_descendants: u32,
     pub maximum_registry_bytes: u64,
+    pub application_init_args: Option<Vec<u8>>,
     pub reserved_against_registry: ComponentRegistryHead,
     pub release_set: FleetSubnetRootReleaseSet,
     pub progress: RootComponentChildAllocationProgressRecord,
@@ -1744,6 +1745,7 @@ struct RootComponentChildReservation<'a> {
     maximum_instances_per_parent: u32,
     maximum_descendants: u32,
     maximum_registry_bytes: u64,
+    application_init_args: &'a Option<Vec<u8>>,
     reserved_against_registry: &'a ComponentRegistryHead,
     release_set: &'a FleetSubnetRootReleaseSet,
 }
@@ -1761,6 +1763,7 @@ impl<'a> From<&'a RootComponentChildAllocationRecord> for RootComponentChildRese
             maximum_instances_per_parent: record.maximum_instances_per_parent,
             maximum_descendants: record.maximum_descendants,
             maximum_registry_bytes: record.maximum_registry_bytes,
+            application_init_args: &record.application_init_args,
             reserved_against_registry: &record.reserved_against_registry,
             release_set: &record.release_set,
         }

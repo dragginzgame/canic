@@ -16,7 +16,7 @@ use crate::{
         runtime::metrics::root_capability::{RootCapabilityMetricOutcome, RootCapabilityMetrics},
     },
     workflow::rpc::{
-        RootCapabilityAuthority,
+        RootCapabilityAuthority, RootCapabilityLifecycleExecutor,
         capability::{
             metric_proof_mode, project_replay_metadata, validate_root_capability_envelope,
             verify_root_capability_proof, with_root_request_metadata,
@@ -31,6 +31,7 @@ use crate::{
 pub(super) async fn response_capability_v1_root(
     envelope: RootCapabilityEnvelopeV1,
     authority: RootCapabilityAuthority,
+    lifecycle: &dyn RootCapabilityLifecycleExecutor,
 ) -> Result<RootCapabilityResponseV1, Error> {
     let RootCapabilityEnvelopeV1 {
         service,
@@ -99,9 +100,10 @@ pub(super) async fn response_capability_v1_root(
 
     let replay_metadata = project_replay_metadata(metadata, IcOps::now_nanos())?;
     let capability = with_root_request_metadata(capability, replay_metadata);
-    let response = RootResponseWorkflow::response_capability_replay_first(capability, &authority)
-        .await
-        .map_err(Error::from)?;
+    let response =
+        RootResponseWorkflow::response_capability_replay_first(capability, &authority, lifecycle)
+            .await
+            .map_err(Error::from)?;
 
     Ok(RootCapabilityResponseV1 { response })
 }

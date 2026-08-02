@@ -274,6 +274,7 @@ pub enum ReplayReceiptStatus {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RecoveryReason {
     ExternalEffectStatusUnknown,
+    ComponentChildLifecycleInterrupted,
     ResponseCommitFailed,
     CostSettlementFailed,
     StateProjectionFailed,

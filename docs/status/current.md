@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.82`.
-- The latest published release is `v0.100.82` at
-  `6b7e11117e8b693e8bf87b19939625996984dccf`.
-- Open `0.100.83` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.83`.
+- The latest published release is `v0.100.83` at
+  `2e685da2c34c8195e5cd6d5609916095eeb73416`.
+- Open `0.100.84` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -684,14 +684,23 @@ Historical detail is archived at:
   Children as required by the accepted design. It also hard-cuts the inactive
   capability-hash stack and residual forwarding namespaces; the maintained
   structural envelope carries no hash field or compatibility path.
-- Open `0.100.83` makes the cascaded local direct-child cache the sole child
+- Released `0.100.83` makes the cascaded local direct-child cache the sole child
   authority for application topology and placement. Placement Index no longer
   cross-checks roles or abandoned children against the legacy Subnet Registry,
   and Fleet Subnet Roots no longer substitute that Registry behind the local
   child abstraction. Root Component membership remains a separate protected
-  Component Registry concern. The same draft hard-cuts the orphaned
+  Component Registry concern. The same release hard-cuts the orphaned
   control-plane subnet-state query, DTO and mapper vertical, which had no
   endpoint, protocol constant or facade consumer.
+- Open `0.100.84` routes structural root provisioning through the durable
+  Component Child lifecycle. The exact active Component member remains the
+  immediate parent; application init bytes are frozen into reservation and
+  install authority; and interrupted exact retries resume the nested
+  reserve/create/install/commit/Directory/runtime/membership sequence without
+  a second deployment charge. Active Directory synchronization now carries a
+  canonical hashed direct-child projection, so the owning Component and
+  immediate parent replace their local child caches only after the new child
+  has Active Registry membership.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -1987,9 +1996,11 @@ First primary results:
 
 ## Next Action
 
-Hard-cut the remaining lifecycle and cascade consumers of the legacy Subnet
-Registry/Directory, delete their stable/cascade schemas once no
-maintained reader remains and complete the reinstall-only decoder audit. Then
+Hard-cut the unused root capability upgrade path and move retained
+recycle/reinstall recovery onto Component Registry-owned child authority.
+Then remove the remaining cascade consumers of the legacy Subnet
+Registry/Directory, delete their stable/cascade schemas once no maintained
+reader remains and complete the reinstall-only decoder audit. Then
 run the guarded host preparation and execution phases as separate
 processes against one explicitly selected disposable real-network root. Verify
 the surviving Coordinator terminal receipt and exact replay before closing 0.100
@@ -2352,12 +2363,19 @@ Role-attestation issuance now admits exact active Components and Component
 Children, matching the accepted design. The same draft removes the inactive
 capability-hash stack, its hash-only tests and residual one-function forwarding
 namespaces without changing the maintained structural protocol.
-Open `0.100.83` removes the legacy Registry from local-child and placement
+Released `0.100.83` removes the legacy Registry from local-child and placement
 authority. Placement binding, role validation and stale-child cleanup now use
 one cascaded direct-child record, and the shared child facade no longer swaps
 to subnet-wide Registry semantics on Fleet Subnet Roots. The same draft
 deletes the unexposed control-plane subnet-state query family while retaining
 stable state, internal views and template-publication responses.
+Open `0.100.84` makes root structural provisioning execute the durable
+Component Child lifecycle under exact active Component Registry authority.
+Reservation and installation retain the application init payload, exact replay
+resumes incomplete nested phases without a duplicate deployment charge, and
+root self-provision is absent. Protected Directory synchronization now binds a
+canonical direct-child projection and refreshes the owning Component and
+immediate parent's local child caches only after active membership commits.
 
 ## Historical Release Detail
 

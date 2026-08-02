@@ -487,7 +487,7 @@ impl LifecycleApi {
     pub async fn activate_component_child_membership(
         request: RootComponentChildMembershipActivationRequest,
     ) -> Result<RootComponentChildMembershipActivationResponse, canic_core::dto::error::Error> {
-        crate::workflow::component_registry::activate_child_membership(request)
+        Box::pin(crate::workflow::component_registry::activate_child_membership(request))
             .await
             .map_err(Into::into)
     }

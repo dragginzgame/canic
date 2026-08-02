@@ -143,6 +143,21 @@ fn map_existing_replay_decision(
         }
         ReplayDecision::RecoveryRequired {
             pending,
+            reason: RecoveryReason::ComponentChildLifecycleInterrupted,
+        } => {
+            ReplayMetrics::record(
+                ReplayMetricOperation::Check,
+                ReplayMetricOutcome::Completed,
+                ReplayMetricReason::Duplicate,
+            );
+            RootCapabilityMetrics::record_replay(
+                replay_input.descriptor.key,
+                RootCapabilityMetricOutcome::DuplicateSame,
+            );
+            Ok(ReplayPreflight::Fresh(pending))
+        }
+        ReplayDecision::RecoveryRequired {
+            pending,
             reason:
                 reason @ (RecoveryReason::CostSettlementFailed | RecoveryReason::ResponseCommitFailed),
         } => {
@@ -433,19 +448,13 @@ pub(super) fn abort_replay_after_failure(
     error
 }
 
-/// Record a root external effect together with the cost intents needed for recovery.
-pub(super) fn mark_costed_external_effect_in_flight(
+/// Record a root external effect whose nested Component lifecycle owns cost recovery.
+pub(super) fn mark_external_effect_in_flight(
     pending: &ReplayPending,
     effect: ExternalEffectDescriptor,
-    cost_permit: &crate::ops::cost_guard::CostGuardPermit,
 ) -> Result<(), InternalError> {
-    replay_ops::mark_root_replay_costed_external_effect(
-        pending,
-        effect,
-        cost_permit,
-        secs_to_ns(IcOps::now_secs()),
-    )
-    .map_err(map_replay_store_error)
+    replay_ops::mark_root_replay_external_effect(pending, effect, secs_to_ns(IcOps::now_secs()))
+        .map_err(map_replay_store_error)
 }
 
 /// Stage the response that an accounting-only retry will commit.

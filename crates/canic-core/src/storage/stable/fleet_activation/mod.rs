@@ -276,6 +276,7 @@ pub struct ComponentDirectoryProvenanceRecord {
 pub struct ComponentRuntimeDirectoryRecord {
     pub authority: ComponentRuntimeDirectoryAuthorityRecord,
     pub authority_hash: [u8; 32],
+    pub direct_children_hash: [u8; 32],
 }
 
 ///

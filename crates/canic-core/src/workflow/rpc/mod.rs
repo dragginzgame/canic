@@ -6,6 +6,7 @@
 
 mod authority;
 pub mod capability;
+mod lifecycle;
 pub mod request;
 
 use crate::{
@@ -20,6 +21,7 @@ pub use authority::{
     RootCapabilityAuthority, RootCapabilityCallerAuthority, RootCapabilityMemberAuthority,
     RootCapabilityParentAuthority,
 };
+pub use lifecycle::{RootCapabilityLifecycleExecutor, RootComponentChildProvisionRequest};
 
 ///
 /// RpcWorkflowError
@@ -34,9 +36,6 @@ pub enum RpcWorkflowError {
 
     #[error("child canister {0} not found")]
     ChildNotFound(Principal),
-
-    #[error("create_canister: missing new pid")]
-    MissingNewCanisterPid,
 
     #[error("canister {0} is not a child of caller {1}")]
     NotChildOfCaller(Principal, Principal),
