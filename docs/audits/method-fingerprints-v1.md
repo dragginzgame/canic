@@ -21,10 +21,10 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 
 | Audit ID | Version | SHA-256 | Definition |
 | --- | --- | --- | --- |
-| `CANIC-AUTH-AUDIENCE-001` | `3` | `481aaed37322a981a6f7d657a34588a453ca3b9c3bfab20db5f3a4b3ab53ec72` | `docs/audits/recurring/invariants/audience-target-binding.md` |
+| `CANIC-AUTH-AUDIENCE-001` | `3` | `10a790fd838059feea550533775f84fdb6e77fdc133a0c0306cc492ced321fe2` | `docs/audits/recurring/invariants/audience-target-binding.md` |
 | `CANIC-AUTH-EQUIVALENCE-001` | `2` | `de18b672622fdc8ec41882921ca6a11d3d7872e5d2df7754b855a45d6f639942` | `docs/audits/recurring/invariants/auth-abstraction-equivalence.md` |
 | `CANIC-AUTH-BOUNDARY-001` | `1` | `3fdc297ab141ff1bddd26981a4a25aaf7e727ff63146054b626e0e054500d822` | `docs/audits/recurring/invariants/canonical-auth-boundary.md` |
-| `CANIC-AUTH-CAPABILITY-001` | `1` | `c7a84870c753548893e4ab1c0d792c9f69eb1b38f09103ba851de24e914545bf` | `docs/audits/recurring/invariants/capability-scope-enforcement.md` |
+| `CANIC-AUTH-CAPABILITY-001` | `1` | `1d6f51308f6c5d250f6931b3f3d98eb321aac2c24bbc794bfa3cd4742bbfffe4` | `docs/audits/recurring/invariants/capability-scope-enforcement.md` |
 | `CANIC-AUTH-REPLAY-001` | `2` | `743b9fcc18e37be029e12fa9db2a5fa5ffb8d4258c484739a5b0e73e43632b6d` | `docs/audits/recurring/invariants/expiry-replay-single-use.md` |
 | `CANIC-AUTH-SUBJECT-001` | `1` | `8af2c270ba89aae9715e6047afa908b1812865c5949f0f1da6441539fdee4475` | `docs/audits/recurring/invariants/subject-caller-binding.md` |
 | `CANIC-AUTH-TRUST-001` | `2` | `150d075dd9749d6c2b849837ce422753fa1a438a8656e50eac0370f555e769c5` | `docs/audits/recurring/invariants/token-trust-chain.md` |
@@ -40,7 +40,7 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 | `CANIC-STRUCTURE-001` | `1` | `ca370a2c910c4d9d3755af74099c6d5715086d8b1ff226c29a40c77c5ee9f58e` | `docs/audits/recurring/system/module-structure.md` |
 | `CANIC-PUBLISH-001` | `1` | `8e2eff6ac0c60c9903cd68f6354f7536636a987fd437306e851643464bdef884` | `docs/audits/recurring/system/publish-surface.md` |
 | `CANIC-RELEASE-INTEGRITY-001` | `1` | `3f6b87b30a3c1f9c80803a8be5d45292e73217d260ea435a956bd05f10d63438` | `docs/audits/recurring/system/release-integrity.md` |
-| `CANIC-AUTH-ORDERING-001` | `1` | `bf5e5a5bb0eb22f22cf30098bc881838c7908209f45c26d0296f546ac55e1802` | `docs/audits/recurring/system/security-boundary-ordering.md` |
+| `CANIC-AUTH-ORDERING-001` | `1` | `2619b50394d35381cb2be0d124868f8249218bf41591fad2713730e20f266b87` | `docs/audits/recurring/system/security-boundary-ordering.md` |
 | `CANIC-WASM-001` | `2` | `e33fc36ee904fa6a9af8c7aa399a94b98c441e25fe6590ac1548c548ba2f3ffb` | `docs/audits/recurring/system/wasm-footprint.md` |
 | `CANIC-MODULE-SURFACE-001` | `2.0` | `404a359b4448ea7288055f0444e3178ae972f4eb7e1a0814aa693ce67df59030` | `docs/audits/modular/module-surface-hardening.md` |
 
