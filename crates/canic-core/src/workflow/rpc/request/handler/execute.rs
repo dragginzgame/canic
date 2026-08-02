@@ -8,8 +8,8 @@ use super::{
     RootCapability, RootContext, nonroot_cycles, nonroot_cycles::AuthorizedCyclesGrant, replay,
 };
 use crate::{
-    InternalError,
-    cdk::types::{Principal, TC},
+    InternalError, InternalErrorOrigin,
+    cdk::types::Principal,
     dto::error::Error,
     dto::rpc::{
         AcknowledgePlacementReceiptRequest, CreateCanisterRequest, CreateCanisterResponse,
@@ -19,8 +19,6 @@ use crate::{
     log::Topic,
     model::replay::{CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason},
     ops::{
-        config::ConfigOps,
-        cost_guard::{CostGuardPermit, CostGuardRequest},
         ic::IcOps,
         replay::{
             acknowledge_root_placement_receipt,
@@ -28,21 +26,18 @@ use crate::{
             receipt::PlacementReceiptAcknowledgementDecision,
         },
     },
-    replay_policy::CostClass,
     workflow::{
         canister_lifecycle::{
             CanisterLifecycleEvent, CanisterLifecycleWorkflow, CanisterUpgradeCostContext,
         },
-        cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
         pool::PoolWorkflow,
         replay::mark_recovery_required_after_failure,
-        rpc::{RootCapabilityAuthority, RpcWorkflowError},
+        rpc::{
+            RootCapabilityAuthority, RootCapabilityLifecycleExecutor,
+            RootComponentChildProvisionRequest,
+        },
     },
 };
-
-const ROOT_PROVISION_DEPLOYMENT_QUOTA_WINDOW_SECONDS: u64 = 60;
-const MAX_ROOT_PROVISION_DEPLOYMENT_OPERATIONS_PER_WINDOW: u64 = 10;
-const MIN_ROOT_PROVISION_CYCLES_AFTER_RESERVATION: u128 = TC;
 
 pub(super) async fn execute_root_capability(
     ctx: &RootContext,
@@ -50,6 +45,7 @@ pub(super) async fn execute_root_capability(
     capability: RootCapability,
     authorized_cycles: Option<AuthorizedCyclesGrant>,
     authority: &RootCapabilityAuthority,
+    lifecycle: &dyn RootCapabilityLifecycleExecutor,
 ) -> Result<Response, InternalError> {
     let descriptor = capability.descriptor();
     let capability_name = descriptor.name;
@@ -59,7 +55,15 @@ pub(super) async fn execute_root_capability(
             unreachable!("receipt acknowledgement bypasses replay execution")
         }
         RootCapability::AllocatePlacementChild(req) | RootCapability::ProvisionCanister(req) => {
-            execute_provision(ctx, pending, &req, descriptor.command_kind, authority).await
+            execute_provision(
+                ctx,
+                pending,
+                &req,
+                descriptor.command_kind,
+                authority,
+                lifecycle,
+            )
+            .await
         }
         RootCapability::UpgradeCanister(req) => execute_upgrade(ctx, pending, &req).await,
         RootCapability::RecycleCanister(req) => execute_recycle(pending, &req).await,
@@ -126,37 +130,14 @@ async fn execute_provision(
     req: &CreateCanisterRequest,
     command_kind: &'static str,
     authority: &RootCapabilityAuthority,
+    lifecycle: &dyn RootCapabilityLifecycleExecutor,
 ) -> Result<Response, InternalError> {
     let parent_pid = resolve_provision_parent(authority)?;
-    let reservation_cycles = root_provision_cycle_reservation_cycles(req)?;
-    let cost_permit = reserve_root_provision_cost_guard(ctx, reservation_cycles, command_kind)?;
-    if let Err(err) = mark_root_provision_external_effect(
-        pending,
-        ctx,
-        req,
-        parent_pid,
-        &cost_permit,
-        command_kind,
-    ) {
-        return Err(CostGuardWorkflow::recover_after_failure(
-            &cost_permit,
-            IcOps::now_secs(),
-            err,
-        ));
-    }
-
-    let event = CanisterLifecycleEvent::Create {
-        deployment_permit: &cost_permit,
-        role: req.canister_role.clone(),
-        parent: parent_pid,
-        extra_arg: req.extra_arg.clone(),
-    };
-
-    let lifecycle_result = match CanisterLifecycleWorkflow::apply(event).await {
-        Ok(result) => result,
+    mark_root_provision_external_effect(pending, ctx, req, parent_pid, command_kind)?;
+    let provision = component_child_provision_request(pending, req, authority)?;
+    let new_canister_pid = match lifecycle.provision_component_child(provision).await {
+        Ok(pid) => pid,
         Err(err) => {
-            let err =
-                CostGuardWorkflow::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
             return Err(preserve_root_provision_recovery_required(
                 pending,
                 ctx,
@@ -164,12 +145,13 @@ async fn execute_provision(
                 parent_pid,
                 err,
                 command_kind,
+                RecoveryReason::ComponentChildLifecycleInterrupted,
             ));
         }
     };
-    let Some(new_canister_pid) = lifecycle_result.new_canister_pid else {
-        let err: InternalError = RpcWorkflowError::MissingNewCanisterPid.into();
-        let err = CostGuardWorkflow::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
+
+    let response = Response::CreateCanister(CreateCanisterResponse { new_canister_pid });
+    if let Err(err) = replay::stage_response(pending, &response) {
         return Err(preserve_root_provision_recovery_required(
             pending,
             ctx,
@@ -177,40 +159,36 @@ async fn execute_provision(
             parent_pid,
             err,
             command_kind,
+            RecoveryReason::ResponseCommitFailed,
         ));
-    };
-
-    let response = Response::CreateCanister(CreateCanisterResponse { new_canister_pid });
-    if let Err(err) = replay::stage_response(pending, &response) {
-        let mut err = err;
-        let reason = match CostGuardWorkflow::complete(&cost_permit, IcOps::now_secs()) {
-            Ok(()) => RecoveryReason::ResponseCommitFailed,
-            Err(settlement_err) => {
-                err = err.with_diagnostic_context(format!(
-                    "root provision cost settlement also failed: {settlement_err}"
-                ));
-                RecoveryReason::CostSettlementFailed
-            }
-        };
-        if let Err(recovery_err) = replay::mark_recovery_required(pending, reason) {
-            err = err.with_diagnostic_context(format!(
-                "root provision replay recovery marker failed: {recovery_err}"
-            ));
-        }
-        return Err(err);
-    }
-    if let Err(err) = CostGuardWorkflow::complete(&cost_permit, IcOps::now_secs()) {
-        if let Err(recovery_err) =
-            replay::mark_recovery_required(pending, RecoveryReason::CostSettlementFailed)
-        {
-            return Err(err.with_diagnostic_context(format!(
-                "root provision replay recovery marker failed: {recovery_err}"
-            )));
-        }
-        return Err(err);
     }
 
     Ok(response)
+}
+
+fn component_child_provision_request(
+    pending: &ReplayPending,
+    req: &CreateCanisterRequest,
+    authority: &RootCapabilityAuthority,
+) -> Result<RootComponentChildProvisionRequest, InternalError> {
+    let component = authority.caller_component().ok_or_else(|| {
+        InternalError::public(Error::forbidden(
+            "Fleet Subnet Root cannot own an application Component Child operation",
+        ))
+    })?;
+    let expected_registry = authority.caller_registry().cloned().ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "authorized Component caller has no protected Registry head",
+        )
+    })?;
+    Ok(RootComponentChildProvisionRequest {
+        operation_id: pending.receipt_token.receipt().operation_id.into_bytes(),
+        component,
+        expected_registry,
+        child_role: req.canister_role.clone(),
+        application_init_args: req.extra_arg.clone(),
+    })
 }
 
 fn resolve_provision_parent(
@@ -224,48 +202,6 @@ fn resolve_provision_parent(
     })
 }
 
-fn root_provision_cycle_reservation_cycles(
-    req: &CreateCanisterRequest,
-) -> Result<u128, InternalError> {
-    Ok(ConfigOps::current_component_canister(&req.canister_role)?
-        .initial_cycles
-        .to_u128())
-}
-
-fn reserve_root_provision_cost_guard(
-    ctx: &RootContext,
-    reservation_cycles: u128,
-    command_kind: &'static str,
-) -> Result<CostGuardPermit, InternalError> {
-    CostGuardWorkflow::reserve(root_provision_cost_guard_request(
-        ctx,
-        reservation_cycles,
-        IcOps::canister_cycle_balance().to_u128(),
-        command_kind,
-    ))
-    .map_err(map_cost_guard_reserve_error)
-}
-
-pub(super) fn root_provision_cost_guard_request(
-    ctx: &RootContext,
-    reservation_cycles: u128,
-    current_cycle_balance: u128,
-    command_kind: &'static str,
-) -> CostGuardRequest {
-    CostGuardRequest {
-        cost_class: CostClass::ManagementDeployment,
-        command_kind: root_provision_command_kind(command_kind),
-        quota_subject: ctx.caller,
-        payer: ctx.self_pid,
-        now_secs: ctx.now,
-        quota_window_secs: ROOT_PROVISION_DEPLOYMENT_QUOTA_WINDOW_SECONDS,
-        max_operations_per_window: MAX_ROOT_PROVISION_DEPLOYMENT_OPERATIONS_PER_WINDOW,
-        current_cycle_balance,
-        cycle_reservation_cycles: reservation_cycles,
-        min_cycles_after_reservation: MIN_ROOT_PROVISION_CYCLES_AFTER_RESERVATION,
-    }
-}
-
 fn root_provision_command_kind(command_kind: &'static str) -> CommandKind {
     CommandKind::new(command_kind).expect("root provision command kind is a valid static label")
 }
@@ -275,15 +211,13 @@ pub(super) fn mark_root_provision_external_effect(
     ctx: &RootContext,
     req: &CreateCanisterRequest,
     parent_pid: Principal,
-    cost_permit: &CostGuardPermit,
     command_kind: &'static str,
 ) -> Result<(), InternalError> {
-    replay::mark_costed_external_effect_in_flight(
+    replay::mark_external_effect_in_flight(
         pending,
         ExternalEffectDescriptor::ManagementCreateCanister {
             command_kind: root_provision_command_kind(command_kind),
         },
-        cost_permit,
     )?;
     log!(
         Topic::Rpc,
@@ -304,11 +238,12 @@ fn preserve_root_provision_recovery_required(
     parent_pid: Principal,
     err: InternalError,
     command_kind: &'static str,
+    reason: RecoveryReason,
 ) -> InternalError {
     let (error_class, error_origin) = err.log_fields();
     let err = mark_recovery_required_after_failure(
         &pending.receipt_token,
-        RecoveryReason::ExternalEffectStatusUnknown,
+        reason,
         secs_to_ns(IcOps::now_secs()),
         err,
         "root provision replay recovery marker failed",

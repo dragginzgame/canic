@@ -5261,6 +5261,7 @@ impl ComponentRegistryOps {
     pub(crate) fn reserve_child_allocation(
         decision: ComponentChildAllocationDecision,
         operation_id: [u8; 32],
+        application_init_args: Option<Vec<u8>>,
         reserved_against_registry: ComponentRegistryHead,
     ) -> Result<RootComponentChildAllocationView, InternalError> {
         let current = RootComponentRegistryStore::current().ok_or_else(|| {
@@ -5281,6 +5282,7 @@ impl ComponentRegistryOps {
             maximum_instances_per_parent: decision.maximum_instances_per_parent,
             maximum_descendants: decision.maximum_descendants,
             maximum_registry_bytes: decision.maximum_registry_bytes,
+            application_init_args,
             reserved_against_registry,
             release_set: current.release_set,
             progress: RootComponentChildAllocationProgressRecord::Reserved,
@@ -8099,6 +8101,7 @@ fn child_allocation_record_to_view(
         maximum_instances_per_parent: record.maximum_instances_per_parent,
         maximum_descendants: record.maximum_descendants,
         maximum_registry_bytes: record.maximum_registry_bytes,
+        application_init_args: record.application_init_args,
         reserved_against_registry: record.reserved_against_registry,
         release_set: record.release_set,
         progress: match record.progress {
@@ -14280,6 +14283,7 @@ mod tests {
                 "project_machine",
             ),
             [69; 32],
+            None,
             registry.clone(),
         )
         .expect("reserve in-flight descendant");
@@ -14367,6 +14371,7 @@ mod tests {
                     "project_machine",
                 ),
                 operation_id,
+                None,
                 registry.clone(),
             )
             .expect_err("fenced subtree member cannot reserve a new child");
@@ -14392,6 +14397,7 @@ mod tests {
                 "project_machine",
             ),
             [74; 32],
+            None,
             registry.clone(),
         )
         .expect("unrelated branch remains mutable");
@@ -15274,6 +15280,7 @@ mod tests {
                 "project_machine",
             ),
             [77; 32],
+            None,
             previous_registry.clone(),
         )
         .expect("reserve in-flight descendant");
@@ -15413,6 +15420,7 @@ mod tests {
                 "project_machine",
             ),
             [80; 32],
+            None,
             draining.registry.clone(),
         )
         .expect_err("Draining Component cannot reserve a new child");
@@ -15910,6 +15918,7 @@ mod tests {
         ComponentRegistryOps::reserve_child_allocation(
             decision_a.clone(),
             operation_a,
+            None,
             registry_a.clone(),
         )
         .expect("reserve Component A child");
@@ -15934,8 +15943,13 @@ mod tests {
         let operation_b = [54; 32];
         let decision_b = child_allocation_decision(&partition_b, "project_instance");
         let registry_b = component_registry_head(&partition_b);
-        ComponentRegistryOps::reserve_child_allocation(decision_b, operation_b, registry_b.clone())
-            .expect("reserve unrelated Component B child");
+        ComponentRegistryOps::reserve_child_allocation(
+            decision_b,
+            operation_b,
+            None,
+            registry_b.clone(),
+        )
+        .expect("reserve unrelated Component B child");
         ComponentRegistryOps::begin_child_creation(
             component_b,
             operation_b,
@@ -15957,9 +15971,13 @@ mod tests {
         ));
 
         let durable = restart_component_registry();
-        let retried_a =
-            ComponentRegistryOps::reserve_child_allocation(decision_a, operation_a, registry_a)
-                .expect("retry preserves incomplete Component A intent");
+        let retried_a = ComponentRegistryOps::reserve_child_allocation(
+            decision_a,
+            operation_a,
+            None,
+            registry_a,
+        )
+        .expect("retry preserves incomplete Component A intent");
         assert_eq!(retried_a, incomplete_a);
         assert_eq!(
             ComponentRegistryOps::partition(component_a)
@@ -16005,6 +16023,7 @@ mod tests {
         let capacity_error = ComponentRegistryOps::reserve_child_allocation(
             child_allocation_decision(&partition_b, "project_machine"),
             [59; 32],
+            None,
             registry_b,
         )
         .expect_err("Component A reservation remains charged to the shared root limit");
@@ -16127,19 +16146,32 @@ mod tests {
             content_hash: partition.content_hash,
         };
 
+        let application_init_args = Some(vec![9, 8, 7]);
         let reserved = ComponentRegistryOps::reserve_child_allocation(
             decision.clone(),
             [44; 32],
+            application_init_args.clone(),
             registry.clone(),
         )
         .expect("reserve child");
         let interrupted = RootComponentRegistryStore::export();
         RootComponentRegistryStore::import(interrupted);
-        let repeated =
-            ComponentRegistryOps::reserve_child_allocation(decision.clone(), [44; 32], registry)
-                .expect("retry child reservation");
+        let repeated = ComponentRegistryOps::reserve_child_allocation(
+            decision.clone(),
+            [44; 32],
+            application_init_args,
+            registry.clone(),
+        )
+        .expect("retry child reservation");
 
         assert_eq!(reserved, repeated);
+        ComponentRegistryOps::reserve_child_allocation(
+            decision.clone(),
+            [44; 32],
+            Some(vec![9, 8, 6]),
+            registry,
+        )
+        .expect_err("retry cannot change application init arguments");
         assert_eq!(
             ComponentRegistryOps::registered_parent(component, parent)
                 .expect("registered parent")
@@ -16168,6 +16200,7 @@ mod tests {
         let error = ComponentRegistryOps::reserve_child_allocation(
             exhausted,
             [45; 32],
+            None,
             repeated.reserved_against_registry.clone(),
         )
         .expect_err("per-parent capacity must reject reservation");
@@ -16180,6 +16213,7 @@ mod tests {
             ComponentRegistryOps::reserve_child_allocation(
                 conflicting,
                 [44; 32],
+                Some(vec![9, 8, 7]),
                 repeated.reserved_against_registry.clone(),
             )
             .is_err()
@@ -16483,6 +16517,7 @@ mod tests {
         let progressed_reservation = ComponentRegistryOps::reserve_child_allocation(
             decision.clone(),
             [68; 32],
+            None,
             ComponentRegistryHead {
                 component,
                 revision: progressed_partition.revision,
@@ -16506,6 +16541,7 @@ mod tests {
         let retried_reservation = ComponentRegistryOps::reserve_child_allocation(
             decision.clone(),
             [44; 32],
+            Some(vec![9, 8, 7]),
             repeated.reserved_against_registry,
         )
         .expect("reservation retry preserves install progress");
@@ -16783,6 +16819,7 @@ mod tests {
         let later_reservation = ComponentRegistryOps::reserve_child_allocation(
             decision,
             [71; 32],
+            None,
             ComponentRegistryHead {
                 component,
                 revision: terminal_partition.revision,
@@ -17264,6 +17301,7 @@ mod tests {
                 maximum_registry_bytes: 16_777_216,
             },
             [50; 32],
+            None,
             ComponentRegistryHead {
                 component: allocation.component,
                 revision: partition.revision,

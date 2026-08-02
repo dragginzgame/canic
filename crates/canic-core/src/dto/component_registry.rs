@@ -104,6 +104,7 @@ pub struct RootComponentChildAllocationRequest {
     pub component: ComponentInstanceId,
     pub expected_registry: ComponentRegistryHead,
     pub child_role: CanisterRole,
+    pub application_init_args: Option<Vec<u8>>,
 }
 
 ///
@@ -848,6 +849,18 @@ pub struct ComponentRuntimeDirectoryAuthority {
 }
 
 ///
+/// ComponentRuntimeDirectChild
+///
+/// Exact active direct-child projection delivered with one Component Directory authority.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub struct ComponentRuntimeDirectChild {
+    pub canister_id: Principal,
+    pub role: CanisterRole,
+}
+
+///
 /// ComponentRuntimeDirectoryPreparationRequest
 ///
 /// Root-issued exact Directory preparation command for one managed Component-tree node.
@@ -857,6 +870,7 @@ pub struct ComponentRuntimeDirectoryAuthority {
 pub struct ComponentRuntimeDirectoryPreparationRequest {
     pub operation_id: [u8; 32],
     pub authority: ComponentRuntimeDirectoryAuthority,
+    pub direct_children: Vec<ComponentRuntimeDirectChild>,
 }
 
 ///
@@ -869,6 +883,7 @@ pub struct ComponentRuntimeDirectoryPreparationRequest {
 pub struct ComponentRuntimeDirectorySynchronizationRequest {
     pub operation_id: [u8; 32],
     pub authority: ComponentRuntimeDirectoryAuthority,
+    pub direct_children: Vec<ComponentRuntimeDirectChild>,
 }
 
 ///
@@ -921,6 +936,7 @@ pub struct ComponentRuntimeStatusResponse {
     pub phase: ComponentRuntimePhase,
     pub authority: Option<ComponentRuntimeDirectoryAuthority>,
     pub authority_hash: Option<[u8; 32]>,
+    pub direct_children_hash: Option<[u8; 32]>,
     pub activation: Option<ComponentRuntimeActivationEvidence>,
 }
 
@@ -2295,6 +2311,7 @@ mod tests {
             component,
             expected_registry: registry.clone(),
             child_role: CanisterRole::new("project_instance"),
+            application_init_args: Some(vec![9, 8, 7]),
         };
         let status_request = RootComponentChildAllocationStatusRequest {
             operation_id: request.operation_id,
@@ -2435,6 +2452,7 @@ mod tests {
                 phase: ComponentRuntimePhase::DirectoryPrepared,
                 authority: Some(runtime_authority.clone()),
                 authority_hash: Some([31; 32]),
+                direct_children_hash: Some([37; 32]),
                 activation: None,
             },
             owning_component: ComponentRuntimeDirectoryConvergenceEvidence {
@@ -2454,6 +2472,7 @@ mod tests {
                 phase: ComponentRuntimePhase::Active,
                 authority: Some(runtime_authority.clone()),
                 authority_hash: Some([31; 32]),
+                direct_children_hash: Some([37; 32]),
                 activation: Some(ComponentRuntimeActivationEvidence {
                     directory_authority_hash: [31; 32],
                     activated_at_ns: 33,
@@ -2497,6 +2516,7 @@ mod tests {
                 phase: ComponentRuntimePhase::Active,
                 authority: Some(active_authority),
                 authority_hash: Some([36; 32]),
+                direct_children_hash: Some([38; 32]),
                 activation: Some(ComponentRuntimeActivationEvidence {
                     directory_authority_hash: [31; 32],
                     activated_at_ns: 33,

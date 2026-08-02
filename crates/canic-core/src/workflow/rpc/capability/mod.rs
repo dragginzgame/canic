@@ -24,7 +24,10 @@ use crate::{
         rpc::RootRequestMetadata,
     },
     ops::runtime::metrics::root_capability::RootCapabilityMetricProofMode,
-    workflow::rpc::{RootCapabilityAuthority, request::handler::capability::RootCapability},
+    workflow::rpc::{
+        RootCapabilityAuthority, RootCapabilityLifecycleExecutor,
+        request::handler::capability::RootCapability,
+    },
 };
 
 const MAX_CAPABILITY_CLOCK_SKEW_NS: u64 = 30_000_000_000;
@@ -48,8 +51,9 @@ pub async fn response_capability_v1_nonroot(
 pub async fn response_capability_v1_root(
     envelope: crate::dto::capability::RootCapabilityEnvelopeV1,
     authority: RootCapabilityAuthority,
+    lifecycle: &dyn RootCapabilityLifecycleExecutor,
 ) -> Result<crate::dto::capability::RootCapabilityResponseV1, InternalError> {
-    root::response_capability_v1_root(envelope, authority)
+    root::response_capability_v1_root(envelope, authority, lifecycle)
         .await
         .map_err(InternalError::public)
 }

@@ -5,8 +5,10 @@
 //! Boundary: the control plane resolves protected membership; core validates and consumes it.
 
 use crate::{
+    InternalError, InternalErrorOrigin,
     cdk::types::Principal,
-    ids::{CanisterRole, ManagedCanisterBinding},
+    dto::component_registry::ComponentRegistryHead,
+    ids::{CanisterRole, ComponentInstanceId, ManagedCanisterBinding},
 };
 
 ///
@@ -32,29 +34,43 @@ pub struct RootCapabilityMemberAuthority {
     canister_id: Principal,
     parent_canister_id: Principal,
     role: CanisterRole,
+    component: ComponentInstanceId,
+    registry: ComponentRegistryHead,
 }
 
 impl RootCapabilityMemberAuthority {
-    #[must_use]
-    pub const fn canister_id(&self) -> Principal {
-        self.canister_id
-    }
-}
-
-impl From<ManagedCanisterBinding> for RootCapabilityMemberAuthority {
-    fn from(member: ManagedCanisterBinding) -> Self {
-        match member {
+    pub fn try_from_active_member(
+        member: ManagedCanisterBinding,
+        registry: ComponentRegistryHead,
+    ) -> Result<Self, InternalError> {
+        let authority = match member {
             ManagedCanisterBinding::Component(binding) => Self {
                 canister_id: binding.canister_id,
                 parent_canister_id: binding.fleet_subnet_root,
                 role: binding.role,
+                component: binding.component,
+                registry,
             },
             ManagedCanisterBinding::ComponentChild(binding) => Self {
                 canister_id: binding.canister_id,
                 parent_canister_id: binding.parent_canister_id,
                 role: binding.role,
+                component: binding.component.component,
+                registry,
             },
+        };
+        if authority.component != authority.registry.component {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                "active Component member differs from its owning Registry head",
+            ));
         }
+        Ok(authority)
+    }
+
+    #[must_use]
+    pub const fn canister_id(&self) -> Principal {
+        self.canister_id
     }
 }
 
@@ -66,7 +82,6 @@ impl From<ManagedCanisterBinding> for RootCapabilityMemberAuthority {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RootCapabilityParentAuthority {
-    FleetSubnetRoot { canister_id: Principal },
     ComponentMember { canister_id: Principal },
 }
 
@@ -149,10 +164,23 @@ impl RootCapabilityAuthority {
         }
     }
 
+    pub(super) const fn caller_component(&self) -> Option<ComponentInstanceId> {
+        match &self.caller {
+            RootCapabilityCallerAuthority::FleetSubnetRoot { .. } => None,
+            RootCapabilityCallerAuthority::ComponentMember(member) => Some(member.component),
+        }
+    }
+
+    pub(super) const fn caller_registry(&self) -> Option<&ComponentRegistryHead> {
+        match &self.caller {
+            RootCapabilityCallerAuthority::FleetSubnetRoot { .. } => None,
+            RootCapabilityCallerAuthority::ComponentMember(member) => Some(&member.registry),
+        }
+    }
+
     pub(super) fn provision_parent_canister_id(&self) -> Option<Principal> {
         self.provision_parent.as_ref().map(|parent| match parent {
-            RootCapabilityParentAuthority::FleetSubnetRoot { canister_id }
-            | RootCapabilityParentAuthority::ComponentMember { canister_id } => *canister_id,
+            RootCapabilityParentAuthority::ComponentMember { canister_id } => *canister_id,
         })
     }
 

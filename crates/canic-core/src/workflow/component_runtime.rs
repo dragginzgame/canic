@@ -9,7 +9,8 @@ use crate::{
     dto::{
         component_registry::{
             ComponentDirectoryProvenance, ComponentRuntimeActivationRequest,
-            ComponentRuntimeDirectoryAuthority, ComponentRuntimeDirectoryPreparationRequest,
+            ComponentRuntimeDirectChild, ComponentRuntimeDirectoryAuthority,
+            ComponentRuntimeDirectoryPreparationRequest,
             ComponentRuntimeDirectorySynchronizationRequest, ComponentRuntimePhase,
             ComponentRuntimeStatusResponse,
         },
@@ -19,7 +20,9 @@ use crate::{
     ops::{
         component_runtime::ComponentRuntimeOps,
         ic::IcOps,
-        storage::{StorageOpsError, fleet_activation::FleetActivationOps},
+        storage::{
+            StorageOpsError, children::CanisterChildrenOps, fleet_activation::FleetActivationOps,
+        },
     },
 };
 
@@ -74,9 +77,17 @@ pub fn prepare_directory(
     let current = FleetActivationOps::component_runtime_status().map_err(StorageOpsError::from)?;
     validate_request(&current, &request)?;
     let authority_hash = ComponentRuntimeOps::directory_authority_hash(&request.authority)?;
-    FleetActivationOps::prepare_component_runtime_directory(request, authority_hash)
-        .map_err(StorageOpsError::from)
-        .map_err(InternalError::from)
+    let direct_children_hash = validate_direct_children(&request.direct_children)?;
+    let direct_children = request.direct_children.clone();
+    let status = FleetActivationOps::prepare_component_runtime_directory(
+        request,
+        authority_hash,
+        direct_children_hash,
+    )
+    .map_err(StorageOpsError::from)
+    .map_err(InternalError::from)?;
+    apply_direct_children(direct_children);
+    Ok(status)
 }
 
 /// Synchronize one exact next current Directory authority on an Active Component runtime.
@@ -104,9 +115,49 @@ pub fn synchronize_directory(
     })?;
     validate_directory_progression(current_authority, &request.authority)?;
     let authority_hash = ComponentRuntimeOps::directory_authority_hash(&request.authority)?;
-    FleetActivationOps::synchronize_component_runtime_directory(request, authority_hash)
-        .map_err(StorageOpsError::from)
-        .map_err(InternalError::from)
+    let direct_children_hash = validate_direct_children(&request.direct_children)?;
+    let direct_children = request.direct_children.clone();
+    let status = FleetActivationOps::synchronize_component_runtime_directory(
+        request,
+        authority_hash,
+        direct_children_hash,
+    )
+    .map_err(StorageOpsError::from)
+    .map_err(InternalError::from)?;
+    apply_direct_children(direct_children);
+    Ok(status)
+}
+
+fn validate_direct_children(
+    direct_children: &[ComponentRuntimeDirectChild],
+) -> Result<[u8; 32], InternalError> {
+    let mut canonical = direct_children.to_vec();
+    canonical.sort();
+    canonical.dedup();
+    if canonical != direct_children {
+        return Err(InternalError::conflict(
+            "Component runtime direct-child projection is not ordered and unique",
+        ));
+    }
+    if direct_children
+        .iter()
+        .any(|child| child.canister_id == IcOps::canister_self())
+    {
+        return Err(InternalError::conflict(
+            "Component runtime direct-child projection contains its owning canister",
+        ));
+    }
+    ComponentRuntimeOps::direct_children_hash(direct_children)
+}
+
+fn apply_direct_children(direct_children: Vec<ComponentRuntimeDirectChild>) {
+    CanisterChildrenOps::import_direct_children(
+        IcOps::canister_self(),
+        direct_children
+            .into_iter()
+            .map(|child| (child.canister_id, child.role))
+            .collect(),
+    );
 }
 
 /// Independently validate and return the target-local Directory preparation state.

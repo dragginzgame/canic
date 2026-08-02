@@ -3,6 +3,7 @@ use crate::{
     cdk::types::{Cycles, Principal, TC},
     config::schema::{CanisterKind, CyclesFundingPolicyConfig},
     dto::{
+        component_registry::ComponentRegistryHead,
         error::ErrorCode,
         rpc::{
             AcknowledgePlacementReceiptRequest, CreateCanisterParent, CreateCanisterRequest,
@@ -116,21 +117,32 @@ fn root_authority(root: Principal) -> RootCapabilityAuthority {
     })
 }
 
-fn root_provision_authority(root: Principal) -> RootCapabilityAuthority {
-    root_authority(root)
-        .with_provision_parent(RootCapabilityParentAuthority::FleetSubnetRoot { canister_id: root })
-}
-
 fn component_authority(member: ManagedCanisterBinding) -> RootCapabilityAuthority {
-    RootCapabilityAuthority::new(RootCapabilityCallerAuthority::ComponentMember(
-        member.into(),
-    ))
+    let member = root_capability_member(member);
+    RootCapabilityAuthority::new(RootCapabilityCallerAuthority::ComponentMember(member))
 }
 
 fn provision_authority(member: ManagedCanisterBinding) -> RootCapabilityAuthority {
-    let parent =
-        RootCapabilityParentAuthority::from(RootCapabilityMemberAuthority::from(member.clone()));
-    component_authority(member).with_provision_parent(parent)
+    let member = root_capability_member(member);
+    let parent = RootCapabilityParentAuthority::from(member.clone());
+    RootCapabilityAuthority::new(RootCapabilityCallerAuthority::ComponentMember(member))
+        .with_provision_parent(parent)
+}
+
+fn root_capability_member(member: ManagedCanisterBinding) -> RootCapabilityMemberAuthority {
+    let component = match &member {
+        ManagedCanisterBinding::Component(binding) => binding.component,
+        ManagedCanisterBinding::ComponentChild(binding) => binding.component.component,
+    };
+    RootCapabilityMemberAuthority::try_from_active_member(
+        member,
+        ComponentRegistryHead {
+            component,
+            revision: 1,
+            content_hash: [211; 32],
+        },
+    )
+    .expect("matching active member authority")
 }
 
 fn seed_root_replay_receipt(
@@ -463,27 +475,6 @@ fn authorize_denies_non_root_context() {
 }
 
 #[test]
-fn authorize_allows_provision_in_root_context() {
-    let root_pid = p(9);
-    let ctx = RootContext {
-        caller: root_pid,
-        self_pid: root_pid,
-        is_root_env: true,
-        subnet_id: p(2),
-        now: 5,
-    };
-    let capability = RootCapability::ProvisionCanister(CreateCanisterRequest {
-        canister_role: CanisterRole::new("app"),
-        parent: CreateCanisterParent::ThisCanister,
-        extra_arg: None,
-        metadata: None,
-    });
-
-    RootResponseWorkflow::authorize(&ctx, &capability, &root_provision_authority(root_pid))
-        .expect("must authorize");
-}
-
-#[test]
 fn authorize_allows_structural_child_provision_for_registered_caller() {
     let root_pid = p(11);
     let caller = p(12);
@@ -509,12 +500,12 @@ fn authorize_allows_structural_child_provision_for_registered_caller() {
 }
 
 #[test]
-fn authorize_rejects_structural_child_provision_with_root_parent() {
+fn authorize_rejects_structural_child_provision_with_different_parent() {
     let root_pid = p(13);
     let caller = p(14);
     let caller_member = component_member(root_pid, caller, CanisterRole::new("user_hub"), 13);
     let authority = component_authority(caller_member).with_provision_parent(
-        RootCapabilityParentAuthority::FleetSubnetRoot {
+        RootCapabilityParentAuthority::ComponentMember {
             canister_id: root_pid,
         },
     );
@@ -544,32 +535,8 @@ fn authorize_rejects_structural_child_provision_with_root_parent() {
 }
 
 #[test]
-fn root_provision_cost_guard_request_uses_deployment_policy() {
-    let ctx = RootContext {
-        caller: p(95),
-        self_pid: p(42),
-        is_root_env: true,
-        subnet_id: p(2),
-        now: 9_500,
-    };
-    let guard_request =
-        execute::root_provision_cost_guard_request(&ctx, 5 * TC, 100 * TC, "root.provision");
-
-    assert_eq!(guard_request.cost_class, CostClass::ManagementDeployment);
-    assert_eq!(guard_request.command_kind.as_str(), "root.provision");
-    assert_eq!(guard_request.quota_subject, ctx.caller);
-    assert_eq!(guard_request.payer, ctx.self_pid);
-    assert_eq!(guard_request.now_secs, ctx.now);
-    assert_eq!(guard_request.quota_window_secs, 60);
-    assert_eq!(guard_request.max_operations_per_window, 10);
-    assert_eq!(guard_request.cycle_reservation_cycles, 5 * TC);
-    assert_eq!(guard_request.min_cycles_after_reservation, TC);
-}
-
-#[test]
 fn root_provision_marks_create_external_effect() {
     ReplayReceiptOps::reset_for_tests();
-    CostGuardOps::reset_for_tests();
 
     let ctx = RootContext {
         caller: p(96),
@@ -592,40 +559,21 @@ fn root_provision_marks_create_external_effect() {
         replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
     };
 
-    let permit = CostGuardOps::reserve(execute::root_provision_cost_guard_request(
-        &ctx,
-        5 * TC,
-        10 * TC,
-        "root.provision",
-    ))
-    .expect("cost permit");
-    execute::mark_root_provision_external_effect(
-        &pending,
-        &ctx,
-        &req,
-        p(42),
-        &permit,
-        "root.provision",
-    )
-    .expect("mark provision effect");
+    execute::mark_root_provision_external_effect(&pending, &ctx, &req, p(42), "root.provision")
+        .expect("mark provision effect");
 
     let receipt = ReplayReceiptOps::get(pending.receipt_token.key())
         .expect("receipt")
         .into_receipt()
         .expect("receipt decodes");
     assert_eq!(receipt.status, ReplayReceiptStatus::ExternalEffectInFlight);
-    assert_eq!(
-        receipt.cost_guard_settlement,
-        Some(permit.replay_settlement())
-    );
+    assert_eq!(receipt.cost_guard_settlement, None);
     assert_eq!(
         receipt.effect,
         Some(ExternalEffectDescriptor::ManagementCreateCanister {
             command_kind: CommandKind::new("root.provision").expect("command kind"),
         })
     );
-
-    CostGuardOps::abort(&permit).expect("abort cost permit");
     ReplayReceiptOps::reset_for_tests();
 }
 
@@ -1310,6 +1258,52 @@ fn abort_replay_preserves_recovery_required_external_effect_receipt() {
 }
 
 #[test]
+fn interrupted_component_child_lifecycle_is_resumed_by_exact_retry() {
+    ReplayReceiptOps::reset_for_tests();
+
+    let ctx = RootContext {
+        caller: p(5),
+        self_pid: p(42),
+        is_root_env: true,
+        subnet_id: p(6),
+        now: 1_000,
+    };
+    let capability = RootCapability::ProvisionCanister(CreateCanisterRequest {
+        canister_role: CanisterRole::new("project_instance"),
+        parent: CreateCanisterParent::ThisCanister,
+        extra_arg: Some(vec![9, 8, 7]),
+        metadata: Some(meta(18, secs_to_ns(60))),
+    });
+    let pending = match RootResponseWorkflow::check_replay(&ctx, &capability)
+        .expect("first replay should reserve")
+    {
+        replay::ReplayPreflight::Fresh(pending) => pending,
+        replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
+    };
+    mark_external_effect_in_flight(
+        &pending.receipt_token,
+        ExternalEffectDescriptor::ManagementCreateCanister {
+            command_kind: CommandKind::new("root.provision").expect("command kind"),
+        },
+        secs_to_ns(1_001),
+    )
+    .expect("mark external effect");
+    mark_recovery_required(
+        &pending.receipt_token,
+        RecoveryReason::ComponentChildLifecycleInterrupted,
+        secs_to_ns(1_002),
+    )
+    .expect("mark resumable lifecycle interruption");
+
+    let retried = RootResponseWorkflow::check_replay(&ctx, &capability)
+        .expect("exact retry should resume the same Component Child operation");
+    let replay::ReplayPreflight::Fresh(retried) = retried else {
+        panic!("interrupted lifecycle retry must return its pending receipt");
+    };
+    assert_eq!(retried.receipt_token.key(), pending.receipt_token.key());
+}
+
+#[test]
 fn abort_replay_cleanup_failure_preserves_primary_error_projection() {
     ReplayReceiptOps::reset_for_tests();
 
@@ -1344,72 +1338,6 @@ fn abort_replay_cleanup_failure_preserves_primary_error_projection() {
         error.public_error().map(|error| error.code),
         Some(ErrorCode::Conflict)
     );
-}
-
-#[test]
-fn check_replay_finishes_cost_settlement_without_reexecuting_capability() {
-    ReplayReceiptOps::reset_for_tests();
-    CostGuardOps::reset_for_tests();
-
-    let ctx = RootContext {
-        caller: p(5),
-        self_pid: p(42),
-        is_root_env: true,
-        subnet_id: p(6),
-        now: 1_000,
-    };
-    let req = CreateCanisterRequest {
-        canister_role: CanisterRole::new("project_hub"),
-        parent: CreateCanisterParent::Root,
-        extra_arg: None,
-        metadata: Some(meta(18, secs_to_ns(60))),
-    };
-    let capability = RootCapability::ProvisionCanister(req.clone());
-    let pending = match RootResponseWorkflow::check_replay(&ctx, &capability)
-        .expect("first replay should reserve")
-    {
-        replay::ReplayPreflight::Fresh(pending) => pending,
-        replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
-    };
-    let permit = CostGuardOps::reserve(execute::root_provision_cost_guard_request(
-        &ctx,
-        5 * TC,
-        10 * TC,
-        "root.provision",
-    ))
-    .expect("cost permit");
-    execute::mark_root_provision_external_effect(
-        &pending,
-        &ctx,
-        &req,
-        p(42),
-        &permit,
-        "root.provision",
-    )
-    .expect("mark costed effect");
-    let response = Response::CreateCanister(crate::dto::rpc::CreateCanisterResponse {
-        new_canister_pid: p(99),
-    });
-    replay::stage_response(&pending, &response).expect("stage terminal response");
-    replay::mark_recovery_required(&pending, RecoveryReason::CostSettlementFailed)
-        .expect("mark settlement recovery");
-
-    let recovered = RootResponseWorkflow::check_replay(&ctx, &capability)
-        .expect("identical retry should finish accounting");
-    match recovered {
-        replay::ReplayPreflight::Cached(Response::CreateCanister(response)) => {
-            assert_eq!(response.new_canister_pid, p(99));
-        }
-        other => panic!("expected cached recovered response, got {other:?}"),
-    }
-    let receipt = ReplayReceiptOps::get(pending.receipt_token.key())
-        .expect("receipt")
-        .into_receipt()
-        .expect("receipt decodes");
-    assert_eq!(receipt.status, ReplayReceiptStatus::Committed);
-
-    ReplayReceiptOps::reset_for_tests();
-    CostGuardOps::reset_for_tests();
 }
 
 #[test]

@@ -171,8 +171,9 @@ pub mod workflow {
 
     pub mod rpc {
         pub use crate::workflow::rpc::{
-            RootCapabilityAuthority, RootCapabilityCallerAuthority, RootCapabilityMemberAuthority,
-            RootCapabilityParentAuthority,
+            RootCapabilityAuthority, RootCapabilityCallerAuthority,
+            RootCapabilityLifecycleExecutor, RootCapabilityMemberAuthority,
+            RootCapabilityParentAuthority, RootComponentChildProvisionRequest,
         };
     }
 

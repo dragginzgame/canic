@@ -171,6 +171,7 @@ impl FleetActivationOps {
     pub(crate) fn prepare_component_runtime_directory(
         request: ComponentRuntimeDirectoryPreparationRequest,
         authority_hash: [u8; 32],
+        direct_children_hash: [u8; 32],
     ) -> Result<ComponentRuntimeStatusResponse, FleetActivationOpsError> {
         let mut record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
         let (operation_id, is_prepared) = match &record.state {
@@ -188,6 +189,7 @@ impl FleetActivationOps {
         let next = ComponentRuntimeDirectoryRecord {
             authority: component_runtime_directory_dto_to_record(request.authority),
             authority_hash,
+            direct_children_hash,
         };
         if component_runtime
             .activation
@@ -217,6 +219,7 @@ impl FleetActivationOps {
     pub(crate) fn synchronize_component_runtime_directory(
         request: ComponentRuntimeDirectorySynchronizationRequest,
         authority_hash: [u8; 32],
+        direct_children_hash: [u8; 32],
     ) -> Result<ComponentRuntimeStatusResponse, FleetActivationOpsError> {
         let mut record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
         let operation_id = match &record.state {
@@ -250,6 +253,7 @@ impl FleetActivationOps {
         let next = ComponentRuntimeDirectoryRecord {
             authority: component_runtime_directory_dto_to_record(request.authority),
             authority_hash,
+            direct_children_hash,
         };
         if current == &next {
             return component_runtime_status(record);
@@ -773,18 +777,25 @@ fn component_runtime_status(
     if let Some(activation) = &component_runtime.activation {
         validate_component_runtime_directory_record(&activation.directory)?;
     }
-    let (phase, authority, authority_hash, activation) = match (
+    let (phase, authority, authority_hash, direct_children_hash, activation) = match (
         runtime_active,
         component_runtime.directory,
         component_runtime.activation,
     ) {
-        (false, None, None) => (ComponentRuntimePhase::AwaitingDirectory, None, None, None),
+        (false, None, None) => (
+            ComponentRuntimePhase::AwaitingDirectory,
+            None,
+            None,
+            None,
+            None,
+        ),
         (false, Some(directory), None) => (
             ComponentRuntimePhase::DirectoryPrepared,
             Some(component_runtime_directory_record_to_dto(
                 &directory.authority,
             )),
             Some(directory.authority_hash),
+            Some(directory.direct_children_hash),
             None,
         ),
         (true, Some(directory), Some(activation))
@@ -796,6 +807,7 @@ fn component_runtime_status(
                     &directory.authority,
                 )),
                 Some(directory.authority_hash),
+                Some(directory.direct_children_hash),
                 Some(ComponentRuntimeActivationEvidence {
                     directory_authority_hash: activation.directory.authority_hash,
                     activated_at_ns: activation.activated_at_ns,
@@ -816,6 +828,7 @@ fn component_runtime_status(
         phase,
         authority,
         authority_hash,
+        direct_children_hash,
         activation,
     })
 }
@@ -867,6 +880,7 @@ fn component_runtime_activation_status(
         &activation_directory.authority,
     ));
     status.authority_hash = Some(activation_directory.authority_hash);
+    status.direct_children_hash = Some(activation_directory.direct_children_hash);
     Ok(status)
 }
 
@@ -883,6 +897,11 @@ fn validate_component_runtime_directory_record(
         return Err(FleetActivationOpsError::InvalidRecord {
             reason: "Component runtime Directory authority does not match its retained hash"
                 .to_string(),
+        });
+    }
+    if directory.direct_children_hash == [0; 32] {
+        return Err(FleetActivationOpsError::InvalidRecord {
+            reason: "Component runtime Directory has no direct-child projection hash".to_string(),
         });
     }
     Ok(())
@@ -1389,16 +1408,21 @@ mod tests {
         let request = ComponentRuntimeDirectoryPreparationRequest {
             operation_id: root_input.install_id,
             authority,
+            direct_children: Vec::new(),
         };
         let expected_authority = request.authority.clone();
         let prepared = FleetActivationOps::prepare_component_runtime_directory(
             request.clone(),
             authority_hash,
+            [60; 32],
         )
         .expect("prepare Directory");
-        let repeated =
-            FleetActivationOps::prepare_component_runtime_directory(request, authority_hash)
-                .expect("repeat Directory preparation");
+        let repeated = FleetActivationOps::prepare_component_runtime_directory(
+            request,
+            authority_hash,
+            [60; 32],
+        )
+        .expect("repeat Directory preparation");
         assert_eq!(repeated, prepared);
         assert_eq!(prepared.phase, ComponentRuntimePhase::DirectoryPrepared);
         assert_eq!(prepared.authority, Some(expected_authority));
@@ -1474,8 +1498,10 @@ mod tests {
             ComponentRuntimeDirectoryPreparationRequest {
                 operation_id: root_input.install_id,
                 authority: authority.clone(),
+                direct_children: Vec::new(),
             },
             authority_hash,
+            [60; 32],
         )
         .expect("prepare Directory");
         let request = ComponentRuntimeActivationRequest {
@@ -1562,15 +1588,18 @@ mod tests {
         let synchronization_request = ComponentRuntimeDirectorySynchronizationRequest {
             operation_id,
             authority: active_authority,
+            direct_children: Vec::new(),
         };
         let synchronized = FleetActivationOps::synchronize_component_runtime_directory(
             synchronization_request.clone(),
             active_authority_hash,
+            [61; 32],
         )
         .expect("synchronize current Directory");
         let synchronized_again = FleetActivationOps::synchronize_component_runtime_directory(
             synchronization_request,
             active_authority_hash,
+            [61; 32],
         )
         .expect("repeat current Directory synchronization");
         assert_eq!(synchronized_again, synchronized);
@@ -1588,8 +1617,10 @@ mod tests {
                     .authority
                     .clone()
                     .expect("prepared activation authority"),
+                direct_children: Vec::new(),
             },
             prepared_authority_hash,
+            [60; 32],
         )
         .expect("Directory preparation retry after current Directory progression");
         assert_eq!(

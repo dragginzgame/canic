@@ -22,8 +22,9 @@ use crate::{
         receipt::{
             PlacementReceiptAcknowledgementDecision, ReplayReceiptStoreError,
             abort_reserved_receipt, acknowledge_placement_receipt, commit_staged_receipt_response,
-            mark_costed_external_effect_in_flight, mark_recovery_required,
-            replay_cost_guard_settlement, reserve_receipt_token, stage_receipt_response,
+            mark_costed_external_effect_in_flight, mark_external_effect_in_flight,
+            mark_recovery_required, replay_cost_guard_settlement, reserve_receipt_token,
+            stage_receipt_response,
         },
     },
     ops::storage::replay::ReplayReceiptOps,
@@ -141,6 +142,15 @@ pub fn mark_root_replay_costed_external_effect(
         cost_permit.replay_settlement(),
         now_ns,
     )
+}
+
+/// Persist a root external-effect boundary whose cost settlement has a nested durable owner.
+pub fn mark_root_replay_external_effect(
+    pending: &ReplayPending,
+    effect: ExternalEffectDescriptor,
+    now_ns: u64,
+) -> Result<(), ReplayReceiptStoreError> {
+    mark_external_effect_in_flight(&pending.receipt_token, effect, now_ns)
 }
 
 /// Encode and stage a root response before cost settlement is attempted.

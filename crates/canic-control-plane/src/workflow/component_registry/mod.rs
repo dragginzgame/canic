@@ -13,18 +13,19 @@ use crate::{
         fleet_registry_mirror::FleetRegistryMirrorOps,
     },
     view::component_registry::{
-        ComponentDirectoryCanonicalCursor, ComponentDirectoryPageSelection,
-        ComponentRegistryPartitionView, RootComponentAllocationProgressView,
-        RootComponentAllocationView, RootComponentChildAllocationProgressView,
-        RootComponentChildAllocationView, RootComponentChildCommitmentView,
-        RootComponentChildInstallEffectView, RootComponentChildMembershipView,
-        RootComponentCreationEffectView, RootComponentDeletionIntentView,
-        RootComponentDeletionProgressView, RootComponentDrainingAdvanceView,
-        RootComponentDrainingView, RootComponentFinalInventoryView,
-        RootComponentInitialInventoryView, RootComponentInstallEffectView,
-        RootComponentMembershipRemovedView, RootComponentQuiescenceProgressView,
-        RootComponentQuiescenceStopIntentView, RootComponentRegistryView,
-        RootComponentSubtreeDeleteEffectView, RootComponentSubtreeDirectoryConvergenceView,
+        ActiveComponentMemberView, ComponentDirectoryCanonicalCursor,
+        ComponentDirectoryPageSelection, ComponentRegistryPartitionView,
+        RootComponentAllocationProgressView, RootComponentAllocationView,
+        RootComponentChildAllocationProgressView, RootComponentChildAllocationView,
+        RootComponentChildCommitmentView, RootComponentChildInstallEffectView,
+        RootComponentChildMembershipView, RootComponentCreationEffectView,
+        RootComponentDeletionIntentView, RootComponentDeletionProgressView,
+        RootComponentDrainingAdvanceView, RootComponentDrainingView,
+        RootComponentFinalInventoryView, RootComponentInitialInventoryView,
+        RootComponentInstallEffectView, RootComponentMembershipRemovedView,
+        RootComponentQuiescenceProgressView, RootComponentQuiescenceStopIntentView,
+        RootComponentRegistryView, RootComponentSubtreeDeleteEffectView,
+        RootComponentSubtreeDirectoryConvergenceView,
         RootComponentSubtreeDirectorySynchronizedView, RootComponentSubtreeMembershipRemovedView,
         RootComponentSubtreeRemovalProgressView, RootComponentSubtreeRemovalView,
         RootComponentSubtreeStopEffectView, RootComponentSubtreeStoppedEffectView,
@@ -76,7 +77,8 @@ use canic_core::{
             ComponentDirectoryPageCursor, ComponentDirectoryPageRequest,
             ComponentDirectoryPageResponse, ComponentDirectoryProvenance, ComponentLifecycleStatus,
             ComponentProvisioningOrigin, ComponentRegistryHead, ComponentRegistryPartitionRequest,
-            ComponentRegistryPartitionResponse, ComponentRuntimeActivationRequest,
+            ComponentRegistryPartitionResponse, ComponentRuntimeActivationEvidence,
+            ComponentRuntimeActivationRequest, ComponentRuntimeDirectChild,
             ComponentRuntimeDirectoryAuthority, ComponentRuntimeDirectoryConvergenceEvidence,
             ComponentRuntimeDirectoryPreparationRequest,
             ComponentRuntimeDirectorySynchronizationRequest, ComponentRuntimePhase,
@@ -180,6 +182,76 @@ struct ComponentDirectoryCursorBinding<'a> {
     parent_canister_id: Option<candid::Principal>,
     role: Option<&'a CanisterRole>,
     status: Option<ComponentLifecycleStatus>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct ComponentRuntimeDirectoryStatusIdentity<'a> {
+    authority: Option<&'a ComponentRuntimeDirectoryAuthority>,
+    authority_hash: Option<[u8; 32]>,
+    direct_children_hash: Option<[u8; 32]>,
+}
+
+impl<'a> ComponentRuntimeDirectoryStatusIdentity<'a> {
+    const fn from_status(status: &'a ComponentRuntimeStatusResponse) -> Self {
+        Self {
+            authority: status.authority.as_ref(),
+            authority_hash: status.authority_hash,
+            direct_children_hash: status.direct_children_hash,
+        }
+    }
+
+    const fn exact(
+        authority: &'a ComponentRuntimeDirectoryAuthority,
+        authority_hash: [u8; 32],
+        direct_children_hash: [u8; 32],
+    ) -> Self {
+        Self {
+            authority: Some(authority),
+            authority_hash: Some(authority_hash),
+            direct_children_hash: Some(direct_children_hash),
+        }
+    }
+
+    const fn empty() -> Self {
+        Self {
+            authority: None,
+            authority_hash: None,
+            direct_children_hash: None,
+        }
+    }
+
+    const fn is_complete(&self) -> bool {
+        matches!(
+            (
+                self.authority,
+                self.authority_hash,
+                self.direct_children_hash
+            ),
+            (Some(_), Some(_), Some(_))
+        )
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct ComponentDirectoryOwnership<'a> {
+    component: &'a ComponentBinding,
+    source_fleet_subnet_root: &'a candid::Principal,
+}
+
+impl<'a> ComponentDirectoryOwnership<'a> {
+    const fn from_binding(component: &'a ComponentBinding) -> Self {
+        Self {
+            component,
+            source_fleet_subnet_root: &component.fleet_subnet_root,
+        }
+    }
+
+    const fn from_provenance(provenance: &'a ComponentDirectoryProvenance) -> Self {
+        Self {
+            component: &provenance.component,
+            source_fleet_subnet_root: &provenance.source_fleet_subnet_root,
+        }
+    }
 }
 
 impl<'a> ComponentDirectoryCursorBinding<'a> {
@@ -839,6 +911,7 @@ pub async fn reserve_child_allocation(
     let reserved = ComponentRegistryOps::reserve_child_allocation(
         decision,
         request.operation_id,
+        request.application_init_args,
         request.expected_registry,
     )?;
     Ok(child_allocation_response(reserved))
@@ -2527,6 +2600,7 @@ pub async fn activate_child_membership(
             fleet: plan.directory_request.authority.fleet.clone(),
             component: component_directory_head(&active_partition),
         },
+        direct_children: active_component_direct_children(&active_partition, plan.child_canister)?,
     };
     let active_authority_hash =
         ComponentRuntimeOps::directory_authority_hash(&synchronization_request.authority)?;
@@ -2561,6 +2635,12 @@ pub async fn activate_child_membership(
         active_authority_hash,
     )
     .await?;
+    converge_active_child_parent_directories(
+        &plan,
+        &synchronization_request.authority,
+        active_authority_hash,
+    )
+    .await?;
     validate_requesting_parent_still_active(request.component, &plan.requesting_parent_binding)?;
     let allocation = ComponentRegistryOps::mark_child_membership_synchronized(
         request.component,
@@ -2573,6 +2653,19 @@ pub async fn activate_child_membership(
         active_partition,
         child,
     )
+}
+
+async fn converge_active_child_parent_directories(
+    plan: &PreparedChildRuntimePlan,
+    authority: &ComponentRuntimeDirectoryAuthority,
+    authority_hash: [u8; 32],
+) -> Result<(), InternalError> {
+    converge_active_member_directory(&plan.owning_component_binding, authority, authority_hash)
+        .await?;
+    if let Some(parent_binding) = &plan.parent_binding {
+        converge_active_member_directory(parent_binding, authority, authority_hash).await?;
+    }
+    Ok(())
 }
 
 /// Atomically commit one verified top-level Component and its first Directory authority.
@@ -2774,6 +2867,7 @@ pub async fn activate_component_membership(
             fleet: plan.directory_request.authority.fleet.clone(),
             component: component_directory_head(&active_partition),
         },
+        direct_children: active_component_direct_children(&active_partition, plan.target_canister)?,
     };
     let active_authority_hash =
         ComponentRuntimeOps::directory_authority_hash(&synchronization_request.authority)?;
@@ -2916,6 +3010,13 @@ pub fn root_runtime_activation_receipt_complete() -> bool {
 pub fn active_component_member(
     canister: candid::Principal,
 ) -> Result<ManagedCanisterBinding, InternalError> {
+    Ok(active_component_member_authority(canister)?.binding)
+}
+
+/// Resolve one active member together with its current owning Registry head.
+pub fn active_component_member_authority(
+    canister: candid::Principal,
+) -> Result<ActiveComponentMemberView, InternalError> {
     let (authority, _) = root_authority()?;
     prepared_registry(&authority.binding, authority.initial_release_set)?;
     let component = ComponentRegistryOps::component_for_principal(canister).ok_or_else(|| {
@@ -2949,7 +3050,14 @@ pub fn active_component_member(
             "caller {canister} is not an active Component Registry member"
         ))));
     }
-    Ok(member)
+    Ok(ActiveComponentMemberView {
+        binding: member,
+        registry: ComponentRegistryHead {
+            component: partition.binding.component,
+            revision: partition.revision,
+            content_hash: partition.content_hash,
+        },
+    })
 }
 
 async fn verify_initial_component_convergence(operation_id: [u8; 32]) -> Result<(), InternalError> {
@@ -2988,6 +3096,7 @@ async fn verify_initial_component_convergence(operation_id: [u8; 32]) -> Result<
             fleet: plan.directory_request.authority.fleet.clone(),
             component: component_directory_head(&active_partition),
         },
+        direct_children: active_component_direct_children(&active_partition, plan.target_canister)?,
     };
     let active_authority_hash =
         ComponentRuntimeOps::directory_authority_hash(&active_request.authority)?;
@@ -3409,6 +3518,7 @@ struct ComponentChildInstallPlan {
     payload: CanisterInitPayload,
     canister: candid::Principal,
     expected_status_module_hash: [u8; 32],
+    application_init_args: Option<Vec<u8>>,
 }
 
 async fn component_install_plan(
@@ -3580,6 +3690,7 @@ async fn child_component_install_plan(
         payload,
         canister,
         expected_status_module_hash: artifact.payload_hash,
+        application_init_args: allocation.application_init_args.clone(),
     })
 }
 
@@ -3713,7 +3824,7 @@ async fn perform_child_install(
         plan.canister,
         &plan.source,
         plan.payload.clone(),
-        None,
+        plan.application_init_args.clone(),
     )
     .await
     {
@@ -4074,12 +4185,13 @@ async fn prepared_component_runtime_plan(
     Ok(PreparedComponentRuntimePlan {
         root_binding: root_authority.binding,
         allocation,
-        partition,
+        partition: partition.clone(),
         target_canister: install.canister,
         target_binding: ManagedCanisterBinding::Component(install.durable.binding),
         directory_request: ComponentRuntimeDirectoryPreparationRequest {
             operation_id,
             authority,
+            direct_children: active_component_direct_children(&partition, install.canister)?,
         },
         directory_authority_hash,
         maximum_component_registry_bytes: install.durable.maximum_registry_bytes,
@@ -4160,6 +4272,7 @@ async fn prepared_child_runtime_plan(
         fleet_directory,
         &committed_partition,
         &allocation,
+        install.canister,
     )?;
 
     let owning_component_binding = ManagedCanisterBinding::Component(current_partition.binding);
@@ -4231,6 +4344,7 @@ fn child_directory_request(
     fleet: FleetDirectorySnapshot,
     partition: &ComponentRegistryPartitionView,
     allocation: &RootComponentChildAllocationView,
+    child_canister: candid::Principal,
 ) -> Result<(ComponentRuntimeDirectoryPreparationRequest, [u8; 32]), InternalError> {
     let request = ComponentRuntimeDirectoryPreparationRequest {
         operation_id,
@@ -4238,6 +4352,7 @@ fn child_directory_request(
             fleet,
             component: component_directory_head(partition),
         },
+        direct_children: active_component_direct_children(partition, child_canister)?,
     };
     let authority_hash = ComponentRuntimeOps::directory_authority_hash(&request.authority)?;
     if committed_child_directory_receipt(allocation)?.directory_authority_hash != authority_hash {
@@ -4247,6 +4362,66 @@ fn child_directory_request(
         ));
     }
     Ok((request, authority_hash))
+}
+
+fn active_component_direct_children_for_authority(
+    authority: &ComponentRuntimeDirectoryAuthority,
+    parent_canister_id: candid::Principal,
+) -> Result<Vec<ComponentRuntimeDirectChild>, InternalError> {
+    let component = authority.component.provenance.component.component;
+    let partition = ComponentRegistryOps::partition(component)?.ok_or_else(|| {
+        InternalError::unavailable("Component Directory partition has not been committed")
+    })?;
+    if component_directory_head(&partition) != authority.component {
+        return Err(InternalError::conflict(
+            "Component direct-child projection authority is not current",
+        ));
+    }
+    active_component_direct_children(&partition, parent_canister_id)
+}
+
+fn active_component_direct_children(
+    partition: &ComponentRegistryPartitionView,
+    parent_canister_id: candid::Principal,
+) -> Result<Vec<ComponentRuntimeDirectChild>, InternalError> {
+    let scan_limit = usize::try_from(partition.committed_descendants)
+        .unwrap_or(usize::MAX)
+        .saturating_add(1);
+    let page = ComponentRegistryOps::directory_page(
+        partition.binding.component,
+        &ComponentDirectoryPageSelection {
+            parent_canister_id: Some(parent_canister_id),
+            role: None,
+            status: Some(ComponentLifecycleStatus::Active),
+            start_after: None,
+        },
+        scan_limit,
+    )?;
+    if page.next_cursor.is_some() {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component direct-child projection exceeded its committed descendant bound",
+        ));
+    }
+    let mut direct_children = page
+        .entries
+        .into_iter()
+        .map(|entry| ComponentRuntimeDirectChild {
+            canister_id: entry.binding.canister_id,
+            role: entry.binding.role,
+        })
+        .collect::<Vec<_>>();
+    direct_children.sort();
+    if direct_children
+        .windows(2)
+        .any(|pair| pair[0].canister_id == pair[1].canister_id)
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component direct-child projection contains a duplicate principal",
+        ));
+    }
+    Ok(direct_children)
 }
 
 async fn query_component_runtime_status(
@@ -4509,35 +4684,50 @@ async fn converge_active_member_directory(
     authority_hash: [u8; 32],
 ) -> Result<ComponentRuntimeDirectoryConvergenceEvidence, InternalError> {
     let canister = managed_canister_principal(binding);
+    let direct_children = active_component_direct_children_for_authority(authority, canister)?;
+    let direct_children_hash = ComponentRuntimeOps::direct_children_hash(&direct_children)?;
     let observed = query_component_runtime_status(canister).await?;
-    let converged =
-        if active_member_directory_is_converged(&observed, binding, authority, authority_hash)? {
-            observed
-        } else {
-            let request = ComponentRuntimeDirectorySynchronizationRequest {
-                operation_id: observed.operation_id,
-                authority: authority.clone(),
-            };
-            match synchronize_target_component_directory(canister, request).await {
-                Ok(status) => status,
-                Err(call_error) => {
-                    let reconciled = query_component_runtime_status(canister).await?;
-                    if active_member_directory_is_converged(
-                        &reconciled,
-                        binding,
-                        authority,
-                        authority_hash,
-                    )
-                    .is_ok_and(|converged| converged)
-                    {
-                        reconciled
-                    } else {
-                        return Err(call_error);
-                    }
+    let converged = if active_member_directory_is_converged(
+        &observed,
+        binding,
+        authority,
+        authority_hash,
+        direct_children_hash,
+    )? {
+        observed
+    } else {
+        let request = ComponentRuntimeDirectorySynchronizationRequest {
+            operation_id: observed.operation_id,
+            authority: authority.clone(),
+            direct_children,
+        };
+        match synchronize_target_component_directory(canister, request).await {
+            Ok(status) => status,
+            Err(call_error) => {
+                let reconciled = query_component_runtime_status(canister).await?;
+                if active_member_directory_is_converged(
+                    &reconciled,
+                    binding,
+                    authority,
+                    authority_hash,
+                    direct_children_hash,
+                )
+                .is_ok_and(|converged| converged)
+                {
+                    reconciled
+                } else {
+                    return Err(call_error);
                 }
             }
-        };
-    if !active_member_directory_is_converged(&converged, binding, authority, authority_hash)? {
+        }
+    };
+    if !active_member_directory_is_converged(
+        &converged,
+        binding,
+        authority,
+        authority_hash,
+        direct_children_hash,
+    )? {
         return Err(InternalError::unavailable(
             "active Component-tree member has not retained the committed Directory authority",
         ));
@@ -4549,6 +4739,7 @@ async fn converge_active_member_directory(
         binding,
         authority,
         authority_hash,
+        direct_children_hash,
     )
 }
 
@@ -4557,6 +4748,7 @@ fn active_member_directory_is_converged(
     binding: &ManagedCanisterBinding,
     expected: &ComponentRuntimeDirectoryAuthority,
     expected_hash: [u8; 32],
+    expected_direct_children_hash: [u8; 32],
 ) -> Result<bool, InternalError> {
     let current = status.authority.as_ref().ok_or_else(|| {
         InternalError::conflict("Active Component-tree member has no current Directory authority")
@@ -4564,28 +4756,27 @@ fn active_member_directory_is_converged(
     let current_hash = status.authority_hash.ok_or_else(|| {
         InternalError::conflict("Active Component-tree member has no current Directory hash")
     })?;
+    let current_direct_children_hash = status.direct_children_hash.ok_or_else(|| {
+        InternalError::conflict("Active Component-tree member has no direct-child projection hash")
+    })?;
     let activation = status.activation.ok_or_else(|| {
         InternalError::conflict("Active Component-tree member has no immutable activation receipt")
     })?;
-    if status.binding != *binding
-        || status.phase != ComponentRuntimePhase::Active
-        || activation.directory_authority_hash == [0; 32]
-        || activation.activated_at_ns == 0
-        || ComponentRuntimeOps::directory_authority_hash(current)? != current_hash
-    {
-        return Err(InternalError::conflict(
-            "Component-tree member status differs from its active protected authority",
-        ));
-    }
+    validate_active_member_protected_status(status, binding, current, current_hash, activation)?;
 
     let current_component = &current.component.provenance;
     let expected_component = &expected.component.provenance;
-    if current_component.component != expected_component.component
-        || current_component.source_fleet_subnet_root != expected_component.source_fleet_subnet_root
-        || current_component.component != *owning_component(binding)
-    {
+    let current_ownership = ComponentDirectoryOwnership::from_provenance(current_component);
+    let expected_ownership = ComponentDirectoryOwnership::from_provenance(expected_component);
+    let binding_ownership = ComponentDirectoryOwnership::from_binding(owning_component(binding));
+    if current_ownership != expected_ownership {
         return Err(InternalError::conflict(
-            "Component-tree member belongs to a different Component Directory",
+            "Component-tree member belongs to a different Component Directory authority",
+        ));
+    }
+    if current_ownership != binding_ownership {
+        return Err(InternalError::conflict(
+            "Component-tree member Directory differs from its protected binding",
         ));
     }
     match current_component
@@ -4593,7 +4784,17 @@ fn active_member_directory_is_converged(
         .cmp(&expected_component.component_registry_revision)
     {
         std::cmp::Ordering::Equal => {
-            if current == expected && current_hash == expected_hash {
+            let current_identity = ComponentRuntimeDirectoryStatusIdentity::exact(
+                current,
+                current_hash,
+                current_direct_children_hash,
+            );
+            let expected_identity = ComponentRuntimeDirectoryStatusIdentity::exact(
+                expected,
+                expected_hash,
+                expected_direct_children_hash,
+            );
+            if current_identity == expected_identity {
                 Ok(true)
             } else {
                 Err(InternalError::conflict(
@@ -4602,11 +4803,7 @@ fn active_member_directory_is_converged(
             }
         }
         std::cmp::Ordering::Less => {
-            if expected_component.component_registry_content_hash
-                == current_component.component_registry_content_hash
-                || expected_component.synchronized_at_ns <= current_component.synchronized_at_ns
-                || !fleet_directory_non_regressing(&current.fleet, &expected.fleet)
-            {
+            if !component_directory_progresses(current, expected) {
                 return Err(InternalError::conflict(
                     "committed Component Directory cannot advance the active member safely",
                 ));
@@ -4614,11 +4811,7 @@ fn active_member_directory_is_converged(
             Ok(false)
         }
         std::cmp::Ordering::Greater => {
-            if current_component.component_registry_content_hash
-                == expected_component.component_registry_content_hash
-                || current_component.synchronized_at_ns <= expected_component.synchronized_at_ns
-                || !fleet_directory_non_regressing(&expected.fleet, &current.fleet)
-            {
+            if !component_directory_progresses(expected, current) {
                 return Err(InternalError::conflict(
                     "active Component-tree member progressed through conflicting Directory authority",
                 ));
@@ -4628,13 +4821,72 @@ fn active_member_directory_is_converged(
     }
 }
 
+fn validate_active_member_protected_status(
+    status: &ComponentRuntimeStatusResponse,
+    binding: &ManagedCanisterBinding,
+    current: &ComponentRuntimeDirectoryAuthority,
+    current_hash: [u8; 32],
+    activation: ComponentRuntimeActivationEvidence,
+) -> Result<(), InternalError> {
+    if status.binding != *binding {
+        return Err(InternalError::conflict(
+            "Component-tree member status has a different protected binding",
+        ));
+    }
+    if status.phase != ComponentRuntimePhase::Active {
+        return Err(InternalError::conflict(
+            "Component-tree member status is not Active",
+        ));
+    }
+    if activation.directory_authority_hash == [0; 32] {
+        return Err(InternalError::conflict(
+            "Component-tree member activation has no Directory authority hash",
+        ));
+    }
+    if activation.activated_at_ns == 0 {
+        return Err(InternalError::conflict(
+            "Component-tree member activation has no timestamp",
+        ));
+    }
+    if ComponentRuntimeOps::directory_authority_hash(current)? != current_hash {
+        return Err(InternalError::conflict(
+            "Component-tree member current Directory hash differs from its authority",
+        ));
+    }
+    Ok(())
+}
+
+fn component_directory_progresses(
+    current: &ComponentRuntimeDirectoryAuthority,
+    next: &ComponentRuntimeDirectoryAuthority,
+) -> bool {
+    let current_component = &current.component.provenance;
+    let next_component = &next.component.provenance;
+    if next_component.component_registry_content_hash
+        == current_component.component_registry_content_hash
+    {
+        return false;
+    }
+    if next_component.synchronized_at_ns <= current_component.synchronized_at_ns {
+        return false;
+    }
+    fleet_directory_non_regressing(&current.fleet, &next.fleet)
+}
+
 fn exact_active_member_directory_receipt(
     status: &ComponentRuntimeStatusResponse,
     binding: &ManagedCanisterBinding,
     authority: &ComponentRuntimeDirectoryAuthority,
     authority_hash: [u8; 32],
+    direct_children_hash: [u8; 32],
 ) -> Result<ComponentRuntimeDirectoryConvergenceEvidence, InternalError> {
-    if !active_member_directory_is_converged(status, binding, authority, authority_hash)? {
+    if !active_member_directory_is_converged(
+        status,
+        binding,
+        authority,
+        authority_hash,
+        direct_children_hash,
+    )? {
         return Err(InternalError::unavailable(
             "active Component-tree member has not converged on the committed Directory authority",
         ));
@@ -4683,33 +4935,38 @@ fn validate_target_directory_status(
     request: &ComponentRuntimeDirectoryPreparationRequest,
     authority_hash: [u8; 32],
 ) -> Result<ComponentRuntimePhase, InternalError> {
-    if status.operation_id != request.operation_id || status.binding != *binding {
+    let direct_children_hash = ComponentRuntimeOps::direct_children_hash(&request.direct_children)?;
+    if status.operation_id != request.operation_id {
         return Err(InternalError::conflict(
-            "Component runtime Directory status differs from root installation authority",
+            "Component runtime Directory status has a different installation operation",
         ));
     }
+    if status.binding != *binding {
+        return Err(InternalError::conflict(
+            "Component runtime Directory status has a different protected binding",
+        ));
+    }
+    let identity = ComponentRuntimeDirectoryStatusIdentity::from_status(status);
+    let prepared_identity = ComponentRuntimeDirectoryStatusIdentity::exact(
+        &request.authority,
+        authority_hash,
+        direct_children_hash,
+    );
     match status.phase {
         ComponentRuntimePhase::AwaitingDirectory
-            if status.authority.is_none()
-                && status.authority_hash.is_none()
+            if identity == ComponentRuntimeDirectoryStatusIdentity::empty()
                 && status.activation.is_none() =>
         {
             Ok(ComponentRuntimePhase::AwaitingDirectory)
         }
         ComponentRuntimePhase::DirectoryPrepared
-            if status.authority.as_ref() == Some(&request.authority)
-                && status.authority_hash == Some(authority_hash)
-                && status.activation.is_none() =>
+            if identity == prepared_identity && status.activation.is_none() =>
         {
             Ok(ComponentRuntimePhase::DirectoryPrepared)
         }
         ComponentRuntimePhase::Active
-            if status.authority.is_some()
-                && status.authority_hash.is_some()
-                && status.activation.as_ref().is_some_and(|activation| {
-                    activation.directory_authority_hash == authority_hash
-                        && activation.activated_at_ns != 0
-                }) =>
+            if identity.is_complete()
+                && target_activation_matches(status.activation, authority_hash) =>
         {
             Ok(ComponentRuntimePhase::Active)
         }
@@ -4719,6 +4976,19 @@ fn validate_target_directory_status(
             "Component runtime retained conflicting or incomplete Directory authority",
         )),
     }
+}
+
+fn target_activation_matches(
+    activation: Option<ComponentRuntimeActivationEvidence>,
+    expected_directory_authority_hash: [u8; 32],
+) -> bool {
+    let Some(activation) = activation else {
+        return false;
+    };
+    if activation.directory_authority_hash != expected_directory_authority_hash {
+        return false;
+    }
+    activation.activated_at_ns != 0
 }
 
 fn prepared_target_directory_status(
@@ -4735,6 +5005,9 @@ fn prepared_target_directory_status(
             phase: ComponentRuntimePhase::DirectoryPrepared,
             authority: Some(request.authority.clone()),
             authority_hash: Some(authority_hash),
+            direct_children_hash: Some(ComponentRuntimeOps::direct_children_hash(
+                &request.direct_children,
+            )?),
             activation: None,
         }),
         ComponentRuntimePhase::AwaitingDirectory => Err(InternalError::unavailable(
@@ -4778,6 +5051,9 @@ fn active_target_runtime_status(
         phase: ComponentRuntimePhase::Active,
         authority: Some(request.authority.clone()),
         authority_hash: Some(authority_hash),
+        direct_children_hash: Some(ComponentRuntimeOps::direct_children_hash(
+            &request.direct_children,
+        )?),
         activation: Some(activation),
     })
 }
@@ -4801,6 +5077,7 @@ fn validate_target_membership_status(
         binding,
         &active_request.authority,
         active_authority_hash,
+        ComponentRuntimeOps::direct_children_hash(&active_request.direct_children)?,
     )
 }
 
@@ -4836,6 +5113,9 @@ fn active_membership_target_status(
         phase: ComponentRuntimePhase::Active,
         authority: Some(active_request.authority.clone()),
         authority_hash: Some(active_authority_hash),
+        direct_children_hash: Some(ComponentRuntimeOps::direct_children_hash(
+            &active_request.direct_children,
+        )?),
         activation: Some(activation),
     })
 }
@@ -6910,11 +7190,37 @@ fn child_allocation_request_matches(
     request: &RootComponentChildAllocationRequest,
     allocation: &RootComponentChildAllocationView,
 ) -> bool {
-    let registry_matches = request.expected_registry == allocation.reserved_against_registry;
-    request.operation_id == allocation.operation_id
-        && request.component == allocation.component
-        && registry_matches
-        && request.child_role == allocation.child_role
+    ComponentChildRequestIdentity::from(request) == ComponentChildRequestIdentity::from(allocation)
+}
+
+#[derive(Eq, PartialEq)]
+struct ComponentChildRequestIdentity<'a> {
+    operation_id: [u8; 32],
+    component: ComponentInstanceId,
+    child_role: &'a CanisterRole,
+    application_init_args: &'a Option<Vec<u8>>,
+}
+
+impl<'a> From<&'a RootComponentChildAllocationRequest> for ComponentChildRequestIdentity<'a> {
+    fn from(request: &'a RootComponentChildAllocationRequest) -> Self {
+        Self {
+            operation_id: request.operation_id,
+            component: request.component,
+            child_role: &request.child_role,
+            application_init_args: &request.application_init_args,
+        }
+    }
+}
+
+impl<'a> From<&'a RootComponentChildAllocationView> for ComponentChildRequestIdentity<'a> {
+    fn from(allocation: &'a RootComponentChildAllocationView) -> Self {
+        Self {
+            operation_id: allocation.operation_id,
+            component: allocation.component,
+            child_role: &allocation.child_role,
+            application_init_args: &allocation.application_init_args,
+        }
+    }
 }
 
 fn validate_partition(

@@ -20,9 +20,21 @@ use canic_core::{
     ids::{
         CanisterRole, ComponentBinding, ComponentChildBinding, ComponentInstanceId,
         ComponentSpecId, ComponentTopologyDigest, FleetSubnetRootBinding,
-        FleetSubnetRootReleaseSet, SubnetId,
+        FleetSubnetRootReleaseSet, ManagedCanisterBinding, SubnetId,
     },
 };
+
+///
+/// ActiveComponentMemberView
+///
+/// Read-only exact active member plus its current owning Registry head.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ActiveComponentMemberView {
+    pub binding: ManagedCanisterBinding,
+    pub registry: ComponentRegistryHead,
+}
 
 ///
 /// RootFleetSubnetDrainingView
@@ -542,6 +554,7 @@ pub struct RootComponentChildAllocationView {
     pub maximum_instances_per_parent: u32,
     pub maximum_descendants: u32,
     pub maximum_registry_bytes: u64,
+    pub application_init_args: Option<Vec<u8>>,
     pub reserved_against_registry: ComponentRegistryHead,
     pub release_set: FleetSubnetRootReleaseSet,
     pub progress: RootComponentChildAllocationProgressView,

@@ -6,10 +6,10 @@ Date: 2026-08-01
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.79`.
-- Latest published release: `v0.100.79` at
-  `cae39e5d80291404cb4d2fff5f9a8dd00d4c3017`.
-- Open patch draft: `0.100.80`; no package-version change has been authorized.
+- Workspace package version: `0.100.83`.
+- Latest published release: `v0.100.83` at
+  `2e685da2c34c8195e5cd6d5609916095eeb73416`.
+- Open patch draft: `0.100.84`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -1055,7 +1055,7 @@ stack and its hash-only tests because the maintained structural envelope has
 no hash field, then folds residual auth/build forwarding namespaces into their
 owners without adding a compatibility path.
 
-Open 0.100.83 removes legacy Registry authority from the local-child and
+Released 0.100.83 removes legacy Registry authority from the local-child and
 placement boundary. `CanisterChildrenOps` now always reads the executing
 canister's cascaded direct-child cache; it no longer changes meaning on a Fleet
 Subnet Root by substituting the subnet-wide Registry. Placement Index bind,
@@ -1063,16 +1063,28 @@ role validation and abandoned-child cleanup consume the same local child
 record, and the obsolete Registry-missing metric branch and Registry-backed
 test setup are removed. Root Component membership remains owned by the
 control-plane Component Registry rather than this application-local cache.
-The same draft hard-cuts the orphaned control-plane subnet-state query/API/DTO
+The same release hard-cuts the orphaned control-plane subnet-state query/API/DTO
 vertical, which had no endpoint, protocol constant or facade consumer; stable
 state, internal views and template-publication responses remain maintained.
 
+Open 0.100.84 routes structural root provisioning through the root-owned
+Component Child lifecycle. An exact active Component member can create only a
+catalog-admitted direct child beneath itself; the durable reservation binds the
+application init payload and the nested lifecycle owns every deployment cost
+guard and phase receipt. Exact outer replay resumes that sequence through
+membership activation rather than issuing a second generic create effect. The
+protected Component Directory now carries a canonical hashed direct-child
+projection, and activation converges both the owning Component and immediate
+parent so their local child caches become authoritative only after the new
+membership is Active.
+
 ## Next Action
 
-Replace the remaining lifecycle and cascade consumers of the legacy Subnet
-Registry/Directory, delete the
-legacy stable storage and cascade schemas, and complete the reinstall-only
-decoder audit. Then run preparation and execution as separate processes
+Hard-cut the unused root capability upgrade path and move retained
+recycle/reinstall recovery onto Component Registry-owned child authority.
+Then replace the remaining cascade consumers of the legacy Subnet
+Registry/Directory, delete the legacy stable storage and cascade schemas, and
+complete the reinstall-only decoder audit. Then run preparation and execution as separate processes
 against one explicitly selected disposable real-network root. Verify the
 surviving Coordinator terminal receipt and exact replay before closing 0.100
 against the final design and beginning 0.101.
