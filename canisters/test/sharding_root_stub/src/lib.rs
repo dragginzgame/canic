@@ -73,7 +73,6 @@ async fn handle_request(request: Request) -> Result<Response, Error> {
                 new_canister_pid: pid,
             }))
         }
-        Request::UpgradeCanister(_) => Ok(Response::UpgradeCanister),
         Request::RecycleCanister(_) => Ok(Response::RecycleCanister),
         Request::Cycles(req) => Ok(Response::Cycles(CyclesResponse {
             cycles_transferred: req.cycles,

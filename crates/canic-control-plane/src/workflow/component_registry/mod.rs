@@ -474,7 +474,7 @@ fn terminal_component_membership_removal_response(
     component_deletion_response(draining).map(Some)
 }
 
-enum ComponentDrainingRemovalAction {
+enum ComponentSubtreeRemovalAction {
     Advance(RootComponentSubtreeRemovalAdvanceRequest),
     PrepareStop(RootComponentSubtreeRemovalStopPreparationRequest),
     Stop(RootComponentSubtreeRemovalStopRequest),
@@ -1178,7 +1178,7 @@ pub async fn advance_component_draining(
     match ComponentRegistryOps::advance_component_draining(request.component, request.operation_id)?
     {
         RootComponentDrainingAdvanceView::DescendantRemoval(removal) => {
-            let removal = Box::pin(advance_draining_removal_phase(*removal)).await?;
+            let removal = Box::pin(advance_subtree_removal_phase(*removal)).await?;
             Ok(component_draining_advance_removal_response(
                 request, removal,
             ))
@@ -1402,29 +1402,27 @@ async fn prepared_component_draining_boundary(
     })
 }
 
-async fn advance_draining_removal_phase(
+async fn advance_subtree_removal_phase(
     removal: RootComponentSubtreeRemovalView,
 ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
-    let action = component_draining_removal_action(&removal)?;
+    let action = subtree_removal_action(&removal)?;
     let response = match action {
-        ComponentDrainingRemovalAction::Advance(request) => {
-            advance_subtree_removal(request).await?
-        }
-        ComponentDrainingRemovalAction::PrepareStop(request) => {
+        ComponentSubtreeRemovalAction::Advance(request) => advance_subtree_removal(request).await?,
+        ComponentSubtreeRemovalAction::PrepareStop(request) => {
             prepare_subtree_leaf_stop(request).await?
         }
-        ComponentDrainingRemovalAction::Stop(request) => stop_subtree_leaf(request).await?,
-        ComponentDrainingRemovalAction::PrepareDelete(request) => {
+        ComponentSubtreeRemovalAction::Stop(request) => stop_subtree_leaf(request).await?,
+        ComponentSubtreeRemovalAction::PrepareDelete(request) => {
             prepare_subtree_leaf_delete(request).await?
         }
-        ComponentDrainingRemovalAction::Delete(request) => delete_subtree_leaf(request).await?,
-        ComponentDrainingRemovalAction::RemoveMembership(request) => {
+        ComponentSubtreeRemovalAction::Delete(request) => delete_subtree_leaf(request).await?,
+        ComponentSubtreeRemovalAction::RemoveMembership(request) => {
             remove_subtree_leaf_membership(request).await?
         }
-        ComponentDrainingRemovalAction::SynchronizeDirectory(request) => {
+        ComponentSubtreeRemovalAction::SynchronizeDirectory(request) => {
             synchronize_subtree_leaf_directory(request).await?
         }
-        ComponentDrainingRemovalAction::FinalizeLeaf(request) => {
+        ComponentSubtreeRemovalAction::FinalizeLeaf(request) => {
             finalize_subtree_leaf(request).await?
         }
     };
@@ -1432,26 +1430,26 @@ async fn advance_draining_removal_phase(
         || {
             InternalError::invariant(
                 InternalErrorOrigin::Storage,
-                "Component draining phase removed its durable subtree cursor",
+                "Component subtree-removal phase removed its durable cursor",
             )
         },
     )
 }
 
-fn component_draining_removal_action(
+fn subtree_removal_action(
     removal: &RootComponentSubtreeRemovalView,
-) -> Result<ComponentDrainingRemovalAction, InternalError> {
+) -> Result<ComponentSubtreeRemovalAction, InternalError> {
     let action = match &removal.progress {
         RootComponentSubtreeRemovalProgressView::Fenced
         | RootComponentSubtreeRemovalProgressView::Traversing { .. } => {
-            ComponentDrainingRemovalAction::Advance(RootComponentSubtreeRemovalAdvanceRequest {
+            ComponentSubtreeRemovalAction::Advance(RootComponentSubtreeRemovalAdvanceRequest {
                 operation_id: removal.operation_id,
                 component: removal.component,
                 expected_traversal_steps: removal.traversal_steps,
             })
         }
         RootComponentSubtreeRemovalProgressView::LeafSelected { leaf } => {
-            ComponentDrainingRemovalAction::PrepareStop(
+            ComponentSubtreeRemovalAction::PrepareStop(
                 RootComponentSubtreeRemovalStopPreparationRequest {
                     operation_id: removal.operation_id,
                     component: removal.component,
@@ -1462,7 +1460,7 @@ fn component_draining_removal_action(
             )
         }
         RootComponentSubtreeRemovalProgressView::StopIntent(stop) => {
-            ComponentDrainingRemovalAction::Stop(RootComponentSubtreeRemovalStopRequest {
+            ComponentSubtreeRemovalAction::Stop(RootComponentSubtreeRemovalStopRequest {
                 operation_id: removal.operation_id,
                 component: removal.component,
                 expected_traversal_steps: removal.traversal_steps,
@@ -1471,7 +1469,7 @@ fn component_draining_removal_action(
             })
         }
         RootComponentSubtreeRemovalProgressView::Stopped(stopped) => {
-            ComponentDrainingRemovalAction::PrepareDelete(
+            ComponentSubtreeRemovalAction::PrepareDelete(
                 RootComponentSubtreeRemovalDeletePreparationRequest {
                     operation_id: removal.operation_id,
                     component: removal.component,
@@ -1482,7 +1480,7 @@ fn component_draining_removal_action(
             )
         }
         RootComponentSubtreeRemovalProgressView::DeleteIntent(deletion) => {
-            ComponentDrainingRemovalAction::Delete(RootComponentSubtreeRemovalDeleteRequest {
+            ComponentSubtreeRemovalAction::Delete(RootComponentSubtreeRemovalDeleteRequest {
                 operation_id: removal.operation_id,
                 component: removal.component,
                 expected_traversal_steps: removal.traversal_steps,
@@ -1492,13 +1490,13 @@ fn component_draining_removal_action(
         }
         RootComponentSubtreeRemovalProgressView::Deleted(deleted) => {
             let leaf = &deleted.deletion.stopped.stop.leaf;
-            ComponentDrainingRemovalAction::RemoveMembership(
-                component_draining_membership_removal_request(removal, leaf),
-            )
+            ComponentSubtreeRemovalAction::RemoveMembership(subtree_membership_removal_request(
+                removal, leaf,
+            ))
         }
         RootComponentSubtreeRemovalProgressView::MembershipRemoved(membership) => {
             let leaf = &membership.deleted.deletion.stopped.stop.leaf;
-            ComponentDrainingRemovalAction::SynchronizeDirectory(
+            ComponentSubtreeRemovalAction::SynchronizeDirectory(
                 RootComponentSubtreeRemovalDirectorySynchronizationRequest {
                     operation_id: removal.operation_id,
                     component: removal.component,
@@ -1516,7 +1514,7 @@ fn component_draining_removal_action(
                 .stopped
                 .stop
                 .leaf;
-            ComponentDrainingRemovalAction::FinalizeLeaf(
+            ComponentSubtreeRemovalAction::FinalizeLeaf(
                 RootComponentSubtreeRemovalLeafFinalizationRequest {
                     operation_id: removal.operation_id,
                     component: removal.component,
@@ -1536,7 +1534,7 @@ fn component_draining_removal_action(
     Ok(action)
 }
 
-const fn component_draining_membership_removal_request(
+const fn subtree_membership_removal_request(
     removal: &RootComponentSubtreeRemovalView,
     leaf: &crate::view::component_registry::RootComponentSubtreeRemovalNodeView,
 ) -> RootComponentSubtreeRemovalMembershipRemovalRequest {
@@ -2196,14 +2194,24 @@ pub async fn finalize_subtree_leaf(
 pub fn subtree_removal_status(
     request: RootComponentSubtreeRemovalStatusRequest,
 ) -> Result<RootComponentSubtreeRemovalResponse, InternalError> {
-    let (authority, _root) = root_authority()?;
-    let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
-    let removal = ComponentRegistryOps::subtree_removal(request.component, request.operation_id)?
-        .ok_or_else(|| {
+    existing_subtree_removal(request)?.ok_or_else(|| {
         InternalError::unavailable(
             "Component subtree-removal operation has not been durably fenced",
         )
-    })?;
+    })
+}
+
+/// Read one durable removal when present, preserving absence for nested lifecycle admission.
+pub(super) fn existing_subtree_removal(
+    request: RootComponentSubtreeRemovalStatusRequest,
+) -> Result<Option<RootComponentSubtreeRemovalResponse>, InternalError> {
+    let (authority, _root) = root_authority()?;
+    let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let Some(removal) =
+        ComponentRegistryOps::subtree_removal(request.component, request.operation_id)?
+    else {
+        return Ok(None);
+    };
     validate_subtree_removal(
         &authority.binding,
         authority.initial_release_set,
@@ -2211,6 +2219,20 @@ pub fn subtree_removal_status(
         &removal,
         None,
     )?;
+    Ok(Some(subtree_removal_response(removal)))
+}
+
+/// Advance one durable subtree-removal phase using its journal as sole cursor authority.
+pub(super) async fn advance_existing_subtree_removal(
+    request: RootComponentSubtreeRemovalStatusRequest,
+) -> Result<RootComponentSubtreeRemovalResponse, InternalError> {
+    let removal = ComponentRegistryOps::subtree_removal(request.component, request.operation_id)?
+        .ok_or_else(|| {
+        InternalError::unavailable(
+            "Component subtree-removal operation has not been durably fenced",
+        )
+    })?;
+    let removal = Box::pin(advance_subtree_removal_phase(removal)).await?;
     Ok(subtree_removal_response(removal))
 }
 
@@ -7047,14 +7069,11 @@ fn validate_subtree_removal_target(
 ) -> Result<(), InternalError> {
     let registered_target =
         ComponentRegistryOps::registered_parent(removal.component, removal.target_canister_id)?;
-    if matches!(
-        &removal.progress,
-        RootComponentSubtreeRemovalProgressView::Completed(_)
-    ) {
+    if subtree_target_membership_is_removed(&removal.progress) {
         if registered_target.is_some() {
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Storage,
-                "completed subtree-removal target remains registered",
+                "subtree-removal target remains registered after membership removal",
             ));
         }
     } else {
@@ -7098,6 +7117,17 @@ fn validate_subtree_removal_target(
         }
     }
     Ok(())
+}
+
+const fn subtree_target_membership_is_removed(
+    progress: &RootComponentSubtreeRemovalProgressView,
+) -> bool {
+    matches!(
+        progress,
+        RootComponentSubtreeRemovalProgressView::MembershipRemoved(_)
+            | RootComponentSubtreeRemovalProgressView::DirectorySynchronized(_)
+            | RootComponentSubtreeRemovalProgressView::Completed(_)
+    )
 }
 
 fn validate_child_allocation(

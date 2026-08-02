@@ -145,10 +145,6 @@ impl SubnetRegistryOps {
         SubnetRegistry::register_root_with_module_hash(pid, created_at, module_hash);
     }
 
-    pub(crate) fn update_module_hash(pid: Principal, module_hash: Vec<u8>) -> bool {
-        SubnetRegistry::update_module_hash(pid, module_hash)
-    }
-
     pub(crate) fn unregister(pid: &Principal) -> bool {
         SubnetRegistry::remove(pid).is_some()
     }

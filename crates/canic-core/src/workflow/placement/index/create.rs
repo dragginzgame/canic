@@ -48,7 +48,7 @@ impl PlacementIndexWorkflow {
             claim.claim_id,
             pid,
         )? {
-            Self::recycle_abandoned_child(pid).await?;
+            Self::recycle_abandoned_child(pid, permit).await?;
             PlacementAllocationWorkflow::finish_disposed_child(permit, pid)?;
             MetricEvent::skipped(MetricOperation::Finalize, MetricReason::ClaimLost);
             return Ok(None);

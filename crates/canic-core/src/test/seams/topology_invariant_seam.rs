@@ -25,7 +25,6 @@ fn topology_invariants_live_in_policy() {
             pid: p(30),
             role,
             parent_pid: None,
-            module_hash: None,
         }],
     };
 

@@ -118,20 +118,6 @@ impl SubnetRegistry {
     // Mutation
     //
 
-    /// Updates the recorded module hash.
-    /// Returns `true` if the canister existed.
-    #[must_use]
-    pub(crate) fn update_module_hash(pid: Principal, module_hash: Vec<u8>) -> bool {
-        SUBNET_REGISTRY.with_borrow_mut(|reg| match reg.get(&pid) {
-            Some(mut record) => {
-                record.module_hash = Some(module_hash);
-                reg.insert(pid, record);
-                true
-            }
-            None => false,
-        })
-    }
-
     /// Removes a canister entry.
     #[must_use]
     pub(crate) fn remove(pid: &Principal) -> Option<CanisterRecord> {
@@ -311,17 +297,6 @@ mod tests {
     }
 
     #[test]
-    fn update_module_hash_mutates_existing_entry() {
-        seed_simple_tree();
-
-        let updated = SubnetRegistry::update_module_hash(p(2), vec![1, 2, 3]);
-        assert!(updated);
-
-        let record = SubnetRegistry::get(p(2)).unwrap();
-        assert_eq!(record.module_hash, Some(vec![1, 2, 3]));
-    }
-
-    #[test]
     fn register_root_with_module_hash_records_hash() {
         clear_registry();
 
@@ -331,14 +306,6 @@ mod tests {
         assert_eq!(record.role, CanisterRole::ROOT);
         assert_eq!(record.parent_pid, None);
         assert_eq!(record.module_hash, Some(vec![9, 8, 7]));
-    }
-
-    #[test]
-    fn update_module_hash_returns_false_for_missing_entry() {
-        clear_registry();
-
-        let updated = SubnetRegistry::update_module_hash(p(9), vec![1, 2, 3]);
-        assert!(!updated);
     }
 
     #[test]

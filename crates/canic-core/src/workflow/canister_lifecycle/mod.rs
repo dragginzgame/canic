@@ -1,82 +1,38 @@
 //! Module: workflow::canister_lifecycle
 //!
-//! Responsibility: orchestrate canister create and upgrade lifecycle events.
-//! Does not own: endpoint authorization, stable registry schemas, or pure upgrade policy.
-//! Boundary: workflow layer coordinating replay, cost guards, IC ops, registry ops, and cascades.
+//! Responsibility: orchestrate the retained generic canister creation lifecycle.
+//! Does not own: endpoint authorization, stable registry schemas, or Component lifecycle journals.
+//! Boundary: workflow layer coordinating generic creation, registry ops, and cascades.
 
 mod propagation;
 
 use crate::{
-    InternalError, InternalErrorOrigin,
-    cdk::types::{Principal, TC},
+    InternalError,
+    cdk::types::Principal,
     domain::metrics::{
         CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
     },
-    domain::policy::pure::{
-        topology::{TopologyPolicy, TopologyPolicyError},
-        upgrade::should_upgrade,
-    },
+    domain::policy::pure::topology::TopologyPolicyError,
     dto::cascade::{StateSnapshotInput, TopologySnapshotInput},
     ids::CanisterRole,
-    log,
-    log::Topic,
-    model::replay::{CommandKind, ExternalEffectDescriptor, RecoveryReason},
     ops::{
-        cost_guard::{CostGuardPermit, CostGuardRequest},
-        ic::{
-            IcOps,
-            mgmt::{CanisterInstallMode, MgmtOps},
-        },
-        replay::{self as replay_ops, guard::ReplayPending},
-        runtime::install_source::{ApprovedModuleSource, ModuleSourceRuntimeApi},
+        cost_guard::CostGuardPermit,
         runtime::metrics::canister_ops::CanisterOpsMetrics,
         runtime::metrics::provisioning::{
             ProvisioningMetricOperation, ProvisioningMetricOutcome, ProvisioningMetricReason,
             ProvisioningMetrics,
         },
         storage::registry::subnet::SubnetRegistryOps,
-        topology::input::mapper::TopologyRegistryMapper,
     },
-    replay_policy::CostClass,
     workflow::{
-        canister_lifecycle::propagation::PropagationWorkflow,
-        cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
-        ic::provision::ProvisionWorkflow,
-        runtime::{fleet_activation::FleetActivationWorkflow, install::ModuleInstallWorkflow},
+        canister_lifecycle::propagation::PropagationWorkflow, ic::provision::ProvisionWorkflow,
+        runtime::fleet_activation::FleetActivationWorkflow,
     },
 };
 
 ///
-/// CanisterLifecycleEvent
-///
-pub enum CanisterLifecycleEvent<'a> {
-    Create {
-        deployment_permit: &'a CostGuardPermit,
-        role: CanisterRole,
-        parent: Principal,
-        extra_arg: Option<Vec<u8>>,
-    },
-    Upgrade {
-        cost_context: CanisterUpgradeCostContext,
-        pid: Principal,
-        replay_pending: &'a ReplayPending,
-    },
-}
-
-///
-/// CanisterUpgradeCostContext
-///
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct CanisterUpgradeCostContext {
-    pub quota_subject: Principal,
-    pub payer: Principal,
-    pub now_secs: u64,
-}
-
-///
 /// CanisterLifecycleResult
 ///
-#[derive(Default)]
 pub struct CanisterLifecycleResult {
     pub new_canister_pid: Option<Principal>,
 }
@@ -96,30 +52,7 @@ impl CanisterLifecycleResult {
 pub struct CanisterLifecycleWorkflow;
 
 impl CanisterLifecycleWorkflow {
-    pub async fn apply(
-        event: CanisterLifecycleEvent<'_>,
-    ) -> Result<CanisterLifecycleResult, InternalError> {
-        match event {
-            CanisterLifecycleEvent::Create {
-                deployment_permit,
-                role,
-                parent,
-                extra_arg,
-            } => Self::apply_create(deployment_permit, role, parent, extra_arg).await,
-
-            CanisterLifecycleEvent::Upgrade {
-                cost_context,
-                pid,
-                replay_pending,
-            } => Self::apply_upgrade(cost_context, pid, replay_pending).await,
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // Creation
-    // -------------------------------------------------------------------------
-
-    async fn apply_create(
+    pub async fn create(
         deployment_permit: &CostGuardPermit,
         role: CanisterRole,
         parent: Principal,
@@ -212,375 +145,6 @@ impl CanisterLifecycleWorkflow {
 
         Ok(CanisterLifecycleResult::created(pid))
     }
-
-    // ───────────────────────── Upgrade ──────────────────────────
-
-    async fn apply_upgrade(
-        cost_context: CanisterUpgradeCostContext,
-        pid: Principal,
-        replay_pending: &ReplayPending,
-    ) -> Result<CanisterLifecycleResult, InternalError> {
-        let (role, parent_pid) = upgrade_target(pid)?;
-
-        record_provisioning(
-            &role,
-            ProvisioningMetricOperation::Upgrade,
-            ProvisioningMetricOutcome::Started,
-            ProvisioningMetricReason::Ok,
-        );
-        record_canister_op(
-            &role,
-            CanisterOpsMetricOperation::Upgrade,
-            CanisterOpsMetricOutcome::Started,
-            CanisterOpsMetricReason::Ok,
-        );
-
-        let module_source = upgrade_module_source(&role).await?;
-        let target_hash = module_source.module_hash().to_vec();
-        let current_hash = upgrade_current_hash(pid, &role).await?;
-        let should_upgrade = should_upgrade(current_hash.as_deref(), &target_hash);
-
-        assert_upgrade_parent(pid, parent_pid, &role)?;
-
-        if !should_upgrade {
-            log!(
-                Topic::CanisterLifecycle,
-                Info,
-                "canister_upgrade: {pid} already running target module"
-            );
-
-            SubnetRegistryOps::update_module_hash(pid, target_hash.clone());
-            assert_upgrade_module_hash(pid, &target_hash, &role)?;
-            record_canister_op(
-                &role,
-                CanisterOpsMetricOperation::Upgrade,
-                CanisterOpsMetricOutcome::Skipped,
-                CanisterOpsMetricReason::AlreadyExists,
-            );
-            record_provisioning(
-                &role,
-                ProvisioningMetricOperation::Upgrade,
-                ProvisioningMetricOutcome::Skipped,
-                ProvisioningMetricReason::AlreadyCurrent,
-            );
-
-            return Ok(CanisterLifecycleResult::default());
-        }
-
-        let cost_permit = match reserve_canister_upgrade_cost_guard(
-            cost_context,
-            IcOps::canister_cycle_balance().to_u128(),
-        ) {
-            Ok(permit) => permit,
-            Err(err) => {
-                record_canister_op_failure(&role, CanisterOpsMetricOperation::Upgrade, &err);
-                record_provisioning_failure(&role, ProvisioningMetricOperation::Upgrade, &err);
-                return Err(err);
-            }
-        };
-        log!(
-            Topic::CanisterLifecycle,
-            Info,
-            "canister_upgrade: deployment cost guard reserved command_kind={} quota_subject={} payer={} target={}",
-            CANISTER_UPGRADE_COMMAND_KIND,
-            cost_context.quota_subject,
-            cost_context.payer,
-            pid
-        );
-
-        if let Err(err) = execute_costed_upgrade(
-            &role,
-            pid,
-            &target_hash,
-            &module_source,
-            &cost_permit,
-            replay_pending,
-        )
-        .await
-        {
-            record_canister_op_failure(&role, CanisterOpsMetricOperation::Upgrade, &err);
-            record_provisioning_failure(&role, ProvisioningMetricOperation::Upgrade, &err);
-            return Err(err);
-        }
-        record_canister_op(
-            &role,
-            CanisterOpsMetricOperation::Upgrade,
-            CanisterOpsMetricOutcome::Completed,
-            CanisterOpsMetricReason::Ok,
-        );
-        record_provisioning(
-            &role,
-            ProvisioningMetricOperation::Upgrade,
-            ProvisioningMetricOutcome::Completed,
-            ProvisioningMetricReason::Ok,
-        );
-
-        Ok(CanisterLifecycleResult::default())
-    }
-}
-
-async fn execute_costed_upgrade(
-    role: &CanisterRole,
-    pid: Principal,
-    target_hash: &[u8],
-    module_source: &ApprovedModuleSource,
-    cost_permit: &CostGuardPermit,
-    replay_pending: &ReplayPending,
-) -> Result<(), InternalError> {
-    if let Err(replay_err) = replay_ops::mark_root_replay_costed_external_effect(
-        replay_pending,
-        ExternalEffectDescriptor::ManagementCall {
-            canister: pid,
-            method: "install_code:upgrade".to_string(),
-        },
-        cost_permit,
-        crate::ops::replay::guard::secs_to_ns(IcOps::now_secs()),
-    ) {
-        return Err(CostGuardWorkflow::recover_after_failure(
-            cost_permit,
-            IcOps::now_secs(),
-            map_upgrade_replay_store_error(replay_err),
-        ));
-    }
-
-    if let Err(err) = ModuleInstallWorkflow::install_code_with_permit(
-        cost_permit,
-        CanisterInstallMode::Upgrade(None),
-        pid,
-        module_source,
-        (),
-    )
-    .await
-    {
-        let err = CostGuardWorkflow::recover_after_failure(cost_permit, IcOps::now_secs(), err);
-        return match replay_ops::mark_root_replay_recovery_required(
-            replay_pending,
-            RecoveryReason::ExternalEffectStatusUnknown,
-            crate::ops::replay::guard::secs_to_ns(IcOps::now_secs()),
-        )
-        .map_err(map_upgrade_replay_store_error)
-        {
-            Ok(()) => Err(err),
-            Err(recovery_err) => Err(err.with_diagnostic_context(format!(
-                "root upgrade replay recovery marker failed: {recovery_err}"
-            ))),
-        };
-    }
-
-    SubnetRegistryOps::update_module_hash(pid, target_hash.to_vec());
-    if let Err(mut err) = assert_upgrade_module_hash(pid, target_hash, role) {
-        if let Err(settlement_err) = CostGuardWorkflow::complete(cost_permit, IcOps::now_secs()) {
-            err = err.with_diagnostic_context(format!(
-                "root upgrade cost settlement also failed: {settlement_err}"
-            ));
-        }
-        if let Err(recovery_err) = replay_ops::mark_root_replay_recovery_required(
-            replay_pending,
-            RecoveryReason::StateProjectionFailed,
-            crate::ops::replay::guard::secs_to_ns(IcOps::now_secs()),
-        )
-        .map_err(map_upgrade_replay_store_error)
-        {
-            err = err.with_diagnostic_context(format!(
-                "root upgrade replay recovery marker failed: {recovery_err}"
-            ));
-        }
-        return Err(err);
-    }
-    if let Err(err) = CostGuardWorkflow::complete(cost_permit, IcOps::now_secs()) {
-        return match replay_ops::mark_root_replay_recovery_required(
-            replay_pending,
-            RecoveryReason::CostSettlementFailed,
-            crate::ops::replay::guard::secs_to_ns(IcOps::now_secs()),
-        )
-        .map_err(map_upgrade_replay_store_error)
-        {
-            Ok(()) => Err(err),
-            Err(recovery_err) => Err(err.with_diagnostic_context(format!(
-                "root upgrade replay recovery marker failed: {recovery_err}"
-            ))),
-        };
-    }
-    Ok(())
-}
-
-fn map_upgrade_replay_store_error(
-    err: crate::ops::replay::receipt::ReplayReceiptStoreError,
-) -> InternalError {
-    InternalError::workflow(
-        InternalErrorOrigin::Workflow,
-        format!("root upgrade replay receipt update failed: {err}"),
-    )
-}
-
-const CANISTER_UPGRADE_COMMAND_KIND: &str = "management.canister_upgrade.v1";
-const CANISTER_UPGRADE_DEPLOYMENT_QUOTA_WINDOW_SECONDS: u64 = 60;
-const MAX_CANISTER_UPGRADE_DEPLOYMENT_OPERATIONS_PER_WINDOW: u64 = 10;
-const CANISTER_UPGRADE_CYCLE_RESERVATION_CYCLES: u128 = 1_000_000_000;
-const MIN_CANISTER_UPGRADE_CYCLES_AFTER_RESERVATION: u128 = TC;
-
-fn reserve_canister_upgrade_cost_guard(
-    cost_context: CanisterUpgradeCostContext,
-    current_cycle_balance: u128,
-) -> Result<CostGuardPermit, InternalError> {
-    CostGuardWorkflow::reserve(canister_upgrade_cost_guard_request(
-        cost_context,
-        current_cycle_balance,
-    ))
-    .map_err(map_cost_guard_reserve_error)
-}
-
-pub(super) fn canister_upgrade_cost_guard_request(
-    cost_context: CanisterUpgradeCostContext,
-    current_cycle_balance: u128,
-) -> CostGuardRequest {
-    CostGuardRequest {
-        cost_class: CostClass::ManagementDeployment,
-        command_kind: CommandKind::new(CANISTER_UPGRADE_COMMAND_KIND)
-            .expect("canister upgrade command kind is a valid static label"),
-        quota_subject: cost_context.quota_subject,
-        payer: cost_context.payer,
-        now_secs: cost_context.now_secs,
-        quota_window_secs: CANISTER_UPGRADE_DEPLOYMENT_QUOTA_WINDOW_SECONDS,
-        max_operations_per_window: MAX_CANISTER_UPGRADE_DEPLOYMENT_OPERATIONS_PER_WINDOW,
-        current_cycle_balance,
-        cycle_reservation_cycles: CANISTER_UPGRADE_CYCLE_RESERVATION_CYCLES,
-        min_cycles_after_reservation: MIN_CANISTER_UPGRADE_CYCLES_AFTER_RESERVATION,
-    }
-}
-
-// Resolve the registry role and parent for one upgrade target.
-fn upgrade_target(pid: Principal) -> Result<(CanisterRole, Option<Principal>), InternalError> {
-    let Some(target) = SubnetRegistryOps::role_parent(pid) else {
-        CanisterOpsMetrics::record_unknown_role(
-            CanisterOpsMetricOperation::Upgrade,
-            CanisterOpsMetricOutcome::Failed,
-            CanisterOpsMetricReason::NotFound,
-        );
-        ProvisioningMetrics::record_unknown_role(
-            ProvisioningMetricOperation::Upgrade,
-            ProvisioningMetricOutcome::Failed,
-            ProvisioningMetricReason::NotFound,
-        );
-        return Err(InternalError::from(
-            TopologyPolicyError::RegistryEntryMissing(pid),
-        ));
-    };
-
-    Ok(target)
-}
-
-// Resolve the approved module source for one upgrade target role.
-async fn upgrade_module_source(role: &CanisterRole) -> Result<ApprovedModuleSource, InternalError> {
-    match ModuleSourceRuntimeApi::approved_module_source(role).await {
-        Ok(module_source) => Ok(module_source),
-        Err(err) => {
-            record_canister_op(
-                role,
-                CanisterOpsMetricOperation::Upgrade,
-                CanisterOpsMetricOutcome::Failed,
-                CanisterOpsMetricReason::MissingWasm,
-            );
-            record_provisioning(
-                role,
-                ProvisioningMetricOperation::Upgrade,
-                ProvisioningMetricOutcome::Failed,
-                ProvisioningMetricReason::MissingWasm,
-            );
-            Err(err)
-        }
-    }
-}
-
-// Read the currently installed module hash for one upgrade target.
-async fn upgrade_current_hash(
-    pid: Principal,
-    role: &CanisterRole,
-) -> Result<Option<Vec<u8>>, InternalError> {
-    match MgmtOps::canister_status(pid).await {
-        Ok(status) => Ok(status.module_hash),
-        Err(err) => {
-            record_canister_op_failure(role, CanisterOpsMetricOperation::Upgrade, &err);
-            record_provisioning_failure(role, ProvisioningMetricOperation::Upgrade, &err);
-            Err(err)
-        }
-    }
-}
-
-// Assert the upgrade target is still attached to its recorded parent.
-fn assert_upgrade_parent(
-    pid: Principal,
-    parent_pid: Option<Principal>,
-    role: &CanisterRole,
-) -> Result<(), InternalError> {
-    let Some(parent_pid) = parent_pid else {
-        return Ok(());
-    };
-
-    let registry_data = SubnetRegistryOps::data();
-    let registry_input = TopologyRegistryMapper::data_to_registry(registry_data);
-
-    if let Err(err) = TopologyPolicy::assert_parent_exists(&registry_input, parent_pid) {
-        record_canister_op(
-            role,
-            CanisterOpsMetricOperation::Upgrade,
-            CanisterOpsMetricOutcome::Failed,
-            CanisterOpsMetricReason::Topology,
-        );
-        record_provisioning(
-            role,
-            ProvisioningMetricOperation::Upgrade,
-            ProvisioningMetricOutcome::Failed,
-            ProvisioningMetricReason::Topology,
-        );
-        return Err(err);
-    }
-
-    if let Err(err) = TopologyPolicy::assert_immediate_parent(&registry_input, pid, parent_pid) {
-        record_canister_op(
-            role,
-            CanisterOpsMetricOperation::Upgrade,
-            CanisterOpsMetricOutcome::Failed,
-            CanisterOpsMetricReason::Topology,
-        );
-        record_provisioning(
-            role,
-            ProvisioningMetricOperation::Upgrade,
-            ProvisioningMetricOutcome::Failed,
-            ProvisioningMetricReason::Topology,
-        );
-        return Err(err);
-    }
-
-    Ok(())
-}
-
-// Assert the registry reflects the target module hash after upgrade bookkeeping.
-fn assert_upgrade_module_hash(
-    pid: Principal,
-    target_hash: &[u8],
-    role: &CanisterRole,
-) -> Result<(), InternalError> {
-    let registry_data = SubnetRegistryOps::data();
-    let registry_input = TopologyRegistryMapper::data_to_registry(registry_data);
-
-    if let Err(err) = TopologyPolicy::assert_module_hash(&registry_input, pid, target_hash) {
-        record_canister_op(
-            role,
-            CanisterOpsMetricOperation::Upgrade,
-            CanisterOpsMetricOutcome::Failed,
-            CanisterOpsMetricReason::Topology,
-        );
-        record_provisioning(
-            role,
-            ProvisioningMetricOperation::Upgrade,
-            ProvisioningMetricOutcome::Failed,
-            ProvisioningMetricReason::Topology,
-        );
-        return Err(err);
-    }
-
-    Ok(())
 }
 
 // Record one canister operation metric for a known role.
@@ -732,43 +296,5 @@ fn assert_registered_immediate_parent(
             found: parent_pid,
         }
         .into())
-    }
-}
-
-// -----------------------------------------------------------------------------
-// Tests
-// -----------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn p(id: u8) -> Principal {
-        Principal::from_slice(&[id; 29])
-    }
-
-    #[test]
-    fn canister_upgrade_cost_guard_request_uses_deployment_policy() {
-        let cost_context = CanisterUpgradeCostContext {
-            quota_subject: p(7),
-            payer: p(8),
-            now_secs: 9_000,
-        };
-
-        let request = canister_upgrade_cost_guard_request(cost_context, 100 * TC);
-
-        assert_eq!(request.cost_class, CostClass::ManagementDeployment);
-        assert_eq!(
-            request.command_kind.as_str(),
-            "management.canister_upgrade.v1"
-        );
-        assert_eq!(request.quota_subject, cost_context.quota_subject);
-        assert_eq!(request.payer, cost_context.payer);
-        assert_eq!(request.now_secs, cost_context.now_secs);
-        assert_eq!(request.quota_window_secs, 60);
-        assert_eq!(request.max_operations_per_window, 10);
-        assert_eq!(request.current_cycle_balance, 100 * TC);
-        assert_eq!(request.cycle_reservation_cycles, 1_000_000_000);
-        assert_eq!(request.min_cycles_after_reservation, TC);
     }
 }

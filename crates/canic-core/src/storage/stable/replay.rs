@@ -730,7 +730,7 @@ mod tests {
         ReplayReceiptStore::reset_for_tests();
         let actor = ReplayActor::direct_caller(p(1));
         let mut a = receipt_record_fixture();
-        a.command_kind = "root.upgrade.v1".to_string();
+        a.command_kind = "root.provision".to_string();
         a.actor = actor;
         a.operation_id = [8; 32];
         let mut b = a.clone();
@@ -749,7 +749,7 @@ mod tests {
         );
 
         assert_eq!(matches.len(), 1);
-        assert_eq!(matches[0].command_kind, "root.upgrade.v1");
+        assert_eq!(matches[0].command_kind, "root.provision");
 
         ReplayReceiptStore::reset_for_tests();
     }

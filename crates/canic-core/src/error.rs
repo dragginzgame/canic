@@ -191,7 +191,6 @@ impl From<TopologyPolicyError> for InternalError {
             TopologyPolicyError::DuplicateDirectoryRole(_)
             | TopologyPolicyError::ImmediateParentMismatch { .. }
             | TopologyPolicyError::DirectoryRoleMismatch { .. }
-            | TopologyPolicyError::ModuleHashMismatch(_)
             | TopologyPolicyError::ParentNotFound(_)
             | TopologyPolicyError::RegistryEntryMissing(_) => None,
         };

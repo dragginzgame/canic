@@ -27,8 +27,8 @@ impl TopologyRegistryMapper {
                 .map(|entry| TopologyEntry {
                     pid: entry.pid,
                     role: entry.record.role,
+                    #[cfg(test)]
                     parent_pid: entry.record.parent_pid,
-                    module_hash: entry.record.module_hash,
                 })
                 .collect(),
         }

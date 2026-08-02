@@ -78,7 +78,6 @@ pub use canic_core::protocol::{
 };
 
 pub const CANIC_FLEET_ADMIN: &str = "canic_fleet_admin";
-pub const CANIC_CANISTER_UPGRADE: &str = "canic_canister_upgrade";
 pub const CANIC_CANISTER_STATUS: &str = "canic_canister_status";
 pub const CANIC_CONFIG: &str = "canic_config";
 pub const CANIC_POOL_LIST: &str = "canic_pool_list";

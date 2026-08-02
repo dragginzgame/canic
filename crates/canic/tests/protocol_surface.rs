@@ -142,7 +142,6 @@ fn environment_candid_shapes_use_fleet_subnet_root_and_component_spec() {
 fn root_rpc_commands_without_result_data_use_unit_variants() {
     for response in [
         RootRpcResponse::AcknowledgePlacementReceipt,
-        RootRpcResponse::UpgradeCanister,
         RootRpcResponse::RecycleCanister,
     ] {
         let encoded = encode_one(&response).expect("encode root RPC response");
@@ -156,7 +155,6 @@ fn root_rpc_commands_without_result_data_use_unit_variants() {
 
     let env = candid_type_env::<RootRpcResponse>();
     assert!(env.contains("AcknowledgePlacementReceipt"));
-    assert!(env.contains("UpgradeCanister"));
     assert!(env.contains("RecycleCanister"));
 }
 

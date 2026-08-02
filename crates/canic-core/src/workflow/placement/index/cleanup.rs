@@ -1,8 +1,8 @@
 //! Module: workflow::placement::index::cleanup
 //!
 //! Responsibility: recycle abandoned index children and release stale claims.
-//! Does not own: pool lifecycle rules, registry schemas, or recovery endpoint mapping.
-//! Boundary: delegates orphan disposal and performs claim-matching cleanup writes.
+//! Does not own: Component Registry lifecycle rules, registry schemas, or endpoint mapping.
+//! Boundary: delegates subtree disposal and performs claim-matching cleanup writes.
 
 use crate::{
     InternalError, InternalErrorOrigin,
@@ -27,7 +27,7 @@ use crate::{
         },
     },
     workflow::placement::{
-        allocation::PlacementAllocationWorkflow,
+        allocation::{PlacementAllocationPermit, PlacementAllocationWorkflow},
         index::{PlacementIndexWorkflow, create::placement_index_allocation_request},
     },
 };
@@ -51,7 +51,7 @@ impl PlacementIndexWorkflow {
         };
         let request = placement_index_allocation_request(pool, key_value, pool_cfg, claim);
         let permit = PlacementAllocationWorkflow::resume_permit(&request)?;
-        if let Err(err) = Self::recycle_abandoned_child(provisional_pid).await {
+        if let Err(err) = Self::recycle_abandoned_child(provisional_pid, &permit).await {
             MetricEvent::failed(MetricOperation::CleanupStale, &err);
             return Err(err);
         }
@@ -70,8 +70,11 @@ impl PlacementIndexWorkflow {
         Ok(())
     }
 
-    // Delegate orphan disposition to the root pool lifecycle instead of encoding pool logic here.
-    pub(super) async fn recycle_abandoned_child(pid: Principal) -> Result<(), InternalError> {
+    // Delegate orphan disposition to the root Component lifecycle.
+    pub(super) async fn recycle_abandoned_child(
+        pid: Principal,
+        permit: &PlacementAllocationPermit,
+    ) -> Result<(), InternalError> {
         if !CanisterChildrenOps::contains_pid(&pid) {
             MetricEvent::skipped(
                 MetricOperation::RecycleAbandoned,
@@ -81,7 +84,8 @@ impl PlacementIndexWorkflow {
         }
 
         MetricEvent::started(MetricOperation::RecycleAbandoned);
-        if let Err(err) = RequestOps::recycle_canister(pid).await {
+        let operation_id = PlacementAllocationWorkflow::disposed_child_operation_id(permit, pid);
+        if let Err(err) = RequestOps::recycle_canister(pid, operation_id).await {
             MetricEvent::failed(MetricOperation::RecycleAbandoned, &err);
             return Err(err);
         }
@@ -107,7 +111,7 @@ impl PlacementIndexWorkflow {
         };
         let request = placement_index_allocation_request(pool, key_value, pool_cfg, claim);
         let permit = PlacementAllocationWorkflow::resume_permit(&request)?;
-        if let Err(err) = Self::recycle_abandoned_child(provisional_pid).await {
+        if let Err(err) = Self::recycle_abandoned_child(provisional_pid, &permit).await {
             MetricEvent::failed(MetricOperation::CleanupStale, &err);
             return Err(err);
         }

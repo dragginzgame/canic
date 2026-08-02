@@ -742,7 +742,6 @@ const fn capability_metadata_from_request(request: &Request) -> ([u8; 32], u64) 
     let metadata = match request {
         Request::AcknowledgePlacementReceipt(req) => req.metadata,
         Request::AllocatePlacementChild(req) | Request::CreateCanister(req) => req.metadata,
-        Request::UpgradeCanister(req) => req.metadata,
         Request::RecycleCanister(req) => req.metadata,
         Request::Cycles(req) => req.metadata,
     };

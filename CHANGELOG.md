@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.85` hard-cuts the unused root Component Child upgrade protocol and
+  moves retained recycle execution onto resumable Component Registry subtree
+  removal, with durable recovery and stable placement-cleanup identity.
+
 - `0.100.84` routes structural root provisioning through the resumable
   Component Child lifecycle with exact init-payload and Registry authority,
   then synchronizes each active member's canonical direct-child projection

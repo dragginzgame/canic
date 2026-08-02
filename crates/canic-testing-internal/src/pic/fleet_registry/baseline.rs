@@ -197,7 +197,8 @@ mod tests {
             },
             page::{Page, PageRequest},
             rpc::{
-                CreateCanisterParent, CreateCanisterRequest, Request, Response, RootRequestMetadata,
+                CreateCanisterParent, CreateCanisterRequest, RecycleCanisterRequest, Request,
+                Response, RootRequestMetadata,
             },
         },
         protocol::{CANIC_CANISTER_CHILDREN, CANIC_RESPONSE_CAPABILITY_V1},
@@ -430,6 +431,64 @@ mod tests {
                     && entry.role == CanisterRole::new("project_instance")),
             "activated child must converge into its parent's local child cache"
         );
+    }
+
+    #[test]
+    fn active_component_recycles_a_child_through_component_registry_removal() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_active_component_registry();
+        let (child, _) = create_active_project_instance(&fixture);
+        let request_id = [0xd2; 32];
+        let ttl_ns = 60_000_000_000;
+        let envelope = RootCapabilityEnvelopeV1 {
+            service: CapabilityService::Root,
+            capability_version: CAPABILITY_VERSION_V1,
+            capability: Request::RecycleCanister(RecycleCanisterRequest {
+                canister_pid: child,
+                metadata: Some(RootRequestMetadata { request_id, ttl_ns }),
+            }),
+            proof: CapabilityProof::Structural,
+            metadata: CapabilityRequestMetadata {
+                request_id,
+                issued_at_ns: fixture.pic().current_time_nanos(),
+                ttl_ns,
+            },
+        };
+
+        assert!(matches!(
+            root_capability_response(&fixture, envelope.clone()).response,
+            Response::RecycleCanister
+        ));
+        assert!(
+            fixture
+                .pic()
+                .canister_status(child, Some(fixture.root))
+                .is_err(),
+            "Component Registry recycle must delete the removed child"
+        );
+        let children: Result<Page<CanisterInfo>, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.verifier.canister_id,
+                CANIC_CANISTER_CHILDREN,
+                (PageRequest {
+                    limit: 100,
+                    offset: 0,
+                },),
+            )
+            .expect("query Component local children transport");
+        assert!(
+            children
+                .expect("query Component local children")
+                .entries
+                .into_iter()
+                .all(|entry| entry.pid != child),
+            "completed recycle must remove the child from its parent's local authority"
+        );
+        assert!(matches!(
+            root_capability_response(&fixture, envelope).response,
+            Response::RecycleCanister
+        ));
     }
 
     #[cfg(test)]

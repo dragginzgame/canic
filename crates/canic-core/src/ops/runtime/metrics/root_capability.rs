@@ -25,7 +25,6 @@ pub enum RootCapabilityMetricKey {
     Provision,
     RecycleCanister,
     RequestCycles,
-    Upgrade,
 }
 
 impl RootCapabilityMetricKey {
@@ -37,7 +36,6 @@ impl RootCapabilityMetricKey {
             Self::Provision => "Provision",
             Self::RecycleCanister => "RecycleCanister",
             Self::RequestCycles => "RequestCycles",
-            Self::Upgrade => "Upgrade",
         }
     }
 }

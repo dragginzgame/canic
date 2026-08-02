@@ -24,7 +24,6 @@ impl RequestConversionOps {
             Request::AcknowledgePlacementReceipt(_) => "AcknowledgePlacementReceipt",
             Request::AllocatePlacementChild(_) => "AllocatePlacementChild",
             Request::CreateCanister(_) => "Provision",
-            Request::UpgradeCanister(_) => "Upgrade",
             Request::RecycleCanister(_) => "RecycleCanister",
             Request::Cycles(_) => "RequestCycles",
         }
@@ -40,7 +39,6 @@ impl RequestConversionOps {
             Request::AllocatePlacementChild(request) | Request::CreateCanister(request) => {
                 request.metadata
             }
-            Request::UpgradeCanister(request) => request.metadata,
             Request::RecycleCanister(request) => request.metadata,
             Request::Cycles(request) => request.metadata,
         };
@@ -61,7 +59,7 @@ mod tests {
         cdk::types::Principal,
         dto::rpc::{
             AcknowledgePlacementReceiptRequest, CreateCanisterRequest, CyclesRequest,
-            RecycleCanisterRequest, UpgradeCanisterRequest,
+            RecycleCanisterRequest,
         },
         ids::CanisterRole,
     };
@@ -93,12 +91,8 @@ mod tests {
                 extra_arg: None,
                 metadata: Some(expected),
             }),
-            Request::UpgradeCanister(UpgradeCanisterRequest {
-                canister_pid: Principal::from_slice(&[2; 29]),
-                metadata: Some(expected),
-            }),
             Request::RecycleCanister(RecycleCanisterRequest {
-                canister_pid: Principal::from_slice(&[3; 29]),
+                canister_pid: Principal::from_slice(&[2; 29]),
                 metadata: Some(expected),
             }),
             Request::Cycles(CyclesRequest {

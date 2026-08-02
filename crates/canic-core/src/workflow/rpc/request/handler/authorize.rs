@@ -9,10 +9,7 @@ use crate::{
     InternalError,
     dto::{
         error::Error,
-        rpc::{
-            CreateCanisterParent, CreateCanisterRequest, RecycleCanisterRequest,
-            UpgradeCanisterRequest,
-        },
+        rpc::{CreateCanisterParent, CreateCanisterRequest, RecycleCanisterRequest},
     },
     log,
     log::Topic,
@@ -50,9 +47,6 @@ pub(super) fn authorize(
         }
         RootCapability::AllocatePlacementChild(req) | RootCapability::ProvisionCanister(req) => {
             authorize_provision(ctx, req, authority)
-        }
-        RootCapability::UpgradeCanister(req) => {
-            authorize_root_only(ctx).and_then(|()| authorize_upgrade(ctx, req, authority))
         }
         RootCapability::RecycleCanister(req) => {
             authorize_root_only(ctx).and_then(|()| authorize_recycle(ctx, req, authority))
@@ -140,24 +134,16 @@ fn authorize_root_only(ctx: &RootContext) -> Result<(), InternalError> {
     }
 }
 
-fn authorize_upgrade(
-    ctx: &RootContext,
-    req: &UpgradeCanisterRequest,
-    authority: &RootCapabilityAuthority,
-) -> Result<(), InternalError> {
-    require_exact_target(req.canister_pid, authority)?;
-    if authority.target_parent_canister_id() != Some(ctx.caller) {
-        return Err(RpcWorkflowError::NotChildOfCaller(req.canister_pid, ctx.caller).into());
-    }
-
-    Ok(())
-}
-
 fn authorize_recycle(
     ctx: &RootContext,
     req: &RecycleCanisterRequest,
     authority: &RootCapabilityAuthority,
 ) -> Result<(), InternalError> {
+    if authority.caller_component().is_none() {
+        return Err(InternalError::public(Error::forbidden(
+            "Fleet Subnet Root cannot recycle a top-level Component as a Component Child",
+        )));
+    }
     require_exact_target(req.canister_pid, authority)?;
     if authority.target_parent_canister_id() != Some(ctx.caller) {
         return Err(RpcWorkflowError::NotChildOfCaller(req.canister_pid, ctx.caller).into());

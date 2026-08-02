@@ -135,7 +135,7 @@ pub mod view {
 pub mod workflow {
     pub mod canister_lifecycle {
         pub use crate::workflow::canister_lifecycle::{
-            CanisterLifecycleEvent, CanisterLifecycleResult, CanisterLifecycleWorkflow,
+            CanisterLifecycleResult, CanisterLifecycleWorkflow,
         };
     }
 
@@ -174,6 +174,7 @@ pub mod workflow {
             RootCapabilityAuthority, RootCapabilityCallerAuthority,
             RootCapabilityLifecycleExecutor, RootCapabilityMemberAuthority,
             RootCapabilityParentAuthority, RootComponentChildProvisionRequest,
+            RootComponentChildRecycleOutcome, RootComponentChildRecycleRequest,
         };
     }
 

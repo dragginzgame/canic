@@ -16,6 +16,7 @@ use sha2::{Digest, Sha256};
 
 const ALLOCATION_OPERATION_COMMAND: &str = "placement.allocate_child";
 const ALLOCATION_RESOURCE_DOMAIN: &[u8] = b"canic-placement-allocation-resource";
+const DISPOSED_CHILD_OPERATION_DOMAIN: &[u8] = b"canic-placement-disposed-child-operation-v1";
 const PLACEMENT_RESOURCE_PREFIX: &str = "canic:placement:";
 
 ///
@@ -43,6 +44,16 @@ struct PlacementAllocationIdentityParts<'a> {
 }
 
 impl PlacementAllocationIdentity {
+    /// Derive the separate root operation used to dispose this allocation's exact child.
+    #[must_use]
+    pub fn disposed_child_operation_id(&self, child: Principal) -> OperationId {
+        let mut hasher = Sha256::new();
+        hash_bytes(&mut hasher, DISPOSED_CHILD_OPERATION_DOMAIN);
+        hash_bytes(&mut hasher, self.operation_id.as_bytes());
+        hash_bytes(&mut hasher, child.as_slice());
+        OperationId::from_bytes(hasher.finalize().into())
+    }
+
     /// Derive an index allocation identity bound to one owner, pool, and logical key.
     #[must_use]
     pub fn index(
@@ -313,5 +324,31 @@ mod tests {
             assert_ne!(shard_first.operation_id, shard_next.operation_id);
             assert_eq!(shard_first.resource_key, shard_next.resource_key);
         }
+    }
+
+    #[test]
+    fn disposed_child_operation_is_stable_and_separate_from_allocation() {
+        let identity = PlacementAllocationIdentity::index(
+            p(1),
+            "pool",
+            "key",
+            1,
+            &CanisterRole::new("worker"),
+            None,
+        );
+        let child = p(2);
+
+        assert_eq!(
+            identity.disposed_child_operation_id(child),
+            identity.disposed_child_operation_id(child)
+        );
+        assert_ne!(
+            identity.disposed_child_operation_id(child),
+            identity.operation_id
+        );
+        assert_ne!(
+            identity.disposed_child_operation_id(child),
+            identity.disposed_child_operation_id(p(3))
+        );
     }
 }

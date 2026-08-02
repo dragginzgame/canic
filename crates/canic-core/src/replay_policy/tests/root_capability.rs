@@ -66,11 +66,6 @@ fn root_capability_implemented_effect_commands_are_replay_protected() {
             CostClass::ManagementDeployment,
         ),
         (
-            "UpgradeCanister",
-            "root.upgrade.v1",
-            CostClass::ManagementDeployment,
-        ),
-        (
             "RecycleCanister",
             "root.recycle_canister.v1",
             CostClass::ManagementDeployment,

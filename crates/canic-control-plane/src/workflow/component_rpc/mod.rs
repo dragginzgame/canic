@@ -17,8 +17,9 @@ use canic_core::{
     },
     dto::{
         capability::{RootCapabilityEnvelopeV1, RootCapabilityResponseV1},
+        component_registry::RootComponentSubtreeRemovalStatusRequest,
         error::{Error, ErrorCode},
-        rpc::{CreateCanisterParent, Request},
+        rpc::{CreateCanisterParent, RecycleCanisterRequest, Request},
     },
     ids::ManagedCanisterBinding,
 };
@@ -49,25 +50,59 @@ fn root_capability_authority(
         Request::AllocatePlacementChild(request) | Request::CreateCanister(request) => Ok(
             authority.with_provision_parent(resolve_provision_parent(&caller, &request.parent)?),
         ),
-        Request::UpgradeCanister(request) => {
-            Ok(authority.with_target(resolve_active_member(request.canister_pid)?))
-        }
-        Request::RecycleCanister(request) => {
-            optional_active_recycle_target(authority, request.canister_pid)
-        }
+        Request::RecycleCanister(request) => recycle_target_authority(caller, authority, request),
         Request::AcknowledgePlacementReceipt(_) | Request::Cycles(_) => Ok(authority),
     }
 }
 
-fn optional_active_recycle_target(
+fn recycle_target_authority(
+    caller: RootCapabilityCallerAuthority,
     authority: RootCapabilityAuthority,
-    target: candid::Principal,
+    request: &RecycleCanisterRequest,
 ) -> Result<RootCapabilityAuthority, Error> {
-    match resolve_active_member(target) {
+    match resolve_active_member(request.canister_pid) {
         Ok(target) => Ok(authority.with_target(target)),
-        Err(error) if error.code == ErrorCode::Forbidden => Ok(authority),
+        Err(error) if error.code == ErrorCode::Forbidden => {
+            recovered_recycle_target_authority(caller, authority, request, error)
+        }
         Err(error) => Err(error),
     }
+}
+
+fn recovered_recycle_target_authority(
+    caller: RootCapabilityCallerAuthority,
+    authority: RootCapabilityAuthority,
+    request: &RecycleCanisterRequest,
+    missing_target: Error,
+) -> Result<RootCapabilityAuthority, Error> {
+    let RootCapabilityCallerAuthority::ComponentMember(caller) = caller else {
+        return Err(missing_target);
+    };
+    let Some(metadata) = request.metadata else {
+        return Err(missing_target);
+    };
+    let removal = super::component_registry::existing_subtree_removal(
+        RootComponentSubtreeRemovalStatusRequest {
+            operation_id: metadata.request_id,
+            component: caller.component(),
+        },
+    )
+    .map_err(Error::from)?
+    .ok_or(missing_target)?;
+    if removal.target_canister_id != request.canister_pid {
+        return Err(Error::forbidden(
+            "recycle target differs from the durable Component subtree-removal operation",
+        ));
+    }
+    if removal.target_parent_canister_id != caller.canister_id() {
+        return Err(Error::forbidden(
+            "recycle target parent differs from the durable Component subtree-removal operation",
+        ));
+    }
+    Ok(authority.with_recovery_target(
+        removal.target_canister_id,
+        removal.target_parent_canister_id,
+    ))
 }
 
 fn caller_authority(

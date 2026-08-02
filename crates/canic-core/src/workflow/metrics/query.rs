@@ -235,7 +235,7 @@ mod tests {
     // Seed multi-label families used by sorting and pagination coverage.
     fn record_multi_label_sort_metrics() {
         CanisterOpsMetrics::record(
-            CanisterOpsMetricOperation::Upgrade,
+            CanisterOpsMetricOperation::Install,
             &CanisterRole::new("worker"),
             CanisterOpsMetricOutcome::Completed,
             CanisterOpsMetricReason::Ok,
