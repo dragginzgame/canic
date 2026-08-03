@@ -702,48 +702,29 @@ mod tests {
     }
 
     #[test]
-    fn descriptors_cover_declared_core_memory_ids() {
+    fn descriptors_exactly_cover_declared_core_memory_ids() {
         let descriptors = canic_state_descriptors();
-        let ids = descriptors
+        let mut descriptor_ids = descriptors
             .iter()
             .flat_map(|descriptor| descriptor.state.iter())
             .filter_map(|domain| domain.memory_id)
             .collect::<Vec<_>>();
+        let mut allocation_ids = crate::role_contract::allocation::allocation_definitions()
+            .iter()
+            .filter(|definition| definition.owner == AllocationOwner::CanicCore)
+            .flat_map(|definition| definition.memory_ids)
+            .map(|memory_id| memory_id.get())
+            .collect::<Vec<_>>();
 
-        for expected in [
-            CANISTER_CHILDREN_ID,
-            ENV_ID,
-            FLEET_STATE_ID,
-            AUTH_STATE_ID,
-            REPLAY_RECEIPTS_ID,
-            FLEET_ACTIVATION_ID,
-            CYCLE_TOPUP_EVENTS_ID,
-            LOG_ENTRIES_ID,
-            ICP_REFILL_RECORDS_ID,
-            CYCLES_FUNDING_LEDGER_ID,
-            INTENT_META_ID,
-            INTENT_RECORDS_ID,
-            INTENT_TOTALS_ID,
-            INTENT_PENDING_ID,
-            RECEIPT_BACKED_INTENT_RECORDS_ID,
-            INTENT_EXPIRY_INDEX_ID,
-            PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID,
-            APPLICATION_RECEIPT_REPLAY_ID,
-            SCALING_REGISTRY_ID,
-            PLACEMENT_INDEX_REGISTRY_ID,
-            SHARDING_REGISTRY_ID,
-            SHARDING_ASSIGNMENT_ID,
-            SHARDING_ACTIVE_SET_ID,
-            STORED_BLOBS_ID,
-            BLOB_DELETION_PENDING_ID,
-            STORAGE_GATEWAY_PRINCIPALS_ID,
-            BLOB_STORAGE_BILLING_ID,
-        ] {
-            assert!(
-                ids.contains(&expected),
-                "state manifest should declare memory id {expected}"
-            );
-        }
+        descriptor_ids.sort_unstable();
+        allocation_ids.sort_unstable();
+
+        assert!(
+            descriptors
+                .iter()
+                .all(|descriptor| descriptor.reserved_memory.is_empty())
+        );
+        assert_eq!(descriptor_ids, allocation_ids);
     }
 
     #[test]
@@ -1112,24 +1093,5 @@ mod tests {
             assert_eq!(declaration.record, record);
             assert_eq!(declaration.snapshot, snapshot);
         }
-    }
-
-    #[test]
-    fn descriptors_model_every_active_core_memory_id() {
-        let descriptors = canic_state_descriptors();
-        let cycle_tracker = descriptors
-            .iter()
-            .flat_map(|descriptor| descriptor.state.iter())
-            .find(|domain| domain.domain == "cycle_tracker")
-            .expect("cycle tracker state descriptor");
-
-        assert!(
-            descriptors
-                .iter()
-                .flat_map(|descriptor| descriptor.reserved_memory.iter())
-                .next()
-                .is_none()
-        );
-        assert_eq!(cycle_tracker.memory_id, Some(CYCLE_TRACKER_ID));
     }
 }
