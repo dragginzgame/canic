@@ -9,7 +9,7 @@ use crate::{
     cdk::structures::{DefaultMemoryImpl, Memory, memory::VirtualMemory},
     eager_static, impl_storable_unbounded,
     log::{Level, Topic},
-    role_contract::allocation::memory::observability::LOG_ENTRIES_ID,
+    role_contract::allocation::memory::log::LOG_ENTRIES_ID,
     storage::StorageError,
 };
 use serde::{Deserialize, Serialize};
@@ -19,7 +19,7 @@ eager_static! {
     static LOG: RefCell<LogStore<VirtualMemory<DefaultMemoryImpl>>> = RefCell::new(
         LogStore::new(StableBtreeMap::init(crate::ic_memory_key!(
             authority = CANIC_CORE_MEMORY_AUTHORITY,
-            key = "canic.core.log_entries.v1",
+            key = "canic.core.log.entries.v1",
             ty = LogEntryRecord,
             id = LOG_ENTRIES_ID
         )))

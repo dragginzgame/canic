@@ -16,7 +16,7 @@ eager_static! {
     static PLACEMENT_INDEX_REGISTRY: RefCell<
         StableBtreeMap<PlacementIndexKey, PlacementIndexEntryRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.placement_index.v1", ty = PlacementIndexRegistry, id = PLACEMENT_INDEX_REGISTRY_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.placement.index_registry.v1", ty = PlacementIndexRegistry, id = PLACEMENT_INDEX_REGISTRY_ID)),
     );
 }
 

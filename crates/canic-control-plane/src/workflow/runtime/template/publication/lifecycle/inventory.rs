@@ -4,7 +4,7 @@ use super::super::{
     fleet::{PublicationStoreFleet, PublicationStoreSnapshot},
     store::{store_catalog, store_status},
 };
-use crate::ops::storage::state::subnet::SubnetStateOps;
+use crate::ops::storage::state::root_wasm_store::RootWasmStoreStateOps;
 use canic_core::control_plane_support::{
     error::{InternalError, InternalErrorOrigin},
     ops::cost_guard::CostGuardPermit,
@@ -14,7 +14,7 @@ use canic_core::control_plane_support::{
 impl WasmStorePublicationWorkflow {
     /// Project the authoritative root-owned Store inventory for fresh Fleet activation.
     pub fn root_activation_wasm_store() -> Result<FleetActivationWasmStoreView, InternalError> {
-        let stores = SubnetStateOps::wasm_stores();
+        let stores = RootWasmStoreStateOps::wasm_stores();
         let [store] = stores.as_slice() else {
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Storage,
@@ -33,15 +33,15 @@ impl WasmStorePublicationWorkflow {
     ) -> Result<PublicationStoreFleet, InternalError> {
         let _ = Self::resume_pending_wasm_store_creation().await?;
 
-        let preferred_binding = match SubnetStateOps::publication_store_binding() {
+        let preferred_binding = match RootWasmStoreStateOps::publication_store_binding() {
             Some(binding) if store_pid_for_binding(&binding).is_ok() => Some(binding),
             Some(binding) => Some(Self::clear_stale_publication_binding(binding)?),
             None => Self::oldest_runtime_store_binding(),
         };
-        let reserved_state = SubnetStateOps::publication_store_state();
+        let reserved_state = RootWasmStoreStateOps::publication_store_state();
         let mut stores = Vec::new();
 
-        for record in SubnetStateOps::wasm_stores() {
+        for record in RootWasmStoreStateOps::wasm_stores() {
             let status = store_status(record.pid).await?;
             let releases = store_catalog(record.pid).await?;
             stores.push(PublicationStoreSnapshot {

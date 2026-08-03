@@ -1182,7 +1182,7 @@ terminal handoff receipts at IDs 24-26 while core remains consecutive at IDs
 Component-local meaning. No compatibility decoder or prior-release transition
 reader is introduced.
 
-Open 0.100.94 gives the Fleet Coordinator and every Fleet Subnet Root one
+Released 0.100.94 gives the Fleet Coordinator and every Fleet Subnet Root one
 controller-owned v1 authority snapshot fence. Prepare records a nonzero
 32-byte operation ID and the authority's independently observed IC Canister
 history at stable-memory ID 59, seals ordinary updates and suspends timer
@@ -1194,6 +1194,17 @@ for the Coordinator and an active root while preserving the root's exact
 Component Registry allocation head. Focused role-package tests confirm that
 only the Coordinator and Fleet Subnet Root own the new stable allocation and
 endpoint bundle.
+
+Open 0.100.95 repacks both reinstall-only owner ledgers into consecutive,
+subsystem-grouped assignments. Control-plane IDs 10-26 now progress through
+templates, Store GC, Coordinator Registry, root Store state, root Registry
+mirror, root Component Registry and root Canister pool. Core IDs 30-59 now
+progress through runtime, Fleet, authentication, replay, cycles, logs,
+intents, application receipts, Placement, sharding, blob storage and the
+authority restore fence. Memory constants, allocation keys, state domains and
+stable keys use the same subsystem vocabulary; the former broad root Subnet
+state name is hard-cut to root Wasm Store state. This is a pre-1.0
+reinstall-only regrouping with no migration, alias or compatibility reader.
 
 ## Next Action
 

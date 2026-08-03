@@ -17,20 +17,22 @@ pub const CANIC_CORE_MAX_ID: u8 = 99;
 /// Canonical stable-memory IDs grouped by record owner.
 pub mod memory {
     pub mod control_plane {
-        // Wasm Store and publication state.
+        // Shared template state.
         pub const TEMPLATE_MANIFESTS_ID: u8 = 10;
         pub const TEMPLATE_CHUNK_SETS_ID: u8 = 11;
         pub const TEMPLATE_CHUNK_REFS_ID: u8 = 12;
         pub const TEMPLATE_CHUNK_PAYLOADS_ID: u8 = 13;
-        pub const CONTROL_PLANE_SUBNET_STATE_ID: u8 = 14;
-        pub const WASM_STORE_GC_STATE_ID: u8 = 15;
+
+        // Wasm Store state.
+        pub const WASM_STORE_GC_STATE_ID: u8 = 14;
 
         // Fleet Coordinator state.
-        pub const FLEET_COORDINATOR_REGISTRY_ID: u8 = 16;
+        pub const FLEET_COORDINATOR_REGISTRY_ID: u8 = 15;
 
         // Fleet Subnet Root state.
+        pub const ROOT_WASM_STORE_STATE_ID: u8 = 16;
         pub const ROOT_FLEET_REGISTRY_MIRROR_ID: u8 = 17;
-        pub const ROOT_COMPONENT_REGISTRY_META_ID: u8 = 18;
+        pub const ROOT_COMPONENT_REGISTRY_STATE_ID: u8 = 18;
         pub const ROOT_COMPONENT_ALLOCATIONS_ID: u8 = 19;
         pub const ROOT_COMPONENT_REGISTRY_ENTRIES_ID: u8 = 20;
         pub const ROOT_COMPONENT_PRINCIPAL_INDEX_ID: u8 = 21;
@@ -38,35 +40,38 @@ pub mod memory {
         pub const ROOT_COMPONENT_DRAINING_ID: u8 = 23;
 
         // Fleet Subnet Root prepaid empty-Canister inventory.
-        pub const ROOT_CANISTER_POOL_ID: u8 = 24;
+        pub const ROOT_CANISTER_POOL_ASSETS_ID: u8 = 24;
         pub const ROOT_CANISTER_POOL_STATE_ID: u8 = 25;
         pub const ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID: u8 = 26;
     }
 
-    pub mod topology {
-        pub const CANISTER_CHILDREN_ID: u8 = 30;
+    pub mod runtime {
+        pub const RUNTIME_CANISTER_CHILDREN_ID: u8 = 30;
+        pub const RUNTIME_BINDINGS_ID: u8 = 31;
     }
 
-    pub mod env {
-        pub const ENV_ID: u8 = 31;
+    pub mod fleet {
         pub const FLEET_STATE_ID: u8 = 32;
+        pub const FLEET_ACTIVATION_ID: u8 = 33;
     }
 
     pub mod auth {
-        pub const AUTH_STATE_ID: u8 = 33;
-        pub const REPLAY_RECEIPTS_ID: u8 = 34;
+        pub const AUTH_STATE_ID: u8 = 34;
     }
 
-    pub mod activation {
-        pub const FLEET_ACTIVATION_ID: u8 = 35;
+    pub mod replay {
+        pub const REPLAY_RECEIPTS_ID: u8 = 35;
     }
 
-    pub mod observability {
-        pub const CYCLE_TRACKER_ID: u8 = 36;
-        pub const CYCLE_TOPUP_EVENTS_ID: u8 = 37;
+    pub mod cycles {
+        pub const CYCLES_TRACKER_ID: u8 = 36;
+        pub const CYCLES_TOPUP_EVENTS_ID: u8 = 37;
         pub const CYCLES_FUNDING_LEDGER_ID: u8 = 38;
-        pub const LOG_ENTRIES_ID: u8 = 39;
-        pub const ICP_REFILL_RECORDS_ID: u8 = 40;
+        pub const CYCLES_ICP_REFILL_RECORDS_ID: u8 = 39;
+    }
+
+    pub mod log {
+        pub const LOG_ENTRIES_ID: u8 = 40;
     }
 
     pub mod intent {
@@ -74,25 +79,31 @@ pub mod memory {
         pub const INTENT_RECORDS_ID: u8 = 42;
         pub const INTENT_TOTALS_ID: u8 = 43;
         pub const INTENT_PENDING_ID: u8 = 44;
-        pub const RECEIPT_BACKED_INTENT_RECORDS_ID: u8 = 45;
+        pub const INTENT_RECEIPT_BACKED_RECORDS_ID: u8 = 45;
         pub const INTENT_EXPIRY_INDEX_ID: u8 = 46;
-        pub const PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID: u8 = 47;
-        pub const APPLICATION_RECEIPT_REPLAY_ID: u8 = 48;
-        pub const APPLICATION_RECEIPT_ELIGIBILITY_ID: u8 = 49;
+    }
+
+    pub mod application_receipt {
+        pub const APPLICATION_RECEIPT_REPLAY_ID: u8 = 47;
+        pub const APPLICATION_RECEIPT_ELIGIBILITY_ID: u8 = 48;
     }
 
     pub mod placement {
-        pub const SCALING_REGISTRY_ID: u8 = 50;
+        pub const PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID: u8 = 49;
+        pub const PLACEMENT_SCALING_REGISTRY_ID: u8 = 50;
         pub const PLACEMENT_INDEX_REGISTRY_ID: u8 = 51;
+    }
+
+    pub mod sharding {
         pub const SHARDING_REGISTRY_ID: u8 = 52;
-        pub const SHARDING_ASSIGNMENT_ID: u8 = 53;
+        pub const SHARDING_ASSIGNMENTS_ID: u8 = 53;
         pub const SHARDING_ACTIVE_SET_ID: u8 = 54;
     }
 
     pub mod blob_storage {
-        pub const STORED_BLOBS_ID: u8 = 55;
-        pub const BLOB_DELETION_PENDING_ID: u8 = 56;
-        pub const STORAGE_GATEWAY_PRINCIPALS_ID: u8 = 57;
+        pub const BLOB_STORAGE_ROOTS_ID: u8 = 55;
+        pub const BLOB_STORAGE_PENDING_DELETIONS_ID: u8 = 56;
+        pub const BLOB_STORAGE_GATEWAY_PRINCIPALS_ID: u8 = 57;
         pub const BLOB_STORAGE_BILLING_ID: u8 = 58;
     }
 
@@ -102,83 +113,52 @@ pub mod memory {
 }
 
 use memory::{
-    activation::FLEET_ACTIVATION_ID,
-    auth::{AUTH_STATE_ID, REPLAY_RECEIPTS_ID},
+    application_receipt::{APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID},
+    auth::AUTH_STATE_ID,
     authority_restore::AUTHORITY_RESTORE_FENCE_ID,
     blob_storage::{
-        BLOB_DELETION_PENDING_ID, BLOB_STORAGE_BILLING_ID, STORAGE_GATEWAY_PRINCIPALS_ID,
-        STORED_BLOBS_ID,
+        BLOB_STORAGE_BILLING_ID, BLOB_STORAGE_GATEWAY_PRINCIPALS_ID,
+        BLOB_STORAGE_PENDING_DELETIONS_ID, BLOB_STORAGE_ROOTS_ID,
     },
     control_plane::{
-        CONTROL_PLANE_SUBNET_STATE_ID, FLEET_COORDINATOR_REGISTRY_ID,
-        ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID, ROOT_CANISTER_POOL_ID, ROOT_CANISTER_POOL_STATE_ID,
+        FLEET_COORDINATOR_REGISTRY_ID, ROOT_CANISTER_POOL_ASSETS_ID,
+        ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID, ROOT_CANISTER_POOL_STATE_ID,
         ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_DRAINING_ID,
         ROOT_COMPONENT_PRINCIPAL_INDEX_ID, ROOT_COMPONENT_REGISTRY_ENTRIES_ID,
-        ROOT_COMPONENT_REGISTRY_META_ID, ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID,
-        ROOT_FLEET_REGISTRY_MIRROR_ID, TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID,
-        TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
+        ROOT_COMPONENT_REGISTRY_STATE_ID, ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID,
+        ROOT_FLEET_REGISTRY_MIRROR_ID, ROOT_WASM_STORE_STATE_ID, TEMPLATE_CHUNK_PAYLOADS_ID,
+        TEMPLATE_CHUNK_REFS_ID, TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID,
+        WASM_STORE_GC_STATE_ID,
     },
-    env::{ENV_ID, FLEET_STATE_ID},
+    cycles::{
+        CYCLES_FUNDING_LEDGER_ID, CYCLES_ICP_REFILL_RECORDS_ID, CYCLES_TOPUP_EVENTS_ID,
+        CYCLES_TRACKER_ID,
+    },
+    fleet::{FLEET_ACTIVATION_ID, FLEET_STATE_ID},
     intent::{
-        APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID, INTENT_EXPIRY_INDEX_ID,
-        INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
-        PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID, RECEIPT_BACKED_INTENT_RECORDS_ID,
+        INTENT_EXPIRY_INDEX_ID, INTENT_META_ID, INTENT_PENDING_ID,
+        INTENT_RECEIPT_BACKED_RECORDS_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
     },
-    observability::{
-        CYCLE_TOPUP_EVENTS_ID, CYCLE_TRACKER_ID, CYCLES_FUNDING_LEDGER_ID, ICP_REFILL_RECORDS_ID,
-        LOG_ENTRIES_ID,
-    },
+    log::LOG_ENTRIES_ID,
     placement::{
-        PLACEMENT_INDEX_REGISTRY_ID, SCALING_REGISTRY_ID, SHARDING_ACTIVE_SET_ID,
-        SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID,
+        PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID, PLACEMENT_INDEX_REGISTRY_ID,
+        PLACEMENT_SCALING_REGISTRY_ID,
     },
-    topology::CANISTER_CHILDREN_ID,
+    replay::REPLAY_RECEIPTS_ID,
+    runtime::{RUNTIME_BINDINGS_ID, RUNTIME_CANISTER_CHILDREN_ID},
+    sharding::{SHARDING_ACTIVE_SET_ID, SHARDING_ASSIGNMENTS_ID, SHARDING_REGISTRY_ID},
 };
 
-const CORE_RUNTIME_TOPOLOGY_IDS: &[MemoryId] = &[MemoryId::new(CANISTER_CHILDREN_ID)];
-const CORE_RUNTIME_ENVIRONMENT_IDS: &[MemoryId] =
-    &[MemoryId::new(ENV_ID), MemoryId::new(FLEET_STATE_ID)];
-const CORE_AUTH_STATE_IDS: &[MemoryId] = &[MemoryId::new(AUTH_STATE_ID)];
-const CORE_REPLAY_RECEIPTS_IDS: &[MemoryId] = &[MemoryId::new(REPLAY_RECEIPTS_ID)];
-const CORE_FLEET_ACTIVATION_IDS: &[MemoryId] = &[MemoryId::new(FLEET_ACTIVATION_ID)];
-const CORE_RUNTIME_OBSERVABILITY_IDS: &[MemoryId] = &[
-    MemoryId::new(CYCLE_TRACKER_ID),
-    MemoryId::new(CYCLE_TOPUP_EVENTS_ID),
-    MemoryId::new(CYCLES_FUNDING_LEDGER_ID),
-    MemoryId::new(LOG_ENTRIES_ID),
-];
-const CORE_ICP_REFILL_RECORDS_IDS: &[MemoryId] = &[MemoryId::new(ICP_REFILL_RECORDS_ID)];
-const CORE_RUNTIME_INTENT_IDS: &[MemoryId] = &[
-    MemoryId::new(INTENT_META_ID),
-    MemoryId::new(INTENT_RECORDS_ID),
-    MemoryId::new(INTENT_TOTALS_ID),
-    MemoryId::new(INTENT_PENDING_ID),
-    MemoryId::new(RECEIPT_BACKED_INTENT_RECORDS_ID),
-    MemoryId::new(INTENT_EXPIRY_INDEX_ID),
-    MemoryId::new(PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID),
-    MemoryId::new(APPLICATION_RECEIPT_REPLAY_ID),
-    MemoryId::new(APPLICATION_RECEIPT_ELIGIBILITY_ID),
-];
-const CORE_AUTHORITY_RESTORE_FENCE_IDS: &[MemoryId] = &[MemoryId::new(AUTHORITY_RESTORE_FENCE_ID)];
-const SCALING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(SCALING_REGISTRY_ID)];
-const PLACEMENT_INDEX_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(PLACEMENT_INDEX_REGISTRY_ID)];
-const SHARDING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_REGISTRY_ID)];
-const SHARDING_ASSIGNMENT_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_ASSIGNMENT_ID)];
-const SHARDING_ACTIVE_SET_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_ACTIVE_SET_ID)];
-const STORED_BLOBS_IDS: &[MemoryId] = &[MemoryId::new(STORED_BLOBS_ID)];
-const BLOB_DELETION_PENDING_IDS: &[MemoryId] = &[MemoryId::new(BLOB_DELETION_PENDING_ID)];
-const STORAGE_GATEWAY_PRINCIPALS_IDS: &[MemoryId] = &[MemoryId::new(STORAGE_GATEWAY_PRINCIPALS_ID)];
-const BLOB_STORAGE_BILLING_IDS: &[MemoryId] = &[MemoryId::new(BLOB_STORAGE_BILLING_ID)];
 const TEMPLATE_MANIFESTS_IDS: &[MemoryId] = &[MemoryId::new(TEMPLATE_MANIFESTS_ID)];
 const TEMPLATE_CHUNK_SETS_IDS: &[MemoryId] = &[MemoryId::new(TEMPLATE_CHUNK_SETS_ID)];
 const TEMPLATE_CHUNK_REFS_IDS: &[MemoryId] = &[MemoryId::new(TEMPLATE_CHUNK_REFS_ID)];
 const TEMPLATE_CHUNK_PAYLOADS_IDS: &[MemoryId] = &[MemoryId::new(TEMPLATE_CHUNK_PAYLOADS_ID)];
-const CONTROL_PLANE_SUBNET_STATE_IDS: &[MemoryId] = &[MemoryId::new(CONTROL_PLANE_SUBNET_STATE_ID)];
 const WASM_STORE_GC_STATE_IDS: &[MemoryId] = &[MemoryId::new(WASM_STORE_GC_STATE_ID)];
 const FLEET_COORDINATOR_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(FLEET_COORDINATOR_REGISTRY_ID)];
+const ROOT_WASM_STORE_STATE_IDS: &[MemoryId] = &[MemoryId::new(ROOT_WASM_STORE_STATE_ID)];
 const ROOT_FLEET_REGISTRY_MIRROR_IDS: &[MemoryId] = &[MemoryId::new(ROOT_FLEET_REGISTRY_MIRROR_ID)];
 const ROOT_COMPONENT_REGISTRY_IDS: &[MemoryId] = &[
-    MemoryId::new(ROOT_COMPONENT_REGISTRY_META_ID),
+    MemoryId::new(ROOT_COMPONENT_REGISTRY_STATE_ID),
     MemoryId::new(ROOT_COMPONENT_ALLOCATIONS_ID),
     MemoryId::new(ROOT_COMPONENT_REGISTRY_ENTRIES_ID),
     MemoryId::new(ROOT_COMPONENT_PRINCIPAL_INDEX_ID),
@@ -186,102 +166,53 @@ const ROOT_COMPONENT_REGISTRY_IDS: &[MemoryId] = &[
     MemoryId::new(ROOT_COMPONENT_DRAINING_ID),
 ];
 const ROOT_CANISTER_POOL_IDS: &[MemoryId] = &[
-    MemoryId::new(ROOT_CANISTER_POOL_ID),
+    MemoryId::new(ROOT_CANISTER_POOL_ASSETS_ID),
     MemoryId::new(ROOT_CANISTER_POOL_STATE_ID),
     MemoryId::new(ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID),
 ];
 
+const CORE_RUNTIME_CHILDREN_IDS: &[MemoryId] = &[MemoryId::new(RUNTIME_CANISTER_CHILDREN_ID)];
+const CORE_RUNTIME_BINDINGS_IDS: &[MemoryId] = &[MemoryId::new(RUNTIME_BINDINGS_ID)];
+const CORE_FLEET_STATE_IDS: &[MemoryId] = &[MemoryId::new(FLEET_STATE_ID)];
+const CORE_FLEET_ACTIVATION_IDS: &[MemoryId] = &[MemoryId::new(FLEET_ACTIVATION_ID)];
+const CORE_AUTH_STATE_IDS: &[MemoryId] = &[MemoryId::new(AUTH_STATE_ID)];
+const CORE_REPLAY_RECEIPTS_IDS: &[MemoryId] = &[MemoryId::new(REPLAY_RECEIPTS_ID)];
+const CORE_CYCLES_IDS: &[MemoryId] = &[
+    MemoryId::new(CYCLES_TRACKER_ID),
+    MemoryId::new(CYCLES_TOPUP_EVENTS_ID),
+    MemoryId::new(CYCLES_FUNDING_LEDGER_ID),
+];
+const CORE_CYCLES_ICP_REFILL_RECORDS_IDS: &[MemoryId] =
+    &[MemoryId::new(CYCLES_ICP_REFILL_RECORDS_ID)];
+const CORE_RUNTIME_LOG_IDS: &[MemoryId] = &[MemoryId::new(LOG_ENTRIES_ID)];
+const CORE_INTENT_IDS: &[MemoryId] = &[
+    MemoryId::new(INTENT_META_ID),
+    MemoryId::new(INTENT_RECORDS_ID),
+    MemoryId::new(INTENT_TOTALS_ID),
+    MemoryId::new(INTENT_PENDING_ID),
+    MemoryId::new(INTENT_RECEIPT_BACKED_RECORDS_ID),
+    MemoryId::new(INTENT_EXPIRY_INDEX_ID),
+];
+const CORE_APPLICATION_RECEIPT_IDS: &[MemoryId] = &[
+    MemoryId::new(APPLICATION_RECEIPT_REPLAY_ID),
+    MemoryId::new(APPLICATION_RECEIPT_ELIGIBILITY_ID),
+];
+const CORE_PLACEMENT_ACKNOWLEDGEMENT_IDS: &[MemoryId] =
+    &[MemoryId::new(PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID)];
+const CORE_AUTHORITY_RESTORE_FENCE_IDS: &[MemoryId] = &[MemoryId::new(AUTHORITY_RESTORE_FENCE_ID)];
+const PLACEMENT_SCALING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(PLACEMENT_SCALING_REGISTRY_ID)];
+const PLACEMENT_INDEX_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(PLACEMENT_INDEX_REGISTRY_ID)];
+const SHARDING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_REGISTRY_ID)];
+const SHARDING_ASSIGNMENTS_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_ASSIGNMENTS_ID)];
+const SHARDING_ACTIVE_SET_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_ACTIVE_SET_ID)];
+const BLOB_STORAGE_ROOTS_IDS: &[MemoryId] = &[MemoryId::new(BLOB_STORAGE_ROOTS_ID)];
+const BLOB_STORAGE_PENDING_DELETIONS_IDS: &[MemoryId] =
+    &[MemoryId::new(BLOB_STORAGE_PENDING_DELETIONS_ID)];
+const BLOB_STORAGE_GATEWAY_PRINCIPALS_IDS: &[MemoryId] =
+    &[MemoryId::new(BLOB_STORAGE_GATEWAY_PRINCIPALS_ID)];
+const BLOB_STORAGE_BILLING_IDS: &[MemoryId] = &[MemoryId::new(BLOB_STORAGE_BILLING_ID)];
+
 const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
-    definition(
-        StateAllocationKey::CoreRuntimeTopology,
-        AllocationOwner::CanicCore,
-        CORE_RUNTIME_TOPOLOGY_IDS,
-    ),
-    definition(
-        StateAllocationKey::CoreRuntimeEnvironment,
-        AllocationOwner::CanicCore,
-        CORE_RUNTIME_ENVIRONMENT_IDS,
-    ),
-    definition(
-        StateAllocationKey::CoreAuthState,
-        AllocationOwner::CanicCore,
-        CORE_AUTH_STATE_IDS,
-    ),
-    definition(
-        StateAllocationKey::CoreReplayReceipts,
-        AllocationOwner::CanicCore,
-        CORE_REPLAY_RECEIPTS_IDS,
-    ),
-    definition(
-        StateAllocationKey::CoreFleetActivation,
-        AllocationOwner::CanicCore,
-        CORE_FLEET_ACTIVATION_IDS,
-    ),
-    definition(
-        StateAllocationKey::CoreRuntimeObservability,
-        AllocationOwner::CanicCore,
-        CORE_RUNTIME_OBSERVABILITY_IDS,
-    ),
-    definition(
-        StateAllocationKey::CoreIcpRefillRecords,
-        AllocationOwner::CanicCore,
-        CORE_ICP_REFILL_RECORDS_IDS,
-    ),
-    definition(
-        StateAllocationKey::CoreRuntimeIntent,
-        AllocationOwner::CanicCore,
-        CORE_RUNTIME_INTENT_IDS,
-    ),
-    definition(
-        StateAllocationKey::CoreAuthorityRestoreFence,
-        AllocationOwner::CanicCore,
-        CORE_AUTHORITY_RESTORE_FENCE_IDS,
-    ),
-    definition(
-        StateAllocationKey::ScalingRegistry,
-        AllocationOwner::CanicCore,
-        SCALING_REGISTRY_IDS,
-    ),
-    definition(
-        StateAllocationKey::PlacementIndexRegistry,
-        AllocationOwner::CanicCore,
-        PLACEMENT_INDEX_REGISTRY_IDS,
-    ),
-    definition(
-        StateAllocationKey::ShardingRegistry,
-        AllocationOwner::CanicCore,
-        SHARDING_REGISTRY_IDS,
-    ),
-    definition(
-        StateAllocationKey::ShardingAssignments,
-        AllocationOwner::CanicCore,
-        SHARDING_ASSIGNMENT_IDS,
-    ),
-    definition(
-        StateAllocationKey::ShardingActiveSet,
-        AllocationOwner::CanicCore,
-        SHARDING_ACTIVE_SET_IDS,
-    ),
-    definition(
-        StateAllocationKey::StoredBlobs,
-        AllocationOwner::CanicCore,
-        STORED_BLOBS_IDS,
-    ),
-    definition(
-        StateAllocationKey::BlobDeletionPending,
-        AllocationOwner::CanicCore,
-        BLOB_DELETION_PENDING_IDS,
-    ),
-    definition(
-        StateAllocationKey::StorageGatewayPrincipals,
-        AllocationOwner::CanicCore,
-        STORAGE_GATEWAY_PRINCIPALS_IDS,
-    ),
-    definition(
-        StateAllocationKey::BlobStorageBilling,
-        AllocationOwner::CanicCore,
-        BLOB_STORAGE_BILLING_IDS,
-    ),
     definition(
         StateAllocationKey::TemplateManifests,
         AllocationOwner::CanicControlPlane,
@@ -303,11 +234,6 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         TEMPLATE_CHUNK_PAYLOADS_IDS,
     ),
     definition(
-        StateAllocationKey::ControlPlaneSubnetState,
-        AllocationOwner::CanicControlPlane,
-        CONTROL_PLANE_SUBNET_STATE_IDS,
-    ),
-    definition(
         StateAllocationKey::WasmStoreGcState,
         AllocationOwner::CanicControlPlane,
         WASM_STORE_GC_STATE_IDS,
@@ -318,19 +244,134 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         FLEET_COORDINATOR_REGISTRY_IDS,
     ),
     definition(
+        StateAllocationKey::RootWasmStoreState,
+        AllocationOwner::CanicControlPlane,
+        ROOT_WASM_STORE_STATE_IDS,
+    ),
+    definition(
         StateAllocationKey::RootFleetRegistryMirror,
         AllocationOwner::CanicControlPlane,
         ROOT_FLEET_REGISTRY_MIRROR_IDS,
     ),
     definition(
-        StateAllocationKey::CanisterPool,
+        StateAllocationKey::RootComponentRegistry,
+        AllocationOwner::CanicControlPlane,
+        ROOT_COMPONENT_REGISTRY_IDS,
+    ),
+    definition(
+        StateAllocationKey::RootCanisterPool,
         AllocationOwner::CanicControlPlane,
         ROOT_CANISTER_POOL_IDS,
     ),
     definition(
-        StateAllocationKey::RootComponentRegistry,
-        AllocationOwner::CanicControlPlane,
-        ROOT_COMPONENT_REGISTRY_IDS,
+        StateAllocationKey::CoreRuntimeChildren,
+        AllocationOwner::CanicCore,
+        CORE_RUNTIME_CHILDREN_IDS,
+    ),
+    definition(
+        StateAllocationKey::CoreRuntimeBindings,
+        AllocationOwner::CanicCore,
+        CORE_RUNTIME_BINDINGS_IDS,
+    ),
+    definition(
+        StateAllocationKey::CoreFleetState,
+        AllocationOwner::CanicCore,
+        CORE_FLEET_STATE_IDS,
+    ),
+    definition(
+        StateAllocationKey::CoreFleetActivation,
+        AllocationOwner::CanicCore,
+        CORE_FLEET_ACTIVATION_IDS,
+    ),
+    definition(
+        StateAllocationKey::CoreAuthState,
+        AllocationOwner::CanicCore,
+        CORE_AUTH_STATE_IDS,
+    ),
+    definition(
+        StateAllocationKey::CoreReplayReceipts,
+        AllocationOwner::CanicCore,
+        CORE_REPLAY_RECEIPTS_IDS,
+    ),
+    definition(
+        StateAllocationKey::CoreCycles,
+        AllocationOwner::CanicCore,
+        CORE_CYCLES_IDS,
+    ),
+    definition(
+        StateAllocationKey::CoreCyclesIcpRefillRecords,
+        AllocationOwner::CanicCore,
+        CORE_CYCLES_ICP_REFILL_RECORDS_IDS,
+    ),
+    definition(
+        StateAllocationKey::CoreRuntimeLog,
+        AllocationOwner::CanicCore,
+        CORE_RUNTIME_LOG_IDS,
+    ),
+    definition(
+        StateAllocationKey::CoreIntent,
+        AllocationOwner::CanicCore,
+        CORE_INTENT_IDS,
+    ),
+    definition(
+        StateAllocationKey::CoreApplicationReceipts,
+        AllocationOwner::CanicCore,
+        CORE_APPLICATION_RECEIPT_IDS,
+    ),
+    definition(
+        StateAllocationKey::CorePlacementAcknowledgement,
+        AllocationOwner::CanicCore,
+        CORE_PLACEMENT_ACKNOWLEDGEMENT_IDS,
+    ),
+    definition(
+        StateAllocationKey::PlacementScalingRegistry,
+        AllocationOwner::CanicCore,
+        PLACEMENT_SCALING_REGISTRY_IDS,
+    ),
+    definition(
+        StateAllocationKey::PlacementIndexRegistry,
+        AllocationOwner::CanicCore,
+        PLACEMENT_INDEX_REGISTRY_IDS,
+    ),
+    definition(
+        StateAllocationKey::ShardingRegistry,
+        AllocationOwner::CanicCore,
+        SHARDING_REGISTRY_IDS,
+    ),
+    definition(
+        StateAllocationKey::ShardingAssignments,
+        AllocationOwner::CanicCore,
+        SHARDING_ASSIGNMENTS_IDS,
+    ),
+    definition(
+        StateAllocationKey::ShardingActiveSet,
+        AllocationOwner::CanicCore,
+        SHARDING_ACTIVE_SET_IDS,
+    ),
+    definition(
+        StateAllocationKey::BlobStorageRoots,
+        AllocationOwner::CanicCore,
+        BLOB_STORAGE_ROOTS_IDS,
+    ),
+    definition(
+        StateAllocationKey::BlobStoragePendingDeletions,
+        AllocationOwner::CanicCore,
+        BLOB_STORAGE_PENDING_DELETIONS_IDS,
+    ),
+    definition(
+        StateAllocationKey::BlobStorageGatewayPrincipals,
+        AllocationOwner::CanicCore,
+        BLOB_STORAGE_GATEWAY_PRINCIPALS_IDS,
+    ),
+    definition(
+        StateAllocationKey::BlobStorageBilling,
+        AllocationOwner::CanicCore,
+        BLOB_STORAGE_BILLING_IDS,
+    ),
+    definition(
+        StateAllocationKey::CoreAuthorityRestoreFence,
+        AllocationOwner::CanicCore,
+        CORE_AUTHORITY_RESTORE_FENCE_IDS,
     ),
 ];
 

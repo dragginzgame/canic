@@ -14,10 +14,13 @@ use crate::{
         intent::{PayloadBinding, ReceiptBackedIntent, ReceiptBackedIntentState},
         replay::OperationId,
     },
-    role_contract::allocation::memory::intent::{
-        APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID, INTENT_EXPIRY_INDEX_ID,
-        INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
-        PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID, RECEIPT_BACKED_INTENT_RECORDS_ID,
+    role_contract::allocation::memory::{
+        application_receipt::{APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID},
+        intent::{
+            INTENT_EXPIRY_INDEX_ID, INTENT_META_ID, INTENT_PENDING_ID,
+            INTENT_RECEIPT_BACKED_RECORDS_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
+        },
+        placement::PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID,
     },
     storage::prelude::*,
 };
@@ -46,7 +49,7 @@ type ApplicationReceiptEligibilityState = (ApplicationReceiptEligibilityMap, Sta
 eager_static! {
     static INTENT_META: RefCell<Cell<IntentStoreMetaRecord, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent_meta.v1", ty = IntentStoreMetaRecord, id = INTENT_META_ID),
+            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent.meta.v1", ty = IntentStoreMetaRecord, id = INTENT_META_ID),
             IntentStoreMetaRecord::default(),
         ));
 }
@@ -60,7 +63,7 @@ eager_static! {
         >
     > = RefCell::new(StableBtreeMap::init(crate::ic_memory_key!(
         authority = CANIC_CORE_MEMORY_AUTHORITY,
-        key = "canic.core.application_receipt_replay.v1",
+        key = "canic.core.application_receipt.replay.v1",
         ty = ApplicationReceiptReplayRecord,
         id = APPLICATION_RECEIPT_REPLAY_ID
     )));
@@ -70,7 +73,7 @@ eager_static! {
     static APPLICATION_RECEIPT_ELIGIBILITY: RefCell<ApplicationReceiptEligibilityState> = {
         let memory = crate::ic_memory_key!(
             authority = CANIC_CORE_MEMORY_AUTHORITY,
-            key = "canic.core.application_receipt_eligibility.v1",
+            key = "canic.core.application_receipt.eligibility.v1",
             ty = ApplicationReceiptEligibilityRecord,
             id = APPLICATION_RECEIPT_ELIGIBILITY_ID
         );
@@ -88,9 +91,9 @@ eager_static! {
         >
     > = RefCell::new(StableBtreeMap::init(crate::ic_memory_key!(
         authority = CANIC_CORE_MEMORY_AUTHORITY,
-        key = "canic.core.receipt_backed_intent_records.v1",
+        key = "canic.core.intent.receipt_backed_records.v1",
         ty = ReceiptBackedIntentRecord,
-        id = RECEIPT_BACKED_INTENT_RECORDS_ID
+        id = INTENT_RECEIPT_BACKED_RECORDS_ID
     )));
 }
 
@@ -98,7 +101,7 @@ eager_static! {
     static INTENT_EXPIRY_INDEX: RefCell<
         StableBtreeMap<IntentExpiryKeyRecord, IntentExpiryEntryRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent_expiry_index.v1", ty = IntentExpiryEntryRecord, id = INTENT_EXPIRY_INDEX_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent.expiry_index.v1", ty = IntentExpiryEntryRecord, id = INTENT_EXPIRY_INDEX_ID)),
     );
 }
 
@@ -111,7 +114,7 @@ eager_static! {
         >
     > = RefCell::new(StableBtreeMap::init(crate::ic_memory_key!(
         authority = CANIC_CORE_MEMORY_AUTHORITY,
-        key = "canic.core.placement_acknowledgement_index.v1",
+        key = "canic.core.placement.acknowledgement_index.v1",
         ty = PlacementAcknowledgementEntryRecord,
         id = PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID
     )));
@@ -121,7 +124,7 @@ eager_static! {
     static INTENT_RECORDS: RefCell<
         StableBtreeMap<IntentId, IntentRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent_records.v1", ty = IntentRecord, id = INTENT_RECORDS_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent.records.v1", ty = IntentRecord, id = INTENT_RECORDS_ID)),
     );
 }
 
@@ -129,7 +132,7 @@ eager_static! {
     static INTENT_TOTALS: RefCell<
         StableBtreeMap<IntentResourceKey, IntentResourceTotalsRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent_totals.v1", ty = IntentResourceTotalsRecord, id = INTENT_TOTALS_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent.totals.v1", ty = IntentResourceTotalsRecord, id = INTENT_TOTALS_ID)),
     );
 }
 
@@ -137,7 +140,7 @@ eager_static! {
     static INTENT_PENDING: RefCell<
         StableBtreeMap<IntentId, IntentPendingEntryRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent_pending.v1", ty = IntentPendingEntryRecord, id = INTENT_PENDING_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent.pending.v1", ty = IntentPendingEntryRecord, id = INTENT_PENDING_ID)),
     );
 }
 

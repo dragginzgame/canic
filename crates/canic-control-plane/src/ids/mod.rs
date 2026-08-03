@@ -201,7 +201,7 @@ impl_storable_bounded!(WasmStoreBinding, 64, false);
 /// WasmStoreCreationPurpose
 ///
 /// Root-owned reason for one durable Wasm Store creation operation.
-/// Stored with control-plane Subnet state and consumed by creation recovery.
+/// Stored with root-owned Wasm Store state and consumed by creation recovery.
 ///
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

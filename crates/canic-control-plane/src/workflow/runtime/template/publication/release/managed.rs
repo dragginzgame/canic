@@ -1,4 +1,4 @@
-use crate::ops::storage::state::subnet::SubnetStateOps;
+use crate::ops::storage::state::root_wasm_store::RootWasmStoreStateOps;
 use crate::{
     config,
     dto::template::{TemplateManifestResponse, WasmStoreCatalogEntryResponse},
@@ -32,7 +32,7 @@ impl WasmStorePublicationWorkflow {
     /// Read the live catalog from the one root-local Store without mutating publication state.
     pub async fn single_store_catalog()
     -> Result<(Principal, Vec<WasmStoreCatalogEntryResponse>), InternalError> {
-        let stores = SubnetStateOps::wasm_stores();
+        let stores = RootWasmStoreStateOps::wasm_stores();
         if stores.len() != 1 {
             return Err(PublicationWorkflowError::InvalidState(format!(
                 "initial root bootstrap requires exactly one local wasm store, found {}",
@@ -75,7 +75,7 @@ impl WasmStorePublicationWorkflow {
         if fleet.reserved_state.active_binding.as_ref() != Some(&initial_binding) {
             Self::set_current_publication_store_binding(initial_binding.clone())?;
             fleet.preferred_binding = Some(initial_binding);
-            fleet.reserved_state = SubnetStateOps::publication_store_state();
+            fleet.reserved_state = RootWasmStoreStateOps::publication_store_state();
         }
         let store_pid = fleet.stores[0].pid;
 

@@ -255,18 +255,22 @@ mod tests {
                 "root",
                 None,
                 &[
-                    StateAllocationKey::CoreRuntimeTopology,
-                    StateAllocationKey::CoreRuntimeEnvironment,
+                    StateAllocationKey::CoreRuntimeChildren,
+                    StateAllocationKey::CoreRuntimeBindings,
+                    StateAllocationKey::CoreFleetState,
                     StateAllocationKey::CoreFleetActivation,
                     StateAllocationKey::CoreAuthState,
                     StateAllocationKey::CoreReplayReceipts,
-                    StateAllocationKey::CoreRuntimeObservability,
-                    StateAllocationKey::CoreRuntimeIntent,
+                    StateAllocationKey::CoreCycles,
+                    StateAllocationKey::CoreRuntimeLog,
+                    StateAllocationKey::CoreIntent,
+                    StateAllocationKey::CoreApplicationReceipts,
+                    StateAllocationKey::CorePlacementAcknowledgement,
                     StateAllocationKey::TemplateManifests,
                     StateAllocationKey::TemplateChunkSets,
                     StateAllocationKey::TemplateChunkRefs,
                     StateAllocationKey::TemplateChunkPayloads,
-                    StateAllocationKey::ControlPlaneSubnetState,
+                    StateAllocationKey::RootWasmStoreState,
                 ],
             )],
             Some("wasm_store") => vec![test_contract(
@@ -443,7 +447,7 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![
                 ("authority_restore_fence", Some(59)),
-                ("fleet_coordinator_registry", Some(16)),
+                ("fleet_coordinator_registry", Some(15)),
             ]
         );
     }
@@ -488,7 +492,7 @@ mod tests {
                 .filter_map(|domain| domain.memory_id)
                 .filter(|memory_id| (55..=58).contains(memory_id))
                 .collect::<Vec<_>>(),
-            vec![56, 58, 57, 55]
+            vec![58, 57, 56, 55]
         );
         assert!(role.state.iter().all(|domain| domain.owner == "canic-core"));
     }
@@ -549,7 +553,7 @@ mod tests {
         assert_eq!(
             ids,
             vec![
-                10, 11, 12, 13, 15, 30, 31, 32, 34, 35, 36, 37, 38, 39, 41, 42, 43, 44, 45, 46, 47,
+                10, 11, 12, 13, 14, 30, 31, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47,
                 48, 49,
             ]
         );
@@ -585,7 +589,7 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![
                 ("authority_restore_fence", Some(59)),
-                ("fleet_coordinator_registry", Some(16)),
+                ("fleet_coordinator_registry", Some(15)),
             ]
         );
     }

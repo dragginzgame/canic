@@ -3,7 +3,7 @@
 use crate::{
     ops::{
         canister_pool::CanisterPoolOps, component_registry::ComponentRegistryOps,
-        storage::state::subnet::SubnetStateOps,
+        storage::state::root_wasm_store::RootWasmStoreStateOps,
     },
     workflow::deployment,
 };
@@ -227,7 +227,7 @@ fn require_import_candidate(canister_id: Principal) -> Result<(), InternalError>
     let root = FleetActivationWorkflow::root_authority()?.binding;
     if canister_id == root.fleet_subnet_root
         || canister_id == root.authority.binding.coordinator
-        || SubnetStateOps::wasm_stores()
+        || RootWasmStoreStateOps::wasm_stores()
             .iter()
             .any(|store| store.pid == canister_id)
     {

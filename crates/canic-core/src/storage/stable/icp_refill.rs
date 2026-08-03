@@ -9,7 +9,7 @@ use crate::{
     cdk::candid::Nat,
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
     impl_storable_bounded,
-    role_contract::allocation::memory::observability::ICP_REFILL_RECORDS_ID,
+    role_contract::allocation::memory::cycles::CYCLES_ICP_REFILL_RECORDS_ID,
     storage::prelude::*,
 };
 use std::cell::RefCell;
@@ -19,10 +19,10 @@ thread_local! {
     // ICP_REFILL_RECORDS
     //
     // Root lifecycle restoration initializes this root-owned state explicitly.
-    // Keeping it lazy prevents non-root canisters from opening memory ID 33.
+    // Keeping it lazy prevents non-root canisters from opening root-only state.
     static ICP_REFILL_RECORDS: RefCell<IcpRefillRecords> =
         RefCell::new(IcpRefillRecords::new(StableBtreeMap::init(
-            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.icp_refill_records.v1", ty = IcpRefillRecords, id = ICP_REFILL_RECORDS_ID),
+            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycles.icp_refill_records.v1", ty = IcpRefillRecords, id = CYCLES_ICP_REFILL_RECORDS_ID),
         )));
 }
 

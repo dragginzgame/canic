@@ -1,2 +1,2 @@
 pub mod mapper;
-pub mod subnet;
+pub mod root_wasm_store;

@@ -15,7 +15,7 @@ use crate::{
         ReplayActor, ReplayCostGuardSettlement, ReplayReceipt, ReplayReceiptStatus,
         placement_receipt_requires_acknowledgement,
     },
-    role_contract::allocation::memory::auth::REPLAY_RECEIPTS_ID,
+    role_contract::allocation::memory::replay::REPLAY_RECEIPTS_ID,
     storage::prelude::*,
 };
 use std::{borrow::Cow, cell::RefCell};
@@ -24,7 +24,7 @@ eager_static! {
     static REPLAY_RECEIPTS: RefCell<
         StableBtreeMap<ReplayReceiptSlotKey, ReplayReceiptRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.replay_receipts.v1", ty = ReplayReceiptStore, id = REPLAY_RECEIPTS_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.replay.receipts.v1", ty = ReplayReceiptStore, id = REPLAY_RECEIPTS_ID)),
     );
 }
 

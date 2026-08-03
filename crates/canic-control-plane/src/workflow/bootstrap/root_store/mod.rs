@@ -11,7 +11,7 @@ use crate::{
     ops::{
         component_registry::ComponentRegistryOps,
         storage::{
-            state::subnet::SubnetStateOps,
+            state::root_wasm_store::RootWasmStoreStateOps,
             template::{TemplateChunkedOps, TemplateManifestOps},
         },
     },
@@ -332,7 +332,8 @@ fn exact_staged_manifests(
 }
 
 fn is_exact_bootstrap_source(binding: &crate::ids::WasmStoreBinding) -> bool {
-    binding == &WASM_STORE_BOOTSTRAP_BINDING || SubnetStateOps::wasm_store_pid(binding).is_some()
+    binding == &WASM_STORE_BOOTSTRAP_BINDING
+        || RootWasmStoreStateOps::wasm_store_pid(binding).is_some()
 }
 
 fn artifact_module_hashes(

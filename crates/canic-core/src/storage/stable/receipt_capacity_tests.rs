@@ -23,9 +23,10 @@ use crate::{
         },
         replay::OperationId,
     },
-    role_contract::allocation::memory::intent::{
-        APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID, INTENT_TOTALS_ID,
-        PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID, RECEIPT_BACKED_INTENT_RECORDS_ID,
+    role_contract::allocation::memory::{
+        application_receipt::{APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID},
+        intent::{INTENT_RECEIPT_BACKED_RECORDS_ID, INTENT_TOTALS_ID},
+        placement::PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID,
     },
     storage::stable::intent::{
         APPLICATION_RECEIPT_ELIGIBILITY_SCHEMA_VERSION, APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION,
@@ -175,7 +176,7 @@ where
 fn managed_placement_ascending_pages() -> (u64, u64, u64, u64) {
     let physical = VectorMemory::default();
     let manager = MemoryManager::init(physical.clone());
-    let primary_memory = manager.get(MemoryId::new(RECEIPT_BACKED_INTENT_RECORDS_ID));
+    let primary_memory = manager.get(MemoryId::new(INTENT_RECEIPT_BACKED_RECORDS_ID));
     let acknowledgement_memory = manager.get(MemoryId::new(PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID));
     let totals_memory = manager.get(MemoryId::new(INTENT_TOTALS_ID));
     let mut primary = StableBtreeMap::init(primary_memory.clone());
@@ -214,7 +215,7 @@ fn managed_application_ascending_pages_with_reservation(
 ) -> (u64, u64, u64, u64, u64) {
     let physical = VectorMemory::default();
     let manager = MemoryManager::init(physical.clone());
-    let primary_memory = manager.get(MemoryId::new(RECEIPT_BACKED_INTENT_RECORDS_ID));
+    let primary_memory = manager.get(MemoryId::new(INTENT_RECEIPT_BACKED_RECORDS_ID));
     let replay_memory = manager.get(MemoryId::new(APPLICATION_RECEIPT_REPLAY_ID));
     let eligibility_memory = manager.get(MemoryId::new(APPLICATION_RECEIPT_ELIGIBILITY_ID));
     let totals_memory = manager.get(MemoryId::new(INTENT_TOTALS_ID));

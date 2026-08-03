@@ -30,17 +30,21 @@ fn build_state_audit_report(role: Option<&str>) -> StateAuditReport {
 
 fn root_contract() -> ResolvedRoleContract {
     let keys = [
-        StateAllocationKey::CoreRuntimeTopology,
-        StateAllocationKey::CoreRuntimeEnvironment,
+        StateAllocationKey::CoreRuntimeChildren,
+        StateAllocationKey::CoreRuntimeBindings,
+        StateAllocationKey::CoreFleetState,
         StateAllocationKey::CoreAuthState,
         StateAllocationKey::CoreReplayReceipts,
-        StateAllocationKey::CoreRuntimeObservability,
-        StateAllocationKey::CoreRuntimeIntent,
+        StateAllocationKey::CoreCycles,
+        StateAllocationKey::CoreRuntimeLog,
+        StateAllocationKey::CoreIntent,
+        StateAllocationKey::CoreApplicationReceipts,
+        StateAllocationKey::CorePlacementAcknowledgement,
         StateAllocationKey::TemplateManifests,
         StateAllocationKey::TemplateChunkSets,
         StateAllocationKey::TemplateChunkRefs,
         StateAllocationKey::TemplateChunkPayloads,
-        StateAllocationKey::ControlPlaneSubnetState,
+        StateAllocationKey::RootWasmStoreState,
     ];
     let allocations = keys
         .into_iter()
@@ -173,7 +177,7 @@ fn text_renderers_include_stable_fields() {
     assert!(manifest.contains("migration_policy: new_domain"));
     assert!(manifest.contains("template_manifests"));
     assert!(!manifest.contains("reserved_memory"));
-    assert!(manifest.contains("cycle_tracker"));
+    assert!(manifest.contains("cycles_tracker"));
     assert!(manifest.contains("runtime_log"));
 }
 

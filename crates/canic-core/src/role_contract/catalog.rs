@@ -226,11 +226,15 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
     ),
     capability_allocation(
         RoleCapabilityKey::Runtime,
-        StateAllocationKey::CoreRuntimeTopology,
+        StateAllocationKey::CoreRuntimeChildren,
     ),
     capability_allocation(
         RoleCapabilityKey::Runtime,
-        StateAllocationKey::CoreRuntimeEnvironment,
+        StateAllocationKey::CoreRuntimeBindings,
+    ),
+    capability_allocation(
+        RoleCapabilityKey::Runtime,
+        StateAllocationKey::CoreFleetState,
     ),
     capability_allocation(
         RoleCapabilityKey::Runtime,
@@ -240,13 +244,19 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
         RoleCapabilityKey::Runtime,
         StateAllocationKey::CoreFleetActivation,
     ),
+    capability_allocation(RoleCapabilityKey::Runtime, StateAllocationKey::CoreCycles),
     capability_allocation(
         RoleCapabilityKey::Runtime,
-        StateAllocationKey::CoreRuntimeObservability,
+        StateAllocationKey::CoreRuntimeLog,
+    ),
+    capability_allocation(RoleCapabilityKey::Runtime, StateAllocationKey::CoreIntent),
+    capability_allocation(
+        RoleCapabilityKey::Runtime,
+        StateAllocationKey::CoreApplicationReceipts,
     ),
     capability_allocation(
         RoleCapabilityKey::Runtime,
-        StateAllocationKey::CoreRuntimeIntent,
+        StateAllocationKey::CorePlacementAcknowledgement,
     ),
     capability_allocation(RoleCapabilityKey::Root, StateAllocationKey::CoreAuthState),
     capability_allocation(
@@ -271,7 +281,7 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
     ),
     capability_allocation(
         RoleCapabilityKey::Root,
-        StateAllocationKey::CoreIcpRefillRecords,
+        StateAllocationKey::CoreCyclesIcpRefillRecords,
     ),
     capability_allocation(
         RoleCapabilityKey::Index,
@@ -279,7 +289,7 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
     ),
     capability_allocation(
         RoleCapabilityKey::Scaling,
-        StateAllocationKey::ScalingRegistry,
+        StateAllocationKey::PlacementScalingRegistry,
     ),
     capability_allocation(
         RoleCapabilityKey::RootControlPlane,
@@ -299,7 +309,7 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
     ),
     capability_allocation(
         RoleCapabilityKey::RootControlPlane,
-        StateAllocationKey::ControlPlaneSubnetState,
+        StateAllocationKey::RootWasmStoreState,
     ),
     capability_allocation(
         RoleCapabilityKey::RootControlPlane,
@@ -311,7 +321,7 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
     ),
     capability_allocation(
         RoleCapabilityKey::RootControlPlane,
-        StateAllocationKey::CanisterPool,
+        StateAllocationKey::RootCanisterPool,
     ),
     capability_allocation(
         RoleCapabilityKey::WasmStore,
@@ -338,15 +348,15 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
 const FEATURE_ALLOCATIONS: &[FeatureAllocation] = &[
     feature_allocation(
         CanicFeatureKey::BlobStorage,
-        StateAllocationKey::StoredBlobs,
+        StateAllocationKey::BlobStorageRoots,
     ),
     feature_allocation(
         CanicFeatureKey::BlobStorage,
-        StateAllocationKey::BlobDeletionPending,
+        StateAllocationKey::BlobStoragePendingDeletions,
     ),
     feature_allocation(
         CanicFeatureKey::BlobStorage,
-        StateAllocationKey::StorageGatewayPrincipals,
+        StateAllocationKey::BlobStorageGatewayPrincipals,
     ),
     feature_allocation(
         CanicFeatureKey::BlobStorageBilling,
@@ -370,7 +380,7 @@ const FEATURE_ALLOCATIONS: &[FeatureAllocation] = &[
     ),
     feature_allocation(
         CanicFeatureKey::ControlPlane,
-        StateAllocationKey::ControlPlaneSubnetState,
+        StateAllocationKey::RootWasmStoreState,
     ),
     feature_allocation(
         CanicFeatureKey::FleetCoordinatorCanister,

@@ -13,7 +13,7 @@
 use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
-    role_contract::allocation::memory::topology::CANISTER_CHILDREN_ID,
+    role_contract::allocation::memory::runtime::RUNTIME_CANISTER_CHILDREN_ID,
     storage::{
         canister::{CanisterEntryRecord, CanisterRecord},
         prelude::*,
@@ -28,7 +28,7 @@ eager_static! {
     static CANISTER_CHILDREN: RefCell<
         StableBtreeMap<Principal, CanisterRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.canister_children.v1", ty = CanisterChildren, id = CANISTER_CHILDREN_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.runtime.canister_children.v1", ty = CanisterChildren, id = RUNTIME_CANISTER_CHILDREN_ID)),
     );
 }
 

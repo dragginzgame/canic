@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.95` repacks both reinstall-only stable-memory ledgers into
+  consecutive subsystem groups and aligns their constants, allocation keys,
+  state domains and stable keys, including the hard cut from broad root
+  Subnet state to root Wasm Store state.
+
 - `0.100.94` adds an IC-history-bound snapshot fence to every Fleet
   Coordinator and Fleet Subnet Root, keeping restored authority queryable but
   preventing stale Registry or Component identity mutation.

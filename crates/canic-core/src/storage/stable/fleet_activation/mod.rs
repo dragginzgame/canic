@@ -1,6 +1,6 @@
 //! Module: storage::stable::fleet_activation
 //!
-//! Responsibility: persist the sole protected Fleet activation record at memory ID 38.
+//! Responsibility: persist the sole protected Fleet activation record.
 //! Does not own: install admission, state transitions, Candid DTOs, or lifecycle scheduling.
 //! Boundary: ops validates and converts complete records before this single-record store mutates.
 
@@ -11,7 +11,7 @@ use crate::{
         ComponentBinding, FleetBinding, FleetRegistryAuthority, FleetSubnetRootBinding,
         FleetSubnetRootReleaseSet, ManagedCanisterBinding, ReleaseBuildId, SubnetId,
     },
-    role_contract::allocation::memory::activation::FLEET_ACTIVATION_ID,
+    role_contract::allocation::memory::fleet::FLEET_ACTIVATION_ID,
     storage::prelude::*,
 };
 use std::cell::RefCell;
@@ -28,7 +28,7 @@ eager_static! {
         StableBtreeMap<u8, FleetActivationRecord, VirtualMemory<DefaultMemoryImpl>>,
     > = RefCell::new(StableBtreeMap::init(crate::ic_memory_key!(
         authority = CANIC_CORE_MEMORY_AUTHORITY,
-        key = "canic.core.fleet_activation.v1",
+        key = "canic.core.fleet.activation.v1",
         ty = FleetActivation,
         id = FLEET_ACTIVATION_ID,
     )));

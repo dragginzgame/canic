@@ -8,7 +8,7 @@ use crate::{
     },
     eager_static,
     ids::CanisterRole,
-    role_contract::allocation::memory::placement::SCALING_REGISTRY_ID,
+    role_contract::allocation::memory::placement::PLACEMENT_SCALING_REGISTRY_ID,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -17,7 +17,7 @@ eager_static! {
     static SCALING_REGISTRY: RefCell<
         StableBtreeMap<Principal, WorkerEntryRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.scaling_registry.v1", ty = ScalingRegistry, id = SCALING_REGISTRY_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.placement.scaling_registry.v1", ty = ScalingRegistry, id = PLACEMENT_SCALING_REGISTRY_ID)),
     );
 }
 

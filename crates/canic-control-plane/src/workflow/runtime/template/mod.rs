@@ -8,7 +8,7 @@ use crate::{
     dto::template::{TemplateChunkSetInfoResponse, TemplateManifestResponse},
     ids::{TemplateId, TemplateReleaseKey, TemplateVersion, WasmStoreBinding},
     ops::storage::{
-        state::subnet::SubnetStateOps,
+        state::root_wasm_store::RootWasmStoreStateOps,
         template::{TemplateChunkedOps, TemplateManifestOps},
     },
 };
@@ -360,7 +360,7 @@ impl WasmStoreManifestSourceError for WasmStoreMetricReason {
 
 // Resolve the currently configured store canister id for one approved binding.
 fn store_pid_for_binding(binding: &WasmStoreBinding) -> Result<Principal, InternalError> {
-    SubnetStateOps::wasm_store_pid(binding).ok_or_else(|| {
+    RootWasmStoreStateOps::wasm_store_pid(binding).ok_or_else(|| {
         InternalError::public(Error::new(
             ErrorCode::WasmStoreManifestMissing,
             format!("wasm store binding '{binding}' is not registered"),

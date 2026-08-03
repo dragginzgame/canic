@@ -353,7 +353,9 @@ async fn root_reconcile_wasm_store() -> Result<(), InternalError> {
 pub(super) async fn ensure_required_wasm_store_canister() -> Result<(), InternalError> {
     let role = CanisterRole::WASM_STORE;
 
-    let had_store = !crate::ops::storage::state::subnet::SubnetStateOps::wasm_stores().is_empty();
+    let had_store =
+        !crate::ops::storage::state::root_wasm_store::RootWasmStoreStateOps::wasm_stores()
+            .is_empty();
     let existing_bindings = WasmStorePublicationWorkflow::ensure_bootstrap_wasm_store().await?;
     if !existing_bindings.is_empty() {
         CanisterOpsMetricsApi::record(

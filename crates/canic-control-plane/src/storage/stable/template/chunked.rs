@@ -28,7 +28,7 @@ eager_static! {
     static TEMPLATE_CHUNK_SETS: RefCell<
         StableBtreeMap<TemplateReleaseKey, TemplateChunkSetRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template_chunk_sets.v1", ty = TemplateChunkSetStateStore, id = TEMPLATE_CHUNK_SETS_ID)),
+        StableBtreeMap::init(canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template.chunk_sets.v1", ty = TemplateChunkSetStateStore, id = TEMPLATE_CHUNK_SETS_ID)),
     );
 }
 
@@ -40,13 +40,13 @@ eager_static! {
     static TEMPLATE_CHUNK_REFS: RefCell<
         StableBtreeMap<TemplateChunkKey, TemplateChunkRefRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template_chunk_refs.v1", ty = TemplateChunkRefStore, id = TEMPLATE_CHUNK_REFS_ID)),
+        StableBtreeMap::init(canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template.chunk_refs.v1", ty = TemplateChunkRefStore, id = TEMPLATE_CHUNK_REFS_ID)),
     );
 }
 
 eager_static! {
     static TEMPLATE_CHUNK_PAYLOADS_MEMORY: VirtualMemory<DefaultMemoryImpl> =
-        canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template_chunk_payloads.v1", ty = TemplateChunkPayloadStore, id = TEMPLATE_CHUNK_PAYLOADS_ID);
+        canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template.chunk_payloads.v1", ty = TemplateChunkPayloadStore, id = TEMPLATE_CHUNK_PAYLOADS_ID);
 }
 
 eager_static! {

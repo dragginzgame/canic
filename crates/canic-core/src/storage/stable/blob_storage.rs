@@ -12,7 +12,8 @@ use crate::{
     eager_static,
     model::blob_storage::BlobRootHash,
     role_contract::allocation::memory::blob_storage::{
-        BLOB_DELETION_PENDING_ID, STORAGE_GATEWAY_PRINCIPALS_ID, STORED_BLOBS_ID,
+        BLOB_STORAGE_GATEWAY_PRINCIPALS_ID, BLOB_STORAGE_PENDING_DELETIONS_ID,
+        BLOB_STORAGE_ROOTS_ID,
     },
 };
 use crate::{cdk::types::BoundedString128, storage::prelude::*};
@@ -41,7 +42,7 @@ eager_static! {
     static STORED_BLOBS: RefCell<
         StableBtreeMap<BlobRootHashKey, StoredBlobRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.blob_storage.stored_blobs.v1", ty = StoredBlobStore, id = STORED_BLOBS_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.blob_storage.roots.v1", ty = StoredBlobStore, id = BLOB_STORAGE_ROOTS_ID)),
     );
 }
 
@@ -50,7 +51,7 @@ eager_static! {
     static BLOB_DELETION_PENDING: RefCell<
         StableBtreeMap<BlobRootHashKey, BlobDeletionPendingRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.blob_storage.deletion_pending.v1", ty = BlobDeletionPendingStore, id = BLOB_DELETION_PENDING_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.blob_storage.pending_deletions.v1", ty = BlobDeletionPendingStore, id = BLOB_STORAGE_PENDING_DELETIONS_ID)),
     );
 }
 
@@ -59,7 +60,7 @@ eager_static! {
     static STORAGE_GATEWAY_PRINCIPALS: RefCell<
         StableBtreeMap<Principal, StorageGatewayPrincipalRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.blob_storage.gateway_principals.v1", ty = StorageGatewayPrincipalStore, id = STORAGE_GATEWAY_PRINCIPALS_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.blob_storage.gateway_principals.v1", ty = StorageGatewayPrincipalStore, id = BLOB_STORAGE_GATEWAY_PRINCIPALS_ID)),
     );
 }
 

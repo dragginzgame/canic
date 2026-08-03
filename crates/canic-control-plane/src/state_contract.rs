@@ -19,7 +19,7 @@ use crate::storage::stable::{
     },
     fleet_coordinator::{FleetCoordinatorRegistryData, FleetCoordinatorRegistryRecord},
     fleet_registry_mirror::{RootFleetRegistryMirrorData, RootFleetRegistryMirrorStateRecord},
-    state::subnet::{ControlPlaneSubnetStateData, SubnetStateRecord},
+    state::root_wasm_store::{RootWasmStoreStateData, RootWasmStoreStateRecord},
     template::{
         TemplateChunkSetRecord, TemplateChunkSetsData, TemplateManifestRecord,
         TemplateManifestsData, WasmStoreGcStateData, WasmStoreGcStateRecord,
@@ -31,17 +31,18 @@ use crate::storage::stable::{
 };
 #[cfg(feature = "root-control-plane")]
 use canic_core::role_contract::allocation::memory::control_plane::{
-    ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID, ROOT_CANISTER_POOL_ID, ROOT_CANISTER_POOL_STATE_ID,
+    ROOT_CANISTER_POOL_ASSETS_ID, ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID,
+    ROOT_CANISTER_POOL_STATE_ID,
 };
 use canic_core::{
     role_contract::{
         AllocationOwner, StateAllocationKey,
         allocation::memory::control_plane::{
-            CONTROL_PLANE_SUBNET_STATE_ID, FLEET_COORDINATOR_REGISTRY_ID,
-            ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_DRAINING_ID,
-            ROOT_COMPONENT_PRINCIPAL_INDEX_ID, ROOT_COMPONENT_REGISTRY_ENTRIES_ID,
-            ROOT_COMPONENT_REGISTRY_META_ID, ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID,
-            ROOT_FLEET_REGISTRY_MIRROR_ID, TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID,
+            FLEET_COORDINATOR_REGISTRY_ID, ROOT_COMPONENT_ALLOCATIONS_ID,
+            ROOT_COMPONENT_DRAINING_ID, ROOT_COMPONENT_PRINCIPAL_INDEX_ID,
+            ROOT_COMPONENT_REGISTRY_ENTRIES_ID, ROOT_COMPONENT_REGISTRY_STATE_ID,
+            ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID, ROOT_FLEET_REGISTRY_MIRROR_ID,
+            ROOT_WASM_STORE_STATE_ID, TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID,
             TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
         },
     },
@@ -111,13 +112,13 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
             "template_chunk_payloads_restore_chunk_bytes",
         ),
         descriptor(
-            StateAllocationKey::ControlPlaneSubnetState,
-            "control_plane_subnet_state",
-            CONTROL_PLANE_SUBNET_STATE_ID,
-            SubnetStateRecord::STATE_CONTRACT_NAME,
-            ControlPlaneSubnetStateData::STATE_CONTRACT_NAME,
+            StateAllocationKey::RootWasmStoreState,
+            "root_wasm_store_state",
+            ROOT_WASM_STORE_STATE_ID,
+            RootWasmStoreStateRecord::STATE_CONTRACT_NAME,
+            RootWasmStoreStateData::STATE_CONTRACT_NAME,
             240,
-            "control_plane_subnet_state_restores_publication_bindings",
+            "root_wasm_store_state_restores_publication_inventory_and_creation_authority",
         ),
         descriptor(
             StateAllocationKey::WasmStoreGcState,
@@ -137,10 +138,10 @@ fn root_component_registry_descriptor() -> StateAllocationDescriptor {
         owner: AllocationOwner::CanicControlPlane,
         state: vec![
             StateDomainManifest {
-                domain: "root_component_registry".to_string(),
+                domain: "root_component_registry_state".to_string(),
                 version: 1,
                 storage: StateStorage::StableMemory,
-                memory_id: Some(ROOT_COMPONENT_REGISTRY_META_ID),
+                memory_id: Some(ROOT_COMPONENT_REGISTRY_STATE_ID),
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: RootComponentRegistryStateRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: RootComponentRegistryData::STATE_CONTRACT_NAME.to_string(),
@@ -251,14 +252,14 @@ fn root_component_draining_domain() -> StateDomainManifest {
 #[cfg(feature = "root-control-plane")]
 fn root_canister_pool_descriptor() -> StateAllocationDescriptor {
     StateAllocationDescriptor {
-        allocation: StateAllocationKey::CanisterPool,
+        allocation: StateAllocationKey::RootCanisterPool,
         owner: AllocationOwner::CanicControlPlane,
         state: vec![
             StateDomainManifest {
-                domain: "root_canister_pool".to_string(),
+                domain: "root_canister_pool_assets".to_string(),
                 version: 1,
                 storage: StateStorage::StableMemory,
-                memory_id: Some(ROOT_CANISTER_POOL_ID),
+                memory_id: Some(ROOT_CANISTER_POOL_ASSETS_ID),
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: CanisterPoolAssetRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: CanisterPoolData::STATE_CONTRACT_NAME.to_string(),
@@ -266,7 +267,7 @@ fn root_canister_pool_descriptor() -> StateAllocationDescriptor {
                 migration_policy: MigrationPolicy::NewDomain,
                 restore_order: Some(202),
                 post_upgrade_invariant: Some(
-                    "root_canister_pool_restores_exact_asset_lifecycle_and_component_claims"
+                    "root_canister_pool_assets_restore_exact_lifecycle_and_component_claims"
                         .to_string(),
                 ),
                 migrations: Vec::new(),
@@ -354,12 +355,12 @@ mod tests {
             StateAllocationKey::FleetCoordinatorRegistry,
             StateAllocationKey::RootComponentRegistry,
             StateAllocationKey::RootFleetRegistryMirror,
-            StateAllocationKey::CanisterPool,
+            StateAllocationKey::RootCanisterPool,
             StateAllocationKey::TemplateManifests,
             StateAllocationKey::TemplateChunkSets,
             StateAllocationKey::TemplateChunkRefs,
             StateAllocationKey::TemplateChunkPayloads,
-            StateAllocationKey::ControlPlaneSubnetState,
+            StateAllocationKey::RootWasmStoreState,
             StateAllocationKey::WasmStoreGcState,
         ] {
             assert!(keys.contains(&expected));
@@ -407,9 +408,9 @@ mod tests {
                 TemplateChunkPayloadsData::STATE_CONTRACT_NAME,
             ),
             (
-                StateAllocationKey::ControlPlaneSubnetState,
-                SubnetStateRecord::STATE_CONTRACT_NAME,
-                ControlPlaneSubnetStateData::STATE_CONTRACT_NAME,
+                StateAllocationKey::RootWasmStoreState,
+                RootWasmStoreStateRecord::STATE_CONTRACT_NAME,
+                RootWasmStoreStateData::STATE_CONTRACT_NAME,
             ),
             (
                 StateAllocationKey::WasmStoreGcState,
@@ -450,8 +451,8 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![
                 (
-                    "root_component_registry",
-                    Some(ROOT_COMPONENT_REGISTRY_META_ID),
+                    "root_component_registry_state",
+                    Some(ROOT_COMPONENT_REGISTRY_STATE_ID),
                     RootComponentRegistryStateRecord::STATE_CONTRACT_NAME,
                     Some(196),
                 ),

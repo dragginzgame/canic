@@ -7,7 +7,7 @@
 use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, Memory, memory::VirtualMemory},
-    role_contract::allocation::memory::placement::SHARDING_ACTIVE_SET_ID,
+    role_contract::allocation::memory::sharding::SHARDING_ACTIVE_SET_ID,
     storage::{
         prelude::*,
         stable::sharding::{ShardingActiveSetData, ShardingActiveSetRecord},
@@ -24,7 +24,7 @@ const PRESENT: u8 = 1;
 eager_static! {
     static SHARDING_LIFECYCLE: RefCell<ShardingLifecycleCore<VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(ShardingLifecycleCore::new(
-            StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.sharding_active_set.v1", ty = ShardingActiveSet, id = SHARDING_ACTIVE_SET_ID)),
+            StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.sharding.active_set.v1", ty = ShardingActiveSet, id = SHARDING_ACTIVE_SET_ID)),
         ));
 }
 

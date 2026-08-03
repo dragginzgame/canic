@@ -31,7 +31,7 @@ eager_static! {
         RefCell::new(Cell::init(
             canic_core::ic_memory_key!(
                 authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-                key = "canic.control_plane.root_fleet_registry_mirror.v1",
+                key = "canic.control_plane.root.fleet_registry_mirror.v1",
                 ty = RootFleetRegistryMirrorState,
                 id = ROOT_FLEET_REGISTRY_MIRROR_ID
             ),

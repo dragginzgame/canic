@@ -13,7 +13,8 @@ use canic_core::{
     ids::ComponentInstanceId,
     impl_storable_bounded, impl_storable_unbounded,
     role_contract::allocation::memory::control_plane::{
-        ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID, ROOT_CANISTER_POOL_ID, ROOT_CANISTER_POOL_STATE_ID,
+        ROOT_CANISTER_POOL_ASSETS_ID, ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID,
+        ROOT_CANISTER_POOL_STATE_ID,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -24,9 +25,9 @@ eager_static! {
         StableBtreeMap<Principal, CanisterPoolAssetRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(StableBtreeMap::init(canic_core::ic_memory_key!(
         authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-        key = "canic.control_plane.root_canister_pool.v1",
+        key = "canic.control_plane.root.canister_pool.assets.v1",
         ty = CanisterPoolAssetRecord,
-        id = ROOT_CANISTER_POOL_ID
+        id = ROOT_CANISTER_POOL_ASSETS_ID
     )));
 }
 
@@ -35,7 +36,7 @@ eager_static! {
         StableBtreeMap<Principal, CanisterPoolHandoffReceiptRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(StableBtreeMap::init(canic_core::ic_memory_key!(
         authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-        key = "canic.control_plane.root_canister_pool_handoff_receipts.v1",
+        key = "canic.control_plane.root.canister_pool.handoff_receipts.v1",
         ty = CanisterPoolHandoffReceiptRecord,
         id = ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID
     )));
@@ -47,7 +48,7 @@ eager_static! {
     > = RefCell::new(Cell::init(
         canic_core::ic_memory_key!(
             authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root_canister_pool_state.v1",
+            key = "canic.control_plane.root.canister_pool.state.v1",
             ty = CanisterPoolStateRecord,
             id = ROOT_CANISTER_POOL_STATE_ID
         ),
