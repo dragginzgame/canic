@@ -283,7 +283,10 @@ mod tests {
             Some("fleet_coordinator") => vec![test_contract(
                 "fleet_coordinator",
                 Some(BuiltInRoleKind::FleetCoordinator),
-                &[StateAllocationKey::FleetCoordinatorRegistry],
+                &[
+                    StateAllocationKey::CoreAuthorityRestoreFence,
+                    StateAllocationKey::FleetCoordinatorRegistry,
+                ],
             )],
             Some(_) => Vec::new(),
         };
@@ -423,7 +426,7 @@ mod tests {
     }
 
     #[test]
-    fn fleet_coordinator_role_audits_its_registry_state_cleanly() {
+    fn fleet_coordinator_role_audits_its_authority_state_cleanly() {
         let report = build_state_audit_report(Some("fleet_coordinator"));
 
         assert_eq!(report.status, StateAuditStatus::Pass);
@@ -433,9 +436,16 @@ mod tests {
             .iter()
             .find(|role| role.canister_role == "fleet_coordinator")
             .expect("Fleet Coordinator role");
-        assert_eq!(role.state.len(), 1);
-        assert_eq!(role.state[0].domain, "fleet_coordinator_registry");
-        assert_eq!(role.state[0].memory_id, Some(16));
+        assert_eq!(
+            role.state
+                .iter()
+                .map(|domain| (domain.domain.as_str(), domain.memory_id))
+                .collect::<Vec<_>>(),
+            vec![
+                ("authority_restore_fence", Some(59)),
+                ("fleet_coordinator_registry", Some(16)),
+            ]
+        );
     }
 
     #[test]
@@ -554,7 +564,7 @@ mod tests {
     }
 
     #[test]
-    fn exact_fleet_coordinator_resolution_materializes_only_registry_state() {
+    fn exact_fleet_coordinator_resolution_materializes_authority_state() {
         let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let resolution = resolve_project_state_manifest(&workspace, &[], Some("fleet_coordinator"));
         let StateManifestResolution::Resolved {
@@ -571,9 +581,12 @@ mod tests {
             manifest.roles[0]
                 .state
                 .iter()
-                .filter_map(|domain| domain.memory_id)
+                .map(|domain| (domain.domain.as_str(), domain.memory_id))
                 .collect::<Vec<_>>(),
-            vec![16]
+            vec![
+                ("authority_restore_fence", Some(59)),
+                ("fleet_coordinator_registry", Some(16)),
+            ]
         );
     }
 
