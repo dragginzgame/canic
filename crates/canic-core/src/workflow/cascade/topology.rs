@@ -8,8 +8,6 @@ use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
     dto::cascade::TopologySnapshotInput,
-    log,
-    log::Topic,
     ops::{
         cascade::CascadeOps,
         ic::IcOps,
@@ -67,109 +65,6 @@ fn prepared_topology_activation_evidence(
 
 impl TopologyCascadeWorkflow {
     // ───────────────────────── Root cascades ─────────────────────────
-
-    /// Initiates a topology cascade from the root canister toward `target_pid`.
-    pub async fn root_cascade_topology_for_pid(
-        target_pid: Principal,
-    ) -> Result<TopologySnapshotInput, InternalError> {
-        EnvOps::require_root()?;
-
-        Self::record(
-            MetricOperation::RootFanout,
-            MetricOutcome::Started,
-            MetricReason::Ok,
-        );
-
-        let snapshot = match TopologySnapshotBuilder::for_target(target_pid) {
-            Ok(builder) => builder.build(),
-            Err(err) => {
-                Self::record(
-                    MetricOperation::RootFanout,
-                    MetricOutcome::Failed,
-                    MetricReason::from_error(&err),
-                );
-                return Err(err);
-            }
-        };
-        let target_input = Self::snapshot_input_for_target(target_pid, &snapshot)?;
-
-        let root_pid = IcOps::canister_self();
-        let first_child = match Self::next_child_on_path(root_pid, &snapshot.parents) {
-            Ok(Some(first_child)) => first_child,
-            Ok(None) => {
-                Self::record(
-                    MetricOperation::RouteResolve,
-                    MetricOutcome::Skipped,
-                    MetricReason::NoRoute,
-                );
-                Self::record(
-                    MetricOperation::RootFanout,
-                    MetricOutcome::Skipped,
-                    MetricReason::NoRoute,
-                );
-                log!(
-                    Topic::Sync,
-                    Warn,
-                    "sync.topology: no branch path to {target_pid}, skipping cascade"
-                );
-                return Ok(target_input);
-            }
-            Err(err) => {
-                Self::record(
-                    MetricOperation::RouteResolve,
-                    MetricOutcome::Failed,
-                    MetricReason::from_error(&err),
-                );
-                Self::record(
-                    MetricOperation::RootFanout,
-                    MetricOutcome::Failed,
-                    MetricReason::from_error(&err),
-                );
-                return Err(err);
-            }
-        };
-
-        let child_snapshot = match Self::slice_snapshot_for_child(first_child, &snapshot) {
-            Ok(snapshot) => snapshot,
-            Err(err) => {
-                Self::record(
-                    MetricOperation::RouteResolve,
-                    MetricOutcome::Failed,
-                    MetricReason::from_error(&err),
-                );
-                Self::record(
-                    MetricOperation::RootFanout,
-                    MetricOutcome::Failed,
-                    MetricReason::from_error(&err),
-                );
-                return Err(err);
-            }
-        };
-        Self::record(
-            MetricOperation::RouteResolve,
-            MetricOutcome::Completed,
-            MetricReason::Ok,
-        );
-
-        match Self::send_snapshot(&first_child, &child_snapshot).await {
-            Ok(()) => {
-                Self::record(
-                    MetricOperation::RootFanout,
-                    MetricOutcome::Completed,
-                    MetricReason::Ok,
-                );
-                Ok(target_input)
-            }
-            Err(err) => {
-                Self::record(
-                    MetricOperation::RootFanout,
-                    MetricOutcome::Failed,
-                    MetricReason::SendFailed,
-                );
-                Err(err)
-            }
-        }
-    }
 
     pub(crate) fn root_wasm_store_snapshot_input(
         wasm_store: Principal,

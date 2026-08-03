@@ -15,8 +15,7 @@ use crate::{
     dto::{cascade::StateSnapshotInput, state::FleetStateInput, topology::FleetDirectoryInput},
     ids::CanisterRole,
     ops::{
-        runtime::env::EnvOps,
-        storage::{registry::subnet::SubnetRegistryOps, state::fleet::FleetStateOps},
+        runtime::env::EnvOps, storage::state::fleet::FleetStateOps,
         topology::directory::FleetDirectoryResolver,
     },
 };
@@ -124,43 +123,6 @@ pub struct TopologySnapshotBuilder {
 }
 
 impl TopologySnapshotBuilder {
-    pub(crate) fn for_target(target_pid: Principal) -> Result<Self, InternalError> {
-        // Build parent chain (root → target)
-        let parents: Vec<TopologyPathNode> = SubnetRegistryOps::parent_chain(target_pid)?
-            .into_iter()
-            .map(|entry| TopologyPathNode {
-                pid: entry.pid,
-                role: entry.record.role.clone(),
-                parent_pid: entry.record.parent_pid,
-            })
-            .collect();
-
-        // Build direct-children map for each parent in the chain
-        let parent_pids: Vec<Principal> = parents.iter().map(|parent| parent.pid).collect();
-        let raw_children = SubnetRegistryOps::direct_children_map(&parent_pids);
-
-        let children_map: HashMap<Principal, Vec<TopologyDirectChild>> = raw_children
-            .into_iter()
-            .map(|(parent_pid, children)| {
-                let mapped = children
-                    .into_iter()
-                    .map(|entry| TopologyDirectChild {
-                        pid: entry.pid,
-                        role: entry.record.role,
-                    })
-                    .collect();
-                (parent_pid, mapped)
-            })
-            .collect();
-
-        Ok(Self {
-            snapshot: TopologySnapshot {
-                parents,
-                children_map,
-            },
-        })
-    }
-
     pub(crate) fn for_direct_leaf(
         root_pid: Principal,
         target_pid: Principal,

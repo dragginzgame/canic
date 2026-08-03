@@ -1,24 +1,8 @@
-use crate::{
-    dto::{
-        error::Error,
-        state::{FleetCommand, FleetCommandResponse},
-    },
-    workflow::state::FleetStateWorkflow,
-};
+//! Module: api::state
+//!
+//! Responsibility: expose read-only Fleet state to configured canisters.
+//! Does not own: root mutation fanout or control-plane inventory selection.
+//! Boundary: root mutation is exposed by the root control-plane facade.
 
 /// Re-export of read-only state query surfaces.
 pub use crate::workflow::state::query::FleetStateQuery;
-
-///
-/// FleetStateApi
-///
-
-pub struct FleetStateApi;
-
-impl FleetStateApi {
-    pub async fn execute_command(cmd: FleetCommand) -> Result<FleetCommandResponse, Error> {
-        FleetStateWorkflow::execute_command(cmd)
-            .await
-            .map_err(Error::from)
-    }
-}

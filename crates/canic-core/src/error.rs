@@ -188,11 +188,7 @@ impl From<TopologyPolicyError> for InternalError {
         let message = err.to_string();
         let public_code = match &err {
             TopologyPolicyError::RegistryPolicy(err) => registry_policy_error_code(err),
-            TopologyPolicyError::DuplicateDirectoryRole(_)
-            | TopologyPolicyError::ImmediateParentMismatch { .. }
-            | TopologyPolicyError::DirectoryRoleMismatch { .. }
-            | TopologyPolicyError::ParentNotFound(_)
-            | TopologyPolicyError::RegistryEntryMissing(_) => None,
+            TopologyPolicyError::ParentNotFound(_) => None,
         };
 
         match public_code {

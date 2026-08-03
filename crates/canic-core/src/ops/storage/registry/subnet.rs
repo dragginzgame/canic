@@ -13,7 +13,6 @@ use crate::{
     },
     view::topology::RegisteredCanisterView,
 };
-use std::collections::{HashMap, HashSet};
 use thiserror::Error as ThisError;
 
 ///
@@ -27,18 +26,6 @@ pub enum SubnetRegistryOpsError {
     #[error("canister {0} already registered")]
     AlreadyRegistered(Principal),
 
-    #[error("canister {0} not found in subnet registry")]
-    CanisterNotFound(Principal),
-
-    #[error("parent chain contains a cycle at {0}")]
-    ParentChainCycle(Principal),
-
-    #[error("parent chain exceeded registry size ({0})")]
-    ParentChainTooLong(usize),
-
-    #[error("parent chain did not terminate at root (last pid: {0})")]
-    ParentChainNotRootTerminated(Principal),
-
     #[error("parent canister {0} not found in subnet registry")]
     ParentNotFound(Principal),
 
@@ -49,59 +36,6 @@ pub enum SubnetRegistryOpsError {
 impl From<SubnetRegistryOpsError> for InternalError {
     fn from(err: SubnetRegistryOpsError) -> Self {
         StorageOpsError::from(err).into()
-    }
-}
-
-impl SubnetRegistryData {
-    /// Return the canonical parent chain for a canister.
-    ///
-    /// Returned order: root → … → target
-    pub(crate) fn parent_chain(
-        &self,
-        target: Principal,
-    ) -> Result<Vec<CanisterEntryRecord>, InternalError> {
-        let registry_len = self.entries.len();
-        let index: HashMap<Principal, CanisterRecord> = self
-            .entries
-            .iter()
-            .map(|entry| (entry.pid, entry.record.clone()))
-            .collect();
-
-        let mut chain = Vec::new();
-        let mut seen = HashSet::new();
-        let mut pid = target;
-
-        loop {
-            if !seen.insert(pid) {
-                return Err(SubnetRegistryOpsError::ParentChainCycle(pid).into());
-            }
-
-            let record = index
-                .get(&pid)
-                .ok_or(SubnetRegistryOpsError::CanisterNotFound(pid))?;
-
-            if seen.len() > registry_len {
-                return Err(SubnetRegistryOpsError::ParentChainTooLong(seen.len()).into());
-            }
-
-            chain.push(CanisterEntryRecord {
-                pid,
-                record: record.clone(),
-            });
-
-            if let Some(parent_pid) = record.parent_pid {
-                pid = parent_pid;
-            } else {
-                if record.role != CanisterRole::ROOT {
-                    return Err(SubnetRegistryOpsError::ParentChainNotRootTerminated(pid).into());
-                }
-
-                break;
-            }
-        }
-
-        chain.reverse();
-        Ok(chain)
     }
 }
 
@@ -243,22 +177,6 @@ impl SubnetRegistryOps {
         role: &CanisterRole,
     ) -> Option<Principal> {
         SubnetRegistry::find_child_pid_for_role(parent, role)
-    }
-
-    pub(crate) fn parent_chain(
-        target: Principal,
-    ) -> Result<Vec<CanisterEntryRecord>, InternalError> {
-        SubnetRegistry::export().parent_chain(target)
-    }
-
-    #[must_use]
-    pub(crate) fn direct_children_map(
-        parents: &[Principal],
-    ) -> HashMap<Principal, Vec<CanisterEntryRecord>> {
-        parents
-            .iter()
-            .map(|pid| (*pid, Self::children(*pid)))
-            .collect()
     }
 
     // -------------------------------------------------------------

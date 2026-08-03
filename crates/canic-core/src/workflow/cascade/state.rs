@@ -18,7 +18,6 @@ use crate::{
     log::Topic,
     ops::{
         cascade::CascadeOps,
-        ic::IcOps,
         runtime::{
             env::EnvOps,
             fleet_activation::FleetActivationRuntimeOps,
@@ -30,8 +29,7 @@ use crate::{
         },
         storage::{
             children::CanisterChildrenOps, directory::fleet::FleetDirectoryOps,
-            fleet_activation::FleetActivationOps, registry::subnet::SubnetRegistryOps,
-            state::fleet::FleetStateOps,
+            fleet_activation::FleetActivationOps, state::fleet::FleetStateOps,
         },
         topology::directory::validate_provenance,
     },
@@ -83,19 +81,6 @@ fn prepared_state_snapshot_hash(
 
 impl StateCascadeWorkflow {
     // ───────────────────────── Root cascade ─────────────────────────
-
-    /// Cascade a state snapshot from the root canister to its direct children.
-    ///
-    /// No-op if the snapshot is empty.
-    pub async fn root_cascade_state(snapshot: &StateSnapshot) -> Result<(), InternalError> {
-        EnvOps::require_root()?;
-        let root_pid = IcOps::canister_self();
-        let children = SubnetRegistryOps::children(root_pid)
-            .into_iter()
-            .map(|entry| entry.pid)
-            .collect::<Vec<_>>();
-        Self::root_cascade_state_to(snapshot, &children).await
-    }
 
     /// Cascade a state snapshot to one explicit root-owned direct-child inventory.
     pub(crate) async fn root_cascade_state_to(

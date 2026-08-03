@@ -154,7 +154,7 @@ fn canister_ops_metrics_are_exposed_with_stable_labels() {
         CanisterOpsMetricOperation::Create,
         &CanisterRole::new("worker"),
         CanisterOpsMetricOutcome::Failed,
-        CanisterOpsMetricReason::StatePropagation,
+        CanisterOpsMetricReason::Topology,
     );
 
     let entries = entries(MetricsKind::Core);
@@ -188,13 +188,7 @@ fn canister_ops_metrics_are_exposed_with_stable_labels() {
     );
     assert_metric_count(
         &entries,
-        &[
-            "canister_ops",
-            "create",
-            "worker",
-            "failed",
-            "state_propagation",
-        ],
+        &["canister_ops", "create", "worker", "failed", "topology"],
         1,
     );
 }
@@ -938,7 +932,7 @@ fn seed_all_metric_families_for_reset_test() {
         PoolMetricReason::Ok,
     );
     ProvisioningMetrics::record(
-        ProvisioningMetricOperation::Create,
+        ProvisioningMetricOperation::Allocate,
         &CanisterRole::new("app"),
         ProvisioningMetricOutcome::Started,
         ProvisioningMetricReason::Ok,

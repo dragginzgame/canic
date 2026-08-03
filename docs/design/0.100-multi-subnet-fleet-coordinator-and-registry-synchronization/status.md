@@ -1,15 +1,15 @@
 # Canic 0.100 Implementation Status
 
-Date: 2026-08-02
+Date: 2026-08-03
 
 - State: implementation in progress.
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.90`.
-- Latest published release: `v0.100.90` at
-  `d646889be88328f272f6ff36978d97e96c3e2923`.
-- Open patch draft: `0.100.91`; no package-version change has been authorized.
+- Workspace package version: `0.100.91`.
+- Latest published release: `v0.100.91` at
+  `49af2ecd3ea10872773ef8c9fbeeadd5bf66cea5`.
+- Open patch draft: `0.100.92`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -95,9 +95,12 @@ Registry slices replace the 0.99 root model.
 - [x] Hard-cut Store creation/publication recovery to one durable root-owned
   create/install journal and direct Store activation, with no Registry row or
   inventory importer.
-- [ ] Hard-cut local `SubnetRegistry` to root-owned per-Component
-  `ComponentRegistry` and direct-child authority for its remaining
-  propagation, provisioning and pool consumers.
+- [x] Hard-cut Fleet-state and topology propagation to root-owned Store,
+  per-Component `ComponentRegistry` and direct-child authority.
+- [ ] Hard-cut legacy provisioning consumers to per-Component
+  `ComponentRegistry` authority.
+- [ ] Hard-cut pool recovery consumers to per-Component `ComponentRegistry`
+  authority.
 - [x] Hard-cut local `SubnetDirectory`; root-owned `ComponentDirectory` is the
   sole component-local directory projection.
 - [x] Split Fleet and Component Directory provenance.
@@ -1142,21 +1145,28 @@ only root-owned Store inventory.
 The same release centralizes exact installed-module verification across fresh
 Coordinator and root host workflows.
 
-Open 0.100.91 moves bootstrap and publication Store creation onto one durable
+Released 0.100.91 moves bootstrap and publication Store creation onto one durable
 root-owned `CreationIntent -> Created -> InstallIntent -> Installed` journal.
 It freezes exact artifact, controller, cycles and cost-guard authority before
 paid effects, never repeats an unresolved creation, reconciles uncertain
 installation from live module state, activates the Store as a direct root leaf
 and atomically commits runtime inventory. No Store creation, recovery or
-deletion path writes, imports or cleans a legacy Registry row. The same draft
+deletion path writes, imports or cleans a legacy Registry row. The same release
 routes terminal host Fleet catalog queries through the canonical typed
 Canister protocol boundary and removes residual one-call wrappers.
 
+Open 0.100.92 moves root Fleet-state mutation behind exact control-plane
+inventory. The root freezes the canonical union of current Store Canisters and
+top-level Component Registry partitions before mutation and fanout; descendants
+continue from their local direct-child caches. The orphaned generic Canister
+lifecycle, Registry-built topology cascade, mapper, consistency policy and
+propagation-only metrics are removed without a compatibility path.
+
 ## Next Action
 
-Replace the legacy Subnet Registry's remaining propagation, provisioning and
-pool-recovery consumers with root-owned Component Registry and direct-child
-authority. Then delete its
+Replace the legacy Subnet Registry's remaining provisioning, pool-recovery and
+root-derived Fleet Directory consumers with root-owned Component Registry and
+direct-child authority. Then delete its
 stable/cascade schema and complete the reinstall-only decoder audit before
 running preparation and execution
 as separate processes against one explicitly selected disposable real-network
