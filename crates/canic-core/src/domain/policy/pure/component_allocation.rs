@@ -415,9 +415,9 @@ mod tests {
         );
 
         root.limits.maximum_component_instances = 10;
-        root.limits.maximum_managed_canisters = 2;
+        root.limits.maximum_managed_canisters = 10;
         let mut request = input(&topology, &root, &component_spec);
-        request.managed_descendants = 1;
+        request.managed_descendants = 9;
         assert_eq!(
             reserve_top_level_component(request),
             Err(ComponentAllocationPolicyError::ManagedCanisterCapacityExhausted)

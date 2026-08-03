@@ -537,10 +537,10 @@ mod tests {
             Err(ComponentChildAllocationPolicyError::ComponentDescendantCapacityExhausted)
         );
 
-        fixture.root.limits.maximum_managed_canisters = 3;
+        fixture.root.limits.maximum_managed_canisters = 10;
         let mut request = input(&fixture, &parent, &child_role);
         request.committed_component_instances = 1;
-        request.root_managed_descendants = 1;
+        request.root_managed_descendants = 8;
         assert_eq!(
             reserve_component_child(request),
             Err(ComponentChildAllocationPolicyError::ManagedCanisterCapacityExhausted)
