@@ -1,6 +1,9 @@
 use crate::{
     config::schema::ConfigModel,
-    dto::{abi::v1::CanisterInitPayload, env::EnvBootstrapArgs},
+    dto::{
+        abi::v1::CanisterInitPayload, env::EnvBootstrapArgs,
+        fleet_subnet_root::FleetSubnetWasmStoreInitArgs,
+    },
     ids::{CanisterRole, ManagedCanisterBinding},
     lifecycle,
 };
@@ -29,6 +32,20 @@ impl LifecycleApi {
             role,
             payload,
             application_init_args,
+            config,
+            config_source,
+            config_path,
+        );
+    }
+
+    pub fn init_wasm_store_before_bootstrap(
+        input: FleetSubnetWasmStoreInitArgs,
+        config: ConfigModel,
+        config_source: &str,
+        config_path: &str,
+    ) {
+        lifecycle::init::nonroot::init_wasm_store_before_bootstrap(
+            input,
             config,
             config_source,
             config_path,

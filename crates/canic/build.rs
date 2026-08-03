@@ -7,7 +7,6 @@ fn main() {
     println!("cargo:rustc-check-cfg=cfg(canic_is_root)");
     println!("cargo:rustc-check-cfg=cfg(canic_has_scaling)");
     println!("cargo:rustc-check-cfg=cfg(canic_has_sharding)");
-    println!("cargo:rustc-check-cfg=cfg(canic_has_root_wasm_store_bootstrap_release_set)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_icrc_standards)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_metadata)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_env)");

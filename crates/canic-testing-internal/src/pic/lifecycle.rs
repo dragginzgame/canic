@@ -1,10 +1,7 @@
 use crate::canister::TEST;
 use candid::{Principal, encode_args, encode_one};
 use canic::{
-    dto::{
-        abi::v1::{CanisterInitAuthority, CanisterInitPayload},
-        env::EnvBootstrapArgs,
-    },
+    dto::abi::v1::{CanisterInitAuthority, CanisterInitPayload},
     ids::{
         ComponentBinding, ComponentInstanceId, ComponentSpecAdmission, ComponentSpecId,
         CyclesFundingBudget, FleetCoordinatorBinding, FleetRegistryAuthority,
@@ -128,24 +125,7 @@ pub fn install_lifecycle_boundary_fixture() -> LifecycleBoundaryFixture {
 /// Encode the intentionally invalid init payload used by lifecycle boundary checks.
 #[must_use]
 pub fn invalid_init_args() -> Vec<u8> {
-    let identity = managed_test_init_identity();
-    let payload = CanisterInitPayload {
-        install_id: identity.install_id,
-        release_build_id: identity.release_build_id,
-        authority: CanisterInitAuthority::Infrastructure {
-            fleet: identity.fleet,
-            env: EnvBootstrapArgs {
-                fleet_subnet_root_pid: None,
-                component_spec: None,
-                subnet_pid: None,
-                root_pid: None,
-                canister_role: None,
-                parent_pid: None,
-            },
-        },
-    };
-
-    encode_init_args(payload)
+    encode_init_args(init_payload(Fake::principal(9)))
 }
 
 /// Encode the empty tuple argument used for no-payload upgrades.

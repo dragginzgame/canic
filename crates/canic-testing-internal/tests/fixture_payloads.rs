@@ -7,6 +7,7 @@ use canic_testing_internal::{
     canister::{APP, SCALE_HUB, SCALE_REPLICA, TEST, USER_HUB, USER_SHARD, WASM_STORE},
     pic::{invalid_init_args, managed_test_init_identity, upgrade_args},
 };
+use ic_testkit::Fake;
 
 // Verify canonical test role constants stay aligned with canister role names.
 #[test]
@@ -26,9 +27,9 @@ fn canister_role_constants_have_expected_names() {
     }
 }
 
-// Verify the invalid lifecycle init fixture encodes incomplete infrastructure authority.
+// Verify the invalid lifecycle fixture binds a different managed Component canister.
 #[test]
-fn invalid_init_args_encode_incomplete_infrastructure_authority() {
+fn invalid_init_args_encode_mismatched_component_authority() {
     let (payload, user_payload): (CanisterInitPayload, Option<Vec<u8>>) =
         decode_args(&invalid_init_args()).expect("decode invalid init args");
     let identity = managed_test_init_identity();
@@ -36,16 +37,11 @@ fn invalid_init_args_encode_incomplete_infrastructure_authority() {
     assert!(user_payload.is_none());
     assert_eq!(payload.install_id, identity.install_id);
     assert_eq!(payload.release_build_id, identity.release_build_id);
-    let CanisterInitAuthority::Infrastructure { fleet, env } = payload.authority else {
-        panic!("invalid fixture must carry incomplete infrastructure authority");
+    let CanisterInitAuthority::Component { binding, .. } = payload.authority else {
+        panic!("invalid fixture must carry Component authority");
     };
-    assert_eq!(fleet, identity.fleet);
-    assert!(env.fleet_subnet_root_pid.is_none());
-    assert!(env.component_spec.is_none());
-    assert!(env.subnet_pid.is_none());
-    assert!(env.root_pid.is_none());
-    assert!(env.canister_role.is_none());
-    assert!(env.parent_pid.is_none());
+    assert_eq!(binding.authority.binding.fleet, identity.fleet);
+    assert_eq!(binding.canister_id, Fake::principal(9));
 }
 
 // Verify the upgrade fixture is the empty tuple expected by no-payload upgrades.

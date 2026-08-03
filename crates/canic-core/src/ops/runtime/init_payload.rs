@@ -7,11 +7,7 @@
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::{
-        abi::v1::{CanisterInitAuthority, CanisterInitPayload},
-        env::EnvBootstrapArgs,
-    },
-    ids::CanisterRole,
+    dto::fleet_subnet_root::FleetSubnetWasmStoreInitArgs,
     ops::{
         runtime::env::EnvOps,
         storage::{StorageOpsError, fleet_activation::FleetActivationOps},
@@ -19,9 +15,9 @@ use crate::{
 };
 
 /// Build the infrastructure authority payload for one Store owned by the current root.
-pub fn wasm_store_init_payload(
+pub fn wasm_store_init_args(
     target_pid: Principal,
-) -> Result<CanisterInitPayload, InternalError> {
+) -> Result<FleetSubnetWasmStoreInitArgs, InternalError> {
     if target_pid == Principal::anonymous() {
         return Err(InternalError::invalid_input(
             "managed infrastructure target Canister is anonymous",
@@ -29,25 +25,18 @@ pub fn wasm_store_init_payload(
     }
 
     EnvOps::require_root()?;
-    let root_pid = EnvOps::root_pid()?;
-    let env = EnvBootstrapArgs {
-        fleet_subnet_root_pid: Some(EnvOps::fleet_subnet_root_pid()?),
-        component_spec: None,
-        subnet_pid: Some(EnvOps::subnet_pid()?),
-        root_pid: Some(root_pid),
-        canister_role: Some(CanisterRole::WASM_STORE),
-        parent_pid: Some(root_pid),
-    };
+    let authority = FleetActivationOps::wasm_store_authority().map_err(StorageOpsError::from)?;
+    if authority.wasm_store != target_pid {
+        return Err(InternalError::invalid_input(
+            "managed sibling Wasm Store target differs from protected authority",
+        ));
+    }
     let identity = FleetActivationOps::status(EnvOps::is_root())
         .map_err(StorageOpsError::from)?
         .identity;
 
-    Ok(CanisterInitPayload {
+    Ok(FleetSubnetWasmStoreInitArgs {
+        authority,
         install_id: identity.operation_id,
-        release_build_id: identity.release_build_id,
-        authority: CanisterInitAuthority::Infrastructure {
-            fleet: identity.fleet,
-            env,
-        },
     })
 }

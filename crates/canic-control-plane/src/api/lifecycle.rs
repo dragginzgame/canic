@@ -2,7 +2,7 @@ use canic_core::{
     api::lifecycle::metrics::{
         LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole, LifecycleMetricsApi,
     },
-    bootstrap::{EmbeddedRootBootstrapEntry, compiled::ConfigModel},
+    bootstrap::compiled::ConfigModel,
     control_plane_support::view::fleet_activation::FleetActivationTransition,
     dto::fleet_registry::{
         FleetSubnetRootRegistryMirrorActivationRequest,
@@ -22,7 +22,8 @@ use canic_core::{
         FleetSubnetRootStoreBindingFinalizationStatusRequest, FleetSubnetRootStoreDeletionRequest,
         FleetSubnetRootStoreDeletionResponse, FleetSubnetRootStoreDeletionStatusRequest,
         FleetSubnetRootStoreReclamationRequest, FleetSubnetRootStoreReclamationResponse,
-        FleetSubnetRootStoreReclamationStatusRequest,
+        FleetSubnetRootStoreReclamationStatusRequest, FleetSubnetWasmStoreAdoptionRequest,
+        FleetSubnetWasmStoreAdoptionResponse,
     },
     dto::{
         component_registry::{
@@ -80,13 +81,9 @@ impl LifecycleApi {
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
-        embedded_wasm_store_bootstrap_release_set: &'static [EmbeddedRootBootstrapEntry],
     ) {
         let canister_pool_config = args.authority.binding.limits.canister_pool.clone();
         let canister_pool_imports = args.canister_pool_imports.clone();
-        crate::api::template::WasmStoreBootstrapApi::register_embedded_root_wasm_store_release_set(
-            embedded_wasm_store_bootstrap_release_set,
-        );
         crate::runtime::install::register_template_module_source_resolver();
         canic_core::api::lifecycle::root::LifecycleApi::init_root_canister_before_bootstrap(
             args,
@@ -102,9 +99,6 @@ impl LifecycleApi {
         .unwrap_or_else(|error| {
             ic_cdk::trap(format!("Canister pool initialization failed: {error}"))
         });
-        crate::api::template::WasmStoreBootstrapApi::log_embedded_root_wasm_store_release_set(
-            embedded_wasm_store_bootstrap_release_set,
-        );
     }
 
     pub fn fleet_subnet_root_authority()
@@ -115,6 +109,20 @@ impl LifecycleApi {
     pub fn fleet_subnet_root_canister_summary()
     -> Result<FleetSubnetRootCanisterSummary, canic_core::dto::error::Error> {
         crate::workflow::fleet_subnet_root::canister_summary().map_err(Into::into)
+    }
+
+    pub async fn adopt_fleet_subnet_wasm_store(
+        request: FleetSubnetWasmStoreAdoptionRequest,
+    ) -> Result<FleetSubnetWasmStoreAdoptionResponse, canic_core::dto::error::Error> {
+        crate::workflow::fleet_subnet_root::adopt_wasm_store(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub fn fleet_subnet_wasm_store_adoption_status(
+        request: FleetSubnetWasmStoreAdoptionRequest,
+    ) -> Result<FleetSubnetWasmStoreAdoptionResponse, canic_core::dto::error::Error> {
+        crate::workflow::fleet_subnet_root::wasm_store_adoption_status(request).map_err(Into::into)
     }
 
     pub fn begin_fleet_subnet_root_draining(
@@ -637,11 +645,7 @@ impl LifecycleApi {
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
-        embedded_wasm_store_bootstrap_release_set: &'static [EmbeddedRootBootstrapEntry],
     ) -> bool {
-        crate::api::template::WasmStoreBootstrapApi::register_embedded_root_wasm_store_release_set(
-            embedded_wasm_store_bootstrap_release_set,
-        );
         crate::runtime::install::register_template_module_source_resolver();
         let active =
             canic_core::api::lifecycle::root::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
@@ -649,9 +653,6 @@ impl LifecycleApi {
                 config_source,
                 config_path,
             );
-        crate::api::template::WasmStoreBootstrapApi::log_embedded_root_wasm_store_release_set(
-            embedded_wasm_store_bootstrap_release_set,
-        );
         if active {
             crate::workflow::canister_pool::start();
         }

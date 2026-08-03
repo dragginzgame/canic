@@ -16,14 +16,6 @@ const CONTROL_PLANE_DEPLOYMENT_QUOTA_WINDOW_SECONDS: u64 = 60;
 const MAX_CONTROL_PLANE_DEPLOYMENT_OPERATIONS_PER_WINDOW: u64 = 64;
 const MIN_CONTROL_PLANE_CYCLES_AFTER_RESERVATION: u128 = TC;
 
-pub const BOOTSTRAP_WASM_STORE_CREATE_COMMAND_KIND: &str =
-    "management.control_plane.bootstrap_wasm_store_create.v1";
-pub const PUBLICATION_WASM_STORE_CREATE_COMMAND_KIND: &str =
-    "management.control_plane.publication_wasm_store_create.v1";
-pub const BOOTSTRAP_WASM_STORE_INSTALL_COMMAND_KIND: &str =
-    "management.control_plane.bootstrap_wasm_store_install.v1";
-pub const PUBLICATION_WASM_STORE_INSTALL_COMMAND_KIND: &str =
-    "management.control_plane.publication_wasm_store_install.v1";
 pub const COMPONENT_CREATE_COMMAND_KIND: &str = "management.control_plane.component_create.v1";
 pub const COMPONENT_CHILD_CREATE_COMMAND_KIND: &str =
     "management.control_plane.component_child_create.v1";
@@ -65,21 +57,6 @@ pub fn reserve_component_pool_claim_guard() -> Result<CostGuardPermit, InternalE
 pub fn reserve_component_child_pool_claim_guard() -> Result<CostGuardPermit, InternalError> {
     let root = IcOps::canister_self();
     reserve_control_plane_deployment_cost_guard(COMPONENT_CHILD_CREATE_COMMAND_KIND, root, root, 0)
-}
-
-pub fn reserve_wasm_store_creation_cost_guard(
-    command_kind: &'static str,
-    initial_cycles: &canic_core::cdk::types::Cycles,
-) -> Result<CostGuardPermit, InternalError> {
-    let root = IcOps::canister_self();
-    reserve_control_plane_deployment_cost_guard(command_kind, root, root, initial_cycles.to_u128())
-}
-
-pub fn reserve_wasm_store_install_cost_guard(
-    command_kind: &'static str,
-) -> Result<CostGuardPermit, InternalError> {
-    let root = IcOps::canister_self();
-    reserve_control_plane_deployment_cost_guard(command_kind, root, root, 0)
 }
 
 pub fn reserve_component_child_creation_cost_guard(

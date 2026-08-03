@@ -4,7 +4,10 @@ use crate::{
     },
     bootstrap,
     config::schema::ConfigModel,
-    dto::{abi::v1::CanisterInitPayload, env::EnvBootstrapArgs},
+    dto::{
+        abi::v1::CanisterInitPayload, env::EnvBootstrapArgs,
+        fleet_subnet_root::FleetSubnetWasmStoreInitArgs,
+    },
     ids::CanisterRole,
     lifecycle::{LifecyclePhase, lifecycle_trap},
     log,
@@ -25,6 +28,21 @@ pub fn init_nonroot_canister_before_bootstrap(
     init_nonroot_before_bootstrap(role, config, config_source, config_path, move |role| {
         workflow::runtime::init_nonroot_canister(role, payload, application_init_args)
     });
+}
+
+pub fn init_wasm_store_before_bootstrap(
+    input: FleetSubnetWasmStoreInitArgs,
+    config: ConfigModel,
+    config_source: &str,
+    config_path: &str,
+) {
+    init_nonroot_before_bootstrap(
+        CanisterRole::WASM_STORE,
+        config,
+        config_source,
+        config_path,
+        |_| workflow::runtime::init_wasm_store_canister(input),
+    );
 }
 
 pub fn init_local_nonroot_canister_before_bootstrap(

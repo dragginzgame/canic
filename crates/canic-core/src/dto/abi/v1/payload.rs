@@ -1,9 +1,6 @@
 use crate::{
-    dto::{env::EnvBootstrapArgs, prelude::*},
-    ids::{
-        ComponentBinding, ComponentChildBinding, FleetBinding, FleetSubnetRootBinding,
-        ReleaseBuildId,
-    },
+    dto::prelude::*,
+    ids::{ComponentBinding, ComponentChildBinding, FleetSubnetRootBinding, ReleaseBuildId},
 };
 
 ///
@@ -14,10 +11,6 @@ use crate::{
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum CanisterInitAuthority {
-    Infrastructure {
-        fleet: FleetBinding,
-        env: EnvBootstrapArgs,
-    },
     Component {
         root: FleetSubnetRootBinding,
         binding: ComponentBinding,
@@ -45,8 +38,9 @@ mod tests {
     use crate::cdk::types::Cycles;
     use crate::ids::{
         AppId, CanisterRole, CanonicalNetworkId, ComponentInstanceId, ComponentSpecId,
-        ComponentTopologyDigest, CyclesFundingBudget, FleetCoordinatorBinding, FleetId, FleetKey,
-        FleetRegistryAuthority, FleetSubnetRootLimits, ReleaseBuildNonce, SubnetId,
+        ComponentTopologyDigest, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
+        FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootLimits, ReleaseBuildNonce,
+        SubnetId,
     };
 
     #[test]
@@ -122,7 +116,7 @@ mod tests {
             CanisterInitAuthority::Component {
                 root: match &payload.authority {
                     CanisterInitAuthority::Component { root, .. } => root.clone(),
-                    _ => unreachable!(),
+                    CanisterInitAuthority::ComponentChild { .. } => unreachable!(),
                 },
                 binding,
             }

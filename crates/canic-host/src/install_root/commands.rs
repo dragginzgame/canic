@@ -207,6 +207,7 @@ pub(super) fn icp_canister_create_command(
     local_replica: Option<&LocalReplicaTarget>,
     subnet: SubnetId,
     funding: &PlannedCanisterCreationFunding,
+    controllers: &[Principal],
 ) -> Command {
     let mut command = icp_canister_command(icp_root);
     command.args(["create", "--detached", "--json", "--subnet"]);
@@ -218,6 +219,9 @@ pub(super) fn icp_canister_create_command(
         PlannedCanisterCreationFunding::Icp { e8s } => {
             command.args(["--with-icp", &icp_e8s_text(*e8s)]);
         }
+    }
+    for controller in controllers {
+        command.args(["--controller", &controller.to_text()]);
     }
     add_icp_environment_target(&mut command, environment, local_replica);
     command

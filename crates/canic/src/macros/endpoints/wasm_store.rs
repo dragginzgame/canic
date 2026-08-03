@@ -8,6 +8,12 @@
 #[macro_export]
 macro_rules! canic_emit_local_wasm_store_endpoints {
     () => {
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_fleet_subnet_wasm_store_authority(
+        ) -> Result<::canic::ids::FleetSubnetWasmStoreAuthority, ::canic::Error> {
+            $crate::__internal::core::api::fleet_activation::FleetActivationApi::wasm_store_authority()
+        }
+
         #[$crate::canic_query(internal, requires(caller::is_root()))]
         async fn canic_wasm_store_catalog()
         -> Result<Vec<::canic::dto::template::WasmStoreCatalogEntryResponse>, ::canic::Error> {

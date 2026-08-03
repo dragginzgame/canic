@@ -14,14 +14,17 @@ use crate::{
         begin_component_registry_preparation, begin_registry_join,
         begin_registry_mirror_activation, begin_registry_sync, begin_root_activation,
         begin_root_activation_preparation, begin_root_creation, begin_root_install,
-        begin_store_bootstrap, begin_store_staging, expected_root_authority,
-        plan_fleet_subnet_root_install, record_component_registry_preparation_verified,
-        record_component_registry_prepared, record_registry_join_verified, record_registry_joined,
+        begin_store_adoption, begin_store_bootstrap, begin_store_staging,
+        begin_wasm_store_creation, begin_wasm_store_install, expected_root_authority,
+        expected_wasm_store_authority, plan_fleet_subnet_root_install,
+        record_component_registry_preparation_verified, record_component_registry_prepared,
+        record_infrastructure_verified, record_registry_join_verified, record_registry_joined,
         record_registry_mirror_activated, record_registry_mirror_activation_verified,
         record_registry_sync_verified, record_registry_synchronized, record_root_activated,
         record_root_activation_prepared, record_root_activation_verified, record_root_created,
-        record_root_installed, record_root_verified, record_store_bootstrapped,
-        record_store_staged, record_store_verified,
+        record_root_installed, record_store_adopted, record_store_bootstrapped,
+        record_store_staged, record_store_verified, record_wasm_store_created,
+        record_wasm_store_installed,
     },
     release_set::{
         CanicInfrastructureArtifactEntry, CanicInfrastructureArtifactManifest,
@@ -52,6 +55,7 @@ use canic_core::{
             FleetSubnetRootRegistryMirrorActivationResponse, FleetSubnetRootRegistrySyncRequest,
             FleetSubnetRootRegistrySyncResponse, FleetSubnetRootSnapshotAcknowledgement,
         },
+        fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse,
         root_store::{
             RootStoreBootstrapRequest, RootStoreBootstrapResponse, RootStoreCatalogEntry,
         },
@@ -79,22 +83,37 @@ fn journals_each_root_effect_and_verifies_exact_protected_authority() {
     let creating = begin_root_creation(&planned).expect("begin creation");
     assert_eq!(
         creating.journal.phase,
-        FleetSubnetRootInstallPhase::CreationInFlight
+        FleetSubnetRootInstallPhase::RootCreationInFlight
     );
     let root_canister = Principal::from_slice(&[44]);
     let created = record_root_created(&creating, root_canister).expect("record root");
-    let installing = begin_root_install(&created).expect("begin install");
+    let creating_store = begin_wasm_store_creation(&created, Principal::from_slice(&[56]))
+        .expect("begin Store creation");
+    let store_canister = Principal::from_slice(&[55]);
+    let store_created =
+        record_wasm_store_created(&creating_store, store_canister).expect("record Store");
+    let store_installing = begin_wasm_store_install(&store_created).expect("begin Store install");
+    let store_installed =
+        record_wasm_store_installed(&store_installing, [9; 32]).expect("record Store module");
+    let installing = begin_root_install(&store_installed).expect("begin root install");
     let installed = record_root_installed(&installing, [7; 32]).expect("record installed module");
     let authority = expected_root_authority(&installed.journal).expect("expected authority");
+    let store_authority =
+        expected_wasm_store_authority(&installed.journal).expect("expected Store authority");
     let verified =
-        record_root_verified(&installed, authority.clone()).expect("record exact authority");
+        record_infrastructure_verified(&installed, authority.clone(), store_authority.clone())
+            .expect("record exact authority");
 
     assert_eq!(
         verified.journal.phase,
-        FleetSubnetRootInstallPhase::Verified
+        FleetSubnetRootInstallPhase::InfrastructureVerified
     );
-    assert_eq!(verified.journal.sequence, 5);
+    assert_eq!(verified.journal.sequence, 9);
     assert_eq!(verified.journal.verified_binding, Some(authority.binding));
+    assert_eq!(
+        verified.journal.verified_wasm_store_authority,
+        Some(store_authority)
+    );
 }
 
 #[test]
@@ -117,14 +136,10 @@ fn journals_exact_store_bootstrap_and_rejects_a_catalog_outside_root_admissions(
     let root = temp_dir("fleet-subnet-root-store-install-journal");
     let fixture = fixture(&root);
     let planned = plan(&fixture).expect("plan root");
-    let creating = begin_root_creation(&planned).expect("begin creation");
     let root_canister = Principal::from_slice(&[44]);
-    let created = record_root_created(&creating, root_canister).expect("record root");
-    let installing = begin_root_install(&created).expect("begin install");
-    let installed = record_root_installed(&installing, [7; 32]).expect("record installed module");
-    let authority = expected_root_authority(&installed.journal).expect("expected authority");
-    let verified = record_root_verified(&installed, authority).expect("record exact authority");
-    let staging = begin_store_staging(&verified).expect("begin Store staging");
+    let verified = install_infrastructure(&planned, root_canister);
+    let adopted = adopt_store(&verified);
+    let staging = begin_store_staging(&adopted).expect("begin Store staging");
     let staged = record_store_staged(&staging).expect("record Store staging");
     let bootstrapping = begin_store_bootstrap(&staged).expect("begin Store bootstrap");
     let evidence = RootStoreBootstrapResponse {
@@ -147,7 +162,7 @@ fn journals_exact_store_bootstrap_and_rejects_a_catalog_outside_root_admissions(
         complete.journal.phase,
         FleetSubnetRootInstallPhase::StoreVerified
     );
-    assert_eq!(complete.journal.sequence, 10);
+    assert_eq!(complete.journal.sequence, 16);
     assert_eq!(complete.journal.store_bootstrap, Some(evidence));
 
     let mut inadmissible = complete
@@ -172,14 +187,10 @@ fn journals_exact_registry_join_sync_and_active_mirror_evidence() {
     let root = temp_dir("fleet-subnet-root-registry-join-journal");
     let fixture = fixture(&root);
     let planned = plan(&fixture).expect("plan root");
-    let creating = begin_root_creation(&planned).expect("begin creation");
     let root_canister = Principal::from_slice(&[44]);
-    let created = record_root_created(&creating, root_canister).expect("record root");
-    let installing = begin_root_install(&created).expect("begin install");
-    let installed = record_root_installed(&installing, [7; 32]).expect("record installed module");
-    let authority = expected_root_authority(&installed.journal).expect("expected authority");
-    let verified = record_root_verified(&installed, authority).expect("record exact authority");
-    let staging = begin_store_staging(&verified).expect("begin Store staging");
+    let verified = install_infrastructure(&planned, root_canister);
+    let adopted = adopt_store(&verified);
+    let staging = begin_store_staging(&adopted).expect("begin Store staging");
     let staged = record_store_staged(&staging).expect("record Store staging");
     let bootstrapping = begin_store_bootstrap(&staged).expect("begin Store bootstrap");
     let store = RootStoreBootstrapResponse {
@@ -215,7 +226,7 @@ fn journals_exact_registry_join_sync_and_active_mirror_evidence() {
         joining.journal.phase,
         FleetSubnetRootInstallPhase::RegistryJoinInFlight
     );
-    assert_eq!(joining.journal.sequence, 11);
+    assert_eq!(joining.journal.sequence, 17);
     let request = joining
         .journal
         .registry_join_request
@@ -246,7 +257,7 @@ fn journals_exact_registry_join_sync_and_active_mirror_evidence() {
         complete.journal.phase,
         FleetSubnetRootInstallPhase::RegistryJoinVerified
     );
-    assert_eq!(complete.journal.sequence, 13);
+    assert_eq!(complete.journal.sequence, 19);
     assert_eq!(complete.journal.registry_join_response, Some(response));
 
     assert_registry_sync_journal(&complete, root_canister, version);
@@ -283,7 +294,7 @@ fn assert_registry_sync_journal(
         verified.journal.phase,
         FleetSubnetRootInstallPhase::RegistrySyncVerified
     );
-    assert_eq!(verified.journal.sequence, 16);
+    assert_eq!(verified.journal.sequence, 22);
     assert_eq!(
         verified.journal.registry_sync_request,
         Some(sync_request.clone())
@@ -344,7 +355,7 @@ fn assert_registry_mirror_and_component_registry_journal(
         activation_verified.journal.phase,
         FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified
     );
-    assert_eq!(activation_verified.journal.sequence, 19);
+    assert_eq!(activation_verified.journal.sequence, 25);
     assert_eq!(
         activation_verified
             .journal
@@ -388,7 +399,7 @@ fn assert_registry_mirror_and_component_registry_journal(
         preparation_verified.journal.phase,
         FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified
     );
-    assert_eq!(preparation_verified.journal.sequence, 22);
+    assert_eq!(preparation_verified.journal.sequence, 28);
     assert_eq!(
         preparation_verified
             .journal
@@ -454,7 +465,7 @@ fn assert_root_activation_journal(
         verified.journal.phase,
         FleetSubnetRootInstallPhase::RootActivationVerified
     );
-    assert_eq!(verified.journal.sequence, 27);
+    assert_eq!(verified.journal.sequence, 33);
     assert_eq!(
         verified.journal.root_activation_preparation_response,
         activation_prepared
@@ -525,6 +536,52 @@ fn prepared_root_activation_response(
         credential_manifest: Some(credential_manifest),
         activated_at_ns: None,
     }
+}
+
+fn install_infrastructure(
+    planned: &super::ResolvedFleetSubnetRootInstall,
+    root_canister: Principal,
+) -> super::ResolvedFleetSubnetRootInstall {
+    let creating = begin_root_creation(planned).expect("begin root creation");
+    let root_created = record_root_created(&creating, root_canister).expect("record root");
+    let creating_store = begin_wasm_store_creation(&root_created, Principal::from_slice(&[56]))
+        .expect("begin Wasm Store creation");
+    let store_created = record_wasm_store_created(&creating_store, Principal::from_slice(&[55]))
+        .expect("record Wasm Store");
+    let installing_store =
+        begin_wasm_store_install(&store_created).expect("begin Wasm Store install");
+    let store_installed =
+        record_wasm_store_installed(&installing_store, [9; 32]).expect("record Store module");
+    let installing_root = begin_root_install(&store_installed).expect("begin root install");
+    let root_installed =
+        record_root_installed(&installing_root, [7; 32]).expect("record root module");
+    let root_authority =
+        expected_root_authority(&root_installed.journal).expect("expected root authority");
+    let store_authority =
+        expected_wasm_store_authority(&root_installed.journal).expect("expected Store authority");
+    record_infrastructure_verified(&root_installed, root_authority, store_authority)
+        .expect("record infrastructure authority")
+}
+
+fn adopt_store(
+    verified: &super::ResolvedFleetSubnetRootInstall,
+) -> super::ResolvedFleetSubnetRootInstall {
+    let adopting = begin_store_adoption(verified).expect("begin Store adoption");
+    let authority =
+        expected_wasm_store_authority(&adopting.journal).expect("expected Store authority");
+    let mut temporary_controllers = vec![
+        authority.installation_controller,
+        authority.fleet_subnet_root,
+    ];
+    temporary_controllers.sort();
+    let evidence = FleetSubnetWasmStoreAdoptionResponse {
+        operation_id: adopting.journal.install_operation_id,
+        authority: authority.clone(),
+        temporary_controllers,
+        final_controllers: vec![authority.fleet_subnet_root],
+        adopted_at_ns: 10,
+    };
+    record_store_adopted(&adopting, evidence).expect("record Store adoption")
 }
 
 #[test]

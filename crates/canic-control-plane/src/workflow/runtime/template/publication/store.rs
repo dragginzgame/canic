@@ -4,16 +4,15 @@ use crate::{
         WasmStoreDeletionCycleReclamationRequest, WasmStoreDeletionCycleReclamationResponse,
         WasmStoreStatusResponse,
     },
-    ids::{TemplateId, TemplateVersion, WasmStoreBinding},
-    ops::storage::{state::root_wasm_store::RootWasmStoreStateOps, template::TemplateChunkedOps},
+    ids::{TemplateId, TemplateVersion},
+    ops::storage::template::TemplateChunkedOps,
 };
 use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{error::InternalError, ops::cost_guard::CostGuardPermit};
 
 use super::super::WasmStoreInternalClient;
-use super::error::PublicationWorkflowError;
 
-// Fetch the approved embedded catalog from one wasm store.
+// Fetch the approved live catalog from one Wasm Store.
 pub(super) async fn store_catalog(
     store_pid: Principal,
 ) -> Result<Vec<WasmStoreCatalogEntryResponse>, InternalError> {
@@ -88,14 +87,6 @@ pub(super) async fn store_chunk(
     WasmStoreInternalClient::new(store_pid)
         .chunk(template_id, version, chunk_index)
         .await
-}
-
-// Resolve the root-owned logical binding for one Store Canister ID.
-pub(super) fn store_binding_for_pid(
-    store_pid: Principal,
-) -> Result<WasmStoreBinding, InternalError> {
-    RootWasmStoreStateOps::wasm_store_binding_for_pid(store_pid)
-        .ok_or_else(|| PublicationWorkflowError::StoreNotRegistered(store_pid).into())
 }
 
 // Return deterministic chunk bytes from the current canister's local bootstrap source.

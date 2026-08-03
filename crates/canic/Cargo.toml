@@ -39,7 +39,6 @@ ic-cdk = { workspace = true }
 ic0 = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-flate2 = { workspace = true }
 toml = { workspace = true }
 
 [dev-dependencies]

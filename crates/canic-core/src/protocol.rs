@@ -32,6 +32,10 @@ pub const CANIC_FLEET_REGISTRY_ROOT_DELETION_COMPLETE: &str =
 pub const CANIC_FLEET_REGISTRY_ROOT_DELETION_STATUS: &str =
     "canic_fleet_registry_root_deletion_status";
 pub const CANIC_FLEET_SUBNET_ROOT_AUTHORITY: &str = "canic_fleet_subnet_root_authority";
+pub const CANIC_FLEET_SUBNET_WASM_STORE_ADOPT: &str = "canic_fleet_subnet_wasm_store_adopt";
+pub const CANIC_FLEET_SUBNET_WASM_STORE_ADOPTION_STATUS: &str =
+    "canic_fleet_subnet_wasm_store_adoption_status";
+pub const CANIC_FLEET_SUBNET_WASM_STORE_AUTHORITY: &str = "canic_fleet_subnet_wasm_store_authority";
 pub const CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY: &str =
     "canic_fleet_subnet_root_canister_summary";
 pub const CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN: &str = "canic_fleet_subnet_root_draining_begin";

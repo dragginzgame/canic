@@ -57,15 +57,6 @@ pub(super) enum PublicationWorkflowError {
     LifecycleBusy,
 
     #[error(
-        "wasm store lifecycle state changed for {binding}: expected generation {expected_generation}, found {actual_generation}"
-    )]
-    LifecycleStateChanged {
-        binding: WasmStoreBinding,
-        expected_generation: u64,
-        actual_generation: u64,
-    },
-
-    #[error(
         "ws conflict for {template_id}@{version} on {binding}: existing hash/size differ ({existing_payload_hash:?}, {existing_payload_size_bytes})"
     )]
     ReleaseConflict {
@@ -74,18 +65,6 @@ pub(super) enum PublicationWorkflowError {
         binding: WasmStoreBinding,
         existing_payload_hash: Vec<u8>,
         existing_payload_size_bytes: u64,
-    },
-
-    #[error("wasm store {0} is not registered")]
-    StoreNotRegistered(Principal),
-
-    #[error(
-        "wasm store binding '{binding}' gc state changed: expected {expected:?}, found {actual:?}"
-    )]
-    StoreGcStateChanged {
-        binding: WasmStoreBinding,
-        expected: WasmStoreGcMode,
-        actual: WasmStoreGcMode,
     },
 
     #[error("wasm store binding '{binding}' is not writable while gc={mode:?}")]
@@ -114,11 +93,8 @@ impl From<PublicationWorkflowError> for InternalError {
                 ErrorCode::WasmStoreManifestMissing
             }
             PublicationWorkflowError::LifecycleBusy
-            | PublicationWorkflowError::LifecycleStateChanged { .. }
             | PublicationWorkflowError::ReleaseConflict { .. }
-            | PublicationWorkflowError::StoreGcStateChanged { .. }
             | PublicationWorkflowError::StoreNotWritable { .. } => ErrorCode::Conflict,
-            PublicationWorkflowError::StoreNotRegistered(_) => ErrorCode::NotFound,
             PublicationWorkflowError::TransportUnavailable { .. } => ErrorCode::Unavailable,
         };
 
@@ -183,32 +159,12 @@ mod tests {
             ),
             (PublicationWorkflowError::LifecycleBusy, ErrorCode::Conflict),
             (
-                PublicationWorkflowError::LifecycleStateChanged {
-                    binding: WasmStoreBinding::new("primary"),
-                    expected_generation: 3,
-                    actual_generation: 4,
-                },
-                ErrorCode::Conflict,
-            ),
-            (
                 PublicationWorkflowError::ReleaseConflict {
                     template_id: TemplateId::new("embedded:app"),
                     version: TemplateVersion::new("1"),
                     binding: WasmStoreBinding::new("primary"),
                     existing_payload_hash: vec![7; 32],
                     existing_payload_size_bytes: 10,
-                },
-                ErrorCode::Conflict,
-            ),
-            (
-                PublicationWorkflowError::StoreNotRegistered(Principal::anonymous()),
-                ErrorCode::NotFound,
-            ),
-            (
-                PublicationWorkflowError::StoreGcStateChanged {
-                    binding: WasmStoreBinding::new("retired"),
-                    expected: WasmStoreGcMode::Complete,
-                    actual: WasmStoreGcMode::InProgress,
                 },
                 ErrorCode::Conflict,
             ),

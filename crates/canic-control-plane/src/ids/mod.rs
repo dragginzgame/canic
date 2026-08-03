@@ -198,19 +198,6 @@ impl fmt::Display for WasmStoreBinding {
 impl_storable_bounded!(WasmStoreBinding, 64, false);
 
 ///
-/// WasmStoreCreationPurpose
-///
-/// Root-owned reason for one durable Wasm Store creation operation.
-/// Stored with root-owned Wasm Store state and consumed by creation recovery.
-///
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum WasmStoreCreationPurpose {
-    Bootstrap,
-    Publication,
-}
-
-///
 /// TemplateReleaseKey
 ///
 

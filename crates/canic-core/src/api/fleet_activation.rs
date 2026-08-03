@@ -15,6 +15,7 @@ use crate::{
         },
         fleet_subnet_root::FleetSubnetRootAuthority,
     },
+    ids::FleetSubnetWasmStoreAuthority,
     ops::fleet_activation::FleetActivationEvidenceOps,
     view::fleet_activation::FleetActivationTransition,
     workflow::runtime::fleet_activation::FleetActivationWorkflow,
@@ -69,6 +70,10 @@ impl FleetActivationApi {
 
     pub fn root_authority() -> Result<FleetSubnetRootAuthority, Error> {
         FleetActivationWorkflow::root_authority().map_err(Error::from)
+    }
+
+    pub fn wasm_store_authority() -> Result<FleetSubnetWasmStoreAuthority, Error> {
+        FleetActivationWorkflow::wasm_store_authority().map_err(Error::from)
     }
 
     pub async fn resume_root(

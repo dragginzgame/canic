@@ -1,3 +1,9 @@
+//! Module: workflow::runtime::template::publication::snapshot
+//!
+//! Responsibility: model the one adopted sibling Store's live publication snapshot.
+//! Does not own: Store selection, lifecycle mutation, stable state, or artifact authority.
+//! Boundary: publication workflows validate and update this in-memory projection around IC calls.
+
 use crate::dto::template::{
     TemplateManifestResponse, WasmStoreCatalogEntryResponse, WasmStoreStatusResponse,
 };
@@ -17,7 +23,6 @@ use std::collections::{BTreeMap, BTreeSet};
 pub(in crate::workflow::runtime::template::publication) struct PublicationStoreSnapshot {
     pub binding: WasmStoreBinding,
     pub pid: Principal,
-    pub created_at: u64,
     pub status: WasmStoreStatusResponse,
     pub releases: Vec<WasmStoreCatalogEntryResponse>,
     pub stored_chunk_hashes: Option<BTreeSet<Vec<u8>>>,
@@ -122,7 +127,7 @@ impl PublicationStoreSnapshot {
                 MgmtOps::stored_chunks(self.pid)
                     .await
                     .map_err(|cause| {
-                        super::super::error::PublicationWorkflowError::TransportUnavailable {
+                        super::error::PublicationWorkflowError::TransportUnavailable {
                             surface: "management stored_chunks",
                             cause,
                         }
@@ -135,7 +140,7 @@ impl PublicationStoreSnapshot {
         Ok(())
     }
 
-    // Project one successful placement into the in-memory fleet snapshot.
+    // Project one successful publication into the in-memory Store snapshot.
     pub(in crate::workflow::runtime::template::publication) fn record_release(
         &mut self,
         manifest: &TemplateManifestResponse,

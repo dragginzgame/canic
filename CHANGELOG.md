@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.98` independently host-installs each root's sibling Wasm Store with
+  reciprocal authority and root-observed controller adoption, removes
+  embedded Store bytes and root-autonomous Store lifecycle paths, and confines
+  publication to the one adopted Store.
+
 - `0.100.97` freezes separate Fleet Subnet Root and sibling Wasm Store funding
   plus both exact infrastructure artifacts in pre-effect install authority,
   hard-cutting the former ambiguous per-root funding field.

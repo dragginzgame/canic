@@ -4,8 +4,8 @@ pub use crate::__internal::core::ids::{
     ComponentTopologyDigest, CyclesFundingBudget, EndpointCall, EndpointCallKind, EndpointId,
     FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority,
     FleetSubnetCanisterPoolConfig, FleetSubnetRootBinding, FleetSubnetRootLimits,
-    FleetSubnetRootReleaseSet, IntentResourceKey, ManagedCanisterBinding, ReleaseSetDigest,
-    SubnetId, SystemMetricKind, cap,
+    FleetSubnetRootReleaseSet, FleetSubnetWasmStoreAuthority, IntentResourceKey,
+    ManagedCanisterBinding, ReleaseSetDigest, SubnetId, SystemMetricKind, cap,
 };
 
 #[cfg(any(feature = "control-plane", feature = "wasm-store-canister"))]

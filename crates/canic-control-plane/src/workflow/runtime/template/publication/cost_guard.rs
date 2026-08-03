@@ -203,8 +203,7 @@ mod tests {
     fn durable_publication_effect_adapters_require_permits() {
         let client = include_str!("../client/mod.rs");
         let chunks = include_str!("release/chunks.rs");
-        let snapshot = include_str!("fleet/snapshot.rs");
-        let creation = include_str!("lifecycle/creation.rs");
+        let snapshot = include_str!("snapshot/mod.rs");
         let store = include_str!("store.rs");
 
         assert_eq!(
@@ -227,34 +226,6 @@ mod tests {
                 .count(),
             1,
             "management chunk inventory must remain behind the publication permit"
-        );
-        assert_eq!(
-            creation
-                .matches("_publication_permit: &CostGuardPermit")
-                .count(),
-            1,
-            "publication Store creation must retain its outer publication permit"
-        );
-        assert!(
-            creation.contains("let permit = reserve_store_creation(&plan)?"),
-            "Store creation must reserve its journal-specific creation permit"
-        );
-        assert!(
-            creation.contains("MgmtOps::create_canister_with_permit(\n            &permit,"),
-            "the paid Store creation effect must consume its creation permit"
-        );
-        assert_eq!(
-            creation
-                .matches("reserve_store_install(creation.purpose)?")
-                .count(),
-            2,
-            "initial and recovered Store installation must reserve fresh install permits"
-        );
-        assert!(
-            creation.contains(
-                "ModuleInstallWorkflow::install_with_payload_with_permit(\n        permit,"
-            ),
-            "the Store installation effect must consume its journal-specific permit"
         );
         assert_eq!(
             store

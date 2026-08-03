@@ -99,6 +99,97 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
     };
 }
 
+// Lifecycle core for the host-installed sibling Wasm Store.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __canic_start_wasm_store_lifecycle_core {
+    ($(, $init:block)?) => {
+        ::std::thread_local! {
+            static __CANIC_PREPARED_APPLICATION_INIT_SCHEDULED:
+                ::std::cell::Cell<bool> = const { ::std::cell::Cell::new(false) };
+        }
+
+        #[doc(hidden)]
+        const _: () = {
+            let _ = canic_install;
+        };
+
+        #[doc(hidden)]
+        fn __canic_schedule_prepared_activation_init(args: Option<Vec<u8>>) {
+            if __CANIC_PREPARED_APPLICATION_INIT_SCHEDULED.replace(true) {
+                return;
+            }
+            $crate::__canic_after_optional_start_init_hook!(
+                "canic:user:prepared_activation_block",
+                {
+                    $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap();
+                    $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
+                        ::core::time::Duration::ZERO,
+                        "canic:user:init",
+                        async move {
+                            canic_setup().await;
+                            canic_install(args).await;
+                        },
+                    );
+                }
+                $(, $init)?
+            );
+        }
+
+        #[doc(hidden)]
+        fn __canic_compiled_config() -> (
+            $crate::__internal::core::bootstrap::compiled::ConfigModel,
+            &'static str,
+            &'static str,
+        ) {
+            let config_model = include!(env!("CANIC_CONFIG_MODEL_PATH"));
+            let config_source = include_str!(env!("CANIC_CONFIG_SOURCE_PATH"));
+            let config_path = env!("CANIC_CONFIG_ORIGIN_PATH");
+            (config_model, config_source, config_path)
+        }
+
+        #[$crate::__internal::cdk::init]
+        fn init(args: ::canic::dto::fleet_subnet_root::FleetSubnetWasmStoreInitArgs) {
+            let (config, config_source, config_path) = __canic_compiled_config();
+            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_wasm_store_before_bootstrap(
+                args,
+                config,
+                config_source,
+                config_path,
+            );
+        }
+
+        #[$crate::__internal::cdk::post_upgrade]
+        fn post_upgrade() {
+            let (config, config_source, config_path) = __canic_compiled_config();
+            let active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap(
+                $crate::api::canister::CanisterRole::WASM_STORE,
+                config,
+                config_source,
+                config_path,
+            );
+
+            if active {
+                $crate::__canic_after_optional_start_init_hook!(
+                    "canic:user:post_upgrade_block",
+                    {
+                        $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
+                        $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
+                            ::core::time::Duration::ZERO,
+                            "canic:user:post_upgrade",
+                            async move {
+                                canic_setup().await;
+                                canic_upgrade().await;
+                            },
+                        );
+                    }
+                    $(, $init)?
+                );
+            }
+        }
+    };
+}
+
 // Local-dev lifecycle core for standalone sandbox canisters.
 #[doc(hidden)]
 #[macro_export]
@@ -257,46 +348,26 @@ macro_rules! __canic_root_lifecycle_core {
             (config_model, config_source, config_path)
         }
 
-        #[doc(hidden)]
-        #[cfg(canic_has_root_wasm_store_bootstrap_release_set)]
-        fn __canic_embedded_root_wasm_store_bootstrap_release_set(
-        ) -> &'static [$crate::__internal::core::bootstrap::EmbeddedRootBootstrapEntry] {
-            include!(env!("CANIC_ROOT_WASM_STORE_BOOTSTRAP_RELEASE_SET_PATH"))
-        }
-
-        #[doc(hidden)]
-        #[cfg(not(canic_has_root_wasm_store_bootstrap_release_set))]
-        fn __canic_embedded_root_wasm_store_bootstrap_release_set(
-        ) -> &'static [$crate::__internal::core::bootstrap::EmbeddedRootBootstrapEntry] {
-            &[]
-        }
-
         #[$crate::__internal::cdk::init]
         fn init(args: ::canic::dto::fleet_subnet_root::FleetSubnetRootInitArgs) {
             let (config, config_source, config_path) = __canic_compiled_config();
-            let embedded_wasm_store_bootstrap_release_set =
-                __canic_embedded_root_wasm_store_bootstrap_release_set();
 
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::init_root_canister_before_bootstrap(
                 args,
                 config,
                 config_source,
                 config_path,
-                embedded_wasm_store_bootstrap_release_set,
             );
         }
 
         #[$crate::__internal::cdk::post_upgrade]
         fn post_upgrade() {
             let (config, config_source, config_path) = __canic_compiled_config();
-            let embedded_wasm_store_bootstrap_release_set =
-                __canic_embedded_root_wasm_store_bootstrap_release_set();
 
             let active = $crate::__internal::control_plane::api::lifecycle::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
                 config,
                 config_source,
                 config_path,
-                embedded_wasm_store_bootstrap_release_set,
             );
 
             if active {
@@ -493,10 +564,7 @@ macro_rules! start_wasm_store {
         #[expect(clippy::unused_async)]
         async fn canic_upgrade() {}
 
-        $crate::__canic_start_nonroot_lifecycle_core!(
-            $crate::api::canister::CanisterRole::WASM_STORE
-            $(, $init)?
-        );
+        $crate::__canic_start_wasm_store_lifecycle_core!($(, $init)?);
         $crate::__canic_start_ingress_payload_inspect!();
         $crate::canic_bundle_wasm_store_runtime_endpoints!();
     };

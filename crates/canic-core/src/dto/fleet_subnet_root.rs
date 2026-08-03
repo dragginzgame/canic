@@ -6,7 +6,10 @@
 
 use crate::{
     dto::fleet_registry::{FleetRegistryVersion, FleetSubnetRootStatus},
-    ids::{ComponentTopologyDigest, FleetSubnetRootBinding, FleetSubnetRootReleaseSet, SubnetId},
+    ids::{
+        ComponentTopologyDigest, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
+        FleetSubnetWasmStoreAuthority, SubnetId,
+    },
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
@@ -31,6 +34,38 @@ pub struct FleetSubnetRootAuthority {
     pub binding: FleetSubnetRootBinding,
     pub initial_release_set: FleetSubnetRootReleaseSet,
     pub expected_module_hash: [u8; 32],
+    pub wasm_store_authority: FleetSubnetWasmStoreAuthority,
+}
+
+///
+/// FleetSubnetWasmStoreInitArgs
+///
+/// Fresh-install operation identity plus one complete sibling Store authority.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct FleetSubnetWasmStoreInitArgs {
+    pub authority: FleetSubnetWasmStoreAuthority,
+    pub install_id: [u8; 32],
+}
+
+/// Request the one planned sibling Store controller handoff during root preparation.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetSubnetWasmStoreAdoptionRequest {
+    pub operation_id: [u8; 32],
+    pub authority: FleetSubnetWasmStoreAuthority,
+}
+
+/// Terminal root-observed receipt for one sibling Store controller handoff.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetSubnetWasmStoreAdoptionResponse {
+    pub operation_id: [u8; 32],
+    pub authority: FleetSubnetWasmStoreAuthority,
+    pub temporary_controllers: Vec<Principal>,
+    pub final_controllers: Vec<Principal>,
+    pub adopted_at_ns: u64,
 }
 
 ///

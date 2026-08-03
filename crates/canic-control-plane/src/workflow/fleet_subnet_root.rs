@@ -21,6 +21,7 @@ use crate::{
         bootstrap::root_store, runtime::template::publication::WasmStorePublicationWorkflow,
     },
 };
+use candid::Principal;
 use canic_core::{
     api::fleet_activation::FleetActivationApi,
     control_plane_support::{
@@ -31,6 +32,7 @@ use canic_core::{
             ic::{IcOps, call::CallOps, mgmt::MgmtOps},
         },
         workflow::cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
+        workflow::runtime::fleet_activation::FleetActivationWorkflow,
     },
     dto::{
         error::Error,
@@ -57,9 +59,10 @@ use canic_core::{
             FleetSubnetRootStoreDeletionRequest, FleetSubnetRootStoreDeletionResponse,
             FleetSubnetRootStoreDeletionStatusRequest, FleetSubnetRootStoreReclamationRequest,
             FleetSubnetRootStoreReclamationResponse, FleetSubnetRootStoreReclamationStatusRequest,
+            FleetSubnetWasmStoreAdoptionRequest, FleetSubnetWasmStoreAdoptionResponse,
         },
     },
-    ids::{FleetSubnetRootBinding, FleetSubnetRootReleaseSet},
+    ids::{FleetSubnetRootBinding, FleetSubnetRootReleaseSet, FleetSubnetWasmStoreAuthority},
     protocol,
     replay_policy::CostClass,
 };
@@ -79,6 +82,166 @@ struct ValidatedFleetSubnetRootState {
 struct ComponentRegistrySourceAuthority<'a> {
     root: &'a FleetSubnetRootBinding,
     release_set: FleetSubnetRootReleaseSet,
+}
+
+#[derive(Eq, PartialEq)]
+struct SiblingWasmStoreLiveEvidence {
+    running: bool,
+    module_hash: Option<Vec<u8>>,
+    controllers: Vec<Principal>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SiblingWasmStoreControllerPhase {
+    Temporary,
+    Final,
+}
+
+/// Adopt the independently installed sibling Store under sole root control.
+pub async fn adopt_wasm_store(
+    request: FleetSubnetWasmStoreAdoptionRequest,
+) -> Result<FleetSubnetWasmStoreAdoptionResponse, InternalError> {
+    let authority = protected_sibling_wasm_store_authority(&request)?;
+    if let Some(receipt) = RootWasmStoreStateOps::sibling_wasm_store_adoption_receipt(
+        request.operation_id,
+        authority.clone(),
+    )? {
+        return Ok(receipt);
+    }
+
+    let temporary_controllers = temporary_sibling_wasm_store_controllers(&authority);
+    let final_controllers = vec![authority.fleet_subnet_root];
+    RootWasmStoreStateOps::begin_sibling_wasm_store_adoption(
+        &crate::ops::storage::state::root_wasm_store::SiblingWasmStoreAdoptionPlan {
+            operation_id: request.operation_id,
+            authority: authority.clone(),
+            temporary_controllers: temporary_controllers.clone(),
+            final_controllers: final_controllers.clone(),
+        },
+    )?;
+
+    let observed = observe_sibling_wasm_store(&authority).await?;
+    match require_sibling_wasm_store_controller_phase(
+        &observed,
+        &temporary_controllers,
+        &final_controllers,
+    )? {
+        SiblingWasmStoreControllerPhase::Temporary => {
+            MgmtOps::update_settings(
+                &canic_core::control_plane_support::ops::ic::mgmt::UpdateSettingsArgs {
+                    canister_id: authority.wasm_store,
+                    settings: canic_core::control_plane_support::ops::ic::mgmt::CanisterSettings {
+                        controllers: Some(final_controllers.clone()),
+                        ..Default::default()
+                    },
+                    sender_canister_version: None,
+                },
+            )
+            .await?;
+        }
+        SiblingWasmStoreControllerPhase::Final => {}
+    }
+
+    let final_observation = observe_sibling_wasm_store(&authority).await?;
+    require_final_sibling_wasm_store_controllers(&final_observation, &final_controllers)?;
+    RootWasmStoreStateOps::commit_sibling_wasm_store_adoption(
+        request.operation_id,
+        authority,
+        IcOps::now_nanos(),
+    )
+}
+
+/// Read the terminal sibling Store adoption receipt without a management call.
+pub fn wasm_store_adoption_status(
+    request: FleetSubnetWasmStoreAdoptionRequest,
+) -> Result<FleetSubnetWasmStoreAdoptionResponse, InternalError> {
+    let authority = protected_sibling_wasm_store_authority(&request)?;
+    RootWasmStoreStateOps::sibling_wasm_store_adoption_receipt(request.operation_id, authority)?
+        .ok_or_else(|| InternalError::unavailable("sibling Wasm Store adoption is not complete"))
+}
+
+fn protected_sibling_wasm_store_authority(
+    request: &FleetSubnetWasmStoreAdoptionRequest,
+) -> Result<FleetSubnetWasmStoreAuthority, InternalError> {
+    if request.operation_id == [0; 32] {
+        return Err(InternalError::invalid_input(
+            "sibling Wasm Store adoption operation ID must be nonzero",
+        ));
+    }
+    let (root_authority, _) = crate::workflow::root_authority::validated_root_authority()?;
+    let activation = FleetActivationWorkflow::status()?;
+    if request.operation_id != activation.identity.operation_id {
+        return Err(InternalError::conflict(
+            "sibling Wasm Store adoption operation differs from protected install identity",
+        ));
+    }
+    if request.authority != root_authority.wasm_store_authority {
+        return Err(InternalError::conflict(
+            "sibling Wasm Store adoption request differs from protected root authority",
+        ));
+    }
+    Ok(root_authority.wasm_store_authority)
+}
+
+fn temporary_sibling_wasm_store_controllers(
+    authority: &FleetSubnetWasmStoreAuthority,
+) -> Vec<Principal> {
+    let mut controllers = vec![
+        authority.installation_controller,
+        authority.fleet_subnet_root,
+    ];
+    controllers.sort();
+    controllers
+}
+
+async fn observe_sibling_wasm_store(
+    authority: &FleetSubnetWasmStoreAuthority,
+) -> Result<SiblingWasmStoreLiveEvidence, InternalError> {
+    use canic_core::control_plane_support::ops::ic::mgmt::CanisterStatusType;
+
+    let status = MgmtOps::canister_status(authority.wasm_store).await?;
+    let mut controllers = status.settings.controllers;
+    controllers.sort();
+    let evidence = SiblingWasmStoreLiveEvidence {
+        running: status.status == CanisterStatusType::Running,
+        module_hash: status.module_hash,
+        controllers,
+    };
+    let module_is_exact = evidence.module_hash.as_deref() == Some(&authority.wasm_module_hash);
+    if !evidence.running || !module_is_exact {
+        return Err(InternalError::conflict(
+            "sibling Wasm Store live status differs from protected module authority",
+        ));
+    }
+    Ok(evidence)
+}
+
+fn require_sibling_wasm_store_controller_phase(
+    observed: &SiblingWasmStoreLiveEvidence,
+    temporary_controllers: &[Principal],
+    final_controllers: &[Principal],
+) -> Result<SiblingWasmStoreControllerPhase, InternalError> {
+    if observed.controllers == temporary_controllers {
+        return Ok(SiblingWasmStoreControllerPhase::Temporary);
+    }
+    if observed.controllers == final_controllers {
+        return Ok(SiblingWasmStoreControllerPhase::Final);
+    }
+    Err(InternalError::conflict(
+        "sibling Wasm Store controller set is neither planned temporary nor final authority",
+    ))
+}
+
+fn require_final_sibling_wasm_store_controllers(
+    observed: &SiblingWasmStoreLiveEvidence,
+    final_controllers: &[Principal],
+) -> Result<(), InternalError> {
+    if observed.controllers != final_controllers {
+        return Err(InternalError::conflict(
+            "sibling Wasm Store did not converge to sole root control",
+        ));
+    }
+    Ok(())
 }
 
 /// Durably fence new top-level Component allocation under exact active authority.
@@ -1231,7 +1394,8 @@ mod tests {
             AppId, CanonicalNetworkId, ComponentTopologyDigest, CyclesFundingBudget, FleetBinding,
             FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority,
             FleetSubnetRootBinding, FleetSubnetRootLimits, FleetSubnetRootReleaseSet,
-            ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
+            FleetSubnetWasmStoreAuthority, ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest,
+            SubnetId,
         },
     };
 
@@ -1332,6 +1496,46 @@ mod tests {
         );
     }
 
+    #[test]
+    fn sibling_store_controller_phase_accepts_only_planned_temporary_or_final_authority() {
+        let authority = authority().wasm_store_authority;
+        let temporary = temporary_sibling_wasm_store_controllers(&authority);
+        let final_controllers = vec![authority.fleet_subnet_root];
+        let evidence = |controllers| SiblingWasmStoreLiveEvidence {
+            running: true,
+            module_hash: Some(authority.wasm_module_hash.to_vec()),
+            controllers,
+        };
+
+        assert_eq!(
+            require_sibling_wasm_store_controller_phase(
+                &evidence(temporary.clone()),
+                &temporary,
+                &final_controllers,
+            )
+            .expect("planned temporary controllers"),
+            SiblingWasmStoreControllerPhase::Temporary,
+        );
+        assert_eq!(
+            require_sibling_wasm_store_controller_phase(
+                &evidence(final_controllers.clone()),
+                &temporary,
+                &final_controllers,
+            )
+            .expect("planned final controllers"),
+            SiblingWasmStoreControllerPhase::Final,
+        );
+        assert!(
+            require_sibling_wasm_store_controller_phase(
+                &evidence(vec![candid::Principal::anonymous()]),
+                &temporary,
+                &final_controllers,
+            )
+            .is_err(),
+            "foreign controllers must fail closed",
+        );
+    }
+
     fn authority() -> FleetSubnetRootAuthority {
         let release_set = FleetSubnetRootReleaseSet {
             release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
@@ -1339,26 +1543,29 @@ mod tests {
             )),
             manifest_digest: ReleaseSetDigest::from_bytes([9; 32]),
         };
+        let registry_authority = FleetRegistryAuthority {
+            binding: FleetCoordinatorBinding {
+                fleet: FleetBinding {
+                    fleet: FleetKey {
+                        canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+                        fleet_id: FleetId::from_generated_bytes([1; 32]),
+                    },
+                    app: AppId::from("toko"),
+                },
+                coordinator_subnet: SubnetId::from_principal(candid::Principal::from_slice(
+                    &[2; 29],
+                )),
+                coordinator: candid::Principal::from_slice(&[3; 29]),
+            },
+            epoch: 1,
+        };
+        let placement_subnet = SubnetId::from_principal(candid::Principal::from_slice(&[4; 29]));
+        let fleet_subnet_root = candid::Principal::from_slice(&[5; 29]);
         FleetSubnetRootAuthority {
             binding: FleetSubnetRootBinding {
-                authority: FleetRegistryAuthority {
-                    binding: FleetCoordinatorBinding {
-                        fleet: FleetBinding {
-                            fleet: FleetKey {
-                                canonical_network_id: CanonicalNetworkId::ic_mainnet(),
-                                fleet_id: FleetId::from_generated_bytes([1; 32]),
-                            },
-                            app: AppId::from("toko"),
-                        },
-                        coordinator_subnet: SubnetId::from_principal(
-                            candid::Principal::from_slice(&[2; 29]),
-                        ),
-                        coordinator: candid::Principal::from_slice(&[3; 29]),
-                    },
-                    epoch: 1,
-                },
-                placement_subnet: SubnetId::from_principal(candid::Principal::from_slice(&[4; 29])),
-                fleet_subnet_root: candid::Principal::from_slice(&[5; 29]),
+                authority: registry_authority.clone(),
+                placement_subnet,
+                fleet_subnet_root,
                 component_admissions: Vec::new(),
                 component_topology_digest: ComponentTopologyDigest::from_bytes([6; 32]),
                 limits: FleetSubnetRootLimits {
@@ -1379,6 +1586,15 @@ mod tests {
             },
             initial_release_set: release_set,
             expected_module_hash: [7; 32],
+            wasm_store_authority: FleetSubnetWasmStoreAuthority {
+                authority: registry_authority,
+                placement_subnet,
+                fleet_subnet_root,
+                wasm_store: candid::Principal::from_slice(&[10; 29]),
+                installation_controller: candid::Principal::from_slice(&[11; 29]),
+                release_build_id: release_set.release_build_id,
+                wasm_module_hash: [12; 32],
+            },
         }
     }
 

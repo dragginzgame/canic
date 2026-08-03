@@ -21,7 +21,7 @@ use crate::{
         },
         fleet_subnet_root::FleetSubnetRootAuthority,
     },
-    ids::EndpointCall,
+    ids::{EndpointCall, FleetSubnetWasmStoreAuthority},
     ops::{
         cascade::CascadeOps,
         fleet_activation::FleetActivationEvidenceOps,
@@ -61,6 +61,13 @@ impl FleetActivationWorkflow {
     pub fn root_authority() -> Result<FleetSubnetRootAuthority, InternalError> {
         EnvOps::require_root()?;
         FleetActivationOps::root_authority()
+            .map_err(StorageOpsError::from)
+            .map_err(Into::into)
+    }
+
+    pub fn wasm_store_authority() -> Result<FleetSubnetWasmStoreAuthority, InternalError> {
+        EnvOps::deny_root()?;
+        FleetActivationOps::wasm_store_authority()
             .map_err(StorageOpsError::from)
             .map_err(Into::into)
     }

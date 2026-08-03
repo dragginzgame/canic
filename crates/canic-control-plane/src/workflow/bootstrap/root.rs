@@ -10,11 +10,8 @@ use crate::{
     workflow::runtime::template::WasmStorePublicationWorkflow,
 };
 use canic_core::api::lifecycle::metrics::{
-    CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
-    CanisterOpsMetricsApi, LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole,
-    LifecycleMetricsApi,
+    LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole, LifecycleMetricsApi,
 };
-use canic_core::api::runtime::install::ModuleSourceRuntimeApi;
 use canic_core::control_plane_support::{
     config::ComponentTopology,
     error::{InternalError, InternalErrorOrigin},
@@ -61,10 +58,6 @@ impl RootBootstrapContext {
 /// ---------------------------------------------------------------------------
 /// Root bootstrap entrypoints
 /// ---------------------------------------------------------------------------
-
-fn root_has_embedded_wasm_store_bootstrap() -> bool {
-    ModuleSourceRuntimeApi::has_embedded_module_source(&CanisterRole::WASM_STORE)
-}
 
 fn root_missing_staged_release_roles(
     data: &RootBootstrapContext,
@@ -152,14 +145,6 @@ fn complete_or_wait_for_root_activation() {
 pub async fn bootstrap_init_root_canister() {
     record_root_bootstrap_metric(LifecycleMetricPhase::Init, LifecycleMetricOutcome::Started);
 
-    if !root_has_embedded_wasm_store_bootstrap() {
-        let message =
-            "bootstrap (root:init) embedded wasm_store bootstrap module is not registered";
-        mark_root_bootstrap_failed(LifecycleMetricPhase::Init, message.to_string());
-        log!(Topic::Init, Error, "{message}");
-        return;
-    }
-
     let data = match RootBootstrapContext::load() {
         Ok(data) => data,
         Err(err) => {
@@ -224,14 +209,6 @@ pub async fn bootstrap_post_upgrade_root_canister() {
         LifecycleMetricPhase::PostUpgrade,
         LifecycleMetricOutcome::Started,
     );
-
-    if !root_has_embedded_wasm_store_bootstrap() {
-        let message =
-            "bootstrap (root:upgrade) embedded wasm_store bootstrap module is not registered";
-        mark_root_bootstrap_failed(LifecycleMetricPhase::PostUpgrade, message.to_string());
-        log!(Topic::Init, Error, "{message}");
-        return;
-    }
 
     let data = match RootBootstrapContext::load() {
         Ok(data) => data,
@@ -334,7 +311,7 @@ pub async fn root_set_subnet_id() -> Result<(), InternalError> {
 }
 
 async fn root_reconcile_wasm_store() -> Result<(), InternalError> {
-    ensure_required_wasm_store_canister().await?;
+    ensure_required_wasm_store_canister()?;
     canic_core::perf!("bootstrap_ensure_wasm_store");
 
     let removed = WasmStorePublicationWorkflow::prune_unconfigured_managed_releases()?;
@@ -350,35 +327,14 @@ async fn root_reconcile_wasm_store() -> Result<(), InternalError> {
     import_default_wasm_store_catalog().await
 }
 
-pub(super) async fn ensure_required_wasm_store_canister() -> Result<(), InternalError> {
-    let role = CanisterRole::WASM_STORE;
-
-    let had_store =
-        !crate::ops::storage::state::root_wasm_store::RootWasmStoreStateOps::wasm_stores()
-            .is_empty();
-    let existing_bindings = WasmStorePublicationWorkflow::ensure_bootstrap_wasm_store().await?;
-    if !existing_bindings.is_empty() {
-        CanisterOpsMetricsApi::record(
-            CanisterOpsMetricOperation::Create,
-            &role,
-            if had_store {
-                CanisterOpsMetricOutcome::Skipped
-            } else {
-                CanisterOpsMetricOutcome::Completed
-            },
-            if had_store {
-                CanisterOpsMetricReason::AlreadyExists
-            } else {
-                CanisterOpsMetricReason::Ok
-            },
-        );
-        log!(Topic::Init, Info, "ws: {role} present");
-        return Ok(());
-    }
-    Err(InternalError::invariant(
-        InternalErrorOrigin::Storage,
-        "Wasm Store bootstrap completed without root-owned inventory",
-    ))
+pub(super) fn ensure_required_wasm_store_canister() -> Result<(), InternalError> {
+    let binding = WasmStorePublicationWorkflow::ensure_bootstrap_wasm_store()?;
+    log!(
+        Topic::Init,
+        Info,
+        "ws: adopted sibling Store {binding} present"
+    );
+    Ok(())
 }
 
 async fn import_default_wasm_store_catalog() -> Result<(), InternalError> {

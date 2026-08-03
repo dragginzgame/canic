@@ -4,7 +4,7 @@ use crate::{
     },
     workflow::runtime::template::{
         WasmStoreInternalClient,
-        publication::{WasmStorePublicationWorkflow, fleet::PublicationStoreSnapshot},
+        publication::{WasmStorePublicationWorkflow, snapshot::PublicationStoreSnapshot},
         record_wasm_store_metric,
     },
 };

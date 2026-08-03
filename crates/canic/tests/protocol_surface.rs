@@ -359,6 +359,24 @@ fn fleet_subnet_root_authority_is_a_controller_query_on_the_root_surface() {
 }
 
 #[test]
+fn fleet_subnet_wasm_store_authority_is_a_controller_query_on_the_store_surface() {
+    assert_eq!(
+        canic::protocol::CANIC_FLEET_SUBNET_WASM_STORE_AUTHORITY,
+        "canic_fleet_subnet_wasm_store_authority"
+    );
+
+    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/wasm_store.rs");
+    let source = read_text(&macro_path);
+    let attribute =
+        preceding_attribute_context(&source, "async fn canic_fleet_subnet_wasm_store_authority(");
+
+    assert!(
+        attribute.contains("canic_query(requires(caller::is_controller()))"),
+        "Fleet Subnet Wasm Store authority must remain a controller-guarded query"
+    );
+}
+
+#[test]
 fn fleet_subnet_root_canister_summary_is_a_controller_query_on_the_root_surface() {
     assert_eq!(
         canic::protocol::CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY,

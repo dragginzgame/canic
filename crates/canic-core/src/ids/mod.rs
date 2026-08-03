@@ -34,7 +34,7 @@ pub use fleet_topology::{
     ComponentBinding, ComponentChildBinding, ComponentSpecAdmission, ComponentTopologyDigest,
     CyclesFundingBudget, FleetCoordinatorBinding, FleetRegistryAuthority,
     FleetSubnetCanisterPoolConfig, FleetSubnetRootBinding, FleetSubnetRootLimits,
-    ManagedCanisterBinding,
+    FleetSubnetWasmStoreAuthority, ManagedCanisterBinding,
 };
 pub use intent::{IntentId, IntentResourceKey};
 pub use metrics::{AccessMetricKind, SystemMetricKind};

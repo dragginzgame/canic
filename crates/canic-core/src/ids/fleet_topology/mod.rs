@@ -6,7 +6,9 @@
 
 use crate::{
     cdk::types::Cycles,
-    ids::{CanisterRole, ComponentInstanceId, ComponentSpecId, FleetBinding, SubnetId},
+    ids::{
+        CanisterRole, ComponentInstanceId, ComponentSpecId, FleetBinding, ReleaseBuildId, SubnetId,
+    },
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
@@ -155,6 +157,24 @@ pub struct FleetSubnetRootBinding {
     pub component_admissions: Vec<ComponentSpecAdmission>,
     pub component_topology_digest: ComponentTopologyDigest,
     pub limits: FleetSubnetRootLimits,
+}
+
+///
+/// FleetSubnetWasmStoreAuthority
+///
+/// Exact reciprocal authority retained by one root and its host-installed sibling Store.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetSubnetWasmStoreAuthority {
+    pub authority: FleetRegistryAuthority,
+    pub placement_subnet: SubnetId,
+    pub fleet_subnet_root: Principal,
+    pub wasm_store: Principal,
+    pub installation_controller: Principal,
+    pub release_build_id: ReleaseBuildId,
+    pub wasm_module_hash: [u8; 32],
 }
 
 ///
