@@ -506,7 +506,7 @@ macro_rules! canic_emit_root_admin_endpoints {
         async fn canic_fleet_admin(
             cmd: ::canic::dto::state::FleetCommand,
         ) -> Result<::canic::dto::state::FleetCommandResponse, ::canic::Error> {
-            $crate::__internal::core::api::state::FleetStateApi::execute_command(cmd).await
+            $crate::__internal::control_plane::api::state::FleetStateApi::execute_command(cmd).await
         }
 
         #[$crate::canic_update(requires(caller::is_controller()))]

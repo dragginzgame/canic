@@ -144,12 +144,6 @@ pub mod view {
 }
 
 pub mod workflow {
-    pub mod canister_lifecycle {
-        pub use crate::workflow::canister_lifecycle::{
-            CanisterLifecycleResult, CanisterLifecycleWorkflow,
-        };
-    }
-
     pub mod cost_guard {
         pub use crate::workflow::cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error};
     }
@@ -192,6 +186,16 @@ pub mod workflow {
     pub mod topology {
         pub mod guard {
             pub use crate::workflow::topology::guard::TopologyGuard;
+        }
+    }
+
+    pub mod state {
+        /// Apply one root Fleet-state command to an exact caller-supplied child inventory.
+        pub async fn execute_fleet_command_to(
+            cmd: crate::dto::state::FleetCommand,
+            root_children: &[crate::cdk::types::Principal],
+        ) -> Result<crate::dto::state::FleetCommandResponse, crate::error::InternalError> {
+            crate::workflow::state::FleetStateWorkflow::execute_command_to(cmd, root_children).await
         }
     }
 }

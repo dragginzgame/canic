@@ -22,10 +22,7 @@ thread_local! {
 #[remain::sorted]
 pub enum ProvisioningMetricOperation {
     Allocate,
-    Create,
     Install,
-    PropagateState,
-    PropagateTopology,
     ResolveModule,
 }
 
@@ -60,9 +57,7 @@ pub enum ProvisioningMetricReason {
     PolicyDenied,
     PoolReuse,
     PoolTopup,
-    StatePropagation,
     Topology,
-    TopologyPropagation,
     Unknown,
 }
 

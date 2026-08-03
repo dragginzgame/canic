@@ -4,7 +4,6 @@ mod directory_addressing_seam;
 mod pool_selection_seam;
 mod registry_policy_seam;
 mod retention_seam;
-mod topology_invariant_seam;
 
 use crate::cdk::types::Principal;
 use std::sync::{Mutex, MutexGuard};

@@ -103,9 +103,7 @@ pub enum CanisterOpsMetricReason {
     PolicyDenied,
     PoolReuse,
     PoolTopup,
-    StatePropagation,
     Topology,
-    TopologyPropagation,
     Unknown,
 }
 
@@ -125,9 +123,7 @@ impl CanisterOpsMetricReason {
             Self::PolicyDenied => "policy_denied",
             Self::PoolReuse => "pool_reuse",
             Self::PoolTopup => "pool_topup",
-            Self::StatePropagation => "state_propagation",
             Self::Topology => "topology",
-            Self::TopologyPropagation => "topology_propagation",
             Self::Unknown => "unknown",
         }
     }

@@ -14,4 +14,5 @@ pub mod intent;
 pub mod placement;
 pub mod replay;
 pub mod runtime_kind;
+#[cfg(test)]
 pub mod topology;

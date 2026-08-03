@@ -6,7 +6,6 @@
 #[cfg(feature = "blob-storage-billing")]
 pub mod blob_storage;
 pub mod bootstrap;
-pub mod canister_lifecycle;
 pub mod cascade;
 pub mod component_runtime;
 pub mod config;

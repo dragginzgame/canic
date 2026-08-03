@@ -11,7 +11,6 @@ use crate::{
     cdk::types::Principal,
     dto::topology::{DirectoryEntryInput, DirectoryProvenance},
     ids::{CanisterRole, FleetBinding},
-    model::topology::TopologyDirectoryEntry,
     ops::storage::StorageOpsError,
     storage::stable::directory::DirectoryEntryRecord,
 };
@@ -104,16 +103,6 @@ fn input_entries_to_records(entries: Vec<DirectoryEntryInput>) -> Vec<DirectoryE
         .into_iter()
         .map(|entry| DirectoryEntryRecord {
             role: entry.role,
-            pid: entry.pid,
-        })
-        .collect()
-}
-
-fn records_to_topology_entries(entries: &[DirectoryEntryRecord]) -> Vec<TopologyDirectoryEntry> {
-    entries
-        .iter()
-        .map(|entry| TopologyDirectoryEntry {
-            role: entry.role.clone(),
             pid: entry.pid,
         })
         .collect()

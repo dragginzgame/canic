@@ -1157,6 +1157,22 @@ impl ComponentRegistryOps {
         RootComponentRegistryStore::current().map(record_to_view)
     }
 
+    /// Return every current top-level Component Canister in canonical principal order.
+    pub(crate) fn root_component_canisters() -> Result<Vec<Principal>, InternalError> {
+        let partitions = RootComponentRegistryStore::partitions();
+        let mut canisters = BTreeSet::new();
+        for partition in partitions {
+            validate_partition_record(&partition)?;
+            if !canisters.insert(partition.binding.canister_id) {
+                return Err(InternalError::invariant(
+                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                    "Component Registry partitions contain a duplicate top-level Canister",
+                ));
+            }
+        }
+        Ok(canisters.into_iter().collect())
+    }
+
     pub(crate) fn begin_root_draining(
         operation_id: [u8; 32],
         expected_registry: &FleetRegistryVersion,

@@ -7,13 +7,12 @@
 use crate::{
     InternalError,
     dto::topology::FleetDirectoryInput,
-    model::topology::TopologyDirectoryEntry,
     ops::{
         config::ConfigOps,
         prelude::*,
         storage::directory::{
             ensure_allowed_roles, ensure_required_roles, ensure_unique_roles,
-            input_entries_to_records, records_to_topology_entries,
+            input_entries_to_records,
         },
     },
     storage::stable::directory::fleet::{FleetDirectory, FleetDirectoryData},
@@ -50,11 +49,6 @@ impl FleetDirectoryOps {
     #[must_use]
     pub(crate) fn data() -> FleetDirectoryData {
         FleetDirectory::export()
-    }
-
-    #[must_use]
-    pub(crate) fn topology_entries() -> Vec<TopologyDirectoryEntry> {
-        records_to_topology_entries(&FleetDirectory::export().entries)
     }
 
     pub(crate) fn filter_args_for_local_config(

@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-02
+Last updated: 2026-08-03
 
 ## Purpose
 
@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.90`.
-- The latest published release is `v0.100.90` at
-  `d646889be88328f272f6ff36978d97e96c3e2923`.
-- Open `0.100.91` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.91`.
+- The latest published release is `v0.100.91` at
+  `49af2ecd3ea10872773ef8c9fbeeadd5bf66cea5`.
+- Open `0.100.92` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
@@ -747,13 +747,18 @@ Historical detail is archived at:
   exact live evidence rather than Registry identity. It also centralizes
   strict installed-module verification across fresh Coordinator and root host
   workflows.
-- Open `0.100.91` gives bootstrap and publication Store creation one durable
+- Released `0.100.91` gives bootstrap and publication Store creation one durable
   root-owned create/install journal. Unknown creation outcomes never repeat a
   paid effect; known principals recover installation from exact live module
   evidence, activate as direct root leaves and enter runtime inventory
-  atomically without a Registry row or importer. The same draft consolidates
+  atomically without a Registry row or importer. The same release consolidates
   terminal host Fleet catalog queries on the canonical typed Canister protocol
   boundary.
+- Open `0.100.92` derives root Fleet-state fanout from the canonical union of
+  root-owned Store inventory and current top-level Component Registry
+  partitions. It deletes the uncalled generic Canister lifecycle and its
+  Registry-built topology/state propagation, mapper, consistency policy and
+  propagation-only metrics.
 - The current 0.100/0.101 designs use exactly one Fleet Subnet Root per
   occupied `(FleetKey, SubnetId)`. Different Fleets may each own an
   independent root on the same physical Subnet; uniqueness and every authority
@@ -2049,9 +2054,9 @@ First primary results:
 
 ## Next Action
 
-Replace the legacy Subnet Registry's remaining propagation, provisioning and
-pool-recovery consumers with root-owned Component Registry and direct-child
-authority. Then delete its
+Replace the legacy Subnet Registry's remaining provisioning, pool-recovery and
+root-derived Fleet Directory consumers with root-owned Component Registry and
+direct-child authority. Then delete its
 stable/cascade schema once no maintained reader remains, complete the
 reinstall-only decoder audit and run the
 guarded host preparation and execution phases as separate processes against
@@ -2471,10 +2476,14 @@ Released `0.100.90` removes legacy Registry identity from Store GC and
 physical-deletion acceptance. Durable root-owned lifecycle receipts and Store
 inventory plus exact live management evidence now form the recovery chain.
 The same release consolidates fresh-install module verification in the host.
-Open `0.100.91` replaces the remaining Store-creation Registry importer with
+Released `0.100.91` replaces the remaining Store-creation Registry importer with
 one root-owned durable create/install journal and direct-leaf activation. It
 also consolidates terminal host Fleet catalog queries on the canonical typed
 Canister protocol boundary.
+Open `0.100.92` makes root Fleet-state mutation consume exact root-owned Store
+and top-level Component inventories before explicit fanout. It hard-cuts the
+orphaned generic Registry-based lifecycle propagation stack and its private
+topology model, mapper and metric vocabulary.
 
 ## Historical Release Detail
 
