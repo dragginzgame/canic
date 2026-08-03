@@ -78,6 +78,7 @@ pub enum StateAllocationKey {
     BlobStorageBilling,
     CanisterPool,
     ControlPlaneSubnetState,
+    CoreAuthorityRestoreFence,
     CoreAuthState,
     CoreFleetActivation,
     CoreIcpRefillRecords,

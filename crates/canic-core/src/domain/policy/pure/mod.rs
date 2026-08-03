@@ -5,6 +5,7 @@
 //! or mutate state.
 
 pub mod auth;
+pub mod authority_restore;
 #[cfg(feature = "blob-storage-billing")]
 pub mod blob_storage;
 pub mod component_allocation;
@@ -29,6 +30,9 @@ use thiserror::Error as ThisError;
 pub enum PolicyError {
     #[error(transparent)]
     AuthPolicy(#[from] auth::AuthPolicyError),
+
+    #[error(transparent)]
+    AuthorityRestorePolicy(#[from] authority_restore::AuthorityRestoreEndpointPolicyError),
 
     #[error(transparent)]
     EnvPolicy(#[from] env::EnvPolicyError),

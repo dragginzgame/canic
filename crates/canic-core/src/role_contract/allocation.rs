@@ -95,11 +95,16 @@ pub mod memory {
         pub const STORAGE_GATEWAY_PRINCIPALS_ID: u8 = 57;
         pub const BLOB_STORAGE_BILLING_ID: u8 = 58;
     }
+
+    pub mod authority_restore {
+        pub const AUTHORITY_RESTORE_FENCE_ID: u8 = 59;
+    }
 }
 
 use memory::{
     activation::FLEET_ACTIVATION_ID,
     auth::{AUTH_STATE_ID, REPLAY_RECEIPTS_ID},
+    authority_restore::AUTHORITY_RESTORE_FENCE_ID,
     blob_storage::{
         BLOB_DELETION_PENDING_ID, BLOB_STORAGE_BILLING_ID, STORAGE_GATEWAY_PRINCIPALS_ID,
         STORED_BLOBS_ID,
@@ -154,6 +159,7 @@ const CORE_RUNTIME_INTENT_IDS: &[MemoryId] = &[
     MemoryId::new(APPLICATION_RECEIPT_REPLAY_ID),
     MemoryId::new(APPLICATION_RECEIPT_ELIGIBILITY_ID),
 ];
+const CORE_AUTHORITY_RESTORE_FENCE_IDS: &[MemoryId] = &[MemoryId::new(AUTHORITY_RESTORE_FENCE_ID)];
 const SCALING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(SCALING_REGISTRY_ID)];
 const PLACEMENT_INDEX_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(PLACEMENT_INDEX_REGISTRY_ID)];
 const SHARDING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_REGISTRY_ID)];
@@ -225,6 +231,11 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         StateAllocationKey::CoreRuntimeIntent,
         AllocationOwner::CanicCore,
         CORE_RUNTIME_INTENT_IDS,
+    ),
+    definition(
+        StateAllocationKey::CoreAuthorityRestoreFence,
+        AllocationOwner::CanicCore,
+        CORE_AUTHORITY_RESTORE_FENCE_IDS,
     ),
     definition(
         StateAllocationKey::ScalingRegistry,

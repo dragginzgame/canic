@@ -372,6 +372,7 @@ impl WasmStoreMetricReason {
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum ManagementCallMetricOperation {
+    CanisterInfo,
     CanisterStatus,
     ClearChunkStore,
     CreateCanister,

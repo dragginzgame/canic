@@ -5,6 +5,7 @@
 //! Boundary: lifecycle workflows call runtime startup after environment restore.
 
 pub mod auth;
+pub mod authority_restore;
 pub mod cycles;
 pub mod fleet_activation;
 pub mod install;

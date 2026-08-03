@@ -8,6 +8,8 @@
 #[macro_export]
 macro_rules! canic_emit_fleet_coordinator_endpoints {
     () => {
+        $crate::canic_emit_authority_restore_endpoints!();
+
         #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_fleet_registry(
         ) -> Result<::canic::dto::fleet_registry::FleetRegistry, ::canic::Error> {

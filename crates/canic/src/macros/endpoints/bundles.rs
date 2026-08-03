@@ -27,6 +27,7 @@ macro_rules! canic_bundle_shared_runtime_endpoints {
 #[macro_export]
 macro_rules! canic_bundle_root_only_endpoints {
     () => {
+        $crate::canic_emit_authority_restore_endpoints!();
         $crate::canic_emit_root_admin_endpoints!();
         $crate::canic_emit_root_auth_attestation_endpoints!();
         $crate::canic_emit_root_wasm_store_endpoints!();

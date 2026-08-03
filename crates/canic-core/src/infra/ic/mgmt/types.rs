@@ -64,6 +64,25 @@ pub(super) struct InfraCanisterIdRecordExtended {
 }
 
 //
+// InfraCanisterInfoArgs
+//
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub(super) struct InfraCanisterInfoArgs {
+    pub(super) canister_id: Principal,
+    pub(super) num_requested_changes: Option<u64>,
+}
+
+//
+// InfraCanisterInfoResult
+//
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub(super) struct InfraCanisterInfoResult {
+    pub(super) total_num_changes: u64,
+}
+
+//
 // InfraCanisterInstallMode
 //
 

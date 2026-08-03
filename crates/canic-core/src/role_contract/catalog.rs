@@ -218,6 +218,10 @@ const CAPABILITY_REQUIREMENTS: &[CapabilityRequirement] = &[
 const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
     capability_allocation(
         RoleCapabilityKey::FleetCoordinator,
+        StateAllocationKey::CoreAuthorityRestoreFence,
+    ),
+    capability_allocation(
+        RoleCapabilityKey::FleetCoordinator,
         StateAllocationKey::FleetCoordinatorRegistry,
     ),
     capability_allocation(
@@ -245,6 +249,10 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
         StateAllocationKey::CoreRuntimeIntent,
     ),
     capability_allocation(RoleCapabilityKey::Root, StateAllocationKey::CoreAuthState),
+    capability_allocation(
+        RoleCapabilityKey::Root,
+        StateAllocationKey::CoreAuthorityRestoreFence,
+    ),
     capability_allocation(
         RoleCapabilityKey::DelegatedTokenIssuer,
         StateAllocationKey::CoreAuthState,
@@ -403,6 +411,10 @@ const FEATURE_ALLOCATIONS: &[FeatureAllocation] = &[
 ];
 
 const BUILT_IN_ALLOCATIONS: &[BuiltInAllocation] = &[
+    built_in_allocation(
+        BuiltInRoleKind::FleetCoordinator,
+        StateAllocationKey::CoreAuthorityRestoreFence,
+    ),
     built_in_allocation(
         BuiltInRoleKind::FleetCoordinator,
         StateAllocationKey::FleetCoordinatorRegistry,

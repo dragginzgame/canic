@@ -7,6 +7,17 @@
 use super::*;
 
 impl MgmtOps {
+    /// Observe the independent monotonic management-history count for one Canister.
+    pub async fn canister_history_total_changes(
+        canister_pid: Principal,
+    ) -> Result<u64, InternalError> {
+        management_call(
+            ManagementCallMetricOperation::CanisterInfo,
+            MgmtInfra::canister_history_total_changes(canister_pid),
+        )
+        .await
+    }
+
     #[must_use]
     pub fn canister_status_to_dto(status: CanisterStatus) -> CanisterStatusResponse {
         CanisterStatusResponse {
