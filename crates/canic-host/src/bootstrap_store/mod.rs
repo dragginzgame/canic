@@ -1,8 +1,8 @@
 use crate::{
     artifact_io::{embed_candid_metadata, maybe_shrink_wasm_artifact, write_gzip_artifact},
     canister_build::{
-        ArtifactTransformKind, ArtifactTransformOutput, CanisterBuildProfile,
-        WorkspaceBuildContext,
+        ArtifactTransformKind, ArtifactTransformOutput, CanisterArtifactBuildOutput,
+        CanisterBuildProfile, WorkspaceBuildContext,
         cache::{canister_build_target_root, configure_canister_cargo_command},
     },
     cargo_command,
@@ -45,19 +45,6 @@ const WASM_STORE_FAST_PROFILE: &[(&str, &str)] = &[
     ("incremental", "false"),
 ];
 
-///
-/// BootstrapWasmStoreBuildOutput
-///
-
-#[derive(Clone, Debug)]
-pub struct BootstrapWasmStoreBuildOutput {
-    pub artifact_root: PathBuf,
-    pub wasm_path: PathBuf,
-    pub wasm_gz_path: PathBuf,
-    pub did_path: PathBuf,
-    pub transforms: Vec<ArtifactTransformOutput>,
-}
-
 #[derive(Clone, Debug)]
 pub struct QualifiedBootstrapWasmStoreOutput {
     pub(crate) package_name: String,
@@ -83,7 +70,7 @@ pub struct GeneratedWrapperDependencies {
 // local ICP artifact paths for downstream/root builds.
 pub fn build_bootstrap_wasm_store_artifact(
     context: &WorkspaceBuildContext,
-) -> Result<BootstrapWasmStoreBuildOutput, Box<dyn std::error::Error>> {
+) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
     let source = resolve_bootstrap_wasm_store_source(&context.workspace_root, &context.icp_root)?;
     require_built_in_wasm_store_contract(&source.manifest_path)?;
     let artifact_root = artifact_root_path(&context.icp_root, "local").join(WASM_STORE_ROLE);
@@ -115,7 +102,8 @@ pub fn build_bootstrap_wasm_store_artifact(
     }
     write_gzip_artifact(&wasm_path, &wasm_gz_path)?;
 
-    Ok(BootstrapWasmStoreBuildOutput {
+    Ok(CanisterArtifactBuildOutput {
+        package_name: source.package_name,
         artifact_root,
         wasm_path,
         wasm_gz_path,

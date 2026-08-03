@@ -17,7 +17,6 @@ use crate::{
     },
 };
 use std::{
-    collections::BTreeMap,
     io,
     path::{Path, PathBuf},
 };
@@ -45,6 +44,7 @@ const APPLICATION_ARTIFACT_UNION_FILE: &str = "application-artifact-union.json";
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ApplicationArtifactFileBuildOutput {
     pub role: CanisterRole,
+    pub package: String,
     pub release_build_id: ReleaseBuildId,
     pub wasm_path: PathBuf,
     pub wasm_gz_path: PathBuf,
@@ -152,13 +152,9 @@ pub fn compile_and_persist_application_artifact_union(
         .map(|output| output.role.clone())
         .collect::<Vec<_>>();
     ApplicationArtifactUnion::validate_build_output_roles(topology, &mut output_roles)?;
-    let targets_by_role = targets
-        .iter()
-        .map(|target| (&target.role, target))
-        .collect::<BTreeMap<_, _>>();
     let materialized = outputs
         .iter()
-        .map(|output| materialize_build_output(root, release_build_id, &targets_by_role, output))
+        .map(|output| materialize_build_output(root, release_build_id, output))
         .collect::<Result<Vec<_>, _>>()?;
     let union =
         ApplicationArtifactUnion::compile(topology, release_build_id, targets, &materialized)?;
@@ -221,7 +217,6 @@ pub fn load_persisted_application_artifact_union(
 fn materialize_build_output(
     root: &Path,
     release_build_id: ReleaseBuildId,
-    targets: &BTreeMap<&CanisterRole, &ApplicationArtifactBuildTarget>,
     output: &ApplicationArtifactFileBuildOutput,
 ) -> Result<ApplicationArtifactBuildOutput, ApplicationArtifactUnionPersistenceError> {
     if output.release_build_id != release_build_id {
@@ -233,18 +228,11 @@ fn materialize_build_output(
         .into());
     }
 
-    let package = targets
-        .get(&output.role)
-        .ok_or_else(|| ApplicationReleaseSetError::MissingBuildTarget {
-            role: output.role.clone(),
-        })?
-        .package
-        .clone();
     let wasm = materialize_artifact(root, &output.role, "raw Wasm", &output.wasm_path)?;
     let wasm_gz = materialize_artifact(root, &output.role, "gzip Wasm", &output.wasm_gz_path)?;
     Ok(ApplicationArtifactBuildOutput {
         role: output.role.clone(),
-        package,
+        package: output.package.clone(),
         release_build_id: output.release_build_id,
         wasm_relative_path: wasm.relative_path,
         wasm: wasm.bytes,

@@ -1,8 +1,27 @@
 use std::path::PathBuf;
 
 pub(super) const ROOT_ROLE: &str = "root";
+pub(super) const FLEET_COORDINATOR_ROLE: &str = "fleet_coordinator";
 pub(super) const WASM_STORE_ROLE: &str = "wasm_store";
 pub(super) const WASM_TARGET: &str = "wasm32-unknown-unknown";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum CanisterArtifactSource {
+    DeclaredRole,
+    FleetCoordinator,
+    WasmStore,
+}
+
+impl CanisterArtifactSource {
+    #[must_use]
+    pub(super) fn for_role(role: &str) -> Self {
+        match role {
+            FLEET_COORDINATOR_ROLE => Self::FleetCoordinator,
+            WASM_STORE_ROLE => Self::WasmStore,
+            _ => Self::DeclaredRole,
+        }
+    }
+}
 
 /// Exact package and output paths admitted before one role build starts.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -19,9 +38,13 @@ pub struct CanisterArtifactBuildSpec {
 ///
 /// CanisterArtifactBuildOutput
 ///
+/// Canonical package identity and artifact outputs produced by one admitted build.
+/// Owned by the host build boundary and consumed by provenance and install planning.
+///
 
 #[derive(Clone, Debug)]
 pub struct CanisterArtifactBuildOutput {
+    pub package_name: String,
     pub artifact_root: PathBuf,
     pub wasm_path: PathBuf,
     pub wasm_gz_path: PathBuf,

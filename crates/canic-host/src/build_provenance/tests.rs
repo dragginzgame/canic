@@ -63,6 +63,7 @@ fn artifact_provenance_records_wasm_and_gzip_separately() {
     let request = sample_request(
         &root,
         CanisterArtifactBuildOutput {
+            package_name: "app-package".to_string(),
             artifact_root,
             wasm_path,
             wasm_gz_path,
@@ -160,6 +161,19 @@ fn build_provenance_rejects_transform_outcome_without_matching_tool_version() {
     fs::remove_dir_all(&root).expect("remove root");
 }
 
+#[test]
+fn build_provenance_rejects_artifact_package_identity_drift() {
+    let root = temp_dir("canic-build-provenance-package-drift");
+    write_sample_workspace(&root, "demo", "app");
+    let mut output = write_sample_artifacts(&root, "app");
+    output.package_name = "other-package".to_string();
+    let request = sample_request(&root, output);
+
+    build_provenance_envelope(&request).expect_err("package identity drift must reject");
+
+    fs::remove_dir_all(&root).expect("remove root");
+}
+
 fn sample_request(root: &Path, output: CanisterArtifactBuildOutput) -> BuildProvenanceRequest {
     BuildProvenanceRequest {
         app: "demo".to_string(),
@@ -250,6 +264,7 @@ fn write_sample_artifacts(root: &Path, role: &str) -> CanisterArtifactBuildOutpu
     fs::write(&wasm_gz_path, b"gzip").expect("write gzip");
 
     CanisterArtifactBuildOutput {
+        package_name: format!("canister_demo_{role}"),
         artifact_root,
         wasm_path,
         wasm_gz_path,

@@ -12,9 +12,11 @@ use crate::deployment_truth::{
     DeploymentCheckV1, DeploymentExecutionContextV1, DeploymentReceiptV1,
 };
 use crate::{
-    bootstrap_coordinator::build_bootstrap_fleet_coordinator_artifact,
     bootstrap_store::qualify_built_bootstrap_wasm_store_artifact,
-    canister_build::{CurrentCanisterArtifactBuildOutput, WorkspaceBuildContext},
+    canister_build::{
+        CurrentCanisterArtifactBuildOutput, WorkspaceBuildContext,
+        build_workspace_canister_artifact,
+    },
     release_set::{CanicInfrastructureArtifactBuildOutput, CanicInfrastructureRole},
 };
 use std::{
@@ -105,8 +107,7 @@ fn build_install_targets_with_phase(
     let started_at = current_unix_timestamp_label()?;
     let started = Instant::now();
     let outputs = operation.execute()?;
-    let infrastructure_outputs =
-        qualify_infrastructure_outputs(options, build_context, complete_build, &outputs)?;
+    let infrastructure_outputs = qualify_infrastructure_outputs(options, build_context, &outputs)?;
     let duration = started.elapsed();
     let phase = CompletedInstallPhase {
         phase: InstallPhaseLabel::BUILD_ARTIFACTS,
@@ -128,23 +129,17 @@ fn build_install_targets_with_phase(
 fn qualify_infrastructure_outputs(
     options: &InstallRootOptions,
     build_context: &WorkspaceBuildContext,
-    complete_build: &super::build_snapshot::CompleteInstallBuildSnapshot,
     outputs: &[CurrentCanisterArtifactBuildOutput],
 ) -> Result<Vec<CanicInfrastructureArtifactBuildOutput>, Box<dyn std::error::Error>> {
     let release_build_id = build_context
         .release_build_id
         .ok_or("infrastructure build is missing its durable release-build identity")?;
-    let root_target = complete_build
-        .targets
-        .iter()
-        .find(|target| target.role == options.root_canister)
-        .ok_or("complete install build has no Fleet Subnet Root target")?;
     let root_output = outputs
         .iter()
         .find(|output| output.role == options.root_canister)
         .ok_or("complete install build has no Fleet Subnet Root output")?;
     let coordinator =
-        build_bootstrap_fleet_coordinator_artifact(&build_context.with_role("fleet_coordinator"))?;
+        build_workspace_canister_artifact(&build_context.with_role("fleet_coordinator"))?;
     let wasm_store = qualify_built_bootstrap_wasm_store_artifact(build_context)?;
 
     Ok(vec![
@@ -157,7 +152,7 @@ fn qualify_infrastructure_outputs(
         },
         CanicInfrastructureArtifactBuildOutput {
             role: CanicInfrastructureRole::FleetSubnetRoot,
-            package: root_target.spec.package_name.clone(),
+            package: root_output.output.package_name.clone(),
             release_build_id,
             wasm_path: root_output.output.wasm_path.clone(),
             wasm_gz_path: root_output.output.wasm_gz_path.clone(),

@@ -187,6 +187,21 @@ fn publication_rejects_incomplete_duplicate_and_cross_build_outputs() {
         ))
     );
 
+    let mut outputs = build_outputs(&root, release_build_id);
+    outputs[0].package = "other-package".to_string();
+    std::assert_matches!(
+        compile_and_persist_application_artifact_union(
+            &root,
+            &topology,
+            release_build_id,
+            &targets,
+            &outputs,
+        ),
+        Err(ApplicationArtifactUnionPersistenceError::ReleaseSet(
+            ApplicationReleaseSetError::BuildOutputPackageMismatch { .. }
+        ))
+    );
+
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
@@ -413,6 +428,7 @@ fn build_output(
 
     ApplicationArtifactFileBuildOutput {
         role: CanisterRole::owned(role.to_string()),
+        package: format!("{role}-package"),
         release_build_id,
         wasm_path,
         wasm_gz_path,

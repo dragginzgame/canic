@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.96` consolidates all three infrastructure Wasms behind one
+  package-qualified host artifact boundary, removes duplicate Coordinator,
+  root-package and feature selection paths, and records their measured release
+  sizes and sole runtime authorities.
+
 - `0.100.95` repacks both reinstall-only stable-memory ledgers into
   consecutive subsystem groups and aligns their constants, allocation keys,
   state domains and stable keys, including the hard cut from broad root

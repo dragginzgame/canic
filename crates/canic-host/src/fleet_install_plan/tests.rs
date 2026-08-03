@@ -514,6 +514,7 @@ fn build_output(
     fs::write(&wasm_gz_path, gzip(&wasm)).expect("write gzip Wasm");
     ApplicationArtifactFileBuildOutput {
         role: CanisterRole::owned(role.to_string()),
+        package: format!("{role}-package"),
         release_build_id,
         wasm_path,
         wasm_gz_path,
