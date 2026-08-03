@@ -242,7 +242,7 @@ impl RootSummaryCounts {
         })
     }
 
-    fn matches(
+    const fn matches(
         &self,
         summary: &FleetSubnetRootCanisterSummary,
         maximum_managed_canisters: u32,
