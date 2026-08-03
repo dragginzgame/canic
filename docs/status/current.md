@@ -14,15 +14,18 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.97`.
-- The latest published release is `v0.100.97` at
-  `40424cc1b6d952c83244117e9a606af8f91b8b06`.
-- Open patch draft `0.100.98` independently host-installs each root's sibling
-  Store on the exact same Subnet, adopts it from installer-plus-root to
-  sole-root control, imports only that Store into runtime publication and
-  hard-cuts embedded Store bytes, root-autonomous creation/replacement and
-  multi-Store publication selection. Focused PocketIC adoption/publication
-  passes; post-extraction release-Wasm measurement remains open.
+- The workspace package version is `0.100.98`.
+- The latest published release is `v0.100.98` at
+  `94119c39c725383aa7f2ffd5e5f4ee9154ee91a2`.
+- Open patch draft `0.100.99` removes the final root-triggered Store build
+  side effect. Installation preparation now builds the Store as an independent
+  infrastructure role, and the passing post-extraction measurement records
+  exact replacement sizes, hashes, Candid exports and retained attribution.
+- Released `0.100.98` independently host-installs each root's sibling Store on
+  the exact same Subnet, adopts it from installer-plus-root to sole-root
+  control, imports only that Store into runtime publication and hard-cuts
+  embedded Store bytes, root-autonomous creation/replacement and multi-Store
+  publication selection.
 - Released `0.100.97` freezes separate positive root and Store creation
   funding plus both qualified artifacts and raw module hashes in immutable
   pre-effect installation authority.
@@ -68,9 +71,9 @@ Historical detail is archived at:
   terminal sole-controller adoption receipt, and remove embedded Store bytes
   plus autonomous root Store creation/replacement. Root publication, catalog,
   GC and terminal deletion authority remain unchanged after handoff.
-  The implementation is complete in open 0.100.98; post-extraction
-  measurement remains open before the
-  disposable real-network root-deletion proof.
+  Released 0.100.98 completes that implementation; open 0.100.99 removes the
+  final root-build side effect and records a passing post-extraction boundary.
+  Only the disposable real-network root-deletion proof remains.
 - Proposed `0.105` defines provider-neutral declarative authentication
   profiles as the sole source of multi-role user-token grants and
   install-owned issuer/verifier policy. Its initial Toko path uses one
@@ -2119,14 +2122,11 @@ First primary results:
 
 ## Next Action
 
-Replace the baseline infrastructure Wasm measurements with post-extraction
-root/Store artifacts, sizes, hashes and retained attribution. The
-maintainer-owned final
-operational proof then remains: run guarded root-deletion preparation and
-execution as separate processes against one explicitly selected disposable
-real-network root, then verify the surviving Coordinator terminal receipt and
-exact replay before closing 0.100 against the accepted design and beginning
-0.101. The retained implementation detail remains in the
+The maintainer-owned final operational proof remains: run guarded root-deletion
+preparation and execution as separate processes against one explicitly
+selected disposable real-network root, then verify the surviving Coordinator
+terminal receipt and exact replay before closing 0.100 against the accepted
+design and beginning 0.101. The retained implementation detail remains in the
 [implementation tracker](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md).
 Fresh installation now journals and verifies the Coordinator, every planned
 Fleet Subnet Root, each root's exact topology-admitted local Store, and every
@@ -2557,9 +2557,10 @@ Released `0.100.94` adds the Coordinator/root authority snapshot fence
 described above and closes the restore-fencing and role-package qualification
 item. Released `0.100.95` groups both reinstall-only stable-memory ledgers by
 their current subsystem owners. Released `0.100.96` records the initial
-boundary baseline; the accepted follow-up must complete the independent
-host-installed Store cut and post-extraction Wasm measurement before the
-maintainer-owned disposable real-network root-deletion proof can close 0.100.
+boundary baseline, released `0.100.98` completes the independent host-installed
+Store cut, and open `0.100.99` records the passing post-extraction boundary.
+The maintainer-owned disposable real-network root-deletion proof is the only
+remaining 0.100 closeout item.
 
 ## Historical Release Detail
 

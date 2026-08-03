@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.99` completes the independent infrastructure build boundary by
+  removing root-triggered Store generation and recording the post-extraction
+  Wasm evidence.
+
 - `0.100.98` independently host-installs each root's sibling Wasm Store with
   reciprocal authority and root-observed controller adoption, removes
   embedded Store bytes and root-autonomous Store lifecycle paths, and confines
