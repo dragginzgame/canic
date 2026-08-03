@@ -763,11 +763,9 @@ mod tests {
             rendered
                 .contains("timer: runtime/heartbeat registration=scheduled condition=active mode=after_completion enabled=true")
         );
-        assert!(
-            rendered.contains(
-                "state_domain: env version=1 storage=stable_memory memory_id=1 status=ok"
-            )
-        );
+        assert!(rendered.contains(
+            "state_domain: runtime_bindings version=1 storage=stable_memory memory_id=1 status=ok"
+        ));
         assert!(rendered.contains(
             "recent_failure: runtime/runtime_status_sample severity=warning redacted=true"
         ));
