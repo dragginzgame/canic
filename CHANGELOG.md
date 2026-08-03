@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.97` freezes separate Fleet Subnet Root and sibling Wasm Store funding
+  plus both exact infrastructure artifacts in pre-effect install authority,
+  hard-cutting the former ambiguous per-root funding field.
+
 - `0.100.96` consolidates all three infrastructure Wasms behind one
   package-qualified host artifact boundary, removes duplicate Coordinator,
   root-package and feature selection paths, and records their measured release

@@ -195,9 +195,9 @@ fn recover_or_create_root(
         result_path: &result_path,
         subject: "Fleet Subnet Root",
         placement_subnet: current.journal.root_plan.placement_subnet,
-        funding: &current.journal.root_plan.creation_funding,
+        funding: &current.journal.root_plan.root_creation_funding,
         action: EffectAction::from_advanced(current.advanced),
-        expected_module_hash: current.journal.expected_module_hash,
+        expected_module_hash: current.journal.expected_root_module_hash,
     })?;
     let Some(fleet_subnet_root) = evidence.canister else {
         return Err(RootCreationOutcomeUnknownError {
@@ -234,7 +234,7 @@ fn recover_or_install_root(
             canister: fleet_subnet_root,
             wasm_path: &artifact.wasm_path,
             args_path: &args_path,
-            expected_module_hash: current.journal.expected_module_hash,
+            expected_module_hash: current.journal.expected_root_module_hash,
             action: EffectAction::from_advanced(current.advanced),
         },
         || root_install_args(&current.journal),
@@ -272,7 +272,7 @@ fn verify_live_root(
     require_expected_module_hash(
         &icp,
         fleet_subnet_root,
-        journal.expected_module_hash,
+        journal.expected_root_module_hash,
         "Fleet Subnet Root",
     )?;
 

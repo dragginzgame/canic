@@ -196,7 +196,8 @@ fn fixture(name: &str) -> Fixture {
             initial_release_set: release_set,
             limits: limits.clone(),
             canister_pool_imports: Vec::new(),
-            creation_funding: funding(),
+            root_creation_funding: funding(),
+            wasm_store_creation_funding: funding(),
         }],
     };
     let authority = FleetRegistryAuthority {

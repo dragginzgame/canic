@@ -14,11 +14,13 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.95`.
-- The latest published release is `v0.100.95` at
-  `b72e57716e3ae111aa2aff9ce62308882bfb0d45`.
-- Open `0.100.96` is the changelog draft target; no package-version change
-  has been authorized.
+- The workspace package version is `0.100.96`.
+- The latest published release is `v0.100.96` at
+  `6d6a4126a465a9000a93985075a2616bce281018`.
+- Open patch draft `0.100.97` freezes separate Fleet Subnet Root and sibling
+  Wasm Store creation funding plus both exact artifacts and raw module hashes
+  in pre-effect install authority. Store creation, independent installation,
+  prepared-root adoption and embedded-byte removal remain open.
 - Released `0.100.93` replaces the superseded generic empty-Canister pool with
   one required prepaid asset inventory owned by every Fleet Subnet Root. Fleet
   input freezes its minimum, proactive maximum, cycles and imports, and IC
@@ -48,17 +50,21 @@ Historical detail is archived at:
   application-receipt, Placement, sharding, blob-storage and authority-fence
   vocabulary. The former broad root Subnet state is hard-cut to root Wasm
   Store state; there is no migration, alias or compatibility path.
-- Open `0.100.96` consolidates the Fleet Coordinator, Fleet Subnet Root and
+- Released `0.100.96` consolidates the Fleet Coordinator, Fleet Subnet Root and
   Wasm Store behind one package-qualified host artifact-build boundary. It
   removes separate Coordinator dispatch, parallel root-package lookup and a
   redundant root/Store feature edge, while provenance rejects package
   identity drift and application-union publication compares actual output
-  identity with the admitted target. Canonical release measurements and the
-  maintained-source inventory confirm distinct Registry, Component/pool and
-  Store runtime authorities with no Tree-era, nested declaration or artifact
-  fallback path. The only remaining 0.100 closeout item is the
-  maintainer-owned disposable real-network root-deletion execution and
-  exact-replay proof.
+  identity with the admitted target. Its first measurement exposed the
+  remaining root-embedded Store artifact and root-owned installation path.
+  The accepted final 0.100 design now requires the next coherent batch to
+  host-create and independently install one sibling Store per root on the
+  exact same Subnet, verify reciprocal bindings and the prepared root's
+  terminal sole-controller adoption receipt, and remove embedded Store bytes
+  plus autonomous root Store creation/replacement. Root publication, catalog,
+  GC and terminal deletion authority remain unchanged after handoff.
+  Implementation and post-extraction measurement are open before the
+  disposable real-network root-deletion proof.
 - Proposed `0.105` defines provider-neutral declarative authentication
   profiles as the sole source of multi-role user-token grants and
   install-owned issuer/verifier policy. Its initial Toko path uses one
@@ -2107,13 +2113,17 @@ First primary results:
 
 ## Next Action
 
-Measure the Coordinator, Fleet Subnet Root and Wasm Store boundaries and
-remove any remaining stale, nested or duplicate authority. The
-maintainer-owned final operational proof remains: run guarded root-deletion
-preparation and execution as separate processes against one explicitly
-selected disposable real-network root, then verify the surviving Coordinator
-terminal receipt and exact replay before closing 0.100 against the accepted
-design and beginning 0.101. The retained implementation detail remains in the
+Implement and prove the host-installed sibling Store amendment within 0.100:
+add separate Store funding and host recovery, install root and Store
+from independent infrastructure outputs on one exact Subnet, verify reciprocal
+protected authority and the root-observed sole-controller adoption receipt,
+hard-cut embedded Store bytes and root-owned create/install/replacement paths,
+then replace the baseline Wasm measurements. The maintainer-owned final
+operational proof then remains: run guarded root-deletion preparation and
+execution as separate processes against one explicitly selected disposable
+real-network root, then verify the surviving Coordinator terminal receipt and
+exact replay before closing 0.100 against the accepted design and beginning
+0.101. The retained implementation detail remains in the
 [implementation tracker](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md).
 Fresh installation now journals and verifies the Coordinator, every planned
 Fleet Subnet Root, each root's exact topology-admitted local Store, and every
@@ -2543,9 +2553,10 @@ prior-release decoder remains.
 Released `0.100.94` adds the Coordinator/root authority snapshot fence
 described above and closes the restore-fencing and role-package qualification
 item. Released `0.100.95` groups both reinstall-only stable-memory ledgers by
-their current subsystem owners. Open `0.100.96` completes the infrastructure
-Wasm measurement and source-authority cut; only the maintainer-owned disposable
-real-network root-deletion proof remains before 0.100 closes.
+their current subsystem owners. Released `0.100.96` records the initial
+boundary baseline; the accepted follow-up must complete the independent
+host-installed Store cut and post-extraction Wasm measurement before the
+maintainer-owned disposable real-network root-deletion proof can close 0.100.
 
 ## Historical Release Detail
 

@@ -35,6 +35,18 @@ fn local_document_resolves_exact_explicit_placement_and_cycles() {
     );
     assert_eq!(resolved.fleet_subnet_roots.len(), 1);
     assert_eq!(
+        resolved.fleet_subnet_roots[0].root_creation_funding,
+        PlannedCanisterCreationFunding::Cycles {
+            cycles: 2_000_000_000_000
+        }
+    );
+    assert_eq!(
+        resolved.fleet_subnet_roots[0].wasm_store_creation_funding,
+        PlannedCanisterCreationFunding::Cycles {
+            cycles: 2_000_000_000_000
+        }
+    );
+    assert_eq!(
         resolved.fleet_subnet_roots[0].component_admissions,
         vec![RootComponentAdmissionInput {
             component_spec: "users".parse().expect("valid Component Spec ID"),
@@ -93,7 +105,9 @@ fn public_resolution_enforces_trusted_eligibility_and_funding_method() {
     });
     input.coordinator.creation_funding = CreationFundingDocument::Icp { e8s: 100_000_000 };
     input.fleet_subnet_roots[0].placement_subnet = system_subnet.clone();
-    input.fleet_subnet_roots[0].creation_funding =
+    input.fleet_subnet_roots[0].root_creation_funding =
+        CreationFundingDocument::Icp { e8s: 100_000_000 };
+    input.fleet_subnet_roots[0].wasm_store_creation_funding =
         CreationFundingDocument::Icp { e8s: 100_000_000 };
     let system_catalog = catalog(vec![info(
         &system_subnet,
@@ -249,6 +263,37 @@ fn loader_decodes_the_document_shape_and_cycle_shorthand() {
             .maximum_cycles,
         Cycles::new(10_000_000_000_000)
     );
+    assert_eq!(
+        document.fleet_subnet_roots[0].root_creation_funding,
+        CreationFundingDocument::Cycles {
+            cycles: Cycles::new(2_000_000_000_000)
+        }
+    );
+    assert_eq!(
+        document.fleet_subnet_roots[0].wasm_store_creation_funding,
+        CreationFundingDocument::Cycles {
+            cycles: Cycles::new(2_000_000_000_000)
+        }
+    );
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn loader_hard_cuts_the_ambiguous_root_creation_funding_field() {
+    let root = temp_dir("fleet-install-input-obsolete-funding");
+    fs::create_dir_all(&root).expect("create temp root");
+    let path = root.join("fleet-install.toml");
+    let source = input_toml().replace(
+        "fleet_subnet_roots.root_creation_funding",
+        "fleet_subnet_roots.creation_funding",
+    );
+    fs::write(&path, source).expect("write obsolete input");
+
+    assert!(matches!(
+        load_document(&path),
+        Err(FleetInstallInputError::Decode { .. })
+    ));
+
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
@@ -412,7 +457,10 @@ fn document(selector: CoordinatorSubnetSelector) -> FleetInstallInputDocument {
                 canister_cycles: Cycles::new(5_000_000_000_000),
                 imports: Vec::new(),
             },
-            creation_funding: CreationFundingDocument::Cycles {
+            root_creation_funding: CreationFundingDocument::Cycles {
+                cycles: Cycles::new(2_000_000_000_000),
+            },
+            wasm_store_creation_funding: CreationFundingDocument::Cycles {
                 cycles: Cycles::new(2_000_000_000_000),
             },
         }],
@@ -454,7 +502,11 @@ maximum_wasm_store_bytes = 40000000
 window_secs = 3600
 maximum_cycles = "10T"
 
-[fleet_subnet_roots.creation_funding]
+[fleet_subnet_roots.root_creation_funding]
+kind = "cycles"
+cycles = "2T"
+
+[fleet_subnet_roots.wasm_store_creation_funding]
 kind = "cycles"
 cycles = "2T"
 "#

@@ -202,7 +202,8 @@ struct FleetSubnetRootInputDocument {
     component_admissions: BTreeMap<ComponentSpecId, u32>,
     limits: FleetSubnetRootLimitsDocument,
     canister_pool: CanisterPoolInputDocument,
-    creation_funding: CreationFundingDocument,
+    root_creation_funding: CreationFundingDocument,
+    wasm_store_creation_funding: CreationFundingDocument,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -338,11 +339,17 @@ fn resolve_document(
             "fleet_subnet_roots.placement_subnet",
             &root.placement_subnet,
         )?;
-        let owner = format!("Fleet Subnet Root {placement_subnet}");
-        let creation_funding = resolve_funding(
-            &owner,
+        let root_creation_funding = resolve_funding(
+            &format!("Fleet Subnet Root {placement_subnet}"),
             placement_subnet,
-            &root.creation_funding,
+            &root.root_creation_funding,
+            build_network,
+            catalog,
+        )?;
+        let wasm_store_creation_funding = resolve_funding(
+            &format!("Wasm Store for Fleet Subnet Root {placement_subnet}"),
+            placement_subnet,
+            &root.wasm_store_creation_funding,
             build_network,
             catalog,
         )?;
@@ -398,7 +405,8 @@ fn resolve_document(
                 },
             },
             canister_pool_imports,
-            creation_funding,
+            root_creation_funding,
+            wasm_store_creation_funding,
         });
     }
 

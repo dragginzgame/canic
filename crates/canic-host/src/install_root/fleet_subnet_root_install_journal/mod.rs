@@ -111,9 +111,11 @@ pub(super) struct FleetSubnetRootInstallJournal {
     pub component_topology: ComponentTopology,
     pub root_plan: PlannedFleetSubnetRoot,
     pub root_artifact: CanicInfrastructureArtifactEntry,
-    pub expected_module_hash: [u8; 32],
+    pub expected_root_module_hash: [u8; 32],
+    pub wasm_store_artifact: CanicInfrastructureArtifactEntry,
+    pub expected_wasm_store_module_hash: [u8; 32],
     pub fleet_subnet_root: Option<Principal>,
-    pub installed_module_hash: Option<[u8; 32]>,
+    pub installed_root_module_hash: Option<[u8; 32]>,
     pub verified_binding: Option<FleetSubnetRootBinding>,
     pub store_bootstrap: Option<RootStoreBootstrapResponse>,
     pub registry_join_request: Option<FleetSubnetRootJoinRequest>,
@@ -146,6 +148,22 @@ pub(super) struct PlanFleetSubnetRootInstallRequest<'a> {
     pub root_plan: &'a PlannedFleetSubnetRoot,
 }
 
+#[derive(Eq, PartialEq)]
+struct FleetSubnetRootInstallAuthority<'a> {
+    schema_version: u32,
+    fleet_install_plan_digest: &'a [u8; 32],
+    infrastructure_manifest_digest: &'a [u8; 32],
+    authority: &'a FleetRegistryAuthority,
+    release_build_id: &'a ReleaseBuildId,
+    install_operation_id: &'a [u8; 32],
+    component_topology: &'a ComponentTopology,
+    root_plan: &'a PlannedFleetSubnetRoot,
+    root_artifact: &'a CanicInfrastructureArtifactEntry,
+    expected_root_module_hash: &'a [u8; 32],
+    wasm_store_artifact: &'a CanicInfrastructureArtifactEntry,
+    expected_wasm_store_module_hash: &'a [u8; 32],
+}
+
 #[derive(Debug, ThisError)]
 pub(super) enum FleetSubnetRootInstallJournalError {
     #[error("Fleet Subnet Root install journal already has different authority: {path}")]
@@ -156,6 +174,12 @@ pub(super) enum FleetSubnetRootInstallJournalError {
 
     #[error("Fleet Subnet Root artifact SHA-256 is not one 32-byte digest")]
     InvalidRootArtifactDigest,
+
+    #[error("Wasm Store infrastructure artifact entry is missing")]
+    WasmStoreArtifactMissing,
+
+    #[error("Wasm Store artifact SHA-256 is not one 32-byte digest")]
+    InvalidWasmStoreArtifactDigest,
 
     #[error("invalid Fleet Subnet Root install journal {path}: {reason}")]
     InvalidDocument { path: PathBuf, reason: String },
@@ -267,14 +291,14 @@ pub(super) fn record_root_installed(
     current: &ResolvedFleetSubnetRootInstall,
     observed_module_hash: [u8; 32],
 ) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
-    if observed_module_hash != current.journal.expected_module_hash {
+    if observed_module_hash != current.journal.expected_root_module_hash {
         return Err(invalid(
             &current.path,
             "observed root module differs from immutable artifact authority",
         ));
     }
     if current.journal.phase == FleetSubnetRootInstallPhase::Installed
-        && current.journal.installed_module_hash == Some(observed_module_hash)
+        && current.journal.installed_root_module_hash == Some(observed_module_hash)
     {
         return Ok(resolved(
             current.journal.clone(),
@@ -286,7 +310,7 @@ pub(super) fn record_root_installed(
         current,
         FleetSubnetRootInstallPhase::InstallInFlight,
         FleetSubnetRootInstallPhase::Installed,
-        |next| next.installed_module_hash = Some(observed_module_hash),
+        |next| next.installed_root_module_hash = Some(observed_module_hash),
     )
 }
 
@@ -720,7 +744,7 @@ pub(super) fn expected_root_authority(
             limits: journal.root_plan.limits.clone(),
         },
         initial_release_set: journal.root_plan.initial_release_set,
-        expected_module_hash: journal.expected_module_hash,
+        expected_module_hash: journal.expected_root_module_hash,
     };
     journal
         .component_topology
@@ -768,10 +792,22 @@ fn planned_journal(
         .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
         .cloned()
         .ok_or(FleetSubnetRootInstallJournalError::RootArtifactMissing)?;
-    let expected_module_hash = decode_hex(&root_artifact.wasm_sha256_hex)
+    let expected_root_module_hash = decode_hex(&root_artifact.wasm_sha256_hex)
         .ok()
         .and_then(|bytes| <[u8; 32]>::try_from(bytes).ok())
         .ok_or(FleetSubnetRootInstallJournalError::InvalidRootArtifactDigest)?;
+    let wasm_store_artifact = request
+        .infrastructure_manifest
+        .manifest
+        .entries
+        .iter()
+        .find(|entry| entry.role == CanicInfrastructureRole::WasmStore)
+        .cloned()
+        .ok_or(FleetSubnetRootInstallJournalError::WasmStoreArtifactMissing)?;
+    let expected_wasm_store_module_hash = decode_hex(&wasm_store_artifact.wasm_sha256_hex)
+        .ok()
+        .and_then(|bytes| <[u8; 32]>::try_from(bytes).ok())
+        .ok_or(FleetSubnetRootInstallJournalError::InvalidWasmStoreArtifactDigest)?;
     let journal = FleetSubnetRootInstallJournal {
         schema_version: JOURNAL_SCHEMA_VERSION,
         sequence: 0,
@@ -791,9 +827,11 @@ fn planned_journal(
         component_topology: request.component_topology.clone(),
         root_plan: request.root_plan.clone(),
         root_artifact,
-        expected_module_hash,
+        expected_root_module_hash,
+        wasm_store_artifact,
+        expected_wasm_store_module_hash,
         fleet_subnet_root: None,
-        installed_module_hash: None,
+        installed_root_module_hash: None,
         verified_binding: None,
         store_bootstrap: None,
         registry_join_request: None,
@@ -984,10 +1022,28 @@ fn validate_immutable_authority(
         .ok()
         .and_then(|bytes| <[u8; 32]>::try_from(bytes).ok())
         .ok_or_else(|| invalid(path, "root artifact digest is invalid"))?;
-    if journal.expected_module_hash != artifact_hash {
+    if journal.expected_root_module_hash != artifact_hash {
         return Err(invalid(
             path,
             "expected module hash differs from root artifact",
+        ));
+    }
+    if journal.wasm_store_artifact.role != CanicInfrastructureRole::WasmStore
+        || journal.wasm_store_artifact.release_build_id != journal.release_build_id
+    {
+        return Err(invalid(
+            path,
+            "Wasm Store artifact differs from role or release build authority",
+        ));
+    }
+    let wasm_store_artifact_hash = decode_hex(&journal.wasm_store_artifact.wasm_sha256_hex)
+        .ok()
+        .and_then(|bytes| <[u8; 32]>::try_from(bytes).ok())
+        .ok_or_else(|| invalid(path, "Wasm Store artifact digest is invalid"))?;
+    if journal.expected_wasm_store_module_hash != wasm_store_artifact_hash {
+        return Err(invalid(
+            path,
+            "expected module hash differs from Wasm Store artifact",
         ));
     }
     Ok(())
@@ -1002,7 +1058,7 @@ fn validate_phase_evidence(
     }
     let retained = [
         journal.fleet_subnet_root.is_some(),
-        journal.installed_module_hash.is_some(),
+        journal.installed_root_module_hash.is_some(),
         journal.verified_binding.is_some(),
         journal.store_bootstrap.is_some(),
         journal.registry_join_request.is_some(),
@@ -1025,8 +1081,8 @@ fn validate_phase_evidence(
     {
         return Err(invalid(path, "phase differs from retained root evidence"));
     }
-    if journal.installed_module_hash.is_some()
-        && journal.installed_module_hash != Some(journal.expected_module_hash)
+    if journal.installed_root_module_hash.is_some()
+        && journal.installed_root_module_hash != Some(journal.expected_root_module_hash)
     {
         return Err(invalid(
             path,
@@ -1754,16 +1810,26 @@ fn same_immutable_authority(
     observed: &FleetSubnetRootInstallJournal,
     expected: &FleetSubnetRootInstallJournal,
 ) -> bool {
-    observed.schema_version == expected.schema_version
-        && observed.fleet_install_plan_digest == expected.fleet_install_plan_digest
-        && observed.infrastructure_manifest_digest == expected.infrastructure_manifest_digest
-        && observed.authority == expected.authority
-        && observed.release_build_id == expected.release_build_id
-        && observed.install_operation_id == expected.install_operation_id
-        && observed.component_topology == expected.component_topology
-        && observed.root_plan == expected.root_plan
-        && observed.root_artifact == expected.root_artifact
-        && observed.expected_module_hash == expected.expected_module_hash
+    immutable_authority(observed) == immutable_authority(expected)
+}
+
+const fn immutable_authority(
+    journal: &FleetSubnetRootInstallJournal,
+) -> FleetSubnetRootInstallAuthority<'_> {
+    FleetSubnetRootInstallAuthority {
+        schema_version: journal.schema_version,
+        fleet_install_plan_digest: &journal.fleet_install_plan_digest,
+        infrastructure_manifest_digest: &journal.infrastructure_manifest_digest,
+        authority: &journal.authority,
+        release_build_id: &journal.release_build_id,
+        install_operation_id: &journal.install_operation_id,
+        component_topology: &journal.component_topology,
+        root_plan: &journal.root_plan,
+        root_artifact: &journal.root_artifact,
+        expected_root_module_hash: &journal.expected_root_module_hash,
+        wasm_store_artifact: &journal.wasm_store_artifact,
+        expected_wasm_store_module_hash: &journal.expected_wasm_store_module_hash,
+    }
 }
 
 fn journal_path(plan_path: &Path, placement_subnet: SubnetId) -> PathBuf {
