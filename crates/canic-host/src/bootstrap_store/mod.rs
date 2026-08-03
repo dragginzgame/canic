@@ -46,13 +46,6 @@ const WASM_STORE_FAST_PROFILE: &[(&str, &str)] = &[
 ];
 
 #[derive(Clone, Debug)]
-pub struct QualifiedBootstrapWasmStoreOutput {
-    pub(crate) package_name: String,
-    pub(crate) wasm_path: PathBuf,
-    pub(crate) wasm_gz_path: PathBuf,
-}
-
-#[derive(Clone, Debug)]
 struct BootstrapWasmStoreSource {
     manifest_path: PathBuf,
     package_name: String,
@@ -109,27 +102,6 @@ pub fn build_bootstrap_wasm_store_artifact(
         wasm_gz_path,
         did_path,
         transforms,
-    })
-}
-
-/// Qualify the store artifact emitted by the immediately preceding root build.
-pub fn qualify_built_bootstrap_wasm_store_artifact(
-    context: &WorkspaceBuildContext,
-) -> Result<QualifiedBootstrapWasmStoreOutput, Box<dyn std::error::Error>> {
-    let source = resolve_bootstrap_wasm_store_source(&context.workspace_root, &context.icp_root)?;
-    require_built_in_wasm_store_contract(&source.manifest_path)?;
-    let artifact_root = artifact_root_path(&context.icp_root, "local").join(WASM_STORE_ROLE);
-    let wasm_path = artifact_root.join(format!("{WASM_STORE_ROLE}.wasm"));
-    let wasm_gz_path = artifact_root.join(format!("{WASM_STORE_ROLE}.wasm.gz"));
-    if !wasm_path.is_file() || !wasm_gz_path.is_file() {
-        return Err(
-            "root build did not emit the exact built-in wasm_store raw and gzip artifacts".into(),
-        );
-    }
-    Ok(QualifiedBootstrapWasmStoreOutput {
-        package_name: source.package_name,
-        wasm_path,
-        wasm_gz_path,
     })
 }
 

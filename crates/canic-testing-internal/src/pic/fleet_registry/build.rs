@@ -17,10 +17,6 @@ use super::super::artifacts::{
 use super::fixture::progress;
 
 const ROOT_CANISTER_PACKAGE: &str = "delegation_root_stub";
-const REQUIRE_EMBEDDED_ARTIFACTS_ENV: (&str, &str) = (
-    canic_core::role_contract::CANONICAL_BUILD_REQUIRE_EMBEDDED_ARTIFACTS_ENV,
-    canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE,
-);
 static BUILD_ONCE: Once = Once::new();
 static CANISTER_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
@@ -92,13 +88,13 @@ fn build_canisters_once(workspace_root: &Path) {
             &target_dir,
             &[ROOT_CANISTER_PACKAGE],
             CanicWasmBuildProfile::Fast,
-            &[canonical_config_env, REQUIRE_EMBEDDED_ARTIFACTS_ENV],
+            &[canonical_config_env],
         );
         progress("finished PIC wasm build");
     });
 }
 
-// Build the root's implicit wasm_store before Cargo runs the root build script.
+// Build the sibling wasm_store independently before the fixture installs both Canisters.
 fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path, config_path: &Path) {
     let cargo = env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
     let output = Command::new(cargo)

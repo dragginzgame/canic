@@ -12,7 +12,6 @@ use crate::deployment_truth::{
     DeploymentCheckV1, DeploymentExecutionContextV1, DeploymentReceiptV1,
 };
 use crate::{
-    bootstrap_store::qualify_built_bootstrap_wasm_store_artifact,
     canister_build::{
         CurrentCanisterArtifactBuildOutput, WorkspaceBuildContext,
         build_workspace_canister_artifact,
@@ -140,7 +139,7 @@ fn qualify_infrastructure_outputs(
         .ok_or("complete install build has no Fleet Subnet Root output")?;
     let coordinator =
         build_workspace_canister_artifact(&build_context.with_role("fleet_coordinator"))?;
-    let wasm_store = qualify_built_bootstrap_wasm_store_artifact(build_context)?;
+    let wasm_store = build_workspace_canister_artifact(&build_context.with_role("wasm_store"))?;
 
     Ok(vec![
         CanicInfrastructureArtifactBuildOutput {

@@ -25,7 +25,7 @@ use super::{
     candid::{extract_candid, remove_stale_icp_candid_sidecars},
     model::{
         ArtifactTransformKind, ArtifactTransformOutput, CanisterArtifactBuildOutput,
-        CanisterArtifactBuildSpec, CanisterArtifactSource, ROOT_ROLE, WASM_TARGET,
+        CanisterArtifactBuildSpec, CanisterArtifactSource, WASM_TARGET,
     },
 };
 
@@ -88,24 +88,13 @@ pub fn build_workspace_canister_artifact_from_spec(
         .into());
     }
 
-    let canister_name = spec.role.as_str();
-    let require_embedded_release_artifacts = canister_name == ROOT_ROLE;
-
-    let mut transforms = if require_embedded_release_artifacts {
-        build_bootstrap_wasm_store_artifact(context)?.transforms
-    } else {
-        Vec::new()
-    };
+    let mut transforms = Vec::new();
 
     fs::create_dir_all(&spec.artifact_root)?;
     remove_stale_icp_candid_sidecars(&spec.artifact_root)?;
 
-    let release_wasm_path = run_canister_build(
-        context,
-        &spec.package_manifest_path,
-        &spec.package_name,
-        require_embedded_release_artifacts,
-    )?;
+    let release_wasm_path =
+        run_canister_build(context, &spec.package_manifest_path, &spec.package_name)?;
     write_wasm_artifact(&release_wasm_path, &spec.wasm_path)?;
     transforms.push(maybe_shrink_wasm_artifact(&spec.wasm_path)?);
 
@@ -115,7 +104,6 @@ pub fn build_workspace_canister_artifact_from_spec(
             &debug_context,
             &spec.package_manifest_path,
             &spec.package_name,
-            require_embedded_release_artifacts,
         )?;
         extract_candid(&debug_wasm_path, &spec.did_path)?;
         transforms.push(embed_candid_metadata(&spec.wasm_path, &spec.did_path)?);
@@ -210,7 +198,6 @@ fn run_canister_build(
     context: &WorkspaceBuildContext,
     manifest_path: &Path,
     package_name: &str,
-    require_embedded_release_artifacts: bool,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let target_root = canister_build_target_root(&context.workspace_root);
     let mut command = cargo_command();
@@ -230,13 +217,6 @@ fn run_canister_build(
         ])
         .args(context.profile.cargo_args());
     configure_canister_cargo_command(&mut command, &context.workspace_root);
-
-    if require_embedded_release_artifacts {
-        command.env(
-            canic_core::role_contract::CANONICAL_BUILD_REQUIRE_EMBEDDED_ARTIFACTS_ENV,
-            canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE,
-        );
-    }
 
     let output = command.output()?;
     if !output.status.success() {

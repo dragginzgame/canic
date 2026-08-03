@@ -2,20 +2,19 @@
 
 Date: 2026-08-03
 
-- State: implementation in progress; the host-installed sibling Store hard
-  cut is implemented and focused post-extraction measurement remains before
-  the maintainer-owned operational proof.
+- State: implementation complete; the independent sibling Store build,
+  installation/adoption and post-extraction Wasm boundary pass. Only the
+  maintainer-owned operational proof remains.
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.97`.
-- Latest published release: `v0.100.97` at
-  `40424cc1b6d952c83244117e9a606af8f91b8b06`.
-- Open patch draft: `0.100.98`; it independently host-installs each sibling
-  Store, adopts it to sole-root control, removes embedded Store bytes and
-  root-autonomous Store lifecycle, and confines publication to that Store.
-- Open design blockers: none; the Store installation ownership amendment is
-  accepted and has open implementation work.
+- Workspace package version: `0.100.98`.
+- Latest published release: `v0.100.98` at
+  `94119c39c725383aa7f2ffd5e5f4ee9154ee91a2`.
+- Open patch draft: `0.100.99`; it removes the final root-triggered Store
+  build side effect and records the passing post-extraction Wasm boundary.
+- Open design blockers: none; implementation is complete and only the
+  maintainer-owned real-network proof remains.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
 exactly one Fleet Subnet Root per occupied `(FleetKey, SubnetId)`, with each
@@ -1243,25 +1242,28 @@ publication/lifecycle authority after an exact controller handoff.
 
 Released 0.100.97 freezes that handoff's independent root/Store creation
 funding and exact root/Store artifacts in the immutable pre-effect plan and
-journal. Open 0.100.98 implements the complete host-installed sibling Store
-boundary: separate same-Subnet creation and installation, reciprocal init
-authority, prepared-root adoption to sole-root control, terminal receipt
+journal. Released 0.100.98 implements the complete host-installed sibling
+Store boundary: separate same-Subnet creation and installation, reciprocal
+init authority, prepared-root adoption to sole-root control, terminal receipt
 verification, imported single-Store publication, and hard removal of embedded
 Store bytes plus root-autonomous creation, replacement, rotation and arbitrary
 Store selection.
 
+Open 0.100.99 removes the final root-build coupling. Installation preparation
+now invokes the Store builder as an independent infrastructure role; a
+root-only build neither creates nor qualifies Store output. The canonical
+post-extraction measurement passes and records exact replacement sizes,
+hashes, Candid exports and retained attribution.
+
 The [0.100 infrastructure Wasm boundary audit](0.100-wasm-boundary-closeout.md)
-records the pre-extraction artifacts and remains open until the independent
-root and Store builds, installation journey and post-extraction sizes are
-verified. Maintained-source searches still find no Tree identity, logical
+records a passing independent root/Store build and post-extraction artifact
+boundary. Maintained-source searches still find no Tree identity, logical
 Subnet-slot, Subnet Registry/Directory, nested Component declaration or
 arbitrary artifact fallback authority.
 
 ## Next Action
 
-Rerun the post-extraction infrastructure Wasm boundary measurement and record
-the independent root/Store artifacts, sizes and retained attribution. After
-that, the maintainer-owned final operational proof remains: run root-deletion
+The maintainer-owned final operational proof remains: run root-deletion
 preparation and execution as separate processes against one explicitly
 selected disposable real-network root, then verify the surviving Coordinator
 terminal receipt and exact replay before closing 0.100 and beginning 0.101.

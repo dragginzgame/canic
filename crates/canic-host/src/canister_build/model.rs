@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-pub(super) const ROOT_ROLE: &str = "root";
 pub(super) const FLEET_COORDINATOR_ROLE: &str = "fleet_coordinator";
 pub(super) const WASM_STORE_ROLE: &str = "wasm_store";
 pub(super) const WASM_TARGET: &str = "wasm32-unknown-unknown";
