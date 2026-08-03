@@ -1,7 +1,7 @@
 use super::super::*;
 use crate::deployment_truth::report::{
     ARTIFACT_FILE_SHA256_DIFF_CATEGORY, ARTIFACT_MISSING_CODE, CANISTER_UNOBSERVED_CODE,
-    OBSERVATION_GAP_CODE, PLAN_ASSUMPTION_CODE, SUBNET_REGISTRY_ROLE_MISSING_CODE,
+    COMPONENT_REGISTRY_ROLE_MISSING_CODE, OBSERVATION_GAP_CODE, PLAN_ASSUMPTION_CODE,
     UNSAFE_CONTROL_CLASS_CODE,
 };
 
@@ -131,7 +131,7 @@ fn deployment_diff_blocks_missing_bootstrap_role_after_registry_observation() {
 
     assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
     assert!(diff.hard_failures.iter().any(|finding| {
-        finding.code == SUBNET_REGISTRY_ROLE_MISSING_CODE
+        finding.code == COMPONENT_REGISTRY_ROLE_MISSING_CODE
             && finding.subject.as_deref() == Some("user_hub")
     }));
 }
@@ -148,7 +148,7 @@ fn deployment_diff_does_not_claim_registry_corruption_when_registry_is_unobserve
     inventory
         .unresolved_observations
         .push(DeploymentObservationGapV1 {
-            key: "live_subnet_registry".to_string(),
+            key: "live_component_registry".to_string(),
             description: "registry query failed".to_string(),
         });
 
@@ -158,7 +158,7 @@ fn deployment_diff_does_not_claim_registry_corruption_when_registry_is_unobserve
         !diff
             .hard_failures
             .iter()
-            .any(|finding| finding.code == SUBNET_REGISTRY_ROLE_MISSING_CODE)
+            .any(|finding| finding.code == COMPONENT_REGISTRY_ROLE_MISSING_CODE)
     );
     assert!(
         diff.warnings

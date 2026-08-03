@@ -243,6 +243,7 @@ fn compile_plan(
                 manifest_digest,
             },
             limits: topology_root.limits.clone(),
+            canister_pool_imports: input.canister_pool_imports.clone(),
             creation_funding: input.creation_funding.clone(),
         });
         root_release_sets.push(manifest);

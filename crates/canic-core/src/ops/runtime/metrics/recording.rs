@@ -11,7 +11,6 @@ use crate::{
             PlacementIndexMetricOperation, PlacementIndexMetricOutcome, PlacementIndexMetricReason,
             PlacementIndexMetrics,
         },
-        pool::{PoolMetricOperation, PoolMetricOutcome, PoolMetricReason, PoolMetrics},
         scaling::{
             ScalingMetricOperation, ScalingMetricOutcome, ScalingMetricReason, ScalingMetrics,
         },
@@ -75,49 +74,6 @@ impl PlacementIndexMetricEvent {
         reason: PlacementIndexMetricReason,
     ) {
         Self::record(operation, PlacementIndexMetricOutcome::Failed, reason);
-    }
-}
-
-///
-/// PoolMetricEvent
-///
-/// Typed recording adapter for pool metric events.
-///
-
-pub struct PoolMetricEvent;
-
-impl PoolMetricEvent {
-    /// Record one pool metric row with an explicit outcome and reason.
-    pub fn record(
-        operation: PoolMetricOperation,
-        outcome: PoolMetricOutcome,
-        reason: PoolMetricReason,
-    ) {
-        PoolMetrics::record(operation, outcome, reason);
-    }
-
-    /// Record a started pool metric row.
-    pub fn started(operation: PoolMetricOperation) {
-        Self::record(operation, PoolMetricOutcome::Started, PoolMetricReason::Ok);
-    }
-
-    /// Record a completed pool metric row.
-    pub fn completed(operation: PoolMetricOperation, reason: PoolMetricReason) {
-        Self::record(operation, PoolMetricOutcome::Completed, reason);
-    }
-
-    /// Record a skipped pool metric row.
-    pub fn skipped(operation: PoolMetricOperation, reason: PoolMetricReason) {
-        Self::record(operation, PoolMetricOutcome::Skipped, reason);
-    }
-
-    /// Record a failed pool metric row classified from an internal error.
-    pub fn failed(operation: PoolMetricOperation, err: &InternalError) {
-        Self::record(
-            operation,
-            PoolMetricOutcome::Failed,
-            PoolMetricReason::from_error(err),
-        );
     }
 }
 

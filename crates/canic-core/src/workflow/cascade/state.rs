@@ -28,10 +28,9 @@ use crate::{
             },
         },
         storage::{
-            children::CanisterChildrenOps, directory::fleet::FleetDirectoryOps,
-            fleet_activation::FleetActivationOps, state::fleet::FleetStateOps,
+            children::CanisterChildrenOps, fleet_activation::FleetActivationOps,
+            state::fleet::FleetStateOps,
         },
-        topology::directory::validate_provenance,
     },
     workflow::cascade::{
         snapshot::{
@@ -283,34 +282,17 @@ impl StateCascadeWorkflow {
             .map(FleetActivationOps::prepare_applied_state_snapshot)
             .transpose()
             .map_err(crate::ops::storage::StorageOpsError::from)?;
-        Self::apply_state_replacements(snapshot)?;
+        Self::apply_state_replacements(snapshot);
         if let Some(prepared) = activation_evidence {
             FleetActivationOps::commit_prepared_snapshot(prepared);
         }
         Ok(())
     }
 
-    fn apply_state_replacements(snapshot: &StateSnapshot) -> Result<(), InternalError> {
-        if let Some(directory) = &snapshot.fleet_directory {
-            validate_provenance(&directory.provenance)?;
-        }
-        let fleet_directory = snapshot
-            .fleet_directory
-            .as_ref()
-            .map(|directory| {
-                let filtered = FleetDirectoryOps::filter_args_for_local_config(directory.clone())?;
-                FleetDirectoryOps::prepare_args_allow_incomplete(filtered)
-            })
-            .transpose()?;
+    fn apply_state_replacements(snapshot: &StateSnapshot) {
         if let Some(fleet) = snapshot.fleet_state {
             FleetStateOps::import_input(fleet);
         }
-
-        if let Some(directory) = fleet_directory {
-            FleetDirectoryOps::commit_prepared(directory);
-        }
-
-        Ok(())
     }
 
     // ───────────────────────── Transport ────────────────────────────
@@ -348,112 +330,6 @@ impl StateCascadeWorkflow {
                 Err(err.with_diagnostic_context(format!("state cascade rejected by child {pid}")))
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod state_apply_tests {
-    use super::{StateCascadeWorkflow, StateSnapshot};
-    use crate::{
-        config::schema::CanisterKind,
-        dto::{
-            state::{FleetMode, FleetStateInput},
-            topology::{DirectoryEntryInput, DirectoryProvenance, FleetDirectoryInput},
-        },
-        ids::{
-            AppId, CanisterRole, CanonicalNetworkId, ComponentSpecId, FleetBinding, FleetId,
-            FleetKey, ReleaseBuildId, ReleaseBuildNonce,
-        },
-        ops::storage::{
-            directory::fleet::FleetDirectoryOps, fleet_activation::FleetActivationOps,
-            state::fleet::FleetStateOps,
-        },
-        test::{
-            config::ConfigTestBuilder,
-            seams::{lock, p},
-            support::import_test_env,
-        },
-    };
-
-    #[test]
-    fn state_apply_prepares_every_replacement_before_mutating_local_state() {
-        let _guard = lock();
-        let service = CanisterRole::new("service");
-        let root = p(1);
-        let original = p(2);
-        let replacement = p(3);
-        let fleet = FleetBinding {
-            fleet: FleetKey {
-                canonical_network_id: CanonicalNetworkId::ic_mainnet(),
-                fleet_id: FleetId::from_generated_bytes([4; 32]),
-            },
-            app: AppId::from("test"),
-        };
-
-        let _config = ConfigTestBuilder::new()
-            .with_default_canister_kind(service.clone(), CanisterKind::Service)
-            .install();
-        import_test_env(
-            service.clone(),
-            ComponentSpecId::try_from(String::from("default")).expect("default Component Spec ID"),
-            root,
-        );
-
-        FleetActivationOps::reset_for_tests();
-        let release = ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([5; 32]));
-        FleetActivationOps::initialize_nonroot_prepared(
-            fleet.clone(),
-            [6; 32],
-            release,
-            release,
-            None,
-            None,
-        )
-        .expect("initialize protected Fleet binding");
-
-        let original_state = FleetStateInput {
-            mode: FleetMode::Disabled,
-            cycles_funding_enabled: false,
-        };
-        FleetStateOps::import_input(original_state);
-        let provenance = DirectoryProvenance {
-            fleet,
-            source_root: root,
-        };
-        FleetDirectoryOps::import_args_allow_incomplete(FleetDirectoryInput {
-            provenance: provenance.clone(),
-            entries: vec![DirectoryEntryInput {
-                role: service.clone(),
-                pid: original,
-            }],
-        })
-        .expect("seed Fleet Directory");
-        let snapshot = StateSnapshot {
-            fleet_state: Some(FleetStateInput {
-                mode: FleetMode::Enabled,
-                cycles_funding_enabled: true,
-            }),
-            fleet_directory: Some(FleetDirectoryInput {
-                provenance,
-                entries: vec![
-                    DirectoryEntryInput {
-                        role: service.clone(),
-                        pid: replacement,
-                    },
-                    DirectoryEntryInput {
-                        role: service.clone(),
-                        pid: p(4),
-                    },
-                ],
-            }),
-        };
-
-        StateCascadeWorkflow::apply_state_with_activation(&snapshot, Some([7; 32]))
-            .expect_err("duplicate Fleet Directory role must reject the complete snapshot");
-
-        assert_eq!(FleetStateOps::snapshot_input(), original_state);
-        assert_eq!(FleetDirectoryOps::get(&service), Some(original));
-        assert!(!FleetActivationOps::has_partial_snapshot_evidence_for_tests());
     }
 }
 

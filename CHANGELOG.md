@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.93` rebuilds prepaid empty-Canister inventory under each Fleet Subnet
+  Root, rejects IC imports outside that root's trusted routed Subnet,
+  integrates claims, recycling and draining-only asset handoff with Component
+  lifecycle, and hard-cuts the superseded generic pool plus role-based Subnet
+  Registry/Directory authority. It also records the proposed provider-neutral
+  0.105 authentication-profile design.
+
 - `0.100.92` derives Fleet-state fanout from exact root-owned Store and
   Component Registry inventories and removes the orphaned generic
   Registry-based lifecycle propagation stack.

@@ -252,6 +252,134 @@ fn loader_decodes_the_document_shape_and_cycle_shorthand() {
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
+#[test]
+fn pool_imports_are_unique_across_fleet_subnet_roots() {
+    let mut input = document(CoordinatorSubnetSelector::Explicit {
+        subnet: subnet_text(7),
+    });
+    let imported = Principal::from_slice(&[44; 29]).to_text();
+    input.fleet_subnet_roots[0].canister_pool.imports = vec![imported.clone()];
+    let mut second = input.fleet_subnet_roots[0].clone();
+    second.placement_subnet = subnet_text(8);
+    second.canister_pool.imports = vec![imported];
+    input.fleet_subnet_roots.push(second);
+
+    assert!(matches!(
+        resolve_document(&input, BuildNetwork::Local, None),
+        Err(FleetInstallInputError::InvalidCanisterPool { .. })
+    ));
+}
+
+#[test]
+fn pool_import_rejects_reserved_principals() {
+    assert!(matches!(
+        parse_canister(
+            "fleet_subnet_roots.canister_pool.imports",
+            &Principal::management_canister().to_text(),
+        ),
+        Err(FleetInstallInputError::InvalidCanister { .. })
+    ));
+}
+
+#[test]
+fn pool_policy_rejects_invalid_capacity_and_funding() {
+    let selector = CoordinatorSubnetSelector::Explicit {
+        subnet: subnet_text(7),
+    };
+    let mut cases = Vec::new();
+
+    let mut zero_minimum = document(selector.clone());
+    zero_minimum.fleet_subnet_roots[0]
+        .canister_pool
+        .minimum_size = 0;
+    cases.push(zero_minimum);
+
+    let mut inverted_bounds = document(selector.clone());
+    inverted_bounds.fleet_subnet_roots[0]
+        .canister_pool
+        .minimum_size = 11;
+    cases.push(inverted_bounds);
+
+    let mut over_managed_limit = document(selector.clone());
+    over_managed_limit.fleet_subnet_roots[0]
+        .canister_pool
+        .maximum_size = 33;
+    cases.push(over_managed_limit);
+
+    let mut zero_cycles = document(selector);
+    zero_cycles.fleet_subnet_roots[0]
+        .canister_pool
+        .canister_cycles = Cycles::new(0);
+    cases.push(zero_cycles);
+
+    for input in cases {
+        assert!(matches!(
+            resolve_document(&input, BuildNetwork::Local, None),
+            Err(FleetInstallInputError::InvalidCanisterPool { .. })
+        ));
+    }
+}
+
+#[test]
+fn ic_pool_imports_require_exact_root_subnet_routing() {
+    let root_subnet = subnet_text(7);
+    let other_subnet = subnet_text(8);
+    let imported = Principal::from_slice(&[44; 29]);
+    let mut input = document(CoordinatorSubnetSelector::Explicit {
+        subnet: root_subnet.clone(),
+    });
+    input.fleet_subnet_roots[0].canister_pool.imports = vec![imported.to_text()];
+    let mut catalog = catalog(vec![
+        info(
+            &root_subnet,
+            SubnetKind::Application,
+            SubnetSpecialization::None,
+            "root",
+        ),
+        info(
+            &other_subnet,
+            SubnetKind::Application,
+            SubnetSpecialization::None,
+            "other",
+        ),
+    ]);
+    catalog.routing_ranges = vec![RoutingRange {
+        start_canister_id: imported.to_text(),
+        end_canister_id: imported.to_text(),
+        subnet_principal: root_subnet,
+    }];
+
+    resolve_document(&input, BuildNetwork::Ic, Some(&catalog))
+        .expect("pool import routes to its Fleet Subnet Root");
+
+    catalog.routing_ranges[0].subnet_principal = other_subnet;
+    assert!(matches!(
+        resolve_document(&input, BuildNetwork::Ic, Some(&catalog)),
+        Err(FleetInstallInputError::ImportedCanisterSubnetMismatch { .. })
+    ));
+}
+
+#[test]
+fn ic_pool_imports_fail_closed_without_routing_evidence() {
+    let root_subnet = subnet_text(7);
+    let imported = Principal::from_slice(&[44; 29]);
+    let mut input = document(CoordinatorSubnetSelector::Explicit {
+        subnet: root_subnet.clone(),
+    });
+    input.fleet_subnet_roots[0].canister_pool.imports = vec![imported.to_text()];
+    let catalog = catalog(vec![info(
+        &root_subnet,
+        SubnetKind::Application,
+        SubnetSpecialization::None,
+        "root",
+    )]);
+
+    assert!(matches!(
+        resolve_document(&input, BuildNetwork::Ic, Some(&catalog)),
+        Err(FleetInstallInputError::ImportedCanisterRoute { .. })
+    ));
+}
+
 fn document(selector: CoordinatorSubnetSelector) -> FleetInstallInputDocument {
     let application_subnet = subnet_text(7);
     FleetInstallInputDocument {
@@ -278,6 +406,12 @@ fn document(selector: CoordinatorSubnetSelector) -> FleetInstallInputDocument {
                     maximum_cycles: Cycles::new(10_000_000_000_000),
                 },
             },
+            canister_pool: CanisterPoolInputDocument {
+                minimum_size: 3,
+                maximum_size: 10,
+                canister_cycles: Cycles::new(5_000_000_000_000),
+                imports: Vec::new(),
+            },
             creation_funding: CreationFundingDocument::Cycles {
                 cycles: Cycles::new(2_000_000_000_000),
             },
@@ -303,6 +437,12 @@ placement_subnet = "{application_subnet}"
 
 [fleet_subnet_roots.component_admissions]
 users = 8
+
+[fleet_subnet_roots.canister_pool]
+minimum_size = 3
+maximum_size = 10
+canister_cycles = "5T"
+imports = []
 
 [fleet_subnet_roots.limits]
 maximum_component_instances = 8

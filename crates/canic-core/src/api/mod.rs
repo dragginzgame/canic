@@ -20,7 +20,6 @@ pub mod lifecycle;
 pub mod memory;
 pub mod metadata;
 pub mod placement;
-pub mod pool;
 pub mod ready;
 pub mod rpc;
 pub mod runtime;

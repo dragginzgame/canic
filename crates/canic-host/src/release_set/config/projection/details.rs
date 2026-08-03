@@ -9,13 +9,6 @@ pub(in crate::release_set) fn configured_role_details_from_config(
 ) -> BTreeMap<String, Vec<String>> {
     let mut details = BTreeMap::<String, BTreeSet<String>>::new();
 
-    for role in config.fleet_directory_roles() {
-        details
-            .entry(role.as_str().to_string())
-            .or_default()
-            .insert("fleet_directory".to_string());
-    }
-
     for (component_spec_id, component_spec) in &config.component_specs {
         for role in component_spec.auto_create_roles() {
             details

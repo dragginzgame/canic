@@ -30,10 +30,9 @@ pub struct StateSnapshotAdapter;
 
 impl StateSnapshotAdapter {
     #[must_use]
-    pub fn to_input(snapshot: &StateSnapshot) -> StateSnapshotInput {
+    pub const fn to_input(snapshot: &StateSnapshot) -> StateSnapshotInput {
         StateSnapshotInput {
             fleet_state: snapshot.fleet_state,
-            fleet_directory: snapshot.fleet_directory.clone(),
         }
     }
 

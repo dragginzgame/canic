@@ -78,10 +78,7 @@ impl FleetActivationWorkflow {
         let root_pid = IcOps::canister_self();
         require_root_activation_wasm_store(root_pid, wasm_store.pid)?;
 
-        let state_snapshot = StateSnapshotBuilder::new()?
-            .with_fleet_state()
-            .with_fleet_directory()?
-            .build();
+        let state_snapshot = StateSnapshotBuilder::new()?.with_fleet_state().build();
         let state_input = StateSnapshotAdapter::to_input(&state_snapshot);
         let state_snapshot_hash = FleetActivationEvidenceOps::state_snapshot_hash(&state_input)?;
 

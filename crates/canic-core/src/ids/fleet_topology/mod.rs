@@ -64,6 +64,25 @@ pub struct CyclesFundingBudget {
 }
 
 ///
+/// FleetSubnetCanisterPoolConfig
+///
+/// Immutable prepaid empty-Canister inventory policy for one Fleet Subnet Root.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetSubnetCanisterPoolConfig {
+    /// Ready empty Canisters the root continuously attempts to retain.
+    pub minimum_size: u32,
+    /// Ceiling for configured imports and proactive refill inventory.
+    ///
+    /// Recycled assets remain tracked even when their return temporarily exceeds this target.
+    pub maximum_size: u32,
+    /// Cycles placed on each Canister created by the root for this pool.
+    pub canister_cycles: Cycles,
+}
+
+///
 /// ComponentSpecAdmission
 ///
 /// Immutable permission and concrete-instance ceiling for one Spec on one Fleet Subnet Root.
@@ -90,6 +109,7 @@ pub struct FleetSubnetRootLimits {
     pub maximum_managed_canisters: u32,
     pub maximum_registry_bytes: u64,
     pub maximum_wasm_store_bytes: u64,
+    pub canister_pool: FleetSubnetCanisterPoolConfig,
     pub cycles_funding: CyclesFundingBudget,
 }
 

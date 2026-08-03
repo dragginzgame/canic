@@ -17,7 +17,6 @@ use crate::{
             MAX_FLEET_ACTIVATION_CANISTERS, MAX_FLEET_CREDENTIAL_MANIFEST_ENTRIES,
         },
         state::FleetStateInput,
-        topology::{DirectoryEntryInput, DirectoryProvenance, FleetDirectoryInput},
     },
     ids::{FleetBinding, FleetKey},
 };
@@ -37,7 +36,7 @@ pub struct FleetActivationEvidenceOps;
 
 impl FleetActivationEvidenceOps {
     pub fn state_snapshot_hash(value: &StateSnapshotInput) -> Result<[u8; 32], InternalError> {
-        hash_value(STATE_SNAPSHOT_DOMAIN, encode_state_snapshot(value)?)
+        hash_value(STATE_SNAPSHOT_DOMAIN, encode_state_snapshot(value))
     }
 
     pub fn topology_snapshot_hash(
@@ -119,22 +118,13 @@ impl FleetActivationEvidenceOps {
     }
 }
 
-fn encode_state_snapshot(value: &StateSnapshotInput) -> Result<Value, InternalError> {
-    Ok(Value::Array(vec![
-        encode_optional(
-            value
-                .fleet_state
-                .as_ref()
-                .map(|fleet_state| encode_fleet_state(*fleet_state)),
-        ),
-        encode_optional(
-            value
-                .fleet_directory
-                .as_ref()
-                .map(encode_fleet_directory)
-                .transpose()?,
-        ),
-    ]))
+fn encode_state_snapshot(value: &StateSnapshotInput) -> Value {
+    Value::Array(vec![encode_optional(
+        value
+            .fleet_state
+            .as_ref()
+            .map(|fleet_state| encode_fleet_state(*fleet_state)),
+    )])
 }
 
 fn encode_fleet_state(value: FleetStateInput) -> Value {
@@ -146,43 +136,6 @@ fn encode_fleet_state(value: FleetStateInput) -> Value {
     Value::Array(vec![
         integer(mode),
         Value::Bool(value.cycles_funding_enabled),
-    ])
-}
-
-fn encode_fleet_directory(value: &FleetDirectoryInput) -> Result<Value, InternalError> {
-    encode_directory(
-        &value.provenance,
-        &value.entries,
-        "Fleet Directory snapshot",
-    )
-}
-
-fn encode_directory(
-    provenance: &DirectoryProvenance,
-    entries: &[DirectoryEntryInput],
-    label: &str,
-) -> Result<Value, InternalError> {
-    require_strict_bytes_order(
-        entries.iter().map(|entry| entry.role.as_str().as_bytes()),
-        label,
-    )?;
-    Ok(Value::Array(vec![
-        encode_directory_provenance(provenance),
-        Value::Array(entries.iter().map(encode_directory_entry).collect()),
-    ]))
-}
-
-fn encode_directory_provenance(value: &DirectoryProvenance) -> Value {
-    Value::Array(vec![
-        encode_fleet_binding(&value.fleet),
-        principal(value.source_root),
-    ])
-}
-
-fn encode_directory_entry(value: &DirectoryEntryInput) -> Value {
-    Value::Array(vec![
-        byte_string(value.role.as_str().as_bytes()),
-        principal(value.pid),
     ])
 }
 
@@ -429,15 +382,9 @@ mod tests {
 
     #[test]
     fn empty_state_snapshot_uses_the_exact_fixed_array_cbor() {
-        let value = StateSnapshotInput {
-            fleet_state: None,
-            fleet_directory: None,
-        };
+        let value = StateSnapshotInput { fleet_state: None };
 
-        assert_eq!(
-            encode_value(&encode_state_snapshot(&value).expect("encode state snapshot")),
-            [0x82, 0xf6, 0xf6]
-        );
+        assert_eq!(encode_value(&encode_state_snapshot(&value)), [0x81, 0xf6]);
     }
 
     #[test]

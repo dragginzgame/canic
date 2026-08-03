@@ -185,23 +185,6 @@ pub struct EndpointReplayPolicy {
 }
 
 ///
-/// PoolAdminCommandReplayPolicy
-///
-/// Replay manifest row for a `PoolAdminCommand` variant.
-/// Owned by replay policy and stored in the pool-admin command manifest.
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PoolAdminCommandReplayPolicy {
-    pub variant: &'static str,
-    pub replay_policy: ReplayPolicy,
-    pub implementation_status: ReplayImplementationStatus,
-    pub cost_class: CostClass,
-    pub quota_policy: Option<ReplayQuotaPolicyLabel>,
-    pub cycle_reserve_policy: Option<ReplayCycleReservePolicyLabel>,
-}
-
-///
 /// RootCapabilityCommandReplayPolicy
 ///
 /// Replay manifest row for an internal root-capability command variant.

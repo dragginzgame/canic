@@ -250,18 +250,6 @@ impl ConfigModel {
         roles
     }
 
-    /// Return the currently projected Fleet Directory role set.
-    ///
-    /// The Component-aware Fleet Registry projection replaces this transitional
-    /// role union in the dedicated Directory slice.
-    #[must_use]
-    pub fn fleet_directory_roles(&self) -> BTreeSet<CanisterRole> {
-        self.component_specs
-            .values()
-            .flat_map(ComponentSpecConfig::component_directory_roles)
-            .collect()
-    }
-
     /// Test-only helper: produces a minimally valid config.
     ///
     /// Includes one default Component Spec plus declared root and Component roles.

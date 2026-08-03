@@ -14,8 +14,8 @@ use canic::{
     },
     ids::{
         CanisterRole, ComponentSpecAdmission, CyclesFundingBudget, FleetCoordinatorBinding,
-        FleetRegistryAuthority, FleetSubnetRootBinding, FleetSubnetRootLimits,
-        FleetSubnetRootReleaseSet, ReleaseSetDigest, SubnetId,
+        FleetRegistryAuthority, FleetSubnetCanisterPoolConfig, FleetSubnetRootBinding,
+        FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ReleaseSetDigest, SubnetId,
     },
     protocol,
 };
@@ -405,6 +405,11 @@ fn managed_test_root_init_args(
                     maximum_managed_canisters: 25_000,
                     maximum_registry_bytes: 16_777_216,
                     maximum_wasm_store_bytes: 536_870_912,
+                    canister_pool: FleetSubnetCanisterPoolConfig {
+                        minimum_size: 1,
+                        maximum_size: 10,
+                        canister_cycles: Cycles::new(5_000_000_000_000),
+                    },
                     cycles_funding: CyclesFundingBudget {
                         window_secs: 3_600,
                         maximum_cycles: Cycles::new(1_000_000_000_000_000),
@@ -418,6 +423,7 @@ fn managed_test_root_init_args(
             expected_module_hash,
         },
         install_id: identity.install_id,
+        canister_pool_imports: Vec::new(),
     })
 }
 

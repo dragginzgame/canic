@@ -15,10 +15,8 @@ use canic_core::api::lifecycle::metrics::{
     LifecycleMetricsApi,
 };
 use canic_core::api::runtime::install::ModuleSourceRuntimeApi;
-use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{
-    config::{ComponentTopology, schema::CanisterPool},
-    domain::pool::CanisterPoolStatus,
+    config::ComponentTopology,
     error::{InternalError, InternalErrorOrigin},
     ops::{
         config::ConfigOps,
@@ -28,12 +26,9 @@ use canic_core::control_plane_support::{
             env::EnvOps,
             ready::ReadyOps,
         },
-        storage::pool::PoolOps,
     },
     workflow::{
-        ic::IcWorkflow,
-        pool::{PoolWorkflow, query::PoolQuery},
-        runtime::fleet_activation::FleetActivationWorkflow,
+        ic::IcWorkflow, runtime::fleet_activation::FleetActivationWorkflow,
         topology::guard::TopologyGuard,
     },
 };
@@ -46,20 +41,12 @@ use std::collections::BTreeSet;
 
 struct RootBootstrapContext {
     component_topology: ComponentTopology,
-    pool: CanisterPool,
-    build_network: Option<BuildNetwork>,
 }
 
 impl RootBootstrapContext {
     fn load() -> Result<Self, InternalError> {
         let component_topology = ConfigOps::component_topology()?;
-        let build_network = BuildNetworkOps::build_network();
-
-        Ok(Self {
-            component_topology,
-            pool: CanisterPool::default(),
-            build_network,
-        })
+        Ok(Self { component_topology })
     }
 
     fn managed_release_roles(&self) -> BTreeSet<CanisterRole> {
@@ -68,58 +55,6 @@ impl RootBootstrapContext {
             .iter()
             .map(|component_spec| component_spec.component_role.clone())
             .collect()
-    }
-}
-
-///
-/// PoolImportStats
-///
-
-struct PoolImportStats {
-    configured_initial: u64,
-    configured_queued: u64,
-    imported: u64,
-    immediate_skipped: u64,
-    immediate_failed: u64,
-    immediate_already_present: u64,
-    queued_added: u64,
-    queued_requeued: u64,
-    queued_skipped: u64,
-    queued_failed: u64,
-    queued_already_present: u64,
-    immediate_imported_pids: Vec<Principal>,
-    immediate_skipped_pids: Vec<Principal>,
-    immediate_failed_pids: Vec<Principal>,
-    immediate_present_pids: Vec<Principal>,
-    queued_added_pids: Vec<Principal>,
-    queued_skipped_pids: Vec<Principal>,
-    queued_failed_pids: Vec<Principal>,
-    queued_present_pids: Vec<Principal>,
-}
-
-impl PoolImportStats {
-    const fn new(configured_initial: usize, configured_queued: usize) -> Self {
-        Self {
-            configured_initial: configured_initial as u64,
-            configured_queued: configured_queued as u64,
-            imported: 0,
-            immediate_skipped: 0,
-            immediate_failed: 0,
-            immediate_already_present: 0,
-            queued_added: 0,
-            queued_requeued: 0,
-            queued_skipped: 0,
-            queued_failed: 0,
-            queued_already_present: 0,
-            immediate_imported_pids: Vec::new(),
-            immediate_skipped_pids: Vec::new(),
-            immediate_failed_pids: Vec::new(),
-            immediate_present_pids: Vec::new(),
-            queued_added_pids: Vec::new(),
-            queued_skipped_pids: Vec::new(),
-            queued_failed_pids: Vec::new(),
-            queued_present_pids: Vec::new(),
-        }
     }
 }
 
@@ -156,6 +91,13 @@ fn record_root_bootstrap_metric(phase: LifecycleMetricPhase, outcome: LifecycleM
 fn mark_root_bootstrap_failed(phase: LifecycleMetricPhase, message: String) {
     record_root_bootstrap_metric(phase, LifecycleMetricOutcome::Failed);
     BootstrapStatusOps::mark_failed(message);
+}
+
+fn fleet_is_prepared() -> bool {
+    matches!(
+        FleetActivationWorkflow::status(),
+        Ok(status) if status.phase == FleetActivationPhase::Prepared
+    )
 }
 
 #[must_use]
@@ -335,9 +277,6 @@ pub async fn bootstrap_post_upgrade_root_canister() {
         mark_root_bootstrap_failed(LifecycleMetricPhase::PostUpgrade, message);
         return;
     }
-    // Keep post-upgrade non-blocking; queued imports continue in background.
-    BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_UPGRADE_IMPORT_POOL);
-    root_import_pool_from_config(false).await;
     BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_UPGRADE_RECONCILE_WASM_STORE);
     if let Err(err) = root_reconcile_wasm_store().await {
         let message = format!("wasm store reconcile failed: {err}");
@@ -394,274 +333,6 @@ pub async fn root_set_subnet_id() -> Result<(), InternalError> {
     }
 }
 
-/// ---------------------------------------------------------------------------
-/// Pool bootstrap
-/// ---------------------------------------------------------------------------
-
-/// Import any statically configured pool canisters for this subnet.
-///
-/// Failures are summarized so bootstrap can continue.
-async fn root_import_pool_from_config(wait_for_queued_imports: bool) {
-    let data = match RootBootstrapContext::load() {
-        Ok(data) => data,
-        Err(err) => {
-            log!(
-                Topic::CanisterPool,
-                Warn,
-                "pool import skipped: no subnet cfg ({err})"
-            );
-            return;
-        }
-    };
-
-    ensure_pool_imported(&data, wait_for_queued_imports).await;
-}
-
-fn fleet_is_prepared() -> bool {
-    matches!(
-        FleetActivationWorkflow::status(),
-        Ok(status) if status.phase == FleetActivationPhase::Prepared
-    )
-}
-
-async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_imports: bool) {
-    let initial_cfg = data
-        .pool
-        .import
-        .initial
-        .map_or_else(|| "unset".to_string(), |v| v.to_string());
-
-    let import_list = match data.build_network {
-        Some(BuildNetwork::Local) => data.pool.import.local.clone(),
-        Some(BuildNetwork::Ic) => data.pool.import.ic.clone(),
-        None => {
-            log!(
-                Topic::CanisterPool,
-                Warn,
-                "pool import skipped: no build network"
-            );
-            return;
-        }
-    };
-
-    let initial_limit = data
-        .pool
-        .import
-        .initial
-        .map_or(data.pool.minimum_size as usize, |count| count as usize);
-
-    log!(
-        Topic::CanisterPool,
-        Info,
-        "pool import cfg: net={} min={} init={} limit={} wait={}",
-        data.build_network.map_or("unknown", BuildNetwork::as_str),
-        data.pool.minimum_size,
-        initial_cfg,
-        initial_limit,
-        wait_for_queued_imports
-    );
-
-    if !import_list.is_empty() {
-        log!(
-            Topic::CanisterPool,
-            Info,
-            "pool import candidates={} pids={}",
-            import_list.len(),
-            summarize_principals(&import_list, 12)
-        );
-    }
-
-    if initial_limit == 0 && !data.managed_release_roles().is_empty() {
-        log!(
-            Topic::CanisterPool,
-            Warn,
-            "pool import init=0 with auto_create; queued imports may lag creation"
-        );
-    }
-
-    if import_list.is_empty() {
-        log!(
-            Topic::CanisterPool,
-            Warn,
-            "pool import skipped: empty list for net={}",
-            data.build_network.map_or("unknown", BuildNetwork::as_str)
-        );
-        log_pool_stats("after-empty-import-skip", data.pool.minimum_size);
-        return;
-    }
-
-    let (initial, queued) = import_list.split_at(initial_limit.min(import_list.len()));
-    let mut stats = PoolImportStats::new(initial.len(), queued.len());
-    import_initial_pool_canisters(initial, &mut stats).await;
-    import_queued_pool_canisters(queued, wait_for_queued_imports, &mut stats).await;
-
-    log_pool_import_result(&stats, wait_for_queued_imports);
-    log_pool_stats("after-import", data.pool.minimum_size);
-}
-
-async fn import_initial_pool_canisters(initial: &[Principal], stats: &mut PoolImportStats) {
-    for pid in initial {
-        if PoolOps::contains(pid) {
-            stats.immediate_already_present += 1;
-            stats.immediate_present_pids.push(*pid);
-            continue;
-        }
-
-        if matches!(PoolWorkflow::pool_import_canister(*pid).await, Ok(())) {
-            if PoolOps::contains(pid) {
-                stats.imported += 1;
-                stats.immediate_imported_pids.push(*pid);
-            } else {
-                stats.immediate_skipped += 1;
-                stats.immediate_skipped_pids.push(*pid);
-            }
-        } else {
-            stats.immediate_failed += 1;
-            stats.immediate_failed_pids.push(*pid);
-        }
-    }
-}
-
-async fn import_queued_pool_canisters(
-    queued: &[Principal],
-    wait_for_queued_imports: bool,
-    stats: &mut PoolImportStats,
-) {
-    let queued_imports = pending_pool_imports(queued, stats);
-    if queued_imports.is_empty() {
-        return;
-    }
-
-    if wait_for_queued_imports {
-        import_queued_pool_canisters_now(queued_imports, stats).await;
-    } else {
-        schedule_queued_pool_imports(queued_imports, stats).await;
-    }
-}
-
-fn pending_pool_imports(queued: &[Principal], stats: &mut PoolImportStats) -> Vec<Principal> {
-    queued
-        .iter()
-        .copied()
-        .filter(|pid| {
-            if PoolOps::contains(pid) {
-                stats.queued_already_present += 1;
-                stats.queued_present_pids.push(*pid);
-                false
-            } else {
-                true
-            }
-        })
-        .collect()
-}
-
-async fn import_queued_pool_canisters_now(
-    queued_imports: Vec<Principal>,
-    stats: &mut PoolImportStats,
-) {
-    for pid in queued_imports {
-        if matches!(PoolWorkflow::pool_import_canister(pid).await, Ok(())) {
-            if PoolOps::contains(&pid) {
-                stats.queued_added += 1;
-                stats.queued_added_pids.push(pid);
-            } else {
-                stats.queued_skipped += 1;
-                stats.queued_skipped_pids.push(pid);
-            }
-        } else {
-            stats.queued_failed += 1;
-            stats.queued_failed_pids.push(pid);
-        }
-    }
-}
-
-async fn schedule_queued_pool_imports(queued_imports: Vec<Principal>, stats: &mut PoolImportStats) {
-    log!(
-        Topic::CanisterPool,
-        Info,
-        "pool import queued async count={} pids={}",
-        queued_imports.len(),
-        summarize_principals(&queued_imports, 12)
-    );
-
-    match PoolWorkflow::pool_import_queued_canisters(queued_imports).await {
-        Ok(result) => {
-            stats.queued_added = result.added;
-            stats.queued_requeued = result.requeued;
-            stats.queued_skipped = result.skipped;
-        }
-        Err(err) => {
-            stats.queued_failed = stats.configured_queued - stats.queued_already_present;
-            log!(Topic::CanisterPool, Warn, "pool import queue failed: {err}");
-        }
-    }
-}
-
-fn log_pool_import_result(stats: &PoolImportStats, wait_for_queued_imports: bool) {
-    log!(
-        Topic::CanisterPool,
-        Info,
-        "pool import now: cfg={} ok={} skip={} fail={} present={}",
-        stats.configured_initial,
-        stats.imported,
-        stats.immediate_skipped,
-        stats.immediate_failed,
-        stats.immediate_already_present
-    );
-    log!(
-        Topic::CanisterPool,
-        Info,
-        "pool import now pids: ok={} skip={} fail={} present={}",
-        summarize_principals(&stats.immediate_imported_pids, 12),
-        summarize_principals(&stats.immediate_skipped_pids, 12),
-        summarize_principals(&stats.immediate_failed_pids, 12),
-        summarize_principals(&stats.immediate_present_pids, 12),
-    );
-
-    if stats.configured_queued > 0 {
-        if stats.queued_failed > 0 {
-            log!(
-                Topic::CanisterPool,
-                Warn,
-                "pool import queued: cfg={} fail={} present={}",
-                stats.configured_queued,
-                stats.queued_failed,
-                stats.queued_already_present
-            );
-        } else {
-            log!(
-                Topic::CanisterPool,
-                Info,
-                "pool import queued: cfg={} added={} requeued={} skip={} present={}",
-                stats.configured_queued,
-                stats.queued_added,
-                stats.queued_requeued,
-                stats.queued_skipped,
-                stats.queued_already_present
-            );
-        }
-
-        if wait_for_queued_imports {
-            log!(
-                Topic::CanisterPool,
-                Info,
-                "pool import queued pids: added={} skip={} fail={} present={}",
-                summarize_principals(&stats.queued_added_pids, 12),
-                summarize_principals(&stats.queued_skipped_pids, 12),
-                summarize_principals(&stats.queued_failed_pids, 12),
-                summarize_principals(&stats.queued_present_pids, 12),
-            );
-        } else {
-            log!(
-                Topic::CanisterPool,
-                Info,
-                "pool import queued pids: present={} (scheduler resolves added/requeued/skip)",
-                summarize_principals(&stats.queued_present_pids, 12),
-            );
-        }
-    }
-}
-
 async fn root_reconcile_wasm_store() -> Result<(), InternalError> {
     ensure_required_wasm_store_canister().await?;
     canic_core::perf!("bootstrap_ensure_wasm_store");
@@ -715,77 +386,4 @@ async fn import_default_wasm_store_catalog() -> Result<(), InternalError> {
     log!(Topic::Init, Info, "ws: imported default catalog");
 
     Ok(())
-}
-
-fn summarize_principals(pids: &[Principal], limit: usize) -> String {
-    if pids.is_empty() {
-        return "[]".to_string();
-    }
-
-    let shown: Vec<String> = pids.iter().take(limit).map(ToString::to_string).collect();
-    let remaining = pids.len().saturating_sub(shown.len());
-
-    if remaining == 0 {
-        format!("[{}]", shown.join(", "))
-    } else {
-        format!("[{} ... +{remaining} more]", shown.join(", "))
-    }
-}
-
-fn log_pool_stats(stage: &str, minimum_size: u8) {
-    let snapshot = PoolQuery::pool_list();
-    let mut ready = 0_usize;
-    let mut pending = 0_usize;
-    let mut failed = 0_usize;
-    let mut pending_pids = Vec::new();
-    let mut failed_pids = Vec::new();
-
-    for entry in snapshot.entries {
-        match entry.status {
-            CanisterPoolStatus::Ready => {
-                ready += 1;
-            }
-            CanisterPoolStatus::PendingReset => {
-                pending += 1;
-                pending_pids.push(entry.pid);
-            }
-            CanisterPoolStatus::Failed { .. } => {
-                failed += 1;
-                failed_pids.push(entry.pid);
-            }
-        }
-    }
-
-    let total = ready + pending + failed;
-    log!(
-        Topic::CanisterPool,
-        Info,
-        "pool stats ({stage}): total={total}, ready={ready}, pending_reset={pending}, failed={failed}, minimum_size={minimum_size}",
-    );
-
-    if ready < minimum_size as usize {
-        log!(
-            Topic::CanisterPool,
-            Warn,
-            "pool ready below minimum_size ({stage}): ready={ready}, minimum_size={minimum_size}",
-        );
-    }
-
-    if pending > 0 {
-        log!(
-            Topic::CanisterPool,
-            Info,
-            "pool pending_reset pids: {}",
-            summarize_principals(&pending_pids, 12)
-        );
-    }
-
-    if failed > 0 {
-        log!(
-            Topic::CanisterPool,
-            Warn,
-            "pool failed pids: {}",
-            summarize_principals(&failed_pids, 12)
-        );
-    }
 }

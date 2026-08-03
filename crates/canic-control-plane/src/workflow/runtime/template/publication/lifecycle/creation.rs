@@ -27,11 +27,11 @@ use canic_core::{
                 IcOps,
                 mgmt::{CanisterStatusType, MgmtOps},
             },
+            runtime::init_payload::wasm_store_init_payload,
             runtime::install_source::{ApprovedModuleSource, resolve_approved_module_source},
         },
         workflow::{
             cost_guard::CostGuardWorkflow,
-            ic::provision::ProvisionWorkflow,
             runtime::{fleet_activation::FleetActivationWorkflow, install::ModuleInstallWorkflow},
         },
     },
@@ -378,8 +378,7 @@ async fn perform_store_install(
     pid: Principal,
     permit: &CostGuardPermit,
 ) -> Result<WasmStoreBinding, InternalError> {
-    let root = IcOps::canister_self();
-    let payload = ProvisionWorkflow::build_nonroot_init_payload(pid, &WASM_STORE_ROLE, root)?;
+    let payload = wasm_store_init_payload(pid)?;
     if let Err(error) = ModuleInstallWorkflow::install_with_payload_with_permit(
         permit,
         pid,

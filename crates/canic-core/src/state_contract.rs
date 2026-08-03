@@ -30,8 +30,7 @@ use crate::role_contract::allocation::memory::{
         PLACEMENT_INDEX_REGISTRY_ID, SCALING_REGISTRY_ID, SHARDING_ACTIVE_SET_ID,
         SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID,
     },
-    pool::CANISTER_POOL_ID,
-    topology::{CANISTER_CHILDREN_ID, FLEET_DIRECTORY_ID, SUBNET_REGISTRY_ID},
+    topology::CANISTER_CHILDREN_ID,
 };
 use crate::role_contract::{AllocationOwner, StateAllocationKey};
 
@@ -239,23 +238,10 @@ fn core_runtime_descriptors() -> Vec<StateAllocationDescriptor> {
 fn placement_capacity_descriptors() -> Vec<StateAllocationDescriptor> {
     use crate::storage::stable::{
         placement_index::{PlacementIndexRegistryData, PlacementIndexRegistryEntryRecord},
-        pool::{CanisterPoolData, CanisterPoolEntryRecord},
         scaling::{ScalingRegistryData, ScalingRegistryEntryRecord},
     };
 
     vec![
-        descriptor(
-            StateAllocationKey::CanisterPool,
-            vec![state_domain(
-                "canister_pool",
-                CANISTER_POOL_ID,
-                CanisterPoolEntryRecord::STATE_CONTRACT_NAME,
-                CanisterPoolData::STATE_CONTRACT_NAME,
-                130,
-                "canister_pool_entries_restore_header_state",
-            )],
-            Vec::new(),
-        ),
         descriptor(
             StateAllocationKey::ScalingRegistry,
             vec![state_domain(
@@ -404,41 +390,16 @@ fn descriptor(
 }
 
 fn runtime_topology_domains() -> Vec<StateDomainManifest> {
-    use crate::storage::{
-        canister::CanisterEntryRecord,
-        stable::{
-            children::CanisterChildrenData,
-            directory::{DirectoryEntryRecord, fleet::FleetDirectoryData},
-            registry::subnet::SubnetRegistryData,
-        },
-    };
+    use crate::storage::{canister::CanisterEntryRecord, stable::children::CanisterChildrenData};
 
-    vec![
-        state_domain(
-            "fleet_directory",
-            FLEET_DIRECTORY_ID,
-            DirectoryEntryRecord::STATE_CONTRACT_NAME,
-            FleetDirectoryData::STATE_CONTRACT_NAME,
-            10,
-            "fleet_directory_import_restores_unique_roles",
-        ),
-        state_domain(
-            "subnet_registry",
-            SUBNET_REGISTRY_ID,
-            CanisterEntryRecord::STATE_CONTRACT_NAME,
-            SubnetRegistryData::STATE_CONTRACT_NAME,
-            25,
-            "subnet_registry_parent_links_are_restored",
-        ),
-        state_domain(
-            "canister_children",
-            CANISTER_CHILDREN_ID,
-            CanisterEntryRecord::STATE_CONTRACT_NAME,
-            CanisterChildrenData::STATE_CONTRACT_NAME,
-            30,
-            "canister_children_projection_is_imported",
-        ),
-    ]
+    vec![state_domain(
+        "canister_children",
+        CANISTER_CHILDREN_ID,
+        CanisterEntryRecord::STATE_CONTRACT_NAME,
+        CanisterChildrenData::STATE_CONTRACT_NAME,
+        30,
+        "canister_children_projection_is_imported",
+    )]
 }
 
 fn runtime_env_domains() -> Vec<StateDomainManifest> {
@@ -730,8 +691,6 @@ mod tests {
 
         for expected in [
             CANISTER_CHILDREN_ID,
-            FLEET_DIRECTORY_ID,
-            SUBNET_REGISTRY_ID,
             ENV_ID,
             FLEET_STATE_ID,
             AUTH_STATE_ID,
@@ -749,7 +708,6 @@ mod tests {
             INTENT_EXPIRY_INDEX_ID,
             PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID,
             APPLICATION_RECEIPT_REPLAY_ID,
-            CANISTER_POOL_ID,
             SCALING_REGISTRY_ID,
             PLACEMENT_INDEX_REGISTRY_ID,
             SHARDING_REGISTRY_ID,
@@ -768,66 +726,27 @@ mod tests {
     }
 
     #[test]
-    fn topology_directory_descriptors_reference_canonical_data_types() {
-        use crate::storage::stable::directory::{DirectoryEntryRecord, fleet::FleetDirectoryData};
-
-        let descriptors = canic_state_descriptors();
-        let topology = descriptors
-            .iter()
-            .find(|descriptor| descriptor.allocation == StateAllocationKey::CoreRuntimeTopology)
-            .expect("runtime topology descriptor");
-
-        let declaration = topology
-            .state
-            .iter()
-            .find(|declaration| declaration.domain == "fleet_directory")
-            .expect("Fleet Directory declaration");
-        assert_eq!(
-            declaration.record,
-            DirectoryEntryRecord::STATE_CONTRACT_NAME
-        );
-        assert_eq!(
-            declaration.snapshot,
-            FleetDirectoryData::STATE_CONTRACT_NAME
-        );
-    }
-
-    #[test]
     fn topology_registry_descriptors_reference_canonical_data_types() {
         use crate::storage::{
-            canister::CanisterEntryRecord,
-            stable::{children::CanisterChildrenData, registry::subnet::SubnetRegistryData},
+            canister::CanisterEntryRecord, stable::children::CanisterChildrenData,
         };
 
         let descriptors = canic_state_descriptors();
+        let descriptor = descriptors
+            .iter()
+            .find(|descriptor| descriptor.allocation == StateAllocationKey::CoreRuntimeTopology)
+            .expect("topology registry descriptor");
+        let declaration = descriptor
+            .state
+            .iter()
+            .find(|declaration| declaration.domain == "canister_children")
+            .expect("Canister children state declaration");
 
-        for (allocation, domain, record, snapshot) in [
-            (
-                StateAllocationKey::CoreRuntimeTopology,
-                "subnet_registry",
-                CanisterEntryRecord::STATE_CONTRACT_NAME,
-                SubnetRegistryData::STATE_CONTRACT_NAME,
-            ),
-            (
-                StateAllocationKey::CoreRuntimeTopology,
-                "canister_children",
-                CanisterEntryRecord::STATE_CONTRACT_NAME,
-                CanisterChildrenData::STATE_CONTRACT_NAME,
-            ),
-        ] {
-            let descriptor = descriptors
-                .iter()
-                .find(|descriptor| descriptor.allocation == allocation)
-                .expect("topology registry descriptor");
-            let declaration = descriptor
-                .state
-                .iter()
-                .find(|declaration| declaration.domain == domain)
-                .expect("topology registry state declaration");
-
-            assert_eq!(declaration.record, record);
-            assert_eq!(declaration.snapshot, snapshot);
-        }
+        assert_eq!(declaration.record, CanisterEntryRecord::STATE_CONTRACT_NAME);
+        assert_eq!(
+            declaration.snapshot,
+            CanisterChildrenData::STATE_CONTRACT_NAME
+        );
     }
 
     #[test]
@@ -1045,19 +964,12 @@ mod tests {
     fn placement_descriptors_reference_canonical_data_types() {
         use crate::storage::stable::{
             placement_index::{PlacementIndexRegistryData, PlacementIndexRegistryEntryRecord},
-            pool::{CanisterPoolData, CanisterPoolEntryRecord},
             scaling::{ScalingRegistryData, ScalingRegistryEntryRecord},
         };
 
         let descriptors = canic_state_descriptors();
 
         for (allocation, domain, record, snapshot) in [
-            (
-                StateAllocationKey::CanisterPool,
-                "canister_pool",
-                CanisterPoolEntryRecord::STATE_CONTRACT_NAME,
-                CanisterPoolData::STATE_CONTRACT_NAME,
-            ),
             (
                 StateAllocationKey::ScalingRegistry,
                 "scaling_registry",

@@ -22,7 +22,6 @@ thread_local! {
 pub enum IntentMetricSurface {
     Cleanup,
     Local,
-    Pool,
     ReceiptBacked,
 }
 
@@ -33,7 +32,6 @@ impl IntentMetricSurface {
         match self {
             Self::Cleanup => "cleanup",
             Self::Local => "local",
-            Self::Pool => "pool",
             Self::ReceiptBacked => "receipt_backed",
         }
     }

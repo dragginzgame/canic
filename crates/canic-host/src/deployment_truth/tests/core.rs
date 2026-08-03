@@ -80,7 +80,9 @@ fn inventory_round_trips_through_json() {
             root_trust_anchor: Some("aaaaa-aa".to_string()),
             canonical_embedded_config_digest: Some("canonical".to_string()),
             role_assignment_source: Some(
-                RoleAssignmentSourceV1::SubnetRegistry.label().to_string(),
+                RoleAssignmentSourceV1::ComponentRegistry
+                    .label()
+                    .to_string(),
             ),
         }],
         observed_pool: Vec::new(),

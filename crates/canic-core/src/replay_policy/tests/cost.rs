@@ -30,25 +30,6 @@ fn costed_manifest_entries_declare_guards() {
 }
 
 #[test]
-fn costed_pool_admin_command_entries_declare_guards() {
-    for entry in POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST {
-        if entry.cost_class == CostClass::None {
-            continue;
-        }
-        assert!(
-            entry.quota_policy.is_some(),
-            "costed pool admin command {} missing quota policy",
-            entry.variant
-        );
-        assert!(
-            entry.cycle_reserve_policy.is_some(),
-            "costed pool admin command {} missing cycle-reserve policy",
-            entry.variant
-        );
-    }
-}
-
-#[test]
 fn costed_root_capability_command_entries_declare_guards() {
     for entry in ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST {
         if entry.cost_class == CostClass::None {

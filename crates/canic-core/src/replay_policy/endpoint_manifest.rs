@@ -22,6 +22,14 @@ use crate::replay_policy::{
 pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     update_response_idempotent("canic_fleet_admin", command_kind("fleet.command.v1")),
     update_read_only("canic_canister_status"),
+    query_read_only("canic_pool_list"),
+    update_costed_snapshot_convergent(
+        "canic_pool_admin",
+        command_kind("canister_pool.maintain.v1"),
+        CostClass::ManagementDeployment,
+        Some(DEPLOYMENT_QUOTA_V1),
+        Some(DEPLOYMENT_RESERVE_V1),
+    ),
     update_replay_protected(
         "canic_icp_refill",
         command_kind("icp.refill.v1"),
@@ -29,15 +37,6 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         CostClass::ValueTransfer,
         Some(VALUE_TRANSFER_QUOTA_V1),
         Some(VALUE_TRANSFER_RESERVE_V1),
-    ),
-    update_command_dispatch(
-        "canic_pool_admin",
-        command_kind("pool.admin.v1"),
-        command_manifest("pool.admin.command_manifest.v1"),
-        ReplayImplementationStatus::Implemented,
-        CostClass::ManagementDeployment,
-        Some(DEPLOYMENT_QUOTA_V1),
-        Some(DEPLOYMENT_RESERVE_V1),
     ),
     update_snapshot_convergent(
         "canic_upsert_root_issuer_policy",

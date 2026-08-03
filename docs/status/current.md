@@ -14,11 +14,29 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.91`.
-- The latest published release is `v0.100.91` at
-  `49af2ecd3ea10872773ef8c9fbeeadd5bf66cea5`.
-- Open `0.100.92` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.92`.
+- The latest published release is `v0.100.92` at
+  `adf54ae1fd875bab33de6efe1560e7ee2aae8f6e`.
+- Open `0.100.93` is the changelog draft target; no package-version change
   has been authorized.
+- Open `0.100.93` replaces the superseded generic empty-Canister pool with one
+  required prepaid asset inventory owned by every Fleet Subnet Root. Fleet
+  input freezes its minimum, proactive maximum, cycles and imports, and IC
+  imports require exact trusted routing to that root's Subnet; root
+  maintenance resets/refills it, Component and child creation claim it before
+  paid fallback creation, removals recycle physical Canisters, draining roots
+  durably hand assets to replacement authority, and bounded controller status
+  plus `canic info subnets` expose the inventory. The
+  retired role-based Fleet Directory/Subnet Registry remains hard-cut, the
+  active Fleet Directory remains Registry-derived, control-plane pool state
+  uses IDs 24-26, and the reinstall-only core ledger remains packed at 30-58.
+- Proposed `0.105` defines provider-neutral declarative authentication
+  profiles as the sole source of multi-role user-token grants and
+  install-owned issuer/verifier policy. Its initial Toko path uses one
+  Fleet-reach token directly against a Project Instance and its Ledger while
+  keeping holdings and project authorization local to each application role.
+  Exact Component-subtree binding and application-authorized admission remain
+  implementation gates; no 0.105 runtime behavior is approved or implemented.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -754,7 +772,7 @@ Historical detail is archived at:
   atomically without a Registry row or importer. The same release consolidates
   terminal host Fleet catalog queries on the canonical typed Canister protocol
   boundary.
-- Open `0.100.92` derives root Fleet-state fanout from the canonical union of
+- Released `0.100.92` derives root Fleet-state fanout from the canonical union of
   root-owned Store inventory and current top-level Component Registry
   partitions. It deletes the uncalled generic Canister lifecycle and its
   Registry-built topology/state propagation, mapper, consistency policy and
@@ -853,6 +871,12 @@ Historical detail is archived at:
   push-first example. Worker identity, kinds, artifact carriage, placement,
   funding, replacement and recovery remain deliberately undecided; no Worker
   is part of 0.100 or 0.101.
+- Proposed 0.105 makes one declarative authentication profile the protected
+  source of user-token roles, scopes, lifetime and reach. Canic derives
+  issuer/verifier requirements and install-owned root policy from that
+  profile, while clients obtain one token for direct use across every granted
+  role. Login-provider names, application account linking and resource
+  ownership remain outside the runtime protocol.
 - Released `0.99.33` pins the maintained operator toolchain to ICP CLI 1.2.0
   and Rust 1.97.1 while preserving the published-crate MSRV.
 - Released `0.99.32` makes the active 0.99–0.103 design sequence
@@ -2054,16 +2078,11 @@ First primary results:
 
 ## Next Action
 
-Replace the legacy Subnet Registry's remaining provisioning, pool-recovery and
-root-derived Fleet Directory consumers with root-owned Component Registry and
-direct-child authority. Then delete its
-stable/cascade schema once no maintained reader remains, complete the
-reinstall-only decoder audit and run the
-guarded host preparation and execution phases as separate processes against
-one explicitly selected disposable real-network root. Verify the surviving
-Coordinator terminal receipt and exact replay before closing 0.100 against the
-accepted design and beginning 0.101. The retained implementation detail
-remains in the
+Run the guarded host preparation and execution phases as separate processes
+against one explicitly selected disposable real-network root. Verify the
+surviving Coordinator terminal receipt and exact replay before closing 0.100
+against the accepted design and beginning 0.101. The retained implementation
+detail remains in the
 [implementation tracker](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md).
 Fresh installation now journals and verifies the Coordinator, every planned
 Fleet Subnet Root, each root's exact topology-admitted local Store, and every
@@ -2480,10 +2499,16 @@ Released `0.100.91` replaces the remaining Store-creation Registry importer with
 one root-owned durable create/install journal and direct-leaf activation. It
 also consolidates terminal host Fleet catalog queries on the canonical typed
 Canister protocol boundary.
-Open `0.100.92` makes root Fleet-state mutation consume exact root-owned Store
+Released `0.100.92` makes root Fleet-state mutation consume exact root-owned Store
 and top-level Component inventories before explicit fanout. It hard-cuts the
 orphaned generic Registry-based lifecycle propagation stack and its private
 topology model, mapper and metric vocabulary.
+Open `0.100.93` replaces the legacy generic pool with root-owned prepaid asset
+inventory integrated into Component creation and recycling, while removing
+generic provisioning and the role-based Directory/Subnet Registry stack. The
+current Component lifecycle, root pool, direct-child cache and Registry-derived
+Fleet Directory are the maintained authorities, and no prior-release decoder
+remains.
 
 ## Historical Release Detail
 

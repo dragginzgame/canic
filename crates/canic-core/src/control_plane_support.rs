@@ -4,7 +4,7 @@ pub mod error {
 
 pub mod config {
     pub mod schema {
-        pub use crate::config::schema::{CanisterPool, ComponentChildKind};
+        pub use crate::config::schema::ComponentChildKind;
     }
 
     pub use crate::config::{ComponentProvisioningGrant, ComponentTopology};
@@ -12,12 +12,6 @@ pub mod config {
 
 pub mod format {
     pub use crate::shared_support::format::byte_size;
-}
-
-pub mod domain {
-    pub mod pool {
-        pub use crate::domain::pool::CanisterPoolStatus;
-    }
 }
 
 pub mod model {
@@ -75,8 +69,13 @@ pub mod ops {
 
         pub mod mgmt {
             pub use crate::ops::ic::mgmt::{
-                CanisterStatus, CanisterStatusObservation, CanisterStatusType, MgmtOps,
+                CanisterSettings, CanisterStatus, CanisterStatusObservation, CanisterStatusType,
+                MgmtOps, UpdateSettingsArgs,
             };
+        }
+
+        pub mod nns {
+            pub use crate::ops::ic::nns::registry::NnsRegistryOps;
         }
 
         pub mod build_network {
@@ -110,23 +109,9 @@ pub mod ops {
                 .await
             }
         }
-    }
 
-    pub mod storage {
-        pub mod directory {
-            pub mod fleet {
-                pub use crate::ops::storage::directory::fleet::FleetDirectoryOps;
-            }
-        }
-
-        pub mod pool {
-            pub use crate::ops::storage::pool::PoolOps;
-        }
-
-        pub mod registry {
-            pub mod subnet {
-                pub use crate::ops::storage::registry::subnet::SubnetRegistryOps;
-            }
+        pub mod init_payload {
+            pub use crate::ops::runtime::init_payload::wasm_store_init_payload;
         }
     }
 }
@@ -136,10 +121,6 @@ pub mod view {
         pub use crate::view::fleet_activation::{
             FleetActivationTransition, FleetActivationWasmStoreView,
         };
-    }
-
-    pub mod topology {
-        pub use crate::view::topology::RegisteredCanisterView;
     }
 }
 
@@ -160,18 +141,6 @@ pub mod workflow {
 
     pub mod ic {
         pub use crate::workflow::ic::IcWorkflow;
-
-        pub mod provision {
-            pub use crate::workflow::ic::provision::ProvisionWorkflow;
-        }
-    }
-
-    pub mod pool {
-        pub use crate::workflow::pool::PoolWorkflow;
-
-        pub mod query {
-            pub use crate::workflow::pool::query::PoolQuery;
-        }
     }
 
     pub mod rpc {

@@ -47,7 +47,6 @@ use canic::{
         RuntimeFieldVisibility,
     },
     dto::state::{FleetCommand, FleetCommandResponse, FleetMode, FleetStateResponse},
-    dto::topology::FleetDirectoryInput,
     ids::{CanisterRole, CanonicalNetworkId, FleetId, FleetKey},
 };
 
@@ -103,19 +102,10 @@ fn fleet_state_and_internal_cascade_candid_shapes_use_the_current_contract() {
     assert!(state_env.contains("FleetMode"));
 
     let cascade_env = candid_type_env::<StateSnapshotInput>();
-    for field in ["fleet_state", "fleet_directory"] {
-        assert!(
-            cascade_env.contains(field),
-            "state cascade Candid must contain {field}"
-        );
-    }
-    let directory_env = candid_type_env::<FleetDirectoryInput>();
-    for field in ["provenance", "fleet", "source_root", "entries"] {
-        assert!(
-            directory_env.contains(field),
-            "Directory Candid must contain {field}"
-        );
-    }
+    assert!(
+        cascade_env.contains("fleet_state"),
+        "state cascade Candid must contain fleet_state"
+    );
 
     assert_candid_roundtrip(FleetMode::Readonly);
 }
@@ -278,9 +268,21 @@ fn wasm_store_canonical_did_parses() {
     let did_path = workspace_root().join("crates/canic-wasm-store/wasm_store.did");
     let did = read_text(&did_path);
     assert!(
-        did.contains("type FleetKey = record { canonical_network_id : text; fleet_id : text };")
+        did.contains("type FleetKey = record {")
+            && did.contains("canonical_network_id : text")
+            && did.contains("fleet_id : text")
             && !did.contains("type FleetKey = record { network : text;"),
         "canonical Wasm-store DID must expose the exact FleetKey member names"
+    );
+    assert!(
+        did.contains("type CanisterInitAuthority = variant")
+            && did.contains("authority : CanisterInitAuthority;")
+            && did.contains(
+                "type StateSnapshotInput = record { fleet_state : opt FleetStateInput };"
+            )
+            && !did.contains("FleetDirectoryInput")
+            && !did.contains("fleet_directory"),
+        "canonical Wasm-store DID must expose current managed init and state-cascade authority"
     );
     let (env, actor) = CandidSource::Text(&did)
         .load()
@@ -378,6 +380,22 @@ fn fleet_subnet_root_canister_summary_is_a_controller_query_on_the_root_surface(
         attribute.contains("canic_query(requires(caller::is_controller()))"),
         "Fleet Subnet Root Canister summary must remain a controller-guarded query"
     );
+}
+
+#[test]
+fn canister_pool_inventory_and_admin_are_controller_guarded_root_surfaces() {
+    assert_eq!(canic::protocol::CANIC_POOL_LIST, "canic_pool_list");
+    assert_eq!(canic::protocol::CANIC_POOL_ADMIN, "canic_pool_admin");
+
+    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
+    let source = read_text(&macro_path);
+    for endpoint in ["async fn canic_pool_list(", "async fn canic_pool_admin("] {
+        let attribute = preceding_attribute_context(&source, endpoint);
+        assert!(
+            attribute.contains("requires(caller::is_controller())"),
+            "{endpoint} must remain controller guarded",
+        );
+    }
 }
 
 #[test]

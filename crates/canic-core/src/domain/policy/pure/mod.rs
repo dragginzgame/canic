@@ -17,8 +17,6 @@ pub mod icp_refill;
 pub mod intent;
 pub mod log;
 pub mod placement;
-pub mod pool;
-pub mod topology;
 
 use crate::{InternalError, InternalErrorOrigin};
 use thiserror::Error as ThisError;
@@ -37,12 +35,6 @@ pub enum PolicyError {
 
     #[error(transparent)]
     FleetActivationPolicy(#[from] fleet_activation::FleetActivationEndpointPolicyError),
-
-    #[error(transparent)]
-    PoolPolicy(#[from] pool::PoolPolicyError),
-
-    #[error(transparent)]
-    TopologyPolicy(#[from] topology::TopologyPolicyError),
 
     #[error(transparent)]
     ScalingPolicy(#[from] placement::scaling::ScalingPolicyError),

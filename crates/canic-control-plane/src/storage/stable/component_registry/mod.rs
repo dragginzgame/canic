@@ -1248,7 +1248,7 @@ pub struct RootComponentDeletionIntentRecord {
 ///
 /// RootComponentDeletedReceiptRecord
 ///
-/// Durable top-level deletion authority retained after independently observed absence.
+/// Durable top-level workload-deletion authority retained after Canister recycling.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -1932,7 +1932,7 @@ pub struct RootComponentSubtreeDeleteEffectRecord {
 ///
 /// RootComponentSubtreeDeletedEffectRecord
 ///
-/// Exact deletion authority retained after independently observed absence.
+/// Exact workload-deletion authority retained after Canister recycling.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

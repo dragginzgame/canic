@@ -42,7 +42,6 @@ use canic_core::control_plane_support::{
         IcOps,
         mgmt::{CanisterStatus, CanisterStatusObservation, CanisterStatusType, MgmtOps},
     },
-    workflow::ic::provision::ProvisionWorkflow,
 };
 use canic_core::{log, log::Topic};
 use std::cell::Cell;
@@ -673,7 +672,9 @@ impl WasmStorePublicationWorkflow {
             .into());
         }
 
-        ProvisionWorkflow::uninstall_and_delete_canister(store_pid).await?;
+        MgmtOps::uninstall_code(store_pid).await?;
+        MgmtOps::stop_canister(store_pid).await?;
+        MgmtOps::delete_canister(store_pid).await?;
         if !SubnetStateOps::remove_wasm_store(&binding) {
             return Err(PublicationWorkflowError::InvalidState(format!(
                 "deleted ws '{binding}' was missing from runtime inventory"

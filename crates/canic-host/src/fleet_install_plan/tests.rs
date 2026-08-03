@@ -88,6 +88,11 @@ fn limits() -> FleetSubnetRootLimits {
         maximum_managed_canisters: 64,
         maximum_registry_bytes: 4_194_304,
         maximum_wasm_store_bytes: 40_000_000,
+        canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {
+            minimum_size: 1,
+            maximum_size: 10,
+            canister_cycles: Cycles::new(5_000_000_000_000),
+        },
         cycles_funding: CyclesFundingBudget {
             window_secs: 3_600,
             maximum_cycles: Cycles::new(1_000_000_000_000),
@@ -110,6 +115,7 @@ fn root_input(
         placement_subnet: subnet(subnet_byte),
         component_admissions: admissions,
         limits: limits(),
+        canister_pool_imports: Vec::new(),
         creation_funding: PlannedCanisterCreationFunding::Cycles {
             cycles: 2_000_000_000_000,
         },

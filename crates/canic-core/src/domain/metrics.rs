@@ -97,12 +97,9 @@ pub enum CanisterOpsMetricReason {
     InvalidState,
     ManagementCall,
     MissingWasm,
-    NewAllocation,
     NotFound,
     Ok,
     PolicyDenied,
-    PoolReuse,
-    PoolTopup,
     Topology,
     Unknown,
 }
@@ -113,7 +110,6 @@ impl CanisterOpsMetricReason {
     pub const fn metric_label(self) -> &'static str {
         match self {
             Self::AlreadyExists => "already_exists",
-            Self::NewAllocation => "new_allocation",
             Self::Cycles => "cycles",
             Self::InvalidState => "invalid_state",
             Self::ManagementCall => "management_call",
@@ -121,8 +117,6 @@ impl CanisterOpsMetricReason {
             Self::NotFound => "not_found",
             Self::Ok => "ok",
             Self::PolicyDenied => "policy_denied",
-            Self::PoolReuse => "pool_reuse",
-            Self::PoolTopup => "pool_topup",
             Self::Topology => "topology",
             Self::Unknown => "unknown",
         }

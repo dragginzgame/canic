@@ -18,8 +18,6 @@ pub mod lifecycle;
 pub mod management_call;
 pub mod placement_index;
 pub mod platform_call;
-pub mod pool;
-pub mod provisioning;
 pub mod recording;
 pub mod replay;
 pub mod root_capability;
@@ -42,7 +40,7 @@ use {
     cycles_topup::CyclesTopupMetrics, delegated_auth::DelegatedAuthMetrics,
     icp_refill::IcpRefillMetrics, intent::IntentMetrics,
     inter_canister_call::InterCanisterCallMetrics, lifecycle::LifecycleMetrics,
-    placement_index::PlacementIndexMetrics, platform_call::PlatformCallMetrics, pool::PoolMetrics,
+    placement_index::PlacementIndexMetrics, platform_call::PlatformCallMetrics,
     replay::ReplayMetrics, root_capability::RootCapabilityMetrics, scaling::ScalingMetrics,
     timer::TimerMetrics, wasm_store::WasmStoreMetrics,
 };
@@ -51,10 +49,7 @@ use {
 use sharding::ShardingMetrics;
 
 #[cfg(test)]
-use {
-    management_call::ManagementCallMetrics, provisioning::ProvisioningMetrics,
-    system::SystemMetrics,
-};
+use {management_call::ManagementCallMetrics, system::SystemMetrics};
 
 /// Project one public metrics tier into the unified row shape.
 #[must_use]
@@ -82,7 +77,6 @@ pub fn core_entries() -> Vec<MetricEntry> {
 pub fn placement_entries() -> Vec<MetricEntry> {
     let mut entries = prefix_entries("cascade", cascade_entries());
     entries.extend(prefix_entries("placement_index", placement_index_entries()));
-    entries.extend(prefix_entries("pool", pool_entries()));
     entries.extend(prefix_entries("scaling", scaling_entries()));
     #[cfg(feature = "sharding")]
     entries.extend(prefix_entries("sharding", sharding_entries()));
@@ -148,8 +142,6 @@ pub fn reset_for_tests() {
     IntentMetrics::reset();
     LifecycleMetrics::reset();
     ManagementCallMetrics::reset();
-    PoolMetrics::reset();
-    ProvisioningMetrics::reset();
     ReplayMetrics::reset();
     RootCapabilityMetrics::reset();
     ScalingMetrics::reset();
@@ -253,23 +245,6 @@ fn placement_index_entries() -> Vec<MetricEntry> {
 #[must_use]
 fn scaling_entries() -> Vec<MetricEntry> {
     ScalingMetrics::snapshot()
-        .into_iter()
-        .map(|(key, count)| MetricEntry {
-            labels: vec![
-                key.operation.metric_label().to_string(),
-                key.outcome.metric_label().to_string(),
-                key.reason.metric_label().to_string(),
-            ],
-            principal: None,
-            value: MetricValue::Count(count),
-        })
-        .collect()
-}
-
-/// Project pool operation counters into the unified public metrics row shape.
-#[must_use]
-fn pool_entries() -> Vec<MetricEntry> {
-    PoolMetrics::snapshot()
         .into_iter()
         .map(|(key, count)| MetricEntry {
             labels: vec![

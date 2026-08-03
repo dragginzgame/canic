@@ -79,6 +79,14 @@ mod tests {
             CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN, CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
         },
     };
+    #[cfg(test)]
+    use canic::{
+        dto::pool::{
+            CanisterPoolAssetOrigin, CanisterPoolAssetStatus, CanisterPoolResponse,
+            CanisterPoolStatusRequest, PoolAdminCommand, PoolAdminResponse,
+        },
+        protocol::{CANIC_POOL_ADMIN, CANIC_POOL_LIST},
+    };
     use canic_control_plane::{
         dto::fleet_coordinator::FleetCoordinatorInitArgs,
         dto::template::{
@@ -462,13 +470,7 @@ mod tests {
             root_capability_response(&fixture, envelope.clone()).response,
             Response::RecycleCanister
         ));
-        assert!(
-            fixture
-                .pic()
-                .canister_status(child, Some(fixture.root))
-                .is_err(),
-            "Component Registry recycle must delete the removed child"
-        );
+        assert_recycled_pool_asset(&fixture, child);
         let children: Result<Page<CanisterInfo>, Error> = fixture
             .pic()
             .query_call(
@@ -492,6 +494,109 @@ mod tests {
             root_capability_response(&fixture, envelope).response,
             Response::RecycleCanister
         ));
+    }
+
+    #[cfg(test)]
+    fn assert_recycled_pool_asset(
+        fixture: &ActiveComponentRegistryFixture,
+        canister_id: Principal,
+    ) {
+        let live = fixture
+            .pic()
+            .canister_status(canister_id, Some(fixture.root))
+            .expect("recycled physical Canister remains present");
+        assert_eq!(live.settings.controllers, vec![fixture.root]);
+        assert_eq!(live.module_hash, None);
+
+        let status = pool_status(fixture);
+        let asset = status
+            .entries
+            .iter()
+            .find(|asset| asset.canister_id == canister_id)
+            .expect("recycled Canister remains in paid asset inventory");
+        assert_eq!(asset.origin, CanisterPoolAssetOrigin::Recycled);
+        match &asset.status {
+            CanisterPoolAssetStatus::Ready => {
+                assert!(asset.cycles >= status.config.canister_cycles);
+            }
+            CanisterPoolAssetStatus::Failed { reason } => {
+                assert!(!reason.is_empty());
+                assert!(asset.cycles < status.config.canister_cycles);
+            }
+            status => panic!("recycled asset has unexpected status {status:?}"),
+        }
+    }
+
+    #[cfg(test)]
+    fn pool_status(fixture: &ActiveComponentRegistryFixture) -> CanisterPoolResponse {
+        let status: Result<CanisterPoolResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.root,
+                CANIC_POOL_LIST,
+                (CanisterPoolStatusRequest {
+                    start_after: None,
+                    limit: 256,
+                },),
+            )
+            .expect("query Canister pool transport");
+        status.expect("query Canister pool")
+    }
+
+    #[cfg(test)]
+    fn handoff_all_pool_assets(fixture: &ActiveComponentRegistryFixture) {
+        let assets = pool_status(fixture).entries;
+        assert!(!assets.is_empty(), "root draining must retain paid assets");
+        let expected_handoffs = u64::try_from(assets.len()).expect("bounded pool length");
+        for asset in assets {
+            assert!(matches!(
+                asset.status,
+                CanisterPoolAssetStatus::Ready | CanisterPoolAssetStatus::Failed { .. }
+            ));
+            let handed_off: Result<PoolAdminResponse, Error> = fixture
+                .pic()
+                .update_call(
+                    fixture.root,
+                    CANIC_POOL_ADMIN,
+                    (PoolAdminCommand::Handoff {
+                        canister_id: asset.canister_id,
+                        recipient: fixture.coordinator,
+                    },),
+                )
+                .expect("handoff pool asset transport");
+            let handed_off = handed_off.expect("handoff pool asset");
+            assert_eq!(
+                handed_off,
+                PoolAdminResponse::HandedOff {
+                    canister_id: asset.canister_id,
+                    recipient: fixture.coordinator,
+                }
+            );
+            let live = fixture
+                .pic()
+                .canister_status(asset.canister_id, Some(fixture.root))
+                .expect("handed-off asset remains present");
+            assert_eq!(live.settings.controllers.len(), 2);
+            assert!(live.settings.controllers.contains(&fixture.root));
+            assert!(live.settings.controllers.contains(&fixture.coordinator));
+
+            let replay: Result<PoolAdminResponse, Error> = fixture
+                .pic()
+                .update_call(
+                    fixture.root,
+                    CANIC_POOL_ADMIN,
+                    (PoolAdminCommand::Handoff {
+                        canister_id: asset.canister_id,
+                        recipient: fixture.coordinator,
+                    },),
+                )
+                .expect("replay pool asset handoff transport");
+            assert_eq!(replay.expect("replay pool asset handoff"), handed_off);
+        }
+        let status = pool_status(fixture);
+        assert_eq!(status.tracked, 0);
+        assert!(status.entries.is_empty());
+        assert_eq!(status.completed_handoffs, expected_handoffs);
     }
 
     #[cfg(test)]
@@ -901,13 +1006,7 @@ mod tests {
             fixture.verifier.canister_id
         );
         assert_eq!(receipt.deletion.stopped.stop.controller, fixture.root);
-        assert!(
-            fixture
-                .pic()
-                .canister_status(child, Some(fixture.root))
-                .is_err(),
-            "independently receipted deletion must leave the Canister absent"
-        );
+        assert_recycled_pool_asset(&fixture, child);
 
         let retry: Result<RootComponentSubtreeRemovalResponse, Error> = fixture
             .pic()
@@ -1037,7 +1136,7 @@ mod tests {
             .expect("delete top-level Component transport");
         let deleted = deleted.expect("delete top-level Component");
         let RootComponentDeletionPhase::Deleted(receipt) = &deleted.phase else {
-            panic!("top-level Component must retain independently observed absence");
+            panic!("top-level Component must retain independently observed workload deletion");
         };
         assert_eq!(receipt.deletion.final_inventory, final_inventory.inventory);
         assert_eq!(
@@ -1045,13 +1144,7 @@ mod tests {
             fixture.verifier.canister_id
         );
         assert_eq!(receipt.deletion.quiescence.stop.controller, fixture.root);
-        assert!(
-            fixture
-                .pic()
-                .canister_status(fixture.verifier.canister_id, Some(fixture.root))
-                .is_err(),
-            "independently receipted top-level deletion must leave the Canister absent"
-        );
+        assert_recycled_pool_asset(&fixture, fixture.verifier.canister_id);
 
         let retry: Result<RootComponentDeletionResponse, Error> = fixture
             .pic()
@@ -1181,6 +1274,8 @@ mod tests {
         };
         assert_eq!(issuer_removal.root_committed_component_instances, 0);
         assert_eq!(issuer_removal.root_known_created_component_canisters, 0);
+
+        handoff_all_pool_assets(&fixture);
 
         let inventory_request = FleetSubnetRootFinalInventoryRequest {
             operation_id: root_draining.operation_id,

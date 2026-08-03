@@ -43,10 +43,6 @@ use crate::{
                 PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
                 PlatformCallMetricSurface,
             },
-            pool::{PoolMetricOperation, PoolMetricOutcome, PoolMetricReason},
-            provisioning::{
-                ProvisioningMetricOperation, ProvisioningMetricOutcome, ProvisioningMetricReason,
-            },
             replay::{ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason},
             root_capability::{
                 RootCapabilityMetricKey, RootCapabilityMetricOutcome, RootCapabilityMetricProofMode,
@@ -147,12 +143,6 @@ fn canister_ops_metrics_are_exposed_with_stable_labels() {
     CanisterOpsMetrics::record(
         CanisterOpsMetricOperation::Create,
         &CanisterRole::new("worker"),
-        CanisterOpsMetricOutcome::Completed,
-        CanisterOpsMetricReason::PoolReuse,
-    );
-    CanisterOpsMetrics::record(
-        CanisterOpsMetricOperation::Create,
-        &CanisterRole::new("worker"),
         CanisterOpsMetricOutcome::Failed,
         CanisterOpsMetricReason::Topology,
     );
@@ -174,17 +164,6 @@ fn canister_ops_metrics_are_exposed_with_stable_labels() {
             "management_call",
         ],
         2,
-    );
-    assert_metric_count(
-        &entries,
-        &[
-            "canister_ops",
-            "create",
-            "worker",
-            "completed",
-            "pool_reuse",
-        ],
-        1,
     );
     assert_metric_count(
         &entries,
@@ -344,75 +323,6 @@ fn wasm_store_metrics_are_exposed_with_stable_labels() {
         ],
         2,
     );
-}
-
-#[test]
-fn pool_metrics_are_exposed_with_stable_labels() {
-    reset_for_tests();
-
-    PoolMetrics::record(
-        PoolMetricOperation::Reset,
-        PoolMetricOutcome::Started,
-        PoolMetricReason::Ok,
-    );
-    PoolMetrics::record(
-        PoolMetricOperation::ImportQueued,
-        PoolMetricOutcome::Skipped,
-        PoolMetricReason::AlreadyPresent,
-    );
-    PoolMetrics::record(
-        PoolMetricOperation::ImportQueued,
-        PoolMetricOutcome::Skipped,
-        PoolMetricReason::AlreadyPresent,
-    );
-
-    let entries = entries(MetricsKind::Placement);
-
-    assert_metric_count(&entries, &["pool", "reset", "started", "ok"], 1);
-    assert_metric_count(
-        &entries,
-        &["pool", "import_queued", "skipped", "already_present"],
-        2,
-    );
-}
-
-#[test]
-fn provisioning_metrics_remain_internal_workflow_counters() {
-    reset_for_tests();
-
-    ProvisioningMetrics::record(
-        ProvisioningMetricOperation::ResolveModule,
-        &CanisterRole::new("app"),
-        ProvisioningMetricOutcome::Started,
-        ProvisioningMetricReason::Ok,
-    );
-    ProvisioningMetrics::record(
-        ProvisioningMetricOperation::Install,
-        &CanisterRole::new("worker"),
-        ProvisioningMetricOutcome::Failed,
-        ProvisioningMetricReason::MissingWasm,
-    );
-    ProvisioningMetrics::record(
-        ProvisioningMetricOperation::Install,
-        &CanisterRole::new("worker"),
-        ProvisioningMetricOutcome::Failed,
-        ProvisioningMetricReason::MissingWasm,
-    );
-
-    let snapshot = ProvisioningMetrics::snapshot();
-    assert_eq!(snapshot.len(), 2);
-    assert!(snapshot.iter().any(|(key, count)| key.operation
-        == ProvisioningMetricOperation::ResolveModule
-        && key.role == "app"
-        && key.outcome == ProvisioningMetricOutcome::Started
-        && key.reason == ProvisioningMetricReason::Ok
-        && *count == 1));
-    assert!(snapshot.iter().any(|(key, count)| key.operation
-        == ProvisioningMetricOperation::Install
-        && key.role == "worker"
-        && key.outcome == ProvisioningMetricOutcome::Failed
-        && key.reason == ProvisioningMetricReason::MissingWasm
-        && *count == 2));
 }
 
 #[test]
@@ -925,17 +835,6 @@ fn seed_all_metric_families_for_reset_test() {
         ManagementCallMetricOperation::InstallCode,
         ManagementCallMetricOutcome::Started,
         ManagementCallMetricReason::Ok,
-    );
-    PoolMetrics::record(
-        PoolMetricOperation::Reset,
-        PoolMetricOutcome::Started,
-        PoolMetricReason::Ok,
-    );
-    ProvisioningMetrics::record(
-        ProvisioningMetricOperation::Allocate,
-        &CanisterRole::new("app"),
-        ProvisioningMetricOutcome::Started,
-        ProvisioningMetricReason::Ok,
     );
     ReplayMetrics::record(
         ReplayMetricOperation::Check,

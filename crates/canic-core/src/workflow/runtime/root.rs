@@ -16,10 +16,7 @@ use crate::{
         runtime::{
             env::EnvOps, fleet_activation::FleetActivationRuntimeOps, memory::MemoryRegistryOps,
         },
-        storage::{
-            fleet_activation::FleetActivationOps, registry::subnet::SubnetRegistryOps,
-            state::fleet::FleetStateOps,
-        },
+        storage::{fleet_activation::FleetActivationOps, state::fleet::FleetStateOps},
     },
     workflow::runtime::{
         RuntimeWorkflow, auth::RuntimeAuthWorkflow, log_memory_summary,
@@ -70,8 +67,6 @@ pub fn init_root_canister(args: FleetSubnetRootInitArgs) -> Result<(), InternalE
 
     let subnet_pid = self_pid;
     let fleet_subnet_root_pid = self_pid;
-    let module_hash = Some(args.authority.expected_module_hash.to_vec());
-
     let input = EnvInput {
         fleet_subnet_root_pid: Some(fleet_subnet_root_pid),
         component_spec: None,
@@ -113,9 +108,6 @@ pub fn init_root_canister(args: FleetSubnetRootInitArgs) -> Result<(), InternalE
     })?;
     FleetStateOps::init_mode(app_mode);
     RuntimeAuthWorkflow::ensure_root_crypto_contract()?;
-
-    let created_at = IcOps::now_secs();
-    SubnetRegistryOps::register_root_with_module_hash(self_pid, created_at, module_hash);
 
     Ok(())
 }

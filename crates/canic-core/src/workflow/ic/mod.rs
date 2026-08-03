@@ -7,7 +7,6 @@
 pub mod call;
 pub mod icp_refill;
 pub mod mgmt;
-pub mod provision;
 
 use crate::{
     InternalError,

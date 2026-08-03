@@ -80,6 +80,11 @@ mod tests {
                 maximum_managed_canisters: 20_001,
                 maximum_registry_bytes: 16 * 1_024 * 1_024,
                 maximum_wasm_store_bytes: 16 * 1_024 * 1_024,
+                canister_pool: crate::ids::FleetSubnetCanisterPoolConfig {
+                    minimum_size: 1,
+                    maximum_size: 10,
+                    canister_cycles: Cycles::new(5_000_000_000_000),
+                },
                 cycles_funding: CyclesFundingBudget {
                     window_secs: 3_600,
                     maximum_cycles: Cycles::new(1_000_000_000_000),

@@ -31,7 +31,7 @@ pub mod compiled {
     pub use crate::{
         cdk::{candid::Principal, types::Cycles},
         config::schema::{
-            AppConfig, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind, CanisterPool,
+            AppConfig, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind,
             CanisterRoleNameIssue, ChainKeyRootProofConfig, ComponentChildConfig,
             ComponentChildKind, ComponentLimitsConfig, ComponentProvisioningGrantConfig,
             ComponentSpawnGrantConfig, ComponentSpecConfig, ConfigModel, CyclesFundingBudgetConfig,
@@ -39,7 +39,7 @@ pub mod compiled {
             FleetInitMode, IcpRefillPolicy, IndexConfig, IndexPool, LogConfig,
             MAX_COMPONENT_CHILD_ROLES, MAX_COMPONENT_PROVISIONING_GRANTS,
             MAX_COMPONENT_SPAWN_GRANTS, MAX_FLEET_COMPONENT_INSTANCES, MetricsCanisterConfig,
-            MetricsProfile, NAME_MAX_BYTES, PoolImport, RoleAttestationConfig, RoleDeclaration,
+            MetricsProfile, NAME_MAX_BYTES, RoleAttestationConfig, RoleDeclaration,
             RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool,
             ShardPoolPolicy, ShardingConfig, Standards, StandardsCanisterConfig, TopupPolicy,
             Whitelist, implicit_root_canister_config, implicit_wasm_store_canister_config,

@@ -265,20 +265,13 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
         RoleCapabilityKey::Root,
         StateAllocationKey::CoreIcpRefillRecords,
     ),
-    capability_allocation(RoleCapabilityKey::Root, StateAllocationKey::CanisterPool),
-    capability_allocation(RoleCapabilityKey::Index, StateAllocationKey::CanisterPool),
     capability_allocation(
         RoleCapabilityKey::Index,
         StateAllocationKey::PlacementIndexRegistry,
     ),
-    capability_allocation(RoleCapabilityKey::Scaling, StateAllocationKey::CanisterPool),
     capability_allocation(
         RoleCapabilityKey::Scaling,
         StateAllocationKey::ScalingRegistry,
-    ),
-    capability_allocation(
-        RoleCapabilityKey::Sharding,
-        StateAllocationKey::CanisterPool,
     ),
     capability_allocation(
         RoleCapabilityKey::RootControlPlane,
@@ -307,6 +300,10 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
     capability_allocation(
         RoleCapabilityKey::RootControlPlane,
         StateAllocationKey::RootComponentRegistry,
+    ),
+    capability_allocation(
+        RoleCapabilityKey::RootControlPlane,
+        StateAllocationKey::CanisterPool,
     ),
     capability_allocation(
         RoleCapabilityKey::WasmStore,
@@ -367,7 +364,6 @@ const FEATURE_ALLOCATIONS: &[FeatureAllocation] = &[
         CanicFeatureKey::ControlPlane,
         StateAllocationKey::ControlPlaneSubnetState,
     ),
-    feature_allocation(CanicFeatureKey::Sharding, StateAllocationKey::CanisterPool),
     feature_allocation(
         CanicFeatureKey::FleetCoordinatorCanister,
         StateAllocationKey::FleetCoordinatorRegistry,

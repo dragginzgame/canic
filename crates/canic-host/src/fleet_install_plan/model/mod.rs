@@ -16,7 +16,7 @@ use std::{
 
 use canic_core::{
     bootstrap::compiled::ConfigModel,
-    cdk::types::Cycles,
+    cdk::types::{Cycles, Principal},
     ids::{
         ComponentSpecAdmission, ComponentTopologyDigest, CyclesFundingBudget, FleetBinding,
         FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseSetDigest,
@@ -62,6 +62,7 @@ pub struct PlannedFleetSubnetRootInput {
     pub placement_subnet: SubnetId,
     pub component_admissions: Vec<RootComponentAdmissionInput>,
     pub limits: FleetSubnetRootLimits,
+    pub canister_pool_imports: Vec<Principal>,
     pub creation_funding: PlannedCanisterCreationFunding,
 }
 
@@ -80,6 +81,7 @@ pub struct PlannedFleetSubnetRoot {
     pub initial_release_set: FleetSubnetRootReleaseSet,
     #[serde(with = "root_limits_document")]
     pub limits: FleetSubnetRootLimits,
+    pub canister_pool_imports: Vec<Principal>,
     pub creation_funding: PlannedCanisterCreationFunding,
 }
 
@@ -288,11 +290,20 @@ mod root_limits_document {
 
     #[derive(Deserialize, Serialize)]
     #[serde(deny_unknown_fields)]
+    struct CanisterPoolDocument {
+        minimum_size: u32,
+        maximum_size: u32,
+        canister_cycles: String,
+    }
+
+    #[derive(Deserialize, Serialize)]
+    #[serde(deny_unknown_fields)]
     struct RootLimitsDocument {
         maximum_component_instances: u32,
         maximum_managed_canisters: u32,
         maximum_registry_bytes: u64,
         maximum_wasm_store_bytes: u64,
+        canister_pool: CanisterPoolDocument,
         cycles_funding: CyclesFundingBudgetDocument,
     }
 
@@ -308,6 +319,11 @@ mod root_limits_document {
             maximum_managed_canisters: limits.maximum_managed_canisters,
             maximum_registry_bytes: limits.maximum_registry_bytes,
             maximum_wasm_store_bytes: limits.maximum_wasm_store_bytes,
+            canister_pool: CanisterPoolDocument {
+                minimum_size: limits.canister_pool.minimum_size,
+                maximum_size: limits.canister_pool.maximum_size,
+                canister_cycles: limits.canister_pool.canister_cycles.to_u128().to_string(),
+            },
             cycles_funding: CyclesFundingBudgetDocument {
                 window_secs: limits.cycles_funding.window_secs,
                 maximum_cycles: limits.cycles_funding.maximum_cycles.to_u128().to_string(),
@@ -326,11 +342,21 @@ mod root_limits_document {
             .maximum_cycles
             .parse()
             .map_err(de::Error::custom)?;
+        let canister_cycles = document
+            .canister_pool
+            .canister_cycles
+            .parse()
+            .map_err(de::Error::custom)?;
         Ok(FleetSubnetRootLimits {
             maximum_component_instances: document.maximum_component_instances,
             maximum_managed_canisters: document.maximum_managed_canisters,
             maximum_registry_bytes: document.maximum_registry_bytes,
             maximum_wasm_store_bytes: document.maximum_wasm_store_bytes,
+            canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {
+                minimum_size: document.canister_pool.minimum_size,
+                maximum_size: document.canister_pool.maximum_size,
+                canister_cycles: Cycles::new(canister_cycles),
+            },
             cycles_funding: CyclesFundingBudget {
                 window_secs: document.cycles_funding.window_secs,
                 maximum_cycles: Cycles::new(maximum_cycles),

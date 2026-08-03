@@ -40,7 +40,6 @@ impl BootstrapPhaseLabel {
     pub const ROOT_UPGRADE_WAITING_STAGED_RELEASES: Self =
         Self("root:upgrade:waiting_staged_releases");
     pub const ROOT_UPGRADE_SET_SUBNET_ID: Self = Self("root:upgrade:set_subnet_id");
-    pub const ROOT_UPGRADE_IMPORT_POOL: Self = Self("root:upgrade:import_pool");
     pub const ROOT_UPGRADE_RECONCILE_WASM_STORE: Self = Self("root:upgrade:reconcile_wasm_store");
 
     #[must_use]

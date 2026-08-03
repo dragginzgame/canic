@@ -229,22 +229,6 @@ impl ConfigOps {
         Self::try_get_canister(&component_spec, canister_role)
     }
 
-    /// Resolve the target canister configuration for one provisioning effect.
-    ///
-    /// A Fleet Subnet Root may create implicit infrastructure or a Component
-    /// and therefore resolves the target globally. Any registered canister in
-    /// a Component tree resolves a requested child role within that tree's
-    /// protected Component Spec.
-    pub(crate) fn canister_for_provisioning(
-        canister_role: &CanisterRole,
-    ) -> Result<CanisterConfig, InternalError> {
-        if EnvOps::is_root() {
-            Self::try_get_canister_by_role(canister_role)
-        } else {
-            Self::current_component_canister(canister_role)
-        }
-    }
-
     /// Resolve funding limits for a direct Fleet Subnet Root child role.
     ///
     /// Roots are infrastructure and have no current Component Spec, so this

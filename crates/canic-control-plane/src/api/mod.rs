@@ -1,6 +1,8 @@
 //! Public control-plane APIs for lifecycle and template publication.
 
 #[cfg(feature = "root-control-plane")]
+pub mod canister_pool;
+#[cfg(feature = "root-control-plane")]
 pub mod component_auth;
 #[cfg(feature = "root-control-plane")]
 pub mod component_rpc;

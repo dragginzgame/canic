@@ -12,12 +12,9 @@ pub mod adapter;
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::{cascade::StateSnapshotInput, state::FleetStateInput, topology::FleetDirectoryInput},
+    dto::{cascade::StateSnapshotInput, state::FleetStateInput},
     ids::CanisterRole,
-    ops::{
-        runtime::env::EnvOps, storage::state::fleet::FleetStateOps,
-        topology::directory::FleetDirectoryResolver,
-    },
+    ops::{runtime::env::EnvOps, storage::state::fleet::FleetStateOps},
 };
 use std::collections::HashMap;
 
@@ -29,7 +26,6 @@ use std::collections::HashMap;
 #[derive(Default)]
 pub struct StateSnapshot {
     pub fleet_state: Option<FleetStateInput>,
-    pub fleet_directory: Option<FleetDirectoryInput>,
 }
 
 ///
@@ -59,13 +55,8 @@ impl StateSnapshotBuilder {
         self
     }
 
-    pub fn with_fleet_directory(mut self) -> Result<Self, InternalError> {
-        self.snapshot.fleet_directory = Some(FleetDirectoryResolver::resolve_input()?);
-        Ok(self)
-    }
-
     #[must_use]
-    pub fn build(self) -> StateSnapshot {
+    pub const fn build(self) -> StateSnapshot {
         self.snapshot
     }
 }
@@ -74,7 +65,6 @@ impl From<StateSnapshotInput> for StateSnapshot {
     fn from(snapshot: StateSnapshotInput) -> Self {
         Self {
             fleet_state: snapshot.fleet_state,
-            fleet_directory: snapshot.fleet_directory,
         }
     }
 }
@@ -179,7 +169,7 @@ impl TopologySnapshotBuilder {
 
 #[must_use]
 pub const fn state_snapshot_is_empty(snapshot: &StateSnapshot) -> bool {
-    snapshot.fleet_state.is_none() && snapshot.fleet_directory.is_none()
+    snapshot.fleet_state.is_none()
 }
 
 #[must_use]
@@ -188,11 +178,7 @@ pub fn state_snapshot_debug(snapshot: &StateSnapshot) -> String {
         if present { code } else { ".." }
     }
 
-    format!(
-        "[{} {}]",
-        fmt(snapshot.fleet_state.is_some(), "fs"),
-        fmt(snapshot.fleet_directory.is_some(), "fd"),
-    )
+    format!("[{}]", fmt(snapshot.fleet_state.is_some(), "fs"))
 }
 
 #[cfg(test)]
@@ -209,10 +195,9 @@ mod tests {
                 mode: FleetMode::Enabled,
                 cycles_funding_enabled: true,
             }),
-            fleet_directory: None,
         };
 
-        assert_eq!(super::state_snapshot_debug(&snapshot), "[fs ..]");
+        assert_eq!(super::state_snapshot_debug(&snapshot), "[fs]");
     }
 
     #[test]

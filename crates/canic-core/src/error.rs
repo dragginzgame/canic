@@ -2,7 +2,6 @@ use crate::access::AccessError;
 use crate::domain::policy::pure::{
     component_allocation::ComponentAllocationPolicyError,
     component_child_allocation::ComponentChildAllocationPolicyError,
-    topology::{TopologyPolicyError, registry::RegistryPolicyError},
 };
 use crate::dto::error::{Error as PublicError, ErrorCode as PublicErrorCode};
 use std::fmt;
@@ -183,21 +182,6 @@ impl From<AccessError> for InternalError {
     }
 }
 
-impl From<TopologyPolicyError> for InternalError {
-    fn from(err: TopologyPolicyError) -> Self {
-        let message = err.to_string();
-        let public_code = match &err {
-            TopologyPolicyError::RegistryPolicy(err) => registry_policy_error_code(err),
-            TopologyPolicyError::ParentNotFound(_) => None,
-        };
-
-        match public_code {
-            Some(code) => Self::public(PublicError::policy(code, message)),
-            None => Self::domain(InternalErrorOrigin::Domain, message),
-        }
-    }
-}
-
 impl From<ComponentAllocationPolicyError> for InternalError {
     fn from(err: ComponentAllocationPolicyError) -> Self {
         let message = err.to_string();
@@ -269,27 +253,6 @@ impl From<ComponentChildAllocationPolicyError> for InternalError {
                 Self::invariant(InternalErrorOrigin::Domain, message)
             }
         }
-    }
-}
-
-const fn registry_policy_error_code(err: &RegistryPolicyError) -> Option<PublicErrorCode> {
-    match err {
-        RegistryPolicyError::RoleAlreadyRegistered { .. } => {
-            Some(PublicErrorCode::PolicyRoleAlreadyRegistered)
-        }
-        RegistryPolicyError::SingletonAlreadyRegisteredUnderParent { .. } => {
-            Some(PublicErrorCode::PolicySingletonAlreadyRegisteredUnderParent)
-        }
-        RegistryPolicyError::ReplicaRequiresServiceWithScaling { .. } => {
-            Some(PublicErrorCode::PolicyReplicaRequiresServiceWithScaling)
-        }
-        RegistryPolicyError::ShardRequiresServiceWithSharding { .. } => {
-            Some(PublicErrorCode::PolicyShardRequiresServiceWithSharding)
-        }
-        RegistryPolicyError::InstanceRequiresServiceWithIndex { .. } => {
-            Some(PublicErrorCode::PolicyInstanceRequiresServiceWithIndex)
-        }
-        RegistryPolicyError::ServiceRequiresRootParent { .. } => None,
     }
 }
 

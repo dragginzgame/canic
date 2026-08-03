@@ -12,7 +12,6 @@ pub mod icrc;
 pub mod memory;
 pub mod metrics;
 pub mod policy;
-pub mod pool;
 pub mod runtime;
 pub mod state;
 pub mod value;
