@@ -200,21 +200,55 @@ fn validate_root_summary(
     registry_version: &FleetRegistryVersion,
     summary: &FleetSubnetRootCanisterSummary,
 ) -> Result<(), TerminalFleetCatalogPublicationError> {
-    let total = summary
-        .infrastructure_canisters
-        .checked_add(summary.component_canisters);
-    let managed = 1_u32.checked_add(summary.component_canisters);
-    if summary.fleet_registry != *registry_version
-        || summary.placement_subnet != registered.placement_subnet
-        || summary.fleet_subnet_root != registered.fleet_subnet_root
-        || summary.status != FleetSubnetRootStatus::Active
-        || summary.infrastructure_canisters != 2
-        || total != Some(summary.total_canisters)
-        || managed.is_none_or(|count| count > registered.limits.maximum_managed_canisters)
-    {
+    let matches_registry = root_summary_matches_registry(registered, registry_version, summary);
+    let matches_counts = RootSummaryCounts::derive(summary)
+        .is_some_and(|counts| counts.matches(summary, registered.limits.maximum_managed_canisters));
+    if !matches_registry || !matches_counts {
         return Err(TerminalFleetCatalogPublicationError::RootSummaryMismatch {
             root: registered.fleet_subnet_root,
         });
     }
     Ok(())
+}
+
+fn root_summary_matches_registry(
+    registered: &FleetSubnetRootEntry,
+    registry_version: &FleetRegistryVersion,
+    summary: &FleetSubnetRootCanisterSummary,
+) -> bool {
+    summary.fleet_registry == *registry_version
+        && summary.placement_subnet == registered.placement_subnet
+        && summary.fleet_subnet_root == registered.fleet_subnet_root
+        && summary.status == FleetSubnetRootStatus::Active
+}
+
+struct RootSummaryCounts {
+    total_canisters: u32,
+    managed_canisters: u32,
+}
+
+impl RootSummaryCounts {
+    fn derive(summary: &FleetSubnetRootCanisterSummary) -> Option<Self> {
+        let total_canisters = summary
+            .infrastructure_canisters
+            .checked_add(summary.component_canisters)?
+            .checked_add(summary.pooled_canisters)?;
+        let managed_canisters = 1_u32
+            .checked_add(summary.component_canisters)?
+            .checked_add(summary.pooled_canisters)?;
+        Some(Self {
+            total_canisters,
+            managed_canisters,
+        })
+    }
+
+    fn matches(
+        &self,
+        summary: &FleetSubnetRootCanisterSummary,
+        maximum_managed_canisters: u32,
+    ) -> bool {
+        summary.infrastructure_canisters == 2
+            && self.total_canisters == summary.total_canisters
+            && self.managed_canisters <= maximum_managed_canisters
+    }
 }
