@@ -16,6 +16,7 @@ use crate::{
         resolved_canic_package, resolved_wrapper_dependencies,
     },
     canister_build::{
+        ArtifactTransformKind, ArtifactTransformOutput, CanisterArtifactBuildOutput,
         CanisterBuildProfile, WorkspaceBuildContext,
         cache::{canister_build_target_root, configure_canister_cargo_command},
     },
@@ -56,23 +57,10 @@ const COORDINATOR_FAST_PROFILE: &[(&str, &str)] = &[
     ("incremental", "false"),
 ];
 
-///
-/// BootstrapFleetCoordinatorBuildOutput
-///
-/// Qualified package and artifact paths from the current Coordinator build.
-///
-
-#[derive(Clone, Debug)]
-pub struct BootstrapFleetCoordinatorBuildOutput {
-    pub(crate) package_name: String,
-    pub(crate) wasm_path: PathBuf,
-    pub(crate) wasm_gz_path: PathBuf,
-}
-
 /// Build the dedicated Fleet Coordinator wrapper selected from the exact Canic dependency graph.
 pub fn build_bootstrap_fleet_coordinator_artifact(
     context: &WorkspaceBuildContext,
-) -> Result<BootstrapFleetCoordinatorBuildOutput, Box<dyn std::error::Error>> {
+) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
     let manifest_path = ensure_generated_wrapper(context)?;
     require_built_in_fleet_coordinator_contract(&manifest_path)?;
     run_coordinator_cargo_build(context, &manifest_path)?;
@@ -88,7 +76,7 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
     let did_path = artifact_root.join(format!("{FLEET_COORDINATOR_ROLE}.did"));
 
     write_wasm_artifact(&built_wasm_path, &wasm_path)?;
-    let _ = maybe_shrink_wasm_artifact(&wasm_path)?;
+    let mut transforms = vec![maybe_shrink_wasm_artifact(&wasm_path)?];
     if should_export_candid_artifacts(context.build_network) {
         let debug_context = context.with_profile(CanisterBuildProfile::Debug);
         run_coordinator_cargo_build(&debug_context, &manifest_path)?;
@@ -97,16 +85,22 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
             .join(CanisterBuildProfile::Debug.target_dir_name())
             .join(format!("{GENERATED_WRAPPER_CRATE_NAME}.wasm"));
         extract_candid(&debug_wasm_path, &did_path)?;
-        let _ = embed_candid_metadata(&wasm_path, &did_path)?;
+        transforms.push(embed_candid_metadata(&wasm_path, &did_path)?);
     } else {
         remove_optional_file(&did_path)?;
+        transforms.push(ArtifactTransformOutput::not_requested(
+            ArtifactTransformKind::CandidMetadata,
+        ));
     }
     write_gzip_artifact(&wasm_path, &wasm_gz_path)?;
 
-    Ok(BootstrapFleetCoordinatorBuildOutput {
+    Ok(CanisterArtifactBuildOutput {
         package_name: GENERATED_WRAPPER_PACKAGE_NAME.to_string(),
+        artifact_root,
         wasm_path,
         wasm_gz_path,
+        did_path,
+        transforms,
     })
 }
 

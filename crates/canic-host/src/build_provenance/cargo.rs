@@ -39,11 +39,19 @@ pub(super) fn cargo_provenance(
         )
         .into());
     }
+    let package_name = required_manifest_str(&manifest, &["package", "name"], package_manifest)?;
+    if package_name != request.output.package_name {
+        return Err(format!(
+            "built artifact package {:?} does not match admitted package {:?}",
+            request.output.package_name, package_name
+        )
+        .into());
+    }
 
     Ok(CargoProvenanceV1 {
         cargo_lock_sha256: optional_file_sha256(&cargo_lock_path)?,
         package_manifest_sha256: Some(sha256_hex(manifest_source.as_bytes())),
-        package_name: required_manifest_str(&manifest, &["package", "name"], package_manifest)?,
+        package_name,
         package_manifest: display_path(package_manifest, &request.workspace_root),
         package_metadata_app,
         package_metadata_role,

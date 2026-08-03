@@ -1,7 +1,24 @@
 use super::{WorkspaceBuildContext, parse_parent_process_id, remove_stale_icp_candid_sidecars};
+use crate::canister_build::model::CanisterArtifactSource;
 use crate::test_support::temp_dir;
 use canic_core::ids::BuildNetwork;
 use std::fs;
+
+#[test]
+fn infrastructure_roles_use_the_canonical_built_in_artifact_sources() {
+    assert_eq!(
+        CanisterArtifactSource::for_role("fleet_coordinator"),
+        CanisterArtifactSource::FleetCoordinator
+    );
+    assert_eq!(
+        CanisterArtifactSource::for_role("wasm_store"),
+        CanisterArtifactSource::WasmStore
+    );
+    assert_eq!(
+        CanisterArtifactSource::for_role("root"),
+        CanisterArtifactSource::DeclaredRole
+    );
+}
 
 #[test]
 fn parse_parent_process_id_accepts_proc_stat_shape() {

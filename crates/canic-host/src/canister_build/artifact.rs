@@ -7,6 +7,7 @@ use crate::{
     artifact_io::{
         embed_candid_metadata, maybe_shrink_wasm_artifact, write_gzip_artifact, write_wasm_artifact,
     },
+    bootstrap_coordinator::build_bootstrap_fleet_coordinator_artifact,
     bootstrap_store::build_bootstrap_wasm_store_artifact,
     cargo_command,
     release_set::{AppConfigSnapshot, artifact_root_path},
@@ -24,22 +25,21 @@ use super::{
     candid::{extract_candid, remove_stale_icp_candid_sidecars},
     model::{
         ArtifactTransformKind, ArtifactTransformOutput, CanisterArtifactBuildOutput,
-        CanisterArtifactBuildSpec, ROOT_ROLE, WASM_STORE_ROLE, WASM_TARGET,
+        CanisterArtifactBuildSpec, CanisterArtifactSource, ROOT_ROLE, WASM_TARGET,
     },
 };
 
 pub fn build_workspace_canister_artifact(
     context: &WorkspaceBuildContext,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
-    if context.role == WASM_STORE_ROLE {
-        let output = build_bootstrap_wasm_store_artifact(context)?;
-        return Ok(CanisterArtifactBuildOutput {
-            artifact_root: output.artifact_root,
-            wasm_path: output.wasm_path,
-            wasm_gz_path: output.wasm_gz_path,
-            did_path: output.did_path,
-            transforms: output.transforms,
-        });
+    match CanisterArtifactSource::for_role(&context.role) {
+        CanisterArtifactSource::FleetCoordinator => {
+            return build_bootstrap_fleet_coordinator_artifact(context);
+        }
+        CanisterArtifactSource::WasmStore => {
+            return build_bootstrap_wasm_store_artifact(context);
+        }
+        CanisterArtifactSource::DeclaredRole => {}
     }
 
     let config = AppConfigSnapshot::load(&context.config_path)?;
@@ -128,6 +128,7 @@ pub fn build_workspace_canister_artifact_from_spec(
     write_gzip_artifact(&spec.wasm_path, &spec.wasm_gz_path)?;
 
     Ok(CanisterArtifactBuildOutput {
+        package_name: spec.package_name.clone(),
         artifact_root: spec.artifact_root.clone(),
         wasm_path: spec.wasm_path.clone(),
         wasm_gz_path: spec.wasm_gz_path.clone(),

@@ -16,11 +16,7 @@ publish = true
 [features]
 default = ["metrics"]
 metrics = []
-control-plane = [
-    "dep:canic-control-plane",
-    "canic-control-plane/root-control-plane",
-    "canic-control-plane/wasm-store-canister",
-]
+control-plane = ["dep:canic-control-plane", "canic-control-plane/root-control-plane"]
 fleet-coordinator-canister = ["dep:canic-control-plane", "canic-control-plane/fleet-coordinator-canister"]
 wasm-store-canister = ["dep:canic-control-plane", "canic-control-plane/wasm-store-canister"]
 blob-storage = ["canic-core/blob-storage"]

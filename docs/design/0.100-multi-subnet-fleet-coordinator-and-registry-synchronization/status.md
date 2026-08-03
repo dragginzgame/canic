@@ -2,14 +2,14 @@
 
 Date: 2026-08-03
 
-- State: implementation in progress.
+- State: code implementation complete; maintainer-owned operational proof pending.
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.93`.
-- Latest published release: `v0.100.93` at
-  `e279fee3622831e3a0d0c0581880e4de95af43fe`.
-- Open patch draft: `0.100.94`; no package-version change has been authorized.
+- Workspace package version: `0.100.95`.
+- Latest published release: `v0.100.95` at
+  `b72e57716e3ae111aa2aff9ce62308882bfb0d45`.
+- Open patch draft: `0.100.96`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -267,7 +267,7 @@ Registry slices replace the 0.99 root model.
   occupied physical Subnet, exact Fleet-owned Canister counts and fail-closed
   Coordinator/root evidence validation.
 - [x] Qualify restore fencing and role-package boundaries.
-- [ ] Measure Wasm boundaries and remove stale authority.
+- [x] Measure Wasm boundaries and remove stale authority.
 
 ## Current Batch
 
@@ -1195,7 +1195,7 @@ Component Registry allocation head. Focused role-package tests confirm that
 only the Coordinator and Fleet Subnet Root own the new stable allocation and
 endpoint bundle.
 
-Open 0.100.95 repacks both reinstall-only owner ledgers into consecutive,
+Released 0.100.95 repacks both reinstall-only owner ledgers into consecutive,
 subsystem-grouped assignments. Control-plane IDs 10-26 now progress through
 templates, Store GC, Coordinator Registry, root Store state, root Registry
 mirror, root Component Registry and root Canister pool. Core IDs 30-59 now
@@ -1206,11 +1206,26 @@ stable keys use the same subsystem vocabulary; the former broad root Subnet
 state name is hard-cut to root Wasm Store state. This is a pre-1.0
 reinstall-only regrouping with no migration, alias or compatibility reader.
 
+Open 0.100.96 consolidates the Coordinator, Fleet Subnet Root and Wasm Store
+behind one host artifact-build boundary. Each build output now carries its
+canonical Cargo package identity, provenance rejects package-manifest drift,
+the application union compares output identity with its admitted target, and
+install preparation consumes the exact root output instead of consulting a
+parallel build target. The separate Store post-build qualifier remains a
+read-only check of the Store artifact embedded by the root build. The facade's
+redundant direct Store feature edge is removed because root control-plane
+authority already implies the bootstrap machinery; a canonical rebuild proves
+the root and Store artifacts remain byte-identical.
+
+The [0.100 infrastructure Wasm boundary closeout](0.100-wasm-boundary-closeout.md)
+records the three canonical release artifacts, their exact byte/hash evidence,
+exported-method boundaries and retained-size attribution. Maintained-source
+searches find no Tree identity, logical Subnet-slot, Subnet Registry/Directory,
+nested Component declaration or arbitrary artifact fallback authority.
+
 ## Next Action
 
-Measure the Coordinator, Fleet Subnet Root and Wasm Store boundaries and remove
-any remaining stale, nested or duplicate authority. The maintainer-owned final
-operational proof remains: run root-deletion preparation and execution as
-separate processes against one explicitly selected disposable real-network
-root, then verify the surviving Coordinator terminal receipt and exact replay
-before closing 0.100 and beginning 0.101.
+The maintainer-owned final operational proof remains: run root-deletion
+preparation and execution as separate processes against one explicitly
+selected disposable real-network root, then verify the surviving Coordinator
+terminal receipt and exact replay before closing 0.100 and beginning 0.101.

@@ -460,6 +460,7 @@ mod tests {
         CurrentCanisterArtifactBuildOutput {
             role: role.to_string(),
             output: CanisterArtifactBuildOutput {
+                package_name: format!("{role}-package"),
                 wasm_path: artifact_root.join(format!("{role}.wasm")),
                 wasm_gz_path: artifact_root.join(format!("{role}.wasm.gz")),
                 did_path: artifact_root.join(format!("{role}.did")),

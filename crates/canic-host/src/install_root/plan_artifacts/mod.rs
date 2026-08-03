@@ -170,6 +170,7 @@ fn application_file_build_outputs(
         })
         .map(|output| ApplicationArtifactFileBuildOutput {
             role: CanisterRole::owned(output.role.clone()),
+            package: output.output.package_name.clone(),
             release_build_id,
             wasm_path: output.output.wasm_path.clone(),
             wasm_gz_path: output.output.wasm_gz_path.clone(),
@@ -394,6 +395,7 @@ maximum_instances = 1
         CurrentCanisterArtifactBuildOutput {
             role: role.to_string(),
             output: CanisterArtifactBuildOutput {
+                package_name: format!("{role}-package"),
                 artifact_root,
                 wasm_path,
                 wasm_gz_path,

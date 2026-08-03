@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.94`.
-- The latest published release is `v0.100.94` at
-  `68cec35895cb0048776a5a826ce572c21e1e3b59`.
-- Open `0.100.95` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.95`.
+- The latest published release is `v0.100.95` at
+  `b72e57716e3ae111aa2aff9ce62308882bfb0d45`.
+- Open `0.100.96` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.93` replaces the superseded generic empty-Canister pool with
   one required prepaid asset inventory owned by every Fleet Subnet Root. Fleet
@@ -40,7 +40,7 @@ Historical detail is archived at:
   root PocketIC proofs cover the exact Registry and Component allocation
   heads, and role-package checks keep the capability confined to those two
   authority runtimes.
-- Open `0.100.95` repacks the reinstall-only stable-memory ledger by subsystem
+- Released `0.100.95` repacks the reinstall-only stable-memory ledger by subsystem
   without changing the owner ranges: control-plane state is consecutive at
   IDs 10-26 and core state at IDs 30-59. Constants, allocation keys, state
   domains and stable keys now share explicit template, Store, Coordinator,
@@ -48,6 +48,17 @@ Historical detail is archived at:
   application-receipt, Placement, sharding, blob-storage and authority-fence
   vocabulary. The former broad root Subnet state is hard-cut to root Wasm
   Store state; there is no migration, alias or compatibility path.
+- Open `0.100.96` consolidates the Fleet Coordinator, Fleet Subnet Root and
+  Wasm Store behind one package-qualified host artifact-build boundary. It
+  removes separate Coordinator dispatch, parallel root-package lookup and a
+  redundant root/Store feature edge, while provenance rejects package
+  identity drift and application-union publication compares actual output
+  identity with the admitted target. Canonical release measurements and the
+  maintained-source inventory confirm distinct Registry, Component/pool and
+  Store runtime authorities with no Tree-era, nested declaration or artifact
+  fallback path. The only remaining 0.100 closeout item is the
+  maintainer-owned disposable real-network root-deletion execution and
+  exact-replay proof.
 - Proposed `0.105` defines provider-neutral declarative authentication
   profiles as the sole source of multi-role user-token grants and
   install-owned issuer/verifier policy. Its initial Toko path uses one
@@ -2529,8 +2540,12 @@ removing generic provisioning and the role-based Directory/Subnet Registry
 stack. The current Component lifecycle, root pool, direct-child cache and
 Registry-derived Fleet Directory are the maintained authorities, and no
 prior-release decoder remains.
-Open `0.100.94` adds the Coordinator/root authority snapshot fence described
-above and closes the restore-fencing and role-package qualification item.
+Released `0.100.94` adds the Coordinator/root authority snapshot fence
+described above and closes the restore-fencing and role-package qualification
+item. Released `0.100.95` groups both reinstall-only stable-memory ledgers by
+their current subsystem owners. Open `0.100.96` completes the infrastructure
+Wasm measurement and source-authority cut; only the maintainer-owned disposable
+real-network root-deletion proof remains before 0.100 closes.
 
 ## Historical Release Detail
 
