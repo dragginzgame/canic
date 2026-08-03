@@ -57,7 +57,7 @@ const ISSUER_ARG: &str = "issuer";
 const JSON_ARG: &str = "json";
 const ROOT_ROLE: &str = "root";
 const AUTH_RENEWAL_STATUS_SCHEMA_VERSION: u16 = 1;
-const ISSUER_NOT_IN_SUBNET_REGISTRY_REASON: &str = "issuer_not_in_subnet_registry";
+const ISSUER_NOT_IN_COMPONENT_REGISTRY_REASON: &str = "issuer_not_in_component_registry";
 
 const HELP_AFTER: &str = "\
 Examples:
@@ -768,7 +768,7 @@ fn issuer_observation_with_runtime(
         CANIC_ACTIVE_DELEGATION_PROOF_STATUS,
     ) {
         Ok(Some(target)) => target,
-        Ok(None) => return unavailable_issuer_observation(ISSUER_NOT_IN_SUBNET_REGISTRY_REASON),
+        Ok(None) => return unavailable_issuer_observation(ISSUER_NOT_IN_COMPONENT_REGISTRY_REASON),
         Err(_) => return unavailable_issuer_observation("issuer_status_metadata_unavailable"),
     };
     let Ok(output) = runtime.query_issuer_output(
@@ -843,7 +843,7 @@ fn renewal_status_code(
     status: &AuthRenewalStatusSummary,
     issuer_observation: &AuthIssuerObservation,
 ) -> AuthRenewalStatusCode {
-    if issuer_observation.reason.as_deref() == Some(ISSUER_NOT_IN_SUBNET_REGISTRY_REASON) {
+    if issuer_observation.reason.as_deref() == Some(ISSUER_NOT_IN_COMPONENT_REGISTRY_REASON) {
         AuthRenewalStatusCode::IssuerUnregistered
     } else if issuer_observation.drift_detected {
         AuthRenewalStatusCode::DriftDetected

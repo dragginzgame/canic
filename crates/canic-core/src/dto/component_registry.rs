@@ -614,7 +614,7 @@ pub struct RootComponentSubtreeRemovalDeleteIntent {
 ///
 /// RootComponentSubtreeRemovalDeletedReceipt
 ///
-/// Frozen deletion authority committed only after independently observed absence.
+/// Frozen workload-deletion authority committed after the Canister is recycled.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -1230,7 +1230,7 @@ pub struct RootComponentDeletionIntent {
 ///
 /// RootComponentDeletedReceipt
 ///
-/// Terminal authority retained after independently observed top-level absence.
+/// Terminal authority retained after the top-level workload Canister is recycled.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

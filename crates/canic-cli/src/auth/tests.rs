@@ -121,7 +121,7 @@ fn renewal_status_queries_root_status_endpoint() {
     );
     assert_eq!(
         result.issuer_observation.reason.as_deref(),
-        Some(ISSUER_NOT_IN_SUBNET_REGISTRY_REASON)
+        Some(ISSUER_NOT_IN_COMPONENT_REGISTRY_REASON)
     );
     assert_eq!(
         result.renewal.latest_batch.status.as_deref(),

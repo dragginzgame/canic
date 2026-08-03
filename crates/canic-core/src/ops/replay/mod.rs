@@ -13,7 +13,6 @@ use crate::{
     dto::{
         auth::{DelegatedTokenPrepareResponse, RoleAttestationPrepareResponse},
         icp_refill::IcpRefillResponse,
-        pool::PoolAdminResponse,
         rpc::{CyclesResponse, Response},
     },
     model::replay::{ExternalEffectDescriptor, RecoveryReason, ReplayActor, ReplayReceipt},
@@ -33,7 +32,6 @@ use candid::{CandidType, decode_one, encode_one};
 
 pub const DELEGATED_TOKEN_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 pub const ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
-pub const POOL_CREATE_EMPTY_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 pub const ROLE_ATTESTATION_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 
 const ROOT_REPLAY_COMPACT_TAG: &[u8] = b"RR1";
@@ -241,30 +239,6 @@ pub fn decode_icp_refill_replay_response(
             "failed to decode ICP refill replay response: {err}"
         ))
     })
-}
-
-/// decode_pool_create_empty_replay_response
-///
-/// Decode a committed pool create-empty response from shared replay receipts.
-pub fn decode_pool_create_empty_replay_response(
-    receipt: &ReplayReceipt,
-) -> Result<Principal, ReplayDecodeError> {
-    let response_bytes = committed_response_bytes(
-        receipt,
-        POOL_CREATE_EMPTY_REPLAY_RESPONSE_SCHEMA_VERSION,
-        "pool create-empty",
-    )?;
-    let response: PoolAdminResponse = decode_one(response_bytes).map_err(|err| {
-        ReplayDecodeError::DecodeFailed(format!(
-            "failed to decode pool create-empty replay response: {err}"
-        ))
-    })?;
-    match response {
-        PoolAdminResponse::Created { pid } => Ok(pid),
-        _ => Err(ReplayDecodeError::DecodeFailed(
-            "pool create-empty replay receipt contains the wrong response variant".to_string(),
-        )),
-    }
 }
 
 /// Encode one typed response payload stored in shared replay receipts.

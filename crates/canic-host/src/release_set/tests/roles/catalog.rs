@@ -164,11 +164,6 @@ maximum_instances_per_parent = 20_000
 "#;
     let details = configured_role_details_from_config(&parsed_config(config));
 
-    assert!(
-        details
-            .get("user_hub")
-            .is_some_and(|details| details.contains(&"fleet_directory".to_string()))
-    );
     assert!(details.get("user_hub").is_some_and(|details| {
         details
             .iter()

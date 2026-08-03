@@ -42,7 +42,6 @@ pub enum TimerKey {
     IntentCleanup,
     LogRetention,
     PlacementReceiptAcknowledgement,
-    PoolReset,
 }
 
 impl TimerKey {
@@ -53,7 +52,6 @@ impl TimerKey {
             Self::IntentCleanup => "intent_cleanup:run",
             Self::LogRetention => "log_retention:run",
             Self::PlacementReceiptAcknowledgement => "placement:receipt_ack",
-            Self::PoolReset => "pool:pending",
         }
     }
 }
@@ -769,7 +767,6 @@ mod tests {
             TimerKey::IntentCleanup,
             TimerKey::LogRetention,
             TimerKey::PlacementReceiptAcknowledgement,
-            TimerKey::PoolReset,
         ];
         let labels = keys.map(TimerKey::label);
         let unique = labels

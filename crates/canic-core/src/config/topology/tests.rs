@@ -164,6 +164,11 @@ fn root_binding(
             maximum_managed_canisters: 1_000,
             maximum_registry_bytes: 4_194_304,
             maximum_wasm_store_bytes: 40_000_000,
+            canister_pool: crate::ids::FleetSubnetCanisterPoolConfig {
+                minimum_size: 1,
+                maximum_size: 10,
+                canister_cycles: Cycles::new(5_000_000_000_000),
+            },
             cycles_funding: CyclesFundingBudget {
                 window_secs: 3_600,
                 maximum_cycles: Cycles::new(1_000_000_000_000_000),

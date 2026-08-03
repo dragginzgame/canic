@@ -58,5 +58,6 @@ pub async fn resume_root(
             "Fleet activation completed but root bootstrap is not ready; inspect bootstrap status and retry activation resume",
         ));
     }
+    crate::workflow::canister_pool::start();
     Ok(transition)
 }

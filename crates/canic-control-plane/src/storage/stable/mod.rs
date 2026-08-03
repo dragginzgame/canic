@@ -1,3 +1,5 @@
+#[cfg(feature = "root-control-plane")]
+pub mod canister_pool;
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 pub mod component_registry;
 pub mod fleet_coordinator;

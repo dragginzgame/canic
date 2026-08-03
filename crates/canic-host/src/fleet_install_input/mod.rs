@@ -16,7 +16,7 @@ use crate::{
     icp_config::{IcpConfigError, resolve_icp_build_network_from_root},
 };
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     io,
     path::{Path, PathBuf},
     time::{SystemTime, SystemTimeError, UNIX_EPOCH},
@@ -25,7 +25,10 @@ use std::{
 use candid::Principal;
 use canic_core::{
     cdk::types::Cycles,
-    ids::{BuildNetwork, ComponentSpecId, CyclesFundingBudget, FleetSubnetRootLimits, SubnetId},
+    ids::{
+        BuildNetwork, ComponentSpecId, CyclesFundingBudget, FleetSubnetCanisterPoolConfig,
+        FleetSubnetRootLimits, SubnetId,
+    },
 };
 use ic_query::subnet_catalog::{
     DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT, SubnetCatalog, SubnetCatalogCacheRequest, SubnetInfo,
@@ -85,6 +88,28 @@ pub enum FleetInstallInputError {
         field: String,
         value: String,
         reason: String,
+    },
+
+    #[error("invalid {field} Canister principal {value:?}: {reason}")]
+    InvalidCanister {
+        field: String,
+        value: String,
+        reason: String,
+    },
+
+    #[error("invalid Fleet Subnet Root Canister pool: {reason}")]
+    InvalidCanisterPool { reason: String },
+
+    #[error("imported Canister pool asset {canister} has no trusted IC routing evidence: {reason}")]
+    ImportedCanisterRoute { canister: Principal, reason: String },
+
+    #[error(
+        "imported Canister pool asset {canister} is routed to Subnet {actual}; expected Fleet Subnet Root placement {expected}"
+    )]
+    ImportedCanisterSubnetMismatch {
+        canister: Principal,
+        expected: SubnetId,
+        actual: SubnetId,
     },
 
     #[error("Subnet profile {profile:?} is invalid")]
@@ -176,7 +201,19 @@ struct FleetSubnetRootInputDocument {
     placement_subnet: String,
     component_admissions: BTreeMap<ComponentSpecId, u32>,
     limits: FleetSubnetRootLimitsDocument,
+    canister_pool: CanisterPoolInputDocument,
     creation_funding: CreationFundingDocument,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct CanisterPoolInputDocument {
+    minimum_size: u32,
+    maximum_size: u32,
+    #[serde(deserialize_with = "Cycles::from_config")]
+    canister_cycles: Cycles,
+    #[serde(default)]
+    imports: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -295,6 +332,7 @@ fn resolve_document(
     };
 
     let mut fleet_subnet_roots = Vec::with_capacity(document.fleet_subnet_roots.len());
+    let mut imported_canisters = BTreeSet::new();
     for root in &document.fleet_subnet_roots {
         let placement_subnet = parse_subnet(
             "fleet_subnet_roots.placement_subnet",
@@ -318,6 +356,29 @@ fn resolve_document(
                 },
             )
             .collect();
+        let canister_pool_imports = root
+            .canister_pool
+            .imports
+            .iter()
+            .map(|value| parse_canister("fleet_subnet_roots.canister_pool.imports", value))
+            .collect::<Result<Vec<_>, _>>()?;
+        validate_canister_pool(root, &canister_pool_imports)?;
+        validate_imported_canister_placements(
+            placement_subnet,
+            &canister_pool_imports,
+            build_network,
+            catalog,
+        )?;
+        if let Some(duplicate) = canister_pool_imports
+            .iter()
+            .find(|canister_id| !imported_canisters.insert(**canister_id))
+        {
+            return Err(FleetInstallInputError::InvalidCanisterPool {
+                reason: format!(
+                    "imported Canister {duplicate} is assigned to more than one Fleet Subnet Root"
+                ),
+            });
+        }
         fleet_subnet_roots.push(PlannedFleetSubnetRootInput {
             placement_subnet,
             component_admissions,
@@ -326,11 +387,17 @@ fn resolve_document(
                 maximum_managed_canisters: root.limits.maximum_managed_canisters,
                 maximum_registry_bytes: root.limits.maximum_registry_bytes,
                 maximum_wasm_store_bytes: root.limits.maximum_wasm_store_bytes,
+                canister_pool: FleetSubnetCanisterPoolConfig {
+                    minimum_size: root.canister_pool.minimum_size,
+                    maximum_size: root.canister_pool.maximum_size,
+                    canister_cycles: root.canister_pool.canister_cycles.clone(),
+                },
                 cycles_funding: CyclesFundingBudget {
                     window_secs: root.limits.cycles_funding.window_secs,
                     maximum_cycles: root.limits.cycles_funding.maximum_cycles.clone(),
                 },
             },
+            canister_pool_imports,
             creation_funding,
         });
     }
@@ -454,7 +521,7 @@ fn parse_subnet(field: &str, value: &str) -> Result<SubnetId, FleetInstallInputE
             value: value.to_string(),
             reason: error.to_string(),
         })?;
-    if principal == Principal::anonymous() {
+    if principal == Principal::anonymous() || principal == Principal::management_canister() {
         return Err(FleetInstallInputError::InvalidSubnet {
             field: field.to_string(),
             value: value.to_string(),
@@ -462,6 +529,107 @@ fn parse_subnet(field: &str, value: &str) -> Result<SubnetId, FleetInstallInputE
         });
     }
     Ok(SubnetId::from_principal(principal))
+}
+
+fn parse_canister(field: &str, value: &str) -> Result<Principal, FleetInstallInputError> {
+    let principal =
+        Principal::from_text(value).map_err(|error| FleetInstallInputError::InvalidCanister {
+            field: field.to_string(),
+            value: value.to_string(),
+            reason: error.to_string(),
+        })?;
+    if principal == Principal::anonymous() || principal == Principal::management_canister() {
+        return Err(FleetInstallInputError::InvalidCanister {
+            field: field.to_string(),
+            value: value.to_string(),
+            reason: "reserved principal is not a Canister".to_string(),
+        });
+    }
+    Ok(principal)
+}
+
+fn validate_canister_pool(
+    root: &FleetSubnetRootInputDocument,
+    imports: &[Principal],
+) -> Result<(), FleetInstallInputError> {
+    let pool = &root.canister_pool;
+    if pool.minimum_size == 0 {
+        return Err(FleetInstallInputError::InvalidCanisterPool {
+            reason: "minimum_size must be greater than zero for every Fleet Subnet Root"
+                .to_string(),
+        });
+    }
+    if pool.maximum_size < pool.minimum_size {
+        return Err(FleetInstallInputError::InvalidCanisterPool {
+            reason: format!(
+                "maximum_size {} is smaller than minimum_size {}",
+                pool.maximum_size, pool.minimum_size
+            ),
+        });
+    }
+    if pool.maximum_size > root.limits.maximum_managed_canisters {
+        return Err(FleetInstallInputError::InvalidCanisterPool {
+            reason: format!(
+                "maximum_size {} exceeds maximum_managed_canisters {}",
+                pool.maximum_size, root.limits.maximum_managed_canisters
+            ),
+        });
+    }
+    if pool.canister_cycles.to_u128() == 0 {
+        return Err(FleetInstallInputError::InvalidCanisterPool {
+            reason: "canister_cycles must be greater than zero".to_string(),
+        });
+    }
+    if imports.len() > pool.maximum_size as usize {
+        return Err(FleetInstallInputError::InvalidCanisterPool {
+            reason: format!(
+                "{} imported Canisters exceed maximum_size {}",
+                imports.len(),
+                pool.maximum_size
+            ),
+        });
+    }
+    let unique = imports.iter().collect::<std::collections::BTreeSet<_>>();
+    if unique.len() != imports.len() {
+        return Err(FleetInstallInputError::InvalidCanisterPool {
+            reason: "imported Canister principals must be unique within one root".to_string(),
+        });
+    }
+    Ok(())
+}
+
+fn validate_imported_canister_placements(
+    expected_subnet: SubnetId,
+    imports: &[Principal],
+    build_network: BuildNetwork,
+    catalog: Option<&SubnetCatalog>,
+) -> Result<(), FleetInstallInputError> {
+    if build_network != BuildNetwork::Ic || imports.is_empty() {
+        return Ok(());
+    }
+    let catalog = catalog.ok_or_else(|| FleetInstallInputError::TrustedMetadataRequired {
+        selector: format!("Canister pool imports for Subnet {expected_subnet}"),
+    })?;
+    for canister in imports {
+        let resolved = catalog
+            .resolve_canister(&canister.to_text())
+            .map_err(|error| FleetInstallInputError::ImportedCanisterRoute {
+                canister: *canister,
+                reason: error.to_string(),
+            })?;
+        let actual = parse_subnet(
+            "trusted Canister routing catalog",
+            &resolved.subnet.subnet_principal,
+        )?;
+        if actual != expected_subnet {
+            return Err(FleetInstallInputError::ImportedCanisterSubnetMismatch {
+                canister: *canister,
+                expected: expected_subnet,
+                actual,
+            });
+        }
+    }
+    Ok(())
 }
 
 fn validate_profile(profile: &str) -> Result<(), FleetInstallInputError> {

@@ -19,17 +19,19 @@ pub(super) fn text_report(report: &FleetSubnetInventoryReportV1) -> String {
                 row.status
                     .as_deref()
                     .map_or_else(|| "-".to_string(), str::to_ascii_uppercase),
+                row.pooled_canisters.to_string(),
                 row.total_canisters.to_string(),
             ]
         })
         .collect::<Vec<_>>();
     let table = render_table(
-        &["SUBNET", "ROOT", "STATUS", "CANISTERS"],
+        &["SUBNET", "ROOT", "STATUS", "POOL", "CANISTERS"],
         &rows,
         &[
             ColumnAlign::Left,
             ColumnAlign::Left,
             ColumnAlign::Left,
+            ColumnAlign::Right,
             ColumnAlign::Right,
         ],
     );

@@ -1,5 +1,3 @@
-type FleetMode = variant { Enabled; Disabled; Readonly };
-type FleetStateInput = record { mode : FleetMode; cycles_funding_enabled : bool };
 type BootstrapStatusResponse = record {
   last_error : opt text;
   phase : text;
@@ -12,12 +10,26 @@ type CanicMetadataResponse = record {
   package_version : text;
   package_name : text;
 };
+//
+// CanisterInitAuthority
+//
+// Exact authority from which one managed non-root initializes its immutable identity.
+//
+type CanisterInitAuthority = variant {
+  Infrastructure : record { env : EnvBootstrapArgs; fleet : FleetBinding };
+  ComponentChild : record {
+    root : FleetSubnetRootBinding;
+    binding : ComponentChildBinding;
+  };
+  Component : record {
+    root : FleetSubnetRootBinding;
+    binding : ComponentBinding;
+  };
+};
 type CanisterInitPayload = record {
-  fleet : FleetBinding;
   install_id : blob;
   release_build_id : text;
-  env : EnvBootstrapArgs;
-  fleet_directory : FleetDirectoryInput;
+  authority : CanisterInitAuthority;
 };
 type CapabilityProof = variant { Structural };
 type CapabilityRequestMetadata = record {
@@ -26,6 +38,42 @@ type CapabilityRequestMetadata = record {
   issued_at_ns : nat64;
 };
 type CapabilityService = variant { Root };
+//
+// ComponentBinding
+//
+// Complete immutable identity and placement of one concrete Component.
+//
+type ComponentBinding = record {
+  placement_subnet : principal;
+  component : text;
+  role : text;
+  canister_id : principal;
+  fleet_subnet_root : principal;
+  authority : FleetRegistryAuthority;
+  component_spec : text;
+  spec_hash : blob;
+};
+//
+// ComponentChildBinding
+//
+// Complete immutable identity of one child at any depth in one exact Component tree.
+//
+type ComponentChildBinding = record {
+  component : ComponentBinding;
+  parent_canister_id : principal;
+  role : text;
+  canister_id : principal;
+};
+//
+// ComponentSpecAdmission
+//
+// Immutable permission and concrete-instance ceiling for one Spec on one Fleet Subnet Root.
+//
+type ComponentSpecAdmission = record {
+  maximum_root_instances : nat32;
+  component_spec : text;
+  spec_hash : blob;
+};
 type CycleTopupEvent = record {
   status : CycleTopupEventStatus;
   error : opt text;
@@ -34,12 +82,21 @@ type CycleTopupEvent = record {
   transferred_cycles : opt nat;
   sequence : nat32;
 };
+//
+// CycleTopupEventStatus
+//
 type CycleTopupEventStatus = variant {
   RequestScheduled;
   RequestOk;
   RequestErr;
 };
 type CycleTrackerEntry = record { cycles : nat; timestamp_secs : nat64 };
+//
+// CyclesFundingBudget
+//
+// Positive aggregate cycles-funding ceiling applied over one bounded window.
+//
+type CyclesFundingBudget = record { window_secs : nat64; maximum_cycles : nat };
 type CyclesRequest = record {
   metadata : opt RootRequestMetadata;
   cycles : nat;
@@ -47,8 +104,8 @@ type CyclesRequest = record {
 type CyclesResponse = record { cycles_transferred : nat };
 type EnvBootstrapArgs = record {
   fleet_subnet_root_pid : opt principal;
+  component_spec : opt text;
   canister_role : opt text;
-  subnet_slot : opt text;
   root_pid : opt principal;
   parent_pid : opt principal;
   subnet_pid : opt principal;
@@ -56,52 +113,64 @@ type EnvBootstrapArgs = record {
 type Error = record { code : ErrorCode; message : text };
 type ErrorCode = variant {
   Internal;
-  PolicyRoleAlreadyRegistered;
   InvalidInput;
   InvariantViolation;
-  PolicyShardRequiresServiceWithSharding;
+  WasmStoreChunkMissing;
   NotFound;
   AuthMaterialStale;
-  PolicySingletonAlreadyRegisteredUnderParent;
-  PolicyInstanceRequiresServiceWithIndex;
   Unauthorized;
-  PolicyReplicaRequiresServiceWithScaling;
+  WasmStoreManifestMissing;
   AuthProofExpired;
-  AuthProofPending;
-  AuthTokenExpired;
   InternalRpcMalformed;
   ResourceExhausted;
-  RootDataCertificateUnavailable;
+  AuthProofPending;
+  WasmStoreCapacityExceeded;
+  AuthTokenExpired;
   Unavailable;
+  RootDataCertificateUnavailable;
   Forbidden;
   OperationIdRequired;
-  Conflict;
-  WasmStoreCapacityExceeded;
-  WasmStoreChunkMissing;
   WasmStoreHashMismatch;
-  WasmStoreManifestMissing;
+  Conflict;
 };
+//
+// FleetActivationIdentity
+//
 type FleetActivationIdentity = record {
   fleet : FleetBinding;
-  release_build_id : text;
   operation_id : blob;
+  release_build_id : text;
 };
+//
+// FleetActivationPhase
+//
 type FleetActivationPhase = variant { Active; Prepared };
 type FleetActivationRequest = record {
   credential : FleetCredentialGenerationRef;
   operation_id : blob;
   activation_evidence_hash : blob;
 };
+//
+// FleetActivationStatusResponse
+//
 type FleetActivationStatusResponse = record {
-  credential_manifest : opt FleetCredentialManifest;
-  phase : FleetActivationPhase;
+  activated_at_ns : opt nat64;
   cascade_manifest : opt vec FleetCascadeManifestEntry;
   credential : opt FleetCredentialGenerationRef;
-  activated_at_ns : opt nat64;
-  identity : FleetActivationIdentity;
   cascade : opt FleetCascadeActivationEvidence;
+  credential_manifest : opt FleetCredentialManifest;
+  identity : FleetActivationIdentity;
+  phase : FleetActivationPhase;
 };
+//
+// FleetBinding
+//
+// Immutable binding between one installed Fleet and its source App.
+//
 type FleetBinding = record { app : text; fleet : FleetKey };
+//
+// FleetCascadeActivationEvidence
+//
 type FleetCascadeActivationEvidence = variant {
   Applied : record {
     state_snapshot_hash : blob;
@@ -109,46 +178,115 @@ type FleetCascadeActivationEvidence = variant {
   };
   Source : record { cascade_manifest_hash : blob };
 };
+//
+// FleetCascadeManifestEntry
+//
 type FleetCascadeManifestEntry = record {
   "principal" : principal;
   state_snapshot_hash : blob;
   topology_snapshot_hash : blob;
 };
+//
+// FleetCoordinatorBinding
+//
+// Immutable identity and exact physical placement of one Fleet Coordinator.
+//
+type FleetCoordinatorBinding = record {
+  fleet : FleetBinding;
+  coordinator_subnet : principal;
+  coordinator : principal;
+};
+//
+// FleetCredentialGenerationRef
+//
 type FleetCredentialGenerationRef = record {
-  manifest_hash : blob;
   generation : nat64;
+  manifest_hash : blob;
 };
 type FleetCredentialGenerationRequest = record {
   credential : FleetCredentialGenerationRef;
   operation_id : blob;
 };
+//
+// FleetCredentialManifest
+//
 type FleetCredentialManifest = record {
   fleet : FleetKey;
+  activation_id : blob;
+  generation : nat64;
+  root_policy_set_hash : blob;
   entries : vec FleetCredentialManifestEntry;
   renewal_template_set_hash : blob;
-  generation : nat64;
-  activation_id : blob;
-  root_policy_set_hash : blob;
 };
+//
+// FleetCredentialManifestEntry
+//
 type FleetCredentialManifestEntry = record {
-  subject_canister : principal;
-  root_issuer : principal;
-  proof_hash : blob;
   cert_hash : blob;
-  expires_at_ns : nat64;
-  key_identity_hash : blob;
+  root_issuer : principal;
   bundle_hash : blob;
   not_before_ns : nat64;
+  proof_hash : blob;
+  subject_canister : principal;
+  expires_at_ns : nat64;
+  key_identity_hash : blob;
 };
-type FleetKey = record { canonical_network_id : text; fleet_id : text };
-type DirectoryEntryInput = record { pid : principal; role : text };
-type DirectoryProvenance = record {
-  fleet : FleetBinding;
-  source_root : principal;
+//
+// FleetKey
+//
+// Complete network-qualified Fleet identity.
+//
+type FleetKey = record { fleet_id : text; canonical_network_id : text };
+//
+// FleetMode
+//
+type FleetMode = variant { Enabled; Disabled; Readonly };
+//
+// FleetRegistryAuthority
+//
+// Exact Coordinator binding and reinstall-local authority epoch for one Fleet Registry.
+//
+type FleetRegistryAuthority = record {
+  epoch : nat64;
+  binding : FleetCoordinatorBinding;
 };
-type FleetDirectoryInput = record {
-  provenance : DirectoryProvenance;
-  entries : vec DirectoryEntryInput;
+type FleetStateInput = record {
+  mode : FleetMode;
+  cycles_funding_enabled : bool;
+};
+//
+// FleetSubnetRootBinding
+//
+// Complete immutable identity, placement, admissions, and limits of one Fleet Subnet Root.
+//
+type FleetSubnetRootBinding = record {
+  placement_subnet : principal;
+  component_topology_digest : blob;
+  fleet_subnet_root : principal;
+  authority : FleetRegistryAuthority;
+  component_admissions : vec ComponentSpecAdmission;
+  limits : FleetSubnetRootLimits;
+};
+//
+// FleetSubnetRootLimits
+//
+// Immutable aggregate policy ceilings for one Fleet Subnet Root.
+//
+type FleetSubnetRootLimits = record {
+  maximum_registry_bytes : nat64;
+  maximum_wasm_store_bytes : nat64;
+  maximum_managed_canisters : nat32;
+  maximum_component_instances : nat32;
+  cycles_funding : CyclesFundingBudget;
+};
+//
+// ManagedCanisterBinding
+//
+// Immutable Registry-issued identity retained by one managed application Canister.
+//
+type ManagedCanisterBinding = variant {
+  ComponentChild : ComponentChildBinding;
+  Component : ComponentBinding;
 };
 type NonrootCyclesCapabilityEnvelopeV1 = record {
   "service" : CapabilityService;
@@ -161,21 +299,23 @@ type NonrootCyclesCapabilityResponseV1 = record { response : CyclesResponse };
 type Page = record { total : nat64; entries : vec CycleTopupEvent };
 type PageRequest = record { offset : nat64; limit : nat64 };
 type Page_1 = record { total : nat64; entries : vec CycleTrackerEntry };
-type Result = variant { Ok : nat; Err : Error };
-type Result_1 = variant { Ok : Page; Err : Error };
-type Result_2 = variant { Ok : Page_1; Err : Error };
-type Result_3 = variant { Ok : NonrootCyclesCapabilityResponseV1; Err : Error };
-type Result_4 = variant { Ok; Err : Error };
-type Result_5 = variant { Ok : vec WasmStoreCatalogEntryResponse; Err : Error };
-type Result_6 = variant { Ok : TemplateChunkResponse; Err : Error };
-type Result_7 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
-type Result_8 = variant { Ok : WasmStoreStatusResponse; Err : Error };
-type Result_9 = variant { Ok : FleetActivationStatusResponse; Err : Error };
-type RootRequestMetadata = record { request_id : blob; ttl_ns : nat64 };
-type StateSnapshotInput = record {
-  fleet_state : opt FleetStateInput;
-  fleet_directory : opt FleetDirectoryInput;
+type Result = variant { Ok : FleetActivationStatusResponse; Err : Error };
+type Result_1 = variant { Ok : nat; Err : Error };
+type Result_10 = variant {
+  Ok : WasmStoreDeletionCycleReclamationResponse;
+  Err : Error;
 };
+type Result_11 = variant { Ok : WasmStoreStatusResponse; Err : Error };
+type Result_2 = variant { Ok : Page; Err : Error };
+type Result_3 = variant { Ok : Page_1; Err : Error };
+type Result_4 = variant { Ok : ManagedCanisterBinding; Err : Error };
+type Result_5 = variant { Ok : NonrootCyclesCapabilityResponseV1; Err : Error };
+type Result_6 = variant { Ok; Err : Error };
+type Result_7 = variant { Ok : vec WasmStoreCatalogEntryResponse; Err : Error };
+type Result_8 = variant { Ok : TemplateChunkResponse; Err : Error };
+type Result_9 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
+type RootRequestMetadata = record { request_id : blob; ttl_ns : nat64 };
+type StateSnapshotInput = record { fleet_state : opt FleetStateInput };
 type TemplateChunkInput = record {
   chunk_index : nat32;
   template_id : text;
@@ -232,10 +372,26 @@ type WasmStoreCatalogEntryResponse = record {
   version : text;
   payload_hash : blob;
 };
+type WasmStoreDeletionCycleReclamationRequest = record {
+  maximum_cycles_to_retain : nat;
+};
+type WasmStoreDeletionCycleReclamationResponse = record {
+  cycles_after : nat;
+  destination : principal;
+  maximum_cycles_to_retain : nat;
+  cycles_transferred : nat;
+  cycles_before : nat;
+};
 //
 // WasmStoreGcMode
 //
-type WasmStoreGcMode = variant { Complete; Normal; Prepared; InProgress };
+type WasmStoreGcMode = variant {
+  Clearing;
+  Complete;
+  Normal;
+  Prepared;
+  InProgress;
+};
 type WasmStoreGcStatusResponse = record {
   prepared_at : opt nat64;
   changed_at : nat64;
@@ -266,29 +422,35 @@ type WasmStoreTemplateStatusResponse = record {
   versions : nat16;
 };
 service : (CanisterInitPayload, opt blob) -> {
-  canic_activate_fleet : (FleetActivationRequest) -> (Result_9);
+  canic_activate_fleet : (FleetActivationRequest) -> (Result);
   canic_bootstrap_status : () -> (BootstrapStatusResponse) query;
-  canic_cycle_balance : () -> (Result) query;
-  canic_fleet_activation_status : () -> (Result_9) query;
-  canic_cycle_topups : (PageRequest) -> (Result_1) query;
-  canic_cycle_tracker : (PageRequest) -> (Result_2) query;
+  canic_cycle_balance : () -> (Result_1) query;
+  canic_cycle_topups : (PageRequest) -> (Result_2) query;
+  canic_cycle_tracker : (PageRequest) -> (Result_3) query;
+  canic_fleet_activation_status : () -> (Result) query;
+  canic_managed_canister_binding : () -> (Result_4) query;
   canic_metadata : () -> (CanicMetadataResponse) query;
-  canic_prepare_fleet_credential_generation : (FleetCredentialGenerationRequest) -> (Result_9);
+  canic_prepare_fleet_credential_generation : (
+      FleetCredentialGenerationRequest,
+    ) -> (Result);
   canic_ready : () -> (bool) query;
   canic_response_capability_v1 : (NonrootCyclesCapabilityEnvelopeV1) -> (
-      Result_3,
+      Result_5,
     );
-  canic_sync_state : (StateSnapshotInput) -> (Result_4);
-  canic_sync_topology : (TopologySnapshotInput) -> (Result_4);
-  canic_wasm_store_begin_gc : () -> (Result_4);
-  canic_wasm_store_catalog : () -> (Result_5) query;
-  canic_wasm_store_chunk : (text, text, nat32) -> (Result_6);
-  canic_wasm_store_complete_gc : () -> (Result_4);
-  canic_wasm_store_info : (text, text) -> (Result_7);
-  canic_wasm_store_prepare : (TemplateChunkSetPrepareInput) -> (Result_7);
-  canic_wasm_store_prepare_gc : () -> (Result_4);
-  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_4);
-  canic_wasm_store_stage_manifest : (TemplateManifestInput) -> (Result_4);
-  canic_wasm_store_status : () -> (Result_8) query;
+  canic_sync_state : (StateSnapshotInput) -> (Result_6);
+  canic_sync_topology : (TopologySnapshotInput) -> (Result_6);
+  canic_wasm_store_begin_gc : () -> (Result_6);
+  canic_wasm_store_catalog : () -> (Result_7) query;
+  canic_wasm_store_chunk : (text, text, nat32) -> (Result_8);
+  canic_wasm_store_complete_gc : () -> (Result_6);
+  canic_wasm_store_info : (text, text) -> (Result_9);
+  canic_wasm_store_prepare : (TemplateChunkSetPrepareInput) -> (Result_9);
+  canic_wasm_store_prepare_gc : () -> (Result_6);
+  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_6);
+  canic_wasm_store_reclaim_deletion_cycles : (
+      WasmStoreDeletionCycleReclamationRequest,
+    ) -> (Result_10);
+  canic_wasm_store_stage_manifest : (TemplateManifestInput) -> (Result_6);
+  canic_wasm_store_status : () -> (Result_11) query;
   icrc10_supported_standards : () -> (vec record { text; text }) query;
 }

@@ -503,6 +503,9 @@ fn encode_limits(encoder: &mut CanonicalEncoder, limits: &FleetSubnetRootLimits)
     encoder.u32(limits.maximum_managed_canisters);
     encoder.u64(limits.maximum_registry_bytes);
     encoder.u64(limits.maximum_wasm_store_bytes);
+    encoder.u32(limits.canister_pool.minimum_size);
+    encoder.u32(limits.canister_pool.maximum_size);
+    encoder.u128(limits.canister_pool.canister_cycles.to_u128());
     encoder.u64(limits.cycles_funding.window_secs);
     encoder.u128(limits.cycles_funding.maximum_cycles.to_u128());
 }

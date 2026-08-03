@@ -43,8 +43,7 @@ pub fn query_canic_metadata_version(
     parse_canic_metadata_version_response(&output).map_err(Into::into)
 }
 
-/// Parse a Canic framework version from `canic_metadata` command output.
-pub fn parse_canic_metadata_version_response(output: &str) -> Result<String, IcpJsonResponseError> {
+fn parse_canic_metadata_version_response(output: &str) -> Result<String, IcpJsonResponseError> {
     let metadata = decode_json_response::<CanicMetadataResponse>(output)?;
     Ok(metadata.canic_version)
 }

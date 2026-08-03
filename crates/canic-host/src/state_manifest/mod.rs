@@ -262,7 +262,6 @@ mod tests {
                     StateAllocationKey::CoreReplayReceipts,
                     StateAllocationKey::CoreRuntimeObservability,
                     StateAllocationKey::CoreRuntimeIntent,
-                    StateAllocationKey::CanisterPool,
                     StateAllocationKey::TemplateManifests,
                     StateAllocationKey::TemplateChunkSets,
                     StateAllocationKey::TemplateChunkRefs,
@@ -477,9 +476,9 @@ mod tests {
             role.state
                 .iter()
                 .filter_map(|domain| domain.memory_id)
-                .filter(|memory_id| (58..=61).contains(memory_id))
+                .filter(|memory_id| (55..=58).contains(memory_id))
                 .collect::<Vec<_>>(),
-            vec![59, 61, 60, 58]
+            vec![56, 58, 57, 55]
         );
         assert!(role.state.iter().all(|domain| domain.owner == "canic-core"));
     }
@@ -489,16 +488,16 @@ mod tests {
         let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
 
         for (config_path, role, expected_ids) in [
-            ("apps/test/canic.toml", "user_hub", vec![52, 55, 56, 57]),
+            ("apps/test/canic.toml", "user_hub", vec![52, 53, 54]),
             (
                 "canisters/audit/scaling_probe/canic.toml",
                 "scale_hub",
-                vec![52, 53],
+                vec![50],
             ),
             (
                 "canisters/test/project_hub_stub/canic.toml",
                 "project_hub",
-                vec![52, 54],
+                vec![51],
             ),
         ] {
             let config = workspace.join(config_path);
@@ -510,7 +509,7 @@ mod tests {
                 .state
                 .iter()
                 .filter_map(|domain| domain.memory_id)
-                .filter(|memory_id| (52..=57).contains(memory_id))
+                .filter(|memory_id| (50..=54).contains(memory_id))
                 .collect::<Vec<_>>();
             actual_ids.sort_unstable();
 
@@ -540,8 +539,8 @@ mod tests {
         assert_eq!(
             ids,
             vec![
-                10, 11, 12, 13, 15, 30, 31, 32, 33, 34, 36, 37, 38, 39, 40, 41, 43, 44, 45, 46, 47,
-                48, 49, 50, 51,
+                10, 11, 12, 13, 15, 30, 31, 32, 34, 35, 36, 37, 38, 39, 41, 42, 43, 44, 45, 46, 47,
+                48, 49,
             ]
         );
         assert_eq!(

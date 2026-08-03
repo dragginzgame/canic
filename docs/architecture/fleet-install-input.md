@@ -32,6 +32,12 @@ placement_subnet = "<workload-subnet-principal>"
 project_hub = 10
 database = 3
 
+[fleet_subnet_roots.canister_pool]
+minimum_size = 3
+maximum_size = 10
+canister_cycles = "5T"
+imports = []
+
 [fleet_subnet_roots.limits]
 maximum_component_instances = 13
 maximum_managed_canisters = 20000
@@ -59,6 +65,23 @@ Components may then be created through the active-root lifecycle. Exact
 nonempty initial placement is a separate 0.101 Component Group deployment
 authority.
 
+Every root has one required prepaid empty-Canister policy. `minimum_size` is
+the ready target maintained after root activation, `maximum_size` bounds
+configured imports and proactive refill, and `canister_cycles` funds each new
+refill asset. `imports` accepts exact existing Canister principals that the
+root will take under sole control, uninstall and validate before use. Imported
+principals must be non-reserved, unique within the root and unique across the
+complete Fleet input. On IC mainnet, every import must also have trusted
+routing-catalog evidence for the exact Subnet occupied by that root; missing
+or different placement fails before installation. Recycled workload
+Canisters remain tracked even if their return temporarily exceeds
+`maximum_size`.
+
+The same placement rule applies to controller-requested runtime imports on IC:
+the root requeries the NNS Registry before taking control. Non-mainnet imports
+remain explicit operator authority because those networks do not provide the
+trusted IC routing catalog.
+
 All root limits and funding amounts are explicit. Cycle amounts accept exact
 integers or Canic cycle suffixes such as `"2T"`. ICP creation funding uses:
 
@@ -68,7 +91,8 @@ kind = "icp"
 e8s = 100000000
 ```
 
-Zero funding, zero limits, unknown Specs, duplicate Subnets, incomplete
+Zero funding, zero limits, invalid pool ranges, over-limit, duplicate or
+wrong-Subnet pool imports, unknown Specs, duplicate Subnets, incomplete
 admission coverage, or a root that cannot fit one admitted Component tree
 fails before Canister creation.
 
@@ -140,4 +164,10 @@ Successful terminal publication is Coordinator-anchored.
 `canic info subnets <fleet> [--json]` resolves that terminal authority and
 reports exact Fleet-owned Canister counts by occupied physical Subnet. It
 fails closed while installation remains before the terminal catalog boundary
-or when current Coordinator/root evidence is incomplete.
+or when current Coordinator/root evidence is incomplete. Root rows expose
+pooled Canisters separately and include them in their exact totals.
+
+Each root's controller-only `canic_pool_list` query supplies the detailed,
+paginated asset ledger. During root draining, `canic_pool_admin` can hand ready
+or failed assets to explicit replacement authority one at a time; final root
+inventory remains fenced until the tracked pool is empty.

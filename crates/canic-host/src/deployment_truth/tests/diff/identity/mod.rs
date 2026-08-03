@@ -234,7 +234,7 @@ fn deployment_diff_uses_concrete_expected_id_for_installed_module_hash() {
         root_trust_anchor: Some("aaaaa-aa".to_string()),
         canonical_embedded_config_digest: None,
         role_assignment_source: Some(
-            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus
+            RoleAssignmentSourceV1::ComponentRegistryAndIcpCanisterStatus
                 .label()
                 .to_string(),
         ),
@@ -271,7 +271,7 @@ fn deployment_diff_blocks_ambiguous_installed_module_hash_target() {
         root_trust_anchor: Some("aaaaa-aa".to_string()),
         canonical_embedded_config_digest: None,
         role_assignment_source: Some(
-            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus
+            RoleAssignmentSourceV1::ComponentRegistryAndIcpCanisterStatus
                 .label()
                 .to_string(),
         ),

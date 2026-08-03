@@ -306,7 +306,7 @@ fn deployment_diff_blocks_cross_surface_role_conflict_for_same_canister_id() {
         root_trust_anchor: Some("aaaaa-aa".to_string()),
         canonical_embedded_config_digest: None,
         role_assignment_source: Some(
-            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus
+            RoleAssignmentSourceV1::ComponentRegistryAndIcpCanisterStatus
                 .label()
                 .to_string(),
         ),

@@ -386,42 +386,6 @@ impl From<ComponentChildKind> for CanisterKind {
 }
 
 ///
-/// PoolImport
-///
-/// Per-environment import lists for canister pools.
-/// Owned by config schema and consumed by pool import workflows.
-///
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct PoolImport {
-    /// Optional count of canisters to import immediately before queuing the rest.
-    #[serde(default)]
-    pub initial: Option<u16>,
-
-    #[serde(default)]
-    pub local: Vec<Principal>,
-
-    #[serde(default)]
-    pub ic: Vec<Principal>,
-}
-
-///
-/// CanisterPool
-///
-/// Pool sizing and import configuration for root-managed canister pools.
-/// Owned by config schema and validated before pool workflows use it.
-///
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct CanisterPool {
-    pub minimum_size: u8,
-    #[serde(default)]
-    pub import: PoolImport,
-}
-
-///
 /// CanisterAuthConfig
 ///
 /// Canister-local auth feature flags.

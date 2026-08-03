@@ -156,7 +156,7 @@ fn deployment_diff_warns_for_extra_observed_canister_roles() {
         root_trust_anchor: Some("aaaaa-aa".to_string()),
         canonical_embedded_config_digest: None,
         role_assignment_source: Some(
-            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus
+            RoleAssignmentSourceV1::ComponentRegistryAndIcpCanisterStatus
                 .label()
                 .to_string(),
         ),
@@ -193,7 +193,7 @@ fn deployment_diff_warns_for_duplicate_observed_planned_role() {
         root_trust_anchor: Some("aaaaa-aa".to_string()),
         canonical_embedded_config_digest: None,
         role_assignment_source: Some(
-            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus
+            RoleAssignmentSourceV1::ComponentRegistryAndIcpCanisterStatus
                 .label()
                 .to_string(),
         ),
@@ -238,7 +238,7 @@ fn deployment_diff_blocks_ambiguous_expected_role_without_canister_id() {
         root_trust_anchor: Some("aaaaa-aa".to_string()),
         canonical_embedded_config_digest: None,
         role_assignment_source: Some(
-            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus
+            RoleAssignmentSourceV1::ComponentRegistryAndIcpCanisterStatus
                 .label()
                 .to_string(),
         ),
@@ -253,7 +253,7 @@ fn deployment_diff_blocks_ambiguous_expected_role_without_canister_id() {
         root_trust_anchor: Some("aaaaa-aa".to_string()),
         canonical_embedded_config_digest: None,
         role_assignment_source: Some(
-            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus
+            RoleAssignmentSourceV1::ComponentRegistryAndIcpCanisterStatus
                 .label()
                 .to_string(),
         ),
@@ -321,7 +321,7 @@ fn deployment_diff_blocks_conflicting_roles_for_same_canister_id() {
         root_trust_anchor: Some("aaaaa-aa".to_string()),
         canonical_embedded_config_digest: None,
         role_assignment_source: Some(
-            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus
+            RoleAssignmentSourceV1::ComponentRegistryAndIcpCanisterStatus
                 .label()
                 .to_string(),
         ),
@@ -394,7 +394,7 @@ fn enriched_registry_status_participates_in_controller_checks() {
         root_trust_anchor: Some("aaaaa-aa".to_string()),
         canonical_embedded_config_digest: None,
         role_assignment_source: Some(
-            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus
+            RoleAssignmentSourceV1::ComponentRegistryAndIcpCanisterStatus
                 .label()
                 .to_string(),
         ),

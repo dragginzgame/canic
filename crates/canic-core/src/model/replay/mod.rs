@@ -468,10 +468,8 @@ mod tests {
             Err(CommandKindError::InvalidCharacter)
         );
         assert_eq!(
-            CommandKind::new("pool.create_empty.v1")
-                .expect("kind")
-                .as_str(),
-            "pool.create_empty.v1"
+            CommandKind::new("proof.issue.v1").expect("kind").as_str(),
+            "proof.issue.v1"
         );
     }
 

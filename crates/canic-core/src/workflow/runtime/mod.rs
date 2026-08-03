@@ -63,7 +63,6 @@ impl RuntimeWorkflow {
         workflow::runtime::intent::IntentCleanupWorkflow::start()?;
 
         // root-only services
-        workflow::pool::scheduler::PoolSchedulerWorkflow::start();
         workflow::runtime::auth::RuntimeAuthWorkflow::reconcile_root_issuer_renewal()?;
         Ok(())
     }

@@ -8,13 +8,10 @@ pub mod auth;
 mod canister;
 pub mod children;
 pub mod cycles;
-pub mod directory;
 pub mod fleet_activation;
 pub mod icp_refill;
 pub mod intent;
 pub mod placement;
-pub mod pool;
-pub mod registry;
 pub mod replay;
 pub mod state;
 
@@ -33,9 +30,6 @@ pub enum StorageOpsError {
     FleetActivationOps(#[from] fleet_activation::FleetActivationOpsError),
 
     #[error(transparent)]
-    DirectoryOps(#[from] directory::DirectoryOpsError),
-
-    #[error(transparent)]
     IntentStoreOps(#[from] intent::IntentStoreOpsError),
 
     #[error(transparent)]
@@ -47,9 +41,6 @@ pub enum StorageOpsError {
     #[cfg(feature = "sharding")]
     #[error(transparent)]
     ShardingRegistryOps(#[from] placement::sharding::ShardingRegistryOpsError),
-
-    #[error(transparent)]
-    SubnetRegistryOps(#[from] registry::subnet::SubnetRegistryOpsError),
 }
 
 impl From<StorageOpsError> for InternalError {

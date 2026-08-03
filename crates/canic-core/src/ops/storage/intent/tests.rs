@@ -587,24 +587,6 @@ fn cleanup_abort_rejects_missing_totals_without_mutation() {
 }
 
 #[test]
-fn unique_pending_intent_lookup_rejects_ambiguous_resource_ownership() {
-    reset();
-    let resource_key = key();
-    let first = IntentId(12);
-    let second = IntentId(13);
-
-    reserve(first, resource_key.clone(), 1, None).expect("first reservation");
-    assert_eq!(
-        IntentStoreOps::unique_pending_intent_id(&resource_key).expect("unique pending intent"),
-        Some(first)
-    );
-
-    reserve(second, resource_key.clone(), 1, None).expect("second reservation");
-    IntentStoreOps::unique_pending_intent_id(&resource_key)
-        .expect_err("ambiguous recovery identity must fail closed");
-}
-
-#[test]
 fn prevents_aggregate_underflow() {
     reset();
     let resource_key = key();

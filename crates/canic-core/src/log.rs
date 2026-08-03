@@ -42,7 +42,6 @@ impl Level {
 pub enum Topic {
     Auth,
     CanisterLifecycle,
-    CanisterPool,
     Config,
     Cycles,
     Fleet,
@@ -63,7 +62,6 @@ impl Topic {
         match self {
             Self::Auth => "Auth",
             Self::CanisterLifecycle => "CanisterLifecycle",
-            Self::CanisterPool => "CanisterPool",
             Self::Config => "Config",
             Self::Cycles => "Cycles",
             Self::Fleet => "Fleet",
@@ -84,7 +82,6 @@ impl Topic {
         match self {
             Self::Auth => "auth",
             Self::CanisterLifecycle => "canister_lifecycle",
-            Self::CanisterPool => "canister_pool",
             Self::Config => "config",
             Self::Cycles => "cycles",
             Self::Fleet => "fleet",

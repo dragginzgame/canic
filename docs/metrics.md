@@ -67,7 +67,7 @@ invalid-input error for that canister.
 | `MetricsKind` | Families | Notes |
 | ------------- | -------- | ----- |
 | `Core` | `lifecycle`, `canister_ops`, `cycles_funding`, `cycles_topup` | Operator-facing lifecycle, canister operation, and cycles rows. |
-| `Placement` | `cascade`, `directory`, `pool`, `scaling`, `sharding` | Fleet placement and topology rows. `sharding` is present only when the sharding feature is enabled. |
+| `Placement` | `cascade`, `placement_index`, `scaling`, `sharding` | Component placement and topology rows. `sharding` is present only when the sharding feature is enabled. |
 | `Platform` | `platform_call`, `inter_canister_call` | Low-cardinality IC/platform I/O rows. |
 | `Runtime` | `intent`, `perf`, `timer` | Runtime reservation, instruction, and timer rows. |
 | `Security` | `access`, `auth`, `delegated_auth`, `replay`, `root_capability` | Access, delegated auth, replay, and capability rows. |
@@ -80,8 +80,13 @@ record observability through the existing funding family.
 
 ### `Placement`
 
-Placement rows cover topology propagation, directory placement, reusable pools,
-scaling, and feature-gated sharding.
+Placement rows cover direct-child topology propagation, keyed placement indexes,
+scaling pools, and feature-gated sharding pools.
+
+The Fleet Subnet Root prepaid empty-Canister inventory is not a Component
+placement metric family. Its exact current policy and asset states are exposed
+through the bounded controller-only pool status query; Fleet-wide counts are
+included in `canic info subnets`.
 
 ### `Platform`
 
@@ -116,13 +121,12 @@ use the existing family-specific dimensions:
 | `cycles_funding` | `[metric]`, `[metric, reason]`, or `[icp_refill, phase, metric, value]` | Child principal for child-scoped rows; root principal for root-refill rows | `Count` or `U128` |
 | `cycles_topup` | `[metric]` | `None` | `Count` |
 | `delegated_auth` | `[delegated_auth_authority]` or `[operation, outcome, reason]` | Verified signer authority for authority rows | `Count` |
-| `directory` | `[operation, outcome, reason]` | `None` | `Count` |
 | `intent` | `[surface, operation, outcome, reason]` | `None` | `Count` |
 | `inter_canister_call` | `[method]` | Target canister principal | `Count` |
 | `lifecycle` | `[phase, role, stage, outcome]` | `None` | `Count` |
 | `perf` | `[endpoint, call_kind, name]`, `[timer, label]`, or `[checkpoint, scope, label]` | `None` | `CountAndU64` |
 | `platform_call` | `[surface, mode, outcome, reason]` | `None` | `Count` |
-| `pool` | `[operation, outcome, reason]` | `None` | `Count` |
+| `placement_index` | `[operation, outcome, reason]` | `None` | `Count` |
 | `replay` | `[operation, outcome, reason]` | `None` | `Count` |
 | `root_capability` | `[capability, event_type, outcome, proof_mode]` | `None` | `Count` |
 | `scaling` | `[operation, outcome, reason]` | `None` | `Count` |
@@ -153,13 +157,11 @@ project the refill record allocation.
 ## Internal Counters
 
 The runtime still records detailed internal counters for management-canister
-calls, provisioning workflow phases, and coarse system operations. Those tables
+calls and coarse system operations. Those tables
 are intentionally not exposed as separate public `MetricsKind` values because
 they overlap the public operator tiers:
 
 - Management-call progress is visible through `platform_call` and higher-level
   `canister_ops` rows.
-- Provisioning workflow progress is folded into public canister operation and
-  placement rows where it is operator-relevant.
 - Coarse system counters are redundant with `platform_call`,
   `inter_canister_call`, and `timer`.

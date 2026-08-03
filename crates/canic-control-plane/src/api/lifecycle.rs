@@ -82,6 +82,8 @@ impl LifecycleApi {
         config_path: &str,
         embedded_wasm_store_bootstrap_release_set: &'static [EmbeddedRootBootstrapEntry],
     ) {
+        let canister_pool_config = args.authority.binding.limits.canister_pool.clone();
+        let canister_pool_imports = args.canister_pool_imports.clone();
         crate::api::template::WasmStoreBootstrapApi::register_embedded_root_wasm_store_release_set(
             embedded_wasm_store_bootstrap_release_set,
         );
@@ -92,6 +94,14 @@ impl LifecycleApi {
             config_source,
             config_path,
         );
+        crate::ops::canister_pool::CanisterPoolOps::initialize_imports(
+            &canister_pool_config,
+            &canister_pool_imports,
+            canic_core::control_plane_support::ops::ic::IcOps::now_nanos(),
+        )
+        .unwrap_or_else(|error| {
+            ic_cdk::trap(format!("Canister pool initialization failed: {error}"))
+        });
         crate::api::template::WasmStoreBootstrapApi::log_embedded_root_wasm_store_release_set(
             embedded_wasm_store_bootstrap_release_set,
         );
@@ -642,6 +652,9 @@ impl LifecycleApi {
         crate::api::template::WasmStoreBootstrapApi::log_embedded_root_wasm_store_release_set(
             embedded_wasm_store_bootstrap_release_set,
         );
+        if active {
+            crate::workflow::canister_pool::start();
+        }
         active
     }
 

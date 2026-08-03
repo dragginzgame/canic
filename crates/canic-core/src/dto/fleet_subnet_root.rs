@@ -47,6 +47,7 @@ pub struct FleetSubnetRootCanisterSummary {
     pub status: FleetSubnetRootStatus,
     pub infrastructure_canisters: u32,
     pub component_canisters: u32,
+    pub pooled_canisters: u32,
     pub total_canisters: u32,
 }
 
@@ -316,6 +317,8 @@ pub struct FleetSubnetRootFinalInventoryResponse {
 pub struct FleetSubnetRootInitArgs {
     pub authority: FleetSubnetRootAuthority,
     pub install_id: [u8; 32],
+    /// Existing prepaid empty Canisters the root must validate, reset, and adopt.
+    pub canister_pool_imports: Vec<Principal>,
 }
 
 #[cfg(test)]
@@ -749,7 +752,8 @@ mod tests {
             status: FleetSubnetRootStatus::Active,
             infrastructure_canisters: 2,
             component_canisters: 3,
-            total_canisters: 5,
+            pooled_canisters: 4,
+            total_canisters: 9,
         }
     }
 

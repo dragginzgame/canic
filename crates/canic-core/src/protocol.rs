@@ -192,6 +192,8 @@ pub const BLOB_STORAGE_CASHIER_STORAGE_GATEWAY_PRINCIPAL_LIST_V1: &str =
 
 pub const CANIC_SYNC_STATE: &str = "canic_sync_state";
 pub const CANIC_SYNC_TOPOLOGY: &str = "canic_sync_topology";
+/// Maximum encoded payload accepted by state and topology cascade endpoints.
+pub const CASCADE_SNAPSHOT_MAX_BYTES: usize = 16_384;
 
 pub const CANIC_WASM_STORE_ROOT_UPDATE_METHODS: &[&str] = &[
     CANIC_WASM_STORE_BEGIN_GC,

@@ -6,8 +6,8 @@
 
 use crate::{
     ops::{
-        component_registry::ComponentRegistryOps, fleet_registry_mirror::FleetRegistryMirrorOps,
-        storage::state::subnet::SubnetStateOps,
+        canister_pool::CanisterPoolOps, component_registry::ComponentRegistryOps,
+        fleet_registry_mirror::FleetRegistryMirrorOps, storage::state::subnet::SubnetStateOps,
     },
     view::component_registry::{
         RootComponentRegistryView, RootFleetSubnetDeletionPreparationAuthority,
@@ -95,12 +95,13 @@ pub fn begin_draining(
             "Fleet Subnet Root draining request differs from the active Registry mirror",
         ));
     }
-    ComponentRegistryOps::begin_root_draining(
+    let draining = ComponentRegistryOps::begin_root_draining(
         request.operation_id,
         &request.expected_registry,
         IcOps::now_nanos(),
-    )
-    .map(draining_response)
+    )?;
+    crate::workflow::canister_pool::stop();
+    Ok(draining_response(draining))
 }
 
 /// Read one exact durable root-local draining fence without mutation.
@@ -126,6 +127,18 @@ pub async fn finalize_inventory(
             ));
         }
         return Ok(final_inventory_response(existing));
+    }
+    let pooled_canisters = CanisterPoolOps::asset_count();
+    if pooled_canisters != 0 {
+        return Err(InternalError::unavailable(format!(
+            "Fleet Subnet Root final inventory cannot orphan {pooled_canisters} prepaid pool Canisters; handoff must complete first",
+        )));
+    }
+    if CanisterPoolOps::pending_creation().is_some() || CanisterPoolOps::pending_handoff().is_some()
+    {
+        return Err(InternalError::unavailable(
+            "Fleet Subnet Root final inventory requires all Canister pool work to reconcile",
+        ));
     }
     let intent_registry =
         ComponentRegistryOps::root_final_inventory_intent_registry(request.operation_id)?;
@@ -582,6 +595,7 @@ pub fn canister_summary() -> Result<FleetSubnetRootCanisterSummary, InternalErro
         state.root_entry,
         &state.component_registry,
         store_canisters,
+        CanisterPoolOps::asset_count(),
     )
 }
 
@@ -734,6 +748,7 @@ fn summary(
     root_entry: FleetSubnetRootEntry,
     registry: &RootComponentRegistryView,
     store_canisters: u32,
+    pooled_canisters: u32,
 ) -> Result<FleetSubnetRootCanisterSummary, InternalError> {
     let infrastructure_canisters = 1_u32.checked_add(store_canisters).ok_or_else(|| {
         InternalError::invariant(
@@ -743,6 +758,7 @@ fn summary(
     })?;
     let managed_canisters = store_canisters
         .checked_add(registry.known_created_component_canisters)
+        .and_then(|count| count.checked_add(pooled_canisters))
         .ok_or_else(|| {
             InternalError::invariant(
                 InternalErrorOrigin::Storage,
@@ -757,6 +773,7 @@ fn summary(
     }
     let total_canisters = infrastructure_canisters
         .checked_add(registry.known_created_component_canisters)
+        .and_then(|count| count.checked_add(pooled_canisters))
         .ok_or_else(|| {
             InternalError::invariant(
                 InternalErrorOrigin::Storage,
@@ -771,6 +788,7 @@ fn summary(
         status: root_entry.status,
         infrastructure_canisters,
         component_canisters: registry.known_created_component_canisters,
+        pooled_canisters,
         total_canisters,
     })
 }
@@ -1228,12 +1246,14 @@ mod tests {
             root_entry(&authority, FleetSubnetRootStatus::Active),
             &registry,
             1,
+            4,
         )
         .expect("build summary");
 
         assert_eq!(summary.infrastructure_canisters, 2);
         assert_eq!(summary.component_canisters, 3);
-        assert_eq!(summary.total_canisters, 5);
+        assert_eq!(summary.pooled_canisters, 4);
+        assert_eq!(summary.total_canisters, 9);
     }
 
     #[test]
@@ -1250,8 +1270,8 @@ mod tests {
         let mut entry = root_entry(&authority, FleetSubnetRootStatus::Active);
         entry.limits.maximum_managed_canisters = 3;
         assert!(
-            summary(version, entry, &registry, 1).is_err(),
-            "Store plus Component Canisters must not exceed the protected managed limit"
+            summary(version, entry, &registry, 1, 1).is_err(),
+            "Store, pool, and Component Canisters must not exceed the protected managed limit"
         );
     }
 
@@ -1344,6 +1364,11 @@ mod tests {
                     maximum_managed_canisters: 10,
                     maximum_registry_bytes: 1_024,
                     maximum_wasm_store_bytes: 2_048,
+                    canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {
+                        minimum_size: 1,
+                        maximum_size: 10,
+                        canister_cycles: Cycles::new(500_000),
+                    },
                     cycles_funding: CyclesFundingBudget {
                         window_secs: 60,
                         maximum_cycles: Cycles::new(1_000_000),

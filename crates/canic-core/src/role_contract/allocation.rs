@@ -36,65 +36,64 @@ pub mod memory {
         pub const ROOT_COMPONENT_PRINCIPAL_INDEX_ID: u8 = 21;
         pub const ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID: u8 = 22;
         pub const ROOT_COMPONENT_DRAINING_ID: u8 = 23;
+
+        // Fleet Subnet Root prepaid empty-Canister inventory.
+        pub const ROOT_CANISTER_POOL_ID: u8 = 24;
+        pub const ROOT_CANISTER_POOL_STATE_ID: u8 = 25;
+        pub const ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID: u8 = 26;
     }
 
     pub mod topology {
         pub const CANISTER_CHILDREN_ID: u8 = 30;
-        pub const FLEET_DIRECTORY_ID: u8 = 31;
-        pub const SUBNET_REGISTRY_ID: u8 = 32;
     }
 
     pub mod env {
-        pub const ENV_ID: u8 = 33;
-        pub const FLEET_STATE_ID: u8 = 34;
+        pub const ENV_ID: u8 = 31;
+        pub const FLEET_STATE_ID: u8 = 32;
     }
 
     pub mod auth {
-        pub const AUTH_STATE_ID: u8 = 35;
-        pub const REPLAY_RECEIPTS_ID: u8 = 36;
+        pub const AUTH_STATE_ID: u8 = 33;
+        pub const REPLAY_RECEIPTS_ID: u8 = 34;
     }
 
     pub mod activation {
-        pub const FLEET_ACTIVATION_ID: u8 = 37;
+        pub const FLEET_ACTIVATION_ID: u8 = 35;
     }
 
     pub mod observability {
-        pub const CYCLE_TRACKER_ID: u8 = 38;
-        pub const CYCLE_TOPUP_EVENTS_ID: u8 = 39;
-        pub const CYCLES_FUNDING_LEDGER_ID: u8 = 40;
-        pub const LOG_ENTRIES_ID: u8 = 41;
-        pub const ICP_REFILL_RECORDS_ID: u8 = 42;
+        pub const CYCLE_TRACKER_ID: u8 = 36;
+        pub const CYCLE_TOPUP_EVENTS_ID: u8 = 37;
+        pub const CYCLES_FUNDING_LEDGER_ID: u8 = 38;
+        pub const LOG_ENTRIES_ID: u8 = 39;
+        pub const ICP_REFILL_RECORDS_ID: u8 = 40;
     }
 
     pub mod intent {
-        pub const INTENT_META_ID: u8 = 43;
-        pub const INTENT_RECORDS_ID: u8 = 44;
-        pub const INTENT_TOTALS_ID: u8 = 45;
-        pub const INTENT_PENDING_ID: u8 = 46;
-        pub const RECEIPT_BACKED_INTENT_RECORDS_ID: u8 = 47;
-        pub const INTENT_EXPIRY_INDEX_ID: u8 = 48;
-        pub const PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID: u8 = 49;
-        pub const APPLICATION_RECEIPT_REPLAY_ID: u8 = 50;
-        pub const APPLICATION_RECEIPT_ELIGIBILITY_ID: u8 = 51;
-    }
-
-    pub mod pool {
-        pub const CANISTER_POOL_ID: u8 = 52;
+        pub const INTENT_META_ID: u8 = 41;
+        pub const INTENT_RECORDS_ID: u8 = 42;
+        pub const INTENT_TOTALS_ID: u8 = 43;
+        pub const INTENT_PENDING_ID: u8 = 44;
+        pub const RECEIPT_BACKED_INTENT_RECORDS_ID: u8 = 45;
+        pub const INTENT_EXPIRY_INDEX_ID: u8 = 46;
+        pub const PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID: u8 = 47;
+        pub const APPLICATION_RECEIPT_REPLAY_ID: u8 = 48;
+        pub const APPLICATION_RECEIPT_ELIGIBILITY_ID: u8 = 49;
     }
 
     pub mod placement {
-        pub const SCALING_REGISTRY_ID: u8 = 53;
-        pub const PLACEMENT_INDEX_REGISTRY_ID: u8 = 54;
-        pub const SHARDING_REGISTRY_ID: u8 = 55;
-        pub const SHARDING_ASSIGNMENT_ID: u8 = 56;
-        pub const SHARDING_ACTIVE_SET_ID: u8 = 57;
+        pub const SCALING_REGISTRY_ID: u8 = 50;
+        pub const PLACEMENT_INDEX_REGISTRY_ID: u8 = 51;
+        pub const SHARDING_REGISTRY_ID: u8 = 52;
+        pub const SHARDING_ASSIGNMENT_ID: u8 = 53;
+        pub const SHARDING_ACTIVE_SET_ID: u8 = 54;
     }
 
     pub mod blob_storage {
-        pub const STORED_BLOBS_ID: u8 = 58;
-        pub const BLOB_DELETION_PENDING_ID: u8 = 59;
-        pub const STORAGE_GATEWAY_PRINCIPALS_ID: u8 = 60;
-        pub const BLOB_STORAGE_BILLING_ID: u8 = 61;
+        pub const STORED_BLOBS_ID: u8 = 55;
+        pub const BLOB_DELETION_PENDING_ID: u8 = 56;
+        pub const STORAGE_GATEWAY_PRINCIPALS_ID: u8 = 57;
+        pub const BLOB_STORAGE_BILLING_ID: u8 = 58;
     }
 }
 
@@ -107,6 +106,7 @@ use memory::{
     },
     control_plane::{
         CONTROL_PLANE_SUBNET_STATE_ID, FLEET_COORDINATOR_REGISTRY_ID,
+        ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID, ROOT_CANISTER_POOL_ID, ROOT_CANISTER_POOL_STATE_ID,
         ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_DRAINING_ID,
         ROOT_COMPONENT_PRINCIPAL_INDEX_ID, ROOT_COMPONENT_REGISTRY_ENTRIES_ID,
         ROOT_COMPONENT_REGISTRY_META_ID, ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID,
@@ -127,15 +127,10 @@ use memory::{
         PLACEMENT_INDEX_REGISTRY_ID, SCALING_REGISTRY_ID, SHARDING_ACTIVE_SET_ID,
         SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID,
     },
-    pool::CANISTER_POOL_ID,
-    topology::{CANISTER_CHILDREN_ID, FLEET_DIRECTORY_ID, SUBNET_REGISTRY_ID},
+    topology::CANISTER_CHILDREN_ID,
 };
 
-const CORE_RUNTIME_TOPOLOGY_IDS: &[MemoryId] = &[
-    MemoryId::new(CANISTER_CHILDREN_ID),
-    MemoryId::new(FLEET_DIRECTORY_ID),
-    MemoryId::new(SUBNET_REGISTRY_ID),
-];
+const CORE_RUNTIME_TOPOLOGY_IDS: &[MemoryId] = &[MemoryId::new(CANISTER_CHILDREN_ID)];
 const CORE_RUNTIME_ENVIRONMENT_IDS: &[MemoryId] =
     &[MemoryId::new(ENV_ID), MemoryId::new(FLEET_STATE_ID)];
 const CORE_AUTH_STATE_IDS: &[MemoryId] = &[MemoryId::new(AUTH_STATE_ID)];
@@ -159,7 +154,6 @@ const CORE_RUNTIME_INTENT_IDS: &[MemoryId] = &[
     MemoryId::new(APPLICATION_RECEIPT_REPLAY_ID),
     MemoryId::new(APPLICATION_RECEIPT_ELIGIBILITY_ID),
 ];
-const CANISTER_POOL_IDS: &[MemoryId] = &[MemoryId::new(CANISTER_POOL_ID)];
 const SCALING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(SCALING_REGISTRY_ID)];
 const PLACEMENT_INDEX_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(PLACEMENT_INDEX_REGISTRY_ID)];
 const SHARDING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_REGISTRY_ID)];
@@ -184,6 +178,11 @@ const ROOT_COMPONENT_REGISTRY_IDS: &[MemoryId] = &[
     MemoryId::new(ROOT_COMPONENT_PRINCIPAL_INDEX_ID),
     MemoryId::new(ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID),
     MemoryId::new(ROOT_COMPONENT_DRAINING_ID),
+];
+const ROOT_CANISTER_POOL_IDS: &[MemoryId] = &[
+    MemoryId::new(ROOT_CANISTER_POOL_ID),
+    MemoryId::new(ROOT_CANISTER_POOL_STATE_ID),
+    MemoryId::new(ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID),
 ];
 
 const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
@@ -226,11 +225,6 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         StateAllocationKey::CoreRuntimeIntent,
         AllocationOwner::CanicCore,
         CORE_RUNTIME_INTENT_IDS,
-    ),
-    definition(
-        StateAllocationKey::CanisterPool,
-        AllocationOwner::CanicCore,
-        CANISTER_POOL_IDS,
     ),
     definition(
         StateAllocationKey::ScalingRegistry,
@@ -316,6 +310,11 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         StateAllocationKey::RootFleetRegistryMirror,
         AllocationOwner::CanicControlPlane,
         ROOT_FLEET_REGISTRY_MIRROR_IDS,
+    ),
+    definition(
+        StateAllocationKey::CanisterPool,
+        AllocationOwner::CanicControlPlane,
+        ROOT_CANISTER_POOL_IDS,
     ),
     definition(
         StateAllocationKey::RootComponentRegistry,

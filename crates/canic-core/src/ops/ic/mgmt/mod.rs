@@ -34,17 +34,16 @@ use crate::{
 };
 use std::future::Future;
 
-pub use types::{
-    CanisterSettings, CanisterSettingsSnapshot, CanisterStatus, CanisterStatusObservation,
-    EcdsaKeyId, EcdsaPublicKeyArgs, EcdsaPublicKeyResult, EnvironmentVariable,
-    MemoryMetricsSnapshot, QueryStatsSnapshot, SignWithEcdsaArgs, SignWithEcdsaResult,
-    UpdateSettingsArgs,
-};
 #[expect(
     unused_imports,
     reason = "preserves public management ops value paths while domain owns the values"
 )]
-pub use types::{CanisterStatusType, LogVisibility};
+pub use types::{CanisterSettings, CanisterStatusType, LogVisibility};
+pub use types::{
+    CanisterSettingsSnapshot, CanisterStatus, CanisterStatusObservation, EcdsaKeyId,
+    EcdsaPublicKeyArgs, EcdsaPublicKeyResult, EnvironmentVariable, MemoryMetricsSnapshot,
+    QueryStatsSnapshot, SignWithEcdsaArgs, SignWithEcdsaResult, UpdateSettingsArgs,
+};
 
 use types::{
     canister_status_from_infra, ecdsa_public_key_args_to_infra, ecdsa_public_key_from_infra,

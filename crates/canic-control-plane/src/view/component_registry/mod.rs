@@ -372,7 +372,7 @@ pub struct RootComponentDeletionIntentView {
 ///
 /// RootComponentDeletedReceiptView
 ///
-/// Read-only terminal receipt after independently observed top-level absence.
+/// Read-only terminal receipt after the top-level workload Canister is recycled.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -704,7 +704,7 @@ pub struct RootComponentSubtreeDeleteEffectView {
 ///
 /// RootComponentSubtreeDeletedEffectView
 ///
-/// Read-only deletion authority retained after independently observed absence.
+/// Read-only workload-deletion authority retained after Canister recycling.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]

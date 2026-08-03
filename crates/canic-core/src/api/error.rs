@@ -44,19 +44,13 @@ mod tests {
     use super::*;
     use crate::{
         access::AccessError,
-        cdk::types::Principal,
         domain::policy::pure::{
             component_allocation::ComponentAllocationPolicyError,
             component_child_allocation::ComponentChildAllocationPolicyError,
-            topology::{TopologyPolicyError, registry::RegistryPolicyError},
         },
         dto::error::ErrorCode,
         ids::CanisterRole,
     };
-
-    fn p(id: u8) -> Principal {
-        Principal::from_slice(&[id; 29])
-    }
 
     #[test]
     fn internal_error_mapping_matches_class_contract() {
@@ -129,50 +123,5 @@ mod tests {
         let public = Error::not_found("missing");
         let remapped: Error = InternalError::public(public.clone()).into();
         assert_eq!(remapped, public);
-    }
-
-    #[test]
-    fn registry_policy_errors_map_to_stable_public_policy_codes() {
-        let err = RegistryPolicyError::RoleAlreadyRegistered {
-            role: CanisterRole::new("app"),
-            pid: p(7),
-        };
-        let internal: InternalError = TopologyPolicyError::from(err).into();
-        let public: Error = internal.into();
-        assert_eq!(public.code, ErrorCode::PolicyRoleAlreadyRegistered);
-    }
-
-    #[test]
-    fn registry_policy_service_parent_errors_use_service_owned_public_codes() {
-        let cases = [
-            (
-                RegistryPolicyError::ReplicaRequiresServiceWithScaling {
-                    role: CanisterRole::new("replica"),
-                    parent_role: CanisterRole::new("plain_parent"),
-                },
-                ErrorCode::PolicyReplicaRequiresServiceWithScaling,
-            ),
-            (
-                RegistryPolicyError::ShardRequiresServiceWithSharding {
-                    role: CanisterRole::new("shard"),
-                    parent_role: CanisterRole::new("plain_parent"),
-                },
-                ErrorCode::PolicyShardRequiresServiceWithSharding,
-            ),
-            (
-                RegistryPolicyError::InstanceRequiresServiceWithIndex {
-                    role: CanisterRole::new("instance"),
-                    parent_role: CanisterRole::new("plain_parent"),
-                },
-                ErrorCode::PolicyInstanceRequiresServiceWithIndex,
-            ),
-        ];
-
-        for (err, expected) in cases {
-            let internal: InternalError = TopologyPolicyError::from(err).into();
-            let public: Error = internal.into();
-
-            assert_eq!(public.code, expected);
-        }
     }
 }

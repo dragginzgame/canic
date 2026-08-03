@@ -30,8 +30,8 @@ mod tests {
         ids::{
             AppId, CanonicalNetworkId, ComponentSpecAdmission, CyclesFundingBudget, FleetBinding,
             FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority,
-            FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce,
-            ReleaseSetDigest, SubnetId,
+            FleetSubnetCanisterPoolConfig, FleetSubnetRootLimits, FleetSubnetRootReleaseSet,
+            ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
         },
         protocol,
     };
@@ -483,6 +483,11 @@ maximum_instances = 3
                 maximum_managed_canisters: 100,
                 maximum_registry_bytes: 2_097_152,
                 maximum_wasm_store_bytes: 268_435_456,
+                canister_pool: FleetSubnetCanisterPoolConfig {
+                    minimum_size: 1,
+                    maximum_size: 10,
+                    canister_cycles: Cycles::new(1_000_000_000_000),
+                },
                 cycles_funding: CyclesFundingBudget {
                     window_secs: 3_600,
                     maximum_cycles: Cycles::new(2_000_000_000_000),

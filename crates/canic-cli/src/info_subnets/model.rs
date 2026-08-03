@@ -58,6 +58,7 @@ pub(super) struct FleetSubnetInventoryRowV1 {
     pub status: Option<String>,
     pub root_infrastructure_canisters: u32,
     pub component_canisters: u32,
+    pub pooled_canisters: u32,
     pub total_canisters: u32,
 }
 
@@ -169,6 +170,7 @@ impl SubnetInventoryPlan {
                 status: None,
                 root_infrastructure_canisters: 0,
                 component_canisters: 0,
+                pooled_canisters: 0,
                 total_canisters: 1,
             },
         );
@@ -323,6 +325,7 @@ fn validate_summary(
     let expected_total = summary
         .infrastructure_canisters
         .checked_add(summary.component_canisters)
+        .and_then(|count| count.checked_add(summary.pooled_canisters))
         .ok_or(SubnetInventoryError::CountOverflow)?;
     let managed_canisters =
         summary
@@ -360,6 +363,7 @@ fn add_root_row(
             status: None,
             root_infrastructure_canisters: 0,
             component_canisters: 0,
+            pooled_canisters: 0,
             total_canisters: 0,
         });
     if row.root.is_some() {
@@ -369,6 +373,7 @@ fn add_root_row(
     row.status = Some(status_label(root.status).to_string());
     row.root_infrastructure_canisters = summary.infrastructure_canisters;
     row.component_canisters = summary.component_canisters;
+    row.pooled_canisters = summary.pooled_canisters;
     row.total_canisters = row
         .total_canisters
         .checked_add(summary.total_canisters)

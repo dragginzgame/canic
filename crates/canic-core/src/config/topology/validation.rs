@@ -206,6 +206,14 @@ fn validate_root_limits(limits: &FleetSubnetRootLimits) -> Result<(), ComponentT
             "cycles_funding.window_secs",
             limits.cycles_funding.window_secs,
         ),
+        (
+            "canister_pool.minimum_size",
+            u64::from(limits.canister_pool.minimum_size),
+        ),
+        (
+            "canister_pool.maximum_size",
+            u64::from(limits.canister_pool.maximum_size),
+        ),
     ] {
         if value == 0 {
             return Err(ComponentTopologyError::NonPositiveRootLimit { field });
@@ -215,6 +223,25 @@ fn validate_root_limits(limits: &FleetSubnetRootLimits) -> Result<(), ComponentT
         return Err(ComponentTopologyError::NonPositiveRootLimit {
             field: "cycles_funding.maximum_cycles",
         });
+    }
+    if limits.canister_pool.canister_cycles.to_u128() == 0 {
+        return Err(ComponentTopologyError::NonPositiveRootLimit {
+            field: "canister_pool.canister_cycles",
+        });
+    }
+    if limits.canister_pool.maximum_size < limits.canister_pool.minimum_size {
+        return Err(ComponentTopologyError::InvalidRootCanisterPoolRange {
+            minimum_size: limits.canister_pool.minimum_size,
+            maximum_size: limits.canister_pool.maximum_size,
+        });
+    }
+    if limits.canister_pool.maximum_size > limits.maximum_managed_canisters {
+        return Err(
+            ComponentTopologyError::RootCanisterPoolExceedsManagedLimit {
+                maximum_size: limits.canister_pool.maximum_size,
+                maximum_managed_canisters: limits.maximum_managed_canisters,
+            },
+        );
     }
 
     Ok(())

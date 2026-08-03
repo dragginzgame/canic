@@ -528,18 +528,22 @@ macro_rules! canic_emit_root_admin_endpoints {
             $crate::__internal::core::api::icp_refill::IcpRefillApi::refill(request).await
         }
 
-        #[$crate::canic_query(public)]
-        async fn canic_pool_list()
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_pool_list(
+            request: ::canic::dto::pool::CanisterPoolStatusRequest,
+        )
         -> Result<::canic::dto::pool::CanisterPoolResponse, ::canic::Error> {
-            Ok($crate::__internal::core::api::pool::CanisterPoolApi::list())
+            $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::status(request)
         }
 
         #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_pool_admin(
-            cmd: ::canic::dto::pool::PoolAdminCommand,
+            command: ::canic::dto::pool::PoolAdminCommand,
         ) -> Result<::canic::dto::pool::PoolAdminResponse, ::canic::Error> {
-            $crate::__internal::core::api::pool::CanisterPoolApi::admin(cmd).await
+            $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::admin(command)
+                .await
         }
+
     };
 }
 

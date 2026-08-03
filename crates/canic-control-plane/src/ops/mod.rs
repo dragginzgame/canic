@@ -1,6 +1,8 @@
 //! Control-plane ops helpers over local state and template storage.
 
 #[cfg(feature = "root-control-plane")]
+pub mod canister_pool;
+#[cfg(feature = "root-control-plane")]
 pub mod component_registry;
 #[cfg(feature = "fleet-coordinator-canister")]
 pub mod fleet_coordinator;

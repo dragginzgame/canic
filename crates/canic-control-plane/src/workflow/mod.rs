@@ -3,6 +3,8 @@
 #[cfg(feature = "root-control-plane")]
 pub mod bootstrap;
 #[cfg(feature = "root-control-plane")]
+pub mod canister_pool;
+#[cfg(feature = "root-control-plane")]
 pub mod component_auth;
 #[cfg(feature = "root-control-plane")]
 pub mod component_registry;

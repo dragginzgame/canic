@@ -121,7 +121,6 @@ mod tests {
                 PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
                 PlatformCallMetricSurface, PlatformCallMetrics,
             },
-            pool::{PoolMetricOperation, PoolMetricOutcome, PoolMetricReason, PoolMetrics},
             replay::{
                 ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason, ReplayMetrics,
             },
@@ -280,16 +279,6 @@ mod tests {
             PlacementIndexMetricOutcome::Completed,
             PlacementIndexMetricReason::PendingFresh,
         );
-        PoolMetrics::record(
-            PoolMetricOperation::ImportQueued,
-            PoolMetricOutcome::Skipped,
-            PoolMetricReason::AlreadyPresent,
-        );
-        PoolMetrics::record(
-            PoolMetricOperation::CreateEmpty,
-            PoolMetricOutcome::Completed,
-            PoolMetricReason::Ok,
-        );
         record_replay_sort_metrics();
         record_intent_sort_metrics();
         record_platform_call_sort_metrics();
@@ -352,7 +341,7 @@ mod tests {
     // Seed intent rows used by multi-family sorting coverage.
     fn record_intent_sort_metrics() {
         IntentMetrics::record(
-            IntentMetricSurface::Pool,
+            IntentMetricSurface::ReceiptBacked,
             IntentMetricOperation::Reserve,
             IntentMetricOutcome::Completed,
             IntentMetricReason::Ok,

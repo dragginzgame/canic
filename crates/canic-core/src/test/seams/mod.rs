@@ -1,8 +1,5 @@
 // Category A - Internal runtime-configured tests (ConfigTestBuilder when needed).
 
-mod directory_addressing_seam;
-mod pool_selection_seam;
-mod registry_policy_seam;
 mod retention_seam;
 
 use crate::cdk::types::Principal;

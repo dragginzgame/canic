@@ -36,7 +36,6 @@ fn root_contract() -> ResolvedRoleContract {
         StateAllocationKey::CoreReplayReceipts,
         StateAllocationKey::CoreRuntimeObservability,
         StateAllocationKey::CoreRuntimeIntent,
-        StateAllocationKey::CanisterPool,
         StateAllocationKey::TemplateManifests,
         StateAllocationKey::TemplateChunkSets,
         StateAllocationKey::TemplateChunkRefs,

@@ -301,5 +301,6 @@ fn root_install_args(
     Ok(FleetSubnetRootInitArgs {
         authority: expected_root_authority(journal)?,
         install_id: journal.install_operation_id,
+        canister_pool_imports: journal.root_plan.canister_pool_imports.clone(),
     })
 }

@@ -6,10 +6,10 @@ Date: 2026-08-03
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.91`.
-- Latest published release: `v0.100.91` at
-  `49af2ecd3ea10872773ef8c9fbeeadd5bf66cea5`.
-- Open patch draft: `0.100.92`; no package-version change has been authorized.
+- Workspace package version: `0.100.92`.
+- Latest published release: `v0.100.92` at
+  `adf54ae1fd875bab33de6efe1560e7ee2aae8f6e`.
+- Open patch draft: `0.100.93`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -97,14 +97,14 @@ Registry slices replace the 0.99 root model.
   inventory importer.
 - [x] Hard-cut Fleet-state and topology propagation to root-owned Store,
   per-Component `ComponentRegistry` and direct-child authority.
-- [ ] Hard-cut legacy provisioning consumers to per-Component
+- [x] Hard-cut legacy provisioning consumers to per-Component
   `ComponentRegistry` authority.
-- [ ] Hard-cut pool recovery consumers to per-Component `ComponentRegistry`
+- [x] Hard-cut pool recovery consumers to per-Component `ComponentRegistry`
   authority.
 - [x] Hard-cut local `SubnetDirectory`; root-owned `ComponentDirectory` is the
   sole component-local directory projection.
 - [x] Split Fleet and Component Directory provenance.
-- [ ] Prove no prior-release transition reader or decoder exists.
+- [x] Prove no prior-release transition reader or decoder exists.
 
 ## Slice 2 — Topology-Admitted Artifacts and Fresh Root Installation
 
@@ -1155,20 +1155,36 @@ deletion path writes, imports or cleans a legacy Registry row. The same release
 routes terminal host Fleet catalog queries through the canonical typed
 Canister protocol boundary and removes residual one-call wrappers.
 
-Open 0.100.92 moves root Fleet-state mutation behind exact control-plane
+Released 0.100.92 moves root Fleet-state mutation behind exact control-plane
 inventory. The root freezes the canonical union of current Store Canisters and
 top-level Component Registry partitions before mutation and fanout; descendants
 continue from their local direct-child caches. The orphaned generic Canister
 lifecycle, Registry-built topology cascade, mapper, consistency policy and
 propagation-only metrics are removed without a compatibility path.
 
+Open 0.100.93 replaces the superseded generic empty-Canister implementation
+with one required prepaid asset inventory owned by each Fleet Subnet Root.
+Strict Fleet input freezes minimum, proactive maximum, per-asset cycles and
+exact imports. Root maintenance resets imports and refills inventory;
+Component and Component Child creation claim the oldest sufficient ready
+asset before guarded paid fallback creation; workload removal recycles the
+physical Canister rather than destroying it. Bounded controller status and
+`canic info subnets` expose tracked, surplus, reset, ready, claimed and failed
+inventory. Root draining stops proactive refill and final inventory currently
+fails closed until each ready or failed asset is durably handed to explicit
+replacement authority and no pool asset or pending pool work remains.
+
+The same open patch hard-cuts the retired role-based Fleet Directory and its
+Subnet Registry source, removes the superseded generic provisioning stack,
+and packs the reinstall-only control-plane pool inventory, work journal and
+terminal handoff receipts at IDs 24-26 while core remains consecutive at IDs
+30-58. Scaling, sharding and Placement Index pools retain their separate
+Component-local meaning. No compatibility decoder or prior-release transition
+reader is introduced.
+
 ## Next Action
 
-Replace the legacy Subnet Registry's remaining provisioning, pool-recovery and
-root-derived Fleet Directory consumers with root-owned Component Registry and
-direct-child authority. Then delete its
-stable/cascade schema and complete the reinstall-only decoder audit before
-running preparation and execution
-as separate processes against one explicitly selected disposable real-network
-root. Verify the surviving Coordinator terminal receipt and exact replay
-before closing 0.100 against the final design and beginning 0.101.
+Run preparation and execution as separate processes against one explicitly
+selected disposable real-network root. Verify the surviving Coordinator
+terminal receipt and exact replay before closing 0.100 against the final design
+and beginning 0.101.

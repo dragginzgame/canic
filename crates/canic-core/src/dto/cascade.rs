@@ -1,4 +1,4 @@
-use crate::dto::{prelude::*, state::FleetStateInput, topology::FleetDirectoryInput};
+use crate::dto::{prelude::*, state::FleetStateInput};
 //
 // StateSnapshotInput
 //
@@ -8,7 +8,6 @@ use crate::dto::{prelude::*, state::FleetStateInput, topology::FleetDirectoryInp
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct StateSnapshotInput {
     pub fleet_state: Option<FleetStateInput>,
-    pub fleet_directory: Option<FleetDirectoryInput>,
 }
 
 //

@@ -6,6 +6,11 @@
 //! stable-memory access.
 //! Boundary: descriptors are static metadata supplied to host-side materialization.
 
+#[cfg(feature = "root-control-plane")]
+use crate::storage::stable::canister_pool::{
+    CanisterPoolAssetRecord, CanisterPoolData, CanisterPoolHandoffReceiptData,
+    CanisterPoolHandoffReceiptRecord, CanisterPoolStateRecord,
+};
 use crate::storage::stable::{
     component_registry::{
         ComponentRegistryEntryRecord, ComponentRegistryPrincipalIndexRecord,
@@ -23,6 +28,10 @@ use crate::storage::stable::{
             TemplateChunkRefsData,
         },
     },
+};
+#[cfg(feature = "root-control-plane")]
+use canic_core::role_contract::allocation::memory::control_plane::{
+    ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID, ROOT_CANISTER_POOL_ID, ROOT_CANISTER_POOL_STATE_ID,
 };
 use canic_core::{
     role_contract::{
@@ -63,6 +72,8 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
             "root_fleet_registry_mirror_restores_exclusive_candidate_or_active_directory",
         ),
         root_component_registry_descriptor(),
+        #[cfg(feature = "root-control-plane")]
+        root_canister_pool_descriptor(),
         descriptor(
             StateAllocationKey::TemplateManifests,
             "template_manifests",
@@ -237,6 +248,66 @@ fn root_component_draining_domain() -> StateDomainManifest {
     }
 }
 
+#[cfg(feature = "root-control-plane")]
+fn root_canister_pool_descriptor() -> StateAllocationDescriptor {
+    StateAllocationDescriptor {
+        allocation: StateAllocationKey::CanisterPool,
+        owner: AllocationOwner::CanicControlPlane,
+        state: vec![
+            StateDomainManifest {
+                domain: "root_canister_pool".to_string(),
+                version: 1,
+                storage: StateStorage::StableMemory,
+                memory_id: Some(ROOT_CANISTER_POOL_ID),
+                owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
+                record: CanisterPoolAssetRecord::STATE_CONTRACT_NAME.to_string(),
+                snapshot: CanisterPoolData::STATE_CONTRACT_NAME.to_string(),
+                min_supported_version: 1,
+                migration_policy: MigrationPolicy::NewDomain,
+                restore_order: Some(202),
+                post_upgrade_invariant: Some(
+                    "root_canister_pool_restores_exact_asset_lifecycle_and_component_claims"
+                        .to_string(),
+                ),
+                migrations: Vec::new(),
+            },
+            StateDomainManifest {
+                domain: "root_canister_pool_state".to_string(),
+                version: 1,
+                storage: StateStorage::StableMemory,
+                memory_id: Some(ROOT_CANISTER_POOL_STATE_ID),
+                owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
+                record: CanisterPoolStateRecord::STATE_CONTRACT_NAME.to_string(),
+                snapshot: CanisterPoolData::STATE_CONTRACT_NAME.to_string(),
+                min_supported_version: 1,
+                migration_policy: MigrationPolicy::NewDomain,
+                restore_order: Some(203),
+                post_upgrade_invariant: Some(
+                    "root_canister_pool_creation_restores_exact_paid_effect_authority".to_string(),
+                ),
+                migrations: Vec::new(),
+            },
+            StateDomainManifest {
+                domain: "root_canister_pool_handoff_receipts".to_string(),
+                version: 1,
+                storage: StateStorage::StableMemory,
+                memory_id: Some(ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID),
+                owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
+                record: CanisterPoolHandoffReceiptRecord::STATE_CONTRACT_NAME.to_string(),
+                snapshot: CanisterPoolHandoffReceiptData::STATE_CONTRACT_NAME.to_string(),
+                min_supported_version: 1,
+                migration_policy: MigrationPolicy::NewDomain,
+                restore_order: Some(204),
+                post_upgrade_invariant: Some(
+                    "root_canister_pool_handoff_receipts_restore_exact_terminal_replay".to_string(),
+                ),
+                migrations: Vec::new(),
+            },
+        ],
+        reserved_memory: Vec::new(),
+    }
+}
+
 fn descriptor(
     allocation: StateAllocationKey,
     domain: &str,
@@ -283,6 +354,7 @@ mod tests {
             StateAllocationKey::FleetCoordinatorRegistry,
             StateAllocationKey::RootComponentRegistry,
             StateAllocationKey::RootFleetRegistryMirror,
+            StateAllocationKey::CanisterPool,
             StateAllocationKey::TemplateManifests,
             StateAllocationKey::TemplateChunkSets,
             StateAllocationKey::TemplateChunkRefs,

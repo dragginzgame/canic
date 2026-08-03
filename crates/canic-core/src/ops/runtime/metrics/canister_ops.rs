@@ -4,7 +4,7 @@
 //! Does not own: workflow decisions, persisted records, or endpoint DTOs.
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
-use crate::{InternalError, InternalErrorClass, InternalErrorOrigin, ids::CanisterRole};
+use crate::ids::CanisterRole;
 use std::{cell::RefCell, collections::HashMap};
 
 pub use crate::domain::metrics::{
@@ -17,26 +17,6 @@ const UNKNOWN_ROLE_LABEL: &str = "unknown";
 thread_local! {
     static CANISTER_OPS_METRICS: RefCell<HashMap<CanisterOpsMetricKey, u64>> =
         RefCell::new(HashMap::new());
-}
-
-impl CanisterOpsMetricReason {
-    /// Classify one internal error into a bounded metric reason.
-    #[must_use]
-    pub(crate) const fn from_error(err: &InternalError) -> Self {
-        match (err.class(), err.origin()) {
-            (InternalErrorClass::Infra, InternalErrorOrigin::Infra) => Self::ManagementCall,
-            (InternalErrorClass::Domain, InternalErrorOrigin::Domain)
-            | (InternalErrorClass::Access, _) => Self::PolicyDenied,
-            (InternalErrorClass::Domain, InternalErrorOrigin::Config)
-            | (
-                InternalErrorClass::Invariant
-                | InternalErrorClass::Ops
-                | InternalErrorClass::Workflow,
-                _,
-            ) => Self::InvalidState,
-            _ => Self::Unknown,
-        }
-    }
 }
 
 ///

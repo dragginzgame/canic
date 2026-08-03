@@ -149,9 +149,6 @@ pub enum IntentStoreOpsError {
     #[error("TTL-free intent {0} appears in the finite-expiry index")]
     TtlFreeIntentInExpiryIndex(IntentId),
 
-    #[error("multiple pending intents exist for resource {0}")]
-    MultiplePendingForResource(IntentResourceKey),
-
     #[error("placement acknowledgement index already exists for {0}")]
     PlacementAcknowledgementIndexExists(OperationId),
 
@@ -691,32 +688,6 @@ impl IntentStoreOps {
             );
         }
         Ok(())
-    }
-
-    /// Return the sole pending local intent for one exact resource key.
-    ///
-    /// Callers that use one resource as a durable recovery identity require
-    /// uniqueness. Competing pending records are therefore an invariant error,
-    /// not an arbitrary first-match selection.
-    pub(crate) fn unique_pending_intent_id(
-        resource_key: &IntentResourceKey,
-    ) -> Result<Option<IntentId>, InternalError> {
-        ensure_schema()?;
-        IntentStore::with_pending_entries(|pending| {
-            let mut found = None;
-            for entry in pending.iter() {
-                if entry.value().resource_key != *resource_key {
-                    continue;
-                }
-                if found.replace(*entry.key()).is_some() {
-                    return Err(IntentStoreOpsError::MultiplePendingForResource(
-                        resource_key.clone(),
-                    )
-                    .into());
-                }
-            }
-            Ok(found)
-        })
     }
 
     /// Return the stored total for all pending local intents.

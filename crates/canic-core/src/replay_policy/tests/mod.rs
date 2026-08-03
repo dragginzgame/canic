@@ -7,7 +7,6 @@
 mod cost;
 mod coverage;
 mod endpoint;
-mod pool_admin;
 mod root_capability;
 
 use super::{
@@ -25,13 +24,6 @@ use crate::protocol::{
     CANIC_WASM_STORE_ROOT_UPDATE_METHODS,
 };
 use std::collections::BTreeSet;
-
-fn pool_admin_command_variant_names() -> BTreeSet<&'static str> {
-    enum_variant_names_from_source(
-        include_str!("../../dto/pool.rs"),
-        "pub enum PoolAdminCommand",
-    )
-}
 
 fn root_capability_command_variant_names() -> BTreeSet<&'static str> {
     enum_variant_names_from_source(
@@ -68,15 +60,7 @@ fn release_candidate_manifest_blockers() -> BTreeSet<String> {
         .filter(|entry| entry.implementation_status == ReplayImplementationStatus::ReleaseBlocker)
         .map(|entry| format!("root-capability:{}", entry.variant));
 
-    let pool_command_blockers = POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST
-        .iter()
-        .filter(|entry| entry.implementation_status == ReplayImplementationStatus::ReleaseBlocker)
-        .map(|entry| format!("pool-admin:{}", entry.variant));
-
-    endpoint_blockers
-        .chain(root_command_blockers)
-        .chain(pool_command_blockers)
-        .collect()
+    endpoint_blockers.chain(root_command_blockers).collect()
 }
 
 const fn replay_command_kind(label: &'static str) -> ReplayCommandKindLabel {

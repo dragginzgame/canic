@@ -211,6 +211,11 @@ fn root_init_args_are_written_as_binary_candid() {
                     maximum_managed_canisters: 100,
                     maximum_registry_bytes: 1_048_576,
                     maximum_wasm_store_bytes: 10_000_000,
+                    canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {
+                        minimum_size: 1,
+                        maximum_size: 10,
+                        canister_cycles: Cycles::new(5_000_000_000_000),
+                    },
                     cycles_funding: CyclesFundingBudget {
                         window_secs: 3_600,
                         maximum_cycles: Cycles::new(1_000_000_000_000),
@@ -224,6 +229,7 @@ fn root_init_args_are_written_as_binary_candid() {
             expected_module_hash: [10; 32],
         },
         install_id: activation.operation_id,
+        canister_pool_imports: Vec::new(),
     };
 
     let root = temp_dir("canic-binary-root-install-args");

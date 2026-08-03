@@ -98,8 +98,8 @@ pub struct ObservedCanisterV1 {
 pub enum RoleAssignmentSourceV1 {
     IcpCanisterStatus,
     FleetCatalog,
-    SubnetRegistry,
-    SubnetRegistryAndIcpCanisterStatus,
+    ComponentRegistry,
+    ComponentRegistryAndIcpCanisterStatus,
 }
 
 impl RoleAssignmentSourceV1 {
@@ -108,15 +108,15 @@ impl RoleAssignmentSourceV1 {
         match self {
             Self::IcpCanisterStatus => "icp_canister_status",
             Self::FleetCatalog => "fleet_catalog",
-            Self::SubnetRegistry => "subnet_registry",
-            Self::SubnetRegistryAndIcpCanisterStatus => "subnet_registry+icp_canister_status",
+            Self::ComponentRegistry => "component_registry",
+            Self::ComponentRegistryAndIcpCanisterStatus => "component_registry+icp_canister_status",
         }
     }
 
     #[must_use]
     pub fn label_includes_live_status(label: &str) -> bool {
         label == Self::IcpCanisterStatus.label()
-            || label == Self::SubnetRegistryAndIcpCanisterStatus.label()
+            || label == Self::ComponentRegistryAndIcpCanisterStatus.label()
     }
 }
 
@@ -271,10 +271,13 @@ mod tests {
                 "icp_canister_status",
             ),
             (RoleAssignmentSourceV1::FleetCatalog, "fleet_catalog"),
-            (RoleAssignmentSourceV1::SubnetRegistry, "subnet_registry"),
             (
-                RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus,
-                "subnet_registry+icp_canister_status",
+                RoleAssignmentSourceV1::ComponentRegistry,
+                "component_registry",
+            ),
+            (
+                RoleAssignmentSourceV1::ComponentRegistryAndIcpCanisterStatus,
+                "component_registry+icp_canister_status",
             ),
         ];
 
@@ -285,7 +288,7 @@ mod tests {
             RoleAssignmentSourceV1::IcpCanisterStatus.label()
         ));
         assert!(RoleAssignmentSourceV1::label_includes_live_status(
-            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus.label()
+            RoleAssignmentSourceV1::ComponentRegistryAndIcpCanisterStatus.label()
         ));
         assert!(!RoleAssignmentSourceV1::label_includes_live_status(
             "custom_status_source"

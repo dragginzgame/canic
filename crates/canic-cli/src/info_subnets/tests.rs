@@ -56,19 +56,21 @@ fn complete_evidence_groups_a_colocated_coordinator_and_root() {
     assert_eq!(report.schema_version, 1);
     assert_eq!(report.registry_revision, 4);
     assert_eq!(report.subnets.len(), 2);
-    assert_eq!(report.total_canisters, 9);
+    assert_eq!(report.total_canisters, 13);
     assert_eq!(report.subnets[0].coordinator_canisters, 1);
     assert_eq!(report.subnets[0].root_infrastructure_canisters, 2);
     assert_eq!(report.subnets[0].component_canisters, 2);
-    assert_eq!(report.subnets[0].total_canisters, 5);
+    assert_eq!(report.subnets[0].pooled_canisters, 2);
+    assert_eq!(report.subnets[0].total_canisters, 7);
     assert_eq!(report.subnets[1].coordinator_canisters, 0);
-    assert_eq!(report.subnets[1].total_canisters, 4);
+    assert_eq!(report.subnets[1].total_canisters, 6);
 
     let json = serde_json::to_value(&report).expect("serialize report");
     assert_eq!(json["schema_version"], 1);
     assert_eq!(json["coordinator_principal"], principal(30).to_text());
     assert_eq!(json["subnets"][0]["status"], "active");
-    assert_eq!(json["subnets"][0]["total_canisters"], 5);
+    assert_eq!(json["subnets"][0]["pooled_canisters"], 2);
+    assert_eq!(json["subnets"][0]["total_canisters"], 7);
     let report_keys = json
         .as_object()
         .expect("report object")
@@ -104,6 +106,7 @@ fn complete_evidence_groups_a_colocated_coordinator_and_root() {
             "status",
             "root_infrastructure_canisters",
             "component_canisters",
+            "pooled_canisters",
             "total_canisters",
         ]
     );
@@ -154,7 +157,7 @@ fn removed_roots_are_excluded_from_queries_and_rows() {
         .expect("active root summary");
     let report = plan.complete(vec![summary]).expect("complete report");
     assert_eq!(report.subnets.len(), 1);
-    assert_eq!(report.total_canisters, 5);
+    assert_eq!(report.total_canisters, 7);
 }
 
 #[test]
@@ -172,7 +175,8 @@ fn text_output_contains_canonical_rows_and_exact_fleet_total() {
     assert!(text.contains("STATUS"));
     assert!(text.contains("CANISTERS"));
     assert!(text.contains("ACTIVE"));
-    assert!(text.contains("Fleet total: 9 Canisters"));
+    assert!(text.contains("POOL"));
+    assert!(text.contains("Fleet total: 13 Canisters"));
 }
 
 struct Fixture {
@@ -203,7 +207,8 @@ impl Fixture {
                 status: root.status,
                 infrastructure_canisters: 2,
                 component_canisters: 2,
-                total_canisters: 4,
+                pooled_canisters: 2,
+                total_canisters: 6,
             })
             .collect()
     }
@@ -282,6 +287,11 @@ fn root(
             maximum_managed_canisters: 20_000,
             maximum_registry_bytes: 2_097_152,
             maximum_wasm_store_bytes: 268_435_456,
+            canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {
+                minimum_size: 1,
+                maximum_size: 10,
+                canister_cycles: Cycles::new(5_000_000_000_000),
+            },
             cycles_funding: CyclesFundingBudget {
                 window_secs: 3_600,
                 maximum_cycles: Cycles::new(2_000_000_000_000),

@@ -625,14 +625,6 @@ impl FleetActivationOps {
     pub(crate) fn reset_for_tests() {
         FleetActivation::import(FleetActivationData::default());
     }
-
-    #[cfg(test)]
-    pub(crate) fn has_partial_snapshot_evidence_for_tests() -> bool {
-        FleetActivation::get().is_some_and(|record| {
-            record.prepared_state_snapshot_hash.is_some()
-                || record.prepared_topology_snapshot_hash.is_some()
-        })
-    }
 }
 
 fn initialize_prepared(
@@ -1167,6 +1159,11 @@ mod tests {
                         maximum_managed_canisters: 1_000,
                         maximum_registry_bytes: 4_194_304,
                         maximum_wasm_store_bytes: 40_000_000,
+                        canister_pool: crate::ids::FleetSubnetCanisterPoolConfig {
+                            minimum_size: 1,
+                            maximum_size: 10,
+                            canister_cycles: Cycles::new(5_000_000_000_000),
+                        },
                         cycles_funding: CyclesFundingBudget {
                             window_secs: 3_600,
                             maximum_cycles: Cycles::new(1_000_000_000_000),
@@ -1180,6 +1177,7 @@ mod tests {
                 expected_module_hash: [13; 32],
             },
             install_id: [12; 32],
+            canister_pool_imports: Vec::new(),
         }
     }
 

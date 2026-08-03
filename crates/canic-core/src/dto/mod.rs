@@ -52,7 +52,6 @@ pub mod root_store;
 pub mod rpc;
 pub mod runtime;
 pub mod state;
-pub mod topology;
 
 ///
 /// Prelude

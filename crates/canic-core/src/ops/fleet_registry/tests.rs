@@ -92,6 +92,11 @@ fn limits() -> FleetSubnetRootLimits {
         maximum_managed_canisters: 20,
         maximum_registry_bytes: 2_097_152,
         maximum_wasm_store_bytes: 40_000_000,
+        canister_pool: crate::ids::FleetSubnetCanisterPoolConfig {
+            minimum_size: 1,
+            maximum_size: 10,
+            canister_cycles: crate::cdk::types::Cycles::new(5_000_000_000_000),
+        },
         cycles_funding: CyclesFundingBudget {
             window_secs: 3_600,
             maximum_cycles: crate::cdk::types::Cycles::new(10_000_000_000_000),
@@ -180,7 +185,7 @@ fn canonical_registry_manifest_and_version_are_digest_stable() {
     assert_eq!(version.content_hash, manifest.content_hash);
     assert_eq!(
         crate::cdk::utils::hash::hex_bytes(manifest.content_hash),
-        "89c9969bf4cd41b7ddff132642b375a0070b4fd79c9a7cdf6be25701f3b7a73a"
+        "b85326db926753ed6d20475fd4d49fc5419a2941a950fef0a47f509f4c6ed748"
     );
 }
 

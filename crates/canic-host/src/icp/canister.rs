@@ -172,14 +172,6 @@ impl IcpCli {
         run_output(&mut command)
     }
 
-    /// Return one canister status report.
-    pub fn canister_status(&self, canister: &str) -> Result<String, IcpCommandError> {
-        let mut command = self.canister_command();
-        command.args(["status", canister]);
-        self.add_target_args(&mut command);
-        run_output(&mut command)
-    }
-
     /// Top up one canister with cycles.
     pub fn canister_top_up_output(
         &self,

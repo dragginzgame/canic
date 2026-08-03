@@ -8,7 +8,7 @@ use canic::{
     ids::{
         ComponentBinding, ComponentInstanceId, ComponentSpecAdmission, ComponentSpecId,
         CyclesFundingBudget, FleetCoordinatorBinding, FleetRegistryAuthority,
-        FleetSubnetRootBinding, FleetSubnetRootLimits, SubnetId,
+        FleetSubnetCanisterPoolConfig, FleetSubnetRootBinding, FleetSubnetRootLimits, SubnetId,
     },
 };
 use canic_core::cdk::types::Cycles;
@@ -214,6 +214,11 @@ fn init_payload(canister_id: Principal) -> CanisterInitPayload {
             maximum_managed_canisters: 2,
             maximum_registry_bytes: 1_048_576,
             maximum_wasm_store_bytes: 1_048_576,
+            canister_pool: FleetSubnetCanisterPoolConfig {
+                minimum_size: 1,
+                maximum_size: 1,
+                canister_cycles: Cycles::new(1),
+            },
             cycles_funding: CyclesFundingBudget {
                 window_secs: 3_600,
                 maximum_cycles: Cycles::new(1_000_000_000_000),

@@ -187,6 +187,7 @@ fn fixture(name: &str) -> Fixture {
             component_topology_digest: topology_digest,
             initial_release_set: release_set,
             limits: limits.clone(),
+            canister_pool_imports: Vec::new(),
             creation_funding: funding(),
         }],
     };
@@ -280,7 +281,8 @@ fn summaries(registry: &FleetRegistrySnapshotResponse) -> Vec<FleetSubnetRootCan
             status: root.status,
             infrastructure_canisters: 2,
             component_canisters: 2,
-            total_canisters: 4,
+            pooled_canisters: 2,
+            total_canisters: 6,
         })
         .collect()
 }
@@ -305,6 +307,11 @@ fn root_limits() -> FleetSubnetRootLimits {
         maximum_managed_canisters: 20_000,
         maximum_registry_bytes: 2_097_152,
         maximum_wasm_store_bytes: 268_435_456,
+        canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {
+            minimum_size: 1,
+            maximum_size: 10,
+            canister_cycles: Cycles::new(5_000_000_000_000),
+        },
         cycles_funding: CyclesFundingBudget {
             window_secs: 3_600,
             maximum_cycles: Cycles::new(2_000_000_000_000),
