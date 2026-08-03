@@ -184,9 +184,8 @@ maximum_instances = 2
         initial_release_set: release_set,
         limits: limits.clone(),
         canister_pool_imports: Vec::new(),
-        creation_funding: PlannedCanisterCreationFunding::Cycles {
-            cycles: 2_000_000_000_000,
-        },
+        root_creation_funding: funding(),
+        wasm_store_creation_funding: funding(),
     };
     let plan = PersistedFleetInstallPlan {
         plan: FleetInstallPlan {
@@ -195,9 +194,7 @@ maximum_instances = 2
             application_artifact_union_digest: [3; 32],
             coordinator: PlannedFleetCoordinator {
                 coordinator_subnet: subnet(1),
-                creation_funding: PlannedCanisterCreationFunding::Cycles {
-                    cycles: 2_000_000_000_000,
-                },
+                creation_funding: funding(),
             },
             fleet_subnet_roots: vec![root_plan],
         },
@@ -223,6 +220,12 @@ maximum_instances = 2
     )
     .expect("Joining root");
     (plan, topology, joining)
+}
+
+fn funding() -> PlannedCanisterCreationFunding {
+    PlannedCanisterCreationFunding::Cycles {
+        cycles: 2_000_000_000_000,
+    }
 }
 
 fn principal(byte: u8) -> Principal {

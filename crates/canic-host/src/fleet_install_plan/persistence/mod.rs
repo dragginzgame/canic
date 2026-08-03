@@ -225,7 +225,14 @@ fn compile_plan(
             .expect("validated topology root must come from one exact input");
         validate_funding(
             &format!("Fleet Subnet Root {}", topology_root.placement_subnet),
-            &input.creation_funding,
+            &input.root_creation_funding,
+        )?;
+        validate_funding(
+            &format!(
+                "Wasm Store for Fleet Subnet Root {}",
+                topology_root.placement_subnet
+            ),
+            &input.wasm_store_creation_funding,
         )?;
         let manifest = FleetSubnetRootReleaseSetManifest::project_planned(
             &topology_plan.component_topology,
@@ -244,7 +251,8 @@ fn compile_plan(
             },
             limits: topology_root.limits.clone(),
             canister_pool_imports: input.canister_pool_imports.clone(),
-            creation_funding: input.creation_funding.clone(),
+            root_creation_funding: input.root_creation_funding.clone(),
+            wasm_store_creation_funding: input.wasm_store_creation_funding.clone(),
         });
         root_release_sets.push(manifest);
     }
@@ -297,7 +305,11 @@ fn canonical_plan_bytes(
         previous = Some(root.placement_subnet);
         validate_funding(
             &format!("Fleet Subnet Root {}", root.placement_subnet),
-            &root.creation_funding,
+            &root.root_creation_funding,
+        )?;
+        validate_funding(
+            &format!("Wasm Store for Fleet Subnet Root {}", root.placement_subnet),
+            &root.wasm_store_creation_funding,
         )?;
         topology.validate_planned_root(
             &root.component_admissions,

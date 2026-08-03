@@ -50,6 +50,12 @@ scaling = 1
 test = 1
 users = 1
 
+[fleet_subnet_roots.canister_pool]
+minimum_size = 1
+maximum_size = 10
+canister_cycles = "5T"
+imports = []
+
 [fleet_subnet_roots.limits]
 maximum_component_instances = 4
 maximum_managed_canisters = 128
@@ -60,7 +66,11 @@ maximum_wasm_store_bytes = 200000000
 window_secs = 3600
 maximum_cycles = "100T"
 
-[fleet_subnet_roots.creation_funding]
+[fleet_subnet_roots.root_creation_funding]
+kind = "cycles"
+cycles = "20T"
+
+[fleet_subnet_roots.wasm_store_creation_funding]
 kind = "cycles"
 cycles = "20T"
 EOF

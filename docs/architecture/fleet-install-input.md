@@ -5,8 +5,8 @@ separate authorities:
 
 - `apps/<app>/canic.toml` declares reusable roles and Component Specs; and
 - `--fleet-input <path>` names an operator-owned TOML document containing
-  concrete Subnet placement, root-local admissions and limits, and initial
-  creation funding.
+  concrete Subnet placement, root-local admissions and limits, and separate
+  initial funding for each host-created infrastructure Canister.
 
 The Fleet input is required. A relative path is resolved from the ICP project
 root. It is read as a bounded regular no-follow file, rejects unknown fields,
@@ -48,7 +48,11 @@ maximum_wasm_store_bytes = 40000000
 window_secs = 3600
 maximum_cycles = "100T"
 
-[fleet_subnet_roots.creation_funding]
+[fleet_subnet_roots.root_creation_funding]
+kind = "cycles"
+cycles = "2T"
+
+[fleet_subnet_roots.wasm_store_creation_funding]
 kind = "cycles"
 cycles = "2T"
 ```
@@ -82,8 +86,11 @@ the root requeries the NNS Registry before taking control. Non-mainnet imports
 remain explicit operator authority because those networks do not provide the
 trusted IC routing catalog.
 
-All root limits and funding amounts are explicit. Cycle amounts accept exact
-integers or Canic cycle suffixes such as `"2T"`. ICP creation funding uses:
+All root limits and funding amounts are explicit. Each root row funds its Fleet
+Subnet Root and sibling Wasm Store independently; the former ambiguous
+`fleet_subnet_roots.creation_funding` field is rejected. Cycle amounts accept
+exact integers or Canic cycle suffixes such as `"2T"`. ICP creation funding
+uses the same shape under the exact Canister's funding table, for example:
 
 ```toml
 [coordinator.creation_funding]

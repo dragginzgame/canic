@@ -63,7 +63,8 @@ pub struct PlannedFleetSubnetRootInput {
     pub component_admissions: Vec<RootComponentAdmissionInput>,
     pub limits: FleetSubnetRootLimits,
     pub canister_pool_imports: Vec<Principal>,
-    pub creation_funding: PlannedCanisterCreationFunding,
+    pub root_creation_funding: PlannedCanisterCreationFunding,
+    pub wasm_store_creation_funding: PlannedCanisterCreationFunding,
 }
 
 ///
@@ -82,7 +83,8 @@ pub struct PlannedFleetSubnetRoot {
     #[serde(with = "root_limits_document")]
     pub limits: FleetSubnetRootLimits,
     pub canister_pool_imports: Vec<Principal>,
-    pub creation_funding: PlannedCanisterCreationFunding,
+    pub root_creation_funding: PlannedCanisterCreationFunding,
+    pub wasm_store_creation_funding: PlannedCanisterCreationFunding,
 }
 
 ///

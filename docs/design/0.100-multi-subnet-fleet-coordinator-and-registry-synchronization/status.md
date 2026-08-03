@@ -2,15 +2,18 @@
 
 Date: 2026-08-03
 
-- State: code implementation complete; maintainer-owned operational proof pending.
+- State: implementation in progress; the host-installed sibling Store hard cut
+  is required before the maintainer-owned operational proof.
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.95`.
-- Latest published release: `v0.100.95` at
-  `b72e57716e3ae111aa2aff9ce62308882bfb0d45`.
-- Open patch draft: `0.100.96`; no package-version change has been authorized.
-- Open design blockers: none.
+- Workspace package version: `0.100.96`.
+- Latest published release: `v0.100.96` at
+  `6d6a4126a465a9000a93985075a2616bce281018`.
+- Open patch draft: `0.100.97`; it freezes independent root/Store funding and
+  exact Store artifact identity before any creation effect.
+- Open design blockers: none; the Store installation ownership amendment is
+  accepted and has open implementation work.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
 exactly one Fleet Subnet Root per occupied `(FleetKey, SubnetId)`, with each
@@ -41,12 +44,16 @@ Hub/Instance/Ledger/Machine potential-Wasm catalog once. Released 0.100.9
 hard-cuts the Component Spec/Topology canonical shape. The maintained pre-1.0
 schema/domain identifier remains v1 and has no prior-shape decoder.
 
-Canic infrastructure now has its own exact three-entry artifact manifest for
-the Coordinator, Fleet Subnet Root and Wasm Store. The host directly installs
-the Coordinator and roots; each root alone bootstraps its local Store from the
-verified infrastructure artifact.
-The Coordinator is not part of a Component hierarchy and is not installed
-through a Wasm Store.
+Canic infrastructure has its own exact three-entry artifact manifest for the
+Coordinator, Fleet Subnet Root and Wasm Store. The accepted final 0.100 design
+requires the host to build, create and independently install all three roles.
+For each root, the host co-places one sibling Store, verifies reciprocal
+bindings and modules, then has the prepared root adopt the Store, re-observe
+sole-root control and retain a host-verified terminal receipt.
+The root owns publication and Store lifecycle after handoff but contains no
+Store Wasm bytes and cannot create or replace the Store autonomously. The
+Coordinator is not part of a Component hierarchy and is not installed through
+a Wasm Store.
 
 Released 0.100.1 removed the staged Tree declaration layer from
 source, generated bootstrap, host/CLI projections, scaffolding, fixtures and
@@ -92,9 +99,10 @@ Registry slices replace the 0.99 root model.
   projection while retaining independent Component Runtime activation.
 - [x] Hard-cut Store garbage-collection and physical-deletion decisions to
   root-owned Store lifecycle authority and typed live management evidence.
-- [x] Hard-cut Store creation/publication recovery to one durable root-owned
-  create/install journal and direct Store activation, with no Registry row or
-  inventory importer.
+- [x] Released 0.100.91 consolidated the then-current Store creation path into
+  one durable root-owned create/install journal with no Registry importer.
+  The accepted final host-installed Store hard cut supersedes that temporary
+  ownership and is tracked in Slice 2 below.
 - [x] Hard-cut Fleet-state and topology propagation to root-owned Store,
   per-Component `ComponentRegistry` and direct-child authority.
 - [x] Hard-cut legacy provisioning consumers to per-Component
@@ -139,7 +147,19 @@ Registry slices replace the 0.99 root model.
 - [x] Install the Coordinator from empty state.
 - [x] Install and independently verify every planned root behind its runtime
   `Prepared` fence.
-- [x] Bootstrap each root's local topology-admitted Wasm Store.
+- [x] Add separate root and Wasm Store creation funding to every root plan.
+- [x] Pin both exact root and Store infrastructure artifacts and raw module
+  hashes in every root install journal before creation.
+- [ ] Remove implicit Store `initial_cycles` as creation authority.
+- [ ] Host-create and independently install each root's sibling Store on the
+  exact planned Subnet, with reciprocal protected init authority.
+- [ ] Journal Store creation/installation, implement the prepared-root adoption
+  boundary and verify its terminal sole-root controller receipt before Catalog
+  publication.
+- [ ] Hard-cut embedded Store bytes, the root-owned Store create/install
+  journal and autonomous Store creation/replacement paths.
+- [ ] Import only the planned Store binding into root runtime state and publish
+  the topology-admitted release set through it.
 - [x] Commit the genesis Fleet Registry.
 
 ## Slice 3 — Fleet Registry and Root Lifecycle
@@ -267,7 +287,8 @@ Registry slices replace the 0.99 root model.
   occupied physical Subnet, exact Fleet-owned Canister counts and fail-closed
   Coordinator/root evidence validation.
 - [x] Qualify restore fencing and role-package boundaries.
-- [x] Measure Wasm boundaries and remove stale authority.
+- [ ] Rebuild and remeasure the independent Coordinator, root and Store Wasm
+  boundaries after Store extraction, then remove remaining stale authority.
 
 ## Current Batch
 
@@ -1206,26 +1227,34 @@ stable keys use the same subsystem vocabulary; the former broad root Subnet
 state name is hard-cut to root Wasm Store state. This is a pre-1.0
 reinstall-only regrouping with no migration, alias or compatibility reader.
 
-Open 0.100.96 consolidates the Coordinator, Fleet Subnet Root and Wasm Store
+Released 0.100.96 consolidates the Coordinator, Fleet Subnet Root and Wasm Store
 behind one host artifact-build boundary. Each build output now carries its
 canonical Cargo package identity, provenance rejects package-manifest drift,
 the application union compares output identity with its admitted target, and
 install preparation consumes the exact root output instead of consulting a
-parallel build target. The separate Store post-build qualifier remains a
-read-only check of the Store artifact embedded by the root build. The facade's
-redundant direct Store feature edge is removed because root control-plane
-authority already implies the bootstrap machinery; a canonical rebuild proves
-the root and Store artifacts remain byte-identical.
+parallel build target. Its initial boundary measurement exposed the remaining
+coupling: the root still embeds the Store artifact and owns Store creation.
+The accepted follow-up 0.100 amendment now requires the next coherent batch to
+remove that coupling, host-install one Store beside each root with separate
+funding and recovery, and retain only root-owned runtime
+publication/lifecycle authority after an exact controller handoff.
 
-The [0.100 infrastructure Wasm boundary closeout](0.100-wasm-boundary-closeout.md)
-records the three canonical release artifacts, their exact byte/hash evidence,
-exported-method boundaries and retained-size attribution. Maintained-source
-searches find no Tree identity, logical Subnet-slot, Subnet Registry/Directory,
-nested Component declaration or arbitrary artifact fallback authority.
+The [0.100 infrastructure Wasm boundary audit](0.100-wasm-boundary-closeout.md)
+records the pre-extraction artifacts and remains open until the independent
+root and Store builds, installation journey and post-extraction sizes are
+verified. Maintained-source searches still find no Tree identity, logical
+Subnet-slot, Subnet Registry/Directory, nested Component declaration or
+arbitrary artifact fallback authority.
 
 ## Next Action
 
-The maintainer-owned final operational proof remains: run root-deletion
+Implement the host-installed sibling Store hard cut within 0.100: extend
+the immutable Fleet plan and host journal, create the root and Store on the
+same exact Subnet, install reciprocal protected payloads, verify the Store's
+root-observed sole-controller adoption receipt, remove root-embedded Store
+bytes and root-owned creation state, then rerun focused installation and
+Wasm-boundary proof. After that, the maintainer-owned final operational proof
+remains: run root-deletion
 preparation and execution as separate processes against one explicitly
 selected disposable real-network root, then verify the surviving Coordinator
 terminal receipt and exact replay before closing 0.100 and beginning 0.101.

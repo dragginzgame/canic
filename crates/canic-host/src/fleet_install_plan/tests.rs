@@ -116,7 +116,10 @@ fn root_input(
         component_admissions: admissions,
         limits: limits(),
         canister_pool_imports: Vec::new(),
-        creation_funding: PlannedCanisterCreationFunding::Cycles {
+        root_creation_funding: PlannedCanisterCreationFunding::Cycles {
+            cycles: 2_000_000_000_000,
+        },
+        wasm_store_creation_funding: PlannedCanisterCreationFunding::Cycles {
             cycles: 2_000_000_000_000,
         },
     }
@@ -311,7 +314,7 @@ fn plan_rejects_nonpositive_funding_and_conflicting_identity() {
 
     let invalid_fleet = fleet_binding(15);
     let mut invalid = request(&root, &config, invalid_fleet.clone(), release_build_id);
-    invalid.fleet_subnet_roots[0].creation_funding =
+    invalid.fleet_subnet_roots[0].wasm_store_creation_funding =
         PlannedCanisterCreationFunding::Cycles { cycles: 0 };
     std::assert_matches!(
         compile_and_persist_fleet_install_plan(invalid),
@@ -320,6 +323,19 @@ fn plan_rejects_nonpositive_funding_and_conflicting_identity() {
     assert!(
         !fleet_install_plan_path(&root, &invalid_fleet, release_build_id).exists(),
         "invalid funding must not publish a plan"
+    );
+
+    let invalid_root_fleet = fleet_binding(16);
+    let mut invalid = request(&root, &config, invalid_root_fleet.clone(), release_build_id);
+    invalid.fleet_subnet_roots[0].root_creation_funding =
+        PlannedCanisterCreationFunding::Cycles { cycles: 0 };
+    std::assert_matches!(
+        compile_and_persist_fleet_install_plan(invalid),
+        Err(FleetInstallPlanError::NonPositiveCreationFunding { .. })
+    );
+    assert!(
+        !fleet_install_plan_path(&root, &invalid_root_fleet, release_build_id).exists(),
+        "invalid root funding must not publish a plan"
     );
     assert!(persisted.path.exists());
 

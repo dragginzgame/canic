@@ -69,6 +69,12 @@ fn journals_each_root_effect_and_verifies_exact_protected_authority() {
     let fixture = fixture(&root);
     let planned = plan(&fixture).expect("plan root");
     assert_eq!(planned.journal.phase, FleetSubnetRootInstallPhase::Planned);
+    assert_eq!(planned.journal.expected_root_module_hash, [7; 32]);
+    assert_eq!(planned.journal.expected_wasm_store_module_hash, [9; 32]);
+    assert_eq!(
+        planned.journal.wasm_store_artifact.role,
+        CanicInfrastructureRole::WasmStore
+    );
 
     let creating = begin_root_creation(&planned).expect("begin creation");
     assert_eq!(
@@ -554,6 +560,22 @@ fn planner_rejects_zero_install_identity_and_a_root_outside_the_fleet_plan() {
     ));
 }
 
+#[test]
+fn planner_requires_the_exact_sibling_wasm_store_artifact() {
+    let root = temp_dir("fleet-subnet-root-install-journal-store-artifact");
+    let mut fixture = fixture(&root);
+    fixture
+        .manifest
+        .manifest
+        .entries
+        .retain(|entry| entry.role != CanicInfrastructureRole::WasmStore);
+
+    assert!(matches!(
+        plan(&fixture),
+        Err(super::FleetSubnetRootInstallJournalError::WasmStoreArtifactMissing)
+    ));
+}
+
 struct Fixture {
     plan: PersistedFleetInstallPlan,
     manifest: PersistedCanicInfrastructureArtifactManifest,
@@ -608,7 +630,10 @@ fn fixture(root: &Path) -> Fixture {
             cycles_funding: cycles_budget(),
         },
         canister_pool_imports: Vec::new(),
-        creation_funding: PlannedCanisterCreationFunding::Cycles {
+        root_creation_funding: PlannedCanisterCreationFunding::Cycles {
+            cycles: 2_000_000_000_000,
+        },
+        wasm_store_creation_funding: PlannedCanisterCreationFunding::Cycles {
             cycles: 2_000_000_000_000,
         },
     };
@@ -635,7 +660,7 @@ fn fixture(root: &Path) -> Fixture {
         path: root.join("fleet-install-plan.json"),
         root_release_sets: Vec::new(),
     };
-    let artifact = CanicInfrastructureArtifactEntry {
+    let root_artifact = CanicInfrastructureArtifactEntry {
         role: CanicInfrastructureRole::FleetSubnetRoot,
         package: "canic-fleet-subnet-root".to_string(),
         release_build_id,
@@ -646,10 +671,21 @@ fn fixture(root: &Path) -> Fixture {
         wasm_gz_size_bytes: 8,
         wasm_gz_sha256_hex: "08".repeat(32),
     };
+    let wasm_store_artifact = CanicInfrastructureArtifactEntry {
+        role: CanicInfrastructureRole::WasmStore,
+        package: "canic-wasm-store".to_string(),
+        release_build_id,
+        wasm_relative_path: "wasm_store.wasm".to_string(),
+        wasm_size_bytes: 8,
+        wasm_sha256_hex: "09".repeat(32),
+        wasm_gz_relative_path: "wasm_store.wasm.gz".to_string(),
+        wasm_gz_size_bytes: 8,
+        wasm_gz_sha256_hex: "0a".repeat(32),
+    };
     let manifest = PersistedCanicInfrastructureArtifactManifest {
         manifest: CanicInfrastructureArtifactManifest {
             release_build_id,
-            entries: vec![artifact],
+            entries: vec![root_artifact, wasm_store_artifact],
         },
         digest: [10; 32],
         path: root.join("infrastructure-artifact-manifest.json"),
