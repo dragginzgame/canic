@@ -1,22 +1,17 @@
 mod cost_guard;
 mod error;
-mod fleet;
 mod lifecycle;
 mod release;
+mod snapshot;
 mod store;
 
 use crate::{
-    dto::template::{
-        WasmStoreAdminCommand, WasmStoreAdminResponse, WasmStoreFinalizedStoreResponse,
-    },
-    ids::CanisterRole,
+    dto::template::{WasmStoreAdminCommand, WasmStoreAdminResponse},
     ops::component_registry::ComponentRegistryOps,
 };
 use canic_core::control_plane_support::error::InternalError;
 
 use self::cost_guard::{PUBLICATION_ADMIN_COMMAND_KIND, PublicationCostGuard};
-
-const WASM_STORE_ROLE: CanisterRole = CanisterRole::WASM_STORE;
 
 ///
 /// WasmStorePublicationWorkflow
@@ -31,62 +26,12 @@ impl WasmStorePublicationWorkflow {
     ) -> Result<WasmStoreAdminResponse, InternalError> {
         ComponentRegistryOps::require_root_store_admin_open()?;
         match cmd {
-            WasmStoreAdminCommand::PublishCurrentReleaseToStore { store_pid } => {
+            WasmStoreAdminCommand::PublishActiveReleaseSet => {
                 let cost_guard = PublicationCostGuard::reserve(PUBLICATION_ADMIN_COMMAND_KIND)?;
-                let result =
-                    Self::publish_current_release_set_to_store(cost_guard.permit(), store_pid)
-                        .await
-                        .map(
-                            |()| WasmStoreAdminResponse::PublishedCurrentReleaseToStore {
-                                store_pid,
-                            },
-                        );
+                let result = Self::publish_active_release_set_to_adopted_store(cost_guard.permit())
+                    .await
+                    .map(|()| WasmStoreAdminResponse::PublishedActiveReleaseSet);
                 cost_guard.settle(result)
-            }
-            WasmStoreAdminCommand::PublishCurrentReleaseToCurrentStore => {
-                let cost_guard = PublicationCostGuard::reserve(PUBLICATION_ADMIN_COMMAND_KIND)?;
-                let result =
-                    Self::publish_current_release_set_to_current_store(cost_guard.permit())
-                        .await
-                        .map(|()| WasmStoreAdminResponse::PublishedCurrentReleaseToCurrentStore);
-                cost_guard.settle(result)
-            }
-            WasmStoreAdminCommand::SetPublicationBinding { binding } => {
-                Self::set_current_publication_store_binding(binding.clone())?;
-                Ok(WasmStoreAdminResponse::SetPublicationBinding { binding })
-            }
-            WasmStoreAdminCommand::ClearPublicationBinding => {
-                Self::clear_current_publication_store_binding()?;
-                Ok(WasmStoreAdminResponse::ClearedPublicationBinding)
-            }
-            WasmStoreAdminCommand::RetireDetachedBinding => {
-                let binding = Self::retire_detached_publication_store_binding();
-                Ok(WasmStoreAdminResponse::RetiredDetachedBinding { binding })
-            }
-            WasmStoreAdminCommand::PrepareRetiredStoreGc => {
-                let binding = Self::prepare_retired_publication_store_for_gc().await?;
-                Ok(WasmStoreAdminResponse::PreparedRetiredStoreGc { binding })
-            }
-            WasmStoreAdminCommand::BeginRetiredStoreGc => {
-                let binding = Self::begin_retired_publication_store_gc().await?;
-                Ok(WasmStoreAdminResponse::BeganRetiredStoreGc { binding })
-            }
-            WasmStoreAdminCommand::CompleteRetiredStoreGc => {
-                let binding = Self::complete_retired_publication_store_gc().await?;
-                Ok(WasmStoreAdminResponse::CompletedRetiredStoreGc { binding })
-            }
-            WasmStoreAdminCommand::FinalizeRetiredBinding => {
-                let result = Self::finalize_retired_publication_store_binding()
-                    .await?
-                    .map(|(binding, store_pid)| WasmStoreFinalizedStoreResponse {
-                        binding,
-                        store_pid,
-                    });
-                Ok(WasmStoreAdminResponse::FinalizedRetiredBinding { result })
-            }
-            WasmStoreAdminCommand::DeleteFinalizedStore { binding, store_pid } => {
-                Self::delete_finalized_publication_store(binding.clone(), store_pid).await?;
-                Ok(WasmStoreAdminResponse::DeletedFinalizedStore { binding, store_pid })
             }
         }
     }

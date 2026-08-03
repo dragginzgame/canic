@@ -43,6 +43,7 @@ mod tests {
             },
             fleet_subnet_root::{
                 FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary, FleetSubnetRootInitArgs,
+                FleetSubnetWasmStoreInitArgs,
             },
             root_store::{
                 ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX,
@@ -109,14 +110,16 @@ mod tests {
     use canic_core::cdk::utils::hash::{hex_bytes, wasm_hash};
     use canic_host::release_set::AppConfigSnapshot;
     use flate2::{Compression, write::GzEncoder};
-    use std::{collections::BTreeMap, io::Write, sync::OnceLock};
+    use std::{collections::BTreeMap, fs, io::Write, sync::OnceLock};
 
     use crate::pic::{
         CanicWasmBuildProfile,
         artifacts::build_internal_test_wasm_canisters_with_env,
         build_internal_test_wasm_canisters,
         canic::{
+            ManagedRootInstallInput, adopt_sibling_wasm_store,
             install_root_args_with_release_set_digest_and_coordinator, managed_test_init_identity,
+            prepare_sibling_wasm_store_controllers,
         },
     };
     use ic_testkit::artifacts::{read_wasm, test_target_dir, workspace_root_for};
@@ -3674,29 +3677,41 @@ mod tests {
         );
         let root_id = pic.create_canister();
         pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
-        let init_bytes = install_root_args_with_release_set_digest_and_coordinator(
-            root_id,
-            coordinator,
-            &root_wasm,
-            &config_path,
-            digest,
-        )
-        .expect("encode exact root authority");
+        let wasm_store = pic.create_canister();
+        pic.add_cycles(wasm_store, ROOT_INSTALL_CYCLES);
+        let wasm_store_wasm =
+            fs::read(workspace_root.join(".icp/local/canisters/wasm_store/wasm_store.wasm.gz"))
+                .expect("read sibling Wasm Store artifact");
+        let installation_controller = Principal::from_slice(&[0x46; 29]);
+        let init_bytes =
+            install_root_args_with_release_set_digest_and_coordinator(ManagedRootInstallInput {
+                root_id,
+                wasm_store,
+                installation_controller,
+                coordinator,
+                root_wasm: &root_wasm,
+                wasm_store_wasm: &wasm_store_wasm,
+                config_path: &config_path,
+                release_set_digest: digest,
+            })
+            .expect("encode exact root authority");
         let mut init_args =
             decode_one::<FleetSubnetRootInitArgs>(&init_bytes).expect("decode root init authority");
-        let physical_subnet = SubnetId::from_principal(
-            Principal::from_text(POCKET_IC_APPLICATION_SUBNET)
-                .expect("PocketIC 14 Application Subnet identity"),
+        bind_init_args_to_pocket_ic_subnet(&mut init_args);
+        let store_init_args = FleetSubnetWasmStoreInitArgs {
+            authority: init_args.authority.wasm_store_authority.clone(),
+            install_id: init_args.install_id,
+        };
+        prepare_sibling_wasm_store_controllers(pic, wasm_store, installation_controller, root_id);
+        pic.install_canister(
+            wasm_store,
+            wasm_store_wasm,
+            encode_one(store_init_args).expect("encode live PocketIC Store authority"),
+            Some(installation_controller),
         );
-        init_args.authority.binding.placement_subnet = physical_subnet;
-        init_args
-            .authority
-            .binding
-            .authority
-            .binding
-            .coordinator_subnet = physical_subnet;
         let init_bytes = encode_one(&init_args).expect("encode live PocketIC root authority");
         pic.install_canister(root_id, root_wasm, init_bytes, None);
+        adopt_sibling_wasm_store(pic, root_id, &init_args);
         assert_prepared(pic, root_id);
 
         let version = TemplateVersion::owned(manifest.release_build_id.to_string());
@@ -3744,6 +3759,27 @@ mod tests {
             request,
             response: response.expect("root Store bootstrap"),
         }
+    }
+
+    fn bind_init_args_to_pocket_ic_subnet(init_args: &mut FleetSubnetRootInitArgs) {
+        let physical_subnet = SubnetId::from_principal(
+            Principal::from_text(POCKET_IC_APPLICATION_SUBNET)
+                .expect("PocketIC 14 Application Subnet identity"),
+        );
+        init_args.authority.binding.placement_subnet = physical_subnet;
+        init_args
+            .authority
+            .binding
+            .authority
+            .binding
+            .coordinator_subnet = physical_subnet;
+        init_args.authority.wasm_store_authority.placement_subnet = physical_subnet;
+        init_args
+            .authority
+            .wasm_store_authority
+            .authority
+            .binding
+            .coordinator_subnet = physical_subnet;
     }
 
     fn build_test_coordinator_wasm() -> Vec<u8> {

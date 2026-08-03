@@ -111,7 +111,7 @@ pub mod ops {
         }
 
         pub mod init_payload {
-            pub use crate::ops::runtime::init_payload::wasm_store_init_payload;
+            pub use crate::ops::runtime::init_payload::wasm_store_init_args;
         }
     }
 }

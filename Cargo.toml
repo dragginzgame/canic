@@ -86,6 +86,7 @@ ic-stable-structures = "0.7.2"
 ic-testkit = "0.1.11"
 ic0 = "1.1.0"
 k256 = { version = "0.14", default-features = false, features = ["ecdsa"] }
+pocket-ic = "14.0.0"
 proc-macro2 = "1.0"
 quote = "1.0"
 remain = "0.2"

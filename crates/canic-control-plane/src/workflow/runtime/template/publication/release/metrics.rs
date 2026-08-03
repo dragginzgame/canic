@@ -1,19 +1,9 @@
-use crate::workflow::runtime::template::{
-    publication::WasmStorePublicationWorkflow, record_wasm_store_metric,
-};
+use crate::workflow::runtime::template::record_wasm_store_metric;
 use canic_core::api::lifecycle::metrics::{
     WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason, WasmStoreMetricSource,
 };
 use canic_core::control_plane_support::error::InternalError;
 use canic_core::dto::error::ErrorCode;
-
-impl WasmStorePublicationWorkflow {
-    // Return true when one failed store call represents store-capacity exhaustion.
-    pub(super) fn is_store_capacity_exceeded(err: &InternalError) -> bool {
-        err.public_error()
-            .is_some_and(|public| public.code == ErrorCode::WasmStoreCapacityExceeded)
-    }
-}
 
 // Record one target-store release publish failure reason.
 pub(super) fn record_wasm_store_publish_failed(reason: WasmStoreMetricReason) {

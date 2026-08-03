@@ -28,6 +28,7 @@ pub(super) fn record_to_status(
     let FleetActivationRecord {
         state,
         root_authority,
+        wasm_store_authority,
         prepared_state_snapshot_hash: _,
         prepared_topology_snapshot_hash: _,
         cascade_manifest,
@@ -37,6 +38,16 @@ pub(super) fn record_to_status(
     if is_root != root_authority.is_some() {
         return Err(invalid(
             "Fleet Subnet Root authority presence does not match the runtime role",
+        ));
+    }
+    if is_root && wasm_store_authority.is_none() {
+        return Err(invalid(
+            "Fleet Subnet Root activation has no sibling Wasm Store authority",
+        ));
+    }
+    if !is_root && wasm_store_authority.is_some() && component_runtime.is_some() {
+        return Err(invalid(
+            "sibling Wasm Store activation contains Component runtime state",
         ));
     }
     let (phase, identity, evidence, activated_at_ns) = match state {

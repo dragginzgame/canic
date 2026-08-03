@@ -488,7 +488,6 @@ dependencies = [
  "canic-control-plane",
  "canic-core",
  "canic-macros",
- "flate2",
  "ic-cdk",
  "ic0",
  "toml 1.1.4+spec-1.1.0",
@@ -605,6 +604,7 @@ dependencies = [
  "canic-host",
  "flate2",
  "ic-testkit",
+ "pocket-ic",
  "serde_json",
 ]
 

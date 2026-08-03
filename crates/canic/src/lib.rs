@@ -68,7 +68,6 @@ pub mod __build {
         METRICS_TIER_SECURITY, METRICS_TIER_STORAGE, assert_canonical_role_contract_build,
         config_app_id, config_contains_role, config_declares_role, config_role_is_deployable,
         configured_role_metrics_tier_mask, declared_package_metadata, declared_package_role,
-        emit_root_wasm_store_bootstrap_release_set, manifest_declares_workspace,
         metrics_profile_tier_mask, read_config_source_or_default, required_package_metadata,
         required_package_role, role_normal_dependency_metrics_enabled,
     };

@@ -10,36 +10,27 @@ use crate::storage::stable::state::root_wasm_store::{
 };
 use crate::{
     dto::template::{WasmStoreGcStatusResponse, WasmStorePublicationStateResponse},
-    ids::{WasmStoreBinding, WasmStoreCreationPurpose, WasmStoreGcMode},
+    ids::{WasmStoreBinding, WasmStoreGcMode},
     ops::storage::state::mapper::RootWasmStoreStateMapper,
     storage::stable::state::root_wasm_store::{
-        RootWasmStoreState, WasmStoreCreationProgressRecord, WasmStoreCreationRecord,
+        RootWasmStoreState, SiblingWasmStoreAdoptionPhaseRecord, SiblingWasmStoreAdoptionRecord,
         WasmStoreGcRecord,
     },
-    view::state::{PublicationStoreStateView, WasmStoreCreationView, WasmStoreView},
+    view::state::{PublicationStoreStateView, WasmStoreView},
 };
 use canic_core::{
     cdk::types::Principal,
-    control_plane_support::{
-        error::{InternalError, InternalErrorOrigin},
-        model::replay::ReplayCostGuardSettlement,
-    },
+    control_plane_support::error::{InternalError, InternalErrorOrigin},
+    dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse,
+    ids::FleetSubnetWasmStoreAuthority,
 };
 
-///
-/// WasmStoreCreationPlan
-///
-/// Ops-owned immutable authority frozen before one root-owned Store creation effect.
-/// Consumed by the Store creation workflow and persisted as a stable record.
-///
-
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct WasmStoreCreationPlan {
-    pub purpose: WasmStoreCreationPurpose,
-    pub expected_module_hash: [u8; 32],
-    pub payload_size_bytes: u64,
-    pub controllers: Vec<Principal>,
-    pub initial_cycles: u128,
+pub struct SiblingWasmStoreAdoptionPlan {
+    pub operation_id: [u8; 32],
+    pub authority: FleetSubnetWasmStoreAuthority,
+    pub temporary_controllers: Vec<Principal>,
+    pub final_controllers: Vec<Principal>,
 }
 
 ///
@@ -88,12 +79,6 @@ impl RootWasmStoreStateOps {
     // Canonical data access
     // -------------------------------------------------------------
 
-    /// Return the current root-owned publication binding, if one is pinned.
-    #[must_use]
-    pub fn publication_store_binding() -> Option<WasmStoreBinding> {
-        RootWasmStoreState::publication_store_binding()
-    }
-
     /// Return the current root-owned publication binding lifecycle state.
     #[must_use]
     pub fn publication_store_state() -> PublicationStoreStateView {
@@ -111,87 +96,55 @@ impl RootWasmStoreStateOps {
             .collect()
     }
 
-    #[must_use]
-    pub fn wasm_store_creation() -> Option<WasmStoreCreationView> {
-        RootWasmStoreState::wasm_store_creation()
-            .map(RootWasmStoreStateMapper::wasm_store_creation_record_to_view)
-    }
-
-    pub fn begin_wasm_store_creation(
-        plan: &WasmStoreCreationPlan,
-        creation_cost_guard_settlement: ReplayCostGuardSettlement,
-        prepared_at: u64,
-    ) -> Result<WasmStoreCreationView, InternalError> {
-        RootWasmStoreState::begin_wasm_store_creation(WasmStoreCreationRecord {
-            sequence: 0,
-            purpose: plan.purpose,
-            expected_module_hash: plan.expected_module_hash,
-            payload_size_bytes: plan.payload_size_bytes,
-            controllers: plan.controllers.clone(),
-            initial_cycles: plan.initial_cycles,
-            creation_cost_guard_settlement,
-            prepared_at,
-            progress: WasmStoreCreationProgressRecord::CreationIntent,
+    pub fn begin_sibling_wasm_store_adoption(
+        plan: &SiblingWasmStoreAdoptionPlan,
+    ) -> Result<(), InternalError> {
+        RootWasmStoreState::begin_sibling_wasm_store_adoption(SiblingWasmStoreAdoptionRecord {
+            operation_id: plan.operation_id,
+            wasm_store: plan.authority.wasm_store,
+            expected_module_hash: plan.authority.wasm_module_hash,
+            temporary_controllers: plan.temporary_controllers.clone(),
+            final_controllers: plan.final_controllers.clone(),
+            phase: SiblingWasmStoreAdoptionPhaseRecord::MutationInFlight,
+            adopted_at_ns: None,
         })
-        .map(RootWasmStoreStateMapper::wasm_store_creation_record_to_view)
+        .map(|_| ())
         .map_err(|reason| {
             InternalError::invariant(
                 InternalErrorOrigin::Storage,
-                format!("failed to begin root-owned Wasm Store creation: {reason:?}"),
+                format!("failed to begin sibling Wasm Store adoption: {reason:?}"),
             )
         })
     }
 
-    pub fn mark_wasm_store_created(
-        sequence: u64,
-        pid: Principal,
-        created_at: u64,
-    ) -> Result<WasmStoreCreationView, InternalError> {
-        RootWasmStoreState::mark_wasm_store_created(sequence, pid, created_at)
-            .map(RootWasmStoreStateMapper::wasm_store_creation_record_to_view)
-            .ok_or_else(|| Self::store_creation_transition_error("record created Canister"))
+    pub fn commit_sibling_wasm_store_adoption(
+        operation_id: [u8; 32],
+        authority: FleetSubnetWasmStoreAuthority,
+        adopted_at_ns: u64,
+    ) -> Result<FleetSubnetWasmStoreAdoptionResponse, InternalError> {
+        let record =
+            RootWasmStoreState::commit_sibling_wasm_store_adoption(operation_id, adopted_at_ns)
+                .map_err(|reason| {
+                    InternalError::invariant(
+                        InternalErrorOrigin::Storage,
+                        format!("failed to commit sibling Wasm Store adoption: {reason:?}"),
+                    )
+                })?;
+        adoption_response(record, authority)
     }
 
-    pub fn begin_wasm_store_install(
-        sequence: u64,
-        settlement: ReplayCostGuardSettlement,
-    ) -> Result<WasmStoreCreationView, InternalError> {
-        RootWasmStoreState::begin_wasm_store_install(sequence, settlement)
-            .map(RootWasmStoreStateMapper::wasm_store_creation_record_to_view)
-            .ok_or_else(|| Self::store_creation_transition_error("begin install"))
-    }
-
-    pub fn renew_wasm_store_install(
-        sequence: u64,
-        settlement: ReplayCostGuardSettlement,
-    ) -> Result<WasmStoreCreationView, InternalError> {
-        RootWasmStoreState::renew_wasm_store_install(sequence, settlement)
-            .map(RootWasmStoreStateMapper::wasm_store_creation_record_to_view)
-            .ok_or_else(|| Self::store_creation_transition_error("renew install"))
-    }
-
-    pub fn mark_wasm_store_installed(
-        sequence: u64,
-    ) -> Result<WasmStoreCreationView, InternalError> {
-        RootWasmStoreState::mark_wasm_store_installed(sequence)
-            .map(RootWasmStoreStateMapper::wasm_store_creation_record_to_view)
-            .ok_or_else(|| Self::store_creation_transition_error("record installed Canister"))
-    }
-
-    pub fn commit_wasm_store_creation(
-        sequence: u64,
-        binding: WasmStoreBinding,
-    ) -> Result<WasmStoreView, InternalError> {
-        RootWasmStoreState::commit_wasm_store_creation(sequence, binding)
-            .map(RootWasmStoreStateMapper::wasm_store_record_to_view)
-            .ok_or_else(|| Self::store_creation_transition_error("commit Store inventory"))
-    }
-
-    fn store_creation_transition_error(transition: &str) -> InternalError {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            format!("failed to {transition} for root-owned Wasm Store creation"),
-        )
+    pub fn sibling_wasm_store_adoption_receipt(
+        operation_id: [u8; 32],
+        authority: FleetSubnetWasmStoreAuthority,
+    ) -> Result<Option<FleetSubnetWasmStoreAdoptionResponse>, InternalError> {
+        let Some(record) = RootWasmStoreState::sibling_wasm_store_adoption() else {
+            return Ok(None);
+        };
+        validate_adoption_authority(&record, operation_id, &authority)?;
+        if record.phase == SiblingWasmStoreAdoptionPhaseRecord::MutationInFlight {
+            return Ok(None);
+        }
+        adoption_response(record, authority).map(Some)
     }
 
     /// Resolve one runtime-managed wasm store principal by logical binding.
@@ -306,9 +259,74 @@ impl RootWasmStoreStateOps {
                         },
                     })
                     .collect(),
-                next_wasm_store_creation_sequence: 0,
-                wasm_store_creation: None,
+                sibling_wasm_store_adoption: None,
             },
         });
     }
+}
+
+#[derive(Eq, PartialEq)]
+struct SiblingWasmStoreAdoptionAuthority {
+    operation_id: [u8; 32],
+    wasm_store: Principal,
+    expected_module_hash: [u8; 32],
+    temporary_controllers: Vec<Principal>,
+    final_controllers: Vec<Principal>,
+}
+
+fn adoption_response(
+    record: SiblingWasmStoreAdoptionRecord,
+    authority: FleetSubnetWasmStoreAuthority,
+) -> Result<FleetSubnetWasmStoreAdoptionResponse, InternalError> {
+    validate_adoption_authority(&record, record.operation_id, &authority)?;
+    if record.phase != SiblingWasmStoreAdoptionPhaseRecord::Verified {
+        return Err(InternalError::unavailable(
+            "sibling Wasm Store adoption has not reached terminal verification",
+        ));
+    }
+    let adopted_at_ns = record.adopted_at_ns.ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "verified sibling Wasm Store adoption omitted its terminal timestamp",
+        )
+    })?;
+    Ok(FleetSubnetWasmStoreAdoptionResponse {
+        operation_id: record.operation_id,
+        authority,
+        temporary_controllers: record.temporary_controllers,
+        final_controllers: record.final_controllers,
+        adopted_at_ns,
+    })
+}
+
+fn validate_adoption_authority(
+    record: &SiblingWasmStoreAdoptionRecord,
+    operation_id: [u8; 32],
+    authority: &FleetSubnetWasmStoreAuthority,
+) -> Result<(), InternalError> {
+    let mut temporary_controllers = vec![
+        authority.installation_controller,
+        authority.fleet_subnet_root,
+    ];
+    temporary_controllers.sort();
+    let expected = SiblingWasmStoreAdoptionAuthority {
+        operation_id,
+        wasm_store: authority.wasm_store,
+        expected_module_hash: authority.wasm_module_hash,
+        temporary_controllers,
+        final_controllers: vec![authority.fleet_subnet_root],
+    };
+    let observed = SiblingWasmStoreAdoptionAuthority {
+        operation_id: record.operation_id,
+        wasm_store: record.wasm_store,
+        expected_module_hash: record.expected_module_hash,
+        temporary_controllers: record.temporary_controllers.clone(),
+        final_controllers: record.final_controllers.clone(),
+    };
+    if observed != expected {
+        return Err(InternalError::conflict(
+            "sibling Wasm Store adoption receipt differs from protected authority",
+        ));
+    }
+    Ok(())
 }

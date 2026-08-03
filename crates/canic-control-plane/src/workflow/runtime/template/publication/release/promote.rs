@@ -4,7 +4,7 @@ use crate::{
     ops::storage::template::TemplateManifestOps,
     workflow::runtime::template::{
         publication::{
-            WasmStorePublicationWorkflow, fleet::PublicationStoreSnapshot,
+            WasmStorePublicationWorkflow, snapshot::PublicationStoreSnapshot,
             store::store_stage_manifest,
         },
         record_wasm_store_metric,

@@ -13,7 +13,7 @@ use canic::{
 };
 use canic_control_plane::dto::template::WasmStoreOverviewResponse;
 use ic_testkit::pic::{Pic, PicBuilder, PicStartError};
-use std::{collections::HashMap, time::Instant};
+use std::{collections::HashMap, fs, time::Instant};
 
 use crate::pic::CanicPicExt;
 
@@ -29,6 +29,11 @@ pub fn setup_root_topology(
     spec: &RootBaselineSpec<'_>,
     root_wasm: Vec<u8>,
 ) -> InitializedRootTopology {
+    let wasm_store_wasm = fs::read(
+        spec.root_release_artifacts_dir
+            .join("wasm_store/wasm_store.wasm.gz"),
+    )
+    .expect("read sibling Wasm Store artifact");
     for attempt in 1..=spec.root_setup_max_attempts {
         progress(
             spec,
@@ -61,7 +66,7 @@ pub fn setup_root_topology(
         progress(spec, "installing root canister");
         let root_install_started_at = Instant::now();
         let root_id = pic
-            .create_and_install_root_canister(root_wasm, &spec.build_config_path)
+            .create_and_install_root_canister(root_wasm, wasm_store_wasm, &spec.build_config_path)
             .expect("install root canister");
         progress_elapsed(spec, "root canister installed", root_install_started_at);
 

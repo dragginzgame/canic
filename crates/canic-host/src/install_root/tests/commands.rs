@@ -114,12 +114,37 @@ fn create_command_binds_subnet_and_exact_cycles() {
         &crate::fleet_install_plan::PlannedCanisterCreationFunding::Cycles {
             cycles: 2_000_000_000_000,
         },
+        &[],
     );
 
     assert_eq!(
         crate::icp::command_display(&command),
         format!(
             "icp --project-root-override /workspace canister create --detached --json --subnet {subnet} --cycles 2000000000000 -e staging"
+        )
+    );
+}
+
+#[test]
+fn create_command_preserves_every_explicit_controller() {
+    let subnet = canic_core::ids::SubnetId::from_principal(candid::Principal::from_slice(&[41]));
+    let first = candid::Principal::from_slice(&[42]);
+    let second = candid::Principal::from_slice(&[43]);
+    let command = icp_canister_create_command(
+        Path::new("/workspace"),
+        "staging",
+        None,
+        subnet,
+        &crate::fleet_install_plan::PlannedCanisterCreationFunding::Cycles {
+            cycles: 2_000_000_000_000,
+        },
+        &[first, second],
+    );
+
+    assert_eq!(
+        crate::icp::command_display(&command),
+        format!(
+            "icp --project-root-override /workspace canister create --detached --json --subnet {subnet} --cycles 2000000000000 --controller {first} --controller {second} -e staging"
         )
     );
 }
@@ -133,6 +158,7 @@ fn create_command_preserves_exact_icp_e8s() {
         None,
         subnet,
         &crate::fleet_install_plan::PlannedCanisterCreationFunding::Icp { e8s: 1 },
+        &[],
     );
 
     assert_eq!(
@@ -183,26 +209,26 @@ fn root_init_args_are_written_as_binary_candid() {
         ids::{
             ComponentTopologyDigest, CyclesFundingBudget, FleetCoordinatorBinding,
             FleetRegistryAuthority, FleetSubnetRootBinding, FleetSubnetRootLimits,
-            FleetSubnetRootReleaseSet, ReleaseSetDigest, SubnetId,
+            FleetSubnetRootReleaseSet, FleetSubnetWasmStoreAuthority, ReleaseSetDigest, SubnetId,
         },
     };
 
     let activation = sample_fleet_activation_identity();
     let fleet_subnet_root = candid::Principal::from_slice(&[42]);
+    let placement_subnet = SubnetId::from_principal(candid::Principal::from_slice(&[43]));
+    let registry_authority = FleetRegistryAuthority {
+        binding: FleetCoordinatorBinding {
+            fleet: activation.fleet.clone(),
+            coordinator_subnet: SubnetId::from_principal(candid::Principal::from_slice(&[40])),
+            coordinator: candid::Principal::from_slice(&[41]),
+        },
+        epoch: 1,
+    };
     let identity = FleetSubnetRootInitArgs {
         authority: FleetSubnetRootAuthority {
             binding: FleetSubnetRootBinding {
-                authority: FleetRegistryAuthority {
-                    binding: FleetCoordinatorBinding {
-                        fleet: activation.fleet,
-                        coordinator_subnet: SubnetId::from_principal(
-                            candid::Principal::from_slice(&[40]),
-                        ),
-                        coordinator: candid::Principal::from_slice(&[41]),
-                    },
-                    epoch: 1,
-                },
-                placement_subnet: SubnetId::from_principal(candid::Principal::from_slice(&[43])),
+                authority: registry_authority.clone(),
+                placement_subnet,
                 fleet_subnet_root,
                 component_admissions: Vec::new(),
                 component_topology_digest: ComponentTopologyDigest::from_bytes([5; 32]),
@@ -227,6 +253,15 @@ fn root_init_args_are_written_as_binary_candid() {
                 manifest_digest: ReleaseSetDigest::from_bytes([6; 32]),
             },
             expected_module_hash: [10; 32],
+            wasm_store_authority: FleetSubnetWasmStoreAuthority {
+                authority: registry_authority,
+                placement_subnet,
+                fleet_subnet_root,
+                wasm_store: candid::Principal::from_slice(&[44]),
+                installation_controller: candid::Principal::from_slice(&[45]),
+                release_build_id: activation.release_build_id,
+                wasm_module_hash: [11; 32],
+            },
         },
         install_id: activation.operation_id,
         canister_pool_imports: Vec::new(),

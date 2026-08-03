@@ -14,13 +14,18 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.96`.
-- The latest published release is `v0.100.96` at
-  `6d6a4126a465a9000a93985075a2616bce281018`.
-- Open patch draft `0.100.97` freezes separate Fleet Subnet Root and sibling
-  Wasm Store creation funding plus both exact artifacts and raw module hashes
-  in pre-effect install authority. Store creation, independent installation,
-  prepared-root adoption and embedded-byte removal remain open.
+- The workspace package version is `0.100.97`.
+- The latest published release is `v0.100.97` at
+  `40424cc1b6d952c83244117e9a606af8f91b8b06`.
+- Open patch draft `0.100.98` independently host-installs each root's sibling
+  Store on the exact same Subnet, adopts it from installer-plus-root to
+  sole-root control, imports only that Store into runtime publication and
+  hard-cuts embedded Store bytes, root-autonomous creation/replacement and
+  multi-Store publication selection. Focused PocketIC adoption/publication
+  passes; post-extraction release-Wasm measurement remains open.
+- Released `0.100.97` freezes separate positive root and Store creation
+  funding plus both qualified artifacts and raw module hashes in immutable
+  pre-effect installation authority.
 - Released `0.100.93` replaces the superseded generic empty-Canister pool with
   one required prepaid asset inventory owned by every Fleet Subnet Root. Fleet
   input freezes its minimum, proactive maximum, cycles and imports, and IC
@@ -63,7 +68,8 @@ Historical detail is archived at:
   terminal sole-controller adoption receipt, and remove embedded Store bytes
   plus autonomous root Store creation/replacement. Root publication, catalog,
   GC and terminal deletion authority remain unchanged after handoff.
-  Implementation and post-extraction measurement are open before the
+  The implementation is complete in open 0.100.98; post-extraction
+  measurement remains open before the
   disposable real-network root-deletion proof.
 - Proposed `0.105` defines provider-neutral declarative authentication
   profiles as the sole source of multi-role user-token grants and
@@ -2113,12 +2119,9 @@ First primary results:
 
 ## Next Action
 
-Implement and prove the host-installed sibling Store amendment within 0.100:
-add separate Store funding and host recovery, install root and Store
-from independent infrastructure outputs on one exact Subnet, verify reciprocal
-protected authority and the root-observed sole-controller adoption receipt,
-hard-cut embedded Store bytes and root-owned create/install/replacement paths,
-then replace the baseline Wasm measurements. The maintainer-owned final
+Replace the baseline infrastructure Wasm measurements with post-extraction
+root/Store artifacts, sizes, hashes and retained attribution. The
+maintainer-owned final
 operational proof then remains: run guarded root-deletion preparation and
 execution as separate processes against one explicitly selected disposable
 real-network root, then verify the surviving Coordinator terminal receipt and

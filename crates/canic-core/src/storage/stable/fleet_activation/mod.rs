@@ -151,6 +151,23 @@ pub struct FleetSubnetRootAuthorityRecord {
 }
 
 ///
+/// FleetSubnetWasmStoreAuthorityRecord
+///
+/// Persisted reciprocal authority shared by one root and its sibling Wasm Store.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetWasmStoreAuthorityRecord {
+    pub authority: FleetRegistryAuthority,
+    pub placement_subnet: SubnetId,
+    pub fleet_subnet_root: Principal,
+    pub wasm_store: Principal,
+    pub installation_controller: Principal,
+    pub release_build_id: ReleaseBuildId,
+    pub wasm_module_hash: [u8; 32],
+}
+
+///
 /// ComponentRuntimeRecord
 ///
 /// Protected Component-tree identity, Directory authority and activation receipt for one non-root.
@@ -299,6 +316,7 @@ pub struct ComponentRuntimeActivationRecord {
 pub struct FleetActivationRecord {
     pub state: FleetActivationStateRecord,
     pub root_authority: Option<FleetSubnetRootAuthorityRecord>,
+    pub wasm_store_authority: Option<FleetSubnetWasmStoreAuthorityRecord>,
     pub prepared_state_snapshot_hash: Option<[u8; 32]>,
     pub prepared_topology_snapshot_hash: Option<[u8; 32]>,
     pub cascade_manifest: Option<Vec<FleetCascadeManifestEntryRecord>>,
@@ -412,6 +430,7 @@ mod tests {
                 application_init_args: Some(vec![4, 5, 6]),
             },
             root_authority: None,
+            wasm_store_authority: None,
             prepared_state_snapshot_hash: None,
             prepared_topology_snapshot_hash: None,
             cascade_manifest: None,

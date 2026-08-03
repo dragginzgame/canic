@@ -1,4 +1,9 @@
-use super::super::super::store_pid_for_binding;
+//! Module: workflow::runtime::template::publication::lifecycle::binding
+//!
+//! Responsibility: pin and verify the one adopted Store publication binding.
+//! Does not own: Store selection, replacement, rotation, GC, or physical deletion.
+//! Boundary: bootstrap may pin an empty publication state exactly once; later publication is read-only.
+
 use super::super::WasmStorePublicationWorkflow;
 use crate::{
     ids::{WasmStoreBinding, WasmStoreGcMode},
@@ -6,70 +11,13 @@ use crate::{
     view::state::PublicationStoreStateView,
     workflow::runtime::template::publication::error::PublicationWorkflowError,
 };
-use canic_core::cdk::types::Principal;
-use canic_core::control_plane_support::{
-    error::{InternalError, InternalErrorOrigin},
-    ops::ic::IcOps,
-};
+use canic_core::control_plane_support::{error::InternalError, ops::ic::IcOps};
 use canic_core::{log, log::Topic};
 
 impl WasmStorePublicationWorkflow {
-    // Build the canonical runtime-managed binding for one wasm store canister id.
-    pub(in crate::workflow::runtime::template::publication::lifecycle) fn binding_for_store_pid(
-        store_pid: Principal,
-    ) -> WasmStoreBinding {
-        WasmStoreBinding::owned(store_pid.to_text())
-    }
-
     // Format one publication-state binding slot for structured transition logs.
     fn binding_slot(slot: Option<&WasmStoreBinding>) -> String {
         slot.map_or_else(|| "-".to_string(), std::string::ToString::to_string)
-    }
-
-    // Return true when a binding is already reserved for detached or retired lifecycle state.
-    pub(in crate::workflow::runtime::template::publication) fn binding_is_reserved_for_publication(
-        state: &PublicationStoreStateView,
-        binding: &WasmStoreBinding,
-    ) -> bool {
-        state.detached_binding.as_ref() == Some(binding)
-            || state.retired_binding.as_ref() == Some(binding)
-    }
-
-    // Reject explicit publication selection when the binding is already detached or retired.
-    fn ensure_binding_is_selectable_for_publication(
-        state: &PublicationStoreStateView,
-        binding: &WasmStoreBinding,
-    ) -> Result<(), InternalError> {
-        if Self::binding_is_reserved_for_publication(state, binding) {
-            return Err(InternalError::workflow(
-                InternalErrorOrigin::Workflow,
-                format!("ws binding '{binding}' is detached/retired"),
-            ));
-        }
-
-        Ok(())
-    }
-
-    // Reject publication through a store that has entered the one-way GC lifecycle.
-    fn ensure_binding_is_writable(binding: &WasmStoreBinding) -> Result<(), InternalError> {
-        let store = RootWasmStoreStateOps::wasm_stores()
-            .into_iter()
-            .find(|store| &store.binding == binding)
-            .ok_or_else(|| {
-                PublicationWorkflowError::InvalidState(format!(
-                    "ws binding '{binding}' is missing from runtime inventory"
-                ))
-            })?;
-
-        if store.gc.mode != WasmStoreGcMode::Normal {
-            return Err(PublicationWorkflowError::StoreNotWritable {
-                binding: binding.clone(),
-                mode: store.gc.mode,
-            }
-            .into());
-        }
-
-        Ok(())
     }
 
     // Emit one structured publication-binding transition record after root-owned state changes.
@@ -99,141 +47,90 @@ impl WasmStorePublicationWorkflow {
         );
     }
 
-    // Reject rollover when it would overwrite an older retired store.
-    pub(in crate::workflow::runtime::template::publication) fn ensure_retired_binding_slot_available_for_promotion()
-    -> Result<(), InternalError> {
+    // Reject publication through any state other than the sole adopted Store as the active binding.
+    pub(in crate::workflow::runtime::template::publication) fn require_active_publication_store(
+        binding: &WasmStoreBinding,
+    ) -> Result<(), InternalError> {
         let state = RootWasmStoreStateOps::publication_store_state();
-
-        if state.detached_binding.is_some() && state.retired_binding.is_some() {
-            return Err(InternalError::workflow(
-                InternalErrorOrigin::Workflow,
-                "ws rollover blocked: retired slot occupied".to_string(),
-            ));
+        let is_exact = [
+            state.active_binding.as_ref() == Some(binding),
+            state.detached_binding.is_none(),
+            state.retired_binding.is_none(),
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !is_exact {
+            return Err(PublicationWorkflowError::InvalidState(format!(
+                "publication state does not name adopted sibling Store '{binding}' as its sole active binding"
+            ))
+            .into());
         }
-
         Ok(())
     }
 
-    // Reject explicit retirement when one retired store is already pending cleanup.
-    pub(in crate::workflow::runtime::template::publication) fn ensure_retired_binding_slot_available_for_retirement()
-    -> Result<(), InternalError> {
-        let state = RootWasmStoreStateOps::publication_store_state();
-
-        if state.retired_binding.is_some() {
-            return Err(InternalError::workflow(
-                InternalErrorOrigin::Workflow,
-                "ws retirement blocked: retired slot occupied".to_string(),
-            ));
-        }
-
-        Ok(())
-    }
-
-    // Move the current detached publication binding into retired state.
-    pub fn retire_detached_publication_store_binding() -> Option<WasmStoreBinding> {
-        if let Err(err) = Self::ensure_retired_binding_slot_available_for_retirement() {
-            log!(Topic::Wasm, Warn, "{err}");
-            return None;
-        }
-
-        let changed_at = IcOps::now_secs();
-        let previous = RootWasmStoreStateOps::publication_store_state();
-        let retired = RootWasmStoreStateOps::retire_detached_publication_store_binding(changed_at);
-
-        if let Some(binding) = retired.as_ref() {
-            let current = RootWasmStoreStateOps::publication_store_state();
-            Self::log_publication_state_transition(
-                "retire_detached_binding",
-                &previous,
-                &current,
-                changed_at,
-            );
-            log!(Topic::Wasm, Ok, "ws retired {}", binding);
-        }
-
-        retired
-    }
-
-    // Persist one explicit publication binding after validating it against the Component Spec config.
-    pub fn set_current_publication_store_binding(
+    // Pin the one adopted sibling Store into an otherwise empty bootstrap publication state.
+    pub(in crate::workflow::runtime::template::publication) fn pin_initial_publication_store(
         binding: WasmStoreBinding,
     ) -> Result<(), InternalError> {
-        let _ = store_pid_for_binding(&binding)?;
-        Self::ensure_retired_binding_slot_available_for_promotion()?;
-        let previous = RootWasmStoreStateOps::publication_store_state();
-        Self::ensure_binding_is_selectable_for_publication(&previous, &binding)?;
-        Self::ensure_binding_is_writable(&binding)?;
-        let changed_at = IcOps::now_secs();
-
-        if RootWasmStoreStateOps::activate_publication_store_binding(binding, changed_at) {
-            let current = RootWasmStoreStateOps::publication_store_state();
-            Self::log_publication_state_transition(
-                "pin_publication_binding",
-                &previous,
-                &current,
-                changed_at,
-            );
-        }
-
-        Ok(())
-    }
-
-    // Clear the explicit publication binding and fall back to configured store selection.
-    pub fn clear_current_publication_store_binding() -> Result<(), InternalError> {
-        Self::ensure_retired_binding_slot_available_for_promotion()?;
-
-        let changed_at = IcOps::now_secs();
-        let previous = RootWasmStoreStateOps::publication_store_state();
-
-        if RootWasmStoreStateOps::clear_publication_store_binding(changed_at) {
-            let current = RootWasmStoreStateOps::publication_store_state();
-            Self::log_publication_state_transition(
-                "clear_publication_binding",
-                &previous,
-                &current,
-                changed_at,
-            );
-        }
-
-        Ok(())
-    }
-
-    // Return the oldest known runtime-managed wasm-store binding for this subnet.
-    pub(in crate::workflow::runtime::template::publication::lifecycle) fn oldest_runtime_store_binding()
-    -> Option<WasmStoreBinding> {
-        RootWasmStoreStateOps::wasm_stores()
-            .into_iter()
-            .min_by(|left, right| left.created_at.cmp(&right.created_at))
-            .map(|record| record.binding)
-    }
-
-    // Clear one stale publication binding and fall back to the oldest known runtime store.
-    pub(in crate::workflow::runtime::template::publication::lifecycle) fn clear_stale_publication_binding(
-        binding: WasmStoreBinding,
-    ) -> Result<WasmStoreBinding, InternalError> {
-        log!(Topic::Wasm, Warn, "ws clear stale binding {}", binding);
-        let changed_at = IcOps::now_secs();
-        Self::ensure_retired_binding_slot_available_for_promotion()?;
-        let previous = RootWasmStoreStateOps::publication_store_state();
-        if !RootWasmStoreStateOps::clear_publication_store_binding(changed_at) {
+        let stores = RootWasmStoreStateOps::wasm_stores();
+        let [store] = stores.as_slice() else {
             return Err(PublicationWorkflowError::InvalidState(format!(
-                "stale ws binding '{binding}' was no longer active"
+                "initial publication binding requires exactly one adopted sibling Store, found {}",
+                stores.len()
             ))
+            .into());
+        };
+        if store.binding != binding {
+            return Err(PublicationWorkflowError::InvalidState(format!(
+                "initial publication binding '{binding}' does not match adopted sibling Store '{}'",
+                store.binding
+            ))
+            .into());
+        }
+        if store.gc.mode != WasmStoreGcMode::Normal {
+            return Err(PublicationWorkflowError::StoreNotWritable {
+                binding,
+                mode: store.gc.mode,
+            }
+            .into());
+        }
+
+        let previous = RootWasmStoreStateOps::publication_store_state();
+        if previous.active_binding.as_ref() == Some(&store.binding) {
+            return Self::require_active_publication_store(&store.binding);
+        }
+        let state_is_empty = [
+            previous.active_binding.is_none(),
+            previous.detached_binding.is_none(),
+            previous.retired_binding.is_none(),
+        ]
+        .into_iter()
+        .all(|empty| empty);
+        if !state_is_empty {
+            return Err(PublicationWorkflowError::InvalidState(
+                "initial publication binding cannot replace or rotate existing Store authority"
+                    .to_string(),
+            )
+            .into());
+        }
+
+        let changed_at = IcOps::now_secs();
+        if !RootWasmStoreStateOps::activate_publication_store_binding(
+            store.binding.clone(),
+            changed_at,
+        ) {
+            return Err(PublicationWorkflowError::InvalidState(
+                "initial publication binding did not commit".to_string(),
+            )
             .into());
         }
         let current = RootWasmStoreStateOps::publication_store_state();
         Self::log_publication_state_transition(
-            "clear_stale_publication_binding",
+            "pin_publication_binding",
             &previous,
             &current,
             changed_at,
         );
-
-        Self::oldest_runtime_store_binding().ok_or_else(|| {
-            InternalError::workflow(
-                InternalErrorOrigin::Workflow,
-                "no root-owned Wasm Stores remain after clearing stale publication binding",
-            )
-        })
+        Self::require_active_publication_store(&store.binding)
     }
 }

@@ -1,13 +1,7 @@
 use crate::{
     dto::template::WasmStorePublicationStateResponse,
-    storage::stable::state::root_wasm_store::{
-        PublicationStoreStateRecord, WasmStoreCreationProgressRecord, WasmStoreCreationRecord,
-        WasmStoreRecord,
-    },
-    view::state::{
-        PublicationStoreStateView, WasmStoreCreationProgressView, WasmStoreCreationView,
-        WasmStoreGcView, WasmStoreView,
-    },
+    storage::stable::state::root_wasm_store::{PublicationStoreStateRecord, WasmStoreRecord},
+    view::state::{PublicationStoreStateView, WasmStoreGcView, WasmStoreView},
 };
 
 ///
@@ -17,48 +11,6 @@ use crate::{
 pub struct RootWasmStoreStateMapper;
 
 impl RootWasmStoreStateMapper {
-    #[must_use]
-    pub fn wasm_store_creation_record_to_view(
-        record: WasmStoreCreationRecord,
-    ) -> WasmStoreCreationView {
-        WasmStoreCreationView {
-            sequence: record.sequence,
-            purpose: record.purpose,
-            expected_module_hash: record.expected_module_hash,
-            payload_size_bytes: record.payload_size_bytes,
-            controllers: record.controllers,
-            initial_cycles: record.initial_cycles,
-            creation_cost_guard_settlement: record.creation_cost_guard_settlement,
-            prepared_at: record.prepared_at,
-            progress: match record.progress {
-                WasmStoreCreationProgressRecord::CreationIntent => {
-                    WasmStoreCreationProgressView::CreationIntent
-                }
-                WasmStoreCreationProgressRecord::Created { pid, created_at } => {
-                    WasmStoreCreationProgressView::Created { pid, created_at }
-                }
-                WasmStoreCreationProgressRecord::InstallIntent {
-                    pid,
-                    created_at,
-                    cost_guard_settlement,
-                } => WasmStoreCreationProgressView::InstallIntent {
-                    pid,
-                    created_at,
-                    cost_guard_settlement,
-                },
-                WasmStoreCreationProgressRecord::Installed {
-                    pid,
-                    created_at,
-                    cost_guard_settlement,
-                } => WasmStoreCreationProgressView::Installed {
-                    pid,
-                    created_at,
-                    cost_guard_settlement,
-                },
-            },
-        }
-    }
-
     // Project one stored wasm-store record into the internal read-only shape.
     #[must_use]
     pub fn wasm_store_record_to_view(record: WasmStoreRecord) -> WasmStoreView {

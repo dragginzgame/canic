@@ -2,16 +2,18 @@
 
 Date: 2026-08-03
 
-- State: implementation in progress; the host-installed sibling Store hard cut
-  is required before the maintainer-owned operational proof.
+- State: implementation in progress; the host-installed sibling Store hard
+  cut is implemented and focused post-extraction measurement remains before
+  the maintainer-owned operational proof.
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.96`.
-- Latest published release: `v0.100.96` at
-  `6d6a4126a465a9000a93985075a2616bce281018`.
-- Open patch draft: `0.100.97`; it freezes independent root/Store funding and
-  exact Store artifact identity before any creation effect.
+- Workspace package version: `0.100.97`.
+- Latest published release: `v0.100.97` at
+  `40424cc1b6d952c83244117e9a606af8f91b8b06`.
+- Open patch draft: `0.100.98`; it independently host-installs each sibling
+  Store, adopts it to sole-root control, removes embedded Store bytes and
+  root-autonomous Store lifecycle, and confines publication to that Store.
 - Open design blockers: none; the Store installation ownership amendment is
   accepted and has open implementation work.
 
@@ -150,15 +152,15 @@ Registry slices replace the 0.99 root model.
 - [x] Add separate root and Wasm Store creation funding to every root plan.
 - [x] Pin both exact root and Store infrastructure artifacts and raw module
   hashes in every root install journal before creation.
-- [ ] Remove implicit Store `initial_cycles` as creation authority.
-- [ ] Host-create and independently install each root's sibling Store on the
+- [x] Remove implicit Store `initial_cycles` as creation authority.
+- [x] Host-create and independently install each root's sibling Store on the
   exact planned Subnet, with reciprocal protected init authority.
-- [ ] Journal Store creation/installation, implement the prepared-root adoption
+- [x] Journal Store creation/installation, implement the prepared-root adoption
   boundary and verify its terminal sole-root controller receipt before Catalog
   publication.
-- [ ] Hard-cut embedded Store bytes, the root-owned Store create/install
+- [x] Hard-cut embedded Store bytes, the root-owned Store create/install
   journal and autonomous Store creation/replacement paths.
-- [ ] Import only the planned Store binding into root runtime state and publish
+- [x] Import only the planned Store binding into root runtime state and publish
   the topology-admitted release set through it.
 - [x] Commit the genesis Fleet Registry.
 
@@ -1239,6 +1241,15 @@ remove that coupling, host-install one Store beside each root with separate
 funding and recovery, and retain only root-owned runtime
 publication/lifecycle authority after an exact controller handoff.
 
+Released 0.100.97 freezes that handoff's independent root/Store creation
+funding and exact root/Store artifacts in the immutable pre-effect plan and
+journal. Open 0.100.98 implements the complete host-installed sibling Store
+boundary: separate same-Subnet creation and installation, reciprocal init
+authority, prepared-root adoption to sole-root control, terminal receipt
+verification, imported single-Store publication, and hard removal of embedded
+Store bytes plus root-autonomous creation, replacement, rotation and arbitrary
+Store selection.
+
 The [0.100 infrastructure Wasm boundary audit](0.100-wasm-boundary-closeout.md)
 records the pre-extraction artifacts and remains open until the independent
 root and Store builds, installation journey and post-extraction sizes are
@@ -1248,13 +1259,9 @@ arbitrary artifact fallback authority.
 
 ## Next Action
 
-Implement the host-installed sibling Store hard cut within 0.100: extend
-the immutable Fleet plan and host journal, create the root and Store on the
-same exact Subnet, install reciprocal protected payloads, verify the Store's
-root-observed sole-controller adoption receipt, remove root-embedded Store
-bytes and root-owned creation state, then rerun focused installation and
-Wasm-boundary proof. After that, the maintainer-owned final operational proof
-remains: run root-deletion
+Rerun the post-extraction infrastructure Wasm boundary measurement and record
+the independent root/Store artifacts, sizes and retained attribution. After
+that, the maintainer-owned final operational proof remains: run root-deletion
 preparation and execution as separate processes against one explicitly
 selected disposable real-network root, then verify the surviving Coordinator
 terminal receipt and exact replay before closing 0.100 and beginning 0.101.

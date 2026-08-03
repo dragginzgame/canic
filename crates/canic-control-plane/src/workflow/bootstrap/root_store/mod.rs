@@ -93,7 +93,7 @@ pub async fn bootstrap(
     let module_hashes = artifact_module_hashes(&manifest)?;
     let staged = exact_staged_manifests(&manifest)?;
 
-    super::root::ensure_required_wasm_store_canister().await?;
+    super::root::ensure_required_wasm_store_canister()?;
     let (wasm_store, live_catalog) =
         WasmStorePublicationWorkflow::bootstrap_exact_staged_release_set(staged.clone()).await?;
     let catalog = verify_live_catalog(&staged, live_catalog, &module_hashes)?;

@@ -35,14 +35,7 @@ use crate::{
 use canic_core::control_plane_support::ops::ic::IcOps;
 #[cfg(feature = "root-control-plane")]
 use canic_core::dto::root_store::{RootStoreBootstrapRequest, RootStoreBootstrapResponse};
-#[cfg(feature = "root-control-plane")]
-use canic_core::{
-    api::runtime::install::ModuleSourceRuntimeApi, bootstrap::EmbeddedRootBootstrapEntry,
-};
 use canic_core::{dto::error::Error, log, log::Topic};
-
-#[cfg(feature = "root-control-plane")]
-const ROOT_WASM_STORE_BOOTSTRAP_TEMPLATE_ID: TemplateId = TemplateId::new("embedded:wasm_store");
 
 ///
 /// WasmStoreBootstrapApi
@@ -53,48 +46,6 @@ pub struct WasmStoreBootstrapApi;
 
 #[cfg(feature = "root-control-plane")]
 impl WasmStoreBootstrapApi {
-    // Register the dedicated embedded bootstrap release set used for the first live store install.
-    pub fn register_embedded_root_wasm_store_release_set(
-        entries: &'static [EmbeddedRootBootstrapEntry],
-    ) {
-        let Some(entry) = entries
-            .iter()
-            .find(|entry| entry.role == CanisterRole::WASM_STORE.as_str())
-        else {
-            return;
-        };
-
-        ModuleSourceRuntimeApi::register_embedded_module_wasm(
-            CanisterRole::WASM_STORE,
-            ROOT_WASM_STORE_BOOTSTRAP_TEMPLATE_ID.as_str().to_string(),
-            entry.wasm_module,
-        );
-    }
-
-    // Log the stable embedded bootstrap artifact provenance captured during root build.
-    pub fn log_embedded_root_wasm_store_release_set(
-        entries: &'static [EmbeddedRootBootstrapEntry],
-    ) {
-        let Some(entry) = entries
-            .iter()
-            .find(|entry| entry.role == CanisterRole::WASM_STORE.as_str())
-        else {
-            return;
-        };
-
-        log!(
-            Topic::Init,
-            Info,
-            "ws bootstrap artifact: role={} kind={} bytes={} sha256={} decompressed_bytes={:?} decompressed_sha256={:?}",
-            entry.role,
-            entry.artifact_kind,
-            entry.artifact_size_bytes,
-            entry.artifact_sha256_hex,
-            entry.decompressed_size_bytes,
-            entry.decompressed_sha256_hex,
-        );
-    }
-
     // Stage one approved manifest in the current canister's local bootstrap source.
     pub fn stage_manifest(input: TemplateManifestInput) {
         log!(

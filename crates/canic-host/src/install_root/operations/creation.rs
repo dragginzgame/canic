@@ -33,6 +33,7 @@ pub(in crate::install_root) struct CreationEffectRequest<'a> {
     pub subject: &'static str,
     pub placement_subnet: SubnetId,
     pub funding: &'a PlannedCanisterCreationFunding,
+    pub controllers: &'a [Principal],
     pub action: EffectAction,
     pub expected_module_hash: [u8; 32],
 }
@@ -49,6 +50,7 @@ pub(in crate::install_root) fn execute_or_observe_creation(
             request.local_replica,
             request.placement_subnet,
             request.funding,
+            request.controllers,
         );
         if let Err(error) = run_output_to_file(&mut command, &result) {
             command_error = Some(error.to_string());
@@ -91,6 +93,7 @@ mod tests {
             subject: "test Canister",
             placement_subnet: SubnetId::from_principal(Principal::from_slice(&[42])),
             funding: &funding,
+            controllers: &[],
             action: EffectAction::ObserveOnly,
             expected_module_hash: [0; 32],
         })

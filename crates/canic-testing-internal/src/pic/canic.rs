@@ -10,12 +10,16 @@ use canic::{
         fleet_activation::{
             FleetActivationPhase, FleetActivationResumeRequest, FleetActivationStatusResponse,
         },
-        fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
+        fleet_subnet_root::{
+            FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreAdoptionRequest,
+            FleetSubnetWasmStoreAdoptionResponse, FleetSubnetWasmStoreInitArgs,
+        },
     },
     ids::{
         CanisterRole, ComponentSpecAdmission, CyclesFundingBudget, FleetCoordinatorBinding,
         FleetRegistryAuthority, FleetSubnetCanisterPoolConfig, FleetSubnetRootBinding,
-        FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ReleaseSetDigest, SubnetId,
+        FleetSubnetRootLimits, FleetSubnetRootReleaseSet, FleetSubnetWasmStoreAuthority,
+        ReleaseSetDigest, SubnetId,
     },
     protocol,
 };
@@ -38,6 +42,23 @@ const STANDALONE_READY_TICK_LIMIT: usize = 60;
 static STANDALONE_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
 ///
+/// ManagedRootInstallInput
+///
+/// Complete test-only authority and artifact input for one managed root installation.
+///
+
+pub(super) struct ManagedRootInstallInput<'a> {
+    pub root_id: Principal,
+    pub wasm_store: Principal,
+    pub installation_controller: Principal,
+    pub coordinator: Principal,
+    pub root_wasm: &'a [u8],
+    pub wasm_store_wasm: &'a [u8],
+    pub config_path: &'a Path,
+    pub release_set_digest: ReleaseSetDigest,
+}
+
+///
 /// CanicPicExt
 ///
 
@@ -45,7 +66,8 @@ pub trait CanicPicExt {
     /// Install a root Canic canister with authority compiled from its exact build config.
     fn create_and_install_root_canister(
         &self,
-        wasm: Vec<u8>,
+        root_wasm: Vec<u8>,
+        wasm_store_wasm: Vec<u8>,
         config_path: &Path,
     ) -> Result<Principal, Error>;
 
@@ -61,13 +83,45 @@ pub trait CanicPicExt {
 impl CanicPicExt for Pic {
     fn create_and_install_root_canister(
         &self,
-        wasm: Vec<u8>,
+        root_wasm: Vec<u8>,
+        wasm_store_wasm: Vec<u8>,
         config_path: &Path,
     ) -> Result<Principal, Error> {
         let root_id = self.create_canister();
         self.add_cycles(root_id, INSTALL_CYCLES);
-        let init_bytes = install_root_args(root_id, &wasm, config_path)?;
-        self.install_canister(root_id, wasm, init_bytes, None);
+        let wasm_store = self.create_canister();
+        self.add_cycles(wasm_store, INSTALL_CYCLES);
+        let installation_controller = Principal::from_slice(&[0x46; 29]);
+        let root_args = managed_test_root_init_args(ManagedRootInstallInput {
+            root_id,
+            wasm_store,
+            installation_controller,
+            coordinator: Principal::from_slice(&[0x41; 29]),
+            root_wasm: &root_wasm,
+            wasm_store_wasm: &wasm_store_wasm,
+            config_path,
+            release_set_digest: ReleaseSetDigest::from_bytes([0x44; 32]),
+        })?;
+        let store_args = FleetSubnetWasmStoreInitArgs {
+            authority: root_args.authority.wasm_store_authority.clone(),
+            install_id: root_args.install_id,
+        };
+        prepare_sibling_wasm_store_controllers(self, wasm_store, installation_controller, root_id);
+        self.install_canister(
+            wasm_store,
+            wasm_store_wasm,
+            encode_one(store_args)
+                .map_err(|error| Error::internal(format!("encode Store init failed: {error}")))?,
+            Some(installation_controller),
+        );
+        self.install_canister(
+            root_id,
+            root_wasm,
+            encode_one(&root_args)
+                .map_err(|error| Error::internal(format!("encode root init failed: {error}")))?,
+            None,
+        );
+        adopt_sibling_wasm_store(self, root_id, &root_args);
         Ok(root_id)
     }
 
@@ -105,6 +159,77 @@ impl CanicPicExt for Pic {
         }
         panic!("{context}: canisters did not become ready after {tick_limit} ticks");
     }
+}
+
+pub(super) fn prepare_sibling_wasm_store_controllers(
+    pic: &Pic,
+    wasm_store: Principal,
+    installation_controller: Principal,
+    root: Principal,
+) {
+    let mut controllers = vec![installation_controller, root];
+    controllers.sort();
+    let live = live_pocket_ic_handle();
+    live.set_controllers(wasm_store, None, controllers.clone())
+        .expect("prepare sibling Wasm Store controllers");
+
+    let mut observed_controllers = pic
+        .canister_status(wasm_store, Some(installation_controller))
+        .expect("observe prepared sibling Wasm Store controllers")
+        .settings
+        .controllers;
+    observed_controllers.sort();
+    assert_eq!(observed_controllers, controllers);
+}
+
+fn live_pocket_ic_handle() -> pocket_ic::PocketIc {
+    let instances = pocket_ic::PocketIc::list_instances();
+    let live_instances = instances
+        .iter()
+        .enumerate()
+        .filter(|(_, status)| status.as_str() != "Deleted")
+        .collect::<Vec<_>>();
+    let [(instance_id, _)] = live_instances.as_slice() else {
+        panic!("expected exactly one serialized live PocketIC instance, found {live_instances:?}");
+    };
+    let port_file = std::env::temp_dir().join(format!("pocket_ic_{}.port", std::process::id()));
+    let port = std::fs::read_to_string(&port_file)
+        .unwrap_or_else(|error| panic!("read PocketIC port file {}: {error}", port_file.display()));
+    let server_url = format!("http://127.0.0.1:{}/", port.trim())
+        .parse()
+        .expect("parse PocketIC server URL");
+
+    pocket_ic::PocketIc::new_from_existing_instance(server_url, *instance_id, None)
+}
+
+pub(super) fn adopt_sibling_wasm_store(
+    pic: &Pic,
+    root: Principal,
+    root_args: &FleetSubnetRootInitArgs,
+) {
+    let request = FleetSubnetWasmStoreAdoptionRequest {
+        operation_id: root_args.install_id,
+        authority: root_args.authority.wasm_store_authority.clone(),
+    };
+    let adopted: Result<FleetSubnetWasmStoreAdoptionResponse, Error> = pic
+        .update_call(
+            root,
+            protocol::CANIC_FLEET_SUBNET_WASM_STORE_ADOPT,
+            (request.clone(),),
+        )
+        .expect("adopt sibling Wasm Store transport");
+    let adopted = adopted.expect("adopt sibling Wasm Store application");
+    let status: Result<Option<FleetSubnetWasmStoreAdoptionResponse>, Error> = pic
+        .query_call(
+            root,
+            protocol::CANIC_FLEET_SUBNET_WASM_STORE_ADOPTION_STATUS,
+            (request,),
+        )
+        .expect("query sibling Wasm Store adoption transport");
+    assert_eq!(
+        status.expect("query sibling Wasm Store adoption application"),
+        Some(adopted)
+    );
 }
 
 /// Drive one prepared managed Fleet through the exact controller activation protocol.
@@ -269,35 +394,11 @@ fn fetch_ready(pic: &Pic, canister_id: Principal) -> bool {
     }
 }
 
-fn install_root_args(
-    root_id: Principal,
-    wasm: &[u8],
-    config_path: &Path,
-) -> Result<Vec<u8>, Error> {
-    install_root_args_with_release_set_digest_and_coordinator(
-        root_id,
-        Principal::from_slice(&[0x41; 29]),
-        wasm,
-        config_path,
-        ReleaseSetDigest::from_bytes([0x44; 32]),
-    )
-}
-
 pub(super) fn install_root_args_with_release_set_digest_and_coordinator(
-    root_id: Principal,
-    coordinator: Principal,
-    wasm: &[u8],
-    config_path: &Path,
-    release_set_digest: ReleaseSetDigest,
+    input: ManagedRootInstallInput<'_>,
 ) -> Result<Vec<u8>, Error> {
-    encode_one(managed_test_root_init_args(
-        root_id,
-        coordinator,
-        wasm,
-        config_path,
-        release_set_digest,
-    )?)
-    .map_err(|err| Error::internal(format!("encode_one failed: {err}")))
+    encode_one(managed_test_root_init_args(input)?)
+        .map_err(|err| Error::internal(format!("encode_one failed: {err}")))
 }
 
 fn ensure_canister_wasm_ready(
@@ -355,12 +456,18 @@ pub fn managed_test_init_identity() -> ManagedTestIdentity {
 }
 
 fn managed_test_root_init_args(
-    root_id: Principal,
-    coordinator: Principal,
-    wasm: &[u8],
-    config_path: &Path,
-    release_set_digest: ReleaseSetDigest,
+    input: ManagedRootInstallInput<'_>,
 ) -> Result<FleetSubnetRootInitArgs, Error> {
+    let ManagedRootInstallInput {
+        root_id,
+        wasm_store,
+        installation_controller,
+        coordinator,
+        root_wasm,
+        wasm_store_wasm,
+        config_path,
+        release_set_digest,
+    } = input;
     let identity = managed_test_init_identity();
     let config = AppConfigSnapshot::load(config_path)
         .map_err(|error| Error::internal(format!("load root test config failed: {error}")))?;
@@ -378,8 +485,10 @@ fn managed_test_root_init_args(
         .project_for_admissions(&component_admissions)
         .and_then(|projection| projection.digest())
         .map_err(|error| Error::internal(format!("compile root test authority failed: {error}")))?;
-    let expected_module_hash =
-        <[u8; 32]>::try_from(wasm_hash(wasm)).expect("SHA-256 helper must return exactly 32 bytes");
+    let expected_module_hash = <[u8; 32]>::try_from(wasm_hash(root_wasm))
+        .expect("SHA-256 helper must return exactly 32 bytes");
+    let expected_wasm_store_module_hash = <[u8; 32]>::try_from(wasm_hash(wasm_store_wasm))
+        .expect("SHA-256 helper must return exactly 32 bytes");
     let authority = FleetRegistryAuthority {
         binding: FleetCoordinatorBinding {
             fleet: FleetBinding {
@@ -395,7 +504,7 @@ fn managed_test_root_init_args(
     Ok(FleetSubnetRootInitArgs {
         authority: FleetSubnetRootAuthority {
             binding: FleetSubnetRootBinding {
-                authority,
+                authority: authority.clone(),
                 placement_subnet: test_subnet(0x45),
                 fleet_subnet_root: root_id,
                 component_admissions,
@@ -421,6 +530,15 @@ fn managed_test_root_init_args(
                 manifest_digest: release_set_digest,
             },
             expected_module_hash,
+            wasm_store_authority: FleetSubnetWasmStoreAuthority {
+                authority,
+                placement_subnet: test_subnet(0x45),
+                fleet_subnet_root: root_id,
+                wasm_store,
+                installation_controller,
+                release_build_id: identity.release_build_id,
+                wasm_module_hash: expected_wasm_store_module_hash,
+            },
         },
         install_id: identity.install_id,
         canister_pool_imports: Vec::new(),

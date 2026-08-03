@@ -172,6 +172,7 @@ fn recover_or_create_coordinator(
         subject: "Coordinator",
         placement_subnet: current.journal.coordinator_subnet,
         funding: &current.journal.creation_funding,
+        controllers: &[],
         action: EffectAction::from_advanced(current.advanced),
         expected_module_hash: current.journal.expected_module_hash,
     })?;

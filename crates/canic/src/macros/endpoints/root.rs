@@ -21,6 +21,20 @@ macro_rules! canic_emit_root_admin_endpoints {
         }
 
         #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_fleet_subnet_wasm_store_adopt(
+            request: ::canic::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest,
+        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::adopt_fleet_subnet_wasm_store(request).await
+        }
+
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_fleet_subnet_wasm_store_adoption_status(
+            request: ::canic::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest,
+        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_subnet_wasm_store_adoption_status(request)
+        }
+
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_fleet_subnet_root_draining_begin(
             request: ::canic::dto::fleet_subnet_root::FleetSubnetRootDrainingRequest,
         ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetRootDrainingResponse, ::canic::Error> {

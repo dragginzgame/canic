@@ -7,7 +7,8 @@
 
 use super::fleet_subnet_root_install_journal::{
     FleetSubnetRootInstallPhase, PlanFleetSubnetRootInstallRequest, ResolvedFleetSubnetRootInstall,
-    begin_store_bootstrap, begin_store_staging, plan_fleet_subnet_root_install,
+    begin_store_adoption, begin_store_bootstrap, begin_store_staging,
+    expected_wasm_store_authority, plan_fleet_subnet_root_install, record_store_adopted,
     record_store_bootstrapped, record_store_staged, record_store_verified,
 };
 use super::operations::{call_with_arg, query_with_arg};
@@ -32,6 +33,9 @@ use canic_control_plane::{
 };
 use canic_core::{
     cdk::utils::hash::{hex_bytes, wasm_hash},
+    dto::fleet_subnet_root::{
+        FleetSubnetWasmStoreAdoptionRequest, FleetSubnetWasmStoreAdoptionResponse,
+    },
     dto::root_store::{
         ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES,
         ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX, RootStoreBootstrapRequest,
@@ -46,7 +50,7 @@ use std::{
 };
 use thiserror::Error as ThisError;
 
-const MAX_STORE_TRANSITIONS: usize = 8;
+const MAX_STORE_TRANSITIONS: usize = 10;
 
 #[derive(Debug, ThisError)]
 enum RootStoreBootstrapError {
@@ -90,6 +94,9 @@ enum RootStoreBootstrapError {
 
     #[error("live root Store evidence differs from the journalled bootstrap result")]
     LiveEvidenceMismatch,
+
+    #[error("root Store adoption update and separately queried receipt differ")]
+    AdoptionResponseMismatch,
 
     #[error("root Store workflow exceeded its bounded phase transitions")]
     TransitionBoundExceeded,
@@ -147,7 +154,12 @@ fn drive_store_bootstrap(
 
     for _ in 0..MAX_STORE_TRANSITIONS {
         current = match current.journal.phase {
-            FleetSubnetRootInstallPhase::Verified => begin_store_staging(&current)?,
+            FleetSubnetRootInstallPhase::InfrastructureVerified => begin_store_adoption(&current)?,
+            FleetSubnetRootInstallPhase::StoreAdoptionInFlight => {
+                let evidence = adopt_store(icp_root, environment, local_replica, &current)?;
+                record_store_adopted(&current, evidence)?
+            }
+            FleetSubnetRootInstallPhase::StoreAdopted => begin_store_staging(&current)?,
             FleetSubnetRootInstallPhase::StoreStaging => {
                 stage_release_set(
                     icp_root,
@@ -214,6 +226,42 @@ fn drive_store_bootstrap(
         };
     }
     Err(RootStoreBootstrapError::TransitionBoundExceeded.into())
+}
+
+fn adopt_store(
+    icp_root: &Path,
+    environment: &str,
+    local_replica: Option<&LocalReplicaTarget>,
+    current: &ResolvedFleetSubnetRootInstall,
+) -> Result<FleetSubnetWasmStoreAdoptionResponse, Box<dyn std::error::Error>> {
+    let root = current
+        .journal
+        .fleet_subnet_root
+        .expect("Store adoption follows verified root installation");
+    let request = FleetSubnetWasmStoreAdoptionRequest {
+        operation_id: current.journal.install_operation_id,
+        authority: expected_wasm_store_authority(&current.journal)?,
+    };
+    let icp = super::install_icp(icp_root, environment, local_replica);
+    let updated = call_with_arg::<_, FleetSubnetWasmStoreAdoptionResponse>(
+        &icp,
+        root,
+        protocol::CANIC_FLEET_SUBNET_WASM_STORE_ADOPT,
+        &request,
+    );
+    let observed = query_with_arg::<_, FleetSubnetWasmStoreAdoptionResponse>(
+        &icp,
+        root,
+        protocol::CANIC_FLEET_SUBNET_WASM_STORE_ADOPTION_STATUS,
+        &request,
+    )?;
+    match updated {
+        Ok(updated) if updated != observed => {
+            return Err(RootStoreBootstrapError::AdoptionResponseMismatch.into());
+        }
+        Ok(_) | Err(_) => {}
+    }
+    Ok(observed)
 }
 
 pub(super) fn canonical_manifest_bytes(

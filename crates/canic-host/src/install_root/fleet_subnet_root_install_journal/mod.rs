@@ -41,12 +41,12 @@ use canic_core::{
             FleetSubnetRootRegistrySyncResponse, FleetSubnetRootSnapshotAcknowledgement,
             FleetSubnetRootStatus,
         },
-        fleet_subnet_root::FleetSubnetRootAuthority,
+        fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetWasmStoreAdoptionResponse},
         root_store::RootStoreBootstrapResponse,
     },
     ids::{
-        FleetCoordinatorBinding, FleetRegistryAuthority, FleetSubnetRootBinding, ReleaseBuildId,
-        SubnetId,
+        FleetCoordinatorBinding, FleetRegistryAuthority, FleetSubnetRootBinding,
+        FleetSubnetWasmStoreAuthority, ReleaseBuildId, SubnetId,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -59,7 +59,8 @@ use thiserror::Error as ThisError;
 
 const JOURNAL_FILE: &str = "install-journal.json";
 const JOURNAL_LOCK_FILE: &str = "install-journal.lock";
-const CREATE_RESULT_FILE: &str = "create-result.json";
+const ROOT_CREATE_RESULT_FILE: &str = "root-create-result.json";
+const WASM_STORE_CREATE_RESULT_FILE: &str = "wasm-store-create-result.json";
 const ROOT_INSTALL_DIRECTORY: &str = "fleet-subnet-root-installs";
 const JOURNAL_SCHEMA_VERSION: u32 = 1;
 const MAX_JOURNAL_BYTES: usize = 4_194_304;
@@ -68,11 +69,17 @@ const MAX_JOURNAL_BYTES: usize = 4_194_304;
 #[serde(rename_all = "snake_case")]
 pub(super) enum FleetSubnetRootInstallPhase {
     Planned,
-    CreationInFlight,
-    Created,
-    InstallInFlight,
-    Installed,
-    Verified,
+    RootCreationInFlight,
+    RootCreated,
+    WasmStoreCreationInFlight,
+    WasmStoreCreated,
+    WasmStoreInstallInFlight,
+    WasmStoreInstalled,
+    RootInstallInFlight,
+    RootInstalled,
+    InfrastructureVerified,
+    StoreAdoptionInFlight,
+    StoreAdopted,
     StoreStaging,
     StoreStaged,
     StoreBootstrapInFlight,
@@ -115,8 +122,13 @@ pub(super) struct FleetSubnetRootInstallJournal {
     pub wasm_store_artifact: CanicInfrastructureArtifactEntry,
     pub expected_wasm_store_module_hash: [u8; 32],
     pub fleet_subnet_root: Option<Principal>,
+    pub wasm_store: Option<Principal>,
+    pub installation_controller: Option<Principal>,
+    pub installed_wasm_store_module_hash: Option<[u8; 32]>,
     pub installed_root_module_hash: Option<[u8; 32]>,
+    pub verified_wasm_store_authority: Option<FleetSubnetWasmStoreAuthority>,
     pub verified_binding: Option<FleetSubnetRootBinding>,
+    pub wasm_store_adoption: Option<FleetSubnetWasmStoreAdoptionResponse>,
     pub store_bootstrap: Option<RootStoreBootstrapResponse>,
     pub registry_join_request: Option<FleetSubnetRootJoinRequest>,
     pub registry_join_response: Option<FleetSubnetRootJoinResponse>,
@@ -252,7 +264,7 @@ pub(super) fn begin_root_creation(
     advance_without_evidence(
         current,
         FleetSubnetRootInstallPhase::Planned,
-        FleetSubnetRootInstallPhase::CreationInFlight,
+        FleetSubnetRootInstallPhase::RootCreationInFlight,
     )
 }
 
@@ -260,7 +272,7 @@ pub(super) fn record_root_created(
     current: &ResolvedFleetSubnetRootInstall,
     fleet_subnet_root: Principal,
 ) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
-    if current.journal.phase == FleetSubnetRootInstallPhase::Created
+    if current.journal.phase == FleetSubnetRootInstallPhase::RootCreated
         && current.journal.fleet_subnet_root == Some(fleet_subnet_root)
     {
         return Ok(resolved(
@@ -271,9 +283,88 @@ pub(super) fn record_root_created(
     }
     transition(
         current,
-        FleetSubnetRootInstallPhase::CreationInFlight,
-        FleetSubnetRootInstallPhase::Created,
+        FleetSubnetRootInstallPhase::RootCreationInFlight,
+        FleetSubnetRootInstallPhase::RootCreated,
         |next| next.fleet_subnet_root = Some(fleet_subnet_root),
+    )
+}
+
+pub(super) fn begin_wasm_store_creation(
+    current: &ResolvedFleetSubnetRootInstall,
+    installation_controller: Principal,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    if current.journal.phase == FleetSubnetRootInstallPhase::WasmStoreCreationInFlight
+        && current.journal.installation_controller == Some(installation_controller)
+    {
+        return Ok(resolved(
+            current.journal.clone(),
+            current.path.clone(),
+            false,
+        ));
+    }
+    transition(
+        current,
+        FleetSubnetRootInstallPhase::RootCreated,
+        FleetSubnetRootInstallPhase::WasmStoreCreationInFlight,
+        |next| next.installation_controller = Some(installation_controller),
+    )
+}
+
+pub(super) fn record_wasm_store_created(
+    current: &ResolvedFleetSubnetRootInstall,
+    wasm_store: Principal,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    if current.journal.phase == FleetSubnetRootInstallPhase::WasmStoreCreated
+        && current.journal.wasm_store == Some(wasm_store)
+    {
+        return Ok(resolved(
+            current.journal.clone(),
+            current.path.clone(),
+            false,
+        ));
+    }
+    transition(
+        current,
+        FleetSubnetRootInstallPhase::WasmStoreCreationInFlight,
+        FleetSubnetRootInstallPhase::WasmStoreCreated,
+        |next| next.wasm_store = Some(wasm_store),
+    )
+}
+
+pub(super) fn begin_wasm_store_install(
+    current: &ResolvedFleetSubnetRootInstall,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    advance_without_evidence(
+        current,
+        FleetSubnetRootInstallPhase::WasmStoreCreated,
+        FleetSubnetRootInstallPhase::WasmStoreInstallInFlight,
+    )
+}
+
+pub(super) fn record_wasm_store_installed(
+    current: &ResolvedFleetSubnetRootInstall,
+    observed_module_hash: [u8; 32],
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    if observed_module_hash != current.journal.expected_wasm_store_module_hash {
+        return Err(invalid(
+            &current.path,
+            "observed Wasm Store module differs from immutable artifact authority",
+        ));
+    }
+    if current.journal.phase == FleetSubnetRootInstallPhase::WasmStoreInstalled
+        && current.journal.installed_wasm_store_module_hash == Some(observed_module_hash)
+    {
+        return Ok(resolved(
+            current.journal.clone(),
+            current.path.clone(),
+            false,
+        ));
+    }
+    transition(
+        current,
+        FleetSubnetRootInstallPhase::WasmStoreInstallInFlight,
+        FleetSubnetRootInstallPhase::WasmStoreInstalled,
+        |next| next.installed_wasm_store_module_hash = Some(observed_module_hash),
     )
 }
 
@@ -282,8 +373,8 @@ pub(super) fn begin_root_install(
 ) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
     advance_without_evidence(
         current,
-        FleetSubnetRootInstallPhase::Created,
-        FleetSubnetRootInstallPhase::InstallInFlight,
+        FleetSubnetRootInstallPhase::WasmStoreInstalled,
+        FleetSubnetRootInstallPhase::RootInstallInFlight,
     )
 }
 
@@ -297,7 +388,7 @@ pub(super) fn record_root_installed(
             "observed root module differs from immutable artifact authority",
         ));
     }
-    if current.journal.phase == FleetSubnetRootInstallPhase::Installed
+    if current.journal.phase == FleetSubnetRootInstallPhase::RootInstalled
         && current.journal.installed_root_module_hash == Some(observed_module_hash)
     {
         return Ok(resolved(
@@ -308,25 +399,30 @@ pub(super) fn record_root_installed(
     }
     transition(
         current,
-        FleetSubnetRootInstallPhase::InstallInFlight,
-        FleetSubnetRootInstallPhase::Installed,
+        FleetSubnetRootInstallPhase::RootInstallInFlight,
+        FleetSubnetRootInstallPhase::RootInstalled,
         |next| next.installed_root_module_hash = Some(observed_module_hash),
     )
 }
 
-pub(super) fn record_root_verified(
+pub(super) fn record_infrastructure_verified(
     current: &ResolvedFleetSubnetRootInstall,
-    authority: FleetSubnetRootAuthority,
+    root_authority: FleetSubnetRootAuthority,
+    wasm_store_authority: FleetSubnetWasmStoreAuthority,
 ) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
-    let expected = expected_root_authority(&current.journal)?;
-    if authority != expected {
+    let expected_root = expected_root_authority(&current.journal)?;
+    let expected_store = expected_wasm_store_authority(&current.journal)?;
+    if root_authority != expected_root || wasm_store_authority != expected_store {
         return Err(invalid(
             &current.path,
-            "observed root authority differs from exact planned binding",
+            "observed infrastructure authority differs from the exact planned binding",
         ));
     }
-    if current.journal.phase == FleetSubnetRootInstallPhase::Verified
-        && current.journal.verified_binding.as_ref() == Some(&authority.binding)
+    let evidence_matches = current.journal.verified_binding.as_ref()
+        == Some(&root_authority.binding)
+        && current.journal.verified_wasm_store_authority.as_ref() == Some(&wasm_store_authority);
+    if current.journal.phase == FleetSubnetRootInstallPhase::InfrastructureVerified
+        && evidence_matches
     {
         return Ok(resolved(
             current.journal.clone(),
@@ -336,9 +432,12 @@ pub(super) fn record_root_verified(
     }
     transition(
         current,
-        FleetSubnetRootInstallPhase::Installed,
-        FleetSubnetRootInstallPhase::Verified,
-        |next| next.verified_binding = Some(authority.binding),
+        FleetSubnetRootInstallPhase::RootInstalled,
+        FleetSubnetRootInstallPhase::InfrastructureVerified,
+        |next| {
+            next.verified_binding = Some(root_authority.binding);
+            next.verified_wasm_store_authority = Some(wasm_store_authority);
+        },
     )
 }
 
@@ -347,8 +446,31 @@ pub(super) fn begin_store_staging(
 ) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
     advance_without_evidence(
         current,
-        FleetSubnetRootInstallPhase::Verified,
+        FleetSubnetRootInstallPhase::StoreAdopted,
         FleetSubnetRootInstallPhase::StoreStaging,
+    )
+}
+
+pub(super) fn begin_store_adoption(
+    current: &ResolvedFleetSubnetRootInstall,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    advance_without_evidence(
+        current,
+        FleetSubnetRootInstallPhase::InfrastructureVerified,
+        FleetSubnetRootInstallPhase::StoreAdoptionInFlight,
+    )
+}
+
+pub(super) fn record_store_adopted(
+    current: &ResolvedFleetSubnetRootInstall,
+    evidence: FleetSubnetWasmStoreAdoptionResponse,
+) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
+    validate_wasm_store_adoption_evidence(&current.path, &current.journal, &evidence)?;
+    transition(
+        current,
+        FleetSubnetRootInstallPhase::StoreAdoptionInFlight,
+        FleetSubnetRootInstallPhase::StoreAdopted,
+        |next| next.wasm_store_adoption = Some(evidence),
     )
 }
 
@@ -725,7 +847,41 @@ pub(super) fn create_result_path(journal_path: &Path) -> PathBuf {
     journal_path
         .parent()
         .expect("validated root journal has an identity directory")
-        .join(CREATE_RESULT_FILE)
+        .join(ROOT_CREATE_RESULT_FILE)
+}
+
+#[must_use]
+pub(super) fn wasm_store_create_result_path(journal_path: &Path) -> PathBuf {
+    journal_path
+        .parent()
+        .expect("validated root journal has an identity directory")
+        .join(WASM_STORE_CREATE_RESULT_FILE)
+}
+
+pub(super) fn expected_wasm_store_authority(
+    journal: &FleetSubnetRootInstallJournal,
+) -> Result<FleetSubnetWasmStoreAuthority, FleetSubnetRootInstallJournalError> {
+    let fleet_subnet_root = journal
+        .fleet_subnet_root
+        .ok_or_else(|| invalid(Path::new(JOURNAL_FILE), "root principal is missing"))?;
+    let wasm_store = journal
+        .wasm_store
+        .ok_or_else(|| invalid(Path::new(JOURNAL_FILE), "Wasm Store principal is missing"))?;
+    let installation_controller = journal.installation_controller.ok_or_else(|| {
+        invalid(
+            Path::new(JOURNAL_FILE),
+            "installation controller is missing",
+        )
+    })?;
+    Ok(FleetSubnetWasmStoreAuthority {
+        authority: journal.authority.clone(),
+        placement_subnet: journal.root_plan.placement_subnet,
+        fleet_subnet_root,
+        wasm_store,
+        installation_controller,
+        release_build_id: journal.release_build_id,
+        wasm_module_hash: journal.expected_wasm_store_module_hash,
+    })
 }
 
 pub(super) fn expected_root_authority(
@@ -745,6 +901,7 @@ pub(super) fn expected_root_authority(
         },
         initial_release_set: journal.root_plan.initial_release_set,
         expected_module_hash: journal.expected_root_module_hash,
+        wasm_store_authority: expected_wasm_store_authority(journal)?,
     };
     journal
         .component_topology
@@ -831,8 +988,13 @@ fn planned_journal(
         wasm_store_artifact,
         expected_wasm_store_module_hash,
         fleet_subnet_root: None,
+        wasm_store: None,
+        installation_controller: None,
+        installed_wasm_store_module_hash: None,
         installed_root_module_hash: None,
+        verified_wasm_store_authority: None,
         verified_binding: None,
+        wasm_store_adoption: None,
         store_bootstrap: None,
         registry_join_request: None,
         registry_join_response: None,
@@ -1058,8 +1220,13 @@ fn validate_phase_evidence(
     }
     let retained = [
         journal.fleet_subnet_root.is_some(),
+        journal.installation_controller.is_some(),
+        journal.wasm_store.is_some(),
+        journal.installed_wasm_store_module_hash.is_some(),
         journal.installed_root_module_hash.is_some(),
+        journal.verified_wasm_store_authority.is_some(),
         journal.verified_binding.is_some(),
+        journal.wasm_store_adoption.is_some(),
         journal.store_bootstrap.is_some(),
         journal.registry_join_request.is_some(),
         journal.registry_join_response.is_some(),
@@ -1089,70 +1256,92 @@ fn validate_phase_evidence(
             "installed module differs from artifact authority",
         ));
     }
+    if journal.installed_wasm_store_module_hash.is_some()
+        && journal.installed_wasm_store_module_hash != Some(journal.expected_wasm_store_module_hash)
+    {
+        return Err(invalid(
+            path,
+            "installed Wasm Store module differs from artifact authority",
+        ));
+    }
     Ok(())
 }
 
 const fn phase_sequence(phase: FleetSubnetRootInstallPhase) -> u64 {
     match phase {
         FleetSubnetRootInstallPhase::Planned => 0,
-        FleetSubnetRootInstallPhase::CreationInFlight => 1,
-        FleetSubnetRootInstallPhase::Created => 2,
-        FleetSubnetRootInstallPhase::InstallInFlight => 3,
-        FleetSubnetRootInstallPhase::Installed => 4,
-        FleetSubnetRootInstallPhase::Verified => 5,
-        FleetSubnetRootInstallPhase::StoreStaging => 6,
-        FleetSubnetRootInstallPhase::StoreStaged => 7,
-        FleetSubnetRootInstallPhase::StoreBootstrapInFlight => 8,
-        FleetSubnetRootInstallPhase::StoreBootstrapped => 9,
-        FleetSubnetRootInstallPhase::StoreVerified => 10,
-        FleetSubnetRootInstallPhase::RegistryJoinInFlight => 11,
-        FleetSubnetRootInstallPhase::RegistryJoined => 12,
-        FleetSubnetRootInstallPhase::RegistryJoinVerified => 13,
-        FleetSubnetRootInstallPhase::RegistrySyncInFlight => 14,
-        FleetSubnetRootInstallPhase::RegistrySynchronized => 15,
-        FleetSubnetRootInstallPhase::RegistrySyncVerified => 16,
-        FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight => 17,
-        FleetSubnetRootInstallPhase::RegistryMirrorActivated => 18,
-        FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified => 19,
-        FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight => 20,
-        FleetSubnetRootInstallPhase::ComponentRegistryPrepared => 21,
-        FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified => 22,
-        FleetSubnetRootInstallPhase::RootActivationPreparationInFlight => 23,
-        FleetSubnetRootInstallPhase::RootActivationPrepared => 24,
-        FleetSubnetRootInstallPhase::RootActivationInFlight => 25,
-        FleetSubnetRootInstallPhase::RootActivated => 26,
-        FleetSubnetRootInstallPhase::RootActivationVerified => 27,
+        FleetSubnetRootInstallPhase::RootCreationInFlight => 1,
+        FleetSubnetRootInstallPhase::RootCreated => 2,
+        FleetSubnetRootInstallPhase::WasmStoreCreationInFlight => 3,
+        FleetSubnetRootInstallPhase::WasmStoreCreated => 4,
+        FleetSubnetRootInstallPhase::WasmStoreInstallInFlight => 5,
+        FleetSubnetRootInstallPhase::WasmStoreInstalled => 6,
+        FleetSubnetRootInstallPhase::RootInstallInFlight => 7,
+        FleetSubnetRootInstallPhase::RootInstalled => 8,
+        FleetSubnetRootInstallPhase::InfrastructureVerified => 9,
+        FleetSubnetRootInstallPhase::StoreAdoptionInFlight => 10,
+        FleetSubnetRootInstallPhase::StoreAdopted => 11,
+        FleetSubnetRootInstallPhase::StoreStaging => 12,
+        FleetSubnetRootInstallPhase::StoreStaged => 13,
+        FleetSubnetRootInstallPhase::StoreBootstrapInFlight => 14,
+        FleetSubnetRootInstallPhase::StoreBootstrapped => 15,
+        FleetSubnetRootInstallPhase::StoreVerified => 16,
+        FleetSubnetRootInstallPhase::RegistryJoinInFlight => 17,
+        FleetSubnetRootInstallPhase::RegistryJoined => 18,
+        FleetSubnetRootInstallPhase::RegistryJoinVerified => 19,
+        FleetSubnetRootInstallPhase::RegistrySyncInFlight => 20,
+        FleetSubnetRootInstallPhase::RegistrySynchronized => 21,
+        FleetSubnetRootInstallPhase::RegistrySyncVerified => 22,
+        FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight => 23,
+        FleetSubnetRootInstallPhase::RegistryMirrorActivated => 24,
+        FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified => 25,
+        FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight => 26,
+        FleetSubnetRootInstallPhase::ComponentRegistryPrepared => 27,
+        FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified => 28,
+        FleetSubnetRootInstallPhase::RootActivationPreparationInFlight => 29,
+        FleetSubnetRootInstallPhase::RootActivationPrepared => 30,
+        FleetSubnetRootInstallPhase::RootActivationInFlight => 31,
+        FleetSubnetRootInstallPhase::RootActivated => 32,
+        FleetSubnetRootInstallPhase::RootActivationVerified => 33,
     }
 }
 
 const fn phase_evidence_count(phase: FleetSubnetRootInstallPhase) -> usize {
     match phase {
-        FleetSubnetRootInstallPhase::Planned | FleetSubnetRootInstallPhase::CreationInFlight => 0,
-        FleetSubnetRootInstallPhase::Created | FleetSubnetRootInstallPhase::InstallInFlight => 1,
-        FleetSubnetRootInstallPhase::Installed => 2,
-        FleetSubnetRootInstallPhase::Verified
+        FleetSubnetRootInstallPhase::Planned
+        | FleetSubnetRootInstallPhase::RootCreationInFlight => 0,
+        FleetSubnetRootInstallPhase::RootCreated => 1,
+        FleetSubnetRootInstallPhase::WasmStoreCreationInFlight => 2,
+        FleetSubnetRootInstallPhase::WasmStoreCreated
+        | FleetSubnetRootInstallPhase::WasmStoreInstallInFlight => 3,
+        FleetSubnetRootInstallPhase::WasmStoreInstalled
+        | FleetSubnetRootInstallPhase::RootInstallInFlight => 4,
+        FleetSubnetRootInstallPhase::RootInstalled => 5,
+        FleetSubnetRootInstallPhase::InfrastructureVerified
+        | FleetSubnetRootInstallPhase::StoreAdoptionInFlight => 7,
+        FleetSubnetRootInstallPhase::StoreAdopted
         | FleetSubnetRootInstallPhase::StoreStaging
         | FleetSubnetRootInstallPhase::StoreStaged
-        | FleetSubnetRootInstallPhase::StoreBootstrapInFlight => 3,
+        | FleetSubnetRootInstallPhase::StoreBootstrapInFlight => 8,
         FleetSubnetRootInstallPhase::StoreBootstrapped
-        | FleetSubnetRootInstallPhase::StoreVerified => 4,
-        FleetSubnetRootInstallPhase::RegistryJoinInFlight => 5,
+        | FleetSubnetRootInstallPhase::StoreVerified => 9,
+        FleetSubnetRootInstallPhase::RegistryJoinInFlight => 10,
         FleetSubnetRootInstallPhase::RegistryJoined
-        | FleetSubnetRootInstallPhase::RegistryJoinVerified => 6,
-        FleetSubnetRootInstallPhase::RegistrySyncInFlight => 7,
+        | FleetSubnetRootInstallPhase::RegistryJoinVerified => 11,
+        FleetSubnetRootInstallPhase::RegistrySyncInFlight => 12,
         FleetSubnetRootInstallPhase::RegistrySynchronized
-        | FleetSubnetRootInstallPhase::RegistrySyncVerified => 8,
-        FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight => 9,
+        | FleetSubnetRootInstallPhase::RegistrySyncVerified => 13,
+        FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight => 14,
         FleetSubnetRootInstallPhase::RegistryMirrorActivated
-        | FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified => 10,
-        FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight => 11,
+        | FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified => 15,
+        FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight => 16,
         FleetSubnetRootInstallPhase::ComponentRegistryPrepared
         | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified
-        | FleetSubnetRootInstallPhase::RootActivationPreparationInFlight => 12,
+        | FleetSubnetRootInstallPhase::RootActivationPreparationInFlight => 17,
         FleetSubnetRootInstallPhase::RootActivationPrepared
-        | FleetSubnetRootInstallPhase::RootActivationInFlight => 13,
-        FleetSubnetRootInstallPhase::RootActivated => 14,
-        FleetSubnetRootInstallPhase::RootActivationVerified => 15,
+        | FleetSubnetRootInstallPhase::RootActivationInFlight => 18,
+        FleetSubnetRootInstallPhase::RootActivated => 19,
+        FleetSubnetRootInstallPhase::RootActivationVerified => 20,
     }
 }
 
@@ -1171,11 +1360,43 @@ fn validate_root_evidence(
             "root principal conflicts with Fleet authority",
         ));
     }
+    let Some(installation_controller) = journal.installation_controller else {
+        return Ok(());
+    };
+    let invalid_controllers = [Principal::anonymous(), fleet_subnet_root];
+    if invalid_controllers.contains(&installation_controller) {
+        return Err(invalid(
+            path,
+            "installation controller conflicts with sibling infrastructure",
+        ));
+    }
+    let Some(wasm_store) = journal.wasm_store else {
+        return Ok(());
+    };
+    let protected_canisters = [
+        Principal::anonymous(),
+        journal.authority.binding.coordinator,
+        fleet_subnet_root,
+    ];
+    if protected_canisters.contains(&wasm_store) {
+        return Err(invalid(
+            path,
+            "Wasm Store principal conflicts with Fleet authority",
+        ));
+    }
+    if installation_controller == wasm_store {
+        return Err(invalid(
+            path,
+            "installation controller conflicts with sibling infrastructure",
+        ));
+    }
     let expected =
         expected_root_authority(journal).map_err(|error| invalid(path, error.to_string()))?;
     if matches!(
         journal.phase,
-        FleetSubnetRootInstallPhase::Verified
+        FleetSubnetRootInstallPhase::InfrastructureVerified
+            | FleetSubnetRootInstallPhase::StoreAdoptionInFlight
+            | FleetSubnetRootInstallPhase::StoreAdopted
             | FleetSubnetRootInstallPhase::StoreStaging
             | FleetSubnetRootInstallPhase::StoreStaged
             | FleetSubnetRootInstallPhase::StoreBootstrapInFlight
@@ -1198,12 +1419,27 @@ fn validate_root_evidence(
             | FleetSubnetRootInstallPhase::RootActivationInFlight
             | FleetSubnetRootInstallPhase::RootActivated
             | FleetSubnetRootInstallPhase::RootActivationVerified
-    ) && journal.verified_binding.as_ref() != Some(&expected.binding)
-    {
+    ) {
+        let expected_store = &expected.wasm_store_authority;
+        let root_matches = journal.verified_binding.as_ref() == Some(&expected.binding);
+        let store_matches = journal.verified_wasm_store_authority.as_ref() == Some(expected_store);
+        if root_matches && store_matches {
+            return validate_root_dependent_evidence(path, journal);
+        }
         return Err(invalid(
             path,
-            "verified root authority differs from exact planned binding",
+            "verified infrastructure authority differs from the exact planned binding",
         ));
+    }
+    validate_root_dependent_evidence(path, journal)
+}
+
+fn validate_root_dependent_evidence(
+    path: &Path,
+    journal: &FleetSubnetRootInstallJournal,
+) -> Result<(), FleetSubnetRootInstallJournalError> {
+    if let Some(evidence) = &journal.wasm_store_adoption {
+        validate_wasm_store_adoption_evidence(path, journal, evidence)?;
     }
     if let Some(evidence) = &journal.store_bootstrap {
         validate_store_bootstrap_evidence(path, journal, evidence)?;
@@ -1240,6 +1476,37 @@ fn validate_root_evidence(
     }
     if let Some(response) = &journal.component_registry_activation_response {
         validate_component_registry_activation_response(path, journal, response)?;
+    }
+    Ok(())
+}
+
+fn validate_wasm_store_adoption_evidence(
+    path: &Path,
+    journal: &FleetSubnetRootInstallJournal,
+    evidence: &FleetSubnetWasmStoreAdoptionResponse,
+) -> Result<(), FleetSubnetRootInstallJournalError> {
+    if evidence.adopted_at_ns == 0 {
+        return Err(invalid(path, "Store adoption timestamp must be nonzero"));
+    }
+    let authority =
+        expected_wasm_store_authority(journal).map_err(|error| invalid(path, error.to_string()))?;
+    let mut temporary_controllers = vec![
+        authority.installation_controller,
+        authority.fleet_subnet_root,
+    ];
+    temporary_controllers.sort();
+    let expected = FleetSubnetWasmStoreAdoptionResponse {
+        operation_id: journal.install_operation_id,
+        authority: authority.clone(),
+        temporary_controllers,
+        final_controllers: vec![authority.fleet_subnet_root],
+        adopted_at_ns: evidence.adopted_at_ns,
+    };
+    if evidence != &expected {
+        return Err(invalid(
+            path,
+            "Store adoption receipt differs from immutable install authority",
+        ));
     }
     Ok(())
 }

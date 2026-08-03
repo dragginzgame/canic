@@ -10,12 +10,13 @@ use crate::{
         abi::v1::{CanisterInitAuthority, CanisterInitPayload},
         env::EnvBootstrapArgs,
         fleet_activation::FleetActivationPhase,
+        fleet_subnet_root::FleetSubnetWasmStoreInitArgs,
     },
     ids::{CanisterRole, ManagedCanisterBinding},
     log::Topic,
     ops::{
         config::ConfigOps,
-        ic::release_build::ReleaseBuildOps,
+        ic::{IcOps, release_build::ReleaseBuildOps},
         runtime::{fleet_activation::FleetActivationRuntimeOps, memory::MemoryRegistryOps},
         storage::{fleet_activation::FleetActivationOps, state::fleet::FleetStateOps},
     },
@@ -45,14 +46,12 @@ pub fn init_nonroot_canister(
         authority,
     } = payload;
     let fleet = match &authority {
-        CanisterInitAuthority::Infrastructure { fleet, .. } => fleet.clone(),
         CanisterInitAuthority::Component { binding, .. } => binding.authority.binding.fleet.clone(),
         CanisterInitAuthority::ComponentChild { binding, .. } => {
             binding.component.authority.binding.fleet.clone()
         }
     };
     let component_binding = match &authority {
-        CanisterInitAuthority::Infrastructure { .. } => None,
         CanisterInitAuthority::Component { binding, .. } => {
             Some(ManagedCanisterBinding::Component(binding.clone()))
         }
@@ -80,6 +79,38 @@ pub fn init_nonroot_canister(
 
     // Prepared managed Canisters do not start timers or application hooks.
     Ok(())
+}
+
+/// Initialize one host-installed sibling Wasm Store with reciprocal root authority.
+pub fn init_wasm_store_canister(input: FleetSubnetWasmStoreInitArgs) -> Result<(), InternalError> {
+    let canister_role = CanisterRole::WASM_STORE;
+    let authority = input.authority.clone();
+    initialize_nonroot_base(&canister_role)?;
+    FleetActivationRuntimeOps::set_managed();
+    let embedded_release_build_id = ReleaseBuildOps::embedded_release_build_id()?;
+    FleetActivationOps::initialize_wasm_store_prepared(
+        input,
+        embedded_release_build_id,
+        IcOps::canister_self(),
+    )
+    .map_err(crate::ops::storage::StorageOpsError::from)?;
+
+    let root = authority.fleet_subnet_root;
+    let env = EnvBootstrapArgs {
+        fleet_subnet_root_pid: Some(root),
+        component_spec: None,
+        subnet_pid: Some(*authority.placement_subnet.as_principal()),
+        root_pid: Some(root),
+        canister_role: Some(canister_role.clone()),
+        parent_pid: Some(root),
+    };
+    EnvWorkflow::init_env_from_args(env, canister_role.clone()).map_err(|err| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            format!("sibling Wasm Store env import failed: {err}"),
+        )
+    })?;
+    register_nonroot_runtime_contract(&canister_role)
 }
 
 /// Initialize one explicit standalone-local non-root without Fleet activation state.
@@ -118,19 +149,6 @@ fn register_managed_nonroot_authority(
     authority: CanisterInitAuthority,
 ) -> Result<(), InternalError> {
     match authority {
-        CanisterInitAuthority::Infrastructure { env, .. } => {
-            if !canister_role.is_wasm_store() {
-                return Err(InternalError::invalid_input(
-                    "application Canisters require Registry-issued Component init authority",
-                ));
-            }
-            EnvWorkflow::init_env_from_args(env, canister_role.clone()).map_err(|err| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Workflow,
-                    format!("infrastructure env import failed: {err}"),
-                )
-            })?;
-        }
         CanisterInitAuthority::Component { root, binding } => {
             EnvWorkflow::init_component(&root, binding, canister_role)?;
         }

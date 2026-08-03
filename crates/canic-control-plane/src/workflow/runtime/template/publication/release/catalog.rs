@@ -6,7 +6,7 @@ use crate::{
     workflow::runtime::template::publication::{
         WasmStorePublicationWorkflow,
         cost_guard::{PUBLICATION_RECOVERY_COMMAND_KIND, PublicationCostGuard},
-        fleet::{PublicationStoreFleet, PublicationStoreSnapshot},
+        snapshot::PublicationStoreSnapshot,
     },
 };
 use canic_core::control_plane_support::{
@@ -34,36 +34,12 @@ impl WasmStorePublicationWorkflow {
         Ok(TemplateManifestOps::prune_approved_roles_not_in(&roles))
     }
 
-    // Return the exact fleet stores that already carry one approved release.
-    fn exact_release_candidates<'a>(
-        fleet: &'a PublicationStoreFleet,
-        manifest: &TemplateManifestResponse,
-    ) -> Vec<&'a PublicationStoreSnapshot> {
-        let mut stores = fleet
-            .stores
-            .iter()
-            .filter(|store| {
-                store.is_available_for_publication() && store.has_exact_release(manifest)
-            })
-            .collect::<Vec<_>>();
-
-        stores.sort_by(|left, right| {
-            left.created_at
-                .cmp(&right.created_at)
-                .then(left.binding.cmp(&right.binding))
-        });
-
-        stores
-    }
-
-    // Reconcile the approved release for one role against the exact matching fleet entries.
+    // Reconcile one approved release against the exact adopted sibling Store.
     pub(in crate::workflow::runtime::template::publication) fn reconciled_binding_for_manifest(
-        fleet: &PublicationStoreFleet,
+        store: &PublicationStoreSnapshot,
         manifest: &TemplateManifestResponse,
     ) -> Result<WasmStoreBinding, InternalError> {
-        let candidates = Self::exact_release_candidates(fleet, manifest);
-
-        if candidates.is_empty() {
+        if !store.is_available_for_publication() || !store.has_exact_release(manifest) {
             return Err(crate::workflow::runtime::template::publication::error::PublicationWorkflowError::ExactReleaseMissing {
                 role: manifest.role.clone(),
                 template_id: manifest.template_id.clone(),
@@ -72,21 +48,7 @@ impl WasmStorePublicationWorkflow {
             }
             .into());
         }
-
-        if candidates
-            .iter()
-            .any(|store| store.binding == manifest.store_binding)
-        {
-            return Ok(manifest.store_binding.clone());
-        }
-
-        if let Some(binding) = fleet.preferred_binding.as_ref()
-            && candidates.iter().any(|store| &store.binding == binding)
-        {
-            return Ok(binding.clone());
-        }
-
-        Ok(candidates[0].binding.clone())
+        Ok(store.binding.clone())
     }
 
     // Build the source label used in placement logs for one approved manifest.
@@ -114,7 +76,7 @@ impl WasmStorePublicationWorkflow {
         });
     }
 
-    // Reconcile root-owned approved manifest bindings against exact releases present in the fleet.
+    // Reconcile root-owned approved manifest bindings against the adopted Store's exact releases.
     pub async fn import_current_store_catalog() -> Result<(), InternalError> {
         let cost_guard = PublicationCostGuard::reserve(PUBLICATION_RECOVERY_COMMAND_KIND)?;
         let result = Self::import_current_store_catalog_with_permit(cost_guard.permit()).await;
@@ -124,9 +86,10 @@ impl WasmStorePublicationWorkflow {
     async fn import_current_store_catalog_with_permit(
         publication_permit: &CostGuardPermit,
     ) -> Result<(), InternalError> {
-        let fleet = Self::snapshot_publication_store_fleet(publication_permit).await?;
+        let store = Self::snapshot_adopted_wasm_store(publication_permit).await?;
+        Self::require_active_publication_store(&store.binding)?;
         for manifest in Self::managed_release_manifests()? {
-            let binding = Self::reconciled_binding_for_manifest(&fleet, &manifest)?;
+            let binding = Self::reconciled_binding_for_manifest(&store, &manifest)?;
             TemplateManifestOps::replace_approved_from_input(TemplateManifestInput {
                 template_id: manifest.template_id,
                 role: manifest.role,

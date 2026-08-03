@@ -269,38 +269,12 @@ pub struct WasmStorePublicationStateResponse {
 }
 
 //
-// WasmStoreFinalizedStoreResponse
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct WasmStoreFinalizedStoreResponse {
-    pub binding: WasmStoreBinding,
-    pub store_pid: Principal,
-}
-
-//
 // WasmStoreAdminCommand
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum WasmStoreAdminCommand {
-    PublishCurrentReleaseToStore {
-        store_pid: Principal,
-    },
-    PublishCurrentReleaseToCurrentStore,
-    SetPublicationBinding {
-        binding: WasmStoreBinding,
-    },
-    ClearPublicationBinding,
-    RetireDetachedBinding,
-    PrepareRetiredStoreGc,
-    BeginRetiredStoreGc,
-    CompleteRetiredStoreGc,
-    FinalizeRetiredBinding,
-    DeleteFinalizedStore {
-        binding: WasmStoreBinding,
-        store_pid: Principal,
-    },
+    PublishActiveReleaseSet,
 }
 
 //
@@ -309,31 +283,5 @@ pub enum WasmStoreAdminCommand {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum WasmStoreAdminResponse {
-    PublishedCurrentReleaseToStore {
-        store_pid: Principal,
-    },
-    PublishedCurrentReleaseToCurrentStore,
-    SetPublicationBinding {
-        binding: WasmStoreBinding,
-    },
-    ClearedPublicationBinding,
-    RetiredDetachedBinding {
-        binding: Option<WasmStoreBinding>,
-    },
-    PreparedRetiredStoreGc {
-        binding: Option<WasmStoreBinding>,
-    },
-    BeganRetiredStoreGc {
-        binding: Option<WasmStoreBinding>,
-    },
-    CompletedRetiredStoreGc {
-        binding: Option<WasmStoreBinding>,
-    },
-    FinalizedRetiredBinding {
-        result: Option<WasmStoreFinalizedStoreResponse>,
-    },
-    DeletedFinalizedStore {
-        binding: WasmStoreBinding,
-        store_pid: Principal,
-    },
+    PublishedActiveReleaseSet,
 }

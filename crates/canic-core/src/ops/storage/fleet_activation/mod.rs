@@ -10,7 +10,9 @@ mod mapper;
 use crate::storage::stable::fleet_activation::FleetActivationData;
 use crate::{
     config::ComponentTopology,
-    dto::fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
+    dto::fleet_subnet_root::{
+        FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreInitArgs,
+    },
     dto::{
         component_registry::{
             ComponentDirectoryHead, ComponentDirectoryProvenance,
@@ -30,11 +32,13 @@ use crate::{
             FleetSubnetRootDirectoryEntry, FleetSubnetRootStatus,
         },
     },
-    ids::{AppId, FleetBinding, ManagedCanisterBinding, ReleaseBuildId},
+    ids::{
+        AppId, FleetBinding, FleetSubnetWasmStoreAuthority, ManagedCanisterBinding, ReleaseBuildId,
+    },
     model::fleet_activation::{
         NonrootInstallIdentity, PrepareFleetActivationError, PreparedFleetActivation,
-        PreparedFleetSubnetRootAuthority, RootInstallIdentity, prepare_nonroot_install,
-        prepare_root_install,
+        PreparedFleetSubnetRootAuthority, RootInstallIdentity, WasmStoreInstallIdentity,
+        prepare_nonroot_install, prepare_root_install, prepare_wasm_store_install,
     },
     storage::stable::fleet_activation::{
         ComponentDirectoryHeadRecord, ComponentDirectoryProvenanceRecord,
@@ -46,7 +50,8 @@ use crate::{
         FleetCredentialManifestEntryRecord, FleetCredentialManifestRecord,
         FleetDirectoryProvenanceRecord, FleetDirectorySnapshotRecord, FleetRegistryVersionRecord,
         FleetSubnetRootAuthorityRecord, FleetSubnetRootDirectoryEntryRecord,
-        FleetSubnetRootStatusRecord, MAX_FLEET_ACTIVATION_RECORD_BYTES,
+        FleetSubnetRootStatusRecord, FleetSubnetWasmStoreAuthorityRecord,
+        MAX_FLEET_ACTIVATION_RECORD_BYTES,
     },
     view::fleet_activation::{ComponentRuntimeActivationTransition, FleetActivationTransition},
 };
@@ -112,11 +117,28 @@ impl FleetActivationOps {
                 initial_release_set: input.authority.initial_release_set,
                 install_id: input.install_id,
                 expected_module_hash: input.authority.expected_module_hash,
+                wasm_store_authority: input.authority.wasm_store_authority,
             },
             embedded_release_build_id,
             configured_app,
             component_topology,
             root_canister,
+        )?;
+        initialize_prepared(prepared, None, None)
+    }
+
+    pub(crate) fn initialize_wasm_store_prepared(
+        input: FleetSubnetWasmStoreInitArgs,
+        embedded_release_build_id: ReleaseBuildId,
+        wasm_store_canister: candid::Principal,
+    ) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
+        let prepared = prepare_wasm_store_install(
+            WasmStoreInstallIdentity {
+                authority: input.authority,
+                install_id: input.install_id,
+            },
+            embedded_release_build_id,
+            wasm_store_canister,
         )?;
         initialize_prepared(prepared, None, None)
     }
@@ -384,11 +406,34 @@ impl FleetActivationOps {
 
     pub(crate) fn root_authority() -> Result<FleetSubnetRootAuthority, FleetActivationOpsError> {
         let record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
+        let root_authority =
+            record
+                .root_authority
+                .ok_or_else(|| FleetActivationOpsError::InvalidRecord {
+                    reason: "protected Fleet activation record has no Fleet Subnet Root authority"
+                        .to_string(),
+                })?;
+        let wasm_store_authority =
+            record
+                .wasm_store_authority
+                .ok_or_else(|| FleetActivationOpsError::InvalidRecord {
+                    reason: "protected Fleet Subnet Root has no sibling Wasm Store authority"
+                        .to_string(),
+                })?;
+        Ok(root_authority_record_to_dto(
+            root_authority,
+            wasm_store_authority,
+        ))
+    }
+
+    pub(crate) fn wasm_store_authority()
+    -> Result<FleetSubnetWasmStoreAuthority, FleetActivationOpsError> {
+        let record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
         record
-            .root_authority
-            .map(root_authority_record_to_dto)
+            .wasm_store_authority
+            .map(wasm_store_authority_record_to_id)
             .ok_or_else(|| FleetActivationOpsError::InvalidRecord {
-                reason: "protected Fleet activation record has no Fleet Subnet Root authority"
+                reason: "protected Fleet activation record has no sibling Wasm Store authority"
                     .to_string(),
             })
     }
@@ -633,6 +678,9 @@ fn initialize_prepared(
     application_init_args: Option<Vec<u8>>,
 ) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
     let root_authority = prepared.root_authority.map(root_authority_model_to_record);
+    let wasm_store_authority = prepared
+        .wasm_store_authority
+        .map(wasm_store_authority_id_to_record);
     let record = FleetActivationRecord {
         state: FleetActivationStateRecord::Prepared {
             identity: FleetActivationIdentityRecord {
@@ -647,6 +695,7 @@ fn initialize_prepared(
             application_init_args,
         },
         root_authority,
+        wasm_store_authority,
         prepared_state_snapshot_hash: None,
         prepared_topology_snapshot_hash: None,
         cascade_manifest: None,
@@ -680,11 +729,41 @@ fn root_authority_model_to_record(
 
 fn root_authority_record_to_dto(
     authority: FleetSubnetRootAuthorityRecord,
+    wasm_store_authority: FleetSubnetWasmStoreAuthorityRecord,
 ) -> FleetSubnetRootAuthority {
     FleetSubnetRootAuthority {
         binding: authority.binding,
         initial_release_set: authority.initial_release_set,
         expected_module_hash: authority.expected_module_hash,
+        wasm_store_authority: wasm_store_authority_record_to_id(wasm_store_authority),
+    }
+}
+
+fn wasm_store_authority_id_to_record(
+    authority: FleetSubnetWasmStoreAuthority,
+) -> FleetSubnetWasmStoreAuthorityRecord {
+    FleetSubnetWasmStoreAuthorityRecord {
+        authority: authority.authority,
+        placement_subnet: authority.placement_subnet,
+        fleet_subnet_root: authority.fleet_subnet_root,
+        wasm_store: authority.wasm_store,
+        installation_controller: authority.installation_controller,
+        release_build_id: authority.release_build_id,
+        wasm_module_hash: authority.wasm_module_hash,
+    }
+}
+
+fn wasm_store_authority_record_to_id(
+    authority: FleetSubnetWasmStoreAuthorityRecord,
+) -> FleetSubnetWasmStoreAuthority {
+    FleetSubnetWasmStoreAuthority {
+        authority: authority.authority,
+        placement_subnet: authority.placement_subnet,
+        fleet_subnet_root: authority.fleet_subnet_root,
+        wasm_store: authority.wasm_store,
+        installation_controller: authority.installation_controller,
+        release_build_id: authority.release_build_id,
+        wasm_module_hash: authority.wasm_module_hash,
     }
 }
 
@@ -1098,14 +1177,16 @@ mod tests {
                 FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistryVersion,
                 FleetSubnetRootDirectoryEntry, FleetSubnetRootStatus,
             },
-            fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetRootInitArgs},
+            fleet_subnet_root::{
+                FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreInitArgs,
+            },
         },
         ids::{
             AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentInstanceId,
             ComponentSpecAdmission, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
             FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootBinding,
-            FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ManagedCanisterBinding,
-            ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
+            FleetSubnetRootLimits, FleetSubnetRootReleaseSet, FleetSubnetWasmStoreAuthority,
+            ManagedCanisterBinding, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
         },
         storage::stable::fleet_activation::{
             FleetActivationEvidenceRecord, FleetActivationStateRecord,
@@ -1131,50 +1212,62 @@ mod tests {
         let projection = topology
             .project_for_admissions(&admissions)
             .expect("root topology projection");
+        let registry_authority = FleetRegistryAuthority {
+            binding: FleetCoordinatorBinding {
+                fleet: FleetBinding {
+                    fleet: FleetKey {
+                        canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+                        fleet_id: FleetId::from_generated_bytes([11; 32]),
+                    },
+                    app: AppId::from("toko"),
+                },
+                coordinator_subnet: SubnetId::from_principal(Principal::from_slice(&[20; 29])),
+                coordinator: Principal::from_slice(&[21; 29]),
+            },
+            epoch: 1,
+        };
+        let placement_subnet = SubnetId::from_principal(Principal::from_slice(&[22; 29]));
+        let fleet_subnet_root = Principal::from_slice(&[23; 29]);
+        let binding = FleetSubnetRootBinding {
+            authority: registry_authority.clone(),
+            placement_subnet,
+            fleet_subnet_root,
+            component_admissions: admissions,
+            component_topology_digest: projection.digest().expect("topology digest"),
+            limits: FleetSubnetRootLimits {
+                maximum_component_instances: 10,
+                maximum_managed_canisters: 1_000,
+                maximum_registry_bytes: 4_194_304,
+                maximum_wasm_store_bytes: 40_000_000,
+                canister_pool: crate::ids::FleetSubnetCanisterPoolConfig {
+                    minimum_size: 1,
+                    maximum_size: 10,
+                    canister_cycles: Cycles::new(5_000_000_000_000),
+                },
+                cycles_funding: CyclesFundingBudget {
+                    window_secs: 3_600,
+                    maximum_cycles: Cycles::new(1_000_000_000_000),
+                },
+            },
+        };
+        let initial_release_set = FleetSubnetRootReleaseSet {
+            release_build_id,
+            manifest_digest: ReleaseSetDigest::from_bytes([24; 32]),
+        };
         FleetSubnetRootInitArgs {
             authority: FleetSubnetRootAuthority {
-                binding: FleetSubnetRootBinding {
-                    authority: FleetRegistryAuthority {
-                        binding: FleetCoordinatorBinding {
-                            fleet: FleetBinding {
-                                fleet: FleetKey {
-                                    canonical_network_id: CanonicalNetworkId::ic_mainnet(),
-                                    fleet_id: FleetId::from_generated_bytes([11; 32]),
-                                },
-                                app: AppId::from("toko"),
-                            },
-                            coordinator_subnet: SubnetId::from_principal(Principal::from_slice(
-                                &[20; 29],
-                            )),
-                            coordinator: Principal::from_slice(&[21; 29]),
-                        },
-                        epoch: 1,
-                    },
-                    placement_subnet: SubnetId::from_principal(Principal::from_slice(&[22; 29])),
-                    fleet_subnet_root: Principal::from_slice(&[23; 29]),
-                    component_admissions: admissions,
-                    component_topology_digest: projection.digest().expect("topology digest"),
-                    limits: FleetSubnetRootLimits {
-                        maximum_component_instances: 10,
-                        maximum_managed_canisters: 1_000,
-                        maximum_registry_bytes: 4_194_304,
-                        maximum_wasm_store_bytes: 40_000_000,
-                        canister_pool: crate::ids::FleetSubnetCanisterPoolConfig {
-                            minimum_size: 1,
-                            maximum_size: 10,
-                            canister_cycles: Cycles::new(5_000_000_000_000),
-                        },
-                        cycles_funding: CyclesFundingBudget {
-                            window_secs: 3_600,
-                            maximum_cycles: Cycles::new(1_000_000_000_000),
-                        },
-                    },
-                },
-                initial_release_set: FleetSubnetRootReleaseSet {
-                    release_build_id,
-                    manifest_digest: ReleaseSetDigest::from_bytes([24; 32]),
-                },
+                binding,
+                initial_release_set,
                 expected_module_hash: [13; 32],
+                wasm_store_authority: FleetSubnetWasmStoreAuthority {
+                    authority: registry_authority,
+                    placement_subnet,
+                    fleet_subnet_root,
+                    wasm_store: Principal::from_slice(&[25; 29]),
+                    installation_controller: Principal::from_slice(&[26; 29]),
+                    release_build_id,
+                    wasm_module_hash: [27; 32],
+                },
             },
             install_id: [12; 32],
             canister_pool_imports: Vec::new(),
@@ -1274,6 +1367,37 @@ mod tests {
             FleetActivationOpsError::AlreadyInitialized
         ));
 
+        FleetActivationOps::reset_for_tests();
+    }
+
+    #[test]
+    fn wasm_store_init_commits_exact_reciprocal_authority() {
+        FleetActivationOps::reset_for_tests();
+        let release_build_id = release_build(28);
+        let root_input = input(release_build_id);
+        let store_authority = root_input.authority.wasm_store_authority;
+        let store = store_authority.wasm_store;
+        let identity = FleetActivationOps::initialize_wasm_store_prepared(
+            FleetSubnetWasmStoreInitArgs {
+                authority: store_authority.clone(),
+                install_id: root_input.install_id,
+            },
+            release_build_id,
+            store,
+        )
+        .expect("initialize sibling Store");
+
+        assert_eq!(identity.operation_id, root_input.install_id);
+        assert_eq!(
+            FleetActivationOps::wasm_store_authority().expect("protected Store authority"),
+            store_authority
+        );
+        assert_eq!(
+            FleetActivationOps::status(false)
+                .expect("Prepared Store status")
+                .identity,
+            identity
+        );
         FleetActivationOps::reset_for_tests();
     }
 

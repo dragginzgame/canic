@@ -31,6 +31,31 @@ pub(in crate::install_root) enum ModuleHashObservationError {
 }
 
 #[derive(Debug, ThisError)]
+pub(in crate::install_root) enum CanisterControllerObservationError {
+    #[error("failed to query status for Canister {canister}: {source}")]
+    Invocation {
+        canister: Principal,
+        #[source]
+        source: IcpCommandError,
+    },
+
+    #[error("Canister status returned {observed} for expected principal {expected}")]
+    PrincipalMismatch {
+        expected: Principal,
+        observed: String,
+    },
+
+    #[error("Canister {canister} status omitted controller settings")]
+    MissingSettings { canister: Principal },
+
+    #[error("Canister {canister} returned invalid installation controller {controller}")]
+    InvalidController {
+        canister: Principal,
+        controller: String,
+    },
+}
+
+#[derive(Debug, ThisError)]
 pub(in crate::install_root) enum CanisterModuleStateError {
     #[error("{subject} {canister} already has its expected module before install intent")]
     ExpectedModulePresent {
@@ -78,6 +103,43 @@ pub(in crate::install_root) fn observe_module_hash(
             })
         })
         .transpose()
+}
+
+pub(in crate::install_root) fn observe_controllers(
+    icp: &IcpCli,
+    canister: Principal,
+) -> Result<Vec<Principal>, CanisterControllerObservationError> {
+    let report = icp
+        .canister_status_report(&canister.to_text())
+        .map_err(|source| CanisterControllerObservationError::Invocation { canister, source })?;
+    if report.id != canister.to_text() {
+        return Err(CanisterControllerObservationError::PrincipalMismatch {
+            expected: canister,
+            observed: report.id,
+        });
+    }
+    let settings = report
+        .settings
+        .ok_or(CanisterControllerObservationError::MissingSettings { canister })?;
+    let mut controllers = Vec::with_capacity(settings.controllers.len());
+    for text in settings.controllers {
+        let controller = Principal::from_text(&text).map_err(|_| {
+            CanisterControllerObservationError::InvalidController {
+                canister,
+                controller: text.clone(),
+            }
+        })?;
+        if controller == Principal::anonymous() {
+            return Err(CanisterControllerObservationError::InvalidController {
+                canister,
+                controller: text,
+            });
+        }
+        controllers.push(controller);
+    }
+    controllers.sort();
+    controllers.dedup();
+    Ok(controllers)
 }
 
 pub(in crate::install_root) fn require_uninstalled_created_canister(

@@ -1,7 +1,6 @@
-use super::super::super::store_pid_for_binding;
 use super::super::{
     WasmStorePublicationWorkflow,
-    fleet::{PublicationStoreFleet, PublicationStoreSnapshot},
+    snapshot::PublicationStoreSnapshot,
     store::{store_catalog, store_status},
 };
 use crate::ops::storage::state::root_wasm_store::RootWasmStoreStateOps;
@@ -27,37 +26,26 @@ impl WasmStorePublicationWorkflow {
         Ok(FleetActivationWasmStoreView { pid: store.pid })
     }
 
-    // Snapshot the current writable store fleet and the current preferred write hint.
-    pub(in crate::workflow::runtime::template::publication) async fn snapshot_publication_store_fleet(
+    // Snapshot the one sibling Store imported by the prepared-root adoption boundary.
+    pub(in crate::workflow::runtime::template::publication) async fn snapshot_adopted_wasm_store(
         _publication_permit: &CostGuardPermit,
-    ) -> Result<PublicationStoreFleet, InternalError> {
-        let _ = Self::resume_pending_wasm_store_creation().await?;
-
-        let preferred_binding = match RootWasmStoreStateOps::publication_store_binding() {
-            Some(binding) if store_pid_for_binding(&binding).is_ok() => Some(binding),
-            Some(binding) => Some(Self::clear_stale_publication_binding(binding)?),
-            None => Self::oldest_runtime_store_binding(),
+    ) -> Result<PublicationStoreSnapshot, InternalError> {
+        let stores = RootWasmStoreStateOps::wasm_stores();
+        let [record] = stores.as_slice() else {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                format!(
+                    "root publication requires exactly one adopted sibling Wasm Store, found {}",
+                    stores.len()
+                ),
+            ));
         };
-        let reserved_state = RootWasmStoreStateOps::publication_store_state();
-        let mut stores = Vec::new();
-
-        for record in RootWasmStoreStateOps::wasm_stores() {
-            let status = store_status(record.pid).await?;
-            let releases = store_catalog(record.pid).await?;
-            stores.push(PublicationStoreSnapshot {
-                binding: record.binding,
-                pid: record.pid,
-                created_at: record.created_at,
-                status,
-                releases,
-                stored_chunk_hashes: None,
-            });
-        }
-
-        Ok(PublicationStoreFleet {
-            preferred_binding,
-            reserved_state,
-            stores,
+        Ok(PublicationStoreSnapshot {
+            binding: record.binding.clone(),
+            pid: record.pid,
+            status: store_status(record.pid).await?,
+            releases: store_catalog(record.pid).await?,
+            stored_chunk_hashes: None,
         })
     }
 }

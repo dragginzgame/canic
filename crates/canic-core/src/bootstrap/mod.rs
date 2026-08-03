@@ -49,23 +49,6 @@ pub mod compiled {
     };
 }
 
-/// EmbeddedRootBootstrapEntry
-///
-/// Metadata and bytes for a root bootstrap artifact embedded at build time.
-/// Owned by bootstrap and consumed during generated install/start flows.
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct EmbeddedRootBootstrapEntry {
-    pub role: &'static str,
-    pub wasm_module: &'static [u8],
-    pub artifact_kind: &'static str,
-    pub artifact_size_bytes: u64,
-    pub artifact_sha256_hex: &'static str,
-    pub decompressed_size_bytes: Option<u64>,
-    pub decompressed_sha256_hex: Option<&'static str>,
-}
-
 /// init_compiled_config
 ///
 /// Install a build-produced configuration model and its canonical TOML source.

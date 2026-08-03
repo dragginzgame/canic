@@ -113,7 +113,6 @@ macro_rules! __canic_build_internal {
         println!("cargo:rustc-check-cfg=cfg(canic_role_declared)");
         println!("cargo:rustc-check-cfg=cfg(canic_role_attached)");
         println!("cargo:rustc-check-cfg=cfg(canic_role_declared_only)");
-        println!("cargo:rustc-check-cfg=cfg(canic_has_root_wasm_store_bootstrap_release_set)");
         println!("cargo:rustc-check-cfg=cfg(canic_has_scaling)");
         println!("cargo:rustc-check-cfg=cfg(canic_has_sharding)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_icrc_standards)");
@@ -218,9 +217,6 @@ macro_rules! __canic_build_internal {
             .contains(&$crate::__internal::core::role_contract::RoleCapabilityKey::Root)
         {
             println!("cargo:rustc-cfg=canic_is_root");
-            if $crate::__build::emit_root_wasm_store_bootstrap_release_set(&$cfg_path) {
-                println!("cargo:rustc-cfg=canic_has_root_wasm_store_bootstrap_release_set");
-            }
         }
 
         if has_icrc21 && $cfg.standards.as_ref().is_some_and(|standards| standards.icrc21) {

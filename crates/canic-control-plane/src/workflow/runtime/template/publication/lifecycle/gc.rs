@@ -4,7 +4,6 @@
 //! Does not own: store-local GC execution, endpoint authorization, or persisted schemas.
 //! Boundary: binds remote GC effects to one generation-checked publication state.
 
-use super::super::super::store_pid_for_binding;
 use super::super::{
     WasmStorePublicationWorkflow,
     error::PublicationWorkflowError,
@@ -37,7 +36,7 @@ use crate::{
 use canic_core::cdk::candid::Nat;
 use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{
-    error::{InternalError, InternalErrorOrigin},
+    error::InternalError,
     ops::ic::{
         IcOps,
         mgmt::{CanisterStatus, CanisterStatusObservation, CanisterStatusType, MgmtOps},
@@ -623,71 +622,6 @@ impl WasmStorePublicationWorkflow {
         Ok(())
     }
 
-    fn ensure_finalized_store_is_deletable(
-        binding: &WasmStoreBinding,
-        store_pid: Principal,
-    ) -> Result<(), InternalError> {
-        let state = RootWasmStoreStateOps::publication_store_state();
-        let is_unbound = [
-            state.active_binding.as_ref() != Some(binding),
-            state.detached_binding.as_ref() != Some(binding),
-            state.retired_binding.as_ref() != Some(binding),
-        ]
-        .into_iter()
-        .all(|valid| valid);
-        let runtime = Self::runtime_store(binding)?;
-        let runtime_is_exact = [
-            runtime.pid == store_pid,
-            runtime.gc.mode == WasmStoreGcMode::Complete,
-        ]
-        .into_iter()
-        .all(|valid| valid);
-        if !is_unbound || !runtime_is_exact {
-            return Err(PublicationWorkflowError::InvalidState(format!(
-                "ws '{binding}' is not exact finalized deletion authority"
-            ))
-            .into());
-        }
-        Ok(())
-    }
-
-    // Delete one ordinary finalized publication Store through the existing admin surface.
-    pub async fn delete_finalized_publication_store(
-        binding: WasmStoreBinding,
-        store_pid: Principal,
-    ) -> Result<(), InternalError> {
-        let _guard = LifecycleOperationGuard::try_enter()?;
-        Self::ensure_finalized_store_is_deletable(&binding, store_pid)?;
-
-        let store = store_status(store_pid).await?;
-        let store_is_empty = [
-            store.gc.mode == WasmStoreGcMode::Complete,
-            store.occupied_store_bytes == 0,
-            store.template_count == 0,
-            store.release_count == 0,
-        ]
-        .into_iter()
-        .all(|valid| valid);
-        if !store_is_empty {
-            return Err(PublicationWorkflowError::InvalidState(format!(
-                "finalized ws '{binding}' is not empty and GC-complete"
-            ))
-            .into());
-        }
-
-        MgmtOps::uninstall_code(store_pid).await?;
-        MgmtOps::stop_canister(store_pid).await?;
-        MgmtOps::delete_canister(store_pid).await?;
-        if !RootWasmStoreStateOps::remove_wasm_store(&binding) {
-            return Err(PublicationWorkflowError::InvalidState(format!(
-                "deleted ws '{binding}' was missing from runtime inventory"
-            ))
-            .into());
-        }
-        log!(Topic::Wasm, Ok, "ws deleted {} ({})", binding, store_pid);
-        Ok(())
-    }
-
     // Resolve one binding from authoritative runtime inventory.
     fn runtime_store(binding: &WasmStoreBinding) -> Result<WasmStoreView, InternalError> {
         RootWasmStoreStateOps::wasm_stores()
@@ -699,226 +633,6 @@ impl WasmStorePublicationWorkflow {
                 ))
                 .into()
             })
-    }
-
-    // Reject a post-await commit when publication ownership changed while the call was in flight.
-    fn ensure_lifecycle_state_is_current(
-        expected: &PublicationStoreStateView,
-        binding: &WasmStoreBinding,
-    ) -> Result<(), InternalError> {
-        let current = RootWasmStoreStateOps::publication_store_state();
-        if current.generation != expected.generation
-            || current.retired_binding.as_ref() != Some(binding)
-        {
-            return Err(PublicationWorkflowError::LifecycleStateChanged {
-                binding: binding.clone(),
-                expected_generation: expected.generation,
-                actual_generation: current.generation,
-            }
-            .into());
-        }
-
-        Ok(())
-    }
-
-    // Commit a remote GC transition only when the same retired binding still owns the lifecycle.
-    fn persist_retired_gc_transition(
-        expected: &PublicationStoreStateView,
-        binding: &WasmStoreBinding,
-        next: WasmStoreGcMode,
-        changed_at: u64,
-    ) -> Result<(), InternalError> {
-        Self::ensure_lifecycle_state_is_current(expected, binding)?;
-        let store = Self::runtime_store(binding)?;
-        if store.gc.mode == next {
-            return Ok(());
-        }
-
-        let required = match next {
-            WasmStoreGcMode::Prepared => WasmStoreGcMode::Normal,
-            WasmStoreGcMode::InProgress => WasmStoreGcMode::Prepared,
-            WasmStoreGcMode::Complete => WasmStoreGcMode::InProgress,
-            WasmStoreGcMode::Normal | WasmStoreGcMode::Clearing => {
-                return Err(PublicationWorkflowError::InvalidState(format!(
-                    "root lifecycle cannot persist gc mode {next:?} for '{binding}'"
-                ))
-                .into());
-            }
-        };
-
-        if store.gc.mode != required {
-            return Err(PublicationWorkflowError::StoreGcStateChanged {
-                binding: binding.clone(),
-                expected: required,
-                actual: store.gc.mode,
-            }
-            .into());
-        }
-
-        if !RootWasmStoreStateOps::transition_wasm_store_gc(binding, next, changed_at) {
-            return Err(PublicationWorkflowError::InvalidState(format!(
-                "failed to persist gc mode {next:?} for '{binding}'"
-            ))
-            .into());
-        }
-
-        Ok(())
-    }
-
-    // Mark the current retired publication store as prepared for store-local GC execution.
-    pub async fn prepare_retired_publication_store_for_gc()
-    -> Result<Option<WasmStoreBinding>, InternalError> {
-        let _guard = LifecycleOperationGuard::try_enter()?;
-        let state = RootWasmStoreStateOps::publication_store_state();
-        let Some(retired_binding) = state.retired_binding.clone() else {
-            return Ok(None);
-        };
-
-        let store_pid = store_pid_for_binding(&retired_binding)?;
-        store_prepare_gc(store_pid).await?;
-        Self::persist_retired_gc_transition(
-            &state,
-            &retired_binding,
-            WasmStoreGcMode::Prepared,
-            IcOps::now_secs(),
-        )?;
-
-        log!(
-            Topic::Wasm,
-            Ok,
-            "ws gc prepared {} gen={} retired_at={}",
-            retired_binding,
-            state.generation,
-            state.retired_at
-        );
-
-        Ok(Some(retired_binding))
-    }
-
-    // Mark the current retired publication store as actively executing store-local GC.
-    pub async fn begin_retired_publication_store_gc()
-    -> Result<Option<WasmStoreBinding>, InternalError> {
-        let _guard = LifecycleOperationGuard::try_enter()?;
-        let state = RootWasmStoreStateOps::publication_store_state();
-        let Some(retired_binding) = state.retired_binding.clone() else {
-            return Ok(None);
-        };
-
-        let store_pid = store_pid_for_binding(&retired_binding)?;
-        store_begin_gc(store_pid).await?;
-        Self::persist_retired_gc_transition(
-            &state,
-            &retired_binding,
-            WasmStoreGcMode::InProgress,
-            IcOps::now_secs(),
-        )?;
-
-        log!(
-            Topic::Wasm,
-            Ok,
-            "ws gc begin {} gen={} retired_at={}",
-            retired_binding,
-            state.generation,
-            state.retired_at
-        );
-
-        Ok(Some(retired_binding))
-    }
-
-    // Mark the current retired publication store as having completed its local GC pass.
-    pub async fn complete_retired_publication_store_gc()
-    -> Result<Option<WasmStoreBinding>, InternalError> {
-        let _guard = LifecycleOperationGuard::try_enter()?;
-        let state = RootWasmStoreStateOps::publication_store_state();
-        let Some(retired_binding) = state.retired_binding.clone() else {
-            return Ok(None);
-        };
-
-        let store_pid = store_pid_for_binding(&retired_binding)?;
-        store_complete_gc(store_pid).await?;
-        Self::persist_retired_gc_transition(
-            &state,
-            &retired_binding,
-            WasmStoreGcMode::Complete,
-            IcOps::now_secs(),
-        )?;
-
-        log!(
-            Topic::Wasm,
-            Ok,
-            "ws gc complete {} gen={} retired_at={}",
-            retired_binding,
-            state.generation,
-            state.retired_at
-        );
-
-        Ok(Some(retired_binding))
-    }
-
-    // Finalize the current retired publication store after its local GC run has completed.
-    pub async fn finalize_retired_publication_store_binding()
-    -> Result<Option<(WasmStoreBinding, Principal)>, InternalError> {
-        let _guard = LifecycleOperationGuard::try_enter()?;
-        let state = RootWasmStoreStateOps::publication_store_state();
-        let Some(retired_binding) = state.retired_binding.clone() else {
-            return Ok(None);
-        };
-
-        let store_pid = store_pid_for_binding(&retired_binding)?;
-        let store = store_status(store_pid).await?;
-
-        if store.gc.mode != WasmStoreGcMode::Complete {
-            return Err(InternalError::workflow(
-                InternalErrorOrigin::Workflow,
-                format!(
-                    "retired ws '{}' not ready for finalize; gc={:?}",
-                    retired_binding, store.gc.mode
-                ),
-            ));
-        }
-
-        Self::ensure_lifecycle_state_is_current(&state, &retired_binding)?;
-        let runtime_store = Self::runtime_store(&retired_binding)?;
-        if runtime_store.gc.mode != WasmStoreGcMode::Complete {
-            return Err(PublicationWorkflowError::StoreGcStateChanged {
-                binding: retired_binding.clone(),
-                expected: WasmStoreGcMode::Complete,
-                actual: runtime_store.gc.mode,
-            }
-            .into());
-        }
-
-        let changed_at = IcOps::now_secs();
-        let previous = RootWasmStoreStateOps::publication_store_state();
-        let finalized_binding =
-            RootWasmStoreStateOps::finalize_retired_publication_store_binding(changed_at)
-                .ok_or_else(|| {
-                    PublicationWorkflowError::InvalidState(format!(
-                        "retired ws '{retired_binding}' disappeared before finalize commit"
-                    ))
-                })?;
-        if finalized_binding != retired_binding {
-            return Err(PublicationWorkflowError::InvalidState(format!(
-                "finalized ws '{finalized_binding}' did not match expected '{retired_binding}'"
-            ))
-            .into());
-        }
-        let current = RootWasmStoreStateOps::publication_store_state();
-        Self::log_publication_state_transition(
-            "finalize_retired_binding",
-            &previous,
-            &current,
-            changed_at,
-        );
-        log!(
-            Topic::Wasm,
-            Ok,
-            "ws finalized {} ({})",
-            finalized_binding,
-            store_pid
-        );
-
-        Ok(Some((finalized_binding, store_pid)))
     }
 }
 
@@ -1532,39 +1246,6 @@ mod tests {
     };
     use canic_core::dto::error::ErrorCode;
 
-    fn import_retired_store(mode: WasmStoreGcMode) -> (WasmStoreBinding, Principal) {
-        let binding = WasmStoreBinding::new("retired");
-        let pid = Principal::from_slice(&[7; 29]);
-        RootWasmStoreStateOps::import_test_state(
-            PublicationStoreStateTestInput {
-                active_binding: Some(WasmStoreBinding::new("active")),
-                detached_binding: None,
-                retired_binding: Some(binding.clone()),
-                generation: 3,
-                changed_at: 30,
-                retired_at: 20,
-            },
-            vec![WasmStoreStateTestInput {
-                binding: binding.clone(),
-                pid,
-                created_at: 10,
-                gc_mode: mode,
-                gc_changed_at: 20,
-                prepared_at: (mode != WasmStoreGcMode::Normal).then_some(11),
-                started_at: matches!(
-                    mode,
-                    WasmStoreGcMode::InProgress
-                        | WasmStoreGcMode::Clearing
-                        | WasmStoreGcMode::Complete
-                )
-                .then_some(12),
-                completed_at: (mode == WasmStoreGcMode::Complete).then_some(20),
-                runs_completed: u32::from(mode == WasmStoreGcMode::Complete),
-            }],
-        );
-        (binding, pid)
-    }
-
     #[test]
     fn lifecycle_guard_rejects_concurrent_entry_and_releases_on_drop() {
         let guard = LifecycleOperationGuard::try_enter().expect("first operation enters");
@@ -1576,46 +1257,6 @@ mod tests {
 
         drop(guard);
         LifecycleOperationGuard::try_enter().expect("guard should release on drop");
-    }
-
-    #[test]
-    fn retired_gc_commit_is_generation_bound_and_idempotent() {
-        let (binding, _) = import_retired_store(WasmStoreGcMode::Normal);
-        let expected = RootWasmStoreStateOps::publication_store_state();
-
-        WasmStorePublicationWorkflow::persist_retired_gc_transition(
-            &expected,
-            &binding,
-            WasmStoreGcMode::Prepared,
-            40,
-        )
-        .expect("matching retired generation should commit");
-        WasmStorePublicationWorkflow::persist_retired_gc_transition(
-            &expected,
-            &binding,
-            WasmStoreGcMode::Prepared,
-            41,
-        )
-        .expect("same transition should be idempotent");
-
-        let store = WasmStorePublicationWorkflow::runtime_store(&binding).expect("runtime store");
-        assert_eq!(store.gc.mode, WasmStoreGcMode::Prepared);
-        assert_eq!(store.gc.changed_at, 40);
-
-        assert!(RootWasmStoreStateOps::clear_publication_store_binding(42));
-        let err = WasmStorePublicationWorkflow::persist_retired_gc_transition(
-            &expected,
-            &binding,
-            WasmStoreGcMode::InProgress,
-            43,
-        )
-        .expect_err("generation drift must reject post-await commit");
-        assert_eq!(
-            err.public_error().map(|public| public.code),
-            Some(ErrorCode::Conflict)
-        );
-        let store = WasmStorePublicationWorkflow::runtime_store(&binding).expect("runtime store");
-        assert_eq!(store.gc.mode, WasmStoreGcMode::Prepared);
     }
 
     #[test]
@@ -1734,26 +1375,6 @@ mod tests {
             assert_eq!(state.retired_binding, None);
             assert_eq!(RootWasmStoreStateOps::wasm_stores().len(), 1);
         }
-    }
-
-    #[test]
-    fn finalized_delete_preflight_binds_inventory_identity_and_gc_state() {
-        let (binding, pid) = import_retired_store(WasmStoreGcMode::Complete);
-        RootWasmStoreStateOps::finalize_retired_publication_store_binding(40)
-            .expect("retired binding finalizes");
-
-        WasmStorePublicationWorkflow::ensure_finalized_store_is_deletable(&binding, pid)
-            .expect("exact finalized store should be deletable");
-
-        let err = WasmStorePublicationWorkflow::ensure_finalized_store_is_deletable(
-            &binding,
-            Principal::from_slice(&[8; 29]),
-        )
-        .expect_err("pid mismatch must reject deletion");
-        assert_eq!(
-            err.public_error().map(|public| public.code),
-            Some(ErrorCode::InvariantViolation)
-        );
     }
 
     #[test]
