@@ -115,6 +115,7 @@ fn canonical_allocations_match_the_active_memory_map() {
         (StateAllocationKey::BlobDeletionPending, vec![56]),
         (StateAllocationKey::StorageGatewayPrincipals, vec![57]),
         (StateAllocationKey::BlobStorageBilling, vec![58]),
+        (StateAllocationKey::CoreAuthorityRestoreFence, vec![59]),
         (StateAllocationKey::TemplateManifests, vec![10]),
         (StateAllocationKey::TemplateChunkSets, vec![11]),
         (StateAllocationKey::TemplateChunkRefs, vec![12]),
@@ -153,7 +154,8 @@ fn canonical_allocations_form_packed_owner_ledgers() {
     );
     assert_eq!(
         ids(AllocationOwner::CanicCore),
-        (allocation::CANIC_CORE_MIN_ID..=allocation::memory::blob_storage::BLOB_STORAGE_BILLING_ID)
+        (allocation::CANIC_CORE_MIN_ID
+            ..=allocation::memory::authority_restore::AUTHORITY_RESTORE_FENCE_ID)
             .collect::<Vec<_>>()
     );
 }
@@ -411,7 +413,7 @@ fn repeated_selection_merges_allocation_provenance() {
         allocation_ids(&contract.allocations),
         vec![
             10, 11, 12, 13, 14, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 30, 31, 32, 33, 34, 35, 36,
-            37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+            37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 59,
         ]
     );
 }
@@ -441,7 +443,7 @@ fn built_in_wasm_store_keeps_template_and_gc_ids() {
 }
 
 #[test]
-fn built_in_fleet_coordinator_selects_only_its_registry() {
+fn built_in_fleet_coordinator_selects_registry_and_restore_fence() {
     let resolution = resolve_role_contract(RoleContractInput {
         source: RoleContractSource::BuiltIn(BuiltInRoleKind::FleetCoordinator),
         declared_features: BTreeSet::from([CanicFeatureKey::FleetCoordinatorCanister]),
@@ -451,7 +453,7 @@ fn built_in_fleet_coordinator_selects_only_its_registry() {
         panic!("built-in Fleet Coordinator contract should resolve");
     };
 
-    assert_eq!(allocation_ids(&contract.allocations), vec![16]);
+    assert_eq!(allocation_ids(&contract.allocations), vec![16, 59]);
     assert_eq!(
         contract.required_features,
         BTreeSet::from([CanicFeatureKey::FleetCoordinatorCanister])

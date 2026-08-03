@@ -4,6 +4,46 @@
 //! Does not own: endpoint auth policy, runtime state, metrics storage, or query semantics.
 //! Boundary: exposes facade macros that delegate immediately to core APIs.
 
+/// Emit the controller-only snapshot seal used by Fleet authority Canisters.
+#[macro_export]
+macro_rules! canic_emit_authority_restore_endpoints {
+    () => {
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_authority_restore_fence_status() -> Result<
+            ::canic::dto::authority_restore::AuthorityRestoreFenceStatusResponse,
+            ::canic::Error,
+        > {
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::status()
+        }
+
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_authority_snapshot_prepare(
+            request: ::canic::dto::authority_restore::AuthoritySnapshotRequest,
+        ) -> Result<
+            ::canic::dto::authority_restore::AuthorityRestoreFenceStatusResponse,
+            ::canic::Error,
+        > {
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::prepare_snapshot(
+                request,
+            )
+            .await
+        }
+
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_authority_snapshot_resume(
+            request: ::canic::dto::authority_restore::AuthoritySnapshotRequest,
+        ) -> Result<
+            ::canic::dto::authority_restore::AuthorityRestoreFenceStatusResponse,
+            ::canic::Error,
+        > {
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::resume_snapshot(
+                request,
+            )
+            .await
+        }
+    };
+}
+
 /// Emit the lifecycle and runtime readiness endpoints shared by all Canic canisters.
 #[macro_export]
 macro_rules! canic_emit_lifecycle_core_endpoints {

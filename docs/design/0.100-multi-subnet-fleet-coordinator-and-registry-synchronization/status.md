@@ -6,10 +6,10 @@ Date: 2026-08-03
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.92`.
-- Latest published release: `v0.100.92` at
-  `adf54ae1fd875bab33de6efe1560e7ee2aae8f6e`.
-- Open patch draft: `0.100.93`; no package-version change has been authorized.
+- Workspace package version: `0.100.93`.
+- Latest published release: `v0.100.93` at
+  `e279fee3622831e3a0d0c0581880e4de95af43fe`.
+- Open patch draft: `0.100.94`; no package-version change has been authorized.
 - Open design blockers: none.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
@@ -266,7 +266,7 @@ Registry slices replace the 0.99 root model.
 - [x] Add `canic info subnets <fleet> [--json]` with one canonical row per
   occupied physical Subnet, exact Fleet-owned Canister counts and fail-closed
   Coordinator/root evidence validation.
-- [ ] Qualify restore fencing and role-package boundaries.
+- [x] Qualify restore fencing and role-package boundaries.
 - [ ] Measure Wasm boundaries and remove stale authority.
 
 ## Current Batch
@@ -1162,7 +1162,7 @@ continue from their local direct-child caches. The orphaned generic Canister
 lifecycle, Registry-built topology cascade, mapper, consistency policy and
 propagation-only metrics are removed without a compatibility path.
 
-Open 0.100.93 replaces the superseded generic empty-Canister implementation
+Released 0.100.93 replaces the superseded generic empty-Canister implementation
 with one required prepaid asset inventory owned by each Fleet Subnet Root.
 Strict Fleet input freezes minimum, proactive maximum, per-asset cycles and
 exact imports. Root maintenance resets imports and refills inventory;
@@ -1174,7 +1174,7 @@ inventory. Root draining stops proactive refill and final inventory currently
 fails closed until each ready or failed asset is durably handed to explicit
 replacement authority and no pool asset or pending pool work remains.
 
-The same open patch hard-cuts the retired role-based Fleet Directory and its
+The same release hard-cuts the retired role-based Fleet Directory and its
 Subnet Registry source, removes the superseded generic provisioning stack,
 and packs the reinstall-only control-plane pool inventory, work journal and
 terminal handoff receipts at IDs 24-26 while core remains consecutive at IDs
@@ -1182,9 +1182,24 @@ terminal handoff receipts at IDs 24-26 while core remains consecutive at IDs
 Component-local meaning. No compatibility decoder or prior-release transition
 reader is introduced.
 
+Open 0.100.94 gives the Fleet Coordinator and every Fleet Subnet Root one
+controller-owned v1 authority snapshot fence. Prepare records a nonzero
+32-byte operation ID and the authority's independently observed IC Canister
+history at stable-memory ID 59, seals ordinary updates and suspends timer
+handles. Exact live resume rechecks that history and rearms the preserved
+logical timers. Loading the sealed snapshot advances live management history
+outside the restored stable state, so the restored authority remains
+queryable but cannot resume or dispatch a new mutation. PocketIC proves this
+for the Coordinator and an active root while preserving the root's exact
+Component Registry allocation head. Focused role-package tests confirm that
+only the Coordinator and Fleet Subnet Root own the new stable allocation and
+endpoint bundle.
+
 ## Next Action
 
-Run preparation and execution as separate processes against one explicitly
-selected disposable real-network root. Verify the surviving Coordinator
-terminal receipt and exact replay before closing 0.100 against the final design
-and beginning 0.101.
+Measure the Coordinator, Fleet Subnet Root and Wasm Store boundaries and remove
+any remaining stale, nested or duplicate authority. The maintainer-owned final
+operational proof remains: run root-deletion preparation and execution as
+separate processes against one explicitly selected disposable real-network
+root, then verify the surviving Coordinator terminal receipt and exact replay
+before closing 0.100 and beginning 0.101.

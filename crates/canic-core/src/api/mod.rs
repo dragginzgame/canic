@@ -5,6 +5,7 @@
 //! Boundary: maps endpoint calls into workflow calls and public errors.
 
 pub mod auth;
+pub mod authority_restore;
 #[cfg(feature = "blob-storage")]
 pub mod blob_storage;
 pub mod call;

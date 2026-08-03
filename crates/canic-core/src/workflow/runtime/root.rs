@@ -19,8 +19,9 @@ use crate::{
         storage::{fleet_activation::FleetActivationOps, state::fleet::FleetStateOps},
     },
     workflow::runtime::{
-        RuntimeWorkflow, auth::RuntimeAuthWorkflow, log_memory_summary,
-        rebuild_root_derived_storage_indexes, require_no_resumable_refill_for_upgrade,
+        RuntimeWorkflow, auth::RuntimeAuthWorkflow, authority_restore::AuthorityRestoreWorkflow,
+        log_memory_summary, rebuild_root_derived_storage_indexes,
+        require_no_resumable_refill_for_upgrade,
     },
 };
 
@@ -37,6 +38,7 @@ pub fn init_root_canister(args: FleetSubnetRootInitArgs) -> Result<(), InternalE
             format!("memory init failed: {err}"),
         )
     })?;
+    AuthorityRestoreWorkflow::initialize(IcOps::canister_self())?;
     rebuild_root_derived_storage_indexes()?;
     FleetActivationRuntimeOps::set_managed();
     crate::log::set_ready();

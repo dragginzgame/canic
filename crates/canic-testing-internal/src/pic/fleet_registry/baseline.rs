@@ -81,11 +81,19 @@ mod tests {
     };
     #[cfg(test)]
     use canic::{
+        dto::authority_restore::{
+            AuthorityRestoreFencePhase, AuthorityRestoreFenceStatusResponse,
+            AuthoritySnapshotRequest,
+        },
+        dto::fleet_registry::FleetRegistryVersion,
         dto::pool::{
             CanisterPoolAssetOrigin, CanisterPoolAssetStatus, CanisterPoolResponse,
             CanisterPoolStatusRequest, PoolAdminCommand, PoolAdminResponse,
         },
-        protocol::{CANIC_POOL_ADMIN, CANIC_POOL_LIST},
+        protocol::{
+            CANIC_AUTHORITY_RESTORE_FENCE_STATUS, CANIC_AUTHORITY_SNAPSHOT_PREPARE,
+            CANIC_AUTHORITY_SNAPSHOT_RESUME, CANIC_POOL_ADMIN, CANIC_POOL_LIST,
+        },
     };
     use canic_control_plane::{
         dto::fleet_coordinator::FleetCoordinatorInitArgs,
@@ -380,6 +388,117 @@ mod tests {
                 canister_id: child,
             },
         );
+    }
+
+    #[test]
+    fn restored_root_preserves_its_allocation_head_but_cannot_allocate() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_active_component_registry();
+        let active_registry: Result<FleetRegistryVersion, Error> = fixture
+            .pic()
+            .query_call(fixture.coordinator, CANIC_FLEET_REGISTRY_VERSION, ())
+            .expect("query active Fleet Registry version transport");
+        let registry_request = RootComponentRegistryPreparationRequest {
+            store_bootstrap: fixture.store_bootstrap.clone(),
+            expected_fleet_registry: active_registry.expect("active Fleet Registry version"),
+        };
+        let before: Result<RootComponentRegistryStatusResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
+                (registry_request.clone(),),
+            )
+            .expect("query root Component Registry before snapshot transport");
+        let before = before.expect("root Component Registry before snapshot");
+
+        let snapshot_request = AuthoritySnapshotRequest {
+            operation_id: [0xb4; 32],
+        };
+        seal_capture_live_resume_and_restore(&fixture, snapshot_request);
+
+        let restored_fence: Result<AuthorityRestoreFenceStatusResponse, Error> = fixture
+            .pic()
+            .query_call(fixture.root, CANIC_AUTHORITY_RESTORE_FENCE_STATUS, ())
+            .expect("restored root authority fence status transport");
+        assert_eq!(
+            restored_fence
+                .expect("restored root authority fence status")
+                .phase,
+            AuthorityRestoreFencePhase::Sealed
+        );
+        let after: Result<RootComponentRegistryStatusResponse, Error> = fixture
+            .pic()
+            .query_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
+                (registry_request,),
+            )
+            .expect("query restored root Component Registry transport");
+        assert_eq!(
+            after.expect("restored root Component Registry"),
+            before,
+            "snapshot restore must preserve the exact allocation head"
+        );
+
+        let rejected_resume: Result<AuthorityRestoreFenceStatusResponse, Error> = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                CANIC_AUTHORITY_SNAPSHOT_RESUME,
+                (snapshot_request,),
+            )
+            .expect("restored root authority snapshot resume transport");
+        assert_eq!(
+            rejected_resume
+                .expect_err("restored root authority must remain mutation-fenced")
+                .code,
+            canic::dto::error::ErrorCode::Unavailable
+        );
+        let fresh_allocation: Result<Result<RootComponentAllocationResponse, Error>, _> =
+            fixture.pic().update_call(
+                fixture.root,
+                CANIC_ROOT_COMPONENT_ALLOCATE,
+                (RootComponentAllocationRequest {
+                    operation_id: [0xb5; 32],
+                    component_spec: fixture.verifier.component_spec.clone(),
+                },),
+            );
+        assert!(
+            fresh_allocation.is_err(),
+            "restored root must reject allocation before handler dispatch"
+        );
+    }
+
+    #[cfg(test)]
+    fn seal_capture_live_resume_and_restore(
+        fixture: &ActiveComponentRegistryFixture,
+        request: AuthoritySnapshotRequest,
+    ) {
+        let sealed: Result<AuthorityRestoreFenceStatusResponse, Error> = fixture
+            .pic()
+            .update_call(fixture.root, CANIC_AUTHORITY_SNAPSHOT_PREPARE, (request,))
+            .expect("root authority snapshot prepare transport");
+        assert_eq!(
+            sealed.expect("root authority snapshot prepare").phase,
+            AuthorityRestoreFencePhase::Sealed
+        );
+        let snapshots = fixture
+            .pic()
+            .capture_controller_snapshots(fixture.root, [fixture.root])
+            .expect("root authority snapshot capture");
+        let resumed: Result<AuthorityRestoreFenceStatusResponse, Error> = fixture
+            .pic()
+            .update_call(fixture.root, CANIC_AUTHORITY_SNAPSHOT_RESUME, (request,))
+            .expect("live root authority snapshot resume transport");
+        assert_eq!(
+            resumed.expect("live root authority snapshot resume").phase,
+            AuthorityRestoreFencePhase::Open
+        );
+
+        fixture
+            .pic()
+            .restore_controller_snapshots(fixture.root, &snapshots);
     }
 
     #[test]

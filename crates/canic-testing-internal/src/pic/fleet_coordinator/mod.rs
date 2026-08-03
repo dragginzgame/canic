@@ -13,6 +13,10 @@ mod tests {
         bootstrap::parse_config_model,
         cdk::types::Cycles,
         dto::{
+            authority_restore::{
+                AuthorityRestoreFencePhase, AuthorityRestoreFenceStatusResponse,
+                AuthoritySnapshotRequest,
+            },
             error::{Error, ErrorCode},
             fleet_registry::{
                 FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
@@ -143,6 +147,88 @@ mod tests {
                 .code,
             ErrorCode::Unauthorized
         );
+
+        assert_authority_snapshot_restore_fence(&pic, coordinator);
+    }
+
+    fn assert_authority_snapshot_restore_fence(pic: &Pic, coordinator: Principal) {
+        let request = AuthoritySnapshotRequest {
+            operation_id: [41; 32],
+        };
+        let sealed: Result<AuthorityRestoreFenceStatusResponse, Error> = pic
+            .update_call(
+                coordinator,
+                protocol::CANIC_AUTHORITY_SNAPSHOT_PREPARE,
+                (request,),
+            )
+            .expect("authority snapshot prepare transport");
+        let sealed = sealed.expect("authority snapshot prepare");
+        assert_eq!(sealed.phase, AuthorityRestoreFencePhase::Sealed);
+        assert_eq!(sealed.operation_id, Some(request.operation_id));
+
+        let snapshots = pic
+            .capture_controller_snapshots(coordinator, [coordinator])
+            .expect("Coordinator snapshot capture");
+        let resumed: Result<AuthorityRestoreFenceStatusResponse, Error> = pic
+            .update_call(
+                coordinator,
+                protocol::CANIC_AUTHORITY_SNAPSHOT_RESUME,
+                (request,),
+            )
+            .expect("live authority snapshot resume transport");
+        assert_eq!(
+            resumed.expect("live authority snapshot resume").phase,
+            AuthorityRestoreFencePhase::Open
+        );
+
+        pic.restore_controller_snapshots(coordinator, &snapshots);
+        let restored: Result<AuthorityRestoreFenceStatusResponse, Error> = pic
+            .query_call(
+                coordinator,
+                protocol::CANIC_AUTHORITY_RESTORE_FENCE_STATUS,
+                (),
+            )
+            .expect("restored authority fence status transport");
+        assert_eq!(
+            restored.expect("restored authority fence status").phase,
+            AuthorityRestoreFencePhase::Sealed
+        );
+
+        let rejected_resume: Result<AuthorityRestoreFenceStatusResponse, Error> = pic
+            .update_call(
+                coordinator,
+                protocol::CANIC_AUTHORITY_SNAPSHOT_RESUME,
+                (request,),
+            )
+            .expect("restored authority snapshot resume transport");
+        assert_eq!(
+            rejected_resume
+                .expect_err("restored authority must remain mutation-fenced")
+                .code,
+            ErrorCode::Unavailable
+        );
+        let ordinary_mutation: Result<Result<FleetRegistryActivationResponse, Error>, _> = pic
+            .update_call(
+                coordinator,
+                protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
+                (FleetRegistryActivationRequest {
+                    expected_registry: registry_version(pic, coordinator),
+                },),
+            );
+        assert!(
+            ordinary_mutation.is_err(),
+            "restored authority must reject ordinary mutation before handler dispatch"
+        );
+    }
+
+    fn registry_version(
+        pic: &Pic,
+        coordinator: Principal,
+    ) -> canic_core::dto::fleet_registry::FleetRegistryVersion {
+        let version: Result<canic_core::dto::fleet_registry::FleetRegistryVersion, Error> = pic
+            .query_call(coordinator, protocol::CANIC_FLEET_REGISTRY_VERSION, ())
+            .expect("restored Registry version transport");
+        version.expect("restored Registry version")
     }
 
     fn assert_root_snapshot_endpoints(

@@ -31,6 +31,7 @@ type TimerTaskFactory = Rc<RefCell<dyn FnMut() -> TimerFuture>>;
 thread_local! {
     static TIMERS: RefCell<BTreeMap<TimerIdentity, TimerEntry>> = const { RefCell::new(BTreeMap::new()) };
     static NEXT_APPLICATION_TIMER_ID: Cell<u64> = const { Cell::new(0) };
+    static TIMERS_SUSPENDED: Cell<bool> = const { Cell::new(false) };
 }
 
 /// Closed identities for Canic-owned background processes.
@@ -244,6 +245,58 @@ impl TimerEntry {
 pub struct TimerWorkflow;
 
 impl TimerWorkflow {
+    /// Disarm every Canic-owned timer while retaining its logical registration in heap state.
+    pub(crate) fn suspend_all() {
+        TIMERS_SUSPENDED.with(|suspended| suspended.set(true));
+        let handles = TIMERS.with_borrow_mut(|timers| {
+            timers
+                .values_mut()
+                .filter_map(|entry| entry.handle.take())
+                .collect::<Vec<_>>()
+        });
+        for handle in handles {
+            TimerOps::clear(handle);
+        }
+    }
+
+    /// Prove a stopped snapshot retained no partially executing Canic timer.
+    pub(crate) fn require_resumable() -> Result<(), &'static str> {
+        let has_running = TIMERS.with_borrow(|timers| {
+            timers.values().any(|entry| {
+                matches!(
+                    entry.control.registration(),
+                    TimerRegistration::Running { .. }
+                )
+            })
+        });
+        if has_running {
+            return Err("authority snapshot retained a running Canic timer");
+        }
+        Ok(())
+    }
+
+    /// Re-arm the retained logical registrations after the live authority resumes.
+    pub(crate) fn resume_all() {
+        if !TIMERS_SUSPENDED.with(|suspended| suspended.replace(false)) {
+            return;
+        }
+        let registrations = TIMERS.with_borrow(|timers| {
+            timers
+                .iter()
+                .filter_map(|(identity, entry)| match entry.control.registration() {
+                    TimerRegistration::Scheduled {
+                        generation,
+                        deadline_ns,
+                    } => Some((*identity, generation, deadline_ns)),
+                    TimerRegistration::Unregistered | TimerRegistration::Running { .. } => None,
+                })
+                .collect::<Vec<_>>()
+        });
+        for (identity, generation, deadline_ns) in registrations {
+            arm(identity, generation, deadline_ns);
+        }
+    }
+
     /// Schedule a cancellable application one-shot.
     pub fn set_application_once(
         delay: Duration,
@@ -544,6 +597,15 @@ fn cancel(identity: TimerIdentity) -> bool {
 }
 
 fn apply_action(identity: TimerIdentity, action: TimerControlAction) {
+    if TIMERS_SUSPENDED.with(Cell::get) {
+        if matches!(
+            action,
+            TimerControlAction::Clear | TimerControlAction::Replace { .. }
+        ) {
+            clear_current_handle(identity);
+        }
+        return;
+    }
     match action {
         TimerControlAction::None | TimerControlAction::Disarm { .. } => {}
         TimerControlAction::Clear => clear_current_handle(identity),
@@ -750,6 +812,22 @@ fn deadline_after(now_ns: u64, delay: Duration) -> Result<u64, &'static str> {
 mod tests {
     use super::*;
 
+    fn reset_timer_runtime() {
+        TIMERS.with_borrow_mut(BTreeMap::clear);
+        TIMERS_SUSPENDED.with(|suspended| suspended.set(false));
+        NEXT_APPLICATION_TIMER_ID.with(|next| next.set(0));
+    }
+
+    fn test_entry() -> TimerEntry {
+        TimerEntry::new(
+            "authority-restore-test".to_string(),
+            TimerMode::Once,
+            TimerSchedulingMode::Deadline,
+            true,
+            timer_factory(|| async { TimerRunResult::no_work(TimerDirective::Stop) }),
+        )
+    }
+
     #[test]
     fn deadline_conversion_is_checked() {
         assert_eq!(deadline_after(10, Duration::from_nanos(5)), Ok(15));
@@ -774,5 +852,68 @@ mod tests {
             .collect::<std::collections::BTreeSet<_>>();
         assert_eq!(unique.len(), keys.len());
         assert!(labels.into_iter().all(|label| label.len() <= 64));
+    }
+
+    #[test]
+    fn authority_suspension_retains_logical_deadlines_without_arming() {
+        reset_timer_runtime();
+        let identity = TimerIdentity::BuiltIn(TimerKey::IntentCleanup);
+        let mut entry = test_entry();
+        let action = entry.control.schedule(100).expect("schedule timer");
+        assert!(matches!(action, TimerControlAction::Arm { .. }));
+        TIMERS.with_borrow_mut(|timers| {
+            timers.insert(identity, entry);
+        });
+
+        TimerWorkflow::suspend_all();
+        assert!(TIMERS_SUSPENDED.with(Cell::get));
+        assert_eq!(
+            TIMERS.with_borrow(|timers| timers[&identity].control.registration()),
+            TimerRegistration::Scheduled {
+                generation: 1,
+                deadline_ns: 100,
+            }
+        );
+
+        let replacement = TIMERS.with_borrow_mut(|timers| {
+            timers
+                .get_mut(&identity)
+                .expect("retained timer")
+                .control
+                .reconcile(50)
+                .expect("replace retained deadline")
+        });
+        apply_action(identity, replacement);
+        assert_eq!(
+            TIMERS.with_borrow(|timers| timers[&identity].control.registration()),
+            TimerRegistration::Scheduled {
+                generation: 2,
+                deadline_ns: 50,
+            }
+        );
+        assert!(TIMERS.with_borrow(|timers| timers[&identity].handle.is_none()));
+        reset_timer_runtime();
+    }
+
+    #[test]
+    fn authority_snapshot_rejects_a_partially_executing_timer() {
+        reset_timer_runtime();
+        let identity = TimerIdentity::BuiltIn(TimerKey::CycleTopup);
+        let mut entry = test_entry();
+        let TimerControlAction::Arm { generation, .. } =
+            entry.control.schedule(100).expect("schedule timer")
+        else {
+            panic!("initial timer schedule must arm");
+        };
+        assert!(entry.control.begin(generation));
+        TIMERS.with_borrow_mut(|timers| {
+            timers.insert(identity, entry);
+        });
+
+        assert_eq!(
+            TimerWorkflow::require_resumable(),
+            Err("authority snapshot retained a running Canic timer")
+        );
+        reset_timer_runtime();
     }
 }

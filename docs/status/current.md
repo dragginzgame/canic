@@ -14,13 +14,13 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.92`.
-- The latest published release is `v0.100.92` at
-  `adf54ae1fd875bab33de6efe1560e7ee2aae8f6e`.
-- Open `0.100.93` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.93`.
+- The latest published release is `v0.100.93` at
+  `e279fee3622831e3a0d0c0581880e4de95af43fe`.
+- Open `0.100.94` is the changelog draft target; no package-version change
   has been authorized.
-- Open `0.100.93` replaces the superseded generic empty-Canister pool with one
-  required prepaid asset inventory owned by every Fleet Subnet Root. Fleet
+- Released `0.100.93` replaces the superseded generic empty-Canister pool with
+  one required prepaid asset inventory owned by every Fleet Subnet Root. Fleet
   input freezes its minimum, proactive maximum, cycles and imports, and IC
   imports require exact trusted routing to that root's Subnet; root
   maintenance resets/refills it, Component and child creation claim it before
@@ -30,6 +30,16 @@ Historical detail is archived at:
   retired role-based Fleet Directory/Subnet Registry remains hard-cut, the
   active Fleet Directory remains Registry-derived, control-plane pool state
   uses IDs 24-26, and the reinstall-only core ledger remains packed at 30-58.
+- Open `0.100.94` gives the Fleet Coordinator and every Fleet Subnet Root one
+  controller-owned v1 authority snapshot fence at stable-memory ID 59.
+  Prepare binds a nonzero 32-byte operation to independently observed IC
+  Canister history, seals ordinary updates and suspends timer handles; exact
+  live resume rechecks history and rearms timers. Loading the sealed snapshot
+  advances live history outside restored stable state, leaving the authority
+  queryable but unable to resume or dispatch mutation. Coordinator and active
+  root PocketIC proofs cover the exact Registry and Component allocation
+  heads, and role-package checks keep the capability confined to those two
+  authority runtimes.
 - Proposed `0.105` defines provider-neutral declarative authentication
   profiles as the sole source of multi-role user-token grants and
   install-owned issuer/verifier policy. Its initial Toko path uses one
@@ -2078,11 +2088,13 @@ First primary results:
 
 ## Next Action
 
-Run the guarded host preparation and execution phases as separate processes
-against one explicitly selected disposable real-network root. Verify the
-surviving Coordinator terminal receipt and exact replay before closing 0.100
-against the accepted design and beginning 0.101. The retained implementation
-detail remains in the
+Measure the Coordinator, Fleet Subnet Root and Wasm Store boundaries and
+remove any remaining stale, nested or duplicate authority. The
+maintainer-owned final operational proof remains: run guarded root-deletion
+preparation and execution as separate processes against one explicitly
+selected disposable real-network root, then verify the surviving Coordinator
+terminal receipt and exact replay before closing 0.100 against the accepted
+design and beginning 0.101. The retained implementation detail remains in the
 [implementation tracker](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md).
 Fresh installation now journals and verifies the Coordinator, every planned
 Fleet Subnet Root, each root's exact topology-admitted local Store, and every
@@ -2503,12 +2515,14 @@ Released `0.100.92` makes root Fleet-state mutation consume exact root-owned Sto
 and top-level Component inventories before explicit fanout. It hard-cuts the
 orphaned generic Registry-based lifecycle propagation stack and its private
 topology model, mapper and metric vocabulary.
-Open `0.100.93` replaces the legacy generic pool with root-owned prepaid asset
-inventory integrated into Component creation and recycling, while removing
-generic provisioning and the role-based Directory/Subnet Registry stack. The
-current Component lifecycle, root pool, direct-child cache and Registry-derived
-Fleet Directory are the maintained authorities, and no prior-release decoder
-remains.
+Released `0.100.93` replaces the legacy generic pool with root-owned prepaid
+asset inventory integrated into Component creation and recycling, while
+removing generic provisioning and the role-based Directory/Subnet Registry
+stack. The current Component lifecycle, root pool, direct-child cache and
+Registry-derived Fleet Directory are the maintained authorities, and no
+prior-release decoder remains.
+Open `0.100.94` adds the Coordinator/root authority snapshot fence described
+above and closes the restore-fencing and role-package qualification item.
 
 ## Historical Release Detail
 

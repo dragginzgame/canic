@@ -2357,6 +2357,56 @@ fn runtime_introspection_endpoints_are_controller_guarded_by_default() {
 }
 
 #[test]
+fn authority_snapshot_restore_endpoints_are_controller_guarded_and_authority_scoped() {
+    let shared_path = workspace_root().join("crates/canic/src/macros/endpoints/shared.rs");
+    let shared = read_text(&shared_path);
+    let endpoint_macro = shared
+        .split("macro_rules! canic_emit_authority_restore_endpoints")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("macro_rules! canic_emit_lifecycle_core_endpoints")
+                .next()
+        })
+        .expect("authority restore endpoint macro");
+    for endpoint in [
+        "canic_authority_restore_fence_status",
+        "canic_authority_snapshot_prepare",
+        "canic_authority_snapshot_resume",
+    ] {
+        assert!(
+            endpoint_macro.contains(endpoint),
+            "authority restore macro must emit {endpoint}"
+        );
+    }
+    assert_eq!(
+        endpoint_macro
+            .matches("requires(caller::is_controller())")
+            .count(),
+        3,
+        "every authority restore endpoint must remain controller-guarded"
+    );
+    assert!(
+        !endpoint_macro.contains("public)]"),
+        "authority restore endpoints must not become public"
+    );
+
+    let bundles = read_text(&workspace_root().join("crates/canic/src/macros/endpoints/bundles.rs"));
+    let root_bundle = bundles
+        .split("macro_rules! canic_bundle_root_only_endpoints")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("macro_rules! canic_bundle_managed_nonroot_only_endpoints")
+                .next()
+        })
+        .expect("root-only endpoint bundle");
+    assert!(root_bundle.contains("canic_emit_authority_restore_endpoints!"));
+
+    let coordinator =
+        read_text(&workspace_root().join("crates/canic/src/macros/endpoints/fleet_coordinator.rs"));
+    assert!(coordinator.contains("canic_emit_authority_restore_endpoints!"));
+}
+
+#[test]
 fn root_icp_refill_endpoint_is_controller_guarded() {
     let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
     let source = read_text(&macro_path);

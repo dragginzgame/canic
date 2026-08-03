@@ -20,6 +20,15 @@ use crate::replay_policy::{
 
 /// Canonical replay-policy rows for Canic endpoint methods.
 pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
+    query_read_only("canic_authority_restore_fence_status"),
+    update_response_idempotent(
+        "canic_authority_snapshot_prepare",
+        command_kind("authority_restore.prepare_snapshot.v1"),
+    ),
+    update_response_idempotent(
+        "canic_authority_snapshot_resume",
+        command_kind("authority_restore.resume_snapshot.v1"),
+    ),
     update_response_idempotent("canic_fleet_admin", command_kind("fleet.command.v1")),
     update_read_only("canic_canister_status"),
     query_read_only("canic_pool_list"),

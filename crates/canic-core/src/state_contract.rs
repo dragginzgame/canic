@@ -12,6 +12,7 @@ use serde::Serialize;
 use crate::role_contract::allocation::memory::{
     activation::FLEET_ACTIVATION_ID,
     auth::{AUTH_STATE_ID, REPLAY_RECEIPTS_ID},
+    authority_restore::AUTHORITY_RESTORE_FENCE_ID,
     blob_storage::{
         BLOB_DELETION_PENDING_ID, BLOB_STORAGE_BILLING_ID, STORAGE_GATEWAY_PRINCIPALS_ID,
         STORED_BLOBS_ID,
@@ -205,6 +206,11 @@ fn core_runtime_descriptors() -> Vec<StateAllocationDescriptor> {
         descriptor(
             StateAllocationKey::CoreFleetActivation,
             fleet_activation_domains(),
+            Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::CoreAuthorityRestoreFence,
+            authority_restore_fence_domains(),
             Vec::new(),
         ),
         descriptor(
@@ -464,6 +470,21 @@ fn fleet_activation_domains() -> Vec<StateDomainManifest> {
         FleetActivationData::STATE_CONTRACT_NAME,
         55,
         "fleet_activation_identity_and_phase_are_protected",
+    )]
+}
+
+fn authority_restore_fence_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::authority_restore::{
+        AuthorityRestoreFenceData, AuthorityRestoreFenceRecord,
+    };
+
+    vec![state_domain(
+        "authority_restore_fence",
+        AUTHORITY_RESTORE_FENCE_ID,
+        AuthorityRestoreFenceRecord::STATE_CONTRACT_NAME,
+        AuthorityRestoreFenceData::STATE_CONTRACT_NAME,
+        57,
+        "authority_snapshot_restore_remains_mutation_fenced_until_live_history_is_proven",
     )]
 }
 
