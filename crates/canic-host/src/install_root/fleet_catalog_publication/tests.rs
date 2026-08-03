@@ -66,6 +66,14 @@ fn publication_rejects_missing_or_contradictory_root_summaries_before_write() {
         publish_terminal_fleet_catalog(fixture.request()),
         Err(TerminalFleetCatalogPublicationError::RootSummaryMismatch { .. })
     ));
+
+    fixture.root_summaries = summaries(&fixture.registry);
+    fixture.root_summaries[0].pooled_canisters = 20_000;
+    fixture.root_summaries[0].total_canisters = 20_004;
+    assert!(matches!(
+        publish_terminal_fleet_catalog(fixture.request()),
+        Err(TerminalFleetCatalogPublicationError::RootSummaryMismatch { .. })
+    ));
     assert!(!fixture.catalog_path().exists());
     fs::remove_dir_all(fixture.root).expect("remove fixture");
 }
