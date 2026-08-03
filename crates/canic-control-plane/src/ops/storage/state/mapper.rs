@@ -1,6 +1,6 @@
 use crate::{
     dto::template::WasmStorePublicationStateResponse,
-    storage::stable::state::subnet::{
+    storage::stable::state::root_wasm_store::{
         PublicationStoreStateRecord, WasmStoreCreationProgressRecord, WasmStoreCreationRecord,
         WasmStoreRecord,
     },
@@ -11,12 +11,12 @@ use crate::{
 };
 
 ///
-/// SubnetStateMapper
+/// RootWasmStoreStateMapper
 ///
 
-pub struct SubnetStateMapper;
+pub struct RootWasmStoreStateMapper;
 
-impl SubnetStateMapper {
+impl RootWasmStoreStateMapper {
     #[must_use]
     pub fn wasm_store_creation_record_to_view(
         record: WasmStoreCreationRecord,
@@ -117,7 +117,7 @@ mod tests {
     use super::*;
     use crate::{
         ids::{WasmStoreBinding, WasmStoreGcMode},
-        storage::stable::state::subnet::WasmStoreGcRecord,
+        storage::stable::state::root_wasm_store::WasmStoreGcRecord,
     };
     use canic_core::cdk::types::Principal;
 
@@ -126,15 +126,16 @@ mod tests {
         let active_binding = WasmStoreBinding::new("active");
         let detached_binding = WasmStoreBinding::new("detached");
         let retired_binding = WasmStoreBinding::new("retired");
-        let publication =
-            SubnetStateMapper::publication_store_record_to_view(PublicationStoreStateRecord {
+        let publication = RootWasmStoreStateMapper::publication_store_record_to_view(
+            PublicationStoreStateRecord {
                 active_binding: Some(active_binding.clone()),
                 detached_binding: Some(detached_binding.clone()),
                 retired_binding: Some(retired_binding.clone()),
                 generation: 7,
                 changed_at: 11,
                 retired_at: 13,
-            });
+            },
+        );
 
         assert_eq!(
             publication,
@@ -150,7 +151,7 @@ mod tests {
 
         let binding = WasmStoreBinding::new("store");
         let pid = Principal::from_slice(&[1; 29]);
-        let store = SubnetStateMapper::wasm_store_record_to_view(WasmStoreRecord {
+        let store = RootWasmStoreStateMapper::wasm_store_record_to_view(WasmStoreRecord {
             binding: binding.clone(),
             pid,
             created_at: 17,

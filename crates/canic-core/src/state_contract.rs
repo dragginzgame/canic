@@ -10,28 +10,30 @@
 use serde::Serialize;
 
 use crate::role_contract::allocation::memory::{
-    activation::FLEET_ACTIVATION_ID,
-    auth::{AUTH_STATE_ID, REPLAY_RECEIPTS_ID},
+    application_receipt::{APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID},
+    auth::AUTH_STATE_ID,
     authority_restore::AUTHORITY_RESTORE_FENCE_ID,
     blob_storage::{
-        BLOB_DELETION_PENDING_ID, BLOB_STORAGE_BILLING_ID, STORAGE_GATEWAY_PRINCIPALS_ID,
-        STORED_BLOBS_ID,
+        BLOB_STORAGE_BILLING_ID, BLOB_STORAGE_GATEWAY_PRINCIPALS_ID,
+        BLOB_STORAGE_PENDING_DELETIONS_ID, BLOB_STORAGE_ROOTS_ID,
     },
-    env::{ENV_ID, FLEET_STATE_ID},
+    cycles::{
+        CYCLES_FUNDING_LEDGER_ID, CYCLES_ICP_REFILL_RECORDS_ID, CYCLES_TOPUP_EVENTS_ID,
+        CYCLES_TRACKER_ID,
+    },
+    fleet::{FLEET_ACTIVATION_ID, FLEET_STATE_ID},
     intent::{
-        APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID, INTENT_EXPIRY_INDEX_ID,
-        INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
-        PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID, RECEIPT_BACKED_INTENT_RECORDS_ID,
+        INTENT_EXPIRY_INDEX_ID, INTENT_META_ID, INTENT_PENDING_ID,
+        INTENT_RECEIPT_BACKED_RECORDS_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
     },
-    observability::{
-        CYCLE_TOPUP_EVENTS_ID, CYCLE_TRACKER_ID, CYCLES_FUNDING_LEDGER_ID, ICP_REFILL_RECORDS_ID,
-        LOG_ENTRIES_ID,
-    },
+    log::LOG_ENTRIES_ID,
     placement::{
-        PLACEMENT_INDEX_REGISTRY_ID, SCALING_REGISTRY_ID, SHARDING_ACTIVE_SET_ID,
-        SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID,
+        PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID, PLACEMENT_INDEX_REGISTRY_ID,
+        PLACEMENT_SCALING_REGISTRY_ID,
     },
-    topology::CANISTER_CHILDREN_ID,
+    replay::REPLAY_RECEIPTS_ID,
+    runtime::{RUNTIME_BINDINGS_ID, RUNTIME_CANISTER_CHILDREN_ID},
+    sharding::{SHARDING_ACTIVE_SET_ID, SHARDING_ASSIGNMENTS_ID, SHARDING_REGISTRY_ID},
 };
 use crate::role_contract::{AllocationOwner, StateAllocationKey};
 
@@ -194,23 +196,23 @@ pub fn canic_state_descriptors() -> Vec<StateAllocationDescriptor> {
 fn core_runtime_descriptors() -> Vec<StateAllocationDescriptor> {
     vec![
         descriptor(
-            StateAllocationKey::CoreRuntimeTopology,
-            runtime_topology_domains(),
+            StateAllocationKey::CoreRuntimeChildren,
+            runtime_children_domains(),
             Vec::new(),
         ),
         descriptor(
-            StateAllocationKey::CoreRuntimeEnvironment,
-            runtime_env_domains(),
+            StateAllocationKey::CoreRuntimeBindings,
+            runtime_bindings_domains(),
+            Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::CoreFleetState,
+            fleet_state_domains(),
             Vec::new(),
         ),
         descriptor(
             StateAllocationKey::CoreFleetActivation,
             fleet_activation_domains(),
-            Vec::new(),
-        ),
-        descriptor(
-            StateAllocationKey::CoreAuthorityRestoreFence,
-            authority_restore_fence_domains(),
             Vec::new(),
         ),
         descriptor(
@@ -223,19 +225,31 @@ fn core_runtime_descriptors() -> Vec<StateAllocationDescriptor> {
             replay_receipt_domains(),
             Vec::new(),
         ),
+        descriptor(StateAllocationKey::CoreCycles, cycles_domains(), Vec::new()),
         descriptor(
-            StateAllocationKey::CoreRuntimeObservability,
-            runtime_observability_domains(),
-            Vec::new(),
-        ),
-        descriptor(
-            StateAllocationKey::CoreIcpRefillRecords,
+            StateAllocationKey::CoreCyclesIcpRefillRecords,
             icp_refill_domains(),
             Vec::new(),
         ),
         descriptor(
-            StateAllocationKey::CoreRuntimeIntent,
-            runtime_intent_domains(),
+            StateAllocationKey::CoreRuntimeLog,
+            runtime_log_domains(),
+            Vec::new(),
+        ),
+        descriptor(StateAllocationKey::CoreIntent, intent_domains(), Vec::new()),
+        descriptor(
+            StateAllocationKey::CoreApplicationReceipts,
+            application_receipt_domains(),
+            Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::CorePlacementAcknowledgement,
+            placement_acknowledgement_domains(),
+            Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::CoreAuthorityRestoreFence,
+            authority_restore_fence_domains(),
             Vec::new(),
         ),
     ]
@@ -249,14 +263,14 @@ fn placement_capacity_descriptors() -> Vec<StateAllocationDescriptor> {
 
     vec![
         descriptor(
-            StateAllocationKey::ScalingRegistry,
+            StateAllocationKey::PlacementScalingRegistry,
             vec![state_domain(
-                "scaling_registry",
-                SCALING_REGISTRY_ID,
+                "placement_scaling_registry",
+                PLACEMENT_SCALING_REGISTRY_ID,
                 ScalingRegistryEntryRecord::STATE_CONTRACT_NAME,
                 ScalingRegistryData::STATE_CONTRACT_NAME,
                 140,
-                "scaling_registry_restores_worker_pool_membership",
+                "placement_scaling_registry_restores_worker_pool_membership",
             )],
             Vec::new(),
         ),
@@ -298,7 +312,7 @@ fn sharding_descriptors() -> Vec<StateAllocationDescriptor> {
             StateAllocationKey::ShardingAssignments,
             vec![state_domain(
                 "sharding_assignments",
-                SHARDING_ASSIGNMENT_ID,
+                SHARDING_ASSIGNMENTS_ID,
                 ShardingAssignmentRecord::STATE_CONTRACT_NAME,
                 ShardingAssignmentsData::STATE_CONTRACT_NAME,
                 170,
@@ -330,38 +344,38 @@ fn blob_storage_descriptors() -> Vec<StateAllocationDescriptor> {
 
     vec![
         descriptor(
-            StateAllocationKey::StoredBlobs,
+            StateAllocationKey::BlobStorageRoots,
             vec![state_domain(
-                "stored_blobs",
-                STORED_BLOBS_ID,
+                "blob_storage_roots",
+                BLOB_STORAGE_ROOTS_ID,
                 StoredBlobRecord::STATE_CONTRACT_NAME,
                 StoredBlobsData::STATE_CONTRACT_NAME,
                 190,
-                "stored_blobs_restore_live_blob_roots",
+                "blob_storage_roots_restore_live_blob_roots",
             )],
             Vec::new(),
         ),
         descriptor(
-            StateAllocationKey::BlobDeletionPending,
+            StateAllocationKey::BlobStoragePendingDeletions,
             vec![state_domain(
-                "blob_deletion_pending",
-                BLOB_DELETION_PENDING_ID,
+                "blob_storage_pending_deletions",
+                BLOB_STORAGE_PENDING_DELETIONS_ID,
                 BlobDeletionPendingRecord::STATE_CONTRACT_NAME,
                 BlobDeletionPendingData::STATE_CONTRACT_NAME,
                 200,
-                "blob_deletion_pending_restores_gateway_scrub_state",
+                "blob_storage_pending_deletions_restore_gateway_scrub_state",
             )],
             Vec::new(),
         ),
         descriptor(
-            StateAllocationKey::StorageGatewayPrincipals,
+            StateAllocationKey::BlobStorageGatewayPrincipals,
             vec![state_domain(
-                "storage_gateway_principals",
-                STORAGE_GATEWAY_PRINCIPALS_ID,
+                "blob_storage_gateway_principals",
+                BLOB_STORAGE_GATEWAY_PRINCIPALS_ID,
                 StorageGatewayPrincipalRecord::STATE_CONTRACT_NAME,
                 StorageGatewayPrincipalsData::STATE_CONTRACT_NAME,
                 210,
-                "storage_gateway_principals_restore_authorized_gateways",
+                "blob_storage_gateway_principals_restore_authorized_gateways",
             )],
             Vec::new(),
         ),
@@ -395,12 +409,12 @@ fn descriptor(
     }
 }
 
-fn runtime_topology_domains() -> Vec<StateDomainManifest> {
+fn runtime_children_domains() -> Vec<StateDomainManifest> {
     use crate::storage::{canister::CanisterEntryRecord, stable::children::CanisterChildrenData};
 
     vec![state_domain(
-        "canister_children",
-        CANISTER_CHILDREN_ID,
+        "runtime_canister_children",
+        RUNTIME_CANISTER_CHILDREN_ID,
         CanisterEntryRecord::STATE_CONTRACT_NAME,
         CanisterChildrenData::STATE_CONTRACT_NAME,
         30,
@@ -408,30 +422,30 @@ fn runtime_topology_domains() -> Vec<StateDomainManifest> {
     )]
 }
 
-fn runtime_env_domains() -> Vec<StateDomainManifest> {
-    use crate::storage::stable::{
-        env::{EnvData, EnvRecord},
-        state::fleet::{FleetStateData, FleetStateRecord},
-    };
+fn runtime_bindings_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::env::{EnvData, EnvRecord};
 
-    vec![
-        state_domain(
-            "env",
-            ENV_ID,
-            EnvRecord::STATE_CONTRACT_NAME,
-            EnvData::STATE_CONTRACT_NAME,
-            40,
-            "env_root_and_role_bindings_are_restored",
-        ),
-        state_domain(
-            "fleet_state",
-            FLEET_STATE_ID,
-            FleetStateRecord::STATE_CONTRACT_NAME,
-            FleetStateData::STATE_CONTRACT_NAME,
-            50,
-            "fleet_state_mode_is_restored_before_hooks",
-        ),
-    ]
+    vec![state_domain(
+        "runtime_bindings",
+        RUNTIME_BINDINGS_ID,
+        EnvRecord::STATE_CONTRACT_NAME,
+        EnvData::STATE_CONTRACT_NAME,
+        40,
+        "runtime_root_role_and_placement_bindings_are_restored",
+    )]
+}
+
+fn fleet_state_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::state::fleet::{FleetStateData, FleetStateRecord};
+
+    vec![state_domain(
+        "fleet_state",
+        FLEET_STATE_ID,
+        FleetStateRecord::STATE_CONTRACT_NAME,
+        FleetStateData::STATE_CONTRACT_NAME,
+        50,
+        "fleet_state_mode_is_restored_before_hooks",
+    )]
 }
 
 fn auth_state_domains() -> Vec<StateDomainManifest> {
@@ -488,37 +502,27 @@ fn authority_restore_fence_domains() -> Vec<StateDomainManifest> {
     )]
 }
 
-fn runtime_observability_domains() -> Vec<StateDomainManifest> {
+fn cycles_domains() -> Vec<StateDomainManifest> {
     use crate::storage::stable::cycles::{
         CycleTopupEventRecord, CycleTopupEventsData, CycleTrackerData, CycleTrackerEntryRecord,
         CyclesFundingLedgerData, CyclesFundingLedgerRecord,
     };
-    use crate::storage::stable::log::{LogEntriesData, LogEntryRecord};
-
     vec![
         state_domain(
-            "cycle_tracker",
-            CYCLE_TRACKER_ID,
+            "cycles_tracker",
+            CYCLES_TRACKER_ID,
             CycleTrackerEntryRecord::STATE_CONTRACT_NAME,
             CycleTrackerData::STATE_CONTRACT_NAME,
             75,
             "cycle_tracker_restores_ordered_balance_samples",
         ),
         state_domain(
-            "cycle_topup_events",
-            CYCLE_TOPUP_EVENTS_ID,
+            "cycles_topup_events",
+            CYCLES_TOPUP_EVENTS_ID,
             CycleTopupEventRecord::STATE_CONTRACT_NAME,
             CycleTopupEventsData::STATE_CONTRACT_NAME,
             80,
             "cycle_topup_events_decode_status_values",
-        ),
-        state_domain(
-            "runtime_log",
-            LOG_ENTRIES_ID,
-            LogEntryRecord::STATE_CONTRACT_NAME,
-            LogEntriesData::STATE_CONTRACT_NAME,
-            85,
-            "runtime_log_restores_exact_sequence_and_retention_order",
         ),
         state_domain(
             "cycles_funding_ledger",
@@ -531,12 +535,25 @@ fn runtime_observability_domains() -> Vec<StateDomainManifest> {
     ]
 }
 
+fn runtime_log_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::log::{LogEntriesData, LogEntryRecord};
+
+    vec![state_domain(
+        "runtime_log",
+        LOG_ENTRIES_ID,
+        LogEntryRecord::STATE_CONTRACT_NAME,
+        LogEntriesData::STATE_CONTRACT_NAME,
+        85,
+        "runtime_log_restores_exact_sequence_and_retention_order",
+    )]
+}
+
 fn icp_refill_domains() -> Vec<StateDomainManifest> {
     use crate::storage::stable::icp_refill::{IcpRefillRecord, IcpRefillRecordsData};
 
     vec![state_domain(
-        "icp_refill_records",
-        ICP_REFILL_RECORDS_ID,
+        "cycles_icp_refill_records",
+        CYCLES_ICP_REFILL_RECORDS_ID,
         IcpRefillRecord::STATE_CONTRACT_NAME,
         IcpRefillRecordsData::STATE_CONTRACT_NAME,
         100,
@@ -544,14 +561,12 @@ fn icp_refill_domains() -> Vec<StateDomainManifest> {
     )]
 }
 
-fn runtime_intent_domains() -> Vec<StateDomainManifest> {
+fn intent_domains() -> Vec<StateDomainManifest> {
     use crate::storage::stable::intent::{
-        ApplicationReceiptEligibilityData, ApplicationReceiptEligibilityRecord,
-        ApplicationReceiptReplayData, ApplicationReceiptReplayRecord, IntentExpiryEntryRecord,
-        IntentExpiryIndexData, IntentMetaData, IntentPendingData, IntentPendingEntryRecord,
-        IntentRecord, IntentRecordsData, IntentResourceTotalsRecord, IntentStoreMetaRecord,
-        IntentTotalsData, PlacementAcknowledgementEntryRecord, PlacementAcknowledgementIndexData,
-        ReceiptBackedIntentRecord, ReceiptBackedIntentsData,
+        IntentExpiryEntryRecord, IntentExpiryIndexData, IntentMetaData, IntentPendingData,
+        IntentPendingEntryRecord, IntentRecord, IntentRecordsData, IntentResourceTotalsRecord,
+        IntentStoreMetaRecord, IntentTotalsData, ReceiptBackedIntentRecord,
+        ReceiptBackedIntentsData,
     };
 
     vec![
@@ -588,12 +603,12 @@ fn runtime_intent_domains() -> Vec<StateDomainManifest> {
             "intent_pending_entries_restore_ttl_metadata",
         ),
         state_domain(
-            "receipt_backed_intent_records",
-            RECEIPT_BACKED_INTENT_RECORDS_ID,
+            "intent_receipt_backed_records",
+            INTENT_RECEIPT_BACKED_RECORDS_ID,
             ReceiptBackedIntentRecord::STATE_CONTRACT_NAME,
             ReceiptBackedIntentsData::STATE_CONTRACT_NAME,
             114,
-            "receipt_backed_intent_records_restore_terminal_evidence",
+            "intent_receipt_backed_records_restore_terminal_evidence",
         ),
         state_domain(
             "intent_expiry_index",
@@ -603,20 +618,22 @@ fn runtime_intent_domains() -> Vec<StateDomainManifest> {
             115,
             "intent_expiry_index_restores_exact_ordered_deadlines",
         ),
-        state_domain(
-            "placement_acknowledgement_index",
-            PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID,
-            PlacementAcknowledgementEntryRecord::STATE_CONTRACT_NAME,
-            PlacementAcknowledgementIndexData::STATE_CONTRACT_NAME,
-            116,
-            "placement_acknowledgement_index_restores_exact_terminal_operations",
-        ),
+    ]
+}
+
+fn application_receipt_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::intent::{
+        ApplicationReceiptEligibilityData, ApplicationReceiptEligibilityRecord,
+        ApplicationReceiptReplayData, ApplicationReceiptReplayRecord,
+    };
+
+    vec![
         state_domain(
             "application_receipt_replay",
             APPLICATION_RECEIPT_REPLAY_ID,
             ApplicationReceiptReplayRecord::STATE_CONTRACT_NAME,
             ApplicationReceiptReplayData::STATE_CONTRACT_NAME,
-            117,
+            116,
             "application_receipt_replay_restores_exact_deadlines",
         ),
         state_domain(
@@ -624,10 +641,25 @@ fn runtime_intent_domains() -> Vec<StateDomainManifest> {
             APPLICATION_RECEIPT_ELIGIBILITY_ID,
             ApplicationReceiptEligibilityRecord::STATE_CONTRACT_NAME,
             ApplicationReceiptEligibilityData::STATE_CONTRACT_NAME,
-            118,
+            117,
             "application_receipt_eligibility_restores_exact_terminal_deadlines",
         ),
     ]
+}
+
+fn placement_acknowledgement_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::intent::{
+        PlacementAcknowledgementEntryRecord, PlacementAcknowledgementIndexData,
+    };
+
+    vec![state_domain(
+        "placement_acknowledgement_index",
+        PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID,
+        PlacementAcknowledgementEntryRecord::STATE_CONTRACT_NAME,
+        PlacementAcknowledgementIndexData::STATE_CONTRACT_NAME,
+        118,
+        "placement_acknowledgement_index_restores_exact_terminal_operations",
+    )]
 }
 
 fn state_domain(
@@ -736,12 +768,12 @@ mod tests {
         let descriptors = canic_state_descriptors();
         let descriptor = descriptors
             .iter()
-            .find(|descriptor| descriptor.allocation == StateAllocationKey::CoreRuntimeTopology)
+            .find(|descriptor| descriptor.allocation == StateAllocationKey::CoreRuntimeChildren)
             .expect("topology registry descriptor");
         let declaration = descriptor
             .state
             .iter()
-            .find(|declaration| declaration.domain == "canister_children")
+            .find(|declaration| declaration.domain == "runtime_canister_children")
             .expect("Canister children state declaration");
 
         assert_eq!(declaration.record, CanisterEntryRecord::STATE_CONTRACT_NAME);
@@ -752,35 +784,36 @@ mod tests {
     }
 
     #[test]
-    fn runtime_env_descriptors_reference_canonical_data_types() {
+    fn runtime_bindings_and_fleet_state_descriptors_reference_canonical_data_types() {
         use crate::storage::stable::{
             env::{EnvData, EnvRecord},
             state::fleet::{FleetStateData, FleetStateRecord},
         };
 
         let descriptors = canic_state_descriptors();
-        let runtime_env = descriptors
-            .iter()
-            .find(|descriptor| descriptor.allocation == StateAllocationKey::CoreRuntimeEnvironment)
-            .expect("runtime environment descriptor");
-
-        for (domain, record, snapshot) in [
+        for (allocation, domain, record, snapshot) in [
             (
-                "env",
+                StateAllocationKey::CoreRuntimeBindings,
+                "runtime_bindings",
                 EnvRecord::STATE_CONTRACT_NAME,
                 EnvData::STATE_CONTRACT_NAME,
             ),
             (
+                StateAllocationKey::CoreFleetState,
                 "fleet_state",
                 FleetStateRecord::STATE_CONTRACT_NAME,
                 FleetStateData::STATE_CONTRACT_NAME,
             ),
         ] {
-            let declaration = runtime_env
+            let descriptor = descriptors
+                .iter()
+                .find(|descriptor| descriptor.allocation == allocation)
+                .expect("runtime bindings or Fleet-state descriptor");
+            let declaration = descriptor
                 .state
                 .iter()
                 .find(|declaration| declaration.domain == domain)
-                .expect("runtime environment state declaration");
+                .expect("runtime bindings or Fleet-state declaration");
 
             assert_eq!(declaration.record, record);
             assert_eq!(declaration.snapshot, snapshot);
@@ -826,7 +859,7 @@ mod tests {
     }
 
     #[test]
-    fn observability_descriptors_reference_canonical_data_types() {
+    fn cycles_and_log_descriptors_reference_canonical_data_types() {
         use crate::storage::stable::{
             cycles::{
                 CycleTopupEventRecord, CycleTopupEventsData, CycleTrackerData,
@@ -840,32 +873,32 @@ mod tests {
 
         for (allocation, domain, record, snapshot) in [
             (
-                StateAllocationKey::CoreRuntimeObservability,
-                "cycle_tracker",
+                StateAllocationKey::CoreCycles,
+                "cycles_tracker",
                 CycleTrackerEntryRecord::STATE_CONTRACT_NAME,
                 CycleTrackerData::STATE_CONTRACT_NAME,
             ),
             (
-                StateAllocationKey::CoreRuntimeObservability,
-                "cycle_topup_events",
+                StateAllocationKey::CoreCycles,
+                "cycles_topup_events",
                 CycleTopupEventRecord::STATE_CONTRACT_NAME,
                 CycleTopupEventsData::STATE_CONTRACT_NAME,
             ),
             (
-                StateAllocationKey::CoreRuntimeObservability,
+                StateAllocationKey::CoreRuntimeLog,
                 "runtime_log",
                 LogEntryRecord::STATE_CONTRACT_NAME,
                 LogEntriesData::STATE_CONTRACT_NAME,
             ),
             (
-                StateAllocationKey::CoreRuntimeObservability,
+                StateAllocationKey::CoreCycles,
                 "cycles_funding_ledger",
                 CyclesFundingLedgerRecord::STATE_CONTRACT_NAME,
                 CyclesFundingLedgerData::STATE_CONTRACT_NAME,
             ),
             (
-                StateAllocationKey::CoreIcpRefillRecords,
-                "icp_refill_records",
+                StateAllocationKey::CoreCyclesIcpRefillRecords,
+                "cycles_icp_refill_records",
                 IcpRefillRecord::STATE_CONTRACT_NAME,
                 IcpRefillRecordsData::STATE_CONTRACT_NAME,
             ),
@@ -897,69 +930,89 @@ mod tests {
         };
 
         let descriptors = canic_state_descriptors();
-        let runtime_intents = descriptors
-            .iter()
-            .find(|descriptor| descriptor.allocation == StateAllocationKey::CoreRuntimeIntent)
-            .expect("runtime intents descriptor");
-
-        for (domain, record, snapshot) in [
+        for (allocation, domain, record, snapshot) in [
             (
+                StateAllocationKey::CoreIntent,
                 "intent_meta",
                 IntentStoreMetaRecord::STATE_CONTRACT_NAME,
                 IntentMetaData::STATE_CONTRACT_NAME,
             ),
             (
+                StateAllocationKey::CoreIntent,
                 "intent_records",
                 IntentRecord::STATE_CONTRACT_NAME,
                 IntentRecordsData::STATE_CONTRACT_NAME,
             ),
             (
+                StateAllocationKey::CoreIntent,
                 "intent_totals",
                 IntentResourceTotalsRecord::STATE_CONTRACT_NAME,
                 IntentTotalsData::STATE_CONTRACT_NAME,
             ),
             (
+                StateAllocationKey::CoreIntent,
                 "intent_pending",
                 IntentPendingEntryRecord::STATE_CONTRACT_NAME,
                 IntentPendingData::STATE_CONTRACT_NAME,
             ),
             (
-                "receipt_backed_intent_records",
+                StateAllocationKey::CoreIntent,
+                "intent_receipt_backed_records",
                 ReceiptBackedIntentRecord::STATE_CONTRACT_NAME,
                 ReceiptBackedIntentsData::STATE_CONTRACT_NAME,
             ),
             (
+                StateAllocationKey::CoreIntent,
                 "intent_expiry_index",
                 IntentExpiryEntryRecord::STATE_CONTRACT_NAME,
                 IntentExpiryIndexData::STATE_CONTRACT_NAME,
             ),
             (
+                StateAllocationKey::CorePlacementAcknowledgement,
                 "placement_acknowledgement_index",
                 PlacementAcknowledgementEntryRecord::STATE_CONTRACT_NAME,
                 PlacementAcknowledgementIndexData::STATE_CONTRACT_NAME,
             ),
             (
+                StateAllocationKey::CoreApplicationReceipts,
                 "application_receipt_replay",
                 ApplicationReceiptReplayRecord::STATE_CONTRACT_NAME,
                 ApplicationReceiptReplayData::STATE_CONTRACT_NAME,
             ),
             (
+                StateAllocationKey::CoreApplicationReceipts,
                 "application_receipt_eligibility",
                 ApplicationReceiptEligibilityRecord::STATE_CONTRACT_NAME,
                 ApplicationReceiptEligibilityData::STATE_CONTRACT_NAME,
             ),
         ] {
-            let declaration = runtime_intents
+            let descriptor = descriptors
+                .iter()
+                .find(|descriptor| descriptor.allocation == allocation)
+                .expect("intent-related descriptor");
+            let declaration = descriptor
                 .state
                 .iter()
                 .find(|declaration| declaration.domain == domain)
-                .expect("runtime intent state declaration");
+                .expect("intent-related state declaration");
 
             assert_eq!(declaration.record, record);
             assert_eq!(declaration.snapshot, snapshot);
         }
 
-        assert!(runtime_intents.reserved_memory.is_empty());
+        assert!(
+            descriptors
+                .iter()
+                .filter(|descriptor| {
+                    matches!(
+                        descriptor.allocation,
+                        StateAllocationKey::CoreIntent
+                            | StateAllocationKey::CoreApplicationReceipts
+                            | StateAllocationKey::CorePlacementAcknowledgement
+                    )
+                })
+                .all(|descriptor| descriptor.reserved_memory.is_empty())
+        );
     }
 
     #[test]
@@ -973,8 +1026,8 @@ mod tests {
 
         for (allocation, domain, record, snapshot) in [
             (
-                StateAllocationKey::ScalingRegistry,
-                "scaling_registry",
+                StateAllocationKey::PlacementScalingRegistry,
+                "placement_scaling_registry",
                 ScalingRegistryEntryRecord::STATE_CONTRACT_NAME,
                 ScalingRegistryData::STATE_CONTRACT_NAME,
             ),
@@ -1056,20 +1109,20 @@ mod tests {
 
         for (allocation, domain, record, snapshot) in [
             (
-                StateAllocationKey::StoredBlobs,
-                "stored_blobs",
+                StateAllocationKey::BlobStorageRoots,
+                "blob_storage_roots",
                 StoredBlobRecord::STATE_CONTRACT_NAME,
                 StoredBlobsData::STATE_CONTRACT_NAME,
             ),
             (
-                StateAllocationKey::BlobDeletionPending,
-                "blob_deletion_pending",
+                StateAllocationKey::BlobStoragePendingDeletions,
+                "blob_storage_pending_deletions",
                 BlobDeletionPendingRecord::STATE_CONTRACT_NAME,
                 BlobDeletionPendingData::STATE_CONTRACT_NAME,
             ),
             (
-                StateAllocationKey::StorageGatewayPrincipals,
-                "storage_gateway_principals",
+                StateAllocationKey::BlobStorageGatewayPrincipals,
+                "blob_storage_gateway_principals",
                 StorageGatewayPrincipalRecord::STATE_CONTRACT_NAME,
                 StorageGatewayPrincipalsData::STATE_CONTRACT_NAME,
             ),

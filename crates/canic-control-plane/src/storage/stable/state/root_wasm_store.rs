@@ -1,9 +1,15 @@
+//! Module: storage::stable::state::root_wasm_store
+//!
+//! Responsibility: persist root-owned Wasm Store publication, inventory, GC, and creation state.
+//! Does not own: Store lifecycle orchestration, DTO projection, or endpoint authorization.
+//! Boundary: storage ops wrap this complete root authority before workflow access.
+
 use crate::ids::{WasmStoreBinding, WasmStoreCreationPurpose, WasmStoreGcMode};
 #[cfg(feature = "root-control-plane")]
 use canic_core::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     eager_static,
-    role_contract::allocation::memory::control_plane::CONTROL_PLANE_SUBNET_STATE_ID,
+    role_contract::allocation::memory::control_plane::ROOT_WASM_STORE_STATE_ID,
 };
 use canic_core::{
     cdk::types::Principal, control_plane_support::model::replay::ReplayCostGuardSettlement,
@@ -15,14 +21,10 @@ use std::cell::RefCell;
 
 #[cfg(feature = "root-control-plane")]
 eager_static! {
-    //
-    // SUBNET_STATE
-    // EMPTY FOR NOW - if we ever want to store subnet-specific state it's here
-    //
-    static SUBNET_STATE: RefCell<Cell<SubnetStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
+    static ROOT_WASM_STORE_STATE: RefCell<Cell<RootWasmStoreStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.subnet_state.v1", ty = SubnetState, id = CONTROL_PLANE_SUBNET_STATE_ID),
-            SubnetStateRecord::default(),
+            canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.root.wasm_store.state.v1", ty = RootWasmStoreState, id = ROOT_WASM_STORE_STATE_ID),
+            RootWasmStoreStateRecord::default(),
         ));
 }
 
@@ -70,7 +72,7 @@ pub struct WasmStoreRecord {
 /// WasmStoreCreationProgressRecord
 ///
 /// Persisted phase of the one root-owned Store creation currently in progress.
-/// Owned by stable control-plane Subnet state and projected through storage ops.
+/// Owned by stable root Wasm Store state and projected through storage ops.
 ///
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -96,7 +98,7 @@ pub enum WasmStoreCreationProgressRecord {
 /// WasmStoreCreationRecord
 ///
 /// Persisted root-owned authority for one Store create/install effect chain.
-/// Owned by stable control-plane Subnet state and consumed by recovery workflows.
+/// Owned by stable root Wasm Store state and consumed by recovery workflows.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -116,7 +118,7 @@ pub struct WasmStoreCreationRecord {
 /// WasmStoreCreationBeginError
 ///
 /// Model-owned reason a root-owned Store creation intent could not be committed.
-/// Mapped to an internal storage invariant by the Subnet-state ops boundary.
+/// Mapped to an internal storage invariant by the root Wasm Store ops boundary.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -143,36 +145,36 @@ pub enum WasmStoreCreationBeginError {
 }
 
 ///
-/// SubnetStateRecord
+/// RootWasmStoreStateRecord
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct SubnetStateRecord {
+pub struct RootWasmStoreStateRecord {
     pub publication_store: PublicationStoreStateRecord,
     pub wasm_stores: Vec<WasmStoreRecord>,
     pub next_wasm_store_creation_sequence: u64,
     pub wasm_store_creation: Option<WasmStoreCreationRecord>,
 }
 
-impl SubnetStateRecord {
-    pub const STATE_CONTRACT_NAME: &'static str = "SubnetStateRecord";
+impl RootWasmStoreStateRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "RootWasmStoreStateRecord";
 }
 
-impl_storable_bounded!(SubnetStateRecord, 16_384, true);
+impl_storable_bounded!(RootWasmStoreStateRecord, 16_384, true);
 
 ///
-/// ControlPlaneSubnetStateData
+/// RootWasmStoreStateData
 ///
-/// Canonical control-plane subnet-state allocation snapshot.
+/// Canonical root-owned Wasm Store state snapshot.
 ///
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct ControlPlaneSubnetStateData {
-    pub record: SubnetStateRecord,
+pub struct RootWasmStoreStateData {
+    pub record: RootWasmStoreStateRecord,
 }
 
-impl ControlPlaneSubnetStateData {
-    pub const STATE_CONTRACT_NAME: &'static str = "ControlPlaneSubnetStateData";
+impl RootWasmStoreStateData {
+    pub const STATE_CONTRACT_NAME: &'static str = "RootWasmStoreStateData";
 }
 
 #[cfg(feature = "root-control-plane")]
@@ -190,14 +192,14 @@ struct PublicationStoreTransitionOutcome {
 }
 
 ///
-/// SubnetState
+/// RootWasmStoreState
 ///
 
 #[cfg(feature = "root-control-plane")]
-pub struct SubnetState;
+pub struct RootWasmStoreState;
 
 #[cfg(feature = "root-control-plane")]
-impl SubnetState {
+impl RootWasmStoreState {
     fn validate_publication_store_state(state: &PublicationStoreStateRecord) {
         let active = state.active_binding.as_ref();
         let detached = state.detached_binding.as_ref();
@@ -251,7 +253,7 @@ impl SubnetState {
         transition: PublicationStoreTransition,
         changed_at: u64,
     ) -> PublicationStoreTransitionOutcome {
-        SUBNET_STATE.with_borrow_mut(|cell| {
+        ROOT_WASM_STORE_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
             let previous = data.publication_store.clone();
             let mut changed = false;
@@ -346,7 +348,7 @@ impl SubnetState {
     pub(crate) fn begin_wasm_store_creation(
         mut record: WasmStoreCreationRecord,
     ) -> Result<WasmStoreCreationRecord, WasmStoreCreationBeginError> {
-        SUBNET_STATE.with_borrow_mut(|cell| {
+        ROOT_WASM_STORE_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
             if data.wasm_store_creation.is_some() {
                 return Err(WasmStoreCreationBeginError::AlreadyPending);
@@ -371,7 +373,7 @@ impl SubnetState {
         pid: Principal,
         created_at: u64,
     ) -> Option<WasmStoreCreationRecord> {
-        SUBNET_STATE.with_borrow_mut(|cell| {
+        ROOT_WASM_STORE_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
             let creation = data.wasm_store_creation.as_mut()?;
             if creation.sequence != sequence {
@@ -407,7 +409,7 @@ impl SubnetState {
         sequence: u64,
         settlement: ReplayCostGuardSettlement,
     ) -> Option<WasmStoreCreationRecord> {
-        SUBNET_STATE.with_borrow_mut(|cell| {
+        ROOT_WASM_STORE_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
             let creation = data.wasm_store_creation.as_mut()?;
             if creation.sequence != sequence {
@@ -432,7 +434,7 @@ impl SubnetState {
         sequence: u64,
         settlement: ReplayCostGuardSettlement,
     ) -> Option<WasmStoreCreationRecord> {
-        SUBNET_STATE.with_borrow_mut(|cell| {
+        ROOT_WASM_STORE_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
             let creation = data.wasm_store_creation.as_mut()?;
             if creation.sequence != sequence {
@@ -456,7 +458,7 @@ impl SubnetState {
     }
 
     pub(crate) fn mark_wasm_store_installed(sequence: u64) -> Option<WasmStoreCreationRecord> {
-        SUBNET_STATE.with_borrow_mut(|cell| {
+        ROOT_WASM_STORE_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
             let creation = data.wasm_store_creation.as_mut()?;
             if creation.sequence != sequence {
@@ -488,7 +490,7 @@ impl SubnetState {
         sequence: u64,
         binding: WasmStoreBinding,
     ) -> Option<WasmStoreRecord> {
-        SUBNET_STATE.with_borrow_mut(|cell| {
+        ROOT_WASM_STORE_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
             let creation = data.wasm_store_creation.as_ref()?;
             if creation.sequence != sequence {
@@ -550,7 +552,7 @@ impl SubnetState {
         next: WasmStoreGcMode,
         changed_at: u64,
     ) -> bool {
-        SUBNET_STATE.with_borrow_mut(|cell| {
+        ROOT_WASM_STORE_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
             let Some(record) = data
                 .wasm_stores
@@ -602,7 +604,7 @@ impl SubnetState {
         if !wasm_store_gc_record_is_valid(&next) {
             return false;
         }
-        SUBNET_STATE.with_borrow_mut(|cell| {
+        ROOT_WASM_STORE_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
             let Some(record) = data
                 .wasm_stores
@@ -624,7 +626,7 @@ impl SubnetState {
     }
 
     pub(crate) fn remove_wasm_store(binding: &WasmStoreBinding) -> Option<WasmStoreRecord> {
-        SUBNET_STATE.with_borrow_mut(|cell| {
+        ROOT_WASM_STORE_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
             let index = data
                 .wasm_stores
@@ -675,7 +677,7 @@ impl SubnetState {
     }
 
     #[cfg(test)]
-    pub(crate) fn import(data: ControlPlaneSubnetStateData) {
+    pub(crate) fn import(data: RootWasmStoreStateData) {
         Self::validate_publication_store_state(&data.record.publication_store);
         let mut seen_bindings = std::collections::BTreeSet::new();
         let mut seen_pids = std::collections::BTreeSet::new();
@@ -691,13 +693,13 @@ impl SubnetState {
                 record.pid
             );
         }
-        SUBNET_STATE.with_borrow_mut(|cell| cell.set(data.record));
+        ROOT_WASM_STORE_STATE.with_borrow_mut(|cell| cell.set(data.record));
     }
 
     #[must_use]
-    pub(crate) fn export() -> ControlPlaneSubnetStateData {
-        ControlPlaneSubnetStateData {
-            record: SUBNET_STATE.with_borrow(|cell| cell.get().clone()),
+    pub(crate) fn export() -> RootWasmStoreStateData {
+        RootWasmStoreStateData {
+            record: ROOT_WASM_STORE_STATE.with_borrow(|cell| cell.get().clone()),
         }
     }
 }
@@ -865,9 +867,9 @@ mod tests {
     }
 
     #[test]
-    fn subnet_state_round_trips_through_canonical_data_snapshot() {
-        SubnetState::import(ControlPlaneSubnetStateData {
-            record: SubnetStateRecord {
+    fn root_wasm_store_state_round_trips_through_canonical_data_snapshot() {
+        RootWasmStoreState::import(RootWasmStoreStateData {
+            record: RootWasmStoreStateRecord {
                 publication_store: PublicationStoreStateRecord::default(),
                 wasm_stores: vec![WasmStoreRecord {
                     binding: WasmStoreBinding::new("primary"),
@@ -880,20 +882,20 @@ mod tests {
             },
         });
 
-        let data = SubnetState::export();
-        SubnetState::import(ControlPlaneSubnetStateData::default());
-        SubnetState::import(data.clone());
+        let data = RootWasmStoreState::export();
+        RootWasmStoreState::import(RootWasmStoreStateData::default());
+        RootWasmStoreState::import(data.clone());
 
-        assert_eq!(SubnetState::export(), data);
-        SubnetState::import(ControlPlaneSubnetStateData::default());
+        assert_eq!(RootWasmStoreState::export(), data);
+        RootWasmStoreState::import(RootWasmStoreStateData::default());
     }
 
     #[test]
     fn store_creation_progress_commits_inventory_atomically() {
-        SubnetState::import(ControlPlaneSubnetStateData::default());
+        RootWasmStoreState::import(RootWasmStoreStateData::default());
         let pid = Principal::from_slice(&[9; 29]);
         let binding = WasmStoreBinding::owned(pid.to_text());
-        let creation = SubnetState::begin_wasm_store_creation(WasmStoreCreationRecord {
+        let creation = RootWasmStoreState::begin_wasm_store_creation(WasmStoreCreationRecord {
             sequence: 0,
             purpose: WasmStoreCreationPurpose::Bootstrap,
             expected_module_hash: [1; 32],
@@ -906,42 +908,48 @@ mod tests {
         })
         .expect("begin Store creation");
         assert_eq!(creation.sequence, 1);
-        assert!(SubnetState::wasm_stores().is_empty());
+        assert!(RootWasmStoreState::wasm_stores().is_empty());
         assert_eq!(
-            SubnetState::mark_wasm_store_created(creation.sequence, Principal::anonymous(), 8),
+            RootWasmStoreState::mark_wasm_store_created(
+                creation.sequence,
+                Principal::anonymous(),
+                8
+            ),
             None
         );
         assert_eq!(
-            SubnetState::mark_wasm_store_created(creation.sequence, pid, 6),
+            RootWasmStoreState::mark_wasm_store_created(creation.sequence, pid, 6),
             None
         );
 
-        SubnetState::mark_wasm_store_created(creation.sequence, pid, 8)
+        RootWasmStoreState::mark_wasm_store_created(creation.sequence, pid, 8)
             .expect("record created Store");
-        SubnetState::begin_wasm_store_install(creation.sequence, settlement(9, 10))
+        RootWasmStoreState::begin_wasm_store_install(creation.sequence, settlement(9, 10))
             .expect("begin Store install");
-        SubnetState::mark_wasm_store_installed(creation.sequence).expect("record installed Store");
+        RootWasmStoreState::mark_wasm_store_installed(creation.sequence)
+            .expect("record installed Store");
         assert_eq!(
-            SubnetState::commit_wasm_store_creation(
+            RootWasmStoreState::commit_wasm_store_creation(
                 creation.sequence,
                 WasmStoreBinding::new("not-the-store-principal"),
             ),
             None
         );
-        let committed = SubnetState::commit_wasm_store_creation(creation.sequence, binding.clone())
-            .expect("commit Store inventory");
+        let committed =
+            RootWasmStoreState::commit_wasm_store_creation(creation.sequence, binding.clone())
+                .expect("commit Store inventory");
 
         assert_eq!(committed.binding, binding);
         assert_eq!(committed.pid, pid);
-        assert_eq!(SubnetState::wasm_store_creation(), None);
-        assert_eq!(SubnetState::wasm_stores(), vec![committed]);
+        assert_eq!(RootWasmStoreState::wasm_store_creation(), None);
+        assert_eq!(RootWasmStoreState::wasm_stores(), vec![committed]);
     }
 
     #[test]
     fn store_creation_intent_rejects_noncanonical_controllers() {
-        SubnetState::import(ControlPlaneSubnetStateData::default());
+        RootWasmStoreState::import(RootWasmStoreStateData::default());
         let controller = Principal::from_slice(&[3; 29]);
-        let result = SubnetState::begin_wasm_store_creation(WasmStoreCreationRecord {
+        let result = RootWasmStoreState::begin_wasm_store_creation(WasmStoreCreationRecord {
             sequence: 0,
             purpose: WasmStoreCreationPurpose::Publication,
             expected_module_hash: [1; 32],
@@ -957,99 +965,108 @@ mod tests {
             result,
             Err(WasmStoreCreationBeginError::ControllersNoncanonical)
         ));
-        assert_eq!(SubnetState::wasm_store_creation(), None);
+        assert_eq!(RootWasmStoreState::wasm_store_creation(), None);
     }
 
     #[test]
     fn publication_store_binding_round_trips() {
-        SubnetState::import(ControlPlaneSubnetStateData::default());
-        assert_eq!(SubnetState::publication_store_binding(), None);
-        assert_eq!(SubnetState::publication_store_state().generation, 0);
+        RootWasmStoreState::import(RootWasmStoreStateData::default());
+        assert_eq!(RootWasmStoreState::publication_store_binding(), None);
+        assert_eq!(RootWasmStoreState::publication_store_state().generation, 0);
 
         let binding = WasmStoreBinding::new("primary");
-        assert!(SubnetState::activate_publication_store_binding(
+        assert!(RootWasmStoreState::activate_publication_store_binding(
             binding.clone(),
             11
         ));
-        assert_eq!(SubnetState::publication_store_binding(), Some(binding));
-        assert_eq!(SubnetState::publication_store_state().generation, 1);
-        assert_eq!(SubnetState::publication_store_state().changed_at, 11);
-
-        assert!(SubnetState::clear_publication_store_binding(12));
-        assert_eq!(SubnetState::publication_store_binding(), None);
         assert_eq!(
-            SubnetState::publication_store_state().detached_binding,
+            RootWasmStoreState::publication_store_binding(),
+            Some(binding)
+        );
+        assert_eq!(RootWasmStoreState::publication_store_state().generation, 1);
+        assert_eq!(RootWasmStoreState::publication_store_state().changed_at, 11);
+
+        assert!(RootWasmStoreState::clear_publication_store_binding(12));
+        assert_eq!(RootWasmStoreState::publication_store_binding(), None);
+        assert_eq!(
+            RootWasmStoreState::publication_store_state().detached_binding,
             Some(WasmStoreBinding::new("primary"))
         );
-        assert_eq!(SubnetState::publication_store_state().generation, 2);
-        assert_eq!(SubnetState::publication_store_state().changed_at, 12);
-        assert_eq!(SubnetState::publication_store_state().retired_binding, None);
+        assert_eq!(RootWasmStoreState::publication_store_state().generation, 2);
+        assert_eq!(RootWasmStoreState::publication_store_state().changed_at, 12);
+        assert_eq!(
+            RootWasmStoreState::publication_store_state().retired_binding,
+            None
+        );
     }
 
     #[test]
     fn activate_same_binding_is_idempotent() {
-        SubnetState::import(ControlPlaneSubnetStateData::default());
+        RootWasmStoreState::import(RootWasmStoreStateData::default());
 
         let binding = WasmStoreBinding::new("primary");
-        assert!(SubnetState::activate_publication_store_binding(
+        assert!(RootWasmStoreState::activate_publication_store_binding(
             binding.clone(),
             20
         ));
-        assert!(!SubnetState::activate_publication_store_binding(
+        assert!(!RootWasmStoreState::activate_publication_store_binding(
             binding, 21
         ));
-        assert_eq!(SubnetState::publication_store_state().generation, 1);
-        assert_eq!(SubnetState::publication_store_state().changed_at, 20);
+        assert_eq!(RootWasmStoreState::publication_store_state().generation, 1);
+        assert_eq!(RootWasmStoreState::publication_store_state().changed_at, 20);
     }
 
     #[test]
     fn retiring_detached_binding_moves_it_to_retired() {
-        SubnetState::import(ControlPlaneSubnetStateData::default());
+        RootWasmStoreState::import(RootWasmStoreStateData::default());
 
-        assert!(SubnetState::activate_publication_store_binding(
+        assert!(RootWasmStoreState::activate_publication_store_binding(
             WasmStoreBinding::new("primary"),
             30,
         ));
-        assert!(SubnetState::activate_publication_store_binding(
+        assert!(RootWasmStoreState::activate_publication_store_binding(
             WasmStoreBinding::new("secondary"),
             31,
         ));
 
-        let retired = SubnetState::retire_detached_publication_store_binding(32);
+        let retired = RootWasmStoreState::retire_detached_publication_store_binding(32);
         assert_eq!(retired, Some(WasmStoreBinding::new("primary")));
         assert_eq!(
-            SubnetState::publication_store_state().detached_binding,
+            RootWasmStoreState::publication_store_state().detached_binding,
             None
         );
         assert_eq!(
-            SubnetState::publication_store_state().retired_binding,
+            RootWasmStoreState::publication_store_state().retired_binding,
             Some(WasmStoreBinding::new("primary"))
         );
-        assert_eq!(SubnetState::publication_store_state().retired_at, 32);
-        assert_eq!(SubnetState::publication_store_state().generation, 3);
+        assert_eq!(RootWasmStoreState::publication_store_state().retired_at, 32);
+        assert_eq!(RootWasmStoreState::publication_store_state().generation, 3);
     }
 
     #[test]
     fn finalizing_retired_binding_clears_it() {
-        SubnetState::import(ControlPlaneSubnetStateData::default());
+        RootWasmStoreState::import(RootWasmStoreStateData::default());
 
-        assert!(SubnetState::activate_publication_store_binding(
+        assert!(RootWasmStoreState::activate_publication_store_binding(
             WasmStoreBinding::new("primary"),
             40,
         ));
-        assert!(SubnetState::activate_publication_store_binding(
+        assert!(RootWasmStoreState::activate_publication_store_binding(
             WasmStoreBinding::new("secondary"),
             41,
         ));
-        let retired = SubnetState::retire_detached_publication_store_binding(42);
+        let retired = RootWasmStoreState::retire_detached_publication_store_binding(42);
         assert_eq!(retired, Some(WasmStoreBinding::new("primary")));
 
-        let finalized = SubnetState::finalize_retired_publication_store_binding(43);
+        let finalized = RootWasmStoreState::finalize_retired_publication_store_binding(43);
         assert_eq!(finalized, Some(WasmStoreBinding::new("primary")));
-        assert_eq!(SubnetState::publication_store_state().retired_binding, None);
-        assert_eq!(SubnetState::publication_store_state().retired_at, 0);
-        assert_eq!(SubnetState::publication_store_state().generation, 4);
-        assert_eq!(SubnetState::publication_store_state().changed_at, 43);
+        assert_eq!(
+            RootWasmStoreState::publication_store_state().retired_binding,
+            None
+        );
+        assert_eq!(RootWasmStoreState::publication_store_state().retired_at, 0);
+        assert_eq!(RootWasmStoreState::publication_store_state().generation, 4);
+        assert_eq!(RootWasmStoreState::publication_store_state().changed_at, 43);
     }
 
     #[test]
@@ -1057,8 +1074,8 @@ mod tests {
     fn import_rejects_duplicate_publication_slots() {
         let binding = WasmStoreBinding::new("duplicate");
 
-        SubnetState::import(ControlPlaneSubnetStateData {
-            record: SubnetStateRecord {
+        RootWasmStoreState::import(RootWasmStoreStateData {
+            record: RootWasmStoreStateRecord {
                 publication_store: PublicationStoreStateRecord {
                     active_binding: Some(binding.clone()),
                     detached_binding: Some(binding),
@@ -1079,8 +1096,8 @@ mod tests {
         expected = "publication store retired_at must be set iff retired_binding is present"
     )]
     fn import_rejects_incoherent_retired_timestamp() {
-        SubnetState::import(ControlPlaneSubnetStateData {
-            record: SubnetStateRecord {
+        RootWasmStoreState::import(RootWasmStoreStateData {
+            record: RootWasmStoreStateRecord {
                 publication_store: PublicationStoreStateRecord {
                     active_binding: None,
                     detached_binding: None,

@@ -28,7 +28,7 @@ use crate::{
         WasmStoreOverviewResponse, WasmStorePublicationSlotResponse,
     },
     ids::CanisterRole,
-    ops::storage::state::subnet::SubnetStateOps,
+    ops::storage::state::root_wasm_store::RootWasmStoreStateOps,
     workflow::runtime::template::WasmStorePublicationWorkflow,
 };
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
@@ -361,8 +361,8 @@ fn publication_overview() -> WasmStoreOverviewResponse {
     let store = config::fleet_subnet_root_default_wasm_store();
     let limits = WasmStoreLimits::from(&store);
     let headroom_bytes = store.headroom_bytes();
-    let publication = SubnetStateOps::publication_store_state_response();
-    let stores = SubnetStateOps::wasm_stores()
+    let publication = RootWasmStoreStateOps::publication_store_state_response();
+    let stores = RootWasmStoreStateOps::wasm_stores()
         .into_iter()
         .map(|store| {
             let publication_slot = if publication.active_binding.as_ref() == Some(&store.binding) {

@@ -12,7 +12,7 @@ use super::super::{
 use crate::{
     config,
     ids::{WasmStoreBinding, WasmStoreCreationPurpose},
-    ops::storage::state::subnet::{SubnetStateOps, WasmStoreCreationPlan},
+    ops::storage::state::root_wasm_store::{RootWasmStoreStateOps, WasmStoreCreationPlan},
     view::state::{WasmStoreCreationProgressView, WasmStoreCreationView},
     workflow::{deployment, runtime::template::publication::error::PublicationWorkflowError},
 };
@@ -54,10 +54,10 @@ enum StoreModuleState {
 impl WasmStorePublicationWorkflow {
     /// Ensure bootstrap has exactly one recoverable root-owned Store.
     pub async fn ensure_bootstrap_wasm_store() -> Result<Vec<WasmStoreBinding>, InternalError> {
-        if SubnetStateOps::wasm_store_creation().is_some() {
+        if RootWasmStoreStateOps::wasm_store_creation().is_some() {
             let _ = Self::resume_pending_wasm_store_creation().await?;
         }
-        let stores = SubnetStateOps::wasm_stores();
+        let stores = RootWasmStoreStateOps::wasm_stores();
         if !stores.is_empty() {
             return Ok(stores.into_iter().map(|store| store.binding).collect());
         }
@@ -68,7 +68,7 @@ impl WasmStorePublicationWorkflow {
     /// Resume any durable Store creation before publication snapshots current inventory.
     pub(in crate::workflow::runtime::template::publication) async fn resume_pending_wasm_store_creation()
     -> Result<Option<WasmStoreBinding>, InternalError> {
-        let Some(creation) = SubnetStateOps::wasm_store_creation() else {
+        let Some(creation) = RootWasmStoreStateOps::wasm_store_creation() else {
             return Ok(None);
         };
         let plan = store_creation_plan(creation.purpose).await?;
@@ -79,7 +79,7 @@ impl WasmStorePublicationWorkflow {
     async fn create_wasm_store(
         purpose: WasmStoreCreationPurpose,
     ) -> Result<WasmStoreBinding, InternalError> {
-        if SubnetStateOps::wasm_store_creation().is_some() {
+        if RootWasmStoreStateOps::wasm_store_creation().is_some() {
             return Self::resume_pending_wasm_store_creation()
                 .await?
                 .ok_or_else(|| {
@@ -92,7 +92,7 @@ impl WasmStorePublicationWorkflow {
 
         let plan = store_creation_plan(purpose).await?;
         let permit = reserve_store_creation(&plan)?;
-        let creation = match SubnetStateOps::begin_wasm_store_creation(
+        let creation = match RootWasmStoreStateOps::begin_wasm_store_creation(
             &plan.durable,
             permit.replay_settlement(),
             IcOps::now_secs(),
@@ -123,7 +123,7 @@ impl WasmStorePublicationWorkflow {
                 ));
             }
         };
-        let created = match SubnetStateOps::mark_wasm_store_created(
+        let created = match RootWasmStoreStateOps::mark_wasm_store_created(
             creation.sequence,
             pid,
             IcOps::now_secs(),
@@ -151,7 +151,7 @@ impl WasmStorePublicationWorkflow {
             None => Self::create_and_activate_first_publication_store().await?,
         };
         let store_pid = store_pid_for_binding(&binding)?;
-        let record = SubnetStateOps::wasm_stores()
+        let record = RootWasmStoreStateOps::wasm_stores()
             .into_iter()
             .find(|record| record.binding == binding)
             .ok_or_else(|| {
@@ -165,7 +165,7 @@ impl WasmStorePublicationWorkflow {
         if fleet.preferred_binding.is_none() {
             fleet.preferred_binding = Some(binding.clone());
         }
-        fleet.reserved_state = SubnetStateOps::publication_store_state();
+        fleet.reserved_state = RootWasmStoreStateOps::publication_store_state();
 
         Ok(PublicationPlacement {
             binding,
@@ -179,10 +179,10 @@ impl WasmStorePublicationWorkflow {
         let binding = Self::create_wasm_store(WasmStoreCreationPurpose::Publication).await?;
         Self::ensure_retired_binding_slot_available_for_promotion()?;
         let changed_at = IcOps::now_secs();
-        let previous = SubnetStateOps::publication_store_state();
+        let previous = RootWasmStoreStateOps::publication_store_state();
         let activated =
-            SubnetStateOps::activate_publication_store_binding(binding.clone(), changed_at);
-        let current = SubnetStateOps::publication_store_state();
+            RootWasmStoreStateOps::activate_publication_store_binding(binding.clone(), changed_at);
+        let current = RootWasmStoreStateOps::publication_store_state();
         if !activated && current.active_binding.as_ref() != Some(&binding) {
             return Err(InternalError::workflow(
                 InternalErrorOrigin::Workflow,
@@ -306,7 +306,8 @@ async fn advance_store_creation(
                         &cost_guard_settlement,
                         IcOps::now_secs(),
                     )?;
-                    let installed = SubnetStateOps::mark_wasm_store_installed(creation.sequence)?;
+                    let installed =
+                        RootWasmStoreStateOps::mark_wasm_store_installed(creation.sequence)?;
                     finalize_store_creation(installed, plan, pid).await
                 }
                 StoreModuleState::Empty => {
@@ -342,9 +343,10 @@ async fn begin_and_perform_store_install(
     pid: Principal,
 ) -> Result<WasmStoreBinding, InternalError> {
     let permit = reserve_store_install(creation.purpose)?;
-    if let Err(error) =
-        SubnetStateOps::begin_wasm_store_install(creation.sequence, permit.replay_settlement())
-    {
+    if let Err(error) = RootWasmStoreStateOps::begin_wasm_store_install(
+        creation.sequence,
+        permit.replay_settlement(),
+    ) {
         return Err(CostGuardWorkflow::recover_after_failure(
             &permit,
             IcOps::now_secs(),
@@ -360,9 +362,10 @@ async fn renew_and_perform_store_install(
     pid: Principal,
 ) -> Result<WasmStoreBinding, InternalError> {
     let permit = reserve_store_install(creation.purpose)?;
-    if let Err(error) =
-        SubnetStateOps::renew_wasm_store_install(creation.sequence, permit.replay_settlement())
-    {
+    if let Err(error) = RootWasmStoreStateOps::renew_wasm_store_install(
+        creation.sequence,
+        permit.replay_settlement(),
+    ) {
         return Err(CostGuardWorkflow::recover_after_failure(
             &permit,
             IcOps::now_secs(),
@@ -394,7 +397,7 @@ async fn perform_store_install(
             error,
         ));
     }
-    let installed = match SubnetStateOps::mark_wasm_store_installed(sequence) {
+    let installed = match RootWasmStoreStateOps::mark_wasm_store_installed(sequence) {
         Ok(installed) => installed,
         Err(error) => {
             return Err(CostGuardWorkflow::recover_after_failure(
@@ -420,7 +423,8 @@ async fn finalize_store_creation(
     }
     FleetActivationWorkflow::complete_provisioned_wasm_store_activation(pid).await?;
     let binding = WasmStorePublicationWorkflow::binding_for_store_pid(pid);
-    let store = SubnetStateOps::commit_wasm_store_creation(creation.sequence, binding.clone())?;
+    let store =
+        RootWasmStoreStateOps::commit_wasm_store_creation(creation.sequence, binding.clone())?;
     if store.pid != pid || store.binding != binding {
         return Err(InternalError::invariant(
             InternalErrorOrigin::Storage,

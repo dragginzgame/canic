@@ -8,8 +8,8 @@ use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, Storable, memory::VirtualMemory, storable::Bound},
     eager_static,
-    role_contract::allocation::memory::observability::{
-        CYCLE_TOPUP_EVENTS_ID, CYCLE_TRACKER_ID, CYCLES_FUNDING_LEDGER_ID,
+    role_contract::allocation::memory::cycles::{
+        CYCLES_FUNDING_LEDGER_ID, CYCLES_TOPUP_EVENTS_ID, CYCLES_TRACKER_ID,
     },
     storage::prelude::*,
 };
@@ -21,7 +21,7 @@ eager_static! {
     //
     static CYCLE_TRACKER: RefCell<CycleTracker> =
         RefCell::new(CycleTracker::new(StableBtreeMap::init(
-            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycle_tracker.v1", ty = CycleTracker, id = CYCLE_TRACKER_ID),
+            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycles.tracker.v1", ty = CycleTracker, id = CYCLES_TRACKER_ID),
         )));
 }
 
@@ -31,7 +31,7 @@ eager_static! {
     //
     static CYCLE_TOPUP_EVENTS: RefCell<CycleTopupEvents> =
         RefCell::new(CycleTopupEvents::new(StableBtreeMap::init(
-            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycle_topup_events.v1", ty = CycleTopupEvents, id = CYCLE_TOPUP_EVENTS_ID),
+            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycles.topup_events.v1", ty = CycleTopupEvents, id = CYCLES_TOPUP_EVENTS_ID),
         )));
 }
 
@@ -41,7 +41,7 @@ eager_static! {
     //
     static CYCLES_FUNDING_LEDGER: RefCell<CyclesFundingLedger> =
         RefCell::new(CyclesFundingLedger::new(StableBtreeMap::init(
-            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycles_funding_ledger.v1", ty = CyclesFundingLedger, id = CYCLES_FUNDING_LEDGER_ID),
+            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycles.funding_ledger.v1", ty = CyclesFundingLedger, id = CYCLES_FUNDING_LEDGER_ID),
         )));
 }
 

@@ -1,6 +1,6 @@
 //! Module: storage::stable::authority_restore
 //!
-//! Responsibility: persist the authority snapshot seal at core memory ID 59.
+//! Responsibility: persist the authority snapshot seal.
 //! Does not own: canister-history observation, endpoint policy, or timer suspension.
 //! Boundary: ops validates complete transitions before this single-record store mutates.
 
@@ -26,7 +26,7 @@ eager_static! {
         StableBtreeMap<u8, AuthorityRestoreFenceRecord, VirtualMemory<DefaultMemoryImpl>>,
     > = RefCell::new(StableBtreeMap::init(crate::ic_memory_key!(
         authority = CANIC_CORE_MEMORY_AUTHORITY,
-        key = "canic.core.authority_restore_fence.v1",
+        key = "canic.core.authority_restore.fence.v1",
         ty = AuthorityRestoreFenceStore,
         id = AUTHORITY_RESTORE_FENCE_ID,
     )));

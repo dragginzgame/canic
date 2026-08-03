@@ -7,7 +7,8 @@
 use crate::{
     ops::{
         canister_pool::CanisterPoolOps, component_registry::ComponentRegistryOps,
-        fleet_registry_mirror::FleetRegistryMirrorOps, storage::state::subnet::SubnetStateOps,
+        fleet_registry_mirror::FleetRegistryMirrorOps,
+        storage::state::root_wasm_store::RootWasmStoreStateOps,
     },
     view::component_registry::{
         RootComponentRegistryView, RootFleetSubnetDeletionPreparationAuthority,
@@ -575,12 +576,13 @@ pub fn deletion_preparation_status(
 /// Return one compact, fail-closed inventory for this active Fleet Subnet Root.
 pub fn canister_summary() -> Result<FleetSubnetRootCanisterSummary, InternalError> {
     let state = validated_root_state()?;
-    let store_canisters = u32::try_from(SubnetStateOps::wasm_stores().len()).map_err(|_| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root-local Wasm Store count exceeds u32",
-        )
-    })?;
+    let store_canisters =
+        u32::try_from(RootWasmStoreStateOps::wasm_stores().len()).map_err(|_| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "root-local Wasm Store count exceeds u32",
+            )
+        })?;
     if store_canisters != 1 {
         return Err(InternalError::invariant(
             InternalErrorOrigin::Storage,

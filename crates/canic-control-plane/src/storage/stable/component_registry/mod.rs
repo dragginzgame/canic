@@ -20,7 +20,7 @@ use canic_core::{
     role_contract::allocation::memory::control_plane::{
         ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_DRAINING_ID,
         ROOT_COMPONENT_PRINCIPAL_INDEX_ID, ROOT_COMPONENT_REGISTRY_ENTRIES_ID,
-        ROOT_COMPONENT_REGISTRY_META_ID, ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID,
+        ROOT_COMPONENT_REGISTRY_STATE_ID, ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID,
     },
 };
 use canic_core::{
@@ -93,9 +93,9 @@ eager_static! {
         RefCell::new(Cell::init(
             canic_core::ic_memory_key!(
                 authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-                key = "canic.control_plane.root_component_registry.v1",
+                key = "canic.control_plane.root.component.registry_state.v1",
                 ty = RootComponentRegistryState,
-                id = ROOT_COMPONENT_REGISTRY_META_ID
+                id = ROOT_COMPONENT_REGISTRY_STATE_ID
             ),
             RootComponentRegistryStateRecord::default(),
         ));
@@ -112,7 +112,7 @@ eager_static! {
     > = RefCell::new(StableBtreeMap::init(
         canic_core::ic_memory_key!(
             authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root_component_draining.v1",
+            key = "canic.control_plane.root.component.draining.v1",
             ty = RootComponentDraining,
             id = ROOT_COMPONENT_DRAINING_ID
         ),
@@ -130,7 +130,7 @@ eager_static! {
     > = RefCell::new(StableBtreeMap::init(
         canic_core::ic_memory_key!(
             authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root_component_subtree_removal_history.v1",
+            key = "canic.control_plane.root.component.subtree_removal_history.v1",
             ty = RootComponentSubtreeRemovalHistory,
             id = ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID
         ),
@@ -148,7 +148,7 @@ eager_static! {
     > = RefCell::new(StableBtreeMap::init(
         canic_core::ic_memory_key!(
             authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.component_registry_entries.v1",
+            key = "canic.control_plane.root.component.registry_entries.v1",
             ty = ComponentRegistryEntries,
             id = ROOT_COMPONENT_REGISTRY_ENTRIES_ID
         ),
@@ -166,7 +166,7 @@ eager_static! {
     > = RefCell::new(StableBtreeMap::init(
         canic_core::ic_memory_key!(
             authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.component_registry_principal_index.v1",
+            key = "canic.control_plane.root.component.principal_index.v1",
             ty = ComponentRegistryPrincipalIndex,
             id = ROOT_COMPONENT_PRINCIPAL_INDEX_ID
         ),
@@ -184,7 +184,7 @@ eager_static! {
     > = RefCell::new(StableBtreeMap::init(
         canic_core::ic_memory_key!(
             authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root_component_allocations.v1",
+            key = "canic.control_plane.root.component.allocations.v1",
             ty = RootComponentAllocations,
             id = ROOT_COMPONENT_ALLOCATIONS_ID
         ),

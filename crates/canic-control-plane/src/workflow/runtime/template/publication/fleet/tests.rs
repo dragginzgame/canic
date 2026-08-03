@@ -6,8 +6,8 @@ use crate::{
     },
     ids::{CanisterRole, TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion},
     ids::{WasmStoreBinding, WasmStoreGcMode},
-    ops::storage::state::subnet::{
-        PublicationStoreStateTestInput, SubnetStateOps, WasmStoreStateTestInput,
+    ops::storage::state::root_wasm_store::{
+        PublicationStoreStateTestInput, RootWasmStoreStateOps, WasmStoreStateTestInput,
     },
     view::state::PublicationStoreStateView,
     workflow::runtime::template::publication::WasmStorePublicationWorkflow,
@@ -78,7 +78,7 @@ fn store(
 }
 
 fn import_occupied_retired_slot() {
-    SubnetStateOps::import_test_state(
+    RootWasmStoreStateOps::import_test_state(
         PublicationStoreStateTestInput {
             active_binding: Some(WasmStoreBinding::new("active")),
             detached_binding: Some(WasmStoreBinding::new("detached")),
@@ -114,7 +114,7 @@ fn clear_binding_reports_blocked_retired_slot() {
     WasmStorePublicationWorkflow::clear_current_publication_store_binding()
         .expect_err("clear must fail while it would overwrite a retired slot");
     assert_eq!(
-        SubnetStateOps::publication_store_state().active_binding,
+        RootWasmStoreStateOps::publication_store_state().active_binding,
         Some(WasmStoreBinding::new("active"))
     );
 }
@@ -154,7 +154,7 @@ fn detached_and_retired_bindings_are_not_publication_candidates() {
 fn completed_gc_store_cannot_be_selected_or_reactivated() {
     let binding = WasmStoreBinding::new("finalized");
     let pid = Principal::from_slice(&[9; 29]);
-    SubnetStateOps::import_test_state(
+    RootWasmStoreStateOps::import_test_state(
         PublicationStoreStateTestInput {
             active_binding: None,
             detached_binding: None,
@@ -182,7 +182,7 @@ fn completed_gc_store_cannot_be_selected_or_reactivated() {
         err.public_error().map(|public| public.code),
         Some(ErrorCode::Conflict)
     );
-    assert_eq!(SubnetStateOps::publication_store_binding(), None);
+    assert_eq!(RootWasmStoreStateOps::publication_store_binding(), None);
 
     let manifest = manifest("app", "embedded:app", "0.20.9", 7, 512);
     let mut finalized = store(

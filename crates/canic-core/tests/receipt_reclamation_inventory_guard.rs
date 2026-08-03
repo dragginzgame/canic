@@ -55,36 +55,36 @@ fn receipt_backed_stable_allocations_remain_single_owner() {
 
     assert_eq!(
         storage
-            .matches("canic.core.receipt_backed_intent_records.v1")
+            .matches("canic.core.intent.receipt_backed_records.v1")
             .count(),
         1,
         "receipt-backed primary stable authority must have one allocation",
     );
     assert_eq!(
         storage
-            .matches("canic.core.placement_acknowledgement_index.v1")
+            .matches("canic.core.placement.acknowledgement_index.v1")
             .count(),
         1,
         "placement acknowledgement must retain one separate derived index",
     );
     assert_eq!(
         storage
-            .matches("canic.core.application_receipt_replay.v1")
+            .matches("canic.core.application_receipt.replay.v1")
             .count(),
         1,
         "application replay deadlines must have one exact adjunct allocation",
     );
     assert_eq!(
         storage
-            .matches("canic.core.application_receipt_eligibility.v1")
+            .matches("canic.core.application_receipt.eligibility.v1")
             .count(),
         1,
         "application terminal eligibility must have one ordered allocation",
     );
-    assert!(allocations.contains("pub const RECEIPT_BACKED_INTENT_RECORDS_ID: u8 = 43;"));
-    assert!(allocations.contains("pub const PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID: u8 = 45;"));
-    assert!(allocations.contains("pub const APPLICATION_RECEIPT_REPLAY_ID: u8 = 46;"));
-    assert!(allocations.contains("pub const APPLICATION_RECEIPT_ELIGIBILITY_ID: u8 = 47;"));
+    assert!(allocations.contains("pub const INTENT_RECEIPT_BACKED_RECORDS_ID: u8 = 45;"));
+    assert!(allocations.contains("pub const PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID: u8 = 49;"));
+    assert!(allocations.contains("pub const APPLICATION_RECEIPT_REPLAY_ID: u8 = 47;"));
+    assert!(allocations.contains("pub const APPLICATION_RECEIPT_ELIGIBILITY_ID: u8 = 48;"));
 }
 
 fn source_paths_containing(root: &Path, needle: &str) -> BTreeSet<String> {

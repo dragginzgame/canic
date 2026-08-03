@@ -37,7 +37,7 @@ fn descriptor_id_drift_is_blocking() {
         .collect::<Vec<_>>();
     let stored_blobs = descriptors
         .iter_mut()
-        .find(|descriptor| descriptor.allocation == StateAllocationKey::StoredBlobs)
+        .find(|descriptor| descriptor.allocation == StateAllocationKey::BlobStorageRoots)
         .expect("stored blobs descriptor");
     stored_blobs.state[0].memory_id = Some(61);
 
@@ -46,7 +46,7 @@ fn descriptor_id_drift_is_blocking() {
         Err(errors) if errors.iter().any(|finding| matches!(
             finding,
             RoleContractFinding::AllocationDescriptorIdMismatch {
-                key: StateAllocationKey::StoredBlobs,
+                key: StateAllocationKey::BlobStorageRoots,
                 ..
             }
         ))
@@ -62,9 +62,9 @@ fn materialization_joins_only_selected_allocations() {
         required_features: BTreeSet::new(),
         effective_features: BTreeSet::new(),
         allocations: vec![ResolvedStateAllocation {
-            key: StateAllocationKey::StoredBlobs,
+            key: StateAllocationKey::BlobStorageRoots,
             owner: AllocationOwner::CanicCore,
-            memory_ids: vec![MemoryId::new(58)],
+            memory_ids: vec![MemoryId::new(55)],
             selected_by: BTreeSet::from([SelectionProvenance::EffectiveFeature(
                 canic_core::role_contract::CanicFeatureKey::BlobStorage,
             )]),
@@ -75,7 +75,7 @@ fn materialization_joins_only_selected_allocations() {
     let role = manifest.roles.first().expect("role");
     assert_eq!(role.canister_role, "blobber");
     assert_eq!(role.state.len(), 1);
-    assert_eq!(role.state[0].domain, "stored_blobs");
+    assert_eq!(role.state[0].domain, "blob_storage_roots");
 }
 
 #[test]
@@ -120,7 +120,7 @@ fn wasm_store_materializes_template_and_gc_state() {
         .filter_map(|domain| domain.memory_id)
         .collect::<Vec<_>>();
     assert_eq!(ids.len(), 5);
-    for expected in [10, 11, 12, 13, 15] {
+    for expected in [10, 11, 12, 13, 14] {
         assert!(ids.contains(&expected));
     }
 }
@@ -151,5 +151,5 @@ fn fleet_coordinator_materializes_only_its_registry_state() {
     let manifest = materialize_state_manifest(&[contract]).expect("manifest");
     assert_eq!(manifest.roles.len(), 1);
     assert_eq!(manifest.roles[0].state.len(), 1);
-    assert_eq!(manifest.roles[0].state[0].memory_id, Some(16));
+    assert_eq!(manifest.roles[0].state[0].memory_id, Some(15));
 }

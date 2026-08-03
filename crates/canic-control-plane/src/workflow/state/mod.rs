@@ -5,7 +5,8 @@
 //! Boundary: derives direct children from Store and Component Registry authority.
 
 use crate::ops::{
-    component_registry::ComponentRegistryOps, storage::state::subnet::SubnetStateOps,
+    component_registry::ComponentRegistryOps,
+    storage::state::root_wasm_store::RootWasmStoreStateOps,
 };
 use canic_core::{
     cdk::types::Principal,
@@ -44,7 +45,7 @@ impl RootStateCascadeTargets {
             root: IcOps::canister_self(),
             canisters: BTreeSet::new(),
         };
-        for store in SubnetStateOps::wasm_stores() {
+        for store in RootWasmStoreStateOps::wasm_stores() {
             targets.insert(store.pid, RootChildAuthority::StoreInventory)?;
         }
         for component in ComponentRegistryOps::root_component_canisters()? {

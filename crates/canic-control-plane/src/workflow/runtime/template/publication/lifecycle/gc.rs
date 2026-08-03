@@ -20,7 +20,7 @@ use crate::{
         WasmStoreStatusResponse,
     },
     ids::{WasmStoreBinding, WasmStoreGcMode},
-    ops::storage::state::subnet::SubnetStateOps,
+    ops::storage::state::root_wasm_store::RootWasmStoreStateOps,
     view::{
         component_registry::{
             RootFleetSubnetFinalInventoryView, RootFleetSubnetStoreBindingAuthority,
@@ -139,7 +139,7 @@ impl WasmStorePublicationWorkflow {
     pub async fn quiesce_single_root_store_for_final_inventory()
     -> Result<(Principal, WasmStoreStatusResponse), InternalError> {
         let _guard = LifecycleOperationGuard::try_enter()?;
-        let stores = SubnetStateOps::wasm_stores();
+        let stores = RootWasmStoreStateOps::wasm_stores();
         if stores.len() != 1 {
             return Err(PublicationWorkflowError::InvalidState(format!(
                 "root final inventory requires exactly one local wasm store, found {}",
@@ -165,7 +165,7 @@ impl WasmStorePublicationWorkflow {
         validate_live_prepared_store(&live)?;
 
         if runtime.gc.mode == WasmStoreGcMode::Normal {
-            let persisted = SubnetStateOps::transition_wasm_store_gc(
+            let persisted = RootWasmStoreStateOps::transition_wasm_store_gc(
                 &runtime.binding,
                 WasmStoreGcMode::Prepared,
                 live.gc.changed_at,
@@ -195,7 +195,7 @@ impl WasmStorePublicationWorkflow {
     pub async fn verify_single_root_store_for_removal()
     -> Result<(Principal, WasmStoreStatusResponse), InternalError> {
         let _guard = LifecycleOperationGuard::try_enter()?;
-        let stores = SubnetStateOps::wasm_stores();
+        let stores = RootWasmStoreStateOps::wasm_stores();
         if stores.len() != 1 {
             return Err(PublicationWorkflowError::InvalidState(format!(
                 "root removal requires exactly one local wasm store, found {}",
@@ -229,7 +229,7 @@ impl WasmStorePublicationWorkflow {
     async fn reclaim_single_root_store_inner(
         inventory: &RootFleetSubnetFinalInventoryView,
     ) -> Result<RootFleetSubnetStoreReclamationEvidence, InternalError> {
-        let stores = SubnetStateOps::wasm_stores();
+        let stores = RootWasmStoreStateOps::wasm_stores();
         if stores.len() != 1 {
             return Err(PublicationWorkflowError::InvalidState(format!(
                 "root Store reclamation requires exactly one local wasm store, found {}",
@@ -298,7 +298,7 @@ impl WasmStorePublicationWorkflow {
     pub async fn verify_single_reclaimed_root_store_binding(
         inventory: &RootFleetSubnetFinalInventoryView,
     ) -> Result<RootFleetSubnetStoreBindingAuthority, InternalError> {
-        let stores = SubnetStateOps::wasm_stores();
+        let stores = RootWasmStoreStateOps::wasm_stores();
         if stores.len() != 1 {
             return Err(PublicationWorkflowError::InvalidState(format!(
                 "root Store binding finalization requires exactly one local Store, found {}",
@@ -307,7 +307,7 @@ impl WasmStorePublicationWorkflow {
             .into());
         }
         let runtime = stores.into_iter().next().expect("validated one Store");
-        let publication = SubnetStateOps::publication_store_state();
+        let publication = RootWasmStoreStateOps::publication_store_state();
         let binding_is_exact = [
             runtime.pid == inventory.wasm_store,
             publication.active_binding.as_ref() == Some(&runtime.binding),
@@ -369,45 +369,48 @@ impl WasmStorePublicationWorkflow {
         }
 
         for _ in 0..4 {
-            let previous = SubnetStateOps::publication_store_state();
+            let previous = RootWasmStoreStateOps::publication_store_state();
             match reclaimed_store_binding_phase(&previous, intent)? {
                 ReclaimedStoreBindingPhase::Active => {
                     let changed_at = IcOps::now_secs();
-                    if !SubnetStateOps::clear_publication_store_binding(changed_at) {
+                    if !RootWasmStoreStateOps::clear_publication_store_binding(changed_at) {
                         return Err(binding_finalization_transition_error("clear active"));
                     }
                     Self::log_publication_state_transition(
                         "finalize_reclaimed_active_binding",
                         &previous,
-                        &SubnetStateOps::publication_store_state(),
+                        &RootWasmStoreStateOps::publication_store_state(),
                         changed_at,
                     );
                 }
                 ReclaimedStoreBindingPhase::Detached => {
                     let changed_at = IcOps::now_secs();
-                    let retired =
-                        SubnetStateOps::retire_detached_publication_store_binding(changed_at);
+                    let retired = RootWasmStoreStateOps::retire_detached_publication_store_binding(
+                        changed_at,
+                    );
                     if retired.as_ref() != Some(&intent.binding) {
                         return Err(binding_finalization_transition_error("retire detached"));
                     }
                     Self::log_publication_state_transition(
                         "finalize_reclaimed_detached_binding",
                         &previous,
-                        &SubnetStateOps::publication_store_state(),
+                        &RootWasmStoreStateOps::publication_store_state(),
                         changed_at,
                     );
                 }
                 ReclaimedStoreBindingPhase::Retired => {
                     let changed_at = IcOps::now_secs();
                     let finalized =
-                        SubnetStateOps::finalize_retired_publication_store_binding(changed_at);
+                        RootWasmStoreStateOps::finalize_retired_publication_store_binding(
+                            changed_at,
+                        );
                     if finalized.as_ref() != Some(&intent.binding) {
                         return Err(binding_finalization_transition_error("finalize retired"));
                     }
                     Self::log_publication_state_transition(
                         "finalize_reclaimed_retired_binding",
                         &previous,
-                        &SubnetStateOps::publication_store_state(),
+                        &RootWasmStoreStateOps::publication_store_state(),
                         changed_at,
                     );
                 }
@@ -600,7 +603,7 @@ impl WasmStorePublicationWorkflow {
         if runtime_is_exact {
             return Ok(());
         }
-        if !SubnetStateOps::reconcile_wasm_store_gc(&runtime.binding, runtime.pid, live) {
+        if !RootWasmStoreStateOps::reconcile_wasm_store_gc(&runtime.binding, runtime.pid, live) {
             return Err(PublicationWorkflowError::InvalidState(format!(
                 "failed to reconcile root Store GC authority for '{}'",
                 runtime.binding
@@ -624,7 +627,7 @@ impl WasmStorePublicationWorkflow {
         binding: &WasmStoreBinding,
         store_pid: Principal,
     ) -> Result<(), InternalError> {
-        let state = SubnetStateOps::publication_store_state();
+        let state = RootWasmStoreStateOps::publication_store_state();
         let is_unbound = [
             state.active_binding.as_ref() != Some(binding),
             state.detached_binding.as_ref() != Some(binding),
@@ -675,7 +678,7 @@ impl WasmStorePublicationWorkflow {
         MgmtOps::uninstall_code(store_pid).await?;
         MgmtOps::stop_canister(store_pid).await?;
         MgmtOps::delete_canister(store_pid).await?;
-        if !SubnetStateOps::remove_wasm_store(&binding) {
+        if !RootWasmStoreStateOps::remove_wasm_store(&binding) {
             return Err(PublicationWorkflowError::InvalidState(format!(
                 "deleted ws '{binding}' was missing from runtime inventory"
             ))
@@ -687,7 +690,7 @@ impl WasmStorePublicationWorkflow {
 
     // Resolve one binding from authoritative runtime inventory.
     fn runtime_store(binding: &WasmStoreBinding) -> Result<WasmStoreView, InternalError> {
-        SubnetStateOps::wasm_stores()
+        RootWasmStoreStateOps::wasm_stores()
             .into_iter()
             .find(|store| &store.binding == binding)
             .ok_or_else(|| {
@@ -703,7 +706,7 @@ impl WasmStorePublicationWorkflow {
         expected: &PublicationStoreStateView,
         binding: &WasmStoreBinding,
     ) -> Result<(), InternalError> {
-        let current = SubnetStateOps::publication_store_state();
+        let current = RootWasmStoreStateOps::publication_store_state();
         if current.generation != expected.generation
             || current.retired_binding.as_ref() != Some(binding)
         {
@@ -752,7 +755,7 @@ impl WasmStorePublicationWorkflow {
             .into());
         }
 
-        if !SubnetStateOps::transition_wasm_store_gc(binding, next, changed_at) {
+        if !RootWasmStoreStateOps::transition_wasm_store_gc(binding, next, changed_at) {
             return Err(PublicationWorkflowError::InvalidState(format!(
                 "failed to persist gc mode {next:?} for '{binding}'"
             ))
@@ -766,7 +769,7 @@ impl WasmStorePublicationWorkflow {
     pub async fn prepare_retired_publication_store_for_gc()
     -> Result<Option<WasmStoreBinding>, InternalError> {
         let _guard = LifecycleOperationGuard::try_enter()?;
-        let state = SubnetStateOps::publication_store_state();
+        let state = RootWasmStoreStateOps::publication_store_state();
         let Some(retired_binding) = state.retired_binding.clone() else {
             return Ok(None);
         };
@@ -796,7 +799,7 @@ impl WasmStorePublicationWorkflow {
     pub async fn begin_retired_publication_store_gc()
     -> Result<Option<WasmStoreBinding>, InternalError> {
         let _guard = LifecycleOperationGuard::try_enter()?;
-        let state = SubnetStateOps::publication_store_state();
+        let state = RootWasmStoreStateOps::publication_store_state();
         let Some(retired_binding) = state.retired_binding.clone() else {
             return Ok(None);
         };
@@ -826,7 +829,7 @@ impl WasmStorePublicationWorkflow {
     pub async fn complete_retired_publication_store_gc()
     -> Result<Option<WasmStoreBinding>, InternalError> {
         let _guard = LifecycleOperationGuard::try_enter()?;
-        let state = SubnetStateOps::publication_store_state();
+        let state = RootWasmStoreStateOps::publication_store_state();
         let Some(retired_binding) = state.retired_binding.clone() else {
             return Ok(None);
         };
@@ -856,7 +859,7 @@ impl WasmStorePublicationWorkflow {
     pub async fn finalize_retired_publication_store_binding()
     -> Result<Option<(WasmStoreBinding, Principal)>, InternalError> {
         let _guard = LifecycleOperationGuard::try_enter()?;
-        let state = SubnetStateOps::publication_store_state();
+        let state = RootWasmStoreStateOps::publication_store_state();
         let Some(retired_binding) = state.retired_binding.clone() else {
             return Ok(None);
         };
@@ -886,22 +889,21 @@ impl WasmStorePublicationWorkflow {
         }
 
         let changed_at = IcOps::now_secs();
-        let previous = SubnetStateOps::publication_store_state();
-        let finalized_binding = SubnetStateOps::finalize_retired_publication_store_binding(
-            changed_at,
-        )
-        .ok_or_else(|| {
-            PublicationWorkflowError::InvalidState(format!(
-                "retired ws '{retired_binding}' disappeared before finalize commit"
-            ))
-        })?;
+        let previous = RootWasmStoreStateOps::publication_store_state();
+        let finalized_binding =
+            RootWasmStoreStateOps::finalize_retired_publication_store_binding(changed_at)
+                .ok_or_else(|| {
+                    PublicationWorkflowError::InvalidState(format!(
+                        "retired ws '{retired_binding}' disappeared before finalize commit"
+                    ))
+                })?;
         if finalized_binding != retired_binding {
             return Err(PublicationWorkflowError::InvalidState(format!(
                 "finalized ws '{finalized_binding}' did not match expected '{retired_binding}'"
             ))
             .into());
         }
-        let current = SubnetStateOps::publication_store_state();
+        let current = RootWasmStoreStateOps::publication_store_state();
         Self::log_publication_state_transition(
             "finalize_retired_binding",
             &previous,
@@ -994,7 +996,7 @@ fn validate_store_deletion_intent_lineage(
 fn validate_finalized_publication_state(
     finalization: &RootFleetSubnetStoreBindingFinalizationView,
 ) -> Result<(), InternalError> {
-    let state = SubnetStateOps::publication_store_state();
+    let state = RootWasmStoreStateOps::publication_store_state();
     let state_is_exact = [
         state.active_binding.is_none(),
         state.detached_binding.is_none(),
@@ -1018,7 +1020,7 @@ fn single_finalized_runtime_store(
     finalization: &RootFleetSubnetStoreBindingFinalizationView,
 ) -> Result<WasmStoreView, InternalError> {
     validate_finalized_publication_state(finalization)?;
-    let stores = SubnetStateOps::wasm_stores();
+    let stores = RootWasmStoreStateOps::wasm_stores();
     if stores.len() != 1 {
         return Err(PublicationWorkflowError::InvalidState(format!(
             "Store deletion preparation requires exactly one runtime Store, found {}",
@@ -1049,7 +1051,7 @@ fn validate_deletion_runtime_inventory(
     finalization: &RootFleetSubnetStoreBindingFinalizationView,
 ) -> Result<bool, InternalError> {
     validate_finalized_publication_state(finalization)?;
-    let stores = SubnetStateOps::wasm_stores();
+    let stores = RootWasmStoreStateOps::wasm_stores();
     match stores.as_slice() {
         [] => Ok(false),
         [runtime]
@@ -1336,16 +1338,16 @@ fn reconcile_deleted_store_inventory(
     finalization: &RootFleetSubnetStoreBindingFinalizationView,
 ) -> Result<(), InternalError> {
     let runtime_present = validate_deletion_runtime_inventory(intent, finalization)?;
-    if runtime_present && !SubnetStateOps::remove_wasm_store(&intent.binding) {
+    if runtime_present && !RootWasmStoreStateOps::remove_wasm_store(&intent.binding) {
         return Err(PublicationWorkflowError::InvalidState(
             "root Store runtime inventory disappeared before deletion reconciliation".to_string(),
         )
         .into());
     }
     let inventory_is_empty = [
-        SubnetStateOps::wasm_stores().is_empty(),
-        SubnetStateOps::wasm_store_pid(&intent.binding).is_none(),
-        SubnetStateOps::wasm_store_binding_for_pid(intent.wasm_store).is_none(),
+        RootWasmStoreStateOps::wasm_stores().is_empty(),
+        RootWasmStoreStateOps::wasm_store_pid(&intent.binding).is_none(),
+        RootWasmStoreStateOps::wasm_store_binding_for_pid(intent.wasm_store).is_none(),
     ]
     .into_iter()
     .all(|valid| valid);
@@ -1525,7 +1527,7 @@ fn validate_live_reclaimed_store(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ops::storage::state::subnet::{
+    use crate::ops::storage::state::root_wasm_store::{
         PublicationStoreStateTestInput, WasmStoreStateTestInput,
     };
     use canic_core::dto::error::ErrorCode;
@@ -1533,7 +1535,7 @@ mod tests {
     fn import_retired_store(mode: WasmStoreGcMode) -> (WasmStoreBinding, Principal) {
         let binding = WasmStoreBinding::new("retired");
         let pid = Principal::from_slice(&[7; 29]);
-        SubnetStateOps::import_test_state(
+        RootWasmStoreStateOps::import_test_state(
             PublicationStoreStateTestInput {
                 active_binding: Some(WasmStoreBinding::new("active")),
                 detached_binding: None,
@@ -1579,7 +1581,7 @@ mod tests {
     #[test]
     fn retired_gc_commit_is_generation_bound_and_idempotent() {
         let (binding, _) = import_retired_store(WasmStoreGcMode::Normal);
-        let expected = SubnetStateOps::publication_store_state();
+        let expected = RootWasmStoreStateOps::publication_store_state();
 
         WasmStorePublicationWorkflow::persist_retired_gc_transition(
             &expected,
@@ -1600,7 +1602,7 @@ mod tests {
         assert_eq!(store.gc.mode, WasmStoreGcMode::Prepared);
         assert_eq!(store.gc.changed_at, 40);
 
-        assert!(SubnetStateOps::clear_publication_store_binding(42));
+        assert!(RootWasmStoreStateOps::clear_publication_store_binding(42));
         let err = WasmStorePublicationWorkflow::persist_retired_gc_transition(
             &expected,
             &binding,
@@ -1620,7 +1622,7 @@ mod tests {
     fn root_store_gc_reconciliation_preserves_live_retry_lineage() {
         let binding = WasmStoreBinding::new("root");
         let pid = Principal::from_slice(&[9; 29]);
-        SubnetStateOps::import_test_state(
+        RootWasmStoreStateOps::import_test_state(
             PublicationStoreStateTestInput {
                 active_binding: Some(binding.clone()),
                 detached_binding: None,
@@ -1697,7 +1699,7 @@ mod tests {
         };
 
         for (generation, active, detached, retired, retired_at) in phases {
-            SubnetStateOps::import_test_state(
+            RootWasmStoreStateOps::import_test_state(
                 PublicationStoreStateTestInput {
                     active_binding: active,
                     detached_binding: detached,
@@ -1726,18 +1728,18 @@ mod tests {
             assert_eq!(evidence.source_generation, source_generation);
             assert_eq!(evidence.finalized_generation, source_generation + 3);
             assert!(evidence.finalized_at_secs > 0);
-            let state = SubnetStateOps::publication_store_state();
+            let state = RootWasmStoreStateOps::publication_store_state();
             assert_eq!(state.active_binding, None);
             assert_eq!(state.detached_binding, None);
             assert_eq!(state.retired_binding, None);
-            assert_eq!(SubnetStateOps::wasm_stores().len(), 1);
+            assert_eq!(RootWasmStoreStateOps::wasm_stores().len(), 1);
         }
     }
 
     #[test]
     fn finalized_delete_preflight_binds_inventory_identity_and_gc_state() {
         let (binding, pid) = import_retired_store(WasmStoreGcMode::Complete);
-        SubnetStateOps::finalize_retired_publication_store_binding(40)
+        RootWasmStoreStateOps::finalize_retired_publication_store_binding(40)
             .expect("retired binding finalizes");
 
         WasmStorePublicationWorkflow::ensure_finalized_store_is_deletable(&binding, pid)
@@ -1759,7 +1761,7 @@ mod tests {
         let root = Principal::from_slice(&[12; 29]);
         let pid = Principal::from_slice(&[13; 29]);
         let binding = WasmStoreBinding::owned(pid.to_text());
-        SubnetStateOps::import_test_state(
+        RootWasmStoreStateOps::import_test_state(
             PublicationStoreStateTestInput {
                 active_binding: None,
                 detached_binding: None,
@@ -1812,8 +1814,8 @@ mod tests {
         reconcile_deleted_store_inventory(&intent, &finalization)
             .expect("exact retry should accept already-empty root-owned inventory");
 
-        assert!(SubnetStateOps::wasm_stores().is_empty());
-        assert_eq!(SubnetStateOps::wasm_store_pid(&binding), None);
-        assert_eq!(SubnetStateOps::wasm_store_binding_for_pid(pid), None);
+        assert!(RootWasmStoreStateOps::wasm_stores().is_empty());
+        assert_eq!(RootWasmStoreStateOps::wasm_store_pid(&binding), None);
+        assert_eq!(RootWasmStoreStateOps::wasm_store_binding_for_pid(pid), None);
     }
 }

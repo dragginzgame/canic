@@ -263,10 +263,11 @@ mod tests {
 
     #[test]
     fn accepts_canic_framework_namespaces_in_owned_ranges() {
-        validate("canic.core.canister_children.v1", CANIC_CORE_MIN_ID).expect("first core slot");
+        validate("canic.core.runtime.canister_children.v1", CANIC_CORE_MIN_ID)
+            .expect("first core slot");
         validate("canic.core.future.v1", CANIC_CORE_MAX_ID).expect("last core slot");
         validate(
-            "canic.control_plane.template_manifest.v1",
+            "canic.control_plane.template.manifests.v1",
             CANIC_CONTROL_PLANE_MIN_ID,
         )
         .expect("first control-plane slot");
@@ -276,12 +277,12 @@ mod tests {
 
     #[test]
     fn rejects_canic_framework_namespaces_outside_owned_ranges() {
-        let err = validate("canic.core.fleet_state.v1", CANIC_CONTROL_PLANE_MIN_ID)
+        let err = validate("canic.core.fleet.state.v1", CANIC_CONTROL_PLANE_MIN_ID)
             .expect_err("core key cannot claim control-plane range");
         std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
 
         let err = validate(
-            "canic.control_plane.template_manifest.v1",
+            "canic.control_plane.template.manifests.v1",
             CANIC_CORE_MIN_ID,
         )
         .expect_err("control-plane key cannot claim core range");

@@ -44,7 +44,7 @@ eager_static! {
         RefCell::new(Cell::init(
             canic_core::ic_memory_key!(
                 authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-                key = "canic.control_plane.fleet_coordinator_registry.v1",
+                key = "canic.control_plane.fleet_coordinator.registry.v1",
                 ty = FleetCoordinatorRegistryState,
                 id = FLEET_COORDINATOR_REGISTRY_ID
             ),

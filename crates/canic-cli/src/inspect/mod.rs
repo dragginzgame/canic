@@ -801,7 +801,7 @@ mod tests {
         );
         assert_eq!(
             value["runtime_status"]["status"]["state"]["domains"][0]["domain"],
-            "env"
+            "runtime_bindings"
         );
         assert_eq!(
             value["runtime_status"]["status"]["receipt_capacity"]["receipt_record_limit"],
@@ -912,7 +912,7 @@ mod tests {
             state: Some(RuntimeStateSummary {
                 manifest_schema_version: 1,
                 domains: vec![RuntimeStateDomainSummary {
-                    domain: "env".to_string(),
+                    domain: "runtime_bindings".to_string(),
                     version: 1,
                     storage: "stable_memory".to_string(),
                     memory_id: Some(1),

@@ -15,7 +15,7 @@ eager_static! {
     static TEMPLATE_MANIFESTS: RefCell<
         StableBtreeMap<TemplateReleaseKey, TemplateManifestRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template_manifest.v1", ty = TemplateManifestStateStore, id = TEMPLATE_MANIFESTS_ID)),
+        StableBtreeMap::init(canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template.manifests.v1", ty = TemplateManifestStateStore, id = TEMPLATE_MANIFESTS_ID)),
     );
 }
 

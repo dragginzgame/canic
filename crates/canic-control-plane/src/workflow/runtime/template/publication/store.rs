@@ -5,7 +5,7 @@ use crate::{
         WasmStoreStatusResponse,
     },
     ids::{TemplateId, TemplateVersion, WasmStoreBinding},
-    ops::storage::{state::subnet::SubnetStateOps, template::TemplateChunkedOps},
+    ops::storage::{state::root_wasm_store::RootWasmStoreStateOps, template::TemplateChunkedOps},
 };
 use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{error::InternalError, ops::cost_guard::CostGuardPermit};
@@ -94,7 +94,7 @@ pub(super) async fn store_chunk(
 pub(super) fn store_binding_for_pid(
     store_pid: Principal,
 ) -> Result<WasmStoreBinding, InternalError> {
-    SubnetStateOps::wasm_store_binding_for_pid(store_pid)
+    RootWasmStoreStateOps::wasm_store_binding_for_pid(store_pid)
         .ok_or_else(|| PublicationWorkflowError::StoreNotRegistered(store_pid).into())
 }
 

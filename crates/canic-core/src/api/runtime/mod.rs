@@ -872,7 +872,7 @@ mod tests {
         let summary = state_summary_for_memory_ids(
             Some("root"),
             &std::collections::BTreeSet::from([
-                crate::role_contract::allocation::memory::env::ENV_ID,
+                crate::role_contract::allocation::memory::runtime::RUNTIME_BINDINGS_ID,
             ]),
         )
         .expect("runtime state declarations");
@@ -883,7 +883,7 @@ mod tests {
         );
         assert!(summary.total_stable_memory_pages.is_none());
         assert!(summary.domains.iter().any(|domain| {
-            domain.domain == "env"
+            domain.domain == "runtime_bindings"
                 && domain.storage == "stable_memory"
                 && domain.status == RuntimeStateDomainStatus::Ok
         }));

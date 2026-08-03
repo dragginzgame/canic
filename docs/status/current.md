@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.93`.
-- The latest published release is `v0.100.93` at
-  `e279fee3622831e3a0d0c0581880e4de95af43fe`.
-- Open `0.100.94` is the changelog draft target; no package-version change
+- The workspace package version is `0.100.94`.
+- The latest published release is `v0.100.94` at
+  `68cec35895cb0048776a5a826ce572c21e1e3b59`.
+- Open `0.100.95` is the changelog draft target; no package-version change
   has been authorized.
 - Released `0.100.93` replaces the superseded generic empty-Canister pool with
   one required prepaid asset inventory owned by every Fleet Subnet Root. Fleet
@@ -30,7 +30,7 @@ Historical detail is archived at:
   retired role-based Fleet Directory/Subnet Registry remains hard-cut, the
   active Fleet Directory remains Registry-derived, control-plane pool state
   uses IDs 24-26, and the reinstall-only core ledger remains packed at 30-58.
-- Open `0.100.94` gives the Fleet Coordinator and every Fleet Subnet Root one
+- Released `0.100.94` gives the Fleet Coordinator and every Fleet Subnet Root one
   controller-owned v1 authority snapshot fence at stable-memory ID 59.
   Prepare binds a nonzero 32-byte operation to independently observed IC
   Canister history, seals ordinary updates and suspends timer handles; exact
@@ -40,6 +40,14 @@ Historical detail is archived at:
   root PocketIC proofs cover the exact Registry and Component allocation
   heads, and role-package checks keep the capability confined to those two
   authority runtimes.
+- Open `0.100.95` repacks the reinstall-only stable-memory ledger by subsystem
+  without changing the owner ranges: control-plane state is consecutive at
+  IDs 10-26 and core state at IDs 30-59. Constants, allocation keys, state
+  domains and stable keys now share explicit template, Store, Coordinator,
+  root, runtime, Fleet, authentication, replay, cycles, log, intent,
+  application-receipt, Placement, sharding, blob-storage and authority-fence
+  vocabulary. The former broad root Subnet state is hard-cut to root Wasm
+  Store state; there is no migration, alias or compatibility path.
 - Proposed `0.105` defines provider-neutral declarative authentication
   profiles as the sole source of multi-role user-token grants and
   install-owned issuer/verifier policy. Its initial Toko path uses one
