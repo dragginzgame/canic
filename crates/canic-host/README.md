@@ -115,7 +115,9 @@ exact root before recording typed absence at the surviving Coordinator.
 
 Use it only after the selected disposable root has completed logical removal,
 Store deletion, and retained the same nonzero operation ID. Run preparation
-and execution as separate processes to prove recovery from remote authority:
+and execution as separate processes to prove recovery from remote authority.
+`execute` refuses to synthesize a missing execution intent, so the durable
+Coordinator receipt from `prepare` is a mandatory phase boundary:
 
 ```text
 cargo run -p canic-host --example fleet_subnet_root_deletion -- \
@@ -128,5 +130,6 @@ cargo run -p canic-host --example fleet_subnet_root_deletion -- \
 ```
 
 The prepare output is the exact Coordinator execution receipt. The execute
-output is its terminal deletion receipt; repeating execute returns that same
-terminal receipt without another root effect.
+output is its terminal deletion receipt. Run the same execute command again to
+verify exact replay: it returns that same terminal receipt without another root
+effect.

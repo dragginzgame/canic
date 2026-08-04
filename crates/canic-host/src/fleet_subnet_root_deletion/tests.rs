@@ -155,14 +155,13 @@ impl FleetSubnetRootDeletionAdapter for ScriptedAdapter {
 }
 
 #[test]
-fn full_execution_prepares_stops_deletes_and_attests_exact_absence() {
+fn prepared_execution_stops_deletes_and_attests_exact_absence() {
     let mut adapter = ScriptedAdapter::with_observations([
-        present(CanisterLifecycle::Running, 500_000_000_000),
-        present(CanisterLifecycle::Running, 100_000_000_000),
         present(CanisterLifecycle::Running, 100_000_000_000),
         present(CanisterLifecycle::Stopped, 100_000_000_000),
         RootStatusObservation::Absent,
     ]);
+    adapter.execution = Some(execution());
 
     let terminal = execute(&mut adapter).expect("execute physical root deletion");
 
@@ -174,12 +173,6 @@ fn full_execution_prepares_stops_deletes_and_attests_exact_absence() {
             "terminal_status",
             "executor_identity",
             "execution_status",
-            "preparation_status",
-            "observe",
-            "store_deletion_status",
-            "prepare",
-            "observe",
-            "begin_execution",
             "observe",
             "stop",
             "observe",
@@ -280,7 +273,8 @@ fn lost_stop_or_delete_response_is_adopted_only_from_later_exact_status() {
 fn absent_root_without_durable_execution_intent_fails_closed() {
     let mut adapter = ScriptedAdapter::with_observations([RootStatusObservation::Absent]);
 
-    let error = execute(&mut adapter).expect_err("absence cannot create execution authority");
+    let error = resolve_execution_intent(&mut adapter, coordinator(), root(), OPERATION_ID)
+        .expect_err("absence cannot create execution authority");
 
     assert!(matches!(
         error,
@@ -290,13 +284,30 @@ fn absent_root_without_durable_execution_intent_fails_closed() {
 }
 
 #[test]
-fn reserved_cycles_fail_before_store_receipt_or_cycle_transfer() {
+fn execution_without_durable_intent_fails_before_root_or_management_effects() {
+    let mut adapter = ScriptedAdapter::with_observations([]);
+
+    let error = execute(&mut adapter).expect_err("execute requires prior durable preparation");
+
+    assert!(matches!(
+        error,
+        FleetSubnetRootDeletionError::ExecutionNotPrepared
+    ));
+    assert_eq!(
+        adapter.events,
+        ["terminal_status", "executor_identity", "execution_status"]
+    );
+}
+
+#[test]
+fn preparation_rejects_reserved_cycles_before_store_receipt_or_transfer() {
     let mut evidence = status(CanisterLifecycle::Running, 500_000_000_000);
     evidence.reserved_cycles = 1;
     let mut adapter =
         ScriptedAdapter::with_observations([RootStatusObservation::Present(evidence)]);
 
-    let error = execute(&mut adapter).expect_err("reserved cycles must fail preflight");
+    let error = resolve_execution_intent(&mut adapter, coordinator(), root(), OPERATION_ID)
+        .expect_err("reserved cycles must fail preflight");
 
     assert!(matches!(
         error,
