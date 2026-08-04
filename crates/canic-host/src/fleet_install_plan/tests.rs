@@ -525,6 +525,7 @@ fn build_output(
     let wasm_path = artifact_root.join(format!("{role}.wasm"));
     let wasm_gz_path = artifact_root.join(format!("{role}.wasm.gz"));
     let mut wasm = crate::release_set::WASM_MAGIC.to_vec();
+    wasm.extend_from_slice(release_build_id.to_string().as_bytes());
     wasm.extend_from_slice(role.as_bytes());
     fs::write(&wasm_path, &wasm).expect("write Wasm");
     fs::write(&wasm_gz_path, gzip(&wasm)).expect("write gzip Wasm");
