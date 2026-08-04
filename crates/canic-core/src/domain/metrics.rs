@@ -271,7 +271,6 @@ impl WasmStoreMetricOperation {
 #[remain::sorted]
 pub enum WasmStoreMetricSource {
     Bootstrap,
-    Embedded,
     ManagedFleet,
     Resolver,
     Store,
@@ -284,7 +283,6 @@ impl WasmStoreMetricSource {
     pub const fn metric_label(self) -> &'static str {
         match self {
             Self::Bootstrap => "bootstrap",
-            Self::Embedded => "embedded",
             Self::ManagedFleet => "managed_fleet",
             Self::Resolver => "resolver",
             Self::Store => "store",

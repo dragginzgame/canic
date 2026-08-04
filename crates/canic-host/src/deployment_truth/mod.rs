@@ -58,12 +58,17 @@ pub use observe::{
     DeploymentTruthError, LocalArtifactManifestRequest, LocalInventoryRequest,
     collect_local_deployment_inventory, collect_local_role_artifact_manifest,
 };
+pub(crate) use observe::{
+    collect_local_deployment_inventory_at_root, collect_local_role_artifact_manifest_at_root,
+};
+pub(crate) use plan::build_local_deployment_plan_at_root;
 pub use plan::{LocalDeploymentPlanRequest, build_local_deployment_plan};
 pub use receipt::{
     artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
     deployment_execution_status_for_receipt_parts, deployment_receipt_from_check,
     deployment_receipt_from_check_with_status, phase_receipt,
 };
+pub(crate) use report::check_local_deployment_at_root;
 pub use report::{
     LocalDeploymentCheckRequest, check_local_deployment, compare_plan_inventory_and_receipt,
     compare_plan_to_inventory, is_evidence_conflict_finding_code, safety_report_from_diff,

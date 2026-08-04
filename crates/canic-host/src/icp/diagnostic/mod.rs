@@ -13,6 +13,7 @@
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum IcpDiagnostic {
     AlreadyInstalled,
+    CanisterOutOfCycles,
     CanisterNotFound { canister: String },
     ProjectManifestMissing,
     LocalNetworkNotRunning,
@@ -25,6 +26,9 @@ pub enum IcpDiagnostic {
 /// Classify the exact external ICP CLI diagnostics understood by Canic.
 #[must_use]
 pub fn classify_icp_diagnostic(message: &str) -> Option<IcpDiagnostic> {
+    if message.contains("IC0207") {
+        return Some(IcpDiagnostic::CanisterOutOfCycles);
+    }
     if let Some((network, project)) = foreign_local_replica_owner(message) {
         return Some(IcpDiagnostic::ForeignLocalReplicaOwner { network, project });
     }
@@ -72,6 +76,13 @@ fn replica_canister_not_found(message: &str) -> Option<String> {
     const CANISTER_PREFIX: &str = "Canister ";
     const SUFFIX: &str = " not found";
 
+    if let Some(canister) = message
+        .trim()
+        .strip_prefix("Error: Canister ")
+        .and_then(|message| message.strip_suffix(" was not found."))
+    {
+        return valid_canister_token(canister);
+    }
     if !message.contains("IC0301") && !message.contains("code=3 message=Canister ") {
         return None;
     }
@@ -79,6 +90,10 @@ fn replica_canister_not_found(message: &str) -> Option<String> {
     let rest = &message[start..];
     let end = rest.find(SUFFIX)?;
     let canister = &rest[..end];
+    valid_canister_token(canister)
+}
+
+fn valid_canister_token(canister: &str) -> Option<String> {
     (!canister.is_empty() && !canister.chars().any(char::is_whitespace))
         .then(|| canister.to_string())
 }
@@ -110,6 +125,10 @@ mod tests {
             (
                 "Error: canister is already installed",
                 IcpDiagnostic::AlreadyInstalled,
+            ),
+            (
+                "Replica error: IC0207: Canister does not have enough cycles for this operation",
+                IcpDiagnostic::CanisterOutOfCycles,
             ),
             (
                 "Error: failed to locate project directory\nproject manifest not found",
@@ -147,6 +166,12 @@ mod tests {
             ),
             (
                 "replica rejected management status: IC0301: Canister uxrrr-q7777-77774-qaaaq-cai not found",
+                IcpDiagnostic::CanisterNotFound {
+                    canister: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
+                },
+            ),
+            (
+                "Error: Canister uxrrr-q7777-77774-qaaaq-cai was not found.",
                 IcpDiagnostic::CanisterNotFound {
                     canister: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
                 },

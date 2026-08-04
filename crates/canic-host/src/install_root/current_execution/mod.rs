@@ -14,7 +14,7 @@ use crate::deployment_truth::{
     artifact_gate_phase_receipt, artifact_gate_role_phase_receipts, missing_executor_capabilities,
 };
 use crate::release_set::artifact_root_path;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub(super) struct PreparedInstallSafetyGate {
     pub(super) check: DeploymentCheckV1,
@@ -26,14 +26,19 @@ pub(super) fn current_install_execution_context(
     icp_root: &Path,
     artifact_environment: &str,
 ) -> DeploymentExecutionContextV1 {
+    let artifact_root = artifact_root_path(icp_root, artifact_environment);
+    current_install_execution_context_at_root(workspace_root, icp_root, &artifact_root)
+}
+
+pub(super) fn current_install_execution_context_at_root(
+    workspace_root: &Path,
+    icp_root: &Path,
+    artifact_root: &Path,
+) -> DeploymentExecutionContextV1 {
     CurrentCliDeploymentExecutor::new(
         Some(workspace_root.display().to_string()),
         Some(icp_root.display().to_string()),
-        vec![
-            artifact_root_path(icp_root, artifact_environment)
-                .display()
-                .to_string(),
-        ],
+        vec![artifact_root.display().to_string()],
     )
     .execution_context()
 }
@@ -72,14 +77,18 @@ pub(super) fn run_install_deployment_truth_safety_gate(
     prepared_plan: Option<&crate::deployment_truth::DeploymentPlanV1>,
 ) -> Result<PreparedInstallSafetyGate, Box<dyn std::error::Error>> {
     let truth_gate_started_at = current_unix_timestamp_label()?;
+    let artifact_root = exact_execution_artifact_root(execution_context)?;
     let deployment_truth_check =
         super::truth_check::current_install_deployment_truth_check_at_with_plan(
             options,
-            workspace_root,
-            icp_root,
-            config_path,
-            fleet_name,
-            truth_gate_started_at.clone(),
+            super::truth_check::CurrentInstallTruthScope::new(
+                workspace_root,
+                icp_root,
+                config_path,
+                fleet_name,
+                truth_gate_started_at.clone(),
+                &artifact_root,
+            ),
             prepared_plan,
         )?;
     let artifact_gate_receipt = artifact_gate_phase_receipt(
@@ -105,4 +114,16 @@ pub(super) fn run_install_deployment_truth_safety_gate(
         check: deployment_truth_check,
         receipts: vec![deployment_receipt, preflight_receipt],
     })
+}
+
+fn exact_execution_artifact_root(
+    execution_context: &DeploymentExecutionContextV1,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let [artifact_root] = execution_context.artifact_roots.as_slice() else {
+        return Err("current install requires exactly one execution artifact root".into());
+    };
+    if artifact_root.trim().is_empty() {
+        return Err("current install execution artifact root is empty".into());
+    }
+    Ok(PathBuf::from(artifact_root))
 }

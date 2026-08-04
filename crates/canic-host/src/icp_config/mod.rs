@@ -1,7 +1,7 @@
 use crate::{
     install_root::{
-        ConfigDiscoveryError, current_canic_project_root, discover_project_canic_config_choices,
-        project_app_roots,
+        ConfigDiscoveryError, current_canic_workspace_root,
+        discover_workspace_canic_config_choices, workspace_app_roots,
     },
     release_set::{AppConfigError, AppConfigSnapshot, WorkspaceDiscoveryError, icp_root},
     workspace_discovery::discover_icp_root_from,
@@ -201,8 +201,8 @@ fn current_icp_root() -> Result<PathBuf, IcpConfigError> {
 
 /// Resolve the ICP project root implied by the current Canic app layout.
 pub fn resolve_current_canic_icp_root() -> Result<PathBuf, IcpConfigError> {
-    let root = current_canic_project_root()?.canonicalize()?;
-    if !discover_project_canic_config_choices(&root)?.is_empty() {
+    let root = current_canic_workspace_root()?.canonicalize()?;
+    if !discover_workspace_canic_config_choices(&root)?.is_empty() {
         return Ok(root);
     }
 
@@ -223,11 +223,11 @@ fn discover_project_spec(
     root: &Path,
     app_filter: Option<&str>,
 ) -> Result<CanicIcpSpec, IcpConfigError> {
-    let choices = discover_project_canic_config_choices(root)?;
+    let choices = discover_workspace_canic_config_choices(root)?;
     if choices.is_empty() {
         return Err(IcpConfigError::Config(format!(
             "no Canic App configs found under {}\nCreate apps/<app>/canic.toml, then add matching entries to icp.yaml and rerun `canic status`.",
-            display_project_app_roots(root)
+            display_workspace_app_roots(root)
         )));
     }
 
@@ -260,7 +260,7 @@ fn discover_project_spec(
     {
         return Err(IcpConfigError::Config(format!(
             "no Canic App config found for {app}\nExpected a config under {} with `[app].name = \"{app}\"`.",
-            display_project_app_roots(root)
+            display_workspace_app_roots(root)
         )));
     }
 
@@ -270,8 +270,8 @@ fn discover_project_spec(
     })
 }
 
-fn display_project_app_roots(root: &Path) -> String {
-    project_app_roots(root)
+fn display_workspace_app_roots(root: &Path) -> String {
+    workspace_app_roots(root)
         .into_iter()
         .map(|path| path.display().to_string())
         .collect::<Vec<_>>()

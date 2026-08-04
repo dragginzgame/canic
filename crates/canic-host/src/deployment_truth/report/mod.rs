@@ -164,26 +164,41 @@ pub struct LocalDeploymentCheckRequest {
 pub fn check_local_deployment(
     request: &LocalDeploymentCheckRequest,
 ) -> Result<DeploymentCheckV1, DeploymentTruthError> {
-    let plan = build_local_deployment_plan(&LocalDeploymentPlanRequest {
-        fleet_name: request.fleet_name.clone(),
-        app: request.app.clone(),
-        environment: request.environment.clone(),
-        artifact_environment: request.artifact_environment.clone(),
-        workspace_root: request.workspace_root.clone(),
-        icp_root: request.icp_root.clone(),
-        config_path: request.config_path.clone(),
-        runtime_variant: request.runtime_variant.clone(),
-        build_profile: request.build_profile.clone(),
-    });
-    let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
-        fleet_name: request.fleet_name.clone(),
-        environment: request.environment.clone(),
-        artifact_environment: request.artifact_environment.clone(),
-        workspace_root: request.workspace_root.clone(),
-        icp_root: request.icp_root.clone(),
-        config_path: request.config_path.clone(),
-        observed_at: request.observed_at.clone(),
-    })?;
+    let artifact_root =
+        crate::release_set::artifact_root_path(&request.icp_root, &request.artifact_environment);
+    check_local_deployment_at_root(request, &artifact_root)
+}
+
+pub fn check_local_deployment_at_root(
+    request: &LocalDeploymentCheckRequest,
+    artifact_root: &std::path::Path,
+) -> Result<DeploymentCheckV1, DeploymentTruthError> {
+    let plan = build_local_deployment_plan_at_root(
+        &LocalDeploymentPlanRequest {
+            fleet_name: request.fleet_name.clone(),
+            app: request.app.clone(),
+            environment: request.environment.clone(),
+            artifact_environment: request.artifact_environment.clone(),
+            workspace_root: request.workspace_root.clone(),
+            icp_root: request.icp_root.clone(),
+            config_path: request.config_path.clone(),
+            runtime_variant: request.runtime_variant.clone(),
+            build_profile: request.build_profile.clone(),
+        },
+        artifact_root,
+    );
+    let inventory = collect_local_deployment_inventory_at_root(
+        &LocalInventoryRequest {
+            fleet_name: request.fleet_name.clone(),
+            environment: request.environment.clone(),
+            artifact_environment: request.artifact_environment.clone(),
+            workspace_root: request.workspace_root.clone(),
+            icp_root: request.icp_root.clone(),
+            config_path: request.config_path.clone(),
+            observed_at: request.observed_at.clone(),
+        },
+        artifact_root,
+    )?;
     let mut diff = compare_plan_to_inventory(&plan, &inventory);
     apply_root_auth_signer_subnet_check(
         &mut diff,

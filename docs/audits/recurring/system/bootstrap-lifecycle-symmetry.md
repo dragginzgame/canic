@@ -29,8 +29,8 @@ This audit tracks the current post-v1 startup surface:
 * `start_local!` and `start_wasm_store!` remain separate special-purpose
   runtime modes and must still obey the same lifecycle timer boundary.
 * lifecycle adapters may record bounded lifecycle metrics synchronously and may
-  register embedded root bootstrap module sources before scheduling, but must
-  not run bootstrap orchestration inline.
+  register the root Store module-source resolver before scheduling, but must not
+  run bootstrap orchestration inline.
 
 ## Audit Type
 
@@ -74,7 +74,7 @@ Drift in lifecycle startup structure can introduce:
 * workflow boundary changes affecting bootstrap scheduling
 * changes to `start_local!` or `start_wasm_store!`
 * lifecycle metrics changes
-* embedded root wasm-store bootstrap release-set registration changes
+* root Store module-source resolver registration changes
 * post-upgrade memory registry restoration changes
 
 ---
@@ -239,21 +239,21 @@ rg -n 'EnvOps::restore_|init_memory_registry_post_upgrade|workflow::runtime::ini
   crates/canic-control-plane/src/api/lifecycle.rs -g '*.rs'
 ```
 
-#### Lifecycle metrics and root bootstrap source registration
+#### Lifecycle metrics and root Store resolver registration
 
 ```bash
-rg -n 'LifecycleMetricsApi|record_runtime|record_bootstrap|WasmStoreBootstrapApi|register_embedded_root_wasm_store_release_set|log_embedded_root_wasm_store_release_set' \
+rg -n 'LifecycleMetricsApi|record_runtime|record_bootstrap|WasmStoreBootstrapApi|register_template_module_source_resolver|register_module_source_resolver' \
   crates/canic-core/src/lifecycle crates/canic-core/src/api/lifecycle/mod.rs \
-  crates/canic-control-plane/src/api/lifecycle.rs crates/canic-control-plane/src/api/template/mod.rs -g '*.rs'
+  crates/canic-control-plane/src/api/lifecycle.rs crates/canic-control-plane/src/api/template/mod.rs \
+  crates/canic-control-plane/src/runtime/install.rs -g '*.rs'
 ```
 
 Expected:
 
 * lifecycle metrics may be recorded inline before/after runtime restore and
   before/inside scheduled bootstrap timer closures
-* embedded root wasm-store bootstrap release-set registration may happen before
-  root runtime restoration delegates to `canic-core`
-* embedded root wasm-store logging may happen after core runtime restoration
+* root Store module-source resolver registration may happen before root runtime
+  restoration delegates to `canic-core`
 * these paths must not perform bootstrap workflow execution inline
 * storage-backed template admin helpers in the same `api/template` module are
   outside lifecycle scope unless lifecycle starts calling them
@@ -338,8 +338,8 @@ Pass criteria:
 * API functions are thin wrappers or direct delegation
 * no workflow/bootstrap/runtime orchestration logic is introduced here outside
   explicit lifecycle timer scheduling
-* inline lifecycle metrics and embedded root wasm-store source registration are
-  bounded adapter duties
+* inline lifecycle metrics and root Store module-source resolver registration
+  are bounded adapter duties
 
 Fail conditions:
 
@@ -352,7 +352,7 @@ Checklist:
 
 * [ ] API layer is glue only
 * [ ] No direct workflow orchestration in API layer outside timer closures
-* [ ] Lifecycle metrics and embedded root wasm-store registration do not own
+* [ ] Lifecycle metrics and root Store resolver registration do not own
   bootstrap orchestration
 
 Findings:

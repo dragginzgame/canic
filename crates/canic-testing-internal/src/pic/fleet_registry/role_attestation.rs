@@ -21,11 +21,11 @@ use canic::{
     ids::{CanisterRole, ComponentBinding, ComponentChildBinding},
     protocol::{CANIC_GET_ROLE_ATTESTATION, CANIC_METRICS, CANIC_PREPARE_ROLE_ATTESTATION},
 };
-use ic_testkit::pic::Pic;
+use ic_testkit::pic::{CandidCallExt, PocketIc};
 
 /// Exercise issuance, verification, and guard metrics through an active issuer Component.
 pub(super) fn assert_registry_bound_role_attestation(
-    pic: &Pic,
+    pic: &PocketIc,
     root: Principal,
     issuer: &ComponentBinding,
     verifier: &ComponentBinding,
@@ -37,7 +37,7 @@ pub(super) fn assert_registry_bound_role_attestation(
 
 /// Exercise role-attestation issuance through an exact active Component Child.
 pub(super) fn assert_registry_bound_child_role_attestation(
-    pic: &Pic,
+    pic: &PocketIc,
     root: Principal,
     child: &ComponentChildBinding,
 ) {
@@ -54,7 +54,7 @@ pub(super) fn assert_registry_bound_child_role_attestation(
         }),
     };
     let prepared: Result<RoleAttestationPrepareResponse, Error> = pic
-        .update_call_as(
+        .update_candid_as(
             root,
             child.canister_id,
             CANIC_PREPARE_ROLE_ATTESTATION,
@@ -63,7 +63,7 @@ pub(super) fn assert_registry_bound_child_role_attestation(
         .expect("Component Child role attestation prepare transport");
     let prepared = prepared.expect("Component Child role attestation prepare");
     let signed: Result<SignedRoleAttestation, Error> = pic
-        .query_call_as(
+        .query_candid_as(
             root,
             child.canister_id,
             CANIC_GET_ROLE_ATTESTATION,
@@ -82,7 +82,7 @@ pub(super) fn assert_registry_bound_child_role_attestation(
     );
 }
 
-fn assert_role_attestation_admission(pic: &Pic, root: Principal, issuer: &ComponentBinding) {
+fn assert_role_attestation_admission(pic: &PocketIc, root: Principal, issuer: &ComponentBinding) {
     let mut subject_drift =
         role_attestation_request(issuer, issuer.canister_id, 60_000_000_000, 11);
     subject_drift.subject = root;
@@ -102,7 +102,7 @@ fn assert_role_attestation_admission(pic: &Pic, root: Principal, issuer: &Compon
 }
 
 fn assert_role_attestation_verification(
-    pic: &Pic,
+    pic: &PocketIc,
     root: Principal,
     issuer: &ComponentBinding,
     verifier: &ComponentBinding,
@@ -204,13 +204,13 @@ fn role_attestation_request(
 }
 
 fn assert_role_prepare_forbidden(
-    pic: &Pic,
+    pic: &PocketIc,
     root: Principal,
     caller: Principal,
     request: RoleAttestationRequest,
 ) {
     let response: Result<RoleAttestationPrepareResponse, Error> = pic
-        .update_call_as(root, caller, CANIC_PREPARE_ROLE_ATTESTATION, (request,))
+        .update_candid_as(root, caller, CANIC_PREPARE_ROLE_ATTESTATION, (request,))
         .expect("role attestation rejection transport");
     assert_eq!(
         response
@@ -221,7 +221,7 @@ fn assert_role_prepare_forbidden(
 }
 
 fn issue_role_attestation(
-    pic: &Pic,
+    pic: &PocketIc,
     root: Principal,
     issuer: &ComponentBinding,
     audience: Principal,
@@ -237,13 +237,13 @@ fn issue_role_attestation(
 }
 
 fn issue_requested_role_attestation(
-    pic: &Pic,
+    pic: &PocketIc,
     root: Principal,
     issuer: &ComponentBinding,
     request: RoleAttestationRequest,
 ) -> SignedRoleAttestation {
     let prepared: Result<RoleAttestationPrepareResponse, Error> = pic
-        .update_call_as(
+        .update_candid_as(
             root,
             issuer.canister_id,
             CANIC_PREPARE_ROLE_ATTESTATION,
@@ -252,7 +252,7 @@ fn issue_requested_role_attestation(
         .expect("role attestation prepare transport");
     let prepared = prepared.expect("role attestation prepare");
     let signed: Result<SignedRoleAttestation, Error> = pic
-        .query_call_as(
+        .query_candid_as(
             root,
             issuer.canister_id,
             CANIC_GET_ROLE_ATTESTATION,
@@ -265,12 +265,12 @@ fn issue_requested_role_attestation(
 }
 
 fn require_attested_local_subnet(
-    pic: &Pic,
+    pic: &PocketIc,
     verifier: Principal,
     caller: Principal,
     attestation: SignedRoleAttestation,
 ) -> Result<(), Error> {
-    pic.update_call_as(
+    pic.update_candid_as(
         verifier,
         caller,
         "verifier_require_attested_local_subnet",
@@ -280,13 +280,13 @@ fn require_attested_local_subnet(
 }
 
 fn verify_role_attestation(
-    pic: &Pic,
+    pic: &PocketIc,
     verifier: Principal,
     caller: Principal,
     attestation: SignedRoleAttestation,
     minimum_epoch: u64,
 ) -> Result<(), Error> {
-    pic.update_call_as(
+    pic.update_candid_as(
         verifier,
         caller,
         "verifier_verify_role_attestation",
@@ -295,11 +295,11 @@ fn verify_role_attestation(
     .expect("role attestation verification transport")
 }
 
-fn assert_issuer_guard_metrics(pic: &Pic, root: Principal, issuer: Principal) {
+fn assert_issuer_guard_metrics(pic: &PocketIc, root: Principal, issuer: Principal) {
     let denial_labels = ["access", "issuer_guard_is_root", "auth", "caller_is_root"];
     let before_denial = metric_count_for_labels(pic, issuer, MetricsKind::Security, &denial_labels);
     let denied: Result<(), Error> = pic
-        .update_call_as(issuer, Principal::anonymous(), "issuer_guard_is_root", ())
+        .update_candid_as(issuer, Principal::anonymous(), "issuer_guard_is_root", ())
         .expect("issuer root-guard denial transport");
     assert_eq!(
         denied.expect_err("anonymous root guard").code,
@@ -314,7 +314,7 @@ fn assert_issuer_guard_metrics(pic: &Pic, root: Principal, issuer: Principal) {
     let before_success =
         metric_count_for_labels(pic, issuer, MetricsKind::Runtime, &success_labels);
     let allowed: Result<(), Error> = pic
-        .update_call_as(issuer, root, "issuer_guard_is_root", ())
+        .update_candid_as(issuer, root, "issuer_guard_is_root", ())
         .expect("issuer root-guard success transport");
     allowed.expect("Fleet Subnet Root caller must satisfy issuer root guard");
     assert_eq!(
@@ -330,7 +330,7 @@ fn assert_issuer_guard_metrics(pic: &Pic, root: Principal, issuer: Principal) {
 }
 
 fn metric_count_for_labels(
-    pic: &Pic,
+    pic: &PocketIc,
     canister: Principal,
     kind: MetricsKind,
     labels: &[&str],
@@ -346,9 +346,13 @@ fn metric_count_for_labels(
         .unwrap_or(0)
 }
 
-fn query_metric_entries(pic: &Pic, canister: Principal, kind: MetricsKind) -> Vec<MetricEntry> {
+fn query_metric_entries(
+    pic: &PocketIc,
+    canister: Principal,
+    kind: MetricsKind,
+) -> Vec<MetricEntry> {
     let response: Result<Page<MetricEntry>, Error> = pic
-        .query_call(
+        .query_candid(
             canister,
             CANIC_METRICS,
             (

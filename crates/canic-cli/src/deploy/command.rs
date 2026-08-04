@@ -17,10 +17,6 @@ struct DeploySubcommand {
 
 const DEPLOY_COMMANDS: &[DeploySubcommand] = &[
     DeploySubcommand {
-        name: "plan",
-        about: "Explain the deterministic deployment plan without mutation",
-    },
-    DeploySubcommand {
         name: "check",
         about: "Print the local deployment truth check",
     },
@@ -28,18 +24,17 @@ const DEPLOY_COMMANDS: &[DeploySubcommand] = &[
         name: "inspect",
         about: "Inspect raw deployment truth artifacts",
     },
+    DeploySubcommand {
+        name: "plan",
+        about: "Explain the deterministic deployment plan without mutation",
+    },
 ];
 
 const DEPLOY_HELP_AFTER: &str = "\
 Examples:
   canic deploy check demo
-  canic deploy check demo --json
-  canic deploy plan demo --app demo
-  canic deploy plan demo --app demo --json
   canic deploy inspect plan demo
-  canic deploy inspect compare --left staging-check.json --right prod-check.json
-  canic deploy inspect catalog list
-  canic deploy inspect resume-report --receipt receipt.json demo
+  canic deploy plan demo --app demo
 
 Use `canic deploy inspect --help` for raw plan, inventory, diff, report,
 comparison, local catalog, and resume-safety JSON artifacts.

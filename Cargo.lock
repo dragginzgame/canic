@@ -604,7 +604,6 @@ dependencies = [
  "canic-host",
  "flate2",
  "ic-testkit",
- "pocket-ic",
  "serde_json",
 ]
 
@@ -2278,18 +2277,15 @@ dependencies = [
 
 [[package]]
 name = "ic-testkit"
-version = "0.1.11"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdfe3b9aafa4e779cd69fc0d92a6994ae57fbf6eb422ccea09d8fb3a4e028480"
+checksum = "3fc473231a26532d0acec321e532f123a7f969ec7c8e7242ec2c9354bf06f9f4"
 dependencies = [
  "candid",
- "flate2",
  "ic-cdk",
  "pocket-ic",
- "reqwest 0.12.28",
  "serde",
  "serde_json",
- "sha2 0.10.9",
 ]
 
 [[package]]
@@ -3170,6 +3166,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19f132c84eca552bf34cab8ec81f1c1dcc229b811638f9d283dceabe58c5569e"
 
 [[package]]
+name = "playground_hub"
+version = "0.100.101"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
+ "serde",
+]
+
+[[package]]
+name = "playground_root"
+version = "0.100.101"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
+]
+
+[[package]]
 name = "plotters"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3199,9 +3214,9 @@ dependencies = [
 
 [[package]]
 name = "pocket-ic"
-version = "14.0.0"
+version = "15.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30ca4be8aebd68fe9f73cd539f99c5c46f7705fa9a6e4ed2eb1f297518c2ac8f"
+checksum = "4fe796a5fbeb08244338f5eb30f2de91fa12152ea2b5176f9da20fecd20b1ced"
 dependencies = [
  "backoff",
  "base64 0.13.1",
@@ -5038,6 +5053,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7dcd9d09a39985f5344844e66b0c530a33843579125f23e21e9f0f220850f22a"
 dependencies = [
  "rustls-pki-types",
+]
+
+[[package]]
+name = "wenzelroll"
+version = "0.100.101"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
+ "serde",
 ]
 
 [[package]]

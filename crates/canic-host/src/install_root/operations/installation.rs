@@ -5,17 +5,26 @@
 //! Boundary: callers supply typed init authority and commit the reconciled module hash.
 
 use crate::{
-    icp::{self, LocalReplicaTarget},
-    install_root::{
-        commands::{icp_canister_install_binary_args_command, write_candid_args},
-        install_icp,
+    durable_io::{
+        RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
+        write_bytes,
     },
+    icp::{self, IcpCommandError, IcpDiagnostic, LocalReplicaTarget},
+    install_root::{commands::icp_canister_install_binary_args_command, install_icp},
 };
 use candid::{CandidType, Principal};
-use std::path::Path;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 use thiserror::Error as ThisError;
 
 use super::{EffectAction, activation::observe_module_hash, module_hash_text};
+
+const INSTALL_REJECTION_RECEIPT_SCHEMA_VERSION: u32 = 1;
+const MAX_INSTALL_REJECTION_RECEIPT_BYTES: usize = 4 * 1024;
 
 #[derive(Debug, ThisError)]
 #[error("{subject} install reconciliation for {canister} failed: {detail}")]
@@ -23,6 +32,46 @@ struct InstallEffectError {
     subject: &'static str,
     canister: Principal,
     detail: String,
+}
+
+/// Exact authority for retrying one install the replica explicitly rejected before application.
+#[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct InstallRejectionReceipt {
+    schema_version: u32,
+    canister: Principal,
+    expected_module_hash: [u8; 32],
+    args_sha256: [u8; 32],
+    rejection: InstallTerminalRejection,
+}
+
+#[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum InstallTerminalRejection {
+    OutOfCycles,
+}
+
+#[derive(Debug, ThisError)]
+enum InstallRejectionReceiptError {
+    #[error("install rejection receipt is not a regular no-follow file: {path}")]
+    Unsafe { path: PathBuf },
+
+    #[error("invalid install rejection receipt {path}: {reason}")]
+    Invalid { path: PathBuf, reason: String },
+
+    #[error("install rejection receipt conflicts with current install authority: {path}")]
+    Conflict { path: PathBuf },
+
+    #[error("failed to access install rejection receipt {path}: {source}")]
+    Io {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
+
+    #[cfg(not(unix))]
+    #[error("install rejection receipt reads are unsupported: {path}")]
+    UnsupportedPlatform { path: PathBuf },
 }
 
 pub(in crate::install_root) struct InstallEffectRequest<'a> {
@@ -46,7 +95,7 @@ where
     F: FnOnce() -> Result<T, Box<dyn std::error::Error>>,
 {
     let icp = install_icp(request.icp_root, request.environment, request.local_replica);
-    match observe_module_hash(&icp, request.canister)? {
+    let prior_rejection = match observe_module_hash(&icp, request.canister)? {
         Some(module_hash) if module_hash == request.expected_module_hash => {
             return Ok(module_hash);
         }
@@ -57,16 +106,33 @@ where
             ));
         }
         None if matches!(request.action, EffectAction::ObserveOnly) => {
-            return Err(effect_error(
-                &request,
-                "outcome is unknown; no second install was attempted because the journal is already install_in_flight and the expected module is not observable"
-                    .to_string(),
-            ));
+            let receipt_path = install_rejection_receipt_path(request.args_path);
+            let Some(receipt) = load_optional_install_rejection_receipt(&receipt_path)? else {
+                return Err(effect_error(
+                    &request,
+                    "outcome is unknown; no second install was attempted because the journal is already install_in_flight and the expected module is not observable"
+                        .to_string(),
+                ));
+            };
+            Some((receipt_path, receipt))
         }
-        None => {}
-    }
+        None => None,
+    };
 
-    write_candid_args(request.args_path, &resolve_args()?)?;
+    let args = candid::encode_one(resolve_args()?)?;
+    let expected_rejection = InstallRejectionReceipt {
+        schema_version: INSTALL_REJECTION_RECEIPT_SCHEMA_VERSION,
+        canister: request.canister,
+        expected_module_hash: request.expected_module_hash,
+        args_sha256: Sha256::digest(&args).into(),
+        rejection: InstallTerminalRejection::OutOfCycles,
+    };
+    if let Some((receipt_path, receipt)) = prior_rejection
+        && receipt != expected_rejection
+    {
+        return Err(InstallRejectionReceiptError::Conflict { path: receipt_path }.into());
+    }
+    write_bytes(request.args_path, &args)?;
     let mut command = icp_canister_install_binary_args_command(
         request.icp_root,
         request.environment,
@@ -82,30 +148,181 @@ where
             &request,
             format!("unexpected module hash {}", module_hash_text(module_hash)),
         )),
-        Ok(None) => Err(effect_error(
-            &request,
-            format!(
-                "outcome is unknown; no second install was attempted: {}",
-                command_result.err().map_or_else(
-                    || "install command completed but no module is observable".to_string(),
-                    |error| error.to_string(),
-                )
-            ),
-        )),
-        Err(observation) => Err(effect_error(
-            &request,
-            format!(
-                "outcome is unknown; no second install was attempted: {}",
-                match command_result {
-                    Ok(()) => format!("post-install observation failed: {observation}"),
-                    Err(command) => {
-                        format!(
-                            "install command failed: {command}; reconciliation failed: {observation}"
-                        )
+        Ok(None) => {
+            if persist_known_rejection(&request, &expected_rejection, &command_result)? {
+                return Err(explicit_rejection_error(&request, None));
+            }
+            Err(effect_error(
+                &request,
+                format!(
+                    "outcome is unknown; no second install was attempted: {}",
+                    command_result.err().map_or_else(
+                        || "install command completed but no module is observable".to_string(),
+                        |error| error.to_string(),
+                    )
+                ),
+            ))
+        }
+        Err(observation) => {
+            if persist_known_rejection(&request, &expected_rejection, &command_result)? {
+                return Err(explicit_rejection_error(
+                    &request,
+                    Some(observation.to_string()),
+                ));
+            }
+            Err(effect_error(
+                &request,
+                format!(
+                    "outcome is unknown; no second install was attempted: {}",
+                    match command_result {
+                        Ok(()) => format!("post-install observation failed: {observation}"),
+                        Err(command) => {
+                            format!(
+                                "install command failed: {command}; reconciliation failed: {observation}"
+                            )
+                        }
                     }
-                }
-            ),
-        )),
+                ),
+            ))
+        }
+    }
+}
+
+fn persist_known_rejection(
+    request: &InstallEffectRequest<'_>,
+    receipt: &InstallRejectionReceipt,
+    command_result: &Result<(), IcpCommandError>,
+) -> Result<bool, InstallRejectionReceiptError> {
+    let Err(command_error) = command_result else {
+        return Ok(false);
+    };
+    if !matches!(
+        command_error.diagnostic(),
+        Some(IcpDiagnostic::CanisterOutOfCycles)
+    ) {
+        return Ok(false);
+    }
+    persist_install_rejection_receipt(&install_rejection_receipt_path(request.args_path), receipt)?;
+    Ok(true)
+}
+
+fn explicit_rejection_error(
+    request: &InstallEffectRequest<'_>,
+    observation_error: Option<String>,
+) -> Box<dyn std::error::Error> {
+    let observation = observation_error.map_or_else(String::new, |error| {
+        format!("; post-rejection observation also failed: {error}")
+    });
+    effect_error(
+        request,
+        format!(
+            "the replica explicitly rejected the install with IC0207 before application; the exact rejection receipt is durable, so top up the Canister and retry{observation}"
+        ),
+    )
+}
+
+fn install_rejection_receipt_path(args_path: &Path) -> PathBuf {
+    let mut path = args_path.as_os_str().to_os_string();
+    path.push(".known-rejection.json");
+    PathBuf::from(path)
+}
+
+fn load_optional_install_rejection_receipt(
+    path: &Path,
+) -> Result<Option<InstallRejectionReceipt>, InstallRejectionReceiptError> {
+    let bytes = match read_optional_regular_bytes(path) {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => return Ok(None),
+        Err(RegularFileReadError::NotRegular) => {
+            return Err(InstallRejectionReceiptError::Unsafe {
+                path: path.to_path_buf(),
+            });
+        }
+        Err(RegularFileReadError::Io(source)) => {
+            return Err(InstallRejectionReceiptError::Io {
+                path: path.to_path_buf(),
+                source,
+            });
+        }
+        #[cfg(not(unix))]
+        Err(RegularFileReadError::UnsupportedPlatform) => {
+            return Err(InstallRejectionReceiptError::UnsupportedPlatform {
+                path: path.to_path_buf(),
+            });
+        }
+    };
+    if bytes.len() > MAX_INSTALL_REJECTION_RECEIPT_BYTES {
+        return Err(invalid_receipt(path, "receipt exceeds its byte bound"));
+    }
+    let receipt: InstallRejectionReceipt = serde_json::from_slice(&bytes)
+        .map_err(|error| invalid_receipt(path, &error.to_string()))?;
+    validate_install_rejection_receipt(path, &receipt)?;
+    let canonical = encode_install_rejection_receipt(path, &receipt)?;
+    if canonical != bytes {
+        return Err(invalid_receipt(path, "receipt bytes are not canonical"));
+    }
+    Ok(Some(receipt))
+}
+
+fn persist_install_rejection_receipt(
+    path: &Path,
+    receipt: &InstallRejectionReceipt,
+) -> Result<(), InstallRejectionReceiptError> {
+    let bytes = encode_install_rejection_receipt(path, receipt)?;
+    match create_new_bytes_with_parents(path, &bytes) {
+        Ok(()) => Ok(()),
+        Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {
+            match load_optional_install_rejection_receipt(path)? {
+                Some(observed) if observed == *receipt => Ok(()),
+                Some(_) => Err(InstallRejectionReceiptError::Conflict {
+                    path: path.to_path_buf(),
+                }),
+                None => Err(InstallRejectionReceiptError::Io {
+                    path: path.to_path_buf(),
+                    source: io::Error::new(
+                        io::ErrorKind::NotFound,
+                        "install rejection receipt disappeared",
+                    ),
+                }),
+            }
+        }
+        Err(source) => Err(InstallRejectionReceiptError::Io {
+            path: path.to_path_buf(),
+            source,
+        }),
+    }
+}
+
+fn encode_install_rejection_receipt(
+    path: &Path,
+    receipt: &InstallRejectionReceipt,
+) -> Result<Vec<u8>, InstallRejectionReceiptError> {
+    validate_install_rejection_receipt(path, receipt)?;
+    let bytes =
+        serde_json::to_vec(receipt).map_err(|error| invalid_receipt(path, &error.to_string()))?;
+    if bytes.len() > MAX_INSTALL_REJECTION_RECEIPT_BYTES {
+        return Err(invalid_receipt(path, "receipt exceeds its byte bound"));
+    }
+    Ok(bytes)
+}
+
+fn validate_install_rejection_receipt(
+    path: &Path,
+    receipt: &InstallRejectionReceipt,
+) -> Result<(), InstallRejectionReceiptError> {
+    if receipt.schema_version != INSTALL_REJECTION_RECEIPT_SCHEMA_VERSION {
+        return Err(invalid_receipt(path, "unsupported schema version"));
+    }
+    if receipt.canister == Principal::anonymous() {
+        return Err(invalid_receipt(path, "Canister principal is anonymous"));
+    }
+    Ok(())
+}
+
+fn invalid_receipt(path: &Path, reason: &str) -> InstallRejectionReceiptError {
+    InstallRejectionReceiptError::Invalid {
+        path: path.to_path_buf(),
+        reason: reason.to_string(),
     }
 }
 
@@ -116,4 +333,74 @@ fn effect_error(request: &InstallEffectRequest<'_>, detail: String) -> Box<dyn s
         detail,
     }
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::temp_dir;
+
+    fn receipt(args_sha256: [u8; 32]) -> InstallRejectionReceipt {
+        InstallRejectionReceipt {
+            schema_version: INSTALL_REJECTION_RECEIPT_SCHEMA_VERSION,
+            canister: Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai")
+                .expect("Canister principal"),
+            expected_module_hash: [7; 32],
+            args_sha256,
+            rejection: InstallTerminalRejection::OutOfCycles,
+        }
+    }
+
+    #[test]
+    fn known_rejection_receipt_is_exact_and_idempotent() {
+        let root = temp_dir("canic-install-known-rejection");
+        let path = root.join("coordinator-install-args.bin.known-rejection.json");
+        let expected = receipt([9; 32]);
+
+        persist_install_rejection_receipt(&path, &expected).expect("persist rejection receipt");
+        persist_install_rejection_receipt(&path, &expected).expect("persist exact retry");
+
+        assert_eq!(
+            load_optional_install_rejection_receipt(&path).expect("load rejection receipt"),
+            Some(expected)
+        );
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn known_rejection_receipt_rejects_changed_install_authority() {
+        let root = temp_dir("canic-install-known-rejection-conflict");
+        let path = root.join("root-install-args.bin.known-rejection.json");
+        persist_install_rejection_receipt(&path, &receipt([1; 32]))
+            .expect("persist rejection receipt");
+
+        let error = persist_install_rejection_receipt(&path, &receipt([2; 32]))
+            .expect_err("changed authority rejected");
+
+        assert!(matches!(
+            error,
+            InstallRejectionReceiptError::Conflict { .. }
+        ));
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn known_rejection_receipt_rejects_noncanonical_bytes() {
+        let root = temp_dir("canic-install-known-rejection-noncanonical");
+        let path = root.join("wasm-store-install-args.bin.known-rejection.json");
+        let mut bytes =
+            encode_install_rejection_receipt(&path, &receipt([3; 32])).expect("encode receipt");
+        bytes.push(b'\n');
+        std::fs::create_dir_all(&root).expect("create temp root");
+        std::fs::write(&path, bytes).expect("write noncanonical receipt");
+
+        let error = load_optional_install_rejection_receipt(&path)
+            .expect_err("noncanonical receipt rejected");
+
+        assert!(matches!(
+            error,
+            InstallRejectionReceiptError::Invalid { .. }
+        ));
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
 }

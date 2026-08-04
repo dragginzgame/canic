@@ -1,0 +1,48 @@
+# One playground Component, initially with five Wenzelroll Canisters on the IC.
+
+controllers = []
+
+[app]
+name = "playground"
+
+# Add the mainnet operator principal before building a deployable release.
+[app.whitelist]
+principals = []
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.playground_hub]
+kind = "canister"
+package = "playground_hub"
+
+[roles.wenzelroll]
+kind = "canister"
+package = "wenzelroll"
+
+[auth.delegated_tokens]
+enabled = false
+
+[component_specs.playground]
+component_role = "playground_hub"
+maximum_instances = 1
+initial_cycles = "2T"
+
+[component_specs.playground.limits]
+maximum_descendants = 5
+maximum_registry_bytes = 16777216
+
+[component_specs.playground.scaling.pools.wenzelrolls]
+canister_role = "wenzelroll"
+# Installation stays empty; explicit hub commands fill the five-worker target.
+policy.initial_workers = 0
+policy.min_workers = 5
+policy.max_workers = 5
+
+[component_specs.playground.children.wenzelroll]
+kind = "replica"
+initial_cycles = "500B"
+
+[component_specs.playground.spawn_grants.playground_hub.wenzelroll]
+maximum_instances_per_parent = 5

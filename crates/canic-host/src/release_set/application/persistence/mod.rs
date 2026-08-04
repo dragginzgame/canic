@@ -13,7 +13,8 @@ use crate::{
     },
     release_build::{ReleaseBuildPlanError, ReleaseBuildPlanState, load_release_build_plan},
     release_set::artifact::{
-        ReleaseArtifactMaterializationError, materialize_qualified_release_artifact,
+        ReleaseArtifactMaterializationError, contains_release_build_identity,
+        materialize_qualified_release_artifact,
     },
 };
 use std::{
@@ -105,6 +106,15 @@ pub enum ApplicationArtifactUnionPersistenceError {
 
     #[error("application artifact union is missing: {path}")]
     MissingUnion { path: PathBuf },
+
+    #[error(
+        "application artifact {role} raw Wasm at {path} does not embed release build {release_build_id}"
+    )]
+    MissingReleaseBuildIdentity {
+        role: CanisterRole,
+        release_build_id: ReleaseBuildId,
+        path: PathBuf,
+    },
 
     #[error("application artifact {role} has a non-UTF-8 {kind} path: {path}")]
     NonUtf8ArtifactPath {
@@ -229,6 +239,15 @@ fn materialize_build_output(
     }
 
     let wasm = materialize_artifact(root, &output.role, "raw Wasm", &output.wasm_path)?;
+    if !contains_release_build_identity(&wasm.bytes, release_build_id) {
+        return Err(
+            ApplicationArtifactUnionPersistenceError::MissingReleaseBuildIdentity {
+                role: output.role.clone(),
+                release_build_id,
+                path: output.wasm_path.clone(),
+            },
+        );
+    }
     let wasm_gz = materialize_artifact(root, &output.role, "gzip Wasm", &output.wasm_gz_path)?;
     Ok(ApplicationArtifactBuildOutput {
         role: output.role.clone(),

@@ -109,9 +109,9 @@ where
             Ok(())
         }
         Some((command, args)) => match command.as_str() {
+            "check" => check::run(args),
             "inspect" => inspect::run(args),
             "plan" => plan::run(args),
-            "check" => check::run(args),
             _ => unreachable!("deploy dispatch command only defines known commands"),
         },
     }

@@ -52,7 +52,7 @@ impl MgmtInfra {
 
     /// Update canister settings through the management canister.
     pub async fn update_settings(args: &InfraUpdateSettingsArgs) -> Result<(), IcInfraError> {
-        Call::bounded_wait(Principal::management_canister(), "update_settings")
+        Call::unbounded_wait(Principal::management_canister(), "update_settings")
             .with_arg(args.clone())?
             .execute()
             .await?;

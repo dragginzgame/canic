@@ -1,10 +1,9 @@
 //! Test-Wasm and PocketIC builders for the prepared-root Registry journey.
 
 use ic_testkit::artifacts::{read_wasm, test_target_dir as artifact_test_target_dir};
-use ic_testkit::pic::{Pic, PicBuilder, PicSerialGuard, acquire_pic_serial_guard};
+use ic_testkit::pic::{PocketIc, PocketIcBuilder};
 use std::{
     env,
-    ops::{Deref, DerefMut},
     path::{Path, PathBuf},
     process::Command,
     sync::{Mutex, Once},
@@ -20,29 +19,6 @@ const ROOT_CANISTER_PACKAGE: &str = "delegation_root_stub";
 static BUILD_ONCE: Once = Once::new();
 static CANISTER_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
-///
-/// SerialPic
-///
-
-pub(super) struct SerialPic {
-    pub(super) pic: Pic,
-    _serial_guard: PicSerialGuard,
-}
-
-impl Deref for SerialPic {
-    type Target = Pic;
-
-    fn deref(&self) -> &Self::Target {
-        &self.pic
-    }
-}
-
-impl DerefMut for SerialPic {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.pic
-    }
-}
-
 // Build the test root wasm.
 pub(super) fn build_test_root_wasm() -> Vec<u8> {
     let workspace_root = workspace_root();
@@ -50,21 +26,15 @@ pub(super) fn build_test_root_wasm() -> Vec<u8> {
     read_built_wasm(&test_target_dir(&workspace_root), "delegation_root_stub")
 }
 
-// Serialize full PocketIC usage to avoid concurrent server races across tests.
-pub(super) fn build_pic() -> SerialPic {
-    progress("acquiring PocketIC serial guard");
-    let serial_guard = acquire_pic_serial_guard();
-    progress("starting serialized PocketIC instance");
-    let pic = PicBuilder::new()
+// Build one independent PocketIC instance for a Fleet Registry fixture.
+pub(super) fn build_pic() -> PocketIc {
+    progress("starting PocketIC instance");
+    let pic = PocketIcBuilder::new()
         .with_ii_subnet()
         .with_application_subnet()
         .build();
-    progress("serialized PocketIC instance ready");
-
-    SerialPic {
-        pic,
-        _serial_guard: serial_guard,
-    }
+    progress("PocketIC instance ready");
+    pic
 }
 
 // Build the test canisters once for the shared Fleet Registry fixtures.

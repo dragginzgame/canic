@@ -24,10 +24,10 @@ use super::{
 };
 
 impl MgmtInfra {
-    /// Create a canister with explicit controllers and an initial cycle balance.
+    /// Create a Canister with explicit controllers and caller-computed attached funding.
     pub async fn create_canister(
         controllers: Vec<Principal>,
-        cycles: Cycles,
+        attached_cycles: Cycles,
     ) -> Result<Principal, IcInfraError> {
         let settings = Some(InfraCanisterSettings {
             controllers: Some(controllers),
@@ -38,9 +38,9 @@ impl MgmtInfra {
             settings,
             sender_canister_version: Some(api::canister_version()),
         };
-        let response = Call::bounded_wait(Principal::management_canister(), "create_canister")
+        let response = Call::unbounded_wait(Principal::management_canister(), "create_canister")
             .with_arg(args)?
-            .with_cycles(cycles.to_u128())
+            .with_cycles(attached_cycles.to_u128())
             .execute()
             .await?;
         let (created,): (InfraCreateCanisterResult,) = response.candid_tuple()?;
@@ -58,7 +58,7 @@ impl MgmtInfra {
             chunk,
         };
 
-        let response = Call::bounded_wait(Principal::management_canister(), "upload_chunk")
+        let response = Call::unbounded_wait(Principal::management_canister(), "upload_chunk")
             .with_arg(args)?
             .execute()
             .await?;
@@ -87,7 +87,7 @@ impl MgmtInfra {
             canister_id: canister_pid,
         };
 
-        Call::bounded_wait(Principal::management_canister(), "clear_chunk_store")
+        Call::unbounded_wait(Principal::management_canister(), "clear_chunk_store")
             .with_arg(args)?
             .execute()
             .await?;
@@ -117,7 +117,7 @@ impl MgmtInfra {
             sender_canister_version: Some(api::canister_version()),
         };
 
-        Call::bounded_wait(Principal::management_canister(), "install_chunked_code")
+        Call::unbounded_wait(Principal::management_canister(), "install_chunked_code")
             .with_arg(install_args)?
             .execute()
             .await?;
@@ -140,7 +140,7 @@ impl MgmtInfra {
             sender_canister_version: Some(api::canister_version()),
         };
 
-        Call::bounded_wait(Principal::management_canister(), "install_code")
+        Call::unbounded_wait(Principal::management_canister(), "install_code")
             .with_arg(install_args)?
             .execute()
             .await?;
@@ -154,7 +154,7 @@ impl MgmtInfra {
             canister_id: canister_pid,
             sender_canister_version: Some(api::canister_version()),
         };
-        Call::bounded_wait(Principal::management_canister(), "uninstall_code")
+        Call::unbounded_wait(Principal::management_canister(), "uninstall_code")
             .with_arg(args)?
             .execute()
             .await?;
@@ -167,7 +167,7 @@ impl MgmtInfra {
         let args = InfraCanisterIdRecord {
             canister_id: canister_pid,
         };
-        Call::bounded_wait(Principal::management_canister(), "stop_canister")
+        Call::unbounded_wait(Principal::management_canister(), "stop_canister")
             .with_arg(args)?
             .execute()
             .await?;
@@ -180,7 +180,7 @@ impl MgmtInfra {
         let args = InfraCanisterIdRecord {
             canister_id: canister_pid,
         };
-        Call::bounded_wait(Principal::management_canister(), "delete_canister")
+        Call::unbounded_wait(Principal::management_canister(), "delete_canister")
             .with_arg(args)?
             .execute()
             .await?;

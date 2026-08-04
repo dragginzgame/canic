@@ -4,6 +4,9 @@ members = [
     "apps/demo/root",
     "apps/demo/user_hub",
     "apps/demo/user_shard",
+    "apps/playground/playground_hub",
+    "apps/playground/root",
+    "apps/playground/wenzelroll",
     "apps/test/app",
     "apps/test/root",
     "apps/test/scale",
@@ -83,10 +86,9 @@ ic-query = { version = "0.26.15", default-features = false, features = [
 ] }
 ic-signature-verification = "0.3.0"
 ic-stable-structures = "0.7.2"
-ic-testkit = "0.1.11"
+ic-testkit = "0.3.2"
 ic0 = "1.1.0"
 k256 = { version = "0.14", default-features = false, features = ["ecdsa"] }
-pocket-ic = "14.0.0"
 proc-macro2 = "1.0"
 quote = "1.0"
 remain = "0.2"

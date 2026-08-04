@@ -16,7 +16,7 @@ publish = true
 [features]
 default = ["fleet-coordinator-canister", "root-control-plane", "wasm-store-canister"]
 fleet-coordinator-canister = []
-root-control-plane = ["wasm-store-canister"]
+root-control-plane = []
 wasm-store-canister = []
 
 [dependencies]

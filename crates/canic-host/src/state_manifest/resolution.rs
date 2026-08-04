@@ -4,7 +4,7 @@
 //! state manifest.
 //! Does not own: descriptor definitions, audit checks, report aggregation, or
 //! rendering.
-//! Boundary: reads passive project/package metadata and returns a complete
+//! Boundary: reads passive workspace/package metadata and returns a complete
 //! resolved manifest or blocking role-contract findings.
 
 use crate::role_contract::{
@@ -37,8 +37,8 @@ pub enum StateManifestResolution {
 }
 
 #[must_use]
-pub fn resolve_project_state_manifest(
-    project_root: &Path,
+pub fn resolve_workspace_state_manifest(
+    workspace_root: &Path,
     config_paths: &[PathBuf],
     role_filter: Option<&str>,
 ) -> StateManifestResolution {
@@ -108,7 +108,7 @@ pub fn resolve_project_state_manifest(
     }
 
     if role_filter.is_none() || role_filter == Some(CanisterRole::WASM_STORE.as_str()) {
-        match existing_built_in_wasm_store_manifest(project_root, &evidence) {
+        match existing_built_in_wasm_store_manifest(workspace_root, &evidence) {
             Some(manifest_path) => match validate_built_in_wasm_store_package(
                 &manifest_path,
                 PackageValidationMode::Passive,
@@ -166,12 +166,12 @@ fn collect_contract(
 }
 
 fn existing_built_in_wasm_store_manifest(
-    project_root: &Path,
+    workspace_root: &Path,
     evidence: &[RoleCargoGraphEvidence],
 ) -> Option<PathBuf> {
     for candidate in [
-        project_root.join("crates/canic-wasm-store/Cargo.toml"),
-        project_root.join(".icp/local/generated/canic-wasm-store/Cargo.toml"),
+        workspace_root.join("crates/canic-wasm-store/Cargo.toml"),
+        workspace_root.join(".icp/local/generated/canic-wasm-store/Cargo.toml"),
     ] {
         if candidate.is_file() {
             return Some(candidate);

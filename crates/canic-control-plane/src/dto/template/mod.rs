@@ -146,10 +146,10 @@ pub struct WasmStoreStatusResponse {
 
 /// Minimum operational headroom retained above the live freezing reserve while
 /// an empty Store returns cycles and remains available for stop/delete calls.
-pub const WASM_STORE_DELETION_EXECUTION_RESERVE_CYCLES: u128 = 100_000_000_000;
+pub const WASM_STORE_DELETION_EXECUTION_RESERVE_CYCLES: u128 = 300_000_000_000;
 
 /// Headroom below the deletion ceiling used to absorb post-call cycle refunds.
-pub const WASM_STORE_DELETION_CALL_REFUND_HEADROOM_CYCLES: u128 = 50_000_000_000;
+pub const WASM_STORE_DELETION_CALL_REFUND_HEADROOM_CYCLES: u128 = 150_000_000_000;
 
 /// Fail-closed ceiling on the total Store balance retained for physical deletion.
 pub const WASM_STORE_DELETION_MAXIMUM_RETAINED_CYCLES: u128 = 1_000_000_000_000;

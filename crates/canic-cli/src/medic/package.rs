@@ -2,7 +2,7 @@
 //!
 //! Responsibility: inspect role-package metadata and resolved Canic dependency features.
 //! Does not own: app configuration policy, report rendering, or Cargo manifest mutation.
-//! Boundary: reads Cargo manifests and returns passive metadata to project medic checks.
+//! Boundary: reads Cargo manifests and returns passive metadata to workspace medic checks.
 
 use std::{
     fs,

@@ -19,9 +19,9 @@ use clap::Command as ClapCommand;
 use std::ffi::OsString;
 
 const COMMAND_NAME: &str = "blob-storage";
+const FUND_COMMAND: &str = "fund";
 const STATUS_COMMAND: &str = "status";
 const SYNC_GATEWAYS_COMMAND: &str = "sync-gateways";
-const FUND_COMMAND: &str = "fund";
 const FLEET_ARG: &str = "fleet";
 const CANISTER_ARG: &str = "canister";
 const CYCLES_ARG: &str = "cycles";
@@ -31,12 +31,9 @@ const JSON_ARG: &str = "json";
 
 const HELP_AFTER: &str = "\
 Examples:
+  canic blob-storage fund local backend --cycles 1000000000000 --dry-run
   canic blob-storage status local backend
-  canic blob-storage status local backend --json
-  canic blob-storage status local backend --check-ready
-  canic blob-storage sync-gateways local backend --dry-run
-  canic blob-storage fund local backend --cycles 1000000000000
-  canic blob-storage fund local backend --cycles 1000000000000 --dry-run";
+  canic blob-storage sync-gateways local backend --dry-run";
 
 ///
 /// BlobStorageCommand
@@ -44,9 +41,9 @@ Examples:
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) enum BlobStorageCommand {
+    Fund(FundOptions),
     Status(StatusOptions),
     SyncGateways(SyncGatewaysOptions),
-    Fund(FundOptions),
 }
 
 ///
@@ -113,6 +110,15 @@ impl BlobStorageOptions {
         let matches = parse_matches(blob_storage_command(), args)
             .map_err(|_| BlobStorageCommandError::Usage(usage()))?;
         match matches.subcommand() {
+            Some((FUND_COMMAND, matches)) => Ok(BlobStorageCommand::Fund(FundOptions {
+                fleet: required_string(matches, FLEET_ARG),
+                canister: required_string(matches, CANISTER_ARG),
+                cycles: parse_cycles(&required_string(matches, CYCLES_ARG))
+                    .map_err(BlobStorageCommandError::InvalidCycles)?,
+                json: matches.get_flag(JSON_ARG),
+                dry_run: matches.get_flag(DRY_RUN_ARG),
+                common: common_options(matches),
+            })),
             Some((STATUS_COMMAND, matches)) => Ok(BlobStorageCommand::Status(StatusOptions {
                 fleet: required_string(matches, FLEET_ARG),
                 canister: required_string(matches, CANISTER_ARG),
@@ -129,15 +135,6 @@ impl BlobStorageOptions {
                     common: common_options(matches),
                 }))
             }
-            Some((FUND_COMMAND, matches)) => Ok(BlobStorageCommand::Fund(FundOptions {
-                fleet: required_string(matches, FLEET_ARG),
-                canister: required_string(matches, CANISTER_ARG),
-                cycles: parse_cycles(&required_string(matches, CYCLES_ARG))
-                    .map_err(BlobStorageCommandError::InvalidCycles)?,
-                json: matches.get_flag(JSON_ARG),
-                dry_run: matches.get_flag(DRY_RUN_ARG),
-                common: common_options(matches),
-            })),
             _ => Err(BlobStorageCommandError::Usage(usage())),
         }
     }
@@ -160,9 +157,9 @@ fn blob_storage_command() -> ClapCommand {
         .disable_help_flag(true)
         .about("Inspect and provision blob-storage billing")
         .subcommand_required(true)
+        .subcommand(fund_command())
         .subcommand(status_command())
         .subcommand(sync_gateways_command())
-        .subcommand(fund_command())
         .after_help(HELP_AFTER)
 }
 

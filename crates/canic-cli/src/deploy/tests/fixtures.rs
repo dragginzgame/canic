@@ -118,7 +118,7 @@ pub(super) fn sample_catalog_report() -> canic_host::fleet_catalog::FleetCatalog
     canic_host::fleet_catalog::FleetCatalogReportV1 {
         schema_version: 1,
         generated_at: "unix:54".to_string(),
-        project_root: Some(".".to_string()),
+        workspace_root: Some(".".to_string()),
         canonical_network_id,
         environment: "local".to_string(),
         entries: vec![FleetCatalogEntryV1 {

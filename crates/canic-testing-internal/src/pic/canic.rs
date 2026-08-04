@@ -30,7 +30,10 @@ use canic_core::{
 use canic_host::release_set::AppConfigSnapshot;
 use ic_testkit::{
     artifacts::{read_wasm, test_target_dir, workspace_root_for},
-    pic::{InstallSpec, Pic, StandaloneCanisterFixture, install_prebuilt_canister_from_spec},
+    pic::{
+        CandidCallError, CandidCallExt, CanisterInstallExt, InstallSpec, PocketIc, PocketIcBuilder,
+        PocketIcDiagnosticsExt, StandaloneCanisterFixture,
+    },
 };
 
 use super::artifacts::{
@@ -80,7 +83,7 @@ pub trait CanicPicExt {
         I: IntoIterator<Item = Principal>;
 }
 
-impl CanicPicExt for Pic {
+impl CanicPicExt for PocketIc {
     fn create_and_install_root_canister(
         &self,
         root_wasm: Vec<u8>,
@@ -162,15 +165,14 @@ impl CanicPicExt for Pic {
 }
 
 pub(super) fn prepare_sibling_wasm_store_controllers(
-    pic: &Pic,
+    pic: &PocketIc,
     wasm_store: Principal,
     installation_controller: Principal,
     root: Principal,
 ) {
     let mut controllers = vec![installation_controller, root];
     controllers.sort();
-    let live = live_pocket_ic_handle();
-    live.set_controllers(wasm_store, None, controllers.clone())
+    pic.set_controllers(wasm_store, None, controllers.clone())
         .expect("prepare sibling Wasm Store controllers");
 
     let mut observed_controllers = pic
@@ -182,28 +184,8 @@ pub(super) fn prepare_sibling_wasm_store_controllers(
     assert_eq!(observed_controllers, controllers);
 }
 
-fn live_pocket_ic_handle() -> pocket_ic::PocketIc {
-    let instances = pocket_ic::PocketIc::list_instances();
-    let live_instances = instances
-        .iter()
-        .enumerate()
-        .filter(|(_, status)| status.as_str() != "Deleted")
-        .collect::<Vec<_>>();
-    let [(instance_id, _)] = live_instances.as_slice() else {
-        panic!("expected exactly one serialized live PocketIC instance, found {live_instances:?}");
-    };
-    let port_file = std::env::temp_dir().join(format!("pocket_ic_{}.port", std::process::id()));
-    let port = std::fs::read_to_string(&port_file)
-        .unwrap_or_else(|error| panic!("read PocketIC port file {}: {error}", port_file.display()));
-    let server_url = format!("http://127.0.0.1:{}/", port.trim())
-        .parse()
-        .expect("parse PocketIC server URL");
-
-    pocket_ic::PocketIc::new_from_existing_instance(server_url, *instance_id, None)
-}
-
 pub(super) fn adopt_sibling_wasm_store(
-    pic: &Pic,
+    pic: &PocketIc,
     root: Principal,
     root_args: &FleetSubnetRootInitArgs,
 ) {
@@ -212,7 +194,7 @@ pub(super) fn adopt_sibling_wasm_store(
         authority: root_args.authority.wasm_store_authority.clone(),
     };
     let adopted: Result<FleetSubnetWasmStoreAdoptionResponse, Error> = pic
-        .update_call(
+        .update_candid(
             root,
             protocol::CANIC_FLEET_SUBNET_WASM_STORE_ADOPT,
             (request.clone(),),
@@ -220,7 +202,7 @@ pub(super) fn adopt_sibling_wasm_store(
         .expect("adopt sibling Wasm Store transport");
     let adopted = adopted.expect("adopt sibling Wasm Store application");
     let status: Result<Option<FleetSubnetWasmStoreAdoptionResponse>, Error> = pic
-        .query_call(
+        .query_candid(
             root,
             protocol::CANIC_FLEET_SUBNET_WASM_STORE_ADOPTION_STATUS,
             (request,),
@@ -239,11 +221,11 @@ pub(super) fn adopt_sibling_wasm_store(
 /// Panics when preparation or activation transport fails, the root rejects
 /// either operation, or the resulting phase is not the exact expected phase.
 pub(super) fn activate_managed_fleet(
-    pic: &Pic,
+    pic: &PocketIc,
     root_id: Principal,
 ) -> FleetActivationStatusResponse {
     let prepared: Result<FleetActivationStatusResponse, Error> = pic
-        .update_call(root_id, protocol::CANIC_PREPARE_FLEET_ACTIVATION, ())
+        .update_candid(root_id, protocol::CANIC_PREPARE_FLEET_ACTIVATION, ())
         .expect("Fleet activation preparation transport");
     let prepared = prepared.unwrap_or_else(|error| {
         pic.dump_canister_debug(root_id, "Fleet activation preparation application");
@@ -255,7 +237,7 @@ pub(super) fn activate_managed_fleet(
         .expect("prepared root must expose its credential generation");
 
     let activated: Result<FleetActivationStatusResponse, Error> = pic
-        .update_call(
+        .update_candid(
             root_id,
             protocol::CANIC_RESUME_FLEET_ACTIVATION,
             (FleetActivationResumeRequest {
@@ -275,9 +257,9 @@ pub(super) fn activate_managed_fleet(
 ///
 /// Panics if the canister does not report ready within `tick_limit` ticks, or
 /// if querying readiness traps.
-pub fn wait_until_ready(pic: &Pic, canister_id: Principal, tick_limit: usize) {
+pub fn wait_until_ready(pic: &PocketIc, canister_id: Principal, tick_limit: usize) {
     for _ in 0..tick_limit {
-        if let Ok(ready) = pic.query_call_as::<bool, _>(
+        if let Ok(ready) = pic.query_candid_as::<bool, _>(
             canister_id,
             Principal::anonymous(),
             protocol::CANIC_READY,
@@ -320,11 +302,13 @@ pub fn install_standalone_canister(
 
     let label = format!("standalone:{crate_name}:{role}");
     let wasm = read_wasm(&target_dir, crate_name, profile.target_dir_name());
-    let fixture = install_prebuilt_canister_from_spec(
+    let pocket_ic = PocketIcBuilder::new().with_application_subnet().build();
+    let fixture = StandaloneCanisterFixture::install(
+        pocket_ic,
         InstallSpec::new(wasm, local_init_args(), 0).label(label),
     );
     let canister_id = fixture.canister_id();
-    let pic = fixture.pic();
+    let pic = fixture.pocket_ic();
     pic.wait_for_ready(
         canister_id,
         STANDALONE_READY_TICK_LIMIT,
@@ -343,7 +327,7 @@ pub fn install_standalone_canister(
 /// configured tick limit.
 #[must_use]
 pub fn install_standalone_canister_on_pic(
-    pic: &Pic,
+    pic: &PocketIc,
     crate_name: &str,
     role: CanisterRole,
     profile: CanicWasmBuildProfile,
@@ -371,14 +355,12 @@ pub fn install_standalone_canister_on_pic(
     canister_id
 }
 
-fn fetch_ready(pic: &Pic, canister_id: Principal) -> bool {
-    match pic.query_call(canister_id, protocol::CANIC_READY, ()) {
+fn fetch_ready(pic: &PocketIc, canister_id: Principal) -> bool {
+    match pic.query_candid(canister_id, protocol::CANIC_READY, ()) {
         Ok(ready) => ready,
         Err(err) => {
-            let activation: Result<
-                Result<FleetActivationStatusResponse, Error>,
-                ic_testkit::pic::PicCallError,
-            > = pic.query_call(canister_id, protocol::CANIC_FLEET_ACTIVATION_STATUS, ());
+            let activation: Result<Result<FleetActivationStatusResponse, Error>, CandidCallError> =
+                pic.query_candid(canister_id, protocol::CANIC_FLEET_ACTIVATION_STATUS, ());
             if matches!(
                 activation,
                 Ok(Ok(FleetActivationStatusResponse {

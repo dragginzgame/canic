@@ -2,11 +2,11 @@
 //!
 //! Responsibility: resolve approved wasm module sources for install workflows.
 //! Does not own: control-plane publication, wasm-store storage, or install execution.
-//! Boundary: mediates embedded sources and registered resolver-backed sources.
+//! Boundary: delegates to the registered resolver and returns Store-backed chunk sources.
 
 use crate::{
     InternalError, InternalErrorOrigin,
-    cdk::{types::Principal, utils::hash::wasm_hash},
+    cdk::types::Principal,
     domain::metrics::{
         WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason,
         WasmStoreMetricSource,
@@ -16,28 +16,7 @@ use crate::{
     ops::runtime::metrics::wasm_store::WasmStoreMetrics,
 };
 use async_trait::async_trait;
-use std::{
-    borrow::Cow,
-    collections::BTreeMap,
-    sync::{Mutex, OnceLock},
-};
-
-///
-/// ApprovedModulePayload
-///
-/// Runtime representation of the installable wasm payload backing one source.
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ApprovedModulePayload {
-    Chunked {
-        source_canister: Principal,
-        chunk_hashes: Vec<Vec<u8>>,
-    },
-    Embedded {
-        wasm_module: Cow<'static, [u8]>,
-    },
-}
+use std::sync::OnceLock;
 
 ///
 /// ApprovedModuleSource
@@ -47,10 +26,11 @@ pub enum ApprovedModulePayload {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ApprovedModuleSource {
+    source_canister: Principal,
     source_label: String,
     module_hash: Vec<u8>,
+    chunk_hashes: Vec<Vec<u8>>,
     payload_size_bytes: u64,
-    payload: ApprovedModulePayload,
 }
 
 impl ApprovedModuleSource {
@@ -64,29 +44,18 @@ impl ApprovedModuleSource {
         payload_size_bytes: u64,
     ) -> Self {
         Self {
+            source_canister,
             source_label,
             module_hash,
+            chunk_hashes,
             payload_size_bytes,
-            payload: ApprovedModulePayload::Chunked {
-                source_canister,
-                chunk_hashes,
-            },
         }
     }
 
-    /// Construct one embedded module source from already packaged wasm bytes.
+    /// Return the Store canister that owns the approved chunk set.
     #[must_use]
-    pub fn embedded(source_label: String, wasm_module: &'static [u8]) -> Self {
-        let payload_size_bytes = wasm_module.len() as u64;
-
-        Self {
-            source_label,
-            module_hash: wasm_hash(wasm_module),
-            payload_size_bytes,
-            payload: ApprovedModulePayload::Embedded {
-                wasm_module: Cow::Borrowed(wasm_module),
-            },
-        }
+    pub const fn source_canister(&self) -> &Principal {
+        &self.source_canister
     }
 
     /// Return the logical source label used for logs and status output.
@@ -113,19 +82,16 @@ impl ApprovedModuleSource {
         self.payload_size_bytes
     }
 
-    /// Return the chunk count when the source is chunk-store-backed.
+    /// Return the approved chunk hashes in deterministic install order.
     #[must_use]
-    pub const fn chunk_count(&self) -> usize {
-        match &self.payload {
-            ApprovedModulePayload::Chunked { chunk_hashes, .. } => chunk_hashes.len(),
-            ApprovedModulePayload::Embedded { .. } => 0,
-        }
+    pub fn chunk_hashes(&self) -> &[Vec<u8>] {
+        &self.chunk_hashes
     }
 
-    /// Return the underlying payload representation.
+    /// Return the approved chunk count.
     #[must_use]
-    pub const fn payload(&self) -> &ApprovedModulePayload {
-        &self.payload
+    pub const fn chunk_count(&self) -> usize {
+        self.chunk_hashes.len()
     }
 }
 
@@ -145,8 +111,6 @@ pub trait ModuleSourceResolver: Send + Sync {
 }
 
 static MODULE_SOURCE_RESOLVER: OnceLock<&'static dyn ModuleSourceResolver> = OnceLock::new();
-static EMBEDDED_MODULE_SOURCES: OnceLock<Mutex<BTreeMap<CanisterRole, ApprovedModuleSource>>> =
-    OnceLock::new();
 
 ///
 /// ModuleSourceRuntimeApi
@@ -157,80 +121,15 @@ static EMBEDDED_MODULE_SOURCES: OnceLock<Mutex<BTreeMap<CanisterRole, ApprovedMo
 pub struct ModuleSourceRuntimeApi;
 
 impl ModuleSourceRuntimeApi {
-    /// Register one built-in module source override for the current process.
-    ///
-    /// # Panics
-    ///
-    /// Panics when the same role has already been registered with a different
-    /// embedded module source in this process.
-    fn register_embedded_module_source(role: CanisterRole, source: ApprovedModuleSource) {
-        let sources = EMBEDDED_MODULE_SOURCES.get_or_init(|| Mutex::new(BTreeMap::new()));
-        let mut sources = sources
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-        match sources.get(&role) {
-            Some(existing) if existing == &source => {}
-            Some(existing) => {
-                panic!(
-                    "embedded module source for role '{role}' was already registered with a different payload: existing='{}' new='{}'",
-                    existing.source_label(),
-                    source.source_label()
-                );
-            }
-            None => {
-                sources.insert(role, source);
-            }
-        }
-    }
-
-    /// Register one embedded wasm payload as the built-in install source for one role.
-    pub fn register_embedded_module_wasm(
-        role: CanisterRole,
-        source_label: impl Into<String>,
-        wasm_module: &'static [u8],
-    ) {
-        Self::register_embedded_module_source(
-            role,
-            ApprovedModuleSource::embedded(source_label.into(), wasm_module),
-        );
-    }
-
     /// Register the control-plane resolver used by root-owned installation flows.
     pub fn register_module_source_resolver(resolver: &'static dyn ModuleSourceResolver) {
         let _ = MODULE_SOURCE_RESOLVER.set(resolver);
-    }
-
-    /// Return whether one embedded module source override has been registered.
-    #[must_use]
-    pub fn has_embedded_module_source(role: &CanisterRole) -> bool {
-        EMBEDDED_MODULE_SOURCES.get().is_some_and(|sources| {
-            let sources = sources
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            sources.contains_key(role)
-        })
     }
 
     /// Resolve the approved install source for one canister role through the registered driver.
     pub(crate) async fn approved_module_source(
         role: &CanisterRole,
     ) -> Result<ApprovedModuleSource, InternalError> {
-        if let Some(source) = EMBEDDED_MODULE_SOURCES.get().and_then(|sources| {
-            let sources = sources
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            sources.get(role).cloned()
-        }) {
-            WasmStoreMetrics::record(
-                WasmStoreMetricOperation::SourceResolve,
-                WasmStoreMetricSource::Embedded,
-                WasmStoreMetricOutcome::Completed,
-                WasmStoreMetricReason::Ok,
-            );
-            return Ok(source);
-        }
-
         let resolver = MODULE_SOURCE_RESOLVER.get().ok_or_else(|| {
             WasmStoreMetrics::record(
                 WasmStoreMetricOperation::SourceResolve,

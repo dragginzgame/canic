@@ -8,7 +8,7 @@ use canic::{
     ids::CanisterRole,
     protocol,
 };
-use ic_testkit::pic::Pic;
+use ic_testkit::pic::{CandidCallExt, PocketIc};
 
 /// Create one user shard through the reference `user_hub` path.
 ///
@@ -16,9 +16,13 @@ use ic_testkit::pic::Pic;
 ///
 /// Panics if the `create_account` transport or application call fails.
 #[must_use]
-pub fn create_user_shard(pic: &Pic, user_hub_pid: Principal, user_pid: Principal) -> Principal {
+pub fn create_user_shard(
+    pic: &PocketIc,
+    user_hub_pid: Principal,
+    user_pid: Principal,
+) -> Principal {
     let created: Result<Principal, Error> =
-        pic.update_call_or_panic(user_hub_pid, "create_account", (user_pid,));
+        pic.update_candid_or_panic(user_hub_pid, "create_account", (user_pid,));
     created.expect("create_account application failed")
 }
 
@@ -30,7 +34,7 @@ pub fn create_user_shard(pic: &Pic, user_hub_pid: Principal, user_pid: Principal
 /// call returns an error.
 #[must_use]
 pub fn issue_delegated_token_from_active_proof(
-    pic: &Pic,
+    pic: &PocketIc,
     issuer_pid: Principal,
     subject: Principal,
     aud: DelegationAudience,
@@ -56,7 +60,7 @@ pub fn issue_delegated_token_from_active_proof(
 /// call returns an error.
 #[must_use]
 pub fn issue_delegated_token_from_active_proof_with_request_nonce(
-    pic: &Pic,
+    pic: &PocketIc,
     issuer_pid: Principal,
     subject: Principal,
     aud: DelegationAudience,
@@ -79,14 +83,14 @@ pub fn issue_delegated_token_from_active_proof_with_request_nonce(
         ttl_ns: token_ttl_ns,
         ext: None,
     };
-    let prepared: Result<DelegatedTokenPrepareResponse, Error> = pic.update_call_as_or_panic(
+    let prepared: Result<DelegatedTokenPrepareResponse, Error> = pic.update_candid_as_or_panic(
         issuer_pid,
         subject,
         protocol::CANIC_PREPARE_DELEGATED_TOKEN,
         (request,),
     );
     let prepared = prepared.expect("canic_prepare_delegated_token application failed");
-    let issued: Result<DelegatedToken, Error> = pic.query_call_as_or_panic(
+    let issued: Result<DelegatedToken, Error> = pic.query_candid_as_or_panic(
         issuer_pid,
         subject,
         protocol::CANIC_GET_DELEGATED_TOKEN,

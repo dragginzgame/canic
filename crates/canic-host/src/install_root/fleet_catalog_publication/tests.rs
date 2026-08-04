@@ -42,7 +42,7 @@ fn exact_terminal_evidence_publishes_one_coordinator_row_and_retries_exactly() {
         fixture.coordinator.to_text()
     );
     let report = build_fleet_catalog_report(&FleetCatalogRequest {
-        project_root: fixture.root.clone(),
+        workspace_root: fixture.root.clone(),
         environment: "staging".to_string(),
         generated_at: "unix:54".to_string(),
     })
@@ -122,7 +122,7 @@ struct Fixture {
 impl Fixture {
     fn request(&self) -> TerminalFleetCatalogPublicationRequest<'_> {
         TerminalFleetCatalogPublicationRequest {
-            project_root: &self.root,
+            workspace_root: &self.root,
             fleet_name: "toko-production".parse().expect("Fleet name"),
             environment: "staging",
             deployed_at_unix_secs: 54,

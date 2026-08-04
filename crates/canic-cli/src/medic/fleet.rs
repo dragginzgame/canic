@@ -91,11 +91,11 @@ pub(super) fn installed_fleet_checks(
 fn check_config_path(icp_root: Option<&Path>, fleet: &FleetCatalogEntryV1) -> MedicCheck {
     let Some(root) = icp_root else {
         return MedicCheck::not_evaluated(
-            MedicCategory::ProjectConfig,
+            MedicCategory::WorkspaceConfig,
             "app_config_not_evaluated",
             "config",
-            "App config lookup skipped because the project root was not resolved",
-            "run from a Canic project root",
+            "App config lookup skipped because the workspace root was not resolved",
+            "run from a Canic workspace root",
             MedicSource::AppConfig,
         );
     };
@@ -105,7 +105,7 @@ fn check_config_path(icp_root: Option<&Path>, fleet: &FleetCatalogEntryV1) -> Me
         .join("canic.toml");
     if config_path.is_file() {
         MedicCheck::pass(
-            MedicCategory::ProjectConfig,
+            MedicCategory::WorkspaceConfig,
             "app_config_found",
             "config",
             display_medic_path(root, &config_path),
@@ -114,7 +114,7 @@ fn check_config_path(icp_root: Option<&Path>, fleet: &FleetCatalogEntryV1) -> Me
         )
     } else {
         MedicCheck::fail(
-            MedicCategory::ProjectConfig,
+            MedicCategory::WorkspaceConfig,
             "app_config_missing",
             "config",
             format!("missing {}", display_medic_path(root, &config_path)),
@@ -139,8 +139,8 @@ fn check_fleet_registry_observation(
             MedicCategory::Topology,
             "fleet_registry_not_evaluated",
             "registry",
-            "Fleet registry observation skipped because the project root was not resolved",
-            "run from a Canic project root",
+            "Fleet registry observation skipped because the workspace root was not resolved",
+            "run from a Canic workspace root",
             MedicSource::InstalledFleet,
         );
     };

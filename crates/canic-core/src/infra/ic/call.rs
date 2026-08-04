@@ -115,6 +115,15 @@ impl CallBuilder<'_> {
         self
     }
 
+    /// Return the exact current-Subnet cost of scheduling this call.
+    #[must_use]
+    pub fn cost(&self) -> u128 {
+        self.cycles.saturating_add(ic_cdk::api::cost_call(
+            self.method.len() as u64,
+            self.args.len() as u64,
+        ))
+    }
+
     /// Execute the configured IC call and return the raw response wrapper.
     pub async fn execute(self) -> Result<CallResult, IcInfraError> {
         let mut call = match self.wait {

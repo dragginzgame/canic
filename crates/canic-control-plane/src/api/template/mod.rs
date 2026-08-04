@@ -1,15 +1,12 @@
+use crate::dto::template::{
+    TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
+    TemplateManifestInput,
+};
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 use crate::{
     config,
     ids::WasmStoreGcStatus,
     ops::storage::template::{TemplateChunkedOps, TemplateManifestOps, WasmStoreLimits},
-};
-use crate::{
-    dto::template::{
-        TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
-        TemplateManifestInput,
-    },
-    ids::TemplateId,
 };
 #[cfg(feature = "wasm-store-canister")]
 use crate::{
@@ -18,7 +15,7 @@ use crate::{
         WasmStoreDeletionCycleReclamationRequest, WasmStoreDeletionCycleReclamationResponse,
         WasmStoreStatusResponse,
     },
-    ids::{TemplateVersion, WasmStoreGcMode},
+    ids::{TemplateId, TemplateVersion, WasmStoreGcMode},
     ops::storage::template::{WasmStoreGcExecutionStats, WasmStoreGcOps},
 };
 #[cfg(feature = "root-control-plane")]

@@ -28,13 +28,13 @@ pub(super) fn evidence_command() -> ClapCommand {
         .about("Evaluate and compare stable Canic evidence envelopes")
         .disable_help_flag(true)
         .subcommand(passthrough_subcommand(
-            ClapCommand::new("gate")
-                .about("Evaluate one EvidenceEnvelopeV1 against a CI policy")
+            ClapCommand::new("compare")
+                .about("Compare two EvidenceEnvelopeV1 JSON files")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
-            ClapCommand::new("compare")
-                .about("Compare two EvidenceEnvelopeV1 JSON files")
+            ClapCommand::new("gate")
+                .about("Evaluate one EvidenceEnvelopeV1 against a CI policy")
                 .disable_help_flag(true),
         ))
 }

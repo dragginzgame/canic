@@ -328,6 +328,11 @@ fn catalog_inspect_and_text_use_fleet_identity_terms() {
     assert!(text.contains("fleet_id:"));
     assert!(text.contains("app: shop"));
     assert!(text.contains("coordinator_principal: rrkah-fqaaa-aaaaa-aaaaq-cai"));
+    assert!(text.contains("workspace_root: ."));
+    assert!(!text.contains("project_root"));
+    let value = serde_json::to_value(&report).expect("serialize Fleet catalog report");
+    assert_eq!(value["workspace_root"], ".");
+    assert!(value.get("project_root").is_none());
     assert!(!text.contains("root_principal"));
     assert!(!text.contains("deployment target"));
     assert!(matches!(
@@ -416,7 +421,7 @@ fn catalog_hard_rejects_the_removed_single_root_shape() {
 
 fn fixture(name: &str) -> PathBuf {
     let root = temp_dir(&format!("canic-fleet-catalog-{name}"));
-    fs::create_dir_all(&root).expect("create project root");
+    fs::create_dir_all(&root).expect("create workspace root");
     fs::write(
         root.join("icp.yaml"),
         "environments:\n  - name: staging\n    network: ic\n  - name: production\n    network: ic\n",
@@ -427,7 +432,7 @@ fn fixture(name: &str) -> PathBuf {
 
 fn request(root: &Path, environment: &str) -> FleetCatalogRequest {
     FleetCatalogRequest {
-        project_root: root.to_path_buf(),
+        workspace_root: root.to_path_buf(),
         environment: environment.to_string(),
         generated_at: "unix:54".to_string(),
     }

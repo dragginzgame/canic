@@ -11,12 +11,8 @@ use std::ffi::OsString;
 
 const DEPLOY_INSPECT_HELP_AFTER: &str = "\
 Examples:
-  canic deploy inspect plan demo
-  canic deploy inspect inventory demo
-  canic deploy inspect diff demo
-  canic deploy inspect report demo
-  canic deploy inspect compare --left staging-check.json --right prod-check.json
   canic deploy inspect catalog list
+  canic deploy inspect plan demo
   canic deploy inspect resume-report --receipt receipt.json demo
 
 These commands print raw deployment-truth JSON artifacts without installing,
@@ -39,12 +35,12 @@ where
             Ok(())
         }
         Some((command, args)) => match command.as_str() {
-            "plan" => truth::run_plan(args),
-            "inventory" => truth::run_inventory(args),
-            "diff" => truth::run_diff(args),
-            "report" => truth::run_report(args),
-            "compare" => compare::run(args),
             "catalog" => catalog::run(args),
+            "compare" => compare::run(args),
+            "diff" => truth::run_diff(args),
+            "inventory" => truth::run_inventory(args),
+            "plan" => truth::run_plan(args),
+            "report" => truth::run_report(args),
             "resume-report" => resume_report::run(args),
             _ => unreachable!("deploy inspect dispatch only defines known commands"),
         },
@@ -53,12 +49,12 @@ where
 
 pub(super) fn command() -> ClapCommand {
     [
-        "plan",
-        "inventory",
-        "diff",
-        "report",
-        "compare",
         "catalog",
+        "compare",
+        "diff",
+        "inventory",
+        "plan",
+        "report",
         "resume-report",
     ]
     .into_iter()

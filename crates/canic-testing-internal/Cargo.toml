@@ -19,7 +19,6 @@ canic-core = { workspace = true }
 canic-host = { workspace = true }
 flate2 = { workspace = true }
 ic-testkit = { workspace = true }
-pocket-ic = { workspace = true }
 serde_json = { workspace = true }
 
 [lints]

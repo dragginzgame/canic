@@ -27,8 +27,8 @@ use canic_host::evidence_envelope::{CommandProvenanceV1, command_path_for_root};
 use canic_host::{
     icp_config::{resolve_current_canic_icp_root, resolve_icp_build_network_from_root},
     install_root::{
-        ConfigDiscoveryError, current_canic_project_root, discover_project_canic_config_choices,
-        select_discovered_app_config_path,
+        ConfigDiscoveryError, current_canic_workspace_root,
+        discover_workspace_canic_config_choices, select_discovered_app_config_path,
     },
     release_set::{AppConfigError, AppConfigSnapshot, WorkspaceDiscoveryError, workspace_root},
 };
@@ -45,7 +45,6 @@ Examples:
   canic build demo app
   canic build demo app --provenance artifacts/app-provenance.json
   canic --environment local build demo root
-  canic build --profile fast --workspace backend --icp-root . --config backend/apps/demo/canic.toml demo root
 
 The selected app must have a matching canic.toml, and the selected role must
 be attached to topology before an artifact build is allowed.
@@ -71,7 +70,7 @@ pub enum BuildCommandError {
     #[error("unknown app {0}; run canic app list to inspect config-defined apps")]
     UnknownApp(String),
 
-    #[error("failed to discover Canic project configs: {0}")]
+    #[error("failed to discover Canic workspace App configs: {0}")]
     ConfigDiscovery(#[from] ConfigDiscoveryError),
 
     #[error("failed to resolve Cargo workspace: {0}")]
@@ -311,11 +310,11 @@ fn resolve_build_config_path(options: &BuildOptions) -> Result<PathBuf, BuildCom
         return Ok(path);
     }
 
-    let project_root = options.workspace.as_ref().map_or_else(
-        || current_canic_project_root().map_err(BuildCommandError::from),
+    let workspace_root = options.workspace.as_ref().map_or_else(
+        || current_canic_workspace_root().map_err(BuildCommandError::from),
         |workspace| normalize_build_path(workspace),
     )?;
-    let choices = discover_project_canic_config_choices(&project_root)?;
+    let choices = discover_workspace_canic_config_choices(&workspace_root)?;
     if choices.is_empty() {
         return Err(BuildCommandError::NoConfigChoices);
     }

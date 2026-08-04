@@ -1,21 +1,16 @@
-use super::{
-    TemplateManifestOps, TemplateManifestOpsError, WasmStoreGcExecutionStats, WasmStoreLimits,
-    input_to_record,
-};
+use super::{TemplateManifestOps, TemplateManifestOpsError};
+#[cfg(feature = "wasm-store-canister")]
+use super::{WasmStoreGcExecutionStats, WasmStoreLimits, input_to_record};
+#[cfg(feature = "wasm-store-canister")]
+use crate::dto::template::TemplateManifestInput;
 use crate::{
     dto::template::{
         TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
-        TemplateChunkSetPrepareInput, TemplateManifestInput, WasmStoreGcStatusResponse,
-        WasmStoreStatusResponse, WasmStoreTemplateStatusResponse,
+        TemplateChunkSetPrepareInput,
     },
-    ids::{
-        TemplateChunkKey, TemplateId, TemplateManifestState, TemplateReleaseKey, TemplateVersion,
-        WasmStoreGcStatus,
-    },
+    ids::{TemplateChunkKey, TemplateId, TemplateReleaseKey, TemplateVersion},
     storage::stable::template::{
-        TemplateChunkRecord, TemplateChunkSetEntryRecord, TemplateChunkSetRecord,
-        TemplateChunkSetStateStore, TemplateChunkStore, TemplateManifestEntryRecord,
-        TemplateManifestStateStore,
+        TemplateChunkRecord, TemplateChunkSetRecord, TemplateChunkSetStateStore, TemplateChunkStore,
     },
 };
 #[cfg(feature = "root-control-plane")]
@@ -25,16 +20,31 @@ use crate::{
     },
     ids::{CanisterRole, TemplateChunkingMode},
 };
-use canic_core::cdk::{structures::storable::Storable, utils::hash::wasm_hash};
-use canic_core::control_plane_support::{
-    error::InternalError, format::byte_size, ops::ic::mgmt::MgmtOps,
+#[cfg(feature = "wasm-store-canister")]
+use crate::{
+    dto::template::{
+        WasmStoreGcStatusResponse, WasmStoreStatusResponse, WasmStoreTemplateStatusResponse,
+    },
+    ids::WasmStoreGcStatus,
+    storage::stable::template::{TemplateChunkSetEntryRecord, TemplateManifestEntryRecord},
 };
+#[cfg(any(test, feature = "wasm-store-canister"))]
+use crate::{ids::TemplateManifestState, storage::stable::template::TemplateManifestStateStore};
+#[cfg(feature = "wasm-store-canister")]
+use canic_core::cdk::structures::storable::Storable;
+use canic_core::cdk::utils::hash::wasm_hash;
+#[cfg(feature = "wasm-store-canister")]
+use canic_core::control_plane_support::ops::ic::mgmt::MgmtOps;
+use canic_core::control_plane_support::{error::InternalError, format::byte_size};
 #[cfg(test)]
 use canic_core::dto::error::ErrorCode;
+#[cfg(feature = "wasm-store-canister")]
 use ic_cdk::api::canister_self;
 #[cfg(feature = "root-control-plane")]
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+#[cfg(feature = "wasm-store-canister")]
+use std::collections::BTreeSet;
 
 ///
 /// TemplateChunkedOps
@@ -77,6 +87,7 @@ impl TemplateChunkedOps {
     }
 
     // Return current occupied-byte and template-retention state for this local store.
+    #[cfg(feature = "wasm-store-canister")]
     #[must_use]
     pub fn store_status_response(
         limits: WasmStoreLimits,
@@ -186,6 +197,7 @@ impl TemplateChunkedOps {
     }
 
     // Replace the approved manifest for a local wasm store with capacity enforcement.
+    #[cfg(feature = "wasm-store-canister")]
     pub fn replace_approved_in_store_from_input(
         input: TemplateManifestInput,
         limits: WasmStoreLimits,
@@ -217,6 +229,7 @@ impl TemplateChunkedOps {
     }
 
     // Prepare one chunk-set metadata record in a local store with capacity enforcement.
+    #[cfg(feature = "wasm-store-canister")]
     pub fn prepare_chunk_set_in_store_from_input(
         input: TemplateChunkSetPrepareInput,
         created_at: u64,
@@ -251,6 +264,7 @@ impl TemplateChunkedOps {
     }
 
     // Publish one chunk into a local store with capacity enforcement.
+    #[cfg(feature = "wasm-store-canister")]
     pub fn publish_chunk_in_store_from_input(
         input: TemplateChunkInput,
         limits: WasmStoreLimits,
@@ -412,6 +426,7 @@ impl TemplateChunkedOps {
     }
 
     // Clear all local template metadata and chunk bytes for store-local GC execution.
+    #[cfg(feature = "wasm-store-canister")]
     pub async fn execute_local_store_gc() -> Result<WasmStoreGcExecutionStats, InternalError> {
         let manifests = TemplateManifestStateStore::export().entries;
         let chunk_sets = TemplateChunkSetStateStore::export().entries;
@@ -498,6 +513,7 @@ fn chunk_set_record_to_response(record: TemplateChunkSetRecord) -> TemplateChunk
     }
 }
 
+#[cfg(feature = "wasm-store-canister")]
 fn manifest_store_bytes(manifests: &[TemplateManifestEntryRecord]) -> u64 {
     manifests
         .iter()
@@ -505,6 +521,7 @@ fn manifest_store_bytes(manifests: &[TemplateManifestEntryRecord]) -> u64 {
         .sum::<u64>()
 }
 
+#[cfg(feature = "wasm-store-canister")]
 fn chunk_set_store_bytes(chunk_sets: &[TemplateChunkSetEntryRecord]) -> u64 {
     chunk_sets
         .iter()
@@ -512,6 +529,7 @@ fn chunk_set_store_bytes(chunk_sets: &[TemplateChunkSetEntryRecord]) -> u64 {
         .sum::<u64>()
 }
 
+#[cfg(feature = "wasm-store-canister")]
 fn ensure_store_limits_from_versions(
     limits: WasmStoreLimits,
     projected_bytes: u64,
@@ -553,6 +571,7 @@ fn ensure_store_limits_from_versions(
     Ok(())
 }
 
+#[cfg(feature = "wasm-store-canister")]
 fn projected_template_versions(
     manifests: &[TemplateManifestEntryRecord],
     chunk_sets: &[TemplateChunkSetEntryRecord],
@@ -575,6 +594,7 @@ fn projected_template_versions(
 
     template_versions
 }
+#[cfg(feature = "wasm-store-canister")]
 fn projected_manifests_after_replace(
     input: &TemplateManifestInput,
 ) -> Vec<TemplateManifestEntryRecord> {
@@ -598,6 +618,7 @@ fn projected_manifests_after_replace(
     manifests
 }
 
+#[cfg(feature = "wasm-store-canister")]
 fn replace_chunk_set_entry(
     release: TemplateReleaseKey,
     record: TemplateChunkSetRecord,
@@ -613,6 +634,7 @@ fn replace_chunk_set_entry(
     entries
 }
 
+#[cfg(feature = "wasm-store-canister")]
 fn chunk_entry_store_bytes(chunk_key: &TemplateChunkKey, record: &TemplateChunkRecord) -> u64 {
     (chunk_key.to_bytes().len() + 12 + record.bytes.len()) as u64
 }
@@ -620,7 +642,7 @@ fn chunk_entry_store_bytes(chunk_key: &TemplateChunkKey, record: &TemplateChunkR
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ids::{TemplateId, WasmStoreBinding};
+    use crate::ids::{CanisterRole, TemplateChunkingMode, TemplateId, WasmStoreBinding};
 
     fn reset_store() {
         TemplateManifestStateStore::clear_for_test();
@@ -628,6 +650,7 @@ mod tests {
         TemplateChunkStore::clear_for_test();
     }
 
+    #[cfg(feature = "wasm-store-canister")]
     fn approved_manifest_input() -> TemplateManifestInput {
         TemplateManifestInput {
             template_id: TemplateId::new("embedded:app"),
@@ -643,6 +666,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "wasm-store-canister")]
     #[test]
     fn publish_chunk_in_store_rejects_incremental_capacity_overflow() {
         reset_store();
@@ -728,6 +752,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "root-control-plane")]
     #[test]
     fn chunk_response_rejects_stale_chunk_after_prepare_replaces_hashes() {
         reset_store();
@@ -807,6 +832,7 @@ mod tests {
         assert_eq!(response.bytes, new_chunk);
     }
 
+    #[cfg(feature = "root-control-plane")]
     #[test]
     fn chunk_response_rejects_stale_chunk_after_prepare_shrinks_set() {
         reset_store();

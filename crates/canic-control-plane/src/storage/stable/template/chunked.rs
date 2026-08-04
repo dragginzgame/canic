@@ -290,6 +290,7 @@ impl TemplateChunkSetStateStore {
     }
 
     // Export the full chunk-set metadata snapshot for ops-owned accounting.
+    #[cfg(any(test, feature = "wasm-store-canister"))]
     #[must_use]
     pub fn export() -> TemplateChunkSetsData {
         TemplateChunkSetsData {
@@ -313,6 +314,7 @@ impl TemplateChunkSetStateStore {
     }
 
     // Return current chunk-set occupied bytes without cloning the full snapshot.
+    #[cfg(feature = "wasm-store-canister")]
     #[must_use]
     pub fn occupied_bytes() -> u64 {
         if let Some(bytes) = TEMPLATE_CHUNK_SETS_OCCUPIED_BYTES.with_borrow(|occupied| *occupied) {
@@ -332,6 +334,7 @@ impl TemplateChunkSetStateStore {
     }
 
     // Clear the chunk-set metadata store.
+    #[cfg(any(test, feature = "wasm-store-canister"))]
     pub fn clear() {
         TEMPLATE_CHUNK_SETS.with_borrow_mut(StableBtreeMap::clear_new);
         TEMPLATE_CHUNK_SETS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
@@ -410,6 +413,7 @@ impl TemplateChunkStore {
     }
 
     // Count indexed chunks whose payload slots resolve.
+    #[cfg(feature = "wasm-store-canister")]
     #[must_use]
     pub fn count() -> usize {
         TEMPLATE_CHUNK_REFS.with_borrow(|map| {
@@ -423,6 +427,7 @@ impl TemplateChunkStore {
     }
 
     // Return current chunk occupied bytes without cloning the full chunk snapshot.
+    #[cfg(any(test, feature = "wasm-store-canister"))]
     #[must_use]
     pub fn occupied_bytes() -> u64 {
         if let Some(bytes) = TEMPLATE_CHUNKS_OCCUPIED_BYTES.with_borrow(|occupied| *occupied) {
@@ -441,6 +446,7 @@ impl TemplateChunkStore {
     }
 
     // Return current chunk bytes for one key.
+    #[cfg(any(test, feature = "wasm-store-canister"))]
     #[must_use]
     pub fn entry_bytes(chunk_key: &TemplateChunkKey) -> Option<u64> {
         TEMPLATE_CHUNK_REFS.with_borrow(|map| {
@@ -466,6 +472,7 @@ impl TemplateChunkStore {
     }
 
     // Clear the chunk store.
+    #[cfg(any(test, feature = "wasm-store-canister"))]
     pub fn clear() {
         TEMPLATE_CHUNK_REFS.with_borrow_mut(StableBtreeMap::clear_new);
         TEMPLATE_CHUNK_PAYLOADS.with_borrow_mut(|payloads| {
@@ -560,6 +567,7 @@ fn init_chunk_payloads() -> TemplateChunkPayloadVec {
     TEMPLATE_CHUNK_PAYLOADS_MEMORY.with(|memory| StableVec::init(memory.clone()))
 }
 
+#[cfg(any(test, feature = "wasm-store-canister"))]
 fn reset_chunk_payloads() -> TemplateChunkPayloadVec {
     TEMPLATE_CHUNK_PAYLOADS_MEMORY.with(|memory| StableVec::new(memory.clone()))
 }

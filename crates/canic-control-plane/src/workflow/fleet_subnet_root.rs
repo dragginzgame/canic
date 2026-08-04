@@ -1317,9 +1317,20 @@ async fn reclaim_root_deletion_cycles(
             "Fleet Subnet Root cycle balance increased after deletion intent",
         ));
     }
+    let deposit_call_cost = MgmtOps::deposit_cycles_call_cost(coordinator)?;
     let target_cycles_to_retain = maximum_cycles_to_retain
-        .saturating_sub(FLEET_SUBNET_ROOT_DELETION_CALL_REFUND_HEADROOM_CYCLES);
-    let maximum_transfer = current_cycles.saturating_sub(target_cycles_to_retain);
+        .checked_sub(FLEET_SUBNET_ROOT_DELETION_CALL_REFUND_HEADROOM_CYCLES)
+        .and_then(|remaining| remaining.checked_sub(deposit_call_cost))
+        .ok_or_else(|| {
+            InternalError::conflict(
+                "Fleet Subnet Root deletion reserve does not cover call-refund headroom and the exact deposit call cost",
+            )
+        })?;
+    let maximum_transfer = transferable_root_deletion_cycles(
+        current_cycles,
+        target_cycles_to_retain,
+        deposit_call_cost,
+    );
     if maximum_transfer > 0 {
         let permit = reserve_root_deletion_cycle_reclamation(
             coordinator,
@@ -1328,7 +1339,11 @@ async fn reclaim_root_deletion_cycles(
             current_cycles,
         )?;
         let cycles_before_transfer = IcOps::canister_cycle_balance().to_u128();
-        let cycles_to_transfer = cycles_before_transfer.saturating_sub(target_cycles_to_retain);
+        let cycles_to_transfer = transferable_root_deletion_cycles(
+            cycles_before_transfer,
+            target_cycles_to_retain,
+            deposit_call_cost,
+        );
         let result =
             MgmtOps::deposit_cycles_with_permit(&permit, coordinator, cycles_to_transfer).await;
         settle_root_deletion_cycle_reclamation(&permit, result)?;
@@ -1346,6 +1361,16 @@ async fn reclaim_root_deletion_cycles(
         ));
     }
     Ok(observed_after)
+}
+
+const fn transferable_root_deletion_cycles(
+    current_cycles: u128,
+    target_cycles_to_retain: u128,
+    call_cost: u128,
+) -> u128 {
+    current_cycles
+        .saturating_sub(target_cycles_to_retain)
+        .saturating_sub(call_cost)
 }
 
 fn reserve_root_deletion_cycle_reclamation(
@@ -1398,6 +1423,25 @@ mod tests {
             SubnetId,
         },
     };
+
+    #[test]
+    fn root_cycle_reclamation_retains_the_target_and_exact_call_cost() {
+        let maximum_cycles_to_retain = 400_u128;
+        let delayed_refund_headroom = 150;
+        let call_cost = 60;
+        let target_before_call = maximum_cycles_to_retain
+            .saturating_sub(delayed_refund_headroom)
+            .saturating_sub(call_cost);
+
+        assert_eq!(
+            transferable_root_deletion_cycles(1_500, target_before_call, call_cost),
+            1_250
+        );
+        assert_eq!(
+            transferable_root_deletion_cycles(190, target_before_call, call_cost),
+            0
+        );
+    }
 
     #[test]
     fn summary_reports_exact_checked_counts_without_member_enumeration() {

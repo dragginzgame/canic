@@ -33,7 +33,7 @@ Install from crates.io after a release:
 cargo install --locked canic-cli --version <version>
 ```
 
-Downstream projects should install the same `canic-cli` version as their
+Downstream repositories should install the same `canic-cli` version as their
 `canic` crate dependency.
 
 Canic uses the installed `icp` binary for local replica, canister, snapshot,
@@ -180,7 +180,10 @@ and it never infers counts from an incomplete install journal.
 
 The `canic install <app> <fleet> --fleet-input <path>` surface keeps the source
 App under `apps/<app>/canic.toml`, the installed Fleet label, and concrete
-operator deployment policy separate.
+operator deployment policy separate. Canic has no third Project identity: an
+App is source/configuration, a Fleet is one installed App instance, and a
+workspace is the local checkout containing `apps/`, `icp.yaml`, `.icp/`, and
+`.canic/`.
 
 The selected install config must include an App source identity:
 
@@ -201,12 +204,12 @@ The local ICP CLI replica does not persist canister state across stop/start.
 If `canic status` reports a local fleet as `lost`, reinstall the fleet before
 running backup or restore commands against that local environment. `canic status`
 and `canic replica status` show the configured local gateway port; use
-`canic replica start --port <port>` to require this project's `icp.yaml`
+`canic replica start --port <port>` to require this workspace's `icp.yaml`
 `gateway.port` to match before starting. Use `canic replica status --json` when
 scripts need the structured ICP CLI local-network status payload.
-App configs live under the project-root `apps/` directory. Commands
-launched from nested directories discover that outer project root and keep
-ICP project config plus `.icp/` and `.canic/` state there.
+App configs live under the workspace-root `apps/` directory. Commands
+launched from nested directories discover that outer workspace root and keep
+ICP config plus `.icp/` and `.canic/` state there.
 
 List saved App configs:
 
@@ -223,14 +226,14 @@ canic app create my_app --yes
 canic install my_app my-local --fleet-input deployments/my-local.toml
 ```
 
-Diagnose project-level setup, or explicitly diagnose one installed Fleet:
+Diagnose workspace setup, or explicitly diagnose one installed Fleet:
 
 ```bash
 canic medic
 canic medic fleet test
 ```
 
-For downstream projects that combine Canic commands with raw `icp` calls on a
+For downstream repositories that combine Canic commands with raw `icp` calls on a
 named local target such as `academic`, use the
 [local academic fleet runbook](../../docs/getting-started/local-academic-fleet.md).
 It covers target selection, canister ID helper naming, sourced shell helpers,

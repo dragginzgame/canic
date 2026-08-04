@@ -1270,9 +1270,9 @@ fn app_usage_lists_subcommands_and_examples() {
     assert!(text.contains("Examples:"));
     assert!(text.contains("Mutation notes:"));
     assert!(
-        text.contains("canic app check/list/config/adoption/role list/role inspect are read-only")
+        text.contains("adoption, check, config, list, role inspect, and role list are read-only")
     );
-    assert!(text.contains("Mutating app commands that can be previewed expose --dry-run"));
+    assert!(text.contains("Mutating commands expose --dry-run where supported"));
 }
 
 // Ensure app adoption help lists the read-only report command.
@@ -1301,8 +1301,8 @@ fn app_role_usage_lists_subcommands_and_examples() {
     assert!(text.contains("inspect"));
     assert!(text.contains("Examples:"));
     assert!(text.contains("Mutation notes:"));
-    assert!(text.contains("declare and attach update canic.toml"));
-    assert!(text.contains("rename updates canic.toml"));
+    assert!(text.contains("attach, declare, and rename update canic.toml"));
+    assert!(text.contains("rename may also update"));
 }
 
 // Ensure app check help explains read-only ICP config checks.

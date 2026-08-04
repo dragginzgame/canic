@@ -14,7 +14,7 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use canic_core::{CANIC_WASM_CHUNK_BYTES, cdk::utils::hash::wasm_hash_hex};
+use canic_core::{CANIC_WASM_CHUNK_BYTES, cdk::utils::hash::wasm_hash_hex, ids::ReleaseBuildId};
 use flate2::read::GzDecoder;
 
 pub(in crate::release_set) struct MaterializedReleaseArtifact {
@@ -28,6 +28,16 @@ pub(in crate::release_set) enum ReleaseArtifactMaterializationError {
     OutsideRoot,
     Read(io::Error),
     UnsafeFile,
+}
+
+/// Prove that raw Wasm carries the exact release-build identity supplied to its build.
+pub(in crate::release_set) fn contains_release_build_identity(
+    wasm: &[u8],
+    release_build_id: ReleaseBuildId,
+) -> bool {
+    let identity = release_build_id.to_string();
+    wasm.windows(identity.len())
+        .any(|window| window == identity.as_bytes())
 }
 
 // Build one release-set entry from one built ordinary role artifact.

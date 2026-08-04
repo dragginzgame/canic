@@ -53,7 +53,9 @@ pub struct ReleaseBuildPlanRecord {
 ///
 /// PlannedReleaseBuild
 ///
-/// Exact planned record and durable path supplied to the artifact builder.
+/// Exact durable record and path supplied to the artifact builder.
+/// The record is newly planned for a fresh install or already finalized when
+/// a same-release Fleet install session is being recovered.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]

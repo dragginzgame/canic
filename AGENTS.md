@@ -95,6 +95,17 @@ Dependency direction is strict: `endpoints -> workflow -> policy -> ops -> model
   authority and persistence validation. Group exact field equality into named
   authority structs and compose named predicates or helpers so each invariant
   remains independently readable and testable.
+- Keep every functional `canic-cli` command and subcommand list in ASCII
+  lexicographic order across declarations, dispatch, documentation, and
+  rendered help. Keep the recursive help-surface ordering test passing; Clap's
+  generated `help` pseudo-command is excluded.
+- Keep `canic-cli` help concise: every help page may show at most three
+  representative command examples. Command-group help should orient the user;
+  detailed option combinations belong on the relevant leaf command.
+- Canic deployment identities are App and Fleet. Use workspace for the local
+  checkout, config and state root; never introduce Project as a Canic identity,
+  CLI scope or report scope. Reserve project terminology for exact upstream or
+  external concepts such as an ICP project root.
 - Rust edition is 2024.
 - Use directory modules with `mod.rs`; never keep both `foo.rs` and `foo/`.
 - Do not use `#[path = "..."]` for module layout. Rename files/directories so

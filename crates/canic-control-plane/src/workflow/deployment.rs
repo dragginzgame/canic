@@ -29,11 +29,12 @@ pub fn reserve_component_creation_cost_guard(
     initial_cycles: &canic_core::cdk::types::Cycles,
 ) -> Result<CostGuardPermit, InternalError> {
     let root = IcOps::canister_self();
+    let attached_cycles = IcOps::canister_creation_attached_cycles(initial_cycles)?;
     reserve_control_plane_deployment_cost_guard(
         COMPONENT_CREATE_COMMAND_KIND,
         root,
         root,
-        initial_cycles.to_u128(),
+        attached_cycles.to_u128(),
     )
 }
 
@@ -41,11 +42,12 @@ pub fn reserve_canister_pool_creation_cost_guard(
     canister_cycles: &canic_core::cdk::types::Cycles,
 ) -> Result<CostGuardPermit, InternalError> {
     let root = IcOps::canister_self();
+    let attached_cycles = IcOps::canister_creation_attached_cycles(canister_cycles)?;
     reserve_control_plane_deployment_cost_guard(
         CANISTER_POOL_CREATE_COMMAND_KIND,
         root,
         root,
-        canister_cycles.to_u128(),
+        attached_cycles.to_u128(),
     )
 }
 
@@ -63,11 +65,12 @@ pub fn reserve_component_child_creation_cost_guard(
     initial_cycles: &canic_core::cdk::types::Cycles,
 ) -> Result<CostGuardPermit, InternalError> {
     let root = IcOps::canister_self();
+    let attached_cycles = IcOps::canister_creation_attached_cycles(initial_cycles)?;
     reserve_control_plane_deployment_cost_guard(
         COMPONENT_CHILD_CREATE_COMMAND_KIND,
         root,
         root,
-        initial_cycles.to_u128(),
+        attached_cycles.to_u128(),
     )
 }
 

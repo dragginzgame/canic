@@ -2,9 +2,8 @@ use crate::{
     InternalError,
     cdk::{candid::CandidType, types::Principal},
     ops::{
-        cost_guard::CostGuardPermit,
-        ic::mgmt::MgmtOps,
-        runtime::install_source::{ApprovedModulePayload, ApprovedModuleSource},
+        cost_guard::CostGuardPermit, ic::mgmt::MgmtOps,
+        runtime::install_source::ApprovedModuleSource,
     },
 };
 
@@ -22,31 +21,15 @@ impl ModuleInstallWorkflow {
         source: &ApprovedModuleSource,
         payload: P,
     ) -> Result<(), InternalError> {
-        match source.payload() {
-            ApprovedModulePayload::Chunked {
-                source_canister,
-                chunk_hashes,
-            } => {
-                MgmtOps::install_chunked_code_with_permit(
-                    permit,
-                    target_canister,
-                    *source_canister,
-                    chunk_hashes.clone(),
-                    source.module_hash().to_vec(),
-                    (payload,),
-                )
-                .await
-            }
-            ApprovedModulePayload::Embedded { wasm_module } => {
-                MgmtOps::install_code_with_permit(
-                    permit,
-                    target_canister,
-                    wasm_module.as_ref().to_vec(),
-                    (payload,),
-                )
-                .await
-            }
-        }
+        MgmtOps::install_chunked_code_with_permit(
+            permit,
+            target_canister,
+            *source.source_canister(),
+            source.chunk_hashes().to_vec(),
+            source.module_hash().to_vec(),
+            (payload,),
+        )
+        .await
     }
 
     /// Install one canister from an already resolved module source after a deployment permit.
@@ -57,30 +40,14 @@ impl ModuleInstallWorkflow {
         payload: P,
         extra_arg: Option<Vec<u8>>,
     ) -> Result<(), InternalError> {
-        match source.payload() {
-            ApprovedModulePayload::Chunked {
-                source_canister,
-                chunk_hashes,
-            } => {
-                MgmtOps::install_chunked_code_with_permit(
-                    permit,
-                    target_canister,
-                    *source_canister,
-                    chunk_hashes.clone(),
-                    source.module_hash().to_vec(),
-                    (payload, extra_arg),
-                )
-                .await
-            }
-            ApprovedModulePayload::Embedded { wasm_module } => {
-                MgmtOps::install_code_with_permit(
-                    permit,
-                    target_canister,
-                    wasm_module.as_ref().to_vec(),
-                    (payload, extra_arg),
-                )
-                .await
-            }
-        }
+        MgmtOps::install_chunked_code_with_permit(
+            permit,
+            target_canister,
+            *source.source_canister(),
+            source.chunk_hashes().to_vec(),
+            source.module_hash().to_vec(),
+            (payload, extra_arg),
+        )
+        .await
     }
 }

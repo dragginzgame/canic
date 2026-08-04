@@ -4,13 +4,8 @@ use crate::canister_build::{
     build_workspace_canister_artifact_from_spec, workspace_build_context_once,
 };
 use crate::format::wasm_size_label;
-use crate::release_set::artifact_root_path;
 use crate::table::{ColumnAlign, render_separator, render_table_row, table_widths};
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    time::Instant,
-};
+use std::{fs, path::Path, time::Instant};
 
 pub(super) fn run_canic_build_targets(
     context: &WorkspaceBuildContext,
@@ -24,14 +19,11 @@ pub(super) fn run_canic_build_targets(
             println!("{line}");
         }
         println!("config: {}", context.config_path.display());
-        println!(
-            "artifacts: {}",
-            planned_build_artifact_root(&context.icp_root).display()
-        );
+        println!("artifacts: {}", context.artifact_root().display());
         println!();
     }
 
-    fs::create_dir_all(planned_build_artifact_root(&context.icp_root))?;
+    fs::create_dir_all(context.artifact_root())?;
     println!("Building {} canisters", targets.len());
     println!();
     let headers = ["CANISTER", "PROGRESS", "WASM", "ELAPSED"];
@@ -80,10 +72,6 @@ pub(super) fn run_canic_build_targets(
 
     println!();
     Ok(outputs)
-}
-
-fn planned_build_artifact_root(icp_root: &Path) -> PathBuf {
-    artifact_root_path(icp_root, "local")
 }
 
 fn wasm_artifact_size(

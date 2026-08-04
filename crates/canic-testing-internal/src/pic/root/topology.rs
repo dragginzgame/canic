@@ -12,7 +12,7 @@ use canic::{
     protocol,
 };
 use canic_control_plane::dto::template::WasmStoreOverviewResponse;
-use ic_testkit::pic::{Pic, PicBuilder, PicStartError};
+use ic_testkit::pic::{PocketIc, PocketIcBuilder, PocketIcStartupError, prelude::*};
 use std::{collections::HashMap, fs, time::Instant};
 
 use crate::pic::CanicPicExt;
@@ -43,12 +43,12 @@ pub fn setup_root_topology(
             ),
         );
         let pic_started_at = Instant::now();
-        let pic = match try_start_root_pic(spec) {
+        let pic = match try_start_root_pic() {
             Ok(pic) => {
                 progress_elapsed(spec, "PocketIC instance ready", pic_started_at);
                 pic
             }
-            Err(err) if should_retry_root_pic_start(&err, spec, attempt) => {
+            Err(err) if should_retry_root_pic_start(spec, attempt) => {
                 eprintln!(
                     "setup_root startup attempt {attempt}/{} failed; retrying: {err}",
                     spec.root_setup_max_attempts
@@ -126,14 +126,14 @@ pub fn setup_root_topology(
 }
 
 // Wait until root reports `canic_ready`.
-pub(super) fn wait_for_bootstrap(spec: &RootBaselineSpec<'_>, pic: &Pic, root_id: Principal) {
+pub(super) fn wait_for_bootstrap(spec: &RootBaselineSpec<'_>, pic: &PocketIc, root_id: Principal) {
     pic.wait_for_ready(root_id, spec.bootstrap_tick_limit, "root bootstrap");
 }
 
 // Wait until every child canister reports `canic_ready`.
 pub(super) fn wait_for_children_ready(
     spec: &RootBaselineSpec<'_>,
-    pic: &Pic,
+    pic: &PocketIc,
     component_canisters: &HashMap<CanisterRole, Principal>,
 ) {
     pic.wait_for_all_ready(
@@ -146,7 +146,7 @@ pub(super) fn wait_for_children_ready(
 // Wait until every registered child PID that will be snapshotted is ready.
 pub(super) fn wait_for_snapshot_pids_ready(
     spec: &RootBaselineSpec<'_>,
-    pic: &Pic,
+    pic: &PocketIc,
     snapshot_pids: &[Principal],
 ) {
     pic.wait_for_all_ready(
@@ -156,38 +156,27 @@ pub(super) fn wait_for_snapshot_pids_ready(
     );
 }
 
-// Start the PocketIC instance for one root baseline and retry only on the
-// typed startup failures we explicitly treat as transient.
-fn try_start_root_pic(spec: &RootBaselineSpec<'_>) -> Result<Pic, PicStartError> {
-    progress(spec, "starting PocketIC instance");
-
-    PicBuilder::new()
+// Start one root baseline through the testkit's typed fallible builder boundary.
+fn try_start_root_pic() -> Result<PocketIc, PocketIcStartupError> {
+    PocketIcBuilder::new()
         .with_ii_subnet()
         .with_application_subnet()
         .try_build()
 }
 
-const fn should_retry_root_pic_start(
-    err: &PicStartError,
-    spec: &RootBaselineSpec<'_>,
-    attempt: usize,
-) -> bool {
+const fn should_retry_root_pic_start(spec: &RootBaselineSpec<'_>, attempt: usize) -> bool {
     attempt < spec.root_setup_max_attempts
-        && matches!(
-            err,
-            PicStartError::ServerStartFailed { .. } | PicStartError::StartupTimedOut { .. }
-        )
 }
 
 // Read every direct root child through the maintained bounded child view.
-fn fetch_root_children(pic: &Pic, root_id: Principal) -> Vec<CanisterInfo> {
+fn fetch_root_children(pic: &PocketIc, root_id: Principal) -> Vec<CanisterInfo> {
     const PAGE_LIMIT: u64 = 1_000;
 
     let mut entries = Vec::new();
     let mut offset = 0;
     loop {
         let page: Result<Page<CanisterInfo>, Error> = pic
-            .query_call(
+            .query_candid(
                 root_id,
                 protocol::CANIC_CANISTER_CHILDREN,
                 (PageRequest {
@@ -210,9 +199,9 @@ fn fetch_root_children(pic: &Pic, root_id: Principal) -> Vec<CanisterInfo> {
 }
 
 // Fetch the currently tracked managed wasm_store canister ids from root-owned state.
-fn fetch_managed_store_pids(pic: &Pic, root_id: Principal) -> Vec<Principal> {
+fn fetch_managed_store_pids(pic: &PocketIc, root_id: Principal) -> Vec<Principal> {
     let overview: Result<WasmStoreOverviewResponse, canic::Error> = pic
-        .query_call(root_id, canic::protocol::CANIC_WASM_STORE_OVERVIEW, ())
+        .query_candid(root_id, canic::protocol::CANIC_WASM_STORE_OVERVIEW, ())
         .expect("query wasm_store overview transport");
 
     overview

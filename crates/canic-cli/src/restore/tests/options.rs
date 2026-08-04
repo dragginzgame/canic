@@ -36,8 +36,8 @@ fn restore_usage_lists_command_family() {
     assert!(text.contains("run"));
     assert!(text.contains("status"));
     assert!(text.contains("Examples:"));
+    assert!(text.contains("canic restore plan 1 --require-verified --require-restore-ready"));
     assert!(text.contains("canic restore prepare 1 --require-verified --require-restore-ready"));
-    assert!(text.contains("canic restore status 1 --require-ready --require-no-attention"));
     assert!(text.contains("canic restore run 1 --execute --max-steps 1"));
 }
 

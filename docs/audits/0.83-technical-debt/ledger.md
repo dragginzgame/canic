@@ -2142,7 +2142,7 @@ Evidence:
 - line or anchor: `state_audit_status_label`
 - module/function: `state_audit_project_check`
 - command/search: `rg -n "status_label|storage_label|migration_policy_label|state_storage_name" crates/canic-core/src crates/canic-cli/src crates/canic-host/src crates/canic-control-plane/src -g '*.rs'`
-- reachability: active `canic medic project` state-audit summary check
+- reachability: active `canic medic` state-audit summary check
 - exact issue: medic locally matched `StateAuditStatus` variants into stable
   report labels even though the state-audit report model owns that label
   meaning.

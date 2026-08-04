@@ -153,25 +153,25 @@ where
     let tail = tail.into_iter();
 
     match command {
-        "backup" => backup::run(tail).map_err(CliError::from),
+        "app" => apps::run(tail).map_err(CliError::from),
         "auth" => auth::run(tail).map_err(CliError::from),
+        "backup" => backup::run(tail).map_err(CliError::from),
         "blob-storage" => blob_storage::run(tail).map_err(CliError::from),
         "build" => build::run(tail).map_err(CliError::from),
         "cycles" => cycles::run(tail).map_err(CliError::from),
         "deploy" => deploy::run(tail).map_err(CliError::from),
         "evidence" => evidence::run(tail).map_err(CliError::from),
-        "app" => apps::run(tail).map_err(CliError::from),
         "info" => info::run(tail).map_err(CliError::from),
-        "install" => install::run(tail).map_err(CliError::from),
         "inspect" => inspect::run(tail).map_err(CliError::from),
+        "install" => install::run(tail).map_err(CliError::from),
         "medic" => medic::run(tail).map_err(CliError::from),
         "network" => network::run(tail).map_err(CliError::from),
         "replica" => replica::run(tail).map_err(CliError::from),
+        "restore" => restore::run(tail).map_err(CliError::from),
         "scaffold" => scaffold::run(tail).map_err(CliError::from),
         "state" => state::run(tail).map_err(CliError::from),
         "status" => status::run(tail).map_err(CliError::from),
         "token" => token::run(tail).map_err(CliError::from),
-        "restore" => restore::run(tail).map_err(CliError::from),
         _ => unreachable!("top-level dispatch command only defines known commands"),
     }
 }

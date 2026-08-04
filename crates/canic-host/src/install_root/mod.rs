@@ -52,16 +52,15 @@ mod receipt_io;
 mod timing;
 mod truth_check;
 
-use crate::release_build::{ReleaseBuildPlanError, plan_release_build};
+use crate::release_build::{PlannedReleaseBuild, ReleaseBuildPlanError, plan_release_build};
 use build_network::resolve_install_build_context;
 use build_snapshot::resolve_install_snapshot;
 pub use config_selection::{
-    ConfigDiscoveryError, current_canic_project_root, discover_canic_config_choices,
-    discover_canic_project_root_from, discover_project_canic_config_choices, project_app_roots,
-    select_discovered_app_config_path,
+    ConfigDiscoveryError, current_canic_workspace_root, discover_canic_config_choices,
+    discover_canic_workspace_root_from, discover_workspace_canic_config_choices,
+    select_discovered_app_config_path, workspace_app_roots,
 };
 use coordinator_install::install_and_verify_fleet_coordinator;
-use current_execution::current_install_execution_context;
 use fleet_catalog_closeout::{
     PublishInstalledFleetCatalogRequest, publish_installed_fleet_catalog,
 };
@@ -148,7 +147,7 @@ impl InstallRootBlockedError {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InstallRootPhase {
     WorkspaceDiscovery,
-    ProjectDiscovery,
+    IcpProjectDiscovery,
     Configuration,
     BuildInputs,
     Identity,
@@ -162,7 +161,7 @@ impl fmt::Display for InstallRootPhase {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
             Self::WorkspaceDiscovery => "workspace discovery",
-            Self::ProjectDiscovery => "ICP project discovery",
+            Self::IcpProjectDiscovery => "ICP project discovery",
             Self::Configuration => "configuration selection",
             Self::BuildInputs => "build input validation",
             Self::Identity => "deployment identity resolution",
@@ -211,14 +210,14 @@ struct MissingFleetInstallInputError;
 
 /// Discover installable Canic config choices under the current workspace.
 pub fn discover_current_canic_config_choices() -> Result<Vec<PathBuf>, ConfigDiscoveryError> {
-    let project_root = current_canic_project_root()?;
-    let choices = config_selection::discover_workspace_canic_config_choices(&project_root)?;
+    let workspace_root = current_canic_workspace_root()?;
+    let choices = config_selection::discover_workspace_canic_config_choices(&workspace_root)?;
     if !choices.is_empty() {
         return Ok(choices);
     }
 
     let icp_root = icp_root()?;
-    if icp_root != project_root {
+    if icp_root != workspace_root {
         return config_selection::discover_workspace_canic_config_choices(&icp_root);
     }
 
@@ -239,10 +238,15 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
     let total_started_at = Instant::now();
     let mut timings = CurrentInstallTimingSummary::default();
     let environment = options.environment.as_str();
-    let execution_context = current_install_execution_context(
+    let artifact_root = if options.deployment_plan_override.is_some() {
+        crate::release_set::artifact_root_path(&icp_root, options.artifact_environment())
+    } else {
+        build_context.artifact_root()
+    };
+    let execution_context = current_execution::current_install_execution_context_at_root(
         &workspace_root,
         &icp_root,
-        options.artifact_environment(),
+        &artifact_root,
     );
     let resolved_fleet_install_input =
         resolve_current_fleet_install_input(&icp_root, environment, &options)
@@ -446,11 +450,12 @@ fn resolve_current_install_roots(
     let workspace_root = workspace_root()
         .map_err(|source| InstallRootError::new(InstallRootPhase::WorkspaceDiscovery, source))?;
     let icp_root = match &options.icp_root {
-        Some(path) => path
-            .canonicalize()
-            .map_err(|source| InstallRootError::new(InstallRootPhase::ProjectDiscovery, source))?,
-        None => icp_root()
-            .map_err(|source| InstallRootError::new(InstallRootPhase::ProjectDiscovery, source))?,
+        Some(path) => path.canonicalize().map_err(|source| {
+            InstallRootError::new(InstallRootPhase::IcpProjectDiscovery, source)
+        })?,
+        None => icp_root().map_err(|source| {
+            InstallRootError::new(InstallRootPhase::IcpProjectDiscovery, source)
+        })?,
     };
     Ok((workspace_root, icp_root))
 }
@@ -672,15 +677,44 @@ fn current_install_build_inputs(
         &options.root_build_target,
         options.build_profile,
     )?;
-    let mut snapshot = resolve_install_snapshot(
-        &context,
-        &options.root_build_target,
-        options.deployment_plan_override.is_some(),
-    )?;
-    if snapshot.complete_build.is_some() {
-        let release_build = plan_release_build(icp_root)?;
-        context = context.with_release_build_id(release_build.record.release_build_id);
-        snapshot.release_build = Some(release_build);
+    if options.deployment_plan_override.is_some() {
+        let snapshot = resolve_install_snapshot(&context, &options.root_build_target, true)?;
+        return Ok((context, snapshot));
     }
+
+    let config = AppConfigSnapshot::load(config_path)?;
+    let release_build = current_install_release_build(
+        icp_root,
+        &options.environment,
+        &options.fleet_name,
+        config.app_id(),
+    )?;
+    context = context.with_release_build_id(release_build.record.release_build_id);
+    let mut snapshot = resolve_install_snapshot(&context, &options.root_build_target, false)?;
+    snapshot.release_build = Some(release_build);
     Ok((context, snapshot))
+}
+
+fn current_install_release_build(
+    icp_root: &Path,
+    environment: &str,
+    fleet_name: &str,
+    app_id: &str,
+) -> Result<PlannedReleaseBuild, Box<dyn std::error::Error>> {
+    let canonical_network_id = resolve_canonical_network_id_from_root(icp_root, environment)?;
+    let fleet_name = fleet_name.parse()?;
+    let app = app_id.into();
+    if let Some(finalized) = fleet_install_session::recover_fleet_install_session_release_build(
+        icp_root,
+        canonical_network_id,
+        &fleet_name,
+        &app,
+    )? {
+        return Ok(PlannedReleaseBuild {
+            record: finalized.record,
+            path: finalized.path,
+        });
+    }
+
+    plan_release_build(icp_root).map_err(Into::into)
 }

@@ -223,6 +223,60 @@ fn local_deployment_check_separates_target_environment_from_artifact_environment
 }
 
 #[test]
+fn local_deployment_check_observes_only_the_exact_release_artifact_root() {
+    let temp = TempWorkspace::new("canic-host-local-check-release-artifact-root");
+    let workspace_root = temp.path().join("workspace");
+    let icp_root = temp.path().join("icp");
+    let config_dir = workspace_root.join("apps");
+    fs::create_dir_all(&config_dir).expect("create config dir");
+    fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
+    write_local_network_authority(&icp_root, "local");
+
+    for role in ["root", "wasm_store", "user_hub"] {
+        write_artifact(&icp_root, role, b"stale-shared-artifact");
+    }
+    let release_artifact_root = icp_root.join(".canic/release-builds/exact/artifacts");
+    for role in ["root", "wasm_store", "user_hub"] {
+        write_artifact_at_root(&release_artifact_root, role, b"exact-release-artifact");
+    }
+
+    let check = check_local_deployment_at_root(
+        &LocalDeploymentCheckRequest {
+            fleet_name: "demo".to_string(),
+            app: "demo".to_string(),
+            environment: "local".to_string(),
+            artifact_environment: "local".to_string(),
+            workspace_root,
+            icp_root,
+            config_path: None,
+            observed_at: "2026-08-04T00:00:00Z".to_string(),
+            runtime_variant: "local".to_string(),
+            build_profile: "release".to_string(),
+        },
+        &release_artifact_root,
+    )
+    .expect("check exact release artifacts");
+
+    assert!(check.plan.role_artifacts.iter().all(|artifact| {
+        artifact
+            .wasm_gz_path
+            .as_deref()
+            .is_some_and(|path| path.starts_with(&release_artifact_root.display().to_string()))
+    }));
+    assert!(check.inventory.observed_artifacts.iter().all(|artifact| {
+        artifact
+            .artifact_path
+            .starts_with(&release_artifact_root.display().to_string())
+    }));
+    assert!(check.report.hard_failures.iter().all(|finding| {
+        !matches!(
+            finding.code.as_str(),
+            "artifact_missing" | "artifact_file_digest_mismatch"
+        )
+    }));
+}
+
+#[test]
 fn local_artifact_manifest_records_missing_artifacts_as_gaps() {
     let temp = TempWorkspace::new("canic-host-local-artifact-manifest-missing");
     let workspace_root = temp.path().join("workspace");

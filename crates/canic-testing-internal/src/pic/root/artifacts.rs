@@ -10,7 +10,10 @@ use canic_control_plane::{
     },
 };
 use canic_core::cdk::utils::hash::wasm_hash;
-use ic_testkit::{artifacts::WatchedInputSnapshot, pic::Pic};
+use ic_testkit::{
+    artifacts::WatchedInputSnapshot,
+    pic::{CandidCallExt, PocketIc, PocketIcTimeExt},
+};
 use std::{fs, io};
 
 use crate::pic::artifacts::{
@@ -70,7 +73,7 @@ Use a compressed `.wasm.gz` artifact and/or build canister wasm with `RUSTFLAGS=
 // Stage the configured ordinary release set into root before bootstrap resumes.
 pub(super) fn stage_managed_release_set(
     spec: &RootBaselineSpec<'_>,
-    pic: &Pic,
+    pic: &PocketIc,
     root_id: Principal,
 ) {
     let now_secs = root_time_secs(pic, root_id);
@@ -223,9 +226,9 @@ fn configured_release_roles(spec: &RootBaselineSpec<'_>) -> Vec<CanisterRole> {
 }
 
 // Stage one manifest through the root admin surface.
-fn stage_manifest(pic: &Pic, root_id: Principal, manifest: TemplateManifestInput) {
+fn stage_manifest(pic: &PocketIc, root_id: Principal, manifest: TemplateManifestInput) {
     let staged: Result<(), Error> = pic
-        .update_call(
+        .update_candid(
             root_id,
             protocol::CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
             (manifest,),
@@ -236,18 +239,18 @@ fn stage_manifest(pic: &Pic, root_id: Principal, manifest: TemplateManifestInput
 }
 
 // Prepare one staged chunk set through the root admin surface.
-fn prepare_chunk_set(pic: &Pic, root_id: Principal, prepare: TemplateChunkSetPrepareInput) {
+fn prepare_chunk_set(pic: &PocketIc, root_id: Principal, prepare: TemplateChunkSetPrepareInput) {
     let prepared: Result<TemplateChunkSetInfoResponse, Error> = pic
-        .update_call(root_id, protocol::CANIC_TEMPLATE_PREPARE_ADMIN, (prepare,))
+        .update_candid(root_id, protocol::CANIC_TEMPLATE_PREPARE_ADMIN, (prepare,))
         .expect("prepare release chunk set transport");
 
     let _ = prepared.expect("prepare release chunk set application");
 }
 
 // Publish one staged release chunk through the root admin surface.
-fn publish_chunk(pic: &Pic, root_id: Principal, chunk: TemplateChunkInput) {
+fn publish_chunk(pic: &PocketIc, root_id: Principal, chunk: TemplateChunkInput) {
     let published: Result<(), Error> = pic
-        .update_call(
+        .update_candid(
             root_id,
             protocol::CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
             (chunk,),
@@ -258,6 +261,6 @@ fn publish_chunk(pic: &Pic, root_id: Principal, chunk: TemplateChunkInput) {
 }
 
 // Read the current PocketIC wall clock in whole seconds.
-fn root_time_secs(pic: &Pic, _root_id: Principal) -> u64 {
+fn root_time_secs(pic: &PocketIc, _root_id: Principal) -> u64 {
     pic.current_time_nanos() / 1_000_000_000
 }

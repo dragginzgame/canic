@@ -1,12 +1,16 @@
 use crate::ids::WasmStoreGcMode;
+#[cfg(feature = "wasm-store-canister")]
 use canic_core::cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory};
+#[cfg(feature = "wasm-store-canister")]
 use canic_core::eager_static;
-use canic_core::{
-    impl_storable_bounded, role_contract::allocation::memory::control_plane::WASM_STORE_GC_STATE_ID,
-};
+use canic_core::impl_storable_bounded;
+#[cfg(feature = "wasm-store-canister")]
+use canic_core::role_contract::allocation::memory::control_plane::WASM_STORE_GC_STATE_ID;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "wasm-store-canister")]
 use std::cell::RefCell;
 
+#[cfg(feature = "wasm-store-canister")]
 eager_static! {
     static WASM_STORE_GC_STATE: RefCell<
         Cell<WasmStoreGcStateRecord, VirtualMemory<DefaultMemoryImpl>>
@@ -55,8 +59,10 @@ impl WasmStoreGcStateData {
 /// WasmStoreGcStateStore
 ///
 
+#[cfg(feature = "wasm-store-canister")]
 pub struct WasmStoreGcStateStore;
 
+#[cfg(feature = "wasm-store-canister")]
 impl WasmStoreGcStateStore {
     // Return the current local wasm-store GC state record.
     #[must_use]
@@ -89,7 +95,7 @@ impl WasmStoreGcStateStore {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "wasm-store-canister"))]
 mod tests {
     use super::*;
 

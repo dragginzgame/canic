@@ -48,6 +48,27 @@ canisters:
           commands:
             - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- user_shard release . . apps/test/canic.toml
 
+  - name: playground_root
+    build:
+      steps:
+        - type: script
+          commands:
+            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- root release . . apps/playground/canic.toml
+
+  - name: playground_hub
+    build:
+      steps:
+        - type: script
+          commands:
+            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- playground_hub release . . apps/playground/canic.toml
+
+  - name: wenzelroll
+    build:
+      steps:
+        - type: script
+          commands:
+            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- wenzelroll release . . apps/playground/canic.toml
+
 networks:
   - name: local
     mode: managed
@@ -60,6 +81,14 @@ environments:
   - name: demo
     network: local
     canisters: [root, app, user_hub, user_shard]
+
+  - name: proof
+    network: ic
+    canisters: [root, app, user_hub, user_shard]
+
+  - name: playground-ic
+    network: ic
+    canisters: [playground_root, playground_hub, wenzelroll]
 
   - name: test
     network: local

@@ -137,6 +137,7 @@ impl TemplateManifestStateStore {
     }
 
     // Return current manifest-store occupied bytes without cloning the full snapshot.
+    #[cfg(any(test, feature = "wasm-store-canister"))]
     #[must_use]
     pub fn occupied_bytes() -> u64 {
         if let Some(bytes) = TEMPLATE_MANIFESTS_OCCUPIED_BYTES.with_borrow(|occupied| *occupied) {
@@ -156,6 +157,7 @@ impl TemplateManifestStateStore {
     }
 
     // Clear the manifest store.
+    #[cfg(any(test, feature = "wasm-store-canister"))]
     pub fn clear() {
         TEMPLATE_MANIFESTS.with_borrow_mut(StableBtreeMap::clear_new);
         TEMPLATE_MANIFESTS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {

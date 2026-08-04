@@ -41,7 +41,9 @@ mod tests {
     };
     use ic_testkit::{
         artifacts::{read_wasm, test_target_dir, workspace_root_for},
-        pic::{Pic, PicBuilder, acquire_pic_serial_guard},
+        pic::{
+            CandidCallExt, PocketIc, PocketIcBuilder, PocketIcSnapshotExt, SnapshotRestoreFunding,
+        },
     };
 
     const COORDINATOR_PACKAGE: &str = "fleet_coordinator_stub";
@@ -50,7 +52,6 @@ mod tests {
     #[test]
     fn coordinator_commits_joining_roots_and_replays_original_receipts() {
         let _unit_test_serial = super::super::acquire_pic_unit_test_serial_guard();
-        let _serial = acquire_pic_serial_guard();
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
         let target_dir = test_target_dir(&workspace_root, "fleet-coordinator");
         build_internal_test_wasm_canisters(
@@ -64,7 +65,7 @@ mod tests {
             COORDINATOR_PACKAGE,
             CanicWasmBuildProfile::Fast.target_dir_name(),
         );
-        let pic = PicBuilder::new().with_application_subnet().build();
+        let pic = PocketIcBuilder::new().with_application_subnet().build();
         let coordinator = pic.create_canister();
         pic.add_cycles(coordinator, INSTALL_CYCLES);
         let args = init_args(coordinator);
@@ -77,7 +78,7 @@ mod tests {
         );
 
         let genesis: Result<canic_core::dto::fleet_registry::FleetRegistryVersion, Error> = pic
-            .query_call(coordinator, protocol::CANIC_FLEET_REGISTRY_VERSION, ())
+            .query_candid(coordinator, protocol::CANIC_FLEET_REGISTRY_VERSION, ())
             .expect("query genesis version");
         let genesis = genesis.expect("genesis version");
         let first_request = FleetSubnetRootJoinRequest {
@@ -85,7 +86,7 @@ mod tests {
             entry: joining_entry(&topology, 5, 21, 1),
         };
         let first: Result<FleetSubnetRootJoinResponse, Error> = pic
-            .update_call(
+            .update_candid(
                 coordinator,
                 protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
                 (first_request.clone(),),
@@ -99,7 +100,7 @@ mod tests {
             entry: joining_entry(&topology, 7, 22, 2),
         };
         let second: Result<FleetSubnetRootJoinResponse, Error> = pic
-            .update_call(
+            .update_candid(
                 coordinator,
                 protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
                 (second_request,),
@@ -109,7 +110,7 @@ mod tests {
         assert_eq!(second.version.revision, 3);
 
         let retried: Result<FleetSubnetRootJoinResponse, Error> = pic
-            .update_call(
+            .update_candid(
                 coordinator,
                 protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
                 (first_request,),
@@ -122,7 +123,7 @@ mod tests {
         );
 
         let registry: Result<FleetRegistry, Error> = pic
-            .query_call(coordinator, protocol::CANIC_FLEET_REGISTRY, ())
+            .query_candid(coordinator, protocol::CANIC_FLEET_REGISTRY, ())
             .expect("query joined Registry");
         let registry = registry.expect("joined Registry");
         assert_eq!(registry.revision, 3);
@@ -131,7 +132,7 @@ mod tests {
         assert_root_snapshot_endpoints(&pic, coordinator, &registry, &second.version);
 
         let unauthorized: Result<FleetSubnetRootJoinResponse, Error> = pic
-            .update_call_as(
+            .update_candid_as(
                 coordinator,
                 principal(99),
                 protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
@@ -151,12 +152,12 @@ mod tests {
         assert_authority_snapshot_restore_fence(&pic, coordinator);
     }
 
-    fn assert_authority_snapshot_restore_fence(pic: &Pic, coordinator: Principal) {
+    fn assert_authority_snapshot_restore_fence(pic: &PocketIc, coordinator: Principal) {
         let request = AuthoritySnapshotRequest {
             operation_id: [41; 32],
         };
         let sealed: Result<AuthorityRestoreFenceStatusResponse, Error> = pic
-            .update_call(
+            .update_candid(
                 coordinator,
                 protocol::CANIC_AUTHORITY_SNAPSHOT_PREPARE,
                 (request,),
@@ -170,7 +171,7 @@ mod tests {
             .capture_controller_snapshots(coordinator, [coordinator])
             .expect("Coordinator snapshot capture");
         let resumed: Result<AuthorityRestoreFenceStatusResponse, Error> = pic
-            .update_call(
+            .update_candid(
                 coordinator,
                 protocol::CANIC_AUTHORITY_SNAPSHOT_RESUME,
                 (request,),
@@ -181,9 +182,16 @@ mod tests {
             AuthorityRestoreFencePhase::Open
         );
 
-        pic.restore_controller_snapshots(coordinator, &snapshots);
+        pic.restore_controller_snapshots_with_funding(
+            coordinator,
+            &snapshots,
+            SnapshotRestoreFunding::TopUpTo {
+                minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
+            },
+        )
+        .expect("Coordinator snapshot restore");
         let restored: Result<AuthorityRestoreFenceStatusResponse, Error> = pic
-            .query_call(
+            .query_candid(
                 coordinator,
                 protocol::CANIC_AUTHORITY_RESTORE_FENCE_STATUS,
                 (),
@@ -195,7 +203,7 @@ mod tests {
         );
 
         let rejected_resume: Result<AuthorityRestoreFenceStatusResponse, Error> = pic
-            .update_call(
+            .update_candid(
                 coordinator,
                 protocol::CANIC_AUTHORITY_SNAPSHOT_RESUME,
                 (request,),
@@ -208,7 +216,7 @@ mod tests {
             ErrorCode::Unavailable
         );
         let ordinary_mutation: Result<Result<FleetRegistryActivationResponse, Error>, _> = pic
-            .update_call(
+            .update_candid(
                 coordinator,
                 protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
                 (FleetRegistryActivationRequest {
@@ -222,24 +230,24 @@ mod tests {
     }
 
     fn registry_version(
-        pic: &Pic,
+        pic: &PocketIc,
         coordinator: Principal,
     ) -> canic_core::dto::fleet_registry::FleetRegistryVersion {
         let version: Result<canic_core::dto::fleet_registry::FleetRegistryVersion, Error> = pic
-            .query_call(coordinator, protocol::CANIC_FLEET_REGISTRY_VERSION, ())
+            .query_candid(coordinator, protocol::CANIC_FLEET_REGISTRY_VERSION, ())
             .expect("restored Registry version transport");
         version.expect("restored Registry version")
     }
 
     fn assert_root_snapshot_endpoints(
-        pic: &Pic,
+        pic: &PocketIc,
         coordinator: Principal,
         registry: &FleetRegistry,
         version: &canic_core::dto::fleet_registry::FleetRegistryVersion,
     ) {
         let first_root = principal(21);
         let snapshot: Result<FleetRegistrySnapshotResponse, Error> = pic
-            .update_call_as(
+            .update_candid_as(
                 coordinator,
                 first_root,
                 protocol::CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT,
@@ -251,7 +259,7 @@ mod tests {
         assert_eq!(&snapshot.version, version);
 
         let unregistered_snapshot: Result<FleetRegistrySnapshotResponse, Error> = pic
-            .update_call_as(
+            .update_candid_as(
                 coordinator,
                 principal(99),
                 protocol::CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT,
@@ -269,7 +277,7 @@ mod tests {
             version: version.clone(),
         };
         let first_ack: Result<FleetSubnetRootSnapshotAcknowledgement, Error> = pic
-            .update_call_as(
+            .update_candid_as(
                 coordinator,
                 first_root,
                 protocol::CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT,
@@ -278,7 +286,7 @@ mod tests {
             .expect("first acknowledgement transport");
         let first_ack = first_ack.expect("first acknowledgement");
         let repeated: Result<FleetSubnetRootSnapshotAcknowledgement, Error> = pic
-            .update_call_as(
+            .update_candid_as(
                 coordinator,
                 first_root,
                 protocol::CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT,
@@ -287,7 +295,7 @@ mod tests {
             .expect("acknowledgement retry transport");
         assert_eq!(repeated.expect("exact acknowledgement retry"), first_ack);
         let second_ack: Result<FleetSubnetRootSnapshotAcknowledgement, Error> = pic
-            .update_call_as(
+            .update_candid_as(
                 coordinator,
                 principal(22),
                 protocol::CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT,
@@ -297,7 +305,7 @@ mod tests {
         second_ack.expect("second acknowledgement");
 
         let acknowledgements: Result<Vec<FleetSubnetRootSnapshotAcknowledgement>, Error> = pic
-            .query_call(
+            .query_candid(
                 coordinator,
                 protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
                 (),
@@ -312,7 +320,7 @@ mod tests {
     }
 
     fn assert_registry_activation(
-        pic: &Pic,
+        pic: &PocketIc,
         coordinator: Principal,
         version: &canic_core::dto::fleet_registry::FleetRegistryVersion,
     ) -> FleetRegistryActivationResponse {
@@ -320,7 +328,7 @@ mod tests {
             expected_registry: version.clone(),
         };
         let activated: Result<FleetRegistryActivationResponse, Error> = pic
-            .update_call(
+            .update_candid(
                 coordinator,
                 protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
                 (activation_request.clone(),),
@@ -330,7 +338,7 @@ mod tests {
         assert_eq!(&activated.previous_version, version);
         assert_eq!(activated.version.revision, version.revision + 1);
         let repeated: Result<FleetRegistryActivationResponse, Error> = pic
-            .update_call(
+            .update_candid(
                 coordinator,
                 protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
                 (activation_request.clone(),),
@@ -341,7 +349,7 @@ mod tests {
             activated
         );
         let unauthorized: Result<FleetRegistryActivationResponse, Error> = pic
-            .update_call_as(
+            .update_candid_as(
                 coordinator,
                 principal(99),
                 protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
@@ -355,7 +363,7 @@ mod tests {
             ErrorCode::Unauthorized
         );
         let active: Result<FleetRegistry, Error> = pic
-            .query_call(coordinator, protocol::CANIC_FLEET_REGISTRY, ())
+            .query_candid(coordinator, protocol::CANIC_FLEET_REGISTRY, ())
             .expect("query active Registry");
         assert!(
             active
@@ -368,7 +376,7 @@ mod tests {
     }
 
     fn assert_removed_root_snapshot_exclusion(
-        pic: &Pic,
+        pic: &PocketIc,
         coordinator: Principal,
         joining_registry: &FleetRegistry,
         active_version: &canic_core::dto::fleet_registry::FleetRegistryVersion,
@@ -384,7 +392,7 @@ mod tests {
         );
 
         let rejected: Result<FleetRegistrySnapshotResponse, Error> = pic
-            .update_call_as(
+            .update_candid_as(
                 coordinator,
                 removed_root,
                 protocol::CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT,
@@ -398,7 +406,7 @@ mod tests {
             ErrorCode::Forbidden
         );
         let surviving: Result<FleetRegistrySnapshotResponse, Error> = pic
-            .update_call_as(
+            .update_candid_as(
                 coordinator,
                 surviving_root,
                 protocol::CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT,
@@ -420,7 +428,7 @@ mod tests {
     }
 
     fn publish_logical_root_removal(
-        pic: &Pic,
+        pic: &PocketIc,
         coordinator: Principal,
         joining_registry: &FleetRegistry,
         active_version: &canic_core::dto::fleet_registry::FleetRegistryVersion,
@@ -432,7 +440,7 @@ mod tests {
             .find(|entry| entry.fleet_subnet_root == removed_root)
             .expect("removed root entry");
         let draining: Result<FleetSubnetRootDrainingPublicationResponse, Error> = pic
-            .update_call(
+            .update_candid(
                 coordinator,
                 protocol::CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,
                 (FleetSubnetRootDrainingPublicationRequest {
@@ -478,7 +486,7 @@ mod tests {
             inventory_hash: [37; 32],
         };
         let removed: Result<FleetSubnetRootRemovalPublicationResponse, Error> = pic
-            .update_call_as(
+            .update_candid_as(
                 coordinator,
                 removed_root,
                 protocol::CANIC_FLEET_REGISTRY_PUBLISH_ROOT_REMOVED,

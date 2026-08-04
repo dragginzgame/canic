@@ -39,7 +39,7 @@ use thiserror::Error as ThisError;
 ///
 
 pub(super) struct TerminalFleetCatalogPublicationRequest<'a> {
-    pub project_root: &'a Path,
+    pub workspace_root: &'a Path,
     pub fleet_name: FleetName,
     pub environment: &'a str,
     pub deployed_at_unix_secs: u64,
@@ -107,7 +107,7 @@ pub(super) fn publish_terminal_fleet_catalog(
         deployed_at_unix_secs: request.deployed_at_unix_secs,
         coordinator_principal: request.coordinator.to_text(),
     };
-    commit_fleet_catalog_entry(request.project_root, entry).map_err(Into::into)
+    commit_fleet_catalog_entry(request.workspace_root, entry).map_err(Into::into)
 }
 
 /// Validate the complete Coordinator Registry before any root is trusted as a query target.

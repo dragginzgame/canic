@@ -5,7 +5,7 @@
 //! Boundary: `MgmtOps` extension for canister lifecycle management calls.
 
 use super::*;
-use crate::ops::cost_guard::CostGuardPermit;
+use crate::ops::{cost_guard::CostGuardPermit, ic::IcOps};
 use candid::utils::ArgumentEncoder;
 
 impl MgmtOps {
@@ -15,9 +15,10 @@ impl MgmtOps {
         controllers: Vec<Principal>,
         cycles: Cycles,
     ) -> Result<Principal, InternalError> {
+        let attached_cycles = IcOps::canister_creation_attached_cycles(&cycles)?;
         let pid = management_call(
             ManagementCallMetricOperation::CreateCanister,
-            MgmtInfra::create_canister(controllers, cycles),
+            MgmtInfra::create_canister(controllers, attached_cycles),
         )
         .await?;
 

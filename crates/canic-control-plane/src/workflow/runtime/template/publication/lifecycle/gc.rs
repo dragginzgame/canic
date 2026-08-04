@@ -14,6 +14,7 @@ use super::super::{
 };
 use crate::{
     dto::template::{
+        WASM_STORE_DELETION_CALL_REFUND_HEADROOM_CYCLES,
         WASM_STORE_DELETION_EXECUTION_RESERVE_CYCLES, WASM_STORE_DELETION_MAXIMUM_RETAINED_CYCLES,
         WasmStoreDeletionCycleReclamationResponse, WasmStoreGcStatusResponse,
         WasmStoreStatusResponse,
@@ -514,8 +515,9 @@ impl WasmStorePublicationWorkflow {
             .into());
         }
         if cycles_before_call > intent.maximum_cycles_to_retain {
+            let store_maximum_cycles_to_retain = store_cycle_reclamation_ceiling(intent)?;
             let response =
-                store_reclaim_deletion_cycles(intent.wasm_store, intent.maximum_cycles_to_retain)
+                store_reclaim_deletion_cycles(intent.wasm_store, store_maximum_cycles_to_retain)
                     .await?;
             validate_store_cycle_reclamation_response(intent, root, &response)?;
         }
@@ -919,9 +921,10 @@ fn validate_store_cycle_reclamation_response(
     root: Principal,
     response: &WasmStoreDeletionCycleReclamationResponse,
 ) -> Result<(), InternalError> {
+    let expected_maximum_cycles_to_retain = store_cycle_reclamation_ceiling(intent)?;
     let response_is_exact = [
         response.destination == root,
-        response.maximum_cycles_to_retain == intent.maximum_cycles_to_retain,
+        response.maximum_cycles_to_retain == expected_maximum_cycles_to_retain,
         response.cycles_before <= intent.observed_cycles_before_reclamation,
         response.cycles_transferred <= response.cycles_before,
         response.cycles_after <= intent.maximum_cycles_to_retain,
@@ -935,6 +938,21 @@ fn validate_store_cycle_reclamation_response(
         .into());
     }
     Ok(())
+}
+
+fn store_cycle_reclamation_ceiling(
+    intent: &RootFleetSubnetStoreDeletionIntentView,
+) -> Result<u128, InternalError> {
+    intent
+        .maximum_cycles_to_retain
+        .checked_sub(WASM_STORE_DELETION_CALL_REFUND_HEADROOM_CYCLES)
+        .ok_or_else(|| {
+            PublicationWorkflowError::InvalidState(
+                "root Store deletion reserve does not cover delayed call-refund headroom"
+                    .to_string(),
+            )
+            .into()
+        })
 }
 
 fn require_durable_store_cycle_reclamation(

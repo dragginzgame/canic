@@ -77,9 +77,6 @@ fn deploy_inspect_help_uses_canonical_paths() {
 
     assert!(help.contains("Inspect raw deployment truth artifacts"));
     assert!(help.contains("canic deploy inspect plan demo"));
-    assert!(help.contains(
-        "canic deploy inspect compare --left staging-check.json --right prod-check.json"
-    ));
     assert!(help.contains("canic deploy inspect catalog list"));
     assert!(help.contains("canic deploy inspect resume-report --receipt receipt.json demo"));
     assert!(help.contains("Use `canic inspect` for live runtime-observed"));

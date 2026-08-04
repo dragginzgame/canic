@@ -10,10 +10,10 @@ use super::{
         check_coordinator_canister_id, check_coordinator_readiness_not_evaluated,
         check_fleet_registry_not_evaluated, fleet_environment_selection,
     },
-    project::project_environment_selection_check,
     render::{MEDIC_REPORT_WIDTH, render_medic_ci_text, render_medic_json, render_medic_text},
     report::{MedicStatus, aggregate_status},
-    role_contract::project_config_quality_checks,
+    role_contract::workspace_config_quality_checks,
+    workspace::workspace_environment_selection_check,
 };
 use crate::{
     CliError,
@@ -33,44 +33,29 @@ use canic_host::{
 };
 use serde_json::Value as JsonValue;
 
-// Ensure bare top-level medic selects the project scope without inventing a Fleet.
+// Ensure bare top-level medic selects the workspace scope without inventing a Fleet.
 #[test]
-fn parses_bare_project_medic_options() {
+fn parses_bare_workspace_medic_options() {
     let options = MedicOptions::parse([
         OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
         OsString::from("/tmp/icp"),
     ])
     .expect("parse medic options");
 
-    assert_eq!(options.scope, MedicScope::Project);
+    assert_eq!(options.scope, MedicScope::Workspace);
     assert_eq!(options.fleet, None);
     assert_eq!(options.environment, None);
     assert_eq!(options.icp, "/tmp/icp");
     assert!(!options.ci);
 }
 
-// Ensure explicit project medic keeps the same scope and accepts JSON output.
+// Ensure the removed project scope has no compatibility command.
 #[test]
-fn parses_project_medic_options() {
-    let options = MedicOptions::parse([OsString::from("project"), OsString::from("--json")])
-        .expect("parse medic project options");
-
-    assert_eq!(options.scope, MedicScope::Project);
-    assert!(options.json);
-    assert!(!options.ci);
-    assert_eq!(options.fleet, None);
-}
-
-// Ensure project medic accepts the concise CI renderer flag.
-#[test]
-fn parses_project_medic_ci_options() {
-    let options = MedicOptions::parse([OsString::from("project"), OsString::from("--ci")])
-        .expect("parse medic project ci options");
-
-    assert_eq!(options.scope, MedicScope::Project);
-    assert!(options.ci);
-    assert!(!options.json);
-    assert_eq!(options.fleet, None);
+fn rejects_removed_project_medic_subcommand() {
+    std::assert_matches!(
+        MedicOptions::parse([OsString::from("project")]),
+        Err(MedicCommandError::Usage(_))
+    );
 }
 
 // Ensure Fleet medic parses target, environment, and ICP selectors.
@@ -131,32 +116,18 @@ fn parses_fleet_auth_renewal_medic_target() {
 fn medic_usage_includes_top_level_examples() {
     let text = usage();
 
-    assert!(text.contains("Diagnose Canic project and Fleet preflight readiness"));
+    assert!(text.contains("Diagnose local workspace and installed-Fleet readiness"));
     assert!(text.contains("Usage: canic medic"));
-    assert!(text.contains("canic medic project"));
-    assert!(text.contains("canic medic project --ci"));
+    assert!(text.contains("canic medic"));
+    assert!(text.contains("canic medic --ci"));
     assert!(text.contains("canic medic fleet test"));
-    assert!(text.contains("canic medic fleet test --blob-storage backend"));
-    assert!(text.contains("canic medic fleet test --auth-renewal"));
+    assert!(!text.contains("project"));
     assert!(text.contains("--json"));
 }
 
-// Ensure subcommand help requests stop before project or Fleet checks run.
+// Ensure Fleet subcommand help requests stop before checks run.
 #[test]
 fn medic_subcommand_help_requests_are_not_targets() {
-    assert!(medic_subcommand_help_requested(&[
-        OsString::from("project"),
-        OsString::from("--help")
-    ]));
-    assert!(medic_subcommand_help_requested(&[
-        OsString::from("project"),
-        OsString::from("--help")
-    ]));
-    assert!(medic_subcommand_help_requested(&[
-        OsString::from("--ci"),
-        OsString::from("project"),
-        OsString::from("--help")
-    ]));
     assert!(medic_subcommand_help_requested(&[
         OsString::from("fleet"),
         OsString::from("--help")
@@ -176,20 +147,9 @@ fn medic_subcommand_help_requests_are_not_targets() {
         OsString::from("--help")
     ]));
     assert!(medic_subcommand_help_requested(&[
-        OsString::from("project"),
-        OsString::from("--json"),
-        OsString::from("--help")
-    ]));
-    assert!(medic_subcommand_help_requested(&[
         OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
         OsString::from("fleet"),
-        OsString::from("--help")
-    ]));
-    assert!(medic_subcommand_help_requested(&[
-        OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
-        OsString::from("/tmp/icp"),
-        OsString::from("project"),
         OsString::from("--help")
     ]));
     assert!(medic_subcommand_help_requested(&[
@@ -210,6 +170,10 @@ fn medic_subcommand_help_requests_are_not_targets() {
     assert!(!medic_subcommand_help_requested(&[
         OsString::from("fleet"),
         OsString::from("demo"),
+        OsString::from("--help")
+    ]));
+    assert!(!medic_subcommand_help_requested(&[
+        OsString::from("project"),
         OsString::from("--help")
     ]));
 }
@@ -256,10 +220,10 @@ fn aggregate_status_follows_report_contract() {
 #[test]
 fn renders_medic_text_report() {
     let report = MedicReport::new(
-        &MedicOptions::project(false, false, None, "icp".to_string()),
+        &MedicOptions::workspace(false, false, None, "icp".to_string()),
         vec![
             MedicCheck::warn(
-                MedicCategory::ProjectConfig,
+                MedicCategory::WorkspaceConfig,
                 "local_environment_implicit",
                 "environment",
                 "no environment was selected",
@@ -278,10 +242,10 @@ fn renders_medic_text_report() {
     );
     let rendered = render_medic_text(&report);
 
-    assert!(rendered.starts_with("canic medic project\nstatus: warn"));
+    assert!(rendered.starts_with("canic medic\nstatus: warn"));
     assert!(rendered.contains("environment: not selected"));
     assert!(rendered.contains("environment [pass] icp_cli_ok"));
-    assert!(rendered.contains("project_config [warn] local_environment_implicit"));
+    assert!(rendered.contains("workspace_config [warn] local_environment_implicit"));
     assert!(rendered.contains("  detail: no environment was selected"));
     assert!(rendered.contains("  next: select an explicit environment"));
     assert!(rendered.contains("  source: icp_config"));
@@ -291,7 +255,7 @@ fn renders_medic_text_report() {
 #[test]
 fn renders_medic_json_report() {
     let report = MedicReport::new(
-        &MedicOptions::project(true, false, None, "icp".to_string()),
+        &MedicOptions::workspace(true, false, None, "icp".to_string()),
         vec![sample_check(MedicStatus::Pass)],
     );
     let rendered = render_medic_json(&report).expect("render json");
@@ -302,24 +266,24 @@ fn renders_medic_json_report() {
     assert!(!rendered.contains("detail:"));
     assert!(!rendered.contains("source:"));
     assert_eq!(value["schema_version"], 1);
-    assert_eq!(value["command"], "canic medic project");
-    assert_eq!(value["scope"], "project");
+    assert_eq!(value["command"], "canic medic");
+    assert_eq!(value["scope"], "workspace");
     assert_eq!(value["environment"], JsonValue::Null);
     assert_eq!(value["fleet"], JsonValue::Null);
     assert_eq!(value["status"], "pass");
     assert!(value["checks"].is_array());
 }
 
-// Ensure project medic summarizes state-audit metadata without owning or running migrations.
+// Ensure workspace medic summarizes state-audit metadata without owning or running migrations.
 #[test]
-fn project_medic_summarizes_state_audit_status() {
+fn workspace_medic_summarizes_state_audit_status() {
     let resolution = StateManifestResolution::Rejected {
         errors: vec![RoleContractFinding::RoleUnknown {
             role: CanisterRole::owned("missing".to_string()),
         }],
     };
     let state_report = build_state_audit_report(&resolution, None);
-    let check = state_audit_project_check(&resolution);
+    let check = state_audit_workspace_check(&resolution);
     let (expected_status, expected_code) = match state_report.status {
         StateAuditStatus::Pass => (MedicStatus::Pass, "state_audit_pass"),
         StateAuditStatus::Warn => (MedicStatus::Warn, "state_audit_warn"),
@@ -342,7 +306,7 @@ fn project_medic_summarizes_state_audit_status() {
 #[test]
 fn renders_medic_ci_report_with_fail_only_rows() {
     let report = MedicReport::new(
-        &MedicOptions::project(false, true, None, "icp".to_string()),
+        &MedicOptions::workspace(false, true, None, "icp".to_string()),
         vec![
             MedicCheck::pass(
                 MedicCategory::Environment,
@@ -353,7 +317,7 @@ fn renders_medic_ci_report_with_fail_only_rows() {
                 MedicSource::IcpCli,
             ),
             MedicCheck::warn(
-                MedicCategory::ProjectConfig,
+                MedicCategory::WorkspaceConfig,
                 "local_environment_implicit",
                 "environment",
                 "no environment was selected",
@@ -361,7 +325,7 @@ fn renders_medic_ci_report_with_fail_only_rows() {
                 MedicSource::IcpConfig,
             ),
             MedicCheck::fail(
-                MedicCategory::ProjectConfig,
+                MedicCategory::WorkspaceConfig,
                 "role_contract_required_feature_missing",
                 "demo.app",
                 "demo.app requires canic feature `auth-root-canister-sig-verify`",
@@ -372,9 +336,9 @@ fn renders_medic_ci_report_with_fail_only_rows() {
     );
     let rendered = render_medic_ci_text(&report);
 
-    assert!(rendered.starts_with("canic medic project\nstatus: fail\nfailures: 1"));
+    assert!(rendered.starts_with("canic medic\nstatus: fail\nfailures: 1"));
     assert!(
-        rendered.contains("fail project_config role_contract_required_feature_missing demo.app")
+        rendered.contains("fail workspace_config role_contract_required_feature_missing demo.app")
     );
     assert!(rendered.contains("  next: edit runtime [dependencies].canic"));
     assert!(!rendered.contains("icp_cli_ok"));
@@ -385,15 +349,12 @@ fn renders_medic_ci_report_with_fail_only_rows() {
 #[test]
 fn renders_medic_ci_report_without_failures() {
     let report = MedicReport::new(
-        &MedicOptions::project(false, true, None, "icp".to_string()),
+        &MedicOptions::workspace(false, true, None, "icp".to_string()),
         vec![sample_check(MedicStatus::Warn)],
     );
     let rendered = render_medic_ci_text(&report);
 
-    assert_eq!(
-        rendered,
-        "canic medic project\nstatus: warn\nfailures: none"
-    );
+    assert_eq!(rendered, "canic medic\nstatus: warn\nfailures: none");
 }
 
 // Ensure medic errors keep the designed process-level exit-code contract.
@@ -431,7 +392,7 @@ fn medic_usage_and_internal_errors_render_cli_stderr() {
     assert!(render_cli_error(&json).contains("medic: failed to render medic JSON output"));
 }
 
-// Ensure Fleet reports include the effective environment while project reports may omit it.
+// Ensure Fleet reports include the effective environment while workspace reports may omit it.
 #[test]
 fn fleet_report_includes_effective_environment() {
     let report = MedicReport::new(
@@ -518,10 +479,10 @@ fn fleet_missing_points_to_deploy_plan() {
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
-// Ensure project-only environment warnings do not duplicate Fleet-scoped environment checks.
+// Ensure workspace-only environment warnings do not duplicate Fleet-scoped checks.
 #[test]
-fn project_environment_selection_check_is_project_only() {
-    let project = MedicOptions::project(false, false, None, "icp".to_string());
+fn workspace_environment_selection_check_is_workspace_only() {
+    let workspace = MedicOptions::workspace(false, false, None, "icp".to_string());
     let fleet = MedicOptions {
         scope: MedicScope::Fleet,
         fleet: Some("demo".to_string()),
@@ -533,12 +494,12 @@ fn project_environment_selection_check_is_project_only() {
         icp: "icp".to_string(),
     };
 
-    let project_check =
-        project_environment_selection_check(&project).expect("project environment check");
+    let workspace_check =
+        workspace_environment_selection_check(&workspace).expect("workspace environment check");
 
-    assert_eq!(project_check.code, "local_environment_implicit");
-    assert_eq!(project_check.status, MedicStatus::Warn);
-    assert!(project_environment_selection_check(&fleet).is_none());
+    assert_eq!(workspace_check.code, "local_environment_implicit");
+    assert_eq!(workspace_check.status, MedicStatus::Warn);
+    assert!(workspace_environment_selection_check(&fleet).is_none());
 }
 
 // Ensure missing Coordinator IDs are caught before medic attempts a live query.
@@ -594,10 +555,10 @@ fn fleet_registry_not_evaluated_explains_skipped_live_query() {
     );
 }
 
-// Ensure project medic validates package-role metadata without spawning Cargo.
+// Ensure workspace medic validates package-role metadata without spawning Cargo.
 #[test]
-fn project_config_quality_checks_validate_role_package_metadata() {
-    let root = temp_dir("canic-cli-medic-project-config-quality");
+fn workspace_config_quality_checks_validate_role_package_metadata() {
+    let root = temp_dir("canic-cli-medic-workspace-config-quality");
     let config = write_medic_config(
         &root,
         r#"
@@ -628,7 +589,7 @@ maximum_instances = 1
     write_medic_package(&root, "app", "demo", "app");
     write_medic_package(&root, "store", "demo", "store");
 
-    let checks = project_config_quality_checks(&root, &[config]);
+    let checks = workspace_config_quality_checks(&root, &[config]);
 
     assert!(checks.iter().any(|check| {
         check.status == MedicStatus::Pass
@@ -645,10 +606,10 @@ maximum_instances = 1
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
-// Ensure package metadata drift is a blocking project-config diagnostic.
+// Ensure package metadata drift is a blocking workspace-config diagnostic.
 #[test]
-fn project_config_quality_checks_fail_on_missing_or_mismatched_package_metadata() {
-    let root = temp_dir("canic-cli-medic-project-config-metadata-drift");
+fn workspace_config_quality_checks_fail_on_missing_or_mismatched_package_metadata() {
+    let root = temp_dir("canic-cli-medic-workspace-config-metadata-drift");
     let config = write_medic_config(
         &root,
         r#"
@@ -682,7 +643,7 @@ maximum_instances = 1
     write_medic_package(&root, "root", "demo", "root");
     write_medic_package(&root, "app", "demo", "other");
 
-    let checks = project_config_quality_checks(&root, &[config]);
+    let checks = workspace_config_quality_checks(&root, &[config]);
 
     let app = checks
         .iter()
@@ -703,10 +664,10 @@ maximum_instances = 1
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
-// Ensure project medic reports config-driven runtime feature requirements before startup traps.
+// Ensure workspace medic reports config-driven runtime feature requirements before startup traps.
 #[test]
-fn project_config_quality_checks_report_missing_required_canic_features() {
-    let root = temp_dir("canic-cli-medic-project-required-features");
+fn workspace_config_quality_checks_report_missing_required_canic_features() {
+    let root = temp_dir("canic-cli-medic-workspace-required-features");
     let config = write_medic_config(
         &root,
         r#"
@@ -747,7 +708,7 @@ role_attestation_cache = true
         &["auth-delegated-token-verify"],
     );
 
-    let checks = project_config_quality_checks(&root, &[config]);
+    let checks = workspace_config_quality_checks(&root, &[config]);
 
     let app = checks
         .iter()
@@ -770,10 +731,10 @@ role_attestation_cache = true
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
-// Ensure project medic accepts roles whose runtime canic dependency enables required features.
+// Ensure workspace medic accepts roles whose runtime canic dependency enables required features.
 #[test]
-fn project_config_quality_checks_accept_required_canic_features() {
-    let root = temp_dir("canic-cli-medic-project-required-features-present");
+fn workspace_config_quality_checks_accept_required_canic_features() {
+    let root = temp_dir("canic-cli-medic-workspace-required-features-present");
     let config = write_medic_config(
         &root,
         r#"
@@ -814,7 +775,7 @@ role_attestation_cache = true
         &["auth-root-canister-sig-verify"],
     );
 
-    let checks = project_config_quality_checks(&root, &[config]);
+    let checks = workspace_config_quality_checks(&root, &[config]);
 
     assert!(checks.iter().any(|check| {
         check.subject == "demo.app"
@@ -828,10 +789,10 @@ role_attestation_cache = true
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
-// Ensure project medic rejects role features inherited from workspace dependencies.
+// Ensure workspace medic rejects role features inherited from workspace dependencies.
 #[test]
-fn project_config_quality_checks_reject_workspace_canic_features() {
-    let root = temp_dir("canic-cli-medic-project-workspace-required-features");
+fn workspace_config_quality_checks_reject_workspace_canic_features() {
+    let root = temp_dir("canic-cli-medic-workspace-workspace-required-features");
     let config = write_medic_config(
         &root,
         r#"
@@ -867,7 +828,7 @@ role_attestation_cache = true
     write_medic_package(&root, "root", "demo", "root");
     write_medic_package(&root, "app", "demo", "app");
 
-    let checks = project_config_quality_checks(&root, &[config]);
+    let checks = workspace_config_quality_checks(&root, &[config]);
 
     let check = checks
         .iter()
@@ -887,8 +848,8 @@ role_attestation_cache = true
 }
 
 #[test]
-fn project_config_quality_checks_reject_package_feature_forwarding() {
-    let root = temp_dir("canic-cli-medic-project-feature-forwarding");
+fn workspace_config_quality_checks_reject_package_feature_forwarding() {
+    let root = temp_dir("canic-cli-medic-workspace-feature-forwarding");
     let config = write_medic_config(
         &root,
         r#"
@@ -924,7 +885,7 @@ storage = ["canic/blob-storage"]
     );
     fs::write(&manifest, source).expect("write forwarded package feature");
 
-    let checks = project_config_quality_checks(&root, &[config]);
+    let checks = workspace_config_quality_checks(&root, &[config]);
     let check = checks
         .iter()
         .find(|check| {
@@ -942,7 +903,7 @@ storage = ["canic/blob-storage"]
 #[test]
 fn orders_checks_by_category() {
     let report = MedicReport::new(
-        &MedicOptions::project(false, false, None, "icp".to_string()),
+        &MedicOptions::workspace(false, false, None, "icp".to_string()),
         vec![
             MedicCheck::pass(
                 MedicCategory::BlobStorage,
@@ -993,7 +954,7 @@ fn renders_blob_storage_medic_summary() {
         next: "canic blob-storage sync-gateways demo backend".to_string(),
     });
     let report = render_medic_text(&MedicReport::new(
-        &MedicOptions::project(false, false, None, "icp".to_string()),
+        &MedicOptions::workspace(false, false, None, "icp".to_string()),
         vec![check],
     ));
 
@@ -1057,7 +1018,7 @@ fn renders_auth_renewal_medic_summary() {
         next: "canic auth renewal status demo --issuer rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
     });
     let report = render_medic_text(&MedicReport::new(
-        &MedicOptions::project(false, false, None, "icp".to_string()),
+        &MedicOptions::workspace(false, false, None, "icp".to_string()),
         vec![check],
     ));
 
@@ -1174,7 +1135,7 @@ fn blob_storage_passive_detection_rejects_partial_or_unrelated_candid() {
 #[test]
 fn wraps_long_medic_report_fields() {
     let report = render_medic_text(&MedicReport::new(
-        &MedicOptions::project(false, false, None, "icp".to_string()),
+        &MedicOptions::workspace(false, false, None, "icp".to_string()),
         vec![MedicCheck::warn(
             MedicCategory::FleetState,
             "fleet_missing",
@@ -1202,7 +1163,7 @@ fn wraps_long_medic_report_fields() {
 #[test]
 fn wraps_unbroken_long_medic_report_fields() {
     let report = render_medic_text(&MedicReport::new(
-        &MedicOptions::project(false, false, None, "icp".to_string()),
+        &MedicOptions::workspace(false, false, None, "icp".to_string()),
         vec![MedicCheck::warn(
             MedicCategory::FleetState,
             "fleet_missing",

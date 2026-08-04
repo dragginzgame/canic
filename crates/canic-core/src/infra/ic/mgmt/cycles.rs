@@ -15,13 +15,14 @@ use crate::{
 use super::{MgmtInfra, MgmtInfraError, types::InfraCanisterIdRecord};
 
 impl MgmtInfra {
+    /// Return the exact current-Subnet cost of one zero-cycle deposit call.
+    pub fn deposit_cycles_call_cost(canister_pid: Principal) -> Result<u128, IcInfraError> {
+        Ok(deposit_cycles_call(canister_pid)?.cost())
+    }
+
     /// Deposit cycles into a canister through the management canister.
     pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(), IcInfraError> {
-        let args = InfraCanisterIdRecord {
-            canister_id: canister_pid,
-        };
-        Call::bounded_wait(Principal::management_canister(), "deposit_cycles")
-            .with_arg(args)?
+        deposit_cycles_call(canister_pid)?
             .with_cycles(cycles)
             .execute()
             .await?;
@@ -34,6 +35,16 @@ impl MgmtInfra {
         let status = Self::canister_status(canister_pid).await?;
         checked_canister_cycles(canister_pid, status.cycles).map_err(IcInfraError::from)
     }
+}
+
+fn deposit_cycles_call(
+    canister_pid: Principal,
+) -> Result<crate::infra::ic::call::CallBuilder<'static>, IcInfraError> {
+    Call::unbounded_wait(Principal::management_canister(), "deposit_cycles").with_arg(
+        InfraCanisterIdRecord {
+            canister_id: canister_pid,
+        },
+    )
 }
 
 fn checked_canister_cycles(canister_pid: Principal, value: Nat) -> Result<Cycles, MgmtInfraError> {

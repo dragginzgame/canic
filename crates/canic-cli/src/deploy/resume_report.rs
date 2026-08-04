@@ -81,7 +81,7 @@ impl DeployResumeReportOptions {
 
         let icp_root = resolve_current_canic_icp_root().map_err(|err| {
             DeployCommandError::Usage(format!(
-                "could not discover current Canic project root for latest deployment receipt: {err}; pass --receipt <file>"
+                "could not discover current Canic workspace root for latest deployment receipt: {err}; pass --receipt <file>"
             ))
         })?;
         self.receipt_path_from_root(&icp_root)

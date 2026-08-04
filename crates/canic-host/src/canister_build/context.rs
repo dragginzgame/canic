@@ -72,6 +72,20 @@ impl WorkspaceBuildContext {
         context
     }
 
+    /// Resolve an output namespace owned by this exact build authority.
+    #[must_use]
+    pub(crate) fn artifact_root(&self) -> PathBuf {
+        self.release_build_id.map_or_else(
+            || self.icp_root.join(".icp/local/canisters"),
+            |release_build_id| {
+                self.icp_root
+                    .join(".canic/release-builds")
+                    .join(release_build_id.to_string())
+                    .join("artifacts")
+            },
+        )
+    }
+
     /// Apply the exact Canic build authority to one child command.
     pub fn apply_to_command(&self, command: &mut Command) {
         command

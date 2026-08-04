@@ -41,13 +41,13 @@ pub(super) fn backup_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
-            ClapCommand::new("list")
-                .about("List backup directories under a backup root")
+            ClapCommand::new("inspect")
+                .about("Inspect a backup or dry-run plan layout")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
-            ClapCommand::new("inspect")
-                .about("Inspect a backup or dry-run plan layout")
+            ClapCommand::new("list")
+                .about("List backup directories under a backup root")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
@@ -61,13 +61,13 @@ pub(super) fn backup_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
-            ClapCommand::new("verify")
-                .about("Verify layout, journal agreement, and durable artifact checksums")
+            ClapCommand::new("status")
+                .about("Summarize resumable download journal state")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
-            ClapCommand::new("status")
-                .about("Summarize resumable download journal state")
+            ClapCommand::new("verify")
+                .about("Verify layout, journal agreement, and durable artifact checksums")
                 .disable_help_flag(true),
         ))
 }

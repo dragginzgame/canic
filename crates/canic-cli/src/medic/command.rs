@@ -25,7 +25,6 @@ use clap::Command as ClapCommand;
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
-const PROJECT_COMMAND: &str = "project";
 const FLEET_COMMAND: &str = "fleet";
 const FLEET_ARG: &str = "fleet";
 const JSON_ARG: &str = "json";
@@ -35,12 +34,9 @@ const AUTH_RENEWAL_ARG: &str = "auth-renewal";
 const MEDIC_HELP_AFTER: &str = "\
 Examples:
   canic medic
-  canic medic project
-  canic medic project --ci
+  canic medic --ci
   canic medic fleet test
-  canic medic fleet test --blob-storage backend
-  canic medic fleet test --auth-renewal rrkah-fqaaa-aaaaa-aaaaq-cai
-  canic medic fleet test --json";
+";
 
 /// An error while parsing, running, or rendering the medic command.
 #[derive(Debug, ThisError)]
@@ -94,7 +90,6 @@ impl MedicOptions {
         let icp = string_option(&matches, "icp").unwrap_or_else(default_icp);
 
         match matches.subcommand() {
-            None | Some((PROJECT_COMMAND, _)) => Ok(Self::project(json, ci, environment, icp)),
             Some((FLEET_COMMAND, matches)) => Ok(Self {
                 scope: MedicScope::Fleet,
                 fleet: Some(required_string(matches, FLEET_ARG)),
@@ -105,18 +100,19 @@ impl MedicOptions {
                 environment,
                 icp,
             }),
+            None => Ok(Self::workspace(json, ci, environment, icp)),
             Some(_) => Err(MedicCommandError::Usage(usage())),
         }
     }
 
-    pub(super) const fn project(
+    pub(super) const fn workspace(
         json: bool,
         ci: bool,
         environment: Option<String>,
         icp: String,
     ) -> Self {
         Self {
-            scope: MedicScope::Project,
+            scope: MedicScope::Workspace,
             fleet: None,
             blob_storage: None,
             auth_renewal: None,
@@ -129,7 +125,7 @@ impl MedicOptions {
 
     pub(super) fn command_label(&self) -> String {
         match (&self.scope, &self.fleet) {
-            (MedicScope::Project, _) => "canic medic project".to_string(),
+            (MedicScope::Workspace, _) => "canic medic".to_string(),
             (MedicScope::Fleet, Some(fleet)) => {
                 format!("canic medic fleet {fleet}")
             }
@@ -178,7 +174,7 @@ where
 
 pub(super) fn medic_subcommand_help_requested(args: &[OsString]) -> bool {
     let mut index = skip_medic_options(args, 0);
-    let Some(PROJECT_COMMAND | FLEET_COMMAND) = args.get(index).and_then(|arg| arg.to_str()) else {
+    let Some(FLEET_COMMAND) = args.get(index).and_then(|arg| arg.to_str()) else {
         return false;
     };
     index = skip_medic_options(args, index + 1);
@@ -204,7 +200,7 @@ fn medic_command() -> ClapCommand {
     ClapCommand::new("medic")
         .bin_name("canic medic")
         .disable_help_flag(true)
-        .about("Diagnose Canic project and Fleet preflight readiness")
+        .about("Diagnose local workspace and installed-Fleet readiness")
         .arg(
             flag_arg(JSON_ARG)
                 .long(JSON_ARG)
@@ -219,15 +215,8 @@ fn medic_command() -> ClapCommand {
         )
         .arg(internal_environment_arg().global(true))
         .arg(internal_icp_arg().global(true))
-        .subcommand(project_command())
         .subcommand(fleet_command())
         .after_help(MEDIC_HELP_AFTER)
-}
-
-fn project_command() -> ClapCommand {
-    ClapCommand::new(PROJECT_COMMAND)
-        .disable_help_flag(true)
-        .about("Run project-level medic checks")
 }
 
 fn fleet_command() -> ClapCommand {

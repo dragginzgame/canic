@@ -4,7 +4,7 @@
 //! host install runner.
 //! Does not own: install planning, controller mutation, canister lifecycle
 //! side effects, or deployment state persistence.
-//! Boundary: resolves local project context, builds host install options, and
+//! Boundary: resolves local workspace context, builds host install options, and
 //! adds CLI-facing diagnostics.
 
 #[cfg(test)]
@@ -43,7 +43,7 @@ limit, and creation-funding document.
 Use it for fresh local creation or recreating local state after the ICP CLI
 replica lost canisters. For an existing canister that only needs new Wasm,
 inspect with canic info list and canic medic fleet, then use the
-project upgrade flow.
+existing-Fleet update flow.
 
 Install removes its transient target/canic-wasm Cargo cache after canonical
 .icp artifacts are written. Advanced Cargo callers can select their own target
@@ -205,7 +205,7 @@ fn install_error_with_context(
         return InstallCommandError::InstallHint {
             source: err,
             hint: format!(
-                "If this Fleet or canister already exists, run `canic --environment {environment} info list {fleet}` and `canic --environment {environment} medic fleet {fleet}` before retrying. For code-only changes, use the project upgrade flow instead of another fresh install."
+                "If this Fleet or canister already exists, run `canic --environment {environment} info list {fleet}` and `canic --environment {environment} medic fleet {fleet}` before retrying. For code-only changes, use the existing-Fleet update flow instead of another fresh install."
             ),
         };
     }

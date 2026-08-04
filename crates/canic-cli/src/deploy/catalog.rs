@@ -30,7 +30,7 @@ struct CatalogCommand {
     help_after: &'static str,
 }
 
-const CATALOG_COMMANDS: &[CatalogCommand] = &[LIST_COMMAND, INSPECT_COMMAND];
+const CATALOG_COMMANDS: &[CatalogCommand] = &[INSPECT_COMMAND, LIST_COMMAND];
 
 const DEPLOY_CATALOG_HELP_AFTER: &str = "\
 Examples:
@@ -94,8 +94,8 @@ where
     }
 
     match parse_subcommand(command(), args).map_err(|_| DeployCommandError::Usage(usage()))? {
-        Some((command, args)) if command == "list" => run_list(args),
         Some((command, args)) if command == "inspect" => run_inspect(args),
+        Some((command, args)) if command == "list" => run_list(args),
         _ => {
             println!("{}", usage());
             Ok(())
@@ -160,11 +160,11 @@ pub(super) fn write_report(
 }
 
 fn request(options: &DeployCatalogOptions) -> Result<FleetCatalogRequest, DeployCommandError> {
-    let project_root = resolve_current_canic_icp_root()
+    let workspace_root = resolve_current_canic_icp_root()
         .map_err(Box::<dyn std::error::Error>::from)
         .map_err(DeployCommandError::from)?;
     Ok(FleetCatalogRequest {
-        project_root,
+        workspace_root,
         environment: options.environment.clone(),
         generated_at: current_evidence_timestamp()?,
     })
