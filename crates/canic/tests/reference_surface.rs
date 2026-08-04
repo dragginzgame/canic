@@ -18,28 +18,42 @@ fn read_text(path: &Path) -> String {
         .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()))
 }
 
-// Read the visible canister keys from the checked-in ICP project topology.
-fn icp_canister_keys() -> Vec<String> {
+// Read one environment's canister keys from the checked-in ICP project topology.
+fn icp_environment_canister_keys(environment: &str) -> Vec<String> {
     let path = workspace_root().join("icp.yaml");
     let source = read_text(&path);
 
-    let mut names = Vec::new();
-    let mut in_canisters = false;
+    let mut in_environments = false;
+    let mut in_target_environment = false;
     for line in source.lines() {
         let trimmed = line.trim();
-        if trimmed == "canisters:" {
-            in_canisters = true;
+        if trimmed == "environments:" {
+            in_environments = true;
             continue;
         }
-        if in_canisters && !line.starts_with(' ') && !trimmed.is_empty() {
+        if in_environments && !line.starts_with(' ') && !trimmed.is_empty() {
             break;
         }
-        if in_canisters && let Some(name) = trimmed.strip_prefix("- name: ") {
-            names.push(name.to_string());
+        if !in_environments {
+            continue;
+        }
+        if let Some(name) = trimmed.strip_prefix("- name: ") {
+            in_target_environment = name == environment;
+            continue;
+        }
+        if in_target_environment
+            && let Some(names) = trimmed
+                .strip_prefix("canisters: [")
+                .and_then(|names| names.strip_suffix(']'))
+        {
+            return names
+                .split(',')
+                .map(str::trim)
+                .map(str::to_string)
+                .collect();
         }
     }
-    assert!(!names.is_empty(), "icp.yaml must define canisters");
-    names
+    panic!("icp.yaml must define canisters for environment `{environment}`");
 }
 
 // Read the deployable flat Component topology from the checked-in test config.
@@ -70,17 +84,19 @@ fn test_component_topology_canister_keys() -> Vec<String> {
     roles
 }
 
-// Keep the visible ICP canister list aligned with the test Component topology.
+// Keep the ICP test environment aligned with the test Component topology.
 #[test]
-fn icp_visible_canisters_match_test_component_topology() {
-    let icp_keys = icp_canister_keys().into_iter().collect::<BTreeSet<_>>();
+fn icp_test_environment_canisters_match_test_component_topology() {
+    let icp_keys = icp_environment_canister_keys("test")
+        .into_iter()
+        .collect::<BTreeSet<_>>();
     let test_component_topology = test_component_topology_canister_keys()
         .into_iter()
         .collect::<BTreeSet<_>>();
 
     assert_eq!(
         icp_keys, test_component_topology,
-        "icp.yaml canister keys must stay aligned with apps/test/canic.toml Component topology"
+        "icp.yaml test-environment canisters must stay aligned with apps/test/canic.toml Component topology"
     );
 }
 
