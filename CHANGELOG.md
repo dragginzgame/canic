@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.100` enforces the durable root-deletion preparation receipt as a
+  mandatory process boundary before destructive execution, while preserving
+  effect-free exact terminal replay.
+
 - `0.100.99` completes the independent infrastructure build boundary by
   removing root-triggered Store generation and recording the post-extraction
   Wasm evidence.

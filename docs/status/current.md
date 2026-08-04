@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-03
+Last updated: 2026-08-04
 
 ## Purpose
 
@@ -14,13 +14,17 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.98`.
-- The latest published release is `v0.100.98` at
-  `94119c39c725383aa7f2ffd5e5f4ee9154ee91a2`.
-- Open patch draft `0.100.99` removes the final root-triggered Store build
-  side effect. Installation preparation now builds the Store as an independent
-  infrastructure role, and the passing post-extraction measurement records
-  exact replacement sizes, hashes, Candid exports and retained attribution.
+- The workspace package version is `0.100.99`.
+- The latest published release is `v0.100.99` at
+  `bf62151d99270a04d92d8a1b00487cbb08eab774`.
+- Open patch draft `0.100.100` makes the durable Coordinator root-deletion
+  execution intent a mandatory process boundary. Destructive execution can no
+  longer prepare its own authority and fails before observing or mutating the
+  root when the separate preparation process has not completed.
+- Released `0.100.99` removes the final root-triggered Store build side effect.
+  Installation preparation builds the Store as an independent infrastructure
+  role, and the passing post-extraction measurement records exact replacement
+  sizes, hashes, Candid exports and retained attribution.
 - Released `0.100.98` independently host-installs each root's sibling Store on
   the exact same Subnet, adopts it from installer-plus-root to sole-root
   control, imports only that Store into runtime publication and hard-cuts
@@ -71,9 +75,10 @@ Historical detail is archived at:
   terminal sole-controller adoption receipt, and remove embedded Store bytes
   plus autonomous root Store creation/replacement. Root publication, catalog,
   GC and terminal deletion authority remain unchanged after handoff.
-  Released 0.100.98 completes that implementation; open 0.100.99 removes the
-  final root-build side effect and records a passing post-extraction boundary.
-  Only the disposable real-network root-deletion proof remains.
+  Released 0.100.98 completes that implementation; released 0.100.99 removes
+  the final root-build side effect and records a passing post-extraction
+  boundary. Open 0.100.100 enforces the final proof's separate-process
+  root-deletion boundary. Only the disposable real-network proof remains.
 - Proposed `0.105` defines provider-neutral declarative authentication
   profiles as the sole source of multi-role user-token grants and
   install-owned issuer/verifier policy. Its initial Toko path uses one
@@ -2558,9 +2563,10 @@ described above and closes the restore-fencing and role-package qualification
 item. Released `0.100.95` groups both reinstall-only stable-memory ledgers by
 their current subsystem owners. Released `0.100.96` records the initial
 boundary baseline, released `0.100.98` completes the independent host-installed
-Store cut, and open `0.100.99` records the passing post-extraction boundary.
-The maintainer-owned disposable real-network root-deletion proof is the only
-remaining 0.100 closeout item.
+Store cut, released `0.100.99` records the passing post-extraction boundary,
+and open `0.100.100` requires a previously retained Coordinator execution
+intent before destructive root deletion. The maintainer-owned disposable
+real-network root-deletion proof is the only remaining 0.100 closeout item.
 
 ## Historical Release Detail
 

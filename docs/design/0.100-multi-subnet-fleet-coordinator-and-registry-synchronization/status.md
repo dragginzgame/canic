@@ -1,6 +1,6 @@
 # Canic 0.100 Implementation Status
 
-Date: 2026-08-03
+Date: 2026-08-04
 
 - State: implementation complete; the independent sibling Store build,
   installation/adoption and post-extraction Wasm boundary pass. Only the
@@ -8,11 +8,12 @@ Date: 2026-08-03
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.98`.
-- Latest published release: `v0.100.98` at
-  `94119c39c725383aa7f2ffd5e5f4ee9154ee91a2`.
-- Open patch draft: `0.100.99`; it removes the final root-triggered Store
-  build side effect and records the passing post-extraction Wasm boundary.
+- Workspace package version: `0.100.99`.
+- Latest published release: `v0.100.99` at
+  `bf62151d99270a04d92d8a1b00487cbb08eab774`.
+- Open patch draft: `0.100.100`; it enforces the durable Coordinator
+  root-deletion execution intent as a mandatory separate-process boundary
+  before any destructive root effect.
 - Open design blockers: none; implementation is complete and only the
   maintainer-owned real-network proof remains.
 
@@ -1249,11 +1250,11 @@ verification, imported single-Store publication, and hard removal of embedded
 Store bytes plus root-autonomous creation, replacement, rotation and arbitrary
 Store selection.
 
-Open 0.100.99 removes the final root-build coupling. Installation preparation
-now invokes the Store builder as an independent infrastructure role; a
-root-only build neither creates nor qualifies Store output. The canonical
-post-extraction measurement passes and records exact replacement sizes,
-hashes, Candid exports and retained attribution.
+Released 0.100.99 removes the final root-build coupling. Installation
+preparation now invokes the Store builder as an independent infrastructure
+role; a root-only build neither creates nor qualifies Store output. The
+canonical post-extraction measurement passes and records exact replacement
+sizes, hashes, Candid exports and retained attribution.
 
 The [0.100 infrastructure Wasm boundary audit](0.100-wasm-boundary-closeout.md)
 records a passing independent root/Store build and post-extraction artifact
@@ -1263,7 +1264,9 @@ arbitrary artifact fallback authority.
 
 ## Next Action
 
-The maintainer-owned final operational proof remains: run root-deletion
-preparation and execution as separate processes against one explicitly
-selected disposable real-network root, then verify the surviving Coordinator
-terminal receipt and exact replay before closing 0.100 and beginning 0.101.
+Open 0.100.100 hardens the proof tool so execution refuses to synthesize a
+missing Coordinator intent. The maintainer-owned final operational proof
+remains: run root-deletion preparation and execution as separate processes
+against one explicitly selected disposable real-network root, then verify the
+surviving Coordinator terminal receipt and exact replay before closing 0.100
+and beginning 0.101.

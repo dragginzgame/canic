@@ -75,6 +75,11 @@ pub enum FleetSubnetRootDeletionError {
     #[error("Fleet Subnet Root was absent before the Coordinator retained execution intent")]
     RootAbsentBeforeExecution,
 
+    #[error(
+        "Coordinator has no durable Fleet Subnet Root deletion execution intent; run preparation in a separate process first"
+    )]
+    ExecutionNotPrepared,
+
     #[error("Fleet Subnet Root is still stopping; retry the same operation")]
     RootStopping,
 
@@ -280,8 +285,26 @@ fn execute_with_adapter(
         return Ok(terminal);
     }
 
-    let execution = resolve_execution_intent(adapter, coordinator, root, operation_id)?;
+    let execution = require_execution_intent(adapter, root, operation_id)?;
     drive_management_deletion(adapter, coordinator, root, operation_id, execution)
+}
+
+fn require_execution_intent(
+    adapter: &mut impl FleetSubnetRootDeletionAdapter,
+    root: Principal,
+    operation_id: [u8; 32],
+) -> Result<FleetSubnetRootDeletionExecutionResponse, FleetSubnetRootDeletionError> {
+    let executor_identity = adapter.executor_identity()?;
+    let status_request = FleetSubnetRootDeletionStatusRequest {
+        operation_id,
+        fleet_subnet_root: root,
+    };
+    let execution = adapter
+        .execution_status(status_request)?
+        .ok_or(FleetSubnetRootDeletionError::ExecutionNotPrepared)?;
+    validate_execution_identity(&execution, root, operation_id)?;
+    validate_executor_identity(&execution, executor_identity)?;
+    Ok(execution)
 }
 
 fn resolve_execution_intent(
@@ -302,13 +325,21 @@ fn resolve_execution_intent(
         }
         None => prepare_execution(adapter, coordinator, root, operation_id)?,
     };
-    if execution.executor != executor_identity {
-        return Err(FleetSubnetRootDeletionError::ExecutorMismatch {
-            expected: execution.executor,
-            observed: executor_identity,
-        });
-    }
+    validate_executor_identity(&execution, executor_identity)?;
     Ok(execution)
+}
+
+fn validate_executor_identity(
+    execution: &FleetSubnetRootDeletionExecutionResponse,
+    observed: Principal,
+) -> Result<(), FleetSubnetRootDeletionError> {
+    if execution.executor == observed {
+        return Ok(());
+    }
+    Err(FleetSubnetRootDeletionError::ExecutorMismatch {
+        expected: execution.executor,
+        observed,
+    })
 }
 
 fn prepare_execution(
