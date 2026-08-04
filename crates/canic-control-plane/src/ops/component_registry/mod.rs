@@ -13778,13 +13778,15 @@ mod tests {
         store_deletion: &RootFleetSubnetStoreDeletionView,
     ) {
         let coordinator = inventory.registry.authority.binding.coordinator;
+        let maximum_cycles_to_retain =
+            deletion_maximum_cycles(86_400, 1).expect("bounded root deletion maximum cycles");
         let intent = ComponentRegistryOps::begin_root_deletion_preparation(
             [10; 32],
             RootFleetSubnetDeletionPreparationAuthority {
                 store_deletion_hash: store_deletion.deletion_hash,
                 coordinator,
                 observed_cycles_before_reclamation: 500_000_000_000,
-                maximum_cycles_to_retain: 100_000_000_001,
+                maximum_cycles_to_retain,
                 observed_reserved_cycles: 0,
                 observed_idle_cycles_burned_per_day: 86_400,
                 observed_freezing_threshold_seconds: 1,
@@ -13801,7 +13803,7 @@ mod tests {
                     store_deletion_hash: store_deletion.deletion_hash,
                     coordinator,
                     observed_cycles_before_reclamation: 500_000_000_000,
-                    maximum_cycles_to_retain: 100_000_000_001,
+                    maximum_cycles_to_retain,
                     observed_reserved_cycles: 0,
                     observed_idle_cycles_burned_per_day: 86_400,
                     observed_freezing_threshold_seconds: 1,
