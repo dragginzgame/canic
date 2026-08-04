@@ -12,9 +12,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.101` relays an operator-owned password file to every ICP subprocess,
+  enabling fail-closed mainnet operation with encrypted identities without
+  exposing or persisting secret contents in Canic, and advances the host-only
+  Subnet Catalog boundary to `ic-query 0.26.15` with its NNS-scoped cache hard
+  cut.
+
 - `0.100.100` enforces the durable root-deletion preparation receipt as a
   mandatory process boundary before destructive execution, while preserving
-  effect-free exact terminal replay.
+  effect-free exact terminal replay. It also refreshes the proposed 0.101
+  design against current host-installed Store, prepaid-Canister and root-limit
+  authority, closes its cross-root requester-proof handoff and records a
+  measured initial scale envelope instead of claiming ten-thousand-Subnet
+  qualification.
 
 - `0.100.99` completes the independent infrastructure build boundary by
   removing root-triggered Store generation and recording the post-extraction

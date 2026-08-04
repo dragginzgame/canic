@@ -8,12 +8,11 @@ Date: 2026-08-04
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.99`.
-- Latest published release: `v0.100.99` at
-  `bf62151d99270a04d92d8a1b00487cbb08eab774`.
-- Open patch draft: `0.100.100`; it enforces the durable Coordinator
-  root-deletion execution intent as a mandatory separate-process boundary
-  before any destructive root effect.
+- Workspace package version: `0.100.100`.
+- Latest published release: `v0.100.100` at
+  `0654385f04baa3df425e1c3cf7335cd378614482`.
+- Open patch draft: `0.100.101`; it relays one operator-owned password file to
+  every ICP subprocess without reading or persisting the secret contents.
 - Open design blockers: none; implementation is complete and only the
   maintainer-owned real-network proof remains.
 
@@ -1264,9 +1263,10 @@ arbitrary artifact fallback authority.
 
 ## Next Action
 
-Open 0.100.100 hardens the proof tool so execution refuses to synthesize a
-missing Coordinator intent. The maintainer-owned final operational proof
-remains: run root-deletion preparation and execution as separate processes
-against one explicitly selected disposable real-network root, then verify the
-surviving Coordinator terminal receipt and exact replay before closing 0.100
-and beginning 0.101.
+Released 0.100.100 hardens the proof tool so execution refuses to synthesize a
+missing Coordinator intent. Open 0.100.101 removes the encrypted-identity
+subprocess blocker exposed by live proof preparation. The maintainer-owned
+final operational proof remains: run root-deletion preparation and execution
+as separate processes against one explicitly selected disposable real-network
+root, then verify the surviving Coordinator terminal receipt and exact replay
+before closing 0.100 and beginning 0.101.
