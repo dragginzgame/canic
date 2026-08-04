@@ -21,8 +21,8 @@ use canic_core::shared_support::is_ascii_snake_case;
 use canic_host::{
     durable_io::write_bytes,
     install_root::{
-        ConfigDiscoveryError, current_canic_project_root, discover_project_canic_config_choices,
-        select_discovered_app_config_path,
+        ConfigDiscoveryError, current_canic_workspace_root,
+        discover_workspace_canic_config_choices, select_discovered_app_config_path,
     },
     release_set::{
         AppConfigError, declare_app_role, display_workspace_path, plan_declare_app_role,
@@ -80,7 +80,7 @@ pub enum ScaffoldCommandError {
     #[error("app {0} config does not have a parent directory")]
     MissingAppDirectory(String),
 
-    #[error("failed to discover Canic project configs: {0}")]
+    #[error("failed to discover Canic workspace App configs: {0}")]
     ConfigDiscovery(#[from] ConfigDiscoveryError),
 
     #[error(transparent)]
@@ -243,7 +243,7 @@ where
     println!();
     println!("Next:");
     println!("  cargo check -p {}", result.package_name);
-    println!("  canic medic project --ci");
+    println!("  canic medic --ci");
     println!(
         "  canic app role attach {} {} --component-spec <component-spec>",
         result.app, result.role
@@ -256,26 +256,26 @@ where
 }
 
 fn run_scaffold(options: ScaffoldOptions) -> Result<(), ScaffoldCommandError> {
-    let project_root = scaffold_project_root()?;
+    let workspace_root = scaffold_workspace_root()?;
     if options.dry_run {
-        let plan = plan_scaffold_project_at(&project_root, &options)?;
-        println!("{}", render_scaffold_project_plan(&plan));
+        let plan = plan_scaffold_app_at(&workspace_root, &options)?;
+        println!("{}", render_scaffold_app_plan(&plan));
         return Ok(());
     }
     if !options.yes {
-        confirm_scaffold(&options, &project_root, io::stdin().lock(), io::stdout())?;
+        confirm_scaffold(&options, &workspace_root, io::stdin().lock(), io::stdout())?;
     }
 
-    let result = scaffold_project_at(&project_root, &options)?;
+    let result = scaffold_app_at(&workspace_root, &options)?;
     println!("Created Canic app:");
-    println!("  {}", result.project_dir.display());
+    println!("  {}", result.app_root.display());
     println!("  {}", result.root_dir.display());
     println!("  {}", result.app_dir.display());
     println!("  {}", result.config_path.display());
     println!();
     println!("Next:");
     println!("  edit icp.yaml");
-    println!("  canic medic project --ci");
+    println!("  canic medic --ci");
     println!("  canic status");
     println!("  canic install {} <fleet>", options.name);
     Ok(())
@@ -314,36 +314,36 @@ struct CanisterScaffoldPlan {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ScaffoldResult {
-    project_dir: PathBuf,
+    app_root: PathBuf,
     root_dir: PathBuf,
     app_dir: PathBuf,
     config_path: PathBuf,
 }
 
 ///
-/// ScaffoldProjectPlan
+/// ScaffoldAppPlan
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct ScaffoldProjectPlan {
+struct ScaffoldAppPlan {
     result: ScaffoldResult,
     files: Vec<PathBuf>,
 }
 
-fn plan_scaffold_project_at(
-    project_root: &Path,
+fn plan_scaffold_app_at(
+    workspace_root: &Path,
     options: &ScaffoldOptions,
-) -> Result<ScaffoldProjectPlan, ScaffoldCommandError> {
-    let project_dir = project_root.join("apps").join(&options.name);
-    if project_dir.exists() {
+) -> Result<ScaffoldAppPlan, ScaffoldCommandError> {
+    let app_root = workspace_root.join("apps").join(&options.name);
+    if app_root.exists() {
         return Err(ScaffoldCommandError::TargetExists(
-            project_dir.display().to_string(),
+            app_root.display().to_string(),
         ));
     }
 
-    let root_dir = project_dir.join("root");
-    let app_dir = project_dir.join("app");
-    let config_path = project_dir.join("canic.toml");
+    let root_dir = app_root.join("root");
+    let app_dir = app_root.join("app");
+    let config_path = app_root.join("canic.toml");
     let files = vec![
         config_path.clone(),
         root_dir.join("Cargo.toml"),
@@ -354,9 +354,9 @@ fn plan_scaffold_project_at(
         app_dir.join("src/lib.rs"),
     ];
 
-    Ok(ScaffoldProjectPlan {
+    Ok(ScaffoldAppPlan {
         result: ScaffoldResult {
-            project_dir,
+            app_root,
             root_dir,
             app_dir,
             config_path,
@@ -365,11 +365,11 @@ fn plan_scaffold_project_at(
     })
 }
 
-fn scaffold_project_at(
-    project_root: &Path,
+fn scaffold_app_at(
+    workspace_root: &Path,
     options: &ScaffoldOptions,
 ) -> Result<ScaffoldResult, ScaffoldCommandError> {
-    let plan = plan_scaffold_project_at(project_root, options)?;
+    let plan = plan_scaffold_app_at(workspace_root, options)?;
     let result = &plan.result;
     let root_src_dir = result.root_dir.join("src");
     let app_src_dir = result.app_dir.join("src");
@@ -392,7 +392,7 @@ fn scaffold_project_at(
     })();
 
     if let Err(operation) = write_result {
-        return match rollback_scaffold(&result.project_dir, &[]) {
+        return match rollback_scaffold(&result.app_root, &[]) {
             Ok(()) => Err(operation),
             Err(rollback) => Err(ScaffoldCommandError::Rollback {
                 operation: Box::new(operation),
@@ -408,20 +408,20 @@ fn scaffold_project_at(
 fn scaffold_canister(
     options: &CanisterScaffoldOptions,
 ) -> Result<CanisterScaffoldResult, ScaffoldCommandError> {
-    scaffold_canister_at(&scaffold_project_root()?, options)
+    scaffold_canister_at(&scaffold_workspace_root()?, options)
 }
 
 fn plan_scaffold_canister(
     options: &CanisterScaffoldOptions,
 ) -> Result<CanisterScaffoldPlan, ScaffoldCommandError> {
-    plan_scaffold_canister_at(&scaffold_project_root()?, options)
+    plan_scaffold_canister_at(&scaffold_workspace_root()?, options)
 }
 
 fn plan_scaffold_canister_at(
-    project_root: &Path,
+    workspace_root: &Path,
     options: &CanisterScaffoldOptions,
 ) -> Result<CanisterScaffoldPlan, ScaffoldCommandError> {
-    let config_path = selected_app_config_path(project_root, &options.app)?;
+    let config_path = selected_app_config_path(workspace_root, &options.app)?;
     let app_dir = config_path
         .parent()
         .ok_or_else(|| ScaffoldCommandError::MissingAppDirectory(options.app.clone()))?;
@@ -435,9 +435,9 @@ fn plan_scaffold_canister_at(
     let package = options.role.clone();
     plan_declare_app_role(&config_path, &options.app, &options.role, &package)
         .map_err(|err| ScaffoldCommandError::Usage(err.to_string()))?;
-    let workspace_member = display_workspace_path(project_root, &canister_dir);
-    validate_workspace_member_update(project_root, &workspace_member)?;
-    let workspace_manifest_path = workspace_manifest_path(project_root);
+    let workspace_member = display_workspace_path(workspace_root, &canister_dir);
+    validate_workspace_member_update(workspace_root, &workspace_member)?;
+    let workspace_manifest_path = workspace_manifest_path(workspace_root);
     let package_name = canister_package_name(&options.app, &options.role);
 
     Ok(CanisterScaffoldPlan {
@@ -446,8 +446,8 @@ fn plan_scaffold_canister_at(
             role: options.role.clone(),
             package,
             package_name,
-            canister_dir: display_path(project_root, &canister_dir),
-            config_path: display_path(project_root, &config_path),
+            canister_dir: display_path(workspace_root, &canister_dir),
+            config_path: display_path(workspace_root, &config_path),
         },
         canister_dir,
         config_path,
@@ -457,10 +457,10 @@ fn plan_scaffold_canister_at(
 }
 
 fn scaffold_canister_at(
-    project_root: &Path,
+    workspace_root: &Path,
     options: &CanisterScaffoldOptions,
 ) -> Result<CanisterScaffoldResult, ScaffoldCommandError> {
-    let plan = plan_scaffold_canister_at(project_root, options)?;
+    let plan = plan_scaffold_canister_at(workspace_root, options)?;
     let src_dir = plan.canister_dir.join("src");
     let mut originals = vec![(plan.config_path.clone(), fs::read(&plan.config_path)?)];
     if let Some(manifest_path) = &plan.workspace_manifest_path {
@@ -474,7 +474,7 @@ fn scaffold_canister_at(
         )?;
         write_new_file(&plan.canister_dir.join("build.rs"), CANISTER_BUILD_RS)?;
         write_new_file(&src_dir.join("lib.rs"), CANISTER_LIB_RS)?;
-        append_workspace_member(project_root, &plan.workspace_member)?;
+        append_workspace_member(workspace_root, &plan.workspace_member)?;
         declare_app_role(
             &plan.config_path,
             &options.app,
@@ -749,7 +749,7 @@ fn app_create_command() -> ClapCommand {
             Arg::new("name")
                 .value_name("name")
                 .required(true)
-                .value_parser(clap::builder::ValueParser::new(parse_project_name))
+                .value_parser(clap::builder::ValueParser::new(parse_snake_case_name))
                 .help("Snake-case app name to create"),
         )
         .arg(
@@ -775,14 +775,14 @@ fn scaffold_canister_command() -> ClapCommand {
             Arg::new("app")
                 .value_name("app")
                 .required(true)
-                .value_parser(clap::builder::ValueParser::new(parse_project_name))
+                .value_parser(clap::builder::ValueParser::new(parse_snake_case_name))
                 .help("Config-defined app name"),
         )
         .arg(
             Arg::new("role")
                 .value_name("role")
                 .required(true)
-                .value_parser(clap::builder::ValueParser::new(parse_project_name))
+                .value_parser(clap::builder::ValueParser::new(parse_snake_case_name))
                 .help("Snake-case role name to scaffold"),
         )
         .arg(
@@ -805,10 +805,10 @@ fn scaffold_canister_usage() -> String {
     render_usage(scaffold_canister_command)
 }
 
-fn render_scaffold_project_plan(plan: &ScaffoldProjectPlan) -> String {
+fn render_scaffold_app_plan(plan: &ScaffoldAppPlan) -> String {
     let mut lines = vec![
         "Planned Canic app scaffold:".to_string(),
-        format!("  project: {}", plan.result.project_dir.display()),
+        format!("  source: {}", plan.result.app_root.display()),
         format!("  root: {}", plan.result.root_dir.display()),
         format!("  app: {}", plan.result.app_dir.display()),
         format!("  config: {}", plan.result.config_path.display()),
@@ -845,7 +845,7 @@ fn render_canister_scaffold_plan(plan: &CanisterScaffoldPlan) -> String {
 
 fn confirm_scaffold<R, W>(
     options: &ScaffoldOptions,
-    project_root: &Path,
+    workspace_root: &Path,
     mut reader: R,
     mut writer: W,
 ) -> Result<(), ScaffoldCommandError>
@@ -853,16 +853,16 @@ where
     R: BufRead,
     W: Write,
 {
-    let project_dir = project_root.join("apps").join(&options.name);
-    if project_dir.exists() {
+    let app_root = workspace_root.join("apps").join(&options.name);
+    if app_root.exists() {
         return Err(ScaffoldCommandError::TargetExists(
-            project_dir.display().to_string(),
+            app_root.display().to_string(),
         ));
     }
 
     writeln!(writer, "Create Canic app?")?;
-    writeln!(writer, "  project: {}", options.name)?;
-    writeln!(writer, "  target:  {}", project_dir.display())?;
+    writeln!(writer, "  app:     {}", options.name)?;
+    writeln!(writer, "  target:  {}", app_root.display())?;
     writeln!(writer, "  install: canic install {} <fleet>", options.name)?;
     write!(writer, "Continue? [y/N] ")?;
     writer.flush()?;
@@ -876,15 +876,15 @@ where
     Err(ScaffoldCommandError::Cancelled)
 }
 
-fn scaffold_project_root() -> Result<PathBuf, ScaffoldCommandError> {
-    current_canic_project_root().map_err(Into::into)
+fn scaffold_workspace_root() -> Result<PathBuf, ScaffoldCommandError> {
+    current_canic_workspace_root().map_err(Into::into)
 }
 
 fn selected_app_config_path(
-    project_root: &Path,
+    workspace_root: &Path,
     app: &str,
 ) -> Result<PathBuf, ScaffoldCommandError> {
-    let choices = discover_project_canic_config_choices(project_root)?;
+    let choices = discover_workspace_canic_config_choices(workspace_root)?;
     if choices.is_empty() {
         return Err(ScaffoldCommandError::NoConfigChoices);
     }
@@ -893,9 +893,9 @@ fn selected_app_config_path(
         .ok_or_else(|| ScaffoldCommandError::UnknownApp(app.to_string()))
 }
 
-fn parse_project_name(name: &str) -> Result<String, String> {
+fn parse_snake_case_name(name: &str) -> Result<String, String> {
     if !is_ascii_snake_case(name) {
-        return Err(format!("project name must be snake_case: {name}"));
+        return Err(format!("name must be snake_case: {name}"));
     }
 
     Ok(name.to_string())

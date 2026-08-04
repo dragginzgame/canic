@@ -188,6 +188,44 @@ pub(super) fn plan_fleet_install_session(
     Ok(observed)
 }
 
+/// Recover the finalized release-build authority retained by an existing exact session.
+pub(super) fn recover_fleet_install_session_release_build(
+    root: &Path,
+    canonical_network_id: CanonicalNetworkId,
+    fleet_name: &FleetName,
+    app: &AppId,
+) -> Result<Option<FinalizedReleaseBuild>, FleetInstallSessionError> {
+    let path = session_path(root, canonical_network_id, fleet_name);
+    let _lock = lock_session(&path)?;
+    let Some(session) = load_optional_session(&path)? else {
+        return Ok(None);
+    };
+    if session.fleet_name != *fleet_name
+        || session.fleet.fleet.canonical_network_id != canonical_network_id
+        || session.fleet.app != *app
+    {
+        return Err(FleetInstallSessionError::ConflictingAuthority { path });
+    }
+
+    let finalized = load_finalized_release_build(root, session.release_build_id)?;
+    let ReleaseBuildPlanState::Finalized {
+        release_set_manifest_digest,
+    } = finalized.record.state
+    else {
+        unreachable!("load_finalized_release_build admits only finalized records");
+    };
+    if session.release_build_plan_digest != finalized.plan_hash
+        || session.release_set_manifest_digest != release_set_manifest_digest
+    {
+        return Err(invalid(
+            &path,
+            "session release-build evidence differs from its finalized authority",
+        ));
+    }
+
+    Ok(Some(finalized))
+}
+
 fn session_matches_request(
     session: &FleetInstallSession,
     request: &PlanFleetInstallSessionRequest<'_>,

@@ -33,17 +33,14 @@ use thiserror::Error as ThisError;
 
 const REPLICA_HELP_AFTER: &str = "\
 Examples:
-  canic replica status
   canic replica start
-  canic replica start --background
-  canic replica start --debug
+  canic replica status
   canic replica stop";
 const REPLICA_START_HELP_AFTER: &str = "\
 Examples:
   canic replica start
   canic replica start --background
-  canic replica start --port 8001 --background
-  canic replica start --debug";
+  canic replica start --port 8001 --background";
 const REPLICA_STATUS_HELP_AFTER: &str = "\
 Examples:
   canic replica status

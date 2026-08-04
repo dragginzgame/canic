@@ -35,9 +35,7 @@ Commands:
 
 Examples:
   canic token balance
-  canic token icp balance
   canic token transfer 1.25 aaaaa-aa
-  canic token transfer 1.25 demo/root
   canic token icp transfer 1.25 demo/app";
 
 ///

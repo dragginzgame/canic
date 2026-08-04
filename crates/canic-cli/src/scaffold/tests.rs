@@ -1,7 +1,7 @@
 use super::*;
 use crate::test_support::TempDir;
 
-// Ensure scaffold options parse the project name.
+// Ensure scaffold options parse the App name.
 #[test]
 fn parses_scaffold_options() {
     let options =
@@ -93,7 +93,7 @@ fn confirm_scaffold_rejects_empty_response() {
 
 // Ensure invalid scaffold names are rejected before filesystem writes.
 #[test]
-fn rejects_invalid_project_names() {
+fn rejects_invalid_app_names() {
     for name in ["MyApp", "my-app", "_app", "app_", "app__one", "1app"] {
         std::assert_matches!(
             ScaffoldOptions::parse([OsString::from(name)]),
@@ -122,7 +122,7 @@ fn rejects_invalid_canister_scaffold_role_names() {
 
 // Ensure scaffold writes the expected minimal root and app files.
 #[test]
-fn scaffold_project_writes_root_and_app_files() {
+fn scaffold_app_writes_root_and_app_files() {
     let root = TempDir::new("canic-cli-scaffold");
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
@@ -130,7 +130,7 @@ fn scaffold_project_writes_root_and_app_files() {
         dry_run: false,
     };
 
-    let result = scaffold_project_at(&root, &options).expect("scaffold project");
+    let result = scaffold_app_at(&root, &options).expect("scaffold app");
     let config = fs::read_to_string(&result.config_path).expect("read config");
     let root_lib = fs::read_to_string(result.root_dir.join("src/lib.rs")).expect("read root lib");
     let root_manifest =
@@ -175,7 +175,7 @@ fn scaffold_project_writes_root_and_app_files() {
 
 // Ensure app scaffold dry-run plans files without creating them.
 #[test]
-fn scaffold_project_plan_does_not_write_files() {
+fn scaffold_app_plan_does_not_write_files() {
     let root = TempDir::new("canic-cli-scaffold-plan");
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
@@ -183,14 +183,14 @@ fn scaffold_project_plan_does_not_write_files() {
         dry_run: true,
     };
 
-    let plan = plan_scaffold_project_at(&root, &options).expect("plan scaffold");
-    let text = render_scaffold_project_plan(&plan);
+    let plan = plan_scaffold_app_at(&root, &options).expect("plan scaffold");
+    let text = render_scaffold_app_plan(&plan);
 
     assert!(text.contains("Planned Canic app scaffold:"));
     assert!(text.contains("dry_run: true"));
     assert!(text.contains("files_changed: 0"));
     assert!(text.contains("canic.toml"));
-    assert!(!plan.result.project_dir.exists());
+    assert!(!plan.result.app_root.exists());
 }
 
 // Ensure canister scaffold writes a declared-only canister role under one app.
@@ -450,9 +450,9 @@ fn scaffold_usage_lists_mutation_notes() {
     assert!(text.contains("Use --dry-run"));
 }
 
-// Ensure scaffold refuses to overwrite an existing project directory.
+// Ensure scaffold refuses to overwrite an existing App directory.
 #[test]
-fn scaffold_project_rejects_existing_target() {
+fn scaffold_app_rejects_existing_target() {
     let root = TempDir::new("canic-cli-scaffold-existing");
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
@@ -461,7 +461,7 @@ fn scaffold_project_rejects_existing_target() {
     };
     fs::create_dir_all(root.join("apps/my_app")).expect("create existing target");
 
-    let err = scaffold_project_at(&root, &options).expect_err("existing scaffold should fail");
+    let err = scaffold_app_at(&root, &options).expect_err("existing scaffold should fail");
 
     std::assert_matches!(err, ScaffoldCommandError::TargetExists(_));
 }

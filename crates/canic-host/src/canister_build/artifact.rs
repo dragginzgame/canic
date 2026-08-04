@@ -10,7 +10,7 @@ use crate::{
     bootstrap_coordinator::build_bootstrap_fleet_coordinator_artifact,
     bootstrap_store::build_bootstrap_wasm_store_artifact,
     cargo_command,
-    release_set::{AppConfigSnapshot, artifact_root_path},
+    release_set::AppConfigSnapshot,
     remove_optional_file,
     role_contract::{
         PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation, finding_detail,
@@ -145,7 +145,7 @@ pub fn resolve_canister_artifact_build_spec(
     };
     require_declared_role_contract(config, &evidence)?;
 
-    let artifact_root = artifact_root_path(&context.icp_root, "local").join(canister_name);
+    let artifact_root = context.artifact_root().join(canister_name);
     Ok(CanisterArtifactBuildSpec {
         role: canister_name.to_string(),
         package_name: evidence.role_package_name,

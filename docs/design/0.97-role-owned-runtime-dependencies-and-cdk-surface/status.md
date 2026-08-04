@@ -133,7 +133,7 @@ refill baseline/deletion set.
 - Strict all-target Clippy passes for `canic-core`, `canic-host`, and
   `canic-cli`; the delegation-root and built-in Wasm-store packages check with
   their semantic facade and canonical feature declarations.
-- Formatting and diff hygiene pass. Repository-root project Medic retains the
+- Formatting and diff hygiene pass. Workspace Medic retains the
   separately existing cross-fleet role-name ambiguity in state-manifest
   discovery; it reports no role dependency-shape finding.
 

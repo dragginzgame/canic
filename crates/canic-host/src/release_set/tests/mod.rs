@@ -10,7 +10,7 @@ use super::config::{
 };
 use super::{
     ArtifactRootError, app_sources_root, artifact_root_path, config_path, plan_attach_app_role,
-    plan_declare_app_role, plan_rename_app_role, resolve_artifact_root,
+    plan_declare_app_role, plan_rename_app_role, resolve_artifact_root, resolve_artifact_root_path,
     root_release_set_manifest_path,
 };
 use crate::test_support::temp_dir;

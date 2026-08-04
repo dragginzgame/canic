@@ -34,12 +34,16 @@ pub(in crate::deployment_truth::tests) fn write_artifact(
     role: &str,
     bytes: &[u8],
 ) {
-    let path = icp_root
-        .join(".icp")
-        .join("local")
-        .join("canisters")
-        .join(role)
-        .join(format!("{role}.wasm.gz"));
+    let artifact_root = icp_root.join(".icp/local/canisters");
+    write_artifact_at_root(&artifact_root, role, bytes);
+}
+
+pub(in crate::deployment_truth::tests) fn write_artifact_at_root(
+    artifact_root: &Path,
+    role: &str,
+    bytes: &[u8],
+) {
+    let path = artifact_root.join(role).join(format!("{role}.wasm.gz"));
     fs::create_dir_all(path.parent().expect("artifact parent")).expect("create artifact dir");
     fs::write(path, bytes).expect("write artifact");
 }

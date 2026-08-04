@@ -14,8 +14,8 @@ use canic_host::{
     adoption::AdoptionReportError,
     icp_config::{IcpConfigError, IcpProjectConfigReport, inspect_canic_icp_yaml},
     install_root::{
-        ConfigDiscoveryError, current_canic_project_root, discover_current_canic_config_choices,
-        project_app_roots, select_discovered_app_config_path,
+        ConfigDiscoveryError, current_canic_workspace_root, discover_current_canic_config_choices,
+        select_discovered_app_config_path, workspace_app_roots,
     },
     release_set::{
         AppConfigError, AppConfigSnapshot, attach_app_role, declare_app_role,
@@ -88,7 +88,7 @@ pub enum AppCommandError {
     #[error(transparent)]
     IcpConfig(#[from] IcpConfigError),
 
-    #[error("failed to discover Canic project configs: {0}")]
+    #[error("failed to discover Canic workspace App configs: {0}")]
     ConfigDiscovery(#[from] ConfigDiscoveryError),
 
     #[error(transparent)]
@@ -119,12 +119,12 @@ where
             Ok(())
         }
         Some((command, args)) => match command.as_str() {
-            "create" => run_create(args),
+            "adoption" => run_adoption(args),
             "check" => run_check(args),
+            "config" => run_config(args),
+            "create" => run_create(args),
             "delete" => run_delete(args),
             "list" => run_list(args),
-            "config" => run_config(args),
-            "adoption" => run_adoption(args),
             "role" => run_role(args),
             _ => unreachable!("app dispatch command only defines known commands"),
         },
@@ -187,11 +187,11 @@ where
             Ok(())
         }
         Some((command, args)) => match command.as_str() {
-            "declare" => run_role_declare(args),
             "attach" => run_role_attach(args),
-            "rename" => run_role_rename(args),
-            "list" => run_role_list(args),
+            "declare" => run_role_declare(args),
             "inspect" => run_role_inspect(args),
+            "list" => run_role_list(args),
+            "rename" => run_role_rename(args),
             _ => unreachable!("app role dispatch command only defines known commands"),
         },
     }
@@ -208,20 +208,20 @@ where
 
     let options = RoleDeclareOptions::parse(args)?;
     let config_path = selected_app_config_path(&options.app)?;
-    let project_root = current_canic_project_root()?;
+    let workspace_root = current_canic_workspace_root()?;
     if options.dry_run {
         let declared =
             plan_declare_app_role(&config_path, &options.app, &options.role, &options.package)?;
         println!(
             "{}",
-            render_planned_declared_role(&declared, &project_root, &config_path)
+            render_planned_declared_role(&declared, &workspace_root, &config_path)
         );
     } else {
         let declared =
             declare_app_role(&config_path, &options.app, &options.role, &options.package)?;
         println!(
             "{}",
-            render_declared_role(&declared, &project_root, &config_path)
+            render_declared_role(&declared, &workspace_root, &config_path)
         );
     }
     Ok(())
@@ -238,7 +238,7 @@ where
 
     let options = RoleAttachOptions::parse(args)?;
     let config_path = selected_app_config_path(&options.app)?;
-    let project_root = current_canic_project_root()?;
+    let workspace_root = current_canic_workspace_root()?;
     if options.dry_run {
         let attached = plan_attach_app_role(
             &config_path,
@@ -249,7 +249,7 @@ where
         )?;
         println!(
             "{}",
-            render_planned_attached_role(&attached, &project_root, &config_path)
+            render_planned_attached_role(&attached, &workspace_root, &config_path)
         );
     } else {
         let attached = attach_app_role(
@@ -261,7 +261,7 @@ where
         )?;
         println!(
             "{}",
-            render_attached_role(&attached, &project_root, &config_path)
+            render_attached_role(&attached, &workspace_root, &config_path)
         );
     }
     Ok(())
@@ -278,7 +278,7 @@ where
 
     let options = RoleRenameOptions::parse(args)?;
     let config_path = selected_app_config_path(&options.app)?;
-    let project_root = current_canic_project_root()?;
+    let workspace_root = current_canic_workspace_root()?;
     if options.dry_run {
         let renamed = plan_rename_app_role(
             &config_path,
@@ -288,7 +288,7 @@ where
         )?;
         println!(
             "{}",
-            render_planned_renamed_role(&renamed, &project_root, &config_path)
+            render_planned_renamed_role(&renamed, &workspace_root, &config_path)
         );
     } else {
         let renamed = rename_app_role(
@@ -299,7 +299,7 @@ where
         )?;
         println!(
             "{}",
-            render_renamed_role(&renamed, &project_root, &config_path)
+            render_renamed_role(&renamed, &workspace_root, &config_path)
         );
     }
     Ok(())
@@ -381,14 +381,14 @@ where
     }
 
     let options = AppOptions::parse(args)?;
-    let project_root = current_canic_project_root()?;
+    let workspace_root = current_canic_workspace_root()?;
     let choices = discover_config_choices()?;
     if choices.is_empty() {
         return Err(AppCommandError::NoConfigChoices);
     }
     println!(
         "{}",
-        render_app_list(&project_root, &choices, &options.environment)
+        render_app_list(&workspace_root, &choices, &options.environment)
     );
     Ok(())
 }
@@ -410,12 +410,12 @@ where
     }
 
     let options = DeleteAppOptions::parse(args)?;
-    let project_root = current_canic_project_root()?;
-    let target = delete_target_dir(&project_root, &options.app)?;
+    let workspace_root = current_canic_workspace_root()?;
+    let target = delete_target_dir(&workspace_root, &options.app)?;
     if options.dry_run {
         println!(
             "{}",
-            render_planned_delete(&project_root, &options.app, &target)
+            render_planned_delete(&workspace_root, &options.app, &target)
         );
         return Ok(());
     }
@@ -426,7 +426,7 @@ where
     println!("  app: {}", options.app);
     println!(
         "  path:  {}",
-        display_workspace_path(&project_root, &target)
+        display_workspace_path(&workspace_root, &target)
     );
     Ok(())
 }
@@ -489,7 +489,7 @@ fn is_safe_delete_target(workspace_root: &Path, target: &Path) -> bool {
     let Ok(target) = target.canonicalize() else {
         return false;
     };
-    project_app_roots(workspace_root)
+    workspace_app_roots(workspace_root)
         .into_iter()
         .filter_map(|root| root.canonicalize().ok())
         .any(|root| target != root && target.starts_with(root))
@@ -523,7 +523,7 @@ where
 }
 
 fn print_config_report(report: &IcpProjectConfigReport) {
-    println!("Checked ICP project config:");
+    println!("Checked ICP config:");
     println!("  path: {}", report.path.display());
     println!("  canisters: {}", report.canisters.len());
     println!("  environments: {}", report.environments.len());

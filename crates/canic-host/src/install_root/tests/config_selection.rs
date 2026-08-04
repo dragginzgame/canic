@@ -2,7 +2,7 @@ use super::*;
 use crate::install_root::ConfigDiscoveryError;
 
 #[test]
-fn install_config_defaults_to_project_config_when_present() {
+fn install_config_defaults_to_workspace_config_when_present() {
     let root = temp_dir("canic-install-config-default");
     let config = root.join("apps/canic.toml");
     fs::create_dir_all(config.parent().expect("config parent")).expect("create parent");
@@ -25,7 +25,7 @@ fn install_config_accepts_explicit_path() {
 }
 
 #[test]
-fn install_config_error_lists_choices_when_project_default_missing() {
+fn install_config_error_lists_choices_when_workspace_default_missing() {
     let root = temp_dir("canic-install-config-choices");
     let demo = root.join("apps/demo/canic.toml");
     let test = root.join("canisters/test/runtime_probe/canic.toml");
@@ -392,7 +392,7 @@ fn discovered_workspace_config_choices_accept_root_apps() {
     fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
     fs::write(&config, "[app]\nname = \"toko\"\n").expect("write config");
 
-    let choices = discover_project_canic_config_choices(&root).expect("discover choices");
+    let choices = discover_workspace_canic_config_choices(&root).expect("discover choices");
 
     assert_eq!(choices, vec![config.clone()]);
     assert_eq!(

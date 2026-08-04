@@ -1,0 +1,40 @@
+# One-Subnet IC mainnet input for the reusable Playground App.
+schema_version = 1
+
+[coordinator.subnet]
+kind = "explicit"
+subnet = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae"
+
+[coordinator.creation_funding]
+kind = "cycles"
+cycles = "3T"
+
+[[fleet_subnet_roots]]
+placement_subnet = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae"
+
+[fleet_subnet_roots.component_admissions]
+playground = 1
+
+[fleet_subnet_roots.canister_pool]
+minimum_size = 5
+maximum_size = 5
+canister_cycles = "500B"
+imports = []
+
+[fleet_subnet_roots.limits]
+maximum_component_instances = 1
+maximum_managed_canisters = 12
+maximum_registry_bytes = 16777216
+maximum_wasm_store_bytes = 40000000
+
+[fleet_subnet_roots.limits.cycles_funding]
+window_secs = 3600
+maximum_cycles = "15T"
+
+[fleet_subnet_roots.root_creation_funding]
+kind = "cycles"
+cycles = "20T"
+
+[fleet_subnet_roots.wasm_store_creation_funding]
+kind = "cycles"
+cycles = "3T"

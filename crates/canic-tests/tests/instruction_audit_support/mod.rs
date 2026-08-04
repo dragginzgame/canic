@@ -35,7 +35,7 @@ use canic_testing_internal::pic::{
     managed_test_init_identity, role_grant, setup_active_component_registry,
 };
 use canic_tests::root::{self, RootSetupProfile, harness::setup_root};
-use ic_testkit::pic::Pic;
+use ic_testkit::pic::{PocketIc, prelude::*};
 use serde::Serialize;
 use std::{
     collections::BTreeSet,

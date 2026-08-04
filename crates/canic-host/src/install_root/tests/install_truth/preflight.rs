@@ -107,6 +107,21 @@ fn install_truth_execution_preflight_receipt_records_ready_state() {
 }
 
 #[test]
+fn install_execution_context_records_the_exact_release_artifact_root() {
+    let root = temp_dir("canic-install-execution-release-artifact-root");
+    fs::create_dir_all(&root).expect("create project root");
+    let artifact_root = root.join(".canic/release-builds/exact/artifacts");
+
+    let context = current_install_execution_context_at_root(&root, &root, &artifact_root);
+
+    assert_eq!(
+        context.artifact_roots,
+        vec![artifact_root.display().to_string()]
+    );
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
 fn install_truth_execution_preflight_blocks_without_ambiguous_receipt_persistence() {
     let (root, mut check) =
         demo_install_deployment_truth_check("canic-install-truth-execution-preflight-blocked");

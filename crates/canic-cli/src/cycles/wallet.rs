@@ -28,8 +28,8 @@ enum WalletCommandKind {
     Balance,
     Convert,
     Mint,
-    Transfer,
     Topup,
+    Transfer,
 }
 
 impl WalletCommandKind {
@@ -38,8 +38,8 @@ impl WalletCommandKind {
             Self::Balance => "balance",
             Self::Convert => "convert",
             Self::Mint => "mint",
-            Self::Transfer => "transfer",
             Self::Topup => "topup",
+            Self::Transfer => "transfer",
         }
     }
 
@@ -48,8 +48,8 @@ impl WalletCommandKind {
             b"balance" => Some(Self::Balance),
             b"convert" => Some(Self::Convert),
             b"mint" => Some(Self::Mint),
-            b"transfer" => Some(Self::Transfer),
             b"topup" => Some(Self::Topup),
+            b"transfer" => Some(Self::Transfer),
             _ => None,
         }
     }
@@ -59,8 +59,8 @@ const WALLET_COMMANDS: &[WalletCommandKind] = &[
     WalletCommandKind::Balance,
     WalletCommandKind::Convert,
     WalletCommandKind::Mint,
-    WalletCommandKind::Transfer,
     WalletCommandKind::Topup,
+    WalletCommandKind::Transfer,
 ];
 
 const AMOUNT_ARG: &str = "amount";
@@ -86,17 +86,14 @@ Commands:
   balance   Display the selected identity cycles balance
   convert   Convert ICP held by an installed Fleet Subnet Root to cycles for that root
   mint      Convert ICP to cycles
-  transfer  Transfer cycles to a principal or Canic Fleet target
   topup     Top up an installed Fleet canister
+  transfer  Transfer cycles to a principal or Canic Fleet target
   help      Print this message or the help of the given subcommand(s)
 
 Examples:
   canic cycles balance
-  canic cycles transfer 4T aaaaa-aa
-  canic cycles transfer 4T demo/root
-  canic cycles transfer 4T demo/app
-  canic cycles convert demo --icp-e8s 100000000 --dry-run
-  canic cycles topup demo app 4T";
+  canic cycles topup demo app 4T
+  canic cycles transfer 4T demo/app";
 
 ///
 /// BalanceOptions
@@ -193,19 +190,19 @@ pub(super) fn run_cycles_command(
             let options = MintOptions::parse(args)?;
             run_mint(&options)
         }
-        WalletCommandKind::Transfer => {
-            if print_help_or_version(&args, transfer_usage, version_text()) {
-                return Ok(());
-            }
-            let options = TransferOptions::parse(args)?;
-            run_transfer(&options)
-        }
         WalletCommandKind::Topup => {
             if print_help_or_version(&args, topup_usage, version_text()) {
                 return Ok(());
             }
             let options = TopupOptions::parse(args)?;
             run_topup(&options)
+        }
+        WalletCommandKind::Transfer => {
+            if print_help_or_version(&args, transfer_usage, version_text()) {
+                return Ok(());
+            }
+            let options = TransferOptions::parse(args)?;
+            run_transfer(&options)
         }
     }
 }

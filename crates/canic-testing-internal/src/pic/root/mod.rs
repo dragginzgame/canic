@@ -2,7 +2,7 @@
 
 use candid::Principal;
 use canic::ids::{BuildNetwork, CanisterRole};
-use ic_testkit::pic::Pic;
+use ic_testkit::pic::PocketIc;
 use std::{collections::HashMap, io::Write, path::PathBuf, time::Instant};
 
 use super::CanicWasmBuildProfile;
@@ -71,6 +71,6 @@ fn progress_elapsed(spec: &RootBaselineSpec<'_>, phase: &str, started_at: Instan
 ///
 
 pub struct InitializedRootTopology {
-    pub pic: Pic,
+    pub pic: PocketIc,
     pub metadata: RootBaselineMetadata,
 }

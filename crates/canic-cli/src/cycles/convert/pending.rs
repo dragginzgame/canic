@@ -394,7 +394,7 @@ mod tests {
     use std::sync::{Arc, Barrier};
 
     #[test]
-    fn pending_log_path_is_project_local() {
+    fn pending_log_path_is_workspace_local() {
         assert_eq!(
             pending_operation_log_path(Path::new("/tmp/canic")),
             PathBuf::from("/tmp/canic/.canic/operations/pending.json")

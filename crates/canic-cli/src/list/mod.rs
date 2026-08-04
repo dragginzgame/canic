@@ -57,7 +57,7 @@ pub enum ListCommandError {
     #[error(transparent)]
     AppConfig(#[from] AppConfigError),
 
-    #[error("failed to discover Canic project configs: {0}")]
+    #[error("failed to discover Canic workspace App configs: {0}")]
     ConfigDiscovery(#[from] ConfigDiscoveryError),
 
     #[error("app {0} is not declared by any config under apps; run `canic app list`")]

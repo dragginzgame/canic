@@ -131,7 +131,7 @@ fn install_usage_explains_app_config() {
     assert!(text.contains("--fleet-input"));
     assert!(normalized.contains("separate operator-owned placement"));
     assert!(normalized.contains("fresh local creation"));
-    assert!(normalized.contains("project upgrade flow"));
+    assert!(normalized.contains("existing-Fleet update flow"));
     assert!(normalized.contains("canic medic fleet"));
     assert!(text.contains("[app]"));
     assert!(text.contains("name = \"test\""));
@@ -152,7 +152,7 @@ fn install_existing_deployment_errors_get_action_hint() {
 
     assert!(message.contains("canic --environment academic info list demo"));
     assert!(message.contains("canic --environment academic medic fleet demo"));
-    assert!(message.contains("project upgrade flow"));
+    assert!(message.contains("existing-Fleet update flow"));
 
     std::assert_matches!(
         install_error_with_context(

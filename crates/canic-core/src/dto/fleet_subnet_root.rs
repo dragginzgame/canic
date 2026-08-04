@@ -15,13 +15,13 @@ use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 
 /// Execution balance retained while a removed root completes its deletion handoff.
-pub const FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES: u128 = 100_000_000_000;
+pub const FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES: u128 = 300_000_000_000;
 
-/// Margin for management-call refunds that become visible after a cycle transfer returns.
-pub const FLEET_SUBNET_ROOT_DELETION_CALL_REFUND_HEADROOM_CYCLES: u128 = 50_000_000_000;
+/// Margin for call-context refunds that become visible after a cycle transfer returns.
+pub const FLEET_SUBNET_ROOT_DELETION_CALL_REFUND_HEADROOM_CYCLES: u128 = 150_000_000_000;
 
 /// Fail-closed ceiling for cycles intentionally left on a root that will be deleted.
-pub const FLEET_SUBNET_ROOT_DELETION_MAXIMUM_RETAINED_CYCLES: u128 = 1_000_000_000_000;
+pub const FLEET_SUBNET_ROOT_DELETION_MAXIMUM_RETAINED_CYCLES: u128 = 1_500_000_000_000;
 
 ///
 /// FleetSubnetRootAuthority

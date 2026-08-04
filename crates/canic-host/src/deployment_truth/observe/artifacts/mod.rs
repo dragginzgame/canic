@@ -2,7 +2,7 @@ use super::super::*;
 use super::shared::observation_gap;
 use crate::release_set::{
     AppConfigSnapshot, ROOT_RELEASE_SET_MANIFEST_FILE, artifact_root_path,
-    load_root_release_set_manifest, resolve_artifact_root,
+    load_root_release_set_manifest, resolve_artifact_root_path,
 };
 use std::{
     collections::BTreeMap,
@@ -27,6 +27,14 @@ pub struct LocalArtifactManifestRequest {
 pub fn collect_local_role_artifact_manifest(
     request: &LocalArtifactManifestRequest,
 ) -> RoleArtifactManifestV1 {
+    let artifact_root = artifact_root_path(&request.icp_root, &request.artifact_environment);
+    collect_local_role_artifact_manifest_at_root(request, &artifact_root)
+}
+
+pub fn collect_local_role_artifact_manifest_at_root(
+    request: &LocalArtifactManifestRequest,
+    projected_artifact_root: &Path,
+) -> RoleArtifactManifestV1 {
     let config = deployment_config_path(&request.workspace_root, request.config_path.as_deref());
     let mut unresolved_artifacts = Vec::new();
     let (app, roles) = match AppConfigSnapshot::load(&config) {
@@ -50,22 +58,20 @@ pub fn collect_local_role_artifact_manifest(
             ("unknown".to_string(), Vec::new())
         }
     };
-    let projected_artifact_root =
-        artifact_root_path(&request.icp_root, &request.artifact_environment);
-    let artifact_root =
-        match resolve_artifact_root(&request.icp_root, &request.artifact_environment) {
-            Ok(root) => Some(root),
-            Err(err) => {
-                unresolved_artifacts.push(observation_gap(
-                    "local_artifacts.root",
-                    format!(
-                        "could not resolve artifact root for environment {}: {err}",
-                        request.artifact_environment
-                    ),
-                ));
-                None
-            }
-        };
+    let artifact_root = match resolve_artifact_root_path(&request.icp_root, projected_artifact_root)
+    {
+        Ok(root) => Some(root),
+        Err(err) => {
+            unresolved_artifacts.push(observation_gap(
+                "local_artifacts.root",
+                format!(
+                    "could not resolve exact artifact root {}: {err}",
+                    projected_artifact_root.display()
+                ),
+            ));
+            None
+        }
+    };
     let release_entries = artifact_root
         .as_ref()
         .and_then(|root| load_release_entries(root, &mut unresolved_artifacts));
@@ -73,7 +79,7 @@ pub fn collect_local_role_artifact_manifest(
         .iter()
         .map(|role| {
             role_artifact_from_local_files(
-                &projected_artifact_root,
+                projected_artifact_root,
                 role,
                 release_entries.as_ref(),
                 &mut unresolved_artifacts,
@@ -93,17 +99,18 @@ pub fn collect_local_role_artifact_manifest(
 
 pub(super) fn collect_observed_artifacts(
     icp_root: &Path,
-    artifact_environment: &str,
+    projected_artifact_root: &Path,
     roles: &[String],
     unresolved_observations: &mut Vec<DeploymentObservationGapV1>,
 ) -> Vec<ObservedArtifactV1> {
-    let artifact_root = match resolve_artifact_root(icp_root, artifact_environment) {
+    let artifact_root = match resolve_artifact_root_path(icp_root, projected_artifact_root) {
         Ok(root) => root,
         Err(err) => {
             unresolved_observations.push(observation_gap(
                 "local_artifacts.root",
                 format!(
-                    "could not resolve artifact root for environment {artifact_environment}: {err}"
+                    "could not resolve exact artifact root {}: {err}",
+                    projected_artifact_root.display()
                 ),
             ));
             return Vec::new();
@@ -176,10 +183,10 @@ fn load_release_entries(
 
 pub(in crate::deployment_truth) fn release_set_manifest_digest(
     icp_root: &Path,
-    artifact_environment: &str,
+    projected_artifact_root: &Path,
     gaps: &mut Vec<DeploymentObservationGapV1>,
 ) -> Option<String> {
-    let artifact_root = match resolve_artifact_root(icp_root, artifact_environment) {
+    let artifact_root = match resolve_artifact_root_path(icp_root, projected_artifact_root) {
         Ok(root) => root,
         Err(err) => {
             gaps.push(observation_gap(
@@ -299,10 +306,10 @@ pub(super) fn observe_config_sha256(
 
 pub(super) fn observe_deployment_manifest_digest(
     icp_root: &Path,
-    artifact_environment: &str,
+    projected_artifact_root: &Path,
     gaps: &mut Vec<DeploymentObservationGapV1>,
 ) -> Option<String> {
-    release_set_manifest_digest(icp_root, artifact_environment, gaps)
+    release_set_manifest_digest(icp_root, projected_artifact_root, gaps)
 }
 
 pub(super) fn observe_canonical_runtime_config_digest(

@@ -38,9 +38,8 @@ Examples:
   canic deploy plan demo-local --app demo
   canic deploy plan demo-local --app demo --json
   canic deploy plan demo-local --app demo --out deployment-plan.json
-  canic deploy plan demo-local --app demo --config apps/demo/canic.toml
 
-Builds a deterministic planning report from local project config. The command
+Builds a deterministic planning report from local App and workspace config. The command
 does not install, upgrade, create canisters, write deployment truth, update
 installed Fleet catalog records, or call live IC state. Future-apply preview rows
 are proposed operation labels only; they are not executed and are not apply

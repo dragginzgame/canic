@@ -11,30 +11,8 @@ use std::ffi::OsString;
 const TOP_LEVEL_HELP_TEMPLATE: &str = "{name} {version}\n{about-with-newline}\n{usage-heading} {usage}\n\n{before-help}Options:\n{options}{after-help}\n";
 const COLOR_RESET: &str = "\x1b[0m";
 const COLOR_HEADING: &str = "\x1b[1m";
-const COLOR_GROUP: &str = "\x1b[38;5;245m";
 const COLOR_COMMAND: &str = "\x1b[38;5;109m";
 const COLOR_TIP: &str = "\x1b[38;5;245m";
-
-/// Top-level help grouping for commands.
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum CommandScope {
-    Project,
-    Deployment,
-    IcpWallet,
-    BackupRestore,
-}
-
-impl CommandScope {
-    const fn heading(self) -> &'static str {
-        match self {
-            Self::Project => "Project commands",
-            Self::Deployment => "Deployment commands",
-            Self::IcpWallet => "ICP wallet commands",
-            Self::BackupRestore => "Backup and restore commands",
-        }
-    }
-}
 
 /// One top-level command shown in help and accepted by dispatch.
 
@@ -42,104 +20,84 @@ impl CommandScope {
 pub(super) struct CommandSpec {
     pub(super) name: &'static str,
     about: &'static str,
-    scope: CommandScope,
 }
 
 pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     CommandSpec {
-        name: "status",
-        about: "Show quick Canic project status",
-        scope: CommandScope::Project,
-    },
-    CommandSpec {
-        name: "medic",
-        about: "Diagnose project and deployment preflight readiness",
-        scope: CommandScope::Project,
-    },
-    CommandSpec {
-        name: "state",
-        about: "Audit declared Canic state metadata",
-        scope: CommandScope::Project,
-    },
-    CommandSpec {
         name: "app",
         about: "Manage Canic source apps and roles",
-        scope: CommandScope::Project,
-    },
-    CommandSpec {
-        name: "scaffold",
-        about: "Scaffold Canic source files",
-        scope: CommandScope::Project,
-    },
-    CommandSpec {
-        name: "replica",
-        about: "Manage the local ICP replica",
-        scope: CommandScope::Project,
-    },
-    CommandSpec {
-        name: "network",
-        about: "Enroll canonical network trust identities",
-        scope: CommandScope::Project,
-    },
-    CommandSpec {
-        name: "install",
-        about: "Install and bootstrap a Canic fleet",
-        scope: CommandScope::Deployment,
-    },
-    CommandSpec {
-        name: "inspect",
-        about: "Inspect runtime-observed status for one deployed canister",
-        scope: CommandScope::Deployment,
-    },
-    CommandSpec {
-        name: "blob-storage",
-        about: "Inspect and provision blob-storage billing",
-        scope: CommandScope::Deployment,
     },
     CommandSpec {
         name: "auth",
         about: "Run delegated-auth operator workflows",
-        scope: CommandScope::Deployment,
-    },
-    CommandSpec {
-        name: "build",
-        about: "Build one Canic canister artifact",
-        scope: CommandScope::Deployment,
-    },
-    CommandSpec {
-        name: "deploy",
-        about: "Plan and check deployment truth before mutation",
-        scope: CommandScope::Deployment,
-    },
-    CommandSpec {
-        name: "evidence",
-        about: "Evaluate stable evidence envelopes",
-        scope: CommandScope::Deployment,
-    },
-    CommandSpec {
-        name: "cycles",
-        about: "Wrap ICP cycles balance and transfer commands",
-        scope: CommandScope::IcpWallet,
-    },
-    CommandSpec {
-        name: "token",
-        about: "Wrap ICP token balance and transfer commands",
-        scope: CommandScope::IcpWallet,
-    },
-    CommandSpec {
-        name: "info",
-        about: "Query deployed canister information",
-        scope: CommandScope::Deployment,
     },
     CommandSpec {
         name: "backup",
         about: "Plan, inspect, and verify backups",
-        scope: CommandScope::BackupRestore,
+    },
+    CommandSpec {
+        name: "blob-storage",
+        about: "Inspect and provision blob-storage billing",
+    },
+    CommandSpec {
+        name: "build",
+        about: "Build one Canic canister artifact",
+    },
+    CommandSpec {
+        name: "cycles",
+        about: "Wrap ICP cycles balance and transfer commands",
+    },
+    CommandSpec {
+        name: "deploy",
+        about: "Plan and check deployment truth before mutation",
+    },
+    CommandSpec {
+        name: "evidence",
+        about: "Evaluate stable evidence envelopes",
+    },
+    CommandSpec {
+        name: "info",
+        about: "Query deployed canister information",
+    },
+    CommandSpec {
+        name: "inspect",
+        about: "Inspect runtime-observed status for one deployed canister",
+    },
+    CommandSpec {
+        name: "install",
+        about: "Install and bootstrap a Canic fleet",
+    },
+    CommandSpec {
+        name: "medic",
+        about: "Diagnose workspace and Fleet preflight readiness",
+    },
+    CommandSpec {
+        name: "network",
+        about: "Enroll canonical network trust identities",
+    },
+    CommandSpec {
+        name: "replica",
+        about: "Manage the local ICP replica",
     },
     CommandSpec {
         name: "restore",
         about: "Plan or run snapshot restores",
-        scope: CommandScope::BackupRestore,
+    },
+    CommandSpec {
+        name: "scaffold",
+        about: "Scaffold Canic source files",
+    },
+    CommandSpec {
+        name: "state",
+        about: "Audit declared Canic state metadata",
+    },
+    CommandSpec {
+        name: "status",
+        about: "Show quick local workspace status",
+    },
+    CommandSpec {
+        name: "token",
+        about: "Wrap ICP token balance and transfer commands",
     },
 ];
 
@@ -186,7 +144,7 @@ pub fn print_help_or_version(
 pub fn top_level_command() -> Command {
     let command = Command::new("canic")
         .version(env!("CARGO_PKG_VERSION"))
-        .about("Operator CLI for Canic projects, deployments, backups, and ICP wallet workflows")
+        .about("Operator CLI for Canic Apps, Fleets, backups, and ICP wallet workflows")
         .disable_version_flag(true)
         .arg(
             Arg::new("version")
@@ -199,7 +157,7 @@ pub fn top_level_command() -> Command {
         .arg(environment_arg().global(true))
         .subcommand_help_heading("Commands")
         .help_template(TOP_LEVEL_HELP_TEMPLATE)
-        .before_help(grouped_command_section(COMMAND_SPECS).join("\n"))
+        .before_help(command_section(COMMAND_SPECS).join("\n"))
         .after_help("Run `canic <command> --help` for command-specific help.");
 
     COMMAND_SPECS.iter().fold(command, |command, spec| {
@@ -219,7 +177,7 @@ pub fn usage() -> String {
         String::new(),
         color(COLOR_HEADING, "Commands:"),
     ];
-    lines.extend(grouped_command_section(COMMAND_SPECS));
+    lines.extend(command_section(COMMAND_SPECS));
     lines.extend([
         String::new(),
         color(COLOR_HEADING, "Options:"),
@@ -238,36 +196,14 @@ pub fn usage() -> String {
     lines.join("\n")
 }
 
-fn grouped_command_section(specs: &[CommandSpec]) -> Vec<String> {
-    let mut lines = Vec::new();
-    let scopes = [
-        CommandScope::Project,
-        CommandScope::Deployment,
-        CommandScope::IcpWallet,
-        CommandScope::BackupRestore,
-    ];
-    for scope in scopes {
-        let scope_specs = specs
-            .iter()
-            .filter(|spec| spec.scope == scope)
-            .collect::<Vec<_>>();
-        if scope_specs.is_empty() {
-            continue;
-        }
-        if !lines.is_empty() {
-            lines.push(String::new());
-        }
-        lines.push(format!("  {}", color(COLOR_GROUP, scope.heading())));
-        for spec in scope_specs {
+fn command_section(specs: &[CommandSpec]) -> Vec<String> {
+    specs
+        .iter()
+        .map(|spec| {
             let command = format!("{:<12}", spec.name);
-            lines.push(format!(
-                "    {} {}",
-                color(COLOR_COMMAND, &command),
-                spec.about
-            ));
-        }
-    }
-    lines
+            format!("  {} {}", color(COLOR_COMMAND, &command), spec.about)
+        })
+        .collect()
 }
 
 fn color(code: &str, text: &str) -> String {
@@ -281,13 +217,12 @@ fn color(code: &str, text: &str) -> String {
 mod tests {
     use super::*;
 
-    // Ensure top-level usage keeps the intended color groups.
+    // Ensure top-level usage keeps the intended help colors.
     #[test]
     fn usage_contains_help_colors() {
         let text = usage();
 
         assert!(text.contains(COLOR_HEADING));
-        assert!(text.contains(COLOR_GROUP));
         assert!(text.contains(COLOR_COMMAND));
     }
 

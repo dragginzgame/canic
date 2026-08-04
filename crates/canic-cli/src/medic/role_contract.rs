@@ -33,7 +33,7 @@ use canic_host::{
     },
 };
 
-pub(super) fn project_config_quality_checks(root: &Path, configs: &[PathBuf]) -> Vec<MedicCheck> {
+pub(super) fn workspace_config_quality_checks(root: &Path, configs: &[PathBuf]) -> Vec<MedicCheck> {
     configs
         .iter()
         .flat_map(|config| app_config_quality_checks(root, config))
@@ -46,7 +46,7 @@ fn app_config_quality_checks(root: &Path, config: &Path) -> Vec<MedicCheck> {
         Ok(snapshot) => snapshot,
         Err(err) => {
             return vec![MedicCheck::fail(
-                MedicCategory::ProjectConfig,
+                MedicCategory::WorkspaceConfig,
                 "app_config_missing",
                 config_display,
                 err.to_string(),
@@ -123,7 +123,7 @@ fn check_role_package_metadata(
     let manifest = role_package_manifest_path(config, &role.package);
     match canic_package_metadata(&manifest) {
         Ok(metadata) if metadata.app == app && metadata.role == role.role => MedicCheck::pass(
-            MedicCategory::ProjectConfig,
+            MedicCategory::WorkspaceConfig,
             "role_package_metadata_present",
             role.display.clone(),
             format!(
@@ -136,7 +136,7 @@ fn check_role_package_metadata(
             MedicSource::AppConfig,
         ),
         Ok(metadata) => MedicCheck::fail(
-            MedicCategory::ProjectConfig,
+            MedicCategory::WorkspaceConfig,
             "role_package_metadata_missing",
             role.display.clone(),
             format!(
@@ -151,7 +151,7 @@ fn check_role_package_metadata(
             MedicSource::AppConfig,
         ),
         Err(err) => MedicCheck::fail(
-            MedicCategory::ProjectConfig,
+            MedicCategory::WorkspaceConfig,
             "role_package_metadata_missing",
             role.display.clone(),
             err,
@@ -193,7 +193,7 @@ fn check_resolved_role_contract(
         .filter(|requirement| contract.required_features.contains(&requirement.feature))
         .map(|requirement| {
             MedicCheck::pass(
-                MedicCategory::ProjectConfig,
+                MedicCategory::WorkspaceConfig,
                 "role_required_canic_feature_present",
                 role.display.clone(),
                 format!(
@@ -229,7 +229,7 @@ fn check_role_resolution_finding(
             .iter()
             .find(|requirement| requirement.feature == *feature)?;
         return Some(MedicCheck::fail(
-            MedicCategory::ProjectConfig,
+            MedicCategory::WorkspaceConfig,
             finding.code(),
             role.display.clone(),
             format!(
@@ -267,14 +267,14 @@ fn check_role_package_contract(
         RoleContractFinding::AllocationDescriptorDuplicate { .. }
         | RoleContractFinding::AllocationDescriptorIdMismatch { .. }
         | RoleContractFinding::AllocationDescriptorMissing { .. } => {
-            "repair the Canic state descriptor registry and rerun canic medic project"
+            "repair the Canic state descriptor registry and rerun canic medic"
         }
         _ => {
             "use one direct, unconditional, non-optional normal Canic dependency with no package feature forwarding"
         }
     };
     Some(MedicCheck::fail(
-        MedicCategory::ProjectConfig,
+        MedicCategory::WorkspaceConfig,
         finding.code(),
         role.display.clone(),
         finding_detail(finding),
@@ -297,7 +297,7 @@ fn check_declared_role_not_deployable(
     role: &ConfiguredRoleLifecycle,
 ) -> MedicCheck {
     MedicCheck::warn(
-        MedicCategory::ProjectConfig,
+        MedicCategory::WorkspaceConfig,
         "declared_role_not_deployable",
         role.display.clone(),
         format!(

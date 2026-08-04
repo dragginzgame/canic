@@ -25,11 +25,23 @@ fn strip_ansi(text: &str) -> String {
     plain
 }
 
-// Ensure top-level help stays compact as command surfaces grow.
+// Ensure top-level help stays alphabetical as command surfaces grow.
 #[test]
-fn usage_lists_command_families() {
+fn usage_lists_commands_alphabetically() {
     let text = usage();
     let plain = strip_ansi(&text);
+    let names = plain
+        .split_once("\nCommands:\n")
+        .expect("top-level commands section")
+        .1
+        .split_once("\nOptions:\n")
+        .expect("top-level options section")
+        .0
+        .lines()
+        .filter_map(|line| line.split_whitespace().next())
+        .collect::<Vec<_>>();
+    let mut sorted_names = names.clone();
+    sorted_names.sort_unstable();
 
     assert!(plain.contains(&format!(
         "Canic Operator CLI v{}",
@@ -37,47 +49,32 @@ fn usage_lists_command_families() {
     )));
     assert!(plain.contains("Usage: canic [OPTIONS] <COMMAND>"));
     assert!(plain.contains("\nCommands:\n"));
-    assert!(plain.contains("Project commands"));
-    assert!(plain.contains("Deployment commands"));
-    assert!(plain.contains("ICP wallet commands"));
-    assert!(plain.contains("Backup and restore commands"));
-    assert!(plain.find("    status") < plain.find("    medic"));
-    assert!(plain.find("    medic") < plain.find("    state"));
-    assert!(plain.find("    state") < plain.find("    app"));
-    assert!(plain.find("    app") < plain.find("    scaffold"));
-    assert!(plain.find("    scaffold") < plain.find("    replica"));
-    assert!(plain.find("    replica") < plain.find("    network"));
-    assert!(plain.find("    network") < plain.find("    install"));
-    assert!(plain.find("    install") < plain.find("    build"));
-    assert!(plain.find("    build") < plain.find("    deploy"));
-    assert!(plain.find("    deploy") < plain.find("    evidence"));
-    assert!(plain.find("    evidence") < plain.find("    info"));
-    assert!(plain.find("    info") < plain.find("    cycles"));
-    assert!(plain.find("    cycles") < plain.find("    token"));
-    assert!(plain.find("    token") < plain.find("    backup"));
-    assert!(plain.find("    backup") < plain.find("    restore"));
+    assert_eq!(names, sorted_names);
+    for name in names {
+        assert!(plain.contains(&format!("\n  {name:<12}")));
+    }
     assert!(plain.contains("Options:"));
     assert!(plain.contains("--icp <path>"));
     assert!(plain.contains("--environment <name>"));
-    assert!(plain.contains("Diagnose project and deployment preflight readiness"));
+    assert!(plain.contains("Diagnose workspace and Fleet preflight readiness"));
     assert!(plain.contains("Audit declared Canic state metadata"));
-    assert!(plain.contains("    scaffold"));
+    assert!(plain.contains("  scaffold"));
     assert!(plain.contains("Inspect runtime-observed status for one deployed canister"));
     assert!(plain.contains("cycles"));
     assert!(plain.contains("token"));
     assert!(plain.contains("info"));
-    assert!(plain.contains("    build"));
-    assert!(plain.contains("    deploy"));
+    assert!(plain.contains("  build"));
+    assert!(plain.contains("  deploy"));
     assert!(plain.contains("Manage Canic source apps and roles"));
     assert!(plain.contains("Plan and check deployment truth before mutation"));
     assert!(plain.contains("Plan, inspect, and verify backups"));
     assert!(!plain.contains("Check, inspect, plan, and install deployments"));
-    assert!(!plain.contains("    environment"));
-    assert!(!plain.contains("    defaults"));
-    assert!(plain.contains("    status"));
-    assert!(plain.contains("    medic"));
-    assert!(plain.contains("    state"));
-    assert!(plain.contains("    app"));
+    assert!(!plain.contains("  environment"));
+    assert!(!plain.contains("  defaults"));
+    assert!(plain.contains("  status"));
+    assert!(plain.contains("  medic"));
+    assert!(plain.contains("  state"));
+    assert!(plain.contains("  app"));
     assert!(plain.contains("replica"));
     assert!(plain.contains("install"));
     assert!(plain.contains("backup"));
@@ -144,9 +141,6 @@ fn command_family_help_returns_ok() {
         &["info", "endpoints", "--help"],
         &["info", "env", "--help"],
         &["medic", "--help"],
-        &["medic", "project", "--help"],
-        &["medic", "--json", "project", "--help"],
-        &["medic", "project", "--json", "--help"],
         &["medic", "fleet", "--help"],
         &["medic", "--json", "fleet", "--help"],
         &["medic", "fleet", "--json", "--help"],

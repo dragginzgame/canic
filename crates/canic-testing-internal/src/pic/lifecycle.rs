@@ -13,7 +13,7 @@ use canic_host::release_set::AppConfigSnapshot;
 use ic_testkit::{
     Fake,
     artifacts::{read_wasm, test_target_dir, workspace_root_for},
-    pic::{Pic, PicSerialGuard, acquire_pic_serial_guard, pic},
+    pic::{PocketIc, PocketIcBuilder},
 };
 use std::{
     path::{Path, PathBuf},
@@ -35,11 +35,10 @@ static BUILD_ONCE: Once = Once::new();
 ///
 
 pub struct LifecycleBoundaryFixture {
-    pub pic: Pic,
+    pub pic: PocketIc,
     pub canic_wasm: Vec<u8>,
     pub runtime_probe_wasm: Vec<u8>,
     pub authority_wasm: Vec<u8>,
-    _serial_guard: PicSerialGuard,
 }
 
 impl LifecycleBoundaryFixture {
@@ -117,8 +116,7 @@ pub fn install_lifecycle_boundary_fixture() -> LifecycleBoundaryFixture {
             "intent_authority",
             CanicWasmBuildProfile::Fast.target_dir_name(),
         ),
-        _serial_guard: acquire_pic_serial_guard(),
-        pic: pic(),
+        pic: PocketIcBuilder::new().with_application_subnet().build(),
     }
 }
 

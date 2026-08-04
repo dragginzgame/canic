@@ -7,7 +7,8 @@ use super::config::observe_local_config_facts;
 use super::identity::{InventoryIdentityFacts, local_inventory_identity};
 use crate::fleet_catalog::{FleetCatalogError, read_fleet_catalog_entry_from_root};
 use crate::network::resolve_canonical_network_id_from_root;
-use std::path::PathBuf;
+use crate::release_set::artifact_root_path;
+use std::path::{Path, PathBuf};
 use thiserror::Error as ThisError;
 
 ///
@@ -37,6 +38,14 @@ pub enum DeploymentTruthError {
 pub fn collect_local_deployment_inventory(
     request: &LocalInventoryRequest,
 ) -> Result<DeploymentInventoryV1, DeploymentTruthError> {
+    let artifact_root = artifact_root_path(&request.icp_root, &request.artifact_environment);
+    collect_local_deployment_inventory_at_root(request, &artifact_root)
+}
+
+pub fn collect_local_deployment_inventory_at_root(
+    request: &LocalInventoryRequest,
+    artifact_root: &Path,
+) -> Result<DeploymentInventoryV1, DeploymentTruthError> {
     let config = deployment_config_path(&request.workspace_root, request.config_path.as_deref());
     let mut unresolved_observations = Vec::new();
     let local_config_facts = observe_local_config_facts(&config, &mut unresolved_observations);
@@ -56,12 +65,12 @@ pub fn collect_local_deployment_inventory(
         observe_canonical_runtime_config_digest(&config, &mut unresolved_observations);
     let deployment_manifest_digest = observe_deployment_manifest_digest(
         &request.icp_root,
-        &request.artifact_environment,
+        artifact_root,
         &mut unresolved_observations,
     );
     let observed_artifacts = collect_observed_artifacts(
         &request.icp_root,
-        &request.artifact_environment,
+        artifact_root,
         &local_config_facts.roles,
         &mut unresolved_observations,
     );

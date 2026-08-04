@@ -153,7 +153,6 @@ fn replica_leaf_usage_lists_options() {
     assert!(!text.contains("--icp"));
     assert!(text.contains("canic replica start --background"));
     assert!(text.contains("canic replica start --port 8001 --background"));
-    assert!(text.contains("canic replica start --debug"));
 
     let status = status_usage();
     assert!(status.contains("--json"));

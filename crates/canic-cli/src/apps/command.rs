@@ -15,25 +15,16 @@ use clap::Command as ClapCommand;
 
 const APP_HELP_AFTER: &str = "\
 Examples:
-  canic app list
-  canic app adoption report demo --profile brownfield
-  canic app role declare demo store --package store
-  canic app role attach demo store --component-spec default
-  canic app role rename demo hub router
-  canic app role list demo
-  canic app role inspect demo app
-  canic app config demo
+  canic app check demo
   canic app create demo
-  canic app check test
-  canic app delete demo
+  canic app list
 
 Mutation notes:
-  canic app check/list/config/adoption/role list/role inspect are read-only.
-  canic app create writes new local source/config files.
-  canic app role declare/attach/rename update canic.toml; rename may also
-  update matching package metadata.
-  canic app delete removes the selected app directory.
-  Mutating app commands that can be previewed expose --dry-run.";
+  adoption, check, config, list, role inspect, and role list are read-only.
+  create, delete, role attach, role declare, and role rename mutate local
+  workspace files. Mutating commands expose --dry-run where supported.
+
+Use `canic app <command> --help` for command-specific examples and safety notes.";
 const APP_LIST_HELP_AFTER: &str = "\
 Examples:
   canic app list
@@ -52,17 +43,14 @@ app name exactly. --dry-run validates and prints the target without
 prompting or deleting files.";
 const APP_ROLE_HELP_AFTER: &str = "\
 Examples:
-  canic app role declare demo store --package store
   canic app role attach demo store --component-spec default
-  canic app role rename demo hub router
-  canic app role list demo
   canic app role inspect demo app
+  canic app role rename demo hub router
 
 Mutation notes:
-  list and inspect are read-only.
-  declare and attach update canic.toml.
-  rename updates canic.toml and may update matching package metadata.
-  declare, attach, and rename support --dry-run.";
+  inspect and list are read-only.
+  attach, declare, and rename update canic.toml; rename may also update
+  matching package metadata. All mutations support --dry-run.";
 const APP_ROLE_LIST_HELP_AFTER: &str = "\
 Examples:
   canic app role list demo";
@@ -85,7 +73,6 @@ Examples:
 const APP_ADOPTION_HELP_AFTER: &str = "\
 Examples:
   canic app adoption report demo --profile brownfield
-  canic app adoption report demo --profile minimal --json
   canic app adoption report demo --profile minimal --evidence-envelope
 
 Adoption commands are read-only. They report recommendations and never update
@@ -94,12 +81,7 @@ const APP_ADOPTION_REPORT_HELP_AFTER: &str = "\
 Examples:
   canic app adoption report demo --profile brownfield
   canic app adoption report demo --profile minimal --json
-  canic app adoption report demo --profile minimal --evidence-envelope
   canic app adoption report demo --profile partial --deployment-check check.json
-  canic app adoption report demo --profile partial --inventory inventory.json
-  canic app adoption report demo --profile partial --cargo-metadata cargo-metadata.json
-  canic app adoption report demo --profile partial --evidence-envelope --build-provenance build-provenance.json
-  canic app adoption report demo --profile partial --output adoption-report.txt
 
 Profiles: brownfield, partial, standalone, leaf-only, hybrid-external-wasm,
 minimal. --json emits the raw experimental adoption report payload.
@@ -119,18 +101,13 @@ pub(super) fn app_command() -> ClapCommand {
         .about("Manage Canic apps")
         .disable_help_flag(true)
         .subcommand(passthrough_subcommand(
+            ClapCommand::new("adoption")
+                .about("Report safe onboarding recommendations")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("check")
                 .about("Check icp.yaml for one Canic app")
-                .disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("create")
-                .about("Create a minimal Canic app")
-                .disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("list")
-                .about("List config-defined Canic apps")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
@@ -139,18 +116,23 @@ pub(super) fn app_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
-            ClapCommand::new("adoption")
-                .about("Report safe onboarding recommendations")
-                .disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("role")
-                .about("Manage app role lifecycle")
+            ClapCommand::new("create")
+                .about("Create a minimal Canic app")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
             ClapCommand::new("delete")
                 .about("Delete a config-defined Canic app")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("list")
+                .about("List config-defined Canic apps")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("role")
+                .about("Manage app role lifecycle")
                 .disable_help_flag(true),
         ))
         .after_help(APP_HELP_AFTER)
@@ -254,18 +236,18 @@ pub(super) fn app_role_command() -> ClapCommand {
         .about("Manage app role lifecycle")
         .disable_help_flag(true)
         .subcommand(passthrough_subcommand(
-            ClapCommand::new("declare")
-                .about("Declare an existing package-backed role")
-                .disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
             ClapCommand::new("attach")
                 .about("Attach a declared role to direct topology")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
-            ClapCommand::new("rename")
-                .about("Rename a declared app role")
+            ClapCommand::new("declare")
+                .about("Declare an existing package-backed role")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("inspect")
+                .about("Inspect one declared app role")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
@@ -274,8 +256,8 @@ pub(super) fn app_role_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
-            ClapCommand::new("inspect")
-                .about("Inspect one declared app role")
+            ClapCommand::new("rename")
+                .about("Rename a declared app role")
                 .disable_help_flag(true),
         ))
         .after_help(APP_ROLE_HELP_AFTER)

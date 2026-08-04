@@ -8,6 +8,9 @@ use super::super::ROOT_RELEASE_SET_MANIFEST_FILE;
 pub enum ArtifactRootError {
     #[error("missing built ICP artifacts under {artifact_root}")]
     Missing { artifact_root: PathBuf },
+
+    #[error("built ICP artifact root escapes the canonical ICP project root: {artifact_root}")]
+    OutsideProject { artifact_root: PathBuf },
 }
 
 /// Resolve the built artifact directory for the selected artifact environment.
@@ -16,11 +19,38 @@ pub fn resolve_artifact_root(
     artifact_environment: &str,
 ) -> Result<PathBuf, ArtifactRootError> {
     let artifact_root = artifact_root_path(icp_root, artifact_environment);
-    if artifact_root.is_dir() {
-        return Ok(artifact_root);
+    resolve_artifact_root_path(icp_root, &artifact_root)
+}
+
+/// Resolve one exact built artifact directory confined to the canonical project root.
+pub fn resolve_artifact_root_path(
+    icp_root: &Path,
+    artifact_root: &Path,
+) -> Result<PathBuf, ArtifactRootError> {
+    if !artifact_root.is_dir() {
+        return Err(ArtifactRootError::Missing {
+            artifact_root: artifact_root.to_path_buf(),
+        });
     }
 
-    Err(ArtifactRootError::Missing { artifact_root })
+    let canonical_project = icp_root
+        .canonicalize()
+        .map_err(|_| ArtifactRootError::Missing {
+            artifact_root: icp_root.to_path_buf(),
+        })?;
+    let canonical_artifact =
+        artifact_root
+            .canonicalize()
+            .map_err(|_| ArtifactRootError::Missing {
+                artifact_root: artifact_root.to_path_buf(),
+            })?;
+    if !canonical_artifact.starts_with(&canonical_project) {
+        return Err(ArtifactRootError::OutsideProject {
+            artifact_root: artifact_root.to_path_buf(),
+        });
+    }
+
+    Ok(canonical_artifact)
 }
 
 /// Return the canonical artifact directory for one artifact environment.

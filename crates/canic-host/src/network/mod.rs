@@ -61,7 +61,7 @@ struct EnvironmentNetworkProfile {
 
 #[derive(Clone, Copy, Debug)]
 pub struct NetworkEnrollmentOptions<'a> {
-    pub project_root: &'a Path,
+    pub workspace_root: &'a Path,
     pub environment: &'a str,
     pub root_key: &'a Path,
     pub fingerprint: &'a str,
@@ -172,7 +172,7 @@ pub fn enroll_network(
     options: NetworkEnrollmentOptions<'_>,
 ) -> Result<NetworkEnrollmentReport, NetworkIdentityError> {
     validate_environment_name(options.environment)?;
-    if resolve_icp_build_network_from_root(options.project_root, options.environment)?
+    if resolve_icp_build_network_from_root(options.workspace_root, options.environment)?
         == BuildNetwork::Ic
     {
         return Err(NetworkIdentityError::IcMainnetEnrollment {
@@ -197,7 +197,7 @@ pub fn enroll_network(
     }
 
     let paths = NetworkPaths::new(
-        options.project_root,
+        options.workspace_root,
         options.environment,
         canonical_network_id,
     );
@@ -260,12 +260,12 @@ pub fn enroll_network(
 
 /// Resolve an environment profile to its verified canonical network identity.
 pub fn resolve_canonical_network_id_from_root(
-    project_root: &Path,
+    workspace_root: &Path,
     environment: &str,
 ) -> Result<CanonicalNetworkId, NetworkIdentityError> {
     validate_environment_name(environment)?;
-    let build_network = resolve_icp_build_network_from_root(project_root, environment)?;
-    let profile_path = environment_profile_path(project_root, environment);
+    let build_network = resolve_icp_build_network_from_root(workspace_root, environment)?;
+    let profile_path = environment_profile_path(workspace_root, environment);
 
     if build_network == BuildNetwork::Ic {
         let expected = CanonicalNetworkId::ic_mainnet();
@@ -282,7 +282,7 @@ pub fn resolve_canonical_network_id_from_root(
     }
 
     let profile = read_required_profile(&profile_path)?;
-    let paths = NetworkPaths::new(project_root, environment, profile.canonical_network_id);
+    let paths = NetworkPaths::new(workspace_root, environment, profile.canonical_network_id);
     let root_key = read_required_regular_file(&paths.root_key)?;
     let observed_network_id =
         CanonicalNetworkId::from_der_root_trust_anchor(&root_key).map_err(|error| {
@@ -604,8 +604,8 @@ fn non_regular_file_error(path: &Path, purpose: FilePurpose) -> NetworkIdentityE
     }
 }
 
-fn environment_profile_path(project_root: &Path, environment: &str) -> PathBuf {
-    project_root
+fn environment_profile_path(workspace_root: &Path, environment: &str) -> PathBuf {
+    workspace_root
         .join(CANIC_STATE_DIRECTORY)
         .join(ENVIRONMENT_PROFILES_DIRECTORY)
         .join(environment)
@@ -622,11 +622,11 @@ struct NetworkPaths {
 
 impl NetworkPaths {
     fn new(
-        project_root: &Path,
+        workspace_root: &Path,
         environment: &str,
         canonical_network_id: CanonicalNetworkId,
     ) -> Self {
-        let authority_directory = project_root
+        let authority_directory = workspace_root
             .join(CANIC_STATE_DIRECTORY)
             .join(NETWORKS_DIRECTORY)
             .join(canonical_network_id.to_string());
@@ -634,7 +634,7 @@ impl NetworkPaths {
             canonical_network_id,
             root_key: authority_directory.join(ROOT_KEY_RELATIVE_PATH),
             enrollment: authority_directory.join(ENROLLMENT_FILE),
-            profile: environment_profile_path(project_root, environment),
+            profile: environment_profile_path(workspace_root, environment),
             authority_directory,
         }
     }

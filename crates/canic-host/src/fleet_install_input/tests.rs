@@ -12,6 +12,118 @@ use ic_query::subnet_catalog::{
 };
 
 const FIDUCIARY_SUBNET: &str = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae";
+const DISPOSABLE_ROOT_DELETION_PROOF_INPUT: &str =
+    include_str!("../../../../deployments/0.100-root-deletion-proof.toml");
+const PLAYGROUND_INPUT: &str = include_str!("../../../../deployments/demos/playground-ic.toml");
+
+#[test]
+fn disposable_root_deletion_proof_input_resolves_one_bounded_mainnet_root() {
+    let document: FleetInstallInputDocument =
+        toml::from_slice(DISPOSABLE_ROOT_DELETION_PROOF_INPUT.as_bytes())
+            .expect("decode disposable root-deletion proof input");
+    let catalog = catalog(vec![info(
+        FIDUCIARY_SUBNET,
+        SubnetKind::Application,
+        SubnetSpecialization::Fiduciary,
+        "fiduciary",
+    )]);
+
+    let resolved = resolve_document(&document, BuildNetwork::Ic, Some(&catalog))
+        .expect("resolve disposable root-deletion proof input");
+
+    assert_eq!(
+        resolved.coordinator.coordinator_subnet,
+        subnet(FIDUCIARY_SUBNET)
+    );
+    assert_eq!(
+        resolved.coordinator.creation_funding,
+        PlannedCanisterCreationFunding::Cycles {
+            cycles: 3_000_000_000_000
+        }
+    );
+    let [root] = resolved.fleet_subnet_roots.as_slice() else {
+        panic!("proof input must resolve exactly one Fleet Subnet Root");
+    };
+    assert_eq!(root.placement_subnet, subnet(FIDUCIARY_SUBNET));
+    assert_eq!(root.component_admissions.len(), 2);
+    assert_eq!(root.limits.maximum_component_instances, 2);
+    assert_eq!(root.limits.maximum_managed_canisters, 20_003);
+    assert_eq!(root.limits.canister_pool.minimum_size, 1);
+    assert_eq!(root.limits.canister_pool.maximum_size, 1);
+    assert_eq!(
+        root.limits.canister_pool.canister_cycles,
+        Cycles::new(1_000_000_000_000)
+    );
+    assert!(root.canister_pool_imports.is_empty());
+    assert_eq!(
+        root.root_creation_funding,
+        PlannedCanisterCreationFunding::Cycles {
+            cycles: 5_000_000_000_000
+        }
+    );
+    assert_eq!(
+        root.wasm_store_creation_funding,
+        PlannedCanisterCreationFunding::Cycles {
+            cycles: 3_000_000_000_000
+        }
+    );
+}
+
+#[test]
+fn playground_input_resolves_one_reusable_mainnet_root() {
+    let document: FleetInstallInputDocument =
+        toml::from_slice(PLAYGROUND_INPUT.as_bytes()).expect("decode Playground input");
+    let catalog = catalog(vec![info(
+        FIDUCIARY_SUBNET,
+        SubnetKind::Application,
+        SubnetSpecialization::Fiduciary,
+        "fiduciary",
+    )]);
+
+    let resolved = resolve_document(&document, BuildNetwork::Ic, Some(&catalog))
+        .expect("resolve Playground input");
+
+    assert_eq!(
+        resolved.coordinator.coordinator_subnet,
+        subnet(FIDUCIARY_SUBNET)
+    );
+    let [root] = resolved.fleet_subnet_roots.as_slice() else {
+        panic!("Playground input must resolve exactly one Fleet Subnet Root");
+    };
+    assert_eq!(root.placement_subnet, subnet(FIDUCIARY_SUBNET));
+    assert_eq!(
+        root.component_admissions,
+        vec![RootComponentAdmissionInput {
+            component_spec: "playground".parse().expect("valid Component Spec ID"),
+            maximum_root_instances: 1,
+        }]
+    );
+    assert_eq!(root.limits.maximum_component_instances, 1);
+    assert_eq!(root.limits.maximum_managed_canisters, 12);
+    assert_eq!(root.limits.canister_pool.minimum_size, 5);
+    assert_eq!(root.limits.canister_pool.maximum_size, 5);
+    assert_eq!(
+        root.limits.canister_pool.canister_cycles,
+        Cycles::new(500_000_000_000)
+    );
+    assert!(root.canister_pool_imports.is_empty());
+    assert_eq!(
+        root.limits.cycles_funding.maximum_cycles,
+        Cycles::new(15_000_000_000_000)
+    );
+    assert_eq!(
+        root.root_creation_funding,
+        PlannedCanisterCreationFunding::Cycles {
+            cycles: 20_000_000_000_000
+        }
+    );
+    assert_eq!(
+        root.wasm_store_creation_funding,
+        PlannedCanisterCreationFunding::Cycles {
+            cycles: 3_000_000_000_000
+        }
+    );
+}
 
 #[test]
 fn local_document_resolves_exact_explicit_placement_and_cycles() {

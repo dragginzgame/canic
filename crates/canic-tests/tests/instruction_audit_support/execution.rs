@@ -307,7 +307,7 @@ fn execute_scenario(
         "scale:request_cycles_from_parent:fresh" => {
             let response: Result<u128, Error> = setup
                 .pic
-                .update_call(target_pid, "request_cycles_from_parent", (999u128,))
+                .update_candid(target_pid, "request_cycles_from_parent", (999u128,))
                 .expect("scale request_cycles_from_parent transport failed");
             assert_eq!(
                 response.expect("scale request_cycles_from_parent application failed"),
@@ -321,7 +321,7 @@ fn execute_scenario(
         "user_hub:create_account:new-principal" => {
             let created: Result<Principal, Error> = setup
                 .pic
-                .update_call(
+                .update_candid(
                     target_pid,
                     "create_account",
                     (Principal::from_slice(&[51; 29]),),
@@ -332,7 +332,7 @@ fn execute_scenario(
         "scale_hub:create_worker:empty-pool" => {
             let created: Result<Principal, Error> = setup
                 .pic
-                .update_call(target_pid, "create_worker", ())
+                .update_candid(target_pid, "create_worker", ())
                 .expect("create_worker transport failed");
             created.expect("create_worker application failed");
         }
@@ -352,9 +352,9 @@ fn execute_scenario(
     }
 }
 
-fn provision_delegation_proof(pic: &Pic, root: Principal, issuer_pid: Principal) {
+fn provision_delegation_proof(pic: &PocketIc, root: Principal, issuer_pid: Principal) {
     let provisioned: Result<(), Error> = pic
-        .update_call(
+        .update_candid(
             root,
             "test_provision_chain_key_delegation_proof_for_issuer",
             (issuer_pid,),
@@ -364,7 +364,7 @@ fn provision_delegation_proof(pic: &Pic, root: Principal, issuer_pid: Principal)
 }
 
 fn execute_delegated_token_prepare(
-    pic: &Pic,
+    pic: &PocketIc,
     prepared: &PreparedScenario,
     verifier_role: &canic::ids::CanisterRole,
 ) {
@@ -375,7 +375,7 @@ fn execute_delegated_token_prepare(
         .issuer_pid
         .expect("delegated prepare scenario must have an issuer");
     let response: Result<DelegatedTokenPrepareResponse, Error> = pic
-        .update_call_as(
+        .update_candid_as(
             prepared.target_pid,
             subject,
             protocol::CANIC_PREPARE_DELEGATED_TOKEN,
@@ -399,7 +399,11 @@ fn execute_delegated_token_prepare(
 }
 
 // Execute the verifier-side delegated token confirmation scenario.
-fn execute_verifier_auth_scenario(pic: &Pic, target_pid: Principal, prepared: &PreparedScenario) {
+fn execute_verifier_auth_scenario(
+    pic: &PocketIc,
+    target_pid: Principal,
+    prepared: &PreparedScenario,
+) {
     let caller = prepared
         .caller_pid
         .expect("verifier auth audit scenario must resolve a delegated subject caller");
@@ -408,20 +412,20 @@ fn execute_verifier_auth_scenario(pic: &Pic, target_pid: Principal, prepared: &P
         .clone()
         .expect("verifier auth audit scenario must issue a delegated token");
     let response: Result<Result<(), Error>, _> =
-        pic.update_call_as(target_pid, caller, "verifier_verify_token", (token,));
+        pic.update_candid_as(target_pid, caller, "verifier_verify_token", (token,));
     response
         .expect("verifier_verify_token transport failed")
         .expect("verifier_verify_token application failed");
 }
 
 fn upsert_delegation_issuer(
-    pic: &Pic,
+    pic: &PocketIc,
     root: Principal,
     issuer_pid: Principal,
     verifier_role: &canic::ids::CanisterRole,
 ) {
     let registered: Result<RootIssuerPolicyResponse, Error> = pic
-        .update_call(
+        .update_candid(
             root,
             protocol::CANIC_UPSERT_ROOT_ISSUER_POLICY,
             (RootIssuerPolicyUpsertRequest {
@@ -442,13 +446,13 @@ fn upsert_delegation_issuer(
 }
 
 fn upsert_delegation_renewal_template(
-    pic: &Pic,
+    pic: &PocketIc,
     root: Principal,
     issuer_pid: Principal,
     verifier_role: &canic::ids::CanisterRole,
 ) {
     let response: Result<RootIssuerRenewalTemplateResponse, Error> = pic
-        .update_call(
+        .update_candid(
             root,
             protocol::CANIC_UPSERT_ROOT_ISSUER_RENEWAL_TEMPLATE,
             (RootIssuerRenewalTemplateUpsertRequest {
@@ -526,9 +530,9 @@ fn audit_template_fixture(scenario: &AuditScenario) -> AuditTemplateFixture {
 }
 
 // Stage one manifest through the root admin surface.
-fn stage_manifest(pic: &Pic, root_id: Principal, manifest: &TemplateManifestInput) {
+fn stage_manifest(pic: &PocketIc, root_id: Principal, manifest: &TemplateManifestInput) {
     let staged: Result<(), Error> = pic
-        .update_call(
+        .update_candid(
             root_id,
             protocol::CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
             (manifest.clone(),),
@@ -538,9 +542,9 @@ fn stage_manifest(pic: &Pic, root_id: Principal, manifest: &TemplateManifestInpu
 }
 
 // Prepare one staged chunk set through the root admin surface.
-fn prepare_chunk_set(pic: &Pic, root_id: Principal, request: &TemplateChunkSetPrepareInput) {
+fn prepare_chunk_set(pic: &PocketIc, root_id: Principal, request: &TemplateChunkSetPrepareInput) {
     let prepared: Result<TemplateChunkSetInfoResponse, Error> = pic
-        .update_call(
+        .update_candid(
             root_id,
             protocol::CANIC_TEMPLATE_PREPARE_ADMIN,
             (request.clone(),),
@@ -550,9 +554,9 @@ fn prepare_chunk_set(pic: &Pic, root_id: Principal, request: &TemplateChunkSetPr
 }
 
 // Publish one staged chunk through the root admin surface.
-fn publish_chunk(pic: &Pic, root_id: Principal, request: &TemplateChunkInput) {
+fn publish_chunk(pic: &PocketIc, root_id: Principal, request: &TemplateChunkInput) {
     let published: Result<(), Error> = pic
-        .update_call(
+        .update_candid(
             root_id,
             protocol::CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
             (request.clone(),),
@@ -562,9 +566,9 @@ fn publish_chunk(pic: &Pic, root_id: Principal, request: &TemplateChunkInput) {
 }
 
 // Read the current perf metrics table for one canister.
-fn perf_entries(pic: &Pic, canister_id: Principal) -> Vec<MetricEntry> {
+fn perf_entries(pic: &PocketIc, canister_id: Principal) -> Vec<MetricEntry> {
     let response: Result<Page<MetricEntry>, Error> = pic
-        .query_call(
+        .query_candid(
             canister_id,
             protocol::CANIC_METRICS,
             (
@@ -720,7 +724,7 @@ fn root_capability_response_as(
         },
     };
 
-    let result: Result<Result<RootCapabilityResponseV1, Error>, _> = setup.pic.update_call_as(
+    let result: Result<Result<RootCapabilityResponseV1, Error>, _> = setup.pic.update_candid_as(
         target_pid,
         caller,
         protocol::CANIC_RESPONSE_CAPABILITY_V1,

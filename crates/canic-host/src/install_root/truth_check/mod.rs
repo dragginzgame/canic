@@ -4,9 +4,9 @@ use super::{capabilities::CURRENT_INSTALL_REQUIRED_CAPABILITIES, options::Instal
 use crate::canister_build::CanisterBuildProfile;
 use crate::deployment_truth::{
     CurrentCliDeploymentExecutor, DeploymentCheckV1, DeploymentExecutionPreflightV1,
-    DeploymentPlanV1, LocalDeploymentCheckRequest, LocalInventoryRequest, check_local_deployment,
-    collect_local_deployment_inventory, compare_plan_to_inventory,
-    deployment_execution_preflight_from_check, safety_report_from_diff,
+    DeploymentPlanV1, LocalDeploymentCheckRequest, LocalInventoryRequest,
+    check_local_deployment_at_root, collect_local_deployment_inventory_at_root,
+    compare_plan_to_inventory, deployment_execution_preflight_from_check, safety_report_from_diff,
     validate_deployment_execution_preflight_for_check,
 };
 use crate::release_set::{AppConfigSnapshot, icp_root, workspace_root};
@@ -18,6 +18,35 @@ struct CurrentInstallTruthInputs {
     icp_root: PathBuf,
     config_path: PathBuf,
     fleet_name: String,
+}
+
+pub(super) struct CurrentInstallTruthScope<'a> {
+    workspace_root: &'a Path,
+    icp_root: &'a Path,
+    config_path: &'a Path,
+    fleet_name: &'a str,
+    observed_at: String,
+    artifact_root: &'a Path,
+}
+
+impl<'a> CurrentInstallTruthScope<'a> {
+    pub(super) const fn new(
+        workspace_root: &'a Path,
+        icp_root: &'a Path,
+        config_path: &'a Path,
+        fleet_name: &'a str,
+        observed_at: String,
+        artifact_root: &'a Path,
+    ) -> Self {
+        Self {
+            workspace_root,
+            icp_root,
+            config_path,
+            fleet_name,
+            observed_at,
+            artifact_root,
+        }
+    }
 }
 
 /// Build the same read-only deployment truth check that can be used as a
@@ -82,38 +111,33 @@ pub(super) fn current_install_deployment_truth_check_at(
     fleet_name: &str,
     observed_at: String,
 ) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
+    let artifact_root =
+        crate::release_set::artifact_root_path(icp_root, options.artifact_environment());
     current_install_deployment_truth_check_at_with_plan(
         options,
-        workspace_root,
-        icp_root,
-        config_path,
-        fleet_name,
-        observed_at,
+        CurrentInstallTruthScope::new(
+            workspace_root,
+            icp_root,
+            config_path,
+            fleet_name,
+            observed_at,
+            &artifact_root,
+        ),
         None,
     )
 }
 
 pub(super) fn current_install_deployment_truth_check_at_with_plan(
     options: &InstallRootOptions,
-    workspace_root: &Path,
-    icp_root: &Path,
-    config_path: &Path,
-    fleet_name: &str,
-    observed_at: String,
+    scope: CurrentInstallTruthScope<'_>,
     prepared_plan: Option<&DeploymentPlanV1>,
 ) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
-    let app = AppConfigSnapshot::load(config_path)?.app_id().to_string();
+    let app = AppConfigSnapshot::load(scope.config_path)?
+        .app_id()
+        .to_string();
     if let Some(plan) = prepared_plan.or(options.deployment_plan_override.as_ref()) {
-        validate_current_install_plan_override(plan, &options.environment, fleet_name, &app)?;
-        return current_install_deployment_truth_check_for_plan(
-            plan,
-            workspace_root,
-            icp_root,
-            config_path,
-            fleet_name,
-            observed_at,
-            &options.environment,
-        );
+        validate_current_install_plan_override(plan, &options.environment, scope.fleet_name, &app)?;
+        return current_install_deployment_truth_check_for_plan(plan, scope, &options.environment);
     }
 
     let build_profile = options
@@ -122,18 +146,21 @@ pub(super) fn current_install_deployment_truth_check_at_with_plan(
         .target_dir_name()
         .to_string();
 
-    check_local_deployment(&LocalDeploymentCheckRequest {
-        fleet_name: fleet_name.to_string(),
-        app,
-        environment: options.environment.clone(),
-        artifact_environment: options.artifact_environment().to_string(),
-        workspace_root: workspace_root.to_path_buf(),
-        icp_root: icp_root.to_path_buf(),
-        config_path: Some(config_path.to_path_buf()),
-        observed_at,
-        runtime_variant: options.environment.clone(),
-        build_profile,
-    })
+    check_local_deployment_at_root(
+        &LocalDeploymentCheckRequest {
+            fleet_name: scope.fleet_name.to_string(),
+            app,
+            environment: options.environment.clone(),
+            artifact_environment: options.artifact_environment().to_string(),
+            workspace_root: scope.workspace_root.to_path_buf(),
+            icp_root: scope.icp_root.to_path_buf(),
+            config_path: Some(scope.config_path.to_path_buf()),
+            observed_at: scope.observed_at,
+            runtime_variant: options.environment.clone(),
+            build_profile,
+        },
+        scope.artifact_root,
+    )
     .map_err(Into::into)
 }
 
@@ -189,32 +216,31 @@ fn resolve_current_install_truth_inputs(
 
 fn current_install_deployment_truth_check_for_plan(
     plan: &DeploymentPlanV1,
-    workspace_root: &Path,
-    icp_root: &Path,
-    config_path: &Path,
-    fleet_name: &str,
-    observed_at: String,
+    scope: CurrentInstallTruthScope<'_>,
     environment: &str,
 ) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
-    let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
-        fleet_name: fleet_name.to_string(),
-        environment: environment.to_string(),
-        artifact_environment: environment.to_string(),
-        workspace_root: workspace_root.to_path_buf(),
-        icp_root: icp_root.to_path_buf(),
-        config_path: Some(config_path.to_path_buf()),
-        observed_at,
-    })?;
+    let inventory = collect_local_deployment_inventory_at_root(
+        &LocalInventoryRequest {
+            fleet_name: scope.fleet_name.to_string(),
+            environment: environment.to_string(),
+            artifact_environment: environment.to_string(),
+            workspace_root: scope.workspace_root.to_path_buf(),
+            icp_root: scope.icp_root.to_path_buf(),
+            config_path: Some(scope.config_path.to_path_buf()),
+            observed_at: scope.observed_at,
+        },
+        scope.artifact_root,
+    )?;
     let diff = compare_plan_to_inventory(plan, &inventory);
     let report = safety_report_from_diff(
-        format!("local:{environment}:{fleet_name}:report"),
-        Some(format!("local:{environment}:{fleet_name}:diff")),
+        format!("local:{environment}:{}:report", scope.fleet_name),
+        Some(format!("local:{environment}:{}:diff", scope.fleet_name)),
         &diff,
     );
 
     Ok(DeploymentCheckV1 {
         schema_version: crate::deployment_truth::DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        check_id: format!("local:{environment}:{fleet_name}:check"),
+        check_id: format!("local:{environment}:{}:check", scope.fleet_name),
         plan: plan.clone(),
         inventory,
         diff,

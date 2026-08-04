@@ -34,7 +34,7 @@ pub enum ConfigDiscoveryError {
     #[error("failed to resolve current directory: {0}")]
     CurrentDirectory(#[source] io::Error),
 
-    #[error("failed to canonicalize Canic project path {path}: {source}")]
+    #[error("failed to canonicalize Canic workspace path {path}: {source}")]
     Canonicalize {
         path: PathBuf,
         #[source]
@@ -62,8 +62,8 @@ pub enum ConfigDiscoveryError {
     WorkspaceDiscovery(#[from] WorkspaceDiscoveryError),
 }
 
-// Resolve the operator-facing Canic project root from the current directory.
-pub fn current_canic_project_root() -> Result<PathBuf, ConfigDiscoveryError> {
+// Resolve the operator-facing Canic workspace root from the current directory.
+pub fn current_canic_workspace_root() -> Result<PathBuf, ConfigDiscoveryError> {
     let current_dir = env::current_dir().map_err(ConfigDiscoveryError::CurrentDirectory)?;
     let current_dir =
         current_dir
@@ -72,15 +72,15 @@ pub fn current_canic_project_root() -> Result<PathBuf, ConfigDiscoveryError> {
                 path: current_dir,
                 source,
             })?;
-    Ok(discover_canic_project_root_from(&current_dir)?.unwrap_or(current_dir))
+    Ok(discover_canic_workspace_root_from(&current_dir)?.unwrap_or(current_dir))
 }
 
-pub fn discover_canic_project_root_from(
+pub fn discover_canic_workspace_root_from(
     start: &Path,
 ) -> Result<Option<PathBuf>, ConfigDiscoveryError> {
     let mut nearest_apps_root = None;
     for candidate in start.ancestors() {
-        if !discover_project_canic_config_choices(candidate)?.is_empty() {
+        if !discover_workspace_canic_config_choices(candidate)?.is_empty() {
             let root =
                 candidate
                     .canonicalize()
@@ -129,19 +129,12 @@ pub(super) fn resolve_install_config_path(
     Err(config_selection_error(workspace_root, &default, &choices).into())
 }
 
-// Discover installable Canic config choices from the app root.
-pub(super) fn discover_workspace_canic_config_choices(
+// Discover candidate `canic.toml` files under the conventional workspace App root.
+pub fn discover_workspace_canic_config_choices(
     workspace_root: &Path,
 ) -> Result<Vec<PathBuf>, ConfigDiscoveryError> {
-    discover_project_canic_config_choices(workspace_root)
-}
-
-// Discover candidate `canic.toml` files under conventional project app roots.
-pub fn discover_project_canic_config_choices(
-    project_root: &Path,
-) -> Result<Vec<PathBuf>, ConfigDiscoveryError> {
     let mut choices = Vec::new();
-    for root in project_app_roots(project_root) {
+    for root in workspace_app_roots(workspace_root) {
         collect_canic_config_choices(&root, &mut choices)?;
     }
     choices.sort();
@@ -160,8 +153,8 @@ pub fn discover_canic_config_choices(root: &Path) -> Result<Vec<PathBuf>, Config
 }
 
 #[must_use]
-pub fn project_app_roots(project_root: &Path) -> Vec<PathBuf> {
-    vec![project_root.join(APPS_ROOT)]
+pub fn workspace_app_roots(workspace_root: &Path) -> Vec<PathBuf> {
+    vec![workspace_root.join(APPS_ROOT)]
 }
 
 fn reject_duplicate_app_names(choices: &[PathBuf]) -> Result<(), ConfigDiscoveryError> {

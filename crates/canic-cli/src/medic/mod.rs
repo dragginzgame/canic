@@ -1,9 +1,9 @@
 //! Module: canic_cli::medic
 //!
-//! Responsibility: diagnose Canic project and installed-Fleet readiness.
+//! Responsibility: diagnose local workspace and installed-Fleet readiness.
 //! Does not own: deployment mutation, recovery, Fleet catalog persistence, or
 //! canister control-plane changes.
-//! Boundary: reads local project/Fleet state and renders diagnostic-only
+//! Boundary: reads local workspace/Fleet state and renders diagnostic-only
 //! medic reports.
 
 mod auth;
@@ -11,12 +11,12 @@ mod blob_storage;
 mod command;
 mod fleet;
 mod package;
-mod project;
 mod render;
 mod report;
 mod role_contract;
 #[cfg(test)]
 mod tests;
+mod workspace;
 
 use std::path::Path;
 
@@ -24,9 +24,9 @@ use canic_core::role_contract::RoleContractFinding;
 use canic_host::{
     icp::{IcpCli, IcpCommandError},
     icp_config::resolve_current_canic_icp_root,
-    install_root::discover_project_canic_config_choices,
+    install_root::discover_workspace_canic_config_choices,
     installed_fleet::{InstalledFleetError, read_installed_fleet_from_root},
-    state_manifest::{StateManifestResolution, resolve_project_state_manifest},
+    state_manifest::{StateManifestResolution, resolve_workspace_state_manifest},
 };
 
 use auth::check_auth_renewal;
@@ -34,8 +34,8 @@ use blob_storage::{check_blob_storage_billing, check_blob_storage_not_selected};
 use command::MedicOptions;
 pub use command::{MedicCommandError, run};
 use fleet::{FleetMedicContext, deploy_plan_then, fleet_medic_context, installed_fleet_checks};
-use project::{project_config_checks, state_audit_project_check};
 use report::{MedicCategory, MedicCheck, MedicReport, MedicScope, MedicSource};
+use workspace::{state_audit_workspace_check, workspace_config_checks};
 
 const ICP_SESSION_DETAIL: &str = "password-protected PEM identities can cache sessions";
 const ICP_SESSION_NEXT: &str =
@@ -44,16 +44,16 @@ const FLEET_NOT_SELECTED_CHECK_CODE: &str = "fleet_not_selected";
 
 fn build_medic_report(options: &MedicOptions) -> MedicReport {
     match options.scope {
-        MedicScope::Project => MedicReport::new(options, run_project_checks(options)),
         MedicScope::Fleet => {
             let context = fleet_medic_context(options);
             let environment = Some(context.environment.clone());
             MedicReport::with_environment(options, environment, run_fleet_checks(options, &context))
         }
+        MedicScope::Workspace => MedicReport::new(options, run_workspace_checks(options)),
     }
 }
 
-fn run_project_checks(options: &MedicOptions) -> Vec<MedicCheck> {
+fn run_workspace_checks(options: &MedicOptions) -> Vec<MedicCheck> {
     let mut checks = vec![
         check_icp_cli(options),
         check_icp_identity_session_cache_hint(),
@@ -63,38 +63,38 @@ fn run_project_checks(options: &MedicOptions) -> Vec<MedicCheck> {
         Ok(root) => {
             checks.push(MedicCheck::pass(
                 MedicCategory::Environment,
-                "project_root_resolved",
-                "project_root",
+                "workspace_root_resolved",
+                "workspace_root",
                 format!("resolved {}", root.display()),
                 "none",
                 MedicSource::Command,
             ));
-            let state_resolution = match discover_project_canic_config_choices(&root) {
-                Ok(configs) => resolve_project_state_manifest(&root, &configs, None),
+            let state_resolution = match discover_workspace_canic_config_choices(&root) {
+                Ok(configs) => resolve_workspace_state_manifest(&root, &configs, None),
                 Err(error) => StateManifestResolution::Rejected {
                     errors: vec![RoleContractFinding::DependencyShapeUnsupported {
                         reason: error.to_string(),
                     }],
                 },
             };
-            checks.push(state_audit_project_check(&state_resolution));
-            checks.extend(project_config_checks(&root, options));
+            checks.push(state_audit_workspace_check(&state_resolution));
+            checks.extend(workspace_config_checks(&root, options));
         }
         Err(err) => {
             checks.push(MedicCheck::fail(
                 MedicCategory::Environment,
-                "project_root_missing",
-                "project_root",
+                "workspace_root_missing",
+                "workspace_root",
                 err.to_string(),
-                "run from a Canic project root",
+                "run from a Canic workspace root",
                 MedicSource::Command,
             ));
             checks.push(MedicCheck::not_evaluated(
                 MedicCategory::Runtime,
                 "state_audit_not_evaluated",
                 "state_manifest",
-                "state audit requires a resolved Canic project root",
-                "run from a Canic project root, then run canic state audit",
+                "state audit requires a resolved Canic workspace root",
+                "run from a Canic workspace root, then run canic state audit",
                 MedicSource::StateManifest,
             ));
         }
@@ -119,7 +119,7 @@ fn display_medic_path(root: &Path, path: &Path) -> String {
 }
 
 fn run_fleet_checks(options: &MedicOptions, context: &FleetMedicContext) -> Vec<MedicCheck> {
-    let mut checks = run_project_checks(options)
+    let mut checks = run_workspace_checks(options)
         .into_iter()
         .filter(|check| check.code != FLEET_NOT_SELECTED_CHECK_CODE)
         .collect::<Vec<_>>();

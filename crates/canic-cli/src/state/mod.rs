@@ -20,11 +20,11 @@ use crate::{
 use canic_core::state_contract::StateManifest;
 use canic_host::{
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
-    install_root::{ConfigDiscoveryError, discover_project_canic_config_choices},
+    install_root::{ConfigDiscoveryError, discover_workspace_canic_config_choices},
     role_contract::finding_detail,
     state_manifest::{
         STATE_AUDIT_COMMAND, STATE_MANIFEST_COMMAND, StateAuditReport, StateAuditStatus,
-        StateManifestResolution, build_state_audit_report, resolve_project_state_manifest,
+        StateManifestResolution, build_state_audit_report, resolve_workspace_state_manifest,
     },
 };
 use clap::Command as ClapCommand;
@@ -39,11 +39,7 @@ const ROLE_ARG: &str = "role";
 const STATE_HELP_AFTER: &str = "\
 Examples:
   canic state audit
-  canic state audit --role root
-  canic state audit --json
   canic state manifest
-  canic state manifest --role root
-  canic state manifest --json
 
 State commands are diagnostic-only metadata reports. They do not read stable
 memory values, run migrations, repair memory IDs, write generated files, modify
@@ -85,7 +81,7 @@ pub enum StateCommandError {
     #[error("failed to resolve ICP project root: {0}")]
     IcpRoot(#[from] IcpConfigError),
 
-    #[error("failed to discover Canic project configs: {0}")]
+    #[error("failed to discover Canic workspace App configs: {0}")]
     ConfigDiscovery(#[from] ConfigDiscoveryError),
 
     #[error("state contract resolution failed: {0}")]
@@ -174,7 +170,7 @@ fn run_audit(args: Vec<OsString>) -> Result<(), StateCommandError> {
     }
 
     let options = StateOptions::parse_audit(args)?;
-    let resolution = project_state_resolution(options.role.as_deref())?;
+    let resolution = workspace_state_resolution(options.role.as_deref())?;
     let report = build_state_audit_report(&resolution, options.role.as_deref());
     if options.json {
         println!("{}", render_json(&report)?);
@@ -193,7 +189,7 @@ fn run_manifest(args: Vec<OsString>) -> Result<(), StateCommandError> {
     }
 
     let options = StateOptions::parse_manifest(args)?;
-    let resolution = project_state_resolution(options.role.as_deref())?;
+    let resolution = workspace_state_resolution(options.role.as_deref())?;
     let manifest = match resolution {
         StateManifestResolution::Resolved { manifest, .. } => manifest,
         StateManifestResolution::Rejected { errors } => {
@@ -214,13 +210,13 @@ fn run_manifest(args: Vec<OsString>) -> Result<(), StateCommandError> {
     Ok(())
 }
 
-fn project_state_resolution(
+fn workspace_state_resolution(
     role: Option<&str>,
 ) -> Result<StateManifestResolution, StateCommandError> {
-    let project_root = resolve_current_canic_icp_root()?;
-    let configs = discover_project_canic_config_choices(&project_root)?;
-    Ok(resolve_project_state_manifest(
-        &project_root,
+    let workspace_root = resolve_current_canic_icp_root()?;
+    let configs = discover_workspace_canic_config_choices(&workspace_root)?;
+    Ok(resolve_workspace_state_manifest(
+        &workspace_root,
         &configs,
         role,
     ))

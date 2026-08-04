@@ -2,7 +2,7 @@ use crate::canister::{APP, SCALE_HUB};
 use candid::Principal;
 use ic_testkit::{
     artifacts::{build_wasm_canisters, read_wasm, test_target_dir, workspace_root_for},
-    pic::{Pic, PicSerialGuard, StandaloneCanisterFixture, acquire_pic_serial_guard, pic},
+    pic::{PocketIc, PocketIcBuilder, StandaloneCanisterFixture},
 };
 use std::{
     path::{Path, PathBuf},
@@ -18,9 +18,8 @@ use super::{
 static AUDIT_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
 pub struct RootAuditProbeFixture {
-    pub pic: Pic,
+    pub pic: PocketIc,
     pub canister_id: Principal,
-    _serial_guard: PicSerialGuard,
 }
 
 // Build one standalone internal leaf probe for shared query-floor audits.
@@ -54,8 +53,7 @@ pub fn install_audit_root_probe(profile: CanicWasmBuildProfile) -> RootAuditProb
         "canister_wasm_store",
         profile.target_dir_name(),
     );
-    let serial_guard = acquire_pic_serial_guard();
-    let pic = pic();
+    let pic = PocketIcBuilder::new().with_application_subnet().build();
     let canister_id = pic
         .create_and_install_root_canister(
             root_wasm,
@@ -64,11 +62,7 @@ pub fn install_audit_root_probe(profile: CanicWasmBuildProfile) -> RootAuditProb
         )
         .expect("install audit root probe canister");
 
-    RootAuditProbeFixture {
-        pic,
-        canister_id,
-        _serial_guard: serial_guard,
-    }
+    RootAuditProbeFixture { pic, canister_id }
 }
 
 fn ensure_probe_wasm_ready(

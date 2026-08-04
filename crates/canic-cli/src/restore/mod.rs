@@ -18,10 +18,8 @@ use std::ffi::OsString;
 
 const RESTORE_HELP_AFTER: &str = "\
 Examples:
-  canic backup create test
-  canic backup list
+  canic restore plan 1 --require-verified --require-restore-ready
   canic restore prepare 1 --require-verified --require-restore-ready
-  canic restore status 1 --require-ready --require-no-attention
   canic restore run 1 --execute --max-steps 1 --require-no-attention";
 
 use enforce::{
@@ -56,6 +54,16 @@ where
         .map_err(|_| RestoreCommandError::Usage(usage()))?;
 
     match command.as_str() {
+        "apply" => {
+            if print_help_or_version(&args, apply_usage, version_text()) {
+                return Ok(());
+            }
+            let options = RestoreApplyOptions::parse(args)?;
+            let dry_run = restore_apply_dry_run(&options)?;
+            write_apply_dry_run(&options, &dry_run)?;
+            write_apply_journal_if_requested(&options, &dry_run)?;
+            Ok(())
+        }
         "plan" => {
             if print_help_or_version(&args, plan_usage, version_text()) {
                 return Ok(());
@@ -73,16 +81,6 @@ where
             let options = RestorePrepareOptions::parse(args)?;
             let report = restore_prepare(&options)?;
             write_prepare_report(&options, &report)?;
-            Ok(())
-        }
-        "apply" => {
-            if print_help_or_version(&args, apply_usage, version_text()) {
-                return Ok(());
-            }
-            let options = RestoreApplyOptions::parse(args)?;
-            let dry_run = restore_apply_dry_run(&options)?;
-            write_apply_dry_run(&options, &dry_run)?;
-            write_apply_journal_if_requested(&options, &dry_run)?;
             Ok(())
         }
         "run" => {
@@ -307,6 +305,11 @@ fn restore_command() -> ClapCommand {
         .about("Plan, apply, and run snapshot restores")
         .disable_help_flag(true)
         .subcommand(passthrough_subcommand(
+            ClapCommand::new("apply")
+                .about("Render restore operations and optionally write an apply journal")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("plan")
                 .about("Build a no-mutation restore plan")
                 .disable_help_flag(true),
@@ -314,11 +317,6 @@ fn restore_command() -> ClapCommand {
         .subcommand(passthrough_subcommand(
             ClapCommand::new("prepare")
                 .about("Prepare a backup layout for restore")
-                .disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("apply")
-                .about("Render restore operations and optionally write an apply journal")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(

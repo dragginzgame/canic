@@ -37,9 +37,7 @@ const CANDID_RESPONSE_FORMAT: &str = "candid";
 const INSPECT_HELP_AFTER: &str = "\
 Examples:
   canic inspect canister aaaaa-aa
-  canic inspect canister aaaaa-aa --json
   canic inspect fleet demo-local --role root
-  canic inspect fleet demo-local --role root --json
 
 Inspect is read-only. It queries the guarded canic_runtime_status endpoint for
 one explicit target and does not fan out across Fleet roles. Use

@@ -2,19 +2,20 @@
 
 Date: 2026-08-04
 
-- State: implementation complete; the independent sibling Store build,
-  installation/adoption and post-extraction Wasm boundary pass. Only the
-  maintainer-owned operational proof remains.
+- State: implementation and operational proof complete; the independent
+  sibling Store build, installation/adoption, post-extraction Wasm boundary
+  and disposable IC mainnet physical-deletion/replay proof pass.
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.100`.
-- Latest published release: `v0.100.100` at
-  `0654385f04baa3df425e1c3cf7335cd378614482`.
-- Open patch draft: `0.100.101`; it relays one operator-owned password file to
-  every ICP subprocess without reading or persisting the secret contents.
-- Open design blockers: none; implementation is complete and only the
-  maintainer-owned real-network proof remains.
+- Workspace package version: `0.100.101`.
+- Latest published release: `v0.100.101` at
+  `cc7ebfdfc40ca45bfb9925ff77314c4d8d71763c`.
+- Open patch draft: `0.100.102`; it completes the bounded mainnet closeout and
+  the release-build, retry, reclamation and diagnostic fixes exposed by its
+  rehearsals.
+- Open design blockers: none; implementation and operational proof are
+  complete.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
 exactly one Fleet Subnet Root per occupied `(FleetKey, SubnetId)`, with each
@@ -1263,10 +1264,9 @@ arbitrary artifact fallback authority.
 
 ## Next Action
 
-Released 0.100.100 hardens the proof tool so execution refuses to synthesize a
-missing Coordinator intent. Open 0.100.101 removes the encrypted-identity
-subprocess blocker exposed by live proof preparation. The maintainer-owned
-final operational proof remains: run root-deletion preparation and execution
-as separate processes against one explicitly selected disposable real-network
-root, then verify the surviving Coordinator terminal receipt and exact replay
-before closing 0.100 and beginning 0.101.
+Publish the validated 0.100.102 closeout batch, then begin 0.101. The
+maintainer-owned `canic-0-100-proof-9` run installed one isolated-release Fleet
+on IC mainnet, retired its empty root and sibling Store, retained its prepaid
+Canister asset under the surviving Coordinator, physically deleted Store and
+root, and returned the exact terminal Coordinator receipt on replay without a
+second root effect.

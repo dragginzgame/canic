@@ -14,20 +14,46 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.100`.
-- The latest published release is `v0.100.100` at
-  `0654385f04baa3df425e1c3cf7335cd378614482`.
-- Open patch draft `0.100.101` relays an operator-owned password file to every
+- The workspace package version is `0.100.101`.
+- The latest published release is `v0.100.101` at
+  `cc7ebfdfc40ca45bfb9925ff77314c4d8d71763c`.
+- Open patch draft `0.100.102` advances the unified test runtime to
+  `ic-testkit 0.3.2` and PocketIC `15.0.0`. Canic now uses the re-exported raw
+  `PocketIc` plus focused extension traits, including typed startup, time and
+  explicit snapshot-funding APIs; removes the direct dependency, global
+  testkit serial guard and non-owning reconnect; and prepares sibling Store
+  controllers directly on the owned instance.
+  It also freezes the explicit IC mainnet `proof` environment and bounded
+  one-root Fleet input for the final physical-deletion proof. The first live
+  rehearsal exposed and now fixes exact-session release-build recovery, typed
+  durable retry of observably unapplied `IC0207` installs and a root-side
+  package-selector/Cargo-identity conflation. A later live run exposed a
+  shared role-path collision and delayed call-refund headroom: qualified builds
+  now use immutable release-ID-scoped artifact directories; deployment truth,
+  execution receipts and manifest admission consume that exact workspace-confined
+  root, and admission proves the embedded release identity. Terminal
+  reclamation reserves both execution and refund headroom. Measured creation
+  funding is now 3T Coordinator, 5T root and 3T sibling Store. The clean
+  `canic-0-100-proof-9` mainnet run installed exact release build
+  `47d711b4a052523d23eb8db46bf5d34b390392b0dc5b47f2b406f0ec831b0667`,
+  drained its empty root, handed its prepaid Canister asset to the surviving
+  Coordinator, physically deleted the reclaimed sibling Store and root, and
+  replayed the exact terminal Coordinator receipt. Independent status checks
+  observe both deleted Canisters absent, the Coordinator running and the
+  handed-off asset present under protected control. The live run also exposed
+  the current ICP CLI's exact `Error: Canister <principal> was not found.`
+  wording; the host now classifies only that complete diagnostic as typed
+  absence and still verifies the exact durable root principal.
+  The CLI also hard-cuts the stale Project identity/scope: App and Fleet are
+  the only deployment identities, workspace names the local checkout/config
+  root, bare `canic medic` owns workspace diagnostics, and the removed
+  `canic medic project` form is rejected without an alias.
+- Released `0.100.101` relays an operator-owned password file to every
   ICP subprocess so encrypted controller identities work consistently across
   non-interactive installation, reconciliation and deletion-proof calls. It
   also advances the host-only Subnet Catalog boundary to `ic-query 0.26.15`;
   Canic's consumed Rust model remains stable while the local cache hard-cuts to
   `nns/<network>/subnet-catalog/...` with no legacy-path fallback.
-- PocketIC remains at `14.0.0`: published `ic-testkit 0.1.11` constrains
-  `pocket-ic` to the 14.x line, and resolving a direct v15 client beside its
-  v14-backed `Pic` wrapper would reject the shared server at runtime. The next
-  testkit release should target PocketIC 15 and expose `Pic::set_controllers`,
-  after which Canic can remove its temporary live-instance reconnect helper.
 - Released `0.100.100` makes the durable Coordinator root-deletion execution
   intent a mandatory process boundary. Destructive execution cannot prepare
   its own authority and fails before observing or mutating the root when the
@@ -97,9 +123,9 @@ Historical detail is archived at:
   Released 0.100.98 completes that implementation; released 0.100.99 removes
   the final root-build side effect and records a passing post-extraction
   boundary. Released 0.100.100 enforces the final proof's separate-process
-  root-deletion boundary, and open 0.100.101 relays encrypted-identity
-  credentials to every ICP subprocess. Only the disposable real-network proof
-  remains.
+  root-deletion boundary, and released 0.100.101 relays encrypted-identity
+  credentials to every ICP subprocess. Open 0.100.102 completes the disposable
+  real-network proof and its exact terminal replay.
 - Proposed `0.105` defines provider-neutral declarative authentication
   profiles as the sole source of multi-role user-token grants and
   install-owned issuer/verifier policy. Its initial Toko path uses one
@@ -654,7 +680,7 @@ Historical detail is archived at:
   module-surface hardening audit and its low-risk helper cleanup.
 - Released `0.100.68` consolidates duplicated Fleet-install ICP context
   construction under one host boundary. The exact executable, environment,
-  project root, optional direct-replica target and every role-specific command
+  ICP project root, optional direct-replica target and every role-specific command
   remain unchanged while nine redundant functions and 87 net lines are
   removed.
 - Released `0.100.69` revalidates the retained final inventory against the sole
@@ -1163,9 +1189,9 @@ Historical detail is archived at:
   parsing, duplicate registry and auth response models, and local query
   transport fallback. Maintained query paths use canonical Candid DTOs and
   retain typed command, envelope, decoding, endpoint, and replica causes.
-- Released `v0.93.8` gives project config discovery, duplicate fleet
+- Released `v0.93.8` gives workspace App-config discovery, duplicate Fleet
   admission, and fleet selection one typed authority. Install, deployment
-  verification, and deployed-list operations fail closed on project-root
+  verification, and deployed-list operations fail closed on workspace-root
   resolution rather than continuing through optional fallbacks.
 - Released `v0.93.9` gives Cargo workspace, ICP project, and
   canister-manifest discovery typed filesystem, TOML, metadata, missing, and
@@ -2099,7 +2125,7 @@ First primary results:
   changelog governance, semantic facade checks for the built-in Wasm store and
   delegation root, strict
   all-target Clippy for core/host/CLI, formatting, and diff hygiene. The
-  repository-root project Medic remains non-passing only on the separately
+  workspace Medic remains non-passing only on the separately
   existing cross-fleet role-name ambiguity in state-manifest discovery; no
   role dependency-shape finding is reported.
 - Released `0.97.1` Slice C validation passes 36 procedural-macro tests, 25
@@ -2157,12 +2183,13 @@ First primary results:
 
 ## Next Action
 
-The maintainer-owned final operational proof remains: run guarded root-deletion
-preparation and execution as separate processes against one explicitly
-selected disposable real-network root, then verify the surviving Coordinator
-terminal receipt and exact replay before closing 0.100 against the accepted
-design and beginning 0.101. The retained implementation detail remains in the
-[implementation tracker](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md).
+Finish the maintainer-owned `0.100.102` release bookkeeping and publish the
+validated closeout batch, then begin 0.101 against the accepted design. The
+disposable mainnet proof is complete: guarded root-deletion preparation and
+execution ran as separate processes, independent status observes the Store and
+root absent, and the surviving Coordinator returns the exact terminal receipt
+on replay without another root effect. The retained implementation detail is
+in the [implementation tracker](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md).
 Fresh installation now journals and verifies the Coordinator, every planned
 Fleet Subnet Root, each root's exact topology-admitted local Store, and every
 root's Registry `Joining` row, private snapshot candidate and exact
@@ -2595,10 +2622,12 @@ their current subsystem owners. Released `0.100.96` records the initial
 boundary baseline, released `0.100.98` completes the independent host-installed
 Store cut, released `0.100.99` records the passing post-extraction boundary,
 released `0.100.100` requires a previously retained Coordinator execution
-intent before destructive root deletion, and open `0.100.101` removes the
-password-encrypted identity execution blocker. The maintainer-owned
-disposable real-network root-deletion proof is the only remaining 0.100
-closeout item.
+intent before destructive root deletion, and released `0.100.101` removes the
+password-encrypted identity execution blocker. Open `0.100.102` completes the
+maintainer-owned disposable real-network proof, including isolated release
+installation, empty-root retirement, sibling Store deletion, separate-process
+root deletion and exact terminal receipt replay. No 0.100 closeout item remains
+after its focused validation and release bookkeeping.
 
 ## Historical Release Detail
 

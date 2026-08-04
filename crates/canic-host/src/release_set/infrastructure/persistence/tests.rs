@@ -140,7 +140,7 @@ fn complete_build_rejects_cross_build_and_out_of_root_artifacts() {
     fs::create_dir_all(&outside).expect("create outside root");
     let mut outputs = build_outputs(&root, release_build_id);
     let outside_wasm = outside.join("fleet_coordinator.wasm");
-    fs::write(&outside_wasm, wasm(9)).expect("write outside Wasm");
+    fs::write(&outside_wasm, wasm(9, release_build_id)).expect("write outside Wasm");
     outputs[0].wasm_path = outside_wasm;
     assert!(matches!(
         compile_and_persist_canic_infrastructure_artifact_manifest(
@@ -152,6 +152,31 @@ fn complete_build_rejects_cross_build_and_out_of_root_artifacts() {
     ));
 
     fs::remove_dir_all(outside).expect("remove outside root");
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn complete_build_rejects_wasm_without_the_exact_embedded_release_identity() {
+    let root = temp_dir("infrastructure-artifact-embedded-identity");
+    let plan = plan_release_build(&root).expect("plan release build");
+    let release_build_id = plan.record.release_build_id;
+    let outputs = build_outputs(&root, release_build_id);
+    fs::write(&outputs[0].wasm_path, wasm_without_identity(9)).expect("replace raw Wasm");
+
+    assert!(matches!(
+        compile_and_persist_canic_infrastructure_artifact_manifest(
+            &root,
+            release_build_id,
+            &outputs,
+        ),
+        Err(CanicInfrastructureArtifactPersistenceError::MissingReleaseBuildIdentity {
+            role: CanicInfrastructureRole::WasmStore,
+            release_build_id: observed,
+            ..
+        }) if observed == release_build_id
+    ));
+    assert!(!infrastructure_artifact_manifest_path(&root, release_build_id).exists());
+
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
@@ -304,7 +329,7 @@ fn build_output(
     fs::create_dir_all(&artifact_root).expect("create artifact root");
     let wasm_path = artifact_root.join(format!("{}.wasm", role.as_str()));
     let wasm_gz_path = artifact_root.join(format!("{}.wasm.gz", role.as_str()));
-    let bytes = wasm(marker);
+    let bytes = wasm(marker, release_build_id);
     fs::write(&wasm_path, &bytes).expect("write Wasm");
     fs::write(&wasm_gz_path, gzip(&bytes)).expect("write gzip Wasm");
 
@@ -318,12 +343,18 @@ fn build_output(
 }
 
 fn replace_output_bytes(output: &CanicInfrastructureArtifactBuildOutput, marker: u8) {
-    let bytes = wasm(marker);
+    let bytes = wasm(marker, output.release_build_id);
     fs::write(&output.wasm_path, &bytes).expect("replace Wasm");
     fs::write(&output.wasm_gz_path, gzip(&bytes)).expect("replace gzip Wasm");
 }
 
-fn wasm(marker: u8) -> Vec<u8> {
+fn wasm(marker: u8, release_build_id: ReleaseBuildId) -> Vec<u8> {
+    let mut bytes = wasm_without_identity(marker);
+    bytes.extend_from_slice(release_build_id.to_string().as_bytes());
+    bytes
+}
+
+fn wasm_without_identity(marker: u8) -> Vec<u8> {
     let mut bytes = WASM_MAGIC.to_vec();
     bytes.push(marker);
     bytes

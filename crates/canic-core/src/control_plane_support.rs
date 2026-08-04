@@ -99,7 +99,7 @@ pub mod ops {
         pub mod install_source {
             pub use crate::ops::runtime::install_source::ApprovedModuleSource;
 
-            /// Resolve one embedded-or-driver-backed source for control-plane installation.
+            /// Resolve one Store-backed chunk source for control-plane installation.
             pub async fn resolve_approved_module_source(
                 role: &crate::ids::CanisterRole,
             ) -> Result<ApprovedModuleSource, crate::error::InternalError> {

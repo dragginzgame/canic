@@ -22,7 +22,6 @@ use crate::{
     },
     cargo_command,
     cargo_metadata::cargo_metadata,
-    release_set::artifact_root_path,
     remove_optional_file,
     role_contract::{
         PackageValidationMode, RolePackageValidation, finding_detail,
@@ -69,7 +68,7 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
         .join("wasm32-unknown-unknown")
         .join(context.profile.target_dir_name())
         .join(format!("{GENERATED_WRAPPER_CRATE_NAME}.wasm"));
-    let artifact_root = artifact_root_path(&context.icp_root, "local").join(FLEET_COORDINATOR_ROLE);
+    let artifact_root = context.artifact_root().join(FLEET_COORDINATOR_ROLE);
     fs::create_dir_all(&artifact_root)?;
     let wasm_path = artifact_root.join(format!("{FLEET_COORDINATOR_ROLE}.wasm"));
     let wasm_gz_path = artifact_root.join(format!("{FLEET_COORDINATOR_ROLE}.wasm.gz"));

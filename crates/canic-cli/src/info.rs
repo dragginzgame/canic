@@ -21,22 +21,19 @@ Group read-only installed-Fleet information commands
 Usage: canic info <command> [OPTIONS]
 
 Commands:
-  list       List installed Fleet canisters
   cycles     Summarize Fleet cycle history
-  metrics    Query Canic runtime telemetry
-  subnets    Show live Fleet Subnet occupancy and Canister counts
   endpoints  List callable Candid endpoints
   env        Print sourceable canister ID exports
+  list       List installed Fleet canisters
+  metrics    Query Canic runtime telemetry
+  subnets    Show live Fleet Subnet occupancy and Canister counts
   help       Print this message or the help of the given subcommand(s)
 
 Examples:
-  canic info list test --subtree scale_hub
   canic info cycles test --subtree scale_hub
-  canic info metrics test
-  canic info subnets test
-  canic info endpoints test app
-  canic info env test";
-const INFO_SUBCOMMANDS: &[&str] = &["list", "cycles", "metrics", "subnets", "endpoints", "env"];
+  canic info list test --subtree scale_hub
+  canic info subnets test";
+const INFO_SUBCOMMANDS: &[&str] = &["cycles", "endpoints", "env", "list", "metrics", "subnets"];
 
 ///
 /// InfoCommandError
@@ -50,17 +47,17 @@ pub enum InfoCommandError {
     #[error("{0}")]
     Usage(String),
 
-    #[error("list: {0}")]
-    List(#[from] list::ListCommandError),
-
     #[error("cycles: {0}")]
     Cycles(#[from] cycles::CyclesCommandError),
+
+    #[error("endpoints: {0}")]
+    Endpoints(#[from] endpoints::EndpointsCommandError),
 
     #[error("env: {0}")]
     Env(#[from] info_env::InfoEnvCommandError),
 
-    #[error("endpoints: {0}")]
-    Endpoints(#[from] endpoints::EndpointsCommandError),
+    #[error("list: {0}")]
+    List(#[from] list::ListCommandError),
 
     #[error("metrics: {0}")]
     Metrics(#[from] metrics::MetricsCommandError),
@@ -73,10 +70,10 @@ impl InfoCommandError {
     pub const fn exit_code(&self) -> u8 {
         match self {
             Self::Usage(_) => 2,
-            Self::List(_)
-            | Self::Cycles(_)
-            | Self::Env(_)
+            Self::Cycles(_)
             | Self::Endpoints(_)
+            | Self::Env(_)
+            | Self::List(_)
             | Self::Metrics(_)
             | Self::Subnets(_) => 1,
         }
@@ -95,12 +92,12 @@ where
 
     let (command, tail) = parse_info_command(args)?;
     match command.as_str() {
-        "list" => list::run_info(tail).map_err(InfoCommandError::from),
         "cycles" => cycles::run_info(tail).map_err(InfoCommandError::from),
-        "metrics" => metrics::run_info(tail).map_err(InfoCommandError::from),
-        "subnets" => info_subnets::run(tail).map_err(InfoCommandError::from),
         "endpoints" => endpoints::run_info(tail).map_err(InfoCommandError::from),
         "env" => info_env::run(tail).map_err(InfoCommandError::from),
+        "list" => list::run_info(tail).map_err(InfoCommandError::from),
+        "metrics" => metrics::run_info(tail).map_err(InfoCommandError::from),
+        "subnets" => info_subnets::run(tail).map_err(InfoCommandError::from),
         _ => unreachable!("clap restricts info subcommands"),
     }
 }
@@ -167,10 +164,11 @@ mod tests {
     }
 
     #[test]
-    fn info_usage_includes_current_info_example() {
+    fn info_usage_includes_representative_examples() {
         let text = usage();
 
+        assert!(text.contains("canic info cycles test"));
+        assert!(text.contains("canic info list test"));
         assert!(text.contains("canic info subnets test"));
-        assert!(text.contains("canic info env test"));
     }
 }

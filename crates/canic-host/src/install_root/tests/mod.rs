@@ -6,11 +6,12 @@ use super::commands::{
     write_candid_args,
 };
 use super::config_selection::{
-    config_selection_error, discover_canic_config_choices, discover_project_canic_config_choices,
+    config_selection_error, discover_canic_config_choices, discover_workspace_canic_config_choices,
     resolve_install_config_path, select_discovered_app_config_path,
 };
 use super::current_execution::{
-    current_install_execution_context, current_install_executor_missing_capabilities,
+    current_install_execution_context, current_install_execution_context_at_root,
+    current_install_executor_missing_capabilities,
 };
 use super::deployment_truth_gate::{
     enforce_install_deployment_truth_gate, install_deployment_truth_gate_lines,
@@ -36,7 +37,7 @@ use super::truth_check::current_install_deployment_truth_check_at;
 use super::{
     InstallRootBlockKind, InstallRootBlockedError, InstallRootError, InstallRootOptions,
     InstallRootPhase, check_install_deployment_truth, check_install_execution_preflight,
-    latest_deployment_truth_receipt_path_from_root,
+    current_install_release_build, latest_deployment_truth_receipt_path_from_root,
 };
 use crate::canister_build::{
     CanisterArtifactBuildSpec, CanisterBuildProfile, WorkspaceBuildContext,
@@ -49,8 +50,10 @@ use crate::deployment_truth::{
     artifact_gate_role_phase_receipts, compare_plan_to_inventory, safety_report_from_diff,
 };
 use crate::icp::LocalReplicaTarget;
-use crate::release_set::RootReleaseSetBuildSnapshot;
 use crate::test_support::{temp_dir, write_local_network_authority};
+use crate::{
+    release_build::finalize_release_build_from_manifest, release_set::RootReleaseSetBuildSnapshot,
+};
 use canic_core::{
     dto::fleet_activation::FleetActivationIdentity,
     ids::{
@@ -67,6 +70,46 @@ use std::{
 mod commands;
 mod config_selection;
 mod install_truth;
+
+#[test]
+fn current_install_reuses_the_existing_session_release_build_before_rebuilding() {
+    let root = temp_dir("current-install-release-recovery");
+    fs::create_dir_all(&root).expect("create temp root");
+    fs::write(
+        root.join("icp.yaml"),
+        "environments:\n  - name: proof\n    network: ic\n",
+    )
+    .expect("write ICP project");
+    let first = current_install_release_build(&root, "proof", "primary", "demo")
+        .expect("plan first release build");
+    let release_build_id = first.record.release_build_id;
+    let manifest = root.join("release-set.json");
+    fs::write(&manifest, [7; 32]).expect("write release-set authority");
+    let finalized = finalize_release_build_from_manifest(&root, release_build_id, &manifest)
+        .expect("finalize release build");
+    super::fleet_install_session::plan_fleet_install_session(
+        super::fleet_install_session::PlanFleetInstallSessionRequest {
+            root: &root,
+            canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+            fleet_name: "primary".parse().expect("Fleet name"),
+            app: "demo".into(),
+            finalized_release_build: &finalized,
+        },
+    )
+    .expect("publish Fleet install session");
+
+    let recovered = current_install_release_build(&root, "proof", "primary", "demo")
+        .expect("recover release build before rebuilding");
+
+    assert_eq!(recovered.record, finalized.record);
+    assert_eq!(
+        fs::read_dir(root.join(".canic/release-builds"))
+            .expect("read release-build directory")
+            .count(),
+        1
+    );
+    fs::remove_dir_all(root).expect("remove temp root");
+}
 
 #[test]
 fn public_install_error_preserves_phase_and_typed_source() {

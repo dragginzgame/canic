@@ -22,7 +22,7 @@ supports the complete Coordinator/root/store control-plane contract.
 | Feature | Default | Enables |
 | --- | --- | --- |
 | `fleet-coordinator-canister` | Yes | Dedicated Fleet Coordinator lifecycle, canonical Fleet Registry state, and query APIs without root or Wasm Store runtime behavior. |
-| `root-control-plane` | Yes | Root-side runtime, workflow, view, bootstrap, publication, and template-management support; also enables `wasm-store-canister`. |
+| `root-control-plane` | Yes | Root-side runtime, workflow, view, bootstrap, publication, and template-management support without Store-canister endpoints. |
 | `wasm-store-canister` | Yes | Store-side template upload, manifest, chunking, garbage-collection, and install APIs without the root runtime/workflow modules. |
 
 Downstream roots should normally select the `canic` facade's `control-plane`
@@ -37,9 +37,9 @@ The host-generated Fleet Coordinator selects only
 `fleet-coordinator-canister`; it does not compile App configuration or root
 runtime behavior.
 
-Selecting `root-control-plane` with default features disabled still enables
-`wasm-store-canister`; there is no root-only feature combination that omits the
-store-side contract.
+Selecting `root-control-plane` with default features disabled compiles only the
+root-side contract. Select `wasm-store-canister` independently for the sibling
+Store canister package.
 
 See `../../README.md` for the broader workspace overview and use `canic` as the
 default public entry surface unless you specifically need this crate.

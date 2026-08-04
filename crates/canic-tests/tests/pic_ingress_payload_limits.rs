@@ -2,7 +2,7 @@ use canic::{Error, ids::CanisterRole};
 use canic_testing_internal::pic::{
     CanicWasmBuildProfile, install_standalone_canister, install_standalone_canister_on_pic,
 };
-use ic_testkit::pic::{PicCallErrorKind, StandaloneCanisterFixture};
+use ic_testkit::pic::{CandidCallErrorKind, CandidCallExt, StandaloneCanisterFixture};
 
 const PROBE_CRATE: &str = "payload_limit_probe";
 const PROBE_ROLE: CanisterRole = CanisterRole::new("test");
@@ -29,7 +29,7 @@ fn inspect_message_enforces_default_explicit_and_named_payload_limits() {
 fn raw_update_adapter_rejects_oversized_inter_canister_payload_before_decode() {
     let target = install_standalone_canister(PROBE_CRATE, PROBE_ROLE, CanicWasmBuildProfile::Fast);
     let relay = install_standalone_canister_on_pic(
-        target.pic(),
+        target.pocket_ic(),
         PROBE_CRATE,
         PROBE_ROLE,
         CanicWasmBuildProfile::Fast,
@@ -37,7 +37,7 @@ fn raw_update_adapter_rejects_oversized_inter_canister_payload_before_decode() {
     );
     let exact_payload_len = string_len_for_wire_size(EXPLICIT_ECHO_MAX_BYTES);
 
-    let accepted: Result<usize, Error> = target.pic().update_call_or_panic(
+    let accepted: Result<usize, Error> = target.pocket_ic().update_candid_or_panic(
         relay,
         "relay_explicit_echo",
         (target.canister_id(), exact_payload_len),
@@ -47,7 +47,7 @@ fn raw_update_adapter_rejects_oversized_inter_canister_payload_before_decode() {
         exact_payload_len
     );
 
-    let rejected: Result<usize, Error> = target.pic().update_call_or_panic(
+    let rejected: Result<usize, Error> = target.pocket_ic().update_candid_or_panic(
         relay,
         "relay_explicit_echo",
         (target.canister_id(), exact_payload_len + 1),
@@ -61,7 +61,7 @@ fn raw_update_adapter_rejects_oversized_inter_canister_payload_before_decode() {
 // Assert one ingress update reaches the canister and returns the echoed length.
 fn assert_echo_ok(fixture: &StandaloneCanisterFixture, method: &str, len: usize) {
     let payload = payload(len);
-    let response: Result<usize, Error> = fixture.update_call_or_panic(method, (payload,));
+    let response: Result<usize, Error> = fixture.update_candid_or_panic(method, (payload,));
 
     assert_eq!(response.expect("endpoint should accept payload"), len);
 }
@@ -70,10 +70,11 @@ fn assert_echo_ok(fixture: &StandaloneCanisterFixture, method: &str, len: usize)
 fn assert_rejected(fixture: &StandaloneCanisterFixture, method: &str, len: usize) {
     let payload = payload(len);
     let err = fixture
-        .update_call::<Result<usize, Error>, _>(method, (payload,))
+        .update_candid::<Result<usize, Error>, _>(method, (payload,))
         .expect_err("transport should reject oversized ingress");
 
-    assert_eq!(err.kind(), PicCallErrorKind::Transport);
+    assert_eq!(err.kind(), CandidCallErrorKind::CanisterReject);
+    assert!(err.reject_response().is_some());
 }
 
 // Build one ASCII string payload with exact byte length.

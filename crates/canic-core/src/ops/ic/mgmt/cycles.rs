@@ -8,6 +8,11 @@ use super::*;
 use crate::ops::cost_guard::CostGuardPermit;
 
 impl MgmtOps {
+    /// Return the exact current-Subnet execution cost of a zero-cycle deposit call.
+    pub fn deposit_cycles_call_cost(canister_pid: Principal) -> Result<u128, InternalError> {
+        MgmtInfra::deposit_cycles_call_cost(canister_pid).map_err(|err| OpsError::from(err).into())
+    }
+
     /// Deposits cycles after a cost guard has reserved value-transfer quota and cycles.
     pub async fn deposit_cycles_with_permit(
         _permit: &CostGuardPermit,

@@ -37,15 +37,6 @@ where
             write_create_report(&report);
             Ok(())
         }
-        "list" => {
-            if print_help_or_version(&args, list_usage, version_text()) {
-                return Ok(());
-            }
-            let options = BackupListOptions::parse(args)?;
-            let entries = backup_list(&options)?;
-            write_list_report(&options, &entries)?;
-            Ok(())
-        }
         "inspect" => {
             if print_help_or_version(&args, inspect_usage, version_text()) {
                 return Ok(());
@@ -53,6 +44,15 @@ where
             let options = BackupInspectOptions::parse(args)?;
             let report = backup_inspect(&options)?;
             write_inspect_report(&options, &report)?;
+            Ok(())
+        }
+        "list" => {
+            if print_help_or_version(&args, list_usage, version_text()) {
+                return Ok(());
+            }
+            let options = BackupListOptions::parse(args)?;
+            let entries = backup_list(&options)?;
+            write_list_report(&options, &entries)?;
             Ok(())
         }
         "manifest" => run_manifest(args).map_err(BackupCommandError::from),

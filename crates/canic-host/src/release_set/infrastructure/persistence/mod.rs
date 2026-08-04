@@ -13,7 +13,8 @@ use crate::{
     },
     release_build::{ReleaseBuildPlanError, ReleaseBuildPlanState, load_release_build_plan},
     release_set::artifact::{
-        ReleaseArtifactMaterializationError, materialize_qualified_release_artifact,
+        ReleaseArtifactMaterializationError, contains_release_build_identity,
+        materialize_qualified_release_artifact,
     },
 };
 use std::{
@@ -98,6 +99,15 @@ pub enum CanicInfrastructureArtifactPersistenceError {
     InvalidArtifactPath {
         role: CanicInfrastructureRole,
         kind: &'static str,
+        path: PathBuf,
+    },
+
+    #[error(
+        "infrastructure artifact {role:?} raw Wasm at {path} does not embed release build {release_build_id}"
+    )]
+    MissingReleaseBuildIdentity {
+        role: CanicInfrastructureRole,
+        release_build_id: ReleaseBuildId,
         path: PathBuf,
     },
 
@@ -257,6 +267,15 @@ fn materialize_build_output(
     }
 
     let wasm = materialize_artifact(root, role, "raw Wasm", &output.wasm_path)?;
+    if !contains_release_build_identity(&wasm.bytes, release_build_id) {
+        return Err(
+            CanicInfrastructureArtifactPersistenceError::MissingReleaseBuildIdentity {
+                role,
+                release_build_id,
+                path: output.wasm_path.clone(),
+            },
+        );
+    }
     let wasm_gz = materialize_artifact(root, role, "gzip Wasm", &output.wasm_gz_path)?;
 
     Ok(MaterializedBuildOutput {

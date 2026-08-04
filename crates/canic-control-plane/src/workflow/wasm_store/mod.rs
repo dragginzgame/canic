@@ -7,7 +7,6 @@
 use crate::{
     config,
     dto::template::{
-        WASM_STORE_DELETION_CALL_REFUND_HEADROOM_CYCLES,
         WASM_STORE_DELETION_MAXIMUM_RETAINED_CYCLES, WasmStoreDeletionCycleReclamationRequest,
         WasmStoreDeletionCycleReclamationResponse,
     },
@@ -43,10 +42,17 @@ pub async fn reclaim_deletion_cycles(
 
     let destination = IcOps::msg_caller();
     let cycles_before = IcOps::canister_cycle_balance().to_u128();
+    let deposit_call_cost = MgmtOps::deposit_cycles_call_cost(destination)?;
     let target_cycles_to_retain = request
         .maximum_cycles_to_retain
-        .saturating_sub(WASM_STORE_DELETION_CALL_REFUND_HEADROOM_CYCLES);
-    let maximum_transfer = cycles_before.saturating_sub(target_cycles_to_retain);
+        .checked_sub(deposit_call_cost)
+        .ok_or_else(|| {
+            InternalError::invalid_input(
+                "Store deletion cycle reserve does not cover the exact deposit call cost",
+            )
+        })?;
+    let maximum_transfer =
+        transferable_cycles(cycles_before, target_cycles_to_retain, deposit_call_cost);
     if maximum_transfer == 0 {
         return Ok(reclamation_response(
             destination,
@@ -63,7 +69,11 @@ pub async fn reclaim_deletion_cycles(
         cycles_before,
     )?;
     let cycles_before_transfer = IcOps::canister_cycle_balance().to_u128();
-    let cycles_transferred = cycles_before_transfer.saturating_sub(target_cycles_to_retain);
+    let cycles_transferred = transferable_cycles(
+        cycles_before_transfer,
+        target_cycles_to_retain,
+        deposit_call_cost,
+    );
     let result = transfer_reclaimed_cycles(&permit, destination, cycles_transferred).await;
     settle_cycle_reclamation(&permit, result)?;
 
@@ -75,10 +85,20 @@ pub async fn reclaim_deletion_cycles(
     ))
 }
 
+const fn transferable_cycles(
+    current_cycles: u128,
+    target_cycles_to_retain: u128,
+    call_cost: u128,
+) -> u128 {
+    current_cycles
+        .saturating_sub(target_cycles_to_retain)
+        .saturating_sub(call_cost)
+}
+
 fn validate_request(
     request: WasmStoreDeletionCycleReclamationRequest,
 ) -> Result<(), InternalError> {
-    if request.maximum_cycles_to_retain <= WASM_STORE_DELETION_CALL_REFUND_HEADROOM_CYCLES
+    if request.maximum_cycles_to_retain == 0
         || request.maximum_cycles_to_retain > WASM_STORE_DELETION_MAXIMUM_RETAINED_CYCLES
     {
         return Err(InternalError::invalid_input(
@@ -181,5 +201,23 @@ fn reclamation_response(
         maximum_cycles_to_retain,
         cycles_transferred,
         cycles_after: IcOps::canister_cycle_balance().to_u128(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::transferable_cycles;
+
+    #[test]
+    fn cycle_reclamation_retains_the_target_and_exact_call_cost() {
+        let maximum_cycles_to_retain = 200_u128;
+        let call_cost = 60;
+        let target_before_call = maximum_cycles_to_retain.saturating_sub(call_cost);
+
+        assert_eq!(
+            transferable_cycles(1_500, target_before_call, call_cost),
+            1_300
+        );
+        assert_eq!(transferable_cycles(190, target_before_call, call_cost), 0);
     }
 }

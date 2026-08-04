@@ -75,6 +75,57 @@ fn build_context_distinguishes_environment_from_build_network() {
 }
 
 #[test]
+fn release_build_artifacts_use_one_immutable_identity_namespace() {
+    let release_build_id = canic_core::ids::ReleaseBuildId::from_nonce(
+        canic_core::ids::ReleaseBuildNonce::from_random_bytes([9; 32]),
+    );
+    let context = WorkspaceBuildContext {
+        role: "root".to_string(),
+        profile: super::CanisterBuildProfile::Release,
+        environment: "proof".to_string(),
+        build_network: BuildNetwork::Ic,
+        workspace_root: "/workspace".into(),
+        icp_root: "/project".into(),
+        config_path: "/workspace/apps/demo/canic.toml".into(),
+        local_replica: None,
+        refresh_canonical_wasm_store_did: false,
+        release_build_id: Some(release_build_id),
+    };
+
+    assert_eq!(
+        context.artifact_root(),
+        std::path::Path::new("/project/.canic/release-builds")
+            .join(release_build_id.to_string())
+            .join("artifacts")
+    );
+    assert_eq!(
+        context.clone().with_role("app").artifact_root(),
+        context.artifact_root()
+    );
+}
+
+#[test]
+fn unqualified_artifacts_keep_the_local_icp_build_surface() {
+    let context = WorkspaceBuildContext {
+        role: "root".to_string(),
+        profile: super::CanisterBuildProfile::Release,
+        environment: "local".to_string(),
+        build_network: BuildNetwork::Local,
+        workspace_root: "/workspace".into(),
+        icp_root: "/project".into(),
+        config_path: "/workspace/apps/demo/canic.toml".into(),
+        local_replica: None,
+        refresh_canonical_wasm_store_did: false,
+        release_build_id: None,
+    };
+
+    assert_eq!(
+        context.artifact_root(),
+        std::path::Path::new("/project/.icp/local/canisters")
+    );
+}
+
+#[test]
 fn build_context_applies_exact_child_build_network() {
     let context = WorkspaceBuildContext {
         role: "app".to_string(),

@@ -1,15 +1,16 @@
 mod chunked;
+#[cfg(feature = "wasm-store-canister")]
 mod gc;
 
 pub use chunked::TemplateChunkedOps;
+#[cfg(feature = "wasm-store-canister")]
 pub use gc::WasmStoreGcOps;
 
 #[cfg(feature = "wasm-store-canister")]
+use crate::dto::template::WasmStoreCatalogEntryResponse;
 use crate::schema::WasmStoreConfig;
 use crate::{
-    dto::template::{
-        TemplateManifestInput, TemplateManifestResponse, WasmStoreCatalogEntryResponse,
-    },
+    dto::template::{TemplateManifestInput, TemplateManifestResponse},
     ids::{TemplateChunkKey, TemplateId, TemplateManifestState, TemplateReleaseKey},
     storage::stable::template::{TemplateManifestRecord, TemplateManifestStateStore},
 };
@@ -149,7 +150,6 @@ pub struct WasmStoreLimits {
     pub max_template_versions_per_template: Option<u16>,
 }
 
-#[cfg(feature = "wasm-store-canister")]
 impl From<&WasmStoreConfig> for WasmStoreLimits {
     fn from(config: &WasmStoreConfig) -> Self {
         Self {
@@ -164,6 +164,7 @@ impl From<&WasmStoreConfig> for WasmStoreLimits {
 /// WasmStoreGcExecutionStats
 ///
 
+#[cfg(feature = "wasm-store-canister")]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct WasmStoreGcExecutionStats {
     pub reclaimed_store_bytes: u64,
@@ -203,6 +204,7 @@ impl TemplateManifestOps {
     }
 
     // Return the approved manifest catalog in a store-safe response shape.
+    #[cfg(feature = "wasm-store-canister")]
     #[must_use]
     pub fn approved_catalog_response() -> Vec<WasmStoreCatalogEntryResponse> {
         Self::approved_manifests_response()
@@ -446,11 +448,15 @@ fn projected_template_versions_for_manifests(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "root-control-plane")]
+    use crate::dto::template::{TemplateChunkInput, TemplateChunkSetPrepareInput};
+    #[cfg(feature = "wasm-store-canister")]
+    use crate::ids::{WasmStoreGcMode, WasmStoreGcStatus};
     use crate::{
-        dto::template::{TemplateChunkInput, TemplateChunkSetPrepareInput},
-        ids::{TemplateChunkingMode, TemplateVersion, WasmStoreBinding, WasmStoreGcMode},
+        ids::{CanisterRole, TemplateChunkingMode, TemplateVersion, WasmStoreBinding},
         storage::stable::template::{TemplateChunkSetStateStore, TemplateChunkStore},
     };
+    #[cfg(feature = "root-control-plane")]
     use canic_core::cdk::utils::hash::wasm_hash;
 
     fn approved_input(template_id: &'static str, role: &'static str) -> TemplateManifestInput {
@@ -468,6 +474,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "wasm-store-canister")]
     fn store_limits(max_store_bytes: u64) -> WasmStoreLimits {
         WasmStoreLimits {
             max_store_bytes,
@@ -482,6 +489,7 @@ mod tests {
         TemplateChunkStore::clear_for_test();
     }
 
+    #[cfg(feature = "wasm-store-canister")]
     fn approved_input_with_version(
         template_id: &'static str,
         role: &'static str,
@@ -492,6 +500,7 @@ mod tests {
         input
     }
 
+    #[cfg(feature = "root-control-plane")]
     fn approved_chunked_input(
         template_id: &'static str,
         role: &'static str,
@@ -501,6 +510,7 @@ mod tests {
         input
     }
 
+    #[cfg(feature = "root-control-plane")]
     #[test]
     fn replace_approved_removes_the_superseded_manifest() {
         reset_store();
@@ -523,6 +533,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "root-control-plane")]
     #[test]
     fn has_approved_for_role_reports_presence() {
         reset_store();
@@ -534,6 +545,7 @@ mod tests {
         assert!(TemplateManifestOps::has_approved_for_role(&CanisterRole::new("app")).unwrap());
     }
 
+    #[cfg(feature = "root-control-plane")]
     #[test]
     fn prune_approved_roles_not_in_removes_stale_managed_roles() {
         reset_store();
@@ -555,6 +567,7 @@ mod tests {
         assert_eq!(TemplateManifestStateStore::export().entries.len(), 1);
     }
 
+    #[cfg(feature = "root-control-plane")]
     #[test]
     fn prepare_then_publish_chunk_rejects_hash_mismatch() {
         reset_store();
@@ -586,6 +599,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "wasm-store-canister")]
     #[test]
     fn store_capacity_rejects_manifest_update_that_exceeds_limit() {
         reset_store();
@@ -602,6 +616,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "wasm-store-canister")]
     #[test]
     fn store_limits_reject_template_count_growth() {
         reset_store();
@@ -632,6 +647,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "wasm-store-canister")]
     #[test]
     fn store_limits_release_version_slot_when_approved_manifest_is_replaced() {
         reset_store();
@@ -661,6 +677,7 @@ mod tests {
         assert_eq!(manifests[0].release.version, TemplateVersion::new("0.18.2"));
     }
 
+    #[cfg(feature = "wasm-store-canister")]
     #[test]
     fn store_status_reports_counts_and_headroom() {
         reset_store();
@@ -723,6 +740,7 @@ mod tests {
         assert_eq!(status.templates[1].versions, 1);
     }
 
+    #[cfg(feature = "wasm-store-canister")]
     #[test]
     fn store_status_reports_gc_preparation_state() {
         reset_store();

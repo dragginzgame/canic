@@ -11,9 +11,9 @@ use crate::{
     release_build::PlannedReleaseBuild,
     release_set::{
         AppConfigSnapshot, ApplicationArtifactBuildTarget, RootReleaseSetBuildSnapshot,
-        RootReleaseSetBuildTarget, artifact_root_path, configured_release_roles_from_config,
-        load_root_package_version, root_release_set_manifest_path,
-        validate_release_artifact_relative_path, workspace_manifest_path,
+        RootReleaseSetBuildTarget, configured_release_roles_from_config, load_root_package_version,
+        root_release_set_manifest_path, validate_release_artifact_relative_path,
+        workspace_manifest_path,
     },
 };
 use std::path::Path;
@@ -80,7 +80,7 @@ pub(super) fn resolve_install_snapshot(
         &root_target.spec.package_manifest_path,
         &workspace_manifest_path(&context.workspace_root),
     )?;
-    let artifact_root = artifact_root_path(&context.icp_root, "local");
+    let artifact_root = context.artifact_root();
     let manifest_path = root_release_set_manifest_path(&artifact_root);
     let manifest_targets = targets
         .iter()

@@ -28,7 +28,7 @@ fn renders_status_report() {
         replica: ReplicaStatus::Running,
         replica_port: "8000".to_string(),
         icp_cli: "icp 0.2.5".to_string(),
-        icp_project: "ok (icp.yaml)".to_string(),
+        icp_config: "ok (icp.yaml)".to_string(),
         canonical_network_id: "network-1".to_string(),
         apps: vec![
             StatusAppRow {
@@ -70,7 +70,7 @@ fn renders_empty_status_report() {
         replica: ReplicaStatus::Stopped,
         replica_port: "8001".to_string(),
         icp_cli: "icp 0.2.5".to_string(),
-        icp_project: "not checked (no Canic App configs)".to_string(),
+        icp_config: "not checked (no Canic App configs)".to_string(),
         canonical_network_id: "network-1".to_string(),
         apps: Vec::new(),
         fleets: Vec::new(),
@@ -78,7 +78,7 @@ fn renders_empty_status_report() {
 
     assert_eq!(
         render_status_report(&report),
-        "Replica: stopped (local, port 8001)\nICP CLI: icp 0.2.5\nICP project: not checked (no Canic App configs)\nApps: 0 configured\nFleets: 0/0 deployed (environment local, network network-1)"
+        "Replica: stopped (local, port 8001)\nICP CLI: icp 0.2.5\nICP config: not checked (no Canic App configs)\nApps: 0 configured\nFleets: 0/0 deployed (environment local, network network-1)"
     );
 }
 
@@ -91,7 +91,7 @@ fn renders_http_fallback_replica_status() {
         replica: ReplicaStatus::RunningHttpFallback,
         replica_port: "8000".to_string(),
         icp_cli: "icp 0.2.6".to_string(),
-        icp_project: "ok (icp.yaml)".to_string(),
+        icp_config: "ok (icp.yaml)".to_string(),
         canonical_network_id: "network-1".to_string(),
         apps: Vec::new(),
         fleets: Vec::new(),
@@ -99,14 +99,14 @@ fn renders_http_fallback_replica_status() {
 
     assert_eq!(
         render_status_report(&report),
-        "Replica: running (local, port 8000, HTTP reachable; ICP CLI status stopped)\nICP CLI: icp 0.2.6\nICP project: ok (icp.yaml)\nApps: 0 configured\nFleets: 0/0 deployed (environment local, network network-1)"
+        "Replica: running (local, port 8000, HTTP reachable; ICP CLI status stopped)\nICP CLI: icp 0.2.6\nICP config: ok (icp.yaml)\nApps: 0 configured\nFleets: 0/0 deployed (environment local, network network-1)"
     );
 }
 
-// Ensure status renders config paths relative to the resolved Canic project root.
+// Ensure status renders config paths relative to the resolved Canic workspace root.
 #[test]
-fn status_app_inventory_uses_project_root_for_config_paths() {
-    let root = temp_dir("canic-status-project-root");
+fn status_app_inventory_uses_workspace_root_for_config_paths() {
+    let root = temp_dir("canic-status-workspace-root");
     let config = root.join("apps/toko/canic.toml");
     fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
     fs::write(
@@ -157,12 +157,12 @@ fn fleet_status_uses_explicit_catalog_app_binding() {
     assert_eq!(row.coordinator, fleet.coordinator_principal);
 }
 
-// Ensure status help points to the compact project summary command.
+// Ensure status help points to the compact workspace summary command.
 #[test]
 fn status_usage_lists_options_and_examples() {
     let text = usage();
 
-    assert!(text.contains("Show quick Canic project status"));
+    assert!(text.contains("Show quick local workspace status"));
     assert!(text.contains("Usage: canic status"));
     assert!(!text.contains("--environment"));
     assert!(!text.contains("--icp"));

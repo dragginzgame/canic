@@ -1,8 +1,8 @@
 //! Module: canic_cli::status
 //!
-//! Responsibility: render the quick local Canic project status summary.
+//! Responsibility: render the quick local Canic workspace status summary.
 //! Does not own: installed Fleet state, replica lifecycle, or App config parsing.
-//! Boundary: reads host/project state and formats the operator-facing status view.
+//! Boundary: reads host/workspace state and formats the operator-facing status view.
 
 #[cfg(test)]
 mod tests;
@@ -21,7 +21,7 @@ use canic_host::{
         DEFAULT_LOCAL_GATEWAY_PORT, configured_local_gateway_port_from_root,
         inspect_canic_icp_yaml_from_root, resolve_current_canic_icp_root,
     },
-    install_root::{ConfigDiscoveryError, discover_project_canic_config_choices},
+    install_root::{ConfigDiscoveryError, discover_workspace_canic_config_choices},
     release_set::{AppConfigSnapshot, display_workspace_path},
     replica_query,
     table::{ColumnAlign, render_table},
@@ -48,7 +48,7 @@ Note:
 ///
 /// StatusCommandError
 ///
-/// CLI boundary error for status option parsing and host/project status reads.
+/// CLI boundary error for status option parsing and host/workspace status reads.
 ///
 
 #[derive(Debug, ThisError)]
@@ -56,7 +56,7 @@ pub enum StatusCommandError {
     #[error("{0}")]
     Usage(String),
 
-    #[error("failed to discover Canic project configs: {0}")]
+    #[error("failed to discover Canic workspace App configs: {0}")]
     ConfigDiscovery(#[from] ConfigDiscoveryError),
 
     #[error(transparent)]
@@ -79,7 +79,7 @@ struct StatusReport {
     replica: ReplicaStatus,
     replica_port: String,
     icp_cli: String,
-    icp_project: String,
+    icp_config: String,
     canonical_network_id: String,
     apps: Vec<StatusAppRow>,
     fleets: Vec<StatusFleetRow>,
@@ -148,13 +148,13 @@ impl StatusOptions {
 fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCommandError> {
     let icp_root =
         resolve_current_canic_icp_root().map_err(|err| StatusCommandError::Host(Box::new(err)))?;
-    let choices = discover_project_canic_config_choices(&icp_root)?;
+    let choices = discover_workspace_canic_config_choices(&icp_root)?;
     let icp_cli = load_icp_cli_version(options);
-    let icp_project = load_icp_project_config_status(&icp_root, &choices);
+    let icp_config = load_icp_config_status(&icp_root, &choices);
     let replica = load_replica_status(options, &icp_root);
     let apps = load_status_apps(&icp_root, &choices);
     let catalog = build_fleet_catalog_report(&FleetCatalogRequest {
-        project_root: icp_root.clone(),
+        workspace_root: icp_root.clone(),
         environment: options.environment.clone(),
         generated_at: String::new(),
     })
@@ -171,7 +171,7 @@ fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCom
         replica,
         replica_port: load_replica_port(&icp_root),
         icp_cli,
-        icp_project,
+        icp_config,
         canonical_network_id: catalog.canonical_network_id.to_string(),
         apps,
         fleets,
@@ -213,7 +213,7 @@ fn load_replica_port(icp_root: &Path) -> String {
         .to_string()
 }
 
-fn load_icp_project_config_status(icp_root: &Path, choices: &[std::path::PathBuf]) -> String {
+fn load_icp_config_status(icp_root: &Path, choices: &[std::path::PathBuf]) -> String {
     if choices.is_empty() {
         return "not checked (no Canic App configs)".to_string();
     }
@@ -270,7 +270,7 @@ fn render_status_report(report: &StatusReport) -> String {
             render_replica_status(&report.replica, &report.replica_port)
         ),
         format!("ICP CLI: {}", report.icp_cli),
-        format!("ICP project: {}", report.icp_project),
+        format!("ICP config: {}", report.icp_config),
         format!("Apps: {} configured", report.apps.len()),
         format!(
             "Fleets: {deployed}/{} deployed (environment {}, network {})",
@@ -350,7 +350,7 @@ fn render_replica_status(status: &ReplicaStatus, port: &str) -> String {
 fn status_command() -> ClapCommand {
     ClapCommand::new("status")
         .bin_name("canic status")
-        .about("Show quick Canic project status")
+        .about("Show quick local workspace status")
         .disable_help_flag(true)
         .arg(internal_environment_arg())
         .arg(internal_icp_arg())

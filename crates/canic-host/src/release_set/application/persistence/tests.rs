@@ -232,7 +232,7 @@ fn publication_rejects_path_drift_and_artifacts_outside_the_project() {
     fs::create_dir_all(&outside).expect("create outside root");
     let mut outputs = build_outputs(&root, release_build_id);
     let outside_wasm = outside.join("alpha.wasm");
-    fs::write(&outside_wasm, wasm(9)).expect("write outside Wasm");
+    fs::write(&outside_wasm, wasm(9, release_build_id)).expect("write outside Wasm");
     outputs
         .iter_mut()
         .find(|output| output.role.as_str() == "alpha")
@@ -250,6 +250,33 @@ fn publication_rejects_path_drift_and_artifacts_outside_the_project() {
     );
 
     fs::remove_dir_all(outside).expect("remove outside root");
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn publication_rejects_wasm_without_the_exact_embedded_release_identity() {
+    let root = temp_dir("application-artifact-embedded-identity");
+    let plan = plan_release_build(&root).expect("plan release build");
+    let release_build_id = plan.record.release_build_id;
+    let topology = topology();
+    let outputs = build_outputs(&root, release_build_id);
+    fs::write(&outputs[0].wasm_path, wasm_without_identity(9)).expect("replace raw Wasm");
+
+    std::assert_matches!(
+        compile_and_persist_application_artifact_union(
+            &root,
+            &topology,
+            release_build_id,
+            &targets(),
+            &outputs,
+        ),
+        Err(ApplicationArtifactUnionPersistenceError::MissingReleaseBuildIdentity {
+            role,
+            release_build_id: observed,
+            ..
+        }) if role.as_str() == "shared" && observed == release_build_id
+    );
+
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
@@ -422,7 +449,7 @@ fn build_output(
     fs::create_dir_all(&artifact_root).expect("create artifact root");
     let wasm_path = artifact_root.join(format!("{role}.wasm"));
     let wasm_gz_path = artifact_root.join(format!("{role}.wasm.gz"));
-    let bytes = wasm(marker);
+    let bytes = wasm(marker, release_build_id);
     fs::write(&wasm_path, &bytes).expect("write Wasm");
     fs::write(&wasm_gz_path, gzip(&bytes)).expect("write gzip Wasm");
 
@@ -436,12 +463,18 @@ fn build_output(
 }
 
 fn replace_output_bytes(output: &ApplicationArtifactFileBuildOutput, marker: u8) {
-    let bytes = wasm(marker);
+    let bytes = wasm(marker, output.release_build_id);
     fs::write(&output.wasm_path, &bytes).expect("replace Wasm");
     fs::write(&output.wasm_gz_path, gzip(&bytes)).expect("replace gzip Wasm");
 }
 
-fn wasm(marker: u8) -> Vec<u8> {
+fn wasm(marker: u8, release_build_id: ReleaseBuildId) -> Vec<u8> {
+    let mut bytes = wasm_without_identity(marker);
+    bytes.extend_from_slice(release_build_id.to_string().as_bytes());
+    bytes
+}
+
+fn wasm_without_identity(marker: u8) -> Vec<u8> {
     let mut bytes = WASM_MAGIC.to_vec();
     bytes.push(marker);
     bytes

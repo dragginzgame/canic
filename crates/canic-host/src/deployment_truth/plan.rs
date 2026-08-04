@@ -2,10 +2,10 @@ use super::*;
 use crate::{
     fleet_catalog::{FleetCatalogEntryV1, read_fleet_catalog_entry_from_root},
     network::resolve_canonical_network_id_from_root,
-    release_set::{AppConfigSnapshot, ConfiguredPoolExpectation},
+    release_set::{AppConfigSnapshot, ConfiguredPoolExpectation, artifact_root_path},
 };
 use canic_core::ids::CanonicalNetworkId;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 ///
 /// LocalDeploymentPlanRequest
@@ -27,6 +27,14 @@ pub struct LocalDeploymentPlanRequest {
 /// observations without querying or mutating IC state.
 #[must_use]
 pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> DeploymentPlanV1 {
+    let artifact_root = artifact_root_path(&request.icp_root, &request.artifact_environment);
+    build_local_deployment_plan_at_root(request, &artifact_root)
+}
+
+pub fn build_local_deployment_plan_at_root(
+    request: &LocalDeploymentPlanRequest,
+    artifact_root: &Path,
+) -> DeploymentPlanV1 {
     let config = deployment_config_path(&request.workspace_root, request.config_path.as_deref());
     let mut unresolved_assumptions = Vec::new();
     let (roles, expected_controllers, expected_pool) = match AppConfigSnapshot::load(&config) {
@@ -75,8 +83,8 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
     let canonical_runtime_config_digest =
         canonical_runtime_config_assumption(&config, &mut unresolved_assumptions);
     let deployment_manifest_digest =
-        deployment_manifest_digest_assumption(request, &mut unresolved_assumptions);
-    let artifact_manifest = local_artifact_manifest(request, config);
+        deployment_manifest_digest_assumption(request, artifact_root, &mut unresolved_assumptions);
+    let artifact_manifest = local_artifact_manifest(request, artifact_root, config);
     extend_artifact_assumptions(
         &mut unresolved_assumptions,
         artifact_manifest.unresolved_artifacts,
@@ -138,15 +146,19 @@ struct PlanIdentityFacts<'a> {
 
 fn local_artifact_manifest(
     request: &LocalDeploymentPlanRequest,
+    artifact_root: &Path,
     config: PathBuf,
 ) -> RoleArtifactManifestV1 {
-    collect_local_role_artifact_manifest(&LocalArtifactManifestRequest {
-        environment: request.environment.clone(),
-        artifact_environment: request.artifact_environment.clone(),
-        workspace_root: request.workspace_root.clone(),
-        icp_root: request.icp_root.clone(),
-        config_path: Some(config),
-    })
+    collect_local_role_artifact_manifest_at_root(
+        &LocalArtifactManifestRequest {
+            environment: request.environment.clone(),
+            artifact_environment: request.artifact_environment.clone(),
+            workspace_root: request.workspace_root.clone(),
+            icp_root: request.icp_root.clone(),
+            config_path: Some(config),
+        },
+        artifact_root,
+    )
 }
 
 fn local_plan_identity(
@@ -381,14 +393,12 @@ fn canonical_runtime_config_assumption(
 
 fn deployment_manifest_digest_assumption(
     request: &LocalDeploymentPlanRequest,
+    artifact_root: &Path,
     assumptions: &mut Vec<DeploymentAssumptionV1>,
 ) -> Option<String> {
     let mut gaps = Vec::new();
-    let digest = super::observe::release_set_manifest_digest(
-        &request.icp_root,
-        &request.artifact_environment,
-        &mut gaps,
-    );
+    let digest =
+        super::observe::release_set_manifest_digest(&request.icp_root, artifact_root, &mut gaps);
     assumptions.extend(
         gaps.into_iter()
             .map(|gap| assumption(gap.key, gap.description)),

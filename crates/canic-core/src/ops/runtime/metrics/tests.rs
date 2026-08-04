@@ -860,7 +860,7 @@ fn seed_all_metric_families_for_reset_test() {
     TimerMetrics::record_timer_scheduled(TimerMode::Once, Duration::from_secs(1), "once:test");
     WasmStoreMetrics::record(
         WasmStoreMetricOperation::SourceResolve,
-        WasmStoreMetricSource::Embedded,
+        WasmStoreMetricSource::Resolver,
         WasmStoreMetricOutcome::Completed,
         WasmStoreMetricReason::Ok,
     );

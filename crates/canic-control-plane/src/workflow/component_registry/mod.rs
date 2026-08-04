@@ -38,7 +38,7 @@ use crate::{
     },
 };
 use candid::CandidType;
-use canic_core::api::runtime::install::{ApprovedModulePayload, ApprovedModuleSource};
+use canic_core::api::runtime::install::ApprovedModuleSource;
 use canic_core::{
     control_plane_support::{
         config::schema::ComponentChildKind,
@@ -3762,18 +3762,13 @@ async fn component_install_plan(
         artifact.payload_size_bytes,
     )
     .await?;
-    let chunk_hashes = match source.payload() {
-        ApprovedModulePayload::Chunked {
-            source_canister,
-            chunk_hashes,
-        } if source_canister == &store.wasm_store => chunk_hashes.clone(),
-        ApprovedModulePayload::Chunked { .. } | ApprovedModulePayload::Embedded { .. } => {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "resolved Component module source differs from the verified root Store",
-            ));
-        }
-    };
+    if source.source_canister() != &store.wasm_store {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "resolved Component module source differs from the verified root Store",
+        ));
+    }
+    let chunk_hashes = source.chunk_hashes().to_vec();
     if source.module_hash() != artifact.payload_hash
         || source.payload_size_bytes() != artifact.payload_size_bytes
     {
@@ -3854,18 +3849,13 @@ async fn child_component_install_plan(
         artifact.payload_size_bytes,
     )
     .await?;
-    let chunk_hashes = match source.payload() {
-        ApprovedModulePayload::Chunked {
-            source_canister,
-            chunk_hashes,
-        } if source_canister == &store.wasm_store => chunk_hashes.clone(),
-        ApprovedModulePayload::Chunked { .. } | ApprovedModulePayload::Embedded { .. } => {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "resolved Component Child module source differs from the verified root Store",
-            ));
-        }
-    };
+    if source.source_canister() != &store.wasm_store {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "resolved Component Child module source differs from the verified root Store",
+        ));
+    }
+    let chunk_hashes = source.chunk_hashes().to_vec();
     if source.module_hash() != artifact.payload_hash
         || source.payload_size_bytes() != artifact.payload_size_bytes
     {

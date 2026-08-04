@@ -15,6 +15,7 @@ use canic::{
     protocol,
 };
 use canic_testing_internal::pic::{CanicPicExt, install_lifecycle_boundary_fixture, upgrade_args};
+use ic_testkit::pic::{CandidCallExt, CanisterInstallExt, PocketIc, RetryPolicy};
 use std::time::Duration;
 
 const READY_TICK_LIMIT: usize = 120;
@@ -135,16 +136,13 @@ fn finite_intent_expiry_is_rebuilt_after_upgrade_without_arming_ttl_free_work() 
         .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
     fixture
         .pic
-        .retry_install_code_ok(INSTALL_CODE_RETRY_LIMIT, INSTALL_CODE_COOLDOWN, || {
-            fixture
-                .pic
-                .upgrade_canister(
-                    canister_id,
-                    fixture.runtime_probe_wasm.clone(),
-                    upgrade_args(),
-                    None,
-                )
-                .map_err(|err| err.to_string())
+        .retry_install_code(install_retry_policy(), || {
+            fixture.pic.upgrade_canister(
+                canister_id,
+                fixture.runtime_probe_wasm.clone(),
+                upgrade_args(),
+                None,
+            )
         })
         .expect("upgrade should succeed");
     fixture
@@ -188,15 +186,15 @@ fn finite_intent_expiry_is_rebuilt_after_upgrade_without_arming_ttl_free_work() 
     }
 }
 
-fn runtime_status(pic: &ic_testkit::pic::Pic, canister_id: Principal) -> CanicRuntimeStatus {
+fn runtime_status(pic: &PocketIc, canister_id: Principal) -> CanicRuntimeStatus {
     let result: Result<CanicRuntimeStatus, canic::Error> = pic
-        .query_call(canister_id, protocol::CANIC_RUNTIME_STATUS, ())
+        .query_candid(canister_id, protocol::CANIC_RUNTIME_STATUS, ())
         .expect("query runtime status");
     result.expect("runtime status application result")
 }
 
 fn intent_cleanup_status(
-    pic: &ic_testkit::pic::Pic,
+    pic: &PocketIc,
     canister_id: Principal,
 ) -> canic::dto::runtime::CanicTimerStatus {
     runtime_status(pic, canister_id)
@@ -207,12 +205,12 @@ fn intent_cleanup_status(
 }
 
 fn begin_intent(
-    pic: &ic_testkit::pic::Pic,
+    pic: &PocketIc,
     canister_id: Principal,
     resource_seed: u8,
     ttl_secs: Option<u64>,
 ) -> Result<u64, canic::Error> {
-    pic.update_call(
+    pic.update_candid(
         canister_id,
         "begin_timer_probe_intent",
         (resource_seed, ttl_secs),
@@ -220,16 +218,16 @@ fn begin_intent(
     .expect("call intent reservation endpoint")
 }
 
-fn counts(pic: &ic_testkit::pic::Pic, canister_id: Principal) -> (u64, u64, u64) {
+fn counts(pic: &PocketIc, canister_id: Principal) -> (u64, u64, u64) {
     let result: Result<(u64, u64, u64), canic::Error> = pic
-        .query_call(canister_id, "timer_probe_counts", ())
+        .query_candid(canister_id, "timer_probe_counts", ())
         .expect("query timer probe counts");
     result.expect("timer probe counts application result")
 }
 
-fn timer_metrics(pic: &ic_testkit::pic::Pic, canister_id: Principal) -> Vec<MetricEntry> {
+fn timer_metrics(pic: &PocketIc, canister_id: Principal) -> Vec<MetricEntry> {
     let response: Result<Page<MetricEntry>, Error> = pic
-        .query_call(
+        .query_candid(
             canister_id,
             protocol::CANIC_METRICS,
             (
@@ -261,8 +259,13 @@ fn timer_metric(entries: &[MetricEntry], label: &str) -> (u64, u64) {
         .unwrap_or_default()
 }
 
-fn tick(pic: &ic_testkit::pic::Pic, count: usize) {
+fn tick(pic: &PocketIc, count: usize) {
     for _ in 0..count {
         pic.tick();
     }
+}
+
+fn install_retry_policy() -> RetryPolicy {
+    RetryPolicy::try_new(INSTALL_CODE_RETRY_LIMIT, INSTALL_CODE_COOLDOWN)
+        .expect("install retry policy")
 }

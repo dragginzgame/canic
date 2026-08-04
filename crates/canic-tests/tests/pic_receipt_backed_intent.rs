@@ -4,7 +4,7 @@ use candid::{CandidType, Deserialize, Principal, encode_one};
 use canic_testing_internal::pic::{CanicWasmBuildProfile, build_internal_test_wasm_canisters};
 use ic_testkit::{
     artifacts::{read_wasm, test_target_dir, workspace_root_for},
-    pic::{InstallSpec, acquire_pic_serial_guard, pic},
+    pic::{InstallSpec, PocketIc, PocketIcBuilder, RetryPolicy, prelude::*},
 };
 use std::{
     path::{Path, PathBuf},
@@ -110,8 +110,7 @@ fn receipt_backed_intent_conformance() {
         authority_wasm.len()
     );
 
-    let _serial_guard = acquire_pic_serial_guard();
-    let pic = pic();
+    let pic = PocketIcBuilder::new().with_application_subnet().build();
     println!("receipt_backed_intent: PocketIC ready");
 
     let authority_id = pic.create_and_install(
@@ -128,7 +127,7 @@ fn receipt_backed_intent_conformance() {
 }
 
 fn assert_receipt_backed_adapter_conformance(
-    pic: &ic_testkit::pic::Pic,
+    pic: &PocketIc,
     authority_id: Principal,
     evidence_source: Principal,
     authority_wasm: &[u8],
@@ -159,7 +158,7 @@ fn assert_receipt_backed_adapter_conformance(
 }
 
 fn assert_pending_begin_decisions(
-    pic: &ic_testkit::pic::Pic,
+    pic: &PocketIc,
     authority_id: Principal,
     replay_deadline_ns: u64,
 ) -> ReceiptIntentView {
@@ -249,7 +248,7 @@ fn assert_pending_begin_decisions(
 }
 
 fn assert_pending_settlement_decisions(
-    pic: &ic_testkit::pic::Pic,
+    pic: &PocketIc,
     authority_id: Principal,
     evidence_source: Principal,
     pending: &ReceiptIntentView,
@@ -308,22 +307,21 @@ fn assert_pending_settlement_decisions(
     assert_eq!(load_receipt(pic, authority_id, 11), Some(pending.clone()),);
 }
 
-fn upgrade_authority(pic: &ic_testkit::pic::Pic, authority_id: Principal, authority_wasm: &[u8]) {
+fn upgrade_authority(pic: &PocketIc, authority_id: Principal, authority_wasm: &[u8]) {
     pic.wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
-    pic.retry_install_code_ok(INSTALL_CODE_RETRY_LIMIT, INSTALL_CODE_COOLDOWN, || {
+    pic.retry_install_code(install_retry_policy(), || {
         pic.upgrade_canister(
             authority_id,
             authority_wasm.to_vec(),
             encode_one(()).expect("encode authority upgrade"),
             None,
         )
-        .map_err(|err| err.to_string())
     })
     .expect("upgrade intent authority");
 }
 
 fn assert_committed_decisions(
-    pic: &ic_testkit::pic::Pic,
+    pic: &PocketIc,
     authority_id: Principal,
     evidence_source: Principal,
     pending: ReceiptIntentView,
@@ -394,7 +392,7 @@ fn assert_committed_decisions(
 }
 
 fn assert_rollback_capacity_decisions(
-    pic: &ic_testkit::pic::Pic,
+    pic: &PocketIc,
     authority_id: Principal,
     replay_deadline_ns: u64,
 ) -> ReceiptIntentView {
@@ -427,7 +425,7 @@ fn assert_rollback_capacity_decisions(
 }
 
 fn assert_rolled_back_decisions(
-    pic: &ic_testkit::pic::Pic,
+    pic: &PocketIc,
     authority_id: Principal,
     evidence_source: Principal,
     rollback_pending: ReceiptIntentView,
@@ -496,11 +494,7 @@ fn assert_rolled_back_decisions(
     );
 }
 
-fn assert_terminal_reclamation(
-    pic: &ic_testkit::pic::Pic,
-    authority_id: Principal,
-    replay_deadline_ns: u64,
-) {
+fn assert_terminal_reclamation(pic: &PocketIc, authority_id: Principal, replay_deadline_ns: u64) {
     pic.advance_time(Duration::from_mins(61));
     pic.tick();
     pic.tick();
@@ -543,7 +537,7 @@ fn assert_terminal_reclamation(
 }
 
 fn begin_receipt(
-    pic: &ic_testkit::pic::Pic,
+    pic: &PocketIc,
     authority_id: Principal,
     operation_seed: u8,
     payload_seed: u8,
@@ -551,7 +545,7 @@ fn begin_receipt(
     quantity: u64,
     replay_deadline_ns: u64,
 ) -> ReceiptBeginView {
-    pic.update_call::<Result<ReceiptBeginView, String>, _>(
+    pic.update_candid::<Result<ReceiptBeginView, String>, _>(
         authority_id,
         "begin_receipt",
         (
@@ -568,7 +562,7 @@ fn begin_receipt(
 
 #[expect(clippy::too_many_arguments)]
 fn settle_receipt(
-    pic: &ic_testkit::pic::Pic,
+    pic: &PocketIc,
     authority_id: Principal,
     operation_seed: u8,
     payload_seed: u8,
@@ -577,7 +571,7 @@ fn settle_receipt(
     source_canister: Principal,
     evidence_seed: u8,
 ) -> Result<ReceiptSettlementView, String> {
-    pic.update_call::<Result<ReceiptSettlementView, String>, _>(
+    pic.update_candid::<Result<ReceiptSettlementView, String>, _>(
         authority_id,
         "settle_receipt",
         (
@@ -593,17 +587,22 @@ fn settle_receipt(
 }
 
 fn load_receipt(
-    pic: &ic_testkit::pic::Pic,
+    pic: &PocketIc,
     authority_id: Principal,
     operation_seed: u8,
 ) -> Option<ReceiptIntentView> {
-    pic.query_call::<Result<Option<ReceiptIntentView>, String>, _>(
+    pic.query_candid::<Result<Option<ReceiptIntentView>, String>, _>(
         authority_id,
         "load_receipt",
         (operation_seed,),
     )
     .expect("load receipt transport")
     .expect("load receipt application")
+}
+
+fn install_retry_policy() -> RetryPolicy {
+    RetryPolicy::try_new(INSTALL_CODE_RETRY_LIMIT, INSTALL_CODE_COOLDOWN)
+        .expect("install retry policy")
 }
 
 fn build_canisters(workspace_root: &Path) {

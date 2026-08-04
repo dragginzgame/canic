@@ -6,7 +6,7 @@ use std::{fmt::Write as _, fs};
 
 fn fixture(name: &str) -> (PathBuf, PathBuf, Vec<u8>, String) {
     let root = temp_dir(&format!("canic-network-{name}"));
-    fs::create_dir_all(&root).expect("create project root");
+    fs::create_dir_all(&root).expect("create workspace root");
     let mut root_key = vec![
         0x30, 0x81, 0x82, 0x30, 0x1d, 0x06, 0x0d, 0x2b, 0x06, 0x01, 0x04, 0x01, 0x82, 0xdc, 0x7c,
         0x05, 0x03, 0x01, 0x02, 0x01, 0x06, 0x0c, 0x2b, 0x06, 0x01, 0x04, 0x01, 0x82, 0xdc, 0x7c,
@@ -26,7 +26,7 @@ fn enroll<'a>(
     fingerprint: &'a str,
 ) -> NetworkEnrollmentOptions<'a> {
     NetworkEnrollmentOptions {
-        project_root: root,
+        workspace_root: root,
         environment,
         root_key,
         fingerprint,

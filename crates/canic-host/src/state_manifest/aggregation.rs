@@ -1,6 +1,6 @@
 //! Module: state_manifest::aggregation
 //!
-//! Responsibility: aggregate audit status, project next actions, and order
+//! Responsibility: aggregate audit status, workspace next actions, and order
 //! state-manifest checks deterministically.
 //! Does not own: check construction, report serialization, package resolution,
 //! or rendering.
@@ -29,7 +29,7 @@ pub(super) fn aggregate_status(checks: &[StateAuditCheck]) -> StateAuditStatus {
 }
 
 pub(super) fn next_actions(status: StateAuditStatus, role: Option<&str>) -> Vec<String> {
-    let scope = role.unwrap_or("project");
+    let scope = role.unwrap_or("workspace");
     match status {
         StateAuditStatus::Pass => vec![format!(
             "state metadata declarations for {scope} have no blocking findings"

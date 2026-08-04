@@ -93,7 +93,7 @@ pub(super) fn publish_installed_fleet_catalog(
         .as_secs();
 
     publish_terminal_fleet_catalog(TerminalFleetCatalogPublicationRequest {
-        project_root: request.icp_root,
+        workspace_root: request.icp_root,
         fleet_name: request.fleet_name,
         environment: request.environment,
         deployed_at_unix_secs,

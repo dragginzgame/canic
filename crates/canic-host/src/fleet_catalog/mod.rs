@@ -40,7 +40,7 @@ const CANONICAL_NAME_MAX_BYTES: usize = 40;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FleetCatalogRequest {
-    pub project_root: PathBuf,
+    pub workspace_root: PathBuf,
     pub environment: String,
     pub generated_at: String,
 }
@@ -54,7 +54,7 @@ pub struct FleetCatalogRequest {
 pub struct FleetCatalogReportV1 {
     pub schema_version: u32,
     pub generated_at: String,
-    pub project_root: Option<String>,
+    pub workspace_root: Option<String>,
     pub canonical_network_id: CanonicalNetworkId,
     pub environment: String,
     pub entries: Vec<FleetCatalogEntryV1>,
@@ -162,8 +162,8 @@ pub fn build_fleet_catalog_report(
 ) -> Result<FleetCatalogReportV1, FleetCatalogError> {
     validate_environment_name(&request.environment)?;
     let canonical_network_id =
-        resolve_canonical_network_id_from_root(&request.project_root, &request.environment)?;
-    let path = fleet_catalog_path(&request.project_root, canonical_network_id);
+        resolve_canonical_network_id_from_root(&request.workspace_root, &request.environment)?;
+    let path = fleet_catalog_path(&request.workspace_root, canonical_network_id);
     let entries = match read_catalog(&path, canonical_network_id)? {
         Some(catalog) => catalog.entries,
         None => Vec::new(),
@@ -172,7 +172,7 @@ pub fn build_fleet_catalog_report(
     Ok(FleetCatalogReportV1 {
         schema_version: FLEET_CATALOG_SCHEMA_VERSION,
         generated_at: request.generated_at.clone(),
-        project_root: Some(".".to_string()),
+        workspace_root: Some(".".to_string()),
         canonical_network_id,
         environment: request.environment.clone(),
         entries,
@@ -193,13 +193,13 @@ pub fn inspect_fleet_catalog_report(
 /// Resolve one exact installed Fleet from the catalog selected by canonical
 /// network identity.
 pub fn read_fleet_catalog_entry_from_root(
-    project_root: &Path,
+    workspace_root: &Path,
     environment: &str,
     fleet_name: &str,
 ) -> Result<Option<FleetCatalogEntryV1>, FleetCatalogError> {
     let fleet_name = fleet_name.parse::<FleetName>()?;
     let report = build_fleet_catalog_report(&FleetCatalogRequest {
-        project_root: project_root.to_path_buf(),
+        workspace_root: workspace_root.to_path_buf(),
         environment: environment.to_string(),
         generated_at: String::new(),
     })?;
@@ -211,11 +211,11 @@ pub fn read_fleet_catalog_entry_from_root(
 
 /// Commit one exact Coordinator-anchored row after the caller validates terminal evidence.
 pub(crate) fn commit_fleet_catalog_entry(
-    project_root: &Path,
+    workspace_root: &Path,
     entry: FleetCatalogEntryV1,
 ) -> Result<CommittedFleetCatalog, FleetCatalogError> {
-    let path = fleet_catalog_path(project_root, entry.canonical_network_id);
-    let lock_path = fleet_catalog_lock_path(project_root, entry.canonical_network_id);
+    let path = fleet_catalog_path(workspace_root, entry.canonical_network_id);
+    let lock_path = fleet_catalog_lock_path(workspace_root, entry.canonical_network_id);
     let _lock = lock_regular_file_with_parents(&lock_path).map_err(|error| match error {
         RegularFileLockError::NotRegular => FleetCatalogError::NotRegular {
             path: lock_path.clone(),
@@ -304,8 +304,8 @@ pub fn fleet_catalog_report_text(report: &FleetCatalogReportV1) -> String {
         format!("environment: {}", report.environment),
         format!("entries: {}", report.entries.len()),
     ];
-    if let Some(project_root) = &report.project_root {
-        lines.push(format!("project_root: {project_root}"));
+    if let Some(workspace_root) = &report.workspace_root {
+        lines.push(format!("workspace_root: {workspace_root}"));
     }
     if report.entries.is_empty() {
         lines.push("fleets: none".to_string());
@@ -542,8 +542,8 @@ fn invalid<T>(path: &Path, reason: String) -> Result<T, FleetCatalogError> {
     })
 }
 
-fn fleet_catalog_path(project_root: &Path, canonical_network_id: CanonicalNetworkId) -> PathBuf {
-    project_root
+fn fleet_catalog_path(workspace_root: &Path, canonical_network_id: CanonicalNetworkId) -> PathBuf {
+    workspace_root
         .join(".canic")
         .join("networks")
         .join(canonical_network_id.to_string())
@@ -551,10 +551,10 @@ fn fleet_catalog_path(project_root: &Path, canonical_network_id: CanonicalNetwor
 }
 
 fn fleet_catalog_lock_path(
-    project_root: &Path,
+    workspace_root: &Path,
     canonical_network_id: CanonicalNetworkId,
 ) -> PathBuf {
-    project_root
+    workspace_root
         .join(".canic")
         .join("networks")
         .join(canonical_network_id.to_string())

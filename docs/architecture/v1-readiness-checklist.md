@@ -20,7 +20,7 @@ docs/architecture/v1-operator-walkthrough.md
 
 An App source identity is not a live Fleet identity.
 
-## Required Project Files
+## Required Workspace Files
 
 A small managed App should have:
 
@@ -163,7 +163,7 @@ The maintained local smoke is:
 scripts/ci/v1-readiness-smoke.sh
 ```
 
-It runs in a temporary project and proves the safe local subset of this
+It runs in a temporary workspace and proves the safe local subset of this
 checklist: App creation, canister scaffold, declared-only inspection,
 explicit role attachment, attached inspection, empty network-scoped Fleet catalog,
 and policy evaluation of one saved envelope.

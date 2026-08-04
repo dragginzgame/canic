@@ -194,7 +194,7 @@ fn failing_state_audit_uses_exit_code_one() {
 }
 
 #[test]
-fn state_command_preserves_project_discovery_causes() {
+fn state_command_preserves_workspace_discovery_causes() {
     let root_error = StateCommandError::from(IcpConfigError::NoIcpRoot {
         start: PathBuf::from("/missing/project"),
     });

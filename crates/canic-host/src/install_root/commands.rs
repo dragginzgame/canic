@@ -1,11 +1,13 @@
+#[cfg(test)]
+use crate::durable_io::write_bytes;
 use crate::{
     durable_io::{
         RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
-        write_bytes,
     },
     fleet_install_plan::PlannedCanisterCreationFunding,
     icp::{self, LocalReplicaTarget},
 };
+#[cfg(test)]
 use candid::CandidType;
 use canic_core::{cdk::types::Principal, ids::SubnetId};
 use serde_json::Value as JsonValue;
@@ -97,6 +99,7 @@ fn parse_canister_id_json(value: &JsonValue) -> Option<Principal> {
     }
 }
 
+#[cfg(test)]
 pub(super) fn write_candid_args<T: CandidType>(
     path: &Path,
     args: &T,

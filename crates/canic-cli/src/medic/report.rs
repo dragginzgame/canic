@@ -2,7 +2,7 @@
 //!
 //! Responsibility: own the stable medic report model, ordering, and aggregate status.
 //! Does not own: diagnostic collection, command parsing, or text/JSON rendering.
-//! Boundary: project and Fleet checks construct this private CLI report model.
+//! Boundary: workspace and Fleet checks construct this private CLI report model.
 
 use super::MedicOptions;
 use serde::Serialize;
@@ -27,7 +27,7 @@ pub(super) struct MedicReport {
 impl MedicReport {
     pub(super) fn new(options: &MedicOptions, checks: Vec<MedicCheck>) -> Self {
         let environment = match options.scope {
-            MedicScope::Project => options.environment.clone(),
+            MedicScope::Workspace => options.environment.clone(),
             MedicScope::Fleet => Some(options.fleet_environment()),
         };
         Self::with_environment(options, environment, checks)
@@ -193,10 +193,10 @@ impl MedicCheck {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 pub(super) enum MedicScope {
-    #[serde(rename = "project")]
-    Project,
     #[serde(rename = "fleet")]
     Fleet,
+    #[serde(rename = "workspace")]
+    Workspace,
 }
 
 ///
@@ -234,8 +234,8 @@ impl MedicStatus {
 pub(super) enum MedicCategory {
     #[serde(rename = "environment")]
     Environment,
-    #[serde(rename = "project_config")]
-    ProjectConfig,
+    #[serde(rename = "workspace_config")]
+    WorkspaceConfig,
     #[serde(rename = "target_environment")]
     TargetEnvironment,
     #[serde(rename = "fleet_state")]
@@ -254,7 +254,7 @@ impl MedicCategory {
     pub(super) const fn label(self) -> &'static str {
         match self {
             Self::Environment => "environment",
-            Self::ProjectConfig => "project_config",
+            Self::WorkspaceConfig => "workspace_config",
             Self::TargetEnvironment => "target_environment",
             Self::FleetState => "fleet_state",
             Self::Topology => "topology",
@@ -267,7 +267,7 @@ impl MedicCategory {
     const fn order(self) -> usize {
         match self {
             Self::Environment => 0,
-            Self::ProjectConfig => 1,
+            Self::WorkspaceConfig => 1,
             Self::TargetEnvironment => 2,
             Self::FleetState => 3,
             Self::Topology => 4,

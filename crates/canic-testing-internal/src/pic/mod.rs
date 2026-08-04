@@ -36,6 +36,8 @@ pub use root::{
     setup_root_topology,
 };
 
+pub(super) const SNAPSHOT_RESTORE_MINIMUM_CYCLES: u128 = 200_000_000_000_000;
+
 #[cfg(test)]
 static PIC_UNIT_TEST_SERIAL: Mutex<()> = Mutex::new(());
 

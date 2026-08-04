@@ -35,23 +35,26 @@ use canic_core::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Manifest authority the root can reproduce from its embedded Component topology.
+///
+/// The configured role package is a workspace-relative package selector, while the artifact
+/// package is its canonical Cargo package name. Host provenance binds those two identities before
+/// the manifest digest is protected; the root must not compare the distinct representations.
 #[derive(Debug, Eq, PartialEq)]
 struct RootReleaseSetEntryAuthority<'a> {
     component_spec: &'a ComponentSpecId,
     kind: RootStoreReleaseSetEntryKind,
     role: &'a CanisterRole,
     release_build_id: &'a ReleaseBuildId,
-    package: &'a str,
 }
 
 impl<'a> RootReleaseSetEntryAuthority<'a> {
-    fn from_entry(entry: &'a RootStoreReleaseSetEntry) -> Self {
+    const fn from_entry(entry: &'a RootStoreReleaseSetEntry) -> Self {
         Self {
             component_spec: &entry.component_spec,
             kind: entry.kind,
             role: &entry.artifact.role,
             release_build_id: &entry.artifact.release_build_id,
-            package: &entry.artifact.package,
         }
     }
 }
@@ -227,13 +230,11 @@ fn validate_manifest_projection(
     let mut unique_payloads = BTreeSet::new();
     let mut total_bytes = 0_u64;
     for (entry, (component_spec, kind, role)) in manifest.entries.iter().zip(expected) {
-        let expected_package = ConfigOps::role_package(&role)?;
         let expected_authority = RootReleaseSetEntryAuthority {
             component_spec: &component_spec,
             kind,
             role: &role,
             release_build_id: &manifest.release_build_id,
-            package: &expected_package,
         };
         if RootReleaseSetEntryAuthority::from_entry(entry) != expected_authority {
             return Err(InternalError::invalid_input(
@@ -446,6 +447,7 @@ const fn decode_nibble(byte: u8) -> u8 {
 mod tests {
     use super::*;
     use crate::ids::{TemplateChunkingMode, TemplateManifestState, WasmStoreBinding};
+    use canic_core::dto::root_store::RootStoreArtifact;
 
     fn manifest(role: &str, byte: u8) -> TemplateManifestResponse {
         TemplateManifestResponse {
@@ -472,6 +474,24 @@ mod tests {
         }
     }
 
+    fn release_set_entry(package: &str) -> RootStoreReleaseSetEntry {
+        RootStoreReleaseSetEntry {
+            component_spec: "app".parse().expect("Component Spec ID"),
+            kind: RootStoreReleaseSetEntryKind::Component,
+            artifact: RootStoreArtifact {
+                role: CanisterRole::from("app"),
+                package: package.to_string(),
+                release_build_id: "00".repeat(32).parse().expect("release-build ID"),
+                wasm_relative_path: ".icp/local/canisters/app/app.wasm".to_string(),
+                wasm_size_bytes: 1,
+                wasm_sha256_hex: "01".repeat(32),
+                wasm_gz_relative_path: ".icp/local/canisters/app/app.wasm.gz".to_string(),
+                wasm_gz_size_bytes: 1,
+                wasm_gz_sha256_hex: "02".repeat(32),
+            },
+        }
+    }
+
     #[test]
     fn sha256_decoder_accepts_only_canonical_lowercase_hex() {
         assert_eq!(
@@ -480,6 +500,17 @@ mod tests {
         );
         assert!(decode_sha256(&"0F".repeat(32)).is_err());
         assert!(decode_sha256("0f").is_err());
+    }
+
+    #[test]
+    fn runtime_projection_does_not_conflate_package_selector_with_cargo_identity() {
+        let configured_selector = release_set_entry("app");
+        let canonical_cargo_package = release_set_entry("demo_fleet_app");
+
+        assert_eq!(
+            RootReleaseSetEntryAuthority::from_entry(&configured_selector),
+            RootReleaseSetEntryAuthority::from_entry(&canonical_cargo_package)
+        );
     }
 
     #[test]

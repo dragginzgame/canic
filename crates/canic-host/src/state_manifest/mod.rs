@@ -11,7 +11,7 @@ mod aggregation;
 mod audit;
 mod resolution;
 
-pub use resolution::{StateManifestResolution, resolve_project_state_manifest};
+pub use resolution::{StateManifestResolution, resolve_workspace_state_manifest};
 
 use canic_core::state_contract::{STATE_MANIFEST_SCHEMA_VERSION, StateManifest};
 use serde::Serialize;
@@ -20,7 +20,7 @@ pub const STATE_AUDIT_COMMAND: &str = "canic state audit";
 pub const STATE_MANIFEST_COMMAND: &str = "canic state manifest";
 pub const STATE_AUDIT_SCHEMA_VERSION: u16 = 1;
 
-const SCOPE_PROJECT: StateAuditScope = StateAuditScope::Project;
+const SCOPE_WORKSPACE: StateAuditScope = StateAuditScope::Workspace;
 const SCOPE_ROLE: StateAuditScope = StateAuditScope::Role;
 
 ///
@@ -68,16 +68,16 @@ pub struct StateAuditCheck {
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StateAuditScope {
-    Project,
     Role,
+    Workspace,
 }
 
 impl StateAuditScope {
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
-            Self::Project => "project",
             Self::Role => "role",
+            Self::Workspace => "workspace",
         }
     }
 }
@@ -219,7 +219,7 @@ pub fn build_state_audit_report(
         scope: if role.is_some() {
             SCOPE_ROLE
         } else {
-            SCOPE_PROJECT
+            SCOPE_WORKSPACE
         },
         role: role.map(ToString::to_string),
         status,
@@ -349,6 +349,15 @@ mod tests {
     }
 
     #[test]
+    fn workspace_audit_hard_cuts_the_project_scope() {
+        let report = build_state_audit_report(None);
+        let value = serde_json::to_value(report).expect("serialize state-audit report");
+
+        assert_eq!(value["scope"], "workspace");
+        assert_ne!(value["scope"], "project");
+    }
+
+    #[test]
     fn builtin_report_passes_when_every_active_memory_id_is_modeled() {
         let report = build_state_audit_report(Some("root"));
 
@@ -474,7 +483,7 @@ mod tests {
     fn exact_blob_role_resolution_materializes_blob_allocations() {
         let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let config = workspace.join("canisters/test/blob_storage_probe/canic.toml");
-        let resolution = resolve_project_state_manifest(&workspace, &[config], Some("test"));
+        let resolution = resolve_workspace_state_manifest(&workspace, &[config], Some("test"));
         let StateManifestResolution::Resolved {
             manifest,
             contracts,
@@ -515,7 +524,7 @@ mod tests {
             ),
         ] {
             let config = workspace.join(config_path);
-            let resolution = resolve_project_state_manifest(&workspace, &[config], Some(role));
+            let resolution = resolve_workspace_state_manifest(&workspace, &[config], Some(role));
             let StateManifestResolution::Resolved { manifest, .. } = resolution else {
                 panic!("{role} role contract should resolve");
             };
@@ -534,7 +543,7 @@ mod tests {
     #[test]
     fn exact_built_in_resolution_materializes_runtime_template_and_gc_allocations() {
         let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let resolution = resolve_project_state_manifest(&workspace, &[], Some("wasm_store"));
+        let resolution = resolve_workspace_state_manifest(&workspace, &[], Some("wasm_store"));
         let StateManifestResolution::Resolved {
             manifest,
             contracts,
@@ -570,7 +579,8 @@ mod tests {
     #[test]
     fn exact_fleet_coordinator_resolution_materializes_authority_state() {
         let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let resolution = resolve_project_state_manifest(&workspace, &[], Some("fleet_coordinator"));
+        let resolution =
+            resolve_workspace_state_manifest(&workspace, &[], Some("fleet_coordinator"));
         let StateManifestResolution::Resolved {
             manifest,
             contracts,
@@ -598,7 +608,7 @@ mod tests {
     fn unknown_role_resolution_returns_no_manifest() {
         let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let config = workspace.join("canisters/audit/root_probe/canic.toml");
-        let resolution = resolve_project_state_manifest(&workspace, &[config], Some("missing"));
+        let resolution = resolve_workspace_state_manifest(&workspace, &[config], Some("missing"));
 
         assert!(matches!(
             resolution,

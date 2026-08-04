@@ -21,6 +21,40 @@ fn selected_environment_artifact_root_never_falls_back_to_local() {
 }
 
 #[test]
+fn exact_release_artifact_root_resolves_inside_the_project() {
+    let temp = TempWorkspace::new();
+    let artifact_root = temp
+        .path()
+        .join(".canic/release-builds/0123456789abcdef/artifacts");
+    fs::create_dir_all(&artifact_root).expect("create release artifact root");
+
+    assert_eq!(
+        resolve_artifact_root_path(temp.path(), &artifact_root).expect("resolve exact root"),
+        artifact_root
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn exact_release_artifact_root_rejects_a_symlink_outside_the_project() {
+    use std::os::unix::fs::symlink;
+
+    let temp = TempWorkspace::new();
+    let outside = TempWorkspace::new();
+    let link = temp.path().join(".canic/release-builds/escape/artifacts");
+    fs::create_dir_all(link.parent().expect("link parent")).expect("create link parent");
+    symlink(outside.path(), &link).expect("link outside root");
+
+    assert_eq!(
+        resolve_artifact_root_path(temp.path(), &link)
+            .expect_err("outside artifact root must reject"),
+        ArtifactRootError::OutsideProject {
+            artifact_root: link,
+        }
+    );
+}
+
+#[test]
 fn artifact_and_manifest_path_projection_does_not_create_directories() {
     let temp = TempWorkspace::new();
     let artifact_root = artifact_root_path(temp.path(), "ic");

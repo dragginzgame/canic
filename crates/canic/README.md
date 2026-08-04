@@ -36,7 +36,7 @@ required by the role.
 | Feature | Default | Enables |
 | --- | --- | --- |
 | `metrics` | Yes | The standard `canic_metrics` endpoint bundle. |
-| `control-plane` | No | Root control-plane bootstrap and Wasm publication APIs; also enables `wasm-store-canister`. |
+| `control-plane` | No | Root control-plane bootstrap and Wasm publication APIs without Store-canister endpoints. |
 | `fleet-coordinator-canister` | No | The dedicated host-generated Fleet Coordinator lifecycle and Fleet Registry API. Configured application roles should not enable it. |
 | `wasm-store-canister` | No | The canonical `wasm_store` canister API used by generated/bootstrap store packages. Ordinary application roles should not enable it. |
 | `blob-storage` | No | Non-billing blob-storage status and gateway-administration runtime APIs/endpoints. |

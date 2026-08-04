@@ -7,7 +7,6 @@ use crate::{
     },
     cargo_command,
     cargo_metadata::{CargoMetadata, CargoMetadataPackage, cargo_metadata},
-    release_set::artifact_root_path,
     remove_optional_file,
     role_contract::{
         PackageValidationMode, RolePackageValidation, finding_detail,
@@ -66,7 +65,7 @@ pub fn build_bootstrap_wasm_store_artifact(
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
     let source = resolve_bootstrap_wasm_store_source(&context.workspace_root, &context.icp_root)?;
     require_built_in_wasm_store_contract(&source.manifest_path)?;
-    let artifact_root = artifact_root_path(&context.icp_root, "local").join(WASM_STORE_ROLE);
+    let artifact_root = context.artifact_root().join(WASM_STORE_ROLE);
     fs::create_dir_all(&artifact_root)?;
 
     run_wasm_store_cargo_build(context, &source.manifest_path)?;

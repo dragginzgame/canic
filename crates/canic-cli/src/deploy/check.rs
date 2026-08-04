@@ -33,9 +33,7 @@ use std::{
 const DEPLOY_CHECK_HELP_AFTER: &str = "\
 Examples:
   canic deploy check demo
-  canic --environment local deploy check --profile fast demo
   canic deploy check demo --json
-  canic deploy check demo --evidence-envelope
   canic deploy check demo --evidence-envelope --build-provenance build-provenance.json
 
 Prints a compact operator-facing deployment check without installing or

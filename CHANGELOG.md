@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.102` advances to `ic-testkit 0.3.2` and PocketIC 15, hardens Fleet
+  install recovery and release-scoped artifact authority, and completes the
+  bounded IC mainnet Store/root deletion proof with exact terminal replay. It
+  also completes the root/Store Wasm hard cut, adds the one-Subnet playground
+  demo, hard-cuts the stale public Project scope to workspace diagnostics, and
+  makes the CLI help hierarchy concise, ordered and drift-checked.
+
 - `0.100.101` relays an operator-owned password file to every ICP subprocess,
   enabling fail-closed mainnet operation with encrypted identities without
   exposing or persisting secret contents in Canic, and advances the host-only

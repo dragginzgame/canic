@@ -18,7 +18,7 @@ use crate::{
     version_text,
 };
 use canic_host::{
-    install_root::{ConfigDiscoveryError, current_canic_project_root},
+    install_root::{ConfigDiscoveryError, current_canic_workspace_root},
     network::{
         NetworkEnrollmentOptions, NetworkEnrollmentReport, NetworkIdentityError, enroll_network,
     },
@@ -49,7 +49,7 @@ pub enum NetworkCommandError {
     Usage(String),
 
     #[error(transparent)]
-    Project(#[from] ConfigDiscoveryError),
+    Workspace(#[from] ConfigDiscoveryError),
 
     #[error(transparent)]
     Network(#[from] NetworkIdentityError),
@@ -110,9 +110,9 @@ where
     }
 
     let options = EnrollOptions::parse(args)?;
-    let project_root = current_canic_project_root()?;
+    let workspace_root = current_canic_workspace_root()?;
     let report = enroll_network(NetworkEnrollmentOptions {
-        project_root: &project_root,
+        workspace_root: &workspace_root,
         environment: &options.environment,
         root_key: &options.root_key,
         fingerprint: &options.fingerprint,

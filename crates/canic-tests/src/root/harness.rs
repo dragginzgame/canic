@@ -7,7 +7,7 @@ use canic_testing_internal::pic::{
     RootBaselineSpec, ensure_root_release_artifacts_built, load_root_wasm,
     setup_root_topology as bootstrap_root_topology,
 };
-use ic_testkit::pic::{Pic, PicSerialGuard, acquire_pic_serial_guard};
+use ic_testkit::pic::PocketIc;
 use std::{
     collections::HashMap,
     io::Write,
@@ -29,11 +29,10 @@ fn test_progress(phase: &str) {
 ///
 
 pub struct RootSetup {
-    pub pic: Box<Pic>,
+    pub pic: Box<PocketIc>,
     pub root_id: Principal,
     pub component_canisters: HashMap<CanisterRole, Principal>,
     _serial_guard: MutexGuard<'static, ()>,
-    _pic_serial_guard: PicSerialGuard,
 }
 
 /// Acquire an isolated fresh root setup for one named root test profile.
@@ -52,8 +51,6 @@ fn setup_root_fresh_spec(spec: RootBaselineSpec<'static>) -> RootSetup {
     // Each setup spins up a full PocketIC topology; serialize to avoid
     // exhausting local temp storage under parallel test execution.
     let serial_guard = acquire_root_setup_serial_guard();
-    let pic_serial_guard = acquire_pic_serial_guard();
-
     ensure_root_release_artifacts_built(&spec);
     let root_wasm = load_root_wasm(&spec).expect("load root wasm");
     let state = bootstrap_root_topology(&spec, root_wasm);
@@ -64,7 +61,6 @@ fn setup_root_fresh_spec(spec: RootBaselineSpec<'static>) -> RootSetup {
         root_id: state.metadata.root_id,
         component_canisters: state.metadata.component_canisters,
         _serial_guard: serial_guard,
-        _pic_serial_guard: pic_serial_guard,
     }
 }
 
