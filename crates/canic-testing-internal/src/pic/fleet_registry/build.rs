@@ -3,7 +3,7 @@
 use ic_testkit::artifacts::{read_wasm, test_target_dir as artifact_test_target_dir};
 use ic_testkit::pic::{PocketIc, PocketIcBuilder};
 use std::{
-    env,
+    env, fs,
     path::{Path, PathBuf},
     process::Command,
     sync::{Mutex, Once},
@@ -24,6 +24,19 @@ pub(super) fn build_test_root_wasm() -> Vec<u8> {
     let workspace_root = workspace_root();
     build_canisters_once(&workspace_root);
     read_built_wasm(&test_target_dir(&workspace_root), "delegation_root_stub")
+}
+
+// Build and read the exact release-qualified sibling wasm_store artifact.
+pub(super) fn build_test_wasm_store_wasm() -> Vec<u8> {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+    fs::read(
+        workspace_root
+            .join(".canic/release-builds")
+            .join(INTERNAL_TEST_RELEASE_BUILD_ID.1)
+            .join("artifacts/wasm_store/wasm_store.wasm.gz"),
+    )
+    .expect("read release-qualified sibling Wasm Store artifact")
 }
 
 // Build one independent PocketIC instance for a Fleet Registry fixture.
