@@ -1,5 +1,5 @@
 use std::{
-    io,
+    env, io,
     os::fd::BorrowedFd,
     path::{Path, PathBuf},
     process::Command,
@@ -19,6 +19,9 @@ use super::{
     version::compatible_version_output,
 };
 
+/// Optional absolute path relayed to every ICP CLI subprocess for an encrypted identity.
+pub const CANIC_ICP_IDENTITY_PASSWORD_FILE_ENV: &str = "CANIC_ICP_IDENTITY_PASSWORD_FILE";
+
 impl IcpCli {
     /// Build an ICP CLI command context from an executable path and optional ICP environment.
     #[must_use]
@@ -29,6 +32,7 @@ impl IcpCli {
             cwd: None,
             local_replica: None,
             inherited_fd: None,
+            identity_password_file: configured_identity_password_file(),
         }
     }
 
@@ -53,6 +57,13 @@ impl IcpCli {
         self
     }
 
+    /// Relay one explicit password file to every ICP CLI subprocess.
+    #[must_use]
+    pub fn with_identity_password_file(mut self, path: impl Into<PathBuf>) -> Self {
+        self.identity_password_file = Some(path.into());
+        self
+    }
+
     /// Return the optional ICP environment carried by this command context.
     #[must_use]
     pub fn environment(&self) -> Option<&str> {
@@ -63,6 +74,7 @@ impl IcpCli {
     #[must_use]
     pub fn command(&self) -> Command {
         let mut command = Command::new(&self.executable);
+        add_identity_password_file_arg(&mut command, self.identity_password_file.as_deref());
         if let Some(cwd) = &self.cwd {
             command.current_dir(cwd);
             add_project_root_override_arg(&mut command, cwd);
@@ -75,6 +87,7 @@ impl IcpCli {
     #[must_use]
     pub fn command_in(&self, cwd: &Path) -> Command {
         let mut command = Command::new(&self.executable);
+        add_identity_password_file_arg(&mut command, self.identity_password_file.as_deref());
         command.current_dir(cwd);
         add_project_root_override_arg(&mut command, cwd);
         configure_inherited_fd(&mut command, self.inherited_fd);
@@ -91,6 +104,18 @@ impl IcpCli {
 
     pub(super) fn add_target_args(&self, command: &mut Command) {
         add_target_args(command, self.environment(), self.local_replica.as_ref());
+    }
+}
+
+fn configured_identity_password_file() -> Option<PathBuf> {
+    env::var_os(CANIC_ICP_IDENTITY_PASSWORD_FILE_ENV)
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+}
+
+fn add_identity_password_file_arg(command: &mut Command, path: Option<&Path>) {
+    if let Some(path) = path {
+        command.arg("--identity-password-file").arg(path);
     }
 }
 

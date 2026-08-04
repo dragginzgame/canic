@@ -117,6 +117,17 @@ fn renders_project_root_override_for_rooted_context() {
     );
 }
 
+#[test]
+fn relays_identity_password_file_without_reading_secret_material() {
+    let icp = IcpCli::new("icp", Some("ic".to_string()))
+        .with_identity_password_file("/run/user/1000/canic-mainnet.password");
+
+    assert_eq!(
+        icp.canister_top_up_display("aaaaa-aa", 4_000_000_000_000),
+        "icp --identity-password-file /run/user/1000/canic-mainnet.password canister top-up --amount 4000000000000 aaaaa-aa -e ic"
+    );
+}
+
 // Ensure query-call previews preserve the explicit Candid argument.
 #[test]
 fn renders_argument_query_call_with_local_candid() {

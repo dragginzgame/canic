@@ -1,21 +1,26 @@
 # Canic 0.101 Implementation Status
 
-Date: 2026-07-27
+Date: 2026-08-04
 
 ## Status
 
 - State: proposed.
 - Release boundary: reinstall only.
 - Implementation started: no.
-- Dependency: completed 0.100 qualified infrastructure, Fleet Subnet Root,
-  Component Spec, root-local Component identity, topology-admitted Wasm Store
-  and Registry architecture, including flat potential-Wasm catalogs and
-  multi-level dynamic Component trees plus separate runtime and Registry
-  membership activation, revision-bound current-Directory convergence and
-  inventory-bound Fleet Subnet Root runtime activation.
-- Open design blockers: none. Application-data replication remains a separate
-  later design and is not an implementation blocker for 0.101 topology,
-  purpose or discovery contracts.
+- Dependency: completed 0.100 qualified independently host-installed
+  Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
+  root-local Component identity, topology-admitted sibling Wasm Store,
+  prepaid-Canister inventory and Registry architecture, including flat
+  potential-Wasm catalogs and multi-level dynamic Component trees plus
+  separate runtime and Registry membership activation, revision-bound
+  current-Directory convergence and inventory-bound Fleet Subnet Root runtime
+  activation.
+- Open design gate: implementation must measure and freeze the exact initial
+  root, Component, placement, service-member, plan, Registry and Directory
+  envelope. The first implementation does not claim ten-thousand-Subnet
+  qualification. Application-data replication remains a separate later design
+  and is not an implementation blocker for 0.101 topology, purpose or
+  discovery contracts.
 
 0.101 creates a fresh Fleet with composable compile-time Component Groups.
 Nested group declarations flatten to direct Components under exact Fleet
@@ -35,9 +40,10 @@ mode-compatible member set. Placement policy can pack several copies of one
 deployment on one root or spread them across roots, subject to per-deployment
 density/spread and immutable aggregate root limits. After installation, an
 authenticated administrator may monotonically add exact placements on
-pre-admitted roots, including a root that completed the separate ordinary
-root-registration lifecycle before scale-out. Toko's one-cell-per-root choice
-and maximum of ten are example policy values, not protocol limits.
+pre-installed, pre-admitted roots from the same fresh Fleet installation.
+0.101 does not add a root after the initial all-root activation. Toko's
+one-cell-per-root choice and maximum of ten are example policy values, not
+protocol limits.
 
 Separate deployment IDs may reference the same Component Group while applying
 different reduction-only limits to exact flattened member paths. The
@@ -62,15 +68,32 @@ protected Canic parentage or the root-derived Component Directory. The Hub and
 Project Instance use distinct explicit spawn grants for their respective
 child roles.
 
+0.101 also closes 0.100's deferred cross-root peer-Component requester proof.
+The target root derives one exact top-level Fleet-service member from the
+IC-authenticated raw caller and its current Fleet Registry Mirror, requires
+the matching Fleet Directory projection, then independently enforces the
+compiled requester-Spec-to-target-Spec Component Provisioning Grant.
+Membership proves identity, not permission. Children, ungrouped Components,
+forwarded callers and caller-supplied bindings cannot use this path.
+
 0.101 does not consume a 0.100 installation, preserve existing Canisters,
 synchronize application data, choose load-balancer health, scale in, promote a
 Replica or create roots during scale-out. Grouped Components and their roots
 remain fenced from the ordinary 0.100 removal paths while placement or service
 references exist.
 
-Fresh 0.101 installation inherits the 0.100 infrastructure manifest and
-host-installed Coordinator/root boundary. Component Group placement does not
-change that installation ownership.
+Fresh 0.101 installation inherits the 0.100 infrastructure manifest,
+independent host installation of the Coordinator, every root and every sibling
+Store, reciprocal root/Store verification and sole-root Store adoption.
+Component Group placement does not change that installation ownership and
+reuses the ordinary prepaid-Canister claim plus guarded paid fallback.
+
+The current complete Fleet-service member vectors and affected-root
+confirmation barrier are retained only for the measured initial envelope. A
+later reinstall-only large-Fleet design may hard-cut them to versioned
+partitions and proof-carrying root-local projections, optionally distributed
+through bounded Coordinator Workers, while keeping the Coordinator the sole
+Fleet policy writer.
 
 ## Slice 1 — Composition and Purpose Contracts
 
@@ -101,6 +124,8 @@ change that installation ownership.
 - [ ] Remove singleton-Spec and sole-root-admission service assumptions.
 - [ ] Validate worst-case Spec demand, placement density/spread and the
   zero-placement/non-Authority versus singleton-Authority count rules.
+- [ ] Measure and freeze the initial supported root, Component, placement,
+  service-member, plan, Registry and Directory envelope.
 
 ## Slice 2 — Root Plans and Provisioning
 
@@ -114,8 +139,13 @@ change that installation ownership.
 - [ ] Require every flattened Spec in that root's immutable admissions,
   Component Topology, active release set and Wasm Store Catalog.
 - [ ] Enforce each root's immutable aggregate group-placement ceiling.
-- [ ] Reuse canonical root-local `ComponentInstanceId` allocation and
-  platform lifecycle.
+- [ ] Extend the complete current root-limit contract without dropping
+  Registry, Store, prepaid-pool or cycles-funding authority.
+- [ ] Reuse canonical root-local `ComponentInstanceId` allocation,
+  prepaid-Canister claim, guarded paid fallback and platform lifecycle.
+- [ ] Derive a cross-root top-level requester from the raw caller's exact
+  current Fleet Registry service binding and matching Fleet Directory, then
+  independently require the compiled peer-Component grant.
 - [ ] Accept same-root child requests from any exact registered
   Component-tree node through an exact role-to-role spawn grant and without a
   Coordinator operation.
@@ -156,6 +186,8 @@ change that installation ownership.
   count, protected maximum and next ordinal.
 - [ ] Accept only monotonic desired-count increases with exact unused
   placement IDs on active roots within density, spread and aggregate limits.
+- [ ] Require every eligible scale-out root to belong to the complete root set
+  installed and activated by the same fresh Fleet installation.
 - [ ] Enforce each affected service's complete member density/spread policy
   after every addition.
 - [ ] Provision only new placements and retain exact retry identity.
@@ -177,6 +209,15 @@ change that installation ownership.
   identity or Component Group Directory ambiguity.
 - [ ] Prove two Fleets remain isolated when their roots share one physical
   Subnet.
+- [ ] Prove cross-root peer provisioning requires the exact current raw-caller
+  Registry member, matching Directory projection and independent
+  requester-Spec-to-target-Spec grant, while stale, forwarded, child and
+  caller-supplied identities reject.
+- [ ] Prove independent host Store installation/adoption and ordinary
+  prepaid-Canister claim/retry remain the sole infrastructure and Component
+  effect paths used by grouped provisioning.
+- [ ] Prove the first excess value for every frozen initial scale bound rejects
+  before mutation or network effects.
 - [ ] Prove configured Replica discovery never claims data readiness,
   promotion or failover and configured PoolMember discovery never claims
   health, load-balancer eligibility or consistency.
@@ -201,6 +242,8 @@ change that installation ownership.
   distinct protected effective spawn-grant ceilings and no duplicated Spec.
 - [ ] A same-Spec ActivePool packs multiple stable placements on one root,
   spans at least two roots and publishes one atomic scale-out addition.
+- [ ] The initial supported Fleet/service envelope is measured and does not
+  claim ten-thousand-Subnet qualification.
 - [ ] All design criteria and required journeys pass.
 - [ ] No Tree identity, runtime Group Canister, nested Component declaration,
   Component Child group/service target, delegated lifecycle authority,

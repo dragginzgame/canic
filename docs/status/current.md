@@ -14,13 +14,32 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.99`.
-- The latest published release is `v0.100.99` at
-  `bf62151d99270a04d92d8a1b00487cbb08eab774`.
-- Open patch draft `0.100.100` makes the durable Coordinator root-deletion
-  execution intent a mandatory process boundary. Destructive execution can no
-  longer prepare its own authority and fails before observing or mutating the
-  root when the separate preparation process has not completed.
+- The workspace package version is `0.100.100`.
+- The latest published release is `v0.100.100` at
+  `0654385f04baa3df425e1c3cf7335cd378614482`.
+- Open patch draft `0.100.101` relays an operator-owned password file to every
+  ICP subprocess so encrypted controller identities work consistently across
+  non-interactive installation, reconciliation and deletion-proof calls. It
+  also advances the host-only Subnet Catalog boundary to `ic-query 0.26.15`;
+  Canic's consumed Rust model remains stable while the local cache hard-cuts to
+  `nns/<network>/subnet-catalog/...` with no legacy-path fallback.
+- PocketIC remains at `14.0.0`: published `ic-testkit 0.1.11` constrains
+  `pocket-ic` to the 14.x line, and resolving a direct v15 client beside its
+  v14-backed `Pic` wrapper would reject the shared server at runtime. The next
+  testkit release should target PocketIC 15 and expose `Pic::set_controllers`,
+  after which Canic can remove its temporary live-instance reconnect helper.
+- Released `0.100.100` makes the durable Coordinator root-deletion execution
+  intent a mandatory process boundary. Destructive execution cannot prepare
+  its own authority and fails before observing or mutating the root when the
+  separate preparation process has not completed.
+- Proposed `0.101` now follows the current 0.100 infrastructure boundary:
+  the host independently installs each Coordinator, root and sibling Store,
+  grouped provisioning reuses the root's prepaid-Canister lifecycle, and
+  cross-root peer provisioning requires both the exact current Registry/member
+  projection for the raw caller and the compiled Spec-to-Spec grant. Its first
+  implementation must freeze a measured finite scale envelope and does not
+  claim ten-thousand-Subnet qualification; later partitioned membership and
+  Worker distribution remain the long-horizon direction.
 - Released `0.100.99` removes the final root-triggered Store build side effect.
   Installation preparation builds the Store as an independent infrastructure
   role, and the passing post-extraction measurement records exact replacement
@@ -77,8 +96,10 @@ Historical detail is archived at:
   GC and terminal deletion authority remain unchanged after handoff.
   Released 0.100.98 completes that implementation; released 0.100.99 removes
   the final root-build side effect and records a passing post-extraction
-  boundary. Open 0.100.100 enforces the final proof's separate-process
-  root-deletion boundary. Only the disposable real-network proof remains.
+  boundary. Released 0.100.100 enforces the final proof's separate-process
+  root-deletion boundary, and open 0.100.101 relays encrypted-identity
+  credentials to every ICP subprocess. Only the disposable real-network proof
+  remains.
 - Proposed `0.105` defines provider-neutral declarative authentication
   profiles as the sole source of multi-role user-token grants and
   install-owned issuer/verifier policy. Its initial Toko path uses one
@@ -855,8 +876,9 @@ Historical detail is archived at:
   Component and potential-descendant catalog, then projects an exact
   release-set manifest for each root. A separate exact Canic infrastructure
   manifest qualifies the Coordinator, Fleet Subnet Root and Wasm Store. The
-  host installs the Coordinator and roots directly; each root bootstraps only
-  its own verified local Store. The Coordinator manages Fleet Subnet Roots and
+  host independently installs the Coordinator, each root and each sibling
+  Store, then verifies reciprocal authority and the prepared root's sole-root
+  Store-adoption receipt. The Coordinator manages Fleet Subnet Roots and
   publication, not ordinary Component inventories.
 - The required 0.100 closeout operator surface now includes
   `canic info subnets <fleet> [--json]`. It resolves the Coordinator from the
@@ -890,29 +912,37 @@ Historical detail is archived at:
   Registry bytes and existing spawn-grant ceilings but cannot raise them or
   alter the Spec. Every placement and scale-out of one deployment inherits
   the same protected limits, so separate deployment IDs express, for example,
-  10,000- and 2,000-instance Project Hubs on different roots/Subnets.
+  10,000- and 2,000-instance Hub-to-Project-Instance grant ceilings on
+  different roots/Subnets.
   Root-local Component Group Directories expose siblings in one exact
   placement without granting lifecycle authority. A service-sensitive
   descendant resolves purpose through its exact owning top-level Component
   and never becomes a group member or Fleet service.
   Explicit same-release group scale-out may add exact placements on
-  already-installed, already-admitted roots—including roots that complete the
-  separate root-registration lifecycle first—up to protected deployment,
-  density, spread and root limits; assignments may pack or spread placements.
+  already-installed, already-admitted roots from the same fresh Fleet
+  installation, up to protected deployment, density, spread and root limits;
+  assignments may pack or spread placements.
   It cannot scale in, expand admissions, promote a Replica or claim
-  application-data readiness. Toko's one-cell-per-root choice and value ten
-  are example policy, not protocol constants. Independently scaled tiers use
-  separate deployments. Dynamic high-cardinality descendants remain
+  application-data readiness, and it cannot add a root after initial all-root
+  activation. Toko's one-cell-per-root choice and value ten are example
+  policy, not protocol constants. Independently scaled tiers use separate
+  deployments. Dynamic high-cardinality descendants remain
   Component Children even when they create children of their own. Each
   Project Hub creates its Project Instances as direct children through its own
   root, and each Project Instance may create its Ledger and optional Machine
   through that same root. The root, not the Hub, child or Coordinator,
   performs every platform lifecycle effect, and the Coordinator is not on the
-  per-instance path. Grouped
-  Components and their roots remain fenced from
-  ordinary removal while placement or service references exist. Neither
-  design consumes an installation from its predecessor. The proposed 0.102
+  per-instance path. A top-level Fleet-service Component may prove its exact
+  cross-root requester identity through the target root's current Fleet
+  Registry Mirror and matching Fleet Directory, but the independently
+  compiled Component Provisioning Grant remains the sole creation permission.
+  Grouped Components and their roots remain fenced from ordinary removal
+  while placement or service references exist. Neither design consumes an
+  installation from its predecessor. The proposed 0.102
   diagnostic and 0.103 transport lines use the same reinstall-only boundary.
+  The first 0.101 implementation retains complete service-member vectors only
+  inside a measured finite envelope. Ten-thousand-Subnet operation requires a
+  later partitioned publication/projection design and is not a current claim.
 - Proposed 0.104 reserves the bounded Coordinator Worker concept. A
   Coordinator may create one or more Fleet-scoped infrastructure Workers to
   partition high-cardinality operational work while remaining the sole Fleet
@@ -2564,9 +2594,11 @@ item. Released `0.100.95` groups both reinstall-only stable-memory ledgers by
 their current subsystem owners. Released `0.100.96` records the initial
 boundary baseline, released `0.100.98` completes the independent host-installed
 Store cut, released `0.100.99` records the passing post-extraction boundary,
-and open `0.100.100` requires a previously retained Coordinator execution
-intent before destructive root deletion. The maintainer-owned disposable
-real-network root-deletion proof is the only remaining 0.100 closeout item.
+released `0.100.100` requires a previously retained Coordinator execution
+intent before destructive root deletion, and open `0.100.101` removes the
+password-encrypted identity execution blocker. The maintainer-owned
+disposable real-network root-deletion proof is the only remaining 0.100
+closeout item.
 
 ## Historical Release Detail
 

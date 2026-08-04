@@ -37,6 +37,7 @@ pub struct IcpCli {
     pub(super) cwd: Option<PathBuf>,
     pub(super) local_replica: Option<LocalReplicaTarget>,
     pub(super) inherited_fd: Option<i32>,
+    pub(super) identity_password_file: Option<PathBuf>,
 }
 
 ///

@@ -133,3 +133,12 @@ The prepare output is the exact Coordinator execution receipt. The execute
 output is its terminal deletion receipt. Run the same execute command again to
 verify exact replay: it returns that same terminal receipt without another root
 effect.
+
+## Password-encrypted ICP identities
+
+When the active ICP CLI identity uses password storage, set
+`CANIC_ICP_IDENTITY_PASSWORD_FILE` to an absolute operator-owned password file
+for the individual Canic command. Canic relays the path as ICP CLI's global
+`--identity-password-file` option to every subprocess; it does not read, copy,
+persist or render the password contents. Keep the file outside the repository,
+restrict it to the current user and remove it after the operation.

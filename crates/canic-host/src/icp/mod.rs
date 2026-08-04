@@ -12,8 +12,8 @@ mod version;
 
 pub(crate) use command::default_command_in;
 pub use command::{
-    add_target_args, command_display, existing_local_canister_candid_path,
-    local_canister_candid_path,
+    CANIC_ICP_IDENTITY_PASSWORD_FILE_ENV, add_target_args, command_display,
+    existing_local_canister_candid_path, local_canister_candid_path,
 };
 pub use diagnostic::{IcpDiagnostic, classify_icp_diagnostic};
 pub use error::IcpCommandError;
