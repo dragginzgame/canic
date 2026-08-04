@@ -222,8 +222,8 @@ mod tests {
         let plan = plan_release_build(&root).expect("plan release build");
         let release_build_id = plan.record.release_build_id;
         let topology = topology();
-        let root_output = build_output(&root, "root");
-        let app_output = build_output(&root, "app");
+        let root_output = build_output(&root, "root", release_build_id);
+        let app_output = build_output(&root, "app", release_build_id);
         let infrastructure_outputs = infrastructure_outputs(&root, release_build_id, &root_output);
         let complete_build = complete_build_snapshot(&root, &topology, &root_output, &app_output);
         let snapshot = ValidatedInstallSnapshot {
@@ -297,8 +297,8 @@ mod tests {
         let plan = plan_release_build(&root).expect("plan release build");
         let release_build_id = plan.record.release_build_id;
         let topology = topology();
-        let root_output = build_output(&root, "root");
-        let app_output = build_output(&root, "app");
+        let root_output = build_output(&root, "root", release_build_id);
+        let app_output = build_output(&root, "app", release_build_id);
         fs::write(
             &app_output.output.wasm_gz_path,
             gzip(b"\0asm\x01\0\0\0different"),
@@ -385,13 +385,19 @@ maximum_instances = 1
         }
     }
 
-    fn build_output(root: &Path, role: &str) -> CurrentCanisterArtifactBuildOutput {
+    fn build_output(
+        root: &Path,
+        role: &str,
+        release_build_id: ReleaseBuildId,
+    ) -> CurrentCanisterArtifactBuildOutput {
         let artifact_root = root.join(".icp/local/canisters").join(role);
         fs::create_dir_all(&artifact_root).expect("create artifact root");
         let wasm_path = artifact_root.join(format!("{role}.wasm"));
         let wasm_gz_path = artifact_root.join(format!("{role}.wasm.gz"));
-        fs::write(&wasm_path, MINIMAL_WASM).expect("write Wasm");
-        fs::write(&wasm_gz_path, gzip(MINIMAL_WASM)).expect("write gzip Wasm");
+        let mut wasm = MINIMAL_WASM.to_vec();
+        wasm.extend_from_slice(release_build_id.to_string().as_bytes());
+        fs::write(&wasm_path, &wasm).expect("write Wasm");
+        fs::write(&wasm_gz_path, gzip(&wasm)).expect("write gzip Wasm");
         CurrentCanisterArtifactBuildOutput {
             role: role.to_string(),
             output: CanisterArtifactBuildOutput {
@@ -410,8 +416,8 @@ maximum_instances = 1
         release_build_id: ReleaseBuildId,
         root_output: &CurrentCanisterArtifactBuildOutput,
     ) -> Vec<CanicInfrastructureArtifactBuildOutput> {
-        let coordinator = build_output(root, "fleet_coordinator");
-        let wasm_store = build_output(root, "wasm_store");
+        let coordinator = build_output(root, "fleet_coordinator", release_build_id);
+        let wasm_store = build_output(root, "wasm_store", release_build_id);
         vec![
             CanicInfrastructureArtifactBuildOutput {
                 role: crate::release_set::CanicInfrastructureRole::FleetCoordinator,
