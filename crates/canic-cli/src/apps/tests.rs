@@ -63,10 +63,10 @@ fn app_config_dispatch_preserves_list_error() {
     let error = run_config(std::iter::empty::<OsString>())
         .expect_err("missing app config arguments reject");
 
-    std::assert_matches!(
-        error,
-        AppCommandError::Config(crate::list::ListCommandError::Usage(_))
-    );
+    let AppCommandError::Config(error) = error else {
+        panic!("expected config error");
+    };
+    std::assert_matches!(*error, crate::list::ListCommandError::Usage(_));
 }
 
 // Ensure role list requires one app name.

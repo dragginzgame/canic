@@ -216,7 +216,7 @@ pub enum RestoreCommandError {
     Persistence(#[from] PersistenceError),
 
     #[error(transparent)]
-    Backup(#[from] BackupCommandError),
+    Backup(Box<BackupCommandError>),
 
     #[error(transparent)]
     RestorePlan(#[from] RestorePlanError),
@@ -229,6 +229,12 @@ pub enum RestoreCommandError {
 
     #[error(transparent)]
     RestorePersistence(#[from] RestorePersistenceError),
+}
+
+impl From<BackupCommandError> for RestoreCommandError {
+    fn from(error: BackupCommandError) -> Self {
+        Self::Backup(Box::new(error))
+    }
 }
 
 impl From<RestoreRunnerError> for RestoreCommandError {

@@ -53,19 +53,19 @@ pub enum CliError {
     Usage(String),
 
     #[error("backup: {0}")]
-    Backup(#[from] backup::BackupCommandError),
+    Backup(#[source] Box<backup::BackupCommandError>),
 
     #[error("auth: {0}")]
-    Auth(#[from] auth::AuthCommandError),
+    Auth(#[source] Box<auth::AuthCommandError>),
 
     #[error("blob-storage: {0}")]
-    BlobStorage(#[from] blob_storage::BlobStorageCommandError),
+    BlobStorage(#[source] Box<blob_storage::BlobStorageCommandError>),
 
     #[error("build: {0}")]
     Build(#[from] build::BuildCommandError),
 
     #[error("cycles: {0}")]
-    Cycles(#[from] cycles::CyclesCommandError),
+    Cycles(#[source] Box<cycles::CyclesCommandError>),
 
     #[error("deploy: {0}")]
     Deploy(#[from] deploy::DeployCommandError),
@@ -77,7 +77,7 @@ pub enum CliError {
     Install(#[from] install::InstallCommandError),
 
     #[error("inspect: {0}")]
-    Inspect(#[from] inspect::InspectCommandError),
+    Inspect(#[source] Box<inspect::InspectCommandError>),
 
     #[error("info: {0}")]
     Info(#[from] info::InfoCommandError),
@@ -89,7 +89,7 @@ pub enum CliError {
     Network(#[from] network::NetworkCommandError),
 
     #[error("app: {0}")]
-    Apps(#[from] apps::AppCommandError),
+    Apps(#[source] Box<apps::AppCommandError>),
 
     #[error("state: {0}")]
     State(#[from] state::StateCommandError),
@@ -107,7 +107,49 @@ pub enum CliError {
     Status(#[from] status::StatusCommandError),
 
     #[error("token: {0}")]
-    Token(#[from] token::TokenCommandError),
+    Token(#[source] Box<token::TokenCommandError>),
+}
+
+impl From<backup::BackupCommandError> for CliError {
+    fn from(error: backup::BackupCommandError) -> Self {
+        Self::Backup(Box::new(error))
+    }
+}
+
+impl From<auth::AuthCommandError> for CliError {
+    fn from(error: auth::AuthCommandError) -> Self {
+        Self::Auth(Box::new(error))
+    }
+}
+
+impl From<blob_storage::BlobStorageCommandError> for CliError {
+    fn from(error: blob_storage::BlobStorageCommandError) -> Self {
+        Self::BlobStorage(Box::new(error))
+    }
+}
+
+impl From<cycles::CyclesCommandError> for CliError {
+    fn from(error: cycles::CyclesCommandError) -> Self {
+        Self::Cycles(Box::new(error))
+    }
+}
+
+impl From<inspect::InspectCommandError> for CliError {
+    fn from(error: inspect::InspectCommandError) -> Self {
+        Self::Inspect(Box::new(error))
+    }
+}
+
+impl From<apps::AppCommandError> for CliError {
+    fn from(error: apps::AppCommandError) -> Self {
+        Self::Apps(Box::new(error))
+    }
+}
+
+impl From<token::TokenCommandError> for CliError {
+    fn from(error: token::TokenCommandError) -> Self {
+        Self::Token(Box::new(error))
+    }
 }
 
 /// Run the CLI from process arguments.
