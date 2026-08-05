@@ -5,9 +5,9 @@
 //! Boundary: callers receive only the validated catalog produced by `ic-query`.
 
 use ic_query::subnet_catalog::{
-    CatalogLoadOutcome, DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT, MAINNET_NETWORK,
-    SubnetCatalogCacheRequest, SubnetCatalogHostError, SubnetCatalogLoadRequest,
-    load_subnet_catalog,
+    CatalogAssurance, CatalogLoadOutcome, CatalogSourceSelection,
+    DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT, MAINNET_NETWORK, SubnetCatalogCacheRequest,
+    SubnetCatalogHostError, SubnetCatalogLoadRequest, load_subnet_catalog,
 };
 use std::path::{Path, PathBuf};
 
@@ -18,20 +18,56 @@ pub fn load_mainnet_subnet_catalog(
     icp_root: &Path,
     now_unix_secs: u64,
 ) -> Result<CatalogLoadOutcome, SubnetCatalogHostError> {
+    let request = mainnet_subnet_catalog_load_request(icp_root, now_unix_secs);
+    load_subnet_catalog(&request)
+}
+
+fn mainnet_subnet_catalog_load_request(
+    icp_root: &Path,
+    now_unix_secs: u64,
+) -> SubnetCatalogLoadRequest {
     let cache = SubnetCatalogCacheRequest::new(
         mainnet_subnet_catalog_cache_root(icp_root),
         MAINNET_NETWORK,
     );
-    let request = SubnetCatalogLoadRequest::refresh_missing_or_invalid(
-        cache,
-        DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT,
-        now_unix_secs,
-    );
-    load_subnet_catalog(&request)
+    let source = CatalogSourceSelection::uncertified_query(DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT);
+    let request =
+        SubnetCatalogLoadRequest::refresh_missing_or_invalid(cache, source, now_unix_secs);
+    request.with_minimum_assurance(CatalogAssurance::UncertifiedQuery)
 }
 
 /// Return the private capability root used for Canic's embedded `ic-query` cache.
 #[must_use]
 pub fn mainnet_subnet_catalog_cache_root(icp_root: &Path) -> PathBuf {
     icp_root.join(".canic").join(IC_QUERY_CACHE_DIRECTORY)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ic_query::subnet_catalog::CatalogReadPolicy;
+
+    #[test]
+    fn mainnet_load_request_freezes_source_and_minimum_assurance() {
+        let request = mainnet_subnet_catalog_load_request(Path::new("/tmp/canic-test"), 123);
+
+        assert_eq!(
+            request.minimum_assurance,
+            CatalogAssurance::UncertifiedQuery
+        );
+        assert_eq!(request.now_unix_secs, 123);
+        assert_eq!(request.cache.network, MAINNET_NETWORK);
+        assert_eq!(
+            request.cache.cache_root,
+            Path::new("/tmp/canic-test/.canic/ic-query")
+        );
+        assert_eq!(
+            request.policy,
+            CatalogReadPolicy::RefreshMissingOrInvalid {
+                source: CatalogSourceSelection::uncertified_query(
+                    DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT,
+                ),
+            }
+        );
+    }
 }

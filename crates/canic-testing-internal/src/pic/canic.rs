@@ -1,7 +1,4 @@
-use std::{
-    path::{Path, PathBuf},
-    sync::Mutex,
-};
+use std::path::{Path, PathBuf};
 
 use candid::{Principal, encode_one};
 use canic::{
@@ -42,7 +39,6 @@ use super::artifacts::{
 
 const INSTALL_CYCLES: u128 = 500_000_000_000_000;
 const STANDALONE_READY_TICK_LIMIT: usize = 60;
-static STANDALONE_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
 ///
 /// ManagedRootInstallInput
@@ -389,10 +385,6 @@ fn ensure_canister_wasm_ready(
     crate_name: &str,
     profile: CanicWasmBuildProfile,
 ) {
-    let _build_guard = STANDALONE_BUILD_SERIAL
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-
     build_internal_test_wasm_canisters(workspace_root, target_dir, &[crate_name], profile);
 }
 

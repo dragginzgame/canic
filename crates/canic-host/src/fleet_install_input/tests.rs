@@ -11,7 +11,7 @@ use ic_query::subnet_catalog::{
     CatalogValidationContext, ClassificationSource, DEFAULT_CATALOG_MAX_FUTURE_SKEW_SECONDS,
     DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT, GeographicScope, MAINNET_NETWORK,
     MAINNET_REGISTRY_CANISTER_ID, RawSubnetCatalog, RoutingRange, SubnetInfo,
-    ValidatedSubnetCatalog,
+    UncertifiedCatalogCollection, ValidatedSubnetCatalog,
 };
 
 const FIDUCIARY_SUBNET: &str = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae";
@@ -677,11 +677,14 @@ fn catalog_with_ranges(
     routing_ranges: Vec<RoutingRange>,
 ) -> ValidatedSubnetCatalog {
     let raw = RawSubnetCatalog::new_mainnet_uncertified(
-        1,
-        DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT,
-        FIXTURE_FETCHED_AT,
-        "canic-test",
-        "0.29.1",
+        UncertifiedCatalogCollection::new(
+            1,
+            DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT,
+            FIXTURE_FETCHED_AT,
+            "canic-test",
+            "0.29.3",
+            1,
+        ),
         subnets,
         routing_ranges,
     )

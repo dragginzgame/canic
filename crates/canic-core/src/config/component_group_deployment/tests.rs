@@ -276,17 +276,178 @@ placement.minimum_distinct_roots = 1
 component_spec = "a"
 [component_group_deployments.cell]
 component_group = "cell"
-service_purpose = "authority"
+labels = { tier = "future" }
 initial_placements = 1
 maximum_placements = 1
 placement.maximum_per_root = 1
 placement.minimum_distinct_roots = 1
 "#
     ))
-    .expect_err("purpose must remain unavailable until its compiler lands");
+    .expect_err("labels must remain unavailable until their compiler lands");
     assert!(matches!(
         partial_future_field,
         ConfigError::CannotParseToml { .. }
+    ));
+}
+
+#[test]
+fn reusable_service_group_resolves_exact_purpose_per_deployment_path() {
+    let (config, topology) = parse(
+        r#"
+[component_groups.databases.components.database]
+component_spec = "a"
+service = "database"
+
+[component_groups.databases.components.helper]
+component_spec = "b"
+
+[component_groups.project_cell.components.hub]
+component_spec = "b"
+service = "project-hubs"
+service_purpose = "pool_member"
+
+[component_groups.project_cell.groups.databases]
+component_group = "databases"
+service_purpose = "replica"
+
+[component_group_deployments.authoritative]
+component_group = "databases"
+service_purpose = "authority"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
+
+[component_group_deployments.projects]
+component_group = "project_cell"
+initial_placements = 1
+maximum_placements = 2
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
+"#,
+    )
+    .expect("valid reusable service deployments");
+    let authoritative = topology
+        .get(&deployment("authoritative"))
+        .expect("Authority deployment");
+    let projects = topology
+        .get(&deployment("projects"))
+        .expect("project deployment");
+
+    assert!(matches!(
+        authoritative.members[0].purpose,
+        ComponentDeploymentPurpose::FleetServiceMember {
+            ref service,
+            member_purpose: FleetServiceMemberPurpose::Authority,
+        } if service.as_str() == "database"
+    ));
+    assert!(matches!(
+        authoritative.members[1].purpose,
+        ComponentDeploymentPurpose::Ordinary
+    ));
+    assert!(matches!(
+        projects.members[0].purpose,
+        ComponentDeploymentPurpose::FleetServiceMember {
+            ref service,
+            member_purpose: FleetServiceMemberPurpose::Replica,
+        } if service.as_str() == "database"
+    ));
+    assert!(matches!(
+        projects.members[1].purpose,
+        ComponentDeploymentPurpose::Ordinary
+    ));
+    assert!(matches!(
+        projects.members[2].purpose,
+        ComponentDeploymentPurpose::FleetServiceMember {
+            ref service,
+            member_purpose: FleetServiceMemberPurpose::PoolMember,
+        } if service.as_str() == "project-hubs"
+    ));
+
+    let encoded = candid::encode_one(&topology).expect("encode purpose topology");
+    let decoded: ComponentGroupDeploymentTopology =
+        candid::decode_one(&encoded).expect("decode purpose topology");
+    assert_eq!(decoded, topology);
+    decoded
+        .validate(
+            &config
+                .compile_component_group_topology()
+                .expect("Component Group topology"),
+            &config
+                .compile_component_topology()
+                .expect("Component topology"),
+        )
+        .expect("decoded purpose topology remains exact");
+}
+
+#[test]
+fn service_leaf_requires_exactly_one_purpose_assignment() {
+    let missing = parse(
+        r#"
+[component_groups.database.components.database]
+component_spec = "a"
+service = "database"
+[component_group_deployments.database]
+component_group = "database"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
+"#,
+    )
+    .expect_err("missing service purpose must reject");
+    assert!(matches!(
+        missing,
+        ConfigError::ComponentGroupDeploymentTopology(
+            ComponentGroupDeploymentTopologyError::MissingServicePurposeAssignment { .. }
+        )
+    ));
+
+    let duplicate = parse(
+        r#"
+[component_groups.database.components.database]
+component_spec = "a"
+service = "database"
+service_purpose = "replica"
+[component_group_deployments.database]
+component_group = "database"
+service_purpose = "authority"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
+"#,
+    )
+    .expect_err("multiple service purposes must reject");
+    assert!(matches!(
+        duplicate,
+        ConfigError::ComponentGroupDeploymentTopology(
+            ComponentGroupDeploymentTopologyError::MultipleServicePurposeAssignments {
+                actual: 2,
+                ..
+            }
+        )
+    ));
+
+    let unused = parse(
+        r#"
+[component_groups.ordinary.components.a]
+component_spec = "a"
+[component_group_deployments.ordinary]
+component_group = "ordinary"
+service_purpose = "authority"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
+"#,
+    )
+    .expect_err("unused deployment purpose must reject");
+    assert!(matches!(
+        unused,
+        ConfigError::ComponentGroupDeploymentTopology(
+            ComponentGroupDeploymentTopologyError::InapplicableServicePurposeAssignment { .. }
+        )
     ));
 }
 
@@ -380,6 +541,17 @@ placement.minimum_distinct_roots = 1
     assert!(matches!(
         wrong_hash.validate(&groups, &components),
         Err(ComponentGroupDeploymentTopologyError::ComponentSpecHashMismatch { .. })
+    ));
+
+    let mut wrong_purpose = topology.clone();
+    wrong_purpose.component_group_deployments[0].members[0].purpose =
+        ComponentDeploymentPurpose::FleetServiceMember {
+            service: "fabricated".parse().expect("Fleet service ID"),
+            member_purpose: FleetServiceMemberPurpose::Authority,
+        };
+    assert!(matches!(
+        wrong_purpose.validate(&groups, &components),
+        Err(ComponentGroupDeploymentTopologyError::MemberProjectionMismatch { .. })
     ));
 
     let mut wrong_order = topology;

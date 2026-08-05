@@ -24,16 +24,18 @@ pub use crate::config::{ConfigError, ConfigTomlIssue};
 #[doc(hidden)]
 pub mod compiled {
     pub use crate::config::{
-        ComponentChildFundingPolicy, ComponentChildSpec, ComponentGroupDeploymentSpec,
-        ComponentGroupDeploymentTopology, ComponentGroupDeploymentTopologyError,
-        ComponentGroupMember, ComponentGroupPlacementPolicy, ComponentGroupSpec,
-        ComponentGroupTopology, ComponentGroupTopologyError, ComponentLimits,
-        ComponentProvisioningGrant, ComponentSpawnGrant, ComponentSpec, ComponentTopology,
-        ComponentTopologyError, FlattenedComponentGroup, FlattenedComponentGroupDeploymentMember,
-        FlattenedComponentGroupMember, MAX_COMPONENT_GROUP_DECLARED_MEMBERS,
-        MAX_COMPONENT_GROUP_DEPLOYMENT_MEMBERS, MAX_COMPONENT_GROUP_DEPLOYMENTS,
-        MAX_COMPONENT_GROUP_FLATTENED_MEMBERS, MAX_COMPONENT_GROUP_GRAPH_CANONICAL_BYTES,
-        MAX_COMPONENT_GROUP_INCLUSIONS, MAX_COMPONENT_GROUP_MEMBERS, MAX_COMPONENT_GROUP_SPECS,
+        ComponentChildFundingPolicy, ComponentChildSpec, ComponentDeploymentPurpose,
+        ComponentGroupDeploymentSpec, ComponentGroupDeploymentTopology,
+        ComponentGroupDeploymentTopologyError, ComponentGroupLeafKind, ComponentGroupMember,
+        ComponentGroupPlacementPolicy, ComponentGroupSpec, ComponentGroupTopology,
+        ComponentGroupTopologyError, ComponentLimits, ComponentProvisioningGrant,
+        ComponentSpawnGrant, ComponentSpec, ComponentTopology, ComponentTopologyError,
+        FlattenedComponentGroup, FlattenedComponentGroupDeploymentMember,
+        FlattenedComponentGroupMember, FleetServiceMemberPurpose,
+        MAX_COMPONENT_GROUP_DECLARED_MEMBERS, MAX_COMPONENT_GROUP_DEPLOYMENT_MEMBERS,
+        MAX_COMPONENT_GROUP_DEPLOYMENTS, MAX_COMPONENT_GROUP_FLATTENED_MEMBERS,
+        MAX_COMPONENT_GROUP_GRAPH_CANONICAL_BYTES, MAX_COMPONENT_GROUP_INCLUSIONS,
+        MAX_COMPONENT_GROUP_MEMBERS, MAX_COMPONENT_GROUP_SPECS,
         MAX_COMPONENT_TOPOLOGY_CANONICAL_BYTES,
     };
     pub use crate::{
@@ -57,7 +59,7 @@ pub mod compiled {
         },
         ids::{
             AppId, BuildNetwork, CanisterRole, ComponentGroupDeploymentId, ComponentGroupMemberId,
-            ComponentGroupSpecId, ComponentSpecId,
+            ComponentGroupSpecId, ComponentSpecId, FleetServiceId,
         },
     };
 }

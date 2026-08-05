@@ -116,12 +116,7 @@ impl RootSubnetEvidenceSource for LiveSubnetCatalogRootSubnetEvidenceSource {
             .resolve_canister_route(canister_id)
             .map_err(|err| err.to_string())?;
         let subnet_principal = resolved.subnet.to_text();
-        let subnet = cached
-            .catalog
-            .subnet_by_principal(&subnet_principal)
-            .ok_or_else(|| {
-                format!("validated Canister route references missing Subnet {subnet_principal}")
-            })?;
+        let subnet = resolved.subnet_info;
 
         Ok(RootSubnetEvidence {
             subnet_principal,
@@ -144,7 +139,7 @@ mod tests {
     use ic_query::subnet_catalog::{
         ClassificationSource, DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT, GeographicScope,
         RawSubnetCatalog, RoutingRange, SubnetInfo, SubnetKind, SubnetSpecialization,
-        catalog_to_pretty_json, subnet_catalog_path,
+        UncertifiedCatalogCollection, catalog_to_pretty_json, subnet_catalog_path,
     };
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
@@ -201,11 +196,14 @@ mod tests {
 
     fn fixture_catalog() -> RawSubnetCatalog {
         RawSubnetCatalog::new_mainnet_uncertified(
-            123_456,
-            DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT,
-            "2026-06-26T00:00:00Z",
-            "fixture",
-            "0.29.1",
+            UncertifiedCatalogCollection::new(
+                123_456,
+                DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT,
+                "2026-06-26T00:00:00Z",
+                "fixture",
+                "0.29.3",
+                1,
+            ),
             vec![SubnetInfo {
                 subnet_principal: SUBNET.to_string(),
                 registry_subnet_type: 5,

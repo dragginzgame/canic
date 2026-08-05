@@ -5,9 +5,10 @@ Date: 2026-08-05
 ## Status
 
 - State: implementation has the bounded layer-neutral identity vocabulary,
-  strict configuration-only Component Group declarations and independent
+  strict configuration-only Component Group declarations, independent
   deployment flattening with bounded placement envelopes and worst-case Spec
-  demand; purpose compilation and every effect-bearing surface remain
+  demand, plus exact deployment/include/leaf Fleet-service purpose resolution;
+  service-target validation and every effect-bearing surface remain
   unimplemented.
 - Release boundary: reinstall only.
 - Implementation started: yes; `0.101.1` is released and `0.101.2` is open.
@@ -111,11 +112,11 @@ Fleet policy writer.
 - [x] Flatten every deployment completely before planning.
 - [x] Preserve each distinct member-path occurrence and distinguish inclusion
   from independent deployment.
-- [ ] Resolve every Fleet-service leaf through exactly one typed purpose
+- [x] Resolve every Fleet-service leaf through exactly one typed purpose
   assignment on its deployment/include/leaf path.
 - [ ] Reject unused purpose assignments and orphan service occurrences or
-  targets.
-- [ ] Add typed `Ordinary` and `FleetServiceMember` purpose with Authority,
+  targets. Unused assignments reject; service targets are the next boundary.
+- [x] Add typed `Ordinary` and `FleetServiceMember` purpose with Authority,
   Replica and PoolMember variants.
 - [ ] Validate AuthorityReplica and ActivePool target/member invariants.
 - [ ] Validate service-wide member density/spread independently of deployment
