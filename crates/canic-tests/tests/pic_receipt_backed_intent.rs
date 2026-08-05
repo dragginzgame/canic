@@ -96,7 +96,7 @@ enum ReceiptDecisionView {
 #[test]
 fn receipt_backed_intent_conformance() {
     let workspace_root = workspace_root();
-    let target_dir = test_target_dir(&workspace_root, "pic-wasm");
+    let target_dir = test_target_dir(&workspace_root, "pic-runtime-wasm");
     println!(
         "receipt_backed_intent: workspace_root={}",
         workspace_root.display()
@@ -607,7 +607,7 @@ fn install_retry_policy() -> RetryPolicy {
 
 fn build_canisters(workspace_root: &Path) {
     BUILD_ONCE.call_once(|| {
-        let target_dir = test_target_dir(workspace_root, "pic-wasm");
+        let target_dir = test_target_dir(workspace_root, "pic-runtime-wasm");
         build_internal_test_wasm_canisters(
             workspace_root,
             &target_dir,

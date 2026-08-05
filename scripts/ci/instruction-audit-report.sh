@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 ORIGINAL_ARGS=("$@")
+# shellcheck source=/dev/null
+source "$ROOT/tool-versions.env"
 
 METHOD_ID="CANIC-INSTRUCTION-001"
 METHOD_VERSION="3"
@@ -202,8 +204,8 @@ mkdir -p "$ARTIFACTS_DIR"
 
 if [[ -z "${POCKET_IC_BIN:-}" ]]; then
   for candidate in \
-    "$ROOT/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic" \
-    "/tmp/pocket-ic-server-14.0.0/pocket-ic"; do
+    "$ROOT/.tmp/test-runtime/pocket-ic-server-$CANIC_POCKET_IC_VERSION/pocket-ic" \
+    "/tmp/pocket-ic-server-$CANIC_POCKET_IC_VERSION/pocket-ic"; do
     if [[ -x "$candidate" ]]; then
       export POCKET_IC_BIN="$candidate"
       break
@@ -211,7 +213,7 @@ if [[ -z "${POCKET_IC_BIN:-}" ]]; then
   done
 fi
 if [[ -z "${POCKET_IC_BIN:-}" || ! -x "$POCKET_IC_BIN" ]]; then
-  echo "error: pinned PocketIC 14.0.0 executable is unavailable; set POCKET_IC_BIN" >&2
+  echo "error: pinned PocketIC $CANIC_POCKET_IC_VERSION executable is unavailable; set POCKET_IC_BIN" >&2
   exit 2
 fi
 

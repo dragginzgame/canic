@@ -297,6 +297,12 @@ mod tests {
         artifacts: BTreeMap<CanisterRole, Vec<u8>>,
     }
 
+    struct ComponentFixtureWasms {
+        issuer: Vec<u8>,
+        project_hub: Vec<u8>,
+        project_instance: Vec<u8>,
+    }
+
     #[cfg(test)]
     #[derive(CandidType)]
     struct CyclesLedgerStubInitArgs {
@@ -4004,19 +4010,23 @@ mod tests {
     }
 
     fn build_test_coordinator_wasm() -> Vec<u8> {
-        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-        let target_dir = test_target_dir(&workspace_root, "fleet-registry-sync");
-        build_internal_test_wasm_canisters(
-            &workspace_root,
-            &target_dir,
-            &[COORDINATOR_PACKAGE],
-            CanicWasmBuildProfile::Fast,
-        );
-        read_wasm(
-            &target_dir,
-            COORDINATOR_PACKAGE,
-            CanicWasmBuildProfile::Fast.target_dir_name(),
-        )
+        static WASM: OnceLock<Vec<u8>> = OnceLock::new();
+        WASM.get_or_init(|| {
+            let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+            let target_dir = test_target_dir(&workspace_root, "fleet-registry-sync");
+            build_internal_test_wasm_canisters(
+                &workspace_root,
+                &target_dir,
+                &[COORDINATOR_PACKAGE],
+                CanicWasmBuildProfile::Fast,
+            );
+            read_wasm(
+                &target_dir,
+                COORDINATOR_PACKAGE,
+                CanicWasmBuildProfile::Fast.target_dir_name(),
+            )
+        })
+        .clone()
     }
 
     fn build_root_store_fixture() -> RootStoreFixture {
@@ -4040,15 +4050,16 @@ mod tests {
         let release_build_id = managed_test_init_identity().release_build_id;
         let mut entries = Vec::new();
         let mut artifacts = BTreeMap::new();
+        let fixture_wasms = build_test_component_wasms();
         let real_modules = BTreeMap::from([
-            (CanisterRole::new("issuer"), build_test_issuer_wasm()),
+            (CanisterRole::new("issuer"), fixture_wasms.issuer.clone()),
             (
                 CanisterRole::new("project_hub"),
-                build_test_project_hub_wasm(),
+                fixture_wasms.project_hub.clone(),
             ),
             (
                 CanisterRole::new("project_instance"),
-                build_test_project_instance_wasm(),
+                fixture_wasms.project_instance.clone(),
             ),
         ]);
         for spec in &topology.component_specs {
@@ -4125,9 +4136,9 @@ mod tests {
         }
     }
 
-    fn build_test_issuer_wasm() -> Vec<u8> {
-        static WASM: OnceLock<Vec<u8>> = OnceLock::new();
-        WASM.get_or_init(|| {
+    fn build_test_component_wasms() -> &'static ComponentFixtureWasms {
+        static WASMS: OnceLock<ComponentFixtureWasms> = OnceLock::new();
+        WASMS.get_or_init(|| {
             let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
             let target_dir = test_target_dir(&workspace_root, "fleet-registry-sync");
             let config_path = root_canister_config_path(&workspace_root);
@@ -4135,72 +4146,24 @@ mod tests {
             build_internal_test_wasm_canisters_with_env(
                 &workspace_root,
                 &target_dir,
-                &[ISSUER_PACKAGE],
+                &[
+                    ISSUER_PACKAGE,
+                    PROJECT_HUB_PACKAGE,
+                    PROJECT_INSTANCE_PACKAGE,
+                ],
                 CanicWasmBuildProfile::Fast,
                 &[(
                     canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
                     canonical_config_path,
                 )],
             );
-            read_wasm(
-                &target_dir,
-                ISSUER_PACKAGE,
-                CanicWasmBuildProfile::Fast.target_dir_name(),
-            )
+            let profile = CanicWasmBuildProfile::Fast.target_dir_name();
+            ComponentFixtureWasms {
+                issuer: read_wasm(&target_dir, ISSUER_PACKAGE, profile),
+                project_hub: read_wasm(&target_dir, PROJECT_HUB_PACKAGE, profile),
+                project_instance: read_wasm(&target_dir, PROJECT_INSTANCE_PACKAGE, profile),
+            }
         })
-        .clone()
-    }
-
-    fn build_test_project_hub_wasm() -> Vec<u8> {
-        static WASM: OnceLock<Vec<u8>> = OnceLock::new();
-        WASM.get_or_init(|| {
-            let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-            let target_dir = test_target_dir(&workspace_root, "fleet-registry-sync");
-            let config_path = root_canister_config_path(&workspace_root);
-            let canonical_config_path = config_path.to_str().expect("root config path UTF-8");
-            build_internal_test_wasm_canisters_with_env(
-                &workspace_root,
-                &target_dir,
-                &[PROJECT_HUB_PACKAGE],
-                CanicWasmBuildProfile::Fast,
-                &[(
-                    canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
-                    canonical_config_path,
-                )],
-            );
-            read_wasm(
-                &target_dir,
-                PROJECT_HUB_PACKAGE,
-                CanicWasmBuildProfile::Fast.target_dir_name(),
-            )
-        })
-        .clone()
-    }
-
-    fn build_test_project_instance_wasm() -> Vec<u8> {
-        static WASM: OnceLock<Vec<u8>> = OnceLock::new();
-        WASM.get_or_init(|| {
-            let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-            let target_dir = test_target_dir(&workspace_root, "fleet-registry-sync");
-            let config_path = root_canister_config_path(&workspace_root);
-            let canonical_config_path = config_path.to_str().expect("root config path UTF-8");
-            build_internal_test_wasm_canisters_with_env(
-                &workspace_root,
-                &target_dir,
-                &[PROJECT_INSTANCE_PACKAGE],
-                CanicWasmBuildProfile::Fast,
-                &[(
-                    canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
-                    canonical_config_path,
-                )],
-            );
-            read_wasm(
-                &target_dir,
-                PROJECT_INSTANCE_PACKAGE,
-                CanicWasmBuildProfile::Fast.target_dir_name(),
-            )
-        })
-        .clone()
     }
 
     fn gzip(bytes: &[u8]) -> Vec<u8> {

@@ -8,11 +8,13 @@
 //! Invariants enforced here are assumed everywhere else in the system.
 
 mod component_group;
+mod component_group_deployment;
 mod component_spec;
 mod log;
 mod role;
 
 pub use component_group::*;
+pub use component_group_deployment::*;
 pub use component_spec::*;
 pub use log::*;
 pub use role::*;
@@ -20,7 +22,10 @@ pub use role::*;
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::candid::Principal,
-    ids::{AppId, BuildNetwork, CanisterRole, ComponentGroupSpecId, ComponentSpecId},
+    ids::{
+        AppId, BuildNetwork, CanisterRole, ComponentGroupDeploymentId, ComponentGroupSpecId,
+        ComponentSpecId,
+    },
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 use std::collections::{BTreeMap, BTreeSet};
@@ -176,6 +181,12 @@ pub struct ConfigModel {
     /// never become runtime parents or lifecycle authorities.
     #[serde(default)]
     pub component_groups: BTreeMap<ComponentGroupSpecId, ComponentGroupSpecConfig>,
+
+    /// Independently scalable selections of reusable Component Groups.
+    /// Physical roots and Subnets remain protected host plan input.
+    #[serde(default)]
+    pub component_group_deployments:
+        BTreeMap<ComponentGroupDeploymentId, ComponentGroupDeploymentConfig>,
 }
 
 impl ConfigModel {

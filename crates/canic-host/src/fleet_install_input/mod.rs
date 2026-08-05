@@ -14,6 +14,7 @@ use crate::{
         PlannedCanisterCreationFunding, PlannedFleetCoordinator, PlannedFleetSubnetRootInput,
     },
     icp_config::{IcpConfigError, resolve_icp_build_network_from_root},
+    subnet_catalog::load_mainnet_subnet_catalog,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -31,8 +32,7 @@ use canic_core::{
     },
 };
 use ic_query::subnet_catalog::{
-    DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT, SubnetCatalog, SubnetCatalogCacheRequest, SubnetInfo,
-    SubnetKind, SubnetSpecialization, load_or_refresh_subnet_catalog,
+    SubnetInfo, SubnetKind, SubnetSpecialization, ValidatedSubnetCatalog,
 };
 use serde::Deserialize;
 use thiserror::Error as ThisError;
@@ -244,11 +244,7 @@ pub fn load_and_resolve_fleet_install_input(
     let build_network = resolve_icp_build_network_from_root(icp_root, environment)?;
     if build_network == BuildNetwork::Ic {
         let now_unix_secs = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
-        let cached = load_or_refresh_subnet_catalog(
-            &SubnetCatalogCacheRequest::new(icp_root, "ic"),
-            DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT,
-            now_unix_secs,
-        )?;
+        let cached = load_mainnet_subnet_catalog(icp_root, now_unix_secs)?;
         return resolve_document(&document, build_network, Some(&cached.catalog));
     }
 
@@ -314,7 +310,7 @@ const fn validate_schema_version(
 fn resolve_document(
     document: &FleetInstallInputDocument,
     build_network: BuildNetwork,
-    catalog: Option<&SubnetCatalog>,
+    catalog: Option<&ValidatedSubnetCatalog>,
 ) -> Result<ResolvedFleetInstallInput, FleetInstallInputError> {
     validate_schema_version(document)?;
     let coordinator_subnet =
@@ -417,7 +413,7 @@ fn resolve_document(
 fn resolve_coordinator_subnet(
     selector: &CoordinatorSubnetSelector,
     build_network: BuildNetwork,
-    catalog: Option<&SubnetCatalog>,
+    catalog: Option<&ValidatedSubnetCatalog>,
 ) -> Result<SubnetId, FleetInstallInputError> {
     match selector {
         CoordinatorSubnetSelector::Explicit { subnet } => {
@@ -456,7 +452,7 @@ fn resolve_funding(
     subnet: SubnetId,
     funding: &CreationFundingDocument,
     build_network: BuildNetwork,
-    catalog: Option<&SubnetCatalog>,
+    catalog: Option<&ValidatedSubnetCatalog>,
 ) -> Result<PlannedCanisterCreationFunding, FleetInstallInputError> {
     let planned = planned_funding(owner, funding)?;
     if build_network != BuildNetwork::Ic {
@@ -600,7 +596,7 @@ fn validate_imported_canister_placements(
     expected_subnet: SubnetId,
     imports: &[Principal],
     build_network: BuildNetwork,
-    catalog: Option<&SubnetCatalog>,
+    catalog: Option<&ValidatedSubnetCatalog>,
 ) -> Result<(), FleetInstallInputError> {
     if build_network != BuildNetwork::Ic || imports.is_empty() {
         return Ok(());
@@ -610,15 +606,12 @@ fn validate_imported_canister_placements(
     })?;
     for canister in imports {
         let resolved = catalog
-            .resolve_canister(&canister.to_text())
+            .resolve_canister_route(&canister.to_text())
             .map_err(|error| FleetInstallInputError::ImportedCanisterRoute {
                 canister: *canister,
                 reason: error.to_string(),
             })?;
-        let actual = parse_subnet(
-            "trusted Canister routing catalog",
-            &resolved.subnet.subnet_principal,
-        )?;
+        let actual = SubnetId::from_principal(resolved.subnet);
         if actual != expected_subnet {
             return Err(FleetInstallInputError::ImportedCanisterSubnetMismatch {
                 canister: *canister,
@@ -647,7 +640,7 @@ fn validate_profile(profile: &str) -> Result<(), FleetInstallInputError> {
 
 fn require_public_catalog(
     build_network: BuildNetwork,
-    catalog: Option<&SubnetCatalog>,
+    catalog: Option<&ValidatedSubnetCatalog>,
     selector: &str,
 ) -> Result<(), FleetInstallInputError> {
     if build_network == BuildNetwork::Ic && catalog.is_some() {
@@ -660,14 +653,14 @@ fn require_public_catalog(
 }
 
 fn trusted_subnet(
-    catalog: Option<&SubnetCatalog>,
+    catalog: Option<&ValidatedSubnetCatalog>,
     subnet: SubnetId,
 ) -> Result<&SubnetInfo, FleetInstallInputError> {
     let catalog = catalog.ok_or_else(|| FleetInstallInputError::TrustedMetadataRequired {
         selector: format!("explicit Subnet {subnet}"),
     })?;
     catalog
-        .subnets
+        .subnets()
         .iter()
         .find(|info| info.subnet_principal == subnet.to_string())
         .ok_or_else(|| FleetInstallInputError::SubnetNotFound {
@@ -690,12 +683,12 @@ fn validate_eligible_subnet(info: &SubnetInfo) -> Result<(), FleetInstallInputEr
 }
 
 fn select_unique_subnet(
-    catalog: &SubnetCatalog,
+    catalog: &ValidatedSubnetCatalog,
     selector: &str,
     matches: impl Fn(&SubnetInfo) -> bool,
 ) -> Result<SubnetId, FleetInstallInputError> {
     let candidates = catalog
-        .subnets
+        .subnets()
         .iter()
         .filter(|info| matches(info))
         .collect::<Vec<_>>();

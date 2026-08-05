@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.2` adds bounded independent group deployments, hardens host Subnet
+  Catalog evidence with `ic-query 0.29.1`, and makes test lanes faster and
+  PocketIC version-aligned.
+
 - `0.101.1` adds strict bounded Component Group declarations and canonical
   occurrence-preserving nested-group flattening.
 

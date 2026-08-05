@@ -20,6 +20,7 @@ DEPENDENCY_RISK_GATE="$ROOT/scripts/ci/check-dependency-risk-inventory.sh"
 DEPENDENCY_RISK_TEST="$ROOT/scripts/ci/test-dependency-risk-inventory.sh"
 DEPENDENCY_RISK_INVENTORY="$ROOT/scripts/ci/dependency-risk-inventory.tsv"
 BUMP_VERSION="$ROOT/scripts/ci/bump-version.sh"
+POCKET_IC_ALIGNMENT="$ROOT/scripts/ci/check-pocketic-version-alignment.sh"
 installers=(
     "$ROOT/scripts/ci/install-actionlint.sh"
     "$ROOT/scripts/ci/install-gitleaks.sh"
@@ -34,7 +35,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION"; do
+for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$POCKET_IC_ALIGNMENT"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -315,6 +316,7 @@ fi
 rg -F 'sha256 checksum mismatch' "$tmp_dir/rejection.stderr" >/dev/null ||
     fail "checksum mismatch did not preserve its deterministic cause"
 
-bash -n "$VERIFY" "${installers[@]}" "$SECRET_SCAN" "$ROOT/scripts/dev/install_dev.sh"
+bash -n "$VERIFY" "${installers[@]}" "$SECRET_SCAN" "$POCKET_IC_ALIGNMENT" "$ROOT/scripts/dev/install_dev.sh"
+bash "$POCKET_IC_ALIGNMENT" >/dev/null
 
 echo "release integrity contract guard passed ($external_action_count immutable Actions)"

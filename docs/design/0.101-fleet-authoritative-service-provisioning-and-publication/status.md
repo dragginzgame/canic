@@ -4,11 +4,13 @@ Date: 2026-08-05
 
 ## Status
 
-- State: implementation has the bounded layer-neutral identity vocabulary and
-  strict configuration-only Component Group declaration compiler; deployment
-  compilation and every effect-bearing surface remain unimplemented.
+- State: implementation has the bounded layer-neutral identity vocabulary,
+  strict configuration-only Component Group declarations and independent
+  deployment flattening with bounded placement envelopes and worst-case Spec
+  demand; purpose compilation and every effect-bearing surface remain
+  unimplemented.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.0` is released and `0.101.1` is open.
+- Implementation started: yes; `0.101.1` is released and `0.101.2` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -106,10 +108,9 @@ Fleet policy writer.
   `ComponentGroupPlacementId`, `FleetServiceId`, member IDs and canonical
   member paths.
 - [x] Compile nested Component Group declarations as a bounded acyclic graph.
-- [ ] Flatten every deployment completely before planning.
-- [ ] Preserve each distinct member-path occurrence and distinguish inclusion
-  from independent deployment. Declaration flattening preserves occurrences;
-  the deployment distinction remains open.
+- [x] Flatten every deployment completely before planning.
+- [x] Preserve each distinct member-path occurrence and distinguish inclusion
+  from independent deployment.
 - [ ] Resolve every Fleet-service leaf through exactly one typed purpose
   assignment on its deployment/include/leaf path.
 - [ ] Reject unused purpose assignments and orphan service occurrences or
@@ -130,6 +131,8 @@ Fleet policy writer.
 - [ ] Remove singleton-Spec and sole-root-admission service assumptions.
 - [ ] Validate worst-case Spec demand, placement density/spread and the
   zero-placement/non-Authority versus singleton-Authority count rules.
+  Maximum-placement Spec demand and scalar deployment envelopes are complete;
+  purpose-dependent and concrete assignment checks remain open.
 - [ ] Measure and freeze the initial supported root, Component, placement,
   service-member, plan, Registry and Directory envelope.
 

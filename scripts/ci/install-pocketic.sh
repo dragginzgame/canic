@@ -11,6 +11,8 @@ if [ "$#" -ne 0 ]; then
     exit 1
 fi
 
+bash "$SCRIPT_DIR/check-pocketic-version-alignment.sh" >&2
+
 TMP_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
 DIR="$TMP_ROOT/pocket-ic-server-$CANIC_POCKET_IC_VERSION"
 BIN="$DIR/pocket-ic"

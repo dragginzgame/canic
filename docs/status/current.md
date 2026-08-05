@@ -14,10 +14,20 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.0`.
-- The latest published release is `v0.101.0` at
-  `f96cdb5cae48467f6199e28cf8982304316b92c8`.
-- Open `0.101.1` adds the strict checked-in Component Group declaration
+- The workspace package version is `0.101.1`.
+- The latest published release is `v0.101.1` at
+  `bd5b4ac43aeb312d871e21bc68dd3f5fb94510b3`.
+- Open `0.101.2` adds strict independent Component Group deployment
+  declarations with mandatory bounded placement envelopes. It completely
+  flattens each deployment before planning, preserves inclusion versus
+  independent-deployment occurrences, binds exact Component Spec hashes and
+  rejects maximum-placement demand beyond the Spec Fleet ceiling. Purpose,
+  labels, member limits, root selection, persistence and effects remain
+  unavailable. The same draft advances host Subnet Catalog authority to
+  `ic-query 0.29.1`, aligns the PocketIC 15 executable pin with
+  `ic-testkit 0.3.2` and removes internal PocketIC journeys from the fast test
+  lane while retaining their full-lane coverage.
+- Released `0.101.1` adds the strict checked-in Component Group declaration
   grammar and compiles it into a bounded canonical acyclic graph. Nested
   inclusion preserves every distinct member-path occurrence without
   deduplicating equal Component Specs or introducing runtime parentage.
@@ -2205,11 +2215,12 @@ First primary results:
 
 ## Next Action
 
-The first 0.101 identity contract is published at immutable `v0.101.0`.
-Continue 0.101 Slice 1 by adding strict deployment declarations and flattening
-each independently selected deployment before purpose, limit and placement
-resolution. Keep the declaration graph configuration-only and do not reopen
-the 0.100 infrastructure or pool boundaries.
+The Component Group declaration compiler is published at immutable
+`v0.101.1`. Continue 0.101 Slice 1 with typed Fleet-service leaf and member
+purpose declarations, then resolve exactly one purpose assignment along each
+deployment/include/leaf path. Keep group and deployment declarations
+configuration-only and do not reopen the 0.100 infrastructure or pool
+boundaries.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.

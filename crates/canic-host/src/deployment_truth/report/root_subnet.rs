@@ -1,9 +1,6 @@
 use super::super::*;
 use super::{finding, refresh_resume_safety};
-use ic_query::subnet_catalog::{
-    DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT, ResolveAs, SubnetCatalogCacheRequest,
-    load_or_refresh_subnet_catalog,
-};
+use crate::subnet_catalog::load_mainnet_subnet_catalog;
 use std::{
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
@@ -107,23 +104,28 @@ impl RootSubnetEvidenceSource for LiveSubnetCatalogRootSubnetEvidenceSource {
         icp_root: &Path,
         canister_id: &str,
     ) -> Result<RootSubnetEvidence, String> {
-        // Canic deliberately supplies its deployment-state root as the cache
-        // boundary for this embedded library call.
-        let request = SubnetCatalogCacheRequest::new(icp_root, environment);
-        let cached = load_or_refresh_subnet_catalog(
-            &request,
-            DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT,
-            now_unix_secs()?,
-        )
-        .map_err(|err| err.to_string())?;
+        if environment != MAINNET_ENVIRONMENT {
+            return Err(format!(
+                "Subnet Catalog evidence is supported only for {MAINNET_ENVIRONMENT}, not {environment}"
+            ));
+        }
+        let cached = load_mainnet_subnet_catalog(icp_root, now_unix_secs()?)
+            .map_err(|err| err.to_string())?;
         let resolved = cached
             .catalog
-            .resolve_principal(canister_id, Some(ResolveAs::Canister))
+            .resolve_canister_route(canister_id)
             .map_err(|err| err.to_string())?;
+        let subnet_principal = resolved.subnet.to_text();
+        let subnet = cached
+            .catalog
+            .subnet_by_principal(&subnet_principal)
+            .ok_or_else(|| {
+                format!("validated Canister route references missing Subnet {subnet_principal}")
+            })?;
 
         Ok(RootSubnetEvidence {
-            subnet_principal: resolved.subnet.subnet_principal,
-            subnet_kind: resolved.subnet.subnet_kind.as_str().to_string(),
+            subnet_principal,
+            subnet_kind: subnet.subnet_kind.as_str().to_string(),
         })
     }
 }
@@ -138,11 +140,14 @@ fn now_unix_secs() -> Result<u64, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::subnet_catalog::mainnet_subnet_catalog_cache_root;
     use ic_query::subnet_catalog::{
-        CATALOG_SCHEMA_VERSION, ClassificationSource, GeographicScope,
-        MAINNET_REGISTRY_CANISTER_ID, RoutingRange, SubnetCatalog, SubnetInfo, SubnetKind,
-        SubnetSpecialization, catalog_to_pretty_json, subnet_catalog_path,
+        ClassificationSource, DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT, GeographicScope,
+        RawSubnetCatalog, RoutingRange, SubnetInfo, SubnetKind, SubnetSpecialization,
+        catalog_to_pretty_json, subnet_catalog_path,
     };
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
     use std::{fs, path::PathBuf};
 
     const SUBNET: &str = "rwlgt-iiaaa-aaaaa-aaaaa-cai";
@@ -151,14 +156,16 @@ mod tests {
     #[test]
     fn subnet_catalog_source_resolves_cached_canister_without_icq_process() {
         let root = temp_root("root-subnet-catalog-source");
-        let path = subnet_catalog_path(&root, MAINNET_ENVIRONMENT);
-        fs::create_dir_all(path.parent().expect("catalog has parent"))
-            .expect("create catalog parent");
+        let cache_root = mainnet_subnet_catalog_cache_root(&root);
+        let path = subnet_catalog_path(&cache_root, MAINNET_ENVIRONMENT);
+        create_private_catalog_parent(&cache_root, &path);
         fs::write(
             &path,
             catalog_to_pretty_json(&fixture_catalog()).expect("catalog serializes"),
         )
         .expect("write catalog");
+        #[cfg(unix)]
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).expect("secure catalog file");
 
         let evidence = LiveSubnetCatalogRootSubnetEvidenceSource
             .root_subnet_evidence(MAINNET_ENVIRONMENT, &root, CANISTER)
@@ -176,34 +183,49 @@ mod tests {
         path
     }
 
-    fn fixture_catalog() -> SubnetCatalog {
-        SubnetCatalog {
-            catalog_schema_version: CATALOG_SCHEMA_VERSION,
-            network: MAINNET_ENVIRONMENT.to_string(),
-            registry_canister_id: MAINNET_REGISTRY_CANISTER_ID.to_string(),
-            registry_version: 123_456,
-            fetched_at: "2026-06-26T00:00:00Z".to_string(),
-            fetched_by: "fixture".to_string(),
-            source_endpoint: "https://icp-api.io".to_string(),
-            resolver_backend: "fixture".to_string(),
-            subnets: vec![SubnetInfo {
+    fn create_private_catalog_parent(cache_root: &Path, path: &Path) {
+        let parent = path.parent().expect("catalog has parent");
+        fs::create_dir_all(parent).expect("create catalog parent");
+        #[cfg(unix)]
+        {
+            let mut directory = cache_root.to_path_buf();
+            fs::set_permissions(&directory, fs::Permissions::from_mode(0o700))
+                .expect("secure catalog root");
+            for component in parent.strip_prefix(cache_root).expect("catalog under root") {
+                directory.push(component);
+                fs::set_permissions(&directory, fs::Permissions::from_mode(0o700))
+                    .expect("secure catalog directory");
+            }
+        }
+    }
+
+    fn fixture_catalog() -> RawSubnetCatalog {
+        RawSubnetCatalog::new_mainnet_uncertified(
+            123_456,
+            DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT,
+            "2026-06-26T00:00:00Z",
+            "fixture",
+            "0.29.1",
+            vec![SubnetInfo {
                 subnet_principal: SUBNET.to_string(),
+                registry_subnet_type: 5,
                 subnet_kind: SubnetKind::CloudEngine,
                 subnet_kind_source: ClassificationSource::Registry,
-                subnet_specialization: SubnetSpecialization::Unknown,
-                subnet_specialization_source: ClassificationSource::Unknown,
+                subnet_specialization: SubnetSpecialization::None,
+                subnet_specialization_source: ClassificationSource::Computed,
                 geographic_scope: GeographicScope::Global,
-                geographic_scope_source: ClassificationSource::Curated,
-                subnet_label: "cloud-engine".to_string(),
-                subnet_label_source: ClassificationSource::Curated,
+                geographic_scope_source: ClassificationSource::Computed,
+                subnet_label: "cloud_engine".to_string(),
+                subnet_label_source: ClassificationSource::Computed,
                 node_count: Some(13),
                 charges_apply_by_default: true,
             }],
-            routing_ranges: vec![RoutingRange {
+            vec![RoutingRange {
                 start_canister_id: CANISTER.to_string(),
                 end_canister_id: CANISTER.to_string(),
                 subnet_principal: SUBNET.to_string(),
             }],
-        }
+        )
+        .expect("build fixture catalog")
     }
 }
