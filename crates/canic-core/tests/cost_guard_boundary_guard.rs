@@ -102,6 +102,18 @@ fn icp_refill_value_transfer_adapters_require_cost_guard_permit() {
 }
 
 #[test]
+fn cycles_ledger_creation_adapter_requires_cost_guard_permit() {
+    let ledger_ops = source_root().join("ops/ic/cycles_ledger.rs");
+    let contents = fs::read_to_string(&ledger_ops).expect("read Cycles Ledger ops");
+
+    assert_eq!(
+        contents.matches("_permit: &CostGuardPermit").count(),
+        1,
+        "the Cycles Ledger paid-creation adapter must require CostGuardPermit"
+    );
+}
+
+#[test]
 fn management_deployment_adapters_require_cost_guard_permit() {
     let lifecycle_ops = source_root().join("ops/ic/mgmt/lifecycle.rs");
     let lifecycle = fs::read_to_string(&lifecycle_ops).expect("read management lifecycle ops");

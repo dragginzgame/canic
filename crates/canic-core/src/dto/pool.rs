@@ -26,6 +26,7 @@ pub enum CanisterPoolRecycleReset {
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum CanisterPoolAssetOrigin {
     InfrastructureStore,
+    Created,
     Imported,
     Recycled,
 }
@@ -76,6 +77,41 @@ pub struct CanisterPoolHandoff {
     pub prepared_at_ns: u64,
 }
 
+/// Why one autonomous refill stopped without creating another Canister.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum CanisterPoolCreationFailure {
+    UnresolvedAfterLedgerWindow,
+    LedgerCreationFailed,
+    LedgerRejected,
+}
+
+/// Durable controller-visible progress of one autonomous refill.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum CanisterPoolCreationProgress {
+    Intent {
+        uncertain_result: bool,
+    },
+    Created {
+        block_index: u64,
+        canister_id: Principal,
+    },
+    Blocked {
+        failure: CanisterPoolCreationFailure,
+    },
+}
+
+/// Exact Cycles Ledger request retained until its principal is in inventory.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CanisterPoolCreation {
+    pub operation_id: [u8; 32],
+    pub cycles_ledger: Principal,
+    pub placement_subnet: Principal,
+    pub root: Principal,
+    pub ledger_amount: Cycles,
+    pub created_at_time_ns: u64,
+    pub progress: CanisterPoolCreationProgress,
+}
+
 /// Bounded controller query for one canonical inventory page.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub struct CanisterPoolStatusRequest {
@@ -100,6 +136,7 @@ pub struct CanisterPoolResponse {
     pub handing_off: u32,
     pub failed: u32,
     pub completed_handoffs: u64,
+    pub pending_creation: Option<CanisterPoolCreation>,
     pub pending_handoff: Option<CanisterPoolHandoff>,
     pub entries: Vec<CanisterPoolAsset>,
     pub next_start_after: Option<Principal>,
@@ -109,6 +146,7 @@ pub struct CanisterPoolResponse {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum PoolAdminCommand {
     Maintain,
+    RetryRefill,
     Import {
         canister_id: Principal,
     },
@@ -128,10 +166,23 @@ pub enum PoolAdminResponse {
     MaintenancePaused {
         reason: String,
     },
-    ReplenishmentRequired {
-        ready: u32,
-        minimum_size: u32,
-        import_capacity: u32,
+    Created {
+        canister_id: Principal,
+    },
+    RefillWaitingForCycles {
+        available: Cycles,
+        creation_amount: Cycles,
+    },
+    RefillPending {
+        operation_id: [u8; 32],
+        uncertain_result: bool,
+    },
+    RefillBlocked {
+        operation_id: [u8; 32],
+        failure: CanisterPoolCreationFailure,
+    },
+    RefillRetryScheduled {
+        previous_operation_id: [u8; 32],
     },
     Imported {
         canister_id: Principal,
@@ -182,6 +233,17 @@ mod tests {
             handing_off: 0,
             failed: 1,
             completed_handoffs: 0,
+            pending_creation: Some(CanisterPoolCreation {
+                operation_id: [8; 32],
+                cycles_ledger: Principal::from_slice(&[6; 29]),
+                placement_subnet: Principal::from_slice(&[5; 29]),
+                root: Principal::from_slice(&[4; 29]),
+                ledger_amount: Cycles::new(5_500_000_000_000),
+                created_at_time_ns: 12,
+                progress: CanisterPoolCreationProgress::Blocked {
+                    failure: CanisterPoolCreationFailure::LedgerCreationFailed,
+                },
+            }),
             pending_handoff: None,
             entries: vec![CanisterPoolAsset {
                 canister_id,
@@ -205,6 +267,13 @@ mod tests {
         let bytes = candid::encode_one(&command).expect("encode pool command");
         assert_eq!(
             candid::decode_one::<PoolAdminCommand>(&bytes).expect("decode pool command"),
+            command,
+        );
+
+        let command = PoolAdminCommand::RetryRefill;
+        let bytes = candid::encode_one(&command).expect("encode refill retry command");
+        assert_eq!(
+            candid::decode_one::<PoolAdminCommand>(&bytes).expect("decode refill retry command"),
             command,
         );
     }

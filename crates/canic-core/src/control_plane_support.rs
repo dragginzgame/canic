@@ -67,6 +67,15 @@ pub mod ops {
             pub use crate::ops::ic::call::CallOps;
         }
 
+        pub mod cycles_ledger {
+            pub use crate::{
+                infra::ic::cycles_ledger::{
+                    CyclesLedgerCreateCanisterError, CyclesLedgerCreateCanisterSuccess,
+                },
+                ops::ic::cycles_ledger::CyclesLedgerOps,
+            };
+        }
+
         pub mod mgmt {
             pub use crate::ops::ic::mgmt::{
                 CanisterSettings, CanisterStatus, CanisterStatusObservation, CanisterStatusType,

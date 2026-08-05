@@ -16,7 +16,11 @@ use super::super::artifacts::{
 use super::fixture::progress;
 
 const ROOT_CANISTER_PACKAGE: &str = "delegation_root_stub";
+#[cfg(test)]
+const CYCLES_LEDGER_STUB_PACKAGE: &str = "cycles_ledger_stub";
 static BUILD_ONCE: Once = Once::new();
+#[cfg(test)]
+static MAINNET_REFILL_BUILD_ONCE: Once = Once::new();
 static CANISTER_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
 // Build the test root wasm.
@@ -24,6 +28,34 @@ pub(super) fn build_test_root_wasm() -> Vec<u8> {
     let workspace_root = workspace_root();
     build_canisters_once(&workspace_root);
     read_built_wasm(&test_target_dir(&workspace_root), "delegation_root_stub")
+}
+
+// Build a mainnet-qualified root and exact Cycles Ledger boundary stub.
+#[cfg(test)]
+pub(super) fn build_mainnet_refill_wasms() -> (Vec<u8>, Vec<u8>) {
+    let workspace_root = workspace_root();
+    let _serial_guard = CANISTER_BUILD_SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let target_dir = test_target_dir(&workspace_root).join("mainnet-refill");
+    MAINNET_REFILL_BUILD_ONCE.call_once_force(|_| {
+        let config_path = root_canister_config_path(&workspace_root);
+        let canonical_config_env = (
+            canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+            config_path.to_str().expect("config path UTF-8"),
+        );
+        build_internal_test_wasm_canisters_with_env(
+            &workspace_root,
+            &target_dir,
+            &[ROOT_CANISTER_PACKAGE, CYCLES_LEDGER_STUB_PACKAGE],
+            CanicWasmBuildProfile::Fast,
+            &[canonical_config_env, ("ICP_ENVIRONMENT", "ic")],
+        );
+    });
+    (
+        read_built_wasm(&target_dir, ROOT_CANISTER_PACKAGE),
+        read_built_wasm(&target_dir, CYCLES_LEDGER_STUB_PACKAGE),
+    )
 }
 
 // Build and read the exact release-qualified sibling wasm_store artifact.

@@ -1,5 +1,7 @@
 //! Root-owned maintenance for prepaid empty Canisters on one physical Subnet.
 
+mod refill;
+
 use crate::ops::{
     canister_pool::CanisterPoolOps, component_registry::ComponentRegistryOps,
     storage::state::root_wasm_store::RootWasmStoreStateOps,
@@ -25,13 +27,37 @@ use canic_core::{
     },
     ids::{BuildNetwork, FleetSubnetCanisterPoolConfig, SubnetId},
 };
-use std::{cell::RefCell, time::Duration};
+use std::{
+    cell::{Cell, RefCell},
+    time::Duration,
+};
 
 const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(30);
 const MAX_STATUS_PAGE_ENTRIES: u16 = 256;
 
 thread_local! {
     static MAINTENANCE_TIMER: RefCell<Option<TimerHandle>> = const { RefCell::new(None) };
+    static MAINTENANCE_IN_FLIGHT: Cell<bool> = const { Cell::new(false) };
+}
+
+struct MaintenanceLease;
+
+impl MaintenanceLease {
+    fn acquire() -> Option<Self> {
+        MAINTENANCE_IN_FLIGHT.with(|in_flight| {
+            if in_flight.replace(true) {
+                None
+            } else {
+                Some(Self)
+            }
+        })
+    }
+}
+
+impl Drop for MaintenanceLease {
+    fn drop(&mut self) {
+        MAINTENANCE_IN_FLIGHT.with(|in_flight| in_flight.set(false));
+    }
 }
 
 /// Start one non-overlapping root-owned maintenance loop.
@@ -84,6 +110,14 @@ pub fn status(request: CanisterPoolStatusRequest) -> Result<CanisterPoolResponse
 pub async fn admin(command: PoolAdminCommand) -> Result<PoolAdminResponse, InternalError> {
     match command {
         PoolAdminCommand::Maintain => maintain_once().await,
+        PoolAdminCommand::RetryRefill => {
+            if root_is_draining() {
+                return Err(InternalError::conflict(
+                    "Canister pool refill retry is fenced while the root is draining",
+                ));
+            }
+            refill::retry_blocked()
+        }
         PoolAdminCommand::Import { canister_id } => import(canister_id).await,
         PoolAdminCommand::RetryReset { canister_id } => {
             CanisterPoolOps::retry_reset(canister_id, IcOps::now_nanos())?;
@@ -96,8 +130,13 @@ pub async fn admin(command: PoolAdminCommand) -> Result<PoolAdminResponse, Inter
     }
 }
 
-/// Reconcile one bounded reset or operator-replenishment observation.
+/// Reconcile one bounded reset or automatic refill operation.
 pub async fn maintain_once() -> Result<PoolAdminResponse, InternalError> {
+    let Some(_lease) = MaintenanceLease::acquire() else {
+        return Ok(PoolAdminResponse::MaintenancePaused {
+            reason: "another Canister pool maintenance pass is still in flight".to_string(),
+        });
+    };
     let status = FleetActivationWorkflow::status()?;
     if !matches!(
         status.phase,
@@ -115,6 +154,14 @@ pub async fn maintain_once() -> Result<PoolAdminResponse, InternalError> {
         });
     }
 
+    if CanisterPoolOps::pending_creation().is_some() {
+        return if root_is_draining() {
+            refill::reconcile_draining().await
+        } else {
+            refill::reconcile().await
+        };
+    }
+
     if let Some(canister_id) = CanisterPoolOps::pending_reset_canisters()
         .into_iter()
         .next()
@@ -124,31 +171,19 @@ pub async fn maintain_once() -> Result<PoolAdminResponse, InternalError> {
             reset_asset(canister_id, &config).await?,
         ));
     }
-
-    if root_is_draining()? {
+    if root_is_draining() {
         return Ok(PoolAdminResponse::MaintenancePaused {
             reason: "Fleet Subnet Root draining has fenced pool replenishment".to_string(),
         });
     }
-    Ok(replenishment_status(&config))
-}
-
-fn replenishment_status(config: &FleetSubnetCanisterPoolConfig) -> PoolAdminResponse {
-    let ready = CanisterPoolOps::ready_count();
-    if ready >= config.minimum_size {
-        return PoolAdminResponse::Maintained;
+    if CanisterPoolOps::ready_count() >= config.minimum_size {
+        return Ok(PoolAdminResponse::Maintained);
     }
-    PoolAdminResponse::ReplenishmentRequired {
-        ready,
-        minimum_size: config.minimum_size,
-        import_capacity: config
-            .maximum_size
-            .saturating_sub(CanisterPoolOps::pooled_asset_count()),
-    }
+    refill::start(&config).await
 }
 
 async fn import(canister_id: Principal) -> Result<PoolAdminResponse, InternalError> {
-    if root_is_draining()? {
+    if root_is_draining() {
         return Err(InternalError::conflict(
             "Canister pool import is fenced while the Fleet Subnet Root is draining",
         ));
@@ -170,7 +205,7 @@ async fn handoff(
     canister_id: Principal,
     recipient: Principal,
 ) -> Result<PoolAdminResponse, InternalError> {
-    if !root_is_draining()? {
+    if !root_is_draining() {
         return Err(InternalError::conflict(
             "Canister pool assets may be handed off only while the Fleet Subnet Root is draining",
         ));
@@ -244,13 +279,8 @@ pub async fn recycle(canister_id: Principal) -> Result<(), InternalError> {
     Ok(())
 }
 
-fn root_is_draining() -> Result<bool, InternalError> {
-    Ok(ComponentRegistryOps::current()
-        .ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?
-        .root_draining
-        .is_some())
+fn root_is_draining() -> bool {
+    ComponentRegistryOps::current().is_some_and(|registry| registry.root_draining.is_some())
 }
 
 enum ResetAssetOutcome {
@@ -356,7 +386,6 @@ fn pool_config() -> Result<FleetSubnetCanisterPoolConfig, InternalError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::stable::canister_pool::CanisterPoolStore;
 
     #[test]
     fn import_subnet_requires_exact_nns_routing_evidence() {
@@ -370,24 +399,5 @@ mod tests {
             validate_import_subnet(canister_id, expected, Some(Principal::from_slice(&[5; 29])))
                 .is_err()
         );
-    }
-
-    #[test]
-    fn empty_inventory_requires_operator_replenishment() {
-        CanisterPoolStore::clear();
-        let config = FleetSubnetCanisterPoolConfig {
-            minimum_size: 2,
-            maximum_size: 5,
-            canister_cycles: Cycles::new(1),
-        };
-        assert_eq!(
-            replenishment_status(&config),
-            PoolAdminResponse::ReplenishmentRequired {
-                ready: 0,
-                minimum_size: 2,
-                import_capacity: 5,
-            }
-        );
-        CanisterPoolStore::clear();
     }
 }

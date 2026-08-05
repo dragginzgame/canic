@@ -74,13 +74,13 @@ pub struct CyclesFundingBudget {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetSubnetCanisterPoolConfig {
-    /// Ready empty Canisters the operator should retain for the root.
+    /// Ready empty Canisters automatically maintained for the root.
     pub minimum_size: u32,
-    /// Ceiling for configured or later operator-imported pool assets.
+    /// Ceiling for standby and operator-imported pool assets.
     ///
     /// Recycled assets remain tracked even when their return temporarily exceeds this target.
     pub maximum_size: u32,
-    /// Minimum observed balance required before an imported asset becomes Ready.
+    /// Minimum retained balance required before a pool asset becomes Ready.
     pub canister_cycles: Cycles,
 }
 

@@ -297,7 +297,7 @@ pub async fn finalize_inventory(
             "Fleet Subnet Root final inventory cannot orphan {retained_workload_assets} pool, allocation or workload Canisters; recycling or handoff must complete first",
         )));
     }
-    if CanisterPoolOps::pending_handoff().is_some() {
+    if CanisterPoolOps::has_pending_lifecycle_work() {
         return Err(InternalError::unavailable(
             "Fleet Subnet Root final inventory requires all Canister pool work to reconcile",
         ));
