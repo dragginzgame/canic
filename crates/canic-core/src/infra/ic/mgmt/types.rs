@@ -26,25 +26,6 @@ pub struct InfraCanisterSettings {
 }
 
 //
-// InfraCreateCanisterArgs
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub(super) struct InfraCreateCanisterArgs {
-    pub(super) settings: Option<InfraCanisterSettings>,
-    pub(super) sender_canister_version: Option<u64>,
-}
-
-//
-// InfraCreateCanisterResult
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub(super) struct InfraCreateCanisterResult {
-    pub(super) canister_id: Principal,
-}
-
-//
 // InfraCanisterIdRecord
 //
 

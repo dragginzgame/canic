@@ -47,7 +47,6 @@ fn disposable_root_deletion_proof_input_resolves_one_bounded_mainnet_root() {
     assert_eq!(root.placement_subnet, subnet(FIDUCIARY_SUBNET));
     assert_eq!(root.component_admissions.len(), 2);
     assert_eq!(root.limits.maximum_component_instances, 2);
-    assert_eq!(root.limits.maximum_managed_canisters, 20_003);
     assert_eq!(root.limits.canister_pool.minimum_size, 1);
     assert_eq!(root.limits.canister_pool.maximum_size, 1);
     assert_eq!(
@@ -99,7 +98,6 @@ fn playground_input_resolves_one_reusable_mainnet_root() {
         }]
     );
     assert_eq!(root.limits.maximum_component_instances, 1);
-    assert_eq!(root.limits.maximum_managed_canisters, 12);
     assert_eq!(root.limits.canister_pool.minimum_size, 5);
     assert_eq!(root.limits.canister_pool.maximum_size, 5);
     assert_eq!(
@@ -457,11 +455,13 @@ fn pool_policy_rejects_invalid_capacity_and_funding() {
         .minimum_size = 11;
     cases.push(inverted_bounds);
 
-    let mut over_managed_limit = document(selector.clone());
-    over_managed_limit.fleet_subnet_roots[0]
+    let mut imports_exceed_maximum = document(selector.clone());
+    imports_exceed_maximum.fleet_subnet_roots[0]
         .canister_pool
-        .maximum_size = 33;
-    cases.push(over_managed_limit);
+        .imports = (1_u8..=11)
+        .map(|byte| Principal::from_slice(&[byte; 29]).to_text())
+        .collect();
+    cases.push(imports_exceed_maximum);
 
     let mut zero_cycles = document(selector);
     zero_cycles.fleet_subnet_roots[0]
@@ -555,7 +555,6 @@ fn document(selector: CoordinatorSubnetSelector) -> FleetInstallInputDocument {
             )]),
             limits: FleetSubnetRootLimitsDocument {
                 maximum_component_instances: 8,
-                maximum_managed_canisters: 32,
                 maximum_registry_bytes: 16_777_216,
                 maximum_wasm_store_bytes: 40_000_000,
                 cycles_funding: CyclesFundingBudgetDocument {
@@ -606,7 +605,6 @@ imports = []
 
 [fleet_subnet_roots.limits]
 maximum_component_instances = 8
-maximum_managed_canisters = 32
 maximum_registry_bytes = 16777216
 maximum_wasm_store_bytes = 40000000
 

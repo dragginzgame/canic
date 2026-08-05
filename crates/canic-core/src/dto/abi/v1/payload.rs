@@ -71,7 +71,6 @@ mod tests {
             component_topology_digest: ComponentTopologyDigest::from_bytes([8; 32]),
             limits: FleetSubnetRootLimits {
                 maximum_component_instances: 1,
-                maximum_managed_canisters: 20_001,
                 maximum_registry_bytes: 16 * 1_024 * 1_024,
                 maximum_wasm_store_bytes: 16 * 1_024 * 1_024,
                 canister_pool: crate::ids::FleetSubnetCanisterPoolConfig {

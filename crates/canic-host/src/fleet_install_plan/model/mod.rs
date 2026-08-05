@@ -302,7 +302,6 @@ mod root_limits_document {
     #[serde(deny_unknown_fields)]
     struct RootLimitsDocument {
         maximum_component_instances: u32,
-        maximum_managed_canisters: u32,
         maximum_registry_bytes: u64,
         maximum_wasm_store_bytes: u64,
         canister_pool: CanisterPoolDocument,
@@ -318,7 +317,6 @@ mod root_limits_document {
     {
         RootLimitsDocument {
             maximum_component_instances: limits.maximum_component_instances,
-            maximum_managed_canisters: limits.maximum_managed_canisters,
             maximum_registry_bytes: limits.maximum_registry_bytes,
             maximum_wasm_store_bytes: limits.maximum_wasm_store_bytes,
             canister_pool: CanisterPoolDocument {
@@ -351,7 +349,6 @@ mod root_limits_document {
             .map_err(de::Error::custom)?;
         Ok(FleetSubnetRootLimits {
             maximum_component_instances: document.maximum_component_instances,
-            maximum_managed_canisters: document.maximum_managed_canisters,
             maximum_registry_bytes: document.maximum_registry_bytes,
             maximum_wasm_store_bytes: document.maximum_wasm_store_bytes,
             canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {

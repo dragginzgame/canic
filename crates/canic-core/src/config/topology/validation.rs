@@ -196,10 +196,6 @@ fn validate_root_limits(limits: &FleetSubnetRootLimits) -> Result<(), ComponentT
             "maximum_component_instances",
             u64::from(limits.maximum_component_instances),
         ),
-        (
-            "maximum_managed_canisters",
-            u64::from(limits.maximum_managed_canisters),
-        ),
         ("maximum_registry_bytes", limits.maximum_registry_bytes),
         ("maximum_wasm_store_bytes", limits.maximum_wasm_store_bytes),
         (
@@ -235,15 +231,6 @@ fn validate_root_limits(limits: &FleetSubnetRootLimits) -> Result<(), ComponentT
             maximum_size: limits.canister_pool.maximum_size,
         });
     }
-    if limits.canister_pool.maximum_size > limits.maximum_managed_canisters {
-        return Err(
-            ComponentTopologyError::RootCanisterPoolExceedsManagedLimit {
-                maximum_size: limits.canister_pool.maximum_size,
-                maximum_managed_canisters: limits.maximum_managed_canisters,
-            },
-        );
-    }
-
     Ok(())
 }
 

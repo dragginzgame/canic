@@ -117,12 +117,6 @@ pub enum ComponentAllocationPolicyError {
     #[error("Component Spec '{0}' root-local admission is exhausted")]
     ComponentSpecCapacityExhausted(ComponentSpecId),
 
-    #[error("root managed-Canister count overflowed")]
-    ManagedCanisterCountOverflow,
-
-    #[error("root managed-Canister capacity is exhausted")]
-    ManagedCanisterCapacityExhausted,
-
     #[error("peer Component provisioning has invalid requester binding authority")]
     InvalidPeerRequesterBinding,
 
@@ -248,16 +242,6 @@ pub fn reserve_top_level_component(
                 input.component_spec.clone(),
             ),
         );
-    }
-
-    // The root owns one implicit Store in addition to all Component and
-    // descendant Canisters counted by its Registry.
-    let managed_canisters = 1_u32
-        .checked_add(allocated_components)
-        .and_then(|count| count.checked_add(input.managed_descendants))
-        .ok_or(ComponentAllocationPolicyError::ManagedCanisterCountOverflow)?;
-    if managed_canisters >= input.root.limits.maximum_managed_canisters {
-        return Err(ComponentAllocationPolicyError::ManagedCanisterCapacityExhausted);
     }
 
     let allocation_sequence = input.next_allocation_sequence;
@@ -393,7 +377,7 @@ mod tests {
     }
 
     #[test]
-    fn reservation_enforces_spec_component_and_managed_canister_capacity() {
+    fn reservation_enforces_spec_and_component_capacity() {
         let (topology, mut root, component_spec) = fixture();
         let mut request = input(&topology, &root, &component_spec);
         request.reserved_spec_instances = 2;
@@ -412,15 +396,6 @@ mod tests {
         assert_eq!(
             reserve_top_level_component(request),
             Err(ComponentAllocationPolicyError::ComponentCapacityExhausted)
-        );
-
-        root.limits.maximum_component_instances = 10;
-        root.limits.maximum_managed_canisters = 10;
-        let mut request = input(&topology, &root, &component_spec);
-        request.managed_descendants = 9;
-        assert_eq!(
-            reserve_top_level_component(request),
-            Err(ComponentAllocationPolicyError::ManagedCanisterCapacityExhausted)
         );
     }
 
@@ -540,7 +515,6 @@ mod tests {
             component_topology_digest: projected.digest().expect("root topology digest"),
             limits: FleetSubnetRootLimits {
                 maximum_component_instances: 4,
-                maximum_managed_canisters: 20,
                 maximum_registry_bytes: 1_000_000,
                 maximum_wasm_store_bytes: 1_000_000,
                 canister_pool: crate::ids::FleetSubnetCanisterPoolConfig {
@@ -622,7 +596,6 @@ mod tests {
             component_topology_digest: projected.digest().expect("peer root topology digest"),
             limits: FleetSubnetRootLimits {
                 maximum_component_instances: 8,
-                maximum_managed_canisters: 20,
                 maximum_registry_bytes: 1_000_000,
                 maximum_wasm_store_bytes: 1_000_000,
                 canister_pool: crate::ids::FleetSubnetCanisterPoolConfig {

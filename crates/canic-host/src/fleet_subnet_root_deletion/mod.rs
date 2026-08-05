@@ -24,7 +24,6 @@ use canic_core::{
         },
         fleet_subnet_root::{
             FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
-            FLEET_SUBNET_ROOT_DELETION_MAXIMUM_RETAINED_CYCLES,
             FleetSubnetRootDeletionPreparationRequest, FleetSubnetRootDeletionPreparationResponse,
             FleetSubnetRootDeletionPreparationStatusRequest, FleetSubnetRootStoreDeletionResponse,
             FleetSubnetRootStoreDeletionStatusRequest,
@@ -422,14 +421,14 @@ fn prepare_root(
             "Store deletion receipt differs from the requested root operation",
         ));
     }
-    let maximum_cycles_to_retain = root_deletion_maximum_cycles(
+    let retained_cycles_target = root_deletion_retained_cycles_target(
         status.idle_cycles_burned_per_day,
         status.freezing_threshold_seconds,
     )?;
     let request = FleetSubnetRootDeletionPreparationRequest {
         operation_id,
         expected_store_deletion_hash: store_deletion.deletion_hash,
-        maximum_cycles_to_retain,
+        retained_cycles_target,
         observed_reserved_cycles: status.reserved_cycles,
         observed_idle_cycles_burned_per_day: status.idle_cycles_burned_per_day,
         observed_freezing_threshold_seconds: status.freezing_threshold_seconds,
@@ -555,7 +554,7 @@ fn validate_preparation_identity(
     root: Principal,
     operation_id: [u8; 32],
 ) -> Result<(), FleetSubnetRootDeletionError> {
-    let expected_maximum = root_deletion_maximum_cycles(
+    let expected_target = root_deletion_retained_cycles_target(
         preparation.observed_idle_cycles_burned_per_day,
         preparation.observed_freezing_threshold_seconds,
     )?;
@@ -566,11 +565,11 @@ fn validate_preparation_identity(
         preparation.final_inventory_hash != [0; 32],
         preparation.store_deletion_hash != [0; 32],
         preparation.observed_cycles_before_reclamation > 0,
-        preparation.maximum_cycles_to_retain == expected_maximum,
+        preparation.retained_cycles_target == expected_target,
         preparation.observed_reserved_cycles == 0,
         preparation.observed_cycles_after_reclamation
             <= preparation.observed_cycles_before_reclamation,
-        preparation.observed_cycles_after_reclamation <= preparation.maximum_cycles_to_retain,
+        preparation.observed_cycles_after_reclamation <= preparation.retained_cycles_target,
         preparation.coordinator_intent_hash != [0; 32],
         preparation.coordinator_readiness_hash != [0; 32],
         preparation.completed_at_ns > 0,
@@ -685,7 +684,7 @@ fn validate_status_against_preparation(
         status.idle_cycles_burned_per_day == preparation.observed_idle_cycles_burned_per_day,
         status.freezing_threshold_seconds == preparation.observed_freezing_threshold_seconds,
         status.cycles <= preparation.observed_cycles_before_reclamation,
-        status.cycles <= preparation.maximum_cycles_to_retain,
+        status.cycles <= preparation.retained_cycles_target,
     ]
     .into_iter()
     .all(|item| item);
@@ -722,7 +721,7 @@ fn validate_status_against_execution(
     Ok(())
 }
 
-fn root_deletion_maximum_cycles(
+fn root_deletion_retained_cycles_target(
     idle_cycles_burned_per_day: u128,
     freezing_threshold_seconds: u128,
 ) -> Result<u128, FleetSubnetRootDeletionError> {
@@ -730,16 +729,10 @@ fn root_deletion_maximum_cycles(
         .checked_mul(freezing_threshold_seconds)
         .ok_or_else(|| invalid_status("cycle authority", "freezing reserve overflows u128"))?
         .div_ceil(SECONDS_PER_DAY);
-    let maximum = freezing_reserve
+    let target = freezing_reserve
         .checked_add(FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES)
         .ok_or_else(|| invalid_status("cycle authority", "deletion reserve overflows u128"))?;
-    if maximum > FLEET_SUBNET_ROOT_DELETION_MAXIMUM_RETAINED_CYCLES {
-        return Err(invalid_status(
-            "cycle authority",
-            "deletion reserve exceeds the supported 1T ceiling",
-        ));
-    }
-    Ok(maximum)
+    Ok(target)
 }
 
 fn canonical_controller_set(controllers: &[Principal]) -> bool {

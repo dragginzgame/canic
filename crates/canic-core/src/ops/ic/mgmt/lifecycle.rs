@@ -5,28 +5,10 @@
 //! Boundary: `MgmtOps` extension for canister lifecycle management calls.
 
 use super::*;
-use crate::ops::{cost_guard::CostGuardPermit, ic::IcOps};
+use crate::ops::cost_guard::CostGuardPermit;
 use candid::utils::ArgumentEncoder;
 
 impl MgmtOps {
-    /// Create a canister after a cost guard has reserved deployment quota and cycles.
-    pub async fn create_canister_with_permit(
-        _permit: &CostGuardPermit,
-        controllers: Vec<Principal>,
-        cycles: Cycles,
-    ) -> Result<Principal, InternalError> {
-        let attached_cycles = IcOps::canister_creation_attached_cycles(&cycles)?;
-        let pid = management_call(
-            ManagementCallMetricOperation::CreateCanister,
-            MgmtInfra::create_canister(controllers, attached_cycles),
-        )
-        .await?;
-
-        SystemMetrics::increment(SystemMetricKind::CreateCanister);
-
-        Ok(pid)
-    }
-
     /// Install chunked code after a cost guard has reserved deployment quota and cycles.
     pub async fn install_chunked_code_with_permit<T: ArgumentEncoder>(
         _permit: &CostGuardPermit,

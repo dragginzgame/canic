@@ -76,13 +76,6 @@ fn replica_canister_not_found(message: &str) -> Option<String> {
     const CANISTER_PREFIX: &str = "Canister ";
     const SUFFIX: &str = " not found";
 
-    if let Some(canister) = message
-        .trim()
-        .strip_prefix("Error: Canister ")
-        .and_then(|message| message.strip_suffix(" was not found."))
-    {
-        return valid_canister_token(canister);
-    }
     if !message.contains("IC0301") && !message.contains("code=3 message=Canister ") {
         return None;
     }
@@ -171,12 +164,6 @@ mod tests {
                 },
             ),
             (
-                "Error: Canister uxrrr-q7777-77774-qaaaq-cai was not found.",
-                IcpDiagnostic::CanisterNotFound {
-                    canister: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
-                },
-            ),
-            (
                 "canister contains no Wasm module",
                 IcpDiagnostic::CanisterWasmMissing,
             ),
@@ -214,6 +201,10 @@ mod tests {
         );
         assert_eq!(
             classify_icp_diagnostic("Canister uxrrr-q7777-77774-qaaaq-cai not found"),
+            None
+        );
+        assert_eq!(
+            classify_icp_diagnostic("Error: Canister uxrrr-q7777-77774-qaaaq-cai was not found."),
             None
         );
     }

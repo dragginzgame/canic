@@ -20,9 +20,6 @@ pub const FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES: u128 = 300_000_00
 /// Margin for call-context refunds that become visible after a cycle transfer returns.
 pub const FLEET_SUBNET_ROOT_DELETION_CALL_REFUND_HEADROOM_CYCLES: u128 = 150_000_000_000;
 
-/// Fail-closed ceiling for cycles intentionally left on a root that will be deleted.
-pub const FLEET_SUBNET_ROOT_DELETION_MAXIMUM_RETAINED_CYCLES: u128 = 1_500_000_000_000;
-
 ///
 /// FleetSubnetRootAuthority
 ///
@@ -266,7 +263,7 @@ pub struct FleetSubnetRootStoreDeletionResponse {
     pub observed_module_hash: [u8; 32],
     pub observed_controllers: Vec<Principal>,
     pub observed_cycles_before_reclamation: u128,
-    pub maximum_cycles_to_retain: u128,
+    pub retained_cycles_target: u128,
     pub observed_cycles_after_reclamation: u128,
     pub cycles_reclaimed_at_ns: u64,
     pub prepared_at_ns: u64,
@@ -280,7 +277,7 @@ pub struct FleetSubnetRootStoreDeletionResponse {
 pub struct FleetSubnetRootDeletionPreparationRequest {
     pub operation_id: [u8; 32],
     pub expected_store_deletion_hash: [u8; 32],
-    pub maximum_cycles_to_retain: u128,
+    pub retained_cycles_target: u128,
     pub observed_reserved_cycles: u128,
     pub observed_idle_cycles_burned_per_day: u128,
     pub observed_freezing_threshold_seconds: u128,
@@ -301,7 +298,7 @@ pub struct FleetSubnetRootDeletionPreparationResponse {
     pub final_inventory_hash: [u8; 32],
     pub store_deletion_hash: [u8; 32],
     pub observed_cycles_before_reclamation: u128,
-    pub maximum_cycles_to_retain: u128,
+    pub retained_cycles_target: u128,
     pub observed_reserved_cycles: u128,
     pub observed_idle_cycles_burned_per_day: u128,
     pub observed_freezing_threshold_seconds: u128,
@@ -583,7 +580,7 @@ mod tests {
             observed_module_hash: [37; 32],
             observed_controllers: vec![finalization.fleet_subnet_root],
             observed_cycles_before_reclamation: 500,
-            maximum_cycles_to_retain: 100,
+            retained_cycles_target: 100,
             observed_cycles_after_reclamation: 90,
             cycles_reclaimed_at_ns: 38,
             prepared_at_ns: 38,
@@ -613,7 +610,7 @@ mod tests {
         let preparation_request = FleetSubnetRootDeletionPreparationRequest {
             operation_id: store_deletion.operation_id,
             expected_store_deletion_hash: store_deletion.deletion_hash,
-            maximum_cycles_to_retain: 100_000_000_001,
+            retained_cycles_target: 100_000_000_001,
             observed_reserved_cycles: 0,
             observed_idle_cycles_burned_per_day: 86_400,
             observed_freezing_threshold_seconds: 1,
@@ -627,7 +624,7 @@ mod tests {
             final_inventory_hash,
             store_deletion_hash: store_deletion.deletion_hash,
             observed_cycles_before_reclamation: 500_000_000_000,
-            maximum_cycles_to_retain: 100_000_000_001,
+            retained_cycles_target: 100_000_000_001,
             observed_reserved_cycles: 0,
             observed_idle_cycles_burned_per_day: 86_400,
             observed_freezing_threshold_seconds: 1,
@@ -652,7 +649,7 @@ mod tests {
             final_inventory_hash,
             store_deletion_hash: store_deletion.deletion_hash,
             observed_cycles_before_reclamation: 500_000_000_000,
-            maximum_cycles_to_retain: 100_000_000_001,
+            retained_cycles_target: 100_000_000_001,
             observed_reserved_cycles: 0,
             observed_idle_cycles_burned_per_day: 86_400,
             observed_freezing_threshold_seconds: 1,
@@ -669,7 +666,7 @@ mod tests {
             final_inventory_hash,
             store_deletion_hash: store_deletion.deletion_hash,
             observed_cycles_before_reclamation: 500_000_000_000,
-            maximum_cycles_to_retain: 100_000_000_001,
+            retained_cycles_target: 100_000_000_001,
             observed_reserved_cycles: 0,
             observed_idle_cycles_burned_per_day: 86_400,
             observed_freezing_threshold_seconds: 1,

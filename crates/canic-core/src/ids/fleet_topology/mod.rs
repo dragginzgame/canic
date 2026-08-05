@@ -74,13 +74,13 @@ pub struct CyclesFundingBudget {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetSubnetCanisterPoolConfig {
-    /// Ready empty Canisters the root continuously attempts to retain.
+    /// Ready empty Canisters the operator should retain for the root.
     pub minimum_size: u32,
-    /// Ceiling for configured imports and proactive refill inventory.
+    /// Ceiling for configured or later operator-imported pool assets.
     ///
     /// Recycled assets remain tracked even when their return temporarily exceeds this target.
     pub maximum_size: u32,
-    /// Cycles placed on each Canister created by the root for this pool.
+    /// Minimum observed balance required before an imported asset becomes Ready.
     pub canister_cycles: Cycles,
 }
 
@@ -108,7 +108,6 @@ pub struct ComponentSpecAdmission {
 #[serde(deny_unknown_fields)]
 pub struct FleetSubnetRootLimits {
     pub maximum_component_instances: u32,
-    pub maximum_managed_canisters: u32,
     pub maximum_registry_bytes: u64,
     pub maximum_wasm_store_bytes: u64,
     pub canister_pool: FleetSubnetCanisterPoolConfig,

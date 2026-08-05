@@ -5,10 +5,7 @@
 //! Boundary: extends `MgmtInfra` with lifecycle management effects.
 
 use crate::{
-    cdk::{
-        candid::{Principal, encode_args, utils::ArgumentEncoder},
-        types::Cycles,
-    },
+    cdk::candid::{Principal, encode_args, utils::ArgumentEncoder},
     infra::ic::{IcInfraError, call::Call},
 };
 use ic_cdk::api;
@@ -17,37 +14,12 @@ use super::{
     MgmtInfra,
     types::{
         InfraCanisterIdRecord, InfraCanisterIdRecordExtended, InfraCanisterInstallMode,
-        InfraCanisterSettings, InfraChunkHash, InfraClearChunkStoreArgs, InfraCreateCanisterArgs,
-        InfraCreateCanisterResult, InfraInstallChunkedCodeArgs, InfraInstallCodeArgs,
-        InfraUploadChunkArgs,
+        InfraChunkHash, InfraClearChunkStoreArgs, InfraInstallChunkedCodeArgs,
+        InfraInstallCodeArgs, InfraUploadChunkArgs,
     },
 };
 
 impl MgmtInfra {
-    /// Create a Canister with explicit controllers and caller-computed attached funding.
-    pub async fn create_canister(
-        controllers: Vec<Principal>,
-        attached_cycles: Cycles,
-    ) -> Result<Principal, IcInfraError> {
-        let settings = Some(InfraCanisterSettings {
-            controllers: Some(controllers),
-            ..Default::default()
-        });
-
-        let args = InfraCreateCanisterArgs {
-            settings,
-            sender_canister_version: Some(api::canister_version()),
-        };
-        let response = Call::unbounded_wait(Principal::management_canister(), "create_canister")
-            .with_arg(args)?
-            .with_cycles(attached_cycles.to_u128())
-            .execute()
-            .await?;
-        let (created,): (InfraCreateCanisterResult,) = response.candid_tuple()?;
-
-        Ok(created.canister_id)
-    }
-
     /// Upload one wasm chunk into a canister's chunk store.
     pub async fn upload_chunk(
         canister_pid: Principal,

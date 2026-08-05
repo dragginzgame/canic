@@ -676,7 +676,6 @@ fn fixture(root: &Path) -> Fixture {
         },
         limits: FleetSubnetRootLimits {
             maximum_component_instances: 100,
-            maximum_managed_canisters: 20_000,
             maximum_registry_bytes: 2_097_152,
             maximum_wasm_store_bytes: 268_435_456,
             canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {

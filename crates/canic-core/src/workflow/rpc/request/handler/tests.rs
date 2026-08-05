@@ -554,7 +554,7 @@ fn root_provision_marks_create_external_effect() {
     assert_eq!(receipt.cost_guard_settlement, None);
     assert_eq!(
         receipt.effect,
-        Some(ExternalEffectDescriptor::ManagementCreateCanister {
+        Some(ExternalEffectDescriptor::RootCanisterProvision {
             command_kind: CommandKind::new("root.provision").expect("command kind"),
         })
     );
@@ -1266,7 +1266,7 @@ fn interrupted_component_child_lifecycle_is_resumed_by_exact_retry() {
     };
     mark_external_effect_in_flight(
         &pending.receipt_token,
-        ExternalEffectDescriptor::ManagementCreateCanister {
+        ExternalEffectDescriptor::RootCanisterProvision {
             command_kind: CommandKind::new("root.provision").expect("command kind"),
         },
         secs_to_ns(1_001),

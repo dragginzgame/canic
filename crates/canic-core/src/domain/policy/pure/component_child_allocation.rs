@@ -160,12 +160,6 @@ pub enum ComponentChildAllocationPolicyError {
 
     #[error("root Component instance count overflowed")]
     ComponentCountOverflow,
-
-    #[error("root managed-Canister count overflowed")]
-    ManagedCanisterCountOverflow,
-
-    #[error("root managed-Canister capacity is exhausted")]
-    ManagedCanisterCapacityExhausted,
 }
 
 /// Decide one exact direct-child reservation without mutation.
@@ -306,20 +300,6 @@ fn validate_capacity(
     }
     if input.component_descendants >= maximum_descendants {
         return Err(ComponentChildAllocationPolicyError::ComponentDescendantCapacityExhausted);
-    }
-
-    let component_instances = input
-        .reserved_component_instances
-        .checked_add(input.committed_component_instances)
-        .ok_or(ComponentChildAllocationPolicyError::ComponentCountOverflow)?;
-    // The root owns one implicit Store in addition to every Component and
-    // reserved or committed descendant counted by its Registry.
-    let managed_canisters = 1_u32
-        .checked_add(component_instances)
-        .and_then(|count| count.checked_add(input.root_managed_descendants))
-        .ok_or(ComponentChildAllocationPolicyError::ManagedCanisterCountOverflow)?;
-    if managed_canisters >= input.root.limits.maximum_managed_canisters {
-        return Err(ComponentChildAllocationPolicyError::ManagedCanisterCapacityExhausted);
     }
 
     Ok(())
@@ -509,7 +489,7 @@ mod tests {
 
     #[test]
     fn every_parent_component_and_root_capacity_is_checked_before_reservation() {
-        let mut fixture = fixture();
+        let fixture = fixture();
         let child_role = CanisterRole::new("project_instance");
         let parent = ManagedCanisterBinding::Component(fixture.component.clone());
 
@@ -535,15 +515,6 @@ mod tests {
         assert_eq!(
             reserve_component_child(request),
             Err(ComponentChildAllocationPolicyError::ComponentDescendantCapacityExhausted)
-        );
-
-        fixture.root.limits.maximum_managed_canisters = 10;
-        let mut request = input(&fixture, &parent, &child_role);
-        request.committed_component_instances = 1;
-        request.root_managed_descendants = 8;
-        assert_eq!(
-            reserve_component_child(request),
-            Err(ComponentChildAllocationPolicyError::ManagedCanisterCapacityExhausted)
         );
     }
 
@@ -628,7 +599,6 @@ mod tests {
                 .expect("root digest"),
             limits: FleetSubnetRootLimits {
                 maximum_component_instances: 4,
-                maximum_managed_canisters: 20_005,
                 maximum_registry_bytes: 16_777_216,
                 maximum_wasm_store_bytes: 268_435_456,
                 canister_pool: crate::ids::FleetSubnetCanisterPoolConfig {

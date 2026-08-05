@@ -5,7 +5,7 @@
 //! Boundary: converts stable records into read-only views before workflow use.
 
 use crate::{
-    dto::template::{WASM_STORE_DELETION_MAXIMUM_RETAINED_CYCLES, WasmStoreStatusResponse},
+    dto::template::WasmStoreStatusResponse,
     ids::{WasmStoreBinding, WasmStoreGcMode},
     storage::stable::component_registry::{
         ComponentRegistryChildRecord, ComponentRegistryChildTraversalRecord,
@@ -93,10 +93,7 @@ use canic_core::{
         fleet_registry::{
             FleetDirectorySnapshot, FleetRegistryVersion, FleetSubnetRootRemovalPublicationResponse,
         },
-        fleet_subnet_root::{
-            FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
-            FLEET_SUBNET_ROOT_DELETION_MAXIMUM_RETAINED_CYCLES,
-        },
+        fleet_subnet_root::FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
         root_store::RootStoreBootstrapRequest,
         root_store::RootStoreBootstrapResponse,
     },
@@ -124,7 +121,7 @@ const ROOT_STORE_BINDING_FINALIZATION_HASH_DOMAIN: &[u8] =
 const ROOT_STORE_DELETION_HASH_DOMAIN: &[u8] = b"canic.fleet-subnet-root.store-deletion.v1";
 const SECONDS_PER_DAY: u128 = 86_400;
 
-fn deletion_maximum_cycles(
+fn deletion_retained_cycles_target(
     idle_cycles_burned_per_day: u128,
     freezing_threshold_seconds: u128,
 ) -> Option<u128> {
@@ -283,7 +280,7 @@ struct RootFleetSubnetStoreDeletionHashAuthority<'a> {
     observed_module_hash: [u8; 32],
     observed_controllers: &'a [Principal],
     observed_cycles_before_reclamation: u128,
-    maximum_cycles_to_retain: u128,
+    retained_cycles_target: u128,
     observed_cycles_after_reclamation: u128,
     cycles_reclaimed_at_ns: u64,
     prepared_at_ns: u64,
@@ -1899,7 +1896,7 @@ impl ComponentRegistryOps {
             observed_module_hash,
             observed_controllers,
             observed_cycles_before_reclamation,
-            maximum_cycles_to_retain,
+            retained_cycles_target,
         } = authority;
         if let Some(existing) = Self::root_store_deletion_intent_if_present(operation_id)? {
             let retry_is_exact = [
@@ -1909,7 +1906,7 @@ impl ComponentRegistryOps {
                 existing.observed_module_hash == observed_module_hash,
                 existing.observed_controllers == observed_controllers,
                 existing.observed_cycles_before_reclamation == observed_cycles_before_reclamation,
-                existing.maximum_cycles_to_retain == maximum_cycles_to_retain,
+                existing.retained_cycles_target == retained_cycles_target,
             ]
             .into_iter()
             .all(|valid| valid);
@@ -1963,7 +1960,7 @@ impl ComponentRegistryOps {
             observed_module_hash,
             observed_controllers,
             observed_cycles_before_reclamation,
-            maximum_cycles_to_retain,
+            retained_cycles_target,
             observed_cycles_after_reclamation: None,
             cycles_reclaimed_at_ns: None,
             prepared_at_ns,
@@ -2011,7 +2008,7 @@ impl ComponentRegistryOps {
         let evidence_is_valid = [
             evidence.observed_cycles_after_reclamation
                 <= existing.observed_cycles_before_reclamation,
-            evidence.observed_cycles_after_reclamation <= existing.maximum_cycles_to_retain,
+            evidence.observed_cycles_after_reclamation <= existing.retained_cycles_target,
             evidence.cycles_reclaimed_at_ns >= existing.prepared_at_ns,
         ]
         .into_iter()
@@ -2143,12 +2140,12 @@ impl ComponentRegistryOps {
             store_deletion_hash: expected_store_deletion_hash,
             coordinator,
             observed_cycles_before_reclamation,
-            maximum_cycles_to_retain,
+            retained_cycles_target,
             observed_reserved_cycles,
             observed_idle_cycles_burned_per_day,
             observed_freezing_threshold_seconds,
         } = authority;
-        let expected_maximum = deletion_maximum_cycles(
+        let expected_target = deletion_retained_cycles_target(
             observed_idle_cycles_burned_per_day,
             observed_freezing_threshold_seconds,
         );
@@ -2156,9 +2153,8 @@ impl ComponentRegistryOps {
             expected_store_deletion_hash != [0; 32],
             coordinator != Principal::anonymous(),
             observed_cycles_before_reclamation > 0,
-            maximum_cycles_to_retain > 0,
-            maximum_cycles_to_retain <= FLEET_SUBNET_ROOT_DELETION_MAXIMUM_RETAINED_CYCLES,
-            expected_maximum == Some(maximum_cycles_to_retain),
+            retained_cycles_target > 0,
+            expected_target == Some(retained_cycles_target),
             observed_reserved_cycles == 0,
             prepared_at_ns > 0,
         ]
@@ -2174,7 +2170,7 @@ impl ComponentRegistryOps {
                 existing.store_deletion_hash == expected_store_deletion_hash,
                 existing.coordinator == coordinator,
                 existing.observed_cycles_before_reclamation == observed_cycles_before_reclamation,
-                existing.maximum_cycles_to_retain == maximum_cycles_to_retain,
+                existing.retained_cycles_target == retained_cycles_target,
                 existing.observed_reserved_cycles == observed_reserved_cycles,
                 existing.observed_idle_cycles_burned_per_day == observed_idle_cycles_burned_per_day,
                 existing.observed_freezing_threshold_seconds == observed_freezing_threshold_seconds,
@@ -2217,7 +2213,7 @@ impl ComponentRegistryOps {
             final_inventory_hash: inventory.inventory_hash,
             store_deletion_hash: deletion.deletion_hash,
             observed_cycles_before_reclamation,
-            maximum_cycles_to_retain,
+            retained_cycles_target,
             observed_reserved_cycles,
             observed_idle_cycles_burned_per_day,
             observed_freezing_threshold_seconds,
@@ -2272,7 +2268,7 @@ impl ComponentRegistryOps {
         let evidence_is_valid = [
             coordinator_intent_hash != [0; 32],
             observed_cycles_after_reclamation <= existing.observed_cycles_before_reclamation,
-            observed_cycles_after_reclamation <= existing.maximum_cycles_to_retain,
+            observed_cycles_after_reclamation <= existing.retained_cycles_target,
             cycles_reclaimed_at_ns >= existing.prepared_at_ns,
         ]
         .into_iter()
@@ -2369,7 +2365,7 @@ impl ComponentRegistryOps {
             final_inventory_hash: intent.final_inventory_hash,
             store_deletion_hash: intent.store_deletion_hash,
             observed_cycles_before_reclamation: intent.observed_cycles_before_reclamation,
-            maximum_cycles_to_retain: intent.maximum_cycles_to_retain,
+            retained_cycles_target: intent.retained_cycles_target,
             observed_reserved_cycles: intent.observed_reserved_cycles,
             observed_idle_cycles_burned_per_day: intent.observed_idle_cycles_burned_per_day,
             observed_freezing_threshold_seconds: intent.observed_freezing_threshold_seconds,
@@ -5413,18 +5409,6 @@ impl ComponentRegistryOps {
             .ok_or_else(|| {
                 InternalError::resource_exhausted("Component Registry bytes overflow")
             })?;
-        let managed_canisters = 1_u32
-            .checked_add(next_meta.reserved_component_instances)
-            .and_then(|count| count.checked_add(next_meta.committed_component_instances))
-            .and_then(|count| count.checked_add(next_meta.managed_descendants))
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("root managed-Canister count overflow")
-            })?;
-        if managed_canisters > next_meta.root.limits.maximum_managed_canisters {
-            return Err(InternalError::resource_exhausted(
-                "root managed-Canister capacity is exhausted",
-            ));
-        }
         if next_meta.encoded_bytes > next_meta.root.limits.maximum_registry_bytes {
             return Err(InternalError::resource_exhausted(format!(
                 "Component Child reservation requires {} root Registry bytes, exceeding protected limit {}",
@@ -7570,7 +7554,7 @@ fn root_store_deletion_record(
         evidence.observed_module_hash == intent.observed_module_hash,
         evidence.observed_controllers == intent.observed_controllers,
         evidence.observed_cycles_before_reclamation == intent.observed_cycles_before_reclamation,
-        evidence.maximum_cycles_to_retain == intent.maximum_cycles_to_retain,
+        evidence.retained_cycles_target == intent.retained_cycles_target,
         evidence.observed_cycles_after_reclamation == observed_cycles_after_reclamation,
         evidence.cycles_reclaimed_at_ns == cycles_reclaimed_at_ns,
         evidence.observed_absent_at_ns >= cycles_reclaimed_at_ns,
@@ -7592,7 +7576,7 @@ fn root_store_deletion_record(
         observed_module_hash: intent.observed_module_hash,
         observed_controllers: intent.observed_controllers.clone(),
         observed_cycles_before_reclamation: intent.observed_cycles_before_reclamation,
-        maximum_cycles_to_retain: intent.maximum_cycles_to_retain,
+        retained_cycles_target: intent.retained_cycles_target,
         observed_cycles_after_reclamation,
         cycles_reclaimed_at_ns,
         prepared_at_ns: intent.prepared_at_ns,
@@ -7616,7 +7600,7 @@ fn root_store_deletion_hash(
         observed_module_hash: deletion.observed_module_hash,
         observed_controllers: &deletion.observed_controllers,
         observed_cycles_before_reclamation: deletion.observed_cycles_before_reclamation,
-        maximum_cycles_to_retain: deletion.maximum_cycles_to_retain,
+        retained_cycles_target: deletion.retained_cycles_target,
         observed_cycles_after_reclamation: deletion.observed_cycles_after_reclamation,
         cycles_reclaimed_at_ns: deletion.cycles_reclaimed_at_ns,
         prepared_at_ns: deletion.prepared_at_ns,
@@ -7655,8 +7639,7 @@ fn validate_root_store_deletion_authority(
         authority.observed_module_hash != [0; 32],
         canonical_controller_set(&authority.observed_controllers),
         authority.observed_cycles_before_reclamation > 0,
-        authority.maximum_cycles_to_retain > 0,
-        authority.maximum_cycles_to_retain <= WASM_STORE_DELETION_MAXIMUM_RETAINED_CYCLES,
+        authority.retained_cycles_target > 0,
         prepared_at_ns > 0,
     ]
     .into_iter()
@@ -7843,7 +7826,7 @@ fn root_store_deletion_intent_record_to_view(
         observed_module_hash: record.observed_module_hash,
         observed_controllers: record.observed_controllers,
         observed_cycles_before_reclamation: record.observed_cycles_before_reclamation,
-        maximum_cycles_to_retain: record.maximum_cycles_to_retain,
+        retained_cycles_target: record.retained_cycles_target,
         observed_cycles_after_reclamation: record.observed_cycles_after_reclamation,
         cycles_reclaimed_at_ns: record.cycles_reclaimed_at_ns,
         prepared_at_ns: record.prepared_at_ns,
@@ -7862,7 +7845,7 @@ fn root_store_deletion_record_to_view(
         observed_module_hash: record.observed_module_hash,
         observed_controllers: record.observed_controllers,
         observed_cycles_before_reclamation: record.observed_cycles_before_reclamation,
-        maximum_cycles_to_retain: record.maximum_cycles_to_retain,
+        retained_cycles_target: record.retained_cycles_target,
         observed_cycles_after_reclamation: record.observed_cycles_after_reclamation,
         cycles_reclaimed_at_ns: record.cycles_reclaimed_at_ns,
         prepared_at_ns: record.prepared_at_ns,
@@ -7881,7 +7864,7 @@ const fn root_deletion_preparation_intent_record_to_view(
         final_inventory_hash: record.final_inventory_hash,
         store_deletion_hash: record.store_deletion_hash,
         observed_cycles_before_reclamation: record.observed_cycles_before_reclamation,
-        maximum_cycles_to_retain: record.maximum_cycles_to_retain,
+        retained_cycles_target: record.retained_cycles_target,
         observed_reserved_cycles: record.observed_reserved_cycles,
         observed_idle_cycles_burned_per_day: record.observed_idle_cycles_burned_per_day,
         observed_freezing_threshold_seconds: record.observed_freezing_threshold_seconds,
@@ -7902,7 +7885,7 @@ const fn root_deletion_preparation_record_to_view(
         final_inventory_hash: record.final_inventory_hash,
         store_deletion_hash: record.store_deletion_hash,
         observed_cycles_before_reclamation: record.observed_cycles_before_reclamation,
-        maximum_cycles_to_retain: record.maximum_cycles_to_retain,
+        retained_cycles_target: record.retained_cycles_target,
         observed_reserved_cycles: record.observed_reserved_cycles,
         observed_idle_cycles_burned_per_day: record.observed_idle_cycles_burned_per_day,
         observed_freezing_threshold_seconds: record.observed_freezing_threshold_seconds,
@@ -12848,6 +12831,17 @@ mod tests {
         },
     };
 
+    #[test]
+    fn deletion_retained_target_has_no_absolute_cycle_cap() {
+        let target = deletion_retained_cycles_target(2_000_000_000_000, 86_400)
+            .expect("derived deletion target");
+        assert_eq!(
+            target,
+            2_000_000_000_000 + FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES
+        );
+        assert!(target > 1_500_000_000_000);
+    }
+
     fn restart_component_registry() -> RootComponentRegistryData {
         let snapshot = RootComponentRegistryStore::export();
         RootComponentRegistryStore::import(snapshot.clone());
@@ -13688,7 +13682,7 @@ mod tests {
             observed_module_hash: [32; 32],
             observed_controllers: vec![inventory.fleet_subnet_root],
             observed_cycles_before_reclamation: 500,
-            maximum_cycles_to_retain: 100,
+            retained_cycles_target: 100,
         };
         ComponentRegistryOps::begin_root_store_deletion(
             [10; 32],
@@ -13745,7 +13739,7 @@ mod tests {
             observed_module_hash: [32; 32],
             observed_controllers: vec![inventory.fleet_subnet_root],
             observed_cycles_before_reclamation: 500,
-            maximum_cycles_to_retain: 100,
+            retained_cycles_target: 100,
             observed_cycles_after_reclamation: 90,
             cycles_reclaimed_at_ns: 32,
             observed_absent_at_ns: 33,
@@ -13778,15 +13772,15 @@ mod tests {
         store_deletion: &RootFleetSubnetStoreDeletionView,
     ) {
         let coordinator = inventory.registry.authority.binding.coordinator;
-        let maximum_cycles_to_retain =
-            deletion_maximum_cycles(86_400, 1).expect("bounded root deletion maximum cycles");
+        let retained_cycles_target = deletion_retained_cycles_target(86_400, 1)
+            .expect("bounded root deletion maximum cycles");
         let intent = ComponentRegistryOps::begin_root_deletion_preparation(
             [10; 32],
             RootFleetSubnetDeletionPreparationAuthority {
                 store_deletion_hash: store_deletion.deletion_hash,
                 coordinator,
                 observed_cycles_before_reclamation: 500_000_000_000,
-                maximum_cycles_to_retain,
+                retained_cycles_target,
                 observed_reserved_cycles: 0,
                 observed_idle_cycles_burned_per_day: 86_400,
                 observed_freezing_threshold_seconds: 1,
@@ -13803,7 +13797,7 @@ mod tests {
                     store_deletion_hash: store_deletion.deletion_hash,
                     coordinator,
                     observed_cycles_before_reclamation: 500_000_000_000,
-                    maximum_cycles_to_retain,
+                    retained_cycles_target,
                     observed_reserved_cycles: 0,
                     observed_idle_cycles_burned_per_day: 86_400,
                     observed_freezing_threshold_seconds: 1,
@@ -15961,13 +15955,8 @@ mod tests {
         let operation_b = [54; 32];
         let decision_b = child_allocation_decision(&partition_b, "project_instance");
         let registry_b = component_registry_head(&partition_b);
-        ComponentRegistryOps::reserve_child_allocation(
-            decision_b,
-            operation_b,
-            None,
-            registry_b.clone(),
-        )
-        .expect("reserve unrelated Component B child");
+        ComponentRegistryOps::reserve_child_allocation(decision_b, operation_b, None, registry_b)
+            .expect("reserve unrelated Component B child");
         ComponentRegistryOps::begin_child_creation(
             component_b,
             operation_b,
@@ -16028,28 +16017,6 @@ mod tests {
             );
         }
 
-        let mut capacity_bounded = durable;
-        let status = capacity_bounded.current.as_mut().expect("Registry status");
-        let managed_canisters = 1
-            + status.reserved_component_instances
-            + status.committed_component_instances
-            + status.managed_descendants;
-        assert_eq!(managed_canisters, 5);
-        status.root.limits.maximum_managed_canisters = managed_canisters;
-        RootComponentRegistryStore::import(capacity_bounded);
-        let before_capacity_failure = RootComponentRegistryStore::export();
-        let capacity_error = ComponentRegistryOps::reserve_child_allocation(
-            child_allocation_decision(&partition_b, "project_machine"),
-            [59; 32],
-            None,
-            registry_b,
-        )
-        .expect_err("Component A reservation remains charged to the shared root limit");
-        assert!(capacity_error.is_public_resource_exhausted());
-        assert_eq!(
-            RootComponentRegistryStore::export(),
-            before_capacity_failure
-        );
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
 
@@ -18218,7 +18185,6 @@ mod tests {
             component_topology_digest: ComponentTopologyDigest::from_bytes([7; 32]),
             limits: FleetSubnetRootLimits {
                 maximum_component_instances: 10,
-                maximum_managed_canisters: 20_000,
                 maximum_registry_bytes: 16_777_216,
                 maximum_wasm_store_bytes: 268_435_456,
                 canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {

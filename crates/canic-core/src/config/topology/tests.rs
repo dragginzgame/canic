@@ -161,7 +161,6 @@ fn root_binding(
         component_topology_digest: projection.digest().expect("root topology digest"),
         limits: FleetSubnetRootLimits {
             maximum_component_instances: 10,
-            maximum_managed_canisters: 1_000,
             maximum_registry_bytes: 4_194_304,
             maximum_wasm_store_bytes: 40_000_000,
             canister_pool: crate::ids::FleetSubnetCanisterPoolConfig {

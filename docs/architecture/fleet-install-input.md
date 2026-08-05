@@ -40,7 +40,6 @@ imports = []
 
 [fleet_subnet_roots.limits]
 maximum_component_instances = 13
-maximum_managed_canisters = 20000
 maximum_registry_bytes = 16777216
 maximum_wasm_store_bytes = 40000000
 
@@ -70,10 +69,12 @@ nonempty initial placement is a separate 0.101 Component Group deployment
 authority.
 
 Every root has one required prepaid empty-Canister policy. `minimum_size` is
-the ready target maintained after root activation, `maximum_size` bounds
-configured imports and proactive refill, and `canister_cycles` funds each new
-refill asset. `imports` accepts exact existing Canister principals that the
-root will take under sole control, uninstall and validate before use. Imported
+the operator replenishment target, `maximum_size` bounds configured or later
+operator-imported pool assets, and `canister_cycles` is the minimum observed
+balance required before an imported asset becomes Ready. The root does not
+create or autonomously refill physical Canisters. `imports` accepts exact
+existing Canister principals that the root will take under sole control,
+uninstall and validate before use. Imported
 principals must be non-reserved, unique within the root and unique across the
 complete Fleet input. On IC mainnet, every import must also have trusted
 routing-catalog evidence for the exact Subnet occupied by that root; missing

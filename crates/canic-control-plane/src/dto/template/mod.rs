@@ -148,11 +148,8 @@ pub struct WasmStoreStatusResponse {
 /// an empty Store returns cycles and remains available for stop/delete calls.
 pub const WASM_STORE_DELETION_EXECUTION_RESERVE_CYCLES: u128 = 300_000_000_000;
 
-/// Headroom below the deletion ceiling used to absorb post-call cycle refunds.
+/// Headroom below the retained target used to absorb post-call cycle refunds.
 pub const WASM_STORE_DELETION_CALL_REFUND_HEADROOM_CYCLES: u128 = 150_000_000_000;
-
-/// Fail-closed ceiling on the total Store balance retained for physical deletion.
-pub const WASM_STORE_DELETION_MAXIMUM_RETAINED_CYCLES: u128 = 1_000_000_000_000;
 
 //
 // WasmStoreDeletionCycleReclamationRequest
@@ -160,7 +157,7 @@ pub const WASM_STORE_DELETION_MAXIMUM_RETAINED_CYCLES: u128 = 1_000_000_000_000;
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub struct WasmStoreDeletionCycleReclamationRequest {
-    pub maximum_cycles_to_retain: u128,
+    pub retained_cycles_target: u128,
 }
 
 //
@@ -171,7 +168,7 @@ pub struct WasmStoreDeletionCycleReclamationRequest {
 pub struct WasmStoreDeletionCycleReclamationResponse {
     pub destination: Principal,
     pub cycles_before: u128,
-    pub maximum_cycles_to_retain: u128,
+    pub retained_cycles_target: u128,
     pub cycles_transferred: u128,
     pub cycles_after: u128,
 }

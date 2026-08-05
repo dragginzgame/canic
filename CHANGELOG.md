@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)
 
+- `0.100.103` hard-cuts unrecoverable root-side Canister creation and aggregate
+  physical caps, provisions only from operator-imported or recycled assets,
+  and unifies Store, pool, workload and recycling inventory.
+
 - `0.100.102` advances to `ic-testkit 0.3.2` and PocketIC 15, hardens Fleet
   install recovery and release-scoped artifact authority, and completes the
   bounded IC mainnet Store/root deletion proof with exact terminal replay. It

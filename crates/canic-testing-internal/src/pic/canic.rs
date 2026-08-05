@@ -493,7 +493,6 @@ fn managed_test_root_init_args(
                 component_topology_digest,
                 limits: FleetSubnetRootLimits {
                     maximum_component_instances: 4_096,
-                    maximum_managed_canisters: 25_000,
                     maximum_registry_bytes: 16_777_216,
                     maximum_wasm_store_bytes: 536_870_912,
                     canister_pool: FleetSubnetCanisterPoolConfig {

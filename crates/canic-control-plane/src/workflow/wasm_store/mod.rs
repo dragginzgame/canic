@@ -7,8 +7,7 @@
 use crate::{
     config,
     dto::template::{
-        WASM_STORE_DELETION_MAXIMUM_RETAINED_CYCLES, WasmStoreDeletionCycleReclamationRequest,
-        WasmStoreDeletionCycleReclamationResponse,
+        WasmStoreDeletionCycleReclamationRequest, WasmStoreDeletionCycleReclamationResponse,
     },
     ids::{WasmStoreGcMode, WasmStoreGcStatus},
     ops::storage::template::{
@@ -44,11 +43,11 @@ pub async fn reclaim_deletion_cycles(
     let cycles_before = IcOps::canister_cycle_balance().to_u128();
     let deposit_call_cost = MgmtOps::deposit_cycles_call_cost(destination)?;
     let target_cycles_to_retain = request
-        .maximum_cycles_to_retain
+        .retained_cycles_target
         .checked_sub(deposit_call_cost)
         .ok_or_else(|| {
             InternalError::invalid_input(
-                "Store deletion cycle reserve does not cover the exact deposit call cost",
+                "Store retained-cycle target does not cover the exact deposit call cost",
             )
         })?;
     let maximum_transfer =
@@ -56,7 +55,7 @@ pub async fn reclaim_deletion_cycles(
     if maximum_transfer == 0 {
         return Ok(reclamation_response(
             destination,
-            request.maximum_cycles_to_retain,
+            request.retained_cycles_target,
             cycles_before,
             0,
         ));
@@ -79,7 +78,7 @@ pub async fn reclaim_deletion_cycles(
 
     Ok(reclamation_response(
         destination,
-        request.maximum_cycles_to_retain,
+        request.retained_cycles_target,
         cycles_before,
         cycles_transferred,
     ))
@@ -98,11 +97,9 @@ const fn transferable_cycles(
 fn validate_request(
     request: WasmStoreDeletionCycleReclamationRequest,
 ) -> Result<(), InternalError> {
-    if request.maximum_cycles_to_retain == 0
-        || request.maximum_cycles_to_retain > WASM_STORE_DELETION_MAXIMUM_RETAINED_CYCLES
-    {
+    if request.retained_cycles_target == 0 {
         return Err(InternalError::invalid_input(
-            "Store deletion cycle reserve is outside the supported range",
+            "Store retained-cycle target must be positive",
         ));
     }
     Ok(())
@@ -191,14 +188,14 @@ fn settle_cycle_reclamation(
 
 fn reclamation_response(
     destination: Principal,
-    maximum_cycles_to_retain: u128,
+    retained_cycles_target: u128,
     cycles_before: u128,
     cycles_transferred: u128,
 ) -> WasmStoreDeletionCycleReclamationResponse {
     WasmStoreDeletionCycleReclamationResponse {
         destination,
         cycles_before,
-        maximum_cycles_to_retain,
+        retained_cycles_target,
         cycles_transferred,
         cycles_after: IcOps::canister_cycle_balance().to_u128(),
     }
@@ -210,9 +207,9 @@ mod tests {
 
     #[test]
     fn cycle_reclamation_retains_the_target_and_exact_call_cost() {
-        let maximum_cycles_to_retain = 200_u128;
+        let retained_cycles_target = 200_u128;
         let call_cost = 60;
-        let target_before_call = maximum_cycles_to_retain.saturating_sub(call_cost);
+        let target_before_call = retained_cycles_target.saturating_sub(call_cost);
 
         assert_eq!(
             transferable_cycles(1_500, target_before_call, call_cost),

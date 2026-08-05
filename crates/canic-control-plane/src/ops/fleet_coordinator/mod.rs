@@ -33,10 +33,7 @@ use canic_core::{
         FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
         FleetSubnetRootStatus,
     },
-    dto::fleet_subnet_root::{
-        FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
-        FLEET_SUBNET_ROOT_DELETION_MAXIMUM_RETAINED_CYCLES,
-    },
+    dto::fleet_subnet_root::FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
     ids::{ComponentTopologyDigest, FleetSubnetRootReleaseSet, SubnetId},
 };
 use serde::Serialize;
@@ -462,7 +459,7 @@ impl FleetCoordinatorOps {
             request.operation_id,
             request.fleet_subnet_root,
         )?;
-        let expected_maximum = root_deletion_maximum_cycles(
+        let expected_target = root_deletion_retained_cycles_target(
             request.observed_idle_cycles_burned_per_day,
             request.observed_freezing_threshold_seconds,
         )?;
@@ -470,9 +467,8 @@ impl FleetCoordinatorOps {
             request.final_inventory_hash == removal.response.final_inventory.inventory_hash,
             request.store_deletion_hash != [0; 32],
             request.observed_cycles_before_reclamation > 0,
-            request.maximum_cycles_to_retain > 0,
-            request.maximum_cycles_to_retain <= FLEET_SUBNET_ROOT_DELETION_MAXIMUM_RETAINED_CYCLES,
-            request.maximum_cycles_to_retain == expected_maximum,
+            request.retained_cycles_target > 0,
+            request.retained_cycles_target == expected_target,
             request.observed_reserved_cycles == 0,
             request.prepared_at_ns >= removal.response.final_inventory.finalized_at_ns,
             recorded_at_ns >= request.prepared_at_ns,
@@ -538,7 +534,7 @@ impl FleetCoordinatorOps {
             request.expected_intent_hash == intent.intent_hash,
             request.observed_cycles_after_reclamation
                 <= intent.request.observed_cycles_before_reclamation,
-            request.observed_cycles_after_reclamation <= intent.request.maximum_cycles_to_retain,
+            request.observed_cycles_after_reclamation <= intent.request.retained_cycles_target,
             request.cycles_reclaimed_at_ns >= intent.request.prepared_at_ns,
             recorded_at_ns >= request.cycles_reclaimed_at_ns,
         ]
@@ -555,7 +551,7 @@ impl FleetCoordinatorOps {
             final_inventory_hash: intent.request.final_inventory_hash,
             store_deletion_hash: intent.request.store_deletion_hash,
             observed_cycles_before_reclamation: intent.request.observed_cycles_before_reclamation,
-            maximum_cycles_to_retain: intent.request.maximum_cycles_to_retain,
+            retained_cycles_target: intent.request.retained_cycles_target,
             observed_reserved_cycles: intent.request.observed_reserved_cycles,
             observed_idle_cycles_burned_per_day: intent.request.observed_idle_cycles_burned_per_day,
             observed_freezing_threshold_seconds: intent.request.observed_freezing_threshold_seconds,
@@ -1377,12 +1373,6 @@ fn validate_draining_publication_request(
     if draining.known_created_component_canisters > allocated_canisters {
         return Err("Fleet Subnet Root draining created canisters exceed allocated canisters");
     }
-    let managed_canisters = allocated_canisters
-        .checked_add(1)
-        .ok_or("Fleet Subnet Root draining managed canister count overflowed")?;
-    if managed_canisters > target.limits.maximum_managed_canisters {
-        return Err("Fleet Subnet Root draining managed canisters exceed the root limit");
-    }
     if draining.root_registry_encoded_bytes > target.limits.maximum_registry_bytes {
         return Err("Fleet Subnet Root draining Registry bytes exceed the root limit");
     }
@@ -1695,7 +1685,7 @@ fn canonical_controller_set(controllers: &[Principal]) -> bool {
     !controllers.is_empty() && controllers.windows(2).all(|pair| pair[0] < pair[1])
 }
 
-fn root_deletion_maximum_cycles(
+fn root_deletion_retained_cycles_target(
     idle_cycles_burned_per_day: u128,
     freezing_threshold_seconds: u128,
 ) -> Result<u128, InternalError> {
@@ -1718,7 +1708,7 @@ fn validate_root_deletion_execution_request(
     readiness: &FleetSubnetRootDeletionReadinessResponse,
     prepared_at_ns: u64,
 ) -> Result<(), InternalError> {
-    let expected_maximum = root_deletion_maximum_cycles(
+    let expected_target = root_deletion_retained_cycles_target(
         request.observed_idle_cycles_burned_per_day,
         request.observed_freezing_threshold_seconds,
     )?;
@@ -1728,14 +1718,13 @@ fn validate_root_deletion_execution_request(
         canonical_controller_set(&request.observed_controllers),
         request.observed_controllers.contains(&executor),
         request.observed_cycles_after_reclamation <= readiness.observed_cycles_before_reclamation,
-        request.observed_cycles_after_reclamation <= readiness.maximum_cycles_to_retain,
+        request.observed_cycles_after_reclamation <= readiness.retained_cycles_target,
         request.observed_reserved_cycles == readiness.observed_reserved_cycles,
         request.observed_idle_cycles_burned_per_day
             == readiness.observed_idle_cycles_burned_per_day,
         request.observed_freezing_threshold_seconds
             == readiness.observed_freezing_threshold_seconds,
-        expected_maximum == readiness.maximum_cycles_to_retain,
-        expected_maximum <= FLEET_SUBNET_ROOT_DELETION_MAXIMUM_RETAINED_CYCLES,
+        expected_target == readiness.retained_cycles_target,
         prepared_at_ns >= readiness.recorded_at_ns,
     ]
     .into_iter()
@@ -1813,7 +1802,7 @@ fn validate_root_deletion_readiness_intents(
         )?;
         let mut expected = response.clone();
         expected.intent_hash = [0; 32];
-        let expected_maximum = root_deletion_maximum_cycles(
+        let expected_target = root_deletion_retained_cycles_target(
             response.request.observed_idle_cycles_burned_per_day,
             response.request.observed_freezing_threshold_seconds,
         )?;
@@ -1823,10 +1812,8 @@ fn validate_root_deletion_readiness_intents(
                 == removal.response.final_inventory.inventory_hash,
             response.request.store_deletion_hash != [0; 32],
             response.request.observed_cycles_before_reclamation > 0,
-            response.request.maximum_cycles_to_retain > 0,
-            response.request.maximum_cycles_to_retain
-                <= FLEET_SUBNET_ROOT_DELETION_MAXIMUM_RETAINED_CYCLES,
-            response.request.maximum_cycles_to_retain == expected_maximum,
+            response.request.retained_cycles_target > 0,
+            response.request.retained_cycles_target == expected_target,
             response.request.observed_reserved_cycles == 0,
             response.request.prepared_at_ns >= removal.response.final_inventory.finalized_at_ns,
             response.recorded_at_ns >= response.request.prepared_at_ns,
@@ -1869,7 +1856,7 @@ fn validate_root_deletion_readiness_receipts(
             response.store_deletion_hash == intent.request.store_deletion_hash,
             response.observed_cycles_before_reclamation
                 == intent.request.observed_cycles_before_reclamation,
-            response.maximum_cycles_to_retain == intent.request.maximum_cycles_to_retain,
+            response.retained_cycles_target == intent.request.retained_cycles_target,
             response.observed_reserved_cycles == intent.request.observed_reserved_cycles,
             response.observed_idle_cycles_burned_per_day
                 == intent.request.observed_idle_cycles_burned_per_day,
@@ -1877,7 +1864,7 @@ fn validate_root_deletion_readiness_receipts(
                 == intent.request.observed_freezing_threshold_seconds,
             response.request.observed_cycles_after_reclamation
                 <= response.observed_cycles_before_reclamation,
-            response.request.observed_cycles_after_reclamation <= response.maximum_cycles_to_retain,
+            response.request.observed_cycles_after_reclamation <= response.retained_cycles_target,
             response.request.cycles_reclaimed_at_ns >= response.prepared_at_ns,
             response.recorded_at_ns >= response.request.cycles_reclaimed_at_ns,
             response.readiness_hash

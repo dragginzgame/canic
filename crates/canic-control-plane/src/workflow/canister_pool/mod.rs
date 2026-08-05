@@ -1,11 +1,8 @@
 //! Root-owned maintenance for prepaid empty Canisters on one physical Subnet.
 
-use crate::{
-    ops::{
-        canister_pool::CanisterPoolOps, component_registry::ComponentRegistryOps,
-        storage::state::root_wasm_store::RootWasmStoreStateOps,
-    },
-    workflow::deployment,
+use crate::ops::{
+    canister_pool::CanisterPoolOps, component_registry::ComponentRegistryOps,
+    storage::state::root_wasm_store::RootWasmStoreStateOps,
 };
 use canic_core::{
     api::timer::{TimerApi, TimerHandle},
@@ -18,7 +15,6 @@ use canic_core::{
             mgmt::{CanisterSettings, MgmtOps, UpdateSettingsArgs},
             nns::NnsRegistryOps,
         },
-        workflow::cost_guard::CostGuardWorkflow,
         workflow::runtime::fleet_activation::FleetActivationWorkflow,
     },
     dto::{
@@ -29,11 +25,9 @@ use canic_core::{
     },
     ids::{BuildNetwork, FleetSubnetCanisterPoolConfig, SubnetId},
 };
-use sha2::{Digest, Sha256};
 use std::{cell::RefCell, time::Duration};
 
 const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(30);
-const CREATION_OPERATION_DOMAIN: &[u8] = b"canic.root.canister_pool.creation.v1";
 const MAX_STATUS_PAGE_ENTRIES: u16 = 256;
 
 thread_local! {
@@ -102,7 +96,7 @@ pub async fn admin(command: PoolAdminCommand) -> Result<PoolAdminResponse, Inter
     }
 }
 
-/// Reconcile one bounded unit of reset or refill work.
+/// Reconcile one bounded reset or operator-replenishment observation.
 pub async fn maintain_once() -> Result<PoolAdminResponse, InternalError> {
     let status = FleetActivationWorkflow::status()?;
     if !matches!(
@@ -131,27 +125,26 @@ pub async fn maintain_once() -> Result<PoolAdminResponse, InternalError> {
         ));
     }
 
-    if let Some(created) = reconcile_recorded_creation(&config)? {
-        return Ok(PoolAdminResponse::Created {
-            canister_id: created,
-        });
-    }
     if root_is_draining()? {
         return Ok(PoolAdminResponse::MaintenancePaused {
-            reason: "Fleet Subnet Root draining has fenced proactive pool refill".to_string(),
+            reason: "Fleet Subnet Root draining has fenced pool replenishment".to_string(),
         });
     }
-    if CanisterPoolOps::ready_count() >= config.minimum_size {
-        return Ok(PoolAdminResponse::Maintained);
-    }
-    if CanisterPoolOps::asset_count() >= config.maximum_size {
-        return Err(InternalError::resource_exhausted(
-            "Canister pool is below minimum_size but maximum_size is exhausted",
-        ));
-    }
-    require_managed_creation_capacity()?;
+    Ok(replenishment_status(&config))
+}
 
-    create_empty_asset(&config).await
+fn replenishment_status(config: &FleetSubnetCanisterPoolConfig) -> PoolAdminResponse {
+    let ready = CanisterPoolOps::ready_count();
+    if ready >= config.minimum_size {
+        return PoolAdminResponse::Maintained;
+    }
+    PoolAdminResponse::ReplenishmentRequired {
+        ready,
+        minimum_size: config.minimum_size,
+        import_capacity: config
+            .maximum_size
+            .saturating_sub(CanisterPoolOps::pooled_asset_count()),
+    }
 }
 
 async fn import(canister_id: Principal) -> Result<PoolAdminResponse, InternalError> {
@@ -163,9 +156,6 @@ async fn import(canister_id: Principal) -> Result<PoolAdminResponse, InternalErr
     require_import_candidate(canister_id)?;
     require_ic_import_on_root_subnet(canister_id).await?;
     let config = pool_config()?;
-    if !CanisterPoolOps::contains_asset(canister_id) {
-        require_managed_creation_capacity()?;
-    }
     CanisterPoolOps::initialize_imports(&config, &[canister_id], IcOps::now_nanos())?;
     match reset_asset(canister_id, &config).await? {
         ResetAssetOutcome::Ready => Ok(PoolAdminResponse::Imported { canister_id }),
@@ -247,28 +237,10 @@ fn require_import_candidate(canister_id: Principal) -> Result<(), InternalError>
 pub async fn recycle(canister_id: Principal) -> Result<(), InternalError> {
     let config = pool_config()?;
     CanisterPoolOps::register_recycled_pending(canister_id, IcOps::now_nanos())?;
-    if CanisterPoolOps::asset_is_ready(canister_id)? {
+    if CanisterPoolOps::recycling_reset_is_terminal(canister_id)? {
         return Ok(());
     }
     let _ = reset_asset(canister_id, &config).await?;
-    Ok(())
-}
-
-/// Reject a new physical Canister when current root-owned assets exhaust the protected ceiling.
-pub fn require_managed_creation_capacity() -> Result<(), InternalError> {
-    let root = FleetActivationWorkflow::root_authority()?.binding;
-    let registry = ComponentRegistryOps::current().ok_or_else(|| {
-        InternalError::unavailable("root Component Registry authority has not been prepared")
-    })?;
-    let managed = 1_u32
-        .checked_add(registry.known_created_component_canisters)
-        .and_then(|count| count.checked_add(CanisterPoolOps::asset_count()))
-        .ok_or_else(|| InternalError::resource_exhausted("root managed-Canister count overflow"))?;
-    if managed >= root.limits.maximum_managed_canisters {
-        return Err(InternalError::resource_exhausted(
-            "root managed-Canister capacity is exhausted",
-        ));
-    }
     Ok(())
 }
 
@@ -335,68 +307,6 @@ async fn reset_asset(
     }
 }
 
-async fn create_empty_asset(
-    config: &FleetSubnetCanisterPoolConfig,
-) -> Result<PoolAdminResponse, InternalError> {
-    let root = IcOps::canister_self();
-    let operation_id = creation_operation_id(root, CanisterPoolOps::next_creation_sequence());
-    let permit = deployment::reserve_canister_pool_creation_cost_guard(&config.canister_cycles)?;
-    CanisterPoolOps::begin_creation(
-        operation_id,
-        config.canister_cycles.clone(),
-        permit.replay_settlement(),
-        IcOps::now_nanos(),
-    )
-    .map_err(|error| CostGuardWorkflow::recover_after_failure(&permit, IcOps::now_secs(), error))?;
-
-    let canister_id =
-        MgmtOps::create_canister_with_permit(&permit, vec![root], config.canister_cycles.clone())
-            .await
-            .map_err(|error| {
-                CostGuardWorkflow::recover_after_failure(&permit, IcOps::now_secs(), error)
-            })?;
-    CanisterPoolOps::mark_creation_created(operation_id, canister_id).map_err(|error| {
-        CostGuardWorkflow::complete_after_failure(&permit, IcOps::now_secs(), error)
-    })?;
-    CanisterPoolOps::register_created_ready(
-        config,
-        canister_id,
-        config.canister_cycles.clone(),
-        IcOps::now_nanos(),
-    )
-    .map_err(|error| {
-        CostGuardWorkflow::complete_after_failure(&permit, IcOps::now_secs(), error)
-    })?;
-    CostGuardWorkflow::complete(&permit, IcOps::now_secs())?;
-    CanisterPoolOps::commit_creation(operation_id)?;
-    Ok(PoolAdminResponse::Created { canister_id })
-}
-
-fn reconcile_recorded_creation(
-    config: &FleetSubnetCanisterPoolConfig,
-) -> Result<Option<Principal>, InternalError> {
-    let Some(creation) = CanisterPoolOps::pending_creation() else {
-        return Ok(None);
-    };
-    let Some(canister_id) = creation.canister_id else {
-        return Err(InternalError::unavailable(
-            "Canister pool creation effect is unresolved; inspect pool status before retrying",
-        ));
-    };
-    CanisterPoolOps::register_created_ready(
-        config,
-        canister_id,
-        creation.canister_cycles,
-        IcOps::now_nanos(),
-    )?;
-    CostGuardWorkflow::complete_replay_settlement(
-        &creation.cost_guard_settlement,
-        IcOps::now_secs(),
-    )?;
-    CanisterPoolOps::commit_creation(creation.operation_id)?;
-    Ok(Some(canister_id))
-}
-
 fn reset_admin_response(canister_id: Principal, outcome: ResetAssetOutcome) -> PoolAdminResponse {
     match outcome {
         ResetAssetOutcome::Ready => PoolAdminResponse::ResetReady { canister_id },
@@ -443,34 +353,10 @@ fn pool_config() -> Result<FleetSubnetCanisterPoolConfig, InternalError> {
         .canister_pool)
 }
 
-fn creation_operation_id(root: Principal, sequence: u64) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hasher.update(CREATION_OPERATION_DOMAIN);
-    hasher.update(root.as_slice());
-    hasher.update(sequence.to_be_bytes());
-    hasher.finalize().into()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn creation_operation_identity_binds_root_and_sequence() {
-        let root = Principal::from_slice(&[1; 29]);
-        assert_eq!(
-            creation_operation_id(root, 7),
-            creation_operation_id(root, 7)
-        );
-        assert_ne!(
-            creation_operation_id(root, 7),
-            creation_operation_id(root, 8)
-        );
-        assert_ne!(
-            creation_operation_id(root, 7),
-            creation_operation_id(Principal::from_slice(&[2; 29]), 7)
-        );
-    }
+    use crate::storage::stable::canister_pool::CanisterPoolStore;
 
     #[test]
     fn import_subnet_requires_exact_nns_routing_evidence() {
@@ -484,5 +370,24 @@ mod tests {
             validate_import_subnet(canister_id, expected, Some(Principal::from_slice(&[5; 29])))
                 .is_err()
         );
+    }
+
+    #[test]
+    fn empty_inventory_requires_operator_replenishment() {
+        CanisterPoolStore::clear();
+        let config = FleetSubnetCanisterPoolConfig {
+            minimum_size: 2,
+            maximum_size: 5,
+            canister_cycles: Cycles::new(1),
+        };
+        assert_eq!(
+            replenishment_status(&config),
+            PoolAdminResponse::ReplenishmentRequired {
+                ready: 0,
+                minimum_size: 2,
+                import_capacity: 5,
+            }
+        );
+        CanisterPoolStore::clear();
     }
 }

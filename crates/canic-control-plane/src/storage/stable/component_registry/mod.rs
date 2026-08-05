@@ -12,10 +12,7 @@ use canic_core::{
         DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, cell::Cell, memory::VirtualMemory,
         storable::Storable,
     },
-    dto::fleet_subnet_root::{
-        FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
-        FLEET_SUBNET_ROOT_DELETION_MAXIMUM_RETAINED_CYCLES,
-    },
+    dto::fleet_subnet_root::FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
     eager_static,
     role_contract::allocation::memory::control_plane::{
         ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_DRAINING_ID,
@@ -63,7 +60,7 @@ const COMPONENT_DRAINING_RECORD_MAX_BYTES: u32 = 8_192;
 const SECONDS_PER_DAY: u128 = 86_400;
 
 #[cfg(feature = "root-control-plane")]
-fn root_deletion_maximum_cycles(
+fn root_deletion_retained_cycles_target(
     idle_cycles_burned_per_day: u128,
     freezing_threshold_seconds: u128,
 ) -> Option<u128> {
@@ -390,7 +387,7 @@ pub struct RootFleetSubnetStoreDeletionIntentRecord {
     pub observed_module_hash: [u8; 32],
     pub observed_controllers: Vec<Principal>,
     pub observed_cycles_before_reclamation: u128,
-    pub maximum_cycles_to_retain: u128,
+    pub retained_cycles_target: u128,
     pub observed_cycles_after_reclamation: Option<u128>,
     pub cycles_reclaimed_at_ns: Option<u64>,
     pub prepared_at_ns: u64,
@@ -407,7 +404,7 @@ pub struct RootFleetSubnetStoreDeletionRecord {
     pub observed_module_hash: [u8; 32],
     pub observed_controllers: Vec<Principal>,
     pub observed_cycles_before_reclamation: u128,
-    pub maximum_cycles_to_retain: u128,
+    pub retained_cycles_target: u128,
     pub observed_cycles_after_reclamation: u128,
     pub cycles_reclaimed_at_ns: u64,
     pub prepared_at_ns: u64,
@@ -424,7 +421,7 @@ pub struct RootFleetSubnetDeletionPreparationIntentRecord {
     pub final_inventory_hash: [u8; 32],
     pub store_deletion_hash: [u8; 32],
     pub observed_cycles_before_reclamation: u128,
-    pub maximum_cycles_to_retain: u128,
+    pub retained_cycles_target: u128,
     pub observed_reserved_cycles: u128,
     pub observed_idle_cycles_burned_per_day: u128,
     pub observed_freezing_threshold_seconds: u128,
@@ -443,7 +440,7 @@ pub struct RootFleetSubnetDeletionPreparationRecord {
     pub final_inventory_hash: [u8; 32],
     pub store_deletion_hash: [u8; 32],
     pub observed_cycles_before_reclamation: u128,
-    pub maximum_cycles_to_retain: u128,
+    pub retained_cycles_target: u128,
     pub observed_reserved_cycles: u128,
     pub observed_idle_cycles_burned_per_day: u128,
     pub observed_freezing_threshold_seconds: u128,
@@ -763,7 +760,7 @@ impl RootFleetSubnetStoreDeletionIntentRecord {
             self.observed_module_hash == other.observed_module_hash,
             self.observed_controllers == other.observed_controllers,
             self.observed_cycles_before_reclamation == other.observed_cycles_before_reclamation,
-            self.maximum_cycles_to_retain == other.maximum_cycles_to_retain,
+            self.retained_cycles_target == other.retained_cycles_target,
             self.prepared_at_ns == other.prepared_at_ns,
         ]
         .into_iter()
@@ -781,7 +778,7 @@ impl RootFleetSubnetStoreDeletionIntentRecord {
             (None, None) => true,
             (Some(observed_after), Some(reclaimed_at_ns)) => [
                 observed_after <= self.observed_cycles_before_reclamation,
-                observed_after <= self.maximum_cycles_to_retain,
+                observed_after <= self.retained_cycles_target,
                 reclaimed_at_ns >= self.prepared_at_ns,
             ]
             .into_iter()
@@ -798,7 +795,7 @@ impl RootFleetSubnetStoreDeletionIntentRecord {
             self.observed_controllers
                 .contains(&draining.fleet_subnet_root),
             self.observed_cycles_before_reclamation > 0,
-            self.maximum_cycles_to_retain > 0,
+            self.retained_cycles_target > 0,
             cycle_reclamation_is_valid,
             self.prepared_at_ns >= finalization.completed_at_ns,
         ]
@@ -822,7 +819,7 @@ impl RootFleetSubnetStoreDeletionRecord {
             self.observed_module_hash == intent.observed_module_hash,
             self.observed_controllers == intent.observed_controllers,
             self.observed_cycles_before_reclamation == intent.observed_cycles_before_reclamation,
-            self.maximum_cycles_to_retain == intent.maximum_cycles_to_retain,
+            self.retained_cycles_target == intent.retained_cycles_target,
             Some(self.observed_cycles_after_reclamation)
                 == intent.observed_cycles_after_reclamation,
             Some(self.cycles_reclaimed_at_ns) == intent.cycles_reclaimed_at_ns,
@@ -845,7 +842,7 @@ impl RootFleetSubnetDeletionPreparationIntentRecord {
             self.final_inventory_hash == other.final_inventory_hash,
             self.store_deletion_hash == other.store_deletion_hash,
             self.observed_cycles_before_reclamation == other.observed_cycles_before_reclamation,
-            self.maximum_cycles_to_retain == other.maximum_cycles_to_retain,
+            self.retained_cycles_target == other.retained_cycles_target,
             self.observed_reserved_cycles == other.observed_reserved_cycles,
             self.observed_idle_cycles_burned_per_day == other.observed_idle_cycles_burned_per_day,
             self.observed_freezing_threshold_seconds == other.observed_freezing_threshold_seconds,
@@ -871,7 +868,7 @@ impl RootFleetSubnetDeletionPreparationIntentRecord {
             (Some(intent_hash), Some(observed_after), Some(reclaimed_at_ns)) => [
                 intent_hash != [0; 32],
                 observed_after <= self.observed_cycles_before_reclamation,
-                observed_after <= self.maximum_cycles_to_retain,
+                observed_after <= self.retained_cycles_target,
                 reclaimed_at_ns >= self.prepared_at_ns,
             ]
             .into_iter()
@@ -884,12 +881,11 @@ impl RootFleetSubnetDeletionPreparationIntentRecord {
             self.final_inventory_hash == inventory.inventory_hash,
             self.store_deletion_hash == deletion.deletion_hash,
             self.observed_cycles_before_reclamation > 0,
-            self.maximum_cycles_to_retain > 0,
-            self.maximum_cycles_to_retain <= FLEET_SUBNET_ROOT_DELETION_MAXIMUM_RETAINED_CYCLES,
-            root_deletion_maximum_cycles(
+            self.retained_cycles_target > 0,
+            root_deletion_retained_cycles_target(
                 self.observed_idle_cycles_burned_per_day,
                 self.observed_freezing_threshold_seconds,
-            ) == Some(self.maximum_cycles_to_retain),
+            ) == Some(self.retained_cycles_target),
             self.observed_reserved_cycles == 0,
             reclamation_is_valid,
             self.prepared_at_ns >= deletion.completed_at_ns,
@@ -912,7 +908,7 @@ impl RootFleetSubnetDeletionPreparationRecord {
             self.final_inventory_hash == intent.final_inventory_hash,
             self.store_deletion_hash == intent.store_deletion_hash,
             self.observed_cycles_before_reclamation == intent.observed_cycles_before_reclamation,
-            self.maximum_cycles_to_retain == intent.maximum_cycles_to_retain,
+            self.retained_cycles_target == intent.retained_cycles_target,
             self.observed_reserved_cycles == intent.observed_reserved_cycles,
             self.observed_idle_cycles_burned_per_day == intent.observed_idle_cycles_burned_per_day,
             self.observed_freezing_threshold_seconds == intent.observed_freezing_threshold_seconds,

@@ -89,7 +89,6 @@ fn release_set_for_build(build_byte: u8, manifest_byte: u8) -> FleetSubnetRootRe
 fn limits() -> FleetSubnetRootLimits {
     FleetSubnetRootLimits {
         maximum_component_instances: 4,
-        maximum_managed_canisters: 20,
         maximum_registry_bytes: 2_097_152,
         maximum_wasm_store_bytes: 40_000_000,
         canister_pool: crate::ids::FleetSubnetCanisterPoolConfig {

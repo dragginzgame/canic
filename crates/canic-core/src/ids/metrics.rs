@@ -52,7 +52,6 @@ impl AccessMetricKind {
 pub enum SystemMetricKind {
     CanisterCall,
     CanisterStatus,
-    CreateCanister,
     DeleteCanister,
     DepositCycles,
     InstallCode,

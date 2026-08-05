@@ -31,7 +31,7 @@ use crate::storage::stable::{
 };
 #[cfg(feature = "root-control-plane")]
 use canic_core::role_contract::allocation::memory::control_plane::{
-    ROOT_CANISTER_POOL_ASSETS_ID, ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID,
+    ROOT_CANISTER_INVENTORY_ASSETS_ID, ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID,
     ROOT_CANISTER_POOL_STATE_ID,
 };
 use canic_core::{
@@ -259,7 +259,7 @@ fn root_canister_pool_descriptor() -> StateAllocationDescriptor {
                 domain: "root_canister_pool_assets".to_string(),
                 version: 1,
                 storage: StateStorage::StableMemory,
-                memory_id: Some(ROOT_CANISTER_POOL_ASSETS_ID),
+                memory_id: Some(ROOT_CANISTER_INVENTORY_ASSETS_ID),
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: CanisterPoolAssetRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: CanisterPoolData::STATE_CONTRACT_NAME.to_string(),

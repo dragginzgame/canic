@@ -290,7 +290,7 @@ pub enum RecoveryReason {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum ExternalEffectDescriptor {
-    ManagementCreateCanister { command_kind: CommandKind },
+    RootCanisterProvision { command_kind: CommandKind },
     ManagementCall { canister: Principal, method: String },
     IcpTransfer { operation_id: OperationId },
 }
@@ -304,7 +304,7 @@ pub fn placement_receipt_requires_acknowledgement(
     *status == ReplayReceiptStatus::Committed
         && matches!(
             effect,
-            Some(ExternalEffectDescriptor::ManagementCreateCanister { command_kind })
+            Some(ExternalEffectDescriptor::RootCanisterProvision { command_kind })
                 if command_kind.as_str() == PLACEMENT_CHILD_REPLAY_COMMAND_KIND
         )
 }
