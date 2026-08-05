@@ -33,7 +33,7 @@ pub(in crate::release_set) fn attach_app_role_source(
     let config =
         parse_config_model(config_source).map_err(|source| AppConfigError::CoreConfig {
             operation: AppConfigOperation::AttachRole,
-            source,
+            source: Box::new(source),
         })?;
     let actual_app = config.app_id().as_str();
     if actual_app != expected_app {
@@ -100,7 +100,7 @@ pub(in crate::release_set) fn attach_app_role_source(
 
     parse_config_model(&source).map_err(|source| AppConfigError::CoreConfig {
         operation: AppConfigOperation::AttachRole,
-        source,
+        source: Box::new(source),
     })?;
 
     Ok(AttachedAppRoleSource {

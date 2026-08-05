@@ -68,8 +68,9 @@ fn public_projection_preserves_config_path_and_core_parse_source() {
                 *source,
                 AppConfigError::CoreConfig {
                     operation: AppConfigOperation::Project,
-                    source: ConfigError::CannotParseToml { .. },
+                    source,
                 }
+                    if matches!(*source, ConfigError::CannotParseToml { .. })
             ));
         }
         other => panic!("expected typed config parse error, got {other:?}"),
@@ -102,7 +103,7 @@ fn public_projection_preserves_typed_nested_unknown_field() {
         panic!("expected core-config boundary");
     };
     assert_eq!(operation, AppConfigOperation::Project);
-    let ConfigError::CannotParseToml { issue, .. } = source else {
+    let ConfigError::CannotParseToml { issue, .. } = *source else {
         panic!("expected TOML parse boundary");
     };
     assert_eq!(

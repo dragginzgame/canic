@@ -55,7 +55,7 @@ impl AppConfigSnapshot {
         let config = parse_config_model(&source)
             .map_err(|source| AppConfigError::CoreConfig {
                 operation: AppConfigOperation::Project,
-                source,
+                source: Box::new(source),
             })
             .map_err(|error| error.at_config_path(path))?;
         let component_topology = config
@@ -63,7 +63,7 @@ impl AppConfigSnapshot {
             .map_err(canic_core::bootstrap::ConfigError::from)
             .map_err(|source| AppConfigError::CoreConfig {
                 operation: AppConfigOperation::Project,
-                source,
+                source: Box::new(source),
             })
             .map_err(|error| error.at_config_path(path))?;
         Ok(Self {

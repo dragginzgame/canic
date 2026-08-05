@@ -35,7 +35,7 @@ pub(in crate::release_set) fn rename_app_role_source(
     let config =
         parse_config_model(config_source).map_err(|source| AppConfigError::CoreConfig {
             operation: AppConfigOperation::RenameRole,
-            source,
+            source: Box::new(source),
         })?;
     let actual_app = config.app_id().as_str();
     if actual_app != expected_app {
@@ -69,7 +69,7 @@ pub(in crate::release_set) fn rename_app_role_source(
     let source = rename_config_role_references(config_source, old_role, new_role)?;
     parse_config_model(&source).map_err(|source| AppConfigError::CoreConfig {
         operation: AppConfigOperation::RenameRole,
-        source,
+        source: Box::new(source),
     })?;
 
     let (package_manifest, package_source, package_manifest_note) =
