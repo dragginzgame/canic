@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.1` adds strict bounded Component Group declarations and canonical
+  occurrence-preserving nested-group flattening.
+
 - `0.101.0` begins the reinstall-only Component Group model with bounded
   group, deployment, placement, member-path and Fleet-service identities.
 

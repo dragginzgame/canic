@@ -1,0 +1,329 @@
+//! Focused proofs for bounded Component Group graph compilation and flattening.
+
+use super::*;
+use crate::config::{Config, ConfigError};
+use std::fmt::Write as _;
+
+const CONFIG_PREFIX: &str = r#"
+[app]
+name = "composition"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.a]
+kind = "canister"
+package = "a"
+
+[roles.b]
+kind = "canister"
+package = "b"
+
+[roles.c]
+kind = "canister"
+package = "c"
+
+[component_specs.a]
+component_role = "a"
+maximum_instances = 8
+
+[component_specs.b]
+component_role = "b"
+maximum_instances = 8
+
+[component_specs.c]
+component_role = "c"
+maximum_instances = 8
+"#;
+
+fn parse(source: &str) -> Result<ComponentGroupTopology, ConfigError> {
+    let config = Config::parse_toml(&format!("{CONFIG_PREFIX}\n{source}"))?;
+    Ok(config.compile_component_group_topology()?)
+}
+
+fn group(value: &str) -> ComponentGroupSpecId {
+    value.parse().expect("Component Group Spec ID")
+}
+
+fn nested_group_source(path_segments: usize) -> String {
+    assert!(path_segments > 0, "test path must contain a member");
+    let mut source = String::new();
+    for index in 0..path_segments {
+        if index + 1 == path_segments {
+            write!(
+                &mut source,
+                "[component_groups.g{index}.components.a]\ncomponent_spec = \"a\"\n"
+            )
+            .expect("write depth fixture");
+        } else {
+            let next = index + 1;
+            write!(
+                &mut source,
+                "[component_groups.g{index}.groups.g{next}]\ncomponent_group = \"g{next}\"\n"
+            )
+            .expect("write depth fixture");
+        }
+    }
+    source
+}
+
+fn repeated_component_group_source(member_count: usize) -> String {
+    let mut source = String::new();
+    for index in 0..member_count {
+        write!(
+            &mut source,
+            "[component_groups.repeated.components.m{index:03}]\ncomponent_spec = \"a\"\n"
+        )
+        .expect("write member-count fixture");
+    }
+    source
+}
+
+#[test]
+fn nested_groups_flatten_occurrence_by_occurrence_in_canonical_path_order() {
+    let topology = parse(
+        r#"
+[component_groups.group_two.components.c]
+component_spec = "c"
+
+[component_groups.group_one.components.a]
+component_spec = "a"
+
+[component_groups.group_one.components.b]
+component_spec = "b"
+
+[component_groups.group_one.groups.group_two]
+component_group = "group_two"
+"#,
+    )
+    .expect("valid nested groups");
+    let group_one = topology.flatten(&group("group_one")).expect("group one");
+    let group_two = topology.flatten(&group("group_two")).expect("group two");
+
+    assert_eq!(
+        group_one
+            .components
+            .iter()
+            .map(|member| {
+                (
+                    member
+                        .member_path
+                        .as_slice()
+                        .iter()
+                        .map(ComponentGroupMemberId::as_str)
+                        .collect::<Vec<_>>(),
+                    member.component_spec.as_str(),
+                )
+            })
+            .collect::<Vec<_>>(),
+        vec![
+            (vec!["a"], "a"),
+            (vec!["b"], "b"),
+            (vec!["group_two", "c"], "c"),
+        ]
+    );
+    assert_eq!(group_two.components.len(), 1);
+
+    let independently_selected = group_one
+        .components
+        .iter()
+        .chain(group_two.components.iter())
+        .filter(|member| member.component_spec.as_str() == "c")
+        .count();
+    assert_eq!(independently_selected, 2);
+}
+
+#[test]
+fn equal_component_specs_on_distinct_paths_are_not_deduplicated() {
+    let topology = parse(
+        r#"
+[component_groups.repeated.components.left]
+component_spec = "a"
+
+[component_groups.repeated.components.right]
+component_spec = "a"
+"#,
+    )
+    .expect("valid repeated Component Spec");
+    let flattened = topology.flatten(&group("repeated")).expect("flatten group");
+
+    assert_eq!(flattened.components.len(), 2);
+    assert_eq!(
+        flattened
+            .components
+            .iter()
+            .map(|member| member.member_path.as_slice()[0].as_str())
+            .collect::<Vec<_>>(),
+        vec!["left", "right"]
+    );
+    assert!(
+        flattened
+            .components
+            .iter()
+            .all(|member| member.component_spec.as_str() == "a")
+    );
+}
+
+#[test]
+fn canonical_graph_bytes_ignore_source_table_order() {
+    let left = parse(
+        r#"
+[component_groups.cell.components.b]
+component_spec = "b"
+[component_groups.cell.components.a]
+component_spec = "a"
+"#,
+    )
+    .expect("left graph");
+    let right = parse(
+        r#"
+[component_groups.cell.components.a]
+component_spec = "a"
+[component_groups.cell.components.b]
+component_spec = "b"
+"#,
+    )
+    .expect("right graph");
+
+    assert_eq!(left, right);
+    assert_eq!(
+        left.canonical_bytes().expect("left canonical bytes"),
+        right.canonical_bytes().expect("right canonical bytes")
+    );
+}
+
+#[test]
+fn component_group_graph_has_exact_schema_one_golden_bytes() {
+    let topology = parse(
+        r#"
+[component_groups.cell.components.a]
+component_spec = "a"
+"#,
+    )
+    .expect("golden graph");
+    let mut expected = Vec::new();
+    expected.extend_from_slice(&30_u64.to_be_bytes());
+    expected.extend_from_slice(b"canic/component-group-graph/v1");
+    expected.extend_from_slice(&1_u32.to_be_bytes());
+    expected.extend_from_slice(&1_u64.to_be_bytes());
+    expected.extend_from_slice(&4_u64.to_be_bytes());
+    expected.extend_from_slice(b"cell");
+    expected.extend_from_slice(&1_u64.to_be_bytes());
+    expected.push(0);
+    expected.extend_from_slice(&1_u64.to_be_bytes());
+    expected.extend_from_slice(b"a");
+    expected.extend_from_slice(&1_u64.to_be_bytes());
+    expected.extend_from_slice(b"a");
+
+    assert_eq!(
+        topology.canonical_bytes().expect("canonical bytes"),
+        expected
+    );
+}
+
+#[test]
+fn missing_references_duplicate_names_and_cycles_reject() {
+    let unknown_spec = parse(
+        r#"
+[component_groups.cell.components.unknown]
+component_spec = "unknown"
+"#,
+    )
+    .expect_err("unknown Component Spec must reject");
+    assert!(matches!(
+        unknown_spec,
+        ConfigError::ComponentGroupTopology(
+            ComponentGroupTopologyError::UnknownComponentSpec { .. }
+        )
+    ));
+
+    let unknown_group = parse(
+        r#"
+[component_groups.cell.groups.missing]
+component_group = "missing"
+"#,
+    )
+    .expect_err("unknown included Component Group must reject");
+    assert!(matches!(
+        unknown_group,
+        ConfigError::ComponentGroupTopology(
+            ComponentGroupTopologyError::UnknownIncludedGroup { .. }
+        )
+    ));
+
+    let duplicate_member = parse(
+        r#"
+[component_groups.cell.components.shared]
+component_spec = "a"
+[component_groups.cell.groups.shared]
+component_group = "other"
+[component_groups.other.components.a]
+component_spec = "a"
+"#,
+    )
+    .expect_err("duplicate member must reject");
+    assert!(matches!(
+        duplicate_member,
+        ConfigError::ComponentGroupTopology(ComponentGroupTopologyError::DuplicateMember { .. })
+    ));
+
+    let cycle = parse(
+        r#"
+[component_groups.one.groups.two]
+component_group = "two"
+[component_groups.two.groups.one]
+component_group = "one"
+"#,
+    )
+    .expect_err("inclusion cycle must reject");
+    assert!(matches!(
+        cycle,
+        ConfigError::ComponentGroupTopology(ComponentGroupTopologyError::InclusionCycle { .. })
+    ));
+}
+
+#[test]
+fn strict_schema_and_member_path_depth_fail_before_use() {
+    let unknown_field = Config::parse_toml(&format!(
+        "{CONFIG_PREFIX}\n{}",
+        r#"
+[component_groups.cell.components.a]
+component_spec = "a"
+runtime_parent = true
+"#
+    ))
+    .expect_err("unknown group member field must reject");
+    assert!(matches!(unknown_field, ConfigError::CannotParseToml { .. }));
+
+    let maximum_depth = crate::ids::COMPONENT_GROUP_MEMBER_PATH_MAX_SEGMENTS;
+    parse(&nested_group_source(maximum_depth)).expect("maximum inclusion depth must compile");
+    let excessive_depth = parse(&nested_group_source(maximum_depth + 1))
+        .expect_err("first excessive inclusion depth must reject");
+    assert!(matches!(
+        excessive_depth,
+        ConfigError::ComponentGroupTopology(ComponentGroupTopologyError::InvalidMemberPath { .. })
+    ));
+}
+
+#[test]
+fn direct_member_bound_accepts_the_limit_and_rejects_its_first_excess() {
+    parse(&repeated_component_group_source(
+        MAX_COMPONENT_GROUP_MEMBERS,
+    ))
+    .expect("maximum direct members must compile");
+    let excessive = parse(&repeated_component_group_source(
+        MAX_COMPONENT_GROUP_MEMBERS + 1,
+    ))
+    .expect_err("first excessive direct member must reject");
+
+    assert!(matches!(
+        excessive,
+        ConfigError::ComponentGroupTopology(ComponentGroupTopologyError::MemberBoundExceeded {
+            actual,
+            maximum,
+            ..
+        }) if actual == MAX_COMPONENT_GROUP_MEMBERS + 1
+            && maximum == MAX_COMPONENT_GROUP_MEMBERS
+    ));
+}

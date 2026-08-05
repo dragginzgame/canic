@@ -4,11 +4,11 @@ Date: 2026-08-05
 
 ## Status
 
-- State: implementation started with the bounded layer-neutral identity
-  vocabulary; composition compilation and every effect-bearing surface remain
-  unimplemented.
+- State: implementation has the bounded layer-neutral identity vocabulary and
+  strict configuration-only Component Group declaration compiler; deployment
+  compilation and every effect-bearing surface remain unimplemented.
 - Release boundary: reinstall only.
-- Implementation started: yes; open `0.101.0` draft.
+- Implementation started: yes; `0.101.0` is released and `0.101.1` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -105,10 +105,11 @@ Fleet policy writer.
 - [x] Add bounded `ComponentGroupSpecId`, `ComponentGroupDeploymentId`,
   `ComponentGroupPlacementId`, `FleetServiceId`, member IDs and canonical
   member paths.
-- [ ] Compile nested Component Group declarations as a bounded acyclic graph.
+- [x] Compile nested Component Group declarations as a bounded acyclic graph.
 - [ ] Flatten every deployment completely before planning.
 - [ ] Preserve each distinct member-path occurrence and distinguish inclusion
-  from independent deployment.
+  from independent deployment. Declaration flattening preserves occurrences;
+  the deployment distinction remains open.
 - [ ] Resolve every Fleet-service leaf through exactly one typed purpose
   assignment on its deployment/include/leaf path.
 - [ ] Reject unused purpose assignments and orphan service occurrences or

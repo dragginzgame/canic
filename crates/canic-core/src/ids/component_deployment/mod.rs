@@ -11,7 +11,8 @@ use std::{borrow::Borrow, fmt, str::FromStr};
 use thiserror::Error as ThisError;
 
 const COMPONENT_DEPLOYMENT_NAME_MAX_BYTES: usize = 40;
-const COMPONENT_GROUP_MEMBER_PATH_MAX_SEGMENTS: usize = 16;
+/// Maximum member segments in one canonical flattened Component Group path.
+pub const COMPONENT_GROUP_MEMBER_PATH_MAX_SEGMENTS: usize = 16;
 const COMPONENT_GROUP_MEMBER_PATH_MAX_BYTES: usize =
     8 + COMPONENT_GROUP_MEMBER_PATH_MAX_SEGMENTS * (8 + COMPONENT_DEPLOYMENT_NAME_MAX_BYTES);
 

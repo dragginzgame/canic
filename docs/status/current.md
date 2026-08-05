@@ -14,9 +14,18 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.103`.
-- The latest published release is `v0.100.103` at
-  `c9301f058eeab4257bd258330f4681fd61d1aaa7`.
+- The workspace package version is `0.101.0`.
+- The latest published release is `v0.101.0` at
+  `f96cdb5cae48467f6199e28cf8982304316b92c8`.
+- Open `0.101.1` adds the strict checked-in Component Group declaration
+  grammar and compiles it into a bounded canonical acyclic graph. Nested
+  inclusion preserves every distinct member-path occurrence without
+  deduplicating equal Component Specs or introducing runtime parentage.
+  Deployment selection, purpose, labels, placement and effects remain outside
+  this batch.
+- Released `0.101.0` begins the reinstall-only Component Group model with
+  bounded canonical group, deployment, placement, member-path and
+  Fleet-service identities. It adds no configuration or runtime authority.
 - Released `0.100.103` removes root-autonomous raw management
   creation and Component paid fallback, while restoring bounded IC-mainnet
   automatic pool refill through the canonical Cycles Ledger. One durable exact
@@ -79,11 +88,6 @@ Historical detail is archived at:
   implementation must freeze a measured finite scale envelope and does not
   claim ten-thousand-Subnet qualification; later partitioned membership and
   Worker distribution remain the long-horizon direction.
-- Open `0.101.0` begins that reinstall-only implementation with bounded
-  canonical Component Group Spec, deployment, placement, member-path and
-  Fleet-service identities. It adds no configuration compiler, placement
-  authority, stable runtime state or effect path yet; the measured finite
-  envelope remains a gate before those surfaces.
 - Released `0.100.99` removes the final root-triggered Store build side effect.
   Installation preparation builds the Store as an independent infrastructure
   role, and the passing post-extraction measurement records exact replacement
@@ -2201,10 +2205,11 @@ First primary results:
 
 ## Next Action
 
-The 0.100 closeout correction is published at immutable `v0.100.103`.
-Continue 0.101 Slice 1 by adding the strict Component Group declaration
-grammar and acyclic occurrence-preserving flattening compiler without
-reopening the 0.100 infrastructure or pool boundaries.
+The first 0.101 identity contract is published at immutable `v0.101.0`.
+Continue 0.101 Slice 1 by adding strict deployment declarations and flattening
+each independently selected deployment before purpose, limit and placement
+resolution. Keep the declaration graph configuration-only and do not reopen
+the 0.100 infrastructure or pool boundaries.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.
