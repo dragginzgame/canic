@@ -1,12 +1,14 @@
 # Canic 0.101 Implementation Status
 
-Date: 2026-08-04
+Date: 2026-08-05
 
 ## Status
 
-- State: proposed.
+- State: implementation started with the bounded layer-neutral identity
+  vocabulary; composition compilation and every effect-bearing surface remain
+  unimplemented.
 - Release boundary: reinstall only.
-- Implementation started: no.
+- Implementation started: yes; open `0.101.0` draft.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -100,7 +102,7 @@ Fleet policy writer.
 
 ## Slice 1 — Composition and Purpose Contracts
 
-- [ ] Add bounded `ComponentGroupSpecId`, `ComponentGroupDeploymentId`,
+- [x] Add bounded `ComponentGroupSpecId`, `ComponentGroupDeploymentId`,
   `ComponentGroupPlacementId`, `FleetServiceId`, member IDs and canonical
   member paths.
 - [ ] Compile nested Component Group declarations as a bounded acyclic graph.

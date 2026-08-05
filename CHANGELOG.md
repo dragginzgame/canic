@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.101.x] - 2026-08-05 - Composable Component Deployment
+
+Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
+
+- `0.101.0` begins the reinstall-only Component Group model with bounded
+  group, deployment, placement, member-path and Fleet-service identities.
+
 ## [0.100.x] - 2026-07-25 - Multi-Subnet Fleet Coordination
 
 Detailed patch breakdown: [docs/changelog/0.100.md](docs/changelog/0.100.md)

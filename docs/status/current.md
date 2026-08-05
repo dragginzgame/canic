@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.102`.
-- The latest published release is `v0.100.102` at
-  `4e6966cf14db0915235ec016b88356590c1cfbf4`.
-- Open `0.100.103` closeout draft removes root-autonomous raw management
+- The workspace package version is `0.100.103`.
+- The latest published release is `v0.100.103` at
+  `c9301f058eeab4257bd258330f4681fd61d1aaa7`.
+- Released `0.100.103` removes root-autonomous raw management
   creation and Component paid fallback, while restoring bounded IC-mainnet
   automatic pool refill through the canonical Cycles Ledger. One durable exact
   request targets the protected root Subnet and controller; success or a
@@ -79,6 +79,11 @@ Historical detail is archived at:
   implementation must freeze a measured finite scale envelope and does not
   claim ten-thousand-Subnet qualification; later partitioned membership and
   Worker distribution remain the long-horizon direction.
+- Open `0.101.0` begins that reinstall-only implementation with bounded
+  canonical Component Group Spec, deployment, placement, member-path and
+  Fleet-service identities. It adds no configuration compiler, placement
+  authority, stable runtime state or effect path yet; the measured finite
+  envelope remains a gate before those surfaces.
 - Released `0.100.99` removes the final root-triggered Store build side effect.
   Installation preparation builds the Store as an independent infrastructure
   role, and the passing post-extraction measurement records exact replacement
@@ -2196,12 +2201,14 @@ First primary results:
 
 ## Next Action
 
-Run the maintainer-owned full release gate and publish the open 0.100 closeout
-correction before beginning 0.101.
+The 0.100 closeout correction is published at immutable `v0.100.103`.
+Continue 0.101 Slice 1 by adding the strict Component Group declaration
+grammar and acyclic occurrence-preserving flattening compiler without
+reopening the 0.100 infrastructure or pool boundaries.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.
-The open correction has a fresh PocketIC proof of the exact mainnet-qualified
+The released correction has a fresh PocketIC proof of the exact mainnet-qualified
 Ledger request, returned-principal adoption, reset and `Ready` transition;
 funding and execution against the live canonical Ledger remain release-operator
 validation.

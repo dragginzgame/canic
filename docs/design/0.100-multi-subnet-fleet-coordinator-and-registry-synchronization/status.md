@@ -2,8 +2,8 @@
 
 Date: 2026-08-05
 
-- State: closeout correction implemented; maintainer release gate and publish
-  remain. The independent sibling Store build, installation/adoption,
+- State: closed and published at immutable `v0.100.103`. The independent
+  sibling Store build, installation/adoption,
   post-extraction Wasm boundary and disposable IC mainnet
   physical-deletion/replay proof pass. The open correction replaces raw
   root-side creation with a PocketIC-proved canonical Cycles Ledger refill and
@@ -11,12 +11,12 @@ Date: 2026-08-05
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.102`.
-- Latest published release: `v0.100.102` at
-  `4e6966cf14db0915235ec016b88356590c1cfbf4`.
+- Workspace package version: `0.100.103`.
+- Latest published release: `v0.100.103` at
+  `c9301f058eeab4257bd258330f4681fd61d1aaa7`.
 - Published proof release: `0.100.102`; it completed the bounded mainnet proof
   and the release-build, retry and reclamation fixes exposed by its rehearsals.
-- Open patch draft: `0.100.103` hard-cuts raw runtime `create_canister` and
+- Final closeout release: `0.100.103` hard-cuts raw runtime `create_canister` and
   Component paid fallback; restores bounded IC-mainnet automatic pool refill
   through one durable canonical Cycles Ledger request; unifies Store, pool,
   workload and deletion-pending principals in one exclusive physical
@@ -1274,11 +1274,13 @@ arbitrary artifact fallback authority.
 
 ## Next Action
 
-Run the maintainer-owned full release gate and publish the open 0.100 closeout
-patch before beginning 0.101. Focused checks prove imported-asset provisioning,
-exclusive Store/pool/workload/recycling accounting, Registry-ordered recycling,
-root draining and typed physical absence without restoring runtime Canister
-creation, an aggregate physical-Canister maximum or an absolute balance cap.
+0.100 is closed at immutable `v0.100.103`. Begin 0.101 Slice 1 without
+reopening its infrastructure, pool, Registry or dynamic Component-tree
+boundaries. Focused checks prove imported and automatically created asset
+provisioning, exclusive Store/pool/workload/recycling accounting,
+Registry-ordered recycling, root draining and typed physical absence without
+restoring runtime raw Canister creation, an aggregate physical-Canister
+maximum or an absolute balance cap.
 The maintainer-owned `canic-0-100-proof-9` run remains the evidence for the
 independent Store/root physical-deletion and terminal replay journey; it is not
 evidence for the corrected pool architecture.

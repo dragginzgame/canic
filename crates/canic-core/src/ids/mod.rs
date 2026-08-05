@@ -9,6 +9,7 @@ mod build_network;
 mod canister;
 pub mod capability;
 mod component;
+mod component_deployment;
 mod endpoint;
 mod fleet;
 mod fleet_topology;
@@ -25,6 +26,11 @@ pub use canister::CanisterRole;
 pub use capability as cap;
 pub use component::{
     ComponentInstanceId, ComponentInstanceIdParseError, ComponentSpecId, ComponentSpecIdParseError,
+};
+pub use component_deployment::{
+    ComponentDeploymentIdParseError, ComponentGroupDeploymentId, ComponentGroupMemberId,
+    ComponentGroupMemberPath, ComponentGroupMemberPathError, ComponentGroupPlacementId,
+    ComponentGroupSpecId, FleetServiceId,
 };
 pub use endpoint::{EndpointCall, EndpointCallKind, EndpointId};
 pub use fleet::{
