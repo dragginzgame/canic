@@ -230,7 +230,7 @@ pub enum AppConfigError {
     CoreConfig {
         operation: AppConfigOperation,
         #[source]
-        source: ConfigError,
+        source: Box<ConfigError>,
     },
 
     #[error("{declaration}")]
