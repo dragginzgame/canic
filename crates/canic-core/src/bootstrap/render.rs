@@ -10,7 +10,8 @@ use crate::{
     cdk::candid::Principal,
     config::schema::{
         AppConfig, AuthConfig, CanisterAuthConfig, ChainKeyRootProofConfig, ComponentChildConfig,
-        ComponentChildKind, ComponentLimitsConfig, ComponentProvisioningGrantConfig,
+        ComponentChildKind, ComponentGroupComponentConfig, ComponentGroupIncludeConfig,
+        ComponentGroupSpecConfig, ComponentLimitsConfig, ComponentProvisioningGrantConfig,
         ComponentSpawnGrantConfig, ComponentSpecConfig, ConfigModel, CyclesFundingBudgetConfig,
         CyclesFundingPolicyConfig, DelegatedTokenConfig, DiagnosticsCanisterConfig, FleetInitMode,
         IndexConfig, IndexPool, LogConfig, MetricsCanisterConfig, MetricsProfile,
@@ -18,7 +19,10 @@ use crate::{
         ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
         StandardsCanisterConfig, TopupPolicy, Whitelist,
     },
-    ids::{AppId, BuildNetwork, CanisterRole, ComponentSpecId},
+    ids::{
+        AppId, BuildNetwork, CanisterRole, ComponentGroupMemberId, ComponentGroupSpecId,
+        ComponentSpecId,
+    },
 };
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -49,6 +53,11 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
         render_component_spec_id,
         render_component_spec_config,
     );
+    let component_groups = render_btree_map(
+        config.component_groups.iter(),
+        render_component_group_spec_id,
+        render_component_group_spec_config,
+    );
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ConfigModel {
             controllers: #controllers,
@@ -58,6 +67,7 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
             app: #app,
             roles: #roles,
             component_specs: #component_specs,
+            component_groups: #component_groups,
         }
     }
 }
@@ -113,6 +123,67 @@ fn render_component_spec_id(component_spec: &ComponentSpecId) -> TokenStream {
         ::canic::__internal::core::bootstrap::compiled::ComponentSpecId::try_from(
             ::std::string::String::from(#value)
         ).expect("embedded Component Spec ID was validated at build time")
+    }
+}
+
+// Render one validated Component Group Spec identifier.
+fn render_component_group_spec_id(component_group: &ComponentGroupSpecId) -> TokenStream {
+    let value = component_group.as_str();
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentGroupSpecId::try_from(
+            ::std::string::String::from(#value)
+        ).expect("embedded Component Group Spec ID was validated at build time")
+    }
+}
+
+// Render one validated Component Group member identifier.
+fn render_component_group_member_id(member: &ComponentGroupMemberId) -> TokenStream {
+    let value = member.as_str();
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentGroupMemberId::try_from(
+            ::std::string::String::from(#value)
+        ).expect("embedded Component Group member ID was validated at build time")
+    }
+}
+
+// Render one strict checked-in Component Group declaration.
+fn render_component_group_spec_config(config: &ComponentGroupSpecConfig) -> TokenStream {
+    let components = render_btree_map(
+        config.components.iter(),
+        render_component_group_member_id,
+        render_component_group_component_config,
+    );
+    let groups = render_btree_map(
+        config.groups.iter(),
+        render_component_group_member_id,
+        render_component_group_include_config,
+    );
+
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentGroupSpecConfig {
+            components: #components,
+            groups: #groups,
+        }
+    }
+}
+
+// Render one direct Component occurrence in a checked-in group.
+fn render_component_group_component_config(config: &ComponentGroupComponentConfig) -> TokenStream {
+    let component_spec = render_component_spec_id(&config.component_spec);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentGroupComponentConfig {
+            component_spec: #component_spec,
+        }
+    }
+}
+
+// Render one configuration-only Component Group inclusion edge.
+fn render_component_group_include_config(config: &ComponentGroupIncludeConfig) -> TokenStream {
+    let component_group = render_component_group_spec_id(&config.component_group);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentGroupIncludeConfig {
+            component_group: #component_group,
+        }
     }
 }
 
@@ -902,7 +973,7 @@ mod tests {
     }
 
     #[test]
-    fn render_topology_v3_multilevel_children_and_provisioning_grants() {
+    fn render_component_topology_and_nested_group_declarations() {
         let config = crate::config::Config::parse_toml(
             r#"
 [app]
@@ -946,13 +1017,29 @@ maximum_instances_per_requester_per_root = 100
 [component_specs.instance]
 component_role = "instance"
 maximum_instances = 100
+
+[component_groups.shared.components.hub]
+component_spec = "hub"
+
+[component_groups.cell.components.instance]
+component_spec = "instance"
+
+[component_groups.cell.groups.shared]
+component_group = "shared"
 "#,
         )
-        .expect("valid topology v3 config");
+        .expect("valid Component and Component Group topology config");
         let rendered = config_model(&config);
 
         assert!(rendered.contains("ComponentProvisioningGrantConfig"));
         assert!(rendered.contains("ComponentSpawnGrantConfig"));
+        assert!(rendered.contains("ComponentGroupSpecConfig"));
+        assert!(rendered.contains("ComponentGroupComponentConfig"));
+        assert!(rendered.contains("ComponentGroupIncludeConfig"));
+        assert!(rendered.contains("embedded Component Group Spec ID was validated at build time"));
+        assert!(
+            rendered.contains("embedded Component Group member ID was validated at build time")
+        );
         assert!(rendered.contains("maximum_instances_per_requester_per_root : 100_u32"));
         assert!(rendered.contains("maximum_instances_per_parent : 100_u32"));
         assert!(!rendered.contains("initial_instances"));

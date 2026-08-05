@@ -4,6 +4,7 @@
 //! Does not own: schema field definitions, validation rules, or endpoint DTOs.
 //! Boundary: bootstrap installs validated config here before ops/workflow reads it.
 
+mod component_group;
 pub mod schema;
 mod topology;
 #[cfg(any(not(target_arch = "wasm32"), test))]
@@ -14,6 +15,12 @@ use schema::ConfigSchemaError;
 use std::{cell::RefCell, sync::Arc};
 use thiserror::Error as ThisError;
 
+pub use component_group::{
+    ComponentGroupMember, ComponentGroupSpec, ComponentGroupTopology, ComponentGroupTopologyError,
+    FlattenedComponentGroup, FlattenedComponentGroupMember, MAX_COMPONENT_GROUP_DECLARED_MEMBERS,
+    MAX_COMPONENT_GROUP_FLATTENED_MEMBERS, MAX_COMPONENT_GROUP_GRAPH_CANONICAL_BYTES,
+    MAX_COMPONENT_GROUP_INCLUSIONS, MAX_COMPONENT_GROUP_MEMBERS, MAX_COMPONENT_GROUP_SPECS,
+};
 pub use schema::ConfigModel;
 #[cfg(any(not(target_arch = "wasm32"), test))]
 use schema::Validate;
@@ -63,6 +70,10 @@ pub enum ConfigError {
     /// Validated declarations could not compile into canonical topology.
     #[error(transparent)]
     ComponentTopology(#[from] ComponentTopologyError),
+
+    /// Validated Component Group declarations could not compile canonically.
+    #[error(transparent)]
+    ComponentGroupTopology(#[from] ComponentGroupTopologyError),
 
     /// Runtime root-key injection failed during local/test bootstrap.
     #[error("runtime IC root key error: {0}")]
@@ -160,6 +171,7 @@ impl Config {
 
         config.validate().map_err(ConfigError::from)?;
         config.compile_component_topology()?;
+        config.compile_component_group_topology()?;
         Ok(config)
     }
 
@@ -169,6 +181,7 @@ impl Config {
         source_toml: &str,
     ) -> Result<Arc<ConfigModel>, ConfigError> {
         config.compile_component_topology()?;
+        config.compile_component_group_topology()?;
         CONFIG.with(|cfg| {
             let mut borrow = cfg.borrow_mut();
             if borrow.is_some() {

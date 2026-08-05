@@ -7,10 +7,12 @@
 //! All configuration must deserialize into these types and pass validation.
 //! Invariants enforced here are assumed everywhere else in the system.
 
+mod component_group;
 mod component_spec;
 mod log;
 mod role;
 
+pub use component_group::*;
 pub use component_spec::*;
 pub use log::*;
 pub use role::*;
@@ -18,7 +20,7 @@ pub use role::*;
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::candid::Principal,
-    ids::{AppId, BuildNetwork, CanisterRole, ComponentSpecId},
+    ids::{AppId, BuildNetwork, CanisterRole, ComponentGroupSpecId, ComponentSpecId},
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 use std::collections::{BTreeMap, BTreeSet};
@@ -169,6 +171,11 @@ pub struct ConfigModel {
     /// App-declared flat Component artifact and descendant-role templates.
     #[serde(default)]
     pub component_specs: BTreeMap<ComponentSpecId, ComponentSpecConfig>,
+
+    /// Reusable configuration-only Component compositions. These declarations
+    /// never become runtime parents or lifecycle authorities.
+    #[serde(default)]
+    pub component_groups: BTreeMap<ComponentGroupSpecId, ComponentGroupSpecConfig>,
 }
 
 impl ConfigModel {

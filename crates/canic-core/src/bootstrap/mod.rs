@@ -24,16 +24,22 @@ pub use crate::config::{ConfigError, ConfigTomlIssue};
 #[doc(hidden)]
 pub mod compiled {
     pub use crate::config::{
-        ComponentChildFundingPolicy, ComponentChildSpec, ComponentLimits,
+        ComponentChildFundingPolicy, ComponentChildSpec, ComponentGroupMember, ComponentGroupSpec,
+        ComponentGroupTopology, ComponentGroupTopologyError, ComponentLimits,
         ComponentProvisioningGrant, ComponentSpawnGrant, ComponentSpec, ComponentTopology,
-        ComponentTopologyError, MAX_COMPONENT_TOPOLOGY_CANONICAL_BYTES,
+        ComponentTopologyError, FlattenedComponentGroup, FlattenedComponentGroupMember,
+        MAX_COMPONENT_GROUP_DECLARED_MEMBERS, MAX_COMPONENT_GROUP_FLATTENED_MEMBERS,
+        MAX_COMPONENT_GROUP_GRAPH_CANONICAL_BYTES, MAX_COMPONENT_GROUP_INCLUSIONS,
+        MAX_COMPONENT_GROUP_MEMBERS, MAX_COMPONENT_GROUP_SPECS,
+        MAX_COMPONENT_TOPOLOGY_CANONICAL_BYTES,
     };
     pub use crate::{
         cdk::{candid::Principal, types::Cycles},
         config::schema::{
             AppConfig, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind,
             CanisterRoleNameIssue, ChainKeyRootProofConfig, ComponentChildConfig,
-            ComponentChildKind, ComponentLimitsConfig, ComponentProvisioningGrantConfig,
+            ComponentChildKind, ComponentGroupComponentConfig, ComponentGroupIncludeConfig,
+            ComponentGroupSpecConfig, ComponentLimitsConfig, ComponentProvisioningGrantConfig,
             ComponentSpawnGrantConfig, ComponentSpecConfig, ConfigModel, CyclesFundingBudgetConfig,
             CyclesFundingPolicyConfig, DelegatedTokenConfig, DiagnosticsCanisterConfig,
             FleetInitMode, IcpRefillPolicy, IndexConfig, IndexPool, LogConfig,
@@ -45,7 +51,10 @@ pub mod compiled {
             Whitelist, implicit_root_canister_config, implicit_wasm_store_canister_config,
             validate_app_name, validate_canister_role_name,
         },
-        ids::{AppId, BuildNetwork, CanisterRole, ComponentSpecId},
+        ids::{
+            AppId, BuildNetwork, CanisterRole, ComponentGroupMemberId, ComponentGroupSpecId,
+            ComponentSpecId,
+        },
     };
 }
 
