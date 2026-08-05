@@ -86,7 +86,9 @@ Fresh 0.101 installation inherits the 0.100 infrastructure manifest,
 independent host installation of the Coordinator, every root and every sibling
 Store, reciprocal root/Store verification and sole-root Store adoption.
 Component Group placement does not change that installation ownership and
-reuses the ordinary prepaid-Canister claim plus guarded paid fallback.
+reuses the ordinary prepaid-Canister claim. It cannot create a physical
+Canister or use a paid fallback when the root's operator-supplied inventory is
+empty.
 
 The current complete Fleet-service member vectors and affected-root
 confirmation barrier are retained only for the measured initial envelope. A
@@ -142,7 +144,17 @@ Fleet policy writer.
 - [ ] Extend the complete current root-limit contract without dropping
   Registry, Store, prepaid-pool or cycles-funding authority.
 - [ ] Reuse canonical root-local `ComponentInstanceId` allocation,
-  prepaid-Canister claim, guarded paid fallback and platform lifecycle.
+  prepaid-Canister claim and platform lifecycle, failing closed when no Ready
+  imported or recycled asset exists.
+- [ ] Add a first-class operator pool-replenishment command whose host-side
+  creation intent, selected Subnet, ingress/result evidence and exact
+  principal survive response loss before authenticated root import; the root
+  must never issue raw `create_canister` or a paid fallback.
+- [ ] Add authenticated minimum-balance/fixed-top-up policy and bounded
+  overfunding warnings without inventing an absolute maximum balance.
+- [ ] Keep Cycles Ledger creation disabled unless recovery is proved across
+  `TooOld`, its finite deduplication horizon and duplicate responses without a
+  Canister ID; otherwise retain external operator creation plus exact import.
 - [ ] Derive a cross-root top-level requester from the raw caller's exact
   current Fleet Registry service binding and matching Fleet Directory, then
   independently require the compiled peer-Component grant.

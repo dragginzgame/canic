@@ -1,4 +1,4 @@
-//! Stable records for one Fleet Subnet Root's prepaid empty-Canister inventory.
+//! Stable records for one Fleet Subnet Root's exclusive physical-Canister inventory.
 
 use canic_core::{
     cdk::{
@@ -8,12 +8,11 @@ use canic_core::{
         },
         types::{Cycles, Principal},
     },
-    control_plane_support::model::replay::ReplayCostGuardSettlement,
     eager_static,
     ids::ComponentInstanceId,
     impl_storable_bounded, impl_storable_unbounded,
     role_contract::allocation::memory::control_plane::{
-        ROOT_CANISTER_POOL_ASSETS_ID, ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID,
+        ROOT_CANISTER_INVENTORY_ASSETS_ID, ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID,
         ROOT_CANISTER_POOL_STATE_ID,
     },
 };
@@ -25,9 +24,9 @@ eager_static! {
         StableBtreeMap<Principal, CanisterPoolAssetRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(StableBtreeMap::init(canic_core::ic_memory_key!(
         authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-        key = "canic.control_plane.root.canister_pool.assets.v1",
+        key = "canic.control_plane.root.canister_inventory.assets.v1",
         ty = CanisterPoolAssetRecord,
-        id = ROOT_CANISTER_POOL_ASSETS_ID
+        id = ROOT_CANISTER_INVENTORY_ASSETS_ID
     )));
 }
 
@@ -56,28 +55,9 @@ eager_static! {
     ));
 }
 
-/// Durable progress of one prepaid empty-Canister creation effect.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum CanisterPoolCreationProgressRecord {
-    Intent,
-    Created { canister_id: Principal },
-}
-
-/// Exact authority frozen before one paid pool-refill creation effect.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct CanisterPoolCreationRecord {
-    pub operation_id: [u8; 32],
-    pub canister_cycles: Cycles,
-    pub cost_guard_settlement: ReplayCostGuardSettlement,
-    pub prepared_at_ns: u64,
-    pub progress: CanisterPoolCreationProgressRecord,
-}
-
-/// Singleton state required to recover or fail closed around pool creation.
+/// Singleton state required to recover one exact draining-root asset handoff.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterPoolStateRecord {
-    pub next_creation_sequence: u64,
-    pub creation: Option<CanisterPoolCreationRecord>,
     pub handoff: Option<CanisterPoolHandoffRecord>,
 }
 
@@ -118,34 +98,54 @@ impl CanisterPoolHandoffReceiptData {
 /// Durable identity of one Component allocation claiming an empty Canister.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterPoolClaimRecord {
-    pub component: Option<ComponentInstanceId>,
+    pub component: ComponentInstanceId,
     pub operation_id: [u8; 32],
 }
 
-/// Durable provenance for one prepaid Canister asset.
+/// Durable reset outcome while a stopped workload is still Registry-owned.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum CanisterPoolRecycleResetRecord {
+    Pending,
+    Ready,
+    Failed(String),
+}
+
+/// Durable provenance for one physical Canister asset.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum CanisterPoolAssetOriginRecord {
-    Created,
+    InfrastructureStore,
     Imported,
     Recycled,
 }
 
-/// Durable lifecycle state for one prepaid Canister asset.
+/// Durable lifecycle state for one physical Canister asset.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum CanisterPoolAssetStatusRecord {
+    Store,
+    StoreDeletionPending {
+        operation_id: [u8; 32],
+    },
     PendingReset,
     Ready,
     Claimed(CanisterPoolClaimRecord),
-    HandingOff { recipient: Principal },
+    Workload(CanisterPoolClaimRecord),
+    Recycling {
+        claim: CanisterPoolClaimRecord,
+        reset: CanisterPoolRecycleResetRecord,
+    },
+    HandingOff {
+        recipient: Principal,
+    },
     Failed(String),
 }
 
-/// Complete persisted row for one prepaid Canister asset.
+/// Complete persisted row for one physical Canister asset.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterPoolAssetRecord {
     pub cycles: Cycles,
     pub origin: CanisterPoolAssetOriginRecord,
     pub status: CanisterPoolAssetStatusRecord,
+    pub last_recycle: Option<CanisterPoolClaimRecord>,
     pub added_at_ns: u64,
     pub updated_at_ns: u64,
 }
@@ -163,7 +163,7 @@ pub struct CanisterPoolEntryRecord {
     pub asset: CanisterPoolAssetRecord,
 }
 
-/// Canonical stable snapshot of the root-owned pool.
+/// Canonical stable snapshot of the root-owned physical inventory.
 #[derive(Clone, Debug)]
 pub struct CanisterPoolData {
     pub entries: Vec<CanisterPoolEntryRecord>,
@@ -174,7 +174,7 @@ impl CanisterPoolData {
     pub const STATE_CONTRACT_NAME: &'static str = "CanisterPoolData";
 }
 
-/// Stable-memory owner for the root-owned prepaid Canister inventory.
+/// Stable-memory owner for the root-owned physical Canister inventory.
 pub struct CanisterPoolStore;
 
 impl CanisterPoolStore {

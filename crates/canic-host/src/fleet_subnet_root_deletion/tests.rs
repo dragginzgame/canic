@@ -5,6 +5,17 @@ use std::collections::VecDeque;
 const OPERATION_ID: [u8; 32] = [7; 32];
 const RETAINED_CYCLES: u128 = FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES + 1;
 
+#[test]
+fn deletion_retained_target_has_no_absolute_cycle_cap() {
+    let target = root_deletion_retained_cycles_target(2_000_000_000_000, 86_400)
+        .expect("derived deletion target");
+    assert_eq!(
+        target,
+        2_000_000_000_000 + FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES
+    );
+    assert!(target > 1_500_000_000_000);
+}
+
 struct ScriptedAdapter {
     terminal: Option<FleetSubnetRootDeletionResponse>,
     execution: Option<FleetSubnetRootDeletionExecutionResponse>,
@@ -87,7 +98,7 @@ impl FleetSubnetRootDeletionAdapter for ScriptedAdapter {
         assert_eq!(observed_root, root());
         assert_eq!(request.operation_id, OPERATION_ID);
         assert_eq!(request.expected_store_deletion_hash, [6; 32]);
-        assert_eq!(request.maximum_cycles_to_retain, RETAINED_CYCLES);
+        assert_eq!(request.retained_cycles_target, RETAINED_CYCLES);
         assert_eq!(request.observed_reserved_cycles, 0);
         self.events.push("prepare");
         let response = preparation();
@@ -447,7 +458,7 @@ fn preparation() -> FleetSubnetRootDeletionPreparationResponse {
         final_inventory_hash: [5; 32],
         store_deletion_hash: [6; 32],
         observed_cycles_before_reclamation: 500_000_000_000,
-        maximum_cycles_to_retain: RETAINED_CYCLES,
+        retained_cycles_target: RETAINED_CYCLES,
         observed_reserved_cycles: 0,
         observed_idle_cycles_burned_per_day: 86_400,
         observed_freezing_threshold_seconds: 1,
@@ -469,7 +480,7 @@ fn store_deletion() -> FleetSubnetRootStoreDeletionResponse {
         observed_module_hash: [5; 32],
         observed_controllers: vec![root()],
         observed_cycles_before_reclamation: 10,
-        maximum_cycles_to_retain: 9,
+        retained_cycles_target: 9,
         observed_cycles_after_reclamation: 8,
         cycles_reclaimed_at_ns: 4,
         prepared_at_ns: 5,

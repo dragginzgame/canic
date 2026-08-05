@@ -327,20 +327,12 @@ fn validate_summary(
         .checked_add(summary.component_canisters)
         .and_then(|count| count.checked_add(summary.pooled_canisters))
         .ok_or(SubnetInventoryError::CountOverflow)?;
-    let managed_canisters =
-        summary
-            .total_canisters
-            .checked_sub(1)
-            .ok_or(SubnetInventoryError::SummaryMismatch {
-                root: root.fleet_subnet_root,
-            })?;
     if &summary.fleet_registry != version
         || summary.placement_subnet != root.placement_subnet
         || summary.fleet_subnet_root != root.fleet_subnet_root
         || summary.status != root.status
         || summary.infrastructure_canisters != ROOT_LOCAL_INFRASTRUCTURE_CANISTERS
         || summary.total_canisters != expected_total
-        || managed_canisters > root.limits.maximum_managed_canisters
     {
         return Err(SubnetInventoryError::SummaryMismatch {
             root: root.fleet_subnet_root,

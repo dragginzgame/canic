@@ -656,14 +656,6 @@ pub enum ComponentTopologyError {
     },
 
     #[error(
-        "Fleet Subnet Root Canister pool maximum_size {maximum_size} exceeds maximum_managed_canisters {maximum_managed_canisters}"
-    )]
-    RootCanisterPoolExceedsManagedLimit {
-        maximum_size: u32,
-        maximum_managed_canisters: u32,
-    },
-
-    #[error(
         "root Component admissions are not in strict Component Spec order: '{previous}' before '{current}'"
     )]
     NonCanonicalAdmissionOrder {

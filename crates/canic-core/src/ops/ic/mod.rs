@@ -11,10 +11,7 @@ pub mod mgmt;
 pub mod nns;
 pub mod release_build;
 
-use crate::{
-    InternalError,
-    cdk::types::{Cycles, Principal},
-};
+use crate::cdk::types::Principal;
 use std::time::SystemTime;
 
 ///
@@ -36,22 +33,6 @@ impl IcOps {
     #[must_use]
     pub fn canister_cycle_balance() -> crate::cdk::types::Cycles {
         ic_cdk::api::canister_cycle_balance().into()
-    }
-
-    /// Return the exact cycles that must accompany creation to leave the new Canister funded.
-    pub fn canister_creation_attached_cycles(
-        initial_cycles: &Cycles,
-    ) -> Result<Cycles, InternalError> {
-        checked_canister_creation_attached_cycles(
-            initial_cycles.to_u128(),
-            ic_cdk::api::cost_create_canister(),
-        )
-        .map(Cycles::new)
-        .ok_or_else(|| {
-            InternalError::resource_exhausted(
-                "Canister creation funding plus the current Subnet creation cost exceeds u128",
-            )
-        })
     }
 
     /// Return the current caller principal.
@@ -148,13 +129,6 @@ impl IcOps {
     }
 }
 
-const fn checked_canister_creation_attached_cycles(
-    initial_cycles: u128,
-    creation_cost: u128,
-) -> Option<u128> {
-    initial_cycles.checked_add(creation_cost)
-}
-
 /// Return the current UNIX epoch time in nanoseconds as the internal base unit.
 #[cfg_attr(target_arch = "wasm32", expect(unreachable_code))]
 fn time_nanos() -> u128 {
@@ -171,22 +145,10 @@ fn time_nanos() -> u128 {
 
 #[cfg(test)]
 mod tests {
-    use super::{IcOps, checked_canister_creation_attached_cycles};
+    use super::IcOps;
 
     #[test]
     fn current_time_is_a_recent_unix_timestamp() {
         assert!(IcOps::now_secs() > 1_700_000_000);
-    }
-
-    #[test]
-    fn canister_creation_funding_includes_platform_cost_without_overflow() {
-        assert_eq!(
-            checked_canister_creation_attached_cycles(1_000_000_000_000, 1_307_692_307_692),
-            Some(2_307_692_307_692)
-        );
-        assert_eq!(
-            checked_canister_creation_attached_cycles(u128::MAX, 1),
-            None
-        );
     }
 }

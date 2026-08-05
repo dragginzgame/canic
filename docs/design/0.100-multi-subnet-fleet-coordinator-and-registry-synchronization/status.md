@@ -1,21 +1,30 @@
 # Canic 0.100 Implementation Status
 
-Date: 2026-08-04
+Date: 2026-08-05
 
-- State: implementation and operational proof complete; the independent
-  sibling Store build, installation/adoption, post-extraction Wasm boundary
-  and disposable IC mainnet physical-deletion/replay proof pass.
+- State: closeout correction implemented; maintainer release gate and publish
+  remain. The independent sibling Store build, installation/adoption,
+  post-extraction Wasm boundary and disposable IC mainnet
+  physical-deletion/replay proof pass, while the open correction removes the
+  root-autonomous physical Canister creation and split inventory rejected by
+  the final audit.
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
-- Workspace package version: `0.100.101`.
-- Latest published release: `v0.100.101` at
-  `cc7ebfdfc40ca45bfb9925ff77314c4d8d71763c`.
-- Open patch draft: `0.100.102`; it completes the bounded mainnet closeout and
-  the release-build, retry, reclamation and diagnostic fixes exposed by its
-  rehearsals.
-- Open design blockers: none; implementation and operational proof are
-  complete.
+- Workspace package version: `0.100.102`.
+- Latest published release: `v0.100.102` at
+  `4e6966cf14db0915235ec016b88356590c1cfbf4`.
+- Published proof release: `0.100.102`; it completed the bounded mainnet proof
+  and the release-build, retry and reclamation fixes exposed by its rehearsals.
+- Open patch draft: `0.100.103` hard-cuts runtime `create_canister`,
+  autonomous pool refill and paid fallback; makes operator-imported/recycled
+  assets the only Component provisioning source; unifies Store, pool,
+  workload and deletion-pending principals in one exclusive physical
+  inventory; removes the unenforceable aggregate Canister maximum and absolute
+  deletion-balance caps; and rejects prose-only physical-absence diagnostics.
+- Explicit 0.101 deferrals: optional authenticated minimum/top-up balance
+  automation, overfunding alerts/reclamation, and any Cycles Ledger creation
+  path after recovery beyond its finite deduplication horizon is proved.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
 exactly one Fleet Subnet Root per occupied `(FleetKey, SubnetId)`, with each
@@ -289,7 +298,7 @@ Registry slices replace the 0.99 root model.
   occupied physical Subnet, exact Fleet-owned Canister counts and fail-closed
   Coordinator/root evidence validation.
 - [x] Qualify restore fencing and role-package boundaries.
-- [ ] Rebuild and remeasure the independent Coordinator, root and Store Wasm
+- [x] Rebuild and remeasure the independent Coordinator, root and Store Wasm
   boundaries after Store extraction, then remove remaining stale authority.
 
 ## Current Batch
@@ -850,7 +859,7 @@ calls and independently re-observes both recipients before committing a
 bounded `DirectorySynchronized` receipt. Shared covered Fleet/Component
 Registry evidence is stored once; recipient receipts retain exact runtime
 operation, principal and immutable activation evidence. The traversal cursor
-does not move in this transition. The same open patch advances the canonical
+does not move in this transition. The same release advances the canonical
 memory runtime to `ic-memory 0.12.3`, adopting its validated semantic policy
 identity and failure-aware size diagnostics without changing durable
 allocation-ledger bytes, stable keys or memory IDs.
@@ -1264,9 +1273,11 @@ arbitrary artifact fallback authority.
 
 ## Next Action
 
-Publish the validated 0.100.102 closeout batch, then begin 0.101. The
-maintainer-owned `canic-0-100-proof-9` run installed one isolated-release Fleet
-on IC mainnet, retired its empty root and sibling Store, retained its prepaid
-Canister asset under the surviving Coordinator, physically deleted Store and
-root, and returned the exact terminal Coordinator receipt on replay without a
-second root effect.
+Run the maintainer-owned full release gate and publish the open 0.100 closeout
+patch before beginning 0.101. Focused checks prove imported-asset provisioning,
+exclusive Store/pool/workload/recycling accounting, Registry-ordered recycling,
+root draining and typed physical absence without restoring runtime Canister
+creation, an aggregate physical-Canister maximum or an absolute balance cap.
+The maintainer-owned `canic-0-100-proof-9` run remains the evidence for the
+independent Store/root physical-deletion and terminal replay journey; it is not
+evidence for the corrected pool architecture.

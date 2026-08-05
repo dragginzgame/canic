@@ -45,8 +45,7 @@ use canic_core::{
         },
         fleet_subnet_root::{
             FLEET_SUBNET_ROOT_DELETION_CALL_REFUND_HEADROOM_CYCLES,
-            FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
-            FLEET_SUBNET_ROOT_DELETION_MAXIMUM_RETAINED_CYCLES, FleetSubnetRootAuthority,
+            FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES, FleetSubnetRootAuthority,
             FleetSubnetRootCanisterSummary, FleetSubnetRootDeletionPreparationRequest,
             FleetSubnetRootDeletionPreparationResponse,
             FleetSubnetRootDeletionPreparationStatusRequest, FleetSubnetRootDrainingRequest,
@@ -292,14 +291,13 @@ pub async fn finalize_inventory(
         }
         return Ok(final_inventory_response(existing));
     }
-    let pooled_canisters = CanisterPoolOps::asset_count();
-    if pooled_canisters != 0 {
+    let retained_workload_assets = CanisterPoolOps::non_store_asset_count();
+    if retained_workload_assets != 0 {
         return Err(InternalError::unavailable(format!(
-            "Fleet Subnet Root final inventory cannot orphan {pooled_canisters} prepaid pool Canisters; handoff must complete first",
+            "Fleet Subnet Root final inventory cannot orphan {retained_workload_assets} pool, allocation or workload Canisters; recycling or handoff must complete first",
         )));
     }
-    if CanisterPoolOps::pending_creation().is_some() || CanisterPoolOps::pending_handoff().is_some()
-    {
+    if CanisterPoolOps::pending_handoff().is_some() {
         return Err(InternalError::unavailable(
             "Fleet Subnet Root final inventory requires all Canister pool work to reconcile",
         ));
@@ -575,6 +573,7 @@ pub async fn delete_store(
     if let Some(existing) =
         ComponentRegistryOps::root_store_deletion_if_present(request.operation_id)?
     {
+        CanisterPoolOps::complete_store_deletion(existing.wasm_store, request.operation_id)?;
         return Ok(store_deletion_response(existing));
     }
 
@@ -607,6 +606,11 @@ pub async fn delete_store(
             IcOps::now_nanos(),
         )?
     };
+    CanisterPoolOps::begin_store_deletion(
+        intent.wasm_store,
+        request.operation_id,
+        IcOps::now_nanos(),
+    )?;
 
     let intent = if intent.observed_cycles_after_reclamation.is_some() {
         intent
@@ -622,12 +626,13 @@ pub async fn delete_store(
     let evidence =
         WasmStorePublicationWorkflow::delete_single_finalized_root_store(&intent, &finalization)
             .await?;
-    ComponentRegistryOps::record_root_store_deletion(
+    let deletion = ComponentRegistryOps::record_root_store_deletion(
         request.operation_id,
         evidence,
         IcOps::now_nanos(),
-    )
-    .map(store_deletion_response)
+    )?;
+    CanisterPoolOps::complete_store_deletion(deletion.wasm_store, request.operation_id)?;
+    Ok(store_deletion_response(deletion))
 }
 
 /// Read one durable Store-deletion receipt without a management or Store call.
@@ -670,7 +675,7 @@ pub async fn prepare_deletion(
             store_deletion_hash: request.expected_store_deletion_hash,
             coordinator,
             observed_cycles_before_reclamation,
-            maximum_cycles_to_retain: request.maximum_cycles_to_retain,
+            retained_cycles_target: request.retained_cycles_target,
             observed_reserved_cycles: request.observed_reserved_cycles,
             observed_idle_cycles_burned_per_day: request.observed_idle_cycles_burned_per_day,
             observed_freezing_threshold_seconds: request.observed_freezing_threshold_seconds,
@@ -694,7 +699,7 @@ pub async fn prepare_deletion(
         )?;
         let observed_cycles_after_reclamation = reclaim_root_deletion_cycles(
             coordinator,
-            intent.maximum_cycles_to_retain,
+            intent.retained_cycles_target,
             intent.observed_cycles_before_reclamation,
         )
         .await?;
@@ -739,13 +744,13 @@ pub fn deletion_preparation_status(
 /// Return one compact, fail-closed inventory for this active Fleet Subnet Root.
 pub fn canister_summary() -> Result<FleetSubnetRootCanisterSummary, InternalError> {
     let state = validated_root_state()?;
-    let store_canisters =
-        u32::try_from(RootWasmStoreStateOps::wasm_stores().len()).map_err(|_| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "root-local Wasm Store count exceeds u32",
-            )
-        })?;
+    let stores = RootWasmStoreStateOps::wasm_stores();
+    let store_canisters = u32::try_from(stores.len()).map_err(|_| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root-local Wasm Store count exceeds u32",
+        )
+    })?;
     if store_canisters != 1 {
         return Err(InternalError::invariant(
             InternalErrorOrigin::Storage,
@@ -754,13 +759,21 @@ pub fn canister_summary() -> Result<FleetSubnetRootCanisterSummary, InternalErro
             ),
         ));
     }
+    CanisterPoolOps::require_store(stores[0].pid)?;
+    if CanisterPoolOps::store_count() != store_canisters {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Store runtime and physical Canister inventories disagree",
+        ));
+    }
 
     summary(
         state.fleet_registry,
         state.root_entry,
         &state.component_registry,
         store_canisters,
-        CanisterPoolOps::asset_count(),
+        CanisterPoolOps::workload_count(),
+        CanisterPoolOps::summary_pool_asset_count(),
     )
 }
 
@@ -913,6 +926,7 @@ fn summary(
     root_entry: FleetSubnetRootEntry,
     registry: &RootComponentRegistryView,
     store_canisters: u32,
+    workload_canisters: u32,
     pooled_canisters: u32,
 ) -> Result<FleetSubnetRootCanisterSummary, InternalError> {
     let infrastructure_canisters = 1_u32.checked_add(store_canisters).ok_or_else(|| {
@@ -921,23 +935,14 @@ fn summary(
             "root-local infrastructure Canister count overflow",
         )
     })?;
-    let managed_canisters = store_canisters
-        .checked_add(registry.known_created_component_canisters)
-        .and_then(|count| count.checked_add(pooled_canisters))
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "root-managed Canister count overflow",
-            )
-        })?;
-    if managed_canisters > root_entry.limits.maximum_managed_canisters {
+    if workload_canisters != registry.known_created_component_canisters {
         return Err(InternalError::invariant(
             InternalErrorOrigin::Storage,
-            "known-created Canisters exceed the protected root limit",
+            "physical workload inventory differs from Component Registry principal accounting",
         ));
     }
     let total_canisters = infrastructure_canisters
-        .checked_add(registry.known_created_component_canisters)
+        .checked_add(workload_canisters)
         .and_then(|count| count.checked_add(pooled_canisters))
         .ok_or_else(|| {
             InternalError::invariant(
@@ -952,7 +957,7 @@ fn summary(
         fleet_subnet_root: root_entry.fleet_subnet_root,
         status: root_entry.status,
         infrastructure_canisters,
-        component_canisters: registry.known_created_component_canisters,
+        component_canisters: workload_canisters,
         pooled_canisters,
         total_canisters,
     })
@@ -1105,7 +1110,7 @@ fn store_deletion_response(
         observed_module_hash: view.observed_module_hash,
         observed_controllers: view.observed_controllers,
         observed_cycles_before_reclamation: view.observed_cycles_before_reclamation,
-        maximum_cycles_to_retain: view.maximum_cycles_to_retain,
+        retained_cycles_target: view.retained_cycles_target,
         observed_cycles_after_reclamation: view.observed_cycles_after_reclamation,
         cycles_reclaimed_at_ns: view.cycles_reclaimed_at_ns,
         prepared_at_ns: view.prepared_at_ns,
@@ -1121,7 +1126,7 @@ fn validate_deletion_preparation_retry(
 ) -> Result<FleetSubnetRootDeletionPreparationResponse, InternalError> {
     let retry_is_exact = [
         request.expected_store_deletion_hash == existing.store_deletion_hash,
-        request.maximum_cycles_to_retain == existing.maximum_cycles_to_retain,
+        request.retained_cycles_target == existing.retained_cycles_target,
         request.observed_reserved_cycles == existing.observed_reserved_cycles,
         request.observed_idle_cycles_burned_per_day == existing.observed_idle_cycles_burned_per_day,
         request.observed_freezing_threshold_seconds == existing.observed_freezing_threshold_seconds,
@@ -1146,7 +1151,7 @@ const fn deletion_preparation_response(
         final_inventory_hash: view.final_inventory_hash,
         store_deletion_hash: view.store_deletion_hash,
         observed_cycles_before_reclamation: view.observed_cycles_before_reclamation,
-        maximum_cycles_to_retain: view.maximum_cycles_to_retain,
+        retained_cycles_target: view.retained_cycles_target,
         observed_reserved_cycles: view.observed_reserved_cycles,
         observed_idle_cycles_burned_per_day: view.observed_idle_cycles_burned_per_day,
         observed_freezing_threshold_seconds: view.observed_freezing_threshold_seconds,
@@ -1162,21 +1167,19 @@ const fn deletion_preparation_response(
 fn validate_root_deletion_cycle_reserve(
     request: &FleetSubnetRootDeletionPreparationRequest,
 ) -> Result<(), InternalError> {
-    let maximum_cycles_to_retain = request
+    let retained_cycles_target = request
         .observed_idle_cycles_burned_per_day
         .checked_mul(request.observed_freezing_threshold_seconds)
         .map(|reserve| reserve.div_ceil(86_400))
         .and_then(|reserve| {
             reserve.checked_add(FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES)
         });
-    if maximum_cycles_to_retain != Some(request.maximum_cycles_to_retain)
+    if retained_cycles_target != Some(request.retained_cycles_target)
         || request.observed_reserved_cycles != 0
-        || request.maximum_cycles_to_retain
-            <= FLEET_SUBNET_ROOT_DELETION_CALL_REFUND_HEADROOM_CYCLES
-        || request.maximum_cycles_to_retain > FLEET_SUBNET_ROOT_DELETION_MAXIMUM_RETAINED_CYCLES
+        || request.retained_cycles_target <= FLEET_SUBNET_ROOT_DELETION_CALL_REFUND_HEADROOM_CYCLES
     {
         return Err(InternalError::invalid_input(
-            "Fleet Subnet Root deletion cycle reserve is outside the supported range",
+            "Fleet Subnet Root retained-cycle target differs from live freezing authority",
         ));
     }
     Ok(())
@@ -1191,7 +1194,7 @@ fn root_deletion_readiness_intent_request(
         final_inventory_hash: intent.final_inventory_hash,
         store_deletion_hash: intent.store_deletion_hash,
         observed_cycles_before_reclamation: intent.observed_cycles_before_reclamation,
-        maximum_cycles_to_retain: intent.maximum_cycles_to_retain,
+        retained_cycles_target: intent.retained_cycles_target,
         observed_reserved_cycles: intent.observed_reserved_cycles,
         observed_idle_cycles_burned_per_day: intent.observed_idle_cycles_burned_per_day,
         observed_freezing_threshold_seconds: intent.observed_freezing_threshold_seconds,
@@ -1288,7 +1291,7 @@ fn validate_root_deletion_readiness_response(
         response.final_inventory_hash == intent.final_inventory_hash,
         response.store_deletion_hash == intent.store_deletion_hash,
         response.observed_cycles_before_reclamation == intent.observed_cycles_before_reclamation,
-        response.maximum_cycles_to_retain == intent.maximum_cycles_to_retain,
+        response.retained_cycles_target == intent.retained_cycles_target,
         response.observed_reserved_cycles == intent.observed_reserved_cycles,
         response.observed_idle_cycles_burned_per_day == intent.observed_idle_cycles_burned_per_day,
         response.observed_freezing_threshold_seconds == intent.observed_freezing_threshold_seconds,
@@ -1308,7 +1311,7 @@ fn validate_root_deletion_readiness_response(
 
 async fn reclaim_root_deletion_cycles(
     coordinator: candid::Principal,
-    maximum_cycles_to_retain: u128,
+    retained_cycles_target: u128,
     observed_cycles_before_reclamation: u128,
 ) -> Result<u128, InternalError> {
     let current_cycles = IcOps::canister_cycle_balance().to_u128();
@@ -1318,7 +1321,7 @@ async fn reclaim_root_deletion_cycles(
         ));
     }
     let deposit_call_cost = MgmtOps::deposit_cycles_call_cost(coordinator)?;
-    let target_cycles_to_retain = maximum_cycles_to_retain
+    let target_cycles_to_retain = retained_cycles_target
         .checked_sub(FLEET_SUBNET_ROOT_DELETION_CALL_REFUND_HEADROOM_CYCLES)
         .and_then(|remaining| remaining.checked_sub(deposit_call_cost))
         .ok_or_else(|| {
@@ -1351,13 +1354,13 @@ async fn reclaim_root_deletion_cycles(
     let observed_after = IcOps::canister_cycle_balance().to_u128();
     let balance_is_reclaimed = [
         observed_after <= observed_cycles_before_reclamation,
-        observed_after <= maximum_cycles_to_retain,
+        observed_after <= retained_cycles_target,
     ]
     .into_iter()
     .all(|valid| valid);
     if !balance_is_reclaimed {
         return Err(InternalError::conflict(
-            "Fleet Subnet Root still exceeds its durable deletion cycle reserve",
+            "Fleet Subnet Root still exceeds its durable retained-cycle target",
         ));
     }
     Ok(observed_after)
@@ -1426,10 +1429,10 @@ mod tests {
 
     #[test]
     fn root_cycle_reclamation_retains_the_target_and_exact_call_cost() {
-        let maximum_cycles_to_retain = 400_u128;
+        let retained_cycles_target = 400_u128;
         let delayed_refund_headroom = 150;
         let call_cost = 60;
-        let target_before_call = maximum_cycles_to_retain
+        let target_before_call = retained_cycles_target
             .saturating_sub(delayed_refund_headroom)
             .saturating_sub(call_cost);
 
@@ -1456,6 +1459,7 @@ mod tests {
             root_entry(&authority, FleetSubnetRootStatus::Active),
             &registry,
             1,
+            3,
             4,
         )
         .expect("build summary");
@@ -1467,7 +1471,7 @@ mod tests {
     }
 
     #[test]
-    fn summary_rejects_counter_and_protected_limit_drift() {
+    fn summary_rejects_counter_and_physical_inventory_drift() {
         let authority = authority();
         let version = version(&authority);
         let invalid_registry = component_registry(&authority, version.clone(), 4, 1, 2, 0);
@@ -1477,11 +1481,17 @@ mod tests {
         );
 
         let registry = component_registry(&authority, version.clone(), 3, 1, 2, 0);
-        let mut entry = root_entry(&authority, FleetSubnetRootStatus::Active);
-        entry.limits.maximum_managed_canisters = 3;
         assert!(
-            summary(version, entry, &registry, 1, 1).is_err(),
-            "Store, pool, and Component Canisters must not exceed the protected managed limit"
+            summary(
+                version,
+                root_entry(&authority, FleetSubnetRootStatus::Active),
+                &registry,
+                1,
+                2,
+                1,
+            )
+            .is_err(),
+            "physical workload inventory must equal protected Registry principal accounting"
         );
     }
 
@@ -1517,7 +1527,7 @@ mod tests {
         let valid = FleetSubnetRootDeletionPreparationRequest {
             operation_id: [1; 32],
             expected_store_deletion_hash: [2; 32],
-            maximum_cycles_to_retain: FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES + 1,
+            retained_cycles_target: FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES + 1,
             observed_reserved_cycles: 0,
             observed_idle_cycles_burned_per_day: 86_400,
             observed_freezing_threshold_seconds: 1,
@@ -1525,10 +1535,10 @@ mod tests {
         validate_root_deletion_cycle_reserve(&valid)
             .expect("exact live freezing reserve plus execution reserve is valid");
 
-        let mut wrong_ceiling = valid;
-        wrong_ceiling.maximum_cycles_to_retain += 1;
+        let mut wrong_target = valid;
+        wrong_target.retained_cycles_target += 1;
         assert!(
-            validate_root_deletion_cycle_reserve(&wrong_ceiling).is_err(),
+            validate_root_deletion_cycle_reserve(&wrong_target).is_err(),
             "caller cannot choose a deletion reserve different from live evidence"
         );
 
@@ -1614,7 +1624,6 @@ mod tests {
                 component_topology_digest: ComponentTopologyDigest::from_bytes([6; 32]),
                 limits: FleetSubnetRootLimits {
                     maximum_component_instances: 10,
-                    maximum_managed_canisters: 10,
                     maximum_registry_bytes: 1_024,
                     maximum_wasm_store_bytes: 2_048,
                     canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {

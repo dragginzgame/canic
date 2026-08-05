@@ -1,4 +1,4 @@
-//! Passive boundary contracts for the Fleet Subnet Root prepaid Canister pool.
+//! Passive boundary contracts for the Fleet Subnet Root physical-Canister inventory.
 
 use crate::{
     cdk::types::Cycles,
@@ -10,29 +10,54 @@ use serde::{Deserialize, Serialize};
 /// Identifies the durable Component allocation that has claimed one empty Canister.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterPoolClaim {
-    pub component: Option<ComponentInstanceId>,
+    pub component: ComponentInstanceId,
     pub operation_id: [u8; 32],
 }
 
-/// How one prepaid empty Canister entered the root-owned inventory.
+/// Reset outcome retained while a stopped workload is still Registry-owned.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum CanisterPoolRecycleReset {
+    Pending,
+    Ready,
+    Failed { reason: String },
+}
+
+/// How one physical Canister entered the root-owned inventory.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum CanisterPoolAssetOrigin {
-    Created,
+    InfrastructureStore,
     Imported,
     Recycled,
 }
 
-/// Current durable state of one prepaid empty-Canister asset.
+/// Current durable state of one root-owned physical Canister.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum CanisterPoolAssetStatus {
+    Store,
+    StoreDeletionPending {
+        operation_id: [u8; 32],
+    },
     PendingReset,
     Ready,
-    Claimed { claim: CanisterPoolClaim },
-    HandingOff { recipient: Principal },
-    Failed { reason: String },
+    Claimed {
+        claim: CanisterPoolClaim,
+    },
+    Workload {
+        claim: CanisterPoolClaim,
+    },
+    Recycling {
+        claim: CanisterPoolClaim,
+        reset: CanisterPoolRecycleReset,
+    },
+    HandingOff {
+        recipient: Principal,
+    },
+    Failed {
+        reason: String,
+    },
 }
 
-/// Controller-visible inventory row for one prepaid empty Canister.
+/// Controller-visible inventory row for one root-owned physical Canister.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterPoolAsset {
     pub canister_id: Principal,
@@ -41,15 +66,6 @@ pub struct CanisterPoolAsset {
     pub status: CanisterPoolAssetStatus,
     pub added_at_ns: u64,
     pub updated_at_ns: u64,
-}
-
-/// Durable refill creation whose paid effect is incomplete or awaiting commit.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct CanisterPoolCreation {
-    pub operation_id: [u8; 32],
-    pub canister_cycles: Cycles,
-    pub canister_id: Option<Principal>,
-    pub prepared_at_ns: u64,
 }
 
 /// Durable transfer of one paid asset to replacement authority during root draining.
@@ -67,19 +83,23 @@ pub struct CanisterPoolStatusRequest {
     pub limit: u16,
 }
 
-/// Exact configured policy and current pool inventory.
+/// Exact pool policy and current exclusive root-owned physical inventory.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterPoolResponse {
     pub config: FleetSubnetCanisterPoolConfig,
     pub tracked: u32,
+    pub store: u32,
+    pub store_deletion_pending: u32,
+    pub pooled: u32,
+    pub workload: u32,
     pub surplus: u32,
     pub ready: u32,
     pub pending_reset: u32,
     pub claimed: u32,
+    pub recycling: u32,
     pub handing_off: u32,
     pub failed: u32,
     pub completed_handoffs: u64,
-    pub pending_creation: Option<CanisterPoolCreation>,
     pub pending_handoff: Option<CanisterPoolHandoff>,
     pub entries: Vec<CanisterPoolAsset>,
     pub next_start_after: Option<Principal>,
@@ -108,8 +128,10 @@ pub enum PoolAdminResponse {
     MaintenancePaused {
         reason: String,
     },
-    Created {
-        canister_id: Principal,
+    ReplenishmentRequired {
+        ready: u32,
+        minimum_size: u32,
+        import_capacity: u32,
     },
     Imported {
         canister_id: Principal,
@@ -148,14 +170,18 @@ mod tests {
                 canister_cycles: Cycles::new(5_000_000_000_000),
             },
             tracked: 1,
+            store: 0,
+            store_deletion_pending: 0,
+            pooled: 1,
+            workload: 0,
             surplus: 0,
             ready: 0,
             pending_reset: 0,
             claimed: 0,
+            recycling: 0,
             handing_off: 0,
             failed: 1,
             completed_handoffs: 0,
-            pending_creation: None,
             pending_handoff: None,
             entries: vec![CanisterPoolAsset {
                 canister_id,

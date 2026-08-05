@@ -108,8 +108,12 @@ fn management_deployment_adapters_require_cost_guard_permit() {
     let lifecycle_permit_args = lifecycle.matches("_permit: &CostGuardPermit").count();
 
     assert_eq!(
-        lifecycle_permit_args, 3,
-        "create_canister and install_code management adapters must have permit-required wrappers"
+        lifecycle_permit_args, 2,
+        "both install_code management adapters must have permit-required wrappers"
+    );
+    assert!(
+        !lifecycle.contains("create_canister"),
+        "Canister runtimes must not retain an autonomous raw create_canister adapter"
     );
 
     let cycles_ops = source_root().join("ops/ic/mgmt/cycles.rs");
@@ -121,7 +125,7 @@ fn management_deployment_adapters_require_cost_guard_permit() {
 }
 
 #[test]
-fn provisioning_workflow_uses_management_permit_wrappers() {
+fn provisioning_has_no_raw_create_adapter_and_guards_install_effects() {
     let workflow_root = source_root().join("workflow");
     let mut violations = Vec::new();
 

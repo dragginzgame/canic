@@ -469,6 +469,11 @@ fn terminal_component_membership_removal_response(
             "Component deletion request differs from terminal removal authority",
         ));
     }
+    CanisterPoolOps::complete_recycling(
+        receipt.deleted.deletion.quiescence.stop.canister_id,
+        request.component,
+        IcOps::now_nanos(),
+    )?;
     component_deletion_response(draining).map(Some)
 }
 
@@ -1261,13 +1266,60 @@ pub fn remove_component_membership(
             &partition,
         )?;
     }
+    let recycling_canister = component_recycling_canister(&request)?;
+    CanisterPoolOps::validate_complete_recycling(recycling_canister, request.component)?;
     let removed = ComponentRegistryOps::remove_component_membership(
         request.component,
         request.operation_id,
         request.expected_inventory_hash,
         IcOps::now_nanos(),
     )?;
+    let canister_id = removed
+        .deletion
+        .as_ref()
+        .and_then(|progress| match progress {
+            RootComponentDeletionProgressView::MembershipRemoved(receipt) => {
+                Some(receipt.deleted.deletion.quiescence.stop.canister_id)
+            }
+            RootComponentDeletionProgressView::DeleteIntent(_)
+            | RootComponentDeletionProgressView::Deleted(_) => None,
+        })
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "Component membership removal returned no terminal physical Canister",
+            )
+        })?;
+    CanisterPoolOps::complete_recycling(canister_id, request.component, IcOps::now_nanos())?;
     component_deletion_response(removed)
+}
+
+fn component_recycling_canister(
+    request: &RootComponentDeletionRequest,
+) -> Result<candid::Principal, InternalError> {
+    let draining =
+        ComponentRegistryOps::component_draining(request.component)?.ok_or_else(|| {
+            InternalError::unavailable("Component draining operation has not been durably fenced")
+        })?;
+    if draining.operation_id != request.operation_id {
+        return Err(InternalError::conflict(
+            "Component membership removal is bound to a different operation",
+        ));
+    }
+    let deletion = draining.deletion.ok_or_else(|| {
+        InternalError::unavailable("Component workload deletion has not been prepared")
+    })?;
+    match deletion {
+        RootComponentDeletionProgressView::Deleted(receipt) => {
+            Ok(receipt.deletion.quiescence.stop.canister_id)
+        }
+        RootComponentDeletionProgressView::MembershipRemoved(receipt) => {
+            Ok(receipt.deleted.deletion.quiescence.stop.canister_id)
+        }
+        RootComponentDeletionProgressView::DeleteIntent(_) => Err(InternalError::unavailable(
+            "Component workload deletion has not reached terminal recycling evidence",
+        )),
+    }
 }
 
 /// Read one finalized Component's durable top-level deletion progress without mutation.
@@ -1995,6 +2047,10 @@ pub async fn remove_subtree_leaf_membership(
         })?
         .limits
         .maximum_registry_bytes;
+    CanisterPoolOps::validate_complete_recycling(
+        request.expected_leaf_canister_id,
+        request.component,
+    )?;
     let removal = ComponentRegistryOps::remove_subtree_leaf_membership(
         request.component,
         request.operation_id,
@@ -2004,6 +2060,11 @@ pub async fn remove_subtree_leaf_membership(
         IcOps::now_nanos(),
         maximum_registry_bytes,
         fleet_directory,
+    )?;
+    CanisterPoolOps::complete_recycling(
+        request.expected_leaf_canister_id,
+        request.component,
+        IcOps::now_nanos(),
     )?;
     validate_subtree_removal(
         &authority.binding,
@@ -2274,7 +2335,7 @@ pub async fn create_child_allocation(
         None,
     )?;
     let plan = child_creation_plan(root, &store, &allocation)?;
-    advance_child_creation(request.component, request.operation_id, allocation, plan).await
+    advance_child_creation(request.component, request.operation_id, allocation, plan)
 }
 
 /// Advance one reserved top-level Component through a durable creation effect.
@@ -2304,7 +2365,7 @@ pub async fn create_allocation(
     )?;
     let plan = creation_plan(root, &store, &allocation)?;
 
-    advance_creation(request.operation_id, allocation, plan).await
+    advance_creation(request.operation_id, allocation, plan)
 }
 
 /// Advance peer Component creation for its exact active requester caller.
@@ -3277,7 +3338,7 @@ pub fn directory_page(
     })
 }
 
-async fn advance_creation(
+fn advance_creation(
     operation_id: [u8; 32],
     allocation: RootComponentAllocationView,
     plan: RootComponentCreationPlan,
@@ -3289,7 +3350,7 @@ async fn advance_creation(
 
     ComponentRegistryOps::validate_creation_capacity(operation_id, &plan)?;
     let pool_claim = CanisterPoolClaimKey {
-        component: None,
+        component: allocation.component,
         operation_id,
     };
     if let Some(canister) =
@@ -3297,81 +3358,12 @@ async fn advance_creation(
     {
         return claim_component_pool_asset(operation_id, plan, pool_claim, canister);
     }
-    crate::workflow::canister_pool::require_managed_creation_capacity()?;
-    let cost_permit = deployment::reserve_component_creation_cost_guard(&plan.initial_cycles)?;
-    let intent = match ComponentRegistryOps::begin_creation(
-        operation_id,
-        plan.clone(),
-        cost_permit.replay_settlement(),
-    ) {
-        Ok(intent) => intent,
-        Err(err) => {
-            return Err(CostGuardWorkflow::recover_after_failure(
-                &cost_permit,
-                IcOps::now_secs(),
-                err,
-            ));
-        }
-    };
-    let effect = match &intent.progress {
-        RootComponentAllocationProgressView::CreationIntent(effect) => effect,
-        RootComponentAllocationProgressView::Reserved
-        | RootComponentAllocationProgressView::Created { .. }
-        | RootComponentAllocationProgressView::InstallIntent { .. }
-        | RootComponentAllocationProgressView::Installed { .. }
-        | RootComponentAllocationProgressView::Verified { .. }
-        | RootComponentAllocationProgressView::Committed { .. }
-        | RootComponentAllocationProgressView::Removed { .. } => {
-            return Err(CostGuardWorkflow::recover_after_failure(
-                &cost_permit,
-                IcOps::now_secs(),
-                InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "Component creation intent commit returned an invalid phase",
-                ),
-            ));
-        }
-    };
-    if let Err(err) = validate_creation_effect(effect, &plan) {
-        return Err(CostGuardWorkflow::recover_after_failure(
-            &cost_permit,
-            IcOps::now_secs(),
-            err,
-        ));
-    }
-
-    let canister = match MgmtOps::create_canister_with_permit(
-        &cost_permit,
-        vec![plan.controller],
-        plan.initial_cycles.clone(),
-    )
-    .await
-    {
-        Ok(canister) => canister,
-        Err(err) => {
-            return Err(CostGuardWorkflow::recover_after_failure(
-                &cost_permit,
-                IcOps::now_secs(),
-                err,
-            ));
-        }
-    };
-
-    let created = match ComponentRegistryOps::mark_created(operation_id, canister) {
-        Ok(created) => created,
-        Err(err) => {
-            return Err(CostGuardWorkflow::complete_after_failure(
-                &cost_permit,
-                IcOps::now_secs(),
-                err,
-            ));
-        }
-    };
-    CostGuardWorkflow::complete(&cost_permit, IcOps::now_secs())?;
-    allocation_response(created)
+    Err(InternalError::resource_exhausted(
+        "no Ready prepaid Canister is available; the operator must replenish and import a root-local asset",
+    ))
 }
 
-async fn advance_child_creation(
+fn advance_child_creation(
     component: canic_core::ids::ComponentInstanceId,
     operation_id: [u8; 32],
     allocation: RootComponentChildAllocationView,
@@ -3384,7 +3376,7 @@ async fn advance_child_creation(
 
     ComponentRegistryOps::validate_child_creation_capacity(component, operation_id, &plan)?;
     let pool_claim = CanisterPoolClaimKey {
-        component: Some(component),
+        component,
         operation_id,
     };
     if let Some(canister) =
@@ -3398,79 +3390,9 @@ async fn advance_child_creation(
             canister,
         );
     }
-    crate::workflow::canister_pool::require_managed_creation_capacity()?;
-    let cost_permit =
-        deployment::reserve_component_child_creation_cost_guard(&plan.initial_cycles)?;
-    let intent = match ComponentRegistryOps::begin_child_creation(
-        component,
-        operation_id,
-        plan.clone(),
-        cost_permit.replay_settlement(),
-    ) {
-        Ok(intent) => intent,
-        Err(error) => {
-            return Err(CostGuardWorkflow::recover_after_failure(
-                &cost_permit,
-                IcOps::now_secs(),
-                error,
-            ));
-        }
-    };
-    let effect = match &intent.progress {
-        RootComponentChildAllocationProgressView::CreationIntent(effect) => effect,
-        RootComponentChildAllocationProgressView::Reserved
-        | RootComponentChildAllocationProgressView::Created { .. }
-        | RootComponentChildAllocationProgressView::InstallIntent { .. }
-        | RootComponentChildAllocationProgressView::Installed { .. }
-        | RootComponentChildAllocationProgressView::Verified { .. }
-        | RootComponentChildAllocationProgressView::Committed { .. } => {
-            return Err(CostGuardWorkflow::recover_after_failure(
-                &cost_permit,
-                IcOps::now_secs(),
-                InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "Component Child creation intent commit returned an invalid phase",
-                ),
-            ));
-        }
-    };
-    if let Err(error) = validate_creation_effect(effect, &plan) {
-        return Err(CostGuardWorkflow::recover_after_failure(
-            &cost_permit,
-            IcOps::now_secs(),
-            error,
-        ));
-    }
-
-    let canister = match MgmtOps::create_canister_with_permit(
-        &cost_permit,
-        vec![plan.controller],
-        plan.initial_cycles.clone(),
-    )
-    .await
-    {
-        Ok(canister) => canister,
-        Err(error) => {
-            return Err(CostGuardWorkflow::recover_after_failure(
-                &cost_permit,
-                IcOps::now_secs(),
-                error,
-            ));
-        }
-    };
-    let created = match ComponentRegistryOps::mark_child_created(component, operation_id, canister)
-    {
-        Ok(created) => created,
-        Err(error) => {
-            return Err(CostGuardWorkflow::complete_after_failure(
-                &cost_permit,
-                IcOps::now_secs(),
-                error,
-            ));
-        }
-    };
-    CostGuardWorkflow::complete(&cost_permit, IcOps::now_secs())?;
-    Ok(child_allocation_response(created))
+    Err(InternalError::resource_exhausted(
+        "no Ready prepaid Canister is available; the operator must replenish and import a root-local asset",
+    ))
 }
 
 fn claim_component_pool_asset(
@@ -3503,7 +3425,7 @@ fn claim_component_pool_asset(
         CostGuardWorkflow::complete_after_failure(&permit, IcOps::now_secs(), error)
     })?;
     CostGuardWorkflow::complete(&permit, IcOps::now_secs())?;
-    CanisterPoolOps::finalize_claim(&claim, canister)?;
+    CanisterPoolOps::finalize_claim(&claim, canister, IcOps::now_nanos())?;
     allocation_response(created)
 }
 
@@ -3540,7 +3462,7 @@ fn claim_component_child_pool_asset(
             CostGuardWorkflow::complete_after_failure(&permit, IcOps::now_secs(), error)
         })?;
     CostGuardWorkflow::complete(&permit, IcOps::now_secs())?;
-    CanisterPoolOps::finalize_claim(&claim, canister)?;
+    CanisterPoolOps::finalize_claim(&claim, canister, IcOps::now_nanos())?;
     Ok(child_allocation_response(created))
 }
 
@@ -3549,7 +3471,7 @@ fn reconcile_component_pool_claim(
     allocation: RootComponentAllocationView,
 ) -> Result<RootComponentAllocationView, InternalError> {
     let claim = CanisterPoolClaimKey {
-        component: None,
+        component: allocation.component,
         operation_id,
     };
     let Some(canister) = CanisterPoolOps::claimed_canister(&claim)? else {
@@ -3565,7 +3487,7 @@ fn reconcile_component_pool_claim(
             allocation
         }
     };
-    CanisterPoolOps::finalize_claim(&claim, canister)?;
+    CanisterPoolOps::finalize_claim(&claim, canister, IcOps::now_nanos())?;
     Ok(reconciled)
 }
 
@@ -3575,7 +3497,7 @@ fn reconcile_component_child_pool_claim(
     allocation: RootComponentChildAllocationView,
 ) -> Result<RootComponentChildAllocationView, InternalError> {
     let claim = CanisterPoolClaimKey {
-        component: Some(component),
+        component,
         operation_id,
     };
     let Some(canister) = CanisterPoolOps::claimed_canister(&claim)? else {
@@ -3591,7 +3513,7 @@ fn reconcile_component_child_pool_claim(
             allocation
         }
     };
-    CanisterPoolOps::finalize_claim(&claim, canister)?;
+    CanisterPoolOps::finalize_claim(&claim, canister, IcOps::now_nanos())?;
     Ok(reconciled)
 }
 

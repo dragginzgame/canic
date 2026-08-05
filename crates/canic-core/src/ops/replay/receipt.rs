@@ -674,7 +674,7 @@ mod tests {
 
         mark_external_effect_in_flight(
             &token,
-            ExternalEffectDescriptor::ManagementCreateCanister {
+            ExternalEffectDescriptor::RootCanisterProvision {
                 command_kind: CommandKind::new("test.command.v1").expect("command"),
             },
             150,
@@ -955,7 +955,7 @@ mod tests {
         };
         mark_external_effect_in_flight(
             &token,
-            ExternalEffectDescriptor::ManagementCreateCanister {
+            ExternalEffectDescriptor::RootCanisterProvision {
                 command_kind: CommandKind::new(PLACEMENT_CHILD_REPLAY_COMMAND_KIND)
                     .expect("command"),
             },
@@ -1057,7 +1057,7 @@ mod tests {
         };
         mark_external_effect_in_flight(
             &token,
-            ExternalEffectDescriptor::ManagementCreateCanister {
+            ExternalEffectDescriptor::RootCanisterProvision {
                 command_kind: CommandKind::new(ROOT_PROVISION_REPLAY_COMMAND_KIND)
                     .expect("command"),
             },

@@ -15,9 +15,8 @@ use super::super::{
 use crate::{
     dto::template::{
         WASM_STORE_DELETION_CALL_REFUND_HEADROOM_CYCLES,
-        WASM_STORE_DELETION_EXECUTION_RESERVE_CYCLES, WASM_STORE_DELETION_MAXIMUM_RETAINED_CYCLES,
-        WasmStoreDeletionCycleReclamationResponse, WasmStoreGcStatusResponse,
-        WasmStoreStatusResponse,
+        WASM_STORE_DELETION_EXECUTION_RESERVE_CYCLES, WasmStoreDeletionCycleReclamationResponse,
+        WasmStoreGcStatusResponse, WasmStoreStatusResponse,
     },
     ids::{WasmStoreBinding, WasmStoreGcMode},
     ops::storage::state::root_wasm_store::RootWasmStoreStateOps,
@@ -464,7 +463,7 @@ impl WasmStorePublicationWorkflow {
             .into());
         };
         let management = store_management_authority(&status, root)?;
-        let (observed_cycles_before_reclamation, maximum_cycles_to_retain) =
+        let (observed_cycles_before_reclamation, retained_cycles_target) =
             store_deletion_cycle_authority(&status)?;
         if status.status != CanisterStatusType::Running {
             return Err(PublicationWorkflowError::InvalidState(
@@ -478,7 +477,7 @@ impl WasmStorePublicationWorkflow {
             observed_module_hash: management.module_hash,
             observed_controllers: management.controllers,
             observed_cycles_before_reclamation,
-            maximum_cycles_to_retain,
+            retained_cycles_target,
         })
     }
 
@@ -514,10 +513,10 @@ impl WasmStorePublicationWorkflow {
             )
             .into());
         }
-        if cycles_before_call > intent.maximum_cycles_to_retain {
-            let store_maximum_cycles_to_retain = store_cycle_reclamation_ceiling(intent)?;
+        if cycles_before_call > intent.retained_cycles_target {
+            let store_retained_cycles_target = store_cycle_reclamation_target(intent)?;
             let response =
-                store_reclaim_deletion_cycles(intent.wasm_store, store_maximum_cycles_to_retain)
+                store_reclaim_deletion_cycles(intent.wasm_store, store_retained_cycles_target)
                     .await?;
             validate_store_cycle_reclamation_response(intent, root, &response)?;
         }
@@ -527,14 +526,14 @@ impl WasmStorePublicationWorkflow {
             status_cycles(&observed.cycles, "post-reclamation Store balance")?;
         let balance_is_reclaimed = [
             observed_cycles_after_reclamation <= intent.observed_cycles_before_reclamation,
-            observed_cycles_after_reclamation <= intent.maximum_cycles_to_retain,
+            observed_cycles_after_reclamation <= intent.retained_cycles_target,
         ]
         .into_iter()
         .all(|valid| valid);
         if !balance_is_reclaimed {
             return Err(PublicationWorkflowError::InvalidState(format!(
-                "root Store still exceeds its durable deletion cycle reserve: observed={observed_cycles_after_reclamation} maximum={}",
-                intent.maximum_cycles_to_retain
+                "root Store still exceeds its durable retained-cycle target: observed={observed_cycles_after_reclamation} target={}",
+                intent.retained_cycles_target
             ))
             .into());
         }
@@ -584,7 +583,7 @@ impl WasmStorePublicationWorkflow {
             observed_module_hash: intent.observed_module_hash,
             observed_controllers: intent.observed_controllers.clone(),
             observed_cycles_before_reclamation: intent.observed_cycles_before_reclamation,
-            maximum_cycles_to_retain: intent.maximum_cycles_to_retain,
+            retained_cycles_target: intent.retained_cycles_target,
             observed_cycles_after_reclamation: intent
                 .observed_cycles_after_reclamation
                 .expect("validated Store cycle reclamation"),
@@ -675,7 +674,7 @@ fn validate_store_deletion_intent_lineage(
         (None, None) => true,
         (Some(observed_after), Some(reclaimed_at_ns)) => [
             observed_after <= intent.observed_cycles_before_reclamation,
-            observed_after <= intent.maximum_cycles_to_retain,
+            observed_after <= intent.retained_cycles_target,
             reclaimed_at_ns >= intent.prepared_at_ns,
         ]
         .into_iter()
@@ -693,8 +692,7 @@ fn validate_store_deletion_intent_lineage(
             .observed_controllers
             .contains(&finalization.fleet_subnet_root),
         intent.observed_cycles_before_reclamation > 0,
-        intent.maximum_cycles_to_retain > 0,
-        intent.maximum_cycles_to_retain <= WASM_STORE_DELETION_MAXIMUM_RETAINED_CYCLES,
+        intent.retained_cycles_target > 0,
         cycle_reclamation_is_valid,
         intent.prepared_at_ns >= finalization.completed_at_ns,
     ]
@@ -862,20 +860,14 @@ fn store_deletion_cycle_authority(status: &CanisterStatus) -> Result<(u128, u128
             )
         })?
         .div_ceil(SECONDS_PER_DAY);
-    let maximum_cycles_to_retain = freezing_reserve
+    let retained_cycles_target = freezing_reserve
         .checked_add(WASM_STORE_DELETION_EXECUTION_RESERVE_CYCLES)
         .ok_or_else(|| {
             PublicationWorkflowError::InvalidState(
                 "root Store deletion cycle reserve overflows u128".to_string(),
             )
         })?;
-    if maximum_cycles_to_retain > WASM_STORE_DELETION_MAXIMUM_RETAINED_CYCLES {
-        return Err(PublicationWorkflowError::InvalidState(
-            "root Store deletion cycle reserve exceeds the supported ceiling".to_string(),
-        )
-        .into());
-    }
-    Ok((observed_cycles, maximum_cycles_to_retain))
+    Ok((observed_cycles, retained_cycles_target))
 }
 
 fn status_cycles(value: &Nat, label: &str) -> Result<u128, InternalError> {
@@ -921,13 +913,13 @@ fn validate_store_cycle_reclamation_response(
     root: Principal,
     response: &WasmStoreDeletionCycleReclamationResponse,
 ) -> Result<(), InternalError> {
-    let expected_maximum_cycles_to_retain = store_cycle_reclamation_ceiling(intent)?;
+    let expected_retained_cycles_target = store_cycle_reclamation_target(intent)?;
     let response_is_exact = [
         response.destination == root,
-        response.maximum_cycles_to_retain == expected_maximum_cycles_to_retain,
+        response.retained_cycles_target == expected_retained_cycles_target,
         response.cycles_before <= intent.observed_cycles_before_reclamation,
         response.cycles_transferred <= response.cycles_before,
-        response.cycles_after <= intent.maximum_cycles_to_retain,
+        response.cycles_after <= intent.retained_cycles_target,
     ]
     .into_iter()
     .all(|valid| valid);
@@ -940,11 +932,11 @@ fn validate_store_cycle_reclamation_response(
     Ok(())
 }
 
-fn store_cycle_reclamation_ceiling(
+fn store_cycle_reclamation_target(
     intent: &RootFleetSubnetStoreDeletionIntentView,
 ) -> Result<u128, InternalError> {
     intent
-        .maximum_cycles_to_retain
+        .retained_cycles_target
         .checked_sub(WASM_STORE_DELETION_CALL_REFUND_HEADROOM_CYCLES)
         .ok_or_else(|| {
             PublicationWorkflowError::InvalidState(
@@ -1442,7 +1434,7 @@ mod tests {
             observed_module_hash: [5; 32],
             observed_controllers: vec![root],
             observed_cycles_before_reclamation: 10,
-            maximum_cycles_to_retain: 5,
+            retained_cycles_target: 5,
             observed_cycles_after_reclamation: Some(5),
             cycles_reclaimed_at_ns: Some(42),
             prepared_at_ns: 41,

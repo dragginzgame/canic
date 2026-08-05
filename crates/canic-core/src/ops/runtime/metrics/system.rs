@@ -89,13 +89,13 @@ mod tests {
     fn metrics_are_isolated_per_kind() {
         SystemMetrics::reset();
 
-        SystemMetrics::increment(SystemMetricKind::CreateCanister);
+        SystemMetrics::increment(SystemMetricKind::InstallCode);
         SystemMetrics::increment(SystemMetricKind::DeleteCanister);
         SystemMetrics::increment(SystemMetricKind::DeleteCanister);
 
         let map = snapshot_map();
 
-        assert_eq!(map.get(&SystemMetricKind::CreateCanister), Some(&1));
+        assert_eq!(map.get(&SystemMetricKind::InstallCode), Some(&1));
         assert_eq!(map.get(&SystemMetricKind::DeleteCanister), Some(&2));
     }
 

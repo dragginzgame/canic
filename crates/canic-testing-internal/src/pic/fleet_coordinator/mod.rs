@@ -574,7 +574,6 @@ maximum_instances = 3
             },
             limits: FleetSubnetRootLimits {
                 maximum_component_instances: 3,
-                maximum_managed_canisters: 100,
                 maximum_registry_bytes: 2_097_152,
                 maximum_wasm_store_bytes: 268_435_456,
                 canister_pool: FleetSubnetCanisterPoolConfig {

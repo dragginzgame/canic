@@ -85,7 +85,6 @@ fn subnet(byte: u8) -> SubnetId {
 fn limits() -> FleetSubnetRootLimits {
     FleetSubnetRootLimits {
         maximum_component_instances: 8,
-        maximum_managed_canisters: 64,
         maximum_registry_bytes: 4_194_304,
         maximum_wasm_store_bytes: 40_000_000,
         canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {

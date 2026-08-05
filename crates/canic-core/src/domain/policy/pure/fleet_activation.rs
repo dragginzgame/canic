@@ -13,8 +13,8 @@ use crate::{
         CANIC_FLEET_REGISTRY_MIRROR_STATUS, CANIC_FLEET_REGISTRY_SYNC_STATUS,
         CANIC_FLEET_REGISTRY_SYNCHRONIZE, CANIC_FLEET_SUBNET_ROOT_AUTHORITY,
         CANIC_FLEET_SUBNET_WASM_STORE_ADOPT, CANIC_FLEET_SUBNET_WASM_STORE_ADOPTION_STATUS,
-        CANIC_FLEET_SUBNET_WASM_STORE_AUTHORITY, CANIC_MANAGED_CANISTER_BINDING,
-        CANIC_PREPARE_FLEET_ACTIVATION, CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION,
+        CANIC_FLEET_SUBNET_WASM_STORE_AUTHORITY, CANIC_MANAGED_CANISTER_BINDING, CANIC_POOL_ADMIN,
+        CANIC_POOL_LIST, CANIC_PREPARE_FLEET_ACTIVATION, CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION,
         CANIC_RESUME_FLEET_ACTIVATION, CANIC_ROOT_COMPONENT_ALLOCATE,
         CANIC_ROOT_COMPONENT_ALLOCATION_STATUS, CANIC_ROOT_COMPONENT_COMMIT,
         CANIC_ROOT_COMPONENT_CREATE, CANIC_ROOT_COMPONENT_DIRECTORY_HEAD,
@@ -96,6 +96,7 @@ pub fn require_prepared_root_endpoint(
         || is_query(call, CANIC_ROOT_COMPONENT_REGISTRY_PARTITION)
         || is_query(call, CANIC_ROOT_COMPONENT_DIRECTORY_HEAD)
         || is_query(call, CANIC_ROOT_COMPONENT_DIRECTORY_PAGE)
+        || is_query(call, CANIC_POOL_LIST)
         || is_composite_query(call, CANIC_ROOT_STORE_BOOTSTRAP_STATUS)
         || is_composite_query(call, CANIC_FLEET_REGISTRY_SYNC_STATUS)
         || is_composite_query(call, CANIC_FLEET_REGISTRY_MIRROR_STATUS)
@@ -106,6 +107,7 @@ pub fn require_prepared_root_endpoint(
                 CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
                 CANIC_FLEET_REGISTRY_SYNCHRONIZE,
                 CANIC_FLEET_SUBNET_WASM_STORE_ADOPT,
+                CANIC_POOL_ADMIN,
                 CANIC_PREPARE_FLEET_ACTIVATION,
                 CANIC_RESUME_FLEET_ACTIVATION,
                 CANIC_ROOT_COMPONENT_ALLOCATE,
@@ -223,6 +225,8 @@ mod tests {
             ),
             (CANIC_ROOT_COMPONENT_DIRECTORY_HEAD, EndpointCallKind::Query),
             (CANIC_ROOT_COMPONENT_DIRECTORY_PAGE, EndpointCallKind::Query),
+            (CANIC_POOL_LIST, EndpointCallKind::Query),
+            (CANIC_POOL_ADMIN, EndpointCallKind::Update),
             (CANIC_PREPARE_FLEET_ACTIVATION, EndpointCallKind::Update),
             (CANIC_RESUME_FLEET_ACTIVATION, EndpointCallKind::Update),
             (CANIC_ROOT_STORE_BOOTSTRAP, EndpointCallKind::Update),
@@ -252,6 +256,8 @@ mod tests {
             (CANIC_AUTHORITY_SNAPSHOT_PREPARE, EndpointCallKind::Update),
             (CANIC_AUTHORITY_SNAPSHOT_RESUME, EndpointCallKind::Update),
             (CANIC_SYNC_STATE, EndpointCallKind::Update),
+            (CANIC_POOL_ADMIN, EndpointCallKind::Query),
+            (CANIC_POOL_LIST, EndpointCallKind::Update),
             ("canic_upsert_root_issuer_policy", EndpointCallKind::Update),
             (CANIC_FLEET_ACTIVATION_STATUS, EndpointCallKind::Update),
             (CANIC_ROOT_PEER_COMPONENT_ALLOCATE, EndpointCallKind::Update),

@@ -373,7 +373,6 @@ pub enum ManagementCallMetricOperation {
     CanisterInfo,
     CanisterStatus,
     ClearChunkStore,
-    CreateCanister,
     DeleteCanister,
     DepositCycles,
     EcdsaPublicKey,

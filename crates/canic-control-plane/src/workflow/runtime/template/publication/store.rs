@@ -67,11 +67,11 @@ pub(super) async fn store_complete_gc(store_pid: Principal) -> Result<(), Intern
 // Return transferable cycles from one empty GC-complete Store to its authenticated root.
 pub(super) async fn store_reclaim_deletion_cycles(
     store_pid: Principal,
-    maximum_cycles_to_retain: u128,
+    retained_cycles_target: u128,
 ) -> Result<WasmStoreDeletionCycleReclamationResponse, InternalError> {
     WasmStoreInternalClient::new(store_pid)
         .reclaim_deletion_cycles(WasmStoreDeletionCycleReclamationRequest {
-            maximum_cycles_to_retain,
+            retained_cycles_target,
         })
         .await
 }

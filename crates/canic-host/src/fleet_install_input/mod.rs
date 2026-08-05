@@ -221,7 +221,6 @@ struct CanisterPoolInputDocument {
 #[serde(deny_unknown_fields)]
 struct FleetSubnetRootLimitsDocument {
     maximum_component_instances: u32,
-    maximum_managed_canisters: u32,
     maximum_registry_bytes: u64,
     maximum_wasm_store_bytes: u64,
     cycles_funding: CyclesFundingBudgetDocument,
@@ -391,7 +390,6 @@ fn resolve_document(
             component_admissions,
             limits: FleetSubnetRootLimits {
                 maximum_component_instances: root.limits.maximum_component_instances,
-                maximum_managed_canisters: root.limits.maximum_managed_canisters,
                 maximum_registry_bytes: root.limits.maximum_registry_bytes,
                 maximum_wasm_store_bytes: root.limits.maximum_wasm_store_bytes,
                 canister_pool: FleetSubnetCanisterPoolConfig {
@@ -572,14 +570,6 @@ fn validate_canister_pool(
             reason: format!(
                 "maximum_size {} is smaller than minimum_size {}",
                 pool.maximum_size, pool.minimum_size
-            ),
-        });
-    }
-    if pool.maximum_size > root.limits.maximum_managed_canisters {
-        return Err(FleetInstallInputError::InvalidCanisterPool {
-            reason: format!(
-                "maximum_size {} exceeds maximum_managed_canisters {}",
-                pool.maximum_size, root.limits.maximum_managed_canisters
             ),
         });
     }

@@ -58,7 +58,6 @@ imports = []
 
 [fleet_subnet_roots.limits]
 maximum_component_instances = 4
-maximum_managed_canisters = 128
 maximum_registry_bytes = 16777216
 maximum_wasm_store_bytes = 200000000
 

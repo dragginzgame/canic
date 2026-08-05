@@ -213,7 +213,7 @@ pub(super) fn mark_root_provision_external_effect(
 ) -> Result<(), InternalError> {
     replay::mark_external_effect_in_flight(
         pending,
-        ExternalEffectDescriptor::ManagementCreateCanister {
+        ExternalEffectDescriptor::RootCanisterProvision {
             command_kind: root_provision_command_kind(command_kind),
         },
     )?;

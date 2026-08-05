@@ -682,7 +682,7 @@ mod tests {
         let mut record = receipt_record_fixture();
         record.command_kind = crate::model::replay::PLACEMENT_CHILD_REPLAY_COMMAND_KIND.to_string();
         record.status = ReplayReceiptStatus::Committed;
-        record.effect = Some(ExternalEffectDescriptor::ManagementCreateCanister {
+        record.effect = Some(ExternalEffectDescriptor::RootCanisterProvision {
             command_kind: CommandKind::new(
                 crate::model::replay::PLACEMENT_CHILD_REPLAY_COMMAND_KIND,
             )

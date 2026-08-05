@@ -8,12 +8,22 @@ use ic_testkit::pic::{CandidCallExt, PocketIc};
 use std::path::Path;
 
 const ROOT_INSTALL_CYCLES: u128 = 80_000_000_000_000;
+const PREPAID_POOL_ASSET_COUNT: usize = 10;
+const PREPAID_POOL_ASSET_CYCLES: u128 = 6_000_000_000_000;
 
 mod tests {
     use super::*;
     use candid::{decode_one, encode_one};
     #[cfg(test)]
+    use canic::dto::pool::{
+        CanisterPoolAssetOrigin, CanisterPoolAssetStatus, CanisterPoolRecycleReset,
+    };
+    use canic::dto::pool::{
+        CanisterPoolResponse, CanisterPoolStatusRequest, PoolAdminCommand, PoolAdminResponse,
+    };
+    #[cfg(test)]
     use canic::ids::ComponentChildBinding;
+    use canic::protocol::{CANIC_POOL_ADMIN, CANIC_POOL_LIST};
     use canic::{
         CANIC_WASM_CHUNK_BYTES,
         dto::{
@@ -87,13 +97,9 @@ mod tests {
             AuthoritySnapshotRequest,
         },
         dto::fleet_registry::FleetRegistryVersion,
-        dto::pool::{
-            CanisterPoolAssetOrigin, CanisterPoolAssetStatus, CanisterPoolResponse,
-            CanisterPoolStatusRequest, PoolAdminCommand, PoolAdminResponse,
-        },
         protocol::{
             CANIC_AUTHORITY_RESTORE_FENCE_STATUS, CANIC_AUTHORITY_SNAPSHOT_PREPARE,
-            CANIC_AUTHORITY_SNAPSHOT_RESUME, CANIC_POOL_ADMIN, CANIC_POOL_LIST,
+            CANIC_AUTHORITY_SNAPSHOT_RESUME,
         },
     };
     use canic_control_plane::{
@@ -659,6 +665,33 @@ mod tests {
     }
 
     #[cfg(test)]
+    fn assert_reset_recycling_asset(
+        fixture: &ActiveComponentRegistryFixture,
+        canister_id: Principal,
+        component: ComponentInstanceId,
+    ) {
+        let live = fixture
+            .pic()
+            .canister_status(canister_id, Some(fixture.root))
+            .expect("reset recycling Canister remains present");
+        assert_eq!(live.settings.controllers, vec![fixture.root]);
+        assert_eq!(live.module_hash, None);
+
+        let status = pool_status(fixture);
+        let asset = status
+            .entries
+            .iter()
+            .find(|asset| asset.canister_id == canister_id)
+            .expect("reset Canister remains in exclusive physical inventory");
+        assert_eq!(asset.origin, CanisterPoolAssetOrigin::Recycled);
+        assert!(matches!(
+            &asset.status,
+            CanisterPoolAssetStatus::Recycling { claim, reset }
+                if claim.component == component && *reset == CanisterPoolRecycleReset::Ready
+        ));
+    }
+
+    #[cfg(test)]
     fn pool_status(fixture: &ActiveComponentRegistryFixture) -> CanisterPoolResponse {
         let status: Result<CanisterPoolResponse, Error> = fixture
             .pic()
@@ -676,7 +709,18 @@ mod tests {
 
     #[cfg(test)]
     fn handoff_all_pool_assets(fixture: &ActiveComponentRegistryFixture) {
-        let assets = pool_status(fixture).entries;
+        let before = pool_status(fixture);
+        assert_eq!(before.store, 1, "the adopted Store remains root-owned");
+        let assets = before
+            .entries
+            .into_iter()
+            .filter(|asset| {
+                matches!(
+                    asset.status,
+                    CanisterPoolAssetStatus::Ready | CanisterPoolAssetStatus::Failed { .. }
+                )
+            })
+            .collect::<Vec<_>>();
         assert!(!assets.is_empty(), "root draining must retain paid assets");
         let expected_handoffs = u64::try_from(assets.len()).expect("bounded pool length");
         for asset in assets {
@@ -725,8 +769,13 @@ mod tests {
             assert_eq!(replay.expect("replay pool asset handoff"), handed_off);
         }
         let status = pool_status(fixture);
-        assert_eq!(status.tracked, 0);
-        assert!(status.entries.is_empty());
+        assert_eq!(status.tracked, 1);
+        assert_eq!(status.store, 1);
+        assert_eq!(status.pooled, 0);
+        assert!(matches!(
+            status.entries.as_slice(),
+            [asset] if matches!(asset.status, CanisterPoolAssetStatus::Store)
+        ));
         assert_eq!(status.completed_handoffs, expected_handoffs);
     }
 
@@ -1137,7 +1186,7 @@ mod tests {
             fixture.verifier.canister_id
         );
         assert_eq!(receipt.deletion.stopped.stop.controller, fixture.root);
-        assert_recycled_pool_asset(&fixture, child);
+        assert_reset_recycling_asset(&fixture, child, fixture.verifier.component);
 
         let retry: Result<RootComponentSubtreeRemovalResponse, Error> = fixture
             .pic()
@@ -1275,7 +1324,11 @@ mod tests {
             fixture.verifier.canister_id
         );
         assert_eq!(receipt.deletion.quiescence.stop.controller, fixture.root);
-        assert_recycled_pool_asset(&fixture, fixture.verifier.canister_id);
+        assert_reset_recycling_asset(
+            &fixture,
+            fixture.verifier.canister_id,
+            fixture.verifier.component,
+        );
 
         let retry: Result<RootComponentDeletionResponse, Error> = fixture
             .pic()
@@ -1712,8 +1765,8 @@ mod tests {
         assert_ne!(deletion.observed_module_hash, [0; 32]);
         assert!(deletion.observed_controllers.contains(&fixture.root));
         assert!(deletion.observed_cycles_before_reclamation <= store_cycles_before_deletion);
-        assert!(deletion.observed_cycles_before_reclamation > deletion.maximum_cycles_to_retain);
-        assert!(deletion.observed_cycles_after_reclamation <= deletion.maximum_cycles_to_retain);
+        assert!(deletion.observed_cycles_before_reclamation > deletion.retained_cycles_target);
+        assert!(deletion.observed_cycles_after_reclamation <= deletion.retained_cycles_target);
         assert!(deletion.cycles_reclaimed_at_ns >= deletion.prepared_at_ns);
         assert!(deletion.observed_absent_at_ns >= deletion.prepared_at_ns);
         assert!(deletion.completed_at_ns >= deletion.observed_absent_at_ns);
@@ -1796,7 +1849,7 @@ mod tests {
             .checked_mul(freezing_threshold_seconds)
             .expect("root freezing reserve")
             .div_ceil(86_400);
-        let maximum_cycles_to_retain = freezing_reserve
+        let retained_cycles_target = freezing_reserve
             .checked_add(FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES)
             .expect("root deletion reserve");
         let coordinator_cycles_before =
@@ -1804,7 +1857,7 @@ mod tests {
         let preparation_request = FleetSubnetRootDeletionPreparationRequest {
             operation_id,
             expected_store_deletion_hash: store_deletion_hash,
-            maximum_cycles_to_retain,
+            retained_cycles_target,
             observed_reserved_cycles: nat_u128(&status.reserved_cycles),
             observed_idle_cycles_burned_per_day: idle_cycles_burned_per_day,
             observed_freezing_threshold_seconds: freezing_threshold_seconds,
@@ -1823,10 +1876,10 @@ mod tests {
         assert_eq!(preparation.final_inventory_hash, final_inventory_hash);
         assert_eq!(preparation.store_deletion_hash, store_deletion_hash);
         assert!(
-            preparation.observed_cycles_before_reclamation > preparation.maximum_cycles_to_retain
+            preparation.observed_cycles_before_reclamation > preparation.retained_cycles_target
         );
         assert!(
-            preparation.observed_cycles_after_reclamation <= preparation.maximum_cycles_to_retain
+            preparation.observed_cycles_after_reclamation <= preparation.retained_cycles_target
         );
         assert_ne!(preparation.coordinator_intent_hash, [0; 32]);
         assert_ne!(preparation.coordinator_readiness_hash, [0; 32]);
@@ -2320,7 +2373,16 @@ mod tests {
         assert_eq!(summary.status, FleetSubnetRootStatus::Active);
         assert_eq!(summary.infrastructure_canisters, 2);
         assert_eq!(summary.component_canisters, 2);
-        assert_eq!(summary.total_canisters, 4);
+        assert_eq!(
+            summary.pooled_canisters,
+            u32::try_from(PREPAID_POOL_ASSET_COUNT - 2).expect("bounded fixture pool size")
+        );
+        assert_eq!(
+            summary.total_canisters,
+            summary.infrastructure_canisters
+                + summary.component_canisters
+                + summary.pooled_canisters
+        );
     }
 
     #[cfg(test)]
@@ -3090,9 +3152,8 @@ mod tests {
         assert_eq!(canister_status.settings.controllers, vec![fixture.root_id]);
         assert_eq!(canister_status.module_hash, None);
         assert!(
-            canister_status.cycles > 0_u128
-                && canister_status.cycles <= creation.initial_cycles.to_u128(),
-            "the created Canister must retain cycles from the exact frozen creation funding"
+            canister_status.cycles >= creation.initial_cycles.to_u128(),
+            "the claimed prepaid asset must meet the Component's frozen minimum balance"
         );
 
         let retry: Result<RootComponentAllocationResponse, Error> = pic
@@ -3705,6 +3766,7 @@ mod tests {
         let mut init_args =
             decode_one::<FleetSubnetRootInitArgs>(&init_bytes).expect("decode root init authority");
         bind_init_args_to_pocket_ic_subnet(pic, root_id, &mut init_args);
+        init_args.canister_pool_imports = create_prepaid_pool_assets(pic, root_id);
         let store_init_args = FleetSubnetWasmStoreInitArgs {
             authority: init_args.authority.wasm_store_authority.clone(),
             install_id: init_args.install_id,
@@ -3720,6 +3782,7 @@ mod tests {
         pic.install_canister(root_id, root_wasm, init_bytes, None);
         adopt_sibling_wasm_store(pic, root_id, &init_args);
         assert_prepared(pic, root_id);
+        reset_prepaid_pool_assets(pic, root_id);
 
         let version = TemplateVersion::owned(manifest.release_build_id.to_string());
         stage_chunked_payload(
@@ -3766,6 +3829,46 @@ mod tests {
             request,
             response: response.expect("root Store bootstrap"),
         }
+    }
+
+    fn create_prepaid_pool_assets(pic: &PocketIc, root: Principal) -> Vec<Principal> {
+        (0..PREPAID_POOL_ASSET_COUNT)
+            .map(|_| {
+                let canister = pic.create_canister();
+                pic.add_cycles(canister, PREPAID_POOL_ASSET_CYCLES);
+                pic.set_controllers(canister, None, vec![root])
+                    .expect("prepare root-owned prepaid Canister");
+                canister
+            })
+            .collect()
+    }
+
+    fn reset_prepaid_pool_assets(pic: &PocketIc, root: Principal) {
+        for _ in 0..PREPAID_POOL_ASSET_COUNT {
+            let response: Result<PoolAdminResponse, Error> = pic
+                .update_candid(root, CANIC_POOL_ADMIN, (PoolAdminCommand::Maintain,))
+                .expect("reset prepaid Canister transport");
+            assert!(matches!(
+                response.expect("reset prepaid Canister"),
+                PoolAdminResponse::ResetReady { .. } | PoolAdminResponse::Maintained
+            ));
+        }
+        let status: Result<CanisterPoolResponse, Error> = pic
+            .query_candid(
+                root,
+                CANIC_POOL_LIST,
+                (CanisterPoolStatusRequest {
+                    start_after: None,
+                    limit: 256,
+                },),
+            )
+            .expect("query prepared prepaid inventory transport");
+        let status = status.expect("query prepared prepaid inventory");
+        assert_eq!(
+            status.ready,
+            u32::try_from(PREPAID_POOL_ASSET_COUNT).expect("bounded fixture pool size")
+        );
+        assert_eq!(status.pending_reset, 0);
     }
 
     fn bind_init_args_to_pocket_ic_subnet(

@@ -84,6 +84,7 @@ impl LifecycleApi {
     ) {
         let canister_pool_config = args.authority.binding.limits.canister_pool.clone();
         let canister_pool_imports = args.canister_pool_imports.clone();
+        let wasm_store = args.authority.wasm_store_authority.wasm_store;
         crate::runtime::install::register_template_module_source_resolver();
         canic_core::api::lifecycle::root::LifecycleApi::init_root_canister_before_bootstrap(
             args,
@@ -91,14 +92,18 @@ impl LifecycleApi {
             config_source,
             config_path,
         );
-        crate::ops::canister_pool::CanisterPoolOps::initialize_imports(
-            &canister_pool_config,
-            &canister_pool_imports,
-            canic_core::control_plane_support::ops::ic::IcOps::now_nanos(),
-        )
-        .unwrap_or_else(|error| {
-            ic_cdk::trap(format!("Canister pool initialization failed: {error}"))
-        });
+        let now_ns = canic_core::control_plane_support::ops::ic::IcOps::now_nanos();
+        crate::ops::canister_pool::CanisterPoolOps::initialize_store(wasm_store, now_ns)
+            .and_then(|()| {
+                crate::ops::canister_pool::CanisterPoolOps::initialize_imports(
+                    &canister_pool_config,
+                    &canister_pool_imports,
+                    now_ns,
+                )
+            })
+            .unwrap_or_else(|error| {
+                ic_cdk::trap(format!("Canister pool initialization failed: {error}"))
+            });
     }
 
     pub fn fleet_subnet_root_authority()

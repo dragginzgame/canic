@@ -196,8 +196,6 @@ impl From<ComponentAllocationPolicyError> for InternalError {
             | ComponentAllocationPolicyError::ComponentCapacityExhausted
             | ComponentAllocationPolicyError::ComponentSpecCountOverflow(_)
             | ComponentAllocationPolicyError::ComponentSpecCapacityExhausted(_)
-            | ComponentAllocationPolicyError::ManagedCanisterCountOverflow
-            | ComponentAllocationPolicyError::ManagedCanisterCapacityExhausted
             | ComponentAllocationPolicyError::PeerProvisioningCountOverflow
             | ComponentAllocationPolicyError::PeerProvisioningCapacityExhausted { .. } => {
                 Self::resource_exhausted(message)
@@ -242,9 +240,7 @@ impl From<ComponentChildAllocationPolicyError> for InternalError {
             ComponentChildAllocationPolicyError::ParentRoleCountOverflow
             | ComponentChildAllocationPolicyError::ParentRoleCapacityExhausted { .. }
             | ComponentChildAllocationPolicyError::ComponentDescendantCapacityExhausted
-            | ComponentChildAllocationPolicyError::ComponentCountOverflow
-            | ComponentChildAllocationPolicyError::ManagedCanisterCountOverflow
-            | ComponentChildAllocationPolicyError::ManagedCanisterCapacityExhausted => {
+            | ComponentChildAllocationPolicyError::ComponentCountOverflow => {
                 Self::resource_exhausted(message)
             }
             ComponentChildAllocationPolicyError::InvalidComponentBinding

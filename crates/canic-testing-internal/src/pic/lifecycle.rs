@@ -189,7 +189,6 @@ fn init_payload(canister_id: Principal) -> CanisterInitPayload {
         component_topology_digest,
         limits: FleetSubnetRootLimits {
             maximum_component_instances: 1,
-            maximum_managed_canisters: 2,
             maximum_registry_bytes: 1_048_576,
             maximum_wasm_store_bytes: 1_048_576,
             canister_pool: FleetSubnetCanisterPoolConfig {

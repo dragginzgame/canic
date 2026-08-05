@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-04
+Last updated: 2026-08-05
 
 ## Purpose
 
@@ -14,10 +14,20 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.100.101`.
-- The latest published release is `v0.100.101` at
-  `cc7ebfdfc40ca45bfb9925ff77314c4d8d71763c`.
-- Open patch draft `0.100.102` advances the unified test runtime to
+- The workspace package version is `0.100.102`.
+- The latest published release is `v0.100.102` at
+  `4e6966cf14db0915235ec016b88356590c1cfbf4`.
+- Open `0.100.103` closeout draft removes root-autonomous raw
+  Canister creation, proactive refill and paid fallback because a lost
+  management-call result cannot recover the allocated principal. Runtime
+  provisioning now claims only operator-imported or recycled assets. One
+  exclusive root-owned physical inventory accounts for the sibling Store,
+  pool transitions, workloads and Store deletion; the unenforceable aggregate
+  Canister maximum and absolute deletion-cycle caps are removed. Prose-only
+  "was not found" diagnostics no longer prove physical absence. Authenticated
+  minimum/top-up automation, overfunding alerts and any Cycles Ledger creation
+  path remain explicit 0.101 work after retry-horizon recovery is proved.
+- Released `0.100.102` advances the unified test runtime to
   `ic-testkit 0.3.2` and PocketIC `15.0.0`. Canic now uses the re-exported raw
   `PocketIc` plus focused extension traits, including typed startup, time and
   explicit snapshot-funding APIs; removes the direct dependency, global
@@ -124,8 +134,8 @@ Historical detail is archived at:
   the final root-build side effect and records a passing post-extraction
   boundary. Released 0.100.100 enforces the final proof's separate-process
   root-deletion boundary, and released 0.100.101 relays encrypted-identity
-  credentials to every ICP subprocess. Open 0.100.102 completes the disposable
-  real-network proof and its exact terminal replay.
+  credentials to every ICP subprocess. Released 0.100.102 completes the
+  disposable real-network proof and its exact terminal replay.
 - Proposed `0.105` defines provider-neutral declarative authentication
   profiles as the sole source of multi-role user-token grants and
   install-owned issuer/verifier policy. Its initial Toko path uses one
@@ -2183,23 +2193,27 @@ First primary results:
 
 ## Next Action
 
-Finish the maintainer-owned `0.100.102` release bookkeeping and publish the
-validated closeout batch, then begin 0.101 against the accepted design. The
-disposable mainnet proof is complete: guarded root-deletion preparation and
-execution ran as separate processes, independent status observes the Store and
-root absent, and the surviving Coordinator returns the exact terminal receipt
-on replay without another root effect. The retained implementation detail is
-in the [implementation tracker](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md).
+Run the maintainer-owned full release gate and publish the open 0.100 closeout
+correction before beginning 0.101.
+The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
+independent Store/root deletion and terminal replay, but it does not prove the
+corrected operator-import-only pool or exclusive physical inventory. Preserve
+the reinstall-only boundary and do not restore runtime raw Canister creation,
+autonomous refill, paid fallback, an aggregate physical Canister cap, an
+absolute balance cap or prose-only absence detection. The retained
+implementation detail is in the
+[implementation tracker](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md).
 Fresh installation now journals and verifies the Coordinator, every planned
 Fleet Subnet Root, each root's exact topology-admitted local Store, and every
 root's Registry `Joining` row, private snapshot candidate and exact
 Coordinator acknowledgement, then atomically commits and independently
 verifies the complete Coordinator Registry as all-`Active`. It also
 atomically activates and independently verifies every root's exact matching
-Registry Mirror/Fleet Directory. Each root can now reserve exact admitted
-top-level Component identity and capacity, create its empty Canister, install
-the exact Store-backed Wasm under an immutable `ComponentBinding` and verify
-the live module, controller and retained binding through durable exact retry.
+Registry Mirror/Fleet Directory. Each root can reserve exact admitted
+top-level Component identity and capacity, claim one sufficient Ready
+operator-imported or recycled Canister, install the exact Store-backed Wasm
+under an immutable `ComponentBinding` and verify the live module, controller
+and retained binding through durable exact retry.
 It atomically commits that Component into counters and its root-local Registry
 partition, derives exact Fleet/Component Directory authority, distributes it
 directly, activates the target only from that retained authority and records
@@ -2214,9 +2228,10 @@ root and an exact active Component Registry partition, while the real
 Registry-created issuer exercises claim rejection and guard metrics without a
 static bootstrap fixture.
 
-The root now also reserves, creates, installs and atomically commits exact
-children from its accepted Store catalog. Every public internal lifecycle
-endpoint authenticates the caller as the same registered immediate parent.
+The root also reserves, claims prepaid assets for, installs and atomically
+commits exact children from its accepted Store catalog. Every public internal
+lifecycle endpoint authenticates the caller as the same registered immediate
+parent.
 The normalized child row, principal and parent/role traversal indexes,
 capacity transfer, exact terminal bytes and descendant-bound Component head
 survive interruption with one immutable commitment receipt.
@@ -2623,11 +2638,11 @@ boundary baseline, released `0.100.98` completes the independent host-installed
 Store cut, released `0.100.99` records the passing post-extraction boundary,
 released `0.100.100` requires a previously retained Coordinator execution
 intent before destructive root deletion, and released `0.100.101` removes the
-password-encrypted identity execution blocker. Open `0.100.102` completes the
-maintainer-owned disposable real-network proof, including isolated release
+password-encrypted identity execution blocker. Released `0.100.102` completes
+the maintainer-owned disposable real-network proof, including isolated release
 installation, empty-root retirement, sibling Store deletion, separate-process
-root deletion and exact terminal receipt replay. No 0.100 closeout item remains
-after its focused validation and release bookkeeping.
+root deletion and exact terminal receipt replay. No 0.100 closeout item
+remains.
 
 ## Historical Release Detail
 

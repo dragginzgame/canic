@@ -105,9 +105,7 @@ fn journal_rejects_changed_source_or_response_authority() {
     ));
 
     let mut changed = joining;
-    changed.fleet_subnet_roots[0]
-        .limits
-        .maximum_managed_canisters += 1;
+    changed.fleet_subnet_roots[0].limits.maximum_registry_bytes += 1;
     assert!(matches!(
         plan_fleet_registry_activation(PlanFleetRegistryActivationRequest {
             fleet_install_plan: &plan,
@@ -239,7 +237,6 @@ fn subnet(byte: u8) -> SubnetId {
 fn root_limits() -> FleetSubnetRootLimits {
     FleetSubnetRootLimits {
         maximum_component_instances: 2,
-        maximum_managed_canisters: 20_000,
         maximum_registry_bytes: 2_097_152,
         maximum_wasm_store_bytes: 268_435_456,
         canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {

@@ -275,7 +275,6 @@ type FleetSubnetRootBinding = record {
 type FleetSubnetRootLimits = record {
   maximum_registry_bytes : nat64;
   maximum_wasm_store_bytes : nat64;
-  maximum_managed_canisters : nat32;
   maximum_component_instances : nat32;
   cycles_funding : CyclesFundingBudget;
 };
@@ -373,12 +372,12 @@ type WasmStoreCatalogEntryResponse = record {
   payload_hash : blob;
 };
 type WasmStoreDeletionCycleReclamationRequest = record {
-  maximum_cycles_to_retain : nat;
+  retained_cycles_target : nat;
 };
 type WasmStoreDeletionCycleReclamationResponse = record {
   cycles_after : nat;
   destination : principal;
-  maximum_cycles_to_retain : nat;
+  retained_cycles_target : nat;
   cycles_transferred : nat;
   cycles_before : nat;
 };

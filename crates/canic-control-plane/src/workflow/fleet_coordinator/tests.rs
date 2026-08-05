@@ -188,7 +188,7 @@ fn root_join_compare_and_commit_retains_exact_response_receipts() {
     );
 
     let mut conflicting_entry = first_entry;
-    conflicting_entry.limits.maximum_managed_canisters += 1;
+    conflicting_entry.limits.maximum_registry_bytes += 1;
     let conflict = FleetCoordinatorWorkflow::join_root(FleetSubnetRootJoinRequest {
         expected_registry: second.version,
         entry: conflicting_entry,
@@ -480,14 +480,14 @@ fn assert_root_deletion_lifecycle(
 ) {
     let coordinator = removal.version.authority.binding.coordinator;
     let operation_id = removal.final_inventory.operation_id;
-    let maximum_cycles_to_retain = FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES + 1;
+    let retained_cycles_target = FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES + 1;
     let intent_request = FleetSubnetRootDeletionReadinessIntentRequest {
         operation_id,
         fleet_subnet_root: root.fleet_subnet_root,
         final_inventory_hash: removal.final_inventory.inventory_hash,
         store_deletion_hash: [41; 32],
         observed_cycles_before_reclamation: 500_000_000_000,
-        maximum_cycles_to_retain,
+        retained_cycles_target,
         observed_reserved_cycles: 0,
         observed_idle_cycles_burned_per_day: 86_400,
         observed_freezing_threshold_seconds: 1,
@@ -679,7 +679,6 @@ fn joining_entry(
         },
         limits: FleetSubnetRootLimits {
             maximum_component_instances: 3,
-            maximum_managed_canisters: 100,
             maximum_registry_bytes: 2_097_152,
             maximum_wasm_store_bytes: 268_435_456,
             canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {

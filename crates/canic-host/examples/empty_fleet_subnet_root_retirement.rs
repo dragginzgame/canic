@@ -328,10 +328,7 @@ fn handoff_pool_assets(
             limit: 256,
         },
     )?;
-    if pool.next_start_after.is_some()
-        || pool.pending_creation.is_some()
-        || pool.pending_handoff.is_some()
-    {
+    if pool.next_start_after.is_some() || pool.pending_handoff.is_some() {
         return Err("Canister pool is not in one complete settled page".into());
     }
     let mut handed_off = Vec::with_capacity(pool.entries.len());

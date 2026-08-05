@@ -500,7 +500,6 @@ fn encode_admission(encoder: &mut CanonicalEncoder, admission: &ComponentSpecAdm
 
 fn encode_limits(encoder: &mut CanonicalEncoder, limits: &FleetSubnetRootLimits) {
     encoder.u32(limits.maximum_component_instances);
-    encoder.u32(limits.maximum_managed_canisters);
     encoder.u64(limits.maximum_registry_bytes);
     encoder.u64(limits.maximum_wasm_store_bytes);
     encoder.u32(limits.canister_pool.minimum_size);
