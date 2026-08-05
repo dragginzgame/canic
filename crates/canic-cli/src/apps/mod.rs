@@ -80,7 +80,7 @@ pub enum AppCommandError {
     Create(#[from] scaffold::ScaffoldCommandError),
 
     #[error("config: {0}")]
-    Config(#[from] crate::list::ListCommandError),
+    Config(#[source] Box<crate::list::ListCommandError>),
 
     #[error(transparent)]
     AdoptionReport(#[from] AdoptionReportError),
@@ -102,6 +102,12 @@ pub enum AppCommandError {
 
     #[error(transparent)]
     Host(#[from] Box<dyn std::error::Error>),
+}
+
+impl From<crate::list::ListCommandError> for AppCommandError {
+    fn from(error: crate::list::ListCommandError) -> Self {
+        Self::Config(Box::new(error))
+    }
 }
 
 pub fn run<I>(args: I) -> Result<(), AppCommandError>

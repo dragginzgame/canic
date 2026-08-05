@@ -90,7 +90,7 @@ fn report_status_errors_delegate_suppression_and_exit_codes() {
         CliError::Deploy(deploy::DeployCommandError::PlanBlocked(
             "blocked".to_string(),
         )),
-        CliError::Inspect(inspect::InspectCommandError::ReportStatus(
+        CliError::from(inspect::InspectCommandError::ReportStatus(
             "failing".to_string(),
         )),
         CliError::Medic(medic::MedicCommandError::ReportFailed),

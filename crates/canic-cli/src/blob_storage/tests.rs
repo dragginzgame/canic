@@ -145,10 +145,10 @@ fn top_level_forwards_global_icp_and_environment() {
     ])
     .expect_err("invalid cycles should be parsed after global options");
 
-    std::assert_matches!(
-        err,
-        crate::CliError::BlobStorage(BlobStorageCommandError::InvalidCycles(_))
-    );
+    let crate::CliError::BlobStorage(error) = err else {
+        panic!("expected blob-storage error");
+    };
+    std::assert_matches!(*error, BlobStorageCommandError::InvalidCycles(_));
 }
 
 #[test]

@@ -48,22 +48,52 @@ pub enum InfoCommandError {
     Usage(String),
 
     #[error("cycles: {0}")]
-    Cycles(#[from] cycles::CyclesCommandError),
+    Cycles(#[source] Box<cycles::CyclesCommandError>),
 
     #[error("endpoints: {0}")]
     Endpoints(#[from] endpoints::EndpointsCommandError),
 
     #[error("env: {0}")]
-    Env(#[from] info_env::InfoEnvCommandError),
+    Env(#[source] Box<info_env::InfoEnvCommandError>),
 
     #[error("list: {0}")]
-    List(#[from] list::ListCommandError),
+    List(#[source] Box<list::ListCommandError>),
 
     #[error("metrics: {0}")]
-    Metrics(#[from] metrics::MetricsCommandError),
+    Metrics(#[source] Box<metrics::MetricsCommandError>),
 
     #[error("subnets: {0}")]
-    Subnets(#[from] info_subnets::InfoSubnetsCommandError),
+    Subnets(#[source] Box<info_subnets::InfoSubnetsCommandError>),
+}
+
+impl From<cycles::CyclesCommandError> for InfoCommandError {
+    fn from(error: cycles::CyclesCommandError) -> Self {
+        Self::Cycles(Box::new(error))
+    }
+}
+
+impl From<info_env::InfoEnvCommandError> for InfoCommandError {
+    fn from(error: info_env::InfoEnvCommandError) -> Self {
+        Self::Env(Box::new(error))
+    }
+}
+
+impl From<list::ListCommandError> for InfoCommandError {
+    fn from(error: list::ListCommandError) -> Self {
+        Self::List(Box::new(error))
+    }
+}
+
+impl From<metrics::MetricsCommandError> for InfoCommandError {
+    fn from(error: metrics::MetricsCommandError) -> Self {
+        Self::Metrics(Box::new(error))
+    }
+}
+
+impl From<info_subnets::InfoSubnetsCommandError> for InfoCommandError {
+    fn from(error: info_subnets::InfoSubnetsCommandError) -> Self {
+        Self::Subnets(Box::new(error))
+    }
 }
 
 impl InfoCommandError {
