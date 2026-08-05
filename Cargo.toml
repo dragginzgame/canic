@@ -22,6 +22,7 @@ members = [
     "canisters/sandbox/blank",
     "canisters/test/blob_storage_cashier_mock",
     "canisters/test/blob_storage_probe",
+    "canisters/test/cycles_ledger_stub",
     "canisters/test/delegation_issuer_stub",
     "canisters/test/delegation_root_stub",
     "canisters/test/fleet_coordinator_stub",
@@ -81,7 +82,7 @@ ic-cdk = "0.20.2"
 ic-cdk-timers = "1.0"
 ic-certification = "3.0"
 ic-memory = "0.12.3"
-ic-query = { version = "0.26.15", default-features = false, features = [
+ic-query = { version = "0.28.4", default-features = false, features = [
     "subnet-catalog-host",
 ] }
 ic-signature-verification = "0.3.0"

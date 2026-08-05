@@ -8,6 +8,7 @@ use canic_core::{
         },
         types::{Cycles, Principal},
     },
+    control_plane_support::model::replay::ReplayCostGuardSettlement,
     eager_static,
     ids::ComponentInstanceId,
     impl_storable_bounded, impl_storable_unbounded,
@@ -55,9 +56,49 @@ eager_static! {
     ));
 }
 
-/// Singleton state required to recover one exact draining-root asset handoff.
+/// Why one autonomous pool refill stopped without a recoverable principal.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum CanisterPoolCreationFailureRecord {
+    UnresolvedAfterLedgerWindow,
+    LedgerCreationFailed,
+    LedgerRejected,
+}
+
+/// Durable progress of one exact Cycles Ledger pool-refill request.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum CanisterPoolCreationProgressRecord {
+    Intent {
+        uncertain_result: bool,
+    },
+    Created {
+        block_index: u64,
+        canister_id: Principal,
+    },
+    Blocked {
+        failure: CanisterPoolCreationFailureRecord,
+    },
+}
+
+/// Exact authority frozen before one autonomous Cycles Ledger creation effect.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CanisterPoolCreationRecord {
+    pub operation_id: [u8; 32],
+    pub cycles_ledger: Principal,
+    pub placement_subnet: Principal,
+    pub root: Principal,
+    pub ledger_amount: Cycles,
+    pub created_at_time_ns: u64,
+    pub prepared_at_ns: u64,
+    pub cost_guard_settlement: Option<ReplayCostGuardSettlement>,
+    pub progress: CanisterPoolCreationProgressRecord,
+}
+
+/// Singleton state required to recover exact pool refill and draining handoff effects.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterPoolStateRecord {
+    pub next_creation_sequence: u64,
+    pub last_creation_timestamp_ns: u64,
+    pub creation: Option<CanisterPoolCreationRecord>,
     pub handoff: Option<CanisterPoolHandoffRecord>,
 }
 
@@ -65,7 +106,7 @@ impl CanisterPoolStateRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "CanisterPoolStateRecord";
 }
 
-impl_storable_bounded!(CanisterPoolStateRecord, 512, false);
+impl_storable_bounded!(CanisterPoolStateRecord, 1_024, false);
 
 /// Exact retry authority for one draining-root asset handoff.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -114,6 +155,7 @@ pub enum CanisterPoolRecycleResetRecord {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum CanisterPoolAssetOriginRecord {
     InfrastructureStore,
+    Created,
     Imported,
     Recycled,
 }

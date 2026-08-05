@@ -6,6 +6,7 @@
 
 pub mod build_network;
 pub mod call;
+pub mod cycles_ledger;
 pub mod icp_refill;
 pub mod known;
 pub mod mgmt;
@@ -27,6 +28,9 @@ use thiserror::Error as ThisError;
 pub enum IcInfraError {
     #[error(transparent)]
     EmbeddedReleaseBuild(#[from] release_build::EmbeddedReleaseBuildError),
+
+    #[error(transparent)]
+    CyclesLedgerInfra(#[from] cycles_ledger::CyclesLedgerInfraError),
 
     #[error(transparent)]
     IcpRefillInfra(#[from] icp_refill::IcpRefillInfraError),

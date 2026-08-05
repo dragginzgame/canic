@@ -5,9 +5,9 @@ Date: 2026-08-05
 - State: closeout correction implemented; maintainer release gate and publish
   remain. The independent sibling Store build, installation/adoption,
   post-extraction Wasm boundary and disposable IC mainnet
-  physical-deletion/replay proof pass, while the open correction removes the
-  root-autonomous physical Canister creation and split inventory rejected by
-  the final audit.
+  physical-deletion/replay proof pass. The open correction replaces raw
+  root-side creation with a PocketIC-proved canonical Cycles Ledger refill and
+  removes the split inventory rejected by the final audit.
 - Release boundary: reinstall only.
 - Implementation started: yes; intermediate Tree identities were released in
   immutable `v0.100.0`.
@@ -16,15 +16,16 @@ Date: 2026-08-05
   `4e6966cf14db0915235ec016b88356590c1cfbf4`.
 - Published proof release: `0.100.102`; it completed the bounded mainnet proof
   and the release-build, retry and reclamation fixes exposed by its rehearsals.
-- Open patch draft: `0.100.103` hard-cuts runtime `create_canister`,
-  autonomous pool refill and paid fallback; makes operator-imported/recycled
-  assets the only Component provisioning source; unifies Store, pool,
+- Open patch draft: `0.100.103` hard-cuts raw runtime `create_canister` and
+  Component paid fallback; restores bounded IC-mainnet automatic pool refill
+  through one durable canonical Cycles Ledger request; unifies Store, pool,
   workload and deletion-pending principals in one exclusive physical
   inventory; removes the unenforceable aggregate Canister maximum and absolute
   deletion-balance caps; and rejects prose-only physical-absence diagnostics.
-- Explicit 0.101 deferrals: optional authenticated minimum/top-up balance
-  automation, overfunding alerts/reclamation, and any Cycles Ledger creation
-  path after recovery beyond its finite deduplication horizon is proved.
+- Explicit 0.101 deferrals: authenticated minimum/fixed-top-up workload balance
+  automation, overfunding alerts/reclamation and non-IC ledger funding. An
+  uncertain pool creation that outlives the ledger's deduplication evidence is
+  intentionally blocked rather than retried under another operation.
 
 The 2026-07-26 design amendment removes the proposed Tree layer. The target is
 exactly one Fleet Subnet Root per occupied `(FleetKey, SubnetId)`, with each

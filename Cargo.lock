@@ -1134,6 +1134,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cycles_ledger_stub"
+version = "0.100.102"
+dependencies = [
+ "candid",
+ "ic-cdk",
+ "serde",
+]
+
+[[package]]
 name = "darling"
 version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2223,9 +2232,9 @@ dependencies = [
 
 [[package]]
 name = "ic-query"
-version = "0.26.15"
+version = "0.28.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4cfae7dae19a45be2f7ab835d2dbfe75cc309cdd49c3d911a2efe6d7d8bad34"
+checksum = "8f6ebb3421c5793e25944d1951d45617b82bcf1b796fa257539e16ce4f9e4528"
 dependencies = [
  "candid",
  "futures",
@@ -2537,15 +2546,6 @@ name = "itertools"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
 dependencies = [
  "either",
 ]
@@ -3364,7 +3364,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "syn 2.0.119",

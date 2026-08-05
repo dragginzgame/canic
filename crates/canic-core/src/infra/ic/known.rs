@@ -24,3 +24,9 @@ pub static CYCLES_MINTING_CANISTER: LazyLock<Principal> = LazyLock::new(|| {
     Principal::from_text("rkp4c-7iaaa-aaaaa-aaaca-cai")
         .expect("cycles minting canister principal literal must be valid")
 });
+
+/// Mainnet cycles ledger canister principal.
+pub static CYCLES_LEDGER_CANISTER: LazyLock<Principal> = LazyLock::new(|| {
+    Principal::from_text("um5iw-rqaaa-aaaaq-qaaba-cai")
+        .expect("cycles ledger principal literal must be valid")
+});

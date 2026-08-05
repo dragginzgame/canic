@@ -66,15 +66,20 @@ fn publication_rejects_missing_or_contradictory_root_summaries_before_write() {
         publish_terminal_fleet_catalog(fixture.request()),
         Err(TerminalFleetCatalogPublicationError::RootSummaryMismatch { .. })
     ));
+    assert!(!fixture.catalog_path().exists());
+    fs::remove_dir_all(fixture.root).expect("remove fixture");
+}
 
-    fixture.root_summaries = summaries(&fixture.registry);
+#[test]
+fn publication_accepts_consistent_root_summaries_without_an_aggregate_physical_cap() {
+    let mut fixture = fixture("uncapped-root-evidence");
     fixture.root_summaries[0].pooled_canisters = 20_000;
     fixture.root_summaries[0].total_canisters = 20_004;
-    assert!(matches!(
-        publish_terminal_fleet_catalog(fixture.request()),
-        Err(TerminalFleetCatalogPublicationError::RootSummaryMismatch { .. })
-    ));
-    assert!(!fixture.catalog_path().exists());
+
+    publish_terminal_fleet_catalog(fixture.request())
+        .expect("publish consistent uncapped root evidence");
+
+    assert!(fixture.catalog_path().exists());
     fs::remove_dir_all(fixture.root).expect("remove fixture");
 }
 

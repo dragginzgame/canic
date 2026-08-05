@@ -17,16 +17,19 @@ Historical detail is archived at:
 - The workspace package version is `0.100.102`.
 - The latest published release is `v0.100.102` at
   `4e6966cf14db0915235ec016b88356590c1cfbf4`.
-- Open `0.100.103` closeout draft removes root-autonomous raw
-  Canister creation, proactive refill and paid fallback because a lost
-  management-call result cannot recover the allocated principal. Runtime
-  provisioning now claims only operator-imported or recycled assets. One
-  exclusive root-owned physical inventory accounts for the sibling Store,
-  pool transitions, workloads and Store deletion; the unenforceable aggregate
-  Canister maximum and absolute deletion-cycle caps are removed. Prose-only
-  "was not found" diagnostics no longer prove physical absence. Authenticated
-  minimum/top-up automation, overfunding alerts and any Cycles Ledger creation
-  path remain explicit 0.101 work after retry-horizon recovery is proved.
+- Open `0.100.103` closeout draft removes root-autonomous raw management
+  creation and Component paid fallback, while restoring bounded IC-mainnet
+  automatic pool refill through the canonical Cycles Ledger. One durable exact
+  request targets the protected root Subnet and controller; success or a
+  duplicate carrying its principal enters the exclusive physical inventory,
+  while an uncertain result that outlives ledger deduplication blocks without
+  another paid effect. Component provisioning still only claims Ready assets.
+  The unified inventory accounts for the sibling Store, pool transitions,
+  workloads and Store deletion; the unenforceable aggregate Canister maximum
+  and absolute deletion-cycle caps are removed. Prose-only "was not found"
+  diagnostics no longer prove physical absence. Authenticated workload
+  minimum/top-up automation, overfunding alerts and non-IC ledger funding
+  remain explicit 0.101 work.
 - Released `0.100.102` advances the unified test runtime to
   `ic-testkit 0.3.2` and PocketIC `15.0.0`. Canic now uses the re-exported raw
   `PocketIc` plus focused extension traits, including typed startup, time and
@@ -2197,10 +2200,14 @@ Run the maintainer-owned full release gate and publish the open 0.100 closeout
 correction before beginning 0.101.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
-corrected operator-import-only pool or exclusive physical inventory. Preserve
-the reinstall-only boundary and do not restore runtime raw Canister creation,
-autonomous refill, paid fallback, an aggregate physical Canister cap, an
-absolute balance cap or prose-only absence detection. The retained
+corrected automatic Cycles Ledger pool refill or exclusive physical inventory.
+The open correction has a fresh PocketIC proof of the exact mainnet-qualified
+Ledger request, returned-principal adoption, reset and `Ready` transition;
+funding and execution against the live canonical Ledger remain release-operator
+validation.
+Preserve the reinstall-only boundary and do not restore runtime raw management
+Canister creation, Component paid fallback, an aggregate physical Canister
+cap, an absolute balance cap or prose-only absence detection. The retained
 implementation detail is in the
 [implementation tracker](../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md).
 Fresh installation now journals and verifies the Coordinator, every planned
@@ -2211,9 +2218,9 @@ verifies the complete Coordinator Registry as all-`Active`. It also
 atomically activates and independently verifies every root's exact matching
 Registry Mirror/Fleet Directory. Each root can reserve exact admitted
 top-level Component identity and capacity, claim one sufficient Ready
-operator-imported or recycled Canister, install the exact Store-backed Wasm
-under an immutable `ComponentBinding` and verify the live module, controller
-and retained binding through durable exact retry.
+imported, recycled or automatically created Canister, install the exact
+Store-backed Wasm under an immutable `ComponentBinding` and verify the live
+module, controller and retained binding through durable exact retry.
 It atomically commits that Component into counters and its root-local Registry
 partition, derives exact Fleet/Component Directory authority, distributes it
 directly, activates the target only from that retained authority and records

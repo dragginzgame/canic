@@ -1,5 +1,7 @@
 //! Prepared-root Fleet Registry and Component Registry PocketIC journey.
 
+#[cfg(test)]
+use super::build::build_mainnet_refill_wasms;
 use super::build::{
     build_pic, build_test_root_wasm, build_test_wasm_store_wasm, root_canister_config_path,
 };
@@ -13,6 +15,8 @@ const PREPAID_POOL_ASSET_CYCLES: u128 = 6_000_000_000_000;
 
 mod tests {
     use super::*;
+    #[cfg(test)]
+    use candid::CandidType;
     use candid::{decode_one, encode_one};
     #[cfg(test)]
     use canic::dto::pool::{
@@ -291,6 +295,86 @@ mod tests {
     struct RootStoreFixture {
         manifest: RootStoreReleaseSetManifest,
         artifacts: BTreeMap<CanisterRole, Vec<u8>>,
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType)]
+    struct CyclesLedgerStubInitArgs {
+        canister_id: Principal,
+        expected_root: Principal,
+        expected_subnet: Principal,
+    }
+
+    #[test]
+    fn prepared_mainnet_root_automatically_refills_one_exact_pool_asset() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let (root_wasm, cycles_ledger_wasm) = build_mainnet_refill_wasms();
+        let _ = build_test_wasm_store_wasm();
+        let store_fixture = build_root_store_fixture();
+        let pic = build_pic();
+        let created_asset = std::cell::Cell::new(None);
+        let fixture = install_bootstrapped_root_with_pool_setup(
+            &pic,
+            root_wasm,
+            Principal::from_slice(&[0x41; 29]),
+            store_fixture,
+            |pic, root| {
+                let root_subnet = pic.get_subnet(root).expect("root placement Subnet");
+                let asset = pic.create_canister_on_subnet(None, None, root_subnet);
+                pic.set_controllers(asset, None, vec![root])
+                    .expect("prepare returned pool asset controller");
+                let cycles_ledger = Principal::from_text("um5iw-rqaaa-aaaaq-qaaba-cai")
+                    .expect("canonical Cycles Ledger principal");
+                pic.create_canister_with_id(None, None, cycles_ledger)
+                    .expect("create canonical Cycles Ledger stub principal");
+                pic.install_canister(
+                    cycles_ledger,
+                    cycles_ledger_wasm,
+                    encode_one(CyclesLedgerStubInitArgs {
+                        canister_id: asset,
+                        expected_root: root,
+                        expected_subnet: root_subnet,
+                    })
+                    .expect("encode Cycles Ledger stub init"),
+                    None,
+                );
+                created_asset.set(Some(asset));
+                Vec::new()
+            },
+        );
+        let asset = created_asset.get().expect("prepared pool asset");
+
+        for _ in 0..4 {
+            let status = root_pool_status(&pic, fixture.root_id);
+            if status.ready == 1 {
+                break;
+            }
+            let response: Result<PoolAdminResponse, Error> = pic
+                .update_candid(
+                    fixture.root_id,
+                    CANIC_POOL_ADMIN,
+                    (PoolAdminCommand::Maintain,),
+                )
+                .expect("automatic pool maintenance transport");
+            response.expect("automatic pool maintenance");
+        }
+
+        let status = root_pool_status(&pic, fixture.root_id);
+        assert_eq!(status.ready, 1);
+        assert_eq!(status.pending_reset, 0);
+        let entry = status
+            .entries
+            .iter()
+            .find(|entry| entry.canister_id == asset)
+            .expect("automatically created inventory entry");
+        assert_eq!(entry.origin, CanisterPoolAssetOrigin::Created);
+        assert_eq!(entry.status, CanisterPoolAssetStatus::Ready);
+        let cycles_ledger = Principal::from_text("um5iw-rqaaa-aaaaq-qaaba-cai")
+            .expect("canonical Cycles Ledger principal");
+        let request_count: u64 = pic
+            .query_candid(cycles_ledger, "request_count", ())
+            .expect("query ledger request count");
+        assert_eq!(request_count, 1);
     }
 
     #[test]
@@ -693,10 +777,14 @@ mod tests {
 
     #[cfg(test)]
     fn pool_status(fixture: &ActiveComponentRegistryFixture) -> CanisterPoolResponse {
-        let status: Result<CanisterPoolResponse, Error> = fixture
-            .pic()
+        root_pool_status(fixture.pic(), fixture.root)
+    }
+
+    #[cfg(test)]
+    fn root_pool_status(pic: &PocketIc, root: Principal) -> CanisterPoolResponse {
+        let status: Result<CanisterPoolResponse, Error> = pic
             .query_candid(
-                fixture.root,
+                root,
                 CANIC_POOL_LIST,
                 (CanisterPoolStatusRequest {
                     start_after: None,
@@ -3730,6 +3818,27 @@ mod tests {
         coordinator: Principal,
         store_fixture: RootStoreFixture,
     ) -> BootstrappedRootFixture {
+        let fixture = install_bootstrapped_root_with_pool_setup(
+            pic,
+            root_wasm,
+            coordinator,
+            store_fixture,
+            create_prepaid_pool_assets,
+        );
+        reset_prepaid_pool_assets(pic, fixture.root_id);
+        fixture
+    }
+
+    fn install_bootstrapped_root_with_pool_setup<F>(
+        pic: &PocketIc,
+        root_wasm: Vec<u8>,
+        coordinator: Principal,
+        store_fixture: RootStoreFixture,
+        pool_setup: F,
+    ) -> BootstrappedRootFixture
+    where
+        F: FnOnce(&PocketIc, Principal) -> Vec<Principal>,
+    {
         let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .and_then(Path::parent)
@@ -3766,7 +3875,7 @@ mod tests {
         let mut init_args =
             decode_one::<FleetSubnetRootInitArgs>(&init_bytes).expect("decode root init authority");
         bind_init_args_to_pocket_ic_subnet(pic, root_id, &mut init_args);
-        init_args.canister_pool_imports = create_prepaid_pool_assets(pic, root_id);
+        init_args.canister_pool_imports = pool_setup(pic, root_id);
         let store_init_args = FleetSubnetWasmStoreInitArgs {
             authority: init_args.authority.wasm_store_authority.clone(),
             install_id: init_args.install_id,
@@ -3782,8 +3891,6 @@ mod tests {
         pic.install_canister(root_id, root_wasm, init_bytes, None);
         adopt_sibling_wasm_store(pic, root_id, &init_args);
         assert_prepared(pic, root_id);
-        reset_prepaid_pool_assets(pic, root_id);
-
         let version = TemplateVersion::owned(manifest.release_build_id.to_string());
         stage_chunked_payload(
             pic,
