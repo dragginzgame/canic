@@ -1,11 +1,13 @@
 pub use crate::__internal::core::ids::{
     AccessMetricKind, BuildNetwork, CanisterRole, CanonicalNetworkId, ComponentBinding,
-    ComponentChildBinding, ComponentInstanceId, ComponentSpecAdmission, ComponentSpecId,
-    ComponentTopologyDigest, CyclesFundingBudget, EndpointCall, EndpointCallKind, EndpointId,
-    FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority,
-    FleetSubnetCanisterPoolConfig, FleetSubnetRootBinding, FleetSubnetRootLimits,
-    FleetSubnetRootReleaseSet, FleetSubnetWasmStoreAuthority, IntentResourceKey,
-    ManagedCanisterBinding, ReleaseSetDigest, SubnetId, SystemMetricKind, cap,
+    ComponentChildBinding, ComponentGroupDeploymentId, ComponentGroupMemberId,
+    ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentGroupSpecId, ComponentInstanceId,
+    ComponentSpecAdmission, ComponentSpecId, ComponentTopologyDigest, CyclesFundingBudget,
+    EndpointCall, EndpointCallKind, EndpointId, FleetBinding, FleetCoordinatorBinding, FleetId,
+    FleetKey, FleetRegistryAuthority, FleetServiceId, FleetSubnetCanisterPoolConfig,
+    FleetSubnetRootBinding, FleetSubnetRootLimits, FleetSubnetRootReleaseSet,
+    FleetSubnetWasmStoreAuthority, IntentResourceKey, ManagedCanisterBinding, ReleaseSetDigest,
+    SubnetId, SystemMetricKind, cap,
 };
 
 #[cfg(any(feature = "control-plane", feature = "wasm-store-canister"))]
