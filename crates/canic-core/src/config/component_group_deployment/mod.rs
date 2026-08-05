@@ -1,7 +1,7 @@
 //! Module: config::component_group_deployment
 //!
 //! Responsibility: compile independent Component Group deployments before planning.
-//! Does not own: labels, member limits, root selection, persistence, or effects.
+//! Does not own: member limits, root selection, persistence, or effects.
 //! Boundary: strict source deployments become bounded exact flattened Component occurrences.
 
 #[cfg(test)]
@@ -9,9 +9,11 @@ mod tests;
 
 use crate::{
     config::{
-        ComponentGroupLeafKind, ComponentGroupTopology, ComponentGroupTopologyError,
-        ComponentTopology, ComponentTopologyError, FlattenedComponentGroup,
-        FlattenedComponentGroupMember, FleetServiceMemberPurpose,
+        ComponentDeploymentLabel, ComponentDeploymentLabelKey, ComponentGroupLeafKind,
+        ComponentGroupTopology, ComponentGroupTopologyError, ComponentTopology,
+        ComponentTopologyError, FlattenedComponentGroup, FlattenedComponentGroupMember,
+        FleetServiceMemberPurpose, MAX_COMPONENT_DEPLOYMENT_LABELS,
+        component_group::source_labels,
         schema::{ComponentGroupDeploymentConfig, ConfigModel},
     },
     ids::{
@@ -67,6 +69,8 @@ impl ComponentGroupDeploymentTopology {
 
         for (deployment, source) in &config.component_group_deployments {
             validate_placement_envelope(deployment, source)?;
+            let deployment_labels = source_labels(&source.labels);
+            validate_deployment_labels(deployment, &deployment_labels)?;
             let flattened = component_group_topology
                 .flatten(&source.component_group)
                 .map_err(ComponentGroupDeploymentTopologyError::ComponentGroupTopology)?;
@@ -93,6 +97,12 @@ impl ComponentGroupDeploymentTopology {
                 .map(|member| {
                     let purpose =
                         resolve_member_purpose(deployment, source.service_purpose, &member)?;
+                    let labels = resolve_effective_labels(
+                        deployment,
+                        &member.member_path,
+                        &deployment_labels,
+                        &member.labels,
+                    )?;
                     let component_spec = component_topology
                         .get(&member.component_spec)
                         .ok_or_else(|| {
@@ -106,6 +116,7 @@ impl ComponentGroupDeploymentTopology {
                         component_spec: member.component_spec,
                         component_spec_hash: component_spec.spec_hash,
                         purpose,
+                        labels,
                     })
                 })
                 .collect::<Result<Vec<_>, ComponentGroupDeploymentTopologyError>>()?;
@@ -113,6 +124,7 @@ impl ComponentGroupDeploymentTopology {
                 deployment: deployment.clone(),
                 component_group: source.component_group.clone(),
                 service_purpose: source.service_purpose,
+                labels: deployment_labels,
                 initial_placements: source.initial_placements,
                 maximum_placements: source.maximum_placements,
                 placement: ComponentGroupPlacementPolicy {
@@ -182,6 +194,7 @@ pub struct ComponentGroupDeploymentSpec {
     pub deployment: ComponentGroupDeploymentId,
     pub component_group: ComponentGroupSpecId,
     pub service_purpose: Option<FleetServiceMemberPurpose>,
+    pub labels: Vec<ComponentDeploymentLabel>,
     pub initial_placements: u32,
     pub maximum_placements: u32,
     pub placement: ComponentGroupPlacementPolicy,
@@ -204,6 +217,7 @@ pub struct FlattenedComponentGroupDeploymentMember {
     pub component_spec: ComponentSpecId,
     pub component_spec_hash: [u8; 32],
     pub purpose: ComponentDeploymentPurpose,
+    pub labels: Vec<ComponentDeploymentLabel>,
 }
 
 /// Exact typed purpose resolved for one flattened deployment occurrence.
@@ -327,6 +341,48 @@ pub enum ComponentGroupDeploymentTopologyError {
         actual: usize,
     },
 
+    #[error("Component Group deployment '{deployment}' has {actual} labels; maximum is {maximum}")]
+    LabelBoundExceeded {
+        deployment: ComponentGroupDeploymentId,
+        actual: usize,
+        maximum: usize,
+    },
+
+    #[error(
+        "Component Group deployment '{deployment}' label '{label}' is duplicated or not in canonical order"
+    )]
+    NonCanonicalLabelOrder {
+        deployment: ComponentGroupDeploymentId,
+        label: ComponentDeploymentLabelKey,
+    },
+
+    #[error(
+        "Component Group deployment '{deployment}' member '{member_path:?}' repeats label key '{label}'"
+    )]
+    DuplicateEffectiveLabel {
+        deployment: ComponentGroupDeploymentId,
+        member_path: ComponentGroupMemberPath,
+        label: ComponentDeploymentLabelKey,
+    },
+
+    #[error(
+        "Component Group deployment '{deployment}' member '{member_path:?}' has {actual} effective labels; maximum is {maximum}"
+    )]
+    EffectiveLabelBoundExceeded {
+        deployment: ComponentGroupDeploymentId,
+        member_path: ComponentGroupMemberPath,
+        actual: usize,
+        maximum: usize,
+    },
+
+    #[error(
+        "Component Group deployment '{deployment}' member '{member_path:?}' has mismatched effective labels"
+    )]
+    MemberLabelProjectionMismatch {
+        deployment: ComponentGroupDeploymentId,
+        member_path: ComponentGroupMemberPath,
+    },
+
     #[error("Component Group deployment demand overflowed for Component Spec '{component_spec}'")]
     ComponentSpecDemandOverflow { component_spec: ComponentSpecId },
 
@@ -429,6 +485,7 @@ fn validate_deployment_projection(
     validation: &mut DeploymentValidationLedger,
 ) -> Result<(), ComponentGroupDeploymentTopologyError> {
     validate_compiled_placement_envelope(deployment)?;
+    validate_deployment_labels(&deployment.deployment, &deployment.labels)?;
     let expected = component_group_topology
         .flatten(&deployment.component_group)
         .map_err(ComponentGroupDeploymentTopologyError::ComponentGroupTopology)?;
@@ -456,6 +513,20 @@ fn validate_deployment_projection(
             return Err(
                 ComponentGroupDeploymentTopologyError::MemberProjectionMismatch {
                     deployment: deployment.deployment.clone(),
+                },
+            );
+        }
+        let expected_labels = resolve_effective_labels(
+            &deployment.deployment,
+            &member.member_path,
+            &deployment.labels,
+            &expected_member.labels,
+        )?;
+        if member.labels != expected_labels {
+            return Err(
+                ComponentGroupDeploymentTopologyError::MemberLabelProjectionMismatch {
+                    deployment: deployment.deployment.clone(),
+                    member_path: member.member_path.clone(),
                 },
             );
         }
@@ -490,6 +561,69 @@ fn member_projection_matches(
     member.member_path == expected.member_path
         && member.component_spec == expected.component_spec
         && member.purpose == *expected_purpose
+}
+
+fn validate_deployment_labels(
+    deployment: &ComponentGroupDeploymentId,
+    labels: &[ComponentDeploymentLabel],
+) -> Result<(), ComponentGroupDeploymentTopologyError> {
+    if labels.len() > MAX_COMPONENT_DEPLOYMENT_LABELS {
+        return Err(ComponentGroupDeploymentTopologyError::LabelBoundExceeded {
+            deployment: deployment.clone(),
+            actual: labels.len(),
+            maximum: MAX_COMPONENT_DEPLOYMENT_LABELS,
+        });
+    }
+    let mut previous: Option<&ComponentDeploymentLabelKey> = None;
+    for label in labels {
+        if previous.is_some_and(|key| key >= &label.key) {
+            return Err(
+                ComponentGroupDeploymentTopologyError::NonCanonicalLabelOrder {
+                    deployment: deployment.clone(),
+                    label: label.key.clone(),
+                },
+            );
+        }
+        previous = Some(&label.key);
+    }
+    Ok(())
+}
+
+fn resolve_effective_labels(
+    deployment: &ComponentGroupDeploymentId,
+    member_path: &ComponentGroupMemberPath,
+    deployment_labels: &[ComponentDeploymentLabel],
+    member_labels: &[ComponentDeploymentLabel],
+) -> Result<Vec<ComponentDeploymentLabel>, ComponentGroupDeploymentTopologyError> {
+    let mut labels = BTreeMap::new();
+    for label in deployment_labels.iter().chain(member_labels) {
+        if labels.insert(&label.key, &label.value).is_some() {
+            return Err(
+                ComponentGroupDeploymentTopologyError::DuplicateEffectiveLabel {
+                    deployment: deployment.clone(),
+                    member_path: member_path.clone(),
+                    label: label.key.clone(),
+                },
+            );
+        }
+    }
+    if labels.len() > MAX_COMPONENT_DEPLOYMENT_LABELS {
+        return Err(
+            ComponentGroupDeploymentTopologyError::EffectiveLabelBoundExceeded {
+                deployment: deployment.clone(),
+                member_path: member_path.clone(),
+                actual: labels.len(),
+                maximum: MAX_COMPONENT_DEPLOYMENT_LABELS,
+            },
+        );
+    }
+    Ok(labels
+        .into_iter()
+        .map(|(key, value)| ComponentDeploymentLabel {
+            key: key.clone(),
+            value: value.clone(),
+        })
+        .collect())
 }
 
 fn validate_deployment_service_purpose(

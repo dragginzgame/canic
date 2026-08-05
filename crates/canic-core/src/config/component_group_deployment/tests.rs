@@ -1,7 +1,7 @@
 //! Focused proofs for independent deployment flattening and placement envelopes.
 
 use super::*;
-use crate::config::{Config, ConfigError};
+use crate::config::{ComponentDeploymentLabelValue, Config, ConfigError};
 
 const CONFIG_PREFIX: &str = r#"
 [app]
@@ -276,17 +276,115 @@ placement.minimum_distinct_roots = 1
 component_spec = "a"
 [component_group_deployments.cell]
 component_group = "cell"
-labels = { tier = "future" }
+member_limits = []
 initial_placements = 1
 maximum_placements = 1
 placement.maximum_per_root = 1
 placement.minimum_distinct_roots = 1
 "#
     ))
-    .expect_err("labels must remain unavailable until their compiler lands");
+    .expect_err("member limits must remain unavailable until their compiler lands");
     assert!(matches!(
         partial_future_field,
         ConfigError::CannotParseToml { .. }
+    ));
+}
+
+#[test]
+fn deployment_labels_inherit_without_altering_typed_purpose() {
+    let (_, topology) = parse(
+        r#"
+[component_groups.services.components.database]
+component_spec = "a"
+service = "database"
+service_purpose = "replica"
+labels = { replica = "authority", zone = "west" }
+
+[component_groups.cell.groups.services]
+component_group = "services"
+labels = { tier = "storage" }
+
+[component_group_deployments.cell]
+component_group = "cell"
+labels = { authority = "writer", workload = "database" }
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
+
+[services.fleet.targets.database]
+role = "a"
+component_spec = "a"
+mode = "authority_replica"
+authority_deployment = "authority"
+authority_member = ["database"]
+placement.maximum_members_per_root = 1
+placement.minimum_distinct_roots = 1
+
+[component_groups.authority.components.database]
+component_spec = "a"
+service = "database"
+service_purpose = "authority"
+
+[component_group_deployments.authority]
+component_group = "authority"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
+"#,
+    )
+    .expect("valid inert labels");
+    let cell = topology.get(&deployment("cell")).expect("cell deployment");
+    let member = &cell.members[0];
+
+    assert!(matches!(
+        member.purpose,
+        ComponentDeploymentPurpose::FleetServiceMember {
+            member_purpose: FleetServiceMemberPurpose::Replica,
+            ..
+        }
+    ));
+    assert_eq!(
+        member
+            .labels
+            .iter()
+            .map(|label| (label.key.as_str(), label.value.as_str()))
+            .collect::<Vec<_>>(),
+        vec![
+            ("authority", "writer"),
+            ("replica", "authority"),
+            ("tier", "storage"),
+            ("workload", "database"),
+            ("zone", "west"),
+        ]
+    );
+}
+
+#[test]
+fn deployment_label_cannot_override_an_inherited_key() {
+    let duplicate = parse(
+        r#"
+[component_groups.cell.components.a]
+component_spec = "a"
+labels = { workload = "leaf" }
+
+[component_group_deployments.cell]
+component_group = "cell"
+labels = { workload = "deployment" }
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
+"#,
+    )
+    .expect_err("deployment/member duplicate label key must reject");
+
+    assert!(matches!(
+        duplicate,
+        ConfigError::ComponentGroupDeploymentTopology(
+            ComponentGroupDeploymentTopologyError::DuplicateEffectiveLabel { .. }
+        )
     ));
 }
 
@@ -568,6 +666,20 @@ placement.minimum_distinct_roots = 1
     assert!(matches!(
         wrong_purpose.validate(&groups, &components),
         Err(ComponentGroupDeploymentTopologyError::MemberProjectionMismatch { .. })
+    ));
+
+    let mut wrong_labels = topology.clone();
+    wrong_labels.component_group_deployments[0].members[0]
+        .labels
+        .push(ComponentDeploymentLabel {
+            key: ComponentDeploymentLabelKey::try_from("fabricated".to_string())
+                .expect("label key"),
+            value: ComponentDeploymentLabelValue::try_from("value".to_string())
+                .expect("label value"),
+        });
+    assert!(matches!(
+        wrong_labels.validate(&groups, &components),
+        Err(ComponentGroupDeploymentTopologyError::MemberLabelProjectionMismatch { .. })
     ));
 
     let mut wrong_order = topology;

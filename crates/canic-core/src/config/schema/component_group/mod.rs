@@ -5,7 +5,9 @@
 //! Boundary: TOML input is decoded into bounded identifier-keyed maps before compilation.
 
 use crate::{
-    config::FleetServiceMemberPurpose,
+    config::{
+        ComponentDeploymentLabelKey, ComponentDeploymentLabelValue, FleetServiceMemberPurpose,
+    },
     ids::{ComponentGroupMemberId, ComponentGroupSpecId, ComponentSpecId, FleetServiceId},
 };
 use std::collections::BTreeMap;
@@ -32,6 +34,9 @@ pub struct ComponentGroupComponentConfig {
     pub service: Option<FleetServiceId>,
 
     pub service_purpose: Option<FleetServiceMemberPurpose>,
+
+    #[serde(default)]
+    pub labels: BTreeMap<ComponentDeploymentLabelKey, ComponentDeploymentLabelValue>,
 }
 
 /// One configuration-only inclusion edge to another Component Group.
@@ -41,4 +46,7 @@ pub struct ComponentGroupIncludeConfig {
     pub component_group: ComponentGroupSpecId,
 
     pub service_purpose: Option<FleetServiceMemberPurpose>,
+
+    #[serde(default)]
+    pub labels: BTreeMap<ComponentDeploymentLabelKey, ComponentDeploymentLabelValue>,
 }
