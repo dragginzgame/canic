@@ -8,20 +8,25 @@
 use crate::config::schema::IcpRefillPolicy;
 use crate::{
     cdk::candid::Principal,
-    config::schema::{
-        AppConfig, AuthConfig, CanisterAuthConfig, ChainKeyRootProofConfig, ComponentChildConfig,
-        ComponentChildKind, ComponentGroupComponentConfig, ComponentGroupDeploymentConfig,
-        ComponentGroupIncludeConfig, ComponentGroupPlacementPolicyConfig, ComponentGroupSpecConfig,
-        ComponentLimitsConfig, ComponentProvisioningGrantConfig, ComponentSpawnGrantConfig,
-        ComponentSpecConfig, ConfigModel, CyclesFundingBudgetConfig, CyclesFundingPolicyConfig,
-        DelegatedTokenConfig, DiagnosticsCanisterConfig, FleetInitMode, IndexConfig, IndexPool,
-        LogConfig, MetricsCanisterConfig, MetricsProfile, RoleAttestationConfig, RoleDeclaration,
-        RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy,
-        ShardingConfig, Standards, StandardsCanisterConfig, TopupPolicy, Whitelist,
+    config::{
+        FleetServiceMemberPurpose,
+        schema::{
+            AppConfig, AuthConfig, CanisterAuthConfig, ChainKeyRootProofConfig,
+            ComponentChildConfig, ComponentChildKind, ComponentGroupComponentConfig,
+            ComponentGroupDeploymentConfig, ComponentGroupIncludeConfig,
+            ComponentGroupPlacementPolicyConfig, ComponentGroupSpecConfig, ComponentLimitsConfig,
+            ComponentProvisioningGrantConfig, ComponentSpawnGrantConfig, ComponentSpecConfig,
+            ConfigModel, CyclesFundingBudgetConfig, CyclesFundingPolicyConfig,
+            DelegatedTokenConfig, DiagnosticsCanisterConfig, FleetInitMode, IndexConfig, IndexPool,
+            LogConfig, MetricsCanisterConfig, MetricsProfile, RoleAttestationConfig,
+            RoleDeclaration, RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig,
+            ShardPool, ShardPoolPolicy, ShardingConfig, Standards, StandardsCanisterConfig,
+            TopupPolicy, Whitelist,
+        },
     },
     ids::{
         AppId, BuildNetwork, CanisterRole, ComponentGroupDeploymentId, ComponentGroupMemberId,
-        ComponentGroupSpecId, ComponentSpecId,
+        ComponentGroupSpecId, ComponentSpecId, FleetServiceId,
     },
 };
 use proc_macro2::TokenStream;
@@ -162,6 +167,31 @@ fn render_component_group_member_id(member: &ComponentGroupMemberId) -> TokenStr
     }
 }
 
+// Render one validated Fleet service identifier.
+fn render_fleet_service_id(service: &FleetServiceId) -> TokenStream {
+    let value = service.as_str();
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::FleetServiceId::try_from(
+            ::std::string::String::from(#value)
+        ).expect("embedded Fleet service ID was validated at build time")
+    }
+}
+
+// Render one typed Fleet-service member purpose.
+fn render_fleet_service_member_purpose(purpose: FleetServiceMemberPurpose) -> TokenStream {
+    match purpose {
+        FleetServiceMemberPurpose::Authority => quote! {
+            ::canic::__internal::core::bootstrap::compiled::FleetServiceMemberPurpose::Authority
+        },
+        FleetServiceMemberPurpose::Replica => quote! {
+            ::canic::__internal::core::bootstrap::compiled::FleetServiceMemberPurpose::Replica
+        },
+        FleetServiceMemberPurpose::PoolMember => quote! {
+            ::canic::__internal::core::bootstrap::compiled::FleetServiceMemberPurpose::PoolMember
+        },
+    }
+}
+
 // Render one strict checked-in Component Group declaration.
 fn render_component_group_spec_config(config: &ComponentGroupSpecConfig) -> TokenStream {
     let components = render_btree_map(
@@ -186,9 +216,15 @@ fn render_component_group_spec_config(config: &ComponentGroupSpecConfig) -> Toke
 // Render one direct Component occurrence in a checked-in group.
 fn render_component_group_component_config(config: &ComponentGroupComponentConfig) -> TokenStream {
     let component_spec = render_component_spec_id(&config.component_spec);
+    let service = render_option(config.service.as_ref(), render_fleet_service_id);
+    let service_purpose = render_option(config.service_purpose.as_ref(), |purpose| {
+        render_fleet_service_member_purpose(*purpose)
+    });
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ComponentGroupComponentConfig {
             component_spec: #component_spec,
+            service: #service,
+            service_purpose: #service_purpose,
         }
     }
 }
@@ -196,9 +232,13 @@ fn render_component_group_component_config(config: &ComponentGroupComponentConfi
 // Render one configuration-only Component Group inclusion edge.
 fn render_component_group_include_config(config: &ComponentGroupIncludeConfig) -> TokenStream {
     let component_group = render_component_group_spec_id(&config.component_group);
+    let service_purpose = render_option(config.service_purpose.as_ref(), |purpose| {
+        render_fleet_service_member_purpose(*purpose)
+    });
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ComponentGroupIncludeConfig {
             component_group: #component_group,
+            service_purpose: #service_purpose,
         }
     }
 }
@@ -208,12 +248,16 @@ fn render_component_group_deployment_config(
     config: &ComponentGroupDeploymentConfig,
 ) -> TokenStream {
     let component_group = render_component_group_spec_id(&config.component_group);
+    let service_purpose = render_option(config.service_purpose.as_ref(), |purpose| {
+        render_fleet_service_member_purpose(*purpose)
+    });
     let initial_placements = render_u32_literal(config.initial_placements);
     let maximum_placements = render_u32_literal(config.maximum_placements);
     let placement = render_component_group_placement_policy_config(&config.placement);
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ComponentGroupDeploymentConfig {
             component_group: #component_group,
+            service_purpose: #service_purpose,
             initial_placements: #initial_placements,
             maximum_placements: #maximum_placements,
             placement: #placement,
@@ -1068,6 +1112,7 @@ maximum_instances = 100
 
 [component_groups.shared.components.hub]
 component_spec = "hub"
+service = "hubs"
 
 [component_groups.cell.components.instance]
 component_spec = "instance"
@@ -1077,6 +1122,7 @@ component_group = "shared"
 
 [component_group_deployments.cell]
 component_group = "cell"
+service_purpose = "pool_member"
 initial_placements = 1
 maximum_placements = 1
 placement.maximum_per_root = 1
@@ -1100,6 +1146,8 @@ placement.minimum_distinct_roots = 1
         assert!(
             rendered.contains("embedded Component Group deployment ID was validated at build time")
         );
+        assert!(rendered.contains("embedded Fleet service ID was validated at build time"));
+        assert!(rendered.contains("FleetServiceMemberPurpose :: PoolMember"));
         assert!(rendered.contains("maximum_instances_per_requester_per_root : 100_u32"));
         assert!(rendered.contains("maximum_instances_per_parent : 100_u32"));
         assert!(!rendered.contains("initial_instances"));

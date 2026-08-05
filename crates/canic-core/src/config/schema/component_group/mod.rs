@@ -4,7 +4,10 @@
 //! Does not own: graph compilation, deployments, placement, purpose, or runtime state.
 //! Boundary: TOML input is decoded into bounded identifier-keyed maps before compilation.
 
-use crate::ids::{ComponentGroupMemberId, ComponentGroupSpecId, ComponentSpecId};
+use crate::{
+    config::FleetServiceMemberPurpose,
+    ids::{ComponentGroupMemberId, ComponentGroupSpecId, ComponentSpecId, FleetServiceId},
+};
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
@@ -25,6 +28,10 @@ pub struct ComponentGroupSpecConfig {
 #[serde(deny_unknown_fields)]
 pub struct ComponentGroupComponentConfig {
     pub component_spec: ComponentSpecId,
+
+    pub service: Option<FleetServiceId>,
+
+    pub service_purpose: Option<FleetServiceMemberPurpose>,
 }
 
 /// One configuration-only inclusion edge to another Component Group.
@@ -32,4 +39,6 @@ pub struct ComponentGroupComponentConfig {
 #[serde(deny_unknown_fields)]
 pub struct ComponentGroupIncludeConfig {
     pub component_group: ComponentGroupSpecId,
+
+    pub service_purpose: Option<FleetServiceMemberPurpose>,
 }

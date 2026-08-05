@@ -1,7 +1,7 @@
 //! Module: config::component_group_deployment
 //!
 //! Responsibility: compile independent Component Group deployments before planning.
-//! Does not own: purpose, labels, member limits, root selection, persistence, or effects.
+//! Does not own: labels, member limits, root selection, persistence, or effects.
 //! Boundary: strict source deployments become bounded exact flattened Component occurrences.
 
 #[cfg(test)]
@@ -9,12 +9,14 @@ mod tests;
 
 use crate::{
     config::{
-        ComponentGroupTopology, ComponentGroupTopologyError, ComponentTopology,
-        ComponentTopologyError, FlattenedComponentGroupMember,
+        ComponentGroupLeafKind, ComponentGroupTopology, ComponentGroupTopologyError,
+        ComponentTopology, ComponentTopologyError, FlattenedComponentGroup,
+        FlattenedComponentGroupMember, FleetServiceMemberPurpose,
         schema::{ComponentGroupDeploymentConfig, ConfigModel},
     },
     ids::{
-        ComponentGroupDeploymentId, ComponentGroupMemberPath, ComponentGroupSpecId, ComponentSpecId,
+        ComponentGroupDeploymentId, ComponentGroupMemberPath, ComponentGroupSpecId,
+        ComponentSpecId, FleetServiceId,
     },
 };
 use std::collections::BTreeMap;
@@ -68,6 +70,7 @@ impl ComponentGroupDeploymentTopology {
             let flattened = component_group_topology
                 .flatten(&source.component_group)
                 .map_err(ComponentGroupDeploymentTopologyError::ComponentGroupTopology)?;
+            validate_deployment_service_purpose(deployment, source.service_purpose, &flattened)?;
             flattened_member_count = flattened_member_count
                 .checked_add(flattened.components.len())
                 .ok_or(
@@ -88,6 +91,8 @@ impl ComponentGroupDeploymentTopology {
                 .components
                 .into_iter()
                 .map(|member| {
+                    let purpose =
+                        resolve_member_purpose(deployment, source.service_purpose, &member)?;
                     let component_spec = component_topology
                         .get(&member.component_spec)
                         .ok_or_else(|| {
@@ -100,12 +105,14 @@ impl ComponentGroupDeploymentTopology {
                         member_path: member.member_path,
                         component_spec: member.component_spec,
                         component_spec_hash: component_spec.spec_hash,
+                        purpose,
                     })
                 })
                 .collect::<Result<Vec<_>, ComponentGroupDeploymentTopologyError>>()?;
             component_group_deployments.push(ComponentGroupDeploymentSpec {
                 deployment: deployment.clone(),
                 component_group: source.component_group.clone(),
+                service_purpose: source.service_purpose,
                 initial_placements: source.initial_placements,
                 maximum_placements: source.maximum_placements,
                 placement: ComponentGroupPlacementPolicy {
@@ -174,6 +181,7 @@ impl ComponentGroupDeploymentTopology {
 pub struct ComponentGroupDeploymentSpec {
     pub deployment: ComponentGroupDeploymentId,
     pub component_group: ComponentGroupSpecId,
+    pub service_purpose: Option<FleetServiceMemberPurpose>,
     pub initial_placements: u32,
     pub maximum_placements: u32,
     pub placement: ComponentGroupPlacementPolicy,
@@ -195,6 +203,17 @@ pub struct FlattenedComponentGroupDeploymentMember {
     pub member_path: ComponentGroupMemberPath,
     pub component_spec: ComponentSpecId,
     pub component_spec_hash: [u8; 32],
+    pub purpose: ComponentDeploymentPurpose,
+}
+
+/// Exact typed purpose resolved for one flattened deployment occurrence.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum ComponentDeploymentPurpose {
+    Ordinary,
+    FleetServiceMember {
+        service: FleetServiceId,
+        member_purpose: FleetServiceMemberPurpose,
+    },
 }
 
 /// Typed rejection for invalid Component Group deployment compilation.
@@ -280,6 +299,32 @@ pub enum ComponentGroupDeploymentTopologyError {
         component_spec: ComponentSpecId,
         expected: [u8; 32],
         received: [u8; 32],
+    },
+
+    #[error(
+        "Component Group deployment '{deployment}' assigns Fleet-service purpose without a service-bearing member"
+    )]
+    InapplicableServicePurposeAssignment {
+        deployment: ComponentGroupDeploymentId,
+    },
+
+    #[error(
+        "Component Group deployment '{deployment}' member '{member_path:?}' for service '{service}' has no Fleet-service purpose assignment"
+    )]
+    MissingServicePurposeAssignment {
+        deployment: ComponentGroupDeploymentId,
+        member_path: ComponentGroupMemberPath,
+        service: FleetServiceId,
+    },
+
+    #[error(
+        "Component Group deployment '{deployment}' member '{member_path:?}' for service '{service}' has {actual} Fleet-service purpose assignments; expected exactly one"
+    )]
+    MultipleServicePurposeAssignments {
+        deployment: ComponentGroupDeploymentId,
+        member_path: ComponentGroupMemberPath,
+        service: FleetServiceId,
+        actual: usize,
     },
 
     #[error("Component Group deployment demand overflowed for Component Spec '{component_spec}'")]
@@ -387,6 +432,11 @@ fn validate_deployment_projection(
     let expected = component_group_topology
         .flatten(&deployment.component_group)
         .map_err(ComponentGroupDeploymentTopologyError::ComponentGroupTopology)?;
+    validate_deployment_service_purpose(
+        &deployment.deployment,
+        deployment.service_purpose,
+        &expected,
+    )?;
     if expected.components.len() != deployment.members.len() {
         return Err(
             ComponentGroupDeploymentTopologyError::MemberProjectionMismatch {
@@ -397,7 +447,12 @@ fn validate_deployment_projection(
     validation.record_member_count(deployment.members.len())?;
 
     for (member, expected_member) in deployment.members.iter().zip(expected.components) {
-        if !member_projection_matches(member, &expected_member) {
+        let expected_purpose = resolve_member_purpose(
+            &deployment.deployment,
+            deployment.service_purpose,
+            &expected_member,
+        )?;
+        if !member_projection_matches(member, &expected_member, &expected_purpose) {
             return Err(
                 ComponentGroupDeploymentTopologyError::MemberProjectionMismatch {
                     deployment: deployment.deployment.clone(),
@@ -430,8 +485,75 @@ fn validate_deployment_projection(
 fn member_projection_matches(
     member: &FlattenedComponentGroupDeploymentMember,
     expected: &FlattenedComponentGroupMember,
+    expected_purpose: &ComponentDeploymentPurpose,
 ) -> bool {
-    member.member_path == expected.member_path && member.component_spec == expected.component_spec
+    member.member_path == expected.member_path
+        && member.component_spec == expected.component_spec
+        && member.purpose == *expected_purpose
+}
+
+fn validate_deployment_service_purpose(
+    deployment: &ComponentGroupDeploymentId,
+    service_purpose: Option<FleetServiceMemberPurpose>,
+    flattened: &FlattenedComponentGroup,
+) -> Result<(), ComponentGroupDeploymentTopologyError> {
+    if service_purpose.is_some()
+        && !flattened
+            .components
+            .iter()
+            .any(FlattenedComponentGroupMember::is_fleet_service)
+    {
+        return Err(
+            ComponentGroupDeploymentTopologyError::InapplicableServicePurposeAssignment {
+                deployment: deployment.clone(),
+            },
+        );
+    }
+    Ok(())
+}
+
+fn resolve_member_purpose(
+    deployment: &ComponentGroupDeploymentId,
+    deployment_purpose: Option<FleetServiceMemberPurpose>,
+    member: &FlattenedComponentGroupMember,
+) -> Result<ComponentDeploymentPurpose, ComponentGroupDeploymentTopologyError> {
+    let ComponentGroupLeafKind::FleetService { service } = &member.kind else {
+        return Ok(ComponentDeploymentPurpose::Ordinary);
+    };
+    let assignment_count =
+        member.service_purpose_assignments.len() + usize::from(deployment_purpose.is_some());
+    if assignment_count == 0 {
+        return Err(
+            ComponentGroupDeploymentTopologyError::MissingServicePurposeAssignment {
+                deployment: deployment.clone(),
+                member_path: member.member_path.clone(),
+                service: service.clone(),
+            },
+        );
+    }
+    if assignment_count > 1 {
+        return Err(
+            ComponentGroupDeploymentTopologyError::MultipleServicePurposeAssignments {
+                deployment: deployment.clone(),
+                member_path: member.member_path.clone(),
+                service: service.clone(),
+                actual: assignment_count,
+            },
+        );
+    }
+    let member_purpose = deployment_purpose
+        .or_else(|| member.service_purpose_assignments.first().copied())
+        .ok_or_else(
+            || ComponentGroupDeploymentTopologyError::MissingServicePurposeAssignment {
+                deployment: deployment.clone(),
+                member_path: member.member_path.clone(),
+                service: service.clone(),
+            },
+        )?;
+    Ok(ComponentDeploymentPurpose::FleetServiceMember {
+        service: service.clone(),
+        member_purpose,
+    })
 }
 
 const fn validate_deployment_count(

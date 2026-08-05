@@ -21,12 +21,18 @@ Historical detail is archived at:
   declarations with mandatory bounded placement envelopes. It completely
   flattens each deployment before planning, preserves inclusion versus
   independent-deployment occurrences, binds exact Component Spec hashes and
-  rejects maximum-placement demand beyond the Spec Fleet ceiling. Purpose,
+  rejects maximum-placement demand beyond the Spec Fleet ceiling. Typed
+  service-bearing leaves now resolve exactly one Authority, Replica or
+  PoolMember assignment along their deployment/include/leaf path, while
+  Ordinary leaves remain outside Fleet services. Fleet-service targets,
   labels, member limits, root selection, persistence and effects remain
   unavailable. The same draft advances host Subnet Catalog authority to
-  `ic-query 0.29.1`, aligns the PocketIC 15 executable pin with
-  `ic-testkit 0.3.2` and removes internal PocketIC journeys from the fast test
-  lane while retaining their full-lane coverage.
+  `ic-query 0.29.3`, explicitly fixes its single-endpoint source selection and
+  minimum `UncertifiedQuery` assurance, aligns the PocketIC 15 executable pin
+  with `ic-testkit 0.3.4`, moves internal Cargo Wasm reuse to an exact
+  content-addressed cross-process cache retained across local test runs, and
+  removes internal PocketIC journeys from the fast test lane while retaining
+  their full-lane coverage.
 - Released `0.101.1` adds the strict checked-in Component Group declaration
   grammar and compiles it into a bounded canonical acyclic graph. Nested
   inclusion preserves every distinct member-path occurrence without
@@ -2216,11 +2222,12 @@ First primary results:
 ## Next Action
 
 The Component Group declaration compiler is published at immutable
-`v0.101.1`. Continue 0.101 Slice 1 with typed Fleet-service leaf and member
-purpose declarations, then resolve exactly one purpose assignment along each
-deployment/include/leaf path. Keep group and deployment declarations
-configuration-only and do not reopen the 0.100 infrastructure or pool
-boundaries.
+`v0.101.1`, and the open 0.101.2 compiler resolves typed Fleet-service purpose
+exactly along every deployment/include/leaf path. Continue Slice 1 with strict
+Fleet-service target declarations and validate the complete orphan,
+AuthorityReplica and ActivePool target/member relationships. Keep group and
+deployment declarations configuration-only and do not reopen the 0.100
+infrastructure or pool boundaries.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.

@@ -194,7 +194,7 @@ component_spec = "b"
 }
 
 #[test]
-fn component_group_graph_has_exact_schema_one_golden_bytes() {
+fn component_group_graph_has_exact_schema_two_golden_bytes() {
     let topology = parse(
         r#"
 [component_groups.cell.components.a]
@@ -204,8 +204,8 @@ component_spec = "a"
     .expect("golden graph");
     let mut expected = Vec::new();
     expected.extend_from_slice(&30_u64.to_be_bytes());
-    expected.extend_from_slice(b"canic/component-group-graph/v1");
-    expected.extend_from_slice(&1_u32.to_be_bytes());
+    expected.extend_from_slice(b"canic/component-group-graph/v2");
+    expected.extend_from_slice(&2_u32.to_be_bytes());
     expected.extend_from_slice(&1_u64.to_be_bytes());
     expected.extend_from_slice(&4_u64.to_be_bytes());
     expected.extend_from_slice(b"cell");
@@ -215,11 +215,87 @@ component_spec = "a"
     expected.extend_from_slice(b"a");
     expected.extend_from_slice(&1_u64.to_be_bytes());
     expected.extend_from_slice(b"a");
+    expected.push(0);
+    expected.push(0);
 
     assert_eq!(
         topology.canonical_bytes().expect("canonical bytes"),
         expected
     );
+}
+
+#[test]
+fn inclusion_purpose_applies_only_to_service_bearing_descendants() {
+    let topology = parse(
+        r#"
+[component_groups.services.components.database]
+component_spec = "a"
+service = "database"
+
+[component_groups.services.components.ordinary]
+component_spec = "b"
+
+[component_groups.cell.groups.services]
+component_group = "services"
+service_purpose = "replica"
+"#,
+    )
+    .expect("valid mixed service inclusion");
+    let flattened = topology.flatten(&group("cell")).expect("flatten cell");
+
+    assert!(matches!(
+        flattened.components[0].kind,
+        ComponentGroupLeafKind::FleetService { ref service }
+            if service.as_str() == "database"
+    ));
+    assert_eq!(
+        flattened.components[0].service_purpose_assignments,
+        vec![FleetServiceMemberPurpose::Replica]
+    );
+    assert!(matches!(
+        flattened.components[1].kind,
+        ComponentGroupLeafKind::Ordinary
+    ));
+    assert!(
+        flattened.components[1]
+            .service_purpose_assignments
+            .is_empty()
+    );
+}
+
+#[test]
+fn purpose_assignment_without_a_service_leaf_rejects() {
+    let leaf = parse(
+        r#"
+[component_groups.cell.components.a]
+component_spec = "a"
+service_purpose = "authority"
+"#,
+    )
+    .expect_err("ordinary leaf purpose must reject");
+    assert!(matches!(
+        leaf,
+        ConfigError::ComponentGroupTopology(
+            ComponentGroupTopologyError::InapplicableServicePurposeAssignment { .. }
+        )
+    ));
+
+    let inclusion = parse(
+        r#"
+[component_groups.ordinary.components.a]
+component_spec = "a"
+[component_groups.cell.groups.ordinary]
+component_group = "ordinary"
+service_purpose = "replica"
+"#,
+    )
+    .expect_err("ordinary inclusion purpose must reject");
+    assert!(matches!(
+        inclusion,
+        ConfigError::ComponentGroupTopology(
+            ComponentGroupTopologyError::InapplicableServicePurposeAssignment { .. }
+        )
+    ));
 }
 
 #[test]

@@ -17,13 +17,14 @@ use std::{cell::RefCell, sync::Arc};
 use thiserror::Error as ThisError;
 
 pub use component_group::{
-    ComponentGroupMember, ComponentGroupSpec, ComponentGroupTopology, ComponentGroupTopologyError,
-    FlattenedComponentGroup, FlattenedComponentGroupMember, MAX_COMPONENT_GROUP_DECLARED_MEMBERS,
+    ComponentGroupLeafKind, ComponentGroupMember, ComponentGroupSpec, ComponentGroupTopology,
+    ComponentGroupTopologyError, FlattenedComponentGroup, FlattenedComponentGroupMember,
+    FleetServiceMemberPurpose, MAX_COMPONENT_GROUP_DECLARED_MEMBERS,
     MAX_COMPONENT_GROUP_FLATTENED_MEMBERS, MAX_COMPONENT_GROUP_GRAPH_CANONICAL_BYTES,
     MAX_COMPONENT_GROUP_INCLUSIONS, MAX_COMPONENT_GROUP_MEMBERS, MAX_COMPONENT_GROUP_SPECS,
 };
 pub use component_group_deployment::{
-    ComponentGroupDeploymentSpec, ComponentGroupDeploymentTopology,
+    ComponentDeploymentPurpose, ComponentGroupDeploymentSpec, ComponentGroupDeploymentTopology,
     ComponentGroupDeploymentTopologyError, ComponentGroupPlacementPolicy,
     FlattenedComponentGroupDeploymentMember, MAX_COMPONENT_GROUP_DEPLOYMENT_MEMBERS,
     MAX_COMPONENT_GROUP_DEPLOYMENTS,

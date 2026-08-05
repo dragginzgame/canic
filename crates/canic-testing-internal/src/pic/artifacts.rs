@@ -1,5 +1,5 @@
 use canic_core::ids::BuildNetwork;
-use ic_testkit::artifacts::{WatchedInputSnapshot, build_wasm_canisters};
+use ic_testkit::artifacts::{WasmBuildSpec, WatchedInputSnapshot, build_wasm_canisters_cached};
 use std::{
     fs, io,
     path::{Path, PathBuf},
@@ -87,12 +87,29 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
         INTERNAL_TEST_RELEASE_BUILD_ID,
     ];
     build_env.extend_from_slice(extra_env);
-    build_wasm_canisters(
+    let build = WasmBuildSpec::new(
         workspace_root,
         target_dir,
         packages,
-        &cargo_args,
-        &build_env,
+        profile.target_dir_name(),
+    )
+    .with_cargo_profile_args(&cargo_args)
+    .with_extra_env(&build_env);
+    let outcome = build_wasm_canisters_cached(&build)
+        .unwrap_or_else(|err| panic!("internal test Wasm build failed: {err}"));
+    let timings = outcome.record().timings();
+    eprintln!(
+        "[canic-test-wasm] {} {} package(s) in {:?} (lock {:?}, inputs {:?}, cargo {:?})",
+        if outcome.is_reused() {
+            "reused"
+        } else {
+            "built"
+        },
+        packages.len(),
+        timings.total(),
+        timings.lock_wait(),
+        timings.input_resolution(),
+        timings.cargo_build(),
     );
 }
 

@@ -1725,6 +1725,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs2"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
+dependencies = [
+ "libc",
+ "winapi",
+]
+
+[[package]]
 name = "fs_extra"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2291,9 +2301,9 @@ dependencies = [
 
 [[package]]
 name = "ic-query"
-version = "0.29.1"
+version = "0.29.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f021aec50d9e75338c760962f0bff1336651c20f4928837812c280cd7d0e7afe"
+checksum = "dbe806058cca75b31f80660986cf84a68f312e54ba31543c3188ef460b5ea77a"
 dependencies = [
  "candid",
  "cap-fs-ext",
@@ -2347,15 +2357,17 @@ dependencies = [
 
 [[package]]
 name = "ic-testkit"
-version = "0.3.2"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3fc473231a26532d0acec321e532f123a7f969ec7c8e7242ec2c9354bf06f9f4"
+checksum = "1423f5b30be238be36b220b5067dbd2b97547db45c43e8343fb2c7e7dcea9177"
 dependencies = [
  "candid",
+ "fs2",
  "ic-cdk",
  "pocket-ic",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
 ]
 
 [[package]]

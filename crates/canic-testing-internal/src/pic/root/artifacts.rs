@@ -24,6 +24,11 @@ use crate::pic::artifacts::{
 use super::{RootBaselineSpec, progress, progress_elapsed};
 
 /// Build the local `.icp` root artifacts once unless all required outputs are already fresh.
+///
+/// # Panics
+///
+/// Panics if watched inputs cannot be captured, change during the build, the
+/// external build fails, or a required nonempty artifact cannot be stamped.
 pub fn ensure_root_release_artifacts_built(spec: &RootBaselineSpec<'_>) {
     if root_release_artifacts_ready(spec) {
         progress(spec, "reusing existing root release artifacts");
@@ -32,6 +37,9 @@ pub fn ensure_root_release_artifacts_built(spec: &RootBaselineSpec<'_>) {
 
     progress(spec, "building local ICP artifacts for root baseline");
     let started_at = std::time::Instant::now();
+    let watched_inputs =
+        WatchedInputSnapshot::capture(&spec.workspace_root, spec.artifact_watch_paths)
+            .expect("capture root release artifact inputs before build");
     build_icp_all_with_env(
         &spec.workspace_root,
         &spec.icp_build_lock_path,
@@ -40,6 +48,7 @@ pub fn ensure_root_release_artifacts_built(spec: &RootBaselineSpec<'_>) {
         &spec.build_config_path,
         &effective_build_env(spec),
     );
+    mark_root_release_artifacts_fresh(spec, watched_inputs);
     progress_elapsed(spec, "finished local ICP artifact build", started_at);
 }
 
@@ -189,6 +198,39 @@ fn root_release_artifacts_ready(spec: &RootBaselineSpec<'_>) -> bool {
             &build_env,
         )
     })
+}
+
+// Publish exact-input stamps only after the external ICP build has completed.
+fn mark_root_release_artifacts_fresh(
+    spec: &RootBaselineSpec<'_>,
+    watched_inputs: WatchedInputSnapshot,
+) {
+    let current_inputs =
+        WatchedInputSnapshot::capture(&spec.workspace_root, spec.artifact_watch_paths)
+            .expect("capture root release artifact inputs after build");
+    assert_eq!(
+        watched_inputs.digest(),
+        current_inputs.digest(),
+        "root release artifact inputs changed during build"
+    );
+    let mut artifact_paths = vec![spec.root_wasm_artifact_path.clone()];
+    artifact_paths.extend(configured_release_roles(spec).into_iter().map(|role| {
+        let role_name = role.as_str();
+        spec.root_release_artifacts_dir
+            .join(role_name)
+            .join(format!("{role_name}.wasm.gz"))
+    }));
+
+    for artifact_path in artifact_paths {
+        watched_inputs
+            .mark_artifact_fresh(&artifact_path)
+            .unwrap_or_else(|err| {
+                panic!(
+                    "mark root release artifact fresh at {} failed: {err}",
+                    artifact_path.display()
+                )
+            });
+    }
 }
 
 // Ensure internal PocketIC root baselines retain their explicit qualified-build

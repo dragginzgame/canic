@@ -4,18 +4,13 @@ use ic_testkit::{
     artifacts::{build_wasm_canisters, read_wasm, test_target_dir, workspace_root_for},
     pic::{PocketIc, PocketIcBuilder, StandaloneCanisterFixture},
 };
-use std::{
-    path::{Path, PathBuf},
-    sync::Mutex,
-};
+use std::path::{Path, PathBuf};
 
 use super::{
     CanicPicExt, CanicWasmBuildProfile,
     artifacts::{INTERNAL_TEST_ENDPOINTS_ENV, INTERNAL_TEST_RELEASE_BUILD_ID},
     install_standalone_canister,
 };
-
-static AUDIT_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
 pub struct RootAuditProbeFixture {
     pub pic: PocketIc,
@@ -71,10 +66,6 @@ fn ensure_probe_wasm_ready(
     crate_name: &str,
     profile: CanicWasmBuildProfile,
 ) {
-    let _build_guard = AUDIT_BUILD_SERIAL
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-
     let config_path = workspace_root.join("canisters/audit/root_probe/canic.toml");
     let config_path = config_path.to_str().expect("audit root config UTF-8");
     let build_env = [

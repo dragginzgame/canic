@@ -61,6 +61,14 @@ clear_pocketic_build_targets() {
         "target/pic-wasm"
         "target/pic-runtime-wasm"
         "target/pic-wasm-no-test-material"
+        "target/fleet-coordinator"
+        "target/fleet-registry-sync"
+        "target/standalone-blob_storage_cashier_mock"
+        "target/standalone-blob_storage_probe"
+        "target/standalone-leaf_probe"
+        "target/standalone-payload_limit_probe"
+        "target/standalone-root-probe"
+        "target/standalone-scaling_probe"
     )
 
     if [[ "$ci_only" -eq 1 ]]; then
@@ -72,8 +80,8 @@ clear_pocketic_build_targets() {
         esac
     fi
 
-    # Final cleanup runs locally and in CI so transient Wasm targets do not
-    # accumulate across suites or release attempts.
+    # CI bounds transient Wasm disk use. Local runs retain exact build caches
+    # until the maintainer explicitly runs `make clean-wasm`.
     for target_dir in "${target_dirs[@]}"; do
         if [[ ! -e "$target_dir" ]]; then
             continue
@@ -89,7 +97,7 @@ clear_pocketic_build_targets() {
 
 cleanup_heavy_build_targets() {
     if [[ "$HEAVY_BUILD_TARGETS_USED" -eq 1 ]]; then
-        clear_pocketic_build_targets "workspace test exit"
+        clear_pocketic_build_targets "workspace test exit" 1
     fi
 }
 

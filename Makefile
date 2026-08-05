@@ -321,10 +321,19 @@ clean:
 	cargo clean
 
 clean-wasm:
-	cargo clean --target-dir target/canic-wasm
-	cargo clean --target-dir target/icp-build
-	cargo clean --target-dir target/pic-wasm
-	cargo clean --target-dir target/pic-wasm-no-test-material
+	rm -rf -- target/canic-wasm
+	rm -rf -- target/icp-build
+	rm -rf -- target/pic-wasm
+	rm -rf -- target/pic-runtime-wasm
+	rm -rf -- target/pic-wasm-no-test-material
+	rm -rf -- target/fleet-coordinator
+	rm -rf -- target/fleet-registry-sync
+	rm -rf -- target/standalone-blob_storage_cashier_mock
+	rm -rf -- target/standalone-blob_storage_probe
+	rm -rf -- target/standalone-leaf_probe
+	rm -rf -- target/standalone-payload_limit_probe
+	rm -rf -- target/standalone-root-probe
+	rm -rf -- target/standalone-scaling_probe
 
 cloc:
 	bash scripts/dev/cloc.sh
