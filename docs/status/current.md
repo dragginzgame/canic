@@ -14,16 +14,24 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.5`.
-- The latest published release is `v0.101.5` at
-  `fcddcbf385a1c141a382f327289ba21a7fd8d197`.
-- Open `0.101.6` derives one bounded schema-v1 semantic configuration digest
+- The workspace package version is `0.101.6`.
+- The latest published release is `v0.101.6` at
+  `6344a650507c286110d2802e52a1688f3aea1a64`.
+- Open `0.101.7` hard-cuts managed init and Component-runtime status to carry
+  one immutable `UngroupedOrdinary` or `GroupMember` deployment context. It
+  validates grouped digest, placement/member identity, Component Group, Spec,
+  purpose, labels and effective limits against compiled App authority before
+  persistence, revalidates on same-release restore and exposes the retained
+  value to application policy. Existing ordinary Component and descendant
+  installation explicitly retains `UngroupedOrdinary`; plan-derived grouped
+  root acceptance and enforcement remain unavailable.
+- Released `0.101.6` derives one bounded schema-v1 semantic configuration digest
   over independently domain-separated Component Group graph, flattened
   deployment and Fleet-service target sections. The digest ignores source
   formatting and order but binds every Spec hash, effective path, purpose,
   label, member limit, placement envelope and service target. Protected
-  deployment context, root selection, persistence and effects remain
-  unavailable. The same patch advances the test runtime to `ic-testkit 0.4.0`,
+  grouped root selection, persistence and effects remain unavailable. The same
+  patch advances the test runtime to `ic-testkit 0.4.0`,
   bounds each named internal test-Wasm cache by age and logical size,
   deduplicates root-baseline snapshot inputs and uses one measured-safe
   capacity-one pool for the ingress payload-limit fixture.
@@ -2252,15 +2260,16 @@ First primary results:
 
 ## Next Action
 
-The Component Group declaration, independent deployment, Fleet-service target,
-inert-label and reduction-only member-limit compilers are published through
-immutable `v0.101.5`. The open 0.101.6 compiler adds the bounded schema-v1
-semantic configuration digest. Continue Slice 1 with the plan-derived
-protected Component deployment context that will carry the digest, exact
-placement/member identity, typed purpose, labels and effective limits into
-application policy and root enforcement. Keep group, deployment and service
-declarations configuration-only and do not reopen the 0.100 infrastructure or
-pool boundaries.
+The complete configuration-only Component Group compiler and semantic digest
+are published through immutable `v0.101.6`. Open 0.101.7 establishes the
+protected runtime context, strict compiled-context validation, stable
+retention and local application-policy read, while deliberately leaving the
+0.100 ordinary lifecycle on `UngroupedOrdinary`. Continue Slice 2 with one
+canonical root/group-placement/member plan that derives `GroupMember`, binds
+the same digest through plan hashing and root acceptance, and enforces exact
+effective limits. Keep group, deployment and service declarations
+configuration-only and do not reopen the 0.100 infrastructure or pool
+boundaries.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.

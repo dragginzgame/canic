@@ -70,6 +70,7 @@ use canic_core::{
     },
     dto::{
         abi::v1::{CanisterInitAuthority, CanisterInitPayload},
+        component_deployment::ProtectedComponentDeployment,
         component_registry::{
             ComponentDirectoryChildEntry, ComponentDirectoryHead, ComponentDirectoryHeadRequest,
             ComponentDirectoryPageCursor, ComponentDirectoryPageRequest,
@@ -3737,6 +3738,9 @@ async fn component_install_plan(
     let payload = CanisterInitPayload {
         install_id: allocation.operation_id,
         release_build_id: allocation.release_set.release_build_id,
+        component_deployment: Box::new(ProtectedComponentDeployment::UngroupedOrdinary {
+            binding: binding.clone(),
+        }),
         authority: CanisterInitAuthority::Component {
             root: root.clone(),
             binding,
@@ -3813,6 +3817,9 @@ async fn child_component_install_plan(
     let payload = CanisterInitPayload {
         install_id: allocation.operation_id,
         release_build_id: allocation.release_set.release_build_id,
+        component_deployment: Box::new(ProtectedComponentDeployment::UngroupedOrdinary {
+            binding: binding.component.clone(),
+        }),
         authority: CanisterInitAuthority::ComponentChild {
             root: root.clone(),
             binding,
@@ -5079,6 +5086,11 @@ fn validate_target_directory_status(
             "Component runtime Directory status has a different protected binding",
         ));
     }
+    if !target_deployment_matches(status, binding) {
+        return Err(InternalError::conflict(
+            "Component runtime Directory status has a different protected deployment context",
+        ));
+    }
     let identity = ComponentRuntimeDirectoryStatusIdentity::from_status(status);
     let prepared_identity = ComponentRuntimeDirectoryStatusIdentity::exact(
         &request.authority,
@@ -5111,6 +5123,25 @@ fn validate_target_directory_status(
     }
 }
 
+fn target_deployment_matches(
+    status: &ComponentRuntimeStatusResponse,
+    binding: &ManagedCanisterBinding,
+) -> bool {
+    status.deployment.as_ref() == &ungrouped_component_deployment(binding)
+}
+
+fn ungrouped_component_deployment(
+    binding: &ManagedCanisterBinding,
+) -> ProtectedComponentDeployment {
+    let component = match binding {
+        ManagedCanisterBinding::Component(component) => component,
+        ManagedCanisterBinding::ComponentChild(child) => &child.component,
+    };
+    ProtectedComponentDeployment::UngroupedOrdinary {
+        binding: component.clone(),
+    }
+}
+
 fn target_activation_matches(
     activation: Option<ComponentRuntimeActivationEvidence>,
     expected_directory_authority_hash: [u8; 32],
@@ -5135,6 +5166,7 @@ fn prepared_target_directory_status(
         ComponentRuntimePhase::Active => Ok(ComponentRuntimeStatusResponse {
             operation_id: request.operation_id,
             binding: binding.clone(),
+            deployment: status.deployment.clone(),
             phase: ComponentRuntimePhase::DirectoryPrepared,
             authority: Some(request.authority.clone()),
             authority_hash: Some(authority_hash),
@@ -5181,6 +5213,7 @@ fn active_target_runtime_status(
     Ok(ComponentRuntimeStatusResponse {
         operation_id: request.operation_id,
         binding: binding.clone(),
+        deployment: status.deployment.clone(),
         phase: ComponentRuntimePhase::Active,
         authority: Some(request.authority.clone()),
         authority_hash: Some(authority_hash),
@@ -5243,6 +5276,7 @@ fn active_membership_target_status(
     Ok(ComponentRuntimeStatusResponse {
         operation_id: prepared_request.operation_id,
         binding: binding.clone(),
+        deployment: status.deployment.clone(),
         phase: ComponentRuntimePhase::Active,
         authority: Some(active_request.authority.clone()),
         authority_hash: Some(active_authority_hash),
@@ -7588,6 +7622,33 @@ mod tests {
         let mut malformed = request;
         malformed.cursor = Some(ComponentDirectoryPageCursor(vec![1, 2, 3]));
         assert!(decode_component_directory_cursor(&malformed).is_err());
+    }
+
+    #[test]
+    fn ordinary_root_observation_rejects_deployment_context_substitution() {
+        let component = component_binding();
+        let managed = ManagedCanisterBinding::Component(component.clone());
+        let mut status = ComponentRuntimeStatusResponse {
+            operation_id: [11; 32],
+            binding: managed.clone(),
+            deployment: Box::new(ProtectedComponentDeployment::UngroupedOrdinary {
+                binding: component,
+            }),
+            phase: ComponentRuntimePhase::AwaitingDirectory,
+            authority: None,
+            authority_hash: None,
+            direct_children_hash: None,
+            activation: None,
+        };
+        assert!(target_deployment_matches(&status, &managed));
+
+        let ProtectedComponentDeployment::UngroupedOrdinary { binding } =
+            status.deployment.as_mut()
+        else {
+            unreachable!()
+        };
+        binding.component = ComponentInstanceId::from_generated_bytes([12; 32]);
+        assert!(!target_deployment_matches(&status, &managed));
     }
 
     fn component_binding() -> ComponentBinding {

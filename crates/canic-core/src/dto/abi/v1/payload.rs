@@ -1,5 +1,5 @@
 use crate::{
-    dto::prelude::*,
+    dto::{component_deployment::ProtectedComponentDeployment, prelude::*},
     ids::{ComponentBinding, ComponentChildBinding, FleetSubnetRootBinding, ReleaseBuildId},
 };
 
@@ -30,6 +30,7 @@ pub struct CanisterInitPayload {
     pub install_id: [u8; 32],
     pub release_build_id: ReleaseBuildId,
     pub authority: CanisterInitAuthority,
+    pub component_deployment: Box<ProtectedComponentDeployment>,
 }
 
 #[cfg(test)]
@@ -98,6 +99,9 @@ mod tests {
         let payload = CanisterInitPayload {
             install_id: [11; 32],
             release_build_id,
+            component_deployment: Box::new(ProtectedComponentDeployment::UngroupedOrdinary {
+                binding: binding.clone(),
+            }),
             authority: CanisterInitAuthority::Component {
                 root,
                 binding: binding.clone(),
@@ -110,6 +114,7 @@ mod tests {
 
         assert_eq!(decoded.install_id, [11; 32]);
         assert_eq!(decoded.release_build_id, release_build_id);
+        assert_eq!(decoded.component_deployment, payload.component_deployment);
         assert_eq!(
             decoded.authority,
             CanisterInitAuthority::Component {

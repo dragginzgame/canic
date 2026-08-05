@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.7` adds the immutable runtime Component deployment context, validates
+  it against compiled authority and retains it for application policy and
+  root-observed lifecycle status.
+
 - `0.101.6` derives one bounded schema-v1 semantic digest over canonical
   Component Group, flattened deployment and Fleet-service target sections. It
   also advances to `ic-testkit 0.4.0`, bounds retained local test-Wasm caches

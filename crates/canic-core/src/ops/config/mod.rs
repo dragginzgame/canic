@@ -14,7 +14,8 @@ use crate::{
             implicit_wasm_store_canister_config,
         },
     },
-    ids::{CanisterRole, ComponentSpecId},
+    dto::component_deployment::ProtectedComponentDeployment,
+    ids::{CanisterRole, ComponentBinding, ComponentSpecId},
     model::cycles_funding::FundingLimits,
     ops::{OpsError, prelude::*, runtime::env::EnvOps},
     storage::stable::state::fleet::FleetMode,
@@ -106,6 +107,20 @@ impl ConfigOps {
             .compile_component_topology()
             .map_err(ConfigError::from)
             .map_err(InternalError::from)
+    }
+
+    /// Validate one retained deployment context against the current compiled App authority.
+    pub(crate) fn validate_protected_component_deployment(
+        context: &ProtectedComponentDeployment,
+        owning_component: &ComponentBinding,
+    ) -> Result<(), InternalError> {
+        Config::get()?
+            .validate_protected_component_deployment(context, owning_component)
+            .map_err(|error| {
+                InternalError::invalid_input(format!(
+                    "protected Component deployment context is invalid: {error}"
+                ))
+            })
     }
 
     /// Resolve the exact configured package identity for one declared application role.

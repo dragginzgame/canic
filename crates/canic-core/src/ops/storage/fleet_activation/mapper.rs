@@ -4,7 +4,10 @@
 //! Does not own: storage access, mutation, activation policy, or endpoint authorization.
 //! Boundary: contradictory protected records fail closed instead of producing a partial status.
 
-use super::{FleetActivationOpsError, validate_component_runtime_directory_record};
+use super::{
+    FleetActivationOpsError, validate_component_runtime_deployment_record,
+    validate_component_runtime_directory_record,
+};
 use crate::{
     dto::fleet_activation::{
         FleetActivationIdentity, FleetActivationPhase, FleetActivationStatusResponse,
@@ -49,6 +52,9 @@ pub(super) fn record_to_status(
         return Err(invalid(
             "sibling Wasm Store activation contains Component runtime state",
         ));
+    }
+    if let Some(runtime) = component_runtime.as_ref() {
+        validate_component_runtime_deployment_record(runtime)?;
     }
     let (phase, identity, evidence, activated_at_ns) = match state {
         FleetActivationStateRecord::Prepared {

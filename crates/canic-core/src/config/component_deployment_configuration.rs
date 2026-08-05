@@ -14,7 +14,11 @@ use crate::{
         ComponentTopologyError, FleetServiceTopology, FleetServiceTopologyError,
         canonical::CanonicalEncoder, schema::ConfigModel,
     },
-    ids::ComponentDeploymentConfigurationDigest,
+    dto::component_deployment::ProtectedComponentDeployment,
+    ids::{
+        ComponentBinding, ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
+        ComponentGroupMemberPath, ComponentGroupSpecId, ComponentSpecId,
+    },
 };
 
 use sha2::{Digest, Sha256};
@@ -55,6 +59,15 @@ impl ConfigModel {
             &component_topology,
         )
     }
+
+    /// Validate one runtime context against the complete compiled deployment configuration.
+    pub(crate) fn validate_protected_component_deployment(
+        &self,
+        context: &ProtectedComponentDeployment,
+        owning_component: &ComponentBinding,
+    ) -> Result<(), ProtectedComponentDeploymentError> {
+        validate_protected_component_deployment(self, context, owning_component)
+    }
 }
 
 /// Typed rejection while deriving protected Component deployment configuration identity.
@@ -74,6 +87,151 @@ pub enum ComponentDeploymentConfigurationDigestError {
 
     #[error("canonical Component deployment configuration bytes {actual} exceed bound {maximum}")]
     CanonicalBytesBoundExceeded { actual: usize, maximum: usize },
+}
+
+/// Typed rejection for a runtime deployment context that differs from compiled authority.
+#[derive(Debug, ThisError)]
+pub enum ProtectedComponentDeploymentError {
+    #[error(transparent)]
+    Configuration(Box<ComponentDeploymentConfigurationDigestError>),
+
+    #[error("protected deployment binding differs from the managed owning Component")]
+    BindingMismatch,
+
+    #[error("protected deployment configuration digest differs from compiled configuration")]
+    ConfigurationDigestMismatch,
+
+    #[error("protected deployment references unknown deployment '{deployment}'")]
+    UnknownDeployment {
+        deployment: ComponentGroupDeploymentId,
+    },
+
+    #[error(
+        "protected deployment '{deployment}' references Component Group '{actual}', expected '{expected}'"
+    )]
+    ComponentGroupMismatch {
+        deployment: ComponentGroupDeploymentId,
+        actual: ComponentGroupSpecId,
+        expected: ComponentGroupSpecId,
+    },
+
+    #[error("protected deployment '{deployment}' references unknown member path '{member:?}'")]
+    UnknownMember {
+        deployment: ComponentGroupDeploymentId,
+        member: ComponentGroupMemberPath,
+    },
+
+    #[error(
+        "protected deployment member '{member:?}' binds Component Spec '{actual}', expected '{expected}'"
+    )]
+    ComponentSpecMismatch {
+        member: ComponentGroupMemberPath,
+        actual: ComponentSpecId,
+        expected: ComponentSpecId,
+    },
+
+    #[error("protected deployment member '{member:?}' has the wrong Component Spec hash")]
+    ComponentSpecHashMismatch { member: ComponentGroupMemberPath },
+
+    #[error("protected deployment member '{member:?}' has the wrong typed purpose")]
+    PurposeMismatch { member: ComponentGroupMemberPath },
+
+    #[error("protected deployment member '{member:?}' has the wrong effective labels")]
+    LabelsMismatch { member: ComponentGroupMemberPath },
+
+    #[error("protected deployment member '{member:?}' has the wrong effective limits")]
+    LimitsMismatch { member: ComponentGroupMemberPath },
+}
+
+fn validate_protected_component_deployment(
+    config: &ConfigModel,
+    context: &ProtectedComponentDeployment,
+    owning_component: &ComponentBinding,
+) -> Result<(), ProtectedComponentDeploymentError> {
+    if let ProtectedComponentDeployment::UngroupedOrdinary { binding } = context {
+        return (binding == owning_component)
+            .then_some(())
+            .ok_or(ProtectedComponentDeploymentError::BindingMismatch);
+    }
+    let ProtectedComponentDeployment::GroupMember {
+        binding,
+        configuration_digest,
+        group_placement,
+        component_group,
+        member_path,
+        purpose,
+        labels,
+        limits,
+    } = context
+    else {
+        unreachable!("ungrouped deployment returned before grouped validation")
+    };
+    if binding != owning_component {
+        return Err(ProtectedComponentDeploymentError::BindingMismatch);
+    }
+
+    let expected_digest = config
+        .compile_component_deployment_configuration_digest()
+        .map_err(|error| ProtectedComponentDeploymentError::Configuration(Box::new(error)))?;
+    if configuration_digest != &expected_digest {
+        return Err(ProtectedComponentDeploymentError::ConfigurationDigestMismatch);
+    }
+
+    let deployment_topology = config
+        .compile_component_group_deployment_topology()
+        .map_err(ComponentDeploymentConfigurationDigestError::ComponentGroupDeploymentTopology)
+        .map_err(|error| ProtectedComponentDeploymentError::Configuration(Box::new(error)))?;
+    let deployment = deployment_topology
+        .get(&group_placement.deployment)
+        .ok_or_else(|| ProtectedComponentDeploymentError::UnknownDeployment {
+            deployment: group_placement.deployment.clone(),
+        })?;
+    if component_group != &deployment.component_group {
+        return Err(ProtectedComponentDeploymentError::ComponentGroupMismatch {
+            deployment: group_placement.deployment.clone(),
+            actual: component_group.clone(),
+            expected: deployment.component_group.clone(),
+        });
+    }
+    let member = deployment
+        .members
+        .binary_search_by(|candidate| candidate.member_path.cmp(member_path))
+        .ok()
+        .map(|index| &deployment.members[index])
+        .ok_or_else(|| ProtectedComponentDeploymentError::UnknownMember {
+            deployment: group_placement.deployment.clone(),
+            member: member_path.clone(),
+        })?;
+    if owning_component.component_spec != member.component_spec {
+        return Err(ProtectedComponentDeploymentError::ComponentSpecMismatch {
+            member: member_path.clone(),
+            actual: owning_component.component_spec.clone(),
+            expected: member.component_spec.clone(),
+        });
+    }
+    if owning_component.spec_hash != member.component_spec_hash {
+        return Err(
+            ProtectedComponentDeploymentError::ComponentSpecHashMismatch {
+                member: member_path.clone(),
+            },
+        );
+    }
+    if purpose != &member.purpose {
+        return Err(ProtectedComponentDeploymentError::PurposeMismatch {
+            member: member_path.clone(),
+        });
+    }
+    if labels != &member.labels {
+        return Err(ProtectedComponentDeploymentError::LabelsMismatch {
+            member: member_path.clone(),
+        });
+    }
+    if limits != &member.limits {
+        return Err(ProtectedComponentDeploymentError::LimitsMismatch {
+            member: member_path.clone(),
+        });
+    }
+    Ok(())
 }
 
 fn derive_digest(

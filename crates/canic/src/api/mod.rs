@@ -46,6 +46,11 @@ pub mod canister {
         pub use crate::__internal::core::api::topology::children::CanisterChildrenApi;
     }
 
+    /// Immutable plan-derived Component deployment policy.
+    pub mod deployment {
+        pub use crate::__internal::core::api::component_deployment::ComponentDeploymentApi;
+    }
+
     pub mod placement {
         pub use crate::__internal::core::api::placement::index::PlacementIndexApi;
         pub use crate::__internal::core::api::placement::scaling::ScalingApi;

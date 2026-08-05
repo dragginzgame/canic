@@ -10,6 +10,7 @@ pub mod authority_restore;
 pub mod blob_storage;
 pub mod call;
 pub mod cascade;
+pub mod component_deployment;
 pub mod component_runtime;
 pub mod config;
 pub mod error;

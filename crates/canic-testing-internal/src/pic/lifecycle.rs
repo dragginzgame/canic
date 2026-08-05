@@ -1,7 +1,10 @@
 use crate::canister::TEST;
 use candid::{Principal, encode_args, encode_one};
 use canic::{
-    dto::abi::v1::{CanisterInitAuthority, CanisterInitPayload},
+    dto::{
+        abi::v1::{CanisterInitAuthority, CanisterInitPayload},
+        component_deployment::ProtectedComponentDeployment,
+    },
     ids::{
         ComponentBinding, ComponentInstanceId, ComponentSpecAdmission, ComponentSpecId,
         CyclesFundingBudget, FleetCoordinatorBinding, FleetRegistryAuthority,
@@ -216,6 +219,9 @@ fn init_payload(canister_id: Principal) -> CanisterInitPayload {
     CanisterInitPayload {
         install_id: identity.install_id,
         release_build_id: identity.release_build_id,
+        component_deployment: Box::new(ProtectedComponentDeployment::UngroupedOrdinary {
+            binding: binding.clone(),
+        }),
         authority: CanisterInitAuthority::Component { root, binding },
     }
 }

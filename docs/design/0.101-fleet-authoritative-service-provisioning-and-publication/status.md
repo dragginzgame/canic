@@ -12,10 +12,12 @@ Date: 2026-08-05
   inherited across deployment/include/leaf paths, plus bounded reduction-only
   limits resolved against exact flattened members and immutable Component
   Spec ceilings and one schema-v1 semantic digest over the canonical group,
-  flattened-deployment and Fleet-service-target sections; every effect-bearing
+  flattened-deployment and Fleet-service-target sections. The managed runtime
+  ABI now validates and retains an immutable ordinary-or-group-member context
+  and exposes it to application policy, while every grouped effect-bearing
   surface remains unimplemented.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.5` is released and `0.101.6` is open.
+- Implementation started: yes; `0.101.6` is released and `0.101.7` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -130,9 +132,13 @@ Fleet policy writer.
 - [x] Add bounded inert deployment labels that cannot alter authority.
 - [x] Compile bounded reduction-only deployment-member limits against exact
   flattened paths and immutable Component Spec envelopes.
-- [ ] Persist one plan-derived protected Component deployment context so
-  application policy can enforce Authority/Replica purpose and the root can
-  enforce exact effective limits.
+- [x] Add the reinstall-only protected Component deployment runtime contract,
+  hard-cut managed init/status to retain it, validate exact compiled grouped
+  projections and expose the retained purpose to application policy. Current
+  ordinary provisioning emits only `UngroupedOrdinary`.
+- [ ] Derive each `GroupMember` context from the accepted root plan, verify it
+  against the Component Group Directory and enforce its exact effective limits
+  throughout root allocation and descendant lifecycle.
 - [x] Derive one semantic protected configuration digest over groups,
   deployments and service targets.
 - [ ] Remove singleton-Spec and sole-root-admission service assumptions.
