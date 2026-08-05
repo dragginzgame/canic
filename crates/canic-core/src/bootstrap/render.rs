@@ -9,7 +9,7 @@ use crate::config::schema::IcpRefillPolicy;
 use crate::{
     cdk::candid::Principal,
     config::{
-        FleetServiceMemberPurpose,
+        ComponentDeploymentLabelKey, ComponentDeploymentLabelValue, FleetServiceMemberPurpose,
         schema::{
             AppConfig, AuthConfig, CanisterAuthConfig, ChainKeyRootProofConfig,
             ComponentChildConfig, ComponentChildKind, ComponentGroupComponentConfig,
@@ -170,6 +170,26 @@ fn render_component_group_member_id(member: &ComponentGroupMemberId) -> TokenStr
     }
 }
 
+// Render one validated deployment-label key.
+fn render_component_deployment_label_key(key: &ComponentDeploymentLabelKey) -> TokenStream {
+    let value = key.as_str();
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentDeploymentLabelKey::try_from(
+            ::std::string::String::from(#value)
+        ).expect("embedded Component deployment label key was validated at build time")
+    }
+}
+
+// Render one validated deployment-label value.
+fn render_component_deployment_label_value(value: &ComponentDeploymentLabelValue) -> TokenStream {
+    let value = value.as_str();
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentDeploymentLabelValue::try_from(
+            ::std::string::String::from(#value)
+        ).expect("embedded Component deployment label value was validated at build time")
+    }
+}
+
 // Render one validated Fleet service identifier.
 fn render_fleet_service_id(service: &FleetServiceId) -> TokenStream {
     let value = service.as_str();
@@ -233,11 +253,17 @@ fn render_component_group_component_config(config: &ComponentGroupComponentConfi
     let service_purpose = render_option(config.service_purpose.as_ref(), |purpose| {
         render_fleet_service_member_purpose(*purpose)
     });
+    let labels = render_btree_map(
+        config.labels.iter(),
+        render_component_deployment_label_key,
+        render_component_deployment_label_value,
+    );
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ComponentGroupComponentConfig {
             component_spec: #component_spec,
             service: #service,
             service_purpose: #service_purpose,
+            labels: #labels,
         }
     }
 }
@@ -248,10 +274,16 @@ fn render_component_group_include_config(config: &ComponentGroupIncludeConfig) -
     let service_purpose = render_option(config.service_purpose.as_ref(), |purpose| {
         render_fleet_service_member_purpose(*purpose)
     });
+    let labels = render_btree_map(
+        config.labels.iter(),
+        render_component_deployment_label_key,
+        render_component_deployment_label_value,
+    );
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ComponentGroupIncludeConfig {
             component_group: #component_group,
             service_purpose: #service_purpose,
+            labels: #labels,
         }
     }
 }
@@ -264,6 +296,11 @@ fn render_component_group_deployment_config(
     let service_purpose = render_option(config.service_purpose.as_ref(), |purpose| {
         render_fleet_service_member_purpose(*purpose)
     });
+    let labels = render_btree_map(
+        config.labels.iter(),
+        render_component_deployment_label_key,
+        render_component_deployment_label_value,
+    );
     let initial_placements = render_u32_literal(config.initial_placements);
     let maximum_placements = render_u32_literal(config.maximum_placements);
     let placement = render_component_group_placement_policy_config(&config.placement);
@@ -271,6 +308,7 @@ fn render_component_group_deployment_config(
         ::canic::__internal::core::bootstrap::compiled::ComponentGroupDeploymentConfig {
             component_group: #component_group,
             service_purpose: #service_purpose,
+            labels: #labels,
             initial_placements: #initial_placements,
             maximum_placements: #maximum_placements,
             placement: #placement,
@@ -1124,47 +1162,9 @@ fn render_index_pool(pool: &IndexPool) -> TokenStream {
 mod tests {
     use super::*;
 
-    fn principal(byte: u8) -> Principal {
-        Principal::from_slice(&[byte; 29])
-    }
-
-    #[test]
-    fn render_icp_refill_policy_preserves_system_canister_overrides() {
-        let rendered = render_icp_refill_policy(&IcpRefillPolicy {
-            max_refill_e8s_per_call: 100_000_000,
-            min_xdr_permyriad_per_icp: Some(40_000),
-            ledger_canister_id: Some(principal(11)),
-            cmc_canister_id: Some(principal(12)),
-            allow_ic_system_canister_overrides: true,
-        })
-        .to_string();
-
-        assert!(rendered.contains("ledger_canister_id"));
-        assert!(rendered.contains("cmc_canister_id"));
-        assert!(rendered.contains("allow_ic_system_canister_overrides"));
-        assert!(rendered.contains("Principal :: from_slice"));
-        assert!(rendered.contains("100_000_000_u64"));
-        assert!(rendered.contains("40_000_u64"));
-    }
-
-    #[test]
-    fn render_large_config_literals_with_clippy_clean_separators() {
-        let log = render_log_config(&LogConfig::default()).to_string();
-        let component_limits =
-            render_component_limits_config(&ComponentLimitsConfig::default()).to_string();
-
-        assert!(log.contains("10_000_u64"));
-        assert!(log.contains("16_384_u32"));
-        assert!(component_limits.contains("16_777_216_u64"));
-        assert!(component_limits.contains("3_600_u64"));
-    }
-
-    #[test]
-    fn render_component_topology_and_nested_group_declarations() {
-        let config = crate::config::Config::parse_toml(
-            r#"
+    const COMPONENT_TOPOLOGY_CONFIG: &str = r#"
 [app]
-name = "render_v2"
+name = "render_v3"
 
 [roles.root]
 kind = "root"
@@ -1208,6 +1208,7 @@ maximum_instances = 100
 [component_groups.shared.components.hub]
 component_spec = "hub"
 service = "hubs"
+labels = { role = "hub" }
 
 [component_groups.cell.components.instance]
 component_spec = "instance"
@@ -1220,9 +1221,11 @@ service_purpose = "authority"
 [component_groups.cell.groups.shared]
 component_group = "shared"
 service_purpose = "pool_member"
+labels = { inclusion = "shared" }
 
 [component_group_deployments.cell]
 component_group = "cell"
+labels = { workload = "project" }
 initial_placements = 1
 maximum_placements = 1
 placement.maximum_per_root = 1
@@ -1243,9 +1246,47 @@ component_spec = "hub"
 mode = "active_pool"
 placement.maximum_members_per_root = 1
 placement.minimum_distinct_roots = 1
-"#,
-        )
-        .expect("valid Component and Component Group topology config");
+"#;
+
+    fn principal(byte: u8) -> Principal {
+        Principal::from_slice(&[byte; 29])
+    }
+
+    #[test]
+    fn render_icp_refill_policy_preserves_system_canister_overrides() {
+        let rendered = render_icp_refill_policy(&IcpRefillPolicy {
+            max_refill_e8s_per_call: 100_000_000,
+            min_xdr_permyriad_per_icp: Some(40_000),
+            ledger_canister_id: Some(principal(11)),
+            cmc_canister_id: Some(principal(12)),
+            allow_ic_system_canister_overrides: true,
+        })
+        .to_string();
+
+        assert!(rendered.contains("ledger_canister_id"));
+        assert!(rendered.contains("cmc_canister_id"));
+        assert!(rendered.contains("allow_ic_system_canister_overrides"));
+        assert!(rendered.contains("Principal :: from_slice"));
+        assert!(rendered.contains("100_000_000_u64"));
+        assert!(rendered.contains("40_000_u64"));
+    }
+
+    #[test]
+    fn render_large_config_literals_with_clippy_clean_separators() {
+        let log = render_log_config(&LogConfig::default()).to_string();
+        let component_limits =
+            render_component_limits_config(&ComponentLimitsConfig::default()).to_string();
+
+        assert!(log.contains("10_000_u64"));
+        assert!(log.contains("16_384_u32"));
+        assert!(component_limits.contains("16_777_216_u64"));
+        assert!(component_limits.contains("3_600_u64"));
+    }
+
+    #[test]
+    fn render_component_topology_and_nested_group_declarations() {
+        let config = crate::config::Config::parse_toml(COMPONENT_TOPOLOGY_CONFIG)
+            .expect("valid Component and Component Group topology config");
         let rendered = config_model(&config);
 
         assert!(rendered.contains("ComponentProvisioningGrantConfig"));
@@ -1271,6 +1312,14 @@ placement.minimum_distinct_roots = 1
             rendered.contains("embedded Component Group member path was validated at build time")
         );
         assert!(rendered.contains("embedded Fleet service ID was validated at build time"));
+        assert!(
+            rendered
+                .contains("embedded Component deployment label key was validated at build time")
+        );
+        assert!(
+            rendered
+                .contains("embedded Component deployment label value was validated at build time")
+        );
         assert!(rendered.contains("FleetServiceMemberPurpose :: PoolMember"));
         assert!(rendered.contains("maximum_instances_per_requester_per_root : 100_u32"));
         assert!(rendered.contains("maximum_instances_per_parent : 100_u32"));

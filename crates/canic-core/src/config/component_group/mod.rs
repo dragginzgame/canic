@@ -4,6 +4,7 @@
 //! Does not own: final deployment purpose resolution, placement, persistence, or runtime parentage.
 //! Boundary: validated checked-in declarations become bounded occurrence-preserving projections.
 
+mod label;
 #[cfg(test)]
 mod tests;
 
@@ -14,14 +15,20 @@ use crate::{
         ComponentGroupSpecId, ComponentSpecId, FleetServiceId,
     },
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
-const COMPONENT_GROUP_GRAPH_DOMAIN: &[u8] = b"canic/component-group-graph/v2";
-const COMPONENT_GROUP_GRAPH_SCHEMA_VERSION: u32 = 2;
+pub use label::{
+    ComponentDeploymentLabel, ComponentDeploymentLabelKey, ComponentDeploymentLabelParseError,
+    ComponentDeploymentLabelValue, MAX_COMPONENT_DEPLOYMENT_LABEL_KEY_BYTES,
+    MAX_COMPONENT_DEPLOYMENT_LABEL_VALUE_BYTES, MAX_COMPONENT_DEPLOYMENT_LABELS,
+};
+
+const COMPONENT_GROUP_GRAPH_DOMAIN: &[u8] = b"canic/component-group-graph/v3";
+const COMPONENT_GROUP_GRAPH_SCHEMA_VERSION: u32 = 3;
 
 /// Maximum Component Group declarations in one App.
 pub const MAX_COMPONENT_GROUP_SPECS: usize = 256;
@@ -131,11 +138,13 @@ impl ComponentGroupTopology {
         let mut member_path = Vec::new();
         let mut active_groups = Vec::new();
         let mut service_purposes = Vec::new();
+        let mut labels = BTreeMap::new();
         self.flatten_into(
             component_group,
             &mut member_path,
             &mut active_groups,
             &mut service_purposes,
+            &mut labels,
             &mut components,
         )?;
         Ok(FlattenedComponentGroup {
@@ -164,22 +173,26 @@ impl ComponentGroupTopology {
                         component_spec,
                         kind,
                         service_purpose,
+                        labels,
                     } => {
                         bytes.push(0);
                         encode_text(&mut bytes, member.as_str());
                         encode_text(&mut bytes, component_spec.as_str());
                         encode_leaf_kind(&mut bytes, kind);
                         encode_service_purpose(&mut bytes, service_purpose.as_ref());
+                        encode_labels(&mut bytes, labels);
                     }
                     ComponentGroupMember::Group {
                         member,
                         component_group,
                         service_purpose,
+                        labels,
                     } => {
                         bytes.push(1);
                         encode_text(&mut bytes, member.as_str());
                         encode_text(&mut bytes, component_group.as_str());
                         encode_service_purpose(&mut bytes, service_purpose.as_ref());
+                        encode_labels(&mut bytes, labels);
                     }
                 }
             }
@@ -246,6 +259,7 @@ impl ComponentGroupTopology {
                     });
                 }
                 previous_member = Some(member_id);
+                validate_member_labels(&group.component_group, member)?;
                 if let ComponentGroupMember::Group {
                     component_group: included,
                     ..
@@ -281,6 +295,7 @@ impl ComponentGroupTopology {
         member_path: &mut Vec<ComponentGroupMemberId>,
         active_groups: &mut Vec<ComponentGroupSpecId>,
         service_purposes: &mut Vec<FleetServiceMemberPurpose>,
+        effective_labels: &mut BTreeMap<ComponentDeploymentLabelKey, ComponentDeploymentLabelValue>,
         output: &mut Vec<FlattenedComponentGroupMember>,
     ) -> Result<(), ComponentGroupTopologyError> {
         if active_groups.contains(component_group) {
@@ -308,6 +323,12 @@ impl ComponentGroupTopology {
                         source,
                     }
                 })?;
+            let added_label_keys = extend_effective_labels(
+                &active_groups[0],
+                &current_path,
+                member.labels(),
+                effective_labels,
+            )?;
             match member {
                 ComponentGroupMember::Component {
                     component_spec,
@@ -329,6 +350,13 @@ impl ComponentGroupTopology {
                             ComponentGroupLeafKind::Ordinary => Vec::new(),
                             ComponentGroupLeafKind::FleetService { .. } => service_purposes.clone(),
                         },
+                        labels: effective_labels
+                            .iter()
+                            .map(|(key, value)| ComponentDeploymentLabel {
+                                key: key.clone(),
+                                value: value.clone(),
+                            })
+                            .collect(),
                     });
                 }
                 ComponentGroupMember::Group {
@@ -339,6 +367,7 @@ impl ComponentGroupTopology {
                     member_path,
                     active_groups,
                     service_purposes,
+                    effective_labels,
                     output,
                 )?,
             }
@@ -356,6 +385,9 @@ impl ComponentGroupTopology {
             }
             if member.service_purpose().is_some() {
                 service_purposes.pop();
+            }
+            for key in added_label_keys {
+                effective_labels.remove(&key);
             }
             member_path.pop();
         }
@@ -381,11 +413,13 @@ pub enum ComponentGroupMember {
         component_spec: ComponentSpecId,
         kind: ComponentGroupLeafKind,
         service_purpose: Option<FleetServiceMemberPurpose>,
+        labels: Vec<ComponentDeploymentLabel>,
     },
     Group {
         member: ComponentGroupMemberId,
         component_group: ComponentGroupSpecId,
         service_purpose: Option<FleetServiceMemberPurpose>,
+        labels: Vec<ComponentDeploymentLabel>,
     },
 }
 
@@ -406,6 +440,13 @@ impl ComponentGroupMember {
             | Self::Group {
                 service_purpose, ..
             } => *service_purpose,
+        }
+    }
+
+    #[must_use]
+    pub fn labels(&self) -> &[ComponentDeploymentLabel] {
+        match self {
+            Self::Component { labels, .. } | Self::Group { labels, .. } => labels,
         }
     }
 }
@@ -444,6 +485,7 @@ pub struct FlattenedComponentGroupMember {
     pub component_spec: ComponentSpecId,
     pub kind: ComponentGroupLeafKind,
     pub service_purpose_assignments: Vec<FleetServiceMemberPurpose>,
+    pub labels: Vec<ComponentDeploymentLabel>,
 }
 
 impl FlattenedComponentGroupMember {
@@ -531,6 +573,44 @@ pub enum ComponentGroupTopologyError {
         member: ComponentGroupMemberId,
     },
 
+    #[error(
+        "Component Group '{component_group}' member '{member}' has {actual} labels; maximum is {maximum}"
+    )]
+    LabelBoundExceeded {
+        component_group: ComponentGroupSpecId,
+        member: ComponentGroupMemberId,
+        actual: usize,
+        maximum: usize,
+    },
+
+    #[error(
+        "Component Group '{component_group}' member '{member}' label '{label}' is duplicated or not in canonical order"
+    )]
+    NonCanonicalLabelOrder {
+        component_group: ComponentGroupSpecId,
+        member: ComponentGroupMemberId,
+        label: ComponentDeploymentLabelKey,
+    },
+
+    #[error(
+        "Component Group '{component_group}' flattened member '{member_path:?}' repeats label key '{label}'"
+    )]
+    DuplicateEffectiveLabel {
+        component_group: ComponentGroupSpecId,
+        member_path: ComponentGroupMemberPath,
+        label: ComponentDeploymentLabelKey,
+    },
+
+    #[error(
+        "Component Group '{component_group}' flattened member '{member_path:?}' has {actual} effective labels; maximum is {maximum}"
+    )]
+    EffectiveLabelBoundExceeded {
+        component_group: ComponentGroupSpecId,
+        member_path: ComponentGroupMemberPath,
+        actual: usize,
+        maximum: usize,
+    },
+
     #[error("Component Group graph canonical bytes {actual} exceed bound {maximum}")]
     CanonicalBytesBoundExceeded { actual: usize, maximum: usize },
 
@@ -608,6 +688,7 @@ fn compile_group(
                     ComponentGroupLeafKind::FleetService { service }
                 }),
             service_purpose: component.service_purpose,
+            labels: source_labels(&component.labels),
         });
     }
     for (member, included) in &source.groups {
@@ -630,6 +711,7 @@ fn compile_group(
             member: member.clone(),
             component_group: included.component_group.clone(),
             service_purpose: included.service_purpose,
+            labels: source_labels(&included.labels),
         });
     }
     members.sort_by(|left, right| left.member().cmp(right.member()));
@@ -670,4 +752,84 @@ fn encode_service_purpose(output: &mut Vec<u8>, purpose: Option<&FleetServiceMem
         Some(FleetServiceMemberPurpose::Replica) => output.extend_from_slice(&[1, 1]),
         Some(FleetServiceMemberPurpose::PoolMember) => output.extend_from_slice(&[1, 2]),
     }
+}
+
+fn encode_labels(output: &mut Vec<u8>, labels: &[ComponentDeploymentLabel]) {
+    encode_u64(output, labels.len());
+    for label in labels {
+        encode_text(output, label.key.as_str());
+        encode_text(output, label.value.as_str());
+    }
+}
+
+pub(super) fn source_labels(
+    labels: &BTreeMap<ComponentDeploymentLabelKey, ComponentDeploymentLabelValue>,
+) -> Vec<ComponentDeploymentLabel> {
+    labels
+        .iter()
+        .map(|(key, value)| ComponentDeploymentLabel {
+            key: key.clone(),
+            value: value.clone(),
+        })
+        .collect()
+}
+
+fn validate_member_labels(
+    component_group: &ComponentGroupSpecId,
+    member: &ComponentGroupMember,
+) -> Result<(), ComponentGroupTopologyError> {
+    let labels = member.labels();
+    if labels.len() > MAX_COMPONENT_DEPLOYMENT_LABELS {
+        return Err(ComponentGroupTopologyError::LabelBoundExceeded {
+            component_group: component_group.clone(),
+            member: member.member().clone(),
+            actual: labels.len(),
+            maximum: MAX_COMPONENT_DEPLOYMENT_LABELS,
+        });
+    }
+    let mut previous: Option<&ComponentDeploymentLabelKey> = None;
+    for label in labels {
+        if previous.is_some_and(|key| key >= &label.key) {
+            return Err(ComponentGroupTopologyError::NonCanonicalLabelOrder {
+                component_group: component_group.clone(),
+                member: member.member().clone(),
+                label: label.key.clone(),
+            });
+        }
+        previous = Some(&label.key);
+    }
+    Ok(())
+}
+
+fn extend_effective_labels(
+    component_group: &ComponentGroupSpecId,
+    member_path: &ComponentGroupMemberPath,
+    member_labels: &[ComponentDeploymentLabel],
+    effective_labels: &mut BTreeMap<ComponentDeploymentLabelKey, ComponentDeploymentLabelValue>,
+) -> Result<Vec<ComponentDeploymentLabelKey>, ComponentGroupTopologyError> {
+    let mut added_label_keys = Vec::with_capacity(member_labels.len());
+    for label in member_labels {
+        match effective_labels.entry(label.key.clone()) {
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                entry.insert(label.value.clone());
+                added_label_keys.push(label.key.clone());
+            }
+            std::collections::btree_map::Entry::Occupied(_) => {
+                return Err(ComponentGroupTopologyError::DuplicateEffectiveLabel {
+                    component_group: component_group.clone(),
+                    member_path: member_path.clone(),
+                    label: label.key.clone(),
+                });
+            }
+        }
+    }
+    if effective_labels.len() > MAX_COMPONENT_DEPLOYMENT_LABELS {
+        return Err(ComponentGroupTopologyError::EffectiveLabelBoundExceeded {
+            component_group: component_group.clone(),
+            member_path: member_path.clone(),
+            actual: effective_labels.len(),
+            maximum: MAX_COMPONENT_DEPLOYMENT_LABELS,
+        });
+    }
+    Ok(added_label_keys)
 }

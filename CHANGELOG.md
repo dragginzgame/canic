@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.4` adds bounded canonical deployment labels inherited across exact
+  deployment/include/leaf paths while keeping labels inert to typed purpose
+  and authority.
+
 - `0.101.3` adds strict Fleet-service targets with exact
   Authority/Replica/PoolMember relationships and independent bounded service
   placement policy.

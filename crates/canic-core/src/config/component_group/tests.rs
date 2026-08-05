@@ -173,6 +173,7 @@ fn canonical_graph_bytes_ignore_source_table_order() {
 component_spec = "b"
 [component_groups.cell.components.a]
 component_spec = "a"
+labels = { zone = "west", tier = "api" }
 "#,
     )
     .expect("left graph");
@@ -180,6 +181,7 @@ component_spec = "a"
         r#"
 [component_groups.cell.components.a]
 component_spec = "a"
+labels = { tier = "api", zone = "west" }
 [component_groups.cell.components.b]
 component_spec = "b"
 "#,
@@ -194,18 +196,19 @@ component_spec = "b"
 }
 
 #[test]
-fn component_group_graph_has_exact_schema_two_golden_bytes() {
+fn component_group_graph_has_exact_schema_three_golden_bytes() {
     let topology = parse(
         r#"
 [component_groups.cell.components.a]
 component_spec = "a"
+labels = { tier = "api" }
 "#,
     )
     .expect("golden graph");
     let mut expected = Vec::new();
     expected.extend_from_slice(&30_u64.to_be_bytes());
-    expected.extend_from_slice(b"canic/component-group-graph/v2");
-    expected.extend_from_slice(&2_u32.to_be_bytes());
+    expected.extend_from_slice(b"canic/component-group-graph/v3");
+    expected.extend_from_slice(&3_u32.to_be_bytes());
     expected.extend_from_slice(&1_u64.to_be_bytes());
     expected.extend_from_slice(&4_u64.to_be_bytes());
     expected.extend_from_slice(b"cell");
@@ -217,11 +220,123 @@ component_spec = "a"
     expected.extend_from_slice(b"a");
     expected.push(0);
     expected.push(0);
+    expected.extend_from_slice(&1_u64.to_be_bytes());
+    expected.extend_from_slice(&4_u64.to_be_bytes());
+    expected.extend_from_slice(b"tier");
+    expected.extend_from_slice(&3_u64.to_be_bytes());
+    expected.extend_from_slice(b"api");
 
     assert_eq!(
         topology.canonical_bytes().expect("canonical bytes"),
         expected
     );
+}
+
+#[test]
+fn nested_group_labels_inherit_in_canonical_key_order() {
+    let topology = parse(
+        r#"
+[component_groups.inner.components.a]
+component_spec = "a"
+labels = { zone = "primary", authority = "metadata-only" }
+
+[component_groups.outer.groups.inner]
+component_group = "inner"
+labels = { workload = "database" }
+"#,
+    )
+    .expect("valid inherited labels");
+    let flattened = topology.flatten(&group("outer")).expect("flatten outer");
+
+    assert_eq!(
+        flattened.components[0]
+            .labels
+            .iter()
+            .map(|label| (label.key.as_str(), label.value.as_str()))
+            .collect::<Vec<_>>(),
+        vec![
+            ("authority", "metadata-only"),
+            ("workload", "database"),
+            ("zone", "primary"),
+        ]
+    );
+}
+
+#[test]
+fn duplicate_label_key_on_one_inclusion_path_rejects() {
+    let duplicate = parse(
+        r#"
+[component_groups.inner.components.a]
+component_spec = "a"
+labels = { workload = "leaf" }
+
+[component_groups.outer.groups.inner]
+component_group = "inner"
+labels = { workload = "include" }
+"#,
+    )
+    .expect_err("duplicate inherited label key must reject");
+
+    assert!(matches!(
+        duplicate,
+        ConfigError::ComponentGroupTopology(
+            ComponentGroupTopologyError::DuplicateEffectiveLabel { .. }
+        )
+    ));
+}
+
+#[test]
+fn label_text_and_effective_count_are_bounded() {
+    ComponentDeploymentLabelKey::try_from("k".repeat(MAX_COMPONENT_DEPLOYMENT_LABEL_KEY_BYTES))
+        .expect("maximum label key must decode");
+    ComponentDeploymentLabelValue::try_from("v".repeat(MAX_COMPONENT_DEPLOYMENT_LABEL_VALUE_BYTES))
+        .expect("maximum label value must decode");
+    assert!(matches!(
+        ComponentDeploymentLabelValue::try_from("line\nbreak".to_string()),
+        Err(ComponentDeploymentLabelParseError::InvalidValueCharacters)
+    ));
+
+    let long_key = "k".repeat(MAX_COMPONENT_DEPLOYMENT_LABEL_KEY_BYTES + 1);
+    let invalid_key = Config::parse_toml(&format!(
+        "{CONFIG_PREFIX}\n[component_groups.cell.components.a]\ncomponent_spec = \"a\"\nlabels = {{ {long_key} = \"value\" }}\n"
+    ))
+    .expect_err("first excessive label key must reject during decode");
+    assert!(matches!(invalid_key, ConfigError::CannotParseToml { .. }));
+
+    let long_value = "v".repeat(MAX_COMPONENT_DEPLOYMENT_LABEL_VALUE_BYTES + 1);
+    let invalid_value = Config::parse_toml(&format!(
+        "{CONFIG_PREFIX}\n[component_groups.cell.components.a]\ncomponent_spec = \"a\"\nlabels = {{ key = \"{long_value}\" }}\n"
+    ))
+    .expect_err("first excessive label value must reject during decode");
+    assert!(matches!(invalid_value, ConfigError::CannotParseToml { .. }));
+
+    let mut labels = String::new();
+    for index in 0..MAX_COMPONENT_DEPLOYMENT_LABELS {
+        if index > 0 {
+            labels.push_str(", ");
+        }
+        write!(&mut labels, "k{index} = \"v\"").expect("write label fixture");
+    }
+    parse(&format!(
+        "[component_groups.cell.components.a]\ncomponent_spec = \"a\"\nlabels = {{ {labels} }}\n"
+    ))
+    .expect("maximum effective label count must compile");
+
+    let first_excess = MAX_COMPONENT_DEPLOYMENT_LABELS;
+    write!(&mut labels, ", k{first_excess} = \"v\"").expect("write first excessive label");
+    let excessive = parse(&format!(
+        "[component_groups.cell.components.a]\ncomponent_spec = \"a\"\nlabels = {{ {labels} }}\n"
+    ))
+    .expect_err("first excessive effective label count must reject");
+    assert!(matches!(
+        excessive,
+        ConfigError::ComponentGroupTopology(ComponentGroupTopologyError::LabelBoundExceeded {
+            actual,
+            maximum,
+            ..
+        }) if actual == MAX_COMPONENT_DEPLOYMENT_LABELS + 1
+            && maximum == MAX_COMPONENT_DEPLOYMENT_LABELS
+    ));
 }
 
 #[test]

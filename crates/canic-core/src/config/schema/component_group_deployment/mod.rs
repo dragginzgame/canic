@@ -1,11 +1,17 @@
 //! Module: config::schema::component_group_deployment
 //!
 //! Responsibility: define strict checked-in Component Group deployment declarations.
-//! Does not own: labels, member limits, root selection, planning, or runtime state.
+//! Does not own: member limits, root selection, planning, or runtime state.
 //! Boundary: source declarations select one group and freeze a bounded placement envelope.
 
-use crate::{config::FleetServiceMemberPurpose, ids::ComponentGroupSpecId};
+use crate::{
+    config::{
+        ComponentDeploymentLabelKey, ComponentDeploymentLabelValue, FleetServiceMemberPurpose,
+    },
+    ids::ComponentGroupSpecId,
+};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// One independently scalable deployment of a reusable Component Group.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -13,6 +19,8 @@ use serde::{Deserialize, Serialize};
 pub struct ComponentGroupDeploymentConfig {
     pub component_group: ComponentGroupSpecId,
     pub service_purpose: Option<FleetServiceMemberPurpose>,
+    #[serde(default)]
+    pub labels: BTreeMap<ComponentDeploymentLabelKey, ComponentDeploymentLabelValue>,
     pub initial_placements: u32,
     pub maximum_placements: u32,
     pub placement: ComponentGroupPlacementPolicyConfig,
