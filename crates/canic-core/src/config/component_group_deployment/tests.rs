@@ -324,6 +324,22 @@ initial_placements = 1
 maximum_placements = 2
 placement.maximum_per_root = 1
 placement.minimum_distinct_roots = 1
+
+[services.fleet.targets.database]
+role = "a"
+component_spec = "a"
+mode = "authority_replica"
+authority_deployment = "authoritative"
+authority_member = ["database"]
+placement.maximum_members_per_root = 1
+placement.minimum_distinct_roots = 1
+
+[services.fleet.targets.project-hubs]
+role = "b"
+component_spec = "b"
+mode = "active_pool"
+placement.maximum_members_per_root = 2
+placement.minimum_distinct_roots = 1
 "#,
     )
     .expect("valid reusable service deployments");

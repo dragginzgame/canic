@@ -17,16 +17,17 @@ use crate::{
             ComponentGroupPlacementPolicyConfig, ComponentGroupSpecConfig, ComponentLimitsConfig,
             ComponentProvisioningGrantConfig, ComponentSpawnGrantConfig, ComponentSpecConfig,
             ConfigModel, CyclesFundingBudgetConfig, CyclesFundingPolicyConfig,
-            DelegatedTokenConfig, DiagnosticsCanisterConfig, FleetInitMode, IndexConfig, IndexPool,
-            LogConfig, MetricsCanisterConfig, MetricsProfile, RoleAttestationConfig,
-            RoleDeclaration, RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig,
-            ShardPool, ShardPoolPolicy, ShardingConfig, Standards, StandardsCanisterConfig,
-            TopupPolicy, Whitelist,
+            DelegatedTokenConfig, DiagnosticsCanisterConfig, FleetInitMode,
+            FleetServicePlacementPolicyConfig, FleetServiceTargetConfig, FleetServicesConfig,
+            IndexConfig, IndexPool, LogConfig, MetricsCanisterConfig, MetricsProfile,
+            RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool,
+            ScalePoolPolicy, ScalingConfig, ServicesConfig, ShardPool, ShardPoolPolicy,
+            ShardingConfig, Standards, StandardsCanisterConfig, TopupPolicy, Whitelist,
         },
     },
     ids::{
         AppId, BuildNetwork, CanisterRole, ComponentGroupDeploymentId, ComponentGroupMemberId,
-        ComponentGroupSpecId, ComponentSpecId, FleetServiceId,
+        ComponentGroupMemberPath, ComponentGroupSpecId, ComponentSpecId, FleetServiceId,
     },
 };
 use proc_macro2::TokenStream;
@@ -68,6 +69,7 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
         render_component_group_deployment_id,
         render_component_group_deployment_config,
     );
+    let services = render_services_config(&config.services);
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ConfigModel {
             controllers: #controllers,
@@ -79,6 +81,7 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
             component_specs: #component_specs,
             component_groups: #component_groups,
             component_group_deployments: #component_group_deployments,
+            services: #services,
         }
     }
 }
@@ -174,6 +177,16 @@ fn render_fleet_service_id(service: &FleetServiceId) -> TokenStream {
         ::canic::__internal::core::bootstrap::compiled::FleetServiceId::try_from(
             ::std::string::String::from(#value)
         ).expect("embedded Fleet service ID was validated at build time")
+    }
+}
+
+// Render one validated flattened Component Group member path.
+fn render_component_group_member_path(path: &ComponentGroupMemberPath) -> TokenStream {
+    let members = render_vec(path.as_slice().iter(), render_component_group_member_id);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentGroupMemberPath::try_from(
+            #members
+        ).expect("embedded Component Group member path was validated at build time")
     }
 }
 
@@ -274,6 +287,88 @@ fn render_component_group_placement_policy_config(
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ComponentGroupPlacementPolicyConfig {
             maximum_per_root: #maximum_per_root,
+            minimum_distinct_roots: #minimum_distinct_roots,
+        }
+    }
+}
+
+// Render the top-level application service namespace.
+fn render_services_config(config: &ServicesConfig) -> TokenStream {
+    let fleet = render_fleet_services_config(&config.fleet);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ServicesConfig {
+            fleet: #fleet,
+        }
+    }
+}
+
+// Render every Fleet-service target in canonical map order.
+fn render_fleet_services_config(config: &FleetServicesConfig) -> TokenStream {
+    let targets = render_btree_map(
+        config.targets.iter(),
+        render_fleet_service_id,
+        render_fleet_service_target_config,
+    );
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::FleetServicesConfig {
+            targets: #targets,
+        }
+    }
+}
+
+// Render one mode-specific Fleet-service target declaration.
+fn render_fleet_service_target_config(config: &FleetServiceTargetConfig) -> TokenStream {
+    match config {
+        FleetServiceTargetConfig::AuthorityReplica {
+            role,
+            component_spec,
+            authority_deployment,
+            authority_member,
+            placement,
+        } => {
+            let role = render_canister_role(role);
+            let component_spec = render_component_spec_id(component_spec);
+            let authority_deployment = render_component_group_deployment_id(authority_deployment);
+            let authority_member = render_component_group_member_path(authority_member);
+            let placement = render_fleet_service_placement_policy_config(placement);
+            quote! {
+                ::canic::__internal::core::bootstrap::compiled::FleetServiceTargetConfig::AuthorityReplica {
+                    role: #role,
+                    component_spec: #component_spec,
+                    authority_deployment: #authority_deployment,
+                    authority_member: #authority_member,
+                    placement: #placement,
+                }
+            }
+        }
+        FleetServiceTargetConfig::ActivePool {
+            role,
+            component_spec,
+            placement,
+        } => {
+            let role = render_canister_role(role);
+            let component_spec = render_component_spec_id(component_spec);
+            let placement = render_fleet_service_placement_policy_config(placement);
+            quote! {
+                ::canic::__internal::core::bootstrap::compiled::FleetServiceTargetConfig::ActivePool {
+                    role: #role,
+                    component_spec: #component_spec,
+                    placement: #placement,
+                }
+            }
+        }
+    }
+}
+
+// Render one Fleet-service-wide density and spread envelope.
+fn render_fleet_service_placement_policy_config(
+    config: &FleetServicePlacementPolicyConfig,
+) -> TokenStream {
+    let maximum_members_per_root = render_u32_literal(config.maximum_members_per_root);
+    let minimum_distinct_roots = render_u32_literal(config.minimum_distinct_roots);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::FleetServicePlacementPolicyConfig {
+            maximum_members_per_root: #maximum_members_per_root,
             minimum_distinct_roots: #minimum_distinct_roots,
         }
     }
@@ -1117,15 +1212,36 @@ service = "hubs"
 [component_groups.cell.components.instance]
 component_spec = "instance"
 
+[component_groups.cell.components.database]
+component_spec = "instance"
+service = "database"
+service_purpose = "authority"
+
 [component_groups.cell.groups.shared]
 component_group = "shared"
+service_purpose = "pool_member"
 
 [component_group_deployments.cell]
 component_group = "cell"
-service_purpose = "pool_member"
 initial_placements = 1
 maximum_placements = 1
 placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
+
+[services.fleet.targets.database]
+role = "instance"
+component_spec = "instance"
+mode = "authority_replica"
+authority_deployment = "cell"
+authority_member = ["database"]
+placement.maximum_members_per_root = 1
+placement.minimum_distinct_roots = 1
+
+[services.fleet.targets.hubs]
+role = "hub"
+component_spec = "hub"
+mode = "active_pool"
+placement.maximum_members_per_root = 1
 placement.minimum_distinct_roots = 1
 "#,
         )
@@ -1139,12 +1255,20 @@ placement.minimum_distinct_roots = 1
         assert!(rendered.contains("ComponentGroupIncludeConfig"));
         assert!(rendered.contains("ComponentGroupDeploymentConfig"));
         assert!(rendered.contains("ComponentGroupPlacementPolicyConfig"));
+        assert!(rendered.contains("ServicesConfig"));
+        assert!(rendered.contains("FleetServicesConfig"));
+        assert!(rendered.contains("FleetServiceTargetConfig :: ActivePool"));
+        assert!(rendered.contains("FleetServiceTargetConfig :: AuthorityReplica"));
+        assert!(rendered.contains("FleetServicePlacementPolicyConfig"));
         assert!(rendered.contains("embedded Component Group Spec ID was validated at build time"));
         assert!(
             rendered.contains("embedded Component Group member ID was validated at build time")
         );
         assert!(
             rendered.contains("embedded Component Group deployment ID was validated at build time")
+        );
+        assert!(
+            rendered.contains("embedded Component Group member path was validated at build time")
         );
         assert!(rendered.contains("embedded Fleet service ID was validated at build time"));
         assert!(rendered.contains("FleetServiceMemberPurpose :: PoolMember"));
