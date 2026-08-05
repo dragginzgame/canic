@@ -28,9 +28,10 @@ pub use component::{
     ComponentInstanceId, ComponentInstanceIdParseError, ComponentSpecId, ComponentSpecIdParseError,
 };
 pub use component_deployment::{
-    COMPONENT_GROUP_MEMBER_PATH_MAX_SEGMENTS, ComponentDeploymentIdParseError,
-    ComponentGroupDeploymentId, ComponentGroupMemberId, ComponentGroupMemberPath,
-    ComponentGroupMemberPathError, ComponentGroupPlacementId, ComponentGroupSpecId, FleetServiceId,
+    COMPONENT_GROUP_MEMBER_PATH_MAX_SEGMENTS, ComponentDeploymentConfigurationDigest,
+    ComponentDeploymentIdParseError, ComponentGroupDeploymentId, ComponentGroupMemberId,
+    ComponentGroupMemberPath, ComponentGroupMemberPathError, ComponentGroupPlacementId,
+    ComponentGroupSpecId, FleetServiceId,
 };
 pub use endpoint::{EndpointCall, EndpointCallKind, EndpointId};
 pub use fleet::{

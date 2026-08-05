@@ -24,7 +24,8 @@ pub use crate::config::{ConfigError, ConfigTomlIssue};
 #[doc(hidden)]
 pub mod compiled {
     pub use crate::config::{
-        ComponentChildFundingPolicy, ComponentChildSpec, ComponentDeploymentLabel,
+        ComponentChildFundingPolicy, ComponentChildSpec,
+        ComponentDeploymentConfigurationDigestError, ComponentDeploymentLabel,
         ComponentDeploymentLabelKey, ComponentDeploymentLabelParseError,
         ComponentDeploymentLabelValue, ComponentDeploymentLimits, ComponentDeploymentMemberLimit,
         ComponentDeploymentMemberLimitError, ComponentDeploymentPurpose,
@@ -36,14 +37,16 @@ pub mod compiled {
         ComponentTopologyError, FlattenedComponentGroup, FlattenedComponentGroupDeploymentMember,
         FlattenedComponentGroupMember, FleetServiceMemberPurpose, FleetServicePlacementPolicy,
         FleetServiceTarget, FleetServiceTargetMode, FleetServiceTopology,
-        FleetServiceTopologyError, MAX_COMPONENT_DEPLOYMENT_LABEL_KEY_BYTES,
-        MAX_COMPONENT_DEPLOYMENT_LABEL_VALUE_BYTES, MAX_COMPONENT_DEPLOYMENT_LABELS,
-        MAX_COMPONENT_DEPLOYMENT_MEMBER_LIMITS, MAX_COMPONENT_DEPLOYMENT_SPAWN_GRANT_REDUCTIONS,
-        MAX_COMPONENT_GROUP_DECLARED_MEMBERS, MAX_COMPONENT_GROUP_DEPLOYMENT_MEMBERS,
-        MAX_COMPONENT_GROUP_DEPLOYMENTS, MAX_COMPONENT_GROUP_FLATTENED_MEMBERS,
-        MAX_COMPONENT_GROUP_GRAPH_CANONICAL_BYTES, MAX_COMPONENT_GROUP_INCLUSIONS,
-        MAX_COMPONENT_GROUP_MEMBERS, MAX_COMPONENT_GROUP_SPECS,
+        FleetServiceTopologyError, MAX_COMPONENT_DEPLOYMENT_CONFIGURATION_CANONICAL_BYTES,
+        MAX_COMPONENT_DEPLOYMENT_LABEL_KEY_BYTES, MAX_COMPONENT_DEPLOYMENT_LABEL_VALUE_BYTES,
+        MAX_COMPONENT_DEPLOYMENT_LABELS, MAX_COMPONENT_DEPLOYMENT_MEMBER_LIMITS,
+        MAX_COMPONENT_DEPLOYMENT_SPAWN_GRANT_REDUCTIONS, MAX_COMPONENT_GROUP_DECLARED_MEMBERS,
+        MAX_COMPONENT_GROUP_DEPLOYMENT_MEMBERS,
+        MAX_COMPONENT_GROUP_DEPLOYMENT_TOPOLOGY_CANONICAL_BYTES, MAX_COMPONENT_GROUP_DEPLOYMENTS,
+        MAX_COMPONENT_GROUP_FLATTENED_MEMBERS, MAX_COMPONENT_GROUP_GRAPH_CANONICAL_BYTES,
+        MAX_COMPONENT_GROUP_INCLUSIONS, MAX_COMPONENT_GROUP_MEMBERS, MAX_COMPONENT_GROUP_SPECS,
         MAX_COMPONENT_TOPOLOGY_CANONICAL_BYTES, MAX_FLEET_SERVICE_TARGETS,
+        MAX_FLEET_SERVICE_TOPOLOGY_CANONICAL_BYTES,
     };
     pub use crate::{
         cdk::{candid::Principal, types::Cycles},
@@ -68,8 +71,9 @@ pub mod compiled {
             validate_canister_role_name,
         },
         ids::{
-            AppId, BuildNetwork, CanisterRole, ComponentGroupDeploymentId, ComponentGroupMemberId,
-            ComponentGroupMemberPath, ComponentGroupSpecId, ComponentSpecId, FleetServiceId,
+            AppId, BuildNetwork, CanisterRole, ComponentDeploymentConfigurationDigest,
+            ComponentGroupDeploymentId, ComponentGroupMemberId, ComponentGroupMemberPath,
+            ComponentGroupSpecId, ComponentSpecId, FleetServiceId,
         },
     };
 }

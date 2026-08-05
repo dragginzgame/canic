@@ -117,6 +117,41 @@ bounded_deployment_name!(
     "Fleet Service ID"
 );
 
+/// SHA-256 identity of one canonical Component deployment configuration.
+#[derive(
+    CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
+)]
+#[serde(transparent)]
+pub struct ComponentDeploymentConfigurationDigest([u8; 32]);
+
+impl ComponentDeploymentConfigurationDigest {
+    #[must_use]
+    pub const fn from_bytes(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+
+    #[must_use]
+    pub const fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+
+    #[must_use]
+    pub const fn into_bytes(self) -> [u8; 32] {
+        self.0
+    }
+}
+
+impl fmt::Display for ComponentDeploymentConfigurationDigest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for byte in self.0 {
+            write!(formatter, "{byte:02x}")?;
+        }
+        Ok(())
+    }
+}
+
+impl_storable_bounded!(ComponentDeploymentConfigurationDigest, 128, false);
+
 /// Durable Fleet-scoped identity of one materialized Component Group deployment copy.
 #[derive(
     CandidType, Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
@@ -307,6 +342,19 @@ mod tests {
 
         assert!(candid::decode_one::<FleetServiceId>(&invalid_candid).is_err());
         assert!(ciborium::de::from_reader::<FleetServiceId, _>(invalid_cbor.as_slice()).is_err());
+    }
+
+    #[test]
+    fn configuration_digest_preserves_exact_bytes_and_hex_boundary() {
+        let digest = ComponentDeploymentConfigurationDigest::from_bytes([0xab; 32]);
+        let encoded = candid::encode_one(digest).expect("encode configuration digest");
+        let decoded: ComponentDeploymentConfigurationDigest =
+            candid::decode_one(&encoded).expect("decode configuration digest");
+
+        assert_eq!(decoded, digest);
+        assert_eq!(digest.as_bytes(), &[0xab; 32]);
+        assert_eq!(digest.to_string(), "ab".repeat(32));
+        assert!(digest.to_bytes().len() <= 128);
     }
 
     #[test]

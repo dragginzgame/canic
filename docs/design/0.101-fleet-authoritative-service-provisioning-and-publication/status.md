@@ -11,9 +11,11 @@ Date: 2026-08-05
   strict canonical Fleet-service target validation and bounded inert labels
   inherited across deployment/include/leaf paths, plus bounded reduction-only
   limits resolved against exact flattened members and immutable Component
-  Spec ceilings; every effect-bearing surface remains unimplemented.
+  Spec ceilings and one schema-v1 semantic digest over the canonical group,
+  flattened-deployment and Fleet-service-target sections; every effect-bearing
+  surface remains unimplemented.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.4` is released and `0.101.5` is open.
+- Implementation started: yes; `0.101.5` is released and `0.101.6` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -131,7 +133,7 @@ Fleet policy writer.
 - [ ] Persist one plan-derived protected Component deployment context so
   application policy can enforce Authority/Replica purpose and the root can
   enforce exact effective limits.
-- [ ] Derive one semantic protected configuration digest over groups,
+- [x] Derive one semantic protected configuration digest over groups,
   deployments and service targets.
 - [ ] Remove singleton-Spec and sole-root-admission service assumptions.
 - [ ] Validate worst-case Spec demand, placement density/spread and the

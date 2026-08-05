@@ -4,6 +4,7 @@
 //! Does not own: root selection, persistence, or effects.
 //! Boundary: strict source deployments become bounded exact flattened Component occurrences.
 
+mod canonical;
 mod member_limit;
 #[cfg(test)]
 mod tests;
@@ -28,6 +29,7 @@ use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
+pub use canonical::MAX_COMPONENT_GROUP_DEPLOYMENT_TOPOLOGY_CANONICAL_BYTES;
 pub use member_limit::{
     ComponentDeploymentLimits, ComponentDeploymentMemberLimit, ComponentDeploymentMemberLimitError,
     ComponentDeploymentSpawnGrantLimit, MAX_COMPONENT_DEPLOYMENT_MEMBER_LIMITS,
@@ -205,6 +207,25 @@ impl ComponentGroupDeploymentTopology {
 
         validation.validate_spec_maxima(component_topology)
     }
+
+    /// Return the exact canonical flattened-deployment section for semantic hashing.
+    pub fn canonical_bytes(
+        &self,
+        component_group_topology: &ComponentGroupTopology,
+        component_topology: &ComponentTopology,
+    ) -> Result<Vec<u8>, ComponentGroupDeploymentTopologyError> {
+        self.validate(component_group_topology, component_topology)?;
+        let bytes = canonical::encode(self);
+        if bytes.len() > MAX_COMPONENT_GROUP_DEPLOYMENT_TOPOLOGY_CANONICAL_BYTES {
+            return Err(
+                ComponentGroupDeploymentTopologyError::CanonicalBytesBoundExceeded {
+                    actual: bytes.len(),
+                    maximum: MAX_COMPONENT_GROUP_DEPLOYMENT_TOPOLOGY_CANONICAL_BYTES,
+                },
+            );
+        }
+        Ok(bytes)
+    }
 }
 
 /// One canonical independently scalable Component Group selection.
@@ -263,6 +284,9 @@ pub enum ComponentGroupDeploymentTopologyError {
 
     #[error(transparent)]
     MemberLimit(#[from] ComponentDeploymentMemberLimitError),
+
+    #[error("canonical Component Group deployment topology bytes {actual} exceed bound {maximum}")]
+    CanonicalBytesBoundExceeded { actual: usize, maximum: usize },
 
     #[error("Component Group deployment count {actual} exceeds bound {maximum}")]
     DeploymentBoundExceeded { actual: usize, maximum: usize },
