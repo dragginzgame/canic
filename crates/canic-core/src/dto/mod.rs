@@ -33,6 +33,7 @@ pub mod blob_storage;
 pub mod canister;
 pub mod capability;
 pub mod cascade;
+pub mod component_deployment;
 pub mod component_registry;
 pub mod cycles;
 pub mod env;

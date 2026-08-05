@@ -8,6 +8,7 @@ use crate::{
     cdk::types::Cycles,
     config::schema::ComponentChildKind,
     dto::{
+        component_deployment::ProtectedComponentDeployment,
         fleet_registry::{FleetDirectorySnapshot, FleetRegistryVersion},
         root_store::RootStoreBootstrapRequest,
     },
@@ -933,6 +934,7 @@ pub struct ComponentRuntimeActivationRequest {
 pub struct ComponentRuntimeStatusResponse {
     pub operation_id: [u8; 32],
     pub binding: ManagedCanisterBinding,
+    pub deployment: Box<ProtectedComponentDeployment>,
     pub phase: ComponentRuntimePhase,
     pub authority: Option<ComponentRuntimeDirectoryAuthority>,
     pub authority_hash: Option<[u8; 32]>,
@@ -2449,6 +2451,9 @@ mod tests {
             child: ComponentRuntimeStatusResponse {
                 operation_id: request.operation_id,
                 binding: ManagedCanisterBinding::ComponentChild(child_binding.clone()),
+                deployment: Box::new(ProtectedComponentDeployment::UngroupedOrdinary {
+                    binding: child_binding.component.clone(),
+                }),
                 phase: ComponentRuntimePhase::DirectoryPrepared,
                 authority: Some(runtime_authority.clone()),
                 authority_hash: Some([31; 32]),
@@ -2469,6 +2474,9 @@ mod tests {
             child: ComponentRuntimeStatusResponse {
                 operation_id: request.operation_id,
                 binding: ManagedCanisterBinding::ComponentChild(child_binding.clone()),
+                deployment: Box::new(ProtectedComponentDeployment::UngroupedOrdinary {
+                    binding: child_binding.component.clone(),
+                }),
                 phase: ComponentRuntimePhase::Active,
                 authority: Some(runtime_authority.clone()),
                 authority_hash: Some([31; 32]),
@@ -2512,7 +2520,10 @@ mod tests {
             directory: active_directory,
             child: ComponentRuntimeStatusResponse {
                 operation_id: request.operation_id,
-                binding: ManagedCanisterBinding::ComponentChild(child_binding),
+                binding: ManagedCanisterBinding::ComponentChild(child_binding.clone()),
+                deployment: Box::new(ProtectedComponentDeployment::UngroupedOrdinary {
+                    binding: child_binding.component,
+                }),
                 phase: ComponentRuntimePhase::Active,
                 authority: Some(active_authority),
                 authority_hash: Some([36; 32]),

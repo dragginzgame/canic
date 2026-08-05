@@ -7,9 +7,12 @@
 use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
+    config::{ComponentDeploymentLabel, ComponentDeploymentLimits, ComponentDeploymentPurpose},
     ids::{
-        ComponentBinding, FleetBinding, FleetRegistryAuthority, FleetSubnetRootBinding,
-        FleetSubnetRootReleaseSet, ManagedCanisterBinding, ReleaseBuildId, SubnetId,
+        ComponentBinding, ComponentDeploymentConfigurationDigest, ComponentGroupMemberPath,
+        ComponentGroupPlacementId, ComponentGroupSpecId, FleetBinding, FleetRegistryAuthority,
+        FleetSubnetRootBinding, FleetSubnetRootReleaseSet, ManagedCanisterBinding, ReleaseBuildId,
+        SubnetId,
     },
     role_contract::allocation::memory::fleet::FLEET_ACTIVATION_ID,
     storage::prelude::*,
@@ -168,6 +171,33 @@ pub struct FleetSubnetWasmStoreAuthorityRecord {
 }
 
 ///
+/// ProtectedComponentDeploymentRecord
+///
+/// Persisted deployment identity and policy inherited by one complete Component tree.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "the bounded reinstall-only record preserves the protected context's direct field shape"
+)]
+pub enum ProtectedComponentDeploymentRecord {
+    UngroupedOrdinary {
+        binding: ComponentBinding,
+    },
+    GroupMember {
+        binding: ComponentBinding,
+        configuration_digest: ComponentDeploymentConfigurationDigest,
+        group_placement: ComponentGroupPlacementId,
+        component_group: ComponentGroupSpecId,
+        member_path: ComponentGroupMemberPath,
+        purpose: ComponentDeploymentPurpose,
+        labels: Vec<ComponentDeploymentLabel>,
+        limits: ComponentDeploymentLimits,
+    },
+}
+
+///
 /// ComponentRuntimeRecord
 ///
 /// Protected Component-tree identity, Directory authority and activation receipt for one non-root.
@@ -176,6 +206,7 @@ pub struct FleetSubnetWasmStoreAuthorityRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ComponentRuntimeRecord {
     pub binding: ManagedCanisterBinding,
+    pub deployment: ProtectedComponentDeploymentRecord,
     pub directory: Option<ComponentRuntimeDirectoryRecord>,
     pub activation: Option<ComponentRuntimeActivationRecord>,
 }

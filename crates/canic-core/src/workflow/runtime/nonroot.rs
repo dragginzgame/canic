@@ -12,13 +12,16 @@ use crate::{
         fleet_activation::FleetActivationPhase,
         fleet_subnet_root::FleetSubnetWasmStoreInitArgs,
     },
-    ids::{CanisterRole, ManagedCanisterBinding},
+    ids::{CanisterRole, ComponentBinding, ManagedCanisterBinding},
     log::Topic,
     ops::{
         config::ConfigOps,
         ic::{IcOps, release_build::ReleaseBuildOps},
         runtime::{fleet_activation::FleetActivationRuntimeOps, memory::MemoryRegistryOps},
-        storage::{fleet_activation::FleetActivationOps, state::fleet::FleetStateOps},
+        storage::{
+            fleet_activation::{FleetActivationOps, PreparedComponentRuntime},
+            state::fleet::FleetStateOps,
+        },
     },
     workflow::{
         env::EnvWorkflow,
@@ -44,6 +47,7 @@ pub fn init_nonroot_canister(
         install_id,
         release_build_id,
         authority,
+        component_deployment,
     } = payload;
     let fleet = match &authority {
         CanisterInitAuthority::Component { binding, .. } => binding.authority.binding.fleet.clone(),
@@ -51,13 +55,21 @@ pub fn init_nonroot_canister(
             binding.component.authority.binding.fleet.clone()
         }
     };
-    let component_binding = match &authority {
+    let managed_binding = match &authority {
         CanisterInitAuthority::Component { binding, .. } => {
-            Some(ManagedCanisterBinding::Component(binding.clone()))
+            ManagedCanisterBinding::Component(binding.clone())
         }
         CanisterInitAuthority::ComponentChild { binding, .. } => {
-            Some(ManagedCanisterBinding::ComponentChild(binding.clone()))
+            ManagedCanisterBinding::ComponentChild(binding.clone())
         }
+    };
+    ConfigOps::validate_protected_component_deployment(
+        component_deployment.as_ref(),
+        owning_component(&managed_binding),
+    )?;
+    let component_runtime = PreparedComponentRuntime {
+        binding: managed_binding,
+        deployment: *component_deployment,
     };
 
     // --- Phase 1: Init base systems ---
@@ -69,7 +81,7 @@ pub fn init_nonroot_canister(
         install_id,
         release_build_id,
         embedded_release_build_id,
-        component_binding,
+        Some(component_runtime),
         application_init_args,
     )
     .map_err(crate::ops::storage::StorageOpsError::from)?;
@@ -222,7 +234,23 @@ fn restore_nonroot_after_upgrade(canister_role: CanisterRole) -> Result<(), Inte
             format!("current canister config unavailable during post-upgrade runtime init: {err}"),
         )
     })?;
+    if !FleetActivationRuntimeOps::is_standalone_local() && !canister_role.is_wasm_store() {
+        let binding = crate::ops::runtime::env::EnvOps::managed_binding()?;
+        let deployment = FleetActivationOps::component_deployment()
+            .map_err(crate::ops::storage::StorageOpsError::from)?;
+        ConfigOps::validate_protected_component_deployment(
+            &deployment,
+            owning_component(&binding),
+        )?;
+    }
     RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(&canister_role, &canister_cfg)?;
 
     Ok(())
+}
+
+const fn owning_component(binding: &ManagedCanisterBinding) -> &ComponentBinding {
+    match binding {
+        ManagedCanisterBinding::Component(component) => component,
+        ManagedCanisterBinding::ComponentChild(child) => &child.component,
+    }
 }

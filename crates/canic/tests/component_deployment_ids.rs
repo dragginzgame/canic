@@ -1,6 +1,10 @@
-use canic::ids::{
-    ComponentGroupDeploymentId, ComponentGroupMemberId, ComponentGroupMemberPath,
-    ComponentGroupPlacementId, ComponentGroupSpecId, FleetServiceId,
+use canic::{
+    api::canister::deployment::ComponentDeploymentApi,
+    dto::component_deployment::ProtectedComponentDeployment,
+    ids::{
+        ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId, ComponentGroupMemberId,
+        ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentGroupSpecId, FleetServiceId,
+    },
 };
 
 #[test]
@@ -39,4 +43,14 @@ fn facade_exposes_bounded_component_deployment_identities() {
     assert_eq!(placement.deployment, deployment);
     assert_eq!(placement.ordinal, 3);
     assert_eq!(path.len(), 2);
+}
+
+#[test]
+fn facade_exposes_protected_component_deployment_policy() {
+    let current: fn() -> Result<ProtectedComponentDeployment, canic::Error> =
+        ComponentDeploymentApi::current;
+    let digest = ComponentDeploymentConfigurationDigest::from_bytes([7; 32]);
+
+    assert_eq!(digest.as_bytes(), &[7; 32]);
+    let _ = current;
 }

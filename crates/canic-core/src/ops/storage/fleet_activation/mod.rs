@@ -14,6 +14,7 @@ use crate::{
         FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreInitArgs,
     },
     dto::{
+        component_deployment::ProtectedComponentDeployment,
         component_registry::{
             ComponentDirectoryHead, ComponentDirectoryProvenance,
             ComponentRuntimeActivationEvidence, ComponentRuntimeActivationRequest,
@@ -51,7 +52,7 @@ use crate::{
         FleetDirectoryProvenanceRecord, FleetDirectorySnapshotRecord, FleetRegistryVersionRecord,
         FleetSubnetRootAuthorityRecord, FleetSubnetRootDirectoryEntryRecord,
         FleetSubnetRootStatusRecord, FleetSubnetWasmStoreAuthorityRecord,
-        MAX_FLEET_ACTIVATION_RECORD_BYTES,
+        MAX_FLEET_ACTIVATION_RECORD_BYTES, ProtectedComponentDeploymentRecord,
     },
     view::fleet_activation::{ComponentRuntimeActivationTransition, FleetActivationTransition},
 };
@@ -103,6 +104,12 @@ pub struct FleetActivationOps;
 /// Fully validated activation-evidence replacement ready for an infallible commit.
 pub struct PreparedFleetActivationSnapshot(Option<FleetActivationRecord>);
 
+/// Exact managed-runtime identity validated before protected activation persistence.
+pub struct PreparedComponentRuntime {
+    pub binding: ManagedCanisterBinding,
+    pub deployment: ProtectedComponentDeployment,
+}
+
 impl FleetActivationOps {
     pub(crate) fn initialize_root_prepared(
         input: FleetSubnetRootInitArgs,
@@ -148,7 +155,7 @@ impl FleetActivationOps {
         install_id: [u8; 32],
         release_build_id: ReleaseBuildId,
         embedded_release_build_id: ReleaseBuildId,
-        component_binding: Option<ManagedCanisterBinding>,
+        component_runtime: Option<PreparedComponentRuntime>,
         application_init_args: Option<Vec<u8>>,
     ) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
         let prepared = prepare_nonroot_install(
@@ -159,7 +166,7 @@ impl FleetActivationOps {
             },
             embedded_release_build_id,
         )?;
-        initialize_prepared(prepared, component_binding, application_init_args)
+        initialize_prepared(prepared, component_runtime, application_init_args)
     }
 
     #[cfg(test)]
@@ -188,6 +195,22 @@ impl FleetActivationOps {
     -> Result<ComponentRuntimeStatusResponse, FleetActivationOpsError> {
         let record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
         component_runtime_status(record)
+    }
+
+    pub(crate) fn component_deployment()
+    -> Result<ProtectedComponentDeployment, FleetActivationOpsError> {
+        let record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
+        let runtime =
+            record
+                .component_runtime
+                .ok_or_else(|| FleetActivationOpsError::InvalidRecord {
+                    reason: "protected non-root is not a managed Component-tree runtime"
+                        .to_string(),
+                })?;
+        validate_component_runtime_deployment_record(&runtime)?;
+        Ok(protected_component_deployment_record_to_dto(
+            runtime.deployment,
+        ))
     }
 
     pub(crate) fn prepare_component_runtime_directory(
@@ -674,7 +697,7 @@ impl FleetActivationOps {
 
 fn initialize_prepared(
     prepared: PreparedFleetActivation,
-    component_binding: Option<ManagedCanisterBinding>,
+    component_runtime: Option<PreparedComponentRuntime>,
     application_init_args: Option<Vec<u8>>,
 ) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
     let root_authority = prepared.root_authority.map(root_authority_model_to_record);
@@ -700,8 +723,9 @@ fn initialize_prepared(
         prepared_topology_snapshot_hash: None,
         cascade_manifest: None,
         credential_manifests: Vec::new(),
-        component_runtime: component_binding.map(|binding| ComponentRuntimeRecord {
-            binding,
+        component_runtime: component_runtime.map(|runtime| ComponentRuntimeRecord {
+            binding: runtime.binding,
+            deployment: protected_component_deployment_dto_to_record(runtime.deployment),
             directory: None,
             activation: None,
         }),
@@ -842,6 +866,7 @@ fn component_runtime_status(
             .ok_or_else(|| FleetActivationOpsError::InvalidRecord {
                 reason: "protected non-root is not a managed Component-tree runtime".to_string(),
             })?;
+    validate_component_runtime_deployment_record(&component_runtime)?;
     if let Some(directory) = &component_runtime.directory {
         validate_component_runtime_directory_record(directory)?;
     }
@@ -896,6 +921,9 @@ fn component_runtime_status(
     Ok(ComponentRuntimeStatusResponse {
         operation_id,
         binding: component_runtime.binding,
+        deployment: Box::new(protected_component_deployment_record_to_dto(
+            component_runtime.deployment,
+        )),
         phase,
         authority,
         authority_hash,
@@ -976,6 +1004,84 @@ fn validate_component_runtime_directory_record(
         });
     }
     Ok(())
+}
+
+fn validate_component_runtime_deployment_record(
+    runtime: &ComponentRuntimeRecord,
+) -> Result<(), FleetActivationOpsError> {
+    let owning_component = match &runtime.binding {
+        ManagedCanisterBinding::Component(component) => component,
+        ManagedCanisterBinding::ComponentChild(child) => &child.component,
+    };
+    let deployment_binding = match &runtime.deployment {
+        ProtectedComponentDeploymentRecord::UngroupedOrdinary { binding }
+        | ProtectedComponentDeploymentRecord::GroupMember { binding, .. } => binding,
+    };
+    if deployment_binding != owning_component {
+        return Err(FleetActivationOpsError::InvalidRecord {
+            reason: "Component deployment context differs from the managed owning Component"
+                .to_string(),
+        });
+    }
+    Ok(())
+}
+
+fn protected_component_deployment_dto_to_record(
+    deployment: ProtectedComponentDeployment,
+) -> ProtectedComponentDeploymentRecord {
+    match deployment {
+        ProtectedComponentDeployment::UngroupedOrdinary { binding } => {
+            ProtectedComponentDeploymentRecord::UngroupedOrdinary { binding }
+        }
+        ProtectedComponentDeployment::GroupMember {
+            binding,
+            configuration_digest,
+            group_placement,
+            component_group,
+            member_path,
+            purpose,
+            labels,
+            limits,
+        } => ProtectedComponentDeploymentRecord::GroupMember {
+            binding,
+            configuration_digest,
+            group_placement,
+            component_group,
+            member_path,
+            purpose,
+            labels,
+            limits,
+        },
+    }
+}
+
+fn protected_component_deployment_record_to_dto(
+    deployment: ProtectedComponentDeploymentRecord,
+) -> ProtectedComponentDeployment {
+    match deployment {
+        ProtectedComponentDeploymentRecord::UngroupedOrdinary { binding } => {
+            ProtectedComponentDeployment::UngroupedOrdinary { binding }
+        }
+        ProtectedComponentDeploymentRecord::GroupMember {
+            binding,
+            configuration_digest,
+            group_placement,
+            component_group,
+            member_path,
+            purpose,
+            labels,
+            limits,
+        } => ProtectedComponentDeployment::GroupMember {
+            binding,
+            configuration_digest,
+            group_placement,
+            component_group,
+            member_path,
+            purpose,
+            labels,
+            limits,
+        },
+    }
 }
 
 fn component_runtime_directory_dto_to_record(
@@ -1480,19 +1586,24 @@ mod tests {
             fleet_subnet_root: root.fleet_subnet_root,
             canister_id: Principal::from_slice(&[37; 29]),
         };
+        let deployment = ProtectedComponentDeployment::UngroupedOrdinary {
+            binding: binding.clone(),
+        };
         FleetActivationOps::initialize_nonroot_prepared(
             root.authority.binding.fleet.clone(),
             root_input.install_id,
             release_build_id,
             release_build_id,
-            Some(ManagedCanisterBinding::Component(binding.clone())),
+            Some(PreparedComponentRuntime {
+                binding: ManagedCanisterBinding::Component(binding.clone()),
+                deployment: deployment.clone(),
+            }),
             None,
         )
         .expect("initialize Component runtime");
         let awaiting =
             FleetActivationOps::component_runtime_status().expect("awaiting Directory status");
-        assert_eq!(awaiting.phase, ComponentRuntimePhase::AwaitingDirectory);
-        assert_eq!(awaiting.authority, None);
+        assert_awaiting_component_deployment(&awaiting, &deployment);
 
         let authority = ComponentRuntimeDirectoryAuthority {
             fleet: FleetDirectorySnapshot {
@@ -1555,7 +1666,59 @@ mod tests {
                 .phase,
             crate::dto::fleet_activation::FleetActivationPhase::Prepared
         );
+
+        assert_component_runtime_deployment_corruption_fails_closed(FleetActivationOps::snapshot());
         FleetActivationOps::reset_for_tests();
+    }
+
+    fn assert_component_runtime_deployment_corruption_fails_closed(
+        mut corrupted: FleetActivationData,
+    ) {
+        let runtime = corrupted
+            .record
+            .as_mut()
+            .expect("activation record")
+            .component_runtime
+            .as_mut()
+            .expect("Component runtime");
+        let ProtectedComponentDeploymentRecord::UngroupedOrdinary {
+            binding: deployment_binding,
+        } = &mut runtime.deployment
+        else {
+            unreachable!()
+        };
+        deployment_binding.canister_id = Principal::from_slice(&[41; 29]);
+        FleetActivation::import(corrupted);
+        assert!(matches!(
+            FleetActivationOps::component_deployment(),
+            Err(FleetActivationOpsError::InvalidRecord { .. })
+        ));
+        assert!(matches!(
+            FleetActivationOps::component_runtime_status(),
+            Err(FleetActivationOpsError::InvalidRecord { .. })
+        ));
+        assert!(matches!(
+            FleetActivationOps::status(false),
+            Err(FleetActivationOpsError::InvalidRecord { .. })
+        ));
+    }
+
+    fn assert_awaiting_component_deployment(
+        awaiting: &ComponentRuntimeStatusResponse,
+        deployment: &ProtectedComponentDeployment,
+    ) {
+        assert_eq!(awaiting.phase, ComponentRuntimePhase::AwaitingDirectory);
+        assert_eq!(awaiting.authority, None);
+        assert_eq!(awaiting.deployment.as_ref(), deployment);
+        assert_eq!(
+            &FleetActivationOps::component_deployment().expect("protected deployment"),
+            deployment
+        );
+        assert_eq!(
+            &crate::api::component_deployment::ComponentDeploymentApi::current()
+                .expect("application deployment API"),
+            deployment
+        );
     }
 
     #[test]
@@ -1579,7 +1742,12 @@ mod tests {
             root_input.install_id,
             release_build_id,
             release_build_id,
-            Some(ManagedCanisterBinding::Component(binding.clone())),
+            Some(PreparedComponentRuntime {
+                binding: ManagedCanisterBinding::Component(binding.clone()),
+                deployment: ProtectedComponentDeployment::UngroupedOrdinary {
+                    binding: binding.clone(),
+                },
+            }),
             Some(vec![45, 46]),
         )
         .expect("initialize Component runtime");

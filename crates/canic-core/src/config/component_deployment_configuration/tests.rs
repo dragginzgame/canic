@@ -1,7 +1,17 @@
 //! Focused proofs for semantic Component deployment configuration identity.
 
 use super::*;
-use crate::config::{Config, ConfigError};
+use crate::{
+    config::{ComponentDeploymentPurpose, Config, ConfigError},
+    dto::component_deployment::ProtectedComponentDeployment,
+    ids::{
+        AppId, CanonicalNetworkId, ComponentBinding, ComponentGroupDeploymentId,
+        ComponentGroupMemberId, ComponentGroupMemberPath, ComponentGroupPlacementId,
+        ComponentGroupSpecId, ComponentInstanceId, ComponentSpecId, FleetBinding,
+        FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, SubnetId,
+    },
+};
+use candid::Principal;
 
 const BASELINE: &str = r#"
 [app]
@@ -263,4 +273,183 @@ fn canonical_configuration_digest_matches_schema_one_golden_vector() {
         digest(BASELINE).expect("golden digest").to_string(),
         "5238d7e4d0e87a339d1fe358498b07b60ea57c511ef5c1ed02bb97b4cd55aa17"
     );
+}
+
+#[test]
+fn group_member_context_matches_only_the_exact_compiled_projection() {
+    let config = Config::parse_toml(BASELINE).expect("valid deployment configuration");
+    let deployment_topology = config
+        .compile_component_group_deployment_topology()
+        .expect("deployment topology");
+    let deployment = deployment_topology
+        .get(&"replicas".parse().expect("deployment ID"))
+        .expect("replica deployment");
+    let member = deployment.members.first().expect("database member");
+    let binding = component_binding(member.component_spec.clone(), member.component_spec_hash);
+    let context = ProtectedComponentDeployment::GroupMember {
+        binding: binding.clone(),
+        configuration_digest: config
+            .compile_component_deployment_configuration_digest()
+            .expect("configuration digest"),
+        group_placement: ComponentGroupPlacementId {
+            deployment: deployment.deployment.clone(),
+            ordinal: 7,
+        },
+        component_group: deployment.component_group.clone(),
+        member_path: member.member_path.clone(),
+        purpose: member.purpose.clone(),
+        labels: member.labels.clone(),
+        limits: member.limits.clone(),
+    };
+
+    config
+        .validate_protected_component_deployment(&context, &binding)
+        .expect("exact protected context");
+    let encoded = candid::encode_one(&context).expect("encode protected context");
+    let decoded: ProtectedComponentDeployment =
+        candid::decode_one(&encoded).expect("decode protected context");
+    assert_eq!(decoded, context);
+
+    let mut wrong_digest = context.clone();
+    let ProtectedComponentDeployment::GroupMember {
+        configuration_digest,
+        ..
+    } = &mut wrong_digest
+    else {
+        unreachable!()
+    };
+    *configuration_digest = ComponentDeploymentConfigurationDigest::from_bytes([99; 32]);
+    assert!(matches!(
+        config.validate_protected_component_deployment(&wrong_digest, &binding),
+        Err(ProtectedComponentDeploymentError::ConfigurationDigestMismatch)
+    ));
+
+    let mut wrong_purpose = context.clone();
+    let ProtectedComponentDeployment::GroupMember { purpose, .. } = &mut wrong_purpose else {
+        unreachable!()
+    };
+    *purpose = ComponentDeploymentPurpose::Ordinary;
+    assert!(matches!(
+        config.validate_protected_component_deployment(&wrong_purpose, &binding),
+        Err(ProtectedComponentDeploymentError::PurposeMismatch { .. })
+    ));
+
+    let mut wrong_limits = context.clone();
+    let ProtectedComponentDeployment::GroupMember { limits, .. } = &mut wrong_limits else {
+        unreachable!()
+    };
+    limits.maximum_descendants -= 1;
+    assert!(matches!(
+        config.validate_protected_component_deployment(&wrong_limits, &binding),
+        Err(ProtectedComponentDeploymentError::LimitsMismatch { .. })
+    ));
+
+    let mut wrong_member = context;
+    let ProtectedComponentDeployment::GroupMember { member_path, .. } = &mut wrong_member else {
+        unreachable!()
+    };
+    *member_path = ComponentGroupMemberPath::try_from(vec![
+        "missing"
+            .parse::<ComponentGroupMemberId>()
+            .expect("member ID"),
+    ])
+    .expect("member path");
+    assert!(matches!(
+        config.validate_protected_component_deployment(&wrong_member, &binding),
+        Err(ProtectedComponentDeploymentError::UnknownMember { .. })
+    ));
+}
+
+#[test]
+fn deployment_context_rejects_binding_or_plan_identity_substitution() {
+    let config = Config::parse_toml(BASELINE).expect("valid deployment configuration");
+    let binding = component_binding("database".parse().expect("Component Spec"), [10; 32]);
+    let ordinary = ProtectedComponentDeployment::UngroupedOrdinary {
+        binding: binding.clone(),
+    };
+    config
+        .validate_protected_component_deployment(&ordinary, &binding)
+        .expect("exact ungrouped binding");
+
+    let mut other_binding = binding;
+    other_binding.component = ComponentInstanceId::from_generated_bytes([22; 32]);
+    assert!(matches!(
+        config.validate_protected_component_deployment(&ordinary, &other_binding),
+        Err(ProtectedComponentDeploymentError::BindingMismatch)
+    ));
+
+    let deployment_topology = config
+        .compile_component_group_deployment_topology()
+        .expect("deployment topology");
+    let deployment = deployment_topology
+        .get(&"replicas".parse().expect("deployment ID"))
+        .expect("replica deployment");
+    let member = deployment.members.first().expect("database member");
+    let exact_binding =
+        component_binding(member.component_spec.clone(), member.component_spec_hash);
+    let mut context = ProtectedComponentDeployment::GroupMember {
+        binding: exact_binding.clone(),
+        configuration_digest: config
+            .compile_component_deployment_configuration_digest()
+            .expect("configuration digest"),
+        group_placement: ComponentGroupPlacementId {
+            deployment: ComponentGroupDeploymentId::try_from("missing".to_string())
+                .expect("deployment ID"),
+            ordinal: 1,
+        },
+        component_group: ComponentGroupSpecId::try_from("databases".to_string())
+            .expect("Component Group ID"),
+        member_path: member.member_path.clone(),
+        purpose: member.purpose.clone(),
+        labels: member.labels.clone(),
+        limits: member.limits.clone(),
+    };
+    assert!(matches!(
+        config.validate_protected_component_deployment(&context, &exact_binding),
+        Err(ProtectedComponentDeploymentError::UnknownDeployment { .. })
+    ));
+
+    let ProtectedComponentDeployment::GroupMember {
+        group_placement,
+        component_group,
+        ..
+    } = &mut context
+    else {
+        unreachable!()
+    };
+    group_placement.deployment = deployment.deployment.clone();
+    *component_group =
+        ComponentGroupSpecId::try_from("apis".to_string()).expect("Component Group ID");
+    assert!(matches!(
+        config.validate_protected_component_deployment(&context, &exact_binding),
+        Err(ProtectedComponentDeploymentError::ComponentGroupMismatch { .. })
+    ));
+}
+
+fn component_binding(component_spec: ComponentSpecId, spec_hash: [u8; 32]) -> ComponentBinding {
+    let coordinator_subnet = SubnetId::from_principal(Principal::from_slice(&[2; 29]));
+    let root_subnet = SubnetId::from_principal(Principal::from_slice(&[3; 29]));
+    ComponentBinding {
+        authority: FleetRegistryAuthority {
+            binding: FleetCoordinatorBinding {
+                fleet: FleetBinding {
+                    fleet: FleetKey {
+                        canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+                        fleet_id: FleetId::from_generated_bytes([1; 32]),
+                    },
+                    app: AppId::from("configuration_digest"),
+                },
+                coordinator_subnet,
+                coordinator: Principal::from_slice(&[4; 29]),
+            },
+            epoch: 1,
+        },
+        component: ComponentInstanceId::from_generated_bytes([5; 32]),
+        component_spec,
+        spec_hash,
+        role: "database".into(),
+        placement_subnet: root_subnet,
+        fleet_subnet_root: Principal::from_slice(&[6; 29]),
+        canister_id: Principal::from_slice(&[7; 29]),
+    }
 }
