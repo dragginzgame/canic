@@ -1,10 +1,17 @@
 use canic_core::ids::BuildNetwork;
-use ic_testkit::artifacts::{WasmBuildSpec, WatchedInputSnapshot, build_wasm_canisters_cached};
+use ic_testkit::artifacts::{
+    WasmBuildCachePrunePolicy, WasmBuildSpec, WatchedInputSnapshot, build_wasm_canisters_cached,
+    prune_wasm_build_cache,
+};
 use std::{
     fs, io,
     path::{Path, PathBuf},
     process::{Command, Output},
+    time::Duration,
 };
+
+const INTERNAL_TEST_WASM_CACHE_MAX_AGE: Duration = Duration::from_hours(168);
+const INTERNAL_TEST_WASM_CACHE_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
 pub(super) const INTERNAL_TEST_ENDPOINTS_ENV: (&str, &str) = ("CANIC_INTERNAL_TEST_ENDPOINTS", "1");
 pub(super) const INTERNAL_TEST_RELEASE_BUILD_ID: (&str, &str) = (
@@ -111,6 +118,39 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
         timings.input_resolution(),
         timings.cargo_build(),
     );
+
+    prune_internal_test_wasm_cache(target_dir);
+}
+
+fn prune_internal_test_wasm_cache(target_dir: &Path) {
+    let policy = WasmBuildCachePrunePolicy::new()
+        .with_max_age(INTERNAL_TEST_WASM_CACHE_MAX_AGE)
+        .with_max_size_bytes(INTERNAL_TEST_WASM_CACHE_MAX_BYTES);
+
+    match prune_wasm_build_cache(target_dir, policy) {
+        Ok(report) if report.entries_removed() > 0 => eprintln!(
+            "[canic-test-wasm] pruned {} cache entr{} ({} bytes); retained {} entr{} ({} bytes)",
+            report.entries_removed(),
+            if report.entries_removed() == 1 {
+                "y"
+            } else {
+                "ies"
+            },
+            report.bytes_removed(),
+            report.entries_retained(),
+            if report.entries_retained() == 1 {
+                "y"
+            } else {
+                "ies"
+            },
+            report.bytes_retained(),
+        ),
+        Ok(_) => {}
+        Err(err) => eprintln!(
+            "[canic-test-wasm] warning: could not prune {}: {err}",
+            target_dir.display()
+        ),
+    }
 }
 
 #[must_use]

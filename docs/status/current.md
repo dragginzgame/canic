@@ -14,16 +14,24 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.4`.
-- The latest published release is `v0.101.4` at
-  `0c1565e32db3e5c63c6f2f5dce559185060ff54b`.
-- Open `0.101.5` adds bounded reduction-only deployment-member limits resolved
-  against exact flattened paths and immutable Component Spec ceilings. It
-  emits one canonical effective aggregate and spawn-grant policy per member;
-  zero, raised, unknown, duplicate and invalid Singleton reductions reject,
-  while equal-to-Spec values canonicalize to omission. Protected deployment
-  context, semantic configuration digest, root selection, persistence and
-  effects remain unavailable.
+- The workspace package version is `0.101.5`.
+- The latest published release is `v0.101.5` at
+  `fcddcbf385a1c141a382f327289ba21a7fd8d197`.
+- Open `0.101.6` derives one bounded schema-v1 semantic configuration digest
+  over independently domain-separated Component Group graph, flattened
+  deployment and Fleet-service target sections. The digest ignores source
+  formatting and order but binds every Spec hash, effective path, purpose,
+  label, member limit, placement envelope and service target. Protected
+  deployment context, root selection, persistence and effects remain
+  unavailable. The same patch advances the test runtime to `ic-testkit 0.4.0`,
+  bounds each named internal test-Wasm cache by age and logical size,
+  deduplicates root-baseline snapshot inputs and uses one measured-safe
+  capacity-one pool for the ingress payload-limit fixture.
+- Released `0.101.5` adds bounded reduction-only deployment-member limits
+  resolved against exact flattened paths and immutable Component Spec
+  ceilings. It emits one canonical effective aggregate and spawn-grant policy
+  per member; zero, raised, unknown, duplicate and invalid Singleton
+  reductions reject, while equal-to-Spec values canonicalize to omission.
 - Released `0.101.4` adds bounded canonical deployment labels at deployment,
   included-group and Component-leaf scope. Every flattened occurrence
   inherits one key-ordered effective set; duplicate keys anywhere on its path
@@ -2244,14 +2252,15 @@ First primary results:
 
 ## Next Action
 
-The Component Group declaration, independent deployment, Fleet-service target
-and inert-label compilers are published through immutable `v0.101.4`. The open
-0.101.5 compiler adds bounded reduction-only member quotas against exact
-flattened paths and immutable Component Spec ceilings. Continue Slice 1 by
-deriving the semantic protected configuration digest and plan-derived
-Component deployment context that will carry typed purpose and effective
-limits. Keep group, deployment and service declarations configuration-only
-and do not reopen the 0.100 infrastructure or pool boundaries.
+The Component Group declaration, independent deployment, Fleet-service target,
+inert-label and reduction-only member-limit compilers are published through
+immutable `v0.101.5`. The open 0.101.6 compiler adds the bounded schema-v1
+semantic configuration digest. Continue Slice 1 with the plan-derived
+protected Component deployment context that will carry the digest, exact
+placement/member identity, typed purpose, labels and effective limits into
+application policy and root enforcement. Keep group, deployment and service
+declarations configuration-only and do not reopen the 0.100 infrastructure or
+pool boundaries.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.

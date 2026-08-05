@@ -4,6 +4,8 @@
 //! Does not own: schema field definitions, validation rules, or endpoint DTOs.
 //! Boundary: bootstrap installs validated config here before ops/workflow reads it.
 
+mod canonical;
+mod component_deployment_configuration;
 mod component_group;
 mod component_group_deployment;
 mod fleet_service;
@@ -17,6 +19,10 @@ use schema::ConfigSchemaError;
 use std::{cell::RefCell, sync::Arc};
 use thiserror::Error as ThisError;
 
+pub use component_deployment_configuration::{
+    ComponentDeploymentConfigurationDigestError,
+    MAX_COMPONENT_DEPLOYMENT_CONFIGURATION_CANONICAL_BYTES,
+};
 pub use component_group::{
     ComponentDeploymentLabel, ComponentDeploymentLabelKey, ComponentDeploymentLabelParseError,
     ComponentDeploymentLabelValue, ComponentGroupLeafKind, ComponentGroupMember,
@@ -33,11 +39,13 @@ pub use component_group_deployment::{
     ComponentGroupDeploymentTopology, ComponentGroupDeploymentTopologyError,
     ComponentGroupPlacementPolicy, FlattenedComponentGroupDeploymentMember,
     MAX_COMPONENT_DEPLOYMENT_MEMBER_LIMITS, MAX_COMPONENT_DEPLOYMENT_SPAWN_GRANT_REDUCTIONS,
-    MAX_COMPONENT_GROUP_DEPLOYMENT_MEMBERS, MAX_COMPONENT_GROUP_DEPLOYMENTS,
+    MAX_COMPONENT_GROUP_DEPLOYMENT_MEMBERS,
+    MAX_COMPONENT_GROUP_DEPLOYMENT_TOPOLOGY_CANONICAL_BYTES, MAX_COMPONENT_GROUP_DEPLOYMENTS,
 };
 pub use fleet_service::{
     FleetServicePlacementPolicy, FleetServiceTarget, FleetServiceTargetMode, FleetServiceTopology,
     FleetServiceTopologyError, MAX_FLEET_SERVICE_TARGETS,
+    MAX_FLEET_SERVICE_TOPOLOGY_CANONICAL_BYTES,
 };
 pub use schema::ConfigModel;
 #[cfg(any(not(target_arch = "wasm32"), test))]
@@ -96,6 +104,9 @@ pub enum ConfigError {
     /// Validated Component Group deployments could not compile canonically.
     #[error(transparent)]
     ComponentGroupDeploymentTopology(#[from] ComponentGroupDeploymentTopologyError),
+
+    #[error("canonical Component deployment configuration bytes {actual} exceed bound {maximum}")]
+    ComponentDeploymentConfigurationCanonicalBytesBoundExceeded { actual: usize, maximum: usize },
 
     /// Validated Fleet-service targets could not compile canonically.
     #[error(transparent)]
@@ -196,19 +207,7 @@ impl Config {
             })?;
 
         config.validate().map_err(ConfigError::from)?;
-        let component_topology = config.compile_component_topology()?;
-        let component_group_topology = config.compile_component_group_topology()?;
-        let component_group_deployment_topology =
-            ComponentGroupDeploymentTopology::compile_from_topologies(
-                &config,
-                &component_group_topology,
-                &component_topology,
-            )?;
-        FleetServiceTopology::compile_from_topologies(
-            &config,
-            &component_group_deployment_topology,
-            &component_topology,
-        )?;
+        config.compile_component_deployment_configuration_digest()?;
         Ok(config)
     }
 
@@ -217,19 +216,7 @@ impl Config {
         config: ConfigModel,
         source_toml: &str,
     ) -> Result<Arc<ConfigModel>, ConfigError> {
-        let component_topology = config.compile_component_topology()?;
-        let component_group_topology = config.compile_component_group_topology()?;
-        let component_group_deployment_topology =
-            ComponentGroupDeploymentTopology::compile_from_topologies(
-                &config,
-                &component_group_topology,
-                &component_topology,
-            )?;
-        FleetServiceTopology::compile_from_topologies(
-            &config,
-            &component_group_deployment_topology,
-            &component_topology,
-        )?;
+        config.compile_component_deployment_configuration_digest()?;
         CONFIG.with(|cfg| {
             let mut borrow = cfg.borrow_mut();
             if borrow.is_some() {

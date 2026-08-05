@@ -4,6 +4,7 @@
 //! Does not own: concrete root assignment, Component identity, publication, or runtime state.
 //! Boundary: checked-in targets become canonical mode-compatible logical service topology.
 
+mod canonical;
 #[cfg(test)]
 mod tests;
 
@@ -24,6 +25,8 @@ use std::collections::BTreeMap;
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
+
+pub use canonical::MAX_FLEET_SERVICE_TOPOLOGY_CANONICAL_BYTES;
 
 /// Maximum logical Fleet-service targets in one App configuration.
 pub const MAX_FLEET_SERVICE_TARGETS: usize = 4_096;
@@ -106,6 +109,23 @@ impl FleetServiceTopology {
         Ok(())
     }
 
+    /// Return the exact canonical Fleet-service target section for semantic hashing.
+    pub fn canonical_bytes(
+        &self,
+        deployment_topology: &ComponentGroupDeploymentTopology,
+        component_topology: &ComponentTopology,
+    ) -> Result<Vec<u8>, FleetServiceTopologyError> {
+        self.validate_relationships(deployment_topology, component_topology)?;
+        let bytes = canonical::encode(self);
+        if bytes.len() > MAX_FLEET_SERVICE_TOPOLOGY_CANONICAL_BYTES {
+            return Err(FleetServiceTopologyError::CanonicalBytesBoundExceeded {
+                actual: bytes.len(),
+                maximum: MAX_FLEET_SERVICE_TOPOLOGY_CANONICAL_BYTES,
+            });
+        }
+        Ok(bytes)
+    }
+
     fn validate_relationships(
         &self,
         deployment_topology: &ComponentGroupDeploymentTopology,
@@ -183,6 +203,9 @@ pub enum FleetServiceTopologyError {
 
     #[error(transparent)]
     ComponentTopology(#[from] ComponentTopologyError),
+
+    #[error("canonical Fleet-service topology bytes {actual} exceed bound {maximum}")]
+    CanonicalBytesBoundExceeded { actual: usize, maximum: usize },
 
     #[error("Fleet-service target count {actual} exceeds bound {maximum}")]
     TargetBoundExceeded { actual: usize, maximum: usize },

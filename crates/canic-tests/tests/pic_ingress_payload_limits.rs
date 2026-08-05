@@ -2,16 +2,28 @@ use canic::{Error, ids::CanisterRole};
 use canic_testing_internal::pic::{
     CanicWasmBuildProfile, install_standalone_canister, install_standalone_canister_on_pic,
 };
-use ic_testkit::pic::{CandidCallErrorKind, CandidCallExt, StandaloneCanisterFixture};
+use ic_testkit::pic::{
+    CachedStandaloneCanisterFixtureGuard, CachedStandaloneCanisterFixturePool, CandidCallErrorKind,
+    CandidCallExt, SnapshotRestoreFunding, StandaloneCanisterFixture,
+};
 
 const PROBE_CRATE: &str = "payload_limit_probe";
 const PROBE_ROLE: CanisterRole = CanisterRole::new("test");
 const EXPLICIT_ECHO_MAX_BYTES: usize = 32 * 1024;
+const SNAPSHOT_RESTORE_MINIMUM_CYCLES: u128 = 10_000_000_000_000;
+
+// Both cases observe only the restored target; the relay created by one case is unrelated state.
+static PROBE_FIXTURES: CachedStandaloneCanisterFixturePool<1> =
+    CachedStandaloneCanisterFixturePool::new().with_restore_funding(
+        SnapshotRestoreFunding::TopUpTo {
+            minimum_cycles: SNAPSHOT_RESTORE_MINIMUM_CYCLES,
+        },
+    );
 
 // Verify generated inspect-message limits for default, explicit, and named updates.
 #[test]
 fn inspect_message_enforces_default_explicit_and_named_payload_limits() {
-    let fixture = install_standalone_canister(PROBE_CRATE, PROBE_ROLE, CanicWasmBuildProfile::Fast);
+    let fixture = acquire_probe_fixture();
 
     assert_echo_ok(&fixture, "default_echo", 12 * 1024);
     assert_rejected(&fixture, "default_echo", 20 * 1024);
@@ -27,7 +39,7 @@ fn inspect_message_enforces_default_explicit_and_named_payload_limits() {
 // canister_inspect_message is not part of the call path.
 #[test]
 fn raw_update_adapter_rejects_oversized_inter_canister_payload_before_decode() {
-    let target = install_standalone_canister(PROBE_CRATE, PROBE_ROLE, CanicWasmBuildProfile::Fast);
+    let target = acquire_probe_fixture();
     let relay = install_standalone_canister_on_pic(
         target.pocket_ic(),
         PROBE_CRATE,
@@ -52,10 +64,24 @@ fn raw_update_adapter_rejects_oversized_inter_canister_payload_before_decode() {
         "relay_explicit_echo",
         (target.canister_id(), exact_payload_len + 1),
     );
+    drop(target);
     assert!(
         rejected.is_err(),
         "oversized inter-canister payload must be rejected by the target"
     );
+}
+
+fn acquire_probe_fixture() -> CachedStandaloneCanisterFixtureGuard<'static> {
+    let (fixture, reused) = PROBE_FIXTURES
+        .acquire(|| {
+            install_standalone_canister(PROBE_CRATE, PROBE_ROLE, CanicWasmBuildProfile::Fast)
+        })
+        .expect("acquire payload-limit probe fixture");
+    eprintln!(
+        "[payload-limit-probe] {} cached standalone fixture",
+        if reused { "restored" } else { "built" }
+    );
+    fixture
 }
 
 // Assert one ingress update reaches the canister and returns the echoed length.
