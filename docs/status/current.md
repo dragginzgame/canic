@@ -14,19 +14,29 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.1`.
-- The latest published release is `v0.101.1` at
-  `bd5b4ac43aeb312d871e21bc68dd3f5fb94510b3`.
-- Open `0.101.2` adds strict independent Component Group deployment
+- The workspace package version is `0.101.2`.
+- The latest published release is `v0.101.2` at
+  `54f61f5c7bcb7274a48fb5b3a67e7bed43774d79`.
+- Open `0.101.3` adds strict canonical Fleet-service targets that bind every
+  service-bearing deployment occurrence to one exact Component role, Spec,
+  typed mode and independent service-wide placement envelope. It rejects
+  orphan occurrences/targets, wrong roles or Specs, incompatible member
+  purposes, missing or duplicate Authorities, inexact Authority selectors,
+  non-singleton Authority deployments, empty initial Active Pools, invalid
+  scalar density/spread bounds and policies impossible for indivisible group
+  placements. Concrete root assignment remains a later protected planning
+  boundary.
+- Released `0.101.2` adds strict independent Component Group deployment
   declarations with mandatory bounded placement envelopes. It completely
   flattens each deployment before planning, preserves inclusion versus
   independent-deployment occurrences, binds exact Component Spec hashes and
   rejects maximum-placement demand beyond the Spec Fleet ceiling. Typed
   service-bearing leaves now resolve exactly one Authority, Replica or
   PoolMember assignment along their deployment/include/leaf path, while
-  Ordinary leaves remain outside Fleet services. Fleet-service targets,
-  labels, member limits, root selection, persistence and effects remain
-  unavailable. The same draft advances host Subnet Catalog authority to
+  Ordinary leaves remain outside Fleet services. Fleet-service targets land
+  in the open 0.101.3 draft; labels, member limits, root selection,
+  persistence and effects remain unavailable. The same release advances host
+  Subnet Catalog authority to
   `ic-query 0.29.3`, explicitly fixes its single-endpoint source selection and
   minimum `UncertifiedQuery` assurance, aligns the PocketIC 15 executable pin
   with `ic-testkit 0.3.4`, moves internal Cargo Wasm reuse to an exact
@@ -2221,13 +2231,14 @@ First primary results:
 
 ## Next Action
 
-The Component Group declaration compiler is published at immutable
-`v0.101.1`, and the open 0.101.2 compiler resolves typed Fleet-service purpose
-exactly along every deployment/include/leaf path. Continue Slice 1 with strict
-Fleet-service target declarations and validate the complete orphan,
-AuthorityReplica and ActivePool target/member relationships. Keep group and
-deployment declarations configuration-only and do not reopen the 0.100
-infrastructure or pool boundaries.
+The Component Group declaration and independent deployment compilers are
+published through immutable `v0.101.2`. The open 0.101.3 compiler binds every
+service-bearing deployment occurrence to one exact canonical target and
+validates complete orphan, AuthorityReplica, ActivePool and scalar
+service-policy relationships. Continue Slice 1 with bounded inert inherited
+labels whose duplicate path keys reject and which cannot alter typed purpose.
+Keep group, deployment and service declarations configuration-only and do not
+reopen the 0.100 infrastructure or pool boundaries.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.

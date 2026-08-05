@@ -7,11 +7,11 @@ Date: 2026-08-05
 - State: implementation has the bounded layer-neutral identity vocabulary,
   strict configuration-only Component Group declarations, independent
   deployment flattening with bounded placement envelopes and worst-case Spec
-  demand, plus exact deployment/include/leaf Fleet-service purpose resolution;
-  service-target validation and every effect-bearing surface remain
-  unimplemented.
+  demand, exact deployment/include/leaf Fleet-service purpose resolution and
+  strict canonical Fleet-service target validation; labels, member limits and
+  every effect-bearing surface remain unimplemented.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.1` is released and `0.101.2` is open.
+- Implementation started: yes; `0.101.2` is released and `0.101.3` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -114,13 +114,15 @@ Fleet policy writer.
   from independent deployment.
 - [x] Resolve every Fleet-service leaf through exactly one typed purpose
   assignment on its deployment/include/leaf path.
-- [ ] Reject unused purpose assignments and orphan service occurrences or
-  targets. Unused assignments reject; service targets are the next boundary.
+- [x] Reject unused purpose assignments and orphan service occurrences or
+  targets.
 - [x] Add typed `Ordinary` and `FleetServiceMember` purpose with Authority,
   Replica and PoolMember variants.
-- [ ] Validate AuthorityReplica and ActivePool target/member invariants.
+- [x] Validate AuthorityReplica and ActivePool target/member invariants.
 - [ ] Validate service-wide member density/spread independently of deployment
-  placement policy.
+  placement policy. Positive scalar bounds against maximum concurrent service
+  members, indivisible placement width and maximum contributing placements
+  compile independently; concrete root assignments remain unavailable.
 - [ ] Add bounded inert deployment labels that cannot alter authority.
 - [ ] Compile bounded reduction-only deployment-member limits against exact
   flattened paths and immutable Component Spec envelopes.
@@ -132,8 +134,9 @@ Fleet policy writer.
 - [ ] Remove singleton-Spec and sole-root-admission service assumptions.
 - [ ] Validate worst-case Spec demand, placement density/spread and the
   zero-placement/non-Authority versus singleton-Authority count rules.
-  Maximum-placement Spec demand and scalar deployment envelopes are complete;
-  purpose-dependent and concrete assignment checks remain open.
+  Maximum-placement Spec/service demand, scalar deployment/service envelopes
+  and purpose-dependent initial-count rules are complete; concrete root
+  assignment checks remain open.
 - [ ] Measure and freeze the initial supported root, Component, placement,
   service-member, plan, Registry and Directory envelope.
 

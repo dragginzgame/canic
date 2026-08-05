@@ -10,12 +10,14 @@
 mod component_group;
 mod component_group_deployment;
 mod component_spec;
+mod fleet_service;
 mod log;
 mod role;
 
 pub use component_group::*;
 pub use component_group_deployment::*;
 pub use component_spec::*;
+pub use fleet_service::*;
 pub use log::*;
 pub use role::*;
 
@@ -143,6 +145,7 @@ pub trait Validate {
 /// - Every Component Spec contains exactly one root Component role
 /// - Every Component Spec carries a flat potential descendant-role catalog
 /// - Component Spec instance ceilings are positive and Fleet-bounded
+/// - Every deployed Fleet-service occurrence resolves through one exact target
 /// - Canister role names follow the canonical deployment identity rule
 /// - Delegated token TTL is sane
 /// - Whitelist principals are valid
@@ -187,6 +190,11 @@ pub struct ConfigModel {
     #[serde(default)]
     pub component_group_deployments:
         BTreeMap<ComponentGroupDeploymentId, ComponentGroupDeploymentConfig>,
+
+    /// Logical Fleet-service targets derived from exact grouped occurrences.
+    /// Physical roots and concrete Components remain protected plan output.
+    #[serde(default)]
+    pub services: ServicesConfig,
 }
 
 impl ConfigModel {

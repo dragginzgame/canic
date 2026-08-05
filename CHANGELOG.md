@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.3` adds strict Fleet-service targets with exact
+  Authority/Replica/PoolMember relationships and independent bounded service
+  placement policy.
+
 - `0.101.2` adds bounded independent group deployments with exact path-resolved
   Fleet-service purposes, hardens host Subnet Catalog evidence with
   `ic-query 0.29.3`, and advances to `ic-testkit 0.3.4` for exact
