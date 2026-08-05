@@ -23,9 +23,32 @@ package = "b"
 kind = "canister"
 package = "c"
 
+[roles.child]
+kind = "canister"
+package = "child"
+
+[roles.once]
+kind = "canister"
+package = "once"
+
 [component_specs.a]
 component_role = "a"
 maximum_instances = 8
+
+[component_specs.a.children.child]
+kind = "instance"
+
+[component_specs.a.children.once]
+kind = "singleton"
+
+[component_specs.a.spawn_grants.a.child]
+maximum_instances_per_parent = 10
+
+[component_specs.a.spawn_grants.child.once]
+maximum_instances_per_parent = 1
+
+[component_specs.a.spawn_grants.child.child]
+maximum_instances_per_parent = 5
 
 [component_specs.b]
 component_role = "b"
@@ -248,7 +271,7 @@ placement.minimum_distinct_roots = 1
 }
 
 #[test]
-fn missing_groups_and_partial_future_fields_reject() {
+fn missing_groups_and_unknown_future_fields_reject() {
     let missing_group = parse(
         r#"
 [component_group_deployments.missing]
@@ -269,25 +292,300 @@ placement.minimum_distinct_roots = 1
         )
     ));
 
-    let partial_future_field = Config::parse_toml(&format!(
+    let unknown_future_field = Config::parse_toml(&format!(
         "{CONFIG_PREFIX}\n{}",
         r#"
 [component_groups.cell.components.a]
 component_spec = "a"
 [component_group_deployments.cell]
 component_group = "cell"
-member_limits = []
+protected_context = "not-yet-available"
 initial_placements = 1
 maximum_placements = 1
 placement.maximum_per_root = 1
 placement.minimum_distinct_roots = 1
 "#
     ))
-    .expect_err("member limits must remain unavailable until their compiler lands");
+    .expect_err("protected context must remain unavailable until its compiler lands");
     assert!(matches!(
-        partial_future_field,
+        unknown_future_field,
         ConfigError::CannotParseToml { .. }
     ));
+}
+
+#[test]
+fn deployments_reuse_one_group_with_distinct_reduction_only_limits() {
+    let (_, topology) = parse(
+        r#"
+[component_groups.shared.components.a]
+component_spec = "a"
+
+[component_groups.cell.groups.shared]
+component_group = "shared"
+
+[component_group_deployments.large]
+component_group = "cell"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
+
+[[component_group_deployments.large.member_limits]]
+member = ["shared", "a"]
+maximum_descendants = 20_000
+maximum_registry_bytes = 16_777_216
+spawn_grants = [
+  { parent_role = "a", child_role = "child", maximum_instances_per_parent = 10 },
+  { parent_role = "child", child_role = "once", maximum_instances_per_parent = 1 },
+]
+
+[component_group_deployments.small]
+component_group = "cell"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
+
+[[component_group_deployments.small.member_limits]]
+member = ["shared", "a"]
+maximum_descendants = 4_000
+maximum_registry_bytes = 8_388_608
+spawn_grants = [
+  { parent_role = "a", child_role = "child", maximum_instances_per_parent = 2 },
+]
+"#,
+    )
+    .expect("same group with distinct deployment reductions");
+
+    let large = topology
+        .get(&deployment("large"))
+        .expect("large deployment");
+    let small = topology
+        .get(&deployment("small"))
+        .expect("small deployment");
+    assert!(large.member_limits.is_empty());
+    assert_eq!(large.members[0].limits.maximum_descendants, 20_000);
+    assert_eq!(large.members[0].limits.maximum_registry_bytes, 16_777_216);
+    assert!(large.members[0].limits.spawn_grant_reductions.is_empty());
+
+    assert_eq!(small.member_limits.len(), 1);
+    assert_eq!(small.members[0].limits.maximum_descendants, 4_000);
+    assert_eq!(small.members[0].limits.maximum_registry_bytes, 8_388_608);
+    assert_eq!(small.members[0].limits.spawn_grant_reductions.len(), 1);
+    assert_eq!(
+        small.members[0].limits.spawn_grant_reductions[0].maximum_instances_per_parent,
+        2
+    );
+}
+
+#[test]
+fn member_limit_paths_and_grants_are_exact_unique_and_canonical() {
+    let base = r#"
+[component_groups.cell.components.a]
+component_spec = "a"
+[component_group_deployments.cell]
+component_group = "cell"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
+"#;
+    let unknown = parse(&format!(
+        "{base}\n{}",
+        r#"
+[[component_group_deployments.cell.member_limits]]
+member = ["missing"]
+maximum_descendants = 1
+"#
+    ))
+    .expect_err("unknown member path must reject");
+    assert!(matches!(
+        unknown,
+        ConfigError::ComponentGroupDeploymentTopology(
+            ComponentGroupDeploymentTopologyError::MemberLimit(
+                ComponentDeploymentMemberLimitError::UnknownMemberLimitPath { .. }
+            )
+        )
+    ));
+
+    let duplicate_path = parse(&format!(
+        "{base}\n{}",
+        r#"
+[[component_group_deployments.cell.member_limits]]
+member = ["a"]
+maximum_descendants = 10
+[[component_group_deployments.cell.member_limits]]
+member = ["a"]
+maximum_registry_bytes = 10
+"#
+    ))
+    .expect_err("duplicate member path must reject");
+    assert!(matches!(
+        duplicate_path,
+        ConfigError::ComponentGroupDeploymentTopology(
+            ComponentGroupDeploymentTopologyError::MemberLimit(
+                ComponentDeploymentMemberLimitError::DuplicateMemberLimitPath { .. }
+            )
+        )
+    ));
+
+    let duplicate_grant = parse(&format!(
+        "{base}\n{}",
+        r#"
+[[component_group_deployments.cell.member_limits]]
+member = ["a"]
+spawn_grants = [
+  { parent_role = "a", child_role = "child", maximum_instances_per_parent = 2 },
+  { parent_role = "a", child_role = "child", maximum_instances_per_parent = 3 },
+]
+"#
+    ))
+    .expect_err("duplicate spawn-grant reduction must reject");
+    assert!(matches!(
+        duplicate_grant,
+        ConfigError::ComponentGroupDeploymentTopology(
+            ComponentGroupDeploymentTopologyError::MemberLimit(
+                ComponentDeploymentMemberLimitError::DuplicateSpawnGrantLimit { .. }
+            )
+        )
+    ));
+}
+
+#[test]
+fn member_limit_source_order_does_not_change_canonical_policy() {
+    let (_, topology) = parse(
+        r#"
+[component_groups.cell.components.a]
+component_spec = "a"
+[component_groups.cell.components.b]
+component_spec = "b"
+
+[component_group_deployments.cell]
+component_group = "cell"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
+
+[[component_group_deployments.cell.member_limits]]
+member = ["b"]
+maximum_descendants = 100
+
+[[component_group_deployments.cell.member_limits]]
+member = ["a"]
+spawn_grants = [
+  { parent_role = "child", child_role = "child", maximum_instances_per_parent = 3 },
+  { parent_role = "a", child_role = "child", maximum_instances_per_parent = 2 },
+]
+"#,
+    )
+    .expect("out-of-order source reductions");
+    let limits = &topology.component_group_deployments[0].member_limits;
+    assert_eq!(
+        limits
+            .iter()
+            .map(|limit| limit.member.as_slice()[0].as_str())
+            .collect::<Vec<_>>(),
+        vec!["a", "b"]
+    );
+    assert_eq!(
+        limits[0]
+            .spawn_grants
+            .iter()
+            .map(|grant| grant.parent_role.as_str())
+            .collect::<Vec<_>>(),
+        vec!["a", "child"]
+    );
+}
+
+#[test]
+fn zero_raised_unknown_and_invalid_singleton_limits_reject() {
+    #[derive(Clone, Copy)]
+    enum Expected {
+        AggregateAboveSpec,
+        InvalidSingleton,
+        SpawnGrantAboveSpec,
+        UnknownSpawnGrant,
+        ZeroAggregate,
+        ZeroSpawnGrant,
+    }
+
+    let base = r#"
+[component_groups.cell.components.a]
+component_spec = "a"
+[component_group_deployments.cell]
+component_group = "cell"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
+"#;
+    let cases = [
+        (
+            "maximum_descendants = 0",
+            "zero aggregate",
+            Expected::ZeroAggregate,
+        ),
+        (
+            "maximum_registry_bytes = 20_000_000",
+            "raised aggregate",
+            Expected::AggregateAboveSpec,
+        ),
+        (
+            "spawn_grants = [{ parent_role = \"a\", child_role = \"child\", maximum_instances_per_parent = 0 }]",
+            "zero spawn grant",
+            Expected::ZeroSpawnGrant,
+        ),
+        (
+            "spawn_grants = [{ parent_role = \"a\", child_role = \"child\", maximum_instances_per_parent = 11 }]",
+            "raised spawn grant",
+            Expected::SpawnGrantAboveSpec,
+        ),
+        (
+            "spawn_grants = [{ parent_role = \"child\", child_role = \"missing\", maximum_instances_per_parent = 1 }]",
+            "unknown spawn grant",
+            Expected::UnknownSpawnGrant,
+        ),
+        (
+            "spawn_grants = [{ parent_role = \"child\", child_role = \"once\", maximum_instances_per_parent = 2 }]",
+            "invalid Singleton grant",
+            Expected::InvalidSingleton,
+        ),
+    ];
+    for (limit, expectation, expected) in cases {
+        let error = parse(&format!(
+            "{base}\n[[component_group_deployments.cell.member_limits]]\nmember = [\"a\"]\n{limit}"
+        ))
+        .expect_err(expectation);
+        let ConfigError::ComponentGroupDeploymentTopology(
+            ComponentGroupDeploymentTopologyError::MemberLimit(error),
+        ) = error
+        else {
+            panic!("expected typed member-limit error for {expectation}");
+        };
+        assert!(matches!(
+            (expected, &error),
+            (
+                Expected::AggregateAboveSpec,
+                ComponentDeploymentMemberLimitError::AggregateLimitExceedsSpec { .. }
+            ) | (
+                Expected::InvalidSingleton,
+                ComponentDeploymentMemberLimitError::InvalidSingletonSpawnGrantLimit { .. }
+            ) | (
+                Expected::SpawnGrantAboveSpec,
+                ComponentDeploymentMemberLimitError::SpawnGrantLimitExceedsSpec { .. }
+            ) | (
+                Expected::UnknownSpawnGrant,
+                ComponentDeploymentMemberLimitError::UnknownSpawnGrant { .. }
+            ) | (
+                Expected::ZeroAggregate,
+                ComponentDeploymentMemberLimitError::ZeroAggregateLimit { .. }
+            ) | (
+                Expected::ZeroSpawnGrant,
+                ComponentDeploymentMemberLimitError::ZeroSpawnGrantLimit { .. }
+            )
+        ));
+    }
 }
 
 #[test]
@@ -680,6 +978,36 @@ placement.minimum_distinct_roots = 1
     assert!(matches!(
         wrong_labels.validate(&groups, &components),
         Err(ComponentGroupDeploymentTopologyError::MemberLabelProjectionMismatch { .. })
+    ));
+
+    let mut wrong_limits = topology.clone();
+    wrong_limits.component_group_deployments[0].members[0]
+        .limits
+        .maximum_descendants = 1;
+    assert!(matches!(
+        wrong_limits.validate(&groups, &components),
+        Err(ComponentGroupDeploymentTopologyError::MemberLimit(
+            ComponentDeploymentMemberLimitError::EffectiveLimitProjectionMismatch { .. }
+        ))
+    ));
+
+    let mut redundant_limit = topology.clone();
+    let member = redundant_limit.component_group_deployments[0].members[0]
+        .member_path
+        .clone();
+    redundant_limit.component_group_deployments[0]
+        .member_limits
+        .push(ComponentDeploymentMemberLimit {
+            member,
+            maximum_descendants: Some(20_000),
+            maximum_registry_bytes: None,
+            spawn_grants: Vec::new(),
+        });
+    assert!(matches!(
+        redundant_limit.validate(&groups, &components),
+        Err(ComponentGroupDeploymentTopologyError::MemberLimit(
+            ComponentDeploymentMemberLimitError::NonCanonicalMemberLimitProjection { .. }
+        ))
     ));
 
     let mut wrong_order = topology;

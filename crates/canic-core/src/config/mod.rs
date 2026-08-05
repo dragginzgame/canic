@@ -28,10 +28,12 @@ pub use component_group::{
     MAX_COMPONENT_GROUP_INCLUSIONS, MAX_COMPONENT_GROUP_MEMBERS, MAX_COMPONENT_GROUP_SPECS,
 };
 pub use component_group_deployment::{
-    ComponentDeploymentPurpose, ComponentGroupDeploymentSpec, ComponentGroupDeploymentTopology,
-    ComponentGroupDeploymentTopologyError, ComponentGroupPlacementPolicy,
-    FlattenedComponentGroupDeploymentMember, MAX_COMPONENT_GROUP_DEPLOYMENT_MEMBERS,
-    MAX_COMPONENT_GROUP_DEPLOYMENTS,
+    ComponentDeploymentLimits, ComponentDeploymentMemberLimit, ComponentDeploymentMemberLimitError,
+    ComponentDeploymentPurpose, ComponentDeploymentSpawnGrantLimit, ComponentGroupDeploymentSpec,
+    ComponentGroupDeploymentTopology, ComponentGroupDeploymentTopologyError,
+    ComponentGroupPlacementPolicy, FlattenedComponentGroupDeploymentMember,
+    MAX_COMPONENT_DEPLOYMENT_MEMBER_LIMITS, MAX_COMPONENT_DEPLOYMENT_SPAWN_GRANT_REDUCTIONS,
+    MAX_COMPONENT_GROUP_DEPLOYMENT_MEMBERS, MAX_COMPONENT_GROUP_DEPLOYMENTS,
 };
 pub use fleet_service::{
     FleetServicePlacementPolicy, FleetServiceTarget, FleetServiceTargetMode, FleetServiceTopology,

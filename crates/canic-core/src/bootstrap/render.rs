@@ -12,7 +12,8 @@ use crate::{
         ComponentDeploymentLabelKey, ComponentDeploymentLabelValue, FleetServiceMemberPurpose,
         schema::{
             AppConfig, AuthConfig, CanisterAuthConfig, ChainKeyRootProofConfig,
-            ComponentChildConfig, ComponentChildKind, ComponentGroupComponentConfig,
+            ComponentChildConfig, ComponentChildKind, ComponentDeploymentMemberLimitConfig,
+            ComponentDeploymentSpawnGrantLimitConfig, ComponentGroupComponentConfig,
             ComponentGroupDeploymentConfig, ComponentGroupIncludeConfig,
             ComponentGroupPlacementPolicyConfig, ComponentGroupSpecConfig, ComponentLimitsConfig,
             ComponentProvisioningGrantConfig, ComponentSpawnGrantConfig, ComponentSpecConfig,
@@ -268,6 +269,47 @@ fn render_component_group_component_config(config: &ComponentGroupComponentConfi
     }
 }
 
+// Render one exact flattened-member reduction declaration.
+fn render_component_deployment_member_limit_config(
+    config: &ComponentDeploymentMemberLimitConfig,
+) -> TokenStream {
+    let member = render_component_group_member_path(&config.member);
+    let maximum_descendants = render_option(config.maximum_descendants.as_ref(), |value| {
+        render_u32_literal(*value)
+    });
+    let maximum_registry_bytes = render_option(config.maximum_registry_bytes.as_ref(), |value| {
+        render_u64_literal(*value)
+    });
+    let spawn_grants = render_vec(
+        config.spawn_grants.iter(),
+        render_component_deployment_spawn_grant_limit_config,
+    );
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentDeploymentMemberLimitConfig {
+            member: #member,
+            maximum_descendants: #maximum_descendants,
+            maximum_registry_bytes: #maximum_registry_bytes,
+            spawn_grants: #spawn_grants,
+        }
+    }
+}
+
+// Render one exact spawn-grant reduction declaration.
+fn render_component_deployment_spawn_grant_limit_config(
+    config: &ComponentDeploymentSpawnGrantLimitConfig,
+) -> TokenStream {
+    let parent_role = render_canister_role(&config.parent_role);
+    let child_role = render_canister_role(&config.child_role);
+    let maximum_instances_per_parent = render_u32_literal(config.maximum_instances_per_parent);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentDeploymentSpawnGrantLimitConfig {
+            parent_role: #parent_role,
+            child_role: #child_role,
+            maximum_instances_per_parent: #maximum_instances_per_parent,
+        }
+    }
+}
+
 // Render one configuration-only Component Group inclusion edge.
 fn render_component_group_include_config(config: &ComponentGroupIncludeConfig) -> TokenStream {
     let component_group = render_component_group_spec_id(&config.component_group);
@@ -301,6 +343,10 @@ fn render_component_group_deployment_config(
         render_component_deployment_label_key,
         render_component_deployment_label_value,
     );
+    let member_limits = render_vec(
+        config.member_limits.iter(),
+        render_component_deployment_member_limit_config,
+    );
     let initial_placements = render_u32_literal(config.initial_placements);
     let maximum_placements = render_u32_literal(config.maximum_placements);
     let placement = render_component_group_placement_policy_config(&config.placement);
@@ -309,6 +355,7 @@ fn render_component_group_deployment_config(
             component_group: #component_group,
             service_purpose: #service_purpose,
             labels: #labels,
+            member_limits: #member_limits,
             initial_placements: #initial_placements,
             maximum_placements: #maximum_placements,
             placement: #placement,
@@ -1231,6 +1278,14 @@ maximum_placements = 1
 placement.maximum_per_root = 1
 placement.minimum_distinct_roots = 1
 
+[[component_group_deployments.cell.member_limits]]
+member = ["shared", "hub"]
+maximum_descendants = 50
+maximum_registry_bytes = 8_388_608
+spawn_grants = [
+  { parent_role = "hub", child_role = "instance", maximum_instances_per_parent = 50 },
+]
+
 [services.fleet.targets.database]
 role = "instance"
 component_spec = "instance"
@@ -1295,6 +1350,8 @@ placement.minimum_distinct_roots = 1
         assert!(rendered.contains("ComponentGroupComponentConfig"));
         assert!(rendered.contains("ComponentGroupIncludeConfig"));
         assert!(rendered.contains("ComponentGroupDeploymentConfig"));
+        assert!(rendered.contains("ComponentDeploymentMemberLimitConfig"));
+        assert!(rendered.contains("ComponentDeploymentSpawnGrantLimitConfig"));
         assert!(rendered.contains("ComponentGroupPlacementPolicyConfig"));
         assert!(rendered.contains("ServicesConfig"));
         assert!(rendered.contains("FleetServicesConfig"));

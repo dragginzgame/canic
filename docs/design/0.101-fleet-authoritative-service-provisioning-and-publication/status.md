@@ -9,10 +9,11 @@ Date: 2026-08-05
   deployment flattening with bounded placement envelopes and worst-case Spec
   demand, exact deployment/include/leaf Fleet-service purpose resolution and
   strict canonical Fleet-service target validation and bounded inert labels
-  inherited across deployment/include/leaf paths; member limits and every
-  effect-bearing surface remain unimplemented.
+  inherited across deployment/include/leaf paths, plus bounded reduction-only
+  limits resolved against exact flattened members and immutable Component
+  Spec ceilings; every effect-bearing surface remains unimplemented.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.3` is released and `0.101.4` is open.
+- Implementation started: yes; `0.101.4` is released and `0.101.5` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -125,7 +126,7 @@ Fleet policy writer.
   members, indivisible placement width and maximum contributing placements
   compile independently; concrete root assignments remain unavailable.
 - [x] Add bounded inert deployment labels that cannot alter authority.
-- [ ] Compile bounded reduction-only deployment-member limits against exact
+- [x] Compile bounded reduction-only deployment-member limits against exact
   flattened paths and immutable Component Spec envelopes.
 - [ ] Persist one plan-derived protected Component deployment context so
   application policy can enforce Authority/Replica purpose and the root can

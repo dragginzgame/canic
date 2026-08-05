@@ -14,16 +14,22 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.3`.
-- The latest published release is `v0.101.3` at
-  `d62f8aab04b3e9cbb74d49ffc24616b579980ab4`.
-- Open `0.101.4` adds bounded canonical deployment labels at deployment,
+- The workspace package version is `0.101.4`.
+- The latest published release is `v0.101.4` at
+  `0c1565e32db3e5c63c6f2f5dce559185060ff54b`.
+- Open `0.101.5` adds bounded reduction-only deployment-member limits resolved
+  against exact flattened paths and immutable Component Spec ceilings. It
+  emits one canonical effective aggregate and spawn-grant policy per member;
+  zero, raised, unknown, duplicate and invalid Singleton reductions reject,
+  while equal-to-Spec values canonicalize to omission. Protected deployment
+  context, semantic configuration digest, root selection, persistence and
+  effects remain unavailable.
+- Released `0.101.4` adds bounded canonical deployment labels at deployment,
   included-group and Component-leaf scope. Every flattened occurrence
   inherits one key-ordered effective set; duplicate keys anywhere on its path
   reject, and authority-like label text cannot alter typed Ordinary,
   Authority, Replica or PoolMember purpose. Component Group graph encoding is
-  hard-cut to schema v3. Member limits, protected deployment context, root
-  selection, persistence and effects remain unavailable.
+  hard-cut to schema v3.
 - Released `0.101.3` adds strict canonical Fleet-service targets that bind every
   service-bearing deployment occurrence to one exact Component role, Spec,
   typed mode and independent service-wide placement envelope. It rejects
@@ -2238,14 +2244,14 @@ First primary results:
 
 ## Next Action
 
-The Component Group declaration, independent deployment and Fleet-service
-target compilers are published through immutable `v0.101.3`. The open
-0.101.4 compiler adds bounded inert deployment/include/leaf labels with exact
-path inheritance, canonical key order and duplicate-key rejection. Continue
-Slice 1 with reduction-only deployment-member limits against exact flattened
-paths and immutable Component Spec envelopes. Keep group, deployment and
-service declarations configuration-only and do not reopen the 0.100
-infrastructure or pool boundaries.
+The Component Group declaration, independent deployment, Fleet-service target
+and inert-label compilers are published through immutable `v0.101.4`. The open
+0.101.5 compiler adds bounded reduction-only member quotas against exact
+flattened paths and immutable Component Spec ceilings. Continue Slice 1 by
+deriving the semantic protected configuration digest and plan-derived
+Component deployment context that will carry typed purpose and effective
+limits. Keep group, deployment and service declarations configuration-only
+and do not reopen the 0.100 infrastructure or pool boundaries.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.
