@@ -1,9 +1,10 @@
 //! Module: config::component_group_deployment
 //!
 //! Responsibility: compile independent Component Group deployments before planning.
-//! Does not own: member limits, root selection, persistence, or effects.
+//! Does not own: root selection, persistence, or effects.
 //! Boundary: strict source deployments become bounded exact flattened Component occurrences.
 
+mod member_limit;
 #[cfg(test)]
 mod tests;
 
@@ -26,6 +27,12 @@ use std::collections::BTreeMap;
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
+
+pub use member_limit::{
+    ComponentDeploymentLimits, ComponentDeploymentMemberLimit, ComponentDeploymentMemberLimitError,
+    ComponentDeploymentSpawnGrantLimit, MAX_COMPONENT_DEPLOYMENT_MEMBER_LIMITS,
+    MAX_COMPONENT_DEPLOYMENT_SPAWN_GRANT_REDUCTIONS,
+};
 
 /// Maximum independent Component Group deployments in one App configuration.
 pub const MAX_COMPONENT_GROUP_DEPLOYMENTS: usize = 4_096;
@@ -75,6 +82,12 @@ impl ComponentGroupDeploymentTopology {
                 .flatten(&source.component_group)
                 .map_err(ComponentGroupDeploymentTopologyError::ComponentGroupTopology)?;
             validate_deployment_service_purpose(deployment, source.service_purpose, &flattened)?;
+            let member_limits = member_limit::compile_member_limits(
+                deployment,
+                &source.member_limits,
+                &flattened.components,
+                component_topology,
+            )?;
             flattened_member_count = flattened_member_count
                 .checked_add(flattened.components.len())
                 .ok_or(
@@ -111,12 +124,18 @@ impl ComponentGroupDeploymentTopology {
                                 component_spec: member.component_spec.clone(),
                             }
                         })?;
+                    let limits = member_limit::effective_limits(
+                        component_spec,
+                        &member.member_path,
+                        &member_limits,
+                    );
                     Ok(FlattenedComponentGroupDeploymentMember {
                         member_path: member.member_path,
                         component_spec: member.component_spec,
                         component_spec_hash: component_spec.spec_hash,
                         purpose,
                         labels,
+                        limits,
                     })
                 })
                 .collect::<Result<Vec<_>, ComponentGroupDeploymentTopologyError>>()?;
@@ -125,6 +144,7 @@ impl ComponentGroupDeploymentTopology {
                 component_group: source.component_group.clone(),
                 service_purpose: source.service_purpose,
                 labels: deployment_labels,
+                member_limits,
                 initial_placements: source.initial_placements,
                 maximum_placements: source.maximum_placements,
                 placement: ComponentGroupPlacementPolicy {
@@ -195,6 +215,7 @@ pub struct ComponentGroupDeploymentSpec {
     pub component_group: ComponentGroupSpecId,
     pub service_purpose: Option<FleetServiceMemberPurpose>,
     pub labels: Vec<ComponentDeploymentLabel>,
+    pub member_limits: Vec<ComponentDeploymentMemberLimit>,
     pub initial_placements: u32,
     pub maximum_placements: u32,
     pub placement: ComponentGroupPlacementPolicy,
@@ -218,6 +239,7 @@ pub struct FlattenedComponentGroupDeploymentMember {
     pub component_spec_hash: [u8; 32],
     pub purpose: ComponentDeploymentPurpose,
     pub labels: Vec<ComponentDeploymentLabel>,
+    pub limits: ComponentDeploymentLimits,
 }
 
 /// Exact typed purpose resolved for one flattened deployment occurrence.
@@ -238,6 +260,9 @@ pub enum ComponentGroupDeploymentTopologyError {
 
     #[error(transparent)]
     ComponentTopology(#[from] ComponentTopologyError),
+
+    #[error(transparent)]
+    MemberLimit(#[from] ComponentDeploymentMemberLimitError),
 
     #[error("Component Group deployment count {actual} exceeds bound {maximum}")]
     DeploymentBoundExceeded { actual: usize, maximum: usize },
@@ -494,6 +519,12 @@ fn validate_deployment_projection(
         deployment.service_purpose,
         &expected,
     )?;
+    member_limit::validate_member_limits(
+        &deployment.deployment,
+        &deployment.member_limits,
+        &expected.components,
+        component_topology,
+    )?;
     if expected.components.len() != deployment.members.len() {
         return Err(
             ComponentGroupDeploymentTopologyError::MemberProjectionMismatch {
@@ -546,6 +577,20 @@ fn validate_deployment_projection(
                     expected: component_spec.spec_hash,
                     received: member.component_spec_hash,
                 },
+            );
+        }
+        let expected_limits = member_limit::effective_limits(
+            component_spec,
+            &member.member_path,
+            &deployment.member_limits,
+        );
+        if member.limits != expected_limits {
+            return Err(
+                ComponentDeploymentMemberLimitError::EffectiveLimitProjectionMismatch {
+                    deployment: deployment.deployment.clone(),
+                    member: member.member_path.clone(),
+                }
+                .into(),
             );
         }
         validation.record_spec_demand(deployment, &member.component_spec)?;

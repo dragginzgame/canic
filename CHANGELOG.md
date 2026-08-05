@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.5` compiles bounded reduction-only deployment-member quotas against
+  exact flattened paths and immutable Component Spec ceilings.
+
 - `0.101.4` adds bounded canonical deployment labels inherited across exact
   deployment/include/leaf paths while keeping labels inert to typed purpose
   and authority.
