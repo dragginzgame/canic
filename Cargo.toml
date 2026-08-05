@@ -82,7 +82,7 @@ ic-cdk = "0.20.2"
 ic-cdk-timers = "1.0"
 ic-certification = "3.0"
 ic-memory = "0.12.3"
-ic-query = { version = "0.28.4", default-features = false, features = [
+ic-query = { version = "0.29.1", default-features = false, features = [
     "subnet-catalog-host",
 ] }
 ic-signature-verification = "0.3.0"

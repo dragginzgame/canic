@@ -97,7 +97,7 @@ impl LifecycleBoundaryFixture {
 #[must_use]
 pub fn install_lifecycle_boundary_fixture() -> LifecycleBoundaryFixture {
     let workspace_root = workspace_root();
-    let target_dir = test_target_dir(&workspace_root, "pic-wasm");
+    let target_dir = test_target_dir(&workspace_root, "pic-runtime-wasm");
     build_canisters_once(&workspace_root);
 
     LifecycleBoundaryFixture {
@@ -139,7 +139,7 @@ pub fn upgrade_args() -> Vec<u8> {
 // Build the dedicated lifecycle-boundary canisters once into the shared test target dir.
 fn build_canisters_once(workspace_root: &Path) {
     BUILD_ONCE.call_once(|| {
-        let target_dir = test_target_dir(workspace_root, "pic-wasm");
+        let target_dir = test_target_dir(workspace_root, "pic-runtime-wasm");
         build_internal_test_wasm_canisters(
             workspace_root,
             &target_dir,

@@ -5,6 +5,7 @@
 //! Boundary: bootstrap installs validated config here before ops/workflow reads it.
 
 mod component_group;
+mod component_group_deployment;
 pub mod schema;
 mod topology;
 #[cfg(any(not(target_arch = "wasm32"), test))]
@@ -20,6 +21,12 @@ pub use component_group::{
     FlattenedComponentGroup, FlattenedComponentGroupMember, MAX_COMPONENT_GROUP_DECLARED_MEMBERS,
     MAX_COMPONENT_GROUP_FLATTENED_MEMBERS, MAX_COMPONENT_GROUP_GRAPH_CANONICAL_BYTES,
     MAX_COMPONENT_GROUP_INCLUSIONS, MAX_COMPONENT_GROUP_MEMBERS, MAX_COMPONENT_GROUP_SPECS,
+};
+pub use component_group_deployment::{
+    ComponentGroupDeploymentSpec, ComponentGroupDeploymentTopology,
+    ComponentGroupDeploymentTopologyError, ComponentGroupPlacementPolicy,
+    FlattenedComponentGroupDeploymentMember, MAX_COMPONENT_GROUP_DEPLOYMENT_MEMBERS,
+    MAX_COMPONENT_GROUP_DEPLOYMENTS,
 };
 pub use schema::ConfigModel;
 #[cfg(any(not(target_arch = "wasm32"), test))]
@@ -74,6 +81,10 @@ pub enum ConfigError {
     /// Validated Component Group declarations could not compile canonically.
     #[error(transparent)]
     ComponentGroupTopology(#[from] ComponentGroupTopologyError),
+
+    /// Validated Component Group deployments could not compile canonically.
+    #[error(transparent)]
+    ComponentGroupDeploymentTopology(#[from] ComponentGroupDeploymentTopologyError),
 
     /// Runtime root-key injection failed during local/test bootstrap.
     #[error("runtime IC root key error: {0}")]
@@ -170,8 +181,13 @@ impl Config {
             })?;
 
         config.validate().map_err(ConfigError::from)?;
-        config.compile_component_topology()?;
-        config.compile_component_group_topology()?;
+        let component_topology = config.compile_component_topology()?;
+        let component_group_topology = config.compile_component_group_topology()?;
+        ComponentGroupDeploymentTopology::compile_from_topologies(
+            &config,
+            &component_group_topology,
+            &component_topology,
+        )?;
         Ok(config)
     }
 
@@ -180,8 +196,13 @@ impl Config {
         config: ConfigModel,
         source_toml: &str,
     ) -> Result<Arc<ConfigModel>, ConfigError> {
-        config.compile_component_topology()?;
-        config.compile_component_group_topology()?;
+        let component_topology = config.compile_component_topology()?;
+        let component_group_topology = config.compile_component_group_topology()?;
+        ComponentGroupDeploymentTopology::compile_from_topologies(
+            &config,
+            &component_group_topology,
+            &component_topology,
+        )?;
         CONFIG.with(|cfg| {
             let mut borrow = cfg.borrow_mut();
             if borrow.is_some() {

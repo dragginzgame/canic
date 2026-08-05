@@ -2,7 +2,6 @@
 set -euo pipefail
 
 MODE="${1:-full}"
-HARNESS_ARGS=(-- --test-threads=1 --nocapture)
 SUMMARY_LABELS=()
 SUMMARY_DURATIONS=()
 SUMMARY_KINDS=()
@@ -44,7 +43,7 @@ run_test() {
     shift
     echo "==> $label"
     local started_at="$SECONDS"
-    cargo test "$@" "${HARNESS_ARGS[@]}"
+    cargo test "$@" -- --test-threads=1 --nocapture
     local elapsed
     elapsed="$(elapsed_seconds "$started_at")"
     echo "==> $label done in $elapsed"
@@ -60,6 +59,7 @@ clear_pocketic_build_targets() {
         "target/icp-build"
         "target/canic-wasm"
         "target/pic-wasm"
+        "target/pic-runtime-wasm"
         "target/pic-wasm-no-test-material"
     )
 
@@ -106,11 +106,23 @@ trap cleanup_heavy_build_targets EXIT
 # Role-package contract tests inspect the Wasm graph with locked offline Cargo
 # metadata. Populate the complete locked graph once so results do not depend on
 # whether the restored Cargo cache contains every target and host/build package.
+bash scripts/ci/check-pocketic-version-alignment.sh
 echo "==> prefetching locked dependency graph for offline metadata checks"
 cargo fetch --locked
 
 # Compile and run all unit/lib/bin tests together first.
-run_test "workspace lib/bin tests" --workspace --lib --bins
+if [[ "$MODE" == "fast" ]]; then
+    run_test "workspace lib/bin tests" --workspace --lib --bins --exclude canic-testing-internal
+    # The internal crate's PocketIC journeys run in the full lane. Compile its
+    # complete test harness here and retain its pure embedded-config unit proof.
+    run_test \
+        "canic-testing-internal embedded config" \
+        -p canic-testing-internal \
+        --lib \
+        pic::lifecycle::tests::init_payload_component_spec_matches_embedded_canister_config
+else
+    run_test "workspace lib/bin tests" --workspace --lib --bins
+fi
 
 # Keep cheap release-surface contract tests in both the full and fast lanes so
 # version bumps and tagged installer drift fail before PocketIC-heavy work.
@@ -130,9 +142,12 @@ run_test "canic workspace_manifest" -p canic --test workspace_manifest
 run_test "canic-core trap_guard" -p canic-core --test trap_guard
 
 # PocketIC-backed integration suites.
+# Receipt, timer and lifecycle use the same internal-test build environment and
+# target directory, so clear once before the group and retain Cargo freshness
+# across the remaining binaries.
 run_pic_test "canic-tests pic_receipt_backed_intent" -p canic-tests --test pic_receipt_backed_intent
-run_pic_test "canic-tests timer_authority" -p canic-tests --test timer_authority
-run_pic_test "canic-tests lifecycle_boundary" -p canic-tests --test lifecycle_boundary
+run_test "canic-tests timer_authority" -p canic-tests --test timer_authority
+run_test "canic-tests lifecycle_boundary" -p canic-tests --test lifecycle_boundary
 run_pic_test "canic-tests instruction_audit" -p canic-tests --test instruction_audit
 
 print_summary

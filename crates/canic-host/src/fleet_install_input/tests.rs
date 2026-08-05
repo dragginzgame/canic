@@ -8,10 +8,17 @@ use crate::test_support::temp_dir;
 use std::fs;
 
 use ic_query::subnet_catalog::{
-    ClassificationSource, GeographicScope, RoutingRange, SubnetCatalog, SubnetInfo,
+    CatalogValidationContext, ClassificationSource, DEFAULT_CATALOG_MAX_FUTURE_SKEW_SECONDS,
+    DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT, GeographicScope, MAINNET_NETWORK,
+    MAINNET_REGISTRY_CANISTER_ID, RawSubnetCatalog, RoutingRange, SubnetInfo,
+    ValidatedSubnetCatalog,
 };
 
 const FIDUCIARY_SUBNET: &str = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae";
+const EUROPEAN_SUBNET: &str = "bkfrj-6k62g-dycql-7h53p-atvkj-zg4to-gaogh-netha-ptybj-ntsgw-rqe";
+const FIXTURE_CANISTER: &str = "ryjl3-tyaaa-aaaaa-aaaba-cai";
+const FIXTURE_FETCHED_AT: &str = "2026-06-26T00:00:00Z";
+const FIXTURE_NOW_UNIX_SECS: u64 = 1_782_432_100;
 const DISPOSABLE_ROOT_DELETION_PROOF_INPUT: &str =
     include_str!("../../../../deployments/0.100-root-deletion-proof.toml");
 const PLAYGROUND_INPUT: &str = include_str!("../../../../deployments/demos/playground-ic.toml");
@@ -178,8 +185,14 @@ fn public_recommended_and_profile_select_exact_unique_application_subnets() {
         info(
             &application_subnet,
             SubnetKind::Application,
+            SubnetSpecialization::None,
+            "application",
+        ),
+        info(
+            EUROPEAN_SUBNET,
+            SubnetKind::Application,
             SubnetSpecialization::European,
-            "europe-west",
+            "european",
         ),
     ]);
     let recommended = resolve_document(
@@ -195,7 +208,7 @@ fn public_recommended_and_profile_select_exact_unique_application_subnets() {
 
     let profile = resolve_document(
         &document(CoordinatorSubnetSelector::Profile {
-            profile: "europe-west".to_string(),
+            profile: "european".to_string(),
         }),
         BuildNetwork::Ic,
         Some(&catalog),
@@ -203,7 +216,7 @@ fn public_recommended_and_profile_select_exact_unique_application_subnets() {
     .expect("resolve profile");
     assert_eq!(
         profile.coordinator.coordinator_subnet,
-        subnet(&application_subnet)
+        subnet(EUROPEAN_SUBNET)
     );
 }
 
@@ -291,21 +304,23 @@ fn public_resolution_rejects_ineligible_and_ambiguous_subnets() {
 
     let ambiguous_catalog = catalog(vec![
         info(
-            FIDUCIARY_SUBNET,
-            SubnetKind::Application,
-            SubnetSpecialization::Fiduciary,
-            "fiduciary",
-        ),
-        info(
             &subnet_text(10),
             SubnetKind::Application,
-            SubnetSpecialization::Fiduciary,
-            "fiduciary-two",
+            SubnetSpecialization::None,
+            "application",
+        ),
+        info(
+            &subnet_text(11),
+            SubnetKind::Application,
+            SubnetSpecialization::None,
+            "application",
         ),
     ]);
     assert!(matches!(
         resolve_document(
-            &document(CoordinatorSubnetSelector::Recommended),
+            &document(CoordinatorSubnetSelector::Profile {
+                profile: "application".to_string(),
+            }),
             BuildNetwork::Ic,
             Some(&ambiguous_catalog)
         ),
@@ -486,7 +501,7 @@ fn ic_pool_imports_require_exact_root_subnet_routing() {
         subnet: root_subnet.clone(),
     });
     input.fleet_subnet_roots[0].canister_pool.imports = vec![imported.to_text()];
-    let mut catalog = catalog(vec![
+    let subnets = vec![
         info(
             &root_subnet,
             SubnetKind::Application,
@@ -499,19 +514,29 @@ fn ic_pool_imports_require_exact_root_subnet_routing() {
             SubnetSpecialization::None,
             "other",
         ),
-    ]);
-    catalog.routing_ranges = vec![RoutingRange {
-        start_canister_id: imported.to_text(),
-        end_canister_id: imported.to_text(),
-        subnet_principal: root_subnet,
-    }];
+    ];
+    let catalog = catalog_with_ranges(
+        subnets.clone(),
+        vec![RoutingRange {
+            start_canister_id: imported.to_text(),
+            end_canister_id: imported.to_text(),
+            subnet_principal: root_subnet,
+        }],
+    );
 
     resolve_document(&input, BuildNetwork::Ic, Some(&catalog))
         .expect("pool import routes to its Fleet Subnet Root");
 
-    catalog.routing_ranges[0].subnet_principal = other_subnet;
+    let contradictory_catalog = catalog_with_ranges(
+        subnets,
+        vec![RoutingRange {
+            start_canister_id: imported.to_text(),
+            end_canister_id: imported.to_text(),
+            subnet_principal: other_subnet,
+        }],
+    );
     assert!(matches!(
-        resolve_document(&input, BuildNetwork::Ic, Some(&catalog)),
+        resolve_document(&input, BuildNetwork::Ic, Some(&contradictory_catalog)),
         Err(FleetInstallInputError::ImportedCanisterSubnetMismatch { .. })
     ));
 }
@@ -631,19 +656,44 @@ fn subnet_text(byte: u8) -> String {
     Principal::from_slice(&[byte; 29]).to_text()
 }
 
-fn catalog(subnets: Vec<SubnetInfo>) -> SubnetCatalog {
-    SubnetCatalog {
-        catalog_schema_version: 1,
-        network: "ic".to_string(),
-        registry_canister_id: "rwlgt-iiaaa-aaaaa-aaaaa-cai".to_string(),
-        registry_version: 1,
-        fetched_at: "unix:1".to_string(),
-        fetched_by: "test".to_string(),
-        source_endpoint: "https://icp-api.io".to_string(),
-        resolver_backend: "test".to_string(),
+fn catalog(subnets: Vec<SubnetInfo>) -> ValidatedSubnetCatalog {
+    let subnet_principal = subnets
+        .first()
+        .expect("fixture Subnet")
+        .subnet_principal
+        .clone();
+    catalog_with_ranges(
         subnets,
-        routing_ranges: Vec::<RoutingRange>::new(),
-    }
+        vec![RoutingRange {
+            start_canister_id: FIXTURE_CANISTER.to_string(),
+            end_canister_id: FIXTURE_CANISTER.to_string(),
+            subnet_principal,
+        }],
+    )
+}
+
+fn catalog_with_ranges(
+    subnets: Vec<SubnetInfo>,
+    routing_ranges: Vec<RoutingRange>,
+) -> ValidatedSubnetCatalog {
+    let raw = RawSubnetCatalog::new_mainnet_uncertified(
+        1,
+        DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT,
+        FIXTURE_FETCHED_AT,
+        "canic-test",
+        "0.29.1",
+        subnets,
+        routing_ranges,
+    )
+    .expect("build raw fixture catalog");
+    let validation = CatalogValidationContext::new(
+        MAINNET_NETWORK,
+        MAINNET_REGISTRY_CANISTER_ID,
+        FIXTURE_NOW_UNIX_SECS,
+        DEFAULT_CATALOG_MAX_FUTURE_SKEW_SECONDS,
+    );
+    ValidatedSubnetCatalog::try_from_raw(raw, &validation)
+        .expect("validate fixture catalog authority")
 }
 
 fn info(
@@ -652,8 +702,15 @@ fn info(
     subnet_specialization: SubnetSpecialization,
     subnet_label: &str,
 ) -> SubnetInfo {
+    let registry_subnet_type = match subnet_kind {
+        SubnetKind::Unknown => 0,
+        SubnetKind::Application => 1,
+        SubnetKind::System => 2,
+        SubnetKind::CloudEngine => 5,
+    };
     SubnetInfo {
         subnet_principal: subnet_principal.to_string(),
+        registry_subnet_type,
         subnet_kind,
         subnet_kind_source: ClassificationSource::Registry,
         subnet_specialization,

@@ -10,18 +10,18 @@ use crate::{
     cdk::candid::Principal,
     config::schema::{
         AppConfig, AuthConfig, CanisterAuthConfig, ChainKeyRootProofConfig, ComponentChildConfig,
-        ComponentChildKind, ComponentGroupComponentConfig, ComponentGroupIncludeConfig,
-        ComponentGroupSpecConfig, ComponentLimitsConfig, ComponentProvisioningGrantConfig,
-        ComponentSpawnGrantConfig, ComponentSpecConfig, ConfigModel, CyclesFundingBudgetConfig,
-        CyclesFundingPolicyConfig, DelegatedTokenConfig, DiagnosticsCanisterConfig, FleetInitMode,
-        IndexConfig, IndexPool, LogConfig, MetricsCanisterConfig, MetricsProfile,
-        RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool, ScalePoolPolicy,
-        ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
-        StandardsCanisterConfig, TopupPolicy, Whitelist,
+        ComponentChildKind, ComponentGroupComponentConfig, ComponentGroupDeploymentConfig,
+        ComponentGroupIncludeConfig, ComponentGroupPlacementPolicyConfig, ComponentGroupSpecConfig,
+        ComponentLimitsConfig, ComponentProvisioningGrantConfig, ComponentSpawnGrantConfig,
+        ComponentSpecConfig, ConfigModel, CyclesFundingBudgetConfig, CyclesFundingPolicyConfig,
+        DelegatedTokenConfig, DiagnosticsCanisterConfig, FleetInitMode, IndexConfig, IndexPool,
+        LogConfig, MetricsCanisterConfig, MetricsProfile, RoleAttestationConfig, RoleDeclaration,
+        RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy,
+        ShardingConfig, Standards, StandardsCanisterConfig, TopupPolicy, Whitelist,
     },
     ids::{
-        AppId, BuildNetwork, CanisterRole, ComponentGroupMemberId, ComponentGroupSpecId,
-        ComponentSpecId,
+        AppId, BuildNetwork, CanisterRole, ComponentGroupDeploymentId, ComponentGroupMemberId,
+        ComponentGroupSpecId, ComponentSpecId,
     },
 };
 use proc_macro2::TokenStream;
@@ -58,6 +58,11 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
         render_component_group_spec_id,
         render_component_group_spec_config,
     );
+    let component_group_deployments = render_btree_map(
+        config.component_group_deployments.iter(),
+        render_component_group_deployment_id,
+        render_component_group_deployment_config,
+    );
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ConfigModel {
             controllers: #controllers,
@@ -68,6 +73,7 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
             roles: #roles,
             component_specs: #component_specs,
             component_groups: #component_groups,
+            component_group_deployments: #component_group_deployments,
         }
     }
 }
@@ -136,6 +142,16 @@ fn render_component_group_spec_id(component_group: &ComponentGroupSpecId) -> Tok
     }
 }
 
+// Render one validated Component Group deployment identifier.
+fn render_component_group_deployment_id(deployment: &ComponentGroupDeploymentId) -> TokenStream {
+    let value = deployment.as_str();
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentGroupDeploymentId::try_from(
+            ::std::string::String::from(#value)
+        ).expect("embedded Component Group deployment ID was validated at build time")
+    }
+}
+
 // Render one validated Component Group member identifier.
 fn render_component_group_member_id(member: &ComponentGroupMemberId) -> TokenStream {
     let value = member.as_str();
@@ -183,6 +199,38 @@ fn render_component_group_include_config(config: &ComponentGroupIncludeConfig) -
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ComponentGroupIncludeConfig {
             component_group: #component_group,
+        }
+    }
+}
+
+// Render one independently scalable Component Group source deployment.
+fn render_component_group_deployment_config(
+    config: &ComponentGroupDeploymentConfig,
+) -> TokenStream {
+    let component_group = render_component_group_spec_id(&config.component_group);
+    let initial_placements = render_u32_literal(config.initial_placements);
+    let maximum_placements = render_u32_literal(config.maximum_placements);
+    let placement = render_component_group_placement_policy_config(&config.placement);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentGroupDeploymentConfig {
+            component_group: #component_group,
+            initial_placements: #initial_placements,
+            maximum_placements: #maximum_placements,
+            placement: #placement,
+        }
+    }
+}
+
+// Render one Component Group deployment density and spread envelope.
+fn render_component_group_placement_policy_config(
+    config: &ComponentGroupPlacementPolicyConfig,
+) -> TokenStream {
+    let maximum_per_root = render_u32_literal(config.maximum_per_root);
+    let minimum_distinct_roots = render_u32_literal(config.minimum_distinct_roots);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentGroupPlacementPolicyConfig {
+            maximum_per_root: #maximum_per_root,
+            minimum_distinct_roots: #minimum_distinct_roots,
         }
     }
 }
@@ -1026,6 +1074,13 @@ component_spec = "instance"
 
 [component_groups.cell.groups.shared]
 component_group = "shared"
+
+[component_group_deployments.cell]
+component_group = "cell"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
 "#,
         )
         .expect("valid Component and Component Group topology config");
@@ -1036,9 +1091,14 @@ component_group = "shared"
         assert!(rendered.contains("ComponentGroupSpecConfig"));
         assert!(rendered.contains("ComponentGroupComponentConfig"));
         assert!(rendered.contains("ComponentGroupIncludeConfig"));
+        assert!(rendered.contains("ComponentGroupDeploymentConfig"));
+        assert!(rendered.contains("ComponentGroupPlacementPolicyConfig"));
         assert!(rendered.contains("embedded Component Group Spec ID was validated at build time"));
         assert!(
             rendered.contains("embedded Component Group member ID was validated at build time")
+        );
+        assert!(
+            rendered.contains("embedded Component Group deployment ID was validated at build time")
         );
         assert!(rendered.contains("maximum_instances_per_requester_per_root : 100_u32"));
         assert!(rendered.contains("maximum_instances_per_parent : 100_u32"));
