@@ -111,7 +111,10 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
             )
             .with_cargo_profile_args(&cargo_args)
             .with_extra_env(&build_env)
-            .with_shared_incremental_target(internal_test_shared_wasm_target(workspace_root))
+            .with_shared_incremental_target(internal_test_shared_wasm_target(
+                workspace_root,
+                &build_env,
+            ))
             .with_prune_policy_at_most_every(
                 internal_test_artifact_prune_policy(),
                 internal_test_artifact_maintenance_interval(),
@@ -138,8 +141,19 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
     eprintln!("[canic-test-wasm] {batch}");
 }
 
-fn internal_test_shared_wasm_target(workspace_root: &Path) -> PathBuf {
-    workspace_root.join("target/test-artifacts/cargo-wasm-incremental")
+fn internal_test_shared_wasm_target(workspace_root: &Path, build_env: &[(&str, &str)]) -> PathBuf {
+    let build_network = build_env
+        .iter()
+        .rev()
+        .find_map(|(key, value)| (*key == "ICP_ENVIRONMENT").then_some(*value))
+        .expect("internal test Wasm build network");
+    assert!(
+        matches!(build_network, "ic" | "local"),
+        "internal test Wasm build network must be `ic` or `local`"
+    );
+    workspace_root
+        .join("target/test-artifacts/cargo-wasm-incremental")
+        .join(build_network)
 }
 
 pub(super) const fn internal_test_artifact_prune_policy() -> ArtifactCachePrunePolicy {
@@ -246,4 +260,24 @@ fn build_ci_wasm_artifacts_script(workspace_root: &Path) -> PathBuf {
         .join("scripts")
         .join("ci")
         .join("build-ci-wasm-artifacts.sh")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shared_wasm_target_uses_effective_network() {
+        let workspace_root = Path::new("/workspace");
+        let build_env = [
+            ("ICP_ENVIRONMENT", "local"),
+            ("UNRELATED", "value"),
+            ("ICP_ENVIRONMENT", "ic"),
+        ];
+
+        assert_eq!(
+            internal_test_shared_wasm_target(workspace_root, &build_env),
+            workspace_root.join("target/test-artifacts/cargo-wasm-incremental/ic")
+        );
+    }
 }

@@ -199,7 +199,7 @@ release-commit:
 release-push:
 	@bash scripts/ci/check-release-push-ready.sh
 	@bash scripts/ci/cleanup-release-artifacts.sh
-	git push --atomic --follow-tags
+	@CANIC_RELEASE_PUSH_READY=1 bash scripts/ci/push-release.sh
 
 package: ensure-clean
 	$(CARGO_ENV) cargo package
@@ -232,11 +232,11 @@ test: blob-storage-inventory-gate blob-storage-cashier-inventory-gate test-unit
 test-wasm: blob-storage-inventory-gate blob-storage-cashier-inventory-gate test-unit-fast
 
 # Version-bump gate.
-# Keeps the secret scan, control-plane feature matrix, Clippy, and fast
-# unit/lib/bin workspace run, while leaving the local ICP CLI fast path explicit.
+# Keeps the secret scan, control-plane feature matrix, Clippy, and complete
+# workspace test target, while leaving the local ICP CLI deployment path explicit.
 test-bump: blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
         gitleaks-scan dependency-risk-gate \
-        control-plane-feature-gate clippy test-unit-fast
+        control-plane-feature-gate clippy test
 
 dependency-risk-gate:
 	bash scripts/ci/check-dependency-risk-inventory.sh

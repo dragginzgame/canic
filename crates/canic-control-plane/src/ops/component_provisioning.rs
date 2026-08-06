@@ -10,15 +10,16 @@ mod tests;
 
 use crate::{
     storage::stable::component_provisioning::{
-        RootComponentProvisioningCommitError, RootComponentProvisioningPlacementKey,
-        RootComponentProvisioningPlacementRecord, RootComponentProvisioningRecord,
-        RootComponentProvisioningReservationCursorRecord,
+        RootComponentProvisioningClaimCursorRecord, RootComponentProvisioningCommitError,
+        RootComponentProvisioningPlacementKey, RootComponentProvisioningPlacementRecord,
+        RootComponentProvisioningRecord, RootComponentProvisioningReservationCursorRecord,
         RootComponentProvisioningStateRecordPhase, RootComponentProvisioningStore,
     },
     view::{
         component_provisioning::{
-            RootComponentMemberReservationView, RootComponentProvisioningReservationCursorView,
-            RootComponentProvisioningReservationDisposition, RootComponentProvisioningView,
+            RootComponentProvisioningAdvanceDisposition, RootComponentProvisioningClaimCursorView,
+            RootComponentProvisioningMemberView, RootComponentProvisioningReservationCursorView,
+            RootComponentProvisioningView,
         },
         component_registry::{RootComponentAllocationProgressView, RootComponentAllocationView},
     },
@@ -30,6 +31,7 @@ use canic_core::{
         ops::component_provisioning_plan::RootComponentProvisioningBatchValidation,
     },
     dto::{
+        component_deployment::ProtectedComponentDeployment,
         component_provisioning::{
             RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningAdvanceRequest,
             RootComponentProvisioningPhase, RootComponentProvisioningStatusRequest,
@@ -39,7 +41,7 @@ use canic_core::{
         fleet_registry::FleetRegistryVersion,
     },
     ids::{
-        ComponentDeploymentConfigurationDigest, ComponentGroupMemberPath,
+        ComponentBinding, ComponentDeploymentConfigurationDigest, ComponentGroupMemberPath,
         ComponentGroupPlacementId, ComponentSpecId,
     },
 };
@@ -49,6 +51,7 @@ use std::collections::{BTreeMap, BTreeSet};
 const ACCEPTANCE_RECEIPT_DOMAIN: &[u8] = b"canic/root-component-provisioning-acceptance-receipt/v1";
 const MEMBER_OPERATION_DOMAIN: &[u8] = b"canic/root-component-provisioning-member-operation/v1";
 const RESERVATION_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-reservation-cursor/v1";
+const CLAIM_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-claim-cursor/v1";
 
 #[derive(CandidType)]
 struct RootComponentProvisioningAcceptanceReceiptAuthority<'a> {
@@ -78,6 +81,15 @@ struct RootComponentProvisioningReservationCursorAuthority {
     placement_index: u32,
     member_index: u32,
     reserved_component_count: u32,
+}
+
+#[derive(CandidType)]
+struct RootComponentProvisioningClaimCursorAuthority {
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    placement_index: u32,
+    member_index: u32,
+    claimed_component_count: u32,
 }
 
 #[derive(Eq, PartialEq)]
@@ -161,6 +173,7 @@ impl RootComponentProvisioningOps {
         )?;
         let reservation_cursor =
             reservation_cursor_record(request.operation_id, request.plan_hash, 0, 0, 0)?;
+        let claim_cursor = claim_cursor_record(request.operation_id, request.plan_hash, 0, 0, 0)?;
         let record = RootComponentProvisioningRecord {
             operation_id: request.operation_id,
             plan_hash: request.plan_hash,
@@ -171,6 +184,7 @@ impl RootComponentProvisioningOps {
                 placement_count: validation.placement_count,
                 component_count: validation.component_count,
                 reservation_cursor,
+                claim_cursor,
                 accepted_at_ns,
                 receipt_content_hash,
             },
@@ -197,87 +211,105 @@ impl RootComponentProvisioningOps {
         Ok(view)
     }
 
-    /// Interpret an expected reservation cursor without allowing a retry to skip work.
-    pub(crate) fn reservation_disposition(
+    /// Interpret both expected cursors without allowing a retry to skip work.
+    pub(crate) fn advance_disposition(
         request: RootComponentProvisioningAdvanceRequest,
         view: &RootComponentProvisioningView,
-    ) -> Result<RootComponentProvisioningReservationDisposition, InternalError> {
+    ) -> Result<RootComponentProvisioningAdvanceDisposition, InternalError> {
         validate_operation_and_plan_hash(request.operation_id, request.plan_hash)?;
         if request.operation_id != view.operation_id || request.plan_hash != view.plan_hash {
             return Err(InternalError::conflict(
                 "root Component provisioning advance request names different authority",
             ));
         }
-        let current = view.reservation_cursor.reserved_component_count;
-        if request.expected_reserved_component_count == current {
-            return if current == view.component_count {
-                Ok(RootComponentProvisioningReservationDisposition::Complete)
+        let current_reserved = view.reservation_cursor.reserved_component_count;
+        let current_claimed = view.claim_cursor.claimed_component_count;
+        let expected_is_current = request.expected_reserved_component_count == current_reserved
+            && request.expected_claimed_component_count == current_claimed;
+        if expected_is_current {
+            return if current_claimed == view.component_count {
+                Ok(RootComponentProvisioningAdvanceDisposition::Complete)
             } else {
-                Ok(RootComponentProvisioningReservationDisposition::Advance)
+                Ok(RootComponentProvisioningAdvanceDisposition::Advance)
             };
         }
-        if request.expected_reserved_component_count.checked_add(1) == Some(current) {
-            return Ok(RootComponentProvisioningReservationDisposition::Replay);
+
+        let replays_last_reservation = current_claimed == 0
+            && request.expected_claimed_component_count == 0
+            && request.expected_reserved_component_count.checked_add(1) == Some(current_reserved);
+        let replays_last_claim = request.expected_reserved_component_count == current_reserved
+            && request.expected_claimed_component_count.checked_add(1) == Some(current_claimed);
+        if replays_last_reservation || replays_last_claim {
+            return Ok(RootComponentProvisioningAdvanceDisposition::Replay);
         }
         Err(InternalError::conflict(
-            "root Component provisioning reservation cursor differs from expected progress",
+            "root Component provisioning cursors differ from expected progress",
         ))
     }
 
     /// Select the next member in O(1) from the hash-bound canonical cursor.
     pub(crate) fn next_member_reservation(
         view: &RootComponentProvisioningView,
-    ) -> Result<RootComponentMemberReservationView, InternalError> {
+    ) -> Result<RootComponentProvisioningMemberView, InternalError> {
         if view.reservation_cursor.reserved_component_count >= view.component_count {
             return Err(InternalError::conflict(
                 "root Component provisioning has no unreserved member",
             ));
         }
-        let placement = view
-            .batch
-            .placements
-            .get(
-                usize::try_from(view.reservation_cursor.placement_index).map_err(|_| {
-                    InternalError::invariant(
-                        InternalErrorOrigin::Storage,
-                        "root Component provisioning placement cursor exceeds usize",
-                    )
-                })?,
-            )
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "root Component provisioning placement cursor is out of bounds",
-                )
-            })?;
-        let entry = placement
-            .entries
-            .get(
-                usize::try_from(view.reservation_cursor.member_index).map_err(|_| {
-                    InternalError::invariant(
-                        InternalErrorOrigin::Storage,
-                        "root Component provisioning member cursor exceeds usize",
-                    )
-                })?,
-            )
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "root Component provisioning member cursor is out of bounds",
-                )
-            })?;
-        Ok(RootComponentMemberReservationView {
-            member_operation_id: member_operation_id(
-                view.batch.root.fleet_subnet_root,
-                view.operation_id,
-                view.plan_hash,
-                &placement.group_placement,
-                &entry.member_path,
-            )?,
-            group_placement: placement.group_placement.clone(),
-            member_path: entry.member_path.clone(),
-            component_spec: entry.component_spec.clone(),
-            spec_hash: entry.spec_hash,
+        member_at_cursor(
+            view,
+            view.reservation_cursor.placement_index,
+            view.reservation_cursor.member_index,
+        )
+    }
+
+    /// Select the next prepaid-Canister claim in O(1) canonical member order.
+    pub(crate) fn next_member_claim(
+        view: &RootComponentProvisioningView,
+    ) -> Result<RootComponentProvisioningMemberView, InternalError> {
+        if view.reservation_cursor.reserved_component_count != view.component_count {
+            return Err(InternalError::conflict(
+                "root Component provisioning cannot claim assets before all identities are reserved",
+            ));
+        }
+        if view.claim_cursor.claimed_component_count >= view.component_count {
+            return Err(InternalError::conflict(
+                "root Component provisioning has no unclaimed member",
+            ));
+        }
+        member_at_cursor(
+            view,
+            view.claim_cursor.placement_index,
+            view.claim_cursor.member_index,
+        )
+    }
+
+    /// Derive one exact protected runtime context from accepted plan and claimed allocation.
+    pub(crate) fn member_deployment_context(
+        view: &RootComponentProvisioningView,
+        allocation: &RootComponentAllocationView,
+    ) -> Result<ProtectedComponentDeployment, InternalError> {
+        let member = Self::next_member_claim(view)?;
+        validate_member_authority(view, &member, allocation)?;
+        let canister_id = claimed_allocation_canister(&allocation.progress)?;
+        Ok(ProtectedComponentDeployment::GroupMember {
+            binding: ComponentBinding {
+                authority: view.batch.root.authority.clone(),
+                component: allocation.component,
+                component_spec: allocation.component_spec.clone(),
+                spec_hash: allocation.spec_hash,
+                role: allocation.role.clone(),
+                placement_subnet: view.batch.root.placement_subnet,
+                fleet_subnet_root: view.batch.root.fleet_subnet_root,
+                canister_id,
+            },
+            configuration_digest: view.configuration_digest,
+            group_placement: member.group_placement,
+            component_group: member.component_group,
+            member_path: member.member_path,
+            purpose: member.purpose,
+            labels: member.labels,
+            limits: member.limits,
         })
     }
 
@@ -291,8 +323,9 @@ impl RootComponentProvisioningOps {
                 InternalError::unavailable("root Component provisioning operation is not accepted")
             })?;
         let current = validated_record(current_record.clone())?;
-        if Self::reservation_disposition(request, &current)?
-            != RootComponentProvisioningReservationDisposition::Advance
+        if Self::advance_disposition(request, &current)?
+            != RootComponentProvisioningAdvanceDisposition::Advance
+            || current.reservation_cursor.reserved_component_count == current.component_count
         {
             return Err(InternalError::conflict(
                 "root Component provisioning reservation step is already committed",
@@ -305,6 +338,7 @@ impl RootComponentProvisioningOps {
         let RootComponentProvisioningStateRecordPhase::Accepted {
             placement_count,
             component_count,
+            claim_cursor,
             accepted_at_ns,
             receipt_content_hash,
             ..
@@ -313,6 +347,51 @@ impl RootComponentProvisioningOps {
             placement_count,
             component_count,
             reservation_cursor: next_cursor,
+            claim_cursor,
+            accepted_at_ns,
+            receipt_content_hash,
+        };
+        RootComponentProvisioningStore::replace_operation(&current_record, next_record.clone())
+            .map_err(map_commit_error)?;
+        validated_record(next_record)
+    }
+
+    /// Commit one exact reconciled prepaid-Canister claim to the aggregate cursor.
+    pub(crate) fn mark_member_claimed(
+        request: RootComponentProvisioningAdvanceRequest,
+        allocation: &RootComponentAllocationView,
+    ) -> Result<RootComponentProvisioningView, InternalError> {
+        let current_record = RootComponentProvisioningStore::operation(request.operation_id)
+            .ok_or_else(|| {
+                InternalError::unavailable("root Component provisioning operation is not accepted")
+            })?;
+        let current = validated_record(current_record.clone())?;
+        if Self::advance_disposition(request, &current)?
+            != RootComponentProvisioningAdvanceDisposition::Advance
+            || current.reservation_cursor.reserved_component_count != current.component_count
+        {
+            return Err(InternalError::conflict(
+                "root Component provisioning claim step is already committed or not ready",
+            ));
+        }
+        let member = Self::next_member_claim(&current)?;
+        validate_member_authority(&current, &member, allocation)?;
+        claimed_allocation_canister(&allocation.progress)?;
+        let next_cursor = advance_claim_cursor(&current)?;
+        let mut next_record = current_record.clone();
+        let RootComponentProvisioningStateRecordPhase::Accepted {
+            placement_count,
+            component_count,
+            reservation_cursor,
+            accepted_at_ns,
+            receipt_content_hash,
+            ..
+        } = next_record.state;
+        next_record.state = RootComponentProvisioningStateRecordPhase::Accepted {
+            placement_count,
+            component_count,
+            reservation_cursor,
+            claim_cursor: next_cursor,
             accepted_at_ns,
             receipt_content_hash,
         };
@@ -479,6 +558,7 @@ fn validated_record(
         placement_count,
         component_count,
         reservation_cursor,
+        claim_cursor,
         accepted_at_ns,
         receipt_content_hash,
     } = record.state;
@@ -510,6 +590,14 @@ fn validated_record(
         &record.batch,
         component_count,
         reservation_cursor,
+    )?;
+    validate_claim_cursor(
+        record.operation_id,
+        record.plan_hash,
+        &record.batch,
+        component_count,
+        reservation_cursor.reserved_component_count,
+        claim_cursor,
     )?;
     let expected_placement = RootComponentProvisioningPlacementRecord {
         operation_id: record.operation_id,
@@ -544,6 +632,11 @@ fn validated_record(
             member_index: reservation_cursor.member_index,
             reserved_component_count: reservation_cursor.reserved_component_count,
         },
+        claim_cursor: RootComponentProvisioningClaimCursorView {
+            placement_index: claim_cursor.placement_index,
+            member_index: claim_cursor.member_index,
+            claimed_component_count: claim_cursor.claimed_component_count,
+        },
         accepted_at_ns,
         receipt_content_hash,
     })
@@ -574,12 +667,71 @@ fn validate_reservation_cursor(
         cursor.member_index,
         cursor.reserved_component_count,
     )?;
-    if cursor.content_hash != expected.content_hash
-        || cursor.reserved_component_count > component_count
-    {
+    if cursor.content_hash != expected.content_hash {
         return Err(InternalError::invariant(
             InternalErrorOrigin::Storage,
-            "root Component provisioning reservation cursor is invalid",
+            "root Component provisioning reservation cursor hash is invalid",
+        ));
+    }
+    validate_member_cursor(
+        batch,
+        component_count,
+        cursor.placement_index,
+        cursor.member_index,
+        cursor.reserved_component_count,
+        "reservation",
+    )
+}
+
+fn validate_claim_cursor(
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
+    component_count: u32,
+    reserved_component_count: u32,
+    cursor: RootComponentProvisioningClaimCursorRecord,
+) -> Result<(), InternalError> {
+    let expected = claim_cursor_record(
+        operation_id,
+        plan_hash,
+        cursor.placement_index,
+        cursor.member_index,
+        cursor.claimed_component_count,
+    )?;
+    if cursor.content_hash != expected.content_hash {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component provisioning claim cursor hash is invalid",
+        ));
+    }
+    if cursor.claimed_component_count > 0 && reserved_component_count != component_count {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component provisioning claimed an asset before reserving every identity",
+        ));
+    }
+    validate_member_cursor(
+        batch,
+        component_count,
+        cursor.placement_index,
+        cursor.member_index,
+        cursor.claimed_component_count,
+        "claim",
+    )
+}
+
+fn validate_member_cursor(
+    batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
+    component_count: u32,
+    placement_index: u32,
+    member_index: u32,
+    completed_count: u32,
+    cursor_kind: &str,
+) -> Result<(), InternalError> {
+    if completed_count > component_count {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            format!("root Component provisioning {cursor_kind} cursor count is invalid"),
         ));
     }
     let placement_count = u32::try_from(batch.placements.len()).map_err(|_| {
@@ -588,18 +740,20 @@ fn validate_reservation_cursor(
             "root Component provisioning placement count exceeds u32",
         )
     })?;
-    if cursor.reserved_component_count == component_count {
-        if cursor.placement_index != placement_count || cursor.member_index != 0 {
+    if completed_count == component_count {
+        if placement_index != placement_count || member_index != 0 {
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Storage,
-                "terminal root Component provisioning cursor is not canonical",
+                format!(
+                    "terminal root Component provisioning {cursor_kind} cursor is not canonical"
+                ),
             ));
         }
         return Ok(());
     }
     let placement = batch
         .placements
-        .get(usize::try_from(cursor.placement_index).map_err(|_| {
+        .get(usize::try_from(placement_index).map_err(|_| {
             InternalError::invariant(
                 InternalErrorOrigin::Storage,
                 "root Component provisioning placement cursor exceeds usize",
@@ -611,13 +765,13 @@ fn validate_reservation_cursor(
                 "root Component provisioning placement cursor is out of bounds",
             )
         })?;
-    if usize::try_from(cursor.member_index)
+    if usize::try_from(member_index)
         .ok()
         .is_none_or(|index| index >= placement.entries.len())
     {
         return Err(InternalError::invariant(
             InternalErrorOrigin::Storage,
-            "root Component provisioning member cursor is out of bounds",
+            format!("root Component provisioning {cursor_kind} member cursor is out of bounds"),
         ));
     }
     Ok(())
@@ -626,58 +780,12 @@ fn validate_reservation_cursor(
 fn advance_reservation_cursor(
     view: &RootComponentProvisioningView,
 ) -> Result<RootComponentProvisioningReservationCursorRecord, InternalError> {
-    let placement_index =
-        usize::try_from(view.reservation_cursor.placement_index).map_err(|_| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "root Component provisioning placement cursor exceeds usize",
-            )
-        })?;
-    let placement = view.batch.placements.get(placement_index).ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component provisioning placement cursor is out of bounds",
-        )
-    })?;
-    let next_reserved = view
-        .reservation_cursor
-        .reserved_component_count
-        .checked_add(1)
-        .ok_or_else(|| {
-            InternalError::resource_exhausted(
-                "root Component provisioning reservation count overflowed",
-            )
-        })?;
-    let next_member = view
-        .reservation_cursor
-        .member_index
-        .checked_add(1)
-        .ok_or_else(|| {
-            InternalError::resource_exhausted(
-                "root Component provisioning member cursor overflowed",
-            )
-        })?;
-    let entry_count = u32::try_from(placement.entries.len()).map_err(|_| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component provisioning placement member count exceeds u32",
-        )
-    })?;
-    let (next_placement, next_member) = if next_member == entry_count {
-        (
-            view.reservation_cursor
-                .placement_index
-                .checked_add(1)
-                .ok_or_else(|| {
-                    InternalError::resource_exhausted(
-                        "root Component provisioning placement cursor overflowed",
-                    )
-                })?,
-            0,
-        )
-    } else {
-        (view.reservation_cursor.placement_index, next_member)
-    };
+    let (next_placement, next_member, next_reserved) = advance_member_cursor(
+        view,
+        view.reservation_cursor.placement_index,
+        view.reservation_cursor.member_index,
+        view.reservation_cursor.reserved_component_count,
+    )?;
     reservation_cursor_record(
         view.operation_id,
         view.plan_hash,
@@ -685,6 +793,69 @@ fn advance_reservation_cursor(
         next_member,
         next_reserved,
     )
+}
+
+fn advance_claim_cursor(
+    view: &RootComponentProvisioningView,
+) -> Result<RootComponentProvisioningClaimCursorRecord, InternalError> {
+    let (next_placement, next_member, next_claimed) = advance_member_cursor(
+        view,
+        view.claim_cursor.placement_index,
+        view.claim_cursor.member_index,
+        view.claim_cursor.claimed_component_count,
+    )?;
+    claim_cursor_record(
+        view.operation_id,
+        view.plan_hash,
+        next_placement,
+        next_member,
+        next_claimed,
+    )
+}
+
+fn advance_member_cursor(
+    view: &RootComponentProvisioningView,
+    placement_index: u32,
+    member_index: u32,
+    completed_count: u32,
+) -> Result<(u32, u32, u32), InternalError> {
+    let placement = view
+        .batch
+        .placements
+        .get(usize::try_from(placement_index).map_err(|_| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "root Component provisioning placement cursor exceeds usize",
+            )
+        })?)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "root Component provisioning placement cursor is out of bounds",
+            )
+        })?;
+    let next_completed = completed_count.checked_add(1).ok_or_else(|| {
+        InternalError::resource_exhausted("root Component provisioning cursor count overflowed")
+    })?;
+    let next_member = member_index.checked_add(1).ok_or_else(|| {
+        InternalError::resource_exhausted("root Component provisioning member cursor overflowed")
+    })?;
+    let entry_count = u32::try_from(placement.entries.len()).map_err(|_| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component provisioning placement member count exceeds u32",
+        )
+    })?;
+    if next_member == entry_count {
+        let next_placement = placement_index.checked_add(1).ok_or_else(|| {
+            InternalError::resource_exhausted(
+                "root Component provisioning placement cursor overflowed",
+            )
+        })?;
+        Ok((next_placement, 0, next_completed))
+    } else {
+        Ok((placement_index, next_member, next_completed))
+    }
 }
 
 fn reservation_cursor_record(
@@ -709,6 +880,28 @@ fn reservation_cursor_record(
     })
 }
 
+fn claim_cursor_record(
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    placement_index: u32,
+    member_index: u32,
+    claimed_component_count: u32,
+) -> Result<RootComponentProvisioningClaimCursorRecord, InternalError> {
+    let authority = RootComponentProvisioningClaimCursorAuthority {
+        operation_id,
+        plan_hash,
+        placement_index,
+        member_index,
+        claimed_component_count,
+    };
+    Ok(RootComponentProvisioningClaimCursorRecord {
+        placement_index,
+        member_index,
+        claimed_component_count,
+        content_hash: domain_separated_candid_hash(CLAIM_CURSOR_DOMAIN, authority)?,
+    })
+}
+
 fn member_operation_id(
     fleet_subnet_root: Principal,
     operation_id: [u8; 32],
@@ -728,9 +921,79 @@ fn member_operation_id(
     )
 }
 
+fn member_at_cursor(
+    view: &RootComponentProvisioningView,
+    placement_index: u32,
+    member_index: u32,
+) -> Result<RootComponentProvisioningMemberView, InternalError> {
+    let placement = view
+        .batch
+        .placements
+        .get(usize::try_from(placement_index).map_err(|_| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "root Component provisioning placement cursor exceeds usize",
+            )
+        })?)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "root Component provisioning placement cursor is out of bounds",
+            )
+        })?;
+    let entry = placement
+        .entries
+        .get(usize::try_from(member_index).map_err(|_| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "root Component provisioning member cursor exceeds usize",
+            )
+        })?)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "root Component provisioning member cursor is out of bounds",
+            )
+        })?;
+    Ok(RootComponentProvisioningMemberView {
+        member_operation_id: member_operation_id(
+            view.batch.root.fleet_subnet_root,
+            view.operation_id,
+            view.plan_hash,
+            &placement.group_placement,
+            &entry.member_path,
+        )?,
+        group_placement: placement.group_placement.clone(),
+        component_group: placement.component_group.clone(),
+        member_path: entry.member_path.clone(),
+        component_spec: entry.component_spec.clone(),
+        spec_hash: entry.spec_hash,
+        purpose: entry.purpose.clone(),
+        labels: entry.labels.clone(),
+        limits: entry.limits.clone(),
+    })
+}
+
 fn validate_reserved_member(
     view: &RootComponentProvisioningView,
-    member: &RootComponentMemberReservationView,
+    member: &RootComponentProvisioningMemberView,
+    allocation: &RootComponentAllocationView,
+) -> Result<(), InternalError> {
+    validate_member_authority(view, member, allocation)?;
+    if !matches!(
+        allocation.progress,
+        RootComponentAllocationProgressView::Reserved
+    ) {
+        return Err(InternalError::conflict(
+            "Component Group member crossed its reservation boundary outside the aggregate workflow",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_member_authority(
+    view: &RootComponentProvisioningView,
+    member: &RootComponentProvisioningMemberView,
     allocation: &RootComponentAllocationView,
 ) -> Result<(), InternalError> {
     let expected_origin = ComponentProvisioningOrigin::ComponentGroup {
@@ -758,15 +1021,26 @@ fn validate_reserved_member(
             "Component Group member reservation differs from accepted authority",
         ));
     }
-    if !matches!(
-        allocation.progress,
-        RootComponentAllocationProgressView::Reserved
-    ) {
-        return Err(InternalError::conflict(
-            "Component Group member crossed its reservation boundary outside the aggregate workflow",
-        ));
-    }
     Ok(())
+}
+
+fn claimed_allocation_canister(
+    progress: &RootComponentAllocationProgressView,
+) -> Result<Principal, InternalError> {
+    match progress {
+        RootComponentAllocationProgressView::Created { canister, .. }
+        | RootComponentAllocationProgressView::InstallIntent { canister, .. }
+        | RootComponentAllocationProgressView::Installed { canister, .. }
+        | RootComponentAllocationProgressView::Verified { canister, .. }
+        | RootComponentAllocationProgressView::Committed { canister, .. } => Ok(*canister),
+        RootComponentAllocationProgressView::Reserved
+        | RootComponentAllocationProgressView::CreationIntent(_) => Err(InternalError::conflict(
+            "Component Group member has not completed its prepaid-Canister claim",
+        )),
+        RootComponentAllocationProgressView::Removed { .. } => Err(InternalError::conflict(
+            "Component Group member was removed before aggregate provisioning completed",
+        )),
+    }
 }
 
 fn domain_separated_candid_hash<T: CandidType>(
@@ -887,6 +1161,7 @@ pub fn status_response(
         placement_count: view.placement_count,
         component_count: view.component_count,
         reserved_component_count: view.reservation_cursor.reserved_component_count,
+        claimed_component_count: view.claim_cursor.claimed_component_count,
         accepted_at_ns: view.accepted_at_ns,
         receipt_content_hash: view.receipt_content_hash,
     }

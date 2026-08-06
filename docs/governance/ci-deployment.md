@@ -98,15 +98,19 @@ marker supplied by those targets.
 Once those compilation gates start, their wrapper confines temporary files to
 the repository-owned `.tmp/test-runtime` tree, then clears that tree and Cargo
 build artifacts on success, ordinary gate failure, or an interrupt handled by
-the wrapper. Cleanup completes before the version mutation and a cleanup
-failure prevents that mutation. Canic scripts must clean their own temporary
+the wrapper. Cargo cleanup retries once when its first filesystem pass fails;
+failure of both bounded attempts prevents version mutation. Cleanup completes
+before the version mutation. Canic scripts must clean their own temporary
 files; release cleanup must not sweep unrelated global `/tmp` content.
 Before its final atomic network update, `make release-push` verifies the exact
 clean release commit/tag pair and repeats the same Cargo and repository-owned
-test-scratch cleanup. No fallible local cleanup step runs after a successful
-push, and atomic push prevents a branch-only or tag-only remote update. A
-transport interruption can still make the remote outcome uncertain and must
-be resolved by inspecting the remote refs before retrying.
+test-scratch cleanup. It explicitly sends both the current branch ref and the
+exact workspace-version tag ref in one atomic push, so the tag is still sent
+when the branch commit is already present remotely. No fallible local cleanup
+step runs after a successful push, and atomic push prevents a branch-only or
+tag-only remote update. A transport interruption can still make the remote
+outcome uncertain and must be resolved by inspecting the remote refs before
+retrying.
 For one-shot releases, humans may run `make release-patch`,
 `make release-minor`, or `make release-major`, which perform those steps in
 order.

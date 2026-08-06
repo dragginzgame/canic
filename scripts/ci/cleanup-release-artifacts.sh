@@ -4,12 +4,29 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TEST_SCRATCH_PARENT="$ROOT/.tmp"
 TEST_SCRATCH="$TEST_SCRATCH_PARENT/test-runtime"
+MAX_CARGO_CLEAN_ATTEMPTS=2
 status=0
 
 cd "$ROOT" || exit 1
 
-echo "==> clearing Cargo build artifacts"
-if ! cargo clean; then
+clean_cargo_artifacts() {
+    local attempt
+
+    for ((attempt = 1; attempt <= MAX_CARGO_CLEAN_ATTEMPTS; attempt++)); do
+        echo "==> clearing Cargo build artifacts (attempt $attempt/$MAX_CARGO_CLEAN_ATTEMPTS)"
+        if cargo clean; then
+            return 0
+        fi
+
+        if [[ "$attempt" -lt "$MAX_CARGO_CLEAN_ATTEMPTS" ]]; then
+            echo "release cleanup will retry the transient Cargo clean failure" >&2
+        fi
+    done
+
+    return 1
+}
+
+if ! clean_cargo_artifacts; then
     echo "release cleanup failed to clear Cargo build artifacts" >&2
     status=1
 fi

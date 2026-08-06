@@ -22,6 +22,7 @@ DEPENDENCY_RISK_INVENTORY="$ROOT/scripts/ci/dependency-risk-inventory.tsv"
 BUMP_VERSION="$ROOT/scripts/ci/bump-version.sh"
 RELEASE_CLEANUP="$ROOT/scripts/ci/cleanup-release-artifacts.sh"
 RELEASE_GATES="$ROOT/scripts/ci/run-release-gates.sh"
+RELEASE_PUSH="$ROOT/scripts/ci/push-release.sh"
 POCKET_IC_ALIGNMENT="$ROOT/scripts/ci/check-pocketic-version-alignment.sh"
 installers=(
     "$ROOT/scripts/ci/install-actionlint.sh"
@@ -37,7 +38,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CLEANUP" "$RELEASE_GATES" "$POCKET_IC_ALIGNMENT"; do
+for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CLEANUP" "$RELEASE_GATES" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -77,18 +78,31 @@ rg --multiline 'test-bump:[^\n]*\\\n[[:space:]]+gitleaks-scan' "$MAKEFILE" >/dev
     fail "the patch-release gate does not require the dedicated secret scan"
 rg --multiline 'test-bump:[^\n]*\\\n[[:space:]]+gitleaks-scan dependency-risk-gate' "$MAKEFILE" >/dev/null ||
     fail "the patch-release gate does not require dependency risk validation"
+rg --multiline 'test-bump:[^\n]*\\\n[[:space:]]+gitleaks-scan dependency-risk-gate \\\n[[:space:]]+control-plane-feature-gate clippy test$' "$MAKEFILE" >/dev/null ||
+    fail "the patch/minor release gate does not require the complete workspace test target"
 for mode in patch minor major; do
     rg -F "bash scripts/ci/run-release-gates.sh $mode" "$MAKEFILE" >/dev/null ||
         fail "the $mode version target does not use release-gate cleanup"
 done
-rg --multiline 'release-push:\n\t@bash scripts/ci/check-release-push-ready\.sh\n\t@bash scripts/ci/cleanup-release-artifacts\.sh\n\tgit push --atomic --follow-tags' "$MAKEFILE" >/dev/null ||
+rg --multiline 'release-push:\n\t@bash scripts/ci/check-release-push-ready\.sh\n\t@bash scripts/ci/cleanup-release-artifacts\.sh\n\t@CANIC_RELEASE_PUSH_READY=1 bash scripts/ci/push-release\.sh' "$MAKEFILE" >/dev/null ||
     fail "release push does not clean before its final atomic network update"
 rg -F 'cargo clean' "$RELEASE_CLEANUP" >/dev/null ||
     fail "release cleanup does not clear Cargo build artifacts"
+rg -F 'MAX_CARGO_CLEAN_ATTEMPTS=2' "$RELEASE_CLEANUP" >/dev/null ||
+    fail "release cleanup does not bound its Cargo cleanup retry"
 rg -F '.tmp/test-runtime' "$RELEASE_CLEANUP" >/dev/null ||
     fail "release cleanup does not clear repository-owned test scratch"
 rg -F 'export TMPDIR="$ROOT/.tmp/test-runtime"' "$RELEASE_GATES" >/dev/null ||
     fail "release gates do not confine temporary files to repository-owned scratch"
+rg -F 'git push --atomic origin' "$RELEASE_PUSH" >/dev/null ||
+    fail "release push does not require one atomic remote update"
+rg -F '"HEAD:refs/heads/$branch"' "$RELEASE_PUSH" >/dev/null ||
+    fail "release push does not name the exact branch ref"
+rg -F '"refs/tags/$tag:refs/tags/$tag"' "$RELEASE_PUSH" >/dev/null ||
+    fail "release push does not name the exact release tag ref"
+if bash "$RELEASE_PUSH" >/dev/null 2>&1; then
+    fail "release push helper accepted direct unverified invocation"
+fi
 if rg -F 'rm -rf -- /tmp' "$RELEASE_CLEANUP" >/dev/null; then
     fail "release cleanup may not delete an unscoped global temporary path"
 fi
@@ -259,7 +273,12 @@ printf '%s\n' \
 printf '%s\n' \
     '#!/usr/bin/env bash' \
     '[ "${1:-}" = "clean" ] || exit 2' \
-    '[ "${FAKE_CARGO_STATUS:-0}" = "0" ] || exit "$FAKE_CARGO_STATUS"' \
+    'attempt_file="$PWD/cargo-clean-attempts"' \
+    'attempt=0' \
+    '[ ! -f "$attempt_file" ] || read -r attempt <"$attempt_file"' \
+    'attempt=$((attempt + 1))' \
+    'printf "%s\n" "$attempt" >"$attempt_file"' \
+    '[ "$attempt" -gt "${FAKE_CARGO_FAILURES:-0}" ] || exit "${FAKE_CARGO_STATUS:-19}"' \
     'rm -rf -- "$PWD/target"' >"$release_cleanup_bin/cargo"
 chmod +x "$release_cleanup_bin/make" "$release_cleanup_bin/cargo"
 
@@ -292,10 +311,24 @@ fi
 [ ! -e "$release_cleanup_fixture/.tmp/test-runtime" ] ||
     fail "failed release-gate cleanup retained test scratch"
 
+rm -f "$release_cleanup_fixture/cargo-clean-attempts"
 mkdir -p \
     "$release_cleanup_fixture/.tmp/test-runtime" \
     "$release_cleanup_fixture/target"
-if FAKE_CARGO_STATUS=19 PATH="$release_cleanup_bin:$PATH" \
+FAKE_CARGO_FAILURES=1 PATH="$release_cleanup_bin:$PATH" \
+    bash "$release_cleanup_fixture/scripts/ci/run-release-gates.sh" minor
+[ "$(cat "$release_cleanup_fixture/cargo-clean-attempts")" -eq 2 ] ||
+    fail "release cleanup did not retry one transient Cargo failure exactly once"
+[ ! -e "$release_cleanup_fixture/target" ] ||
+    fail "retried release cleanup retained Cargo artifacts"
+[ ! -e "$release_cleanup_fixture/.tmp/test-runtime" ] ||
+    fail "retried release cleanup retained test scratch"
+
+rm -f "$release_cleanup_fixture/cargo-clean-attempts"
+mkdir -p \
+    "$release_cleanup_fixture/.tmp/test-runtime" \
+    "$release_cleanup_fixture/target"
+if FAKE_CARGO_FAILURES=2 FAKE_CARGO_STATUS=19 PATH="$release_cleanup_bin:$PATH" \
     bash "$release_cleanup_fixture/scripts/ci/run-release-gates.sh" minor; then
     fail "release-gate wrapper accepted a failed cleanup"
 else
@@ -303,10 +336,34 @@ else
 fi
 [ "$release_cleanup_status" -eq 1 ] ||
     fail "release-gate wrapper did not preserve the cleanup failure"
+[ "$(cat "$release_cleanup_fixture/cargo-clean-attempts")" -eq 2 ] ||
+    fail "release cleanup exceeded its bounded Cargo retry"
 [ -e "$release_cleanup_fixture/target" ] ||
     fail "failed fake Cargo cleanup unexpectedly removed its target fixture"
 [ ! -e "$release_cleanup_fixture/.tmp/test-runtime" ] ||
     fail "Cargo cleanup failure prevented test-scratch cleanup"
+
+release_push_fixture="$tmp_dir/release-push"
+release_push_bin="$release_push_fixture/bin"
+mkdir -p "$release_push_fixture/scripts/ci" "$release_push_bin"
+cp "$RELEASE_PUSH" "$release_push_fixture/scripts/ci/"
+printf '%s\n' \
+    '[workspace.package]' \
+    'version = "0.101.10"' >"$release_push_fixture/Cargo.toml"
+# shellcheck disable=SC2016 # Preserve argument handling for the generated fixture.
+printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'case "${1:-}" in' \
+    'symbolic-ref) printf "main\n" ;;' \
+    'push) printf "%s\n" "$@" >"$PWD/push-arguments" ;;' \
+    '*) exit 2 ;;' \
+    'esac' >"$release_push_bin/git"
+chmod +x "$release_push_bin/git"
+CANIC_RELEASE_PUSH_READY=1 PATH="$release_push_bin:$PATH" \
+    bash "$release_push_fixture/scripts/ci/push-release.sh"
+expected_push_arguments=$'push\n--atomic\norigin\nHEAD:refs/heads/main\nrefs/tags/v0.101.10:refs/tags/v0.101.10'
+[ "$(cat "$release_push_fixture/push-arguments")" = "$expected_push_arguments" ] ||
+    fail "release push did not send the exact branch and tag refs atomically"
 
 fake_gitleaks="$tmp_dir/gitleaks"
 # shellcheck disable=SC2016 # Preserve variable expansion for the generated fixture.

@@ -25,11 +25,15 @@ Date: 2026-08-06
   authority is live. The root now advances that accepted batch one canonical
   placement member at a time through the existing root-local
   `ComponentInstanceId` allocator, retaining a hash-bound O(1) cursor and
-  exact response-loss reconciliation with the Component Registry. Pool claim,
-  installation, Registry/Directory publication and every grouped
-  effect-bearing surface remain unimplemented.
+  exact response-loss reconciliation with the Component Registry. After every
+  identity is reserved, the same aggregate command claims one
+  oldest-sufficient Ready prepaid Canister per canonical member through the
+  ordinary Component creation journal and derives the exact protected
+  `GroupMember` runtime context from the accepted plan. A second hash-bound
+  O(1) cursor reconciles response loss without another claim. Installation,
+  Registry/Directory publication and runtime activation remain unimplemented.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.9` is released and `0.101.10` is open.
+- Implementation started: yes; `0.101.10` is released and `0.101.11` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -149,7 +153,10 @@ Fleet policy writer.
   ordinary provisioning emits only `UngroupedOrdinary`.
 - [ ] Derive each `GroupMember` context from the accepted root plan, verify it
   against the Component Group Directory and enforce its exact effective limits
-  throughout root allocation and descendant lifecycle.
+  throughout root allocation and descendant lifecycle. Accepted-plan context
+  derivation and compiled-configuration validation are complete at prepaid-
+  Canister claim; installation, Directory confirmation and descendant-limit
+  enforcement remain.
 - [x] Derive one semantic protected configuration digest over groups,
   deployments and service targets.
 - [ ] Remove singleton-Spec and sole-root-admission service assumptions.
@@ -181,8 +188,8 @@ Fleet policy writer.
 - [ ] Reuse canonical root-local `ComponentInstanceId` allocation,
   prepaid-Canister claim and platform lifecycle, failing closed when no Ready
   imported, recycled or automatically created asset exists. Root-local
-  identity allocation and exact retry are complete; prepaid-Canister claim
-  and every effect-bearing lifecycle phase remain.
+  identity allocation plus ordinary prepaid-Canister claim and exact retry are
+  complete; installation and later effect-bearing lifecycle phases remain.
 - [ ] Reuse 0.100's bounded root-owned Cycles Ledger refill and permanent
   uncertain-expiry fence; keep raw management `create_canister` and Component
   paid fallback absent.
@@ -201,7 +208,7 @@ Fleet policy writer.
 - [ ] Keep new Components runtime `Prepared`.
 - [ ] Persist group-partitioned Component Registry evidence and one aggregate
   idempotent root receipt. The aggregate acceptance record, receipt and
-  hash-bound reservation cursor are complete; provisioned bindings and
+  hash-bound reservation/claim cursors are complete; provisioned bindings and
   committed Registry evidence remain.
 
 ## Slice 3 — Service Topology and Directories

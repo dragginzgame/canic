@@ -110,7 +110,7 @@ impl ConfigOps {
     }
 
     /// Validate one retained deployment context against the current compiled App authority.
-    pub(crate) fn validate_protected_component_deployment(
+    pub fn validate_protected_component_deployment(
         context: &ProtectedComponentDeployment,
         owning_component: &ComponentBinding,
     ) -> Result<(), InternalError> {
