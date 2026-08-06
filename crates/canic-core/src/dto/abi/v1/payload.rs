@@ -74,6 +74,7 @@ mod tests {
                 maximum_component_instances: 1,
                 maximum_registry_bytes: 16 * 1_024 * 1_024,
                 maximum_wasm_store_bytes: 16 * 1_024 * 1_024,
+                maximum_group_placements: 16,
                 canister_pool: crate::ids::FleetSubnetCanisterPoolConfig {
                     minimum_size: 1,
                     maximum_size: 10,

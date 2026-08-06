@@ -48,6 +48,16 @@ pub mod ops {
         pub use crate::ops::component_runtime::ComponentRuntimeOps;
     }
 
+    pub mod component_provisioning_plan {
+        pub use crate::ops::component_provisioning_plan::{
+            ComponentProvisioningPlanOps, MAX_FLEET_COMPONENT_PROVISIONING_PLAN_BATCHES,
+            MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CANONICAL_BYTES,
+            MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CONFIRMATION_ROOTS,
+            MAX_FLEET_COMPONENT_PROVISIONING_PLAN_ENTRIES,
+            MAX_FLEET_COMPONENT_PROVISIONING_PLAN_PLACEMENTS,
+        };
+    }
+
     pub mod cost_guard {
         pub use crate::ops::cost_guard::{
             CostGuardPermit, CostGuardRequest, CostGuardReserveError, CostGuardReservePublicKind,

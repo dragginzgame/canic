@@ -1,14 +1,17 @@
 use crate::canister::{APP, SCALE_HUB};
 use candid::Principal;
 use ic_testkit::{
-    artifacts::{build_wasm_canisters, read_wasm, test_target_dir, workspace_root_for},
+    artifacts::{read_wasm, test_target_dir, workspace_root_for},
     pic::{PocketIc, PocketIcBuilder, StandaloneCanisterFixture},
 };
 use std::path::{Path, PathBuf};
 
 use super::{
     CanicPicExt, CanicWasmBuildProfile,
-    artifacts::{INTERNAL_TEST_ENDPOINTS_ENV, INTERNAL_TEST_RELEASE_BUILD_ID},
+    artifacts::{
+        INTERNAL_TEST_ENDPOINTS_ENV, INTERNAL_TEST_RELEASE_BUILD_ID,
+        build_internal_test_wasm_canisters_with_env,
+    },
     install_standalone_canister,
 };
 
@@ -77,11 +80,11 @@ fn ensure_probe_wasm_ready(
         INTERNAL_TEST_ENDPOINTS_ENV,
         INTERNAL_TEST_RELEASE_BUILD_ID,
     ];
-    build_wasm_canisters(
+    build_internal_test_wasm_canisters_with_env(
         workspace_root,
         target_dir,
         &[crate_name, "canic-wasm-store"],
-        profile.cargo_profile_args(),
+        profile,
         &build_env,
     );
 }

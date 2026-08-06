@@ -42,6 +42,7 @@ imports = []
 maximum_component_instances = 13
 maximum_registry_bytes = 16777216
 maximum_wasm_store_bytes = 40000000
+maximum_group_placements = 16
 
 [fleet_subnet_roots.limits.cycles_funding]
 window_secs = 3600
@@ -67,6 +68,12 @@ installation activates each root with an empty sealed Component inventory;
 Components may then be created through the active-root lifecycle. Exact
 nonempty initial placement is a separate 0.101 Component Group deployment
 authority.
+
+`maximum_group_placements` is the immutable aggregate ceiling for accepted or
+committed Component Group placements on that root. Ordinary Components do not
+consume it. Set it to zero when the root must remain ineligible for grouped
+placement; every grouped Component still consumes the existing Component,
+Registry, Store, prepaid-asset and cycles limits independently.
 
 Every root has one required prepaid empty-Canister policy. `minimum_size` is
 the automatic Ready-asset target, `maximum_size` bounds standby and

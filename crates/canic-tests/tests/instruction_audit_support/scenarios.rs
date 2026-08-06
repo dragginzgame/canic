@@ -1,7 +1,7 @@
 use super::*;
 
-// Build the fixed v3 scenario manifest. Every row uses an authoritative
-// fixture and a fresh PocketIC topology.
+// Build the fixed v3 scenario manifest. Every row uses an exclusive lease of
+// its authoritative profile baseline after exact snapshot restore and validation.
 #[expect(
     clippy::too_many_lines,
     reason = "the fixed ordered scenario table is clearer as one authoritative roster"
@@ -21,7 +21,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
             replay_state: "fresh",
             cache_state: "cold",
             topology_state: "scaling-profile-ready",
-            freshness_model: "fresh-topology-per-scenario",
+            freshness_model: "restored-baseline-per-scenario",
             notes: "Scale child update performs a fresh structural capability round trip to its parent.",
         },
         AuditScenario {
@@ -37,7 +37,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
             replay_state: "n/a",
             cache_state: "empty-pool",
             topology_state: "scaling-profile-ready",
-            freshness_model: "fresh-topology-per-scenario",
+            freshness_model: "restored-baseline-per-scenario",
             notes: "Scaling worker creation through observe, plan, create, and registration stages.",
         },
         AuditScenario {
@@ -53,7 +53,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
             replay_state: "n/a",
             cache_state: "empty-assignment",
             topology_state: "sharding-profile-ready",
-            freshness_model: "fresh-topology-per-scenario",
+            freshness_model: "restored-baseline-per-scenario",
             notes: "User-shard assignment and allocation through the maintained user_hub endpoint.",
         },
         AuditScenario {
@@ -69,7 +69,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
             replay_state: "n/a",
             cache_state: "proof-missing",
             topology_state: "component-registry-active",
-            freshness_model: "fresh-topology-per-scenario",
+            freshness_model: "restored-baseline-per-scenario",
             notes: "Active Fleet Subnet Root creates and installs the first chain-key delegation proof for its Registry-issued Component.",
         },
         AuditScenario {
@@ -85,7 +85,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
             replay_state: "fresh",
             cache_state: "proof-warm",
             topology_state: "component-registry-active",
-            freshness_model: "fresh-topology-per-scenario",
+            freshness_model: "restored-baseline-per-scenario",
             notes: "Registry-issued Component prepares a delegated token from an explicitly provisioned active proof.",
         },
         AuditScenario {
@@ -101,7 +101,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
             replay_state: "fresh",
             cache_state: "proof-warm",
             topology_state: "component-registry-active",
-            freshness_model: "fresh-topology-per-scenario",
+            freshness_model: "restored-baseline-per-scenario",
             notes: "Registry-issued verifier Component confirms a freshly issued delegated token.",
         },
         AuditScenario {
@@ -117,7 +117,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
             replay_state: "fresh",
             cache_state: "cold",
             topology_state: "capability-profile-ready",
-            freshness_model: "fresh-topology-per-scenario",
+            freshness_model: "restored-baseline-per-scenario",
             notes: "Fresh root capability cycles request through auth, replay, policy, and execution.",
         },
         AuditScenario {
@@ -133,7 +133,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
             replay_state: "duplicate-same",
             cache_state: "warm-response",
             topology_state: "capability-profile-ready",
-            freshness_model: "fresh-topology-per-scenario",
+            freshness_model: "restored-baseline-per-scenario",
             notes: "Second identical cycles request returns the cached replay response.",
         },
         AuditScenario {
@@ -149,7 +149,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
             replay_state: "n/a",
             cache_state: "cold",
             topology_state: "capability-profile-ready",
-            freshness_model: "fresh-topology-per-scenario",
+            freshness_model: "restored-baseline-per-scenario",
             notes: "Stage one synthetic approved manifest in the root-local release buffer.",
         },
         AuditScenario {
@@ -165,7 +165,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
             replay_state: "n/a",
             cache_state: "warm-manifest",
             topology_state: "capability-profile-ready",
-            freshness_model: "fresh-topology-per-scenario",
+            freshness_model: "restored-baseline-per-scenario",
             notes: "Prepare one staged single-chunk release.",
         },
         AuditScenario {
@@ -181,7 +181,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
             replay_state: "n/a",
             cache_state: "warm-manifest-and-prepare",
             topology_state: "capability-profile-ready",
-            freshness_model: "fresh-topology-per-scenario",
+            freshness_model: "restored-baseline-per-scenario",
             notes: "Publish the only chunk for one prepared release.",
         },
         AuditScenario {
@@ -197,7 +197,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
             replay_state: "n/a",
             cache_state: "fresh-install",
             topology_state: "topology-profile-ready",
-            freshness_model: "fresh-topology-per-scenario",
+            freshness_model: "restored-baseline-per-scenario",
             notes: "Checkpoint-group observation retained from the completed root init bootstrap flow.",
         },
     ]
@@ -279,7 +279,7 @@ mod tests {
         );
         assert!(actual.iter().all(|scenario| {
             matches!(scenario.transport_mode, "update" | "install")
-                && scenario.freshness_model == "fresh-topology-per-scenario"
+                && scenario.freshness_model == "restored-baseline-per-scenario"
         }));
     }
 }

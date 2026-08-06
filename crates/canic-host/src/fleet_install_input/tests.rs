@@ -54,6 +54,7 @@ fn disposable_root_deletion_proof_input_resolves_one_bounded_mainnet_root() {
     assert_eq!(root.placement_subnet, subnet(FIDUCIARY_SUBNET));
     assert_eq!(root.component_admissions.len(), 2);
     assert_eq!(root.limits.maximum_component_instances, 2);
+    assert_eq!(root.limits.maximum_group_placements, 0);
     assert_eq!(root.limits.canister_pool.minimum_size, 1);
     assert_eq!(root.limits.canister_pool.maximum_size, 1);
     assert_eq!(
@@ -105,6 +106,7 @@ fn playground_input_resolves_one_reusable_mainnet_root() {
         }]
     );
     assert_eq!(root.limits.maximum_component_instances, 1);
+    assert_eq!(root.limits.maximum_group_placements, 16);
     assert_eq!(root.limits.canister_pool.minimum_size, 5);
     assert_eq!(root.limits.canister_pool.maximum_size, 5);
     assert_eq!(
@@ -152,6 +154,12 @@ fn local_document_resolves_exact_explicit_placement_and_cycles() {
     );
     assert_eq!(resolved.fleet_subnet_roots.len(), 1);
     assert_eq!(
+        resolved.fleet_subnet_roots[0]
+            .limits
+            .maximum_group_placements,
+        16
+    );
+    assert_eq!(
         resolved.fleet_subnet_roots[0].root_creation_funding,
         PlannedCanisterCreationFunding::Cycles {
             cycles: 2_000_000_000_000
@@ -169,6 +177,27 @@ fn local_document_resolves_exact_explicit_placement_and_cycles() {
             component_spec: "users".parse().expect("valid Component Spec ID"),
             maximum_root_instances: 8,
         }]
+    );
+}
+
+#[test]
+fn group_placement_ceiling_is_required_and_zero_remains_an_explicit_fence() {
+    let missing = input_toml().replace("maximum_group_placements = 16\n", "");
+    assert!(toml::from_slice::<FleetInstallInputDocument>(missing.as_bytes()).is_err());
+
+    let mut document = document(CoordinatorSubnetSelector::Explicit {
+        subnet: subnet_text(7),
+    });
+    document.fleet_subnet_roots[0]
+        .limits
+        .maximum_group_placements = 0;
+    let resolved = resolve_document(&document, BuildNetwork::Local, None)
+        .expect("zero is an explicit root-ineligibility fence");
+    assert_eq!(
+        resolved.fleet_subnet_roots[0]
+            .limits
+            .maximum_group_placements,
+        0
     );
 }
 
@@ -582,6 +611,7 @@ fn document(selector: CoordinatorSubnetSelector) -> FleetInstallInputDocument {
                 maximum_component_instances: 8,
                 maximum_registry_bytes: 16_777_216,
                 maximum_wasm_store_bytes: 40_000_000,
+                maximum_group_placements: 16,
                 cycles_funding: CyclesFundingBudgetDocument {
                     window_secs: 3_600,
                     maximum_cycles: Cycles::new(10_000_000_000_000),
@@ -632,6 +662,7 @@ imports = []
 maximum_component_instances = 8
 maximum_registry_bytes = 16777216
 maximum_wasm_store_bytes = 40000000
+maximum_group_placements = 16
 
 [fleet_subnet_roots.limits.cycles_funding]
 window_secs = 3600

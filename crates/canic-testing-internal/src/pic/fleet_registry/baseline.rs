@@ -120,7 +120,10 @@ mod tests {
     use canic_core::cdk::utils::hash::{hex_bytes, wasm_hash};
     use canic_host::release_set::AppConfigSnapshot;
     use flate2::{Compression, write::GzEncoder};
-    use std::{collections::BTreeMap, io::Write, sync::OnceLock};
+    use std::{
+        collections::BTreeMap, error::Error as StdError, fmt, io::Write, num::NonZeroUsize,
+        sync::OnceLock,
+    };
 
     use crate::pic::{
         CanicWasmBuildProfile,
@@ -133,10 +136,18 @@ mod tests {
         },
     };
     use ic_testkit::artifacts::{read_wasm, test_target_dir, workspace_root_for};
+    use ic_testkit::pic::{
+        BaselinePoolContractError, BaselinePoolOutcome, BaselinePreparationStage,
+        CachedPocketIcBaseline, CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard,
+        CandidCallError, CanisterRestoreReceipt, ControllerSnapshotError, CycleResetPolicy,
+        FailureDisposition, FixtureRecipeId, PocketIcBaselineRecipe, PreparedBaseline,
+        ReadinessReceipt, RebuildReason, ResetAchievement, ResetReceipt, ResetRequirement,
+        ResetRequirements, SnapshotRestoreFunding, TimeResetPolicy, ValidationReceipt,
+        is_dead_pocket_ic_transport_error,
+    };
     #[cfg(test)]
-    use ic_testkit::pic::{PocketIcSnapshotExt, PocketIcTimeExt, SnapshotRestoreFunding};
+    use ic_testkit::pic::{PocketIcSnapshotExt, PocketIcTimeExt};
 
-    #[cfg(test)]
     use crate::pic::CanicPicExt;
     #[cfg(test)]
     use canic::protocol::{
@@ -253,24 +264,227 @@ mod tests {
     ///
     /// ActiveComponentRegistryFixture
     ///
-    /// Fresh Coordinator-anchored Fleet fixture whose root and two Components
-    /// are active under current Component Registry authority.
+    /// Coordinator-anchored Fleet fixture whose root and two Components are
+    /// active under current Component Registry authority.
     ///
     pub struct ActiveComponentRegistryFixture {
-        pic: PocketIc,
+        runtime: ActiveComponentRegistryRuntime,
         pub coordinator: Principal,
         pub root: Principal,
         pub issuer: ComponentBinding,
         pub verifier: ComponentBinding,
-        #[cfg(test)]
         store_bootstrap: RootStoreBootstrapRequest,
+        wasm_store: Principal,
+        pool_assets: Vec<Principal>,
     }
 
     impl ActiveComponentRegistryFixture {
         /// Borrow the live PocketIC instance.
         #[must_use]
-        pub const fn pic(&self) -> &PocketIc {
-            &self.pic
+        pub fn pic(&self) -> &PocketIc {
+            match &self.runtime {
+                ActiveComponentRegistryRuntime::Fresh(pic) => pic,
+                ActiveComponentRegistryRuntime::Pooled(baseline) => baseline.pocket_ic(),
+            }
+        }
+    }
+
+    enum ActiveComponentRegistryRuntime {
+        Fresh(Box<PocketIc>),
+        Pooled(CachedPocketIcBaselinePoolGuard<'static, ActiveComponentRegistryBaselineRecipe>),
+    }
+
+    #[derive(Clone)]
+    struct ActiveComponentRegistryBaselineMetadata {
+        coordinator: Principal,
+        root: Principal,
+        issuer: ComponentBinding,
+        verifier: ComponentBinding,
+        store_bootstrap: RootStoreBootstrapRequest,
+        wasm_store: Principal,
+        pool_assets: Vec<Principal>,
+    }
+
+    struct ActiveComponentRegistryBaselineRecipe {
+        id: FixtureRecipeId,
+        reset_requirements: ResetRequirements,
+    }
+
+    #[derive(Debug)]
+    enum ActiveComponentRegistryBaselineError {
+        Call(CandidCallError),
+        Contract(BaselinePoolContractError),
+        Invariant(String),
+        Snapshot(ControllerSnapshotError),
+    }
+
+    impl ActiveComponentRegistryBaselineRecipe {
+        fn new() -> Result<Self, BaselinePoolContractError> {
+            Ok(Self {
+                id: FixtureRecipeId::try_new("canic/active-component-registry/v1")?,
+                reset_requirements: ResetRequirements::try_new([
+                    ResetRequirement::CanisterSnapshots,
+                    ResetRequirement::CanisterCycles(CycleResetPolicy::TopUpTo(
+                        crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
+                    )),
+                    ResetRequirement::PocketIcTime(TimeResetPolicy::PreserveCurrent),
+                ])?,
+            })
+        }
+    }
+
+    impl PocketIcBaselineRecipe for ActiveComponentRegistryBaselineRecipe {
+        type Metadata = ActiveComponentRegistryBaselineMetadata;
+        type Error = ActiveComponentRegistryBaselineError;
+
+        fn id(&self) -> &FixtureRecipeId {
+            &self.id
+        }
+
+        fn reset_requirements(&self) -> &ResetRequirements {
+            &self.reset_requirements
+        }
+
+        fn build(&self) -> Result<CachedPocketIcBaseline<Self::Metadata>, Self::Error> {
+            let ActiveComponentRegistryFixture {
+                runtime,
+                coordinator,
+                root,
+                issuer,
+                verifier,
+                store_bootstrap,
+                wasm_store,
+                pool_assets,
+            } = setup_active_component_registry_fresh();
+            let ActiveComponentRegistryRuntime::Fresh(pic) = runtime else {
+                unreachable!("fresh baseline builder must own its PocketIC instance")
+            };
+            let metadata = ActiveComponentRegistryBaselineMetadata {
+                coordinator,
+                root,
+                issuer,
+                verifier,
+                store_bootstrap,
+                wasm_store,
+                pool_assets,
+            };
+            let snapshot_canisters = [
+                metadata.coordinator,
+                metadata.root,
+                metadata.wasm_store,
+                metadata.issuer.canister_id,
+                metadata.verifier.canister_id,
+            ];
+            CachedPocketIcBaseline::capture(*pic, metadata.root, snapshot_canisters, metadata)
+                .map_err(Into::into)
+        }
+
+        fn restore_canisters(
+            &self,
+            baseline: &CachedPocketIcBaseline<Self::Metadata>,
+        ) -> Result<CanisterRestoreReceipt, Self::Error> {
+            baseline.restore_with_funding(
+                baseline.metadata().root,
+                SnapshotRestoreFunding::TopUpTo {
+                    minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
+                },
+            )?;
+            CanisterRestoreReceipt::try_from_baseline(
+                baseline,
+                CycleResetPolicy::TopUpTo(crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES),
+            )
+            .map_err(Into::into)
+        }
+
+        fn reset_non_snapshot_state(
+            &self,
+            baseline: &CachedPocketIcBaseline<Self::Metadata>,
+        ) -> Result<ResetReceipt, Self::Error> {
+            reset_unclaimed_pool_assets(baseline)?;
+            ResetReceipt::try_new([ResetAchievement::PocketIcTime(
+                TimeResetPolicy::PreserveCurrent,
+            )])
+            .map_err(Into::into)
+        }
+
+        fn drive_to_readiness(
+            &self,
+            baseline: &CachedPocketIcBaseline<Self::Metadata>,
+        ) -> Result<ReadinessReceipt, Self::Error> {
+            let metadata = baseline.metadata();
+            baseline.pocket_ic().wait_for_all_ready(
+                [
+                    metadata.root,
+                    metadata.wasm_store,
+                    metadata.issuer.canister_id,
+                    metadata.verifier.canister_id,
+                ],
+                60,
+                "restored active Component Registry baseline",
+            );
+            ReadinessReceipt::try_new("active-fleet-ready").map_err(Into::into)
+        }
+
+        fn validate(
+            &self,
+            baseline: &CachedPocketIcBaseline<Self::Metadata>,
+            _preparation: &PreparedBaseline,
+        ) -> Result<ValidationReceipt, Self::Error> {
+            validate_active_component_registry_baseline(baseline)?;
+            ValidationReceipt::try_new(self.id.clone(), "active-fleet-authority-exact")
+                .map_err(Into::into)
+        }
+
+        fn classify_failure(
+            &self,
+            stage: BaselinePreparationStage,
+            error: &Self::Error,
+        ) -> FailureDisposition {
+            if is_dead_pocket_ic_transport_error(error) {
+                FailureDisposition::Rebuild(RebuildReason::DeadPocketIcTransport)
+            } else {
+                FailureDisposition::Rebuild(stage.default_rebuild_reason())
+            }
+        }
+    }
+
+    impl From<BaselinePoolContractError> for ActiveComponentRegistryBaselineError {
+        fn from(error: BaselinePoolContractError) -> Self {
+            Self::Contract(error)
+        }
+    }
+
+    impl From<CandidCallError> for ActiveComponentRegistryBaselineError {
+        fn from(error: CandidCallError) -> Self {
+            Self::Call(error)
+        }
+    }
+
+    impl From<ControllerSnapshotError> for ActiveComponentRegistryBaselineError {
+        fn from(error: ControllerSnapshotError) -> Self {
+            Self::Snapshot(error)
+        }
+    }
+
+    impl fmt::Display for ActiveComponentRegistryBaselineError {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                Self::Call(error) => error.fmt(formatter),
+                Self::Contract(error) => error.fmt(formatter),
+                Self::Invariant(message) => formatter.write_str(message),
+                Self::Snapshot(error) => error.fmt(formatter),
+            }
+        }
+    }
+
+    impl StdError for ActiveComponentRegistryBaselineError {
+        fn source(&self) -> Option<&(dyn StdError + 'static)> {
+            match self {
+                Self::Call(error) => Some(error),
+                Self::Contract(error) => Some(error),
+                Self::Invariant(_) => None,
+                Self::Snapshot(error) => Some(error),
+            }
         }
     }
 
@@ -471,7 +685,7 @@ mod tests {
     #[test]
     fn active_registry_issues_component_and_component_child_role_attestations() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let fixture = setup_active_component_registry();
+        let fixture = acquire_active_component_registry();
         super::super::role_attestation::assert_registry_bound_role_attestation(
             fixture.pic(),
             fixture.root,
@@ -492,9 +706,13 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::significant_drop_tightening,
+        reason = "the pooled Fleet fixture lease is intentionally retained for the full test"
+    )]
     fn restored_root_preserves_its_allocation_head_but_cannot_allocate() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let fixture = setup_active_component_registry();
+        let fixture = acquire_active_component_registry();
         let active_registry: Result<FleetRegistryVersion, Error> = fixture
             .pic()
             .query_candid(fixture.coordinator, CANIC_FLEET_REGISTRY_VERSION, ())
@@ -610,9 +828,13 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::significant_drop_tightening,
+        reason = "the pooled Fleet fixture lease is intentionally retained for the full test"
+    )]
     fn active_component_provisions_a_registered_child_through_root_capability() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let fixture = setup_active_component_registry();
+        let fixture = acquire_active_component_registry();
         let request_id = [0xd1; 32];
         let ttl_ns = 60_000_000_000;
         let envelope = RootCapabilityEnvelopeV1 {
@@ -672,9 +894,13 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::significant_drop_tightening,
+        reason = "the pooled Fleet fixture lease is intentionally retained for the full test"
+    )]
     fn active_component_recycles_a_child_through_component_registry_removal() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let fixture = setup_active_component_registry();
+        let fixture = acquire_active_component_registry();
         let (child, _) = create_active_project_instance(&fixture);
         let request_id = [0xd2; 32];
         let ttl_ns = 60_000_000_000;
@@ -891,9 +1117,13 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::significant_drop_tightening,
+        reason = "the pooled Fleet fixture lease is intentionally retained for the full test"
+    )]
     fn active_component_provisions_one_same_root_peer_without_parentage() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let fixture = setup_active_component_registry();
+        let fixture = acquire_active_component_registry();
         let requester = fixture.issuer.clone();
         let operation_id = [0xb1; 32];
         let reserved = reserve_peer_component(&fixture, &requester, operation_id);
@@ -1102,12 +1332,16 @@ mod tests {
 
     #[test]
     #[expect(
+        clippy::significant_drop_tightening,
+        reason = "the pooled Fleet fixture lease is intentionally retained for the full test"
+    )]
+    #[expect(
         clippy::too_many_lines,
         reason = "one PocketIC journey keeps the fence, stop and deletion boundary coherent"
     )]
     fn active_root_deletes_one_exact_registered_child_before_membership_removal() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let fixture = setup_active_component_registry();
+        let fixture = acquire_active_component_registry();
         let (child, registry) = create_active_project_instance(&fixture);
         let operation_id = [0xd1; 32];
         let begin_request = RootComponentSubtreeRemovalRequest {
@@ -1313,12 +1547,16 @@ mod tests {
 
     #[test]
     #[expect(
+        clippy::significant_drop_tightening,
+        reason = "the pooled Fleet fixture lease is intentionally retained for the full test"
+    )]
+    #[expect(
         clippy::too_many_lines,
         reason = "one PocketIC journey proves qualified top-level stop, deletion and membership removal"
     )]
     fn published_draining_root_removes_one_exact_empty_component() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let fixture = setup_active_component_registry();
+        let fixture = acquire_active_component_registry();
         let root_draining = assert_root_draining_fence(&fixture);
         let published = assert_coordinator_root_draining_publication(&fixture, &root_draining);
         assert_root_draining_mirror_activation(&fixture, &root_draining, &published);
@@ -2184,7 +2422,7 @@ mod tests {
         removed.expect("remove empty Component membership")
     }
 
-    /// Build one current Coordinator/root/Store fixture with active Registry-issued Components.
+    /// Acquire one current Coordinator/root/Store fixture with active Registry-issued Components.
     ///
     /// # Panics
     ///
@@ -2193,6 +2431,55 @@ mod tests {
     /// fails its current protocol contract.
     #[must_use]
     pub fn setup_active_component_registry() -> ActiveComponentRegistryFixture {
+        acquire_active_component_registry()
+    }
+
+    fn acquire_active_component_registry() -> ActiveComponentRegistryFixture {
+        let (baseline, outcome) = active_component_registry_pool()
+            .acquire()
+            .expect("acquire active Component Registry baseline");
+        let metadata = baseline.metadata().clone();
+        let timings = match &outcome {
+            BaselinePoolOutcome::Built { timings, .. }
+            | BaselinePoolOutcome::Restored { timings, .. }
+            | BaselinePoolOutcome::Rebuilt { timings, .. } => *timings,
+            _ => unreachable!("ic-testkit baseline outcome must be built, restored, or rebuilt"),
+        };
+        eprintln!(
+            "[pic_fleet_registry] active baseline {outcome:?} in {:?} (wait {:?}, build {:?}, restore {:?}, validation {:?})",
+            timings.total(),
+            timings.wait(),
+            timings.build(),
+            timings.restore(),
+            timings.validation(),
+        );
+
+        ActiveComponentRegistryFixture {
+            runtime: ActiveComponentRegistryRuntime::Pooled(baseline),
+            coordinator: metadata.coordinator,
+            root: metadata.root,
+            issuer: metadata.issuer,
+            verifier: metadata.verifier,
+            store_bootstrap: metadata.store_bootstrap,
+            wasm_store: metadata.wasm_store,
+            pool_assets: metadata.pool_assets,
+        }
+    }
+
+    fn active_component_registry_pool()
+    -> &'static CachedPocketIcBaselinePool<ActiveComponentRegistryBaselineRecipe> {
+        static POOL: OnceLock<CachedPocketIcBaselinePool<ActiveComponentRegistryBaselineRecipe>> =
+            OnceLock::new();
+        POOL.get_or_init(|| {
+            CachedPocketIcBaselinePool::new(
+                NonZeroUsize::new(1).expect("one is nonzero"),
+                ActiveComponentRegistryBaselineRecipe::new()
+                    .expect("valid active Component Registry baseline recipe"),
+            )
+        })
+    }
+
+    fn setup_active_component_registry_fresh() -> ActiveComponentRegistryFixture {
         let root_wasm = build_test_root_wasm();
         let coordinator_wasm = build_test_coordinator_wasm();
         let store_fixture = build_root_store_fixture();
@@ -2278,16 +2565,142 @@ mod tests {
             sync_request,
         );
         let fixture = ActiveComponentRegistryFixture {
-            pic,
+            runtime: ActiveComponentRegistryRuntime::Fresh(Box::new(pic)),
             coordinator,
             root: fixture.root_id,
             issuer: components.issuer,
             verifier: components.verifier,
-            #[cfg(test)]
             store_bootstrap: fixture.request,
+            wasm_store: fixture.response.wasm_store,
+            pool_assets: fixture.init_args.canister_pool_imports,
         };
         assert_root_canister_summary(&fixture);
         fixture
+    }
+
+    fn reset_unclaimed_pool_assets(
+        baseline: &CachedPocketIcBaseline<ActiveComponentRegistryBaselineMetadata>,
+    ) -> Result<(), ActiveComponentRegistryBaselineError> {
+        let pic = baseline.pocket_ic();
+        let metadata = baseline.metadata();
+        let workload_canisters = [metadata.issuer.canister_id, metadata.verifier.canister_id];
+
+        for canister_id in metadata
+            .pool_assets
+            .iter()
+            .copied()
+            .filter(|canister_id| !workload_canisters.contains(canister_id))
+        {
+            if !pic.canister_exists(canister_id) {
+                return Err(ActiveComponentRegistryBaselineError::Invariant(format!(
+                    "pooled asset {canister_id} no longer exists"
+                )));
+            }
+            let status = pic
+                .canister_status(canister_id, Some(metadata.root))
+                .map_err(|error| {
+                    ActiveComponentRegistryBaselineError::Invariant(format!(
+                        "inspect pooled asset {canister_id}: {error:?}"
+                    ))
+                })?;
+            if status.module_hash.is_some() {
+                pic.uninstall_canister(canister_id, Some(metadata.root))
+                    .map_err(|error| {
+                        ActiveComponentRegistryBaselineError::Invariant(format!(
+                            "uninstall pooled asset {canister_id}: {error:?}"
+                        ))
+                    })?;
+            }
+            pic.set_controllers(canister_id, Some(metadata.root), vec![metadata.root])
+                .map_err(|error| {
+                    ActiveComponentRegistryBaselineError::Invariant(format!(
+                        "restore pooled asset {canister_id} controller: {error:?}"
+                    ))
+                })?;
+            pic.start_canister(canister_id, Some(metadata.root))
+                .map_err(|error| {
+                    ActiveComponentRegistryBaselineError::Invariant(format!(
+                        "start pooled asset {canister_id}: {error:?}"
+                    ))
+                })?;
+            let cycles = pic.cycle_balance(canister_id);
+            if cycles < PREPAID_POOL_ASSET_CYCLES {
+                pic.add_cycles(canister_id, PREPAID_POOL_ASSET_CYCLES - cycles);
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_active_component_registry_baseline(
+        baseline: &CachedPocketIcBaseline<ActiveComponentRegistryBaselineMetadata>,
+    ) -> Result<(), ActiveComponentRegistryBaselineError> {
+        let pic = baseline.pocket_ic();
+        let metadata = baseline.metadata();
+        let registry: Result<FleetRegistry, Error> =
+            pic.query_candid(metadata.coordinator, CANIC_FLEET_REGISTRY, ())?;
+        let registry = baseline_application_result(registry, "query active Fleet Registry")?;
+        if registry.fleet_subnet_roots.len() != 1
+            || registry.fleet_subnet_roots[0].fleet_subnet_root != metadata.root
+            || registry.fleet_subnet_roots[0].status != FleetSubnetRootStatus::Active
+        {
+            return Err(ActiveComponentRegistryBaselineError::Invariant(
+                "active Fleet Registry root binding changed".to_string(),
+            ));
+        }
+
+        let activation: Result<FleetActivationStatusResponse, Error> =
+            pic.query_candid(metadata.root, CANIC_FLEET_ACTIVATION_STATUS, ())?;
+        if baseline_application_result(activation, "query root activation")?.phase
+            != FleetActivationPhase::Active
+        {
+            return Err(ActiveComponentRegistryBaselineError::Invariant(
+                "Fleet Subnet Root is not active".to_string(),
+            ));
+        }
+
+        for binding in [&metadata.issuer, &metadata.verifier] {
+            let runtime: Result<ComponentRuntimeStatusResponse, Error> = pic.query_candid_as(
+                binding.canister_id,
+                metadata.root,
+                CANIC_COMPONENT_RUNTIME_STATUS,
+                (),
+            )?;
+            let runtime = baseline_application_result(runtime, "query Component runtime")?;
+            if runtime.phase != ComponentRuntimePhase::Active {
+                return Err(ActiveComponentRegistryBaselineError::Invariant(format!(
+                    "Component {} is not active",
+                    binding.canister_id
+                )));
+            }
+        }
+
+        let pool: Result<CanisterPoolResponse, Error> = pic.query_candid(
+            metadata.root,
+            CANIC_POOL_LIST,
+            (CanisterPoolStatusRequest {
+                start_after: None,
+                limit: 256,
+            },),
+        )?;
+        let pool = baseline_application_result(pool, "query root Canister pool")?;
+        let expected_ready = u32::try_from(metadata.pool_assets.len().saturating_sub(2))
+            .expect("bounded test asset count");
+        if pool.ready != expected_ready || pool.workload != 2 || pool.pending_reset != 0 {
+            return Err(ActiveComponentRegistryBaselineError::Invariant(format!(
+                "root Canister pool is not at baseline: ready={}, workload={}, pending_reset={}",
+                pool.ready, pool.workload, pool.pending_reset
+            )));
+        }
+        Ok(())
+    }
+
+    fn baseline_application_result<T>(
+        result: Result<T, Error>,
+        context: &str,
+    ) -> Result<T, ActiveComponentRegistryBaselineError> {
+        result.map_err(|error| {
+            ActiveComponentRegistryBaselineError::Invariant(format!("{context}: {error:?}"))
+        })
     }
 
     #[cfg(test)]

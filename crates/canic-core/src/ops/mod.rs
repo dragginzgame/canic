@@ -18,6 +18,7 @@ pub mod blob_storage;
 pub mod cascade;
 #[cfg(feature = "blob-storage-billing")]
 pub mod cashier;
+pub mod component_provisioning_plan;
 pub mod component_runtime;
 pub mod config;
 pub mod cost_guard;
@@ -63,6 +64,11 @@ use thiserror::Error as ThisError;
 pub enum OpsError {
     #[error(transparent)]
     ConfigOps(#[from] config::ConfigOpsError),
+
+    #[error(transparent)]
+    ComponentProvisioningPlan(
+        #[from] component_provisioning_plan::ComponentProvisioningPlanOpsError,
+    ),
 
     #[error(transparent)]
     FleetRegistry(#[from] fleet_registry::FleetRegistryOpsError),

@@ -141,10 +141,10 @@ pub(super) fn verification_rows(
                 .to_string(),
         },
         VerificationRow {
-            command: "fresh authoritative root harness profile per scenario".to_string(),
+            command: "restored authoritative root harness profile per scenario".to_string(),
             status: STATUS_PASS.to_string(),
             notes:
-                "Each scenario used a fresh topology/capability/scaling/sharding root bootstrap instead of sharing one cumulative perf table."
+                "Each scenario used an exclusively leased, snapshot-restored and validated topology/capability/scaling/sharding baseline instead of sharing cumulative canister state."
                     .to_string(),
         },
         VerificationRow {
@@ -822,7 +822,7 @@ mod tests {
                 replay_state: "fresh",
                 cache_state: "n/a",
                 topology_state: "scaling-profile-ready",
-                freshness_model: "fresh-topology-per-scenario",
+                freshness_model: "restored-baseline-per-scenario",
                 notes: "scale capability row",
             },
             row: CanonicalPerfRow {

@@ -306,6 +306,7 @@ mod root_limits_document {
         maximum_wasm_store_bytes: u64,
         canister_pool: CanisterPoolDocument,
         cycles_funding: CyclesFundingBudgetDocument,
+        maximum_group_placements: u32,
     }
 
     pub(super) fn serialize<S>(
@@ -328,6 +329,7 @@ mod root_limits_document {
                 window_secs: limits.cycles_funding.window_secs,
                 maximum_cycles: limits.cycles_funding.maximum_cycles.to_u128().to_string(),
             },
+            maximum_group_placements: limits.maximum_group_placements,
         }
         .serialize(serializer)
     }
@@ -360,6 +362,7 @@ mod root_limits_document {
                 window_secs: document.cycles_funding.window_secs,
                 maximum_cycles: Cycles::new(maximum_cycles),
             },
+            maximum_group_placements: document.maximum_group_placements,
         })
     }
 }

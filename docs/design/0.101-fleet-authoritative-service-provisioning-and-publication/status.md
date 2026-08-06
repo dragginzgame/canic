@@ -1,6 +1,6 @@
 # Canic 0.101 Implementation Status
 
-Date: 2026-08-05
+Date: 2026-08-06
 
 ## Status
 
@@ -14,10 +14,14 @@ Date: 2026-08-05
   Spec ceilings and one schema-v1 semantic digest over the canonical group,
   flattened-deployment and Fleet-service-target sections. The managed runtime
   ABI now validates and retains an immutable ordinary-or-group-member context
-  and exposes it to application policy, while every grouped effect-bearing
-  surface remains unimplemented.
+  and exposes it to application policy. One bounded canonical fresh
+  provisioning plan now binds the exact Registry version, active roots,
+  release sets, placement IDs, complete flattened members and effective
+  limits; the strict Fleet input and Registry also carry the immutable
+  per-root group-placement ceiling. Plan persistence, root acceptance and
+  every grouped effect-bearing surface remain unimplemented.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.6` is released and `0.101.7` is open.
+- Implementation started: yes; `0.101.7` is released and `0.101.8` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -152,17 +156,20 @@ Fleet policy writer.
 
 ## Slice 2 — Root Plans and Provisioning
 
-- [ ] Freeze one canonical root/group-placement/member plan shape.
+- [x] Freeze one canonical root/group-placement/member plan shape.
 - [ ] Carry every member's canonical effective limits through plan hashing,
-  root acceptance, protected runtime context and durable receipts.
+  root acceptance, protected runtime context and durable receipts. Plan
+  hashing is complete; root acceptance, context derivation and receipts remain.
 - [ ] Reserve monotonically increasing, never-reused placement ordinals before
   root calls.
 - [ ] Bind every placement to one exact eligible Fleet-owned root while
   permitting repeated roots within placement policy.
 - [ ] Require every flattened Spec in that root's immutable admissions,
   Component Topology, active release set and Wasm Store Catalog.
-- [ ] Enforce each root's immutable aggregate group-placement ceiling.
-- [ ] Extend the complete current root-limit contract without dropping
+- [ ] Enforce each root's immutable aggregate group-placement ceiling. Fresh
+  plan gross-capacity rejection is complete; durable accepted-plus-committed
+  accounting remains.
+- [x] Extend the complete current root-limit contract without dropping
   Registry, Store, prepaid-pool or cycles-funding authority.
 - [ ] Reuse canonical root-local `ComponentInstanceId` allocation,
   prepaid-Canister claim and platform lifecycle, failing closed when no Ready

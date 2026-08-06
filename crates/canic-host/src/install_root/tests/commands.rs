@@ -236,6 +236,7 @@ fn root_init_args_are_written_as_binary_candid() {
                     maximum_component_instances: 10,
                     maximum_registry_bytes: 1_048_576,
                     maximum_wasm_store_bytes: 10_000_000,
+                    maximum_group_placements: 16,
                     canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {
                         minimum_size: 1,
                         maximum_size: 10,

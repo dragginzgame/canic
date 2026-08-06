@@ -1018,7 +1018,7 @@ mod tests {
             replay_state: "fresh",
             cache_state: "n/a",
             topology_state: "scaling-profile-ready",
-            freshness_model: "fresh-topology-per-scenario",
+            freshness_model: "restored-baseline-per-scenario",
             notes: "scale capability row",
         }
     }

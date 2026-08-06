@@ -223,6 +223,7 @@ struct FleetSubnetRootLimitsDocument {
     maximum_component_instances: u32,
     maximum_registry_bytes: u64,
     maximum_wasm_store_bytes: u64,
+    maximum_group_placements: u32,
     cycles_funding: CyclesFundingBudgetDocument,
 }
 
@@ -397,6 +398,7 @@ fn resolve_document(
                     window_secs: root.limits.cycles_funding.window_secs,
                     maximum_cycles: root.limits.cycles_funding.maximum_cycles.clone(),
                 },
+                maximum_group_placements: root.limits.maximum_group_placements,
             },
             canister_pool_imports,
             root_creation_funding,

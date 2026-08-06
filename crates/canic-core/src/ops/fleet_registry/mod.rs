@@ -507,6 +507,7 @@ fn encode_limits(encoder: &mut CanonicalEncoder, limits: &FleetSubnetRootLimits)
     encoder.u128(limits.canister_pool.canister_cycles.to_u128());
     encoder.u64(limits.cycles_funding.window_secs);
     encoder.u128(limits.cycles_funding.maximum_cycles.to_u128());
+    encoder.u32(limits.maximum_group_placements);
 }
 
 const fn status_tag(status: FleetSubnetRootStatus) -> u8 {
