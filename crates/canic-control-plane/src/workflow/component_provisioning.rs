@@ -1,9 +1,9 @@
 //! Module: workflow::component_provisioning
 //!
-//! Responsibility: authenticate and accept one exact Coordinator-planned root batch.
-//! Does not own: stable records, Component effects, service publication, or runtime activation.
-//! Boundary: no durable acceptance occurs before protected root, mirror, config, Store, pool and
-//! aggregate capacity evidence agree.
+//! Responsibility: authenticate and advance one exact Coordinator-planned root batch.
+//! Does not own: stable records, pool state, service publication, or runtime activation.
+//! Boundary: acceptance and each bounded member step revalidate protected root, Registry, config,
+//! Store and aggregate progress before delegating to existing root-local lifecycle authority.
 
 use crate::{
     ops::{
@@ -12,7 +12,7 @@ use crate::{
     },
     view::{
         component_provisioning::{
-            RootComponentMemberReservationView, RootComponentProvisioningReservationDisposition,
+            RootComponentProvisioningAdvanceDisposition, RootComponentProvisioningMemberView,
             RootComponentProvisioningView,
         },
         component_registry::{RootComponentAllocationView, RootComponentRegistryView},
@@ -117,8 +117,8 @@ pub fn status(
         .map(crate::ops::component_provisioning::status_response)
 }
 
-/// Advance exactly one canonical Component identity reservation or replay that step.
-pub fn advance(
+/// Advance exactly one canonical identity reservation or prepaid-Canister claim.
+pub async fn advance(
     caller: Principal,
     request: RootComponentProvisioningAdvanceRequest,
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
@@ -128,16 +128,33 @@ pub fn advance(
         operation_id: request.operation_id,
         plan_hash: request.plan_hash,
     })?;
-    match RootComponentProvisioningOps::reservation_disposition(request, &current)? {
-        RootComponentProvisioningReservationDisposition::Complete
-        | RootComponentProvisioningReservationDisposition::Replay => {
+    match RootComponentProvisioningOps::advance_disposition(request, &current)? {
+        RootComponentProvisioningAdvanceDisposition::Complete
+        | RootComponentProvisioningAdvanceDisposition::Replay => {
             return Ok(crate::ops::component_provisioning::status_response(current));
         }
-        RootComponentProvisioningReservationDisposition::Advance => {}
+        RootComponentProvisioningAdvanceDisposition::Advance => {}
     }
 
-    let registry = current_registry_for_reservation(&authority, root, &current)?;
-    let member = RootComponentProvisioningOps::next_member_reservation(&current)?;
+    let advanced = if current.reservation_cursor.reserved_component_count < current.component_count
+    {
+        advance_member_reservation(&authority, root, request, &current)?
+    } else {
+        advance_member_claim(&authority, root, request, &current).await?
+    };
+    Ok(crate::ops::component_provisioning::status_response(
+        advanced,
+    ))
+}
+
+fn advance_member_reservation(
+    authority: &FleetSubnetRootAuthority,
+    root: Principal,
+    request: RootComponentProvisioningAdvanceRequest,
+    current: &RootComponentProvisioningView,
+) -> Result<RootComponentProvisioningView, InternalError> {
+    let registry = current_registry_for_reservation(authority, root, current)?;
+    let member = RootComponentProvisioningOps::next_member_reservation(current)?;
     let existing = ComponentRegistryOps::allocation(member.member_operation_id);
     validate_reservation_registry_progress(
         registry.reserved_component_instances,
@@ -147,7 +164,7 @@ pub fn advance(
     let topology = ConfigOps::component_topology()?;
     let allocation = match existing {
         Some(allocation) => allocation,
-        None => reserve_group_member(&authority, &registry, &current, &member, &topology)?,
+        None => reserve_group_member(authority, &registry, current, &member, &topology)?,
     };
     super::component_registry::validate_allocation_record(
         &authority.binding,
@@ -156,10 +173,70 @@ pub fn advance(
         &allocation,
         member.member_operation_id,
     )?;
-    let advanced = RootComponentProvisioningOps::mark_member_reserved(request, &allocation)?;
-    Ok(crate::ops::component_provisioning::status_response(
-        advanced,
-    ))
+    RootComponentProvisioningOps::mark_member_reserved(request, &allocation)
+}
+
+async fn advance_member_claim(
+    authority: &FleetSubnetRootAuthority,
+    root: Principal,
+    request: RootComponentProvisioningAdvanceRequest,
+    current: &RootComponentProvisioningView,
+) -> Result<RootComponentProvisioningView, InternalError> {
+    let registry = current_registry_for_reservation(authority, root, current)?;
+    validate_claim_registry_progress(&registry, current.component_count)?;
+    let member = RootComponentProvisioningOps::next_member_claim(current)?;
+    let allocation =
+        ComponentRegistryOps::allocation(member.member_operation_id).ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component Group member claim has no reserved Component identity",
+            )
+        })?;
+    let topology = ConfigOps::component_topology()?;
+    super::component_registry::validate_allocation_record(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &allocation,
+        member.member_operation_id,
+    )?;
+
+    let store = root_store::status(registry.store_bootstrap.clone()).await?;
+    let revalidated = current_registry_for_reservation(authority, root, current)?;
+    if revalidated.store_bootstrap != registry.store_bootstrap {
+        return Err(InternalError::conflict(
+            "root Component Registry Store authority changed across prepaid-Canister claim observation",
+        ));
+    }
+    let latest = RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
+        operation_id: request.operation_id,
+        plan_hash: request.plan_hash,
+    })?;
+    match RootComponentProvisioningOps::advance_disposition(request, &latest)? {
+        RootComponentProvisioningAdvanceDisposition::Complete
+        | RootComponentProvisioningAdvanceDisposition::Replay => return Ok(latest),
+        RootComponentProvisioningAdvanceDisposition::Advance => {}
+    }
+
+    let allocation =
+        ComponentRegistryOps::allocation(member.member_operation_id).ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "Component Group member reservation disappeared across Store observation",
+            )
+        })?;
+    super::component_registry::validate_allocation_record(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &allocation,
+        member.member_operation_id,
+    )?;
+    let claimed =
+        super::component_registry::advance_group_member_creation(root, &store, allocation)?;
+    let context = RootComponentProvisioningOps::member_deployment_context(&latest, &claimed)?;
+    validate_group_member_context(&context)?;
+    RootComponentProvisioningOps::mark_member_claimed(request, &claimed)
 }
 
 fn require_coordinator(caller: Principal, coordinator: Principal) -> Result<(), InternalError> {
@@ -269,11 +346,40 @@ fn validate_reservation_registry_progress(
     Ok(())
 }
 
+fn validate_claim_registry_progress(
+    registry: &RootComponentRegistryView,
+    component_count: u32,
+) -> Result<(), InternalError> {
+    if registry.reserved_component_instances != component_count {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component Registry reservations differ from claim-ready aggregate provisioning progress",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_group_member_context(
+    context: &canic_core::dto::component_deployment::ProtectedComponentDeployment,
+) -> Result<(), InternalError> {
+    let canic_core::dto::component_deployment::ProtectedComponentDeployment::GroupMember {
+        binding,
+        ..
+    } = context
+    else {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
+            "group provisioning derived an ordinary Component deployment context",
+        ));
+    };
+    ConfigOps::validate_protected_component_deployment(context, binding)
+}
+
 fn reserve_group_member(
     authority: &FleetSubnetRootAuthority,
     registry: &RootComponentRegistryView,
     provisioning: &RootComponentProvisioningView,
-    member: &RootComponentMemberReservationView,
+    member: &RootComponentProvisioningMemberView,
     topology: &canic_core::control_plane_support::config::ComponentTopology,
 ) -> Result<RootComponentAllocationView, InternalError> {
     let request = RootComponentAllocationRequest {

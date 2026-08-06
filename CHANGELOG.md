@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.11` advances reserved group members through the ordinary restart-safe
+  prepaid-Canister claim and exact plan-derived runtime context, and hardens
+  release cleanup and atomic branch/tag publication against transient races.
+
 - `0.101.10` gives accepted root batches deterministic, restart-safe
   Component identity reservation in canonical placement/member order while
   keeping every Canister and publication effect fenced, and advances the

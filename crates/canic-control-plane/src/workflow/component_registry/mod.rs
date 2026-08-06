@@ -2378,7 +2378,18 @@ pub async fn create_allocation(
     )?;
     let plan = creation_plan(root, &store, &allocation)?;
 
-    advance_creation(request.operation_id, allocation, plan)
+    allocation_response(advance_creation(request.operation_id, allocation, plan)?)
+}
+
+/// Reuse the ordinary top-level Component pool-claim journal for one accepted group member.
+pub(super) fn advance_group_member_creation(
+    root: candid::Principal,
+    store: &RootStoreBootstrapResponse,
+    allocation: RootComponentAllocationView,
+) -> Result<RootComponentAllocationView, InternalError> {
+    let operation_id = allocation.operation_id;
+    let plan = creation_plan(root, store, &allocation)?;
+    advance_creation(operation_id, allocation, plan)
 }
 
 /// Advance peer Component creation for its exact active requester caller.
@@ -3355,10 +3366,10 @@ fn advance_creation(
     operation_id: [u8; 32],
     allocation: RootComponentAllocationView,
     plan: RootComponentCreationPlan,
-) -> Result<RootComponentAllocationResponse, InternalError> {
+) -> Result<RootComponentAllocationView, InternalError> {
     let allocation = reconcile_component_pool_claim(operation_id, allocation)?;
     if reconcile_existing_creation(&allocation, &plan)? {
-        return allocation_response(allocation);
+        return Ok(allocation);
     }
 
     ComponentRegistryOps::validate_creation_capacity(operation_id, &plan)?;
@@ -3372,7 +3383,7 @@ fn advance_creation(
         return claim_component_pool_asset(operation_id, plan, pool_claim, canister);
     }
     Err(InternalError::resource_exhausted(
-        "no Ready prepaid Canister is available; the operator must replenish and import a root-local asset",
+        "no Ready prepaid Canister is available; root-local pool maintenance or an operator import must replenish an asset",
     ))
 }
 
@@ -3404,7 +3415,7 @@ fn advance_child_creation(
         );
     }
     Err(InternalError::resource_exhausted(
-        "no Ready prepaid Canister is available; the operator must replenish and import a root-local asset",
+        "no Ready prepaid Canister is available; root-local pool maintenance or an operator import must replenish an asset",
     ))
 }
 
@@ -3413,7 +3424,7 @@ fn claim_component_pool_asset(
     plan: RootComponentCreationPlan,
     claim: CanisterPoolClaimKey,
     canister: candid::Principal,
-) -> Result<RootComponentAllocationResponse, InternalError> {
+) -> Result<RootComponentAllocationView, InternalError> {
     let permit = deployment::reserve_component_pool_claim_guard()?;
     let intent = ComponentRegistryOps::begin_creation(
         operation_id,
@@ -3439,7 +3450,7 @@ fn claim_component_pool_asset(
     })?;
     CostGuardWorkflow::complete(&permit, IcOps::now_secs())?;
     CanisterPoolOps::finalize_claim(&claim, canister, IcOps::now_nanos())?;
-    allocation_response(created)
+    Ok(created)
 }
 
 fn claim_component_child_pool_asset(

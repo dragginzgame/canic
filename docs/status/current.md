@@ -14,16 +14,28 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.9`.
-- The latest published release is `v0.101.9` at
-  `ca83ca84b7fc4213ec28c3b47bc0a3a20307d06a`.
-- Open `0.101.10` advances each accepted root batch one canonical member at a
-  time through the existing root-local `ComponentInstanceId` allocator. A
+- The workspace package version is `0.101.10`.
+- The latest published release is `v0.101.10` at
+  `e74715d5d3a460daf129eefcdcdd6620e88915bc`.
+- Open `0.101.11` advances fully reserved root batches one canonical member at
+  a time through the ordinary prepaid-Canister claim journal. A second hash-
+  bound O(1) cursor and caller-supplied expected count reconcile response loss
+  without selecting another asset; only after the exact created principal and
+  plan-derived `GroupMember` runtime context validate does aggregate claim
+  progress commit. Installation, Registry/Directory publication and runtime
+  activation remain fenced. Release cleanup now retries one transient Cargo
+  filesystem failure, and release publication explicitly pushes the exact
+  branch and workspace-version tag together atomically even when the branch
+  commit is already remote. Version-bump validation uses the complete
+  workspace test lane, and network-aware core builds rerun when
+  `ICP_ENVIRONMENT` changes.
+- Released `0.101.10` advances each accepted root batch one canonical member
+  at a time through the existing root-local `ComponentInstanceId` allocator. A
   hash-bound O(1) placement/member cursor and caller-supplied expected count
   reconcile the sole cross-record partial-progress shape without skipping or
   double-reserving a member; ordinary lifecycle endpoints reject the grouped
   origin. No Canister, pool, cycles, install, Registry membership, Directory
-  or runtime effect is enabled yet. The same open patch advances the internal
+  or runtime effect is enabled yet. The same patch advances the internal
   harness dependency to `ic-testkit` 0.7.0 without changing the current Canic
   test topology, adopting its batch progress, exact Cargo-input and captured
   snapshot-sender APIs. Patch, minor and major release gates now confine
@@ -2310,15 +2322,17 @@ First primary results:
 
 ## Next Action
 
-The canonical plan is published through immutable `v0.101.8`, and exact root
-batch acceptance is published through immutable `v0.101.9`. Open 0.101.10
-allocates each accepted member's root-local `ComponentInstanceId` in canonical
-order with a hash-bound response-idempotent cursor while leaving every
-external effect fenced. Continue Slice 2 by claiming each member's Ready
-prepaid Canister through that same operation identity, deriving the exact
-`GroupMember` runtime context from the accepted plan and advancing the
-existing Component lifecycle without creating a second identity, lifecycle,
-Store or pool path. Do not enable scale-out until its durable Coordinator
+The canonical plan, exact root-batch acceptance and canonical root-local
+`ComponentInstanceId` allocation are published through immutable
+`v0.101.10`. Open 0.101.11 claims each fully reserved member's Ready prepaid
+Canister through that same operation identity, derives and validates the exact
+`GroupMember` runtime context from the accepted plan, and commits a separate
+hash-bound response-idempotent claim cursor without creating a second
+identity, lifecycle, Store or pool path. Continue Slice 2 by installing each
+claimed member's exact Store-backed Wasm behind `Prepared`, retaining that
+grouped runtime context and its effective limits while keeping Registry,
+Directory and activation transitions independently fenced. Do not enable
+scale-out until its durable Coordinator
 placement ledger can prove ordinal non-reuse and combined density/spread.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the

@@ -132,6 +132,7 @@ pub enum RootComponentProvisioningStateRecordPhase {
         placement_count: u32,
         component_count: u32,
         reservation_cursor: RootComponentProvisioningReservationCursorRecord,
+        claim_cursor: RootComponentProvisioningClaimCursorRecord,
         accepted_at_ns: u64,
         receipt_content_hash: [u8; 32],
     },
@@ -143,6 +144,15 @@ pub struct RootComponentProvisioningReservationCursorRecord {
     pub placement_index: u32,
     pub member_index: u32,
     pub reserved_component_count: u32,
+    pub content_hash: [u8; 32],
+}
+
+/// Canonical O(1) cursor over prepaid-Canister claims for accepted members.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentProvisioningClaimCursorRecord {
+    pub placement_index: u32,
+    pub member_index: u32,
+    pub claimed_component_count: u32,
     pub content_hash: [u8; 32],
 }
 
