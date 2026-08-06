@@ -178,10 +178,18 @@ fn prepared_activation_schedules_each_current_application_install_hook_once() {
         .split("macro_rules! __canic_start_nonroot_lifecycle_core")
         .nth(1)
         .and_then(|rest| {
-            rest.split("macro_rules! __canic_start_local_lifecycle_core")
+            rest.split("macro_rules! __canic_start_wasm_store_lifecycle_core")
                 .next()
         })
         .expect("managed non-root lifecycle macro");
+    let wasm_store = source
+        .split("macro_rules! __canic_start_wasm_store_lifecycle_core")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("macro_rules! __canic_start_local_lifecycle_core")
+                .next()
+        })
+        .expect("Wasm Store lifecycle macro");
     let root = source
         .split("macro_rules! __canic_root_lifecycle_core")
         .nth(1)
@@ -197,15 +205,33 @@ fn prepared_activation_schedules_each_current_application_install_hook_once() {
         "managed non-root activation must receive durable init bytes from its transition"
     );
     assert!(
-        root.contains("canic_setup().await;") && root.contains("canic_install().await;"),
+        wasm_store.contains("fn __canic_schedule_prepared_activation_init(args: Option<Vec<u8>>)")
+            && wasm_store.contains("canic_install(args).await;"),
+        "Wasm Store activation must receive durable init bytes from its transition"
+    );
+    assert!(
+        root.contains("fn __canic_schedule_prepared_activation_init()")
+            && root.contains("canic_setup().await;")
+            && root.contains("canic_install().await;"),
         "managed root activation must schedule its current application install hooks"
     );
+
+    const DUPLICATE_GUARD: &str = "__CANIC_PREPARED_APPLICATION_INIT_SCHEDULED.replace(true)";
+    for (adapter, lifecycle) in [
+        ("managed non-root", nonroot),
+        ("Wasm Store", wasm_store),
+        ("managed root", root),
+    ] {
+        assert_eq!(
+            lifecycle.matches(DUPLICATE_GUARD).count(),
+            1,
+            "{adapter} activation adapter must suppress duplicate hook scheduling"
+        );
+    }
     assert_eq!(
-        source
-            .matches("__CANIC_PREPARED_APPLICATION_INIT_SCHEDULED.replace(true)")
-            .count(),
-        2,
-        "root and non-root activation adapters must each suppress duplicate hook scheduling"
+        source.matches(DUPLICATE_GUARD).count(),
+        3,
+        "only the root, non-root and Wasm Store activation adapters may schedule application install hooks"
     );
 
     let nonroot_path = workspace.join("crates/canic/src/macros/endpoints/nonroot.rs");
