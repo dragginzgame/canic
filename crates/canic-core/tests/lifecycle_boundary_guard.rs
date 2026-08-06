@@ -59,13 +59,13 @@ fn nonroot_init_arguments_reach_only_the_application_hook() {
 
     assert_eq!(
         source.matches("schedule_init_nonroot_bootstrap();").count(),
-        2,
-        "both non-root start paths must schedule argument-free internal bootstrap"
+        3,
+        "all three non-root start paths must schedule argument-free internal bootstrap"
     );
     assert_eq!(
         source.matches("canic_install(args).await;").count(),
-        2,
-        "both non-root start paths must preserve application init arguments"
+        3,
+        "all three non-root start paths must preserve application init arguments"
     );
 }
 
