@@ -216,20 +216,20 @@ fn prepared_activation_schedules_each_current_application_install_hook_once() {
         "managed root activation must schedule its current application install hooks"
     );
 
-    const DUPLICATE_GUARD: &str = "__CANIC_PREPARED_APPLICATION_INIT_SCHEDULED.replace(true)";
+    let duplicate_guard = "__CANIC_PREPARED_APPLICATION_INIT_SCHEDULED.replace(true)";
     for (adapter, lifecycle) in [
         ("managed non-root", nonroot),
         ("Wasm Store", wasm_store),
         ("managed root", root),
     ] {
         assert_eq!(
-            lifecycle.matches(DUPLICATE_GUARD).count(),
+            lifecycle.matches(duplicate_guard).count(),
             1,
             "{adapter} activation adapter must suppress duplicate hook scheduling"
         );
     }
     assert_eq!(
-        source.matches(DUPLICATE_GUARD).count(),
+        source.matches(duplicate_guard).count(),
         3,
         "only the root, non-root and Wasm Store activation adapters may schedule application install hooks"
     );
