@@ -17,7 +17,8 @@ Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
   behind `Prepared`, with real-canister coverage and correctly bounded stable
   acceptance keys; it also makes the release test lane cover every classified
   integration target while preserving serial PocketIC isolation and bounding
-  shared test-Wasm compilation state.
+  shared test-Wasm compilation state, and keeps committed Component lifecycle
+  retries phase-correct after Directory preparation or activation.
 
 - `0.101.11` advances reserved group members through the ordinary restart-safe
   prepaid-Canister claim and exact plan-derived runtime context, and hardens

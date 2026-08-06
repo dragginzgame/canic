@@ -2821,7 +2821,7 @@ pub async fn commit_allocation(
     let plan = component_install_plan(&authority.binding, &store, &allocation).await?;
     let installation = committed_or_verified_installation(&allocation)?;
     validate_install_effect(installation, &plan.durable)?;
-    verify_installed_component(&plan).await?;
+    verify_committed_or_verified_install(&allocation, &plan).await?;
 
     let (committed, partition) = ComponentRegistryOps::commit_verified(
         request.operation_id,
@@ -4220,12 +4220,30 @@ async fn advance_install(
                 &installation.cost_guard_settlement,
                 IcOps::now_secs(),
             )?;
-            verify_installed_component(&plan).await?;
+            verify_committed_or_verified_install(&allocation, &plan).await?;
             allocation_response(allocation)
         }
         RootComponentAllocationProgressView::Removed { .. } => {
             removed_allocation_response(allocation, &plan)
         }
+    }
+}
+
+async fn verify_committed_or_verified_install(
+    allocation: &RootComponentAllocationView,
+    plan: &ComponentInstallPlan,
+) -> Result<(), InternalError> {
+    match &allocation.progress {
+        RootComponentAllocationProgressView::Verified { .. } => {
+            verify_prepared_installed_component(plan).await
+        }
+        RootComponentAllocationProgressView::Committed { .. } => {
+            verify_installed_component(plan).await
+        }
+        _ => Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "Component install verification reached an invalid allocation phase",
+        )),
     }
 }
 
@@ -4269,7 +4287,7 @@ async fn verify_and_mark_installed(
     _installed: RootComponentAllocationView,
     plan: &ComponentInstallPlan,
 ) -> Result<RootComponentAllocationResponse, InternalError> {
-    verify_installed_component(plan).await?;
+    verify_prepared_installed_component(plan).await?;
     let verified = ComponentRegistryOps::mark_verified(operation_id)?;
     if !matches!(
         verified.progress,
@@ -4299,7 +4317,9 @@ async fn observed_install_state(plan: &ComponentInstallPlan) -> Result<bool, Int
     }
 }
 
-async fn verify_installed_component(plan: &ComponentInstallPlan) -> Result<(), InternalError> {
+async fn installed_component_status(
+    plan: &ComponentInstallPlan,
+) -> Result<ComponentRuntimeStatusResponse, InternalError> {
     if !observed_install_state(plan).await? {
         return Err(InternalError::unavailable(
             "Component Canister has no installed module after installation",
@@ -4312,16 +4332,52 @@ async fn verify_installed_component(plan: &ComponentInstallPlan) -> Result<(), I
             "installed Component retained binding differs from root install authority",
         ));
     }
-    let status = query_component_runtime_status(plan.canister).await?;
+    query_component_runtime_status(plan.canister).await
+}
+
+async fn verify_installed_component(plan: &ComponentInstallPlan) -> Result<(), InternalError> {
+    let status = installed_component_status(plan).await?;
+    validate_installed_component_status(
+        &status,
+        plan.payload.install_id,
+        &ManagedCanisterBinding::Component(plan.durable.binding.clone()),
+        &plan.deployment,
+    )
+}
+
+async fn verify_prepared_installed_component(
+    plan: &ComponentInstallPlan,
+) -> Result<(), InternalError> {
+    let status = installed_component_status(plan).await?;
     validate_prepared_install_status(
         &status,
         plan.payload.install_id,
-        &expected,
+        &ManagedCanisterBinding::Component(plan.durable.binding.clone()),
         &plan.deployment,
     )
 }
 
 fn validate_prepared_install_status(
+    status: &ComponentRuntimeStatusResponse,
+    operation_id: [u8; 32],
+    binding: &ManagedCanisterBinding,
+    deployment: &ProtectedComponentDeployment,
+) -> Result<(), InternalError> {
+    validate_installed_component_status(status, operation_id, binding, deployment)?;
+    let directory_is_empty = ComponentRuntimeDirectoryStatusIdentity::from_status(status)
+        == ComponentRuntimeDirectoryStatusIdentity::empty();
+    let runtime_is_prepared = status.phase == ComponentRuntimePhase::AwaitingDirectory
+        && directory_is_empty
+        && status.activation.is_none();
+    if !runtime_is_prepared {
+        return Err(InternalError::conflict(
+            "installed Component did not remain behind the empty AwaitingDirectory fence",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_installed_component_status(
     status: &ComponentRuntimeStatusResponse,
     operation_id: [u8; 32],
     binding: &ManagedCanisterBinding,
@@ -4340,16 +4396,6 @@ fn validate_prepared_install_status(
     if status.deployment.as_ref() != deployment {
         return Err(InternalError::conflict(
             "installed Component retained a different protected deployment context",
-        ));
-    }
-    let directory_is_empty = ComponentRuntimeDirectoryStatusIdentity::from_status(status)
-        == ComponentRuntimeDirectoryStatusIdentity::empty();
-    let runtime_is_prepared = status.phase == ComponentRuntimePhase::AwaitingDirectory
-        && directory_is_empty
-        && status.activation.is_none();
-    if !runtime_is_prepared {
-        return Err(InternalError::conflict(
-            "installed Component did not remain behind the empty AwaitingDirectory fence",
         ));
     }
     Ok(())
@@ -7726,6 +7772,8 @@ mod tests {
         assert!(
             validate_prepared_install_status(&status, operation_id, &managed, &deployment).is_err()
         );
+        validate_installed_component_status(&status, operation_id, &managed, &deployment)
+            .expect("advanced runtime retains exact installed identity");
     }
 
     #[test]
