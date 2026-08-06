@@ -6,8 +6,8 @@
 
 use crate::{
     ops::{
-        canister_pool::CanisterPoolOps, component_registry::ComponentRegistryOps,
-        fleet_registry_mirror::FleetRegistryMirrorOps,
+        canister_pool::CanisterPoolOps, component_provisioning::RootComponentProvisioningOps,
+        component_registry::ComponentRegistryOps, fleet_registry_mirror::FleetRegistryMirrorOps,
         storage::state::root_wasm_store::RootWasmStoreStateOps,
     },
     view::component_registry::{
@@ -258,6 +258,7 @@ pub fn begin_draining(
             "Fleet Subnet Root draining request differs from the active Registry mirror",
         ));
     }
+    RootComponentProvisioningOps::require_root_draining_open()?;
     let draining = ComponentRegistryOps::begin_root_draining(
         request.operation_id,
         &request.expected_registry,

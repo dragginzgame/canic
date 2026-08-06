@@ -18,10 +18,15 @@ Date: 2026-08-06
   provisioning plan now binds the exact Registry version, active roots,
   release sets, placement IDs, complete flattened members and effective
   limits; the strict Fleet input and Registry also carry the immutable
-  per-root group-placement ceiling. Plan persistence, root acceptance and
-  every grouped effect-bearing surface remain unimplemented.
+  per-root group-placement ceiling. A selected root now validates and durably
+  accepts its exact Coordinator-authenticated batch, retains permanent
+  placement reservations and an exact restart-safe acceptance receipt, and
+  fences unrelated allocation and ordinary removal while that aggregate
+  authority is live. Component identity allocation, pool claim, installation,
+  Registry/Directory publication and every grouped effect-bearing surface
+  remain unimplemented.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.7` is released and `0.101.8` is open.
+- Implementation started: yes; `0.101.8` is released and `0.101.9` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -129,10 +134,9 @@ Fleet policy writer.
 - [x] Add typed `Ordinary` and `FleetServiceMember` purpose with Authority,
   Replica and PoolMember variants.
 - [x] Validate AuthorityReplica and ActivePool target/member invariants.
-- [ ] Validate service-wide member density/spread independently of deployment
-  placement policy. Positive scalar bounds against maximum concurrent service
-  members, indivisible placement width and maximum contributing placements
-  compile independently; concrete root assignments remain unavailable.
+- [x] Validate service-wide member density/spread independently of deployment
+  placement policy, including concrete fresh-plan and selected-root
+  assignments.
 - [x] Add bounded inert deployment labels that cannot alter authority.
 - [x] Compile bounded reduction-only deployment-member limits against exact
   flattened paths and immutable Component Spec envelopes.
@@ -146,11 +150,8 @@ Fleet policy writer.
 - [x] Derive one semantic protected configuration digest over groups,
   deployments and service targets.
 - [ ] Remove singleton-Spec and sole-root-admission service assumptions.
-- [ ] Validate worst-case Spec demand, placement density/spread and the
+- [x] Validate worst-case Spec demand, placement density/spread and the
   zero-placement/non-Authority versus singleton-Authority count rules.
-  Maximum-placement Spec/service demand, scalar deployment/service envelopes
-  and purpose-dependent initial-count rules are complete; concrete root
-  assignment checks remain open.
 - [ ] Measure and freeze the initial supported root, Component, placement,
   service-member, plan, Registry and Directory envelope.
 
@@ -159,16 +160,19 @@ Fleet policy writer.
 - [x] Freeze one canonical root/group-placement/member plan shape.
 - [ ] Carry every member's canonical effective limits through plan hashing,
   root acceptance, protected runtime context and durable receipts. Plan
-  hashing is complete; root acceptance, context derivation and receipts remain.
+  hashing, root acceptance and the acceptance receipt are complete; grouped
+  runtime-context derivation and effect enforcement remain.
 - [ ] Reserve monotonically increasing, never-reused placement ordinals before
   root calls.
-- [ ] Bind every placement to one exact eligible Fleet-owned root while
+- [x] Bind every placement to one exact eligible Fleet-owned root while
   permitting repeated roots within placement policy.
-- [ ] Require every flattened Spec in that root's immutable admissions,
-  Component Topology, active release set and Wasm Store Catalog.
-- [ ] Enforce each root's immutable aggregate group-placement ceiling. Fresh
-  plan gross-capacity rejection is complete; durable accepted-plus-committed
-  accounting remains.
+- [x] Require every flattened Spec in that root's immutable admissions,
+  Component Topology, active release set and Wasm Store Catalog before durable
+  acceptance.
+- [ ] Enforce each root's immutable aggregate group-placement ceiling across
+  accepted and committed state. Permanent exact-retry-safe accepted
+  reservations now count once; later provisioning/publication transitions do
+  not yet exist.
 - [x] Extend the complete current root-limit contract without dropping
   Registry, Store, prepaid-pool or cycles-funding authority.
 - [ ] Reuse canonical root-local `ComponentInstanceId` allocation,
@@ -191,7 +195,8 @@ Fleet policy writer.
   owning top-level Component binding.
 - [ ] Keep new Components runtime `Prepared`.
 - [ ] Persist group-partitioned Component Registry evidence and one aggregate
-  idempotent root receipt.
+  idempotent root receipt. The aggregate acceptance record and receipt are
+  complete; provisioned bindings and Registry evidence remain.
 
 ## Slice 3 — Service Topology and Directories
 
@@ -232,6 +237,8 @@ Fleet policy writer.
 - [ ] Append all Replica and PoolMember bindings from one scale operation
   atomically.
 - [ ] Fence grouped Components and their roots from ordinary drain/removal.
+  Accepted placement authority, retained grouped origins and grouped Components
+  are fenced; the aggregate grouped removal protocol remains unimplemented.
 - [ ] Reject scale-down, placement reuse, Authority-group scaling, live root
   creation and admission expansion.
 

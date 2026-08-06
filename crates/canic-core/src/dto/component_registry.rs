@@ -13,9 +13,9 @@ use crate::{
         root_store::RootStoreBootstrapRequest,
     },
     ids::{
-        CanisterRole, ComponentBinding, ComponentChildBinding, ComponentInstanceId,
-        ComponentSpecId, ComponentTopologyDigest, FleetSubnetRootReleaseSet,
-        ManagedCanisterBinding,
+        CanisterRole, ComponentBinding, ComponentChildBinding, ComponentGroupMemberPath,
+        ComponentGroupPlacementId, ComponentInstanceId, ComponentSpecId, ComponentTopologyDigest,
+        FleetSubnetRootReleaseSet, ManagedCanisterBinding,
     },
 };
 use candid::{CandidType, Principal};
@@ -516,6 +516,12 @@ pub enum ComponentProvisioningOrigin {
     Component {
         requester: Box<ComponentBinding>,
         grant: Box<crate::config::ComponentProvisioningGrant>,
+    },
+    ComponentGroup {
+        operation_id: [u8; 32],
+        plan_hash: [u8; 32],
+        group_placement: ComponentGroupPlacementId,
+        member_path: ComponentGroupMemberPath,
     },
 }
 
@@ -1697,6 +1703,29 @@ mod tests {
         assert_eq!(
             candid::decode_one::<ComponentProvisioningOrigin>(&bytes)
                 .expect("decode peer provisioning origin"),
+            origin
+        );
+    }
+
+    #[test]
+    fn component_group_provisioning_origin_round_trips_through_candid() {
+        let origin = ComponentProvisioningOrigin::ComponentGroup {
+            operation_id: [25; 32],
+            plan_hash: [26; 32],
+            group_placement: ComponentGroupPlacementId {
+                deployment: "cells".parse().expect("deployment ID"),
+                ordinal: 3,
+            },
+            member_path: ComponentGroupMemberPath::try_from(vec![
+                "api".parse().expect("member ID"),
+            ])
+            .expect("member path"),
+        };
+        let bytes = candid::encode_one(&origin).expect("encode group provisioning origin");
+
+        assert_eq!(
+            candid::decode_one::<ComponentProvisioningOrigin>(&bytes)
+                .expect("decode group provisioning origin"),
             origin
         );
     }

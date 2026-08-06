@@ -100,24 +100,16 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
     )
     .with_cargo_profile_args(&cargo_args)
     .with_extra_env(&build_env)
+    .with_shared_incremental_target(internal_test_shared_wasm_target(workspace_root))
     .with_prune_policy(internal_test_artifact_prune_policy());
     let outcome = build_wasm_canisters_cached(&build)
         .unwrap_or_else(|err| panic!("internal test Wasm build failed: {err}"));
-    let timings = outcome.record().timings();
-    eprintln!(
-        "[canic-test-wasm] {} {} package(s) in {:?} (lock {:?}, inputs {:?}, cargo {:?})",
-        if outcome.is_reused() {
-            "reused"
-        } else {
-            "built"
-        },
-        packages.len(),
-        timings.total(),
-        timings.lock_wait(),
-        timings.input_resolution(),
-        timings.cargo_build(),
-    );
+    eprintln!("[canic-test-wasm] {outcome}");
     report_artifact_cache_maintenance("canic-test-wasm", outcome.record().maintenance());
+}
+
+fn internal_test_shared_wasm_target(workspace_root: &Path) -> PathBuf {
+    workspace_root.join("target/test-artifacts/cargo-wasm-incremental")
 }
 
 pub(super) const fn internal_test_artifact_prune_policy() -> ArtifactCachePrunePolicy {

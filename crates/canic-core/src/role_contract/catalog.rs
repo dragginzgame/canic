@@ -324,6 +324,10 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
         StateAllocationKey::RootCanisterPool,
     ),
     capability_allocation(
+        RoleCapabilityKey::RootControlPlane,
+        StateAllocationKey::RootComponentProvisioning,
+    ),
+    capability_allocation(
         RoleCapabilityKey::WasmStore,
         StateAllocationKey::TemplateManifests,
     ),

@@ -178,7 +178,8 @@ impl ConfigOps {
     // Current-context / infallible helpers
     // ---------------------------------------------------------------------
 
-    pub(crate) fn get() -> Result<Arc<ConfigModel>, InternalError> {
+    /// Return the immutable compiled App model to trusted control-plane validators.
+    pub fn get() -> Result<Arc<ConfigModel>, InternalError> {
         let cfg = Config::get()?;
 
         Ok(cfg)

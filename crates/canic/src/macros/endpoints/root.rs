@@ -174,6 +174,20 @@ macro_rules! canic_emit_root_admin_endpoints {
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_registry_status(request).await
         }
 
+        #[$crate::canic_update(internal, public)]
+        async fn canic_root_component_provisioning_accept(
+            request: ::canic::dto::component_provisioning::RootComponentProvisioningAcceptanceRequest,
+        ) -> Result<::canic::dto::component_provisioning::RootComponentProvisioningStatusResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::component_provisioning::RootComponentProvisioningApi::accept(request).await
+        }
+
+        #[$crate::canic_query(internal, public)]
+        async fn canic_root_component_provisioning_status(
+            request: ::canic::dto::component_provisioning::RootComponentProvisioningStatusRequest,
+        ) -> Result<::canic::dto::component_provisioning::RootComponentProvisioningStatusResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::component_provisioning::RootComponentProvisioningApi::status(request)
+        }
+
         #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_root_component_allocate(
             request: ::canic::dto::component_registry::RootComponentAllocationRequest,

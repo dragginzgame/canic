@@ -834,6 +834,16 @@ fn assert_component_registry_protocol_constants() {
             "canic_root_component_registry_status",
         ),
         (
+            canic::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ACCEPT,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ACCEPT,
+            "canic_root_component_provisioning_accept",
+        ),
+        (
+            canic::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_STATUS,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_STATUS,
+            "canic_root_component_provisioning_status",
+        ),
+        (
             canic::protocol::CANIC_ROOT_COMPONENT_ALLOCATE,
             canic_core::protocol::CANIC_ROOT_COMPONENT_ALLOCATE,
             "canic_root_component_allocate",
@@ -1109,6 +1119,16 @@ fn assert_root_registry_mirror_guards(root: &str) {
         preceding_attribute_context(root, "async fn canic_root_component_registry_status(")
             .contains("canic_query(composite, requires(caller::is_controller()))"),
         "root Component Registry status must remain a controller-guarded composite query"
+    );
+    assert!(
+        preceding_attribute_context(root, "async fn canic_root_component_provisioning_accept(")
+            .contains("canic_update(internal, public)"),
+        "root Component provisioning acceptance must remain a public update authenticated by workflow"
+    );
+    assert!(
+        preceding_attribute_context(root, "async fn canic_root_component_provisioning_status(")
+            .contains("canic_query(internal, public)"),
+        "root Component provisioning status must remain a public query authenticated by workflow"
     );
     assert!(
         preceding_attribute_context(root, "async fn canic_root_component_allocate(")

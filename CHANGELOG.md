@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.9` adds exact Coordinator-authenticated root-batch acceptance with
+  durable placement reservations and replayable status, and advances the
+  internal harness to `ic-testkit` 0.6 with shared test-Wasm compilation and
+  exact mixed-controller snapshot senders.
+
 - `0.101.8` freezes the canonical fresh Component-provisioning plan and hash,
   binding exact active roots, group placements, flattened members and the new
   immutable per-root group-placement ceiling before effects, and advances the

@@ -84,6 +84,7 @@ pub enum StateAllocationKey {
     RootFleetRegistryMirror,
     RootComponentRegistry,
     RootCanisterPool,
+    RootComponentProvisioning,
     CoreRuntimeChildren,
     CoreRuntimeBindings,
     CoreFleetState,

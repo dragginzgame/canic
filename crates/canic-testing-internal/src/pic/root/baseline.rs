@@ -4,12 +4,13 @@ use super::{
 };
 use ic_testkit::pic::{
     BaselinePoolContractError, BaselinePreparationStage, CachedPocketIcBaseline,
-    CanisterRestoreReceipt, ControllerSnapshotError, CycleResetPolicy, FailureDisposition,
-    FixtureRecipeId, PocketIcBaselineRecipe, PreparedBaseline, ReadinessReceipt, RebuildReason,
-    ResetAchievement, ResetReceipt, ResetRequirement, ResetRequirements, SnapshotRestoreFunding,
-    TimeResetPolicy, ValidationReceipt, is_dead_pocket_ic_transport_error,
+    CanisterRestoreReceipt, CanisterSnapshotTarget, ControllerSnapshotError, CycleResetPolicy,
+    FailureDisposition, FixtureRecipeId, PocketIcBaselineRecipe, PreparedBaseline,
+    ReadinessReceipt, RebuildReason, ResetAchievement, ResetReceipt, ResetRequirement,
+    ResetRequirements, SnapshotRestoreFunding, TimeResetPolicy, ValidationReceipt,
+    is_dead_pocket_ic_transport_error,
 };
-use std::{collections::BTreeSet, error::Error as StdError, fmt, path::PathBuf, time::Instant};
+use std::{collections::BTreeMap, error::Error as StdError, fmt, path::PathBuf, time::Instant};
 
 /// Typed lifecycle recipe for one reusable root topology profile.
 pub struct RootBaselineRecipe {
@@ -249,14 +250,13 @@ fn capture_cached_root_baseline(
     spec: &RootBaselineSpec<'_>,
     initialized: InitializedRootTopology,
 ) -> CachedPocketIcBaseline<RootBaselineMetadata> {
-    let controller_ids = root_baseline_controller_ids(&initialized.metadata);
+    let snapshot_targets = root_baseline_snapshot_targets(&initialized.metadata);
 
     progress(spec, "capturing cached root snapshots");
     let started_at = Instant::now();
-    let baseline = CachedPocketIcBaseline::capture(
+    let baseline = CachedPocketIcBaseline::capture_with_senders(
         initialized.pic,
-        initialized.metadata.root_id,
-        controller_ids,
+        snapshot_targets,
         initialized.metadata,
     )
     .expect("cached root snapshots must be available");
@@ -264,12 +264,20 @@ fn capture_cached_root_baseline(
     baseline
 }
 
-fn root_baseline_controller_ids(metadata: &RootBaselineMetadata) -> Vec<candid::Principal> {
-    std::iter::once(metadata.root_id)
-        .chain(metadata.snapshot_pids.iter().copied())
-        .chain(metadata.managed_store_pids.iter().copied())
-        .collect::<BTreeSet<_>>()
+fn root_baseline_snapshot_targets(metadata: &RootBaselineMetadata) -> Vec<CanisterSnapshotTarget> {
+    let mut senders = BTreeMap::from([(metadata.root_id, None)]);
+    for canister_id in metadata
+        .snapshot_pids
+        .iter()
+        .chain(&metadata.managed_store_pids)
+    {
+        senders
+            .entry(*canister_id)
+            .or_insert(Some(metadata.root_id));
+    }
+    senders
         .into_iter()
+        .map(|(canister_id, sender)| CanisterSnapshotTarget::new(canister_id, sender))
         .collect()
 }
 
@@ -279,7 +287,7 @@ mod tests {
     use std::collections::HashMap;
 
     #[test]
-    fn root_baseline_controller_ids_are_unique() {
+    fn root_baseline_snapshot_targets_are_unique_and_controller_exact() {
         let root_id = candid::Principal::from_slice(&[0x41; 29]);
         let child_id = candid::Principal::from_slice(&[0x42; 29]);
         let store_id = candid::Principal::from_slice(&[0x43; 29]);
@@ -290,11 +298,14 @@ mod tests {
             managed_store_pids: vec![store_id, root_id],
         };
 
-        let controller_ids = root_baseline_controller_ids(&metadata);
+        let targets = root_baseline_snapshot_targets(&metadata);
 
-        assert_eq!(controller_ids.len(), 3);
-        assert!(controller_ids.contains(&root_id));
-        assert!(controller_ids.contains(&child_id));
-        assert!(controller_ids.contains(&store_id));
+        assert_eq!(targets.len(), 3);
+        assert_eq!(targets[0].canister_id(), root_id);
+        assert_eq!(targets[0].sender(), None);
+        assert_eq!(targets[1].canister_id(), child_id);
+        assert_eq!(targets[1].sender(), Some(root_id));
+        assert_eq!(targets[2].canister_id(), store_id);
+        assert_eq!(targets[2].sender(), Some(root_id));
     }
 }

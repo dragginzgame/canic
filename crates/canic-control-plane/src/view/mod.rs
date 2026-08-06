@@ -5,6 +5,7 @@
 //! Boundary: receives values projected by ops before workflow use.
 
 pub mod canister_pool;
+pub mod component_provisioning;
 pub mod component_registry;
 pub mod fleet_registry_mirror;
 pub mod state;

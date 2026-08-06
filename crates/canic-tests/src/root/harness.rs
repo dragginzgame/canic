@@ -62,7 +62,7 @@ pub fn setup_root(profile: RootSetupProfile) -> RootSetup {
         .acquire()
         .expect("acquire root topology baseline");
     let metadata = baseline.metadata().clone();
-    test_progress(&format!("pooled root setup ready: {outcome:?}"));
+    test_progress(&format!("pooled root setup ready: {outcome}"));
 
     RootSetup {
         pic: RootPocketIc { baseline },

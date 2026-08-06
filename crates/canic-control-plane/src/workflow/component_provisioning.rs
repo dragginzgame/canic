@@ -1,0 +1,297 @@
+//! Module: workflow::component_provisioning
+//!
+//! Responsibility: authenticate and accept one exact Coordinator-planned root batch.
+//! Does not own: stable records, Component effects, service publication, or runtime activation.
+//! Boundary: no durable acceptance occurs before protected root, mirror, config, Store, pool and
+//! aggregate capacity evidence agree.
+
+use crate::{
+    ops::{
+        canister_pool::CanisterPoolOps, component_provisioning::RootComponentProvisioningOps,
+        component_registry::ComponentRegistryOps, fleet_registry_mirror::FleetRegistryMirrorOps,
+    },
+    view::component_registry::RootComponentRegistryView,
+    workflow::{bootstrap::root_store, root_authority::validated_root_authority},
+};
+use candid::Principal;
+use canic_core::{
+    control_plane_support::{
+        error::InternalError,
+        ops::{
+            component_provisioning_plan::{
+                ComponentProvisioningPlanOps, RootComponentProvisioningBatchValidation,
+            },
+            config::ConfigOps,
+            ic::IcOps,
+        },
+        workflow::runtime::fleet_activation::FleetActivationWorkflow,
+    },
+    dto::{
+        component_provisioning::{
+            RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningStatusRequest,
+            RootComponentProvisioningStatusResponse,
+        },
+        fleet_activation::FleetActivationPhase,
+        fleet_registry::FleetSubnetRootStatus,
+        fleet_subnet_root::FleetSubnetRootAuthority,
+    },
+};
+
+/// Durably accept one complete root batch under the exact protected Coordinator.
+pub async fn accept(
+    caller: Principal,
+    request: RootComponentProvisioningAcceptanceRequest,
+) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
+    let (authority, root) = validated_root_authority()?;
+    require_coordinator(caller, authority.binding.authority.binding.coordinator)?;
+    if let Some(existing) = RootComponentProvisioningOps::acceptance_replay(&request)? {
+        return Ok(crate::ops::component_provisioning::status_response(
+            existing,
+        ));
+    }
+    RootComponentProvisioningOps::require_acceptance_open(request.operation_id)?;
+    if FleetActivationWorkflow::status()?.phase != FleetActivationPhase::Prepared {
+        return Err(InternalError::conflict(
+            "fresh root Component provisioning acceptance requires runtime Prepared",
+        ));
+    }
+
+    let mirror = FleetRegistryMirrorOps::validated_current(&authority, root)?;
+    if mirror.root_entry.status != FleetSubnetRootStatus::Active
+        || mirror.active.snapshot.version != request.fleet_registry
+    {
+        return Err(InternalError::conflict(
+            "root Component provisioning request differs from the exact active Registry mirror",
+        ));
+    }
+    let config = ConfigOps::get()?;
+    let validation = ComponentProvisioningPlanOps::validate_root_batch(
+        &config,
+        &mirror.active.snapshot.registry,
+        &request.fleet_registry,
+        request.configuration_digest,
+        &authority.binding,
+        &request.batch,
+    )?;
+    let _canonical_batch = ComponentProvisioningPlanOps::root_batch_canonical_bytes(
+        &config,
+        &mirror.active.snapshot.registry,
+        &request.fleet_registry,
+        request.configuration_digest,
+        &authority.binding,
+        &request.batch,
+    )?;
+
+    let component_registry =
+        current_registry_for_acceptance(&authority, root, &request, &validation)?;
+
+    let store = root_store::status(component_registry.store_bootstrap.clone()).await?;
+    validate_store_artifacts(&store, &validation.component_roles)?;
+    let revalidated = current_registry_for_acceptance(&authority, root, &request, &validation)?;
+    if revalidated.store_bootstrap != component_registry.store_bootstrap {
+        return Err(InternalError::conflict(
+            "root Component Registry Store authority changed across acceptance observation",
+        ));
+    }
+    let accepted = RootComponentProvisioningOps::accept(request, &validation, IcOps::now_nanos())?;
+    Ok(crate::ops::component_provisioning::status_response(
+        accepted,
+    ))
+}
+
+/// Read one exact durable acceptance receipt under Coordinator authentication.
+pub fn status(
+    caller: Principal,
+    request: RootComponentProvisioningStatusRequest,
+) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
+    let (authority, _root) = validated_root_authority()?;
+    require_coordinator(caller, authority.binding.authority.binding.coordinator)?;
+    RootComponentProvisioningOps::status(request)
+        .map(crate::ops::component_provisioning::status_response)
+}
+
+fn require_coordinator(caller: Principal, coordinator: Principal) -> Result<(), InternalError> {
+    if caller != coordinator {
+        return Err(InternalError::forbidden(format!(
+            "caller {caller} is not the protected Fleet Coordinator"
+        )));
+    }
+    Ok(())
+}
+
+fn current_registry_for_acceptance(
+    authority: &FleetSubnetRootAuthority,
+    root: Principal,
+    request: &RootComponentProvisioningAcceptanceRequest,
+    validation: &RootComponentProvisioningBatchValidation,
+) -> Result<RootComponentRegistryView, InternalError> {
+    if FleetActivationWorkflow::status()?.phase != FleetActivationPhase::Prepared {
+        return Err(InternalError::conflict(
+            "fresh root Component provisioning acceptance requires runtime Prepared",
+        ));
+    }
+    let mirror = FleetRegistryMirrorOps::validated_current(authority, root)?;
+    if mirror.root_entry.status != FleetSubnetRootStatus::Active
+        || mirror.active.snapshot.version != request.fleet_registry
+    {
+        return Err(InternalError::conflict(
+            "root Component provisioning request differs from the exact active Registry mirror",
+        ));
+    }
+    let current = ComponentRegistryOps::current().ok_or_else(|| {
+        InternalError::unavailable("root Component Registry authority has not been prepared")
+    })?;
+    validate_component_registry_authority(
+        &current,
+        &authority.binding,
+        authority.initial_release_set,
+        &request.fleet_registry,
+    )?;
+    validate_component_capacity(&current, validation)?;
+    validate_group_placement_capacity(
+        RootComponentProvisioningOps::tracked_group_placements()?,
+        validation.placement_count,
+        authority.binding.limits.maximum_group_placements,
+    )?;
+    validate_ready_pool_capacity(validation.component_count)?;
+    Ok(current)
+}
+
+fn validate_component_registry_authority(
+    current: &RootComponentRegistryView,
+    root: &canic_core::ids::FleetSubnetRootBinding,
+    release_set: canic_core::ids::FleetSubnetRootReleaseSet,
+    fleet_registry: &canic_core::dto::fleet_registry::FleetRegistryVersion,
+) -> Result<(), InternalError> {
+    if &current.root != root
+        || current.release_set != release_set
+        || current.initial_inventory.is_some()
+        || current.root_draining.is_some()
+        || !ComponentRegistryOps::registry_covers_preparation(
+            &current.prepared_against_registry,
+            fleet_registry,
+        )
+    {
+        return Err(InternalError::conflict(
+            "root Component provisioning authority differs from the open prepared Component Registry",
+        ));
+    }
+    ComponentRegistryOps::require_top_level_allocation_open()
+}
+
+fn validate_component_capacity(
+    current: &RootComponentRegistryView,
+    validation: &RootComponentProvisioningBatchValidation,
+) -> Result<(), InternalError> {
+    if current.reserved_component_instances != 0 {
+        return Err(InternalError::unavailable(
+            "root has nonterminal top-level Component allocations",
+        ));
+    }
+    let occupied = current
+        .reserved_component_instances
+        .checked_add(current.committed_component_instances)
+        .and_then(|count| count.checked_add(validation.component_count))
+        .ok_or_else(|| {
+            InternalError::resource_exhausted("root Component instance accounting overflowed")
+        })?;
+    if occupied > current.root.limits.maximum_component_instances {
+        return Err(InternalError::resource_exhausted(format!(
+            "root provisioning batch requires {occupied} Component instances, exceeding protected limit {}",
+            current.root.limits.maximum_component_instances
+        )));
+    }
+    for (component_spec, requested) in &validation.component_spec_counts {
+        let admission = current
+            .root
+            .component_admissions
+            .binary_search_by(|candidate| candidate.component_spec.cmp(component_spec))
+            .ok()
+            .map(|index| &current.root.component_admissions[index])
+            .ok_or_else(|| {
+                InternalError::conflict(format!(
+                    "root has no admission for planned Component Spec '{component_spec}'"
+                ))
+            })?;
+        let counts = ComponentRegistryOps::component_spec_counts(component_spec)?;
+        let occupied = counts
+            .reserved
+            .checked_add(counts.committed)
+            .and_then(|count| count.checked_add(*requested))
+            .ok_or_else(|| {
+                InternalError::resource_exhausted(
+                    "root Component Spec instance accounting overflowed",
+                )
+            })?;
+        if occupied > admission.maximum_root_instances {
+            return Err(InternalError::resource_exhausted(format!(
+                "root provisioning batch requires {occupied} instances of Component Spec '{component_spec}', exceeding admission {}",
+                admission.maximum_root_instances
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn validate_group_placement_capacity(
+    tracked: u32,
+    requested: u32,
+    maximum: u32,
+) -> Result<(), InternalError> {
+    let required = tracked.checked_add(requested).ok_or_else(|| {
+        InternalError::resource_exhausted("root Component Group placement accounting overflowed")
+    })?;
+    if required > maximum {
+        return Err(InternalError::resource_exhausted(format!(
+            "root provisioning batch requires {required} group placements, exceeding protected limit {maximum}"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_ready_pool_capacity(component_count: u32) -> Result<(), InternalError> {
+    let ready = CanisterPoolOps::ready_count();
+    if ready < component_count {
+        return Err(InternalError::unavailable(format!(
+            "root provisioning batch requires {component_count} Ready prepaid Canisters but only {ready} are available"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_store_artifacts(
+    store: &canic_core::dto::root_store::RootStoreBootstrapResponse,
+    roles: &std::collections::BTreeSet<canic_core::ids::CanisterRole>,
+) -> Result<(), InternalError> {
+    for role in roles {
+        let count = store
+            .catalog
+            .iter()
+            .filter(|artifact| &artifact.role == role)
+            .count();
+        if count != 1 {
+            return Err(InternalError::conflict(format!(
+                "root Wasm Store Catalog has {count} artifacts for planned Component role '{role}'"
+            )));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_the_exact_protected_coordinator_is_authorized() {
+        let coordinator = Principal::from_slice(&[7; 29]);
+        assert!(require_coordinator(coordinator, coordinator).is_ok());
+        assert!(require_coordinator(Principal::from_slice(&[8; 29]), coordinator).is_err());
+    }
+
+    #[test]
+    fn capacity_helpers_reject_first_excess_without_mutation() {
+        assert!(validate_group_placement_capacity(3, 2, 5).is_ok());
+        assert!(validate_group_placement_capacity(3, 3, 5).is_err());
+    }
+}

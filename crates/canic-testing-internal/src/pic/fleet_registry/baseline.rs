@@ -137,9 +137,9 @@ mod tests {
     };
     use ic_testkit::artifacts::{read_wasm, test_target_dir, workspace_root_for};
     use ic_testkit::pic::{
-        BaselinePoolContractError, BaselinePoolOutcome, BaselinePreparationStage,
-        CachedPocketIcBaseline, CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard,
-        CandidCallError, CanisterRestoreReceipt, ControllerSnapshotError, CycleResetPolicy,
+        BaselinePoolContractError, BaselinePreparationStage, CachedPocketIcBaseline,
+        CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard, CandidCallError,
+        CanisterRestoreReceipt, CanisterSnapshotTarget, ControllerSnapshotError, CycleResetPolicy,
         FailureDisposition, FixtureRecipeId, PocketIcBaselineRecipe, PreparedBaseline,
         ReadinessReceipt, RebuildReason, ResetAchievement, ResetReceipt, ResetRequirement,
         ResetRequirements, SnapshotRestoreFunding, TimeResetPolicy, ValidationReceipt,
@@ -368,14 +368,14 @@ mod tests {
                 wasm_store,
                 pool_assets,
             };
-            let snapshot_canisters = [
-                metadata.coordinator,
-                metadata.root,
-                metadata.wasm_store,
-                metadata.issuer.canister_id,
-                metadata.verifier.canister_id,
+            let snapshot_targets = [
+                CanisterSnapshotTarget::new(metadata.coordinator, None),
+                CanisterSnapshotTarget::new(metadata.root, None),
+                CanisterSnapshotTarget::new(metadata.wasm_store, Some(metadata.root)),
+                CanisterSnapshotTarget::new(metadata.issuer.canister_id, Some(metadata.root)),
+                CanisterSnapshotTarget::new(metadata.verifier.canister_id, Some(metadata.root)),
             ];
-            CachedPocketIcBaseline::capture(*pic, metadata.root, snapshot_canisters, metadata)
+            CachedPocketIcBaseline::capture_with_senders(*pic, snapshot_targets, metadata)
                 .map_err(Into::into)
         }
 
@@ -2439,20 +2439,7 @@ mod tests {
             .acquire()
             .expect("acquire active Component Registry baseline");
         let metadata = baseline.metadata().clone();
-        let timings = match &outcome {
-            BaselinePoolOutcome::Built { timings, .. }
-            | BaselinePoolOutcome::Restored { timings, .. }
-            | BaselinePoolOutcome::Rebuilt { timings, .. } => *timings,
-            _ => unreachable!("ic-testkit baseline outcome must be built, restored, or rebuilt"),
-        };
-        eprintln!(
-            "[pic_fleet_registry] active baseline {outcome:?} in {:?} (wait {:?}, build {:?}, restore {:?}, validation {:?})",
-            timings.total(),
-            timings.wait(),
-            timings.build(),
-            timings.restore(),
-            timings.validation(),
-        );
+        eprintln!("[pic_fleet_registry] active baseline {outcome}");
 
         ActiveComponentRegistryFixture {
             runtime: ActiveComponentRegistryRuntime::Pooled(baseline),

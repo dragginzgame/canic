@@ -69,3 +69,47 @@ pub struct ComponentGroupPlanEntry {
     pub labels: Vec<ComponentDeploymentLabel>,
     pub limits: ComponentDeploymentLimits,
 }
+
+/// Coordinator-authenticated command asking one root to retain its exact plan batch.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RootComponentProvisioningAcceptanceRequest {
+    pub fleet_registry: FleetRegistryVersion,
+    pub configuration_digest: ComponentDeploymentConfigurationDigest,
+    pub operation_id: [u8; 32],
+    pub plan_hash: [u8; 32],
+    pub batch: FleetSubnetRootProvisioningBatch,
+}
+
+/// Read-only lookup key for one exact root provisioning operation.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RootComponentProvisioningStatusRequest {
+    pub operation_id: [u8; 32],
+    pub plan_hash: [u8; 32],
+}
+
+/// Durable aggregate progress of one root provisioning batch.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RootComponentProvisioningPhase {
+    Accepted,
+    Provisioned,
+    Published,
+    RuntimesActive,
+}
+
+/// Compact receipt for one exact durable root provisioning operation.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RootComponentProvisioningStatusResponse {
+    pub operation_id: [u8; 32],
+    pub plan_hash: [u8; 32],
+    pub fleet_registry: FleetRegistryVersion,
+    pub configuration_digest: ComponentDeploymentConfigurationDigest,
+    pub fleet_subnet_root: Principal,
+    pub phase: RootComponentProvisioningPhase,
+    pub placement_count: u32,
+    pub component_count: u32,
+    pub accepted_at_ns: u64,
+    pub receipt_content_hash: [u8; 32],
+}

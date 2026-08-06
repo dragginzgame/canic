@@ -592,6 +592,8 @@ pub async fn reserve_allocation(
         return allocation_response(existing);
     }
 
+    crate::ops::component_provisioning::RootComponentProvisioningOps::
+        require_ordinary_allocation_open()?;
     ComponentRegistryOps::require_top_level_allocation_open()?;
     let counts = ComponentRegistryOps::component_spec_counts(&request.component_spec)?;
     let decision = reserve_top_level_component(TopLevelComponentAllocationInput {
@@ -648,6 +650,8 @@ pub async fn reserve_peer_allocation(
         return Ok(response);
     }
 
+    crate::ops::component_provisioning::RootComponentProvisioningOps::
+        require_ordinary_allocation_open()?;
     ComponentRegistryOps::require_top_level_allocation_open()?;
     authorize_new_peer_allocation(
         &authority.binding,
@@ -978,6 +982,14 @@ pub async fn begin_component_draining(
         &topology,
         &partition,
     )?;
+    if matches!(
+        &partition.provisioning_origin,
+        ComponentProvisioningOrigin::ComponentGroup { .. }
+    ) {
+        return Err(InternalError::conflict(
+            "grouped Components require the aggregate Component Group removal protocol",
+        ));
+    }
     let maximum_registry_bytes = topology
         .get(&partition.binding.component_spec)
         .ok_or_else(|| {
@@ -7097,6 +7109,14 @@ fn validate_provisioning_origin(
                     "stored peer Component provisioning origin differs from protected topology",
                 ));
             }
+        }
+        origin @ ComponentProvisioningOrigin::ComponentGroup { .. } => {
+            crate::ops::component_provisioning::RootComponentProvisioningOps::
+                validate_member_provisioning_origin(
+                    origin,
+                    &allocation.component_spec,
+                    allocation.spec_hash,
+                )?;
         }
     }
     Ok(())
