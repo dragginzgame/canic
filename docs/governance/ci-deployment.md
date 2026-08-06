@@ -13,6 +13,14 @@ versioning, releases, and deployment-adjacent automation.
 - Merge verification normally includes `make fmt-check`, `make clippy`, and
   `make test` unless the task or maintainer explicitly narrows scope.
 
+`make test` executes every top-level integration test recorded in the guarded
+workspace test inventory. New integration targets must declare their release
+lane, execution class and suite before the gate accepts them. Ordinary tests
+retain libtest's default parallelism; PocketIC suites remain explicitly
+single-threaded and ordered until a measured narrower concurrency policy is
+proven stable. `make test-wasm` is the fast lane and runs only its classified
+release-surface integrations, never the PocketIC suites.
+
 ## Development Slices and Validation Tiers
 
 A code slice is a small, focused implementation unit chosen for reviewability

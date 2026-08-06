@@ -14,21 +14,34 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.10`.
-- The latest published release is `v0.101.10` at
-  `e74715d5d3a460daf129eefcdcdd6620e88915bc`.
-- Open `0.101.11` advances fully reserved root batches one canonical member at
-  a time through the ordinary prepaid-Canister claim journal. A second hash-
-  bound O(1) cursor and caller-supplied expected count reconcile response loss
-  without selecting another asset; only after the exact created principal and
-  plan-derived `GroupMember` runtime context validate does aggregate claim
-  progress commit. Installation, Registry/Directory publication and runtime
-  activation remain fenced. Release cleanup now retries one transient Cargo
-  filesystem failure, and release publication explicitly pushes the exact
-  branch and workspace-version tag together atomically even when the branch
-  commit is already remote. Version-bump validation uses the complete
-  workspace test lane, and network-aware core builds rerun when
-  `ICP_ENVIRONMENT` changes.
+- The workspace package version is `0.101.11`.
+- The latest published release is `v0.101.11` at
+  `1d52e01417b273b1a28e3eec27e804dcedeb1ab7`.
+- Open `0.101.12` advances the internal harness to `ic-testkit` 0.7.2, applies
+  scheduled age and size retention to network-qualified shared Cargo targets,
+  and makes one guarded inventory authoritative for all 35 integration test
+  targets. The full release lane runs all 29 parallel-safe and six serial
+  PocketIC targets; the fast lane retains three release-surface integrations.
+  It also installs every fully claimed grouped member in canonical order
+  through the ordinary exact-retry Store-backed journal. A third hash-bound
+  cursor reconciles response loss only after the exact plan-derived context,
+  effective Registry-byte ceiling, module, controller, binding and empty
+  `Prepared` runtime status agree. A real PocketIC root now proves the complete
+  accept/reserve/claim/install/replay path and exposed two undersized stable
+  acceptance bounds, which now cover their maximum valid CBOR encodings.
+  Registry/Directory publication and runtime activation remain fenced.
+- Released `0.101.11` advances fully reserved root batches one canonical
+  member at a time through the ordinary prepaid-Canister claim journal. A
+  second hash-bound O(1) cursor and caller-supplied expected count reconcile
+  response loss without selecting another asset; only after the exact created
+  principal and plan-derived `GroupMember` runtime context validate does
+  aggregate claim progress commit. Installation, Registry/Directory
+  publication and runtime activation remain fenced. Release cleanup now
+  retries one transient Cargo filesystem failure, and release publication
+  explicitly pushes the exact branch and workspace-version tag together
+  atomically even when the branch commit is already remote. Version-bump
+  validation uses the complete workspace test lane, and network-aware core
+  builds rerun when `ICP_ENVIRONMENT` changes.
 - Released `0.101.10` advances each accepted root batch one canonical member
   at a time through the existing root-local `ComponentInstanceId` allocator. A
   hash-bound O(1) placement/member cursor and caller-supplied expected count
@@ -2322,17 +2335,15 @@ First primary results:
 
 ## Next Action
 
-The canonical plan, exact root-batch acceptance and canonical root-local
-`ComponentInstanceId` allocation are published through immutable
-`v0.101.10`. Open 0.101.11 claims each fully reserved member's Ready prepaid
-Canister through that same operation identity, derives and validates the exact
-`GroupMember` runtime context from the accepted plan, and commits a separate
-hash-bound response-idempotent claim cursor without creating a second
-identity, lifecycle, Store or pool path. Continue Slice 2 by installing each
-claimed member's exact Store-backed Wasm behind `Prepared`, retaining that
-grouped runtime context and its effective limits while keeping Registry,
-Directory and activation transitions independently fenced. Do not enable
-scale-out until its durable Coordinator
+The canonical plan, exact root-batch acceptance, canonical root-local
+`ComponentInstanceId` allocation and prepaid-Canister claim are published
+through immutable `v0.101.11`. Open `0.101.12` additionally installs each
+claimed member's exact Store-backed Wasm behind `Prepared`, retaining and
+independently observing its grouped runtime context while keeping later
+transitions fenced. Continue Slice 2 by committing each verified member's
+exact `Prepared` Component Registry partition and aggregate root receipt;
+Directory publication and activation remain separate. Do not enable scale-out
+until its durable Coordinator
 placement ledger can prove ordinal non-reuse and combined density/spread.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the

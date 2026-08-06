@@ -117,7 +117,7 @@ pub fn status(
         .map(crate::ops::component_provisioning::status_response)
 }
 
-/// Advance exactly one canonical identity reservation or prepaid-Canister claim.
+/// Advance exactly one canonical identity reservation, Canister claim or verified install.
 pub async fn advance(
     caller: Principal,
     request: RootComponentProvisioningAdvanceRequest,
@@ -139,8 +139,10 @@ pub async fn advance(
     let advanced = if current.reservation_cursor.reserved_component_count < current.component_count
     {
         advance_member_reservation(&authority, root, request, &current)?
-    } else {
+    } else if current.claim_cursor.claimed_component_count < current.component_count {
         advance_member_claim(&authority, root, request, &current).await?
+    } else {
+        Box::pin(advance_member_install(&authority, root, request, &current)).await?
     };
     Ok(crate::ops::component_provisioning::status_response(
         advanced,
@@ -153,7 +155,7 @@ fn advance_member_reservation(
     request: RootComponentProvisioningAdvanceRequest,
     current: &RootComponentProvisioningView,
 ) -> Result<RootComponentProvisioningView, InternalError> {
-    let registry = current_registry_for_reservation(authority, root, current)?;
+    let registry = current_registry_for_progress(authority, root, current)?;
     let member = RootComponentProvisioningOps::next_member_reservation(current)?;
     let existing = ComponentRegistryOps::allocation(member.member_operation_id);
     validate_reservation_registry_progress(
@@ -182,7 +184,7 @@ async fn advance_member_claim(
     request: RootComponentProvisioningAdvanceRequest,
     current: &RootComponentProvisioningView,
 ) -> Result<RootComponentProvisioningView, InternalError> {
-    let registry = current_registry_for_reservation(authority, root, current)?;
+    let registry = current_registry_for_progress(authority, root, current)?;
     validate_claim_registry_progress(&registry, current.component_count)?;
     let member = RootComponentProvisioningOps::next_member_claim(current)?;
     let allocation =
@@ -202,7 +204,7 @@ async fn advance_member_claim(
     )?;
 
     let store = root_store::status(registry.store_bootstrap.clone()).await?;
-    let revalidated = current_registry_for_reservation(authority, root, current)?;
+    let revalidated = current_registry_for_progress(authority, root, current)?;
     if revalidated.store_bootstrap != registry.store_bootstrap {
         return Err(InternalError::conflict(
             "root Component Registry Store authority changed across prepaid-Canister claim observation",
@@ -234,9 +236,99 @@ async fn advance_member_claim(
     )?;
     let claimed =
         super::component_registry::advance_group_member_creation(root, &store, allocation)?;
-    let context = RootComponentProvisioningOps::member_deployment_context(&latest, &claimed)?;
+    let context =
+        RootComponentProvisioningOps::member_deployment_context(&latest, &member, &claimed)?;
     validate_group_member_context(&context)?;
     RootComponentProvisioningOps::mark_member_claimed(request, &claimed)
+}
+
+async fn advance_member_install(
+    authority: &FleetSubnetRootAuthority,
+    root: Principal,
+    request: RootComponentProvisioningAdvanceRequest,
+    current: &RootComponentProvisioningView,
+) -> Result<RootComponentProvisioningView, InternalError> {
+    let registry = current_registry_for_progress(authority, root, current)?;
+    validate_claim_registry_progress(&registry, current.component_count)?;
+    let member = RootComponentProvisioningOps::next_member_install(current)?;
+    let allocation = required_member_allocation(member.member_operation_id, "install")?;
+    let topology = ConfigOps::component_topology()?;
+    super::component_registry::validate_allocation_record(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &allocation,
+        member.member_operation_id,
+    )?;
+    let deployment =
+        RootComponentProvisioningOps::member_deployment_context(current, &member, &allocation)?;
+    validate_group_member_context(&deployment)?;
+
+    let store = root_store::status(registry.store_bootstrap.clone()).await?;
+    let revalidated = current_registry_for_progress(authority, root, current)?;
+    if revalidated.store_bootstrap != registry.store_bootstrap {
+        return Err(InternalError::conflict(
+            "root Component Registry Store authority changed across grouped install observation",
+        ));
+    }
+    let latest = RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
+        operation_id: request.operation_id,
+        plan_hash: request.plan_hash,
+    })?;
+    match RootComponentProvisioningOps::advance_disposition(request, &latest)? {
+        RootComponentProvisioningAdvanceDisposition::Complete
+        | RootComponentProvisioningAdvanceDisposition::Replay => return Ok(latest),
+        RootComponentProvisioningAdvanceDisposition::Advance => {}
+    }
+    if RootComponentProvisioningOps::next_member_install(&latest)? != member {
+        return Err(InternalError::conflict(
+            "root Component provisioning install member changed across Store observation",
+        ));
+    }
+
+    let allocation = required_member_allocation(member.member_operation_id, "install")?;
+    super::component_registry::validate_allocation_record(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &allocation,
+        member.member_operation_id,
+    )?;
+    let deployment =
+        RootComponentProvisioningOps::member_deployment_context(&latest, &member, &allocation)?;
+    validate_group_member_context(&deployment)?;
+    let installed = Box::pin(super::component_registry::advance_group_member_install(
+        &authority.binding,
+        &store,
+        allocation,
+        deployment,
+    ))
+    .await?;
+
+    let _registry = current_registry_for_progress(authority, root, &latest)?;
+    let committed = RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
+        operation_id: request.operation_id,
+        plan_hash: request.plan_hash,
+    })?;
+    match RootComponentProvisioningOps::advance_disposition(request, &committed)? {
+        RootComponentProvisioningAdvanceDisposition::Complete
+        | RootComponentProvisioningAdvanceDisposition::Replay => Ok(committed),
+        RootComponentProvisioningAdvanceDisposition::Advance => {
+            RootComponentProvisioningOps::mark_member_installed(request, &installed)
+        }
+    }
+}
+
+fn required_member_allocation(
+    operation_id: [u8; 32],
+    phase: &str,
+) -> Result<RootComponentAllocationView, InternalError> {
+    ComponentRegistryOps::allocation(operation_id).ok_or_else(|| {
+        InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            format!("Component Group member {phase} has no reserved Component identity"),
+        )
+    })
 }
 
 fn require_coordinator(caller: Principal, coordinator: Principal) -> Result<(), InternalError> {
@@ -286,14 +378,14 @@ fn current_registry_for_acceptance(
     Ok(current)
 }
 
-fn current_registry_for_reservation(
+fn current_registry_for_progress(
     authority: &FleetSubnetRootAuthority,
     root: Principal,
     provisioning: &RootComponentProvisioningView,
 ) -> Result<RootComponentRegistryView, InternalError> {
     if FleetActivationWorkflow::status()?.phase != FleetActivationPhase::Prepared {
         return Err(InternalError::conflict(
-            "fresh root Component reservation requires runtime Prepared",
+            "fresh root Component provisioning requires runtime Prepared",
         ));
     }
     let mirror = FleetRegistryMirrorOps::validated_current(authority, root)?;
@@ -301,7 +393,7 @@ fn current_registry_for_reservation(
         || mirror.active.snapshot.version != provisioning.fleet_registry
     {
         return Err(InternalError::conflict(
-            "root Component reservation differs from the exact active Registry mirror",
+            "root Component provisioning differs from the exact active Registry mirror",
         ));
     }
     let config = ConfigOps::get()?;

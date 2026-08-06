@@ -97,6 +97,7 @@ pub struct RootComponentProvisioningAdvanceRequest {
     pub plan_hash: [u8; 32],
     pub expected_reserved_component_count: u32,
     pub expected_claimed_component_count: u32,
+    pub expected_installed_component_count: u32,
 }
 
 /// Durable aggregate progress of one root provisioning batch.
@@ -122,6 +123,7 @@ pub struct RootComponentProvisioningStatusResponse {
     pub component_count: u32,
     pub reserved_component_count: u32,
     pub claimed_component_count: u32,
+    pub installed_component_count: u32,
     pub accepted_at_ns: u64,
     pub receipt_content_hash: [u8; 32],
 }

@@ -285,7 +285,7 @@ fn make_release_targets_are_sequential_and_push_is_guarded() {
         "release-patch must invoke each phase sequentially"
     );
 
-    let release_push = "release-push:\n\t@bash scripts/ci/check-release-push-ready.sh\n\tcargo clean\n\tgit push --atomic --follow-tags";
+    let release_push = "release-push:\n\t@bash scripts/ci/check-release-push-ready.sh\n\t@bash scripts/ci/cleanup-release-artifacts.sh\n\t@CANIC_RELEASE_PUSH_READY=1 bash scripts/ci/push-release.sh";
     assert!(
         makefile.contains(release_push),
         "release-push must validate and clean before an atomic push"
