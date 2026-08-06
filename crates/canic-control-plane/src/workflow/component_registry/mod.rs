@@ -779,7 +779,7 @@ fn authorize_new_peer_allocation(
     Ok(())
 }
 
-fn top_level_allocation_decision(
+pub(super) fn top_level_allocation_decision(
     root: &canic_core::ids::FleetSubnetRootBinding,
     topology: &canic_core::control_plane_support::config::ComponentTopology,
     prepared: &RootComponentRegistryView,
@@ -6879,15 +6879,22 @@ fn validate_subtree_leaf_live_status(
 fn validate_allocation_caller(
     allocation: &RootComponentAllocationView,
 ) -> Result<(), InternalError> {
-    if let ComponentProvisioningOrigin::FleetAdministrator { caller } =
-        &allocation.provisioning_origin
-        && *caller != IcOps::msg_caller()
-    {
-        return Err(InternalError::conflict(
-            "Component creation caller differs from its reserved administrator origin",
-        ));
+    match &allocation.provisioning_origin {
+        ComponentProvisioningOrigin::FleetAdministrator { caller }
+            if *caller != IcOps::msg_caller() =>
+        {
+            Err(InternalError::conflict(
+                "Component creation caller differs from its reserved administrator origin",
+            ))
+        }
+        ComponentProvisioningOrigin::ComponentGroup { .. } => {
+            Err(InternalError::public(Error::forbidden(
+                "Component Group members advance only through the aggregate provisioning workflow",
+            )))
+        }
+        ComponentProvisioningOrigin::FleetAdministrator { .. }
+        | ComponentProvisioningOrigin::Component { .. } => Ok(()),
     }
-    Ok(())
 }
 
 #[derive(Clone, Copy)]
@@ -7013,7 +7020,7 @@ fn child_install_evidence(
     }
 }
 
-fn validate_allocation_record(
+pub(super) fn validate_allocation_record(
     root: &canic_core::ids::FleetSubnetRootBinding,
     release_set: canic_core::ids::FleetSubnetRootReleaseSet,
     topology: &canic_core::control_plane_support::config::ComponentTopology,
@@ -7544,8 +7551,42 @@ mod tests {
     use super::*;
     use canic_core::ids::{
         AppId, CanonicalNetworkId, ComponentInstanceId, FleetBinding, FleetCoordinatorBinding,
-        FleetId, FleetKey, FleetRegistryAuthority, SubnetId,
+        FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootReleaseSet, ReleaseBuildId,
+        ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
     };
+
+    #[test]
+    fn grouped_allocation_cannot_advance_through_ordinary_lifecycle() {
+        let allocation = RootComponentAllocationView {
+            operation_id: [1; 32],
+            allocation_sequence: 1,
+            component: ComponentInstanceId::from_generated_bytes([2; 32]),
+            component_spec: "projects".parse().expect("Component Spec"),
+            spec_hash: [3; 32],
+            role: CanisterRole::new("project_hub"),
+            provisioning_origin: ComponentProvisioningOrigin::ComponentGroup {
+                operation_id: [4; 32],
+                plan_hash: [5; 32],
+                group_placement: canic_core::ids::ComponentGroupPlacementId {
+                    deployment: "cells".parse().expect("deployment ID"),
+                    ordinal: 0,
+                },
+                member_path: canic_core::ids::ComponentGroupMemberPath::try_from(vec![
+                    "hub".parse().expect("member ID"),
+                ])
+                .expect("member path"),
+            },
+            release_set: FleetSubnetRootReleaseSet {
+                release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
+                    [6; 32],
+                )),
+                manifest_digest: ReleaseSetDigest::from_bytes([7; 32]),
+            },
+            progress: RootComponentAllocationProgressView::Reserved,
+        };
+
+        assert!(validate_allocation_caller(&allocation).is_err());
+    }
 
     #[test]
     fn draining_component_members_retain_directory_lookup() {

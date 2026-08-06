@@ -68,6 +68,8 @@ pub const CANIC_ROOT_COMPONENT_REGISTRY_PREPARE: &str = "canic_root_component_re
 pub const CANIC_ROOT_COMPONENT_REGISTRY_STATUS: &str = "canic_root_component_registry_status";
 pub const CANIC_ROOT_COMPONENT_PROVISIONING_ACCEPT: &str =
     "canic_root_component_provisioning_accept";
+pub const CANIC_ROOT_COMPONENT_PROVISIONING_ADVANCE: &str =
+    "canic_root_component_provisioning_advance";
 pub const CANIC_ROOT_COMPONENT_PROVISIONING_STATUS: &str =
     "canic_root_component_provisioning_status";
 pub const CANIC_ROOT_COMPONENT_ALLOCATE: &str = "canic_root_component_allocate";

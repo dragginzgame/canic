@@ -22,11 +22,14 @@ Date: 2026-08-06
   accepts its exact Coordinator-authenticated batch, retains permanent
   placement reservations and an exact restart-safe acceptance receipt, and
   fences unrelated allocation and ordinary removal while that aggregate
-  authority is live. Component identity allocation, pool claim, installation,
-  Registry/Directory publication and every grouped effect-bearing surface
-  remain unimplemented.
+  authority is live. The root now advances that accepted batch one canonical
+  placement member at a time through the existing root-local
+  `ComponentInstanceId` allocator, retaining a hash-bound O(1) cursor and
+  exact response-loss reconciliation with the Component Registry. Pool claim,
+  installation, Registry/Directory publication and every grouped
+  effect-bearing surface remain unimplemented.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.8` is released and `0.101.9` is open.
+- Implementation started: yes; `0.101.9` is released and `0.101.10` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -177,7 +180,9 @@ Fleet policy writer.
   Registry, Store, prepaid-pool or cycles-funding authority.
 - [ ] Reuse canonical root-local `ComponentInstanceId` allocation,
   prepaid-Canister claim and platform lifecycle, failing closed when no Ready
-  imported, recycled or automatically created asset exists.
+  imported, recycled or automatically created asset exists. Root-local
+  identity allocation and exact retry are complete; prepaid-Canister claim
+  and every effect-bearing lifecycle phase remain.
 - [ ] Reuse 0.100's bounded root-owned Cycles Ledger refill and permanent
   uncertain-expiry fence; keep raw management `create_canister` and Component
   paid fallback absent.
@@ -195,8 +200,9 @@ Fleet policy writer.
   owning top-level Component binding.
 - [ ] Keep new Components runtime `Prepared`.
 - [ ] Persist group-partitioned Component Registry evidence and one aggregate
-  idempotent root receipt. The aggregate acceptance record and receipt are
-  complete; provisioned bindings and Registry evidence remain.
+  idempotent root receipt. The aggregate acceptance record, receipt and
+  hash-bound reservation cursor are complete; provisioned bindings and
+  committed Registry evidence remain.
 
 ## Slice 3 — Service Topology and Directories
 

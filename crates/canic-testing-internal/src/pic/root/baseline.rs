@@ -80,12 +80,9 @@ impl PocketIcBaselineRecipe for RootBaselineRecipe {
         &self,
         baseline: &CachedPocketIcBaseline<Self::Metadata>,
     ) -> Result<CanisterRestoreReceipt, Self::Error> {
-        baseline.restore_with_funding(
-            baseline.metadata().root_id,
-            SnapshotRestoreFunding::TopUpTo {
-                minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
-            },
-        )?;
+        baseline.restore_with_captured_senders_and_funding(SnapshotRestoreFunding::TopUpTo {
+            minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
+        })?;
         CanisterRestoreReceipt::try_from_baseline(
             baseline,
             CycleResetPolicy::TopUpTo(crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES),
@@ -212,12 +209,9 @@ pub fn restore_root_cached_baseline(
     progress(spec, "restoring cached root snapshots");
     let restore_started_at = Instant::now();
     baseline
-        .restore_with_funding(
-            baseline.metadata().root_id,
-            SnapshotRestoreFunding::TopUpTo {
-                minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
-            },
-        )
+        .restore_with_captured_senders_and_funding(SnapshotRestoreFunding::TopUpTo {
+            minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
+        })
         .expect("restore cached root snapshots");
     progress_elapsed(spec, "restored cached root snapshots", restore_started_at);
 

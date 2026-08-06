@@ -1,8 +1,9 @@
 //! Test-Wasm and PocketIC builders for the prepared-root Registry journey.
 
 use ic_testkit::artifacts::{
-    ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheSpec, prepare_artifact_cache,
-    read_wasm, test_target_dir as artifact_test_target_dir,
+    ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheSpec, WasmBuildSpec,
+    prepare_artifact_cache, read_wasm, resolve_cargo_build_inputs,
+    test_target_dir as artifact_test_target_dir,
 };
 use ic_testkit::pic::{PocketIc, PocketIcBuilder};
 use std::{
@@ -14,8 +15,8 @@ use std::{
 
 use super::super::artifacts::{
     CanicWasmBuildProfile, INTERNAL_TEST_ENDPOINTS_ENV, INTERNAL_TEST_RELEASE_BUILD_ID,
-    build_internal_test_wasm_canisters_with_env, internal_test_artifact_prune_policy,
-    report_artifact_cache_maintenance,
+    build_internal_test_wasm_canisters_with_env, internal_test_artifact_maintenance_interval,
+    internal_test_artifact_prune_policy, report_artifact_cache_maintenance,
 };
 use super::fixture::progress;
 
@@ -124,7 +125,22 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path, config_p
         .expect("bootstrap Store config must be workspace-confined")
         .to_str()
         .expect("bootstrap Store config path UTF-8");
-    let mut cache = ArtifactCacheSpec::new(
+    let cargo_build = WasmBuildSpec::new(
+        workspace_root,
+        target_dir,
+        &["canic-host", "canic-wasm-store"],
+        CanicWasmBuildProfile::Fast.target_dir_name(),
+    )
+    .with_cargo_profile_args(&["--profile", "fast", "--locked"])
+    .with_extra_env(&[
+        ("CARGO_INCREMENTAL", "0"),
+        ("ICP_ENVIRONMENT", "local"),
+        INTERNAL_TEST_ENDPOINTS_ENV,
+        INTERNAL_TEST_RELEASE_BUILD_ID,
+    ]);
+    let cargo_inputs = resolve_cargo_build_inputs(&cargo_build)
+        .expect("resolve bootstrap Store Cargo build inputs");
+    let cache = ArtifactCacheSpec::new(
         &workspace_root.join("target/test-artifacts/external-artifact-cache"),
         "bootstrap-wasm-store",
         "canic/bootstrap-wasm-store/v1",
@@ -142,19 +158,14 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path, config_p
         INTERNAL_TEST_ENDPOINTS_ENV,
         INTERNAL_TEST_RELEASE_BUILD_ID,
     ])
+    .with_input("build-config", config_path)
+    .with_input("icp-config", &workspace_root.join("icp.yaml"))
+    .with_cargo_build_inputs("bootstrap-store-cargo", &cargo_build, &cargo_inputs)
     .with_output("wasm_store", &artifact_path)
-    .with_prune_policy(internal_test_artifact_prune_policy());
-    for relative in [
-        "Cargo.toml",
-        "Cargo.lock",
-        "apps/test",
-        "canisters",
-        "crates",
-        "icp.yaml",
-        "rust-toolchain.toml",
-    ] {
-        cache = cache.with_input(relative, &workspace_root.join(relative));
-    }
+    .with_prune_policy_at_most_every(
+        internal_test_artifact_prune_policy(),
+        internal_test_artifact_maintenance_interval(),
+    );
 
     let outcome = match prepare_artifact_cache(&cache).expect("prepare bootstrap Store cache") {
         ArtifactCachePreparation::Reused(record) => ArtifactCacheOutcome::Reused(record),

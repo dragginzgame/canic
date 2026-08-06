@@ -181,6 +181,13 @@ macro_rules! canic_emit_root_admin_endpoints {
             $crate::__internal::control_plane::api::component_provisioning::RootComponentProvisioningApi::accept(request).await
         }
 
+        #[$crate::canic_update(internal, public)]
+        fn canic_root_component_provisioning_advance(
+            request: ::canic::dto::component_provisioning::RootComponentProvisioningAdvanceRequest,
+        ) -> Result<::canic::dto::component_provisioning::RootComponentProvisioningStatusResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::component_provisioning::RootComponentProvisioningApi::advance(request)
+        }
+
         #[$crate::canic_query(internal, public)]
         async fn canic_root_component_provisioning_status(
             request: ::canic::dto::component_provisioning::RootComponentProvisioningStatusRequest,

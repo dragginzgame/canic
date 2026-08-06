@@ -1,6 +1,8 @@
 use canic_core::ids::BuildNetwork;
 use ic_testkit::artifacts::{
-    ArtifactCacheMaintenance, ArtifactCachePrunePolicy, WasmBuildSpec, build_wasm_canisters_cached,
+    ArtifactCacheMaintenance, ArtifactCachePrunePolicy, WasmBuildBatchProgressEvent,
+    WasmBuildProgressConfig, WasmBuildProgressEvent, WasmBuildSpec,
+    build_wasm_canisters_cached_batch_with_progress,
 };
 use std::{
     path::{Path, PathBuf},
@@ -10,6 +12,8 @@ use std::{
 
 const INTERNAL_TEST_WASM_CACHE_MAX_AGE: Duration = Duration::from_hours(168);
 const INTERNAL_TEST_WASM_CACHE_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+const INTERNAL_TEST_WASM_CACHE_MAINTENANCE_INTERVAL: Duration = Duration::from_hours(1);
+const INTERNAL_TEST_WASM_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 
 pub(super) const INTERNAL_TEST_ENDPOINTS_ENV: (&str, &str) = ("CANIC_INTERNAL_TEST_ENDPOINTS", "1");
 pub(super) const INTERNAL_TEST_RELEASE_BUILD_ID: (&str, &str) = (
@@ -69,6 +73,10 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
     profile: CanicWasmBuildProfile,
     extra_env: &[(&str, &str)],
 ) {
+    assert!(
+        !packages.is_empty(),
+        "internal PocketIC Wasm build requires at least one package"
+    );
     canic_host::role_contract::validate_internal_test_wasm_packages(workspace_root, packages)
         .unwrap_or_else(|finding| {
             panic!(
@@ -92,20 +100,42 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
         INTERNAL_TEST_RELEASE_BUILD_ID,
     ];
     build_env.extend_from_slice(extra_env);
-    let build = WasmBuildSpec::new(
-        workspace_root,
-        target_dir,
-        packages,
-        profile.target_dir_name(),
-    )
-    .with_cargo_profile_args(&cargo_args)
-    .with_extra_env(&build_env)
-    .with_shared_incremental_target(internal_test_shared_wasm_target(workspace_root))
-    .with_prune_policy(internal_test_artifact_prune_policy());
-    let outcome = build_wasm_canisters_cached(&build)
-        .unwrap_or_else(|err| panic!("internal test Wasm build failed: {err}"));
-    eprintln!("[canic-test-wasm] {outcome}");
-    report_artifact_cache_maintenance("canic-test-wasm", outcome.record().maintenance());
+    let builds = packages
+        .iter()
+        .map(|package| {
+            WasmBuildSpec::new(
+                workspace_root,
+                target_dir,
+                &[*package],
+                profile.target_dir_name(),
+            )
+            .with_cargo_profile_args(&cargo_args)
+            .with_extra_env(&build_env)
+            .with_shared_incremental_target(internal_test_shared_wasm_target(workspace_root))
+            .with_prune_policy_at_most_every(
+                internal_test_artifact_prune_policy(),
+                internal_test_artifact_maintenance_interval(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let progress = WasmBuildProgressConfig::new()
+        .with_heartbeat_interval(INTERNAL_TEST_WASM_HEARTBEAT_INTERVAL)
+        .with_cargo_output(false);
+    let batch = build_wasm_canisters_cached_batch_with_progress(&builds, progress, |event| {
+        report_wasm_build_progress(packages, event);
+    })
+    .unwrap_or_else(|err| {
+        let package = packages
+            .get(err.failed_index())
+            .copied()
+            .unwrap_or("unknown");
+        panic!("internal test Wasm build failed for `{package}`: {err}")
+    });
+    for (package, outcome) in packages.iter().zip(batch.outcomes()) {
+        eprintln!("[canic-test-wasm:{package}] {outcome}");
+        report_artifact_cache_maintenance("canic-test-wasm", outcome.record().maintenance());
+    }
+    eprintln!("[canic-test-wasm] {batch}");
 }
 
 fn internal_test_shared_wasm_target(workspace_root: &Path) -> PathBuf {
@@ -116,6 +146,30 @@ pub(super) const fn internal_test_artifact_prune_policy() -> ArtifactCachePruneP
     ArtifactCachePrunePolicy::new()
         .with_max_age(INTERNAL_TEST_WASM_CACHE_MAX_AGE)
         .with_max_size_bytes(INTERNAL_TEST_WASM_CACHE_MAX_BYTES)
+}
+
+pub(super) const fn internal_test_artifact_maintenance_interval() -> Duration {
+    INTERNAL_TEST_WASM_CACHE_MAINTENANCE_INTERVAL
+}
+
+fn report_wasm_build_progress(packages: &[&str], event: WasmBuildBatchProgressEvent) {
+    match event {
+        WasmBuildBatchProgressEvent::BuildStarted { index, total } => {
+            let package = packages.get(index).copied().unwrap_or("unknown");
+            eprintln!(
+                "[canic-test-wasm:{package}] acquiring independent build {}/{total}",
+                index + 1
+            );
+        }
+        WasmBuildBatchProgressEvent::BuildProgress {
+            index,
+            event: WasmBuildProgressEvent::CargoHeartbeat { elapsed },
+        } => {
+            let package = packages.get(index).copied().unwrap_or("unknown");
+            eprintln!("[canic-test-wasm:{package}] Cargo still running after {elapsed:?}");
+        }
+        _ => {}
+    }
 }
 
 pub(super) fn report_artifact_cache_maintenance(

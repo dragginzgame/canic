@@ -89,6 +89,15 @@ pub struct RootComponentProvisioningStatusRequest {
     pub plan_hash: [u8; 32],
 }
 
+/// Coordinator-authenticated command advancing one exact bounded reservation step.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RootComponentProvisioningAdvanceRequest {
+    pub operation_id: [u8; 32],
+    pub plan_hash: [u8; 32],
+    pub expected_reserved_component_count: u32,
+}
+
 /// Durable aggregate progress of one root provisioning batch.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RootComponentProvisioningPhase {
@@ -110,6 +119,7 @@ pub struct RootComponentProvisioningStatusResponse {
     pub phase: RootComponentProvisioningPhase,
     pub placement_count: u32,
     pub component_count: u32,
+    pub reserved_component_count: u32,
     pub accepted_at_ns: u64,
     pub receipt_content_hash: [u8; 32],
 }

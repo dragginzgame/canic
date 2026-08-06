@@ -10,17 +10,24 @@ use canic_control_plane::{
     },
 };
 use canic_core::cdk::utils::hash::wasm_hash;
+use canic_host::release_set::AppConfigSnapshot;
 use ic_testkit::{
     artifacts::{
-        ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheSpec, prepare_artifact_cache,
+        ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheSpec, WasmBuildSpec,
+        prepare_artifact_cache, resolve_cargo_build_inputs,
     },
     pic::{CandidCallExt, PocketIc, PocketIcTimeExt},
 };
-use std::{collections::BTreeMap, fs, io, path::PathBuf};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs, io,
+    path::PathBuf,
+};
 
 use crate::pic::artifacts::{
     INTERNAL_TEST_ENDPOINTS_ENV, INTERNAL_TEST_RELEASE_BUILD_ID,
-    internal_test_artifact_prune_policy, report_artifact_cache_maintenance, run_icp_all_with_env,
+    internal_test_artifact_maintenance_interval, internal_test_artifact_prune_policy,
+    report_artifact_cache_maintenance, run_icp_all_with_env,
 };
 
 use super::{RootBaselineSpec, progress, progress_elapsed};
@@ -199,6 +206,9 @@ fn root_release_artifact_cache_spec(
         .expect("root build config path UTF-8");
     let mut environment = vec![("ICP_ENVIRONMENT", spec.build_network.as_str())];
     environment.extend_from_slice(build_env);
+    let cargo_build = root_release_cargo_build_spec(spec, &environment);
+    let cargo_inputs =
+        resolve_cargo_build_inputs(&cargo_build).expect("resolve root release Cargo build inputs");
     let mut cache = ArtifactCacheSpec::new(
         &spec
             .workspace_root
@@ -213,7 +223,12 @@ fn root_release_artifact_cache_spec(
         config_path,
     ])
     .with_environment(&environment)
-    .with_prune_policy(internal_test_artifact_prune_policy());
+    .with_input("build-config", &spec.build_config_path)
+    .with_cargo_build_inputs("root-release-cargo", &cargo_build, &cargo_inputs)
+    .with_prune_policy_at_most_every(
+        internal_test_artifact_prune_policy(),
+        internal_test_artifact_maintenance_interval(),
+    );
 
     for relative in spec.artifact_watch_paths {
         cache = cache.with_input(relative, &spec.workspace_root.join(relative));
@@ -222,6 +237,40 @@ fn root_release_artifact_cache_spec(
         cache = cache.with_output(name, path);
     }
     cache
+}
+
+fn root_release_cargo_build_spec(
+    spec: &RootBaselineSpec<'_>,
+    environment: &[(&str, &str)],
+) -> WasmBuildSpec {
+    let config = AppConfigSnapshot::load(&spec.build_config_path)
+        .expect("load root release build config for Cargo inputs");
+    let role_packages = config
+        .role_lifecycle()
+        .into_iter()
+        .map(|lifecycle| (lifecycle.role, lifecycle.package))
+        .collect::<BTreeMap<_, _>>();
+    let mut packages = BTreeSet::from(["canic-host".to_string(), "canic-wasm-store".to_string()]);
+    for role in std::iter::once("root").chain(spec.release_roles.iter().copied()) {
+        packages.insert(
+            role_packages
+                .get(role)
+                .unwrap_or_else(|| panic!("root release role `{role}` missing from build config"))
+                .clone(),
+        );
+    }
+    let packages = packages.iter().map(String::as_str).collect::<Vec<_>>();
+    let mut cargo_args = spec.build_profile.cargo_profile_args().to_vec();
+    cargo_args.push("--locked");
+
+    WasmBuildSpec::new(
+        &spec.workspace_root,
+        &spec.workspace_root.join("target/icp-build"),
+        &packages,
+        spec.build_profile.target_dir_name(),
+    )
+    .with_cargo_profile_args(&cargo_args)
+    .with_extra_env(environment)
 }
 
 fn root_release_artifact_outputs(spec: &RootBaselineSpec<'_>) -> BTreeMap<String, PathBuf> {
