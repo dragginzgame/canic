@@ -146,7 +146,7 @@ mod tests {
         is_dead_pocket_ic_transport_error,
     };
     #[cfg(test)]
-    use ic_testkit::pic::{PocketIcSnapshotExt, PocketIcTimeExt};
+    use ic_testkit::pic::{PocketIcCapturedSnapshotExt, PocketIcSnapshotExt, PocketIcTimeExt};
 
     use crate::pic::CanicPicExt;
     #[cfg(test)]
@@ -383,8 +383,7 @@ mod tests {
             &self,
             baseline: &CachedPocketIcBaseline<Self::Metadata>,
         ) -> Result<CanisterRestoreReceipt, Self::Error> {
-            baseline.restore_with_funding(
-                baseline.metadata().root,
+            baseline.restore_with_captured_senders_and_funding(
                 SnapshotRestoreFunding::TopUpTo {
                     minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
                 },
@@ -817,8 +816,7 @@ mod tests {
 
         fixture
             .pic()
-            .restore_controller_snapshots_with_funding(
-                fixture.root,
+            .restore_snapshots_with_captured_senders_and_funding(
                 &snapshots,
                 SnapshotRestoreFunding::TopUpTo {
                     minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,

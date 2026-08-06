@@ -1,9 +1,12 @@
 //! Recoverable IC-mainnet Cycles Ledger refill for the root's prepaid Canister pool.
 
 use crate::{
-    ops::canister_pool::{CanisterPoolCreationAuthority, CanisterPoolOps},
-    storage::stable::canister_pool::CanisterPoolCreationFailureRecord,
-    view::canister_pool::{CanisterPoolCreationProgressView, CanisterPoolCreationView},
+    ops::canister_pool::{
+        CanisterPoolCreationAuthority, CanisterPoolOps, creation_failure_view_to_dto,
+    },
+    view::canister_pool::{
+        CanisterPoolCreationFailureView, CanisterPoolCreationProgressView, CanisterPoolCreationView,
+    },
     workflow::deployment,
 };
 use canic_core::{
@@ -74,7 +77,7 @@ pub(super) async fn reconcile() -> Result<PoolAdminResponse, InternalError> {
         CanisterPoolCreationProgressView::Blocked { failure } => {
             Ok(PoolAdminResponse::RefillBlocked {
                 operation_id: creation.operation_id,
-                failure: failure_to_dto(failure),
+                failure: creation_failure_view_to_dto(failure),
             })
         }
         CanisterPoolCreationProgressView::Intent { uncertain_result } => {
@@ -94,8 +97,8 @@ pub(super) async fn reconcile_draining() -> Result<PoolAdminResponse, InternalEr
         }
         | CanisterPoolCreationProgressView::Blocked {
             failure:
-                CanisterPoolCreationFailureRecord::LedgerCreationFailed
-                | CanisterPoolCreationFailureRecord::LedgerRejected,
+                CanisterPoolCreationFailureView::LedgerCreationFailed
+                | CanisterPoolCreationFailureView::LedgerRejected,
         } if creation.cost_guard_settlement.is_none() => {
             CanisterPoolOps::cancel_known_unapplied_creation()?;
             Ok(PoolAdminResponse::MaintenancePaused {
@@ -111,7 +114,7 @@ pub(super) async fn reconcile_draining() -> Result<PoolAdminResponse, InternalEr
         CanisterPoolCreationProgressView::Blocked { failure } => {
             Ok(PoolAdminResponse::RefillBlocked {
                 operation_id: creation.operation_id,
-                failure: failure_to_dto(failure),
+                failure: creation_failure_view_to_dto(failure),
             })
         }
         CanisterPoolCreationProgressView::Intent {
@@ -225,13 +228,13 @@ fn handle_ledger_result(
             creation.operation_id,
             settlement,
             permit,
-            CanisterPoolCreationFailureRecord::LedgerCreationFailed,
+            CanisterPoolCreationFailure::LedgerCreationFailed,
         ),
         Err(CyclesLedgerCreateCanisterError::GenericError { .. }) => block_known_failure(
             creation.operation_id,
             settlement,
             permit,
-            CanisterPoolCreationFailureRecord::LedgerRejected,
+            CanisterPoolCreationFailure::LedgerRejected,
         ),
     }
 }
@@ -286,14 +289,14 @@ fn block_known_failure(
     operation_id: [u8; 32],
     settlement: ReplayCostGuardSettlement,
     permit: &CostGuardPermit,
-    failure: CanisterPoolCreationFailureRecord,
+    failure: CanisterPoolCreationFailure,
 ) -> Result<PoolAdminResponse, InternalError> {
     CostGuardWorkflow::recover(permit, IcOps::now_secs())?;
     CanisterPoolOps::finish_creation_attempt(operation_id, settlement, false)?;
     CanisterPoolOps::block_creation(operation_id, failure)?;
     Ok(PoolAdminResponse::RefillBlocked {
         operation_id,
-        failure: failure_to_dto(failure),
+        failure,
     })
 }
 
@@ -302,11 +305,11 @@ fn handle_expired_creation(
     uncertain_result: bool,
 ) -> Result<PoolAdminResponse, InternalError> {
     if uncertain_result {
-        let failure = CanisterPoolCreationFailureRecord::UnresolvedAfterLedgerWindow;
+        let failure = CanisterPoolCreationFailure::UnresolvedAfterLedgerWindow;
         CanisterPoolOps::block_creation(operation_id, failure)?;
         return Ok(PoolAdminResponse::RefillBlocked {
             operation_id,
-            failure: failure_to_dto(failure),
+            failure,
         });
     }
     CanisterPoolOps::rollover_known_expired_creation()?;
@@ -359,20 +362,6 @@ fn creation_operation_id(root: Principal, sequence: u64) -> [u8; 32] {
     hasher.finalize().into()
 }
 
-const fn failure_to_dto(failure: CanisterPoolCreationFailureRecord) -> CanisterPoolCreationFailure {
-    match failure {
-        CanisterPoolCreationFailureRecord::UnresolvedAfterLedgerWindow => {
-            CanisterPoolCreationFailure::UnresolvedAfterLedgerWindow
-        }
-        CanisterPoolCreationFailureRecord::LedgerCreationFailed => {
-            CanisterPoolCreationFailure::LedgerCreationFailed
-        }
-        CanisterPoolCreationFailureRecord::LedgerRejected => {
-            CanisterPoolCreationFailure::LedgerRejected
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -397,7 +386,7 @@ mod tests {
 
     #[test]
     fn unresolved_expiry_is_never_operator_retryable() {
-        crate::storage::stable::canister_pool::CanisterPoolStore::clear();
+        CanisterPoolOps::clear_for_test();
         let root = Principal::from_slice(&[1; 29]);
         let operation_id = creation_operation_id(root, 0);
         CanisterPoolOps::begin_creation(
@@ -414,10 +403,10 @@ mod tests {
         .expect("begin creation");
         CanisterPoolOps::block_creation(
             operation_id,
-            CanisterPoolCreationFailureRecord::UnresolvedAfterLedgerWindow,
+            CanisterPoolCreationFailure::UnresolvedAfterLedgerWindow,
         )
         .expect("block unresolved creation");
         assert!(CanisterPoolOps::retry_blocked_creation().is_err());
-        crate::storage::stable::canister_pool::CanisterPoolStore::clear();
+        CanisterPoolOps::clear_for_test();
     }
 }

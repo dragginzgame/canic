@@ -131,9 +131,19 @@ pub enum RootComponentProvisioningStateRecordPhase {
     Accepted {
         placement_count: u32,
         component_count: u32,
+        reservation_cursor: RootComponentProvisioningReservationCursorRecord,
         accepted_at_ns: u64,
         receipt_content_hash: [u8; 32],
     },
+}
+
+/// Canonical O(1) cursor over the accepted placement/member sequence.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentProvisioningReservationCursorRecord {
+    pub placement_index: u32,
+    pub member_index: u32,
+    pub reserved_component_count: u32,
+    pub content_hash: [u8; 32],
 }
 
 /// Placement reservation proving one ID belongs to one exact operation and plan.
@@ -189,6 +199,7 @@ pub enum RootComponentProvisioningCommitOutcome {
 pub enum RootComponentProvisioningCommitError {
     ActiveOperationConflict,
     ConflictingOperation,
+    OperationChanged,
     PlacementConflict,
     PlacementCountOverflow,
 }
@@ -263,6 +274,25 @@ impl RootComponentProvisioningStore {
         ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow(|operations| {
             operations.get(&RootComponentProvisioningOperationKey(operation_id))
         })
+    }
+
+    pub(crate) fn replace_operation(
+        current: &RootComponentProvisioningRecord,
+        next: RootComponentProvisioningRecord,
+    ) -> Result<(), RootComponentProvisioningCommitError> {
+        let key = RootComponentProvisioningOperationKey(current.operation_id);
+        if next.operation_id != current.operation_id
+            || ROOT_COMPONENT_PROVISIONING_OPERATIONS
+                .with_borrow(|operations| operations.get(&key))
+                .as_ref()
+                != Some(current)
+        {
+            return Err(RootComponentProvisioningCommitError::OperationChanged);
+        }
+        ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow_mut(|operations| {
+            operations.insert(key, next);
+        });
+        Ok(())
     }
 
     #[must_use]

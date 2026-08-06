@@ -42,7 +42,8 @@ mod tests {
     use ic_testkit::{
         artifacts::{read_wasm, test_target_dir, workspace_root_for},
         pic::{
-            CandidCallExt, PocketIc, PocketIcBuilder, PocketIcSnapshotExt, SnapshotRestoreFunding,
+            CandidCallExt, PocketIc, PocketIcBuilder, PocketIcCapturedSnapshotExt,
+            PocketIcSnapshotExt, SnapshotRestoreFunding,
         },
     };
 
@@ -182,8 +183,7 @@ mod tests {
             AuthorityRestoreFencePhase::Open
         );
 
-        pic.restore_controller_snapshots_with_funding(
-            coordinator,
+        pic.restore_snapshots_with_captured_senders_and_funding(
             &snapshots,
             SnapshotRestoreFunding::TopUpTo {
                 minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,

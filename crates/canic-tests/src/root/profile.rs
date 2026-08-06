@@ -15,16 +15,7 @@ const ROOT_SCALING_RELEASE_ROLES: &[&str] = &["scale_hub", "scale_replica"];
 const ROOT_SHARDING_RELEASE_ROLES: &[&str] = &["test", "user_hub", "user_shard"];
 const BOOTSTRAP_TICK_LIMIT: usize = 120;
 const ROOT_SETUP_MAX_ATTEMPTS: usize = 2;
-const ROOT_WASM_WATCH_PATHS: &[&str] = &[
-    "Cargo.toml",
-    "Cargo.lock",
-    "canisters",
-    "apps/test",
-    "icp.yaml",
-    "crates",
-    "rust-toolchain.toml",
-    "scripts/ci",
-];
+const ROOT_WASM_WATCH_PATHS: &[&str] = &["icp.yaml", "scripts/ci"];
 
 #[derive(Clone, Copy)]
 pub enum RootSetupProfile {

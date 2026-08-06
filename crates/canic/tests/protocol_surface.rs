@@ -839,6 +839,11 @@ fn assert_component_registry_protocol_constants() {
             "canic_root_component_provisioning_accept",
         ),
         (
+            canic::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ADVANCE,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ADVANCE,
+            "canic_root_component_provisioning_advance",
+        ),
+        (
             canic::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_STATUS,
             canic_core::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_STATUS,
             "canic_root_component_provisioning_status",
@@ -1124,6 +1129,11 @@ fn assert_root_registry_mirror_guards(root: &str) {
         preceding_attribute_context(root, "async fn canic_root_component_provisioning_accept(")
             .contains("canic_update(internal, public)"),
         "root Component provisioning acceptance must remain a public update authenticated by workflow"
+    );
+    assert!(
+        preceding_attribute_context(root, "fn canic_root_component_provisioning_advance(")
+            .contains("canic_update(internal, public)"),
+        "root Component provisioning advance must remain a public update authenticated by workflow"
     );
     assert!(
         preceding_attribute_context(root, "async fn canic_root_component_provisioning_status(")

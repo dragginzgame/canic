@@ -4,6 +4,7 @@ use super::*;
 use crate::storage::stable::component_provisioning::{
     RootComponentProvisioningData, RootComponentProvisioningStore,
 };
+use crate::view::component_registry::RootComponentAllocationProgressView;
 use candid::Principal;
 use canic_core::{
     bootstrap::parse_config_model,
@@ -16,11 +17,11 @@ use canic_core::{
         fleet_registry::FleetRegistryVersion,
     },
     ids::{
-        AppId, CanonicalNetworkId, ComponentGroupMemberPath, ComponentSpecAdmission,
-        CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey,
-        FleetRegistryAuthority, FleetSubnetCanisterPoolConfig, FleetSubnetRootBinding,
-        FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce,
-        ReleaseSetDigest, SubnetId,
+        AppId, CanisterRole, CanonicalNetworkId, ComponentGroupMemberPath, ComponentInstanceId,
+        ComponentSpecAdmission, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
+        FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetCanisterPoolConfig,
+        FleetSubnetRootBinding, FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ReleaseBuildId,
+        ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
     },
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -220,6 +221,132 @@ fn exact_acceptance_replays_across_restart_without_mutating_capacity() {
 }
 
 #[test]
+fn reservation_advance_is_cursor_bound_restart_safe_and_terminal() {
+    let fixture = fixture();
+    let accepted =
+        RootComponentProvisioningOps::accept(fixture.request.clone(), &fixture.validation, 100)
+            .expect("accept batch");
+    let request = RootComponentProvisioningAdvanceRequest {
+        operation_id: fixture.request.operation_id,
+        plan_hash: fixture.request.plan_hash,
+        expected_reserved_component_count: 0,
+    };
+    assert_eq!(
+        RootComponentProvisioningOps::reservation_disposition(request, &accepted)
+            .expect("advance disposition"),
+        RootComponentProvisioningReservationDisposition::Advance
+    );
+    let member = RootComponentProvisioningOps::next_member_reservation(&accepted)
+        .expect("next member reservation");
+    assert_eq!(
+        member.member_operation_id,
+        [
+            171, 220, 109, 38, 164, 5, 152, 44, 236, 134, 217, 253, 36, 55, 213, 121, 56, 239, 238,
+            30, 99, 196, 36, 234, 206, 2, 149, 236, 72, 124, 86, 131,
+        ]
+    );
+    let allocation = RootComponentAllocationView {
+        operation_id: member.member_operation_id,
+        allocation_sequence: 1,
+        component: ComponentInstanceId::from_generated_bytes([31; 32]),
+        component_spec: member.component_spec.clone(),
+        spec_hash: member.spec_hash,
+        role: CanisterRole::new("alpha"),
+        provisioning_origin: ComponentProvisioningOrigin::ComponentGroup {
+            operation_id: fixture.request.operation_id,
+            plan_hash: fixture.request.plan_hash,
+            group_placement: member.group_placement,
+            member_path: member.member_path,
+        },
+        release_set: fixture.request.batch.active_release_set,
+        progress: RootComponentAllocationProgressView::Reserved,
+    };
+    let advanced = RootComponentProvisioningOps::mark_member_reserved(request, &allocation)
+        .expect("commit member reservation");
+    assert_eq!(advanced.reservation_cursor.reserved_component_count, 1);
+    assert_eq!(advanced.reservation_cursor.placement_index, 1);
+    assert_eq!(advanced.reservation_cursor.member_index, 0);
+    assert_eq!(
+        RootComponentProvisioningOps::reservation_disposition(request, &advanced)
+            .expect("response-loss replay"),
+        RootComponentProvisioningReservationDisposition::Replay
+    );
+    let complete = RootComponentProvisioningAdvanceRequest {
+        expected_reserved_component_count: 1,
+        ..request
+    };
+    assert_eq!(
+        RootComponentProvisioningOps::reservation_disposition(complete, &advanced)
+            .expect("terminal disposition"),
+        RootComponentProvisioningReservationDisposition::Complete
+    );
+
+    let snapshot = RootComponentProvisioningStore::export();
+    RootComponentProvisioningStore::import(snapshot);
+    let restored = RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
+        operation_id: request.operation_id,
+        plan_hash: request.plan_hash,
+    })
+    .expect("restored reservation progress");
+    assert_eq!(restored, advanced);
+}
+
+#[test]
+fn reservation_cursor_crosses_canonical_placements_without_reusing_identity() {
+    let mut fixture = fixture();
+    let mut second_placement = fixture.request.batch.placements[0].clone();
+    second_placement.group_placement.ordinal = 1;
+    fixture.request.batch.placements.push(second_placement);
+    fixture.validation.placement_count = 2;
+    fixture.validation.component_count = 2;
+    *fixture
+        .validation
+        .component_spec_counts
+        .values_mut()
+        .next()
+        .expect("Component Spec count") = 2;
+
+    let mut current =
+        RootComponentProvisioningOps::accept(fixture.request.clone(), &fixture.validation, 100)
+            .expect("accept two-placement batch");
+    let mut operation_ids = BTreeSet::new();
+    for expected in 0..2 {
+        let request = RootComponentProvisioningAdvanceRequest {
+            operation_id: fixture.request.operation_id,
+            plan_hash: fixture.request.plan_hash,
+            expected_reserved_component_count: expected,
+        };
+        let member = RootComponentProvisioningOps::next_member_reservation(&current)
+            .expect("next placement member");
+        assert_eq!(member.group_placement.ordinal, expected);
+        assert!(operation_ids.insert(member.member_operation_id));
+        let allocation = RootComponentAllocationView {
+            operation_id: member.member_operation_id,
+            allocation_sequence: u64::from(expected) + 1,
+            component: ComponentInstanceId::from_generated_bytes(
+                [u8::try_from(expected).expect("small ordinal") + 40; 32],
+            ),
+            component_spec: member.component_spec.clone(),
+            spec_hash: member.spec_hash,
+            role: CanisterRole::new("alpha"),
+            provisioning_origin: ComponentProvisioningOrigin::ComponentGroup {
+                operation_id: fixture.request.operation_id,
+                plan_hash: fixture.request.plan_hash,
+                group_placement: member.group_placement,
+                member_path: member.member_path,
+            },
+            release_set: fixture.request.batch.active_release_set,
+            progress: RootComponentAllocationProgressView::Reserved,
+        };
+        current = RootComponentProvisioningOps::mark_member_reserved(request, &allocation)
+            .expect("advance placement member");
+    }
+    assert_eq!(current.reservation_cursor.reserved_component_count, 2);
+    assert_eq!(current.reservation_cursor.placement_index, 2);
+    assert_eq!(current.reservation_cursor.member_index, 0);
+}
+
+#[test]
 fn conflicting_operation_and_active_batch_reject_without_new_reservations() {
     let fixture = fixture();
     RootComponentProvisioningOps::accept(fixture.request.clone(), &fixture.validation, 100)
@@ -263,8 +390,16 @@ fn corrupted_receipt_index_or_aggregate_state_fails_closed() {
     RootComponentProvisioningStore::import(corrupted);
     assert!(RootComponentProvisioningOps::acceptance_replay(&fixture.request).is_err());
 
-    let mut corrupted = exact;
+    let mut corrupted = exact.clone();
     corrupted.state.tracked_group_placements = 2;
+    RootComponentProvisioningStore::import(corrupted);
+    assert!(RootComponentProvisioningOps::acceptance_replay(&fixture.request).is_err());
+
+    let mut corrupted = exact;
+    let RootComponentProvisioningStateRecordPhase::Accepted {
+        reservation_cursor, ..
+    } = &mut corrupted.operations[0].state;
+    reservation_cursor.content_hash = [97; 32];
     RootComponentProvisioningStore::import(corrupted);
     assert!(RootComponentProvisioningOps::acceptance_replay(&fixture.request).is_err());
 }

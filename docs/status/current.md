@@ -14,10 +14,23 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.8`.
-- The latest published release is `v0.101.8` at
-  `0951abd21adf093bf453f8bf19184d3b86a75c8b`.
-- Open `0.101.9` advances the internal harness to `ic-testkit 0.6.0`, shares
+- The workspace package version is `0.101.9`.
+- The latest published release is `v0.101.9` at
+  `ca83ca84b7fc4213ec28c3b47bc0a3a20307d06a`.
+- Open `0.101.10` advances each accepted root batch one canonical member at a
+  time through the existing root-local `ComponentInstanceId` allocator. A
+  hash-bound O(1) placement/member cursor and caller-supplied expected count
+  reconcile the sole cross-record partial-progress shape without skipping or
+  double-reserving a member; ordinary lifecycle endpoints reject the grouped
+  origin. No Canister, pool, cycles, install, Registry membership, Directory
+  or runtime effect is enabled yet. The same open patch advances the internal
+  harness dependency to `ic-testkit` 0.7.0 without changing the current Canic
+  test topology, adopting its batch progress, exact Cargo-input and captured
+  snapshot-sender APIs. Focused validation measured a single exact Wasm hit at
+  424 milliseconds after a 37.42-second cold build, and the active Registry
+  journey at 22.78 seconds warm after a 226.98-second cold artifact pass; its
+  transactional Store artifact reused in 955 milliseconds.
+- Released `0.101.9` advances the internal harness to `ic-testkit 0.6.0`, shares
   caller-owned Cargo compilation state across exact test-Wasm caches and uses
   exact per-canister snapshot senders for mixed-controller pooled topologies.
   It also gives each selected root a Coordinator-authenticated, restart-safe
@@ -28,9 +41,9 @@ Historical detail is archived at:
   bypass them. Concrete deployment and independent service density/spread,
   current Registry/admission/release-set/Store evidence, Component capacity and
   Ready prepaid assets are checked before acceptance and rechecked after Store
-  observation. This slice stops at `Accepted`: Component identity allocation,
-  pool claim, installation, Registry/Directory publication and activation are
-  still unavailable.
+  observation. That released slice stops at `Accepted`: Component identity
+  allocation, pool claim, installation, Registry/Directory publication and
+  activation are unavailable at that boundary.
   With incremental codegen still disabled, a controlled second-fingerprint
   miss fell from 11.71 seconds isolated to 2.41 seconds shared; its Cargo phase
   fell from 9.97 seconds to 88 milliseconds. The exact sender-map unit test
@@ -2293,16 +2306,16 @@ First primary results:
 
 ## Next Action
 
-The protected runtime context is published through immutable `v0.101.7`.
-Open 0.101.8 freezes the canonical fresh provisioning-plan shape and hash plus
-the protected per-root group-placement ceiling, while deliberately leaving
-scale-out and every grouped effect fenced. Continue Slice 2 by persisting one
-exact root batch, deriving each installed `GroupMember` context from that
-accepted plan and enforcing effective limits through the existing root-local
-Component allocation and prepaid-Canister lifecycle. Do not create a second
-Component identity, lifecycle, Store or pool path, and do not enable scale-out
-until its durable Coordinator placement ledger can prove ordinal non-reuse and
-combined density/spread.
+The canonical plan is published through immutable `v0.101.8`, and exact root
+batch acceptance is published through immutable `v0.101.9`. Open 0.101.10
+allocates each accepted member's root-local `ComponentInstanceId` in canonical
+order with a hash-bound response-idempotent cursor while leaving every
+external effect fenced. Continue Slice 2 by claiming each member's Ready
+prepaid Canister through that same operation identity, deriving the exact
+`GroupMember` runtime context from the accepted plan and advancing the
+existing Component lifecycle without creating a second identity, lifecycle,
+Store or pool path. Do not enable scale-out until its durable Coordinator
+placement ledger can prove ordinal non-reuse and combined density/spread.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.

@@ -10,7 +10,13 @@ use crate::{
         canister_pool::CanisterPoolOps, component_provisioning::RootComponentProvisioningOps,
         component_registry::ComponentRegistryOps, fleet_registry_mirror::FleetRegistryMirrorOps,
     },
-    view::component_registry::RootComponentRegistryView,
+    view::{
+        component_provisioning::{
+            RootComponentMemberReservationView, RootComponentProvisioningReservationDisposition,
+            RootComponentProvisioningView,
+        },
+        component_registry::{RootComponentAllocationView, RootComponentRegistryView},
+    },
     workflow::{bootstrap::root_store, root_authority::validated_root_authority},
 };
 use candid::Principal;
@@ -28,9 +34,10 @@ use canic_core::{
     },
     dto::{
         component_provisioning::{
-            RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningStatusRequest,
-            RootComponentProvisioningStatusResponse,
+            RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningAdvanceRequest,
+            RootComponentProvisioningStatusRequest, RootComponentProvisioningStatusResponse,
         },
+        component_registry::{ComponentProvisioningOrigin, RootComponentAllocationRequest},
         fleet_activation::FleetActivationPhase,
         fleet_registry::FleetSubnetRootStatus,
         fleet_subnet_root::FleetSubnetRootAuthority,
@@ -110,6 +117,51 @@ pub fn status(
         .map(crate::ops::component_provisioning::status_response)
 }
 
+/// Advance exactly one canonical Component identity reservation or replay that step.
+pub fn advance(
+    caller: Principal,
+    request: RootComponentProvisioningAdvanceRequest,
+) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
+    let (authority, root) = validated_root_authority()?;
+    require_coordinator(caller, authority.binding.authority.binding.coordinator)?;
+    let current = RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
+        operation_id: request.operation_id,
+        plan_hash: request.plan_hash,
+    })?;
+    match RootComponentProvisioningOps::reservation_disposition(request, &current)? {
+        RootComponentProvisioningReservationDisposition::Complete
+        | RootComponentProvisioningReservationDisposition::Replay => {
+            return Ok(crate::ops::component_provisioning::status_response(current));
+        }
+        RootComponentProvisioningReservationDisposition::Advance => {}
+    }
+
+    let registry = current_registry_for_reservation(&authority, root, &current)?;
+    let member = RootComponentProvisioningOps::next_member_reservation(&current)?;
+    let existing = ComponentRegistryOps::allocation(member.member_operation_id);
+    validate_reservation_registry_progress(
+        registry.reserved_component_instances,
+        current.reservation_cursor.reserved_component_count,
+        existing.is_some(),
+    )?;
+    let topology = ConfigOps::component_topology()?;
+    let allocation = match existing {
+        Some(allocation) => allocation,
+        None => reserve_group_member(&authority, &registry, &current, &member, &topology)?,
+    };
+    super::component_registry::validate_allocation_record(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &allocation,
+        member.member_operation_id,
+    )?;
+    let advanced = RootComponentProvisioningOps::mark_member_reserved(request, &allocation)?;
+    Ok(crate::ops::component_provisioning::status_response(
+        advanced,
+    ))
+}
+
 fn require_coordinator(caller: Principal, coordinator: Principal) -> Result<(), InternalError> {
     if caller != coordinator {
         return Err(InternalError::forbidden(format!(
@@ -155,6 +207,92 @@ fn current_registry_for_acceptance(
     )?;
     validate_ready_pool_capacity(validation.component_count)?;
     Ok(current)
+}
+
+fn current_registry_for_reservation(
+    authority: &FleetSubnetRootAuthority,
+    root: Principal,
+    provisioning: &RootComponentProvisioningView,
+) -> Result<RootComponentRegistryView, InternalError> {
+    if FleetActivationWorkflow::status()?.phase != FleetActivationPhase::Prepared {
+        return Err(InternalError::conflict(
+            "fresh root Component reservation requires runtime Prepared",
+        ));
+    }
+    let mirror = FleetRegistryMirrorOps::validated_current(authority, root)?;
+    if mirror.root_entry.status != FleetSubnetRootStatus::Active
+        || mirror.active.snapshot.version != provisioning.fleet_registry
+    {
+        return Err(InternalError::conflict(
+            "root Component reservation differs from the exact active Registry mirror",
+        ));
+    }
+    let config = ConfigOps::get()?;
+    ComponentProvisioningPlanOps::validate_root_batch(
+        &config,
+        &mirror.active.snapshot.registry,
+        &provisioning.fleet_registry,
+        provisioning.configuration_digest,
+        &authority.binding,
+        &provisioning.batch,
+    )?;
+    let current = ComponentRegistryOps::current().ok_or_else(|| {
+        InternalError::unavailable("root Component Registry authority has not been prepared")
+    })?;
+    validate_component_registry_authority(
+        &current,
+        &authority.binding,
+        authority.initial_release_set,
+        &provisioning.fleet_registry,
+    )?;
+    Ok(current)
+}
+
+fn validate_reservation_registry_progress(
+    registry_reserved_components: u32,
+    aggregate_reserved_components: u32,
+    current_member_exists: bool,
+) -> Result<(), InternalError> {
+    let expected = aggregate_reserved_components
+        .checked_add(u32::from(current_member_exists))
+        .ok_or_else(|| {
+            InternalError::resource_exhausted(
+                "root Component provisioning reservation count overflowed",
+            )
+        })?;
+    if registry_reserved_components != expected {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component Registry reservations differ from aggregate provisioning progress",
+        ));
+    }
+    Ok(())
+}
+
+fn reserve_group_member(
+    authority: &FleetSubnetRootAuthority,
+    registry: &RootComponentRegistryView,
+    provisioning: &RootComponentProvisioningView,
+    member: &RootComponentMemberReservationView,
+    topology: &canic_core::control_plane_support::config::ComponentTopology,
+) -> Result<RootComponentAllocationView, InternalError> {
+    let request = RootComponentAllocationRequest {
+        operation_id: member.member_operation_id,
+        component_spec: member.component_spec.clone(),
+    };
+    let decision = super::component_registry::top_level_allocation_decision(
+        &authority.binding,
+        topology,
+        registry,
+        &request,
+    )?;
+    let origin = ComponentProvisioningOrigin::ComponentGroup {
+        operation_id: provisioning.operation_id,
+        plan_hash: provisioning.plan_hash,
+        group_placement: member.group_placement.clone(),
+        member_path: member.member_path.clone(),
+    };
+    ComponentRegistryOps::reserve_allocation(decision, member.member_operation_id, origin, false)
 }
 
 fn validate_component_registry_authority(
@@ -293,5 +431,13 @@ mod tests {
     fn capacity_helpers_reject_first_excess_without_mutation() {
         assert!(validate_group_placement_capacity(3, 2, 5).is_ok());
         assert!(validate_group_placement_capacity(3, 3, 5).is_err());
+    }
+
+    #[test]
+    fn registry_progress_allows_only_exact_or_response_lost_reservation() {
+        assert!(validate_reservation_registry_progress(3, 3, false).is_ok());
+        assert!(validate_reservation_registry_progress(4, 3, true).is_ok());
+        assert!(validate_reservation_registry_progress(4, 3, false).is_err());
+        assert!(validate_reservation_registry_progress(3, 3, true).is_err());
     }
 }

@@ -8,8 +8,8 @@ use crate::{
             ComponentGroupPlacementPlan, ComponentGroupPlanEntry,
             FleetComponentProvisioningOperation, FleetComponentProvisioningPlan,
             FleetSubnetRootProvisioningBatch, RootComponentProvisioningAcceptanceRequest,
-            RootComponentProvisioningPhase, RootComponentProvisioningStatusRequest,
-            RootComponentProvisioningStatusResponse,
+            RootComponentProvisioningAdvanceRequest, RootComponentProvisioningPhase,
+            RootComponentProvisioningStatusRequest, RootComponentProvisioningStatusResponse,
         },
         fleet_registry::{FleetRegistry, FleetSubnetRootEntry, FleetSubnetRootStatus},
     },
@@ -408,6 +408,18 @@ fn exact_root_batch_validation_returns_bounded_capacity_and_artifact_facts() {
         .expect("decode status request"),
         status_request
     );
+    let advance_request = RootComponentProvisioningAdvanceRequest {
+        operation_id: request.operation_id,
+        plan_hash: request.plan_hash,
+        expected_reserved_component_count: 0,
+    };
+    assert_eq!(
+        candid::decode_one::<RootComponentProvisioningAdvanceRequest>(
+            &candid::encode_one(advance_request).expect("encode advance request")
+        )
+        .expect("decode advance request"),
+        advance_request
+    );
     let response = RootComponentProvisioningStatusResponse {
         operation_id: request.operation_id,
         plan_hash: request.plan_hash,
@@ -417,6 +429,7 @@ fn exact_root_batch_validation_returns_bounded_capacity_and_artifact_facts() {
         phase: RootComponentProvisioningPhase::Accepted,
         placement_count: validation.placement_count,
         component_count: validation.component_count,
+        reserved_component_count: 0,
         accepted_at_ns: 1,
         receipt_content_hash: [15; 32],
     };

@@ -7,7 +7,8 @@ use crate::storage::stable::canister_pool::{
     CanisterPoolRecycleResetRecord, CanisterPoolStore,
 };
 use crate::view::canister_pool::{
-    CanisterPoolCreationProgressView, CanisterPoolCreationView, CanisterPoolHandoffView,
+    CanisterPoolCreationFailureView, CanisterPoolCreationProgressView, CanisterPoolCreationView,
+    CanisterPoolHandoffView,
 };
 use canic_core::{
     cdk::types::{Cycles, Principal},
@@ -580,8 +581,9 @@ impl CanisterPoolOps {
 
     pub fn block_creation(
         operation_id: [u8; 32],
-        failure: CanisterPoolCreationFailureRecord,
+        failure: CanisterPoolCreationFailure,
     ) -> Result<(), InternalError> {
+        let failure = creation_failure_from_dto(failure);
         let mut state = CanisterPoolStore::state();
         let creation = state.creation.as_mut().ok_or_else(|| {
             InternalError::unavailable("autonomous Canister pool refill is not pending")
@@ -785,7 +787,9 @@ impl CanisterPoolOps {
                     canister_id,
                 },
                 CanisterPoolCreationProgressRecord::Blocked { failure } => {
-                    CanisterPoolCreationProgressView::Blocked { failure }
+                    CanisterPoolCreationProgressView::Blocked {
+                        failure: creation_failure_to_view(failure),
+                    }
                 }
             };
             CanisterPoolCreationView {
@@ -1133,6 +1137,11 @@ impl CanisterPoolOps {
         CanisterPoolStore::remove(&canister_id);
         Ok(())
     }
+
+    #[cfg(test)]
+    pub(crate) fn clear_for_test() {
+        CanisterPoolStore::clear();
+    }
 }
 
 fn validate_config(config: &FleetSubnetCanisterPoolConfig) -> Result<(), InternalError> {
@@ -1360,6 +1369,54 @@ const fn creation_failure_to_dto(
         }
         CanisterPoolCreationFailureRecord::LedgerRejected => {
             CanisterPoolCreationFailure::LedgerRejected
+        }
+    }
+}
+
+pub const fn creation_failure_view_to_dto(
+    failure: CanisterPoolCreationFailureView,
+) -> CanisterPoolCreationFailure {
+    match failure {
+        CanisterPoolCreationFailureView::UnresolvedAfterLedgerWindow => {
+            CanisterPoolCreationFailure::UnresolvedAfterLedgerWindow
+        }
+        CanisterPoolCreationFailureView::LedgerCreationFailed => {
+            CanisterPoolCreationFailure::LedgerCreationFailed
+        }
+        CanisterPoolCreationFailureView::LedgerRejected => {
+            CanisterPoolCreationFailure::LedgerRejected
+        }
+    }
+}
+
+const fn creation_failure_to_view(
+    failure: CanisterPoolCreationFailureRecord,
+) -> CanisterPoolCreationFailureView {
+    match failure {
+        CanisterPoolCreationFailureRecord::UnresolvedAfterLedgerWindow => {
+            CanisterPoolCreationFailureView::UnresolvedAfterLedgerWindow
+        }
+        CanisterPoolCreationFailureRecord::LedgerCreationFailed => {
+            CanisterPoolCreationFailureView::LedgerCreationFailed
+        }
+        CanisterPoolCreationFailureRecord::LedgerRejected => {
+            CanisterPoolCreationFailureView::LedgerRejected
+        }
+    }
+}
+
+const fn creation_failure_from_dto(
+    failure: CanisterPoolCreationFailure,
+) -> CanisterPoolCreationFailureRecord {
+    match failure {
+        CanisterPoolCreationFailure::UnresolvedAfterLedgerWindow => {
+            CanisterPoolCreationFailureRecord::UnresolvedAfterLedgerWindow
+        }
+        CanisterPoolCreationFailure::LedgerCreationFailed => {
+            CanisterPoolCreationFailureRecord::LedgerCreationFailed
+        }
+        CanisterPoolCreationFailure::LedgerRejected => {
+            CanisterPoolCreationFailureRecord::LedgerRejected
         }
     }
 }

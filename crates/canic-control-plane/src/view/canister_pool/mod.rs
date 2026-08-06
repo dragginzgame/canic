@@ -4,11 +4,18 @@
 //! Does not own: stable records, endpoint DTOs, or workflow mutation.
 //! Boundary: ops projects storage records here before workflow orchestration.
 
-use crate::storage::stable::canister_pool::CanisterPoolCreationFailureRecord;
 use canic_core::{
     cdk::types::{Cycles, Principal},
     control_plane_support::model::replay::ReplayCostGuardSettlement,
 };
+
+/// Read-only reason one autonomous refill is blocked without a principal.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CanisterPoolCreationFailureView {
+    UnresolvedAfterLedgerWindow,
+    LedgerCreationFailed,
+    LedgerRejected,
+}
 
 /// Read-only progress of one exact autonomous pool refill.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -21,7 +28,7 @@ pub enum CanisterPoolCreationProgressView {
         canister_id: Principal,
     },
     Blocked {
-        failure: CanisterPoolCreationFailureRecord,
+        failure: CanisterPoolCreationFailureView,
     },
 }
 
