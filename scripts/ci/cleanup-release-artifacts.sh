@@ -5,9 +5,18 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TEST_SCRATCH_PARENT="$ROOT/.tmp"
 TEST_SCRATCH="$TEST_SCRATCH_PARENT/test-runtime"
 MAX_CARGO_CLEAN_ATTEMPTS=2
+CLEANUP_MODE="${1:-all}"
 status=0
 
 cd "$ROOT" || exit 1
+
+case "$CLEANUP_MODE" in
+    all | --scratch-only) ;;
+    *)
+        echo "usage: $0 [--scratch-only]" >&2
+        exit 2
+        ;;
+esac
 
 clean_cargo_artifacts() {
     local attempt
@@ -26,9 +35,13 @@ clean_cargo_artifacts() {
     return 1
 }
 
-if ! clean_cargo_artifacts; then
-    echo "release cleanup failed to clear Cargo build artifacts" >&2
-    status=1
+if [[ "$CLEANUP_MODE" == "all" ]]; then
+    if ! clean_cargo_artifacts; then
+        echo "release cleanup failed to clear Cargo build artifacts" >&2
+        status=1
+    fi
+else
+    echo "==> retaining Cargo build artifacts after unsuccessful release gates"
 fi
 
 if [[ -L "$TEST_SCRATCH_PARENT" ]]; then

@@ -309,6 +309,7 @@ PATH="$release_cleanup_bin:$PATH" \
 mkdir -p \
     "$release_cleanup_fixture/.tmp/test-runtime" \
     "$release_cleanup_fixture/target"
+rm -f "$release_cleanup_fixture/cargo-clean-attempts"
 if FAKE_MAKE_STATUS=23 PATH="$release_cleanup_bin:$PATH" \
     bash "$release_cleanup_fixture/scripts/ci/run-release-gates.sh" major; then
     fail "release-gate wrapper accepted a failed validation gate"
@@ -319,8 +320,10 @@ fi
     fail "release-gate wrapper did not preserve the validation failure"
 [ "$(cat "$release_cleanup_fixture/gate-targets")" = "control-plane-feature-gate clippy test" ] ||
     fail "major release-gate wrapper did not select the full release gates"
-[ ! -e "$release_cleanup_fixture/target" ] ||
-    fail "failed release-gate cleanup retained Cargo artifacts"
+[ -e "$release_cleanup_fixture/target" ] ||
+    fail "failed release-gate cleanup removed Cargo artifacts needed for retry"
+[ ! -e "$release_cleanup_fixture/cargo-clean-attempts" ] ||
+    fail "failed release-gate cleanup invoked Cargo clean"
 [ ! -e "$release_cleanup_fixture/.tmp/test-runtime" ] ||
     fail "failed release-gate cleanup retained test scratch"
 

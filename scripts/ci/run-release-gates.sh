@@ -27,7 +27,11 @@ finish() {
     local cleanup_status
 
     trap - EXIT INT TERM
-    bash scripts/ci/cleanup-release-artifacts.sh
+    if [[ "$gate_status" -eq 0 && "$command_status" -eq 0 ]]; then
+        bash scripts/ci/cleanup-release-artifacts.sh
+    else
+        bash scripts/ci/cleanup-release-artifacts.sh --scratch-only
+    fi
     cleanup_status=$?
 
     if [[ "$gate_status" -ne 0 ]]; then

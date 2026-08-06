@@ -15,7 +15,9 @@ Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 - `0.101.13` commits installed grouped Components into their exact prepared
   Registry partitions through a fourth replay-safe cursor while keeping
   Directories and runtimes fenced, and folds bounded shared-target maintenance
-  into each batch's first exact test-Wasm acquisition.
+  into each batch's first exact test-Wasm acquisition. Failed release gates now
+  retain Cargo artifacts for diagnosis and faster retry while still clearing
+  repository-owned test scratch.
 
 - `0.101.12` installs each claimed group member through the ordinary exact-
   retry Store-backed journal while retaining its plan-derived runtime context
