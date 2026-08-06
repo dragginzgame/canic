@@ -8,7 +8,7 @@ use crate::{
     config::{ComponentDeploymentLabel, ComponentDeploymentLimits, ComponentDeploymentPurpose},
     dto::fleet_registry::FleetRegistryVersion,
     ids::{
-        ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
+        ComponentBinding, ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
         ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentGroupSpecId, ComponentSpecId,
         FleetBinding, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
     },
@@ -101,6 +101,35 @@ pub struct RootComponentProvisioningAdvanceRequest {
     pub expected_registry_committed_component_count: u32,
 }
 
+/// One exact provisioned Component occurrence and its committed Registry identity.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RootProvisionedGroupMember {
+    pub member_path: ComponentGroupMemberPath,
+    pub component_spec: ComponentSpecId,
+    pub purpose: ComponentDeploymentPurpose,
+    pub limits: ComponentDeploymentLimits,
+    pub binding: ComponentBinding,
+    pub component_registry_revision: u64,
+    pub component_registry_content_hash: [u8; 32],
+}
+
+/// Complete provisioned result for one exact group placement on this root.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RootProvisionedGroupPlacement {
+    pub group_placement: ComponentGroupPlacementId,
+    pub component_group: ComponentGroupSpecId,
+    pub members: Vec<RootProvisionedGroupMember>,
+}
+
+/// Complete group-partitioned result of one root provisioning operation.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RootComponentProvisioningResult {
+    pub placements: Vec<RootProvisionedGroupPlacement>,
+}
+
 /// Durable aggregate progress of one root provisioning batch.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RootComponentProvisioningPhase {
@@ -110,7 +139,7 @@ pub enum RootComponentProvisioningPhase {
     RuntimesActive,
 }
 
-/// Compact receipt for one exact durable root provisioning operation.
+/// Durable progress or complete terminal result for one exact root provisioning operation.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RootComponentProvisioningStatusResponse {
@@ -126,6 +155,8 @@ pub struct RootComponentProvisioningStatusResponse {
     pub claimed_component_count: u32,
     pub installed_component_count: u32,
     pub registry_committed_component_count: u32,
+    pub result: Option<RootComponentProvisioningResult>,
     pub accepted_at_ns: u64,
+    pub provisioned_at_ns: Option<u64>,
     pub receipt_content_hash: [u8; 32],
 }

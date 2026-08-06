@@ -14,10 +14,17 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.12`.
-- The latest published release is `v0.101.12` at
-  `20b1395e8f2af782b1e2f7599c7c74343d89fb59`.
-- Open `0.101.13` advances every fully installed grouped root batch one
+- The workspace package version is `0.101.13`.
+- The latest published release is `v0.101.13` at
+  `e82b0385244a0ab596a05fed1b924f2e47ae6d2b`.
+- Open `0.101.14` freezes each fully Registry-committed root batch as one
+  durable group-partitioned `Provisioned` result. Every member retains its
+  exact path, Spec, purpose, effective limits, protected binding and Registry
+  head under a domain-separated terminal receipt; exact retries and restart
+  return the same result while publication, Directories and runtime activation
+  remain fenced. The same patch advances the internal harness to `ic-testkit`
+  0.7.6 and its batch-scoped, bounded best-effort shared-target maintenance.
+- Released `0.101.13` advances every fully installed grouped root batch one
   canonical member at a time through the ordinary Component Registry
   commitment path. A fourth hash-bound cursor reconciles response loss only
   after the exact accepted member, Store artifact, grouped Registry-byte limit,
@@ -2367,13 +2374,13 @@ First primary results:
 ## Next Action
 
 The canonical plan, exact root-batch acceptance, canonical root-local
-`ComponentInstanceId` allocation, prepaid-Canister claim and Store-backed
-installation are published through immutable `v0.101.12`. Open `0.101.13`
-additionally commits each verified member's exact `Prepared` Component Registry
-partition through its own replay-safe cursor while retaining the aggregate
-`Accepted` fence. Continue Slice 2 by materializing the durable aggregate
-`Provisioned` result and exact terminal retry receipt; Component Group/Fleet
-service publication, Directory delivery and runtime activation remain separate.
+`ComponentInstanceId` allocation, prepaid-Canister claim, Store-backed
+installation and prepared Registry commitment are published through immutable
+`v0.101.13`. Open `0.101.14` additionally freezes the complete exact
+group-partitioned `Provisioned` result and terminal retry receipt. Continue
+Slice 3 by deriving the complete Fleet-service topology from exact root results
+before one atomic Coordinator Registry publication; Component Group/Fleet
+Directory delivery and runtime activation remain separate later boundaries.
 Do not enable scale-out until its durable Coordinator
 placement ledger can prove ordinal non-reuse and combined density/spread.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for

@@ -359,7 +359,7 @@ fn commit_single_registry_member(
     installed_allocation: RootComponentAllocationView,
     installed: &RootComponentProvisioningView,
     install_request: RootComponentProvisioningAdvanceRequest,
-) -> RootComponentProvisioningView {
+) -> (RootComponentProvisioningView, ProvisionedMemberEvidence) {
     let registry_request = RootComponentProvisioningAdvanceRequest {
         expected_installed_component_count: 1,
         expected_registry_committed_component_count: 0,
@@ -395,7 +395,14 @@ fn commit_single_registry_member(
             .expect("Registry response-loss replay"),
         RootComponentProvisioningAdvanceDisposition::Replay
     );
-    registered
+    (
+        registered,
+        ProvisionedMemberEvidence {
+            member: member.clone(),
+            allocation: committed_allocation,
+            partition,
+        },
+    )
 }
 
 fn assert_restart_retains_registered(
@@ -410,6 +417,86 @@ fn assert_restart_retains_registered(
     })
     .expect("restored Registry progress");
     assert_eq!(&restored, registered);
+}
+
+fn finalize_single_provisioned_result(
+    fixture: &Fixture,
+    registered: &RootComponentProvisioningView,
+    evidence: ProvisionedMemberEvidence,
+    request: RootComponentProvisioningAdvanceRequest,
+) -> RootComponentProvisioningView {
+    let result =
+        provisioned_result_record(registered, &[evidence]).expect("complete provisioned result");
+    let provisioned = commit_provisioned_result(request, 300, result)
+        .expect("commit terminal provisioned receipt");
+    assert_eq!(
+        provisioned.phase,
+        RootComponentProvisioningPhase::Provisioned
+    );
+    assert_eq!(provisioned.provisioned_at_ns, Some(300));
+    assert_eq!(
+        provisioned
+            .result
+            .as_ref()
+            .expect("provisioned result")
+            .placements
+            .len(),
+        1
+    );
+    assert_ne!(
+        provisioned.receipt_content_hash,
+        registered.receipt_content_hash
+    );
+    assert_eq!(
+        RootComponentProvisioningOps::advance_disposition(request, &provisioned)
+            .expect("terminal replay disposition"),
+        RootComponentProvisioningAdvanceDisposition::Complete
+    );
+    assert_eq!(
+        RootComponentProvisioningOps::acceptance_replay(&fixture.request)
+            .expect("terminal acceptance replay")
+            .expect("terminal receipt"),
+        provisioned
+    );
+    provisioned
+}
+
+fn assert_terminal_provisioning_corruption_rejects(fixture: &Fixture) {
+    let exact = RootComponentProvisioningStore::export();
+    let mut corrupted = exact.clone();
+    let RootComponentProvisioningStateRecordPhase::Provisioned {
+        receipt_content_hash,
+        ..
+    } = &mut corrupted.operations[0].state
+    else {
+        panic!("terminal fixture must retain Provisioned state")
+    };
+    *receipt_content_hash = [99; 32];
+    RootComponentProvisioningStore::import(corrupted);
+    assert!(
+        RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
+            operation_id: fixture.request.operation_id,
+            plan_hash: fixture.request.plan_hash,
+        })
+        .is_err()
+    );
+
+    let mut corrupted = exact.clone();
+    let RootComponentProvisioningStateRecordPhase::Provisioned { result, .. } =
+        &mut corrupted.operations[0].state
+    else {
+        panic!("terminal fixture must retain Provisioned state")
+    };
+    result.placements[0].members[0].component_registry_content_hash = [0; 32];
+    RootComponentProvisioningStore::import(corrupted);
+    assert!(
+        RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
+            operation_id: fixture.request.operation_id,
+            plan_hash: fixture.request.plan_hash,
+        })
+        .is_err()
+    );
+    RootComponentProvisioningStore::import(exact);
 }
 
 #[test]
@@ -584,7 +671,7 @@ fn claim_install_and_registry_advances_are_context_bound_restart_safe_and_termin
         ..install_request
     };
     assert!(RootComponentProvisioningOps::advance_disposition(contradictory, &installed).is_err());
-    let registered =
+    let (registered, evidence) =
         commit_single_registry_member(&member, installed_allocation, &installed, install_request);
     assert_eq!(
         registered
@@ -602,10 +689,13 @@ fn claim_install_and_registry_advances_are_context_bound_restart_safe_and_termin
     assert_eq!(
         RootComponentProvisioningOps::advance_disposition(complete, &registered)
             .expect("terminal disposition"),
-        RootComponentProvisioningAdvanceDisposition::Complete
+        RootComponentProvisioningAdvanceDisposition::Advance
     );
 
-    assert_restart_retains_registered(request, &registered);
+    let provisioned = finalize_single_provisioned_result(&fixture, &registered, evidence, complete);
+
+    assert_restart_retains_registered(request, &provisioned);
+    assert_terminal_provisioning_corruption_rejects(&fixture);
 }
 
 #[test]
@@ -686,6 +776,7 @@ fn reservation_cursor_crosses_canonical_placements_without_reusing_identity() {
     let mut allocations = Vec::new();
     let mut claimed_allocations = Vec::new();
     let mut installed_allocations = Vec::new();
+    let mut registry_evidence = Vec::new();
     for expected in 0..2 {
         let request = RootComponentProvisioningAdvanceRequest {
             operation_id: fixture.request.operation_id,
@@ -805,6 +896,11 @@ fn reservation_cursor_crosses_canonical_placements_without_reusing_identity() {
             &partition,
         )
         .expect("advance placement Registry commitment");
+        registry_evidence.push(ProvisionedMemberEvidence {
+            member,
+            allocation,
+            partition,
+        });
     }
     assert_eq!(
         current.registry_cursor.registry_committed_component_count,
@@ -812,6 +908,34 @@ fn reservation_cursor_crosses_canonical_placements_without_reusing_identity() {
     );
     assert_eq!(current.registry_cursor.placement_index, 2);
     assert_eq!(current.registry_cursor.member_index, 0);
+    registry_evidence.reverse();
+    assert!(provisioned_result_record(&current, &registry_evidence).is_err());
+    registry_evidence.reverse();
+    let result = provisioned_result_record(&current, &registry_evidence)
+        .expect("canonical multi-placement result");
+    assert_eq!(result.placements.len(), 2);
+    let complete = RootComponentProvisioningAdvanceRequest {
+        operation_id: fixture.request.operation_id,
+        plan_hash: fixture.request.plan_hash,
+        expected_reserved_component_count: 2,
+        expected_claimed_component_count: 2,
+        expected_installed_component_count: 2,
+        expected_registry_committed_component_count: 2,
+    };
+    let provisioned =
+        commit_provisioned_result(complete, 300, result).expect("multi-placement terminal result");
+    assert_eq!(
+        provisioned.phase,
+        RootComponentProvisioningPhase::Provisioned
+    );
+    assert_eq!(
+        provisioned
+            .result
+            .expect("multi-placement result")
+            .placements
+            .len(),
+        2
+    );
 }
 
 #[test]
@@ -848,7 +972,10 @@ fn corrupted_receipt_index_or_aggregate_state_fails_closed() {
     let RootComponentProvisioningStateRecordPhase::Accepted {
         receipt_content_hash,
         ..
-    } = state;
+    } = state
+    else {
+        panic!("fresh fixture must retain Accepted state")
+    };
     *receipt_content_hash = [99; 32];
     RootComponentProvisioningStore::import(corrupted);
     assert!(RootComponentProvisioningOps::acceptance_replay(&fixture.request).is_err());
@@ -866,21 +993,30 @@ fn corrupted_receipt_index_or_aggregate_state_fails_closed() {
     let mut corrupted = exact.clone();
     let RootComponentProvisioningStateRecordPhase::Accepted {
         reservation_cursor, ..
-    } = &mut corrupted.operations[0].state;
+    } = &mut corrupted.operations[0].state
+    else {
+        panic!("fresh fixture must retain Accepted state")
+    };
     reservation_cursor.content_hash = [97; 32];
     RootComponentProvisioningStore::import(corrupted);
     assert!(RootComponentProvisioningOps::acceptance_replay(&fixture.request).is_err());
 
     let mut corrupted = exact.clone();
     let RootComponentProvisioningStateRecordPhase::Accepted { claim_cursor, .. } =
-        &mut corrupted.operations[0].state;
+        &mut corrupted.operations[0].state
+    else {
+        panic!("fresh fixture must retain Accepted state")
+    };
     claim_cursor.content_hash = [96; 32];
     RootComponentProvisioningStore::import(corrupted);
     assert!(RootComponentProvisioningOps::acceptance_replay(&fixture.request).is_err());
 
     let mut corrupted = exact.clone();
     let RootComponentProvisioningStateRecordPhase::Accepted { install_cursor, .. } =
-        &mut corrupted.operations[0].state;
+        &mut corrupted.operations[0].state
+    else {
+        panic!("fresh fixture must retain Accepted state")
+    };
     install_cursor.content_hash = [95; 32];
     RootComponentProvisioningStore::import(corrupted);
     assert!(RootComponentProvisioningOps::acceptance_replay(&fixture.request).is_err());
@@ -888,7 +1024,10 @@ fn corrupted_receipt_index_or_aggregate_state_fails_closed() {
     let mut corrupted = exact;
     let RootComponentProvisioningStateRecordPhase::Accepted {
         registry_cursor, ..
-    } = &mut corrupted.operations[0].state;
+    } = &mut corrupted.operations[0].state
+    else {
+        panic!("fresh fixture must retain Accepted state")
+    };
     registry_cursor.content_hash = [94; 32];
     RootComponentProvisioningStore::import(corrupted);
     assert!(RootComponentProvisioningOps::acceptance_replay(&fixture.request).is_err());

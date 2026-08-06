@@ -1,8 +1,10 @@
 use canic_core::ids::BuildNetwork;
 use ic_testkit::artifacts::{
-    ArtifactCacheMaintenance, ArtifactCachePrunePolicy, SharedIncrementalTargetPrunePolicy,
-    WasmBuildBatchProgressEvent, WasmBuildProgressConfig, WasmBuildProgressEvent, WasmBuildSpec,
-    build_wasm_canisters_cached_batch_with_progress,
+    ArtifactCacheMaintenance, ArtifactCachePrunePolicy, SharedIncrementalTargetMaintenanceConfig,
+    SharedIncrementalTargetMaintenanceFailureMode, SharedIncrementalTargetPrunePolicy,
+    WasmBuildBatchConfig, WasmBuildBatchProgressEvent, WasmBuildProgressConfig,
+    WasmBuildProgressEvent, WasmBuildSpec,
+    build_wasm_canisters_cached_batch_with_config_and_progress,
 };
 use std::{
     path::{Path, PathBuf},
@@ -105,9 +107,8 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
     build_env.extend_from_slice(extra_env);
     let builds = packages
         .iter()
-        .enumerate()
-        .map(|(index, package)| {
-            let build = WasmBuildSpec::new(
+        .map(|package| {
+            WasmBuildSpec::new(
                 workspace_root,
                 target_dir,
                 &[*package],
@@ -122,23 +123,21 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
             .with_prune_policy_at_most_every(
                 internal_test_artifact_prune_policy(),
                 internal_test_artifact_maintenance_interval(),
-            );
-            if index == 0 {
-                build.with_shared_incremental_target_maintenance_at_most_every(
-                    internal_test_shared_wasm_target_prune_policy(),
-                    INTERNAL_TEST_SHARED_WASM_TARGET_MAINTENANCE_INTERVAL,
-                )
-            } else {
-                build
-            }
+            )
         })
         .collect::<Vec<_>>();
+    let batch_config = internal_test_wasm_batch_config();
     let progress = WasmBuildProgressConfig::new()
         .with_heartbeat_interval(INTERNAL_TEST_WASM_HEARTBEAT_INTERVAL)
         .with_cargo_output(false);
-    let batch = build_wasm_canisters_cached_batch_with_progress(&builds, progress, |event| {
-        report_wasm_build_progress(packages, event);
-    })
+    let batch = build_wasm_canisters_cached_batch_with_config_and_progress(
+        &builds,
+        batch_config,
+        progress,
+        |event| {
+            report_wasm_build_progress(packages, event);
+        },
+    )
     .unwrap_or_else(|err| {
         let package = packages
             .get(err.failed_index())
@@ -182,6 +181,15 @@ const fn internal_test_shared_wasm_target_prune_policy() -> SharedIncrementalTar
     SharedIncrementalTargetPrunePolicy::new()
         .with_max_age(INTERNAL_TEST_SHARED_WASM_TARGET_MAX_AGE)
         .with_max_size_bytes(INTERNAL_TEST_SHARED_WASM_TARGET_MAX_BYTES)
+}
+
+const fn internal_test_wasm_batch_config() -> WasmBuildBatchConfig {
+    let maintenance = SharedIncrementalTargetMaintenanceConfig::new(
+        internal_test_shared_wasm_target_prune_policy(),
+        INTERNAL_TEST_SHARED_WASM_TARGET_MAINTENANCE_INTERVAL,
+    )
+    .with_failure_mode(SharedIncrementalTargetMaintenanceFailureMode::BestEffort);
+    WasmBuildBatchConfig::new().with_shared_incremental_target_maintenance(maintenance)
 }
 
 fn report_wasm_build_progress(packages: &[&str], event: WasmBuildBatchProgressEvent) {
@@ -308,7 +316,10 @@ mod tests {
 
     #[test]
     fn shared_wasm_target_retention_is_bounded() {
-        let policy = internal_test_shared_wasm_target_prune_policy();
+        let maintenance = internal_test_wasm_batch_config()
+            .shared_incremental_target_maintenance()
+            .expect("shared target maintenance");
+        let policy = maintenance.policy();
 
         assert_eq!(
             policy.max_age(),
@@ -318,9 +329,10 @@ mod tests {
             policy.max_size_bytes(),
             Some(INTERNAL_TEST_SHARED_WASM_TARGET_MAX_BYTES)
         );
+        assert_eq!(maintenance.minimum_interval(), Duration::from_hours(1));
         assert_eq!(
-            INTERNAL_TEST_SHARED_WASM_TARGET_MAINTENANCE_INTERVAL,
-            Duration::from_hours(1)
+            maintenance.failure_mode(),
+            SharedIncrementalTargetMaintenanceFailureMode::BestEffort
         );
     }
 }
