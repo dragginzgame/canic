@@ -117,7 +117,7 @@ pub fn status(
         .map(crate::ops::component_provisioning::status_response)
 }
 
-/// Advance exactly one canonical identity reservation, Canister claim or verified install.
+/// Advance one canonical reservation, claim, install or Component Registry commitment.
 pub async fn advance(
     caller: Principal,
     request: RootComponentProvisioningAdvanceRequest,
@@ -141,8 +141,13 @@ pub async fn advance(
         advance_member_reservation(&authority, root, request, &current)?
     } else if current.claim_cursor.claimed_component_count < current.component_count {
         advance_member_claim(&authority, root, request, &current).await?
-    } else {
+    } else if current.install_cursor.installed_component_count < current.component_count {
         Box::pin(advance_member_install(&authority, root, request, &current)).await?
+    } else {
+        Box::pin(advance_member_registry_commit(
+            &authority, root, request, &current,
+        ))
+        .await?
     };
     Ok(crate::ops::component_provisioning::status_response(
         advanced,
@@ -319,6 +324,110 @@ async fn advance_member_install(
     }
 }
 
+async fn advance_member_registry_commit(
+    authority: &FleetSubnetRootAuthority,
+    root: Principal,
+    request: RootComponentProvisioningAdvanceRequest,
+    current: &RootComponentProvisioningView,
+) -> Result<RootComponentProvisioningView, InternalError> {
+    let registry = current_registry_for_progress(authority, root, current)?;
+    let fleet_directory = current_fleet_directory_for_progress(authority, root, current)?;
+    let member = RootComponentProvisioningOps::next_member_registry_commit(current)?;
+    let allocation = required_member_allocation(member.member_operation_id, "Registry commit")?;
+    validate_registry_commit_progress(
+        registry.reserved_component_instances,
+        current.component_count,
+        current.registry_cursor.registry_committed_component_count,
+        matches!(
+            allocation.progress,
+            crate::view::component_registry::RootComponentAllocationProgressView::Committed { .. }
+        ),
+    )?;
+    let topology = ConfigOps::component_topology()?;
+    super::component_registry::validate_allocation_record(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &allocation,
+        member.member_operation_id,
+    )?;
+    let deployment =
+        RootComponentProvisioningOps::member_deployment_context(current, &member, &allocation)?;
+    validate_group_member_context(&deployment)?;
+
+    let store = root_store::status(registry.store_bootstrap.clone()).await?;
+    let revalidated = current_registry_for_progress(authority, root, current)?;
+    if revalidated.store_bootstrap != registry.store_bootstrap {
+        return Err(InternalError::conflict(
+            "root Component Registry Store authority changed across grouped Registry commitment",
+        ));
+    }
+    let revalidated_directory = current_fleet_directory_for_progress(authority, root, current)?;
+    if revalidated_directory != fleet_directory {
+        return Err(InternalError::conflict(
+            "Fleet Directory authority changed across grouped Registry commitment",
+        ));
+    }
+    let latest = RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
+        operation_id: request.operation_id,
+        plan_hash: request.plan_hash,
+    })?;
+    match RootComponentProvisioningOps::advance_disposition(request, &latest)? {
+        RootComponentProvisioningAdvanceDisposition::Complete
+        | RootComponentProvisioningAdvanceDisposition::Replay => return Ok(latest),
+        RootComponentProvisioningAdvanceDisposition::Advance => {}
+    }
+    if RootComponentProvisioningOps::next_member_registry_commit(&latest)? != member {
+        return Err(InternalError::conflict(
+            "root Component provisioning Registry member changed across Store observation",
+        ));
+    }
+
+    let allocation = required_member_allocation(member.member_operation_id, "Registry commit")?;
+    super::component_registry::validate_allocation_record(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &allocation,
+        member.member_operation_id,
+    )?;
+    let deployment =
+        RootComponentProvisioningOps::member_deployment_context(&latest, &member, &allocation)?;
+    validate_group_member_context(&deployment)?;
+    let (committed, partition) = Box::pin(
+        super::component_registry::advance_group_member_registry_commit(
+            authority,
+            &authority.binding,
+            &store,
+            allocation,
+            deployment,
+            fleet_directory,
+        ),
+    )
+    .await?;
+
+    let current_registry = current_registry_for_progress(authority, root, &latest)?;
+    validate_registry_commit_progress(
+        current_registry.reserved_component_instances,
+        latest.component_count,
+        latest.registry_cursor.registry_committed_component_count,
+        true,
+    )?;
+    let aggregate = RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
+        operation_id: request.operation_id,
+        plan_hash: request.plan_hash,
+    })?;
+    match RootComponentProvisioningOps::advance_disposition(request, &aggregate)? {
+        RootComponentProvisioningAdvanceDisposition::Complete
+        | RootComponentProvisioningAdvanceDisposition::Replay => Ok(aggregate),
+        RootComponentProvisioningAdvanceDisposition::Advance => {
+            RootComponentProvisioningOps::mark_member_registry_committed(
+                request, &committed, &partition,
+            )
+        }
+    }
+}
+
 fn required_member_allocation(
     operation_id: [u8; 32],
     phase: &str,
@@ -417,6 +526,22 @@ fn current_registry_for_progress(
     Ok(current)
 }
 
+fn current_fleet_directory_for_progress(
+    authority: &FleetSubnetRootAuthority,
+    root: Principal,
+    provisioning: &RootComponentProvisioningView,
+) -> Result<canic_core::dto::fleet_registry::FleetDirectorySnapshot, InternalError> {
+    let mirror = FleetRegistryMirrorOps::validated_current(authority, root)?;
+    if mirror.root_entry.status != FleetSubnetRootStatus::Active
+        || mirror.active.snapshot.version != provisioning.fleet_registry
+    {
+        return Err(InternalError::conflict(
+            "root Component provisioning differs from the exact active Registry mirror",
+        ));
+    }
+    Ok(mirror.active.directory)
+}
+
 fn validate_reservation_registry_progress(
     registry_reserved_components: u32,
     aggregate_reserved_components: u32,
@@ -446,6 +571,36 @@ fn validate_claim_registry_progress(
         return Err(InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
             "Component Registry reservations differ from claim-ready aggregate provisioning progress",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_registry_commit_progress(
+    registry_reserved_components: u32,
+    component_count: u32,
+    aggregate_registry_committed_components: u32,
+    current_member_is_committed: bool,
+) -> Result<(), InternalError> {
+    let reconciled_committed = aggregate_registry_committed_components
+        .checked_add(u32::from(current_member_is_committed))
+        .ok_or_else(|| {
+            InternalError::resource_exhausted(
+                "root Component provisioning Registry commitment count overflowed",
+            )
+        })?;
+    let expected_reserved = component_count
+        .checked_sub(reconciled_committed)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "aggregate Registry commitment count exceeds the accepted Component count",
+            )
+        })?;
+    if registry_reserved_components != expected_reserved {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component Registry reservations differ from aggregate Registry commitment progress",
         ));
     }
     Ok(())
@@ -637,5 +792,14 @@ mod tests {
         assert!(validate_reservation_registry_progress(4, 3, true).is_ok());
         assert!(validate_reservation_registry_progress(4, 3, false).is_err());
         assert!(validate_reservation_registry_progress(3, 3, true).is_err());
+    }
+
+    #[test]
+    fn registry_commit_progress_allows_only_exact_or_response_lost_commitment() {
+        assert!(validate_registry_commit_progress(3, 3, 0, false).is_ok());
+        assert!(validate_registry_commit_progress(2, 3, 0, true).is_ok());
+        assert!(validate_registry_commit_progress(2, 3, 0, false).is_err());
+        assert!(validate_registry_commit_progress(3, 3, 0, true).is_err());
+        assert!(validate_registry_commit_progress(1, 3, 1, true).is_ok());
     }
 }

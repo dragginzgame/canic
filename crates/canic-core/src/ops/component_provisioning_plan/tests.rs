@@ -414,6 +414,7 @@ fn exact_root_batch_validation_returns_bounded_capacity_and_artifact_facts() {
         expected_reserved_component_count: 0,
         expected_claimed_component_count: 0,
         expected_installed_component_count: 0,
+        expected_registry_committed_component_count: 0,
     };
     assert_eq!(
         candid::decode_one::<RootComponentProvisioningAdvanceRequest>(
@@ -434,6 +435,7 @@ fn exact_root_batch_validation_returns_bounded_capacity_and_artifact_facts() {
         reserved_component_count: 0,
         claimed_component_count: 0,
         installed_component_count: 0,
+        registry_committed_component_count: 0,
         accepted_at_ns: 1,
         receipt_content_hash: [15; 32],
     };

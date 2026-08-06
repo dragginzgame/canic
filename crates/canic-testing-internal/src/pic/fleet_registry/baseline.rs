@@ -705,7 +705,7 @@ mod tests {
     }
 
     #[test]
-    fn prepared_root_installs_one_exact_group_member_without_publishing_membership() {
+    fn prepared_root_commits_one_exact_group_member_without_publishing_directories() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let fixture = setup_prepared_grouped_provisioning();
         let accepted: Result<RootComponentProvisioningStatusResponse, Error> = fixture
@@ -718,12 +718,12 @@ mod tests {
             )
             .expect("accept grouped provisioning batch transport");
         let accepted = accepted.expect("accept grouped provisioning batch");
-        assert_grouped_provisioning_progress(&accepted, 0, 0, 0);
+        assert_grouped_provisioning_progress(&accepted, 0, 0, 0, 0);
 
         let reserved = advance_grouped_provisioning(&fixture, advance_request(&accepted));
-        assert_grouped_provisioning_progress(&reserved, 1, 0, 0);
+        assert_grouped_provisioning_progress(&reserved, 1, 0, 0, 0);
         let claimed = advance_grouped_provisioning(&fixture, advance_request(&reserved));
-        assert_grouped_provisioning_progress(&claimed, 1, 1, 0);
+        assert_grouped_provisioning_progress(&claimed, 1, 1, 0, 0);
 
         let (canister_id, claim) = one_grouped_workload(&fixture);
         let created = grouped_allocation_status(&fixture, claim.operation_id);
@@ -743,11 +743,18 @@ mod tests {
 
         let install_request = advance_request(&claimed);
         let installed = advance_grouped_provisioning(&fixture, install_request);
-        assert_grouped_provisioning_progress(&installed, 1, 1, 1);
+        assert_grouped_provisioning_progress(&installed, 1, 1, 1, 0);
         assert_grouped_member_install(&fixture, canister_id, &claim);
 
-        let replayed = advance_grouped_provisioning(&fixture, install_request);
-        assert_eq!(replayed, installed);
+        let install_replay = advance_grouped_provisioning(&fixture, install_request);
+        assert_eq!(install_replay, installed);
+
+        let registry_request = advance_request(&installed);
+        let registered = advance_grouped_provisioning(&fixture, registry_request);
+        assert_grouped_provisioning_progress(&registered, 1, 1, 1, 1);
+        assert_grouped_member_registry_commit(&fixture, &claim);
+        let registry_replay = advance_grouped_provisioning(&fixture, registry_request);
+        assert_eq!(registry_replay, registered);
         let observed: Result<RootComponentProvisioningStatusResponse, Error> = fixture
             .pic
             .query_candid_as(
@@ -762,7 +769,7 @@ mod tests {
             .expect("query grouped provisioning status transport");
         assert_eq!(
             observed.expect("query grouped provisioning status"),
-            installed
+            registered
         );
         assert_prepared(&fixture.pic, fixture.root.root_id);
     }
@@ -2630,6 +2637,7 @@ mod tests {
             expected_reserved_component_count: status.reserved_component_count,
             expected_claimed_component_count: status.claimed_component_count,
             expected_installed_component_count: status.installed_component_count,
+            expected_registry_committed_component_count: status.registry_committed_component_count,
         }
     }
 
@@ -2656,6 +2664,7 @@ mod tests {
         reserved: u32,
         claimed: u32,
         installed: u32,
+        registry_committed: u32,
     ) {
         assert_eq!(status.phase, RootComponentProvisioningPhase::Accepted);
         assert_eq!(status.placement_count, 1);
@@ -2663,6 +2672,10 @@ mod tests {
         assert_eq!(status.reserved_component_count, reserved);
         assert_eq!(status.claimed_component_count, claimed);
         assert_eq!(status.installed_component_count, installed);
+        assert_eq!(
+            status.registry_committed_component_count,
+            registry_committed
+        );
         assert_ne!(status.receipt_content_hash, [0; 32]);
     }
 
@@ -2779,6 +2792,55 @@ mod tests {
                 .code,
             canic::dto::error::ErrorCode::Unavailable
         );
+    }
+
+    #[cfg(test)]
+    fn assert_grouped_member_registry_commit(
+        fixture: &PreparedGroupedProvisioningFixture,
+        claim: &CanisterPoolClaim,
+    ) {
+        let allocation = grouped_allocation_status(fixture, claim.operation_id);
+        assert_eq!(allocation.phase, RootComponentAllocationPhase::Committed);
+        let installation = allocation
+            .installation
+            .as_ref()
+            .expect("grouped Registry installation evidence");
+        let partition: Result<ComponentRegistryPartitionResponse, Error> = fixture
+            .pic
+            .query_candid(
+                fixture.root.root_id,
+                CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
+                (ComponentRegistryPartitionRequest {
+                    component: claim.component,
+                },),
+            )
+            .expect("query committed grouped Component partition transport");
+        let partition = partition.expect("committed grouped Component partition");
+        assert_eq!(partition.binding, installation.binding);
+        assert_eq!(
+            partition.provisioning_origin,
+            allocation.provisioning_origin
+        );
+        assert_eq!(partition.release_set, allocation.release_set);
+        assert_eq!(partition.status, ComponentLifecycleStatus::Prepared);
+        assert_eq!(partition.reserved_descendants, 0);
+        assert_eq!(partition.committed_descendants, 0);
+        assert!(partition.head.revision > 0);
+        assert_ne!(partition.head.content_hash, [0; 32]);
+
+        let runtime: Result<ComponentRuntimeStatusResponse, Error> = fixture
+            .pic
+            .query_candid_as(
+                installation.binding.canister_id,
+                fixture.root.root_id,
+                CANIC_COMPONENT_RUNTIME_STATUS,
+                (),
+            )
+            .expect("query Registry-committed grouped runtime transport");
+        let runtime = runtime.expect("query Registry-committed grouped runtime");
+        assert_eq!(runtime.phase, ComponentRuntimePhase::AwaitingDirectory);
+        assert_eq!(runtime.authority, None);
+        assert_eq!(runtime.activation, None);
     }
 
     fn acquire_active_component_registry() -> ActiveComponentRegistryFixture {

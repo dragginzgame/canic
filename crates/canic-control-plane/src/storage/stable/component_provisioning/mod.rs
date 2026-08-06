@@ -144,6 +144,7 @@ pub enum RootComponentProvisioningStateRecordPhase {
         reservation_cursor: RootComponentProvisioningReservationCursorRecord,
         claim_cursor: RootComponentProvisioningClaimCursorRecord,
         install_cursor: RootComponentProvisioningInstallCursorRecord,
+        registry_cursor: RootComponentProvisioningRegistryCursorRecord,
         accepted_at_ns: u64,
         receipt_content_hash: [u8; 32],
     },
@@ -173,6 +174,15 @@ pub struct RootComponentProvisioningInstallCursorRecord {
     pub placement_index: u32,
     pub member_index: u32,
     pub installed_component_count: u32,
+    pub content_hash: [u8; 32],
+}
+
+/// Canonical O(1) cursor over Component Registry commitments for installed members.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentProvisioningRegistryCursorRecord {
+    pub placement_index: u32,
+    pub member_index: u32,
+    pub registry_committed_component_count: u32,
     pub content_hash: [u8; 32],
 }
 

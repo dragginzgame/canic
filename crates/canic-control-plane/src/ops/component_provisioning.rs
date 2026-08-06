@@ -13,6 +13,7 @@ use crate::{
         RootComponentProvisioningClaimCursorRecord, RootComponentProvisioningCommitError,
         RootComponentProvisioningInstallCursorRecord, RootComponentProvisioningPlacementKey,
         RootComponentProvisioningPlacementRecord, RootComponentProvisioningRecord,
+        RootComponentProvisioningRegistryCursorRecord,
         RootComponentProvisioningReservationCursorRecord,
         RootComponentProvisioningStateRecordPhase, RootComponentProvisioningStore,
     },
@@ -20,9 +21,13 @@ use crate::{
         component_provisioning::{
             RootComponentProvisioningAdvanceDisposition, RootComponentProvisioningClaimCursorView,
             RootComponentProvisioningInstallCursorView, RootComponentProvisioningMemberView,
+            RootComponentProvisioningRegistryCursorView,
             RootComponentProvisioningReservationCursorView, RootComponentProvisioningView,
         },
-        component_registry::{RootComponentAllocationProgressView, RootComponentAllocationView},
+        component_registry::{
+            ComponentRegistryPartitionView, RootComponentAllocationProgressView,
+            RootComponentAllocationView,
+        },
     },
 };
 use candid::{CandidType, Principal};
@@ -38,7 +43,9 @@ use canic_core::{
             RootComponentProvisioningPhase, RootComponentProvisioningStatusRequest,
             RootComponentProvisioningStatusResponse,
         },
-        component_registry::ComponentProvisioningOrigin,
+        component_registry::{
+            ComponentLifecycleStatus, ComponentProvisioningOrigin, ComponentRegistryHead,
+        },
         fleet_registry::FleetRegistryVersion,
     },
     ids::{
@@ -54,6 +61,7 @@ const MEMBER_OPERATION_DOMAIN: &[u8] = b"canic/root-component-provisioning-membe
 const RESERVATION_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-reservation-cursor/v1";
 const CLAIM_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-claim-cursor/v1";
 const INSTALL_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-install-cursor/v1";
+const REGISTRY_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-registry-cursor/v1";
 
 #[derive(CandidType)]
 struct RootComponentProvisioningAcceptanceReceiptAuthority<'a> {
@@ -103,11 +111,29 @@ struct RootComponentProvisioningInstallCursorAuthority {
     installed_component_count: u32,
 }
 
+#[derive(CandidType)]
+struct RootComponentProvisioningRegistryCursorAuthority {
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    placement_index: u32,
+    member_index: u32,
+    registry_committed_component_count: u32,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct ProvisioningProgress {
     reserved: u32,
     claimed: u32,
     installed: u32,
+    registry_committed: u32,
+}
+
+#[derive(Clone, Copy)]
+struct ProvisioningCursorRecords {
+    reservation: RootComponentProvisioningReservationCursorRecord,
+    claim: RootComponentProvisioningClaimCursorRecord,
+    install: RootComponentProvisioningInstallCursorRecord,
+    registry: RootComponentProvisioningRegistryCursorRecord,
 }
 
 impl ProvisioningProgress {
@@ -116,6 +142,7 @@ impl ProvisioningProgress {
             reserved: request.expected_reserved_component_count,
             claimed: request.expected_claimed_component_count,
             installed: request.expected_installed_component_count,
+            registry_committed: request.expected_registry_committed_component_count,
         }
     }
 
@@ -124,25 +151,38 @@ impl ProvisioningProgress {
             reserved: view.reservation_cursor.reserved_component_count,
             claimed: view.claim_cursor.claimed_component_count,
             installed: view.install_cursor.installed_component_count,
+            registry_committed: view.registry_cursor.registry_committed_component_count,
         }
     }
 
     fn replays_one_step_before(self, current: Self, component_count: u32) -> bool {
         let reservation = self.claimed == 0
             && self.installed == 0
+            && self.registry_committed == 0
             && current.claimed == 0
             && current.installed == 0
+            && current.registry_committed == 0
             && self.reserved.checked_add(1) == Some(current.reserved);
         let claim = self.reserved == current.reserved
             && self.installed == 0
+            && self.registry_committed == 0
             && current.installed == 0
+            && current.registry_committed == 0
             && self.claimed.checked_add(1) == Some(current.claimed);
         let install = self.reserved == current.reserved
             && self.claimed == current.claimed
+            && self.registry_committed == 0
+            && current.registry_committed == 0
             && self.installed.checked_add(1) == Some(current.installed);
-        let prerequisites_are_canonical =
-            current.claimed == 0 || current.reserved == component_count;
-        prerequisites_are_canonical && (reservation || claim || install)
+        let registry_commit = self.reserved == current.reserved
+            && self.claimed == current.claimed
+            && self.installed == current.installed
+            && self.registry_committed.checked_add(1) == Some(current.registry_committed);
+        let prerequisites_are_canonical = (current.claimed == 0
+            || current.reserved == component_count)
+            && (current.installed == 0 || current.claimed == component_count)
+            && (current.registry_committed == 0 || current.installed == component_count);
+        prerequisites_are_canonical && (reservation || claim || install || registry_commit)
     }
 }
 
@@ -153,6 +193,19 @@ struct ReservedMemberAuthority<'a> {
     spec_hash: [u8; 32],
     provisioning_origin: &'a ComponentProvisioningOrigin,
     release_set: canic_core::ids::FleetSubnetRootReleaseSet,
+}
+
+#[derive(Eq, PartialEq)]
+struct RegistryCommittedMemberAuthority<'a> {
+    binding: &'a ComponentBinding,
+    provisioning_origin: &'a ComponentProvisioningOrigin,
+    release_set: canic_core::ids::FleetSubnetRootReleaseSet,
+    status: ComponentLifecycleStatus,
+    registry: ComponentRegistryHead,
+    registry_encoded_bytes: u64,
+    directory_synchronized_at_ns: u64,
+    reserved_descendants: u32,
+    committed_descendants: u32,
 }
 
 /// Stable root-local Component Group provisioning operations.
@@ -230,6 +283,8 @@ impl RootComponentProvisioningOps {
         let claim_cursor = claim_cursor_record(request.operation_id, request.plan_hash, 0, 0, 0)?;
         let install_cursor =
             install_cursor_record(request.operation_id, request.plan_hash, 0, 0, 0)?;
+        let registry_cursor =
+            registry_cursor_record(request.operation_id, request.plan_hash, 0, 0, 0)?;
         let record = RootComponentProvisioningRecord {
             operation_id: request.operation_id,
             plan_hash: request.plan_hash,
@@ -242,6 +297,7 @@ impl RootComponentProvisioningOps {
                 reservation_cursor,
                 claim_cursor,
                 install_cursor,
+                registry_cursor,
                 accepted_at_ns,
                 receipt_content_hash,
             },
@@ -268,7 +324,7 @@ impl RootComponentProvisioningOps {
         Ok(view)
     }
 
-    /// Interpret both expected cursors without allowing a retry to skip work.
+    /// Interpret every expected cursor without allowing a retry to skip work.
     pub(crate) fn advance_disposition(
         request: RootComponentProvisioningAdvanceRequest,
         view: &RootComponentProvisioningView,
@@ -282,7 +338,7 @@ impl RootComponentProvisioningOps {
         let expected = ProvisioningProgress::from_request(request);
         let current = ProvisioningProgress::from_view(view);
         if expected == current {
-            return if current.installed == view.component_count {
+            return if current.registry_committed == view.component_count {
                 Ok(RootComponentProvisioningAdvanceDisposition::Complete)
             } else {
                 Ok(RootComponentProvisioningAdvanceDisposition::Advance)
@@ -354,6 +410,27 @@ impl RootComponentProvisioningOps {
         )
     }
 
+    /// Select the next verified member for one O(1) Component Registry commitment.
+    pub(crate) fn next_member_registry_commit(
+        view: &RootComponentProvisioningView,
+    ) -> Result<RootComponentProvisioningMemberView, InternalError> {
+        if view.install_cursor.installed_component_count != view.component_count {
+            return Err(InternalError::conflict(
+                "root Component provisioning cannot commit Registry partitions before every member is installed",
+            ));
+        }
+        if view.registry_cursor.registry_committed_component_count >= view.component_count {
+            return Err(InternalError::conflict(
+                "root Component provisioning has no Registry-uncommitted member",
+            ));
+        }
+        member_at_cursor(
+            view,
+            view.registry_cursor.placement_index,
+            view.registry_cursor.member_index,
+        )
+    }
+
     /// Derive one exact protected runtime context from accepted plan and claimed allocation.
     pub(crate) fn member_deployment_context(
         view: &RootComponentProvisioningView,
@@ -410,6 +487,7 @@ impl RootComponentProvisioningOps {
             component_count,
             claim_cursor,
             install_cursor,
+            registry_cursor,
             accepted_at_ns,
             receipt_content_hash,
             ..
@@ -420,6 +498,7 @@ impl RootComponentProvisioningOps {
             reservation_cursor: next_cursor,
             claim_cursor,
             install_cursor,
+            registry_cursor,
             accepted_at_ns,
             receipt_content_hash,
         };
@@ -456,6 +535,7 @@ impl RootComponentProvisioningOps {
             component_count,
             reservation_cursor,
             install_cursor,
+            registry_cursor,
             accepted_at_ns,
             receipt_content_hash,
             ..
@@ -466,6 +546,7 @@ impl RootComponentProvisioningOps {
             reservation_cursor,
             claim_cursor: next_cursor,
             install_cursor,
+            registry_cursor,
             accepted_at_ns,
             receipt_content_hash,
         };
@@ -503,6 +584,7 @@ impl RootComponentProvisioningOps {
             claim_cursor,
             accepted_at_ns,
             receipt_content_hash,
+            registry_cursor,
             ..
         } = next_record.state;
         next_record.state = RootComponentProvisioningStateRecordPhase::Accepted {
@@ -511,6 +593,55 @@ impl RootComponentProvisioningOps {
             reservation_cursor,
             claim_cursor,
             install_cursor: next_cursor,
+            registry_cursor,
+            accepted_at_ns,
+            receipt_content_hash,
+        };
+        RootComponentProvisioningStore::replace_operation(&current_record, next_record.clone())
+            .map_err(map_commit_error)?;
+        validated_record(next_record)
+    }
+
+    /// Commit one exact reconciled Component Registry partition to the aggregate cursor.
+    pub(crate) fn mark_member_registry_committed(
+        request: RootComponentProvisioningAdvanceRequest,
+        allocation: &RootComponentAllocationView,
+        partition: &crate::view::component_registry::ComponentRegistryPartitionView,
+    ) -> Result<RootComponentProvisioningView, InternalError> {
+        let current_record = RootComponentProvisioningStore::operation(request.operation_id)
+            .ok_or_else(|| {
+                InternalError::unavailable("root Component provisioning operation is not accepted")
+            })?;
+        let current = validated_record(current_record.clone())?;
+        if Self::advance_disposition(request, &current)?
+            != RootComponentProvisioningAdvanceDisposition::Advance
+            || current.install_cursor.installed_component_count != current.component_count
+        {
+            return Err(InternalError::conflict(
+                "root Component provisioning Registry step is already committed or not ready",
+            ));
+        }
+        let member = Self::next_member_registry_commit(&current)?;
+        validate_registry_committed_member(&current, &member, allocation, partition)?;
+        let next_cursor = advance_registry_cursor(&current)?;
+        let mut next_record = current_record.clone();
+        let RootComponentProvisioningStateRecordPhase::Accepted {
+            placement_count,
+            component_count,
+            reservation_cursor,
+            claim_cursor,
+            install_cursor,
+            accepted_at_ns,
+            receipt_content_hash,
+            ..
+        } = next_record.state;
+        next_record.state = RootComponentProvisioningStateRecordPhase::Accepted {
+            placement_count,
+            component_count,
+            reservation_cursor,
+            claim_cursor,
+            install_cursor,
+            registry_cursor: next_cursor,
             accepted_at_ns,
             receipt_content_hash,
         };
@@ -679,6 +810,7 @@ fn validated_record(
         reservation_cursor,
         claim_cursor,
         install_cursor,
+        registry_cursor,
         accepted_at_ns,
         receipt_content_hash,
     } = record.state;
@@ -709,9 +841,12 @@ fn validated_record(
         record.plan_hash,
         &record.batch,
         component_count,
-        reservation_cursor,
-        claim_cursor,
-        install_cursor,
+        ProvisioningCursorRecords {
+            reservation: reservation_cursor,
+            claim: claim_cursor,
+            install: install_cursor,
+            registry: registry_cursor,
+        },
     )?;
     validate_record_placement_index(record.operation_id, record.plan_hash, &record.batch)?;
     let state = validated_aggregate_state()?;
@@ -744,6 +879,11 @@ fn validated_record(
             member_index: install_cursor.member_index,
             installed_component_count: install_cursor.installed_component_count,
         },
+        registry_cursor: RootComponentProvisioningRegistryCursorView {
+            placement_index: registry_cursor.placement_index,
+            member_index: registry_cursor.member_index,
+            registry_committed_component_count: registry_cursor.registry_committed_component_count,
+        },
         accepted_at_ns,
         receipt_content_hash,
     })
@@ -754,26 +894,38 @@ fn validate_record_cursors(
     plan_hash: [u8; 32],
     batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
     component_count: u32,
-    reservation: RootComponentProvisioningReservationCursorRecord,
-    claim: RootComponentProvisioningClaimCursorRecord,
-    install: RootComponentProvisioningInstallCursorRecord,
+    cursors: ProvisioningCursorRecords,
 ) -> Result<(), InternalError> {
-    validate_reservation_cursor(operation_id, plan_hash, batch, component_count, reservation)?;
+    validate_reservation_cursor(
+        operation_id,
+        plan_hash,
+        batch,
+        component_count,
+        cursors.reservation,
+    )?;
     validate_claim_cursor(
         operation_id,
         plan_hash,
         batch,
         component_count,
-        reservation.reserved_component_count,
-        claim,
+        cursors.reservation.reserved_component_count,
+        cursors.claim,
     )?;
     validate_install_cursor(
         operation_id,
         plan_hash,
         batch,
         component_count,
-        claim.claimed_component_count,
-        install,
+        cursors.claim.claimed_component_count,
+        cursors.install,
+    )?;
+    validate_registry_cursor(
+        operation_id,
+        plan_hash,
+        batch,
+        component_count,
+        cursors.install.installed_component_count,
+        cursors.registry,
     )
 }
 
@@ -913,6 +1065,44 @@ fn validate_install_cursor(
     )
 }
 
+fn validate_registry_cursor(
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
+    component_count: u32,
+    installed_component_count: u32,
+    cursor: RootComponentProvisioningRegistryCursorRecord,
+) -> Result<(), InternalError> {
+    let expected = registry_cursor_record(
+        operation_id,
+        plan_hash,
+        cursor.placement_index,
+        cursor.member_index,
+        cursor.registry_committed_component_count,
+    )?;
+    if cursor.content_hash != expected.content_hash {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component provisioning Registry cursor hash is invalid",
+        ));
+    }
+    if cursor.registry_committed_component_count > 0 && installed_component_count != component_count
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component provisioning committed a Registry partition before installing every member",
+        ));
+    }
+    validate_member_cursor(
+        batch,
+        component_count,
+        cursor.placement_index,
+        cursor.member_index,
+        cursor.registry_committed_component_count,
+        "Registry",
+    )
+}
+
 fn validate_member_cursor(
     batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
     component_count: u32,
@@ -1021,6 +1211,24 @@ fn advance_install_cursor(
         next_placement,
         next_member,
         next_installed,
+    )
+}
+
+fn advance_registry_cursor(
+    view: &RootComponentProvisioningView,
+) -> Result<RootComponentProvisioningRegistryCursorRecord, InternalError> {
+    let (next_placement, next_member, next_committed) = advance_member_cursor(
+        view,
+        view.registry_cursor.placement_index,
+        view.registry_cursor.member_index,
+        view.registry_cursor.registry_committed_component_count,
+    )?;
+    registry_cursor_record(
+        view.operation_id,
+        view.plan_hash,
+        next_placement,
+        next_member,
+        next_committed,
     )
 }
 
@@ -1135,6 +1343,28 @@ fn install_cursor_record(
     })
 }
 
+fn registry_cursor_record(
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    placement_index: u32,
+    member_index: u32,
+    registry_committed_component_count: u32,
+) -> Result<RootComponentProvisioningRegistryCursorRecord, InternalError> {
+    let authority = RootComponentProvisioningRegistryCursorAuthority {
+        operation_id,
+        plan_hash,
+        placement_index,
+        member_index,
+        registry_committed_component_count,
+    };
+    Ok(RootComponentProvisioningRegistryCursorRecord {
+        placement_index,
+        member_index,
+        registry_committed_component_count,
+        content_hash: domain_separated_candid_hash(REGISTRY_CURSOR_DOMAIN, authority)?,
+    })
+}
+
 fn member_operation_id(
     fleet_subnet_root: Principal,
     operation_id: [u8; 32],
@@ -1236,6 +1466,58 @@ fn validate_installed_member(
     ) {
         return Err(InternalError::conflict(
             "Component Group member did not stop at the verified install boundary",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_registry_committed_member(
+    view: &RootComponentProvisioningView,
+    member: &RootComponentProvisioningMemberView,
+    allocation: &RootComponentAllocationView,
+    partition: &ComponentRegistryPartitionView,
+) -> Result<(), InternalError> {
+    validate_member_authority(view, member, allocation)?;
+    let RootComponentAllocationProgressView::Committed {
+        installation,
+        commitment,
+        ..
+    } = &allocation.progress
+    else {
+        return Err(InternalError::conflict(
+            "Component Group member did not reach its Registry commitment boundary",
+        ));
+    };
+    let expected = RegistryCommittedMemberAuthority {
+        binding: &installation.binding,
+        provisioning_origin: &allocation.provisioning_origin,
+        release_set: allocation.release_set,
+        status: ComponentLifecycleStatus::Prepared,
+        registry: commitment.registry.clone(),
+        registry_encoded_bytes: commitment.prepared_registry_encoded_bytes,
+        directory_synchronized_at_ns: commitment.directory_synchronized_at_ns,
+        reserved_descendants: 0,
+        committed_descendants: 0,
+    };
+    let actual = RegistryCommittedMemberAuthority {
+        binding: &partition.binding,
+        provisioning_origin: &partition.provisioning_origin,
+        release_set: partition.release_set,
+        status: partition.status,
+        registry: ComponentRegistryHead {
+            component: partition.binding.component,
+            revision: partition.revision,
+            content_hash: partition.content_hash,
+        },
+        registry_encoded_bytes: partition.encoded_bytes,
+        directory_synchronized_at_ns: partition.directory_synchronized_at_ns,
+        reserved_descendants: partition.reserved_descendants,
+        committed_descendants: partition.committed_descendants,
+    };
+    if actual != expected || actual.registry_encoded_bytes > member.limits.maximum_registry_bytes {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component Group member Registry partition differs from its accepted authority or durable receipt",
         ));
     }
     Ok(())
@@ -1413,6 +1695,7 @@ pub fn status_response(
         reserved_component_count: view.reservation_cursor.reserved_component_count,
         claimed_component_count: view.claim_cursor.claimed_component_count,
         installed_component_count: view.install_cursor.installed_component_count,
+        registry_committed_component_count: view.registry_cursor.registry_committed_component_count,
         accepted_at_ns: view.accepted_at_ns,
         receipt_content_hash: view.receipt_content_hash,
     }

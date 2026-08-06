@@ -2411,6 +2411,45 @@ pub(super) async fn advance_group_member_install(
     })
 }
 
+/// Reuse the ordinary top-level Registry commitment with plan-derived grouped limits.
+pub(super) async fn advance_group_member_registry_commit(
+    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    root: &canic_core::ids::FleetSubnetRootBinding,
+    store: &RootStoreBootstrapResponse,
+    allocation: RootComponentAllocationView,
+    deployment: ProtectedComponentDeployment,
+    fleet_directory: FleetDirectorySnapshot,
+) -> Result<(RootComponentAllocationView, ComponentRegistryPartitionView), InternalError> {
+    let operation_id = allocation.operation_id;
+    let plan =
+        component_install_plan_with_deployment(root, store, &allocation, Some(deployment)).await?;
+    let installation = committed_or_verified_installation(&allocation)?;
+    validate_install_effect(installation, &plan.durable)?;
+    verify_committed_or_verified_install(&allocation, &plan).await?;
+    let mirror = FleetRegistryMirrorOps::validated_current(authority, root.fleet_subnet_root)?;
+    if mirror.root_entry.status != FleetSubnetRootStatus::Active
+        || mirror.active.directory != fleet_directory
+    {
+        return Err(InternalError::conflict(
+            "Fleet Directory authority changed before grouped Registry commitment",
+        ));
+    }
+    let (committed, partition) = ComponentRegistryOps::commit_verified(
+        operation_id,
+        IcOps::now_nanos(),
+        plan.durable.maximum_registry_bytes,
+        fleet_directory,
+    )?;
+    validate_partition(
+        root,
+        allocation.release_set,
+        &ConfigOps::component_topology()?,
+        &partition,
+    )?;
+    let _ = commit_response(committed.clone(), partition.clone())?;
+    Ok((committed, partition))
+}
+
 /// Advance peer Component creation for its exact active requester caller.
 pub async fn create_peer_allocation(
     request: RootComponentCreationRequest,
