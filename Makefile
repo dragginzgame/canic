@@ -50,7 +50,7 @@ help:
 	@echo "  release-major    Confirm, bump, stage, commit, tag, and push a major release"
 	@echo "  release-stage    Stage release version files after review"
 	@echo "  release-commit   Commit and tag the staged release"
-	@echo "  release-push     Clear build artifacts, then atomically push the verified release"
+	@echo "  release-push     Clear build/test artifacts, then atomically push the verified release"
 	@echo "  package          Build a publishable crate tarball"
 	@echo "  publish          Publish workspace crates to registry in dependency order"
 	@echo "  test-packaged-downstream-wasm-store  Verify the special packaged downstream wasm_store wrapper path"
@@ -70,7 +70,7 @@ help:
 	@echo "  clippy           Run clippy checks"
 	@echo "  fmt              Format code"
 	@echo "  fmt-check        Check formatting"
-	@echo "  clean            Clean build artifacts"
+	@echo "  clean            Clean Cargo artifacts and repository-owned test scratch"
 	@echo "  clean-wasm       Clean only transient Canic/PocketIC Wasm build caches"
 	@echo "  gitleaks-scan     Scan complete repository history with pinned Gitleaks"
 	@echo "  dependency-risk-gate  Reject vulnerability or transitive advisory drift"
@@ -147,23 +147,21 @@ tags:
 patch:
 	@$(MAKE) ensure-clean
 	@$(MAKE) fmt
-	@$(MAKE) test-bump
+	+@bash scripts/ci/run-release-gates.sh patch
 	@CANIC_RELEASE_GATES_PASSED=1 scripts/ci/bump-version.sh patch
 
 minor:
 	@scripts/ci/confirm-version-bump.sh minor
 	@$(MAKE) ensure-clean
 	@$(MAKE) fmt
-	@$(MAKE) test-bump
+	+@bash scripts/ci/run-release-gates.sh minor
 	@CANIC_RELEASE_GATES_PASSED=1 scripts/ci/bump-version.sh minor
 
 major:
 	@scripts/ci/confirm-version-bump.sh major
 	@$(MAKE) ensure-clean
 	@$(MAKE) fmt
-	@$(MAKE) control-plane-feature-gate
-	@$(MAKE) clippy
-	@$(MAKE) test
+	+@bash scripts/ci/run-release-gates.sh major
 	@CANIC_RELEASE_GATES_PASSED=1 scripts/ci/bump-version.sh major
 
 release-patch:
@@ -200,7 +198,7 @@ release-commit:
 
 release-push:
 	@bash scripts/ci/check-release-push-ready.sh
-	cargo clean
+	@bash scripts/ci/cleanup-release-artifacts.sh
 	git push --atomic --follow-tags
 
 package: ensure-clean
@@ -318,7 +316,7 @@ fmt-check-core:
 	cargo fmt --all -- --check
 
 clean:
-	cargo clean
+	@bash scripts/ci/cleanup-release-artifacts.sh
 
 clean-wasm:
 	rm -rf -- target/canic-wasm

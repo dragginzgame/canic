@@ -15,7 +15,8 @@ Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 - `0.101.10` gives accepted root batches deterministic, restart-safe
   Component identity reservation in canonical placement/member order while
   keeping every Canister and publication effect fenced, and advances the
-  internal harness to `ic-testkit` 0.7.
+  internal harness to `ic-testkit` 0.7. Local release gates now confine and
+  clear temporary files plus Cargo artifacts before version mutation.
 
 - `0.101.9` adds exact Coordinator-authenticated root-batch acceptance with
   durable placement reservations and replayable status, and advances the

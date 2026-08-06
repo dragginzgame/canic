@@ -20,6 +20,8 @@ DEPENDENCY_RISK_GATE="$ROOT/scripts/ci/check-dependency-risk-inventory.sh"
 DEPENDENCY_RISK_TEST="$ROOT/scripts/ci/test-dependency-risk-inventory.sh"
 DEPENDENCY_RISK_INVENTORY="$ROOT/scripts/ci/dependency-risk-inventory.tsv"
 BUMP_VERSION="$ROOT/scripts/ci/bump-version.sh"
+RELEASE_CLEANUP="$ROOT/scripts/ci/cleanup-release-artifacts.sh"
+RELEASE_GATES="$ROOT/scripts/ci/run-release-gates.sh"
 POCKET_IC_ALIGNMENT="$ROOT/scripts/ci/check-pocketic-version-alignment.sh"
 installers=(
     "$ROOT/scripts/ci/install-actionlint.sh"
@@ -35,7 +37,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$POCKET_IC_ALIGNMENT"; do
+for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CLEANUP" "$RELEASE_GATES" "$POCKET_IC_ALIGNMENT"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -75,6 +77,21 @@ rg --multiline 'test-bump:[^\n]*\\\n[[:space:]]+gitleaks-scan' "$MAKEFILE" >/dev
     fail "the patch-release gate does not require the dedicated secret scan"
 rg --multiline 'test-bump:[^\n]*\\\n[[:space:]]+gitleaks-scan dependency-risk-gate' "$MAKEFILE" >/dev/null ||
     fail "the patch-release gate does not require dependency risk validation"
+for mode in patch minor major; do
+    rg -F "bash scripts/ci/run-release-gates.sh $mode" "$MAKEFILE" >/dev/null ||
+        fail "the $mode version target does not use release-gate cleanup"
+done
+rg --multiline 'release-push:\n\t@bash scripts/ci/check-release-push-ready\.sh\n\t@bash scripts/ci/cleanup-release-artifacts\.sh\n\tgit push --atomic --follow-tags' "$MAKEFILE" >/dev/null ||
+    fail "release push does not clean before its final atomic network update"
+rg -F 'cargo clean' "$RELEASE_CLEANUP" >/dev/null ||
+    fail "release cleanup does not clear Cargo build artifacts"
+rg -F '.tmp/test-runtime' "$RELEASE_CLEANUP" >/dev/null ||
+    fail "release cleanup does not clear repository-owned test scratch"
+rg -F 'export TMPDIR="$ROOT/.tmp/test-runtime"' "$RELEASE_GATES" >/dev/null ||
+    fail "release gates do not confine temporary files to repository-owned scratch"
+if rg -F 'rm -rf -- /tmp' "$RELEASE_CLEANUP" >/dev/null; then
+    fail "release cleanup may not delete an unscoped global temporary path"
+fi
 rg -F -- '--redact=100' "$SECRET_SCAN" >/dev/null ||
     fail "the dedicated secret scan does not redact findings"
 rg -F '"$GITLEAKS_BIN" git' "$SECRET_SCAN" >/dev/null ||
@@ -223,6 +240,74 @@ fi
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
+
+release_cleanup_fixture="$tmp_dir/release-cleanup"
+release_cleanup_bin="$release_cleanup_fixture/bin"
+mkdir -p \
+    "$release_cleanup_fixture/scripts/ci" \
+    "$release_cleanup_fixture/.tmp/test-runtime" \
+    "$release_cleanup_fixture/target" \
+    "$release_cleanup_bin"
+cp "$RELEASE_CLEANUP" "$RELEASE_GATES" "$release_cleanup_fixture/scripts/ci/"
+# shellcheck disable=SC2016 # Preserve expansion for the generated fixture.
+printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf "%s\n" "$*" >"$PWD/gate-targets"' \
+    'printf "%s\n" "$TMPDIR" >"$PWD/gate-tmpdir"' \
+    'exit "${FAKE_MAKE_STATUS:-0}"' >"$release_cleanup_bin/make"
+# shellcheck disable=SC2016 # Preserve expansion for the generated fixture.
+printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    '[ "${1:-}" = "clean" ] || exit 2' \
+    '[ "${FAKE_CARGO_STATUS:-0}" = "0" ] || exit "$FAKE_CARGO_STATUS"' \
+    'rm -rf -- "$PWD/target"' >"$release_cleanup_bin/cargo"
+chmod +x "$release_cleanup_bin/make" "$release_cleanup_bin/cargo"
+
+PATH="$release_cleanup_bin:$PATH" \
+    bash "$release_cleanup_fixture/scripts/ci/run-release-gates.sh" patch
+[ "$(cat "$release_cleanup_fixture/gate-targets")" = "test-bump" ] ||
+    fail "patch release-gate wrapper did not select the patch gate"
+[ "$(cat "$release_cleanup_fixture/gate-tmpdir")" = "$release_cleanup_fixture/.tmp/test-runtime" ] ||
+    fail "release-gate wrapper did not confine temporary files to repository scratch"
+[ ! -e "$release_cleanup_fixture/target" ] ||
+    fail "successful release-gate cleanup retained Cargo artifacts"
+[ ! -e "$release_cleanup_fixture/.tmp/test-runtime" ] ||
+    fail "successful release-gate cleanup retained test scratch"
+
+mkdir -p \
+    "$release_cleanup_fixture/.tmp/test-runtime" \
+    "$release_cleanup_fixture/target"
+if FAKE_MAKE_STATUS=23 PATH="$release_cleanup_bin:$PATH" \
+    bash "$release_cleanup_fixture/scripts/ci/run-release-gates.sh" major; then
+    fail "release-gate wrapper accepted a failed validation gate"
+else
+    release_gate_status=$?
+fi
+[ "$release_gate_status" -eq 23 ] ||
+    fail "release-gate wrapper did not preserve the validation failure"
+[ "$(cat "$release_cleanup_fixture/gate-targets")" = "control-plane-feature-gate clippy test" ] ||
+    fail "major release-gate wrapper did not select the full release gates"
+[ ! -e "$release_cleanup_fixture/target" ] ||
+    fail "failed release-gate cleanup retained Cargo artifacts"
+[ ! -e "$release_cleanup_fixture/.tmp/test-runtime" ] ||
+    fail "failed release-gate cleanup retained test scratch"
+
+mkdir -p \
+    "$release_cleanup_fixture/.tmp/test-runtime" \
+    "$release_cleanup_fixture/target"
+if FAKE_CARGO_STATUS=19 PATH="$release_cleanup_bin:$PATH" \
+    bash "$release_cleanup_fixture/scripts/ci/run-release-gates.sh" minor; then
+    fail "release-gate wrapper accepted a failed cleanup"
+else
+    release_cleanup_status=$?
+fi
+[ "$release_cleanup_status" -eq 1 ] ||
+    fail "release-gate wrapper did not preserve the cleanup failure"
+[ -e "$release_cleanup_fixture/target" ] ||
+    fail "failed fake Cargo cleanup unexpectedly removed its target fixture"
+[ ! -e "$release_cleanup_fixture/.tmp/test-runtime" ] ||
+    fail "Cargo cleanup failure prevented test-scratch cleanup"
+
 fake_gitleaks="$tmp_dir/gitleaks"
 # shellcheck disable=SC2016 # Preserve variable expansion for the generated fixture.
 printf '%s\n' \

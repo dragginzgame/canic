@@ -95,12 +95,18 @@ The Make version targets complete their required test and feature gates before
 changing package versions; any failed gate leaves the version unchanged. The
 underlying bump script rejects direct invocation without the private gate
 marker supplied by those targets.
+Once those compilation gates start, their wrapper confines temporary files to
+the repository-owned `.tmp/test-runtime` tree, then clears that tree and Cargo
+build artifacts on success, ordinary gate failure, or an interrupt handled by
+the wrapper. Cleanup completes before the version mutation and a cleanup
+failure prevents that mutation. Canic scripts must clean their own temporary
+files; release cleanup must not sweep unrelated global `/tmp` content.
 Before its final atomic network update, `make release-push` verifies the exact
-clean release commit/tag pair and clears Cargo build artifacts. No fallible
-local cleanup step runs after a successful push, and atomic push prevents a
-branch-only or tag-only remote update. A transport interruption can still make
-the remote outcome uncertain and must be resolved by inspecting the remote
-refs before retrying.
+clean release commit/tag pair and repeats the same Cargo and repository-owned
+test-scratch cleanup. No fallible local cleanup step runs after a successful
+push, and atomic push prevents a branch-only or tag-only remote update. A
+transport interruption can still make the remote outcome uncertain and must
+be resolved by inspecting the remote refs before retrying.
 For one-shot releases, humans may run `make release-patch`,
 `make release-minor`, or `make release-major`, which perform those steps in
 order.
