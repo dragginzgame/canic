@@ -26,7 +26,10 @@ Historical detail is archived at:
   internal harness to `ic-testkit` 0.7.4 and integrates scheduled shared
   Cargo-target retention with the first exact Wasm acquisition in each package
   batch, reusing one Cargo-input resolution and avoiding redundant later
-  schedule checks and lock acquisition.
+  schedule checks and lock acquisition. Release-gate failures and handled
+  interrupts now retain Cargo artifacts for diagnosis and faster retry while
+  still clearing repository-owned test scratch; successful gates retain the
+  bounded pre-version `cargo clean`.
 - Released `0.101.12` makes one guarded inventory authoritative for all 35
   integration test targets. The full release lane runs all 29 parallel-safe
   and six serial PocketIC targets; the fast lane retains three release-surface

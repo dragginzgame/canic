@@ -104,12 +104,14 @@ changing package versions; any failed gate leaves the version unchanged. The
 underlying bump script rejects direct invocation without the private gate
 marker supplied by those targets.
 Once those compilation gates start, their wrapper confines temporary files to
-the repository-owned `.tmp/test-runtime` tree, then clears that tree and Cargo
-build artifacts on success, ordinary gate failure, or an interrupt handled by
-the wrapper. Cargo cleanup retries once when its first filesystem pass fails;
-failure of both bounded attempts prevents version mutation. Cleanup completes
-before the version mutation. Canic scripts must clean their own temporary
-files; release cleanup must not sweep unrelated global `/tmp` content.
+the repository-owned `.tmp/test-runtime` tree. A successful gate clears that
+tree and Cargo build artifacts before version mutation. An ordinary gate
+failure or handled interrupt clears only the repository-owned test scratch and
+retains Cargo artifacts for diagnosis and a faster exact retry. Cargo cleanup
+after a successful gate retries once when its first filesystem pass fails;
+failure of both bounded attempts prevents version mutation. Canic scripts must
+clean their own temporary files; release cleanup must not sweep unrelated
+global `/tmp` content.
 Before its final atomic network update, `make release-push` verifies the exact
 clean release commit/tag pair and repeats the same Cargo and repository-owned
 test-scratch cleanup. It explicitly sends both the current branch ref and the
