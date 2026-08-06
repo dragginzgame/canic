@@ -290,7 +290,10 @@ Historical detail is archived at:
   the same tenant-owned immutable references. Caffeine remains the sole first
   byte backend. Canic deploys the service only as an ordinary application
   Component and hard-cuts its current blob API, state, stable-memory, feature,
-  CLI and Medic ownership without migration or compatibility paths.
+  CLI and Medic ownership without migration or compatibility paths. A new
+  off-by-default `blob-service` facade feature manages the endpoint and
+  lifecycle envelope, but delegates to the same standalone handlers and owns
+  no blob state or policy.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -1143,9 +1146,10 @@ Historical detail is archived at:
 - Proposed 0.106 moves object identity, tenant-owned references, quotas,
   Caffeine/Cashier adaptation, retention and deletion into a standalone blob
   service. Its portable protocol and client have no Canic dependency; a thin
-  application adapter may supply the ordinary Canic Component lifecycle
-  envelope without returning blob semantics to `canic-core`. The line is a
-  reinstall-only hard cut of the current Canic blob subsystem.
+  off-by-default `blob-service` facade feature supplies Canic's ordinary
+  endpoint and Component lifecycle envelope without returning blob semantics
+  to `canic-core`. The line is a reinstall-only hard cut of the current Canic
+  blob subsystem, not a removal of optional Canic API management.
 - Released `0.99.33` pins the maintained operator toolchain to ICP CLI 1.2.0
   and Rust 1.97.1 while preserving the published-crate MSRV.
 - Released `0.99.32` makes the active 0.99–0.103 design sequence
