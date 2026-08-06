@@ -8,7 +8,7 @@
         control-plane-feature-gate \
         dependency-risk-gate gitleaks-scan \
         install install-dev update-dev test-fleet-install \
-        ensure-clean ensure-hooks test-unit test-unit-fast \
+        ensure-clean ensure-hooks test-unit test-unit-fast workspace-test-inventory-gate \
         test-auth test-auth-chain-key test-cli test-runtime-fast \
         test-canisters fmt-core cloc
 
@@ -224,12 +224,14 @@ test-fleet-install:
 	@mkdir -p "$(TEST_TMPDIR)"
 	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) bash scripts/ci/test-fleet-install.sh
 
-test: blob-storage-inventory-gate blob-storage-cashier-inventory-gate test-unit
+test: blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
+        workspace-test-inventory-gate test-unit
 
 # Fast iteration path for wasm work.
-# Skips integration tests under `tests/`, which is where the PocketIC-heavy
-# suites live today.
-test-wasm: blob-storage-inventory-gate blob-storage-cashier-inventory-gate test-unit-fast
+# Runs only the three classified fast integration targets and skips every
+# PocketIC suite.
+test-wasm: blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
+        workspace-test-inventory-gate test-unit-fast
 
 # Version-bump gate.
 # Keeps the secret scan, control-plane feature matrix, Clippy, and complete
@@ -253,12 +255,13 @@ blob-storage-inventory-gate:
 blob-storage-cashier-inventory-gate:
 	bash scripts/ci/check-blob-storage-cashier-inventory-gate.sh
 
-# Keep rust test execution single-threaded inside each test binary for PocketIC
-# stability and deterministic fixture reuse.
-# Integration test binaries are run explicitly in sequence so they do not queue
-# behind the shared PocketIC runtime lock and look hung at startup.
-# Parallel test threads can still trigger PocketIC panics like:
+# Keep ordinary Rust tests parallel. The workspace runner classifies every
+# integration target and serializes only PocketIC suites for deterministic
+# fixture reuse. Parallel PocketIC tests can still trigger failures like:
 # `KeyAlreadyExists { key: "nns_subnet_id", version: 2 }` and incomplete HTTP messages.
+workspace-test-inventory-gate:
+	bash scripts/ci/check-workspace-test-inventory.sh
+
 test-unit:
 	@mkdir -p "$(TEST_TMPDIR)"
 	TMPDIR="$(TEST_TMPDIR)" CARGO_INCREMENTAL=0 $(CARGO_ENV) bash scripts/ci/run-workspace-tests.sh full
@@ -319,6 +322,7 @@ clean:
 	@bash scripts/ci/cleanup-release-artifacts.sh
 
 clean-wasm:
+	rm -rf -- target/test-artifacts
 	rm -rf -- target/canic-wasm
 	rm -rf -- target/icp-build
 	rm -rf -- target/pic-wasm

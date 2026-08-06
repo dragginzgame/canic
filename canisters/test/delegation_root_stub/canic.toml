@@ -71,3 +71,13 @@ role_attestation_cache = true
 
 [component_specs.projects.spawn_grants.project_hub.project_instance]
 maximum_instances_per_parent = 20_000
+
+[component_groups.grouped_projects.components.project_hub]
+component_spec = "projects"
+
+[component_group_deployments.grouped_projects]
+component_group = "grouped_projects"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1

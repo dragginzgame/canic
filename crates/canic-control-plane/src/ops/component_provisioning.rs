@@ -11,15 +11,16 @@ mod tests;
 use crate::{
     storage::stable::component_provisioning::{
         RootComponentProvisioningClaimCursorRecord, RootComponentProvisioningCommitError,
-        RootComponentProvisioningPlacementKey, RootComponentProvisioningPlacementRecord,
-        RootComponentProvisioningRecord, RootComponentProvisioningReservationCursorRecord,
+        RootComponentProvisioningInstallCursorRecord, RootComponentProvisioningPlacementKey,
+        RootComponentProvisioningPlacementRecord, RootComponentProvisioningRecord,
+        RootComponentProvisioningReservationCursorRecord,
         RootComponentProvisioningStateRecordPhase, RootComponentProvisioningStore,
     },
     view::{
         component_provisioning::{
             RootComponentProvisioningAdvanceDisposition, RootComponentProvisioningClaimCursorView,
-            RootComponentProvisioningMemberView, RootComponentProvisioningReservationCursorView,
-            RootComponentProvisioningView,
+            RootComponentProvisioningInstallCursorView, RootComponentProvisioningMemberView,
+            RootComponentProvisioningReservationCursorView, RootComponentProvisioningView,
         },
         component_registry::{RootComponentAllocationProgressView, RootComponentAllocationView},
     },
@@ -52,6 +53,7 @@ const ACCEPTANCE_RECEIPT_DOMAIN: &[u8] = b"canic/root-component-provisioning-acc
 const MEMBER_OPERATION_DOMAIN: &[u8] = b"canic/root-component-provisioning-member-operation/v1";
 const RESERVATION_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-reservation-cursor/v1";
 const CLAIM_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-claim-cursor/v1";
+const INSTALL_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-install-cursor/v1";
 
 #[derive(CandidType)]
 struct RootComponentProvisioningAcceptanceReceiptAuthority<'a> {
@@ -90,6 +92,58 @@ struct RootComponentProvisioningClaimCursorAuthority {
     placement_index: u32,
     member_index: u32,
     claimed_component_count: u32,
+}
+
+#[derive(CandidType)]
+struct RootComponentProvisioningInstallCursorAuthority {
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    placement_index: u32,
+    member_index: u32,
+    installed_component_count: u32,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ProvisioningProgress {
+    reserved: u32,
+    claimed: u32,
+    installed: u32,
+}
+
+impl ProvisioningProgress {
+    const fn from_request(request: RootComponentProvisioningAdvanceRequest) -> Self {
+        Self {
+            reserved: request.expected_reserved_component_count,
+            claimed: request.expected_claimed_component_count,
+            installed: request.expected_installed_component_count,
+        }
+    }
+
+    const fn from_view(view: &RootComponentProvisioningView) -> Self {
+        Self {
+            reserved: view.reservation_cursor.reserved_component_count,
+            claimed: view.claim_cursor.claimed_component_count,
+            installed: view.install_cursor.installed_component_count,
+        }
+    }
+
+    fn replays_one_step_before(self, current: Self, component_count: u32) -> bool {
+        let reservation = self.claimed == 0
+            && self.installed == 0
+            && current.claimed == 0
+            && current.installed == 0
+            && self.reserved.checked_add(1) == Some(current.reserved);
+        let claim = self.reserved == current.reserved
+            && self.installed == 0
+            && current.installed == 0
+            && self.claimed.checked_add(1) == Some(current.claimed);
+        let install = self.reserved == current.reserved
+            && self.claimed == current.claimed
+            && self.installed.checked_add(1) == Some(current.installed);
+        let prerequisites_are_canonical =
+            current.claimed == 0 || current.reserved == component_count;
+        prerequisites_are_canonical && (reservation || claim || install)
+    }
 }
 
 #[derive(Eq, PartialEq)]
@@ -174,6 +228,8 @@ impl RootComponentProvisioningOps {
         let reservation_cursor =
             reservation_cursor_record(request.operation_id, request.plan_hash, 0, 0, 0)?;
         let claim_cursor = claim_cursor_record(request.operation_id, request.plan_hash, 0, 0, 0)?;
+        let install_cursor =
+            install_cursor_record(request.operation_id, request.plan_hash, 0, 0, 0)?;
         let record = RootComponentProvisioningRecord {
             operation_id: request.operation_id,
             plan_hash: request.plan_hash,
@@ -185,6 +241,7 @@ impl RootComponentProvisioningOps {
                 component_count: validation.component_count,
                 reservation_cursor,
                 claim_cursor,
+                install_cursor,
                 accepted_at_ns,
                 receipt_content_hash,
             },
@@ -222,24 +279,16 @@ impl RootComponentProvisioningOps {
                 "root Component provisioning advance request names different authority",
             ));
         }
-        let current_reserved = view.reservation_cursor.reserved_component_count;
-        let current_claimed = view.claim_cursor.claimed_component_count;
-        let expected_is_current = request.expected_reserved_component_count == current_reserved
-            && request.expected_claimed_component_count == current_claimed;
-        if expected_is_current {
-            return if current_claimed == view.component_count {
+        let expected = ProvisioningProgress::from_request(request);
+        let current = ProvisioningProgress::from_view(view);
+        if expected == current {
+            return if current.installed == view.component_count {
                 Ok(RootComponentProvisioningAdvanceDisposition::Complete)
             } else {
                 Ok(RootComponentProvisioningAdvanceDisposition::Advance)
             };
         }
-
-        let replays_last_reservation = current_claimed == 0
-            && request.expected_claimed_component_count == 0
-            && request.expected_reserved_component_count.checked_add(1) == Some(current_reserved);
-        let replays_last_claim = request.expected_reserved_component_count == current_reserved
-            && request.expected_claimed_component_count.checked_add(1) == Some(current_claimed);
-        if replays_last_reservation || replays_last_claim {
+        if expected.replays_one_step_before(current, view.component_count) {
             return Ok(RootComponentProvisioningAdvanceDisposition::Replay);
         }
         Err(InternalError::conflict(
@@ -284,13 +333,34 @@ impl RootComponentProvisioningOps {
         )
     }
 
+    /// Select the next Store-backed install in O(1) canonical member order.
+    pub(crate) fn next_member_install(
+        view: &RootComponentProvisioningView,
+    ) -> Result<RootComponentProvisioningMemberView, InternalError> {
+        if view.claim_cursor.claimed_component_count != view.component_count {
+            return Err(InternalError::conflict(
+                "root Component provisioning cannot install members before every Canister is claimed",
+            ));
+        }
+        if view.install_cursor.installed_component_count >= view.component_count {
+            return Err(InternalError::conflict(
+                "root Component provisioning has no uninstalled member",
+            ));
+        }
+        member_at_cursor(
+            view,
+            view.install_cursor.placement_index,
+            view.install_cursor.member_index,
+        )
+    }
+
     /// Derive one exact protected runtime context from accepted plan and claimed allocation.
     pub(crate) fn member_deployment_context(
         view: &RootComponentProvisioningView,
+        member: &RootComponentProvisioningMemberView,
         allocation: &RootComponentAllocationView,
     ) -> Result<ProtectedComponentDeployment, InternalError> {
-        let member = Self::next_member_claim(view)?;
-        validate_member_authority(view, &member, allocation)?;
+        validate_member_authority(view, member, allocation)?;
         let canister_id = claimed_allocation_canister(&allocation.progress)?;
         Ok(ProtectedComponentDeployment::GroupMember {
             binding: ComponentBinding {
@@ -304,12 +374,12 @@ impl RootComponentProvisioningOps {
                 canister_id,
             },
             configuration_digest: view.configuration_digest,
-            group_placement: member.group_placement,
-            component_group: member.component_group,
-            member_path: member.member_path,
-            purpose: member.purpose,
-            labels: member.labels,
-            limits: member.limits,
+            group_placement: member.group_placement.clone(),
+            component_group: member.component_group.clone(),
+            member_path: member.member_path.clone(),
+            purpose: member.purpose.clone(),
+            labels: member.labels.clone(),
+            limits: member.limits.clone(),
         })
     }
 
@@ -339,6 +409,7 @@ impl RootComponentProvisioningOps {
             placement_count,
             component_count,
             claim_cursor,
+            install_cursor,
             accepted_at_ns,
             receipt_content_hash,
             ..
@@ -348,6 +419,7 @@ impl RootComponentProvisioningOps {
             component_count,
             reservation_cursor: next_cursor,
             claim_cursor,
+            install_cursor,
             accepted_at_ns,
             receipt_content_hash,
         };
@@ -383,6 +455,7 @@ impl RootComponentProvisioningOps {
             placement_count,
             component_count,
             reservation_cursor,
+            install_cursor,
             accepted_at_ns,
             receipt_content_hash,
             ..
@@ -392,6 +465,52 @@ impl RootComponentProvisioningOps {
             component_count,
             reservation_cursor,
             claim_cursor: next_cursor,
+            install_cursor,
+            accepted_at_ns,
+            receipt_content_hash,
+        };
+        RootComponentProvisioningStore::replace_operation(&current_record, next_record.clone())
+            .map_err(map_commit_error)?;
+        validated_record(next_record)
+    }
+
+    /// Commit one exact verified Store-backed install to the aggregate cursor.
+    pub(crate) fn mark_member_installed(
+        request: RootComponentProvisioningAdvanceRequest,
+        allocation: &RootComponentAllocationView,
+    ) -> Result<RootComponentProvisioningView, InternalError> {
+        let current_record = RootComponentProvisioningStore::operation(request.operation_id)
+            .ok_or_else(|| {
+                InternalError::unavailable("root Component provisioning operation is not accepted")
+            })?;
+        let current = validated_record(current_record.clone())?;
+        if Self::advance_disposition(request, &current)?
+            != RootComponentProvisioningAdvanceDisposition::Advance
+            || current.claim_cursor.claimed_component_count != current.component_count
+        {
+            return Err(InternalError::conflict(
+                "root Component provisioning install step is already committed or not ready",
+            ));
+        }
+        let member = Self::next_member_install(&current)?;
+        validate_installed_member(&current, &member, allocation)?;
+        let next_cursor = advance_install_cursor(&current)?;
+        let mut next_record = current_record.clone();
+        let RootComponentProvisioningStateRecordPhase::Accepted {
+            placement_count,
+            component_count,
+            reservation_cursor,
+            claim_cursor,
+            accepted_at_ns,
+            receipt_content_hash,
+            ..
+        } = next_record.state;
+        next_record.state = RootComponentProvisioningStateRecordPhase::Accepted {
+            placement_count,
+            component_count,
+            reservation_cursor,
+            claim_cursor,
+            install_cursor: next_cursor,
             accepted_at_ns,
             receipt_content_hash,
         };
@@ -559,6 +678,7 @@ fn validated_record(
         component_count,
         reservation_cursor,
         claim_cursor,
+        install_cursor,
         accepted_at_ns,
         receipt_content_hash,
     } = record.state;
@@ -584,34 +704,16 @@ fn validated_record(
             "root Component provisioning acceptance receipt hash is invalid",
         ));
     }
-    validate_reservation_cursor(
+    validate_record_cursors(
         record.operation_id,
         record.plan_hash,
         &record.batch,
         component_count,
         reservation_cursor,
-    )?;
-    validate_claim_cursor(
-        record.operation_id,
-        record.plan_hash,
-        &record.batch,
-        component_count,
-        reservation_cursor.reserved_component_count,
         claim_cursor,
+        install_cursor,
     )?;
-    let expected_placement = RootComponentProvisioningPlacementRecord {
-        operation_id: record.operation_id,
-        plan_hash: record.plan_hash,
-    };
-    for placement in &record.batch.placements {
-        let key = RootComponentProvisioningPlacementKey::from(&placement.group_placement);
-        if RootComponentProvisioningStore::placement(&key) != Some(expected_placement) {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "accepted root Component provisioning placement index is inconsistent",
-            ));
-        }
-    }
+    validate_record_placement_index(record.operation_id, record.plan_hash, &record.batch)?;
     let state = validated_aggregate_state()?;
     if state.active_operation_id != Some(record.operation_id) {
         return Err(InternalError::invariant(
@@ -637,9 +739,63 @@ fn validated_record(
             member_index: claim_cursor.member_index,
             claimed_component_count: claim_cursor.claimed_component_count,
         },
+        install_cursor: RootComponentProvisioningInstallCursorView {
+            placement_index: install_cursor.placement_index,
+            member_index: install_cursor.member_index,
+            installed_component_count: install_cursor.installed_component_count,
+        },
         accepted_at_ns,
         receipt_content_hash,
     })
+}
+
+fn validate_record_cursors(
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
+    component_count: u32,
+    reservation: RootComponentProvisioningReservationCursorRecord,
+    claim: RootComponentProvisioningClaimCursorRecord,
+    install: RootComponentProvisioningInstallCursorRecord,
+) -> Result<(), InternalError> {
+    validate_reservation_cursor(operation_id, plan_hash, batch, component_count, reservation)?;
+    validate_claim_cursor(
+        operation_id,
+        plan_hash,
+        batch,
+        component_count,
+        reservation.reserved_component_count,
+        claim,
+    )?;
+    validate_install_cursor(
+        operation_id,
+        plan_hash,
+        batch,
+        component_count,
+        claim.claimed_component_count,
+        install,
+    )
+}
+
+fn validate_record_placement_index(
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
+) -> Result<(), InternalError> {
+    let expected_placement = RootComponentProvisioningPlacementRecord {
+        operation_id,
+        plan_hash,
+    };
+    for placement in &batch.placements {
+        let key = RootComponentProvisioningPlacementKey::from(&placement.group_placement);
+        if RootComponentProvisioningStore::placement(&key) != Some(expected_placement) {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "accepted root Component provisioning placement index is inconsistent",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn request_matches_view(
@@ -717,6 +873,43 @@ fn validate_claim_cursor(
         cursor.member_index,
         cursor.claimed_component_count,
         "claim",
+    )
+}
+
+fn validate_install_cursor(
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
+    component_count: u32,
+    claimed_component_count: u32,
+    cursor: RootComponentProvisioningInstallCursorRecord,
+) -> Result<(), InternalError> {
+    let expected = install_cursor_record(
+        operation_id,
+        plan_hash,
+        cursor.placement_index,
+        cursor.member_index,
+        cursor.installed_component_count,
+    )?;
+    if cursor.content_hash != expected.content_hash {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component provisioning install cursor hash is invalid",
+        ));
+    }
+    if cursor.installed_component_count > 0 && claimed_component_count != component_count {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component provisioning installed a member before claiming every Canister",
+        ));
+    }
+    validate_member_cursor(
+        batch,
+        component_count,
+        cursor.placement_index,
+        cursor.member_index,
+        cursor.installed_component_count,
+        "install",
     )
 }
 
@@ -813,6 +1006,24 @@ fn advance_claim_cursor(
     )
 }
 
+fn advance_install_cursor(
+    view: &RootComponentProvisioningView,
+) -> Result<RootComponentProvisioningInstallCursorRecord, InternalError> {
+    let (next_placement, next_member, next_installed) = advance_member_cursor(
+        view,
+        view.install_cursor.placement_index,
+        view.install_cursor.member_index,
+        view.install_cursor.installed_component_count,
+    )?;
+    install_cursor_record(
+        view.operation_id,
+        view.plan_hash,
+        next_placement,
+        next_member,
+        next_installed,
+    )
+}
+
 fn advance_member_cursor(
     view: &RootComponentProvisioningView,
     placement_index: u32,
@@ -902,6 +1113,28 @@ fn claim_cursor_record(
     })
 }
 
+fn install_cursor_record(
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    placement_index: u32,
+    member_index: u32,
+    installed_component_count: u32,
+) -> Result<RootComponentProvisioningInstallCursorRecord, InternalError> {
+    let authority = RootComponentProvisioningInstallCursorAuthority {
+        operation_id,
+        plan_hash,
+        placement_index,
+        member_index,
+        installed_component_count,
+    };
+    Ok(RootComponentProvisioningInstallCursorRecord {
+        placement_index,
+        member_index,
+        installed_component_count,
+        content_hash: domain_separated_candid_hash(INSTALL_CURSOR_DOMAIN, authority)?,
+    })
+}
+
 fn member_operation_id(
     fleet_subnet_root: Principal,
     operation_id: [u8; 32],
@@ -986,6 +1219,23 @@ fn validate_reserved_member(
     ) {
         return Err(InternalError::conflict(
             "Component Group member crossed its reservation boundary outside the aggregate workflow",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_installed_member(
+    view: &RootComponentProvisioningView,
+    member: &RootComponentProvisioningMemberView,
+    allocation: &RootComponentAllocationView,
+) -> Result<(), InternalError> {
+    validate_member_authority(view, member, allocation)?;
+    if !matches!(
+        allocation.progress,
+        RootComponentAllocationProgressView::Verified { .. }
+    ) {
+        return Err(InternalError::conflict(
+            "Component Group member did not stop at the verified install boundary",
         ));
     }
     Ok(())
@@ -1162,6 +1412,7 @@ pub fn status_response(
         component_count: view.component_count,
         reserved_component_count: view.reservation_cursor.reserved_component_count,
         claimed_component_count: view.claim_cursor.claimed_component_count,
+        installed_component_count: view.install_cursor.installed_component_count,
         accepted_at_ns: view.accepted_at_ns,
         receipt_content_hash: view.receipt_content_hash,
     }

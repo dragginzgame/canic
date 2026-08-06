@@ -1,8 +1,9 @@
 use canic_core::ids::BuildNetwork;
 use ic_testkit::artifacts::{
-    ArtifactCacheMaintenance, ArtifactCachePrunePolicy, WasmBuildBatchProgressEvent,
-    WasmBuildProgressConfig, WasmBuildProgressEvent, WasmBuildSpec,
+    ArtifactCacheMaintenance, ArtifactCachePrunePolicy, SharedIncrementalTargetPrunePolicy,
+    WasmBuildBatchProgressEvent, WasmBuildProgressConfig, WasmBuildProgressEvent, WasmBuildSpec,
     build_wasm_canisters_cached_batch_with_progress,
+    maintain_shared_incremental_target_at_most_every,
 };
 use std::{
     path::{Path, PathBuf},
@@ -14,6 +15,9 @@ const INTERNAL_TEST_WASM_CACHE_MAX_AGE: Duration = Duration::from_hours(168);
 const INTERNAL_TEST_WASM_CACHE_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const INTERNAL_TEST_WASM_CACHE_MAINTENANCE_INTERVAL: Duration = Duration::from_hours(1);
 const INTERNAL_TEST_WASM_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
+const INTERNAL_TEST_SHARED_WASM_TARGET_MAX_AGE: Duration = Duration::from_hours(168);
+const INTERNAL_TEST_SHARED_WASM_TARGET_MAX_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+const INTERNAL_TEST_SHARED_WASM_TARGET_MAINTENANCE_INTERVAL: Duration = Duration::from_hours(1);
 
 pub(super) const INTERNAL_TEST_ENDPOINTS_ENV: (&str, &str) = ("CANIC_INTERNAL_TEST_ENDPOINTS", "1");
 pub(super) const INTERNAL_TEST_RELEASE_BUILD_ID: (&str, &str) = (
@@ -121,6 +125,9 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
             )
         })
         .collect::<Vec<_>>();
+    maintain_internal_test_shared_wasm_target(
+        builds.first().expect("nonempty internal test Wasm batch"),
+    );
     let progress = WasmBuildProgressConfig::new()
         .with_heartbeat_interval(INTERNAL_TEST_WASM_HEARTBEAT_INTERVAL)
         .with_cargo_output(false);
@@ -164,6 +171,24 @@ pub(super) const fn internal_test_artifact_prune_policy() -> ArtifactCachePruneP
 
 pub(super) const fn internal_test_artifact_maintenance_interval() -> Duration {
     INTERNAL_TEST_WASM_CACHE_MAINTENANCE_INTERVAL
+}
+
+fn maintain_internal_test_shared_wasm_target(build: &WasmBuildSpec) {
+    let policy = internal_test_shared_wasm_target_prune_policy();
+    match maintain_shared_incremental_target_at_most_every(
+        build,
+        policy,
+        INTERNAL_TEST_SHARED_WASM_TARGET_MAINTENANCE_INTERVAL,
+    ) {
+        Ok(outcome) => eprintln!("[canic-test-wasm-shared-target] {outcome}"),
+        Err(err) => eprintln!("[canic-test-wasm-shared-target] warning: maintenance failed: {err}"),
+    }
+}
+
+const fn internal_test_shared_wasm_target_prune_policy() -> SharedIncrementalTargetPrunePolicy {
+    SharedIncrementalTargetPrunePolicy::new()
+        .with_max_age(INTERNAL_TEST_SHARED_WASM_TARGET_MAX_AGE)
+        .with_max_size_bytes(INTERNAL_TEST_SHARED_WASM_TARGET_MAX_BYTES)
 }
 
 fn report_wasm_build_progress(packages: &[&str], event: WasmBuildBatchProgressEvent) {
@@ -278,6 +303,24 @@ mod tests {
         assert_eq!(
             internal_test_shared_wasm_target(workspace_root, &build_env),
             workspace_root.join("target/test-artifacts/cargo-wasm-incremental/ic")
+        );
+    }
+
+    #[test]
+    fn shared_wasm_target_retention_is_bounded() {
+        let policy = internal_test_shared_wasm_target_prune_policy();
+
+        assert_eq!(
+            policy.max_age(),
+            Some(INTERNAL_TEST_SHARED_WASM_TARGET_MAX_AGE)
+        );
+        assert_eq!(
+            policy.max_size_bytes(),
+            Some(INTERNAL_TEST_SHARED_WASM_TARGET_MAX_BYTES)
+        );
+        assert_eq!(
+            INTERNAL_TEST_SHARED_WASM_TARGET_MAINTENANCE_INTERVAL,
+            Duration::from_hours(1)
         );
     }
 }

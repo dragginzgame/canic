@@ -31,9 +31,12 @@ impl RootComponentProvisioningApi {
     pub async fn advance(
         request: RootComponentProvisioningAdvanceRequest,
     ) -> Result<RootComponentProvisioningStatusResponse, Error> {
-        component_provisioning::advance(IcOps::msg_caller(), request)
-            .await
-            .map_err(Into::into)
+        Box::pin(component_provisioning::advance(
+            IcOps::msg_caller(),
+            request,
+        ))
+        .await
+        .map_err(Into::into)
     }
 
     pub fn status(

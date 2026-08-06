@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.12` installs each claimed group member through the ordinary exact-
+  retry Store-backed journal while retaining its plan-derived runtime context
+  behind `Prepared`, with real-canister coverage and correctly bounded stable
+  acceptance keys; it also makes the release test lane cover every classified
+  integration target while preserving serial PocketIC isolation and bounding
+  shared test-Wasm compilation state.
+
 - `0.101.11` advances reserved group members through the ordinary restart-safe
   prepaid-Canister claim and exact plan-derived runtime context, and hardens
   release cleanup and atomic branch/tag publication against transient races.

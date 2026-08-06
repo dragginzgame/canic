@@ -20,7 +20,8 @@ mod tests {
     use candid::{decode_one, encode_one};
     #[cfg(test)]
     use canic::dto::pool::{
-        CanisterPoolAssetOrigin, CanisterPoolAssetStatus, CanisterPoolRecycleReset,
+        CanisterPoolAssetOrigin, CanisterPoolAssetStatus, CanisterPoolClaim,
+        CanisterPoolRecycleReset,
     };
     use canic::dto::pool::{
         CanisterPoolResponse, CanisterPoolStatusRequest, PoolAdminCommand, PoolAdminResponse,
@@ -96,14 +97,26 @@ mod tests {
     };
     #[cfg(test)]
     use canic::{
-        dto::authority_restore::{
-            AuthorityRestoreFencePhase, AuthorityRestoreFenceStatusResponse,
-            AuthoritySnapshotRequest,
+        dto::{
+            authority_restore::{
+                AuthorityRestoreFencePhase, AuthorityRestoreFenceStatusResponse,
+                AuthoritySnapshotRequest,
+            },
+            component_deployment::ProtectedComponentDeployment,
+            component_provisioning::{
+                ComponentGroupPlacementPlan, ComponentGroupPlanEntry,
+                FleetComponentProvisioningOperation, FleetComponentProvisioningPlan,
+                FleetSubnetRootProvisioningBatch, RootComponentProvisioningAcceptanceRequest,
+                RootComponentProvisioningAdvanceRequest, RootComponentProvisioningPhase,
+                RootComponentProvisioningStatusRequest, RootComponentProvisioningStatusResponse,
+            },
+            fleet_registry::FleetRegistryVersion,
         },
-        dto::fleet_registry::FleetRegistryVersion,
+        ids::ComponentGroupPlacementId,
         protocol::{
             CANIC_AUTHORITY_RESTORE_FENCE_STATUS, CANIC_AUTHORITY_SNAPSHOT_PREPARE,
-            CANIC_AUTHORITY_SNAPSHOT_RESUME,
+            CANIC_AUTHORITY_SNAPSHOT_RESUME, CANIC_ROOT_COMPONENT_PROVISIONING_ACCEPT,
+            CANIC_ROOT_COMPONENT_PROVISIONING_ADVANCE, CANIC_ROOT_COMPONENT_PROVISIONING_STATUS,
         },
     };
     use canic_control_plane::{
@@ -118,6 +131,8 @@ mod tests {
         },
     };
     use canic_core::cdk::utils::hash::{hex_bytes, wasm_hash};
+    #[cfg(test)]
+    use canic_core::control_plane_support::ops::component_provisioning_plan::ComponentProvisioningPlanOps;
     use canic_host::release_set::AppConfigSnapshot;
     use flate2::{Compression, write::GzEncoder};
     use std::{
@@ -505,6 +520,14 @@ mod tests {
         response: RootStoreBootstrapResponse,
     }
 
+    #[cfg(test)]
+    struct PreparedGroupedProvisioningFixture {
+        pic: PocketIc,
+        coordinator: Principal,
+        root: BootstrappedRootFixture,
+        request: RootComponentProvisioningAcceptanceRequest,
+    }
+
     struct RootStoreFixture {
         manifest: RootStoreReleaseSetManifest,
         artifacts: BTreeMap<CanisterRole, Vec<u8>>,
@@ -679,6 +702,69 @@ mod tests {
             canic::dto::error::ErrorCode::Unauthorized
         );
         assert_prepared(&pic, fixture.root_id);
+    }
+
+    #[test]
+    fn prepared_root_installs_one_exact_group_member_without_publishing_membership() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_prepared_grouped_provisioning();
+        let accepted: Result<RootComponentProvisioningStatusResponse, Error> = fixture
+            .pic
+            .update_candid_as(
+                fixture.root.root_id,
+                fixture.coordinator,
+                CANIC_ROOT_COMPONENT_PROVISIONING_ACCEPT,
+                (fixture.request.clone(),),
+            )
+            .expect("accept grouped provisioning batch transport");
+        let accepted = accepted.expect("accept grouped provisioning batch");
+        assert_grouped_provisioning_progress(&accepted, 0, 0, 0);
+
+        let reserved = advance_grouped_provisioning(&fixture, advance_request(&accepted));
+        assert_grouped_provisioning_progress(&reserved, 1, 0, 0);
+        let claimed = advance_grouped_provisioning(&fixture, advance_request(&reserved));
+        assert_grouped_provisioning_progress(&claimed, 1, 1, 0);
+
+        let (canister_id, claim) = one_grouped_workload(&fixture);
+        let created = grouped_allocation_status(&fixture, claim.operation_id);
+        assert_eq!(created.phase, RootComponentAllocationPhase::Created);
+        assert_eq!(created.component, claim.component);
+        assert_eq!(
+            created.provisioning_origin,
+            ComponentProvisioningOrigin::ComponentGroup {
+                operation_id: fixture.request.operation_id,
+                plan_hash: fixture.request.plan_hash,
+                group_placement: fixture.request.batch.placements[0].group_placement.clone(),
+                member_path: fixture.request.batch.placements[0].entries[0]
+                    .member_path
+                    .clone(),
+            }
+        );
+
+        let install_request = advance_request(&claimed);
+        let installed = advance_grouped_provisioning(&fixture, install_request);
+        assert_grouped_provisioning_progress(&installed, 1, 1, 1);
+        assert_grouped_member_install(&fixture, canister_id, &claim);
+
+        let replayed = advance_grouped_provisioning(&fixture, install_request);
+        assert_eq!(replayed, installed);
+        let observed: Result<RootComponentProvisioningStatusResponse, Error> = fixture
+            .pic
+            .query_candid_as(
+                fixture.root.root_id,
+                fixture.coordinator,
+                CANIC_ROOT_COMPONENT_PROVISIONING_STATUS,
+                (RootComponentProvisioningStatusRequest {
+                    operation_id: fixture.request.operation_id,
+                    plan_hash: fixture.request.plan_hash,
+                },),
+            )
+            .expect("query grouped provisioning status transport");
+        assert_eq!(
+            observed.expect("query grouped provisioning status"),
+            installed
+        );
+        assert_prepared(&fixture.pic, fixture.root.root_id);
     }
 
     #[test]
@@ -2432,6 +2518,269 @@ mod tests {
         acquire_active_component_registry()
     }
 
+    #[cfg(test)]
+    fn setup_prepared_grouped_provisioning() -> PreparedGroupedProvisioningFixture {
+        let root_wasm = build_test_root_wasm();
+        let coordinator_wasm = build_test_coordinator_wasm();
+        let store_fixture = build_root_store_fixture();
+        let pic = build_pic();
+        let coordinator = pic.create_canister();
+        pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
+        let root = install_bootstrapped_root(&pic, root_wasm, coordinator, store_fixture);
+        install_fixture_coordinator(&pic, coordinator, coordinator_wasm, &root);
+        let (joining_version, sync_request) = join_and_synchronize_root(&pic, coordinator, &root);
+        let component_registry = activate_registry_and_prepare_component_registry(
+            &pic,
+            coordinator,
+            &root,
+            joining_version,
+            sync_request,
+        );
+        let registry: Result<FleetRegistry, Error> = pic
+            .query_candid(coordinator, CANIC_FLEET_REGISTRY, ())
+            .expect("query grouped provisioning Fleet Registry transport");
+        let registry = registry.expect("query grouped provisioning Fleet Registry");
+        let request = grouped_projects_provisioning_request(
+            &root,
+            &registry,
+            component_registry.expected_fleet_registry,
+        );
+        PreparedGroupedProvisioningFixture {
+            pic,
+            coordinator,
+            root,
+            request,
+        }
+    }
+
+    #[cfg(test)]
+    fn grouped_projects_provisioning_request(
+        root: &BootstrappedRootFixture,
+        registry: &FleetRegistry,
+        fleet_registry: canic::dto::fleet_registry::FleetRegistryVersion,
+    ) -> RootComponentProvisioningAcceptanceRequest {
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config_path = root_canister_config_path(&workspace_root);
+        let config = AppConfigSnapshot::load(&config_path).expect("load grouped root config");
+        let deployments = config
+            .model()
+            .compile_component_group_deployment_topology()
+            .expect("compile grouped deployment topology");
+        let deployment = deployments
+            .get(
+                &"grouped_projects"
+                    .parse()
+                    .expect("grouped projects deployment ID"),
+            )
+            .expect("grouped projects deployment");
+        let entries = deployment
+            .members
+            .iter()
+            .map(|member| ComponentGroupPlanEntry {
+                member_path: member.member_path.clone(),
+                component_spec: member.component_spec.clone(),
+                spec_hash: member.component_spec_hash,
+                purpose: member.purpose.clone(),
+                labels: member.labels.clone(),
+                limits: member.limits.clone(),
+            })
+            .collect::<Vec<_>>();
+        let batch = FleetSubnetRootProvisioningBatch {
+            root: root.init_args.authority.binding.clone(),
+            active_release_set: root.init_args.authority.initial_release_set,
+            placements: vec![ComponentGroupPlacementPlan {
+                group_placement: ComponentGroupPlacementId {
+                    deployment: deployment.deployment.clone(),
+                    ordinal: 0,
+                },
+                component_group: deployment.component_group.clone(),
+                entries,
+            }],
+        };
+        let configuration_digest = config
+            .model()
+            .compile_component_deployment_configuration_digest()
+            .expect("compile grouped configuration digest");
+        let plan = FleetComponentProvisioningPlan {
+            fleet: registry.authority.binding.fleet.clone(),
+            fleet_registry: fleet_registry.clone(),
+            configuration_digest,
+            operation: FleetComponentProvisioningOperation::FreshInstall,
+            directory_confirmation_roots: vec![root.root_id],
+            batches: vec![batch.clone()],
+        };
+        let plan_hash = ComponentProvisioningPlanOps::hash(config.model(), registry, &plan)
+            .expect("hash exact grouped provisioning plan");
+        RootComponentProvisioningAcceptanceRequest {
+            fleet_registry,
+            configuration_digest,
+            operation_id: [0xd1; 32],
+            plan_hash,
+            batch,
+        }
+    }
+
+    #[cfg(test)]
+    const fn advance_request(
+        status: &RootComponentProvisioningStatusResponse,
+    ) -> RootComponentProvisioningAdvanceRequest {
+        RootComponentProvisioningAdvanceRequest {
+            operation_id: status.operation_id,
+            plan_hash: status.plan_hash,
+            expected_reserved_component_count: status.reserved_component_count,
+            expected_claimed_component_count: status.claimed_component_count,
+            expected_installed_component_count: status.installed_component_count,
+        }
+    }
+
+    #[cfg(test)]
+    fn advance_grouped_provisioning(
+        fixture: &PreparedGroupedProvisioningFixture,
+        request: RootComponentProvisioningAdvanceRequest,
+    ) -> RootComponentProvisioningStatusResponse {
+        let response: Result<RootComponentProvisioningStatusResponse, Error> = fixture
+            .pic
+            .update_candid_as(
+                fixture.root.root_id,
+                fixture.coordinator,
+                CANIC_ROOT_COMPONENT_PROVISIONING_ADVANCE,
+                (request,),
+            )
+            .expect("advance grouped provisioning transport");
+        response.expect("advance grouped provisioning")
+    }
+
+    #[cfg(test)]
+    fn assert_grouped_provisioning_progress(
+        status: &RootComponentProvisioningStatusResponse,
+        reserved: u32,
+        claimed: u32,
+        installed: u32,
+    ) {
+        assert_eq!(status.phase, RootComponentProvisioningPhase::Accepted);
+        assert_eq!(status.placement_count, 1);
+        assert_eq!(status.component_count, 1);
+        assert_eq!(status.reserved_component_count, reserved);
+        assert_eq!(status.claimed_component_count, claimed);
+        assert_eq!(status.installed_component_count, installed);
+        assert_ne!(status.receipt_content_hash, [0; 32]);
+    }
+
+    #[cfg(test)]
+    fn one_grouped_workload(
+        fixture: &PreparedGroupedProvisioningFixture,
+    ) -> (Principal, CanisterPoolClaim) {
+        let status = root_pool_status(&fixture.pic, fixture.root.root_id);
+        assert_eq!(status.ready, 9);
+        assert_eq!(status.workload, 1);
+        let workloads = status
+            .entries
+            .into_iter()
+            .filter_map(|asset| match asset.status {
+                CanisterPoolAssetStatus::Workload { claim } => Some((asset.canister_id, claim)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let [workload] = workloads.as_slice() else {
+            panic!("grouped provisioning must own one exact workload")
+        };
+        workload.clone()
+    }
+
+    #[cfg(test)]
+    fn grouped_allocation_status(
+        fixture: &PreparedGroupedProvisioningFixture,
+        operation_id: [u8; 32],
+    ) -> RootComponentAllocationResponse {
+        let response: Result<RootComponentAllocationResponse, Error> = fixture
+            .pic
+            .query_candid(
+                fixture.root.root_id,
+                CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
+                (RootComponentAllocationStatusRequest { operation_id },),
+            )
+            .expect("query grouped Component allocation transport");
+        response.expect("query grouped Component allocation")
+    }
+
+    #[cfg(test)]
+    fn assert_grouped_member_install(
+        fixture: &PreparedGroupedProvisioningFixture,
+        canister_id: Principal,
+        claim: &CanisterPoolClaim,
+    ) {
+        let allocation = grouped_allocation_status(fixture, claim.operation_id);
+        assert_eq!(allocation.phase, RootComponentAllocationPhase::Verified);
+        let creation = allocation
+            .creation
+            .as_ref()
+            .expect("grouped creation evidence");
+        let installation = allocation
+            .installation
+            .as_ref()
+            .expect("grouped install evidence");
+        assert_eq!(creation.canister, Some(canister_id));
+        assert_eq!(installation.binding.component, claim.component);
+        assert_eq!(installation.binding.canister_id, canister_id);
+
+        let entry = &fixture.request.batch.placements[0].entries[0];
+        let placement = &fixture.request.batch.placements[0];
+        let expected_deployment = ProtectedComponentDeployment::GroupMember {
+            binding: installation.binding.clone(),
+            configuration_digest: fixture.request.configuration_digest,
+            group_placement: placement.group_placement.clone(),
+            component_group: placement.component_group.clone(),
+            member_path: entry.member_path.clone(),
+            purpose: entry.purpose.clone(),
+            labels: entry.labels.clone(),
+            limits: entry.limits.clone(),
+        };
+        let runtime: Result<ComponentRuntimeStatusResponse, Error> = fixture
+            .pic
+            .query_candid_as(
+                canister_id,
+                fixture.root.root_id,
+                CANIC_COMPONENT_RUNTIME_STATUS,
+                (),
+            )
+            .expect("query grouped Component runtime transport");
+        let runtime = runtime.expect("query grouped Component runtime");
+        assert_eq!(runtime.operation_id, claim.operation_id);
+        assert_eq!(
+            runtime.binding,
+            ManagedCanisterBinding::Component(installation.binding.clone())
+        );
+        assert_eq!(runtime.deployment.as_ref(), &expected_deployment);
+        assert_eq!(runtime.phase, ComponentRuntimePhase::AwaitingDirectory);
+        assert_eq!(runtime.authority, None);
+        assert_eq!(runtime.authority_hash, None);
+        assert_eq!(runtime.direct_children_hash, None);
+        assert_eq!(runtime.activation, None);
+
+        let live = fixture
+            .pic
+            .canister_status(canister_id, Some(fixture.root.root_id))
+            .expect("grouped Component Canister status");
+        assert_eq!(live.settings.controllers, vec![fixture.root.root_id]);
+        assert_eq!(live.module_hash, Some(creation.payload_hash.to_vec()));
+        let partition: Result<ComponentRegistryPartitionResponse, Error> = fixture
+            .pic
+            .query_candid(
+                fixture.root.root_id,
+                CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
+                (ComponentRegistryPartitionRequest {
+                    component: claim.component,
+                },),
+            )
+            .expect("query unpublished grouped Component partition transport");
+        assert_eq!(
+            partition
+                .expect_err("grouped install must not publish Registry membership")
+                .code,
+            canic::dto::error::ErrorCode::Unavailable
+        );
+    }
+
     fn acquire_active_component_registry() -> ActiveComponentRegistryFixture {
         let (baseline, outcome) = active_component_registry_pool()
             .acquire()
@@ -2473,14 +2822,44 @@ mod tests {
         pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
         let fixture = install_bootstrapped_root(&pic, root_wasm, coordinator, store_fixture);
         install_fixture_coordinator(&pic, coordinator, coordinator_wasm, &fixture);
+        let (joining_version, sync_request) =
+            join_and_synchronize_root(&pic, coordinator, &fixture);
 
+        let components = assert_registry_and_root_runtime_activation(
+            &pic,
+            coordinator,
+            &fixture,
+            joining_version,
+            sync_request,
+        );
+        let fixture = ActiveComponentRegistryFixture {
+            runtime: ActiveComponentRegistryRuntime::Fresh(Box::new(pic)),
+            coordinator,
+            root: fixture.root_id,
+            issuer: components.issuer,
+            verifier: components.verifier,
+            store_bootstrap: fixture.request,
+            wasm_store: fixture.response.wasm_store,
+            pool_assets: fixture.init_args.canister_pool_imports,
+        };
+        assert_root_canister_summary(&fixture);
+        fixture
+    }
+
+    fn join_and_synchronize_root(
+        pic: &PocketIc,
+        coordinator: Principal,
+        fixture: &BootstrappedRootFixture,
+    ) -> (
+        canic::dto::fleet_registry::FleetRegistryVersion,
+        FleetSubnetRootRegistrySyncRequest,
+    ) {
         let genesis: Result<canic::dto::fleet_registry::FleetRegistryVersion, Error> = pic
             .query_candid(coordinator, CANIC_FLEET_REGISTRY_VERSION, ())
             .expect("query Registry genesis");
-        let genesis = genesis.expect("Registry genesis");
         let binding = &fixture.init_args.authority.binding;
         let join_request = FleetSubnetRootJoinRequest {
-            expected_registry: genesis,
+            expected_registry: genesis.expect("Registry genesis"),
             entry: FleetSubnetRootEntry {
                 placement_subnet: binding.placement_subnet,
                 fleet_subnet_root: fixture.root_id,
@@ -2495,7 +2874,6 @@ mod tests {
             .update_candid(coordinator, CANIC_FLEET_SUBNET_ROOT_JOIN, (join_request,))
             .expect("join root transport");
         let joined = joined.expect("join root");
-
         let sync_request = FleetSubnetRootRegistrySyncRequest {
             expected_registry: joined.version.clone(),
             store_bootstrap: fixture.request.clone(),
@@ -2533,7 +2911,6 @@ mod tests {
             observed.expect("root Registry synchronization status"),
             synchronized
         );
-
         let acknowledgements: Result<Vec<FleetSubnetRootSnapshotAcknowledgement>, Error> = pic
             .query_candid(coordinator, CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS, ())
             .expect("query root acknowledgements");
@@ -2541,26 +2918,7 @@ mod tests {
             acknowledgements.expect("root acknowledgements"),
             vec![synchronized.acknowledgement]
         );
-
-        let components = assert_registry_and_root_runtime_activation(
-            &pic,
-            coordinator,
-            &fixture,
-            joined.version,
-            sync_request,
-        );
-        let fixture = ActiveComponentRegistryFixture {
-            runtime: ActiveComponentRegistryRuntime::Fresh(Box::new(pic)),
-            coordinator,
-            root: fixture.root_id,
-            issuer: components.issuer,
-            verifier: components.verifier,
-            store_bootstrap: fixture.request,
-            wasm_store: fixture.response.wasm_store,
-            pool_assets: fixture.init_args.canister_pool_imports,
-        };
-        assert_root_canister_summary(&fixture);
-        fixture
+        (joined.version, sync_request)
     }
 
     fn reset_unclaimed_pool_assets(
@@ -3171,6 +3529,23 @@ mod tests {
         joining_version: canic::dto::fleet_registry::FleetRegistryVersion,
         sync_request: FleetSubnetRootRegistrySyncRequest,
     ) -> ActiveComponentBindings {
+        let component_registry_request = activate_registry_and_prepare_component_registry(
+            pic,
+            coordinator,
+            fixture,
+            joining_version,
+            sync_request,
+        );
+        assert_component_allocation(pic, fixture, component_registry_request)
+    }
+
+    fn activate_registry_and_prepare_component_registry(
+        pic: &PocketIc,
+        coordinator: Principal,
+        fixture: &BootstrappedRootFixture,
+        joining_version: canic::dto::fleet_registry::FleetRegistryVersion,
+        sync_request: FleetSubnetRootRegistrySyncRequest,
+    ) -> RootComponentRegistryPreparationRequest {
         let activated: Result<FleetRegistryActivationResponse, Error> = pic
             .update_candid(
                 coordinator,
@@ -3239,7 +3614,8 @@ mod tests {
             .expect("query root Registry mirror status transport");
         assert_eq!(mirror_status.expect("root Registry mirror status"), mirror);
 
-        let issuer = assert_component_registry_preparation(pic, fixture, activation_request);
+        let component_registry_request =
+            prepare_component_registry(pic, fixture, activation_request);
 
         let old_candidate: Result<FleetSubnetRootRegistrySyncResponse, Error> = pic
             .query_candid(
@@ -3254,14 +3630,14 @@ mod tests {
                 .code,
             canic::dto::error::ErrorCode::Unavailable
         );
-        issuer
+        component_registry_request
     }
 
-    fn assert_component_registry_preparation(
+    fn prepare_component_registry(
         pic: &PocketIc,
         fixture: &BootstrappedRootFixture,
         activation_request: FleetSubnetRootRegistryMirrorActivationRequest,
-    ) -> ActiveComponentBindings {
+    ) -> RootComponentRegistryPreparationRequest {
         let component_registry_request = RootComponentRegistryPreparationRequest {
             store_bootstrap: activation_request.store_bootstrap,
             expected_fleet_registry: activation_request.expected_registry,
@@ -3317,7 +3693,7 @@ mod tests {
             component_registry
         );
 
-        assert_component_allocation(pic, fixture, component_registry_request)
+        component_registry_request
     }
 
     #[expect(

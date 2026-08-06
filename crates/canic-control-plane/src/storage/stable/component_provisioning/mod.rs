@@ -27,6 +27,12 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 const ROOT_COMPONENT_PROVISIONING_OPERATION_MAX_BYTES: u32 = 8_650_000;
+// CBOR encodes a 32-byte `[u8; 32]` key as a two-byte array header followed by
+// at most two bytes per element.
+const ROOT_COMPONENT_PROVISIONING_OPERATION_KEY_MAX_BYTES: u32 = 66;
+// The placement owner adds one CBOR map header and the exact two field names to
+// two maximum-width operation keys.
+const ROOT_COMPONENT_PROVISIONING_PLACEMENT_RECORD_MAX_BYTES: u32 = 156;
 
 struct RootComponentProvisioningOperations;
 struct RootComponentProvisioningPlacements;
@@ -84,7 +90,11 @@ eager_static! {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct RootComponentProvisioningOperationKey(pub [u8; 32]);
 
-impl_storable_bounded!(RootComponentProvisioningOperationKey, 64, false);
+impl_storable_bounded!(
+    RootComponentProvisioningOperationKey,
+    ROOT_COMPONENT_PROVISIONING_OPERATION_KEY_MAX_BYTES,
+    false
+);
 
 /// Stable placement-index key.
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -133,6 +143,7 @@ pub enum RootComponentProvisioningStateRecordPhase {
         component_count: u32,
         reservation_cursor: RootComponentProvisioningReservationCursorRecord,
         claim_cursor: RootComponentProvisioningClaimCursorRecord,
+        install_cursor: RootComponentProvisioningInstallCursorRecord,
         accepted_at_ns: u64,
         receipt_content_hash: [u8; 32],
     },
@@ -156,6 +167,15 @@ pub struct RootComponentProvisioningClaimCursorRecord {
     pub content_hash: [u8; 32],
 }
 
+/// Canonical O(1) cursor over Store-backed installs for claimed members.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentProvisioningInstallCursorRecord {
+    pub placement_index: u32,
+    pub member_index: u32,
+    pub installed_component_count: u32,
+    pub content_hash: [u8; 32],
+}
+
 /// Placement reservation proving one ID belongs to one exact operation and plan.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentProvisioningPlacementRecord {
@@ -167,7 +187,11 @@ impl RootComponentProvisioningPlacementRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "RootComponentProvisioningPlacementRecord";
 }
 
-impl_storable_bounded!(RootComponentProvisioningPlacementRecord, 128, false);
+impl_storable_bounded!(
+    RootComponentProvisioningPlacementRecord,
+    ROOT_COMPONENT_PROVISIONING_PLACEMENT_RECORD_MAX_BYTES,
+    false
+);
 
 /// Compact aggregate state for exact capacity and active-operation fencing.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

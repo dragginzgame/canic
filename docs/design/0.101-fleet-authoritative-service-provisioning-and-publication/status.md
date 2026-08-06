@@ -30,10 +30,18 @@ Date: 2026-08-06
   oldest-sufficient Ready prepaid Canister per canonical member through the
   ordinary Component creation journal and derives the exact protected
   `GroupMember` runtime context from the accepted plan. A second hash-bound
-  O(1) cursor reconciles response loss without another claim. Installation,
-  Registry/Directory publication and runtime activation remain unimplemented.
+  O(1) cursor reconciles response loss without another claim. After every
+  Canister is claimed, the root installs one canonical member at a time through
+  the ordinary Store-backed install journal, retaining and independently
+  observing its exact grouped context behind `Prepared`; a third hash-bound
+  cursor reconciles response loss. A focused PocketIC root proves the complete
+  accept/reserve/claim/install/replay path against one canonical Project Hub
+  group placement and confirms that installation publishes no Registry
+  partition. That journey also exposed and closed undersized operation-key and
+  placement-owner stable bounds. Registry/Directory publication and runtime
+  activation remain unimplemented.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.10` is released and `0.101.11` is open.
+- Implementation started: yes; `0.101.11` is released and `0.101.12` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -154,9 +162,9 @@ Fleet policy writer.
 - [ ] Derive each `GroupMember` context from the accepted root plan, verify it
   against the Component Group Directory and enforce its exact effective limits
   throughout root allocation and descendant lifecycle. Accepted-plan context
-  derivation and compiled-configuration validation are complete at prepaid-
-  Canister claim; installation, Directory confirmation and descendant-limit
-  enforcement remain.
+  derivation, compiled-configuration validation and exact retained-context
+  installation are complete; Component Group Directory confirmation and
+  descendant-limit enforcement remain.
 - [x] Derive one semantic protected configuration digest over groups,
   deployments and service targets.
 - [ ] Remove singleton-Spec and sole-root-admission service assumptions.
@@ -170,8 +178,9 @@ Fleet policy writer.
 - [x] Freeze one canonical root/group-placement/member plan shape.
 - [ ] Carry every member's canonical effective limits through plan hashing,
   root acceptance, protected runtime context and durable receipts. Plan
-  hashing, root acceptance and the acceptance receipt are complete; grouped
-  runtime-context derivation and effect enforcement remain.
+  hashing, root acceptance, the acceptance receipt and grouped runtime-context
+  installation are complete; Registry receipts and complete descendant-effect
+  enforcement remain.
 - [ ] Reserve monotonically increasing, never-reused placement ordinals before
   root calls.
 - [x] Bind every placement to one exact eligible Fleet-owned root while
@@ -188,8 +197,8 @@ Fleet policy writer.
 - [ ] Reuse canonical root-local `ComponentInstanceId` allocation,
   prepaid-Canister claim and platform lifecycle, failing closed when no Ready
   imported, recycled or automatically created asset exists. Root-local
-  identity allocation plus ordinary prepaid-Canister claim and exact retry are
-  complete; installation and later effect-bearing lifecycle phases remain.
+  identity allocation, ordinary prepaid-Canister claim and exact Store-backed
+  install recovery are complete; Registry and later lifecycle phases remain.
 - [ ] Reuse 0.100's bounded root-owned Cycles Ledger refill and permanent
   uncertain-expiry fence; keep raw management `create_canister` and Component
   paid fallback absent.
@@ -205,11 +214,11 @@ Fleet policy writer.
   Coordinator operation.
 - [ ] Bind every descendant to its exact immediate parent while retaining the
   owning top-level Component binding.
-- [ ] Keep new Components runtime `Prepared`.
+- [x] Keep new Components runtime `Prepared`.
 - [ ] Persist group-partitioned Component Registry evidence and one aggregate
   idempotent root receipt. The aggregate acceptance record, receipt and
-  hash-bound reservation/claim cursors are complete; provisioned bindings and
-  committed Registry evidence remain.
+  hash-bound reservation/claim/install cursors are complete; provisioned
+  bindings and committed Registry evidence remain.
 
 ## Slice 3 — Service Topology and Directories
 

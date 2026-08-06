@@ -24,6 +24,9 @@ RELEASE_CLEANUP="$ROOT/scripts/ci/cleanup-release-artifacts.sh"
 RELEASE_GATES="$ROOT/scripts/ci/run-release-gates.sh"
 RELEASE_PUSH="$ROOT/scripts/ci/push-release.sh"
 POCKET_IC_ALIGNMENT="$ROOT/scripts/ci/check-pocketic-version-alignment.sh"
+WORKSPACE_TEST_INVENTORY="$ROOT/scripts/ci/workspace-test-inventory.tsv"
+WORKSPACE_TEST_INVENTORY_GATE="$ROOT/scripts/ci/check-workspace-test-inventory.sh"
+WORKSPACE_TEST_RUNNER="$ROOT/scripts/ci/run-workspace-tests.sh"
 installers=(
     "$ROOT/scripts/ci/install-actionlint.sh"
     "$ROOT/scripts/ci/install-gitleaks.sh"
@@ -38,7 +41,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CLEANUP" "$RELEASE_GATES" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT"; do
+for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CLEANUP" "$RELEASE_GATES" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -80,6 +83,16 @@ rg --multiline 'test-bump:[^\n]*\\\n[[:space:]]+gitleaks-scan dependency-risk-ga
     fail "the patch-release gate does not require dependency risk validation"
 rg --multiline 'test-bump:[^\n]*\\\n[[:space:]]+gitleaks-scan dependency-risk-gate \\\n[[:space:]]+control-plane-feature-gate clippy test$' "$MAKEFILE" >/dev/null ||
     fail "the patch/minor release gate does not require the complete workspace test target"
+bash "$WORKSPACE_TEST_INVENTORY_GATE" >/dev/null ||
+    fail "the workspace integration-test inventory is incomplete or invalid"
+rg -F 'bash scripts/ci/check-workspace-test-inventory.sh' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the workspace test runner does not enforce its integration-test inventory"
+rg -F 'run_serial_pocketic_test' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the workspace test runner does not isolate serial PocketIC execution"
+CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" fast >/dev/null ||
+    fail "the fast workspace test plan cannot be resolved"
+CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" full >/dev/null ||
+    fail "the full workspace test plan cannot be resolved"
 for mode in patch minor major; do
     rg -F "bash scripts/ci/run-release-gates.sh $mode" "$MAKEFILE" >/dev/null ||
         fail "the $mode version target does not use release-gate cleanup"

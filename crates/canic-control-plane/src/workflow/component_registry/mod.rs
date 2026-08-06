@@ -2392,6 +2392,25 @@ pub(super) fn advance_group_member_creation(
     advance_creation(operation_id, allocation, plan)
 }
 
+/// Reuse the ordinary top-level Component install journal with plan-derived grouped context.
+pub(super) async fn advance_group_member_install(
+    root: &canic_core::ids::FleetSubnetRootBinding,
+    store: &RootStoreBootstrapResponse,
+    allocation: RootComponentAllocationView,
+    deployment: ProtectedComponentDeployment,
+) -> Result<RootComponentAllocationView, InternalError> {
+    let operation_id = allocation.operation_id;
+    let plan =
+        component_install_plan_with_deployment(root, store, &allocation, Some(deployment)).await?;
+    let _response = advance_install(operation_id, allocation, plan).await?;
+    ComponentRegistryOps::allocation(operation_id).ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "verified grouped Component allocation disappeared after installation",
+        )
+    })
+}
+
 /// Advance peer Component creation for its exact active requester caller.
 pub async fn create_peer_allocation(
     request: RootComponentCreationRequest,
@@ -3676,6 +3695,7 @@ struct ComponentInstallPlan {
     durable: RootComponentInstallPlan,
     source: ApprovedModuleSource,
     payload: CanisterInitPayload,
+    deployment: ProtectedComponentDeployment,
     canister: candid::Principal,
     expected_status_module_hash: [u8; 32],
 }
@@ -3694,6 +3714,15 @@ async fn component_install_plan(
     root: &canic_core::ids::FleetSubnetRootBinding,
     store: &RootStoreBootstrapResponse,
     allocation: &RootComponentAllocationView,
+) -> Result<ComponentInstallPlan, InternalError> {
+    component_install_plan_with_deployment(root, store, allocation, None).await
+}
+
+async fn component_install_plan_with_deployment(
+    root: &canic_core::ids::FleetSubnetRootBinding,
+    store: &RootStoreBootstrapResponse,
+    allocation: &RootComponentAllocationView,
+    deployment: Option<ProtectedComponentDeployment>,
 ) -> Result<ComponentInstallPlan, InternalError> {
     let (creation, canister) = allocation_creation_and_canister(allocation)?;
     let expected_creation = creation_plan(root.fleet_subnet_root, store, allocation)?;
@@ -3742,7 +3771,7 @@ async fn component_install_plan(
                 "derived Component install binding is invalid: {error}"
             ))
         })?;
-    let maximum_registry_bytes = topology
+    let spec_maximum_registry_bytes = topology
         .get(&allocation.component_spec)
         .ok_or_else(|| {
             InternalError::invariant(
@@ -3752,6 +3781,15 @@ async fn component_install_plan(
         })?
         .limits
         .maximum_registry_bytes;
+    let deployment =
+        deployment.unwrap_or_else(|| ProtectedComponentDeployment::UngroupedOrdinary {
+            binding: binding.clone(),
+        });
+    ConfigOps::validate_protected_component_deployment(&deployment, &binding)?;
+    let maximum_registry_bytes = match &deployment {
+        ProtectedComponentDeployment::UngroupedOrdinary { .. } => spec_maximum_registry_bytes,
+        ProtectedComponentDeployment::GroupMember { limits, .. } => limits.maximum_registry_bytes,
+    };
     let durable = RootComponentInstallPlan {
         raw_module_hash: artifact.raw_module_hash,
         chunk_hashes,
@@ -3761,9 +3799,7 @@ async fn component_install_plan(
     let payload = CanisterInitPayload {
         install_id: allocation.operation_id,
         release_build_id: allocation.release_set.release_build_id,
-        component_deployment: Box::new(ProtectedComponentDeployment::UngroupedOrdinary {
-            binding: binding.clone(),
-        }),
+        component_deployment: Box::new(deployment.clone()),
         authority: CanisterInitAuthority::Component {
             root: root.clone(),
             binding,
@@ -3774,6 +3810,7 @@ async fn component_install_plan(
         durable,
         source,
         payload,
+        deployment,
         canister,
         expected_status_module_hash: artifact.payload_hash,
     })
@@ -4273,6 +4310,46 @@ async fn verify_installed_component(plan: &ComponentInstallPlan) -> Result<(), I
     if observed != expected {
         return Err(InternalError::conflict(
             "installed Component retained binding differs from root install authority",
+        ));
+    }
+    let status = query_component_runtime_status(plan.canister).await?;
+    validate_prepared_install_status(
+        &status,
+        plan.payload.install_id,
+        &expected,
+        &plan.deployment,
+    )
+}
+
+fn validate_prepared_install_status(
+    status: &ComponentRuntimeStatusResponse,
+    operation_id: [u8; 32],
+    binding: &ManagedCanisterBinding,
+    deployment: &ProtectedComponentDeployment,
+) -> Result<(), InternalError> {
+    if status.operation_id != operation_id {
+        return Err(InternalError::conflict(
+            "installed Component retained a different installation operation",
+        ));
+    }
+    if &status.binding != binding {
+        return Err(InternalError::conflict(
+            "installed Component runtime status retained a different binding",
+        ));
+    }
+    if status.deployment.as_ref() != deployment {
+        return Err(InternalError::conflict(
+            "installed Component retained a different protected deployment context",
+        ));
+    }
+    let directory_is_empty = ComponentRuntimeDirectoryStatusIdentity::from_status(status)
+        == ComponentRuntimeDirectoryStatusIdentity::empty();
+    let runtime_is_prepared = status.phase == ComponentRuntimePhase::AwaitingDirectory
+        && directory_is_empty
+        && status.activation.is_none();
+    if !runtime_is_prepared {
+        return Err(InternalError::conflict(
+            "installed Component did not remain behind the empty AwaitingDirectory fence",
         ));
     }
     Ok(())
@@ -7597,6 +7674,58 @@ mod tests {
         };
 
         assert!(validate_allocation_caller(&allocation).is_err());
+    }
+
+    #[test]
+    fn grouped_install_status_requires_exact_context_and_empty_prepared_fence() {
+        let binding = component_binding();
+        let managed = ManagedCanisterBinding::Component(binding.clone());
+        let deployment = ProtectedComponentDeployment::GroupMember {
+            binding,
+            configuration_digest:
+                canic_core::ids::ComponentDeploymentConfigurationDigest::from_bytes([9; 32]),
+            group_placement: canic_core::ids::ComponentGroupPlacementId {
+                deployment: "cells".parse().expect("deployment ID"),
+                ordinal: 2,
+            },
+            component_group: "cell".parse().expect("Component Group ID"),
+            member_path: canic_core::ids::ComponentGroupMemberPath::try_from(vec![
+                "hub".parse().expect("member ID"),
+            ])
+            .expect("member path"),
+            purpose: canic_core::dto::component_deployment::ComponentDeploymentPurpose::Ordinary,
+            labels: Vec::new(),
+            limits: canic_core::dto::component_deployment::ComponentDeploymentLimits {
+                maximum_descendants: 10_000,
+                maximum_registry_bytes: 16_777_216,
+                spawn_grant_reductions: Vec::new(),
+            },
+        };
+        let operation_id = [10; 32];
+        let mut status = ComponentRuntimeStatusResponse {
+            operation_id,
+            binding: managed.clone(),
+            deployment: Box::new(deployment.clone()),
+            phase: ComponentRuntimePhase::AwaitingDirectory,
+            authority: None,
+            authority_hash: None,
+            direct_children_hash: None,
+            activation: None,
+        };
+
+        validate_prepared_install_status(&status, operation_id, &managed, &deployment)
+            .expect("exact grouped Prepared status");
+        *status.deployment = ProtectedComponentDeployment::UngroupedOrdinary {
+            binding: component_binding(),
+        };
+        assert!(
+            validate_prepared_install_status(&status, operation_id, &managed, &deployment).is_err()
+        );
+        *status.deployment = deployment.clone();
+        status.phase = ComponentRuntimePhase::DirectoryPrepared;
+        assert!(
+            validate_prepared_install_status(&status, operation_id, &managed, &deployment).is_err()
+        );
     }
 
     #[test]

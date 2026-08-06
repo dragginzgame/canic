@@ -1,11 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+INVENTORY="$ROOT/scripts/ci/workspace-test-inventory.tsv"
 MODE="${1:-full}"
 SUMMARY_LABELS=()
 SUMMARY_DURATIONS=()
 SUMMARY_KINDS=()
 HEAVY_BUILD_TARGETS_USED=0
+PLAN_ONLY="${CANIC_TEST_PLAN_ONLY:-0}"
+
+case "$MODE" in
+    fast | full) ;;
+    *)
+        echo "usage: $0 <fast|full>" >&2
+        exit 2
+        ;;
+esac
+
+cd "$ROOT"
+
+case "$PLAN_ONLY" in
+    0 | 1) ;;
+    *)
+        echo "CANIC_TEST_PLAN_ONLY must be 0 or 1" >&2
+        exit 2
+        ;;
+esac
 
 elapsed_seconds() {
     local started_at="$1"
@@ -26,12 +47,12 @@ print_summary() {
 
     echo
     echo "==> workspace timing summary"
-    printf '%-12s %-8s %s\n' "kind" "elapsed" "label"
-    printf '%-12s %-8s %s\n' "----" "-------" "-----"
+    printf '%-16s %-8s %s\n' "kind" "elapsed" "label"
+    printf '%-16s %-8s %s\n' "----" "-------" "-----"
 
     local i
     for ((i = 0; i < count; i++)); do
-        printf '%-12s %-8s %s\n' \
+        printf '%-16s %-8s %s\n' \
             "${SUMMARY_KINDS[$i]}" \
             "${SUMMARY_DURATIONS[$i]}" \
             "${SUMMARY_LABELS[$i]}"
@@ -39,15 +60,78 @@ print_summary() {
 }
 
 run_test() {
-    local label="$1"
-    shift
+    local execution="$1"
+    local label="$2"
+    shift 2
     echo "==> $label"
+    if [ "$PLAN_ONLY" -eq 1 ]; then
+        printf '==> plan: cargo test'
+        printf ' %q' "$@"
+        if [ "$execution" = "pocketic-serial" ]; then
+            printf ' -- --test-threads=1 --nocapture'
+        else
+            printf ' -- --nocapture'
+        fi
+        printf '\n'
+        record_summary "$label" "0s" "$execution"
+        return
+    fi
     local started_at="$SECONDS"
-    cargo test "$@" -- --test-threads=1 --nocapture
+    case "$execution" in
+        parallel)
+            cargo test "$@" -- --nocapture
+            ;;
+        pocketic-serial)
+            cargo test "$@" -- --test-threads=1 --nocapture
+            ;;
+        *)
+            echo "unknown test execution class: $execution" >&2
+            exit 2
+            ;;
+    esac
     local elapsed
     elapsed="$(elapsed_seconds "$started_at")"
     echo "==> $label done in $elapsed"
-    record_summary "$label" "$elapsed" "test"
+    record_summary "$label" "$elapsed" "$execution"
+}
+
+run_parallel_test() {
+    local label="$1"
+    shift
+    run_test parallel "$label" "$@"
+}
+
+run_serial_pocketic_test() {
+    local label="$1"
+    shift
+    run_test pocketic-serial "$label" "$@"
+}
+
+run_inventory_tests() {
+    local label="$1"
+    local package="$2"
+    local execution="$3"
+    local suite="$4"
+    local row_package row_target release_lane row_execution row_suite
+    local selected=0
+    local cargo_args=(-p "$package")
+
+    while IFS=$'\t' read -r row_package row_target release_lane row_execution row_suite; do
+        [ "$row_package" = "$package" ] || continue
+        [ "$row_execution" = "$execution" ] || continue
+        [ "$row_suite" = "$suite" ] || continue
+        if [ "$MODE" = "fast" ] && [ "$release_lane" != "fast" ]; then
+            continue
+        fi
+        cargo_args+=(--test "$row_target")
+        selected=$((selected + 1))
+    done < <(tail -n +2 "$INVENTORY")
+
+    [ "$selected" -gt 0 ] || {
+        echo "no $MODE inventory targets selected for $package/$execution/$suite" >&2
+        exit 2
+    }
+    run_test "$execution" "$label" "${cargo_args[@]}"
 }
 
 clear_pocketic_build_targets() {
@@ -101,61 +185,77 @@ cleanup_heavy_build_targets() {
     fi
 }
 
-run_pic_test() {
+run_pic_inventory_tests() {
     local label="$1"
-    shift
-    HEAVY_BUILD_TARGETS_USED=1
-    clear_pocketic_build_targets "before $label" 1
-    run_test "$label" "$@"
+    local suite="$2"
+    if [ "$PLAN_ONLY" -eq 0 ]; then
+        HEAVY_BUILD_TARGETS_USED=1
+        clear_pocketic_build_targets "before $label" 1
+    fi
+    run_inventory_tests "$label" canic-tests pocketic-serial "$suite"
 }
 
 trap cleanup_heavy_build_targets EXIT
 
-# Role-package contract tests inspect the Wasm graph with locked offline Cargo
-# metadata. Populate the complete locked graph once so results do not depend on
-# whether the restored Cargo cache contains every target and host/build package.
-bash scripts/ci/check-pocketic-version-alignment.sh
-echo "==> prefetching locked dependency graph for offline metadata checks"
-cargo fetch --locked
+bash scripts/ci/check-workspace-test-inventory.sh
 
-# Compile and run all unit/lib/bin tests together first.
+if [ "$PLAN_ONLY" -eq 0 ]; then
+    # Role-package contract tests inspect the Wasm graph with locked offline Cargo
+    # metadata. Populate the complete locked graph once so results do not depend on
+    # whether the restored Cargo cache contains every target and host/build package.
+    bash scripts/ci/check-pocketic-version-alignment.sh
+    echo "==> prefetching locked dependency graph for offline metadata checks"
+    cargo fetch --locked
+fi
+
+# Run ordinary unit/lib/bin tests with libtest's default parallelism. The
+# internal harness remains separate because its library contains PocketIC
+# journeys protected by process-local fixture serialization.
+run_parallel_test \
+    "workspace parallel lib/bin tests" \
+    --workspace \
+    --lib \
+    --bins \
+    --exclude canic-testing-internal
+
 if [[ "$MODE" == "fast" ]]; then
-    run_test "workspace lib/bin tests" --workspace --lib --bins --exclude canic-testing-internal
     # The internal crate's PocketIC journeys run in the full lane. Compile its
     # complete test harness here and retain its pure embedded-config unit proof.
-    run_test \
+    run_parallel_test \
         "canic-testing-internal embedded config" \
         -p canic-testing-internal \
         --lib \
         pic::lifecycle::tests::init_payload_component_spec_matches_embedded_canister_config
-else
-    run_test "workspace lib/bin tests" --workspace --lib --bins
-fi
-
-# Keep cheap release-surface contract tests in both the full and fast lanes so
-# version bumps and tagged installer drift fail before PocketIC-heavy work.
-run_test "canic protocol_surface" -p canic --test protocol_surface
-run_test "canic install_script_surface" -p canic --test install_script_surface
-run_test "canic reference_surface" -p canic --test reference_surface
-
-if [[ "$MODE" == "fast" ]]; then
+    run_inventory_tests "fast release-surface integration tests" canic parallel ordinary
     print_summary
     exit 0
 fi
 
-# Keep non-PocketIC integration tests explicit so the heavy PocketIC suites can
-# run in a deterministic order without sitting behind a shared runtime lock.
-run_test "canic control_plane_facade" -p canic --test control_plane_facade
-run_test "canic workspace_manifest" -p canic --test workspace_manifest
-run_test "canic-core trap_guard" -p canic-core --test trap_guard
+# Every checked-in top-level integration target is classified by the guarded
+# inventory. Parallel-safe targets run before expensive PocketIC work.
+run_inventory_tests "canic-cli integration tests" canic-cli parallel ordinary
+run_inventory_tests "canic-core integration tests" canic-core parallel ordinary
+run_inventory_tests \
+    "canic-testing-internal integration tests" \
+    canic-testing-internal \
+    parallel \
+    ordinary
+run_inventory_tests "canic integration tests" canic parallel ordinary
+
+# The internal library owns several PocketIC journeys in its adjacent unit
+# tests. Keep only this mixed harness serial.
+run_serial_pocketic_test \
+    "canic-testing-internal lib tests" \
+    -p canic-testing-internal \
+    --lib
 
 # PocketIC-backed integration suites.
 # Receipt, timer and lifecycle use the same internal-test build environment and
 # target directory, so clear once before the group and retain Cargo freshness
 # across the remaining binaries.
-run_pic_test "canic-tests pic_receipt_backed_intent" -p canic-tests --test pic_receipt_backed_intent
-run_test "canic-tests timer_authority" -p canic-tests --test timer_authority
-run_test "canic-tests lifecycle_boundary" -p canic-tests --test lifecycle_boundary
-run_pic_test "canic-tests instruction_audit" -p canic-tests --test instruction_audit
+run_pic_inventory_tests "canic-tests runtime PocketIC suite" runtime
+run_pic_inventory_tests "canic-tests blob-storage PocketIC suite" blob-storage
+run_pic_inventory_tests "canic-tests payload-limit PocketIC suite" payload-limits
+run_pic_inventory_tests "canic-tests instruction-audit PocketIC suite" instruction-audit
 
 print_summary
