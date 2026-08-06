@@ -9,13 +9,14 @@ use canic_core::{
         DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, cell::Cell, memory::VirtualMemory,
     },
     dto::{
+        component_deployment::{ComponentDeploymentLimits, ComponentDeploymentPurpose},
         component_provisioning::FleetSubnetRootProvisioningBatch,
         fleet_registry::FleetRegistryVersion,
     },
     eager_static,
     ids::{
-        ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
-        ComponentGroupPlacementId,
+        ComponentBinding, ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
+        ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentGroupSpecId, ComponentSpecId,
     },
     impl_storable_bounded,
     role_contract::allocation::memory::control_plane::{
@@ -148,6 +149,40 @@ pub enum RootComponentProvisioningStateRecordPhase {
         accepted_at_ns: u64,
         receipt_content_hash: [u8; 32],
     },
+    Provisioned {
+        placement_count: u32,
+        component_count: u32,
+        result: RootComponentProvisioningResultRecord,
+        accepted_at_ns: u64,
+        provisioned_at_ns: u64,
+        receipt_content_hash: [u8; 32],
+    },
+}
+
+/// Persisted Component occurrence in one terminal root provisioning result.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootProvisionedGroupMemberRecord {
+    pub member_path: ComponentGroupMemberPath,
+    pub component_spec: ComponentSpecId,
+    pub purpose: ComponentDeploymentPurpose,
+    pub limits: ComponentDeploymentLimits,
+    pub binding: ComponentBinding,
+    pub component_registry_revision: u64,
+    pub component_registry_content_hash: [u8; 32],
+}
+
+/// Persisted terminal result for one exact group placement.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootProvisionedGroupPlacementRecord {
+    pub group_placement: ComponentGroupPlacementId,
+    pub component_group: ComponentGroupSpecId,
+    pub members: Vec<RootProvisionedGroupMemberRecord>,
+}
+
+/// Persisted complete group-partitioned provisioning result.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentProvisioningResultRecord {
+    pub placements: Vec<RootProvisionedGroupPlacementRecord>,
 }
 
 /// Canonical O(1) cursor over the accepted placement/member sequence.

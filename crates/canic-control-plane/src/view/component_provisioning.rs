@@ -10,6 +10,7 @@ use canic_core::{
             ComponentDeploymentLabel, ComponentDeploymentLimits, ComponentDeploymentPurpose,
         },
         component_provisioning::FleetSubnetRootProvisioningBatch,
+        component_provisioning::{RootComponentProvisioningPhase, RootComponentProvisioningResult},
         fleet_registry::FleetRegistryVersion,
     },
     ids::{
@@ -86,6 +87,9 @@ pub struct RootComponentProvisioningView {
     pub claim_cursor: RootComponentProvisioningClaimCursorView,
     pub install_cursor: RootComponentProvisioningInstallCursorView,
     pub registry_cursor: RootComponentProvisioningRegistryCursorView,
+    pub phase: RootComponentProvisioningPhase,
+    pub result: Option<RootComponentProvisioningResult>,
     pub accepted_at_ns: u64,
+    pub provisioned_at_ns: Option<u64>,
     pub receipt_content_hash: [u8; 32],
 }

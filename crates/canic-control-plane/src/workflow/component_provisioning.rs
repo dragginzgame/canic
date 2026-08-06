@@ -117,7 +117,7 @@ pub fn status(
         .map(crate::ops::component_provisioning::status_response)
 }
 
-/// Advance one canonical reservation, claim, install or Component Registry commitment.
+/// Advance one canonical lifecycle step or freeze the complete provisioned result.
 pub async fn advance(
     caller: Principal,
     request: RootComponentProvisioningAdvanceRequest,
@@ -143,11 +143,14 @@ pub async fn advance(
         advance_member_claim(&authority, root, request, &current).await?
     } else if current.install_cursor.installed_component_count < current.component_count {
         Box::pin(advance_member_install(&authority, root, request, &current)).await?
-    } else {
+    } else if current.registry_cursor.registry_committed_component_count < current.component_count {
         Box::pin(advance_member_registry_commit(
             &authority, root, request, &current,
         ))
         .await?
+    } else {
+        let _registry = current_registry_for_progress(&authority, root, &current)?;
+        RootComponentProvisioningOps::finalize_provisioned(request, IcOps::now_nanos())?
     };
     Ok(crate::ops::component_provisioning::status_response(
         advanced,

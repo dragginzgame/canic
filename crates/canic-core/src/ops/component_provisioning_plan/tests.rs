@@ -436,7 +436,9 @@ fn exact_root_batch_validation_returns_bounded_capacity_and_artifact_facts() {
         claimed_component_count: 0,
         installed_component_count: 0,
         registry_committed_component_count: 0,
+        result: None,
         accepted_at_ns: 1,
+        provisioned_at_ns: None,
         receipt_content_hash: [15; 32],
     };
     assert_eq!(

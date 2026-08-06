@@ -38,14 +38,17 @@ Date: 2026-08-06
   commits one exact `Prepared` Component Registry partition at a time through
   the ordinary commitment authority; a fourth hash-bound cursor reconciles
   response loss only after the allocation receipt, grouped Registry-byte
-  ceiling and current Fleet Directory agree. A focused PocketIC root proves
-  the complete accept/reserve/claim/install/commit/replay path against one
-  canonical Project Hub group placement, including the absence of a partition
-  before commitment and the continued Directory/runtime fence afterward. The
-  durable aggregate `Provisioned` result, Directory publication and runtime
-  activation remain unimplemented.
+  ceiling and current Fleet Directory agree. After the fourth cursor becomes
+  terminal, one local-only step re-reads every exact allocation and partition
+  and freezes a group-partitioned `Provisioned` result containing each member's
+  path, Spec, purpose, limits, binding and Registry head under one
+  domain-separated terminal receipt. A focused PocketIC root proves the
+  complete accept/reserve/claim/install/commit/provision/replay path against one
+  canonical Project Hub group placement and the continued Directory/runtime
+  fence afterward. Directory publication and runtime activation remain
+  unimplemented.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.12` is released and `0.101.13` is open.
+- Implementation started: yes; `0.101.13` is released and `0.101.14` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -183,8 +186,8 @@ Fleet policy writer.
 - [ ] Carry every member's canonical effective limits through plan hashing,
   root acceptance, protected runtime context and durable receipts. Plan
   hashing, root acceptance, the acceptance receipt and grouped runtime-context
-  installation are complete; Registry receipts and complete descendant-effect
-  enforcement remain.
+  installation plus the terminal group-partitioned provisioning receipt are
+  complete; complete descendant-effect enforcement remains.
 - [ ] Reserve monotonically increasing, never-reused placement ordinals before
   root calls.
 - [x] Bind every placement to one exact eligible Fleet-owned root while
@@ -192,10 +195,9 @@ Fleet policy writer.
 - [x] Require every flattened Spec in that root's immutable admissions,
   Component Topology, active release set and Wasm Store Catalog before durable
   acceptance.
-- [ ] Enforce each root's immutable aggregate group-placement ceiling across
-  accepted and committed state. Permanent exact-retry-safe accepted
-  reservations now count once; later provisioning/publication transitions do
-  not yet exist.
+- [x] Enforce each root's immutable aggregate group-placement ceiling across
+  accepted and provisioned state. Permanent exact-retry-safe reservations count
+  once and the terminal transition preserves that same accounting authority.
 - [x] Extend the complete current root-limit contract without dropping
   Registry, Store, prepaid-pool or cycles-funding authority.
 - [ ] Reuse canonical root-local `ComponentInstanceId` allocation,
@@ -220,11 +222,8 @@ Fleet policy writer.
 - [ ] Bind every descendant to its exact immediate parent while retaining the
   owning top-level Component binding.
 - [x] Keep new Components runtime `Prepared`.
-- [ ] Persist group-partitioned Component Registry evidence and one aggregate
-  idempotent root receipt. The aggregate acceptance record, receipt and
-  hash-bound reservation/claim/install/Registry cursors plus committed
-  partitions are complete; the aggregate `Provisioned` binding/Registry result
-  remains.
+- [x] Persist group-partitioned Component Registry evidence and one aggregate
+  idempotent root receipt.
 
 ## Slice 3 — Service Topology and Directories
 

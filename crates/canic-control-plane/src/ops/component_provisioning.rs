@@ -8,14 +8,16 @@
 #[cfg(test)]
 mod tests;
 
+use crate::ops::component_registry::ComponentRegistryOps;
 use crate::{
     storage::stable::component_provisioning::{
         RootComponentProvisioningClaimCursorRecord, RootComponentProvisioningCommitError,
         RootComponentProvisioningInstallCursorRecord, RootComponentProvisioningPlacementKey,
         RootComponentProvisioningPlacementRecord, RootComponentProvisioningRecord,
         RootComponentProvisioningRegistryCursorRecord,
-        RootComponentProvisioningReservationCursorRecord,
+        RootComponentProvisioningReservationCursorRecord, RootComponentProvisioningResultRecord,
         RootComponentProvisioningStateRecordPhase, RootComponentProvisioningStore,
+        RootProvisionedGroupMemberRecord, RootProvisionedGroupPlacementRecord,
     },
     view::{
         component_provisioning::{
@@ -37,11 +39,14 @@ use canic_core::{
         ops::component_provisioning_plan::RootComponentProvisioningBatchValidation,
     },
     dto::{
-        component_deployment::ProtectedComponentDeployment,
+        component_deployment::{
+            ComponentDeploymentLimits, ComponentDeploymentPurpose, ProtectedComponentDeployment,
+        },
         component_provisioning::{
             RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningAdvanceRequest,
-            RootComponentProvisioningPhase, RootComponentProvisioningStatusRequest,
-            RootComponentProvisioningStatusResponse,
+            RootComponentProvisioningPhase, RootComponentProvisioningResult,
+            RootComponentProvisioningStatusRequest, RootComponentProvisioningStatusResponse,
+            RootProvisionedGroupMember, RootProvisionedGroupPlacement,
         },
         component_registry::{
             ComponentLifecycleStatus, ComponentProvisioningOrigin, ComponentRegistryHead,
@@ -62,6 +67,8 @@ const RESERVATION_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-res
 const CLAIM_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-claim-cursor/v1";
 const INSTALL_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-install-cursor/v1";
 const REGISTRY_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-registry-cursor/v1";
+const PROVISIONED_RECEIPT_DOMAIN: &[u8] =
+    b"canic/root-component-provisioning-provisioned-receipt/v1";
 
 #[derive(CandidType)]
 struct RootComponentProvisioningAcceptanceReceiptAuthority<'a> {
@@ -120,6 +127,18 @@ struct RootComponentProvisioningRegistryCursorAuthority {
     registry_committed_component_count: u32,
 }
 
+#[derive(CandidType)]
+struct RootComponentProvisioningProvisionedReceiptAuthority<'a> {
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    fleet_registry: &'a FleetRegistryVersion,
+    configuration_digest: ComponentDeploymentConfigurationDigest,
+    root: &'a canic_core::ids::FleetSubnetRootBinding,
+    result: &'a RootComponentProvisioningResult,
+    accepted_at_ns: u64,
+    provisioned_at_ns: u64,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct ProvisioningProgress {
     reserved: u32,
@@ -134,6 +153,12 @@ struct ProvisioningCursorRecords {
     claim: RootComponentProvisioningClaimCursorRecord,
     install: RootComponentProvisioningInstallCursorRecord,
     registry: RootComponentProvisioningRegistryCursorRecord,
+}
+
+struct ProvisionedMemberEvidence {
+    member: RootComponentProvisioningMemberView,
+    allocation: RootComponentAllocationView,
+    partition: ComponentRegistryPartitionView,
 }
 
 impl ProvisioningProgress {
@@ -206,6 +231,26 @@ struct RegistryCommittedMemberAuthority<'a> {
     directory_synchronized_at_ns: u64,
     reserved_descendants: u32,
     committed_descendants: u32,
+}
+
+#[derive(Eq, PartialEq)]
+struct ProvisionedPlacementAuthority<'a> {
+    group_placement: &'a ComponentGroupPlacementId,
+    component_group: &'a canic_core::ids::ComponentGroupSpecId,
+    member_count: usize,
+}
+
+#[derive(Eq, PartialEq)]
+struct ProvisionedResultMemberAuthority<'a> {
+    member_path: &'a ComponentGroupMemberPath,
+    component_spec: &'a ComponentSpecId,
+    purpose: &'a ComponentDeploymentPurpose,
+    limits: &'a ComponentDeploymentLimits,
+    binding_authority: &'a canic_core::ids::FleetRegistryAuthority,
+    binding_component_spec: &'a ComponentSpecId,
+    binding_spec_hash: [u8; 32],
+    binding_placement_subnet: canic_core::ids::SubnetId,
+    binding_root: Principal,
 }
 
 /// Stable root-local Component Group provisioning operations.
@@ -338,10 +383,15 @@ impl RootComponentProvisioningOps {
         let expected = ProvisioningProgress::from_request(request);
         let current = ProvisioningProgress::from_view(view);
         if expected == current {
-            return if current.registry_committed == view.component_count {
-                Ok(RootComponentProvisioningAdvanceDisposition::Complete)
-            } else {
-                Ok(RootComponentProvisioningAdvanceDisposition::Advance)
+            return match view.phase {
+                RootComponentProvisioningPhase::Accepted => {
+                    Ok(RootComponentProvisioningAdvanceDisposition::Advance)
+                }
+                RootComponentProvisioningPhase::Provisioned
+                | RootComponentProvisioningPhase::Published
+                | RootComponentProvisioningPhase::RuntimesActive => {
+                    Ok(RootComponentProvisioningAdvanceDisposition::Complete)
+                }
             };
         }
         if expected.replays_one_step_before(current, view.component_count) {
@@ -491,7 +541,13 @@ impl RootComponentProvisioningOps {
             accepted_at_ns,
             receipt_content_hash,
             ..
-        } = next_record.state;
+        } = next_record.state
+        else {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "root Component provisioning reservation reached a terminal aggregate phase",
+            ));
+        };
         next_record.state = RootComponentProvisioningStateRecordPhase::Accepted {
             placement_count,
             component_count,
@@ -539,7 +595,13 @@ impl RootComponentProvisioningOps {
             accepted_at_ns,
             receipt_content_hash,
             ..
-        } = next_record.state;
+        } = next_record.state
+        else {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "root Component provisioning claim reached a terminal aggregate phase",
+            ));
+        };
         next_record.state = RootComponentProvisioningStateRecordPhase::Accepted {
             placement_count,
             component_count,
@@ -586,7 +648,13 @@ impl RootComponentProvisioningOps {
             receipt_content_hash,
             registry_cursor,
             ..
-        } = next_record.state;
+        } = next_record.state
+        else {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "root Component provisioning install reached a terminal aggregate phase",
+            ));
+        };
         next_record.state = RootComponentProvisioningStateRecordPhase::Accepted {
             placement_count,
             component_count,
@@ -634,7 +702,13 @@ impl RootComponentProvisioningOps {
             accepted_at_ns,
             receipt_content_hash,
             ..
-        } = next_record.state;
+        } = next_record.state
+        else {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "root Component provisioning Registry step reached a terminal aggregate phase",
+            ));
+        };
         next_record.state = RootComponentProvisioningStateRecordPhase::Accepted {
             placement_count,
             component_count,
@@ -648,6 +722,20 @@ impl RootComponentProvisioningOps {
         RootComponentProvisioningStore::replace_operation(&current_record, next_record.clone())
             .map_err(map_commit_error)?;
         validated_record(next_record)
+    }
+
+    /// Freeze one complete group-partitioned result after every Registry commit.
+    pub(crate) fn finalize_provisioned(
+        request: RootComponentProvisioningAdvanceRequest,
+        provisioned_at_ns: u64,
+    ) -> Result<RootComponentProvisioningView, InternalError> {
+        let current = Self::status(RootComponentProvisioningStatusRequest {
+            operation_id: request.operation_id,
+            plan_hash: request.plan_hash,
+        })?;
+        let evidence = provisioned_member_evidence(&current)?;
+        let result = provisioned_result_record(&current, &evidence)?;
+        commit_provisioned_result(request, provisioned_at_ns, result)
     }
 
     /// Number of distinct accepted or committed placements occupying the root ceiling.
@@ -800,23 +888,25 @@ fn validated_aggregate_state() -> Result<
     Ok(state)
 }
 
+struct ValidatedProvisioningState {
+    phase: RootComponentProvisioningPhase,
+    placement_count: u32,
+    component_count: u32,
+    cursors: ProvisioningCursorRecords,
+    result: Option<RootComponentProvisioningResult>,
+    accepted_at_ns: u64,
+    provisioned_at_ns: Option<u64>,
+    receipt_content_hash: [u8; 32],
+}
+
 fn validated_record(
     record: RootComponentProvisioningRecord,
 ) -> Result<RootComponentProvisioningView, InternalError> {
     validate_operation_and_plan_hash(record.operation_id, record.plan_hash)?;
-    let RootComponentProvisioningStateRecordPhase::Accepted {
-        placement_count,
-        component_count,
-        reservation_cursor,
-        claim_cursor,
-        install_cursor,
-        registry_cursor,
-        accepted_at_ns,
-        receipt_content_hash,
-    } = record.state;
+    let state = validated_record_state(&record)?;
     let validation = RootComponentProvisioningBatchValidation {
-        placement_count,
-        component_count,
+        placement_count: state.placement_count,
+        component_count: state.component_count,
         component_spec_counts: BTreeMap::default(),
         component_roles: BTreeSet::default(),
     };
@@ -827,33 +917,20 @@ fn validated_record(
         plan_hash: record.plan_hash,
         batch: record.batch.clone(),
     };
-    validate_acceptance_identity(&request, &validation, accepted_at_ns)?;
-    let expected_hash =
-        acceptance_receipt_hash(&request, placement_count, component_count, accepted_at_ns)?;
-    if receipt_content_hash != expected_hash {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component provisioning acceptance receipt hash is invalid",
-        ));
-    }
+    validate_acceptance_identity(&request, &validation, state.accepted_at_ns)?;
     validate_record_cursors(
         record.operation_id,
         record.plan_hash,
         &record.batch,
-        component_count,
-        ProvisioningCursorRecords {
-            reservation: reservation_cursor,
-            claim: claim_cursor,
-            install: install_cursor,
-            registry: registry_cursor,
-        },
+        state.component_count,
+        state.cursors,
     )?;
     validate_record_placement_index(record.operation_id, record.plan_hash, &record.batch)?;
-    let state = validated_aggregate_state()?;
-    if state.active_operation_id != Some(record.operation_id) {
+    let aggregate = validated_aggregate_state()?;
+    if aggregate.active_operation_id != Some(record.operation_id) {
         return Err(InternalError::invariant(
             InternalErrorOrigin::Storage,
-            "accepted root Component provisioning aggregate state is inconsistent",
+            "root Component provisioning aggregate state is inconsistent",
         ));
     }
     Ok(RootComponentProvisioningView {
@@ -862,31 +939,519 @@ fn validated_record(
         fleet_registry: record.fleet_registry,
         configuration_digest: record.configuration_digest,
         batch: record.batch,
-        placement_count,
-        component_count,
+        placement_count: state.placement_count,
+        component_count: state.component_count,
         reservation_cursor: RootComponentProvisioningReservationCursorView {
-            placement_index: reservation_cursor.placement_index,
-            member_index: reservation_cursor.member_index,
-            reserved_component_count: reservation_cursor.reserved_component_count,
+            placement_index: state.cursors.reservation.placement_index,
+            member_index: state.cursors.reservation.member_index,
+            reserved_component_count: state.cursors.reservation.reserved_component_count,
         },
         claim_cursor: RootComponentProvisioningClaimCursorView {
-            placement_index: claim_cursor.placement_index,
-            member_index: claim_cursor.member_index,
-            claimed_component_count: claim_cursor.claimed_component_count,
+            placement_index: state.cursors.claim.placement_index,
+            member_index: state.cursors.claim.member_index,
+            claimed_component_count: state.cursors.claim.claimed_component_count,
         },
         install_cursor: RootComponentProvisioningInstallCursorView {
-            placement_index: install_cursor.placement_index,
-            member_index: install_cursor.member_index,
-            installed_component_count: install_cursor.installed_component_count,
+            placement_index: state.cursors.install.placement_index,
+            member_index: state.cursors.install.member_index,
+            installed_component_count: state.cursors.install.installed_component_count,
         },
         registry_cursor: RootComponentProvisioningRegistryCursorView {
-            placement_index: registry_cursor.placement_index,
-            member_index: registry_cursor.member_index,
-            registry_committed_component_count: registry_cursor.registry_committed_component_count,
+            placement_index: state.cursors.registry.placement_index,
+            member_index: state.cursors.registry.member_index,
+            registry_committed_component_count: state
+                .cursors
+                .registry
+                .registry_committed_component_count,
         },
+        phase: state.phase,
+        result: state.result,
+        accepted_at_ns: state.accepted_at_ns,
+        provisioned_at_ns: state.provisioned_at_ns,
+        receipt_content_hash: state.receipt_content_hash,
+    })
+}
+
+fn validated_record_state(
+    record: &RootComponentProvisioningRecord,
+) -> Result<ValidatedProvisioningState, InternalError> {
+    match record.state.clone() {
+        RootComponentProvisioningStateRecordPhase::Accepted {
+            placement_count,
+            component_count,
+            reservation_cursor,
+            claim_cursor,
+            install_cursor,
+            registry_cursor,
+            accepted_at_ns,
+            receipt_content_hash,
+        } => {
+            let request = acceptance_request(record);
+            let expected_hash = acceptance_receipt_hash(
+                &request,
+                placement_count,
+                component_count,
+                accepted_at_ns,
+            )?;
+            if receipt_content_hash != expected_hash {
+                return Err(InternalError::invariant(
+                    InternalErrorOrigin::Storage,
+                    "root Component provisioning acceptance receipt hash is invalid",
+                ));
+            }
+            Ok(ValidatedProvisioningState {
+                phase: RootComponentProvisioningPhase::Accepted,
+                placement_count,
+                component_count,
+                cursors: ProvisioningCursorRecords {
+                    reservation: reservation_cursor,
+                    claim: claim_cursor,
+                    install: install_cursor,
+                    registry: registry_cursor,
+                },
+                result: None,
+                accepted_at_ns,
+                provisioned_at_ns: None,
+                receipt_content_hash,
+            })
+        }
+        RootComponentProvisioningStateRecordPhase::Provisioned {
+            placement_count,
+            component_count,
+            result,
+            accepted_at_ns,
+            provisioned_at_ns,
+            receipt_content_hash,
+        } => validated_provisioned_state(
+            record,
+            placement_count,
+            component_count,
+            result,
+            accepted_at_ns,
+            provisioned_at_ns,
+            receipt_content_hash,
+        ),
+    }
+}
+
+fn acceptance_request(
+    record: &RootComponentProvisioningRecord,
+) -> RootComponentProvisioningAcceptanceRequest {
+    RootComponentProvisioningAcceptanceRequest {
+        fleet_registry: record.fleet_registry.clone(),
+        configuration_digest: record.configuration_digest,
+        operation_id: record.operation_id,
+        plan_hash: record.plan_hash,
+        batch: record.batch.clone(),
+    }
+}
+
+fn validated_provisioned_state(
+    record: &RootComponentProvisioningRecord,
+    placement_count: u32,
+    component_count: u32,
+    result_record: RootComponentProvisioningResultRecord,
+    accepted_at_ns: u64,
+    provisioned_at_ns: u64,
+    receipt_content_hash: [u8; 32],
+) -> Result<ValidatedProvisioningState, InternalError> {
+    if provisioned_at_ns == 0 || provisioned_at_ns < accepted_at_ns {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component provisioning completion time is invalid",
+        ));
+    }
+    let result = provisioning_result_from_record(&result_record);
+    validate_provisioned_result(&record.batch, component_count, &result)?;
+    let expected_hash =
+        provisioned_receipt_hash(record, &result, accepted_at_ns, provisioned_at_ns)?;
+    if receipt_content_hash != expected_hash {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component provisioning terminal receipt hash is invalid",
+        ));
+    }
+    let cursors = terminal_cursor_records(record, placement_count, component_count)?;
+    Ok(ValidatedProvisioningState {
+        phase: RootComponentProvisioningPhase::Provisioned,
+        placement_count,
+        component_count,
+        cursors,
+        result: Some(result),
         accepted_at_ns,
+        provisioned_at_ns: Some(provisioned_at_ns),
         receipt_content_hash,
     })
+}
+
+fn terminal_cursor_records(
+    record: &RootComponentProvisioningRecord,
+    placement_count: u32,
+    component_count: u32,
+) -> Result<ProvisioningCursorRecords, InternalError> {
+    Ok(ProvisioningCursorRecords {
+        reservation: reservation_cursor_record(
+            record.operation_id,
+            record.plan_hash,
+            placement_count,
+            0,
+            component_count,
+        )?,
+        claim: claim_cursor_record(
+            record.operation_id,
+            record.plan_hash,
+            placement_count,
+            0,
+            component_count,
+        )?,
+        install: install_cursor_record(
+            record.operation_id,
+            record.plan_hash,
+            placement_count,
+            0,
+            component_count,
+        )?,
+        registry: registry_cursor_record(
+            record.operation_id,
+            record.plan_hash,
+            placement_count,
+            0,
+            component_count,
+        )?,
+    })
+}
+
+fn provisioned_member_evidence(
+    view: &RootComponentProvisioningView,
+) -> Result<Vec<ProvisionedMemberEvidence>, InternalError> {
+    if view.phase != RootComponentProvisioningPhase::Accepted
+        || view.registry_cursor.registry_committed_component_count != view.component_count
+    {
+        return Err(InternalError::conflict(
+            "root Component provisioning result requires every Registry partition to be committed",
+        ));
+    }
+    let capacity = usize::try_from(view.component_count).map_err(|_| {
+        InternalError::resource_exhausted(
+            "root Component provisioning result count exceeds the platform collection range",
+        )
+    })?;
+    let mut evidence = Vec::with_capacity(capacity);
+    for (placement_index, placement) in view.batch.placements.iter().enumerate() {
+        for member_index in 0..placement.entries.len() {
+            let member = member_at_cursor(
+                view,
+                u32::try_from(placement_index).map_err(|_| {
+                    InternalError::resource_exhausted(
+                        "root Component provisioning result placement index exceeds u32",
+                    )
+                })?,
+                u32::try_from(member_index).map_err(|_| {
+                    InternalError::resource_exhausted(
+                        "root Component provisioning result member index exceeds u32",
+                    )
+                })?,
+            )?;
+            let allocation = ComponentRegistryOps::allocation(member.member_operation_id)
+                .ok_or_else(|| {
+                    InternalError::invariant(
+                        InternalErrorOrigin::Storage,
+                        "provisioned Component Group member has no allocation receipt",
+                    )
+                })?;
+            let partition =
+                ComponentRegistryOps::partition(allocation.component)?.ok_or_else(|| {
+                    InternalError::invariant(
+                        InternalErrorOrigin::Storage,
+                        "provisioned Component Group member has no Registry partition",
+                    )
+                })?;
+            validate_registry_committed_member(view, &member, &allocation, &partition)?;
+            evidence.push(ProvisionedMemberEvidence {
+                member,
+                allocation,
+                partition,
+            });
+        }
+    }
+    Ok(evidence)
+}
+
+fn provisioned_result_record(
+    view: &RootComponentProvisioningView,
+    evidence: &[ProvisionedMemberEvidence],
+) -> Result<RootComponentProvisioningResultRecord, InternalError> {
+    if evidence.len()
+        != usize::try_from(view.component_count).map_err(|_| {
+            InternalError::resource_exhausted(
+                "root Component provisioning result count exceeds the platform collection range",
+            )
+        })?
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Ops,
+            "root Component provisioning evidence does not cover the complete batch",
+        ));
+    }
+    let mut evidence = evidence.iter();
+    let mut placements = Vec::with_capacity(view.batch.placements.len());
+    for placement in &view.batch.placements {
+        let mut members = Vec::with_capacity(placement.entries.len());
+        for entry in &placement.entries {
+            let observed = evidence.next().ok_or_else(|| {
+                InternalError::invariant(
+                    InternalErrorOrigin::Ops,
+                    "root Component provisioning evidence ended before the accepted batch",
+                )
+            })?;
+            let expected_member = (&placement.group_placement, &entry.member_path);
+            let observed_member = (
+                &observed.member.group_placement,
+                &observed.member.member_path,
+            );
+            if observed_member != expected_member {
+                return Err(InternalError::conflict(
+                    "root Component provisioning evidence is not in canonical member order",
+                ));
+            }
+            validate_registry_committed_member(
+                view,
+                &observed.member,
+                &observed.allocation,
+                &observed.partition,
+            )?;
+            members.push(RootProvisionedGroupMemberRecord {
+                member_path: entry.member_path.clone(),
+                component_spec: entry.component_spec.clone(),
+                purpose: entry.purpose.clone(),
+                limits: entry.limits.clone(),
+                binding: observed.partition.binding.clone(),
+                component_registry_revision: observed.partition.revision,
+                component_registry_content_hash: observed.partition.content_hash,
+            });
+        }
+        placements.push(RootProvisionedGroupPlacementRecord {
+            group_placement: placement.group_placement.clone(),
+            component_group: placement.component_group.clone(),
+            members,
+        });
+    }
+    if evidence.next().is_some() {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Ops,
+            "root Component provisioning evidence exceeds the accepted batch",
+        ));
+    }
+    let result = RootComponentProvisioningResultRecord { placements };
+    validate_provisioned_result(
+        &view.batch,
+        view.component_count,
+        &provisioning_result_from_record(&result),
+    )?;
+    Ok(result)
+}
+
+fn commit_provisioned_result(
+    request: RootComponentProvisioningAdvanceRequest,
+    provisioned_at_ns: u64,
+    result: RootComponentProvisioningResultRecord,
+) -> Result<RootComponentProvisioningView, InternalError> {
+    let current_record = RootComponentProvisioningStore::operation(request.operation_id)
+        .ok_or_else(|| {
+            InternalError::unavailable("root Component provisioning operation is not accepted")
+        })?;
+    let current = validated_record(current_record.clone())?;
+    if RootComponentProvisioningOps::advance_disposition(request, &current)?
+        != RootComponentProvisioningAdvanceDisposition::Advance
+        || current.phase != RootComponentProvisioningPhase::Accepted
+        || current.registry_cursor.registry_committed_component_count != current.component_count
+    {
+        return Err(InternalError::conflict(
+            "root Component provisioning result is already committed or not ready",
+        ));
+    }
+    if provisioned_at_ns == 0 || provisioned_at_ns < current.accepted_at_ns {
+        return Err(InternalError::invalid_input(
+            "root Component provisioning completion time must follow acceptance",
+        ));
+    }
+    let result_view = provisioning_result_from_record(&result);
+    validate_provisioned_result(&current.batch, current.component_count, &result_view)?;
+    let receipt_content_hash = provisioned_receipt_hash(
+        &current_record,
+        &result_view,
+        current.accepted_at_ns,
+        provisioned_at_ns,
+    )?;
+    let next = RootComponentProvisioningRecord {
+        state: RootComponentProvisioningStateRecordPhase::Provisioned {
+            placement_count: current.placement_count,
+            component_count: current.component_count,
+            result,
+            accepted_at_ns: current.accepted_at_ns,
+            provisioned_at_ns,
+            receipt_content_hash,
+        },
+        ..current_record.clone()
+    };
+    RootComponentProvisioningStore::replace_operation(&current_record, next.clone())
+        .map_err(map_commit_error)?;
+    validated_record(next)
+}
+
+fn provisioning_result_from_record(
+    result: &RootComponentProvisioningResultRecord,
+) -> RootComponentProvisioningResult {
+    RootComponentProvisioningResult {
+        placements: result
+            .placements
+            .iter()
+            .map(|placement| RootProvisionedGroupPlacement {
+                group_placement: placement.group_placement.clone(),
+                component_group: placement.component_group.clone(),
+                members: placement
+                    .members
+                    .iter()
+                    .map(|member| RootProvisionedGroupMember {
+                        member_path: member.member_path.clone(),
+                        component_spec: member.component_spec.clone(),
+                        purpose: member.purpose.clone(),
+                        limits: member.limits.clone(),
+                        binding: member.binding.clone(),
+                        component_registry_revision: member.component_registry_revision,
+                        component_registry_content_hash: member.component_registry_content_hash,
+                    })
+                    .collect(),
+            })
+            .collect(),
+    }
+}
+
+fn validate_provisioned_result(
+    batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
+    component_count: u32,
+    result: &RootComponentProvisioningResult,
+) -> Result<(), InternalError> {
+    if result.placements.len() != batch.placements.len() {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "provisioned result does not cover the exact placement batch",
+        ));
+    }
+    let mut components = BTreeSet::new();
+    let mut principals = BTreeSet::new();
+    let mut observed_count = 0_u32;
+    for (planned, provisioned) in batch.placements.iter().zip(&result.placements) {
+        let expected = ProvisionedPlacementAuthority {
+            group_placement: &planned.group_placement,
+            component_group: &planned.component_group,
+            member_count: planned.entries.len(),
+        };
+        let actual = ProvisionedPlacementAuthority {
+            group_placement: &provisioned.group_placement,
+            component_group: &provisioned.component_group,
+            member_count: provisioned.members.len(),
+        };
+        if actual != expected {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "provisioned result placement differs from the accepted batch",
+            ));
+        }
+        for (entry, member) in planned.entries.iter().zip(&provisioned.members) {
+            validate_provisioned_result_member(batch, entry, member)?;
+            if !components.insert(member.binding.component)
+                || !principals.insert(member.binding.canister_id)
+            {
+                return Err(InternalError::invariant(
+                    InternalErrorOrigin::Storage,
+                    "provisioned result reuses a Component identity or Canister principal",
+                ));
+            }
+            observed_count = observed_count.checked_add(1).ok_or_else(|| {
+                InternalError::resource_exhausted("provisioned result Component count overflowed")
+            })?;
+        }
+    }
+    if observed_count != component_count {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "provisioned result Component count differs from the accepted batch",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_provisioned_result_member(
+    batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
+    entry: &canic_core::dto::component_provisioning::ComponentGroupPlanEntry,
+    member: &RootProvisionedGroupMember,
+) -> Result<(), InternalError> {
+    let binding = &member.binding;
+    let expected = ProvisionedResultMemberAuthority {
+        member_path: &entry.member_path,
+        component_spec: &entry.component_spec,
+        purpose: &entry.purpose,
+        limits: &entry.limits,
+        binding_authority: &batch.root.authority,
+        binding_component_spec: &entry.component_spec,
+        binding_spec_hash: entry.spec_hash,
+        binding_placement_subnet: batch.root.placement_subnet,
+        binding_root: batch.root.fleet_subnet_root,
+    };
+    let actual = ProvisionedResultMemberAuthority {
+        member_path: &member.member_path,
+        component_spec: &member.component_spec,
+        purpose: &member.purpose,
+        limits: &member.limits,
+        binding_authority: &binding.authority,
+        binding_component_spec: &binding.component_spec,
+        binding_spec_hash: binding.spec_hash,
+        binding_placement_subnet: binding.placement_subnet,
+        binding_root: binding.fleet_subnet_root,
+    };
+    let identity_is_qualified = provisioned_result_identity_is_qualified(member);
+    if actual != expected || !identity_is_qualified {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "provisioned result member differs from accepted or committed authority",
+        ));
+    }
+    Ok(())
+}
+
+fn provisioned_result_identity_is_qualified(member: &RootProvisionedGroupMember) -> bool {
+    if member.binding.component.as_bytes() == &[0; 32] {
+        return false;
+    }
+    if member.binding.canister_id == Principal::anonymous() {
+        return false;
+    }
+    if member.component_registry_revision == 0 {
+        return false;
+    }
+    member.component_registry_content_hash != [0; 32]
+}
+
+fn provisioned_receipt_hash(
+    record: &RootComponentProvisioningRecord,
+    result: &RootComponentProvisioningResult,
+    accepted_at_ns: u64,
+    provisioned_at_ns: u64,
+) -> Result<[u8; 32], InternalError> {
+    domain_separated_candid_hash(
+        PROVISIONED_RECEIPT_DOMAIN,
+        RootComponentProvisioningProvisionedReceiptAuthority {
+            operation_id: record.operation_id,
+            plan_hash: record.plan_hash,
+            fleet_registry: &record.fleet_registry,
+            configuration_digest: record.configuration_digest,
+            root: &record.batch.root,
+            result,
+            accepted_at_ns,
+            provisioned_at_ns,
+        },
+    )
 }
 
 fn validate_record_cursors(
@@ -1679,7 +2244,7 @@ fn map_commit_error(error: RootComponentProvisioningCommitError) -> InternalErro
     }
 }
 
-/// Convert one validated durable view to its compact boundary receipt.
+/// Convert one validated durable view to its exact boundary receipt.
 pub fn status_response(
     view: RootComponentProvisioningView,
 ) -> RootComponentProvisioningStatusResponse {
@@ -1689,14 +2254,16 @@ pub fn status_response(
         fleet_registry: view.fleet_registry,
         configuration_digest: view.configuration_digest,
         fleet_subnet_root: view.batch.root.fleet_subnet_root,
-        phase: RootComponentProvisioningPhase::Accepted,
+        phase: view.phase,
         placement_count: view.placement_count,
         component_count: view.component_count,
         reserved_component_count: view.reservation_cursor.reserved_component_count,
         claimed_component_count: view.claim_cursor.claimed_component_count,
         installed_component_count: view.install_cursor.installed_component_count,
         registry_committed_component_count: view.registry_cursor.registry_committed_component_count,
+        result: view.result,
         accepted_at_ns: view.accepted_at_ns,
+        provisioned_at_ns: view.provisioned_at_ns,
         receipt_content_hash: view.receipt_content_hash,
     }
 }

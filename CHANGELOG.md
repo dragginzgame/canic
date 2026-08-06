@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.14` freezes every Registry-committed root batch as one exact,
+  group-partitioned `Provisioned` result with durable terminal replay while
+  keeping publication and activation fenced, and advances shared test-Wasm
+  target maintenance to the batch-scoped `ic-testkit` 0.7.6 contract.
+
 - `0.101.13` commits installed grouped Components into their exact prepared
   Registry partitions through a fourth replay-safe cursor while keeping
   Directories and runtimes fenced, and folds bounded shared-target maintenance

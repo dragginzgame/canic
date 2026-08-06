@@ -705,7 +705,7 @@ mod tests {
     }
 
     #[test]
-    fn prepared_root_commits_one_exact_group_member_without_publishing_directories() {
+    fn prepared_root_freezes_one_exact_provisioned_group_result_without_publishing_directories() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let fixture = setup_prepared_grouped_provisioning();
         let accepted: Result<RootComponentProvisioningStatusResponse, Error> = fixture
@@ -752,9 +752,46 @@ mod tests {
         let registry_request = advance_request(&installed);
         let registered = advance_grouped_provisioning(&fixture, registry_request);
         assert_grouped_provisioning_progress(&registered, 1, 1, 1, 1);
-        assert_grouped_member_registry_commit(&fixture, &claim);
+        let partition = assert_grouped_member_registry_commit(&fixture, &claim);
         let registry_replay = advance_grouped_provisioning(&fixture, registry_request);
         assert_eq!(registry_replay, registered);
+
+        let provision_request = advance_request(&registered);
+        let provisioned = advance_grouped_provisioning(&fixture, provision_request);
+        assert_eq!(
+            provisioned.phase,
+            RootComponentProvisioningPhase::Provisioned
+        );
+        assert!(provisioned.provisioned_at_ns.is_some());
+        let result = provisioned
+            .result
+            .as_ref()
+            .expect("provisioned root result");
+        assert_eq!(result.placements.len(), 1);
+        let planned_placement = &fixture.request.batch.placements[0];
+        let placement = &result.placements[0];
+        assert_eq!(placement.group_placement, planned_placement.group_placement);
+        assert_eq!(placement.component_group, planned_placement.component_group);
+        assert_eq!(placement.members.len(), 1);
+        let planned_member = &planned_placement.entries[0];
+        let member = &placement.members[0];
+        assert_eq!(member.member_path, planned_member.member_path);
+        assert_eq!(member.component_spec, planned_member.component_spec);
+        assert_eq!(member.purpose, planned_member.purpose);
+        assert_eq!(member.limits, planned_member.limits);
+        assert_eq!(member.binding.component, claim.component);
+        assert_eq!(member.binding.canister_id, canister_id);
+        assert_eq!(member.component_registry_revision, partition.head.revision);
+        assert_eq!(
+            member.component_registry_content_hash,
+            partition.head.content_hash
+        );
+        assert_ne!(
+            provisioned.receipt_content_hash,
+            registered.receipt_content_hash
+        );
+        let provision_replay = advance_grouped_provisioning(&fixture, provision_request);
+        assert_eq!(provision_replay, provisioned);
         let observed: Result<RootComponentProvisioningStatusResponse, Error> = fixture
             .pic
             .query_candid_as(
@@ -769,7 +806,7 @@ mod tests {
             .expect("query grouped provisioning status transport");
         assert_eq!(
             observed.expect("query grouped provisioning status"),
-            registered
+            provisioned
         );
         assert_prepared(&fixture.pic, fixture.root.root_id);
     }
@@ -2798,7 +2835,7 @@ mod tests {
     fn assert_grouped_member_registry_commit(
         fixture: &PreparedGroupedProvisioningFixture,
         claim: &CanisterPoolClaim,
-    ) {
+    ) -> ComponentRegistryPartitionResponse {
         let allocation = grouped_allocation_status(fixture, claim.operation_id);
         assert_eq!(allocation.phase, RootComponentAllocationPhase::Committed);
         let installation = allocation
@@ -2841,6 +2878,7 @@ mod tests {
         assert_eq!(runtime.phase, ComponentRuntimePhase::AwaitingDirectory);
         assert_eq!(runtime.authority, None);
         assert_eq!(runtime.activation, None);
+        partition
     }
 
     fn acquire_active_component_registry() -> ActiveComponentRegistryFixture {
