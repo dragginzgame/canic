@@ -66,6 +66,10 @@ pub const CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR: &str = "canic_fleet_registry_act
 pub const CANIC_FLEET_REGISTRY_MIRROR_STATUS: &str = "canic_fleet_registry_mirror_status";
 pub const CANIC_ROOT_COMPONENT_REGISTRY_PREPARE: &str = "canic_root_component_registry_prepare";
 pub const CANIC_ROOT_COMPONENT_REGISTRY_STATUS: &str = "canic_root_component_registry_status";
+pub const CANIC_ROOT_COMPONENT_PROVISIONING_ACCEPT: &str =
+    "canic_root_component_provisioning_accept";
+pub const CANIC_ROOT_COMPONENT_PROVISIONING_STATUS: &str =
+    "canic_root_component_provisioning_status";
 pub const CANIC_ROOT_COMPONENT_ALLOCATE: &str = "canic_root_component_allocate";
 pub const CANIC_ROOT_COMPONENT_ALLOCATION_STATUS: &str = "canic_root_component_allocation_status";
 pub const CANIC_ROOT_PEER_COMPONENT_ALLOCATE: &str = "canic_root_peer_component_allocate";

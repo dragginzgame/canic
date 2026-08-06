@@ -168,19 +168,7 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path, config_p
                 .expect("commit bootstrap Store artifact cache")
         }
     };
-    let timings = outcome.record().timings();
-    eprintln!(
-        "[pic_fleet_registry] {} bootstrap Store artifact in {:?} (inputs {:?}, build {:?}, materialize {:?})",
-        if outcome.is_reused() {
-            "reused"
-        } else {
-            "built"
-        },
-        timings.total(),
-        timings.input_capture(),
-        timings.caller_build(),
-        timings.materialization(),
-    );
+    eprintln!("[pic_fleet_registry] bootstrap Store artifact {outcome}");
     report_artifact_cache_maintenance("bootstrap-wasm-store", outcome.record().maintenance());
 }
 

@@ -7,7 +7,9 @@ use crate::{
         component_provisioning::{
             ComponentGroupPlacementPlan, ComponentGroupPlanEntry,
             FleetComponentProvisioningOperation, FleetComponentProvisioningPlan,
-            FleetSubnetRootProvisioningBatch,
+            FleetSubnetRootProvisioningBatch, RootComponentProvisioningAcceptanceRequest,
+            RootComponentProvisioningPhase, RootComponentProvisioningStatusRequest,
+            RootComponentProvisioningStatusResponse,
         },
         fleet_registry::{FleetRegistry, FleetSubnetRootEntry, FleetSubnetRootStatus},
     },
@@ -56,6 +58,42 @@ component_group = "cell"
 initial_placements = 2
 maximum_placements = 4
 placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 2
+"#;
+
+const SERVICE_CONFIG: &str = r#"
+[app]
+name = "plan_test"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.alpha]
+kind = "canister"
+package = "alpha"
+
+[component_specs.alpha]
+component_role = "alpha"
+maximum_instances = 4
+
+[component_groups.cell.components.alpha]
+component_spec = "alpha"
+service = "api"
+
+[component_group_deployments.cells]
+component_group = "cell"
+service_purpose = "pool_member"
+initial_placements = 2
+maximum_placements = 4
+placement.maximum_per_root = 2
+placement.minimum_distinct_roots = 1
+
+[services.fleet.targets.api]
+role = "alpha"
+component_spec = "alpha"
+mode = "active_pool"
+placement.maximum_members_per_root = 1
 placement.minimum_distinct_roots = 2
 "#;
 
@@ -231,7 +269,14 @@ fn plan(config: &ConfigModel, registry: &FleetRegistry) -> FleetComponentProvisi
 fn fixture(
     maximum_group_placements: u32,
 ) -> (ConfigModel, FleetRegistry, FleetComponentProvisioningPlan) {
-    let config = parse_config_model(CONFIG).expect("valid config");
+    fixture_from(CONFIG, maximum_group_placements)
+}
+
+fn fixture_from(
+    source: &str,
+    maximum_group_placements: u32,
+) -> (ConfigModel, FleetRegistry, FleetComponentProvisioningPlan) {
+    let config = parse_config_model(source).expect("valid config");
     let registry = active_registry(&config, maximum_group_placements);
     let plan = plan(&config, &registry);
     (config, registry, plan)
@@ -299,6 +344,155 @@ fn protected_root_group_placement_ceiling_rejects_before_plan_hashing() {
         Err(ComponentProvisioningPlanOpsError::RootGroupPlacementCapacityExceeded)
     );
     assert!(ComponentProvisioningPlanOps::hash(&config, &registry, &plan).is_err());
+}
+
+#[test]
+fn exact_root_batch_validation_returns_bounded_capacity_and_artifact_facts() {
+    let (config, registry, plan) = fixture(1);
+    let batch = &plan.batches[0];
+    let validation = validate_root_batch(
+        &config,
+        &registry,
+        &plan.fleet_registry,
+        plan.configuration_digest,
+        &batch.root,
+        batch,
+    )
+    .expect("valid root batch");
+
+    assert_eq!(validation.placement_count, 1);
+    assert_eq!(validation.component_count, 2);
+    assert_eq!(validation.component_spec_counts.len(), 2);
+    assert_eq!(validation.component_roles.len(), 2);
+    let bytes = ComponentProvisioningPlanOps::root_batch_canonical_bytes(
+        &config,
+        &registry,
+        &plan.fleet_registry,
+        plan.configuration_digest,
+        &batch.root,
+        batch,
+    )
+    .expect("canonical root batch");
+    assert!(bytes.len() <= MAX_FLEET_SUBNET_ROOT_PROVISIONING_BATCH_CANONICAL_BYTES);
+    let hash: [u8; 32] = Sha256::digest(bytes).into();
+    assert_eq!(
+        hash,
+        [
+            56, 62, 229, 20, 255, 138, 237, 163, 237, 11, 43, 6, 103, 35, 227, 70, 137, 144, 159,
+            139, 238, 99, 22, 4, 149, 162, 16, 250, 30, 115, 132, 51,
+        ]
+    );
+
+    let request = RootComponentProvisioningAcceptanceRequest {
+        fleet_registry: plan.fleet_registry.clone(),
+        configuration_digest: plan.configuration_digest,
+        operation_id: [13; 32],
+        plan_hash: [14; 32],
+        batch: batch.clone(),
+    };
+    assert_eq!(
+        candid::decode_one::<RootComponentProvisioningAcceptanceRequest>(
+            &candid::encode_one(&request).expect("encode acceptance request")
+        )
+        .expect("decode acceptance request"),
+        request
+    );
+    let status_request = RootComponentProvisioningStatusRequest {
+        operation_id: request.operation_id,
+        plan_hash: request.plan_hash,
+    };
+    assert_eq!(
+        candid::decode_one::<RootComponentProvisioningStatusRequest>(
+            &candid::encode_one(status_request).expect("encode status request")
+        )
+        .expect("decode status request"),
+        status_request
+    );
+    let response = RootComponentProvisioningStatusResponse {
+        operation_id: request.operation_id,
+        plan_hash: request.plan_hash,
+        fleet_registry: request.fleet_registry,
+        configuration_digest: request.configuration_digest,
+        fleet_subnet_root: request.batch.root.fleet_subnet_root,
+        phase: RootComponentProvisioningPhase::Accepted,
+        placement_count: validation.placement_count,
+        component_count: validation.component_count,
+        accepted_at_ns: 1,
+        receipt_content_hash: [15; 32],
+    };
+    assert_eq!(
+        candid::decode_one::<RootComponentProvisioningStatusResponse>(
+            &candid::encode_one(&response).expect("encode status response")
+        )
+        .expect("decode status response"),
+        response
+    );
+}
+
+#[test]
+fn exact_root_batch_rejects_local_deployment_density_excess() {
+    let (config, registry, plan) = fixture(2);
+    let mut batch = plan.batches[0].clone();
+    batch.placements.push(plan.batches[1].placements[0].clone());
+
+    crate::assert_err_variant!(
+        validate_root_batch(
+            &config,
+            &registry,
+            &plan.fleet_registry,
+            plan.configuration_digest,
+            &batch.root,
+            &batch,
+        ),
+        Err(ComponentProvisioningPlanOpsError::RootBatchDeploymentDensityExceeded)
+    );
+}
+
+#[test]
+fn deployment_placements_may_share_one_root_within_density_and_capacity() {
+    let source = CONFIG.replace(
+        "placement.maximum_per_root = 1\nplacement.minimum_distinct_roots = 2",
+        "placement.maximum_per_root = 2\nplacement.minimum_distinct_roots = 1",
+    );
+    let (config, registry, mut plan) = fixture_from(&source, 2);
+    let second = plan.batches.remove(1);
+    plan.batches[0].placements.extend(second.placements);
+
+    validate(&config, &registry, &plan).expect("valid packed deployment plan");
+    validate_root_batch(
+        &config,
+        &registry,
+        &plan.fleet_registry,
+        plan.configuration_digest,
+        &plan.batches[0].root,
+        &plan.batches[0],
+    )
+    .expect("valid packed root batch");
+}
+
+#[test]
+fn service_density_and_spread_are_independent_from_deployment_policy() {
+    let (config, registry, plan) = fixture_from(SERVICE_CONFIG, 2);
+    validate(&config, &registry, &plan).expect("distributed service plan");
+
+    let mut concentrated = plan.clone();
+    let second = concentrated.batches.remove(1);
+    concentrated.batches[0].placements.extend(second.placements);
+    crate::assert_err_variant!(
+        validate(&config, &registry, &concentrated),
+        Err(ComponentProvisioningPlanOpsError::FreshInstallServicePlacementPolicyMismatch)
+    );
+    crate::assert_err_variant!(
+        validate_root_batch(
+            &config,
+            &registry,
+            &plan.fleet_registry,
+            plan.configuration_digest,
+            &concentrated.batches[0].root,
+            &concentrated.batches[0],
+        ),
+        Err(ComponentProvisioningPlanOpsError::RootBatchServiceDensityExceeded)
+    );
 }
 
 #[test]

@@ -14,10 +14,31 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.7`.
-- The latest published release is `v0.101.7` at
-  `a11f12a620f7df56deb4acb807032102512cecd2`.
-- Open `0.101.8` freezes one bounded canonical fresh Component-provisioning
+- The workspace package version is `0.101.8`.
+- The latest published release is `v0.101.8` at
+  `0951abd21adf093bf453f8bf19184d3b86a75c8b`.
+- Open `0.101.9` advances the internal harness to `ic-testkit 0.6.0`, shares
+  caller-owned Cargo compilation state across exact test-Wasm caches and uses
+  exact per-canister snapshot senders for mixed-controller pooled topologies.
+  It also gives each selected root a Coordinator-authenticated, restart-safe
+  acceptance and status boundary for one exact canonical provisioning batch.
+  Stable-memory IDs 27–29 retain the operation, permanent placement index and
+  active aggregate fence; accepted placements count once against the immutable
+  root ceiling, and ordinary allocation plus Component/root draining cannot
+  bypass them. Concrete deployment and independent service density/spread,
+  current Registry/admission/release-set/Store evidence, Component capacity and
+  Ready prepaid assets are checked before acceptance and rechecked after Store
+  observation. This slice stops at `Accepted`: Component identity allocation,
+  pool claim, installation, Registry/Directory publication and activation are
+  still unavailable.
+  With incremental codegen still disabled, a controlled second-fingerprint
+  miss fell from 11.71 seconds isolated to 2.41 seconds shared; its Cargo phase
+  fell from 9.97 seconds to 88 milliseconds. The exact sender-map unit test
+  plus focused package compile, Clippy and changelog-governance checks pass.
+  The heavy active-Registry recheck correctly rejected publication when
+  concurrent provisioning edits changed its exact inputs during the build, so
+  that journey still needs a stable-tree rerun.
+- Released `0.101.8` freezes one bounded canonical fresh Component-provisioning
   plan and domain-separated schema-v1 hash. It binds the exact checked-in
   configuration digest, active Fleet Registry version, canonical root
   batches, release sets, stable placement IDs, complete flattened member

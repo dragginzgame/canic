@@ -14,7 +14,7 @@ use crate::{
     config::{
         ComponentDeploymentLimits, ComponentDeploymentPurpose, ComponentGroupDeploymentSpec,
         ComponentGroupDeploymentTopology, ComponentTopology, ConfigModel,
-        FlattenedComponentGroupDeploymentMember, FleetServiceMemberPurpose,
+        FlattenedComponentGroupDeploymentMember, FleetServiceMemberPurpose, FleetServiceTopology,
         MAX_COMPONENT_GROUP_DEPLOYMENT_MEMBERS,
     },
     dto::{
@@ -28,9 +28,9 @@ use crate::{
         },
     },
     ids::{
-        ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
-        ComponentGroupMemberPath, ComponentSpecAdmission, FleetRegistryAuthority,
-        FleetSubnetRootLimits,
+        CanisterRole, ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
+        ComponentGroupMemberPath, ComponentSpecAdmission, ComponentSpecId, FleetRegistryAuthority,
+        FleetServiceId, FleetSubnetRootBinding, FleetSubnetRootLimits,
     },
     ops::{OpsError, fleet_registry::FleetRegistryOps},
 };
@@ -40,6 +40,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
 
 const PLAN_DOMAIN: &[u8] = b"canic/fleet-component-provisioning-plan/v1";
+const ROOT_BATCH_DOMAIN: &[u8] = b"canic/fleet-subnet-root-provisioning-batch/v1";
 const PLAN_SCHEMA_VERSION: u32 = 1;
 
 /// Maximum canonical bytes retained for one initial or scale-out provisioning plan.
@@ -53,6 +54,17 @@ pub const MAX_FLEET_COMPONENT_PROVISIONING_PLAN_PLACEMENTS: usize = 4_096;
 /// Maximum new top-level Component occurrences in one provisioning plan.
 pub const MAX_FLEET_COMPONENT_PROVISIONING_PLAN_ENTRIES: usize =
     MAX_COMPONENT_GROUP_DEPLOYMENT_MEMBERS;
+/// Maximum canonical bytes accepted for one root's exact batch.
+pub const MAX_FLEET_SUBNET_ROOT_PROVISIONING_BATCH_CANONICAL_BYTES: usize = 8_388_608;
+
+/// Validated local capacity and artifact facts derived from one exact root batch.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentProvisioningBatchValidation {
+    pub placement_count: u32,
+    pub component_count: u32,
+    pub component_spec_counts: BTreeMap<ComponentSpecId, u32>,
+    pub component_roles: BTreeSet<CanisterRole>,
+}
 
 /// Typed rejection for a noncanonical or unauthorized provisioning plan.
 #[derive(Debug, ThisError)]
@@ -153,6 +165,15 @@ pub enum ComponentProvisioningPlanOpsError {
     #[error("fresh-install placement assignment violates deployment density or spread")]
     FreshInstallPlacementPolicyMismatch,
 
+    #[error("fresh-install service assignment violates service density or spread")]
+    FreshInstallServicePlacementPolicyMismatch,
+
+    #[error("root provisioning batch violates local deployment density")]
+    RootBatchDeploymentDensityExceeded,
+
+    #[error("root provisioning batch violates local Fleet-service density")]
+    RootBatchServiceDensityExceeded,
+
     #[error("scale-out validation requires the durable Coordinator placement ledger")]
     ScaleOutStateUnavailable,
 
@@ -203,6 +224,54 @@ impl ComponentProvisioningPlanOps {
             .map_err(InternalError::from)?;
         Ok(Sha256::digest(bytes).into())
     }
+
+    /// Validate one Coordinator-selected batch against current local and Registry authority.
+    pub fn validate_root_batch(
+        config: &ConfigModel,
+        registry: &FleetRegistry,
+        fleet_registry: &FleetRegistryVersion,
+        configuration_digest: ComponentDeploymentConfigurationDigest,
+        expected_root: &FleetSubnetRootBinding,
+        batch: &FleetSubnetRootProvisioningBatch,
+    ) -> Result<RootComponentProvisioningBatchValidation, InternalError> {
+        validate_root_batch(
+            config,
+            registry,
+            fleet_registry,
+            configuration_digest,
+            expected_root,
+            batch,
+        )
+        .map_err(OpsError::from)
+        .map_err(InternalError::from)
+    }
+
+    /// Return the bounded canonical bytes of one already validated root batch.
+    pub fn root_batch_canonical_bytes(
+        config: &ConfigModel,
+        registry: &FleetRegistry,
+        fleet_registry: &FleetRegistryVersion,
+        configuration_digest: ComponentDeploymentConfigurationDigest,
+        expected_root: &FleetSubnetRootBinding,
+        batch: &FleetSubnetRootProvisioningBatch,
+    ) -> Result<Vec<u8>, InternalError> {
+        validate_root_batch(
+            config,
+            registry,
+            fleet_registry,
+            configuration_digest,
+            expected_root,
+            batch,
+        )
+        .map_err(OpsError::from)
+        .map_err(InternalError::from)?;
+        let mut encoder = CanonicalEncoder::with_domain(ROOT_BATCH_DOMAIN);
+        encode_batch(&mut encoder, batch);
+        encoder
+            .finish_with_bound(MAX_FLEET_SUBNET_ROOT_PROVISIONING_BATCH_CANONICAL_BYTES)
+            .map_err(OpsError::from)
+            .map_err(InternalError::from)
+    }
 }
 
 fn validate(
@@ -215,6 +284,9 @@ fn validate(
         .map_err(|error| ComponentProvisioningPlanOpsError::Configuration(error.to_string()))?;
     let deployment_topology = config
         .compile_component_group_deployment_topology()
+        .map_err(|error| ComponentProvisioningPlanOpsError::Configuration(error.to_string()))?;
+    let service_topology = config
+        .compile_fleet_service_topology()
         .map_err(|error| ComponentProvisioningPlanOpsError::Configuration(error.to_string()))?;
     let expected_digest = config
         .compile_component_deployment_configuration_digest()
@@ -231,17 +303,68 @@ fn validate(
             return Err(ComponentProvisioningPlanOpsError::NonCanonicalBatchOrder);
         }
         previous_root = Some(root);
-        validate_batch(
+        let _validation = validate_batch(
             registry,
-            plan,
             batch,
             &component_topology,
             &deployment_topology,
             &mut ledger,
         )?;
+        if plan
+            .directory_confirmation_roots
+            .binary_search(&batch.root.fleet_subnet_root)
+            .is_err()
+        {
+            return Err(ComponentProvisioningPlanOpsError::SelectedRootNotConfirmed);
+        }
     }
 
-    validate_operation(plan, &deployment_topology, &ledger)
+    validate_operation(plan, &deployment_topology, &service_topology, &ledger)
+}
+
+fn validate_root_batch(
+    config: &ConfigModel,
+    registry: &FleetRegistry,
+    fleet_registry: &FleetRegistryVersion,
+    configuration_digest: ComponentDeploymentConfigurationDigest,
+    expected_root: &FleetSubnetRootBinding,
+    batch: &FleetSubnetRootProvisioningBatch,
+) -> Result<RootComponentProvisioningBatchValidation, ComponentProvisioningPlanOpsError> {
+    let component_topology = config
+        .compile_component_topology()
+        .map_err(|error| ComponentProvisioningPlanOpsError::Configuration(error.to_string()))?;
+    let deployment_topology = config
+        .compile_component_group_deployment_topology()
+        .map_err(|error| ComponentProvisioningPlanOpsError::Configuration(error.to_string()))?;
+    let service_topology = config
+        .compile_fleet_service_topology()
+        .map_err(|error| ComponentProvisioningPlanOpsError::Configuration(error.to_string()))?;
+    let expected_digest = config
+        .compile_component_deployment_configuration_digest()
+        .map_err(|error| ComponentProvisioningPlanOpsError::Configuration(error.to_string()))?;
+    if configuration_digest != expected_digest {
+        return Err(ComponentProvisioningPlanOpsError::ConfigurationDigestMismatch);
+    }
+    let expected_registry =
+        FleetRegistryOps::version(&registry.authority, &component_topology, registry)
+            .map_err(|error| ComponentProvisioningPlanOpsError::FleetRegistry(error.to_string()))?;
+    if fleet_registry != &expected_registry {
+        return Err(ComponentProvisioningPlanOpsError::FleetRegistryVersionMismatch);
+    }
+    if expected_root != &batch.root {
+        return Err(ComponentProvisioningPlanOpsError::RootBindingMismatch);
+    }
+    validate_root_batch_bounds(batch)?;
+    let mut ledger = PlanValidationLedger::new();
+    let validation = validate_batch(
+        registry,
+        batch,
+        &component_topology,
+        &deployment_topology,
+        &mut ledger,
+    )?;
+    validate_root_batch_density(batch, &deployment_topology, &service_topology)?;
+    Ok(validation)
 }
 
 fn validate_plan_authority(
@@ -312,6 +435,32 @@ fn validate_bounds(
     Ok(())
 }
 
+fn validate_root_batch_bounds(
+    batch: &FleetSubnetRootProvisioningBatch,
+) -> Result<(), ComponentProvisioningPlanOpsError> {
+    if batch.placements.len() > MAX_FLEET_COMPONENT_PROVISIONING_PLAN_PLACEMENTS {
+        return Err(ComponentProvisioningPlanOpsError::PlacementBoundExceeded {
+            actual: batch.placements.len(),
+            maximum: MAX_FLEET_COMPONENT_PROVISIONING_PLAN_PLACEMENTS,
+        });
+    }
+    let entries = batch
+        .placements
+        .iter()
+        .try_fold(0_usize, |total, placement| {
+            total
+                .checked_add(placement.entries.len())
+                .ok_or(ComponentProvisioningPlanOpsError::CountOverflow)
+        })?;
+    if entries > MAX_FLEET_COMPONENT_PROVISIONING_PLAN_ENTRIES {
+        return Err(ComponentProvisioningPlanOpsError::EntryBoundExceeded {
+            actual: entries,
+            maximum: MAX_FLEET_COMPONENT_PROVISIONING_PLAN_ENTRIES,
+        });
+    }
+    Ok(())
+}
+
 fn validate_confirmation_roots(
     registry: &FleetRegistry,
     plan: &FleetComponentProvisioningPlan,
@@ -358,12 +507,11 @@ fn validate_confirmation_roots(
 
 fn validate_batch(
     registry: &FleetRegistry,
-    plan: &FleetComponentProvisioningPlan,
     batch: &FleetSubnetRootProvisioningBatch,
     component_topology: &ComponentTopology,
     deployment_topology: &ComponentGroupDeploymentTopology,
     ledger: &mut PlanValidationLedger,
-) -> Result<(), ComponentProvisioningPlanOpsError> {
+) -> Result<RootComponentProvisioningBatchValidation, ComponentProvisioningPlanOpsError> {
     if batch.placements.is_empty() {
         return Err(ComponentProvisioningPlanOpsError::EmptyRootBatch);
     }
@@ -373,14 +521,6 @@ fn validate_batch(
         .find(|entry| entry.fleet_subnet_root == batch.root.fleet_subnet_root)
         .ok_or(ComponentProvisioningPlanOpsError::RootBindingMismatch)?;
     validate_root_binding(registry, registry_root, batch, component_topology)?;
-    if plan
-        .directory_confirmation_roots
-        .binary_search(&batch.root.fleet_subnet_root)
-        .is_err()
-    {
-        return Err(ComponentProvisioningPlanOpsError::SelectedRootNotConfirmed);
-    }
-
     let placement_count = u32::try_from(batch.placements.len())
         .map_err(|_| ComponentProvisioningPlanOpsError::CountOverflow)?;
     if placement_count > batch.root.limits.maximum_group_placements {
@@ -388,6 +528,7 @@ fn validate_batch(
     }
     let mut component_count = 0_u32;
     let mut spec_counts = BTreeMap::new();
+    let mut component_roles = BTreeSet::new();
     let mut previous_placement = None;
     for placement in &batch.placements {
         if previous_placement
@@ -416,12 +557,24 @@ fn validate_batch(
             *count = count
                 .checked_add(1)
                 .ok_or(ComponentProvisioningPlanOpsError::CountOverflow)?;
+            let role = component_topology
+                .get(&entry.component_spec)
+                .ok_or(ComponentProvisioningPlanOpsError::MissingRootAdmission)?
+                .component_role
+                .clone();
+            component_roles.insert(role);
         }
     }
     if component_count > batch.root.limits.maximum_component_instances {
         return Err(ComponentProvisioningPlanOpsError::RootComponentCapacityExceeded);
     }
-    validate_spec_admissions(&batch.root.component_admissions, &spec_counts)
+    validate_spec_admissions(&batch.root.component_admissions, &spec_counts)?;
+    Ok(RootComponentProvisioningBatchValidation {
+        placement_count,
+        component_count,
+        component_spec_counts: spec_counts,
+        component_roles,
+    })
 }
 
 fn validate_root_binding(
@@ -534,11 +687,12 @@ fn validate_spec_admissions(
 fn validate_operation(
     plan: &FleetComponentProvisioningPlan,
     topology: &ComponentGroupDeploymentTopology,
+    service_topology: &FleetServiceTopology,
     ledger: &PlanValidationLedger,
 ) -> Result<(), ComponentProvisioningPlanOpsError> {
     match &plan.operation {
         FleetComponentProvisioningOperation::FreshInstall => {
-            validate_fresh_install(topology, ledger)
+            validate_fresh_install(topology, service_topology, ledger)
         }
         FleetComponentProvisioningOperation::ScaleOut { .. } => {
             Err(ComponentProvisioningPlanOpsError::ScaleOutStateUnavailable)
@@ -548,6 +702,7 @@ fn validate_operation(
 
 fn validate_fresh_install(
     topology: &ComponentGroupDeploymentTopology,
+    service_topology: &FleetServiceTopology,
     ledger: &PlanValidationLedger,
 ) -> Result<(), ComponentProvisioningPlanOpsError> {
     for deployment in &topology.component_group_deployments {
@@ -569,7 +724,7 @@ fn validate_fresh_install(
         }
         validate_fresh_placement_policy(deployment, ledger)?;
     }
-    Ok(())
+    validate_fresh_service_placement_policy(service_topology, ledger)
 }
 
 fn validate_fresh_placement_policy(
@@ -592,9 +747,89 @@ fn validate_fresh_placement_policy(
     Ok(())
 }
 
+fn validate_fresh_service_placement_policy(
+    topology: &FleetServiceTopology,
+    ledger: &PlanValidationLedger,
+) -> Result<(), ComponentProvisioningPlanOpsError> {
+    for target in &topology.targets {
+        let roots = ledger.service_root_counts(&target.service);
+        if roots
+            .values()
+            .any(|count| *count > target.placement.maximum_members_per_root)
+        {
+            return Err(
+                ComponentProvisioningPlanOpsError::FreshInstallServicePlacementPolicyMismatch,
+            );
+        }
+        let members = roots.values().try_fold(0_u32, |total, count| {
+            total
+                .checked_add(*count)
+                .ok_or(ComponentProvisioningPlanOpsError::CountOverflow)
+        })?;
+        let required_roots = members.min(target.placement.minimum_distinct_roots) as usize;
+        if roots.len() < required_roots {
+            return Err(
+                ComponentProvisioningPlanOpsError::FreshInstallServicePlacementPolicyMismatch,
+            );
+        }
+    }
+    Ok(())
+}
+
+fn validate_root_batch_density(
+    batch: &FleetSubnetRootProvisioningBatch,
+    deployment_topology: &ComponentGroupDeploymentTopology,
+    service_topology: &FleetServiceTopology,
+) -> Result<(), ComponentProvisioningPlanOpsError> {
+    let mut deployment_counts = BTreeMap::<ComponentGroupDeploymentId, u32>::new();
+    let mut service_counts = BTreeMap::<FleetServiceId, u32>::new();
+    for placement in &batch.placements {
+        let deployment_count = deployment_counts
+            .entry(placement.group_placement.deployment.clone())
+            .or_default();
+        *deployment_count = deployment_count
+            .checked_add(1)
+            .ok_or(ComponentProvisioningPlanOpsError::CountOverflow)?;
+        for entry in &placement.entries {
+            if let ComponentDeploymentPurpose::FleetServiceMember { service, .. } = &entry.purpose {
+                let service_count = service_counts.entry(service.clone()).or_default();
+                *service_count = service_count
+                    .checked_add(1)
+                    .ok_or(ComponentProvisioningPlanOpsError::CountOverflow)?;
+            }
+        }
+    }
+    for (deployment, count) in deployment_counts {
+        let maximum = deployment_topology
+            .get(&deployment)
+            .ok_or(ComponentProvisioningPlanOpsError::UnknownDeployment { deployment })?
+            .placement
+            .maximum_per_root;
+        if count > maximum {
+            return Err(ComponentProvisioningPlanOpsError::RootBatchDeploymentDensityExceeded);
+        }
+    }
+    for (service, count) in service_counts {
+        let maximum = service_topology
+            .get(&service)
+            .ok_or_else(|| {
+                ComponentProvisioningPlanOpsError::Configuration(format!(
+                    "root batch references unknown Fleet service '{service}'"
+                ))
+            })?
+            .placement
+            .maximum_members_per_root;
+        if count > maximum {
+            return Err(ComponentProvisioningPlanOpsError::RootBatchServiceDensityExceeded);
+        }
+    }
+    Ok(())
+}
+
 struct PlanValidationLedger {
     placements: BTreeSet<crate::ids::ComponentGroupPlacementId>,
     placement_roots: BTreeMap<crate::ids::ComponentGroupPlacementId, Principal>,
+    service_roots: BTreeMap<FleetServiceId, BTreeMap<Principal, u32>>,
 }
 
 impl PlanValidationLedger {
@@ -602,12 +837,23 @@ impl PlanValidationLedger {
         Self {
             placements: BTreeSet::new(),
             placement_roots: BTreeMap::new(),
+            service_roots: BTreeMap::new(),
         }
     }
 
     fn record(&mut self, placement: &ComponentGroupPlacementPlan, root: Principal) {
         self.placement_roots
             .insert(placement.group_placement.clone(), root);
+        for entry in &placement.entries {
+            if let ComponentDeploymentPurpose::FleetServiceMember { service, .. } = &entry.purpose {
+                *self
+                    .service_roots
+                    .entry(service.clone())
+                    .or_default()
+                    .entry(root)
+                    .or_default() += 1;
+            }
+        }
     }
 
     fn for_deployment(
@@ -628,6 +874,10 @@ impl PlanValidationLedger {
             }
         }
         counts
+    }
+
+    fn service_root_counts(&self, service: &FleetServiceId) -> BTreeMap<Principal, u32> {
+        self.service_roots.get(service).cloned().unwrap_or_default()
     }
 }
 
@@ -802,8 +1052,12 @@ struct CanonicalEncoder {
 
 impl CanonicalEncoder {
     fn new() -> Self {
+        Self::with_domain(PLAN_DOMAIN)
+    }
+
+    fn with_domain(domain: &[u8]) -> Self {
         let mut encoder = Self { bytes: Vec::new() };
-        encoder.bytes(PLAN_DOMAIN);
+        encoder.bytes(domain);
         encoder.u32(PLAN_SCHEMA_VERSION);
         encoder
     }
@@ -834,10 +1088,17 @@ impl CanonicalEncoder {
     }
 
     fn finish(self) -> Result<Vec<u8>, ComponentProvisioningPlanOpsError> {
-        if self.bytes.len() > MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CANONICAL_BYTES {
+        self.finish_with_bound(MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CANONICAL_BYTES)
+    }
+
+    fn finish_with_bound(
+        self,
+        maximum_bytes: usize,
+    ) -> Result<Vec<u8>, ComponentProvisioningPlanOpsError> {
+        if self.bytes.len() > maximum_bytes {
             return Err(ComponentProvisioningPlanOpsError::CanonicalBytesExceeded {
                 actual_bytes: self.bytes.len(),
-                maximum_bytes: MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CANONICAL_BYTES,
+                maximum_bytes,
             });
         }
         Ok(self.bytes)

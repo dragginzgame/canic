@@ -11,6 +11,11 @@ use crate::storage::stable::canister_pool::{
     CanisterPoolAssetRecord, CanisterPoolData, CanisterPoolHandoffReceiptData,
     CanisterPoolHandoffReceiptRecord, CanisterPoolStateRecord,
 };
+#[cfg(feature = "root-control-plane")]
+use crate::storage::stable::component_provisioning::{
+    RootComponentProvisioningData, RootComponentProvisioningPlacementRecord,
+    RootComponentProvisioningRecord, RootComponentProvisioningStateRecord,
+};
 use crate::storage::stable::{
     component_registry::{
         ComponentRegistryEntryRecord, ComponentRegistryPrincipalIndexRecord,
@@ -32,7 +37,8 @@ use crate::storage::stable::{
 #[cfg(feature = "root-control-plane")]
 use canic_core::role_contract::allocation::memory::control_plane::{
     ROOT_CANISTER_INVENTORY_ASSETS_ID, ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID,
-    ROOT_CANISTER_POOL_STATE_ID,
+    ROOT_CANISTER_POOL_STATE_ID, ROOT_COMPONENT_PROVISIONING_OPERATIONS_ID,
+    ROOT_COMPONENT_PROVISIONING_PLACEMENTS_ID, ROOT_COMPONENT_PROVISIONING_STATE_ID,
 };
 use canic_core::{
     role_contract::{
@@ -75,6 +81,8 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
         root_component_registry_descriptor(),
         #[cfg(feature = "root-control-plane")]
         root_canister_pool_descriptor(),
+        #[cfg(feature = "root-control-plane")]
+        root_component_provisioning_descriptor(),
         descriptor(
             StateAllocationKey::TemplateManifests,
             "template_manifests",
@@ -309,6 +317,68 @@ fn root_canister_pool_descriptor() -> StateAllocationDescriptor {
     }
 }
 
+#[cfg(feature = "root-control-plane")]
+fn root_component_provisioning_descriptor() -> StateAllocationDescriptor {
+    StateAllocationDescriptor {
+        allocation: StateAllocationKey::RootComponentProvisioning,
+        owner: AllocationOwner::CanicControlPlane,
+        state: vec![
+            StateDomainManifest {
+                domain: "root_component_provisioning_operations".to_string(),
+                version: 1,
+                storage: StateStorage::StableMemory,
+                memory_id: Some(ROOT_COMPONENT_PROVISIONING_OPERATIONS_ID),
+                owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
+                record: RootComponentProvisioningRecord::STATE_CONTRACT_NAME.to_string(),
+                snapshot: RootComponentProvisioningData::STATE_CONTRACT_NAME.to_string(),
+                min_supported_version: 1,
+                migration_policy: MigrationPolicy::NewDomain,
+                restore_order: Some(205),
+                post_upgrade_invariant: Some(
+                    "root_component_provisioning_operations_restore_exact_intent_and_receipts"
+                        .to_string(),
+                ),
+                migrations: Vec::new(),
+            },
+            StateDomainManifest {
+                domain: "root_component_provisioning_placements".to_string(),
+                version: 1,
+                storage: StateStorage::StableMemory,
+                memory_id: Some(ROOT_COMPONENT_PROVISIONING_PLACEMENTS_ID),
+                owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
+                record: RootComponentProvisioningPlacementRecord::STATE_CONTRACT_NAME.to_string(),
+                snapshot: RootComponentProvisioningData::STATE_CONTRACT_NAME.to_string(),
+                min_supported_version: 1,
+                migration_policy: MigrationPolicy::NewDomain,
+                restore_order: Some(206),
+                post_upgrade_invariant: Some(
+                    "root_component_provisioning_placements_restore_permanent_unique_reservations"
+                        .to_string(),
+                ),
+                migrations: Vec::new(),
+            },
+            StateDomainManifest {
+                domain: "root_component_provisioning_state".to_string(),
+                version: 1,
+                storage: StateStorage::StableMemory,
+                memory_id: Some(ROOT_COMPONENT_PROVISIONING_STATE_ID),
+                owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
+                record: RootComponentProvisioningStateRecord::STATE_CONTRACT_NAME.to_string(),
+                snapshot: RootComponentProvisioningData::STATE_CONTRACT_NAME.to_string(),
+                min_supported_version: 1,
+                migration_policy: MigrationPolicy::NewDomain,
+                restore_order: Some(207),
+                post_upgrade_invariant: Some(
+                    "root_component_provisioning_state_restores_capacity_and_active_operation_fence"
+                        .to_string(),
+                ),
+                migrations: Vec::new(),
+            },
+        ],
+        reserved_memory: Vec::new(),
+    }
+}
+
 fn descriptor(
     allocation: StateAllocationKey,
     domain: &str,
@@ -356,6 +426,7 @@ mod tests {
             StateAllocationKey::RootComponentRegistry,
             StateAllocationKey::RootFleetRegistryMirror,
             StateAllocationKey::RootCanisterPool,
+            StateAllocationKey::RootComponentProvisioning,
             StateAllocationKey::TemplateManifests,
             StateAllocationKey::TemplateChunkSets,
             StateAllocationKey::TemplateChunkRefs,
@@ -386,6 +457,11 @@ mod tests {
                 StateAllocationKey::RootFleetRegistryMirror,
                 RootFleetRegistryMirrorStateRecord::STATE_CONTRACT_NAME,
                 RootFleetRegistryMirrorData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::RootComponentProvisioning,
+                RootComponentProvisioningRecord::STATE_CONTRACT_NAME,
+                RootComponentProvisioningData::STATE_CONTRACT_NAME,
             ),
             (
                 StateAllocationKey::TemplateManifests,
@@ -485,6 +561,50 @@ mod tests {
                     Some(ROOT_COMPONENT_DRAINING_ID),
                     RootComponentDrainingRecord::STATE_CONTRACT_NAME,
                     Some(201),
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn root_component_provisioning_declares_exact_consecutive_domains() {
+        let descriptors = canic_control_plane_state_descriptors();
+        let descriptor = descriptors
+            .iter()
+            .find(|descriptor| {
+                descriptor.allocation == StateAllocationKey::RootComponentProvisioning
+            })
+            .expect("root Component provisioning descriptor");
+
+        assert_eq!(
+            descriptor
+                .state
+                .iter()
+                .map(|domain| (
+                    domain.domain.as_str(),
+                    domain.memory_id,
+                    domain.record.as_str(),
+                    domain.restore_order,
+                ))
+                .collect::<Vec<_>>(),
+            vec![
+                (
+                    "root_component_provisioning_operations",
+                    Some(ROOT_COMPONENT_PROVISIONING_OPERATIONS_ID),
+                    RootComponentProvisioningRecord::STATE_CONTRACT_NAME,
+                    Some(205),
+                ),
+                (
+                    "root_component_provisioning_placements",
+                    Some(ROOT_COMPONENT_PROVISIONING_PLACEMENTS_ID),
+                    RootComponentProvisioningPlacementRecord::STATE_CONTRACT_NAME,
+                    Some(206),
+                ),
+                (
+                    "root_component_provisioning_state",
+                    Some(ROOT_COMPONENT_PROVISIONING_STATE_ID),
+                    RootComponentProvisioningStateRecord::STATE_CONTRACT_NAME,
+                    Some(207),
                 ),
             ]
         );

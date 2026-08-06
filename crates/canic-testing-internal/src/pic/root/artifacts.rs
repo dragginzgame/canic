@@ -64,7 +64,6 @@ pub fn ensure_root_release_artifacts_built(spec: &RootBaselineSpec<'_>) {
                     .expect("commit root release artifact cache")
             }
         };
-    let timings = outcome.record().timings();
     progress_elapsed(
         spec,
         if outcome.is_reused() {
@@ -74,14 +73,7 @@ pub fn ensure_root_release_artifacts_built(spec: &RootBaselineSpec<'_>) {
         },
         started_at,
     );
-    eprintln!(
-        "[root_setup] artifact cache {:?} (coordination {:?}, inputs {:?}, build {:?}, materialize {:?})",
-        timings.total(),
-        timings.coordination_lock_wait(),
-        timings.input_capture(),
-        timings.caller_build(),
-        timings.materialization(),
-    );
+    eprintln!("[root_setup] artifact cache {outcome}");
     report_artifact_cache_maintenance("root-artifacts", outcome.record().maintenance());
 }
 

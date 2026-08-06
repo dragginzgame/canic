@@ -127,6 +127,10 @@ fn canonical_allocations_match_the_active_memory_map() {
             vec![18, 19, 20, 21, 22, 23],
         ),
         (StateAllocationKey::RootCanisterPool, vec![24, 25, 26]),
+        (
+            StateAllocationKey::RootComponentProvisioning,
+            vec![27, 28, 29],
+        ),
     ]);
     assert_eq!(actual, expected);
 }
@@ -147,7 +151,7 @@ fn canonical_allocations_form_packed_owner_ledgers() {
     assert_eq!(
         ids(AllocationOwner::CanicControlPlane),
         (allocation::CANIC_CONTROL_PLANE_MIN_ID
-            ..=allocation::memory::control_plane::ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID)
+            ..=allocation::memory::control_plane::ROOT_COMPONENT_PROVISIONING_STATE_ID)
             .collect::<Vec<_>>()
     );
     assert_eq!(
@@ -410,8 +414,8 @@ fn repeated_selection_merges_allocation_provenance() {
     assert_eq!(
         allocation_ids(&contract.allocations),
         vec![
-            10, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 30, 31, 32, 33, 34, 35, 36,
-            37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 59,
+            10, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33,
+            34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 59,
         ]
     );
 }
