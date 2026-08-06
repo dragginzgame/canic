@@ -487,6 +487,7 @@ fn managed_test_root_init_args(
                     maximum_component_instances: 4_096,
                     maximum_registry_bytes: 16_777_216,
                     maximum_wasm_store_bytes: 536_870_912,
+                    maximum_group_placements: 16,
                     canister_pool: FleetSubnetCanisterPoolConfig {
                         minimum_size: 1,
                         maximum_size: 10,

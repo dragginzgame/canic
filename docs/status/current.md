@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-05
+Last updated: 2026-08-06
 
 ## Purpose
 
@@ -14,10 +14,22 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.6`.
-- The latest published release is `v0.101.6` at
-  `6344a650507c286110d2802e52a1688f3aea1a64`.
-- Open `0.101.7` hard-cuts managed init and Component-runtime status to carry
+- The workspace package version is `0.101.7`.
+- The latest published release is `v0.101.7` at
+  `a11f12a620f7df56deb4acb807032102512cecd2`.
+- Open `0.101.8` freezes one bounded canonical fresh Component-provisioning
+  plan and domain-separated schema-v1 hash. It binds the exact checked-in
+  configuration digest, active Fleet Registry version, canonical root
+  batches, release sets, stable placement IDs, complete flattened member
+  projections, labels and effective limits before effects. Fleet input and
+  the Registry now retain `maximum_group_placements` in the existing root
+  limits; zero fences grouped placement. Scale-out plan acceptance remains
+  deliberately unavailable until the Coordinator has its durable placement
+  ledger, and no grouped lifecycle effect is enabled. The same open patch
+  advances the internal harness to `ic-testkit 0.5.0`, transactionally caches
+  complete external artifact sets, and restores validated active-Registry and
+  instruction-audit root baselines instead of rebuilding each serial journey.
+- Released `0.101.7` hard-cuts managed init and Component-runtime status to carry
   one immutable `UngroupedOrdinary` or `GroupMember` deployment context. It
   validates grouped digest, placement/member identity, Component Group, Spec,
   purpose, labels and effective limits against compiled App authority before
@@ -2260,16 +2272,16 @@ First primary results:
 
 ## Next Action
 
-The complete configuration-only Component Group compiler and semantic digest
-are published through immutable `v0.101.6`. Open 0.101.7 establishes the
-protected runtime context, strict compiled-context validation, stable
-retention and local application-policy read, while deliberately leaving the
-0.100 ordinary lifecycle on `UngroupedOrdinary`. Continue Slice 2 with one
-canonical root/group-placement/member plan that derives `GroupMember`, binds
-the same digest through plan hashing and root acceptance, and enforces exact
-effective limits. Keep group, deployment and service declarations
-configuration-only and do not reopen the 0.100 infrastructure or pool
-boundaries.
+The protected runtime context is published through immutable `v0.101.7`.
+Open 0.101.8 freezes the canonical fresh provisioning-plan shape and hash plus
+the protected per-root group-placement ceiling, while deliberately leaving
+scale-out and every grouped effect fenced. Continue Slice 2 by persisting one
+exact root batch, deriving each installed `GroupMember` context from that
+accepted plan and enforcing effective limits through the existing root-local
+Component allocation and prepaid-Canister lifecycle. Do not create a second
+Component identity, lifecycle, Store or pool path, and do not enable scale-out
+until its durable Coordinator placement ledger can prove ordinal non-reuse and
+combined density/spread.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.

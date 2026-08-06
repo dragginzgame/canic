@@ -1,6 +1,9 @@
 //! Test-Wasm and PocketIC builders for the prepared-root Registry journey.
 
-use ic_testkit::artifacts::{read_wasm, test_target_dir as artifact_test_target_dir};
+use ic_testkit::artifacts::{
+    ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheSpec, prepare_artifact_cache,
+    read_wasm, test_target_dir as artifact_test_target_dir,
+};
 use ic_testkit::pic::{PocketIc, PocketIcBuilder};
 use std::{
     env, fs,
@@ -11,7 +14,8 @@ use std::{
 
 use super::super::artifacts::{
     CanicWasmBuildProfile, INTERNAL_TEST_ENDPOINTS_ENV, INTERNAL_TEST_RELEASE_BUILD_ID,
-    build_internal_test_wasm_canisters_with_env,
+    build_internal_test_wasm_canisters_with_env, internal_test_artifact_prune_policy,
+    report_artifact_cache_maintenance,
 };
 use super::fixture::progress;
 
@@ -111,6 +115,76 @@ fn build_canisters_once(workspace_root: &Path) {
 
 // Build the sibling wasm_store independently before the fixture installs both Canisters.
 fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path, config_path: &Path) {
+    let artifact_path = workspace_root
+        .join(".canic/release-builds")
+        .join(INTERNAL_TEST_RELEASE_BUILD_ID.1)
+        .join("artifacts/wasm_store/wasm_store.wasm.gz");
+    let config_relative = config_path
+        .strip_prefix(workspace_root)
+        .expect("bootstrap Store config must be workspace-confined")
+        .to_str()
+        .expect("bootstrap Store config path UTF-8");
+    let mut cache = ArtifactCacheSpec::new(
+        &workspace_root.join("target/test-artifacts/external-artifact-cache"),
+        "bootstrap-wasm-store",
+        "canic/bootstrap-wasm-store/v1",
+    )
+    .with_coordination_scope("canic-external-artifact-builds")
+    .with_arguments(&[
+        "cargo run -p canic-host --example build_artifact",
+        "wasm_store",
+        "fast",
+        config_relative,
+    ])
+    .with_environment(&[
+        ("CARGO_INCREMENTAL", "0"),
+        ("ICP_ENVIRONMENT", "local"),
+        INTERNAL_TEST_ENDPOINTS_ENV,
+        INTERNAL_TEST_RELEASE_BUILD_ID,
+    ])
+    .with_output("wasm_store", &artifact_path)
+    .with_prune_policy(internal_test_artifact_prune_policy());
+    for relative in [
+        "Cargo.toml",
+        "Cargo.lock",
+        "apps/test",
+        "canisters",
+        "crates",
+        "icp.yaml",
+        "rust-toolchain.toml",
+    ] {
+        cache = cache.with_input(relative, &workspace_root.join(relative));
+    }
+
+    let outcome = match prepare_artifact_cache(&cache).expect("prepare bootstrap Store cache") {
+        ArtifactCachePreparation::Reused(record) => ArtifactCacheOutcome::Reused(record),
+        ArtifactCachePreparation::Build(transaction) => {
+            run_bootstrap_wasm_store_build(workspace_root, target_dir, config_path);
+            transaction
+                .import_output("wasm_store", &artifact_path)
+                .expect("import bootstrap Store artifact");
+            transaction
+                .commit()
+                .expect("commit bootstrap Store artifact cache")
+        }
+    };
+    let timings = outcome.record().timings();
+    eprintln!(
+        "[pic_fleet_registry] {} bootstrap Store artifact in {:?} (inputs {:?}, build {:?}, materialize {:?})",
+        if outcome.is_reused() {
+            "reused"
+        } else {
+            "built"
+        },
+        timings.total(),
+        timings.input_capture(),
+        timings.caller_build(),
+        timings.materialization(),
+    );
+    report_artifact_cache_maintenance("bootstrap-wasm-store", outcome.record().maintenance());
+}
+
+fn run_bootstrap_wasm_store_build(workspace_root: &Path, target_dir: &Path, config_path: &Path) {
     let cargo = env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
     let output = Command::new(cargo)
         .current_dir(workspace_root)

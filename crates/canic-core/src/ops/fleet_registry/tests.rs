@@ -91,6 +91,7 @@ fn limits() -> FleetSubnetRootLimits {
         maximum_component_instances: 4,
         maximum_registry_bytes: 2_097_152,
         maximum_wasm_store_bytes: 40_000_000,
+        maximum_group_placements: 16,
         canister_pool: crate::ids::FleetSubnetCanisterPoolConfig {
             minimum_size: 1,
             maximum_size: 10,
@@ -184,7 +185,7 @@ fn canonical_registry_manifest_and_version_are_digest_stable() {
     assert_eq!(version.content_hash, manifest.content_hash);
     assert_eq!(
         crate::cdk::utils::hash::hex_bytes(manifest.content_hash),
-        "970d647f7eefcdc264538a05b32c80c209efed61f32c58c5bf14183fb30f72c2"
+        "5a7ad9941b568f6de577d6f11b6512ad55b429751f7405c350faf57efadb7a0e"
     );
 }
 

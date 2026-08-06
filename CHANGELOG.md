@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.8` freezes the canonical fresh Component-provisioning plan and hash,
+  binding exact active roots, group placements, flattened members and the new
+  immutable per-root group-placement ceiling before effects, and advances the
+  internal harness to `ic-testkit` 0.5 with transactional artifact caches and
+  restored PocketIC baseline pools.
+
 - `0.101.7` adds the immutable runtime Component deployment context, validates
   it against compiled authority and retains it for application policy and
   root-observed lifecycle status.

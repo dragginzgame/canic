@@ -11,45 +11,78 @@ use canic_control_plane::{
 };
 use canic_core::cdk::utils::hash::wasm_hash;
 use ic_testkit::{
-    artifacts::WatchedInputSnapshot,
+    artifacts::{
+        ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheSpec, prepare_artifact_cache,
+    },
     pic::{CandidCallExt, PocketIc, PocketIcTimeExt},
 };
-use std::{fs, io};
+use std::{collections::BTreeMap, fs, io, path::PathBuf};
 
 use crate::pic::artifacts::{
-    INTERNAL_TEST_ENDPOINTS_ENV, INTERNAL_TEST_RELEASE_BUILD_ID, build_icp_all_with_env,
-    icp_artifact_ready_with_snapshot,
+    INTERNAL_TEST_ENDPOINTS_ENV, INTERNAL_TEST_RELEASE_BUILD_ID,
+    internal_test_artifact_prune_policy, report_artifact_cache_maintenance, run_icp_all_with_env,
 };
 
 use super::{RootBaselineSpec, progress, progress_elapsed};
 
-/// Build the local `.icp` root artifacts once unless all required outputs are already fresh.
+/// Build or transactionally reuse the complete local `.icp` root artifact set.
 ///
 /// # Panics
 ///
-/// Panics if watched inputs cannot be captured, change during the build, the
-/// external build fails, or a required nonempty artifact cannot be stamped.
+/// Panics if exact inputs cannot be captured, the external build fails, inputs
+/// change during the build, or any required output cannot be committed.
 pub fn ensure_root_release_artifacts_built(spec: &RootBaselineSpec<'_>) {
-    if root_release_artifacts_ready(spec) {
-        progress(spec, "reusing existing root release artifacts");
-        return;
-    }
-
-    progress(spec, "building local ICP artifacts for root baseline");
+    progress(spec, "acquiring local ICP artifacts for root baseline");
     let started_at = std::time::Instant::now();
-    let watched_inputs =
-        WatchedInputSnapshot::capture(&spec.workspace_root, spec.artifact_watch_paths)
-            .expect("capture root release artifact inputs before build");
-    build_icp_all_with_env(
-        &spec.workspace_root,
-        &spec.icp_build_lock_path,
-        spec.build_network,
-        spec.build_profile,
-        &spec.build_config_path,
-        &effective_build_env(spec),
+    let build_env = effective_build_env(spec);
+    let outputs = root_release_artifact_outputs(spec);
+    let cache_spec = root_release_artifact_cache_spec(spec, &build_env, &outputs);
+    let outcome =
+        match prepare_artifact_cache(&cache_spec).expect("prepare root release artifact cache") {
+            ArtifactCachePreparation::Reused(record) => ArtifactCacheOutcome::Reused(record),
+            ArtifactCachePreparation::Build(transaction) => {
+                progress(spec, "building local ICP artifacts for root baseline");
+                let output = run_icp_all_with_env(
+                    &spec.workspace_root,
+                    spec.build_network,
+                    spec.build_profile,
+                    &spec.build_config_path,
+                    &build_env,
+                );
+                assert!(
+                    output.status.success(),
+                    "local artifact build failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                for (name, path) in &outputs {
+                    transaction.import_output(name, path).unwrap_or_else(|err| {
+                        panic!("import root release artifact `{name}`: {err}")
+                    });
+                }
+                transaction
+                    .commit()
+                    .expect("commit root release artifact cache")
+            }
+        };
+    let timings = outcome.record().timings();
+    progress_elapsed(
+        spec,
+        if outcome.is_reused() {
+            "reused local ICP artifact set"
+        } else {
+            "built local ICP artifact set"
+        },
+        started_at,
     );
-    mark_root_release_artifacts_fresh(spec, watched_inputs);
-    progress_elapsed(spec, "finished local ICP artifact build", started_at);
+    eprintln!(
+        "[root_setup] artifact cache {:?} (coordination {:?}, inputs {:?}, build {:?}, materialize {:?})",
+        timings.total(),
+        timings.coordination_lock_wait(),
+        timings.input_capture(),
+        timings.caller_build(),
+        timings.materialization(),
+    );
+    report_artifact_cache_maintenance("root-artifacts", outcome.record().maintenance());
 }
 
 /// Load the built `root.wasm.gz` artifact used for PocketIC root installs.
@@ -161,76 +194,64 @@ fn load_release_wasm_gz(spec: &RootBaselineSpec<'_>, role_name: &str) -> Vec<u8>
     bytes
 }
 
-// Confirm the root bootstrap artifact and every managed ordinary release artifact are fresh.
-fn root_release_artifacts_ready(spec: &RootBaselineSpec<'_>) -> bool {
-    let build_env = effective_build_env(spec);
-    let Ok(watched_inputs) =
-        WatchedInputSnapshot::capture(&spec.workspace_root, spec.artifact_watch_paths)
-    else {
-        return false;
-    };
+fn root_release_artifact_cache_spec(
+    spec: &RootBaselineSpec<'_>,
+    build_env: &[(&str, &str)],
+    outputs: &BTreeMap<String, PathBuf>,
+) -> ArtifactCacheSpec {
+    let config_path = spec
+        .build_config_path
+        .strip_prefix(&spec.workspace_root)
+        .expect("root build config must be workspace-confined")
+        .to_str()
+        .expect("root build config path UTF-8");
+    let mut environment = vec![("ICP_ENVIRONMENT", spec.build_network.as_str())];
+    environment.extend_from_slice(build_env);
+    let mut cache = ArtifactCacheSpec::new(
+        &spec
+            .workspace_root
+            .join("target/test-artifacts/external-artifact-cache"),
+        "root-release-artifacts",
+        "canic/root-release-artifacts/v1",
+    )
+    .with_coordination_scope("canic-external-artifact-builds")
+    .with_arguments(&[
+        "scripts/ci/build-ci-wasm-artifacts.sh",
+        spec.build_profile.canic_wasm_profile_value(),
+        config_path,
+    ])
+    .with_environment(&environment)
+    .with_prune_policy(internal_test_artifact_prune_policy());
 
-    if !icp_artifact_ready_with_snapshot(
-        &spec.workspace_root,
-        &spec.root_wasm_artifact_path,
-        watched_inputs,
-        spec.build_network,
-        spec.build_profile,
-        &spec.build_config_path,
-        &build_env,
-    ) {
-        return false;
+    for relative in spec.artifact_watch_paths {
+        cache = cache.with_input(relative, &spec.workspace_root.join(relative));
     }
-
-    configured_release_roles(spec).into_iter().all(|role| {
-        let role_name = role.as_str().to_string();
-        let artifact_path = spec
-            .root_release_artifacts_dir
-            .join(&role_name)
-            .join(format!("{role_name}.wasm.gz"));
-        icp_artifact_ready_with_snapshot(
-            &spec.workspace_root,
-            &artifact_path,
-            watched_inputs,
-            spec.build_network,
-            spec.build_profile,
-            &spec.build_config_path,
-            &build_env,
-        )
-    })
+    for (name, path) in outputs {
+        cache = cache.with_output(name, path);
+    }
+    cache
 }
 
-// Publish exact-input stamps only after the external ICP build has completed.
-fn mark_root_release_artifacts_fresh(
-    spec: &RootBaselineSpec<'_>,
-    watched_inputs: WatchedInputSnapshot,
-) {
-    let current_inputs =
-        WatchedInputSnapshot::capture(&spec.workspace_root, spec.artifact_watch_paths)
-            .expect("capture root release artifact inputs after build");
-    assert_eq!(
-        watched_inputs.digest(),
-        current_inputs.digest(),
-        "root release artifact inputs changed during build"
-    );
-    let mut artifact_paths = vec![spec.root_wasm_artifact_path.clone()];
-    artifact_paths.extend(configured_release_roles(spec).into_iter().map(|role| {
-        let role_name = role.as_str();
-        spec.root_release_artifacts_dir
-            .join(role_name)
-            .join(format!("{role_name}.wasm.gz"))
-    }));
-
-    for artifact_path in artifact_paths {
-        watched_inputs
-            .mark_artifact_fresh(&artifact_path)
-            .unwrap_or_else(|err| {
-                panic!(
-                    "mark root release artifact fresh at {} failed: {err}",
-                    artifact_path.display()
-                )
-            });
+fn root_release_artifact_outputs(spec: &RootBaselineSpec<'_>) -> BTreeMap<String, PathBuf> {
+    let mut outputs = BTreeMap::new();
+    for role_name in ["root", "wasm_store"] {
+        outputs.insert(
+            role_name.to_string(),
+            spec.root_release_artifacts_dir
+                .join(role_name)
+                .join(format!("{role_name}.wasm.gz")),
+        );
     }
+    for role in configured_release_roles(spec) {
+        let role_name = role.as_str().to_string();
+        outputs.insert(
+            role_name.clone(),
+            spec.root_release_artifacts_dir
+                .join(&role_name)
+                .join(format!("{role_name}.wasm.gz")),
+        );
+    }
+    outputs
 }
 
 // Ensure internal PocketIC root baselines retain their explicit qualified-build

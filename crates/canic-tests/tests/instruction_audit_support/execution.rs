@@ -11,7 +11,7 @@ fn setup_for_scenario(scenario: &AuditScenario) -> root::harness::RootSetup {
     }
 }
 
-// Execute one v3 scenario in a fresh authoritative topology.
+// Execute one v3 scenario in an exactly restored authoritative baseline.
 pub(super) fn run_scenario(scenario: &AuditScenario) -> ScenarioResult {
     if is_registry_auth_scenario(scenario) {
         return run_registry_auth_scenario(scenario);

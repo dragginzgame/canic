@@ -112,6 +112,8 @@ pub struct FleetSubnetRootLimits {
     pub maximum_wasm_store_bytes: u64,
     pub canister_pool: FleetSubnetCanisterPoolConfig,
     pub cycles_funding: CyclesFundingBudget,
+    /// Maximum accepted or committed Component Group placements on this root.
+    pub maximum_group_placements: u32,
 }
 
 ///

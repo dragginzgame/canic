@@ -22,6 +22,8 @@ const ROOT_WASM_WATCH_PATHS: &[&str] = &[
     "apps/test",
     "icp.yaml",
     "crates",
+    "rust-toolchain.toml",
+    "scripts/ci",
 ];
 
 #[derive(Clone, Copy)]
@@ -113,11 +115,9 @@ fn baseline_spec_for_roles_owned_env(
     RootBaselineSpec {
         progress_prefix: "root_setup",
         root_wasm_path: root_wasm_path(&workspace_root),
-        root_wasm_artifact_path: root_wasm_path(&workspace_root),
         root_release_artifacts_dir: root_release_artifacts_dir(&workspace_root),
         artifact_watch_paths: ROOT_WASM_WATCH_PATHS,
         release_roles,
-        icp_build_lock_path: icp_build_lock_path(&workspace_root),
         workspace_root,
         build_network: BuildNetwork::Local,
         build_profile,
@@ -139,8 +139,4 @@ fn root_wasm_path(workspace_root: &Path) -> PathBuf {
 
 fn root_release_artifacts_dir(workspace_root: &Path) -> PathBuf {
     workspace_root.join(".icp").join("local").join("canisters")
-}
-
-fn icp_build_lock_path(workspace_root: &Path) -> PathBuf {
-    workspace_root.join(".icp").join("canic-tests-build.lock")
 }

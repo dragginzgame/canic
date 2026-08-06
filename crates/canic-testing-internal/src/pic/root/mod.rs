@@ -13,7 +13,10 @@ mod topology;
 
 use artifacts::stage_managed_release_set;
 pub use artifacts::{ensure_root_release_artifacts_built, load_root_wasm};
-pub use baseline::{build_root_cached_baseline, restore_root_cached_baseline};
+pub use baseline::{
+    RootBaselineRecipe, RootBaselineRecipeError, build_root_cached_baseline,
+    restore_root_cached_baseline,
+};
 pub use topology::setup_root_topology;
 
 ///
@@ -25,11 +28,9 @@ pub struct RootBaselineSpec<'a> {
     pub progress_prefix: &'a str,
     pub workspace_root: PathBuf,
     pub root_wasm_path: PathBuf,
-    pub root_wasm_artifact_path: PathBuf,
     pub root_release_artifacts_dir: PathBuf,
     pub artifact_watch_paths: &'a [&'a str],
     pub release_roles: &'a [&'a str],
-    pub icp_build_lock_path: PathBuf,
     pub build_network: BuildNetwork,
     pub build_profile: CanicWasmBuildProfile,
     pub build_config_path: PathBuf,
@@ -45,6 +46,7 @@ pub struct RootBaselineSpec<'a> {
 /// RootBaselineMetadata
 ///
 
+#[derive(Clone)]
 pub struct RootBaselineMetadata {
     pub root_id: Principal,
     pub component_canisters: HashMap<CanisterRole, Principal>,

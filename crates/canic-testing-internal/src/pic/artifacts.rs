@@ -1,10 +1,8 @@
 use canic_core::ids::BuildNetwork;
 use ic_testkit::artifacts::{
-    WasmBuildCachePrunePolicy, WasmBuildSpec, WatchedInputSnapshot, build_wasm_canisters_cached,
-    prune_wasm_build_cache,
+    ArtifactCacheMaintenance, ArtifactCachePrunePolicy, WasmBuildSpec, build_wasm_canisters_cached,
 };
 use std::{
-    fs, io,
     path::{Path, PathBuf},
     process::{Command, Output},
     time::Duration,
@@ -47,7 +45,7 @@ impl CanicWasmBuildProfile {
     }
 
     #[must_use]
-    const fn canic_wasm_profile_value(self) -> &'static str {
+    pub(super) const fn canic_wasm_profile_value(self) -> &'static str {
         match self {
             Self::Debug => "debug",
             Self::Fast => "fast",
@@ -101,7 +99,8 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
         profile.target_dir_name(),
     )
     .with_cargo_profile_args(&cargo_args)
-    .with_extra_env(&build_env);
+    .with_extra_env(&build_env)
+    .with_prune_policy(internal_test_artifact_prune_policy());
     let outcome = build_wasm_canisters_cached(&build)
         .unwrap_or_else(|err| panic!("internal test Wasm build failed: {err}"));
     let timings = outcome.record().timings();
@@ -118,193 +117,55 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
         timings.input_resolution(),
         timings.cargo_build(),
     );
-
-    prune_internal_test_wasm_cache(target_dir);
+    report_artifact_cache_maintenance("canic-test-wasm", outcome.record().maintenance());
 }
 
-fn prune_internal_test_wasm_cache(target_dir: &Path) {
-    let policy = WasmBuildCachePrunePolicy::new()
+pub(super) const fn internal_test_artifact_prune_policy() -> ArtifactCachePrunePolicy {
+    ArtifactCachePrunePolicy::new()
         .with_max_age(INTERNAL_TEST_WASM_CACHE_MAX_AGE)
-        .with_max_size_bytes(INTERNAL_TEST_WASM_CACHE_MAX_BYTES);
-
-    match prune_wasm_build_cache(target_dir, policy) {
-        Ok(report) if report.entries_removed() > 0 => eprintln!(
-            "[canic-test-wasm] pruned {} cache entr{} ({} bytes); retained {} entr{} ({} bytes)",
-            report.entries_removed(),
-            if report.entries_removed() == 1 {
-                "y"
-            } else {
-                "ies"
-            },
-            report.bytes_removed(),
-            report.entries_retained(),
-            if report.entries_retained() == 1 {
-                "y"
-            } else {
-                "ies"
-            },
-            report.bytes_retained(),
-        ),
-        Ok(_) => {}
-        Err(err) => eprintln!(
-            "[canic-test-wasm] warning: could not prune {}: {err}",
-            target_dir.display()
-        ),
-    }
+        .with_max_size_bytes(INTERNAL_TEST_WASM_CACHE_MAX_BYTES)
 }
 
-#[must_use]
-pub(super) fn icp_artifact_ready_with_snapshot(
-    workspace_root: &Path,
-    artifact_path: &Path,
-    watched_inputs: WatchedInputSnapshot,
-    build_network: BuildNetwork,
-    profile: CanicWasmBuildProfile,
-    config_path: &Path,
-    extra_env: &[(&str, &str)],
-) -> bool {
-    match fs::metadata(artifact_path) {
-        Ok(meta) if meta.is_file() && meta.len() > 0 => {
-            watched_inputs
-                .artifact_is_fresh(artifact_path)
-                .unwrap_or(false)
-                && build_stamp_matches(
-                    workspace_root,
-                    build_network,
-                    profile,
-                    config_path,
-                    extra_env,
-                )
-        }
-        _ => false,
-    }
-}
-
-pub(super) fn build_icp_all_with_env(
-    workspace_root: &Path,
-    lock_path: &Path,
-    build_network: BuildNetwork,
-    profile: CanicWasmBuildProfile,
-    config_path: &Path,
-    extra_env: &[(&str, &str)],
+pub(super) fn report_artifact_cache_maintenance(
+    label: &str,
+    maintenance: Option<&ArtifactCacheMaintenance>,
 ) {
-    let output = run_local_artifact_build_with_lock(
-        workspace_root,
-        lock_path,
-        build_network,
-        profile,
-        config_path,
-        extra_env,
-    );
-    assert!(
-        output.status.success(),
-        "local artifact build failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    write_build_stamp(
-        workspace_root,
-        build_network,
-        profile,
-        config_path,
-        extra_env,
-    )
-    .expect("write local artifact build env stamp");
-}
-
-fn build_stamp_matches(
-    workspace_root: &Path,
-    build_network: BuildNetwork,
-    profile: CanicWasmBuildProfile,
-    config_path: &Path,
-    extra_env: &[(&str, &str)],
-) -> bool {
-    fs::read_to_string(icp_build_env_stamp_path(workspace_root)).is_ok_and(|current| {
-        current == build_stamp_contents(build_network, profile, config_path, extra_env)
-    })
-}
-
-fn write_build_stamp(
-    workspace_root: &Path,
-    build_network: BuildNetwork,
-    profile: CanicWasmBuildProfile,
-    config_path: &Path,
-    extra_env: &[(&str, &str)],
-) -> io::Result<()> {
-    let stamp_path = icp_build_env_stamp_path(workspace_root);
-    if let Some(parent) = stamp_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(
-        stamp_path,
-        build_stamp_contents(build_network, profile, config_path, extra_env),
-    )
-}
-
-fn build_stamp_contents(
-    build_network: BuildNetwork,
-    profile: CanicWasmBuildProfile,
-    config_path: &Path,
-    extra_env: &[(&str, &str)],
-) -> String {
-    let mut lines = vec![
-        format!("ICP_ENVIRONMENT={build_network}"),
-        format!("profile={}", profile.canic_wasm_profile_value()),
-        format!("config_path={}", config_path.display()),
-    ];
-
-    let mut extra = extra_env.to_vec();
-    extra.sort_unstable_by_key(|(left, _)| *left);
-    lines.extend(
-        extra
-            .into_iter()
-            .map(|(key, value)| format!("{key}={value}")),
-    );
-    lines.push(String::new());
-    lines.join("\n")
-}
-
-fn run_local_artifact_build_with_lock(
-    workspace_root: &Path,
-    lock_file: &Path,
-    build_network: BuildNetwork,
-    profile: CanicWasmBuildProfile,
-    config_path: &Path,
-    extra_env: &[(&str, &str)],
-) -> Output {
-    let target_dir = icp_build_target_dir(workspace_root);
-    if let Some(parent) = lock_file.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    let _ = fs::create_dir_all(&target_dir);
-
-    let mut flock = Command::new("flock");
-    flock
-        .current_dir(workspace_root)
-        .arg(lock_file.as_os_str())
-        .arg("bash")
-        .env("ICP_ENVIRONMENT", build_network.as_str())
-        .env("CARGO_TARGET_DIR", &target_dir)
-        .arg(build_ci_wasm_artifacts_script(workspace_root))
-        .arg(profile.canic_wasm_profile_value())
-        .arg(config_path);
-    for (key, value) in extra_env {
-        flock.env(key, value);
-    }
-
-    match flock.output() {
-        Ok(output) => output,
-        Err(err) if err.kind() == io::ErrorKind::NotFound => run_local_artifact_build(
-            workspace_root,
-            build_network,
-            profile,
-            config_path,
-            extra_env,
+    match maintenance {
+        Some(maintenance)
+            if maintenance
+                .prune_report()
+                .is_some_and(|report| report.entries_removed() > 0) =>
+        {
+            let report = maintenance.prune_report().expect("checked prune report");
+            eprintln!(
+                "[{label}] pruned {} cache entr{} ({} bytes); retained {} entr{} ({} bytes)",
+                report.entries_removed(),
+                if report.entries_removed() == 1 {
+                    "y"
+                } else {
+                    "ies"
+                },
+                report.bytes_removed(),
+                report.entries_retained(),
+                if report.entries_retained() == 1 {
+                    "y"
+                } else {
+                    "ies"
+                },
+                report.bytes_retained(),
+            );
+        }
+        Some(maintenance) if maintenance.failure_message().is_some() => eprintln!(
+            "[{label}] warning: cache maintenance failed: {}",
+            maintenance
+                .failure_message()
+                .expect("checked failure message")
         ),
-        Err(err) => panic!("failed to run `flock` for local artifact build: {err}"),
+        Some(_) | None => {}
     }
 }
 
-fn run_local_artifact_build(
+pub(super) fn run_icp_all_with_env(
     workspace_root: &Path,
     build_network: BuildNetwork,
     profile: CanicWasmBuildProfile,
@@ -312,7 +173,6 @@ fn run_local_artifact_build(
     extra_env: &[(&str, &str)],
 ) -> Output {
     let target_dir = icp_build_target_dir(workspace_root);
-    let _ = fs::create_dir_all(&target_dir);
 
     let mut build = Command::new("bash");
     build
@@ -329,10 +189,6 @@ fn run_local_artifact_build(
     build
         .output()
         .expect("failed to run local artifact build helper")
-}
-
-fn icp_build_env_stamp_path(workspace_root: &Path) -> PathBuf {
-    workspace_root.join(".icp").join("canic-build-env.stamp")
 }
 
 fn icp_build_target_dir(workspace_root: &Path) -> PathBuf {

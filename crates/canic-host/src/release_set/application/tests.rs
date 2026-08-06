@@ -109,6 +109,7 @@ fn limits(maximum_wasm_store_bytes: u64) -> FleetSubnetRootLimits {
         maximum_component_instances: 10,
         maximum_registry_bytes: 4_194_304,
         maximum_wasm_store_bytes,
+        maximum_group_placements: 16,
         canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {
             minimum_size: 1,
             maximum_size: 10,

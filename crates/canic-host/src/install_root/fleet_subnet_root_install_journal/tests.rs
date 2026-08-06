@@ -678,6 +678,7 @@ fn fixture(root: &Path) -> Fixture {
             maximum_component_instances: 100,
             maximum_registry_bytes: 2_097_152,
             maximum_wasm_store_bytes: 268_435_456,
+            maximum_group_placements: 16,
             canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {
                 minimum_size: 1,
                 maximum_size: 10,

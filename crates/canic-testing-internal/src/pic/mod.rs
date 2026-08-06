@@ -31,9 +31,9 @@ pub use lifecycle::{
     LifecycleBoundaryFixture, install_lifecycle_boundary_fixture, invalid_init_args, upgrade_args,
 };
 pub use root::{
-    RootBaselineMetadata, RootBaselineSpec, build_root_cached_baseline,
-    ensure_root_release_artifacts_built, load_root_wasm, restore_root_cached_baseline,
-    setup_root_topology,
+    RootBaselineMetadata, RootBaselineRecipe, RootBaselineRecipeError, RootBaselineSpec,
+    build_root_cached_baseline, ensure_root_release_artifacts_built, load_root_wasm,
+    restore_root_cached_baseline, setup_root_topology,
 };
 
 pub(super) const SNAPSHOT_RESTORE_MINIMUM_CYCLES: u128 = 200_000_000_000_000;
