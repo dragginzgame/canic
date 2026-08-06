@@ -26,10 +26,14 @@ Historical detail is archived at:
   or runtime effect is enabled yet. The same open patch advances the internal
   harness dependency to `ic-testkit` 0.7.0 without changing the current Canic
   test topology, adopting its batch progress, exact Cargo-input and captured
-  snapshot-sender APIs. Focused validation measured a single exact Wasm hit at
-  424 milliseconds after a 37.42-second cold build, and the active Registry
-  journey at 22.78 seconds warm after a 226.98-second cold artifact pass; its
-  transactional Store artifact reused in 955 milliseconds.
+  snapshot-sender APIs. Patch, minor and major release gates now confine
+  temporary files to repository-owned test scratch, then clear it and Cargo
+  artifacts on exit before version mutation; release push repeats the bounded
+  cleanup before its atomic network effect.
+  Focused validation measured a single exact Wasm hit at 424 milliseconds
+  after a 37.42-second cold build, and the active Registry journey at 22.78
+  seconds warm after a 226.98-second cold artifact pass; its transactional
+  Store artifact reused in 955 milliseconds.
 - Released `0.101.9` advances the internal harness to `ic-testkit 0.6.0`, shares
   caller-owned Cargo compilation state across exact test-Wasm caches and uses
   exact per-canister snapshot senders for mixed-controller pooled topologies.
