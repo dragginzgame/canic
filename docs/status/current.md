@@ -14,17 +14,26 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.11`.
-- The latest published release is `v0.101.11` at
-  `1d52e01417b273b1a28e3eec27e804dcedeb1ab7`.
-- Open `0.101.12` advances the internal harness to `ic-testkit` 0.7.2, applies
-  scheduled age and size retention to network-qualified shared Cargo targets,
-  and makes one guarded inventory authoritative for all 35 integration test
-  targets. The full release lane runs all 29 parallel-safe and six serial
-  PocketIC targets; the fast lane retains three release-surface integrations.
-  It also installs every fully claimed grouped member in canonical order
-  through the ordinary exact-retry Store-backed journal. A third hash-bound
-  cursor reconciles response loss only after the exact plan-derived context,
+- The workspace package version is `0.101.12`.
+- The latest published release is `v0.101.12` at
+  `20b1395e8f2af782b1e2f7599c7c74343d89fb59`.
+- Open `0.101.13` advances every fully installed grouped root batch one
+  canonical member at a time through the ordinary Component Registry
+  commitment path. A fourth hash-bound cursor reconciles response loss only
+  after the exact accepted member, Store artifact, grouped Registry-byte limit,
+  current Fleet Directory authority and resulting `Prepared` partition agree.
+  Directories and runtime activation remain fenced. The same patch advances the
+  internal harness to `ic-testkit` 0.7.4 and integrates scheduled shared
+  Cargo-target retention with the first exact Wasm acquisition in each package
+  batch, reusing one Cargo-input resolution and avoiding redundant later
+  schedule checks and lock acquisition.
+- Released `0.101.12` makes one guarded inventory authoritative for all 35
+  integration test targets. The full release lane runs all 29 parallel-safe
+  and six serial PocketIC targets; the fast lane retains three release-surface
+  integrations. It also installs every fully claimed grouped member in
+  canonical order through the ordinary exact-retry Store-backed journal. A
+  third hash-bound cursor reconciles response loss only after the exact
+  plan-derived context,
   effective Registry-byte ceiling, module, controller, binding and empty
   `Prepared` runtime status agree. A real PocketIC root now proves the complete
   accept/reserve/claim/install/replay path and exposed two undersized stable
@@ -285,18 +294,17 @@ Historical detail is archived at:
   keeping holdings and project authorization local to each application role.
   Exact Component-subtree binding and application-authorized admission remain
   implementation gates; no 0.105 runtime behavior is approved or implemented.
-- Proposed `0.106` extracts blob storage into independent `blob-protocol`,
-  `blob-client` and `blob-service` packages so non-Canic applications can use
-  the same service-qualified, tenant-owned immutable references. Caffeine
-  remains the sole first byte backend. Canic deploys the service only as an
-  ordinary application Component and hard-cuts its current blob API, state,
-  stable-memory, features, CLI and Medic ownership without migration or
-  compatibility paths. Optional API/lifecycle composition lives instead in
-  standalone-repository `blob-service-canic`; its dependency points toward
-  generic Canic facilities. Canic gains no blob feature, module, macro or
-  dependency. The Canic hard cut cannot begin until M0 proves the Caffeine
-  upload, deletion and exclusive-authority contracts; bounded resumability;
-  safe public serving; and ordinary Component deployment.
+- Proposed `0.106` extracts blob storage into three standalone core libraries
+  plus a tiny `blob-service-canister` Wasm shell so Canic and non-Canic
+  applications can use the same service-qualified tenant references. A
+  conditional external `blob-service-canic` library composes the API only when
+  M0 proves generic lifecycle integration is needed; Canic gains no blob
+  package, feature, module, macro or production dependency. M0 investigation
+  alone is approved by the design. It must freeze the Cargo/Wasm target graph,
+  sole Candid authorities, bounded init/operator policy, origin-owned upload
+  recovery and Caffeine authority before implementation or the Canic hard cut.
+  A qualified standalone release and real Canic fixture gate closeout; Toko and
+  IcyDB production adoption remains an independent downstream release.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -1146,15 +1154,14 @@ Historical detail is archived at:
   profile, while clients obtain one token for direct use across every granted
   role. Login-provider names, application account linking and resource
   ownership remain outside the runtime protocol.
-- Proposed 0.106 moves raw/backend object identities, service-qualified
-  tenant-owned references, quotas,
-  Caffeine/Cashier adaptation, retention and deletion into a standalone blob
-  service. Its portable protocol and cross-runtime client have no Canic
-  dependency; optional standalone-repository `blob-service-canic` supplies a
-  generic Canic endpoint and Component lifecycle envelope without adding any
-  blob feature, module, macro or dependency to Canic. The line is a
-  reinstall-only hard cut of the current Canic blob subsystem, not a removal
-  of optional Canic API management.
+- Proposed 0.106 moves raw/backend identities, service-qualified tenant
+  references, quotas, Caffeine/Cashier adaptation, retention and deletion into
+  three standalone libraries and one minimal standalone Wasm shell. A
+  conditional external adapter may compose generic Canic lifecycle without
+  adding a production blob dependency to Canic. The qualified standalone
+  release precedes the reinstall-only Canic hard cut. A Canic fixture, rather
+  than Toko/IcyDB's independent production release, proves the consumer
+  contract for closeout.
 - Released `0.99.33` pins the maintained operator toolchain to ICP CLI 1.2.0
   and Rust 1.97.1 while preserving the published-crate MSRV.
 - Released `0.99.32` makes the active 0.99–0.103 design sequence
@@ -2357,14 +2364,14 @@ First primary results:
 ## Next Action
 
 The canonical plan, exact root-batch acceptance, canonical root-local
-`ComponentInstanceId` allocation and prepaid-Canister claim are published
-through immutable `v0.101.11`. Open `0.101.12` additionally installs each
-claimed member's exact Store-backed Wasm behind `Prepared`, retaining and
-independently observing its grouped runtime context while keeping later
-transitions fenced. Continue Slice 2 by committing each verified member's
-exact `Prepared` Component Registry partition and aggregate root receipt;
-Directory publication and activation remain separate. Do not enable scale-out
-until its durable Coordinator
+`ComponentInstanceId` allocation, prepaid-Canister claim and Store-backed
+installation are published through immutable `v0.101.12`. Open `0.101.13`
+additionally commits each verified member's exact `Prepared` Component Registry
+partition through its own replay-safe cursor while retaining the aggregate
+`Accepted` fence. Continue Slice 2 by materializing the durable aggregate
+`Provisioned` result and exact terminal retry receipt; Component Group/Fleet
+service publication, Directory delivery and runtime activation remain separate.
+Do not enable scale-out until its durable Coordinator
 placement ledger can prove ordinal non-reuse and combined density/spread.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the

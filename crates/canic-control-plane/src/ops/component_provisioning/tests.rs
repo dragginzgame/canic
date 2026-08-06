@@ -5,8 +5,8 @@ use crate::storage::stable::component_provisioning::{
     RootComponentProvisioningData, RootComponentProvisioningStore,
 };
 use crate::view::component_registry::{
-    RootComponentAllocationProgressView, RootComponentCreationEffectView,
-    RootComponentInstallEffectView,
+    ComponentRegistryPartitionView, RootComponentAllocationProgressView,
+    RootComponentCommitmentView, RootComponentCreationEffectView, RootComponentInstallEffectView,
 };
 use candid::Principal;
 use canic_core::{
@@ -16,6 +16,9 @@ use canic_core::{
     dto::{
         component_provisioning::{
             ComponentGroupPlacementPlan, ComponentGroupPlanEntry, FleetSubnetRootProvisioningBatch,
+        },
+        component_registry::{
+            ComponentLifecycleStatus, ComponentProvisioningOrigin, ComponentRegistryHead,
         },
         fleet_registry::FleetRegistryVersion,
     },
@@ -247,6 +250,52 @@ fn installed_allocation(
     allocation
 }
 
+fn committed_allocation(
+    mut allocation: RootComponentAllocationView,
+) -> (RootComponentAllocationView, ComponentRegistryPartitionView) {
+    let RootComponentAllocationProgressView::Verified {
+        creation,
+        canister,
+        installation,
+    } = allocation.progress
+    else {
+        panic!("installed allocation must be Verified")
+    };
+    let registry = ComponentRegistryHead {
+        component: allocation.component,
+        revision: 1,
+        content_hash: [35; 32],
+    };
+    let partition = ComponentRegistryPartitionView {
+        binding: installation.binding.clone(),
+        provisioning_origin: allocation.provisioning_origin.clone(),
+        release_set: allocation.release_set,
+        status: ComponentLifecycleStatus::Prepared,
+        revision: registry.revision,
+        content_hash: registry.content_hash,
+        descendant_content_hash: [36; 32],
+        directory_synchronized_at_ns: 200,
+        reserved_descendants: 0,
+        committed_descendants: 0,
+        encoded_bytes: 1,
+    };
+    allocation.progress = RootComponentAllocationProgressView::Committed {
+        creation,
+        canister,
+        installation,
+        commitment: RootComponentCommitmentView {
+            registry,
+            prepared_registry_encoded_bytes: partition.encoded_bytes,
+            directory_synchronized_at_ns: partition.directory_synchronized_at_ns,
+            directory_authority_hash: [37; 32],
+            directory_prepared: false,
+            runtime_activated: false,
+            membership: None,
+        },
+    };
+    (allocation, partition)
+}
+
 fn assert_group_context(
     context: ProtectedComponentDeployment,
     canister: Principal,
@@ -280,6 +329,7 @@ fn reserve_single_member(
         expected_reserved_component_count: 0,
         expected_claimed_component_count: 0,
         expected_installed_component_count: 0,
+        expected_registry_committed_component_count: 0,
     };
     let member = RootComponentProvisioningOps::next_member_reservation(&accepted)
         .expect("next member reservation");
@@ -302,6 +352,64 @@ fn reserve_single_member(
     let advanced = RootComponentProvisioningOps::mark_member_reserved(request, &allocation)
         .expect("commit member reservation");
     (request, allocation, advanced)
+}
+
+fn commit_single_registry_member(
+    member: &RootComponentProvisioningMemberView,
+    installed_allocation: RootComponentAllocationView,
+    installed: &RootComponentProvisioningView,
+    install_request: RootComponentProvisioningAdvanceRequest,
+) -> RootComponentProvisioningView {
+    let registry_request = RootComponentProvisioningAdvanceRequest {
+        expected_installed_component_count: 1,
+        expected_registry_committed_component_count: 0,
+        ..install_request
+    };
+    assert_eq!(
+        RootComponentProvisioningOps::advance_disposition(registry_request, installed)
+            .expect("Registry disposition"),
+        RootComponentProvisioningAdvanceDisposition::Advance
+    );
+    let registry_member = RootComponentProvisioningOps::next_member_registry_commit(installed)
+        .expect("next Registry member");
+    assert_eq!(&registry_member, member);
+    let (committed_allocation, partition) = committed_allocation(installed_allocation);
+    let mut wrong_partition = partition.clone();
+    wrong_partition.status = ComponentLifecycleStatus::Active;
+    assert!(
+        RootComponentProvisioningOps::mark_member_registry_committed(
+            registry_request,
+            &committed_allocation,
+            &wrong_partition,
+        )
+        .is_err()
+    );
+    let registered = RootComponentProvisioningOps::mark_member_registry_committed(
+        registry_request,
+        &committed_allocation,
+        &partition,
+    )
+    .expect("commit member Registry progress");
+    assert_eq!(
+        RootComponentProvisioningOps::advance_disposition(registry_request, &registered)
+            .expect("Registry response-loss replay"),
+        RootComponentProvisioningAdvanceDisposition::Replay
+    );
+    registered
+}
+
+fn assert_restart_retains_registered(
+    request: RootComponentProvisioningAdvanceRequest,
+    registered: &RootComponentProvisioningView,
+) {
+    let snapshot = RootComponentProvisioningStore::export();
+    RootComponentProvisioningStore::import(snapshot);
+    let restored = RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
+        operation_id: request.operation_id,
+        plan_hash: request.plan_hash,
+    })
+    .expect("restored Registry progress");
+    assert_eq!(&restored, registered);
 }
 
 #[test]
@@ -368,6 +476,7 @@ fn reservation_advance_is_cursor_bound_and_response_loss_safe() {
         expected_reserved_component_count: 0,
         expected_claimed_component_count: 0,
         expected_installed_component_count: 0,
+        expected_registry_committed_component_count: 0,
     };
     assert_eq!(
         RootComponentProvisioningOps::advance_disposition(request, &accepted)
@@ -395,7 +504,7 @@ fn reservation_advance_is_cursor_bound_and_response_loss_safe() {
 }
 
 #[test]
-fn claim_and_install_advances_are_context_bound_restart_safe_and_terminal() {
+fn claim_install_and_registry_advances_are_context_bound_restart_safe_and_terminal() {
     let fixture = fixture();
     let (request, allocation, advanced) = reserve_single_member(&fixture);
     let claim_request = RootComponentProvisioningAdvanceRequest {
@@ -434,6 +543,7 @@ fn claim_and_install_advances_are_context_bound_restart_safe_and_terminal() {
     assert_eq!(response.reserved_component_count, 1);
     assert_eq!(response.claimed_component_count, 1);
     assert_eq!(response.installed_component_count, 0);
+    assert_eq!(response.registry_committed_component_count, 0);
     assert_eq!(
         RootComponentProvisioningOps::advance_disposition(claim_request, &claimed)
             .expect("claim response-loss replay"),
@@ -474,24 +584,28 @@ fn claim_and_install_advances_are_context_bound_restart_safe_and_terminal() {
         ..install_request
     };
     assert!(RootComponentProvisioningOps::advance_disposition(contradictory, &installed).is_err());
+    let registered =
+        commit_single_registry_member(&member, installed_allocation, &installed, install_request);
+    assert_eq!(
+        registered
+            .registry_cursor
+            .registry_committed_component_count,
+        1
+    );
+    assert_eq!(registered.registry_cursor.placement_index, 1);
+    assert_eq!(registered.registry_cursor.member_index, 0);
     let complete = RootComponentProvisioningAdvanceRequest {
+        expected_registry_committed_component_count: 1,
         expected_installed_component_count: 1,
         ..install_request
     };
     assert_eq!(
-        RootComponentProvisioningOps::advance_disposition(complete, &installed)
+        RootComponentProvisioningOps::advance_disposition(complete, &registered)
             .expect("terminal disposition"),
         RootComponentProvisioningAdvanceDisposition::Complete
     );
 
-    let snapshot = RootComponentProvisioningStore::export();
-    RootComponentProvisioningStore::import(snapshot);
-    let restored = RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
-        operation_id: request.operation_id,
-        plan_hash: request.plan_hash,
-    })
-    .expect("restored reservation progress");
-    assert_eq!(restored, installed);
+    assert_restart_retains_registered(request, &registered);
 }
 
 #[test]
@@ -529,18 +643,27 @@ fn prepaid_claim_cannot_precede_complete_identity_reservation() {
         expected_reserved_component_count: 0,
         expected_claimed_component_count: 0,
         expected_installed_component_count: 0,
+        expected_registry_committed_component_count: 0,
     };
     assert!(RootComponentProvisioningOps::next_member_claim(&accepted).is_err());
     assert!(RootComponentProvisioningOps::mark_member_claimed(request, &allocation).is_err());
     let installed = installed_allocation(allocation, &fixture.request.batch.root);
     assert!(RootComponentProvisioningOps::next_member_install(&accepted).is_err());
     assert!(RootComponentProvisioningOps::mark_member_installed(request, &installed).is_err());
+    let (committed, partition) = committed_allocation(installed);
+    assert!(RootComponentProvisioningOps::next_member_registry_commit(&accepted).is_err());
+    assert!(
+        RootComponentProvisioningOps::mark_member_registry_committed(
+            request, &committed, &partition,
+        )
+        .is_err()
+    );
 }
 
 #[test]
 #[expect(
     clippy::too_many_lines,
-    reason = "one canonical three-phase journey makes ordering and identity reuse explicit"
+    reason = "one canonical four-phase journey makes ordering and identity reuse explicit"
 )]
 fn reservation_cursor_crosses_canonical_placements_without_reusing_identity() {
     let mut fixture = fixture();
@@ -562,6 +685,7 @@ fn reservation_cursor_crosses_canonical_placements_without_reusing_identity() {
     let mut operation_ids = BTreeSet::new();
     let mut allocations = Vec::new();
     let mut claimed_allocations = Vec::new();
+    let mut installed_allocations = Vec::new();
     for expected in 0..2 {
         let request = RootComponentProvisioningAdvanceRequest {
             operation_id: fixture.request.operation_id,
@@ -569,6 +693,7 @@ fn reservation_cursor_crosses_canonical_placements_without_reusing_identity() {
             expected_reserved_component_count: expected,
             expected_claimed_component_count: 0,
             expected_installed_component_count: 0,
+            expected_registry_committed_component_count: 0,
         };
         let member = RootComponentProvisioningOps::next_member_reservation(&current)
             .expect("next placement member");
@@ -607,6 +732,7 @@ fn reservation_cursor_crosses_canonical_placements_without_reusing_identity() {
             expected_reserved_component_count: 2,
             expected_claimed_component_count: expected,
             expected_installed_component_count: 0,
+            expected_registry_committed_component_count: 0,
         };
         let member = RootComponentProvisioningOps::next_member_claim(&current)
             .expect("next canonical claim member");
@@ -636,6 +762,7 @@ fn reservation_cursor_crosses_canonical_placements_without_reusing_identity() {
             expected_reserved_component_count: 2,
             expected_claimed_component_count: 2,
             expected_installed_component_count: expected,
+            expected_registry_committed_component_count: 0,
         };
         let member = RootComponentProvisioningOps::next_member_install(&current)
             .expect("next canonical install member");
@@ -648,10 +775,43 @@ fn reservation_cursor_crosses_canonical_placements_without_reusing_identity() {
         let allocation = installed_allocation(allocation, &fixture.request.batch.root);
         current = RootComponentProvisioningOps::mark_member_installed(request, &allocation)
             .expect("advance placement install");
+        installed_allocations.push(allocation);
     }
     assert_eq!(current.install_cursor.installed_component_count, 2);
     assert_eq!(current.install_cursor.placement_index, 2);
     assert_eq!(current.install_cursor.member_index, 0);
+
+    for expected in 0..2 {
+        let request = RootComponentProvisioningAdvanceRequest {
+            operation_id: fixture.request.operation_id,
+            plan_hash: fixture.request.plan_hash,
+            expected_reserved_component_count: 2,
+            expected_claimed_component_count: 2,
+            expected_installed_component_count: 2,
+            expected_registry_committed_component_count: expected,
+        };
+        let member = RootComponentProvisioningOps::next_member_registry_commit(&current)
+            .expect("next canonical Registry member");
+        assert_eq!(member.group_placement.ordinal, expected);
+        let allocation = installed_allocations
+            .iter()
+            .find(|allocation| allocation.operation_id == member.member_operation_id)
+            .expect("installed Registry member")
+            .clone();
+        let (allocation, partition) = committed_allocation(allocation);
+        current = RootComponentProvisioningOps::mark_member_registry_committed(
+            request,
+            &allocation,
+            &partition,
+        )
+        .expect("advance placement Registry commitment");
+    }
+    assert_eq!(
+        current.registry_cursor.registry_committed_component_count,
+        2
+    );
+    assert_eq!(current.registry_cursor.placement_index, 2);
+    assert_eq!(current.registry_cursor.member_index, 0);
 }
 
 #[test]
@@ -718,10 +878,18 @@ fn corrupted_receipt_index_or_aggregate_state_fails_closed() {
     RootComponentProvisioningStore::import(corrupted);
     assert!(RootComponentProvisioningOps::acceptance_replay(&fixture.request).is_err());
 
-    let mut corrupted = exact;
+    let mut corrupted = exact.clone();
     let RootComponentProvisioningStateRecordPhase::Accepted { install_cursor, .. } =
         &mut corrupted.operations[0].state;
     install_cursor.content_hash = [95; 32];
+    RootComponentProvisioningStore::import(corrupted);
+    assert!(RootComponentProvisioningOps::acceptance_replay(&fixture.request).is_err());
+
+    let mut corrupted = exact;
+    let RootComponentProvisioningStateRecordPhase::Accepted {
+        registry_cursor, ..
+    } = &mut corrupted.operations[0].state;
+    registry_cursor.content_hash = [94; 32];
     RootComponentProvisioningStore::import(corrupted);
     assert!(RootComponentProvisioningOps::acceptance_replay(&fixture.request).is_err());
 }

@@ -42,6 +42,14 @@ pub struct RootComponentProvisioningInstallCursorView {
     pub installed_component_count: u32,
 }
 
+/// Read-only canonical Registry-commit cursor for one accepted root batch.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RootComponentProvisioningRegistryCursorView {
+    pub placement_index: u32,
+    pub member_index: u32,
+    pub registry_committed_component_count: u32,
+}
+
 /// Response-idempotent interpretation of one caller-bound expected cursor.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RootComponentProvisioningAdvanceDisposition {
@@ -77,6 +85,7 @@ pub struct RootComponentProvisioningView {
     pub reservation_cursor: RootComponentProvisioningReservationCursorView,
     pub claim_cursor: RootComponentProvisioningClaimCursorView,
     pub install_cursor: RootComponentProvisioningInstallCursorView,
+    pub registry_cursor: RootComponentProvisioningRegistryCursorView,
     pub accepted_at_ns: u64,
     pub receipt_content_hash: [u8; 32],
 }
