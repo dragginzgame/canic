@@ -114,6 +114,10 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "canic_fleet_component_provisioning_prepare",
         command_kind("fleet_component_provisioning.prepare.v1"),
     ),
+    update_response_idempotent(
+        "canic_fleet_component_provisioning_advance",
+        command_kind("fleet_component_provisioning.advance_root_acceptance.v1"),
+    ),
     query_read_only("canic_fleet_component_provisioning_status"),
     update_response_idempotent(
         "canic_fleet_registry_publish_root_draining",

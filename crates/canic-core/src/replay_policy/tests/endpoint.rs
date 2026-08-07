@@ -565,7 +565,7 @@ fn fleet_subnet_root_physical_deletion_handoff_is_durable_and_costed() {
 }
 
 #[test]
-fn fleet_component_plan_preparation_is_response_idempotent() {
+fn fleet_component_plan_commands_are_response_idempotent() {
     let prepare = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
         .find(|entry| entry.endpoint == "canic_fleet_component_provisioning_prepare")
@@ -577,6 +577,20 @@ fn fleet_component_plan_preparation_is_response_idempotent() {
         }
     );
     assert_eq!(prepare.cost_class, CostClass::None);
+
+    let advance = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_fleet_component_provisioning_advance")
+        .expect("Fleet Component provisioning advance policy entry");
+    assert_eq!(
+        advance.replay_policy,
+        ReplayPolicy::ResponseIdempotent {
+            command_kind: replay_command_kind(
+                "fleet_component_provisioning.advance_root_acceptance.v1",
+            ),
+        }
+    );
+    assert_eq!(advance.cost_class, CostClass::None);
 
     let status = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()

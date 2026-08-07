@@ -276,6 +276,42 @@ fn canonical_configuration_digest_matches_schema_one_golden_vector() {
 }
 
 #[test]
+fn compiled_configuration_round_trips_with_the_exact_semantic_digest() {
+    let config = Config::parse_toml(BASELINE).expect("valid deployment configuration");
+    let compiled = config
+        .compile_component_deployment_configuration()
+        .expect("compiled deployment configuration");
+    let expected = config
+        .compile_component_deployment_configuration_digest()
+        .expect("configuration digest");
+
+    assert_eq!(compiled.digest().expect("compiled digest"), expected);
+    let encoded = candid::encode_one(&compiled).expect("encode compiled configuration");
+    let decoded: ComponentDeploymentConfiguration =
+        candid::decode_one(&encoded).expect("decode compiled configuration");
+    assert_eq!(decoded, compiled);
+    assert_eq!(decoded.digest().expect("decoded digest"), expected);
+}
+
+#[test]
+fn decoded_compiled_configuration_rejects_noncanonical_topology() {
+    let config = Config::parse_toml(BASELINE).expect("valid deployment configuration");
+    let mut compiled = config
+        .compile_component_deployment_configuration()
+        .expect("compiled deployment configuration");
+    compiled.component_group_topology.component_groups.reverse();
+
+    assert!(matches!(
+        compiled.digest(),
+        Err(
+            ComponentDeploymentConfigurationDigestError::ComponentGroupTopology(
+                ComponentGroupTopologyError::NonCanonicalGroupOrder { .. }
+            )
+        )
+    ));
+}
+
+#[test]
 fn group_member_context_matches_only_the_exact_compiled_projection() {
     let config = Config::parse_toml(BASELINE).expect("valid deployment configuration");
     let deployment_topology = config

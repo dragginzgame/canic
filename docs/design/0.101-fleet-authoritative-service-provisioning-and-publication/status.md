@@ -55,11 +55,18 @@ Date: 2026-08-07
   primitive. The Coordinator now validates and durably freezes the complete
   fresh-install plan before effects, exposes compact exact status and replay,
   revalidates that authority after restart and fences grouped root lifecycle.
-  Authenticated root-result collection is not yet wired to the closed commit,
-  so live publication, Directory publication and runtime activation remain
-  unavailable.
+  It now journals and dispatches one exact canonical root acceptance at a
+  time, reconciles response loss by exact root replay and retains each
+  authenticated acceptance under the shared canonical receipt hash before
+  reaching `RootsAccepted`. The host durably freezes the complete canonical
+  compiled App provisioning configuration before Coordinator creation, and
+  the standalone Coordinator persists and revalidates that exact authority
+  without source TOML, embedded App config or runtime `ConfigOps`. Root
+  provisioning advance and terminal result collection are not yet wired to
+  the closed commit, so live publication, Directory publication and runtime
+  activation remain unavailable.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.16` is released and `0.101.17` is open.
+- Implementation started: yes; `0.101.17` is released and `0.101.18` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -235,6 +242,9 @@ Fleet policy writer.
 - [x] Keep new Components runtime `Prepared`.
 - [x] Persist group-partitioned Component Registry evidence and one aggregate
   idempotent root receipt.
+- [x] Dispatch each persisted root batch from the Coordinator only after an
+  exact pre-call intent, reconcile response loss by exact retry and retain the
+  authenticated canonical `Accepted` receipt in plan order.
 
 ## Slice 3 — Service Topology and Directories
 
@@ -247,8 +257,10 @@ Fleet policy writer.
   Fleet Registry revision. The service-aware canonical Registry schema,
   validation, hashing and closed atomic Coordinator commit/replay primitive are
   complete. The complete Coordinator plan is now durable before effects with
-  exact status and restart replay; authenticated root receipt acquisition and
-  closed-commit invocation remain before publication can complete.
+  exact status and restart replay; canonical root acceptance dispatch and
+  receipt retention are complete. Root provisioning advance, terminal
+  `Provisioned` receipt acquisition and closed-commit invocation remain before
+  publication can complete.
 - [ ] Project exact service ID, mode and purpose-bearing member bindings
   through Fleet Directory.
 - [ ] Derive one root-local Component Group Directory per placement without

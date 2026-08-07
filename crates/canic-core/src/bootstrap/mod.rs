@@ -24,7 +24,7 @@ pub use crate::config::{ConfigError, ConfigTomlIssue};
 #[doc(hidden)]
 pub mod compiled {
     pub use crate::config::{
-        ComponentChildFundingPolicy, ComponentChildSpec,
+        ComponentChildFundingPolicy, ComponentChildSpec, ComponentDeploymentConfiguration,
         ComponentDeploymentConfigurationDigestError, ComponentDeploymentLabel,
         ComponentDeploymentLabelKey, ComponentDeploymentLabelParseError,
         ComponentDeploymentLabelValue, ComponentDeploymentLimits, ComponentDeploymentMemberLimit,

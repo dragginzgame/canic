@@ -36,6 +36,15 @@ pub struct FleetComponentProvisioningPrepareRequest {
     pub plan: FleetComponentProvisioningPlan,
 }
 
+/// Controller-authenticated command advancing one exact Coordinator root-acceptance step.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetComponentProvisioningAdvanceRequest {
+    pub operation_id: [u8; 32],
+    pub plan_hash: [u8; 32],
+    pub expected_accepted_root_count: u32,
+}
+
 /// Exact passive lookup key for one Coordinator-owned provisioning operation.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -48,6 +57,8 @@ pub struct FleetComponentProvisioningStatusRequest {
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum FleetComponentProvisioningPhase {
     Planned,
+    AcceptingRoots,
+    RootsAccepted,
 }
 
 /// Compact exact status for one Coordinator-owned provisioning operation.
@@ -62,9 +73,12 @@ pub struct FleetComponentProvisioningStatusResponse {
     pub phase: FleetComponentProvisioningPhase,
     pub directory_confirmation_root_count: u32,
     pub root_batch_count: u32,
+    pub accepted_root_count: u32,
+    pub acceptance_in_flight_root: Option<Principal>,
     pub group_placement_count: u32,
     pub component_count: u32,
     pub planned_at_ns: u64,
+    pub roots_accepted_at_ns: Option<u64>,
 }
 
 /// Fresh-install or monotonic scale-out scope covered by one plan.

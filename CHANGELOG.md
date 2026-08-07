@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.18` journals and reconciles each Coordinator-to-root provisioning
+  acceptance in canonical plan order, retaining exact authenticated evidence
+  before advancing to `RootsAccepted`. The standalone Coordinator now receives
+  and persists the App's exact compiled provisioning authority through the
+  host install journal instead of depending on unavailable runtime config;
+  later provisioning and publication remain fenced.
+
 - `0.101.17` durably freezes the complete controller-authenticated Coordinator
   provisioning plan before root effects and aligns the default Coordinator,
   App-owned root and Wasm Store around canonical artifact sources, explicit

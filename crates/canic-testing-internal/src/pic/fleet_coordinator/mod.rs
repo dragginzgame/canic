@@ -12,10 +12,20 @@ mod tests {
     use canic_core::{
         bootstrap::parse_config_model,
         cdk::types::Cycles,
+        control_plane_support::ops::{
+            component_provisioning_plan::ComponentProvisioningPlanOps,
+            fleet_registry::FleetRegistryOps,
+        },
         dto::{
             authority_restore::{
                 AuthorityRestoreFencePhase, AuthorityRestoreFenceStatusResponse,
                 AuthoritySnapshotRequest,
+            },
+            component_provisioning::{
+                ComponentGroupPlacementPlan, ComponentGroupPlanEntry,
+                FleetComponentProvisioningOperation, FleetComponentProvisioningPhase,
+                FleetComponentProvisioningPlan, FleetComponentProvisioningPrepareRequest,
+                FleetComponentProvisioningStatusRequest, FleetSubnetRootProvisioningBatch,
             },
             error::{Error, ErrorCode},
             fleet_registry::{
@@ -32,10 +42,11 @@ mod tests {
             },
         },
         ids::{
-            AppId, CanonicalNetworkId, ComponentSpecAdmission, CyclesFundingBudget, FleetBinding,
-            FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority,
-            FleetSubnetCanisterPoolConfig, FleetSubnetRootLimits, FleetSubnetRootReleaseSet,
-            ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
+            AppId, CanonicalNetworkId, ComponentGroupPlacementId, ComponentSpecAdmission,
+            CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey,
+            FleetRegistryAuthority, FleetSubnetCanisterPoolConfig, FleetSubnetRootBinding,
+            FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce,
+            ReleaseSetDigest, SubnetId,
         },
         protocol,
     };
@@ -48,6 +59,41 @@ mod tests {
     };
 
     const INSTALL_CYCLES: u128 = 500_000_000_000_000;
+    const COORDINATOR_CONFIG: &str = r#"
+[app]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.project]
+kind = "canister"
+package = "project"
+
+[component_specs.projects]
+component_role = "project"
+maximum_instances = 3
+
+[component_groups.project_cell.components.project]
+component_spec = "projects"
+service = "projects"
+
+[component_group_deployments.project_cells]
+component_group = "project_cell"
+service_purpose = "pool_member"
+initial_placements = 2
+maximum_placements = 2
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 2
+
+[services.fleet.targets.projects]
+role = "project"
+component_spec = "projects"
+mode = "active_pool"
+placement.maximum_members_per_root = 1
+placement.minimum_distinct_roots = 2
+"#;
 
     #[test]
     fn coordinator_commits_joining_roots_and_replays_original_receipts() {
@@ -58,7 +104,10 @@ mod tests {
         let coordinator = pic.create_canister();
         pic.add_cycles(coordinator, INSTALL_CYCLES);
         let args = init_args(coordinator);
-        let topology = args.component_topology.clone();
+        let topology = args
+            .component_deployment_configuration
+            .component_topology
+            .clone();
         pic.install_canister(
             coordinator,
             wasm,
@@ -139,6 +188,64 @@ mod tests {
         );
 
         assert_authority_snapshot_restore_fence(&pic, coordinator);
+    }
+
+    #[test]
+    fn standalone_coordinator_prepares_from_its_durable_compiled_configuration() {
+        let _unit_test_serial = super::super::acquire_pic_unit_test_serial_guard();
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let wasm = build_canonical_fleet_coordinator_wasm(&workspace_root);
+        let pic = PocketIcBuilder::new().with_application_subnet().build();
+        let coordinator = pic.create_canister();
+        pic.add_cycles(coordinator, INSTALL_CYCLES);
+        let args = init_args(coordinator);
+        let configuration = args.component_deployment_configuration.clone();
+        pic.install_canister(
+            coordinator,
+            wasm,
+            encode_one(args).expect("encode Coordinator init"),
+            None,
+        );
+
+        let registry = activate_two_roots(&pic, coordinator, &configuration.component_topology);
+        let plan = fresh_component_plan(&configuration, &registry);
+        let plan_hash =
+            ComponentProvisioningPlanOps::hash_compiled(&configuration, &registry, &plan)
+                .expect("canonical plan hash");
+        let request = FleetComponentProvisioningPrepareRequest {
+            operation_id: [71; 32],
+            plan,
+        };
+        let prepared: Result<
+            canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+            Error,
+        > = pic
+            .update_candid(
+                coordinator,
+                protocol::CANIC_FLEET_COMPONENT_PROVISIONING_PREPARE,
+                (request,),
+            )
+            .expect("prepare Component provisioning transport");
+        let prepared = prepared.expect("prepare Component provisioning");
+        assert_eq!(prepared.phase, FleetComponentProvisioningPhase::Planned);
+        assert_eq!(prepared.plan_hash, plan_hash);
+        assert_eq!(prepared.root_batch_count, 2);
+        assert_eq!(prepared.component_count, 2);
+
+        let observed: Result<
+            canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+            Error,
+        > = pic
+            .query_candid(
+                coordinator,
+                protocol::CANIC_FLEET_COMPONENT_PROVISIONING_STATUS,
+                (FleetComponentProvisioningStatusRequest {
+                    operation_id: [71; 32],
+                    plan_hash,
+                },),
+            )
+            .expect("query Component provisioning status transport");
+        assert_eq!(observed.expect("Component provisioning status"), prepared);
     }
 
     fn assert_authority_snapshot_restore_fence(pic: &PocketIc, coordinator: Principal) {
@@ -487,28 +594,131 @@ mod tests {
         removed.expect("publish root Removed")
     }
 
+    fn activate_two_roots(
+        pic: &PocketIc,
+        coordinator: Principal,
+        topology: &canic_core::control_plane_support::config::ComponentTopology,
+    ) -> FleetRegistry {
+        let genesis: Result<canic_core::dto::fleet_registry::FleetRegistryVersion, Error> = pic
+            .query_candid(coordinator, protocol::CANIC_FLEET_REGISTRY_VERSION, ())
+            .expect("query genesis version");
+        let first: Result<FleetSubnetRootJoinResponse, Error> = pic
+            .update_candid(
+                coordinator,
+                protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
+                (FleetSubnetRootJoinRequest {
+                    expected_registry: genesis.expect("genesis version"),
+                    entry: joining_entry(topology, 5, 21, 1),
+                },),
+            )
+            .expect("first join transport");
+        let second: Result<FleetSubnetRootJoinResponse, Error> = pic
+            .update_candid(
+                coordinator,
+                protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
+                (FleetSubnetRootJoinRequest {
+                    expected_registry: first.expect("first join").version,
+                    entry: joining_entry(topology, 7, 22, 1),
+                },),
+            )
+            .expect("second join transport");
+        let joined_version = second.expect("second join").version;
+        for root in [principal(21), principal(22)] {
+            let acknowledgement: Result<FleetSubnetRootSnapshotAcknowledgement, Error> = pic
+                .update_candid_as(
+                    coordinator,
+                    root,
+                    protocol::CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT,
+                    (FleetSubnetRootSnapshotAcknowledgementRequest {
+                        version: joined_version.clone(),
+                    },),
+                )
+                .expect("root acknowledgement transport");
+            acknowledgement.expect("root acknowledgement");
+        }
+        let active: Result<FleetRegistryActivationResponse, Error> = pic
+            .update_candid(
+                coordinator,
+                protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
+                (FleetRegistryActivationRequest {
+                    expected_registry: joined_version,
+                },),
+            )
+            .expect("activate Registry transport");
+        active.expect("activate Registry");
+        let registry: Result<FleetRegistry, Error> = pic
+            .query_candid(coordinator, protocol::CANIC_FLEET_REGISTRY, ())
+            .expect("query active Registry transport");
+        registry.expect("active Registry")
+    }
+
+    fn fresh_component_plan(
+        configuration: &canic_core::control_plane_support::config::ComponentDeploymentConfiguration,
+        registry: &FleetRegistry,
+    ) -> FleetComponentProvisioningPlan {
+        let deployment = configuration
+            .deployment_topology
+            .get(&"project_cells".parse().expect("deployment ID"))
+            .expect("project cells deployment");
+        let entries = deployment
+            .members
+            .iter()
+            .map(|member| ComponentGroupPlanEntry {
+                member_path: member.member_path.clone(),
+                component_spec: member.component_spec.clone(),
+                spec_hash: member.component_spec_hash,
+                purpose: member.purpose.clone(),
+                labels: member.labels.clone(),
+                limits: member.limits.clone(),
+            })
+            .collect::<Vec<_>>();
+        let mut roots = registry.fleet_subnet_roots.iter().collect::<Vec<_>>();
+        roots.sort_unstable_by_key(|root| root.fleet_subnet_root);
+        let batches = roots
+            .iter()
+            .enumerate()
+            .map(|(ordinal, root)| FleetSubnetRootProvisioningBatch {
+                root: FleetSubnetRootBinding {
+                    authority: registry.authority.clone(),
+                    placement_subnet: root.placement_subnet,
+                    fleet_subnet_root: root.fleet_subnet_root,
+                    component_admissions: root.component_admissions.clone(),
+                    component_topology_digest: root.component_topology_digest,
+                    limits: root.limits.clone(),
+                },
+                active_release_set: root.active_release_set,
+                placements: vec![ComponentGroupPlacementPlan {
+                    group_placement: ComponentGroupPlacementId {
+                        deployment: deployment.deployment.clone(),
+                        ordinal: u32::try_from(ordinal).expect("placement ordinal"),
+                    },
+                    component_group: deployment.component_group.clone(),
+                    entries: entries.clone(),
+                }],
+            })
+            .collect();
+        let directory_confirmation_roots =
+            roots.iter().map(|root| root.fleet_subnet_root).collect();
+        FleetComponentProvisioningPlan {
+            fleet: registry.authority.binding.fleet.clone(),
+            fleet_registry: FleetRegistryOps::version(
+                &registry.authority,
+                &configuration.component_topology,
+                registry,
+            )
+            .expect("active Registry version"),
+            configuration_digest: configuration.digest().expect("configuration digest"),
+            operation: FleetComponentProvisioningOperation::FreshInstall,
+            directory_confirmation_roots,
+            batches,
+        }
+    }
+
     fn init_args(coordinator: Principal) -> FleetCoordinatorInitArgs {
-        let component_topology = parse_config_model(
-            r#"
-[app]
-name = "demo"
-
-[roles.root]
-kind = "root"
-package = "root"
-
-[roles.project]
-kind = "canister"
-package = "project"
-
-[component_specs.projects]
-component_role = "project"
-maximum_instances = 3
-"#,
-        )
-        .expect("valid config")
-        .compile_component_topology()
-        .expect("Component Topology");
+        let component_deployment_configuration = parse_config_model(COORDINATOR_CONFIG)
+            .expect("valid config")
+            .compile_component_deployment_configuration()
+            .expect("Component deployment configuration");
         FleetCoordinatorInitArgs {
             configured_app: AppId::from("demo"),
             authority: FleetRegistryAuthority {
@@ -525,7 +735,7 @@ maximum_instances = 3
                 },
                 epoch: 1,
             },
-            component_topology,
+            component_deployment_configuration,
         }
     }
 

@@ -21,6 +21,8 @@ use crate::{
     },
 };
 
+use candid::CandidType;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error as ThisError;
 
@@ -35,29 +37,19 @@ const FLEET_SERVICE_TARGET_SECTION: &str = "fleet_service_targets";
 pub const MAX_COMPONENT_DEPLOYMENT_CONFIGURATION_CANONICAL_BYTES: usize = 8_388_608;
 
 impl ConfigModel {
+    /// Compile the complete protected Component deployment authority.
+    pub fn compile_component_deployment_configuration(
+        &self,
+    ) -> Result<ComponentDeploymentConfiguration, ComponentDeploymentConfigurationDigestError> {
+        ComponentDeploymentConfiguration::compile(self)
+    }
+
     /// Compile and hash the complete semantic Component deployment configuration.
     pub fn compile_component_deployment_configuration_digest(
         &self,
     ) -> Result<ComponentDeploymentConfigurationDigest, ComponentDeploymentConfigurationDigestError>
     {
-        let component_topology = self.compile_component_topology()?;
-        let component_group_topology = self.compile_component_group_topology()?;
-        let deployment_topology = ComponentGroupDeploymentTopology::compile_from_topologies(
-            self,
-            &component_group_topology,
-            &component_topology,
-        )?;
-        let fleet_service_topology = FleetServiceTopology::compile_from_topologies(
-            self,
-            &deployment_topology,
-            &component_topology,
-        )?;
-        derive_digest(
-            &component_group_topology,
-            &deployment_topology,
-            &fleet_service_topology,
-            &component_topology,
-        )
+        self.compile_component_deployment_configuration()?.digest()
     }
 
     /// Validate one runtime context against the complete compiled deployment configuration.
@@ -67,6 +59,57 @@ impl ConfigModel {
         owning_component: &ComponentBinding,
     ) -> Result<(), ProtectedComponentDeploymentError> {
         validate_protected_component_deployment(self, context, owning_component)
+    }
+}
+
+/// Canonical compiled App authority required to validate provisioning without source TOML.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ComponentDeploymentConfiguration {
+    pub component_topology: ComponentTopology,
+    pub component_group_topology: ComponentGroupTopology,
+    pub deployment_topology: ComponentGroupDeploymentTopology,
+    pub fleet_service_topology: FleetServiceTopology,
+}
+
+impl ComponentDeploymentConfiguration {
+    /// Compile all four canonical projections from one checked-in App model.
+    pub fn compile(
+        config: &ConfigModel,
+    ) -> Result<Self, ComponentDeploymentConfigurationDigestError> {
+        let component_topology = config.compile_component_topology()?;
+        let component_group_topology = config.compile_component_group_topology()?;
+        let deployment_topology = ComponentGroupDeploymentTopology::compile_from_topologies(
+            config,
+            &component_group_topology,
+            &component_topology,
+        )?;
+        let fleet_service_topology = FleetServiceTopology::compile_from_topologies(
+            config,
+            &deployment_topology,
+            &component_topology,
+        )?;
+        let compiled = Self {
+            component_topology,
+            component_group_topology,
+            deployment_topology,
+            fleet_service_topology,
+        };
+        compiled.digest()?;
+        Ok(compiled)
+    }
+
+    /// Revalidate all decoded projections and derive their protected semantic identity.
+    pub fn digest(
+        &self,
+    ) -> Result<ComponentDeploymentConfigurationDigest, ComponentDeploymentConfigurationDigestError>
+    {
+        derive_digest(
+            &self.component_group_topology,
+            &self.deployment_topology,
+            &self.fleet_service_topology,
+            &self.component_topology,
+        )
     }
 }
 

@@ -21,9 +21,10 @@ use crate::{
 };
 use candid::Principal;
 use canic_core::{
-    bootstrap::compiled::ComponentTopology,
     cdk::utils::hash::decode_hex,
-    control_plane_support::ops::fleet_registry::FleetRegistryOps,
+    control_plane_support::{
+        config::ComponentDeploymentConfiguration, ops::fleet_registry::FleetRegistryOps,
+    },
     dto::fleet_registry::{FleetRegistryManifest, FleetRegistryVersion},
     ids::{
         FleetBinding, FleetCoordinatorBinding, FleetRegistryAuthority, ReleaseBuildId, SubnetId,
@@ -40,7 +41,7 @@ const COORDINATOR_INSTALL_JOURNAL_FILE: &str = "coordinator-install-journal.json
 const COORDINATOR_INSTALL_JOURNAL_LOCK_FILE: &str = "coordinator-install-journal.lock";
 const COORDINATOR_CREATE_RESULT_FILE: &str = "coordinator-create-result.json";
 const COORDINATOR_INSTALL_JOURNAL_SCHEMA_VERSION: u32 = 1;
-const MAX_COORDINATOR_INSTALL_JOURNAL_BYTES: usize = 4_194_304;
+const MAX_COORDINATOR_INSTALL_JOURNAL_BYTES: usize = 16_777_216;
 
 ///
 /// FleetCoordinatorInstallPhase
@@ -77,7 +78,7 @@ pub(super) struct FleetCoordinatorInstallJournal {
     pub release_build_id: ReleaseBuildId,
     pub coordinator_subnet: SubnetId,
     pub creation_funding: PlannedCanisterCreationFunding,
-    pub component_topology: ComponentTopology,
+    pub component_deployment_configuration: ComponentDeploymentConfiguration,
     pub coordinator_artifact: CanicInfrastructureArtifactEntry,
     pub expected_module_hash: [u8; 32],
     pub installation_controller: Option<Principal>,
@@ -85,6 +86,39 @@ pub(super) struct FleetCoordinatorInstallJournal {
     pub installed_module_hash: Option<[u8; 32]>,
     pub verified_registry_manifest: Option<FleetRegistryManifest>,
     pub verified_registry_version: Option<FleetRegistryVersion>,
+}
+
+#[derive(Eq, PartialEq)]
+struct FleetCoordinatorInstallImmutableAuthority<'a> {
+    schema_version: u32,
+    fleet_install_plan_digest: [u8; 32],
+    infrastructure_manifest_digest: [u8; 32],
+    fleet: &'a FleetBinding,
+    release_build_id: ReleaseBuildId,
+    coordinator_subnet: SubnetId,
+    creation_funding: &'a PlannedCanisterCreationFunding,
+    component_deployment_configuration: &'a ComponentDeploymentConfiguration,
+    coordinator_artifact: &'a CanicInfrastructureArtifactEntry,
+    expected_module_hash: [u8; 32],
+}
+
+impl<'a> From<&'a FleetCoordinatorInstallJournal>
+    for FleetCoordinatorInstallImmutableAuthority<'a>
+{
+    fn from(journal: &'a FleetCoordinatorInstallJournal) -> Self {
+        Self {
+            schema_version: journal.schema_version,
+            fleet_install_plan_digest: journal.fleet_install_plan_digest,
+            infrastructure_manifest_digest: journal.infrastructure_manifest_digest,
+            fleet: &journal.fleet,
+            release_build_id: journal.release_build_id,
+            coordinator_subnet: journal.coordinator_subnet,
+            creation_funding: &journal.creation_funding,
+            component_deployment_configuration: &journal.component_deployment_configuration,
+            coordinator_artifact: &journal.coordinator_artifact,
+            expected_module_hash: journal.expected_module_hash,
+        }
+    }
 }
 
 ///
@@ -107,7 +141,7 @@ pub(super) struct ResolvedFleetCoordinatorInstall {
 pub(super) struct PlanFleetCoordinatorInstallRequest<'a> {
     pub fleet_install_plan: &'a PersistedFleetInstallPlan,
     pub infrastructure_manifest: &'a PersistedCanicInfrastructureArtifactManifest,
-    pub component_topology: ComponentTopology,
+    pub component_deployment_configuration: ComponentDeploymentConfiguration,
 }
 
 ///
@@ -333,7 +367,7 @@ fn planned_journal(
         release_build_id: plan.release_build_id,
         coordinator_subnet: plan.coordinator.coordinator_subnet,
         creation_funding: plan.coordinator.creation_funding.clone(),
-        component_topology: request.component_topology.clone(),
+        component_deployment_configuration: request.component_deployment_configuration.clone(),
         coordinator_artifact,
         expected_module_hash,
         installation_controller: None,
@@ -481,8 +515,8 @@ fn validate_immutable_authority(
         return Err(invalid(path, "unsupported journal schema version"));
     }
     journal
-        .component_topology
-        .canonical_bytes()
+        .component_deployment_configuration
+        .digest()
         .map_err(|error| invalid(path, error.to_string()))?;
     if journal.coordinator_subnet.as_principal() == &Principal::anonymous() {
         return Err(invalid(path, "Coordinator Subnet is anonymous"));
@@ -597,15 +631,27 @@ fn validate_registry_evidence(
         let registry = FleetRegistryOps::compile_genesis(
             &journal.fleet.app,
             authority.clone(),
-            &journal.component_topology,
+            &journal
+                .component_deployment_configuration
+                .component_topology,
         )
         .map_err(|error| invalid(path, error.to_string()))?;
-        let expected_manifest =
-            FleetRegistryOps::manifest(&authority, &journal.component_topology, &registry)
-                .map_err(|error| invalid(path, error.to_string()))?;
-        let expected_version =
-            FleetRegistryOps::version(&authority, &journal.component_topology, &registry)
-                .map_err(|error| invalid(path, error.to_string()))?;
+        let expected_manifest = FleetRegistryOps::manifest(
+            &authority,
+            &journal
+                .component_deployment_configuration
+                .component_topology,
+            &registry,
+        )
+        .map_err(|error| invalid(path, error.to_string()))?;
+        let expected_version = FleetRegistryOps::version(
+            &authority,
+            &journal
+                .component_deployment_configuration
+                .component_topology,
+            &registry,
+        )
+        .map_err(|error| invalid(path, error.to_string()))?;
         if journal.phase == FleetCoordinatorInstallPhase::Verified
             && (journal.verified_registry_manifest.as_ref() != Some(&expected_manifest)
                 || journal.verified_registry_version.as_ref() != Some(&expected_version))
@@ -635,16 +681,8 @@ fn same_immutable_authority(
     observed: &FleetCoordinatorInstallJournal,
     expected: &FleetCoordinatorInstallJournal,
 ) -> bool {
-    observed.schema_version == expected.schema_version
-        && observed.fleet_install_plan_digest == expected.fleet_install_plan_digest
-        && observed.infrastructure_manifest_digest == expected.infrastructure_manifest_digest
-        && observed.fleet == expected.fleet
-        && observed.release_build_id == expected.release_build_id
-        && observed.coordinator_subnet == expected.coordinator_subnet
-        && observed.creation_funding == expected.creation_funding
-        && observed.component_topology == expected.component_topology
-        && observed.coordinator_artifact == expected.coordinator_artifact
-        && observed.expected_module_hash == expected.expected_module_hash
+    FleetCoordinatorInstallImmutableAuthority::from(observed)
+        == FleetCoordinatorInstallImmutableAuthority::from(expected)
 }
 
 fn coordinator_install_journal_path(plan_path: &Path) -> PathBuf {
