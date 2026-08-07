@@ -56,6 +56,7 @@ package = "worker"
 "#,
     )
     .expect("write config");
+    write_wasm_gz_artifact(&root, "fleet_coordinator", b"fleet-coordinator-artifact");
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
     write_wasm_gz_artifact(&root, "wasm_store", b"wasm-store-artifact");
     write_local_network_authority(&root, "local");
