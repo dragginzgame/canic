@@ -116,7 +116,7 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     ),
     update_response_idempotent(
         "canic_fleet_component_provisioning_advance",
-        command_kind("fleet_component_provisioning.advance_root_acceptance.v1"),
+        command_kind("fleet_component_provisioning.advance.v1"),
     ),
     query_read_only("canic_fleet_component_provisioning_status"),
     update_response_idempotent(

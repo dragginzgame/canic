@@ -105,7 +105,9 @@ mod tests {
             component_deployment::ProtectedComponentDeployment,
             component_provisioning::{
                 ComponentGroupPlacementPlan, ComponentGroupPlanEntry,
-                FleetComponentProvisioningOperation, FleetComponentProvisioningPlan,
+                FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningOperation,
+                FleetComponentProvisioningPhase, FleetComponentProvisioningPlan,
+                FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningStatusResponse,
                 FleetSubnetRootProvisioningBatch, RootComponentProvisioningAcceptanceRequest,
                 RootComponentProvisioningAdvanceRequest, RootComponentProvisioningPhase,
                 RootComponentProvisioningStatusRequest, RootComponentProvisioningStatusResponse,
@@ -115,7 +117,8 @@ mod tests {
         ids::ComponentGroupPlacementId,
         protocol::{
             CANIC_AUTHORITY_RESTORE_FENCE_STATUS, CANIC_AUTHORITY_SNAPSHOT_PREPARE,
-            CANIC_AUTHORITY_SNAPSHOT_RESUME, CANIC_ROOT_COMPONENT_PROVISIONING_ACCEPT,
+            CANIC_AUTHORITY_SNAPSHOT_RESUME, CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE,
+            CANIC_FLEET_COMPONENT_PROVISIONING_PREPARE, CANIC_ROOT_COMPONENT_PROVISIONING_ACCEPT,
             CANIC_ROOT_COMPONENT_PROVISIONING_ADVANCE, CANIC_ROOT_COMPONENT_PROVISIONING_STATUS,
         },
     };
@@ -807,6 +810,95 @@ mod tests {
         assert_eq!(
             observed.expect("query grouped provisioning status"),
             provisioned
+        );
+        assert_prepared(&fixture.pic, fixture.root.root_id);
+    }
+
+    #[test]
+    fn coordinator_drives_one_root_batch_to_components_provisioned() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_prepared_grouped_provisioning();
+        let registry: Result<FleetRegistry, Error> = fixture
+            .pic
+            .query_candid(fixture.coordinator, CANIC_FLEET_REGISTRY, ())
+            .expect("query grouped provisioning Registry transport");
+        let registry = registry.expect("query grouped provisioning Registry");
+        let plan = FleetComponentProvisioningPlan {
+            fleet: registry.authority.binding.fleet.clone(),
+            fleet_registry: fixture.request.fleet_registry.clone(),
+            configuration_digest: fixture.request.configuration_digest,
+            operation: FleetComponentProvisioningOperation::FreshInstall,
+            directory_confirmation_roots: vec![fixture.root.root_id],
+            batches: vec![fixture.request.batch.clone()],
+        };
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config = AppConfigSnapshot::load(&root_canister_config_path(&workspace_root))
+            .expect("load grouped root config");
+        assert_eq!(
+            ComponentProvisioningPlanOps::hash(config.model(), &registry, &plan)
+                .expect("hash Coordinator plan"),
+            fixture.request.plan_hash
+        );
+        let prepared: Result<FleetComponentProvisioningStatusResponse, Error> = fixture
+            .pic
+            .update_candid(
+                fixture.coordinator,
+                CANIC_FLEET_COMPONENT_PROVISIONING_PREPARE,
+                (FleetComponentProvisioningPrepareRequest {
+                    operation_id: fixture.request.operation_id,
+                    plan,
+                },),
+            )
+            .expect("prepare Coordinator provisioning transport");
+        let mut status = prepared.expect("prepare Coordinator provisioning");
+        assert_eq!(status.phase, FleetComponentProvisioningPhase::Planned);
+
+        while status.phase != FleetComponentProvisioningPhase::ComponentsProvisioned {
+            let request = FleetComponentProvisioningAdvanceRequest {
+                operation_id: status.operation_id,
+                plan_hash: status.plan_hash,
+                expected_accepted_root_count: status.accepted_root_count,
+                expected_provisioned_root_count: status.provisioned_root_count,
+                expected_current_root: status.current_root,
+            };
+            let advanced: Result<FleetComponentProvisioningStatusResponse, Error> = fixture
+                .pic
+                .update_candid(
+                    fixture.coordinator,
+                    CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE,
+                    (request,),
+                )
+                .expect("advance Coordinator provisioning transport");
+            let advanced = advanced.expect("advance Coordinator provisioning");
+            let replayed: Result<FleetComponentProvisioningStatusResponse, Error> = fixture
+                .pic
+                .update_candid(
+                    fixture.coordinator,
+                    CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE,
+                    (request,),
+                )
+                .expect("replay Coordinator provisioning transport");
+            assert_eq!(replayed.expect("replay Coordinator provisioning"), advanced);
+            status = advanced;
+        }
+        assert_eq!(status.accepted_root_count, 1);
+        assert_eq!(status.provisioned_root_count, 1);
+        assert!(status.components_provisioned_at_ns.is_some());
+        let root: Result<RootComponentProvisioningStatusResponse, Error> = fixture
+            .pic
+            .query_candid_as(
+                fixture.root.root_id,
+                fixture.coordinator,
+                CANIC_ROOT_COMPONENT_PROVISIONING_STATUS,
+                (RootComponentProvisioningStatusRequest {
+                    operation_id: fixture.request.operation_id,
+                    plan_hash: fixture.request.plan_hash,
+                },),
+            )
+            .expect("query root provisioning status transport");
+        assert_eq!(
+            root.expect("query root provisioning status").phase,
+            RootComponentProvisioningPhase::Provisioned
         );
         assert_prepared(&fixture.pic, fixture.root.root_id);
     }

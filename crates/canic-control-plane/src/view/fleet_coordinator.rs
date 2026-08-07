@@ -2,11 +2,12 @@
 //!
 //! Responsibility: expose read-only Coordinator provisioning decisions to workflow.
 //! Does not own: stable records, inter-canister calls, or Registry publication.
-//! Boundary: ops returns one exact current result or root acceptance call authority.
+//! Boundary: ops returns one exact current result or root call authority.
 
 use candid::Principal;
 use canic_core::dto::component_provisioning::{
     FleetComponentProvisioningStatusResponse, RootComponentProvisioningAcceptanceRequest,
+    RootComponentProvisioningAdvanceRequest,
 };
 
 /// One exact root acceptance call derived only from the durable Coordinator plan.
@@ -20,4 +21,17 @@ pub enum FleetComponentProvisioningRootAcceptanceDisposition {
     Current(FleetComponentProvisioningStatusResponse),
     Invoke(FleetComponentProvisioningRootAcceptanceCallView),
     Reconcile(FleetComponentProvisioningRootAcceptanceCallView),
+}
+
+/// One exact root advance call derived only from durable Coordinator progress.
+pub struct FleetComponentProvisioningRootProvisionCallView {
+    pub fleet_subnet_root: Principal,
+    pub request: RootComponentProvisioningAdvanceRequest,
+}
+
+/// Coordinator decision for one expected root provisioning cursor.
+pub enum FleetComponentProvisioningRootProvisionDisposition {
+    Current(Box<FleetComponentProvisioningStatusResponse>),
+    Invoke(FleetComponentProvisioningRootProvisionCallView),
+    Reconcile(FleetComponentProvisioningRootProvisionCallView),
 }
