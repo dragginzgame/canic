@@ -26,7 +26,8 @@ use canic_core::{
             ComponentGroupPlacementPlan, ComponentGroupPlanEntry,
             FleetComponentProvisioningOperation, FleetComponentProvisioningPhase,
             FleetComponentProvisioningPlan, FleetComponentProvisioningPrepareRequest,
-            FleetComponentProvisioningStatusRequest, FleetSubnetRootProvisioningBatch,
+            FleetComponentProvisioningStatusRequest, FleetComponentProvisioningStatusResponse,
+            FleetSubnetRootProvisioningBatch,
         },
         error::ErrorCode,
         fleet_registry::{
@@ -472,6 +473,22 @@ fn complete_component_plan_is_durable_before_root_effects_and_replays_exactly() 
         plan,
     };
 
+    assert_invalid_plan_identity_rejects_before_persistence(&config, &request);
+    let prepared = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        prepare_component_provisioning_for_test(&config, request.clone(), 92)
+        .expect("persist complete plan");
+    assert_prepared_plan_summary(&prepared, plan_hash);
+
+    let durable = FleetCoordinatorRegistryStore::export();
+    FleetCoordinatorRegistryStore::import(durable.clone());
+    assert_prepared_plan_replays_exactly(&config, &request, plan_hash, &prepared);
+    assert_conflicting_plan_authority_fails_closed(&config, request, plan_hash, &durable);
+}
+
+fn assert_invalid_plan_identity_rejects_before_persistence(
+    config: &ConfigModel,
+    request: &FleetComponentProvisioningPrepareRequest,
+) {
     let mut zero_operation = request.clone();
     zero_operation.operation_id = [0; 32];
     let invalid = crate::ops::fleet_coordinator::FleetCoordinatorOps::
@@ -488,10 +505,12 @@ fn complete_component_plan_is_durable_before_root_effects_and_replays_exactly() 
             .component_provisioning
             .is_none()
     );
+}
 
-    let prepared = crate::ops::fleet_coordinator::FleetCoordinatorOps::
-        prepare_component_provisioning_for_test(&config, request.clone(), 92)
-        .expect("persist complete plan");
+fn assert_prepared_plan_summary(
+    prepared: &FleetComponentProvisioningStatusResponse,
+    plan_hash: [u8; 32],
+) {
     assert_eq!(prepared.plan_hash, plan_hash);
     assert_eq!(prepared.phase, FleetComponentProvisioningPhase::Planned);
     assert_eq!(prepared.directory_confirmation_root_count, 2);
@@ -499,23 +518,28 @@ fn complete_component_plan_is_durable_before_root_effects_and_replays_exactly() 
     assert_eq!(prepared.group_placement_count, 2);
     assert_eq!(prepared.component_count, 2);
     assert_eq!(prepared.planned_at_ns, 92);
+}
 
-    let durable = FleetCoordinatorRegistryStore::export();
-    FleetCoordinatorRegistryStore::import(durable.clone());
+fn assert_prepared_plan_replays_exactly(
+    config: &ConfigModel,
+    request: &FleetComponentProvisioningPrepareRequest,
+    plan_hash: [u8; 32],
+    prepared: &FleetComponentProvisioningStatusResponse,
+) {
     assert_eq!(
         crate::ops::fleet_coordinator::FleetCoordinatorOps::component_provisioning_status_for_test(
-            &config,
+            config,
             FleetComponentProvisioningStatusRequest {
                 operation_id: request.operation_id,
                 plan_hash,
             },
         )
         .expect("status after restart"),
-        prepared
+        prepared.clone()
     );
     let wrong_status =
         crate::ops::fleet_coordinator::FleetCoordinatorOps::component_provisioning_status_for_test(
-            &config,
+            config,
             FleetComponentProvisioningStatusRequest {
                 operation_id: request.operation_id,
                 plan_hash: [93; 32],
@@ -528,26 +552,33 @@ fn complete_component_plan_is_durable_before_root_effects_and_replays_exactly() 
     );
     assert_eq!(
         crate::ops::fleet_coordinator::FleetCoordinatorOps::
-            prepare_component_provisioning_for_test(&config, request.clone(), 999)
+            prepare_component_provisioning_for_test(config, request.clone(), 999)
             .expect("exact preparation retry"),
-        prepared,
+        prepared.clone(),
         "an exact retry preserves the original durable preparation time"
     );
+}
 
+fn assert_conflicting_plan_authority_fails_closed(
+    config: &ConfigModel,
+    request: FleetComponentProvisioningPrepareRequest,
+    plan_hash: [u8; 32],
+    durable: &FleetCoordinatorRegistryData,
+) {
     let mut conflicting = request;
     conflicting.plan.directory_confirmation_roots.pop();
     let conflict = crate::ops::fleet_coordinator::FleetCoordinatorOps::
-        prepare_component_provisioning_for_test(&config, conflicting, 93)
+        prepare_component_provisioning_for_test(config, conflicting, 93)
         .expect_err("one operation cannot replace its complete plan");
     assert_eq!(
         conflict.public_error().map(|error| error.code),
         Some(ErrorCode::Conflict)
     );
-    assert_eq!(FleetCoordinatorRegistryStore::export(), durable);
+    assert_eq!(FleetCoordinatorRegistryStore::export(), durable.clone());
 
     let drain =
         crate::ops::fleet_coordinator::FleetCoordinatorOps::require_root_lifecycle_open_for_test(
-            &config,
+            config,
         )
         .expect_err("a planned grouped Fleet fences root lifecycle");
     assert_eq!(
@@ -567,7 +598,7 @@ fn complete_component_plan_is_durable_before_root_effects_and_replays_exactly() 
     FleetCoordinatorRegistryStore::import(corrupted);
     let invalid =
         crate::ops::fleet_coordinator::FleetCoordinatorOps::component_provisioning_status_for_test(
-            &config,
+            config,
             FleetComponentProvisioningStatusRequest {
                 operation_id: [91; 32],
                 plan_hash,
@@ -575,7 +606,7 @@ fn complete_component_plan_is_durable_before_root_effects_and_replays_exactly() 
         )
         .expect_err("corrupt durable plan authority must fail closed");
     assert_eq!(invalid.class(), InternalErrorClass::Invariant);
-    FleetCoordinatorRegistryStore::import(durable);
+    FleetCoordinatorRegistryStore::import(durable.clone());
 }
 
 fn activate_two_roots(
