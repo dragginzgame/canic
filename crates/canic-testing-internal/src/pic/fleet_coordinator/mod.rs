@@ -6,7 +6,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::pic::{CanicWasmBuildProfile, build_internal_test_wasm_canisters};
+    use crate::pic::artifacts::build_canonical_fleet_coordinator_wasm;
     use candid::{Principal, encode_one};
     use canic_control_plane::dto::fleet_coordinator::FleetCoordinatorInitArgs;
     use canic_core::{
@@ -40,32 +40,20 @@ mod tests {
         protocol,
     };
     use ic_testkit::{
-        artifacts::{read_wasm, test_target_dir, workspace_root_for},
+        artifacts::workspace_root_for,
         pic::{
             CandidCallExt, PocketIc, PocketIcBuilder, PocketIcCapturedSnapshotExt,
             PocketIcSnapshotExt, SnapshotRestoreFunding,
         },
     };
 
-    const COORDINATOR_PACKAGE: &str = "fleet_coordinator_stub";
     const INSTALL_CYCLES: u128 = 500_000_000_000_000;
 
     #[test]
     fn coordinator_commits_joining_roots_and_replays_original_receipts() {
         let _unit_test_serial = super::super::acquire_pic_unit_test_serial_guard();
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-        let target_dir = test_target_dir(&workspace_root, "fleet-coordinator");
-        build_internal_test_wasm_canisters(
-            &workspace_root,
-            &target_dir,
-            &[COORDINATOR_PACKAGE],
-            CanicWasmBuildProfile::Fast,
-        );
-        let wasm = read_wasm(
-            &target_dir,
-            COORDINATOR_PACKAGE,
-            CanicWasmBuildProfile::Fast.target_dir_name(),
-        );
+        let wasm = build_canonical_fleet_coordinator_wasm(&workspace_root);
         let pic = PocketIcBuilder::new().with_application_subnet().build();
         let coordinator = pic.create_canister();
         pic.add_cycles(coordinator, INSTALL_CYCLES);

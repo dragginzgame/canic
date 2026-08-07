@@ -1,6 +1,6 @@
 //! Module: bootstrap_coordinator
 //!
-//! Responsibility: build the exact built-in Fleet Coordinator wrapper and artifact.
+//! Responsibility: build the exact built-in Fleet Coordinator source package and artifact.
 //! Does not own: Coordinator placement, installation effects, or Fleet Registry mutation.
 //! Boundary: resolves the selected Canic package and emits one qualified current-build Wasm.
 
@@ -12,7 +12,8 @@ use crate::{
         embed_candid_metadata, maybe_shrink_wasm_artifact, write_gzip_artifact, write_wasm_artifact,
     },
     bootstrap_store::{
-        append_profile_config_args, generated_wasm_store_wrapper_patch_table, render_profile,
+        append_profile_config_args, generated_wasm_store_wrapper_patch_table,
+        registry_package_version_suffix, render_profile, require_package_manifest_identity,
         resolved_canic_package, resolved_wrapper_dependencies,
     },
     canister_build::{
@@ -21,7 +22,7 @@ use crate::{
         cache::{canister_build_target_root, configure_canister_cargo_command},
     },
     cargo_command,
-    cargo_metadata::cargo_metadata,
+    cargo_metadata::{CargoMetadata, CargoMetadataPackage, cargo_metadata},
     remove_optional_file,
     role_contract::{
         PackageValidationMode, RolePackageValidation, finding_detail,
@@ -36,6 +37,7 @@ use std::{
 };
 
 const FLEET_COORDINATOR_ROLE: &str = "fleet_coordinator";
+const CANONICAL_PACKAGE_NAME: &str = "canic-fleet-coordinator";
 const GENERATED_WRAPPER_RELATIVE: &str = ".icp/local/generated/canic-fleet-coordinator";
 const GENERATED_WRAPPER_PACKAGE_NAME: &str = "canic-generated-fleet-coordinator";
 const GENERATED_WRAPPER_CRATE_NAME: &str = "canister_fleet_coordinator";
@@ -56,13 +58,19 @@ const COORDINATOR_FAST_PROFILE: &[(&str, &str)] = &[
     ("incremental", "false"),
 ];
 
+#[derive(Clone, Debug)]
+struct BootstrapFleetCoordinatorSource {
+    manifest_path: PathBuf,
+    package_name: String,
+}
+
 /// Build the dedicated Fleet Coordinator wrapper selected from the exact Canic dependency graph.
 pub fn build_bootstrap_fleet_coordinator_artifact(
     context: &WorkspaceBuildContext,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
-    let manifest_path = ensure_generated_wrapper(context)?;
-    require_built_in_fleet_coordinator_contract(&manifest_path)?;
-    run_coordinator_cargo_build(context, &manifest_path)?;
+    let source = resolve_bootstrap_fleet_coordinator_source(context)?;
+    require_built_in_fleet_coordinator_contract(&source.manifest_path)?;
+    run_coordinator_cargo_build(context, &source.manifest_path)?;
 
     let built_wasm_path = canister_build_target_root(&context.workspace_root)
         .join("wasm32-unknown-unknown")
@@ -78,7 +86,7 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
     let mut transforms = vec![maybe_shrink_wasm_artifact(&wasm_path)?];
     if should_export_candid_artifacts(context.build_network) {
         let debug_context = context.with_profile(CanisterBuildProfile::Debug);
-        run_coordinator_cargo_build(&debug_context, &manifest_path)?;
+        run_coordinator_cargo_build(&debug_context, &source.manifest_path)?;
         let debug_wasm_path = canister_build_target_root(&context.workspace_root)
             .join("wasm32-unknown-unknown")
             .join(CanisterBuildProfile::Debug.target_dir_name())
@@ -94,13 +102,86 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
     write_gzip_artifact(&wasm_path, &wasm_gz_path)?;
 
     Ok(CanisterArtifactBuildOutput {
-        package_name: GENERATED_WRAPPER_PACKAGE_NAME.to_string(),
+        package_name: source.package_name,
         artifact_root,
         wasm_path,
         wasm_gz_path,
         did_path,
         transforms,
     })
+}
+
+// Resolve the canonical published/workspace Coordinator source or fall back
+// to a generated runtime-only wrapper when downstreams only depend on `canic`.
+fn resolve_bootstrap_fleet_coordinator_source(
+    context: &WorkspaceBuildContext,
+) -> Result<BootstrapFleetCoordinatorSource, Box<dyn std::error::Error>> {
+    let metadata = cargo_metadata(&context.workspace_root, true)?;
+    let canic_package = resolved_canic_package(&metadata)?;
+    if let Some(source) = resolve_canonical_fleet_coordinator_source(&metadata, canic_package)? {
+        return Ok(source);
+    }
+
+    let manifest_path = ensure_generated_wrapper(context)?;
+    Ok(BootstrapFleetCoordinatorSource {
+        manifest_path,
+        package_name: GENERATED_WRAPPER_PACKAGE_NAME.to_string(),
+    })
+}
+
+// Prefer the exact resolved canonical package, then the exact sibling source
+// belonging to the selected Canic package.
+fn resolve_canonical_fleet_coordinator_source(
+    metadata: &CargoMetadata,
+    canic_package: &CargoMetadataPackage,
+) -> Result<Option<BootstrapFleetCoordinatorSource>, Box<dyn std::error::Error>> {
+    let matches = metadata
+        .packages
+        .iter()
+        .filter(|package| {
+            package.name == CANONICAL_PACKAGE_NAME
+                && package.version == canic_package.version
+                && package.source == canic_package.source
+        })
+        .collect::<Vec<_>>();
+    if matches.len() > 1 {
+        return Err(
+            "Fleet Coordinator source resolved more than once for the selected Canic package"
+                .into(),
+        );
+    }
+    if let [package] = matches.as_slice() {
+        return Ok(Some(BootstrapFleetCoordinatorSource {
+            manifest_path: package.manifest_path.clone(),
+            package_name: package.name.clone(),
+        }));
+    }
+
+    let canic_root = canic_package
+        .manifest_path
+        .parent()
+        .expect("Canic manifest path must have parent");
+    let sibling_root = canic_root.parent().expect("Canic root must have parent");
+    let registry_version = registry_package_version_suffix(&canic_package.manifest_path, "canic")
+        .filter(|version| *version == canic_package.version);
+    let sibling_dir = registry_version.map_or_else(
+        || CANONICAL_PACKAGE_NAME.to_string(),
+        |version| format!("{CANONICAL_PACKAGE_NAME}-{version}"),
+    );
+    let sibling_manifest = sibling_root.join(sibling_dir).join("Cargo.toml");
+    if sibling_manifest.is_file() {
+        require_package_manifest_identity(
+            &sibling_manifest,
+            CANONICAL_PACKAGE_NAME,
+            &canic_package.version,
+        )?;
+        return Ok(Some(BootstrapFleetCoordinatorSource {
+            manifest_path: sibling_manifest,
+            package_name: CANONICAL_PACKAGE_NAME.to_string(),
+        }));
+    }
+
+    Ok(None)
 }
 
 fn require_built_in_fleet_coordinator_contract(

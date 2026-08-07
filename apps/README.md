@@ -5,11 +5,13 @@ when it has a `canic.toml` that describes an App topology and should be
 discoverable by `canic app list` and usable through commands that take the
 App name as a positional argument.
 
-The implicit `wasm_store` is not sourced from this directory. Its canonical
-canister crate lives at `crates/canic-wasm-store/` so downstreams build the same
-store from published Canic sources instead of carrying a local `wasm_store`
-crate. The local build helper discovers the matching canonical store source
-from the resolved `canic` package automatically.
+The built-in `fleet_coordinator` and `wasm_store` roles are not sourced from
+this directory. Their canonical canister crates live at
+`crates/canic-fleet-coordinator/` and `crates/canic-wasm-store/` so downstreams
+build the same infrastructure from published Canic sources instead of carrying
+local built-in role crates. The local build helper discovers matching canonical
+sources from the resolved `canic` package automatically. Each App still owns
+its configuration-compiled Fleet Subnet Root under its own directory.
 
 ## Layout
 

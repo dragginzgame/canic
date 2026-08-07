@@ -17,6 +17,7 @@ PUBLISH_ORDER=(
     canic-control-plane
     canic-macros
     canic
+    canic-fleet-coordinator
     canic-host
     canic-cli
     canic-wasm-store

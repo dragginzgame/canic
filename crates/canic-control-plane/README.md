@@ -10,7 +10,7 @@ types and helpers explicitly.
 This crate exists to hold the shared control-plane runtime pieces used by:
 
 - the `canic` facade when `control-plane` is enabled
-- the built-in Fleet Coordinator runtime
+- the canonical `canic-fleet-coordinator` crate
 - the canonical `canic-wasm-store` crate
 - internal root/bootstrap orchestration support
 
@@ -33,9 +33,9 @@ feature instead of depending on this crate directly. The canonical standalone
 canic-control-plane = { version = "<version>", default-features = false, features = ["wasm-store-canister"] }
 ```
 
-The host-generated Fleet Coordinator selects only
-`fleet-coordinator-canister`; it does not compile App configuration or root
-runtime behavior.
+The canonical Fleet Coordinator package and its generated fallback select only
+`fleet-coordinator-canister`; neither compiles App configuration or root runtime
+behavior.
 
 Selecting `root-control-plane` with default features disabled compiles only the
 root-side contract. Select `wasm-store-canister` independently for the sibling

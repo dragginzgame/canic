@@ -15,7 +15,6 @@ fn configured_role_kinds_lists_configured_roles() {
 #[test]
 fn configured_role_lifecycle_lists_declared_and_attached_roles() {
     let config = r#"
-controllers = []
 [app]
 name = "demo"
 
@@ -82,7 +81,6 @@ maximum_instances_per_parent = 20_000
 #[test]
 fn configured_role_details_lists_verbose_config_features() {
     let config = r#"
-controllers = []
 [app]
 name = "demo"
 init_mode = "enabled"

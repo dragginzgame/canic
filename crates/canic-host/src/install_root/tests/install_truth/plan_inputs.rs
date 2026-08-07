@@ -8,7 +8,6 @@ fn install_truth_artifact_gate_blocks_missing_built_artifacts() {
     fs::write(
         &config_path,
         r#"
-controllers = []
 [app]
 name = "demo"
 init_mode = "enabled"

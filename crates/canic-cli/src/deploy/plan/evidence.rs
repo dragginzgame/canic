@@ -5,8 +5,8 @@
 //! Boundary: maps resolved plan inputs into informational report diagnostics.
 
 use crate::deploy::plan::{
-    ASSUMPTION_KEY_LOCAL_CONFIG_CONTROLLERS, ASSUMPTION_KEY_LOCAL_CONFIG_POOLS,
-    ASSUMPTION_KEY_LOCAL_CONFIG_ROLES, ASSUMPTION_PREFIX_LOCAL_ARTIFACTS, build_profile_name,
+    ASSUMPTION_KEY_LOCAL_CONFIG_POOLS, ASSUMPTION_KEY_LOCAL_CONFIG_ROLES,
+    ASSUMPTION_PREFIX_LOCAL_ARTIFACTS, build_profile_name,
     command::DeployPlanOptions,
     report::{
         CATEGORY_ARTIFACT, CATEGORY_AUTHORITY, CATEGORY_CONFIG, CATEGORY_DEPLOYMENT_IDENTITY,
@@ -169,19 +169,17 @@ fn plan_identity_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
             source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
         },
     );
-    if !has_plan_assumption_key(plan, ASSUMPTION_KEY_LOCAL_CONFIG_CONTROLLERS) {
-        push_digest_fact(
-            &mut facts,
-            DigestFact {
-                category: CATEGORY_AUTHORITY,
-                code: "authority_profile_resolved",
-                subject,
-                label: "authority profile hash",
-                digest: identity.authority_profile_hash.as_deref(),
-                source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
-            },
-        );
-    }
+    push_digest_fact(
+        &mut facts,
+        DigestFact {
+            category: CATEGORY_AUTHORITY,
+            code: "authority_profile_resolved",
+            subject,
+            label: "authority profile hash",
+            digest: identity.authority_profile_hash.as_deref(),
+            source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
+        },
+    );
     push_digest_fact(
         &mut facts,
         DigestFact {
@@ -259,10 +257,6 @@ fn push_digest_fact(facts: &mut Vec<PlanDiagnostic>, fact: DigestFact<'_>) {
 }
 
 fn authority_profile_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
-    if has_plan_assumption_key(plan, ASSUMPTION_KEY_LOCAL_CONFIG_CONTROLLERS) {
-        return Vec::new();
-    }
-
     let expected_count = plan.authority_profile.expected_controllers.len();
     vec![PlanDiagnostic {
         category: CATEGORY_AUTHORITY,

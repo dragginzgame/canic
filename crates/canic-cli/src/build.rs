@@ -618,7 +618,6 @@ mod tests {
         fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n")
             .expect("write workspace manifest");
         let mut config = r#"
-controllers = []
 [app]
 name = "demo"
 

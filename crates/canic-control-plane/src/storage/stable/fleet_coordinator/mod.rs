@@ -12,14 +12,17 @@ use canic_core::{
 };
 use canic_core::{
     control_plane_support::config::ComponentTopology,
-    dto::fleet_registry::{
-        FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
-        FleetRegistryVersion, FleetServiceBinding, FleetSubnetRootDeletionExecutionResponse,
-        FleetSubnetRootDeletionReadinessIntentResponse, FleetSubnetRootDeletionReadinessResponse,
-        FleetSubnetRootDeletionResponse, FleetSubnetRootDrainingPublicationRequest,
-        FleetSubnetRootDrainingPublicationResponse, FleetSubnetRootEntry,
-        FleetSubnetRootRemovalPublicationRequest, FleetSubnetRootRemovalPublicationResponse,
-        FleetSubnetRootSnapshotAcknowledgement,
+    dto::{
+        component_provisioning::FleetComponentProvisioningPlan,
+        fleet_registry::{
+            FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
+            FleetRegistryVersion, FleetServiceBinding, FleetSubnetRootDeletionExecutionResponse,
+            FleetSubnetRootDeletionReadinessIntentResponse,
+            FleetSubnetRootDeletionReadinessResponse, FleetSubnetRootDeletionResponse,
+            FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingPublicationResponse,
+            FleetSubnetRootEntry, FleetSubnetRootRemovalPublicationRequest,
+            FleetSubnetRootRemovalPublicationResponse, FleetSubnetRootSnapshotAcknowledgement,
+        },
     },
     ids::{AppId, ComponentDeploymentConfigurationDigest, FleetRegistryAuthority},
 };
@@ -30,8 +33,9 @@ use std::cell::RefCell;
 #[cfg(feature = "fleet-coordinator-canister")]
 // The record may contain one topology, one Registry snapshot, the root-entry
 // portion of that Registry again as immutable join receipts, the complete
-// service set again as one publication receipt, one exact acknowledgement per
-// current root, and at most one draining and one removal receipt per root.
+// Component provisioning plan, the complete service set again as one
+// publication receipt, one exact acknowledgement per current root, and at
+// most one draining and one removal receipt per root.
 const FLEET_COORDINATOR_STATE_MAX_BYTES: u32 = 16_777_216;
 
 #[cfg(feature = "fleet-coordinator-canister")]
@@ -67,6 +71,7 @@ pub struct FleetCoordinatorRegistryRecord {
     pub root_join_receipts: Vec<FleetSubnetRootJoinReceiptRecord>,
     pub root_snapshot_acknowledgements: Vec<FleetSubnetRootSnapshotAcknowledgement>,
     pub registry_activation_receipt: Option<FleetRegistryActivationReceiptRecord>,
+    pub component_provisioning: Option<FleetComponentProvisioningRecord>,
     pub service_publication_receipt: Option<FleetServicePublicationReceiptRecord>,
     pub root_draining_publication_receipts: Vec<FleetSubnetRootDrainingPublicationReceiptRecord>,
     pub root_removal_publication_receipts: Vec<FleetSubnetRootRemovalPublicationReceiptRecord>,
@@ -98,6 +103,21 @@ pub struct FleetSubnetRootJoinReceiptRecord {
 pub struct FleetRegistryActivationReceiptRecord {
     pub request: FleetRegistryActivationRequest,
     pub response: FleetRegistryActivationResponse,
+}
+
+/// Complete Coordinator-owned plan retained before the first root effect.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetComponentProvisioningRecord {
+    pub operation_id: [u8; 32],
+    pub plan_hash: [u8; 32],
+    pub plan: FleetComponentProvisioningPlan,
+    pub state: FleetComponentProvisioningStateRecord,
+}
+
+/// Monotonic durable Coordinator provisioning state implemented in this slice.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum FleetComponentProvisioningStateRecord {
+    Planned { planned_at_ns: u64 },
 }
 
 /// Persisted exact authority and response for initial Fleet-service publication.

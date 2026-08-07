@@ -111,8 +111,6 @@ of its potential descendant roles. Do not use a flat `[[canisters]]` list or
 nest child tables to express runtime parentage.
 
 ```toml
-controllers = []
-
 [app]
 name = "example"
 

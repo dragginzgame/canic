@@ -15,9 +15,15 @@ pub(in crate::deployment_truth::tests) fn assert_plan_excludes_declared_only_sto
     );
 }
 
-pub(in crate::deployment_truth::tests) fn assert_plan_has_implicit_wasm_store_artifact(
+pub(in crate::deployment_truth::tests) fn assert_plan_has_built_in_infrastructure_artifacts(
     plan: &DeploymentPlanV1,
 ) {
+    assert!(plan.role_artifacts.iter().any(|artifact| {
+        artifact.role == "fleet_coordinator"
+            && artifact.source == ArtifactSourceV1::FleetCoordinator
+            && artifact.observed_wasm_gz_file_sha256_source
+                == Some(ArtifactDigestSourceV1::ObservedFileDigest)
+    }));
     assert!(
         plan.role_artifacts
             .iter()

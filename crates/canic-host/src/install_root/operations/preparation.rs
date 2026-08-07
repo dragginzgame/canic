@@ -19,17 +19,24 @@ impl<'a> BuildInstallTargetsOperation<'a> {
     }
 
     pub(in crate::install_root) fn evidence(&self) -> Vec<String> {
-        self.build_targets
-            .iter()
-            .map(|target| format!("build_target:{}", target.role))
+        self.role_names()
+            .into_iter()
+            .map(|role| format!("build_target:{role}"))
             .collect()
     }
 
     pub(in crate::install_root) fn role_names(&self) -> Vec<String> {
-        self.build_targets
-            .iter()
-            .map(|target| target.role.clone())
-            .collect()
+        let mut roles = Vec::with_capacity(self.build_targets.len() + 2);
+        roles.push("fleet_coordinator".to_string());
+        for target in self.build_targets {
+            if !roles.contains(&target.role) {
+                roles.push(target.role.clone());
+            }
+        }
+        if !roles.iter().any(|role| role == "wasm_store") {
+            roles.push("wasm_store".to_string());
+        }
+        roles
     }
 
     pub(in crate::install_root) fn execute(

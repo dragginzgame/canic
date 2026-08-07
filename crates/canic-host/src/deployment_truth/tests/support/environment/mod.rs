@@ -1,7 +1,6 @@
 use super::*;
 
 pub(in crate::deployment_truth::tests) const SAMPLE_CONFIG: &str = r#"
-controllers = []
 [app]
 name = "demo"
 init_mode = "enabled"

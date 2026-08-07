@@ -11,7 +11,6 @@ use serde_json::Value as JsonValue;
 use std::{ffi::OsString, fs, path::PathBuf};
 
 const SAMPLE_CONFIG: &str = r#"
-controllers = []
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -36,40 +35,13 @@ maximum_instances = 1
 const USER_HUB_ARTIFACT: &[u8] = b"user-hub-artifact";
 
 const MALFORMED_DESIRED_CONFIG: &str = r#"
-controllers = ["not-a-principal"]
+unknown = true
 
 [app]
 name = "demo"
-"#;
-
-const CONTROLLER_CONFIG: &str = r#"
-controllers = [
-  "zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae",
-  "rrkah-fqaaa-aaaaa-aaaaq-cai",
-]
-[app]
-name = "demo"
-init_mode = "enabled"
-
-
-[roles.root]
-kind = "root"
-package = "root"
-
-[roles.user_hub]
-kind = "canister"
-package = "user_hub"
-[app.whitelist]
-
-
-
-[component_specs.user_hub]
-component_role = "user_hub"
-maximum_instances = 1
 "#;
 
 const POOL_CONFIG: &str = r#"
-controllers = []
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -232,15 +204,19 @@ fn deploy_plan_report_builds_from_config_without_fleet_catalog_entry() {
     assert_proposed_operation_keys(
         &json,
         &[
+            "future_apply_preview|create_canister|fleet_coordinator|not_executed",
             "future_apply_preview|create_canister|root|not_executed",
             "future_apply_preview|create_canister|user_hub|not_executed",
             "future_apply_preview|create_canister|wasm_store|not_executed",
+            "future_apply_preview|install_wasm|fleet_coordinator|not_executed",
             "future_apply_preview|install_wasm|root|not_executed",
             "future_apply_preview|install_wasm|user_hub|not_executed",
             "future_apply_preview|install_wasm|wasm_store|not_executed",
+            "future_apply_preview|register_child|fleet_coordinator|not_executed",
             "future_apply_preview|register_child|user_hub|not_executed",
             "future_apply_preview|register_child|wasm_store|not_executed",
             "future_apply_preview|register_root|root|not_executed",
+            "future_apply_preview|upload_artifact|fleet_coordinator|not_executed",
             "future_apply_preview|upload_artifact|root|not_executed",
             "future_apply_preview|upload_artifact|user_hub|not_executed",
             "future_apply_preview|upload_artifact|wasm_store|not_executed",
@@ -342,6 +318,12 @@ fn deploy_plan_report_keeps_complete_inputs_planned_without_root_comparison() {
         "demo-local",
         "deployment_plan_builder",
     );
+    assert_verified_fact(
+        &json,
+        "role_artifact_observed",
+        "fleet_coordinator",
+        "local_observation",
+    );
     assert_verified_fact(&json, "role_artifact_observed", "root", "local_observation");
     assert_verified_fact(
         &json,
@@ -392,47 +374,6 @@ fn deploy_plan_report_previews_pool_canister_creation() {
     );
     assert_proposed_operation(&json, "create_canister", "user_shards:user_shard");
     assert_proposed_operation(&json, "register_child", "user_shards:user_shard");
-}
-
-#[test]
-fn deploy_plan_report_previews_controller_reconciliation() {
-    let (_temp, workspace_root, icp_root) =
-        temp_plan_workspace_with_config("canic-deploy-plan-controller-preview", CONTROLLER_CONFIG);
-    write_artifact(&icp_root, "root", b"root-artifact");
-    write_artifact(&icp_root, "user_hub", b"user-hub-artifact");
-    let options = deploy_plan::DeployPlanOptions::parse([
-        OsString::from("demo-local"),
-        OsString::from("--app"),
-        OsString::from("demo"),
-        OsString::from("--config"),
-        OsString::from("apps/demo/canic.toml"),
-    ])
-    .expect("parse deploy plan options");
-
-    let report = deploy_plan::build_report(
-        &options,
-        &deploy_plan::DeployPlanRoots {
-            workspace_root,
-            icp_root,
-        },
-    );
-    let json = serde_json::to_value(&report).expect("report should serialize");
-
-    assert_eq!(
-        json["plan"]["authority_profile"]["expected_controllers"],
-        serde_json::json!([
-            "rrkah-fqaaa-aaaaa-aaaaq-cai",
-            "zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae"
-        ])
-    );
-    assert_verified_fact(
-        &json,
-        "expected_controller_set_resolved",
-        "demo-local",
-        "deployment_plan_builder",
-    );
-    assert_proposed_operation(&json, "apply_policy", "demo-local");
-    assert_proposed_operation(&json, "set_controllers", "demo-local");
 }
 
 #[test]
@@ -529,15 +470,25 @@ fn deploy_plan_report_blocks_malformed_desired_config() {
             .iter()
             .any(|item| item["code"] == "fleet_app_resolved")
     );
-    assert_no_verified_fact(&json, "authority_profile_resolved");
-    assert_no_verified_fact(&json, "expected_controller_set_resolved");
+    assert_verified_fact(
+        &json,
+        "authority_profile_resolved",
+        "demo-local",
+        "deployment_plan_builder",
+    );
+    assert_verified_fact(
+        &json,
+        "expected_controller_set_resolved",
+        "demo-local",
+        "deployment_plan_builder",
+    );
     assert_no_verified_fact(&json, "expected_canister_inventory_resolved");
     assert!(
         json["blockers"]
             .as_array()
             .expect("blockers")
             .iter()
-            .any(|item| item["code"] == "local_config_controllers")
+            .any(|item| item["code"] == "local_config_roles")
     );
     assert!(
         json["assumptions"]
@@ -836,6 +787,7 @@ fn write_artifact(icp_root: &std::path::Path, role: &str, bytes: &[u8]) {
 }
 
 fn write_complete_local_plan_inputs(icp_root: &std::path::Path) {
+    write_artifact(icp_root, "fleet_coordinator", b"fleet-coordinator-artifact");
     write_artifact(icp_root, "root", b"root-artifact");
     write_artifact(icp_root, "wasm_store", b"wasm-store-artifact");
     write_artifact(icp_root, "user_hub", USER_HUB_ARTIFACT);

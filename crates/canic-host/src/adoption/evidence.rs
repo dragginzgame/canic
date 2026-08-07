@@ -179,7 +179,8 @@ const fn artifact_state_for_source(source: ArtifactSourceV1) -> AdoptionArtifact
         ArtifactSourceV1::External | ArtifactSourceV1::Unknown => {
             AdoptionArtifactStateV1::ExternalWasm
         }
-        ArtifactSourceV1::LocalBuild
+        ArtifactSourceV1::FleetCoordinator
+        | ArtifactSourceV1::LocalBuild
         | ArtifactSourceV1::ReleaseSet
         | ArtifactSourceV1::WasmStore => AdoptionArtifactStateV1::CanicBuilt,
     }
@@ -187,6 +188,7 @@ const fn artifact_state_for_source(source: ArtifactSourceV1) -> AdoptionArtifact
 
 const fn artifact_source_label(source: ArtifactSourceV1) -> &'static str {
     match source {
+        ArtifactSourceV1::FleetCoordinator => "fleet-coordinator",
         ArtifactSourceV1::LocalBuild => "local-build",
         ArtifactSourceV1::ReleaseSet => "release-set",
         ArtifactSourceV1::WasmStore => "wasm-store",

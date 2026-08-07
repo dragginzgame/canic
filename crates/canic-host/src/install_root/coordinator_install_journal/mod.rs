@@ -80,6 +80,7 @@ pub(super) struct FleetCoordinatorInstallJournal {
     pub component_topology: ComponentTopology,
     pub coordinator_artifact: CanicInfrastructureArtifactEntry,
     pub expected_module_hash: [u8; 32],
+    pub installation_controller: Option<Principal>,
     pub coordinator: Option<Principal>,
     pub installed_module_hash: Option<[u8; 32]>,
     pub verified_registry_manifest: Option<FleetRegistryManifest>,
@@ -193,11 +194,22 @@ pub(super) fn plan_fleet_coordinator_install(
 /// Record durable intent immediately before the one Coordinator creation effect.
 pub(super) fn begin_coordinator_creation(
     current: &ResolvedFleetCoordinatorInstall,
+    installation_controller: Principal,
 ) -> Result<ResolvedFleetCoordinatorInstall, FleetCoordinatorInstallJournalError> {
-    advance_without_evidence(
+    if current.journal.phase == FleetCoordinatorInstallPhase::CreationInFlight
+        && current.journal.installation_controller == Some(installation_controller)
+    {
+        return Ok(resolved(
+            current.journal.clone(),
+            current.path.clone(),
+            false,
+        ));
+    }
+    transition(
         current,
         FleetCoordinatorInstallPhase::Planned,
         FleetCoordinatorInstallPhase::CreationInFlight,
+        |next| next.installation_controller = Some(installation_controller),
     )
 }
 
@@ -324,6 +336,7 @@ fn planned_journal(
         component_topology: request.component_topology.clone(),
         coordinator_artifact,
         expected_module_hash,
+        installation_controller: None,
         coordinator: None,
         installed_module_hash: None,
         verified_registry_manifest: None,
@@ -474,6 +487,12 @@ fn validate_immutable_authority(
     if journal.coordinator_subnet.as_principal() == &Principal::anonymous() {
         return Err(invalid(path, "Coordinator Subnet is anonymous"));
     }
+    if journal
+        .installation_controller
+        .is_some_and(|controller| controller == Principal::anonymous())
+    {
+        return Err(invalid(path, "installation controller is anonymous"));
+    }
     let funding_is_positive = match journal.creation_funding {
         PlannedCanisterCreationFunding::Cycles { cycles } => cycles > 0,
         PlannedCanisterCreationFunding::Icp { e8s } => e8s > 0,
@@ -520,22 +539,26 @@ fn validate_phase_evidence(
     if journal.sequence != expected_sequence {
         return Err(invalid(path, "phase does not match journal sequence"));
     }
+    let has_controller = journal.installation_controller.is_some();
     let has_coordinator = journal.coordinator.is_some();
     let has_installed = journal.installed_module_hash.is_some();
     let has_manifest = journal.verified_registry_manifest.is_some();
     let has_version = journal.verified_registry_version.is_some();
     let valid_evidence = match journal.phase {
-        FleetCoordinatorInstallPhase::Planned | FleetCoordinatorInstallPhase::CreationInFlight => {
-            !has_coordinator && !has_installed && !has_manifest && !has_version
+        FleetCoordinatorInstallPhase::Planned => {
+            !has_controller && !has_coordinator && !has_installed && !has_manifest && !has_version
+        }
+        FleetCoordinatorInstallPhase::CreationInFlight => {
+            has_controller && !has_coordinator && !has_installed && !has_manifest && !has_version
         }
         FleetCoordinatorInstallPhase::Created | FleetCoordinatorInstallPhase::InstallInFlight => {
-            has_coordinator && !has_installed && !has_manifest && !has_version
+            has_controller && has_coordinator && !has_installed && !has_manifest && !has_version
         }
         FleetCoordinatorInstallPhase::Installed => {
-            has_coordinator && has_installed && !has_manifest && !has_version
+            has_controller && has_coordinator && has_installed && !has_manifest && !has_version
         }
         FleetCoordinatorInstallPhase::Verified => {
-            has_coordinator && has_installed && has_manifest && has_version
+            has_controller && has_coordinator && has_installed && has_manifest && has_version
         }
     };
     if !valid_evidence {

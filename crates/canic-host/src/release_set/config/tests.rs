@@ -6,7 +6,6 @@ use std::{
 };
 
 const CONFIG: &str = r#"
-controllers = []
 [app]
 name = "demo"
 
@@ -58,7 +57,7 @@ fn public_projection_preserves_config_path_and_core_parse_source() {
     let root = temp_root("typed-core-source");
     fs::create_dir_all(&root).expect("create temp root");
     let config_path = root.join("canic.toml");
-    fs::write(&config_path, "controllers = [").expect("write invalid config");
+    fs::write(&config_path, "[app").expect("write invalid config");
 
     let error = AppConfigSnapshot::load(&config_path).expect_err("invalid config must fail");
     match error {

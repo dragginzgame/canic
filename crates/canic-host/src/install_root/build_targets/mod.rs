@@ -24,7 +24,7 @@ pub(super) fn run_canic_build_targets(
     }
 
     fs::create_dir_all(context.artifact_root())?;
-    println!("Building {} canisters", targets.len());
+    println!("Building {} configured canisters", targets.len());
     println!();
     let headers = ["CANISTER", "PROGRESS", "WASM", "ELAPSED"];
     let planned_rows = targets

@@ -40,7 +40,6 @@ fn configured_role_capabilities_resolves_exact_role_package_contracts() {
 #[test]
 fn configured_role_metrics_profiles_lists_resolved_profiles() {
     let config = r#"
-controllers = []
 [app]
 name = "demo"
 
@@ -118,7 +117,6 @@ maximum_instances_per_parent = 20_000
 #[test]
 fn configured_role_topups_lists_configured_policy_summaries() {
     let config = r#"
-controllers = []
 [app]
 name = "demo"
 init_mode = "enabled"

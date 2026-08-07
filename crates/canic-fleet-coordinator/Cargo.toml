@@ -1,0 +1,33 @@
+[package]
+name = "canic-fleet-coordinator"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+license = { workspace = true }
+description = "Canonical Canic Fleet Coordinator canister crate"
+readme = "README.md"
+documentation = "https://docs.rs/canic-fleet-coordinator"
+homepage = { workspace = true }
+repository = { workspace = true }
+keywords = { workspace = true }
+categories = { workspace = true }
+publish = true
+
+[package.metadata.cargo-machete]
+ignored = ["candid", "ic-cdk"]
+
+[package.metadata.canic]
+app = "fleet_coordinator"
+role = "fleet_coordinator"
+
+[lib]
+name = "canister_fleet_coordinator"
+crate-type = ["cdylib"]
+
+[dependencies]
+candid = { workspace = true }
+canic = { workspace = true, default-features = false, features = ["fleet-coordinator-canister"] }
+ic-cdk = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,4 +1,3 @@
-controllers = []
 [app]
 name = "test"
 init_mode = "enabled"
@@ -43,6 +42,9 @@ component_role = "scale_hub"
 maximum_instances = 1
 topup = {}
 
+[component_specs.scaling.standards]
+icrc21 = true
+
 [component_specs.scaling.scaling.pools.scales]
 canister_role = "scale_replica"
 policy.initial_workers = 1
@@ -51,6 +53,9 @@ policy.min_workers = 2
 [component_specs.scaling.children.scale_replica]
 kind = "replica"
 topup = {}
+
+[component_specs.scaling.children.scale_replica.standards]
+icrc21 = true
 
 [component_specs.scaling.spawn_grants.scale_hub.scale_replica]
 maximum_instances_per_parent = 32

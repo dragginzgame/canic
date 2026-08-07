@@ -9,6 +9,7 @@ fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
     write_local_network_authority(&icp_root, "local");
+    write_artifact(&icp_root, "fleet_coordinator", b"coordinator-artifact");
     write_artifact(&icp_root, "root", b"root-artifact");
     write_artifact(&icp_root, "wasm_store", b"wasm-store-artifact");
     write_artifact(&icp_root, "user_hub", b"user-hub-artifact");
@@ -79,93 +80,23 @@ fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
     );
     assert_eq!(plan.deployment_identity.app, "demo");
     assert_eq!(plan.runtime_variant, "local");
-    assert_eq!(plan.role_artifacts.len(), 3);
+    assert_eq!(plan.role_artifacts.len(), 4);
     assert!(
         plan.role_artifacts
             .iter()
             .all(|artifact| artifact.build_profile == "fast")
     );
-    assert_plan_has_implicit_wasm_store_artifact(&plan);
+    assert_plan_has_built_in_infrastructure_artifacts(&plan);
     assert_plan_has_user_hub_release_artifact(&plan);
+    assert!(plan.authority_profile.expected_controllers.is_empty());
     assert_eq!(
         plan.expected_canisters
             .iter()
             .map(|canister| canister.role.as_str())
             .collect::<Vec<_>>(),
-        vec!["root", "wasm_store", "user_hub"]
+        vec!["fleet_coordinator", "root", "wasm_store", "user_hub"]
     );
     assert_plan_excludes_declared_only_store(&plan);
-    assert!(
-        plan.unresolved_assumptions
-            .iter()
-            .any(|assumption| assumption.has_kind(DeploymentAssumptionKindV1::FleetCatalogMissing))
-    );
-}
-
-#[test]
-fn local_plan_uses_configured_controllers_as_expected_authority() {
-    let temp = TempWorkspace::new("canic-host-local-plan-controllers");
-    let workspace_root = temp.path().join("workspace");
-    let icp_root = temp.path().join("icp");
-    let config_dir = workspace_root.join("apps");
-    fs::create_dir_all(&config_dir).expect("create config dir");
-    fs::write(
-        config_dir.join("canic.toml"),
-        r#"
-controllers = [
-  "zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae",
-  "rrkah-fqaaa-aaaaa-aaaaq-cai",
-]
-[app]
-name = "demo"
-init_mode = "enabled"
-
-
-[roles.root]
-kind = "root"
-package = "root"
-
-[roles.user_hub]
-kind = "canister"
-package = "user_hub"
-
-[roles.user_shard]
-kind = "canister"
-package = "user_shard"
-
-[roles.store]
-kind = "canister"
-package = "store"
-[app.whitelist]
-
-
-"#,
-    )
-    .expect("write config");
-    write_local_network_authority(&icp_root, "local");
-    write_artifact(&icp_root, "root", b"root-artifact");
-
-    let plan = build_local_deployment_plan(&LocalDeploymentPlanRequest {
-        fleet_name: "demo-local".to_string(),
-        app: "demo".to_string(),
-        environment: "local".to_string(),
-        artifact_environment: "local".to_string(),
-        workspace_root,
-        icp_root,
-        config_path: None,
-        runtime_variant: "local".to_string(),
-        build_profile: "fast".to_string(),
-    });
-
-    assert_eq!(
-        plan.authority_profile.expected_controllers,
-        vec![
-            "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
-            "zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae".to_string(),
-        ]
-    );
-    assert!(plan.authority_profile.staging_controllers.is_empty());
-    assert!(plan.authority_profile.emergency_controllers.is_empty());
     assert!(
         plan.unresolved_assumptions
             .iter()
@@ -181,6 +112,7 @@ fn local_plan_uses_catalog_fleet_identity_without_inventing_one_root() {
     let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
+    write_artifact(&icp_root, "fleet_coordinator", b"coordinator-artifact");
     write_artifact(&icp_root, "root", b"root-artifact");
     write_artifact(&icp_root, "wasm_store", b"wasm-store-artifact");
     write_artifact(&icp_root, "user_hub", b"user-hub-artifact");
@@ -227,7 +159,6 @@ fn local_plan_uses_configured_pools_as_expected_pool_identities() {
     fs::write(
         config_dir.join("canic.toml"),
         r#"
-controllers = []
 [app]
 name = "demo"
 init_mode = "enabled"

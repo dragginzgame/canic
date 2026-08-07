@@ -424,7 +424,6 @@ fn discovered_install_config_choices_reject_duplicate_app_names() {
     )
     .expect("write copy root manifest");
     let config = r#"
-controllers = []
 [app]
 name = "demo"
 

@@ -76,7 +76,6 @@ fn install_truth_phase_receipt_records_emit_manifest_evidence() {
     fs::write(
         &config_path,
         r#"
-controllers = []
 [app]
 name = "demo"
 init_mode = "enabled"

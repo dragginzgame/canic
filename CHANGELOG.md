@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.17` durably freezes the complete controller-authenticated Coordinator
+  provisioning plan before root effects and aligns the default Coordinator,
+  App-owned root and Wasm Store around canonical artifact sources, explicit
+  creation authority and complete three-role deployment evidence, while
+  hard-cutting stale config-level controller authority and making ICRC-21
+  capability declarations role-local.
+
 - `0.101.16` hard-cuts the canonical Fleet Registry to carry validated service
   topology and adds the Coordinator's durable atomic publication/replay
   primitive while keeping plan orchestration, Directories and runtimes fenced.

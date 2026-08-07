@@ -5,7 +5,7 @@
 //!
 //! - `build!` for configured canisters and generated local sandbox/probe config
 //! - `start!` for configured canister lifecycle hooks and endpoints
-//! - `start_fleet_coordinator!` for Canic's host-generated Coordinator
+//! - `start_fleet_coordinator!` for Canic's canonical Coordinator artifact source
 //!
 //! For lower-level access, use the `api`, `dto`, and `memory` modules.
 //! These surfaces are for configured canister role packages. Shared runtime

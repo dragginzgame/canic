@@ -110,7 +110,7 @@ fn build_install_targets_with_phase(
     let duration = started.elapsed();
     let phase = CompletedInstallPhase {
         phase: InstallPhaseLabel::BUILD_ARTIFACTS,
-        attempted_action: "build configured install targets",
+        attempted_action: "build configured and built-in infrastructure targets",
         started_at,
         finished_at: Some(current_unix_timestamp_label()?),
         evidence: operation.evidence(),
@@ -137,6 +137,8 @@ fn qualify_infrastructure_outputs(
         .iter()
         .find(|output| output.role == options.root_canister)
         .ok_or("complete install build has no Fleet Subnet Root output")?;
+    println!("Building 2 built-in infrastructure canisters");
+    println!();
     let coordinator =
         build_workspace_canister_artifact(&build_context.with_role("fleet_coordinator"))?;
     let wasm_store = build_workspace_canister_artifact(&build_context.with_role("wasm_store"))?;

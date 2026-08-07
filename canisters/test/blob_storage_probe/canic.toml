@@ -1,4 +1,3 @@
-controllers = []
 [app]
 name = "blob_storage_probe"
 init_mode = "enabled"

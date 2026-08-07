@@ -6,7 +6,6 @@ use toml::Value as TomlValue;
 #[test]
 fn declare_app_role_adds_declared_only_canister_role() {
     let config = r#"
-controllers = []
 [app]
 name = "demo"
 
@@ -97,7 +96,6 @@ role = "user_hub"
 #[test]
 fn attach_app_role_creates_component_spec_for_first_attachment() {
     let config = r#"
-controllers = []
 [app]
 name = "demo"
 
@@ -133,7 +131,6 @@ package = "store"
 #[test]
 fn attach_app_role_preserves_explicit_supported_kind() {
     let config = r#"
-controllers = []
 [app]
 name = "demo"
 
@@ -171,7 +168,6 @@ maximum_instances = 1
 #[test]
 fn attach_app_role_rejects_removed_service_kind() {
     let config = r#"
-controllers = []
 [app]
 name = "demo"
 
@@ -210,7 +206,6 @@ fn attach_app_role_rejects_missing_duplicate_root_and_unknown_kind() {
 #[test]
 fn attach_app_role_allows_one_child_artifact_in_multiple_component_specs() {
     let config = r#"
-controllers = []
 [app]
 name = "demo"
 
@@ -273,7 +268,6 @@ maximum_instances = 1
 #[test]
 fn attach_app_role_allows_a_component_role_as_another_specs_descendant() {
     let config = r#"
-controllers = []
 [app]
 name = "demo"
 
@@ -342,7 +336,6 @@ role = "hub"
     )
     .expect("write manifest");
     let config = r#"
-controllers = []
 [app]
 name = "demo"
 
@@ -429,7 +422,6 @@ maximum_instances_per_parent = 4
 #[test]
 fn rename_app_role_updates_role_bearing_references() {
     let config = r#"
-controllers = []
 [app]
 name = "demo"
 

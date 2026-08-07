@@ -24,7 +24,6 @@ environments:
 EOF
 
     cat > "$downstream_root/apps/downstream/canic.toml" <<'EOF'
-controllers = []
 [app]
 name = "downstream"
 

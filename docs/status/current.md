@@ -14,18 +14,29 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.15`.
-- The latest published release is `v0.101.15` at
-  `3ba3a5d57a5a13578d1c40178bc08421556e9db3`.
-- Open `0.101.16` hard-cuts the canonical Fleet Registry to carry the complete
-  service topology under exact ordering, mode, placement, active-root
+- The workspace package version is `0.101.16`.
+- The latest published release is `v0.101.16` at
+  `437ce02f56c8d61b133fd55ed483e463c1cdad3c`.
+- Open `0.101.17` adds the controller-authenticated Coordinator preparation
+  boundary for one complete fresh-install Component-provisioning plan. The
+  exact operation, canonical plan hash, complete plan and original preparation
+  time are durable before root effects; compact exact status, restart replay,
+  corruption rejection and grouped root-lifecycle fencing are implemented.
+  The same patch adds the canonical publishable Coordinator artifact source,
+  preserves the App-owned root artifact boundary, removes the Coordinator test
+  stub, binds paid Coordinator/root creation to durable explicit controller
+  authority and hard-cuts v1 deployment evidence to cover Coordinator, root
+  and Wasm Store together. It also removes the runtime-only Coordinator's
+  synthetic App config, hard-cuts the unused global config controller list and
+  makes the retained ICRC-21 declarations role-local.
+  Authenticated root dispatch and receipt collection remain unavailable, so
+  service publication, Directories and runtime activation remain fenced.
+- Released `0.101.16` hard-cuts the canonical Fleet Registry to carry the
+  complete service topology under exact ordering, mode, placement, active-root
   admission and global Component identity/principal validation. The
   Coordinator can atomically commit that complete set with its durable exact
-  publication receipt, replay it after restart and reconstruct it before later
-  root lifecycle transitions. The commit primitive remains deliberately
-  unexported until the Coordinator owns a persisted plan and collects
-  authenticated root receipts; Fleet/Component Group Directory publication
-  and runtime activation remain fenced.
+  publication receipt and replay it after restart. That closed primitive has
+  no caller-supplied authority path.
 - Released `0.101.15` revalidates the canonical provisioning plan and every
   exact root `Provisioned` receipt before deriving the complete canonical
   initial Fleet-service binding set. Authority/Replica and Active Pool mode,
@@ -2395,14 +2406,14 @@ The canonical plan, exact root-batch acceptance, canonical root-local
 `ComponentInstanceId` allocation, prepaid-Canister claim, Store-backed
 installation, prepared Registry commitment and exact group-partitioned
 `Provisioned` result plus receipt-derived service compiler are published
-through immutable `v0.101.15`. Open `0.101.16` hard-cuts the canonical Fleet
-Registry to the service-aware shape and adds one durable atomic
-Registry-plus-receipt publication/replay primitive without exposing a
-caller-supplied authority path. Continue Slice 3 by persisting the complete
-Coordinator-owned plan before effects, collecting authenticated exact root
-results and invoking that closed commit boundary. Component Group Directory
-derivation, Directory delivery and runtime activation remain separate later
-boundaries.
+through immutable `v0.101.16`. Open `0.101.17` durably freezes the complete
+Coordinator-owned plan before effects behind exact controller-authenticated
+preparation and status boundaries. Continue Slice 3 by dispatching only its
+persisted root batches, collecting authenticated exact root results into the
+same monotonic operation and invoking the closed Registry publication
+boundary only after the complete receipt set validates. Component Group
+Directory derivation, Directory delivery and runtime activation remain
+separate later boundaries.
 Do not enable scale-out until its durable Coordinator
 placement ledger can prove ordinal non-reuse and combined density/spread.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for

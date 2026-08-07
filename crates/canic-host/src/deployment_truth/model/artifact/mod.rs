@@ -55,6 +55,7 @@ pub enum ArtifactDigestSourceV1 {
 ///
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum ArtifactSourceV1 {
+    FleetCoordinator,
     LocalBuild,
     ReleaseSet,
     WasmStore,
@@ -66,6 +67,7 @@ impl ArtifactSourceV1 {
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
+            Self::FleetCoordinator => "FleetCoordinator",
             Self::LocalBuild => "LocalBuild",
             Self::ReleaseSet => "ReleaseSet",
             Self::WasmStore => "WasmStore",
@@ -95,6 +97,10 @@ mod tests {
 
     #[test]
     fn artifact_source_owns_text_labels() {
+        assert_eq!(
+            ArtifactSourceV1::FleetCoordinator.label(),
+            "FleetCoordinator"
+        );
         assert_eq!(ArtifactSourceV1::LocalBuild.label(), "LocalBuild");
         assert_eq!(ArtifactSourceV1::ReleaseSet.label(), "ReleaseSet");
         assert_eq!(ArtifactSourceV1::WasmStore.label(), "WasmStore");

@@ -260,11 +260,22 @@ pub(super) fn plan_fleet_subnet_root_install(
 
 pub(super) fn begin_root_creation(
     current: &ResolvedFleetSubnetRootInstall,
+    installation_controller: Principal,
 ) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
-    advance_without_evidence(
+    if current.journal.phase == FleetSubnetRootInstallPhase::RootCreationInFlight
+        && current.journal.installation_controller == Some(installation_controller)
+    {
+        return Ok(resolved(
+            current.journal.clone(),
+            current.path.clone(),
+            false,
+        ));
+    }
+    transition(
         current,
         FleetSubnetRootInstallPhase::Planned,
         FleetSubnetRootInstallPhase::RootCreationInFlight,
+        |next| next.installation_controller = Some(installation_controller),
     )
 }
 
@@ -291,22 +302,11 @@ pub(super) fn record_root_created(
 
 pub(super) fn begin_wasm_store_creation(
     current: &ResolvedFleetSubnetRootInstall,
-    installation_controller: Principal,
 ) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
-    if current.journal.phase == FleetSubnetRootInstallPhase::WasmStoreCreationInFlight
-        && current.journal.installation_controller == Some(installation_controller)
-    {
-        return Ok(resolved(
-            current.journal.clone(),
-            current.path.clone(),
-            false,
-        ));
-    }
-    transition(
+    advance_without_evidence(
         current,
         FleetSubnetRootInstallPhase::RootCreated,
         FleetSubnetRootInstallPhase::WasmStoreCreationInFlight,
-        |next| next.installation_controller = Some(installation_controller),
     )
 }
 
@@ -1145,6 +1145,12 @@ fn validate_immutable_authority(
     if journal.install_operation_id == [0; 32] {
         return Err(invalid(path, "install operation identity must not be zero"));
     }
+    if journal
+        .installation_controller
+        .is_some_and(|controller| controller == Principal::anonymous())
+    {
+        return Err(invalid(path, "installation controller is anonymous"));
+    }
     journal
         .component_topology
         .canonical_bytes()
@@ -1219,8 +1225,8 @@ fn validate_phase_evidence(
         return Err(invalid(path, "phase differs from journal sequence"));
     }
     let retained = [
-        journal.fleet_subnet_root.is_some(),
         journal.installation_controller.is_some(),
+        journal.fleet_subnet_root.is_some(),
         journal.wasm_store.is_some(),
         journal.installed_wasm_store_module_hash.is_some(),
         journal.installed_root_module_hash.is_some(),
@@ -1308,10 +1314,10 @@ const fn phase_sequence(phase: FleetSubnetRootInstallPhase) -> u64 {
 
 const fn phase_evidence_count(phase: FleetSubnetRootInstallPhase) -> usize {
     match phase {
-        FleetSubnetRootInstallPhase::Planned
-        | FleetSubnetRootInstallPhase::RootCreationInFlight => 0,
-        FleetSubnetRootInstallPhase::RootCreated => 1,
-        FleetSubnetRootInstallPhase::WasmStoreCreationInFlight => 2,
+        FleetSubnetRootInstallPhase::Planned => 0,
+        FleetSubnetRootInstallPhase::RootCreationInFlight => 1,
+        FleetSubnetRootInstallPhase::RootCreated
+        | FleetSubnetRootInstallPhase::WasmStoreCreationInFlight => 2,
         FleetSubnetRootInstallPhase::WasmStoreCreated
         | FleetSubnetRootInstallPhase::WasmStoreInstallInFlight => 3,
         FleetSubnetRootInstallPhase::WasmStoreInstalled

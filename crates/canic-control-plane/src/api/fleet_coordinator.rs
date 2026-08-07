@@ -1,6 +1,6 @@
 //! Module: api::fleet_coordinator
 //!
-//! Responsibility: adapt Coordinator lifecycle and Registry endpoint calls to workflow.
+//! Responsibility: adapt Coordinator lifecycle and endpoint calls to workflow.
 //! Does not own: authorization policy, stable state, or Registry validation.
 //! Boundary: the dedicated facade macro is the only canister export authority.
 
@@ -12,6 +12,10 @@ use canic_core::{
     api::runtime::MemoryRuntimeApi,
     control_plane_support::ops::runtime::env::EnvOps,
     dto::{
+        component_provisioning::{
+            FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningStatusRequest,
+            FleetComponentProvisioningStatusResponse,
+        },
         error::Error,
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
@@ -90,6 +94,18 @@ impl FleetCoordinatorApi {
         request: FleetRegistryActivationRequest,
     ) -> Result<FleetRegistryActivationResponse, Error> {
         FleetCoordinatorWorkflow::activate_registry(request).map_err(Into::into)
+    }
+
+    pub fn prepare_component_provisioning(
+        request: FleetComponentProvisioningPrepareRequest,
+    ) -> Result<FleetComponentProvisioningStatusResponse, Error> {
+        FleetCoordinatorWorkflow::prepare_component_provisioning(request).map_err(Into::into)
+    }
+
+    pub fn component_provisioning_status(
+        request: FleetComponentProvisioningStatusRequest,
+    ) -> Result<FleetComponentProvisioningStatusResponse, Error> {
+        FleetCoordinatorWorkflow::component_provisioning_status(request).map_err(Into::into)
     }
 
     pub fn publish_root_draining(

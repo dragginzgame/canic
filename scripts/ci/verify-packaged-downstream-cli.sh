@@ -142,7 +142,6 @@ edition = "2024"
 EOF
 
     cat > "$DOWNSTREAM_ROOT/apps/downstream/canic.toml" <<'EOF'
-controllers = []
 [app]
 name = "downstream"
 

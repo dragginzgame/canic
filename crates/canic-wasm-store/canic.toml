@@ -1,4 +1,3 @@
-controllers = []
 [app]
 name = "wasm_store"
 init_mode = "enabled"

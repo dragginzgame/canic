@@ -102,6 +102,9 @@ That builder:
 - builds the requested Rust canister crate for `wasm32-unknown-unknown`
 - keeps `wasm_store` out of downstream `icp.yaml`; normal installation builds
   it as a separately qualified Canic infrastructure artifact
+- resolves the canonical `canic-fleet-coordinator` source from the current
+  `canic` checkout or published registry source, with a generated runtime-only
+  fallback when that package is unavailable
 - resolves the canonical `canic-wasm-store` source from the current `canic`
   checkout or published registry source, so downstreams do not need their own
   `wasm_store` crate or extra Store build config
@@ -113,7 +116,7 @@ That builder:
 The visible reference canister `.did` files now live only under `.icp/local`.
 They are generated build artifacts, not committed source files.
 
-The one checked-in exception is:
+The one checked-in Candid exception is:
 - `crates/canic-wasm-store/wasm_store.did`
 
 That file remains the canonical published interface for the implicit bootstrap

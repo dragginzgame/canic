@@ -13,7 +13,21 @@ use canic_core::{
         parse_config_model,
     },
     cdk::types::Cycles,
+    control_plane_support::{
+        config::ConfigModel,
+        error::InternalErrorClass,
+        ops::{
+            component_provisioning_plan::ComponentProvisioningPlanOps,
+            fleet_registry::FleetRegistryOps,
+        },
+    },
     dto::{
+        component_provisioning::{
+            ComponentGroupPlacementPlan, ComponentGroupPlanEntry,
+            FleetComponentProvisioningOperation, FleetComponentProvisioningPhase,
+            FleetComponentProvisioningPlan, FleetComponentProvisioningPrepareRequest,
+            FleetComponentProvisioningStatusRequest, FleetSubnetRootProvisioningBatch,
+        },
         error::ErrorCode,
         fleet_registry::{
             FleetRegistryActivationRequest, FleetServiceBinding, FleetServiceComponentBinding,
@@ -33,7 +47,7 @@ use canic_core::{
         AppId, CanonicalNetworkId, ComponentDeploymentConfigurationDigest,
         ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentInstanceId,
         ComponentSpecAdmission, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
-        FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootLimits,
+        FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootBinding, FleetSubnetRootLimits,
         FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
     },
 };
@@ -42,9 +56,7 @@ fn principal(byte: u8) -> Principal {
     Principal::from_slice(&[byte; 29])
 }
 
-fn init_args(coordinator: Principal) -> FleetCoordinatorInitArgs {
-    let component_topology = parse_config_model(
-        r#"
+const COORDINATOR_CONFIG: &str = r#"
 [app]
 name = "demo"
 
@@ -59,11 +71,35 @@ package = "project"
 [component_specs.projects]
 component_role = "project"
 maximum_instances = 3
-"#,
-    )
-    .expect("valid config")
-    .compile_component_topology()
-    .expect("Component Topology");
+
+[component_groups.project_cell.components.project]
+component_spec = "projects"
+service = "projects"
+
+[component_group_deployments.project_cells]
+component_group = "project_cell"
+service_purpose = "pool_member"
+initial_placements = 2
+maximum_placements = 2
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 2
+
+[services.fleet.targets.projects]
+role = "project"
+component_spec = "projects"
+mode = "active_pool"
+placement.maximum_members_per_root = 1
+placement.minimum_distinct_roots = 2
+"#;
+
+fn coordinator_config() -> ConfigModel {
+    parse_config_model(COORDINATOR_CONFIG).expect("valid Coordinator config")
+}
+
+fn init_args(coordinator: Principal) -> FleetCoordinatorInitArgs {
+    let component_topology = coordinator_config()
+        .compile_component_topology()
+        .expect("Component Topology");
     FleetCoordinatorInitArgs {
         configured_app: AppId::from("demo"),
         authority: FleetRegistryAuthority {
@@ -422,6 +458,126 @@ fn ordinary_only_provisioning_records_publication_without_registry_mutation() {
     );
 }
 
+#[test]
+fn complete_component_plan_is_durable_before_root_effects_and_replays_exactly() {
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+    let config = coordinator_config();
+    let (_, _, _) = activate_two_roots(principal(90));
+    let registry = FleetCoordinatorWorkflow::registry().expect("active Registry");
+    let plan = fresh_component_plan(&config, &registry);
+    let plan_hash =
+        ComponentProvisioningPlanOps::hash(&config, &registry, &plan).expect("canonical plan hash");
+    let request = FleetComponentProvisioningPrepareRequest {
+        operation_id: [91; 32],
+        plan,
+    };
+
+    let mut zero_operation = request.clone();
+    zero_operation.operation_id = [0; 32];
+    let invalid = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        prepare_component_provisioning_for_test(&config, zero_operation, 92)
+        .expect_err("zero operation ID must reject before persistence");
+    assert_eq!(
+        invalid.public_error().map(|error| error.code),
+        Some(ErrorCode::InvalidInput)
+    );
+    assert!(
+        FleetCoordinatorRegistryStore::export()
+            .current
+            .expect("Coordinator state")
+            .component_provisioning
+            .is_none()
+    );
+
+    let prepared = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        prepare_component_provisioning_for_test(&config, request.clone(), 92)
+        .expect("persist complete plan");
+    assert_eq!(prepared.plan_hash, plan_hash);
+    assert_eq!(prepared.phase, FleetComponentProvisioningPhase::Planned);
+    assert_eq!(prepared.directory_confirmation_root_count, 2);
+    assert_eq!(prepared.root_batch_count, 2);
+    assert_eq!(prepared.group_placement_count, 2);
+    assert_eq!(prepared.component_count, 2);
+    assert_eq!(prepared.planned_at_ns, 92);
+
+    let durable = FleetCoordinatorRegistryStore::export();
+    FleetCoordinatorRegistryStore::import(durable.clone());
+    assert_eq!(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::component_provisioning_status_for_test(
+            &config,
+            FleetComponentProvisioningStatusRequest {
+                operation_id: request.operation_id,
+                plan_hash,
+            },
+        )
+        .expect("status after restart"),
+        prepared
+    );
+    let wrong_status =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::component_provisioning_status_for_test(
+            &config,
+            FleetComponentProvisioningStatusRequest {
+                operation_id: request.operation_id,
+                plan_hash: [93; 32],
+            },
+        )
+        .expect_err("status cannot cross protected plan authority");
+    assert_eq!(
+        wrong_status.public_error().map(|error| error.code),
+        Some(ErrorCode::Conflict)
+    );
+    assert_eq!(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            prepare_component_provisioning_for_test(&config, request.clone(), 999)
+            .expect("exact preparation retry"),
+        prepared,
+        "an exact retry preserves the original durable preparation time"
+    );
+
+    let mut conflicting = request;
+    conflicting.plan.directory_confirmation_roots.pop();
+    let conflict = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        prepare_component_provisioning_for_test(&config, conflicting, 93)
+        .expect_err("one operation cannot replace its complete plan");
+    assert_eq!(
+        conflict.public_error().map(|error| error.code),
+        Some(ErrorCode::Conflict)
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), durable);
+
+    let drain =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::require_root_lifecycle_open_for_test(
+            &config,
+        )
+        .expect_err("a planned grouped Fleet fences root lifecycle");
+    assert_eq!(
+        drain.public_error().map(|error| error.code),
+        Some(ErrorCode::Conflict)
+    );
+
+    let mut corrupted = durable.clone();
+    corrupted
+        .current
+        .as_mut()
+        .expect("Coordinator state")
+        .component_provisioning
+        .as_mut()
+        .expect("provisioning record")
+        .plan_hash[0] ^= 1;
+    FleetCoordinatorRegistryStore::import(corrupted);
+    let invalid =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::component_provisioning_status_for_test(
+            &config,
+            FleetComponentProvisioningStatusRequest {
+                operation_id: [91; 32],
+                plan_hash,
+            },
+        )
+        .expect_err("corrupt durable plan authority must fail closed");
+    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    FleetCoordinatorRegistryStore::import(durable);
+}
+
 fn activate_two_roots(
     coordinator: Principal,
 ) -> (
@@ -459,6 +615,78 @@ fn activate_two_roots(
     })
     .expect("activate roots");
     (first, second, active.version)
+}
+
+fn fresh_component_plan(
+    config: &ConfigModel,
+    registry: &FleetRegistry,
+) -> FleetComponentProvisioningPlan {
+    let component_topology = config
+        .compile_component_topology()
+        .expect("Component Topology");
+    let deployment_topology = config
+        .compile_component_group_deployment_topology()
+        .expect("Component deployment topology");
+    let deployment = deployment_topology
+        .get(&"project_cells".parse().expect("deployment ID"))
+        .expect("project cells deployment");
+    let entries = deployment
+        .members
+        .iter()
+        .map(|member| ComponentGroupPlanEntry {
+            member_path: member.member_path.clone(),
+            component_spec: member.component_spec.clone(),
+            spec_hash: member.component_spec_hash,
+            purpose: member.purpose.clone(),
+            labels: member.labels.clone(),
+            limits: member.limits.clone(),
+        })
+        .collect::<Vec<_>>();
+    let batches = registry
+        .fleet_subnet_roots
+        .iter()
+        .enumerate()
+        .map(|(ordinal, root)| FleetSubnetRootProvisioningBatch {
+            root: FleetSubnetRootBinding {
+                authority: registry.authority.clone(),
+                placement_subnet: root.placement_subnet,
+                fleet_subnet_root: root.fleet_subnet_root,
+                component_admissions: root.component_admissions.clone(),
+                component_topology_digest: root.component_topology_digest,
+                limits: root.limits.clone(),
+            },
+            active_release_set: root.active_release_set,
+            placements: vec![ComponentGroupPlacementPlan {
+                group_placement: ComponentGroupPlacementId {
+                    deployment: deployment.deployment.clone(),
+                    ordinal: u32::try_from(ordinal).expect("bounded placement ordinal"),
+                },
+                component_group: deployment.component_group.clone(),
+                entries: entries.clone(),
+            }],
+        })
+        .collect::<Vec<_>>();
+    let mut directory_confirmation_roots = registry
+        .fleet_subnet_roots
+        .iter()
+        .map(|root| root.fleet_subnet_root)
+        .collect::<Vec<_>>();
+    directory_confirmation_roots.sort_unstable();
+    FleetComponentProvisioningPlan {
+        fleet: registry.authority.binding.fleet.clone(),
+        fleet_registry: FleetRegistryOps::version(
+            &registry.authority,
+            &component_topology,
+            registry,
+        )
+        .expect("active Registry version"),
+        configuration_digest: config
+            .compile_component_deployment_configuration_digest()
+            .expect("configuration digest"),
+        operation: FleetComponentProvisioningOperation::FreshInstall,
+        directory_confirmation_roots,
+        batches,
+    }
 }
 
 fn service_member(

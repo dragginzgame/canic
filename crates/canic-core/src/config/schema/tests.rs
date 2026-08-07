@@ -6,7 +6,12 @@
 
 use super::*;
 use crate::{cdk::types::Cycles, domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW};
-use std::{collections::BTreeMap, fmt::Write as _, fs, path::PathBuf};
+use std::{
+    collections::BTreeMap,
+    fmt::Write as _,
+    fs,
+    path::{Path, PathBuf},
+};
 
 fn hex(bytes: impl AsRef<[u8]>) -> String {
     let bytes = bytes.as_ref();
@@ -23,6 +28,26 @@ fn workspace_root() -> PathBuf {
         .and_then(|path| path.parent())
         .expect("canic-core should live under workspace crates/")
         .to_path_buf()
+}
+
+fn collect_canic_configs(root: &Path, configs: &mut Vec<PathBuf>) {
+    let entries =
+        fs::read_dir(root).unwrap_or_else(|err| panic!("read {} failed: {err}", root.display()));
+    for entry in entries {
+        let path = entry
+            .unwrap_or_else(|err| panic!("read entry in {} failed: {err}", root.display()))
+            .path();
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if path.is_dir() {
+            if !matches!(name, ".git" | ".tmp" | "target") {
+                collect_canic_configs(&path, configs);
+            }
+        } else if name == "canic.toml" {
+            configs.push(path);
+        }
+    }
 }
 
 fn component_spec_id(value: &str) -> ComponentSpecId {
@@ -261,26 +286,15 @@ fn checked_in_delegated_auth_configs_validate_with_current_chain_key_policy() {
 }
 
 #[test]
-fn checked_in_active_configs_parse_and_validate() {
+fn every_checked_in_canic_config_parses_and_validates() {
     let root = workspace_root();
-    for rel_path in [
-        "canisters/audit/leaf_probe/canic.toml",
-        "canisters/audit/minimal_metrics/canic.toml",
-        "canisters/audit/root_probe/canic.toml",
-        "canisters/audit/scaling_probe/canic.toml",
-        "canisters/test/blob_storage_cashier_mock/canic.toml",
-        "canisters/test/blob_storage_probe/canic.toml",
-        "canisters/test/delegation_issuer_stub/canic.toml",
-        "canisters/test/delegation_root_stub/canic.toml",
-        "canisters/test/payload_limit_probe/canic.toml",
-        "canisters/test/project_hub_stub/canic.toml",
-        "canisters/test/project_instance_stub/canic.toml",
-        "canisters/test/runtime_probe/canic.toml",
-        "crates/canic-wasm-store/canic.toml",
-        "apps/demo/canic.toml",
-        "apps/test/canic.toml",
-    ] {
-        let path = root.join(rel_path);
+    let mut configs = Vec::new();
+    collect_canic_configs(&root, &mut configs);
+    configs.sort();
+    assert_eq!(configs.len(), 19, "checked-in canic.toml inventory changed");
+
+    for path in configs {
+        let rel_path = path.strip_prefix(&root).unwrap_or(&path).display();
         let source =
             fs::read_to_string(&path).unwrap_or_else(|err| panic!("read {rel_path} failed: {err}"));
         crate::bootstrap::parse_config_model(&source)

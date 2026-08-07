@@ -275,6 +275,26 @@ fn uses_generated_standalone_config(
     })
 }
 
+// Returns whether a package is the canonical runtime-only built-in Coordinator.
+fn is_runtime_only_fleet_coordinator(
+    manifest_path: &Path,
+    manifest: &Value,
+    metadata: &CanicPackageMetadata,
+) -> bool {
+    if metadata.app != "fleet_coordinator"
+        || metadata.role != "fleet_coordinator"
+        || package_name(manifest) != Some("canic-fleet-coordinator")
+        || !is_explicitly_publishable(manifest)
+        || lib_crate_types(manifest) != BTreeSet::from(["cdylib"])
+    {
+        return false;
+    }
+
+    manifest_path.parent().is_some_and(|package_dir| {
+        !package_dir.join("build.rs").exists() && !package_dir.join("canic.toml").exists()
+    })
+}
+
 // Allow the one intentional local-only dev-dependency edge for unpublished
 // internal self-test support.
 fn allow_local_path_dependency(
@@ -672,7 +692,9 @@ fn canic_package_metadata_resolves_to_declared_app_roles() {
         }
 
         let Some(role) = declared_roles.get(&(metadata.app.clone(), metadata.role.clone())) else {
-            if uses_generated_standalone_config(&manifest_path, &manifest, &metadata) {
+            if uses_generated_standalone_config(&manifest_path, &manifest, &metadata)
+                || is_runtime_only_fleet_coordinator(&manifest_path, &manifest, &metadata)
+            {
                 continue;
             }
             failures.push(format!(

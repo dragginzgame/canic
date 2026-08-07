@@ -1,6 +1,5 @@
 # One playground Component, initially with five Wenzelroll Canisters on the IC.
 
-controllers = []
 
 [app]
 name = "playground"

@@ -1,6 +1,11 @@
 use super::*;
 
 #[test]
+fn deployment_truth_keeps_the_single_current_pre_one_schema_identifier() {
+    assert_eq!(DEPLOYMENT_TRUTH_SCHEMA_VERSION, 1);
+}
+
+#[test]
 fn plan_round_trips_through_json() {
     let plan = DeploymentPlanV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,

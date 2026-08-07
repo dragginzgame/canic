@@ -74,7 +74,6 @@ version = "0.0.0"
 EOF
 
     cat > "$DOWNSTREAM_ROOT/apps/downstream/canic.toml" <<'EOF'
-controllers = []
 [app]
 name = "downstream"
 

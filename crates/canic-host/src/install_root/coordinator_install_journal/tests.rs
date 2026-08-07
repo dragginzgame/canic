@@ -15,6 +15,11 @@ use canic_core::{
 };
 
 #[test]
+fn coordinator_journal_keeps_the_single_current_pre_one_schema_identifier() {
+    assert_eq!(COORDINATOR_INSTALL_JOURNAL_SCHEMA_VERSION, 1);
+}
+
+#[test]
 fn journals_every_coordinator_effect_before_advancing() {
     let root = temp_dir("coordinator-install-journal");
     let plan = persisted_plan(&root);
@@ -27,10 +32,16 @@ fn journals_every_coordinator_effect_before_advancing() {
     .expect("plan Coordinator install");
     assert_eq!(planned.journal.phase, FleetCoordinatorInstallPhase::Planned);
 
-    let creating = begin_coordinator_creation(&planned).expect("begin creation");
+    let installation_controller = Principal::from_slice(&[89]);
+    let creating =
+        begin_coordinator_creation(&planned, installation_controller).expect("begin creation");
     assert_eq!(
         creating.journal.phase,
         FleetCoordinatorInstallPhase::CreationInFlight
+    );
+    assert_eq!(
+        creating.journal.installation_controller,
+        Some(installation_controller)
     );
     let coordinator = Principal::from_slice(&[91]);
     let created = record_coordinator_created(&creating, coordinator).expect("record created");
@@ -87,7 +98,9 @@ fn exact_retry_recovers_in_flight_without_advancing_again() {
         component_topology: empty_topology(),
     })
     .expect("plan Coordinator install");
-    let creating = begin_coordinator_creation(&planned).expect("begin creation");
+    let installation_controller = Principal::from_slice(&[89]);
+    let creating =
+        begin_coordinator_creation(&planned, installation_controller).expect("begin creation");
 
     let recovered = plan_fleet_coordinator_install(PlanFleetCoordinatorInstallRequest {
         fleet_install_plan: &plan,
@@ -98,7 +111,8 @@ fn exact_retry_recovers_in_flight_without_advancing_again() {
 
     assert_eq!(recovered.journal, creating.journal);
     assert!(!recovered.advanced);
-    let repeated = begin_coordinator_creation(&recovered).expect("recover in-flight intent");
+    let repeated = begin_coordinator_creation(&recovered, installation_controller)
+        .expect("recover in-flight intent");
     assert_eq!(repeated.journal, creating.journal);
     assert!(!repeated.advanced);
 }
