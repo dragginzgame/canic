@@ -3,14 +3,11 @@ use canic::{
     dto::metrics::{MetricEntry, MetricsKind, QueryPerfSample},
     dto::page::PageRequest,
 };
-use std::sync::Once;
 
-static METRICS_MEMORY_BOOTSTRAP: Once = Once::new();
-
-fn bootstrap_metrics_memory() {
-    METRICS_MEMORY_BOOTSTRAP.call_once(|| {
-        MemoryRuntimeApi::bootstrap_registry().expect("metrics facade memory bootstrap");
-    });
+// The default memory runtime is thread-local, so each libtest worker that uses
+// stable-backed metrics must bootstrap its own runtime.
+fn bootstrap_metrics_memory_for_current_thread() {
+    MemoryRuntimeApi::bootstrap_registry().expect("metrics facade memory bootstrap");
 }
 
 // Verify the public facade exposes query perf sampling without internal paths.
@@ -25,7 +22,7 @@ fn metrics_query_sample_query_is_public_facade_usable() {
 // Verify the public facade can still page metric rows through re-exported DTOs.
 #[test]
 fn metrics_query_page_is_public_facade_usable() {
-    bootstrap_metrics_memory();
+    bootstrap_metrics_memory_for_current_thread();
 
     let page = MetricsQuery::page(
         MetricsKind::Security,
@@ -42,7 +39,7 @@ fn metrics_query_page_is_public_facade_usable() {
 // Verify all metric families are reachable through the public facade.
 #[test]
 fn all_metric_families_are_public_facade_usable() {
-    bootstrap_metrics_memory();
+    bootstrap_metrics_memory_for_current_thread();
 
     for kind in [
         MetricsKind::Core,
