@@ -18,7 +18,8 @@ use canic_core::{
     control_plane_support::config::ComponentDeploymentConfiguration,
     dto::{
         component_provisioning::{
-            FleetComponentProvisioningPlan, RootComponentProvisioningStatusResponse,
+            FleetComponentProvisioningPlan, RootComponentProvisioningAdvanceRequest,
+            RootComponentProvisioningStatusResponse,
         },
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
@@ -38,9 +39,10 @@ use serde::{Deserialize, Serialize};
 // The record may contain one complete compiled deployment configuration, one
 // Registry snapshot, the root-entry portion of that Registry again as
 // immutable join receipts, the complete Component provisioning plan plus one
-// compact acceptance per planned root, the complete service set again as one
-// publication receipt, one exact acknowledgement per current root, and at
-// most one draining and one removal receipt per root.
+// compact acceptance and one terminal provisioning receipt per planned root,
+// the complete service set again as one publication receipt, one exact
+// acknowledgement per current root, and at most one draining and one removal
+// receipt per root.
 const FLEET_COORDINATOR_STATE_MAX_BYTES: u32 = 33_554_432;
 
 #[cfg(feature = "fleet-coordinator-canister")]
@@ -135,6 +137,21 @@ pub enum FleetComponentProvisioningStateRecord {
         acceptances: Vec<FleetComponentProvisioningRootAcceptanceRecord>,
         roots_accepted_at_ns: u64,
     },
+    ProvisioningRoots {
+        planned_at_ns: u64,
+        acceptances: Vec<FleetComponentProvisioningRootAcceptanceRecord>,
+        roots_accepted_at_ns: u64,
+        provisions: Vec<FleetComponentProvisioningRootProvisionRecord>,
+        current: Option<Box<FleetComponentProvisioningRootProvisionRecord>>,
+        in_flight: Option<FleetComponentProvisioningRootProvisionIntentRecord>,
+    },
+    ComponentsProvisioned {
+        planned_at_ns: u64,
+        acceptances: Vec<FleetComponentProvisioningRootAcceptanceRecord>,
+        roots_accepted_at_ns: u64,
+        provisions: Vec<FleetComponentProvisioningRootProvisionRecord>,
+        components_provisioned_at_ns: u64,
+    },
 }
 
 /// Durable pre-call intent for one exact canonical root batch.
@@ -148,6 +165,23 @@ pub struct FleetComponentProvisioningRootAcceptanceIntentRecord {
 /// Authenticated root acceptance retained with Coordinator observation time.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetComponentProvisioningRootAcceptanceRecord {
+    pub started_at_ns: u64,
+    pub response: RootComponentProvisioningStatusResponse,
+    pub recorded_at_ns: u64,
+}
+
+/// Durable pre-call intent for one exact root-local provisioning cursor.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetComponentProvisioningRootProvisionIntentRecord {
+    pub root_index: u32,
+    pub fleet_subnet_root: Principal,
+    pub request: RootComponentProvisioningAdvanceRequest,
+    pub started_at_ns: u64,
+}
+
+/// Latest authenticated root provisioning response retained with observation time.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetComponentProvisioningRootProvisionRecord {
     pub started_at_ns: u64,
     pub response: RootComponentProvisioningStatusResponse,
     pub recorded_at_ns: u64,

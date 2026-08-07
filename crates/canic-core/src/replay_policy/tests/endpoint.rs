@@ -585,9 +585,7 @@ fn fleet_component_plan_commands_are_response_idempotent() {
     assert_eq!(
         advance.replay_policy,
         ReplayPolicy::ResponseIdempotent {
-            command_kind: replay_command_kind(
-                "fleet_component_provisioning.advance_root_acceptance.v1",
-            ),
+            command_kind: replay_command_kind("fleet_component_provisioning.advance.v1"),
         }
     );
     assert_eq!(advance.cost_class, CostClass::None);

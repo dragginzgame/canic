@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.19` advances every accepted root batch through its existing bounded
+  root-local provisioning journal, retaining exact response-loss recovery and
+  terminal `Provisioned` receipts in canonical plan order before reaching
+  `ComponentsProvisioned`; Fleet Registry publication remains a separate
+  fenced boundary.
+
 - `0.101.18` journals and reconciles each Coordinator-to-root provisioning
   acceptance in canonical plan order, retaining exact authenticated evidence
   before advancing to `RootsAccepted`. The standalone Coordinator now receives

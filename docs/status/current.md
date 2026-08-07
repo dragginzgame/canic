@@ -14,21 +14,26 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.17`.
-- The latest published release is `v0.101.17` at
-  `444adf5a73f9ce4257883be01b8be2f4b0bcc411`.
-- Open `0.101.18` advances the durable Coordinator provisioning operation one
-  canonical root acceptance at a time. It records the exact root cursor,
+- The workspace package version is `0.101.18`.
+- The latest published release is `v0.101.18` at
+  `931c75ccfa61db8d5d76611e60d5c12491f9592f`.
+- Open `0.101.19` advances only completely accepted root batches through their
+  existing root-local provisioning journals. The Coordinator persists each
+  exact root request before dispatch, reconciles response loss through the
+  root's response-idempotent cursor, retains authenticated progress and freezes
+  every terminal `Provisioned` receipt in canonical plan order. The complete
+  receipt set must recompile one globally valid service topology before the
+  operation reaches `ComponentsProvisioned`. Fleet Registry publication,
+  Directories and runtime activation remain separate fenced boundaries.
+- Released `0.101.18` advances the durable Coordinator provisioning operation
+  one canonical root acceptance at a time. It records the exact root cursor,
   principal and pre-call time before dispatch; exact retry replays an
   unresolved call, accepted responses are authenticated against the protected
   plan and canonical receipt hash, and complete acceptance evidence reaches
-  `RootsAccepted`. Root provisioning advance and terminal `Provisioned`
-  receipt collection remain unavailable, so service publication, Directories
-  and runtime activation remain fenced. The host now freezes the App's
-  complete canonical compiled provisioning configuration in its install
-  journal before Coordinator creation, and the standalone Coordinator retains
-  and revalidates that exact authority without source TOML, embedded App config
-  or runtime `ConfigOps`.
+  `RootsAccepted`. The host freezes the App's complete canonical compiled
+  provisioning configuration in its install journal before Coordinator
+  creation, and the standalone Coordinator retains and revalidates that exact
+  authority without source TOML, embedded App config or runtime `ConfigOps`.
 - Released `0.101.17` adds the controller-authenticated Coordinator preparation
   boundary for one complete fresh-install Component-provisioning plan. The
   exact operation, canonical plan hash, complete plan and original preparation
@@ -2414,18 +2419,15 @@ First primary results:
 
 ## Next Action
 
-The canonical plan, exact root-batch acceptance, canonical root-local
-`ComponentInstanceId` allocation, prepaid-Canister claim, Store-backed
-installation, prepared Registry commitment and exact group-partitioned
-`Provisioned` result plus receipt-derived service compiler are published
-through immutable `v0.101.17`. Open `0.101.18` durably dispatches and records
-each persisted root batch's exact initial acceptance through one monotonic,
-response-idempotent Coordinator cursor. Continue Slice 3 by advancing only
-those accepted root operations to terminal `Provisioned`, collecting their
-authenticated exact terminal receipts into the same operation and invoking
-the closed Registry publication boundary only after the complete receipt set
-validates. Component Group Directory derivation, Directory delivery and
-runtime activation remain separate later boundaries.
+The canonical plan and exact root-batch acceptance are published through
+immutable `v0.101.18`. Open `0.101.19` now drives only those accepted batches
+through the existing root-local identity, prepaid-Canister, Store install and
+prepared Registry journals, then retains every authenticated terminal
+`Provisioned` receipt and revalidates the complete service projection before
+`ComponentsProvisioned`. Continue Slice 3 by invoking the closed atomic Fleet
+Registry publication primitive from that exact terminal receipt set. Component
+Group Directory derivation, Directory delivery and runtime activation remain
+separate later boundaries.
 Do not enable scale-out until its durable Coordinator
 placement ledger can prove ordinal non-reuse and combined density/spread.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for

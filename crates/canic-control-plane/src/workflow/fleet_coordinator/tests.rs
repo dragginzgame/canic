@@ -8,7 +8,11 @@ use crate::storage::stable::fleet_coordinator::{
     FleetComponentProvisioningStateRecord, FleetCoordinatorRegistryData,
     FleetCoordinatorRegistryStore,
 };
-use crate::view::fleet_coordinator::FleetComponentProvisioningRootAcceptanceDisposition;
+use crate::view::fleet_coordinator::{
+    FleetComponentProvisioningRootAcceptanceDisposition,
+    FleetComponentProvisioningRootProvisionCallView,
+    FleetComponentProvisioningRootProvisionDisposition,
+};
 use canic_core::{
     bootstrap::{
         compiled::{FleetServiceMemberPurpose, FleetServicePlacementPolicy},
@@ -22,6 +26,7 @@ use canic_core::{
             component_provisioning_plan::ComponentProvisioningPlanOps,
             component_provisioning_receipt::{
                 RootComponentProvisioningAcceptanceReceiptAuthority,
+                RootComponentProvisioningProvisionedReceiptAuthority,
                 RootComponentProvisioningReceiptOps,
             },
             fleet_registry::FleetRegistryOps,
@@ -35,7 +40,8 @@ use canic_core::{
             FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningStatusRequest,
             FleetComponentProvisioningStatusResponse, FleetSubnetRootProvisioningBatch,
             RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningPhase,
-            RootComponentProvisioningStatusResponse,
+            RootComponentProvisioningResult, RootComponentProvisioningStatusResponse,
+            RootProvisionedGroupMember, RootProvisionedGroupPlacement,
         },
         error::ErrorCode,
         fleet_registry::{
@@ -53,7 +59,7 @@ use canic_core::{
         },
     },
     ids::{
-        AppId, CanonicalNetworkId, ComponentDeploymentConfigurationDigest,
+        AppId, CanonicalNetworkId, ComponentBinding, ComponentDeploymentConfigurationDigest,
         ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentInstanceId,
         ComponentSpecAdmission, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
         FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootBinding, FleetSubnetRootLimits,
@@ -544,10 +550,14 @@ fn assert_prepared_plan_summary(
     assert_eq!(prepared.root_batch_count, 2);
     assert_eq!(prepared.accepted_root_count, 0);
     assert_eq!(prepared.acceptance_in_flight_root, None);
+    assert_eq!(prepared.provisioned_root_count, 0);
+    assert_eq!(prepared.current_root, None);
+    assert_eq!(prepared.provisioning_in_flight_root, None);
     assert_eq!(prepared.group_placement_count, 2);
     assert_eq!(prepared.component_count, 2);
     assert_eq!(prepared.planned_at_ns, 92);
     assert_eq!(prepared.roots_accepted_at_ns, None);
+    assert_eq!(prepared.components_provisioned_at_ns, None);
 }
 
 fn assert_prepared_plan_replays_exactly(
@@ -705,6 +715,228 @@ fn coordinator_journals_each_root_acceptance_and_reconciles_lost_responses() {
     assert_corrupt_root_acceptance_fails_closed(&config, plan_hash);
 }
 
+#[test]
+fn coordinator_advances_each_accepted_root_and_freezes_terminal_receipts() {
+    let (config, plan_hash) = prepare_two_root_acceptance_plan();
+    accept_every_planned_root(&config, plan_hash);
+    let mut status = component_provisioning_status(&config, plan_hash);
+    assert_eq!(status.phase, FleetComponentProvisioningPhase::RootsAccepted);
+    assert_eq!(status.provisioned_root_count, 0);
+
+    let mut now = 120_u64;
+    while status.phase != FleetComponentProvisioningPhase::ComponentsProvisioned {
+        let request = root_provision_advance_request(&status);
+        let call = expect_root_provision_call(
+            crate::ops::fleet_coordinator::FleetCoordinatorOps::
+                advance_component_provisioning_root_for_test(&config, &request, now)
+                .expect("persist exact root provisioning intent"),
+            false,
+        );
+        let durable_intent = FleetCoordinatorRegistryStore::export();
+        FleetCoordinatorRegistryStore::import(durable_intent.clone());
+        let reconciled = expect_root_provision_call(
+            crate::ops::fleet_coordinator::FleetCoordinatorOps::
+                advance_component_provisioning_root_for_test(&config, &request, now + 99)
+                .expect("reconcile exact root provisioning intent"),
+            true,
+        );
+        assert_eq!(reconciled.request, call.request);
+        assert_eq!(FleetCoordinatorRegistryStore::export(), durable_intent);
+
+        let response = next_root_provision_response(&config, &call, now + 1);
+        if status.provisioned_root_count == 0
+            && status
+                .current_root
+                .is_some_and(|progress| progress.reserved_component_count == 0)
+        {
+            assert_invalid_root_provision_responses(
+                &config,
+                &request,
+                &response,
+                now,
+                &durable_intent,
+            );
+        }
+        let next = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            record_component_provisioning_root_for_test(
+                &config,
+                &request,
+                response.clone(),
+                now + 2,
+            )
+            .expect("record exact root provisioning response");
+        assert_eq!(
+            crate::ops::fleet_coordinator::FleetCoordinatorOps::
+                record_component_provisioning_root_for_test(
+                    &config,
+                    &request,
+                    response,
+                    now + 99,
+                )
+                .expect("replay response after Coordinator commit"),
+            next
+        );
+        let FleetComponentProvisioningRootProvisionDisposition::Current(replayed) =
+            crate::ops::fleet_coordinator::FleetCoordinatorOps::
+                advance_component_provisioning_root_for_test(&config, &request, now + 99)
+                .expect("advance retry returns current durable status")
+        else {
+            panic!("committed root provisioning step must replay current status")
+        };
+        assert_eq!(*replayed, next);
+        status = next;
+        now += 3;
+    }
+
+    assert_eq!(status.provisioned_root_count, status.root_batch_count);
+    assert_eq!(status.current_root, None);
+    assert_eq!(status.provisioning_in_flight_root, None);
+    assert_eq!(status.components_provisioned_at_ns, Some(now - 1));
+    let durable = FleetCoordinatorRegistryStore::export();
+    FleetCoordinatorRegistryStore::import(durable.clone());
+    assert_eq!(component_provisioning_status(&config, plan_hash), status);
+
+    let mut corrupted = durable;
+    let record = corrupted
+        .current
+        .as_mut()
+        .expect("Coordinator state")
+        .component_provisioning
+        .as_mut()
+        .expect("provisioning record");
+    let FleetComponentProvisioningStateRecord::ComponentsProvisioned { provisions, .. } =
+        &mut record.state
+    else {
+        panic!("all root receipts must be terminal")
+    };
+    provisions[0].response.receipt_content_hash[0] ^= 1;
+    FleetCoordinatorRegistryStore::import(corrupted);
+    let invalid =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::component_provisioning_status_for_test(
+            &config,
+            FleetComponentProvisioningStatusRequest {
+                operation_id: [101; 32],
+                plan_hash,
+            },
+        )
+        .expect_err("corrupt terminal root receipt must fail closed");
+    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+}
+
+fn accept_every_planned_root(config: &ConfigModel, plan_hash: [u8; 32]) {
+    for index in 0..2_u32 {
+        let request = root_acceptance_advance_request(plan_hash, index);
+        let call = expect_root_acceptance_call(
+            crate::ops::fleet_coordinator::FleetCoordinatorOps::
+                advance_component_provisioning_root_acceptance_for_test(
+                    config,
+                    request,
+                    110 + u64::from(index) * 3,
+                )
+                .expect("persist root acceptance intent"),
+            false,
+        );
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            record_component_provisioning_root_acceptance_for_test(
+                config,
+                request,
+                accepted_root_response(&call.request, 111 + u64::from(index) * 3),
+                112 + u64::from(index) * 3,
+            )
+            .expect("record root acceptance");
+    }
+}
+
+fn component_provisioning_status(
+    config: &ConfigModel,
+    plan_hash: [u8; 32],
+) -> FleetComponentProvisioningStatusResponse {
+    crate::ops::fleet_coordinator::FleetCoordinatorOps::component_provisioning_status_for_test(
+        config,
+        FleetComponentProvisioningStatusRequest {
+            operation_id: [101; 32],
+            plan_hash,
+        },
+    )
+    .expect("Component provisioning status")
+}
+
+fn assert_invalid_root_provision_responses(
+    config: &ConfigModel,
+    request: &FleetComponentProvisioningAdvanceRequest,
+    response: &RootComponentProvisioningStatusResponse,
+    started_at_ns: u64,
+    durable_intent: &FleetCoordinatorRegistryData,
+) {
+    let mut skipped = response.clone();
+    skipped.claimed_component_count = 1;
+    let conflict = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_provisioning_root_for_test(
+            config,
+            request,
+            skipped,
+            started_at_ns + 2,
+        )
+        .expect_err("root response cannot skip a provisioning cursor");
+    assert_eq!(
+        conflict.public_error().map(|error| error.code),
+        Some(ErrorCode::Conflict)
+    );
+    let early = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_provisioning_root_for_test(
+            config,
+            request,
+            response.clone(),
+            started_at_ns - 1,
+        )
+        .expect_err("root response cannot predate its durable call intent");
+    assert_eq!(
+        early.public_error().map(|error| error.code),
+        Some(ErrorCode::InvalidInput)
+    );
+    let mut substituted = response.clone();
+    substituted.fleet_subnet_root = principal(200);
+    let conflict = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_provisioning_root_for_test(
+            config,
+            request,
+            substituted,
+            started_at_ns + 2,
+        )
+        .expect_err("root response cannot substitute its protected root");
+    assert_eq!(
+        conflict.public_error().map(|error| error.code),
+        Some(ErrorCode::Conflict)
+    );
+    assert_eq!(
+        FleetCoordinatorRegistryStore::export(),
+        durable_intent.clone()
+    );
+}
+
+fn root_provision_advance_request(
+    status: &FleetComponentProvisioningStatusResponse,
+) -> FleetComponentProvisioningAdvanceRequest {
+    FleetComponentProvisioningAdvanceRequest {
+        operation_id: status.operation_id,
+        plan_hash: status.plan_hash,
+        expected_accepted_root_count: status.accepted_root_count,
+        expected_provisioned_root_count: status.provisioned_root_count,
+        expected_current_root: status.current_root,
+    }
+}
+
+fn expect_root_provision_call(
+    disposition: FleetComponentProvisioningRootProvisionDisposition,
+    reconcile: bool,
+) -> FleetComponentProvisioningRootProvisionCallView {
+    match (disposition, reconcile) {
+        (FleetComponentProvisioningRootProvisionDisposition::Invoke(call), false)
+        | (FleetComponentProvisioningRootProvisionDisposition::Reconcile(call), true) => call,
+        _ => panic!("root provisioning disposition differs from expected call boundary"),
+    }
+}
+
 fn prepare_two_root_acceptance_plan() -> (ConfigModel, [u8; 32]) {
     FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
     let config = coordinator_config();
@@ -779,6 +1011,8 @@ fn root_acceptance_advance_request(
         operation_id: [101; 32],
         plan_hash,
         expected_accepted_root_count,
+        expected_provisioned_root_count: 0,
+        expected_current_root: None,
     }
 }
 
@@ -833,6 +1067,180 @@ fn accepted_root_response(
         result: None,
         accepted_at_ns,
         provisioned_at_ns: None,
+        receipt_content_hash,
+    }
+}
+
+fn next_root_provision_response(
+    config: &ConfigModel,
+    call: &FleetComponentProvisioningRootProvisionCallView,
+    observed_at_ns: u64,
+) -> RootComponentProvisioningStatusResponse {
+    let durable = FleetCoordinatorRegistryStore::export();
+    let record = durable
+        .current
+        .as_ref()
+        .expect("Coordinator state")
+        .component_provisioning
+        .as_ref()
+        .expect("provisioning record");
+    let root_index = record
+        .plan
+        .batches
+        .iter()
+        .position(|batch| batch.root.fleet_subnet_root == call.fleet_subnet_root)
+        .expect("planned root index");
+    let batch = &record.plan.batches[root_index];
+    let acceptance = provisioning_acceptances(&record.state)[root_index]
+        .response
+        .clone();
+    let component_count = acceptance.component_count;
+    let request = call.request;
+    if request.expected_reserved_component_count < component_count {
+        let mut response = acceptance;
+        response.reserved_component_count = request.expected_reserved_component_count + 1;
+        return response;
+    }
+    if request.expected_claimed_component_count < component_count {
+        let mut response = acceptance;
+        response.reserved_component_count = component_count;
+        response.claimed_component_count = request.expected_claimed_component_count + 1;
+        return response;
+    }
+    if request.expected_installed_component_count < component_count {
+        let mut response = acceptance;
+        response.reserved_component_count = component_count;
+        response.claimed_component_count = component_count;
+        response.installed_component_count = request.expected_installed_component_count + 1;
+        return response;
+    }
+    if request.expected_registry_committed_component_count < component_count {
+        let mut response = acceptance;
+        response.reserved_component_count = component_count;
+        response.claimed_component_count = component_count;
+        response.installed_component_count = component_count;
+        response.registry_committed_component_count =
+            request.expected_registry_committed_component_count + 1;
+        return response;
+    }
+    provisioned_root_response(
+        config,
+        record,
+        batch,
+        acceptance.accepted_at_ns,
+        observed_at_ns,
+    )
+}
+
+fn provisioning_acceptances(
+    state: &FleetComponentProvisioningStateRecord,
+) -> &[crate::storage::stable::fleet_coordinator::FleetComponentProvisioningRootAcceptanceRecord] {
+    match state {
+        FleetComponentProvisioningStateRecord::RootsAccepted { acceptances, .. }
+        | FleetComponentProvisioningStateRecord::ProvisioningRoots { acceptances, .. }
+        | FleetComponentProvisioningStateRecord::ComponentsProvisioned { acceptances, .. } => {
+            acceptances
+        }
+        FleetComponentProvisioningStateRecord::Planned { .. }
+        | FleetComponentProvisioningStateRecord::AcceptingRoots { .. } => {
+            panic!("root provisioning requires complete acceptances")
+        }
+    }
+}
+
+fn provisioned_root_response(
+    config: &ConfigModel,
+    record: &crate::storage::stable::fleet_coordinator::FleetComponentProvisioningRecord,
+    batch: &FleetSubnetRootProvisioningBatch,
+    accepted_at_ns: u64,
+    provisioned_at_ns: u64,
+) -> RootComponentProvisioningStatusResponse {
+    let topology = config
+        .compile_component_topology()
+        .expect("Component Topology");
+    let root_index = record
+        .plan
+        .batches
+        .iter()
+        .position(|planned| planned.root.fleet_subnet_root == batch.root.fleet_subnet_root)
+        .expect("root index");
+    let identity_byte = 150_u8 + u8::try_from(root_index).expect("root index byte");
+    let result = RootComponentProvisioningResult {
+        placements: batch
+            .placements
+            .iter()
+            .map(|placement| RootProvisionedGroupPlacement {
+                group_placement: placement.group_placement.clone(),
+                component_group: placement.component_group.clone(),
+                members: placement
+                    .entries
+                    .iter()
+                    .map(|entry| {
+                        let spec = topology.get(&entry.component_spec).expect("known Spec");
+                        RootProvisionedGroupMember {
+                            member_path: entry.member_path.clone(),
+                            component_spec: entry.component_spec.clone(),
+                            purpose: entry.purpose.clone(),
+                            limits: entry.limits.clone(),
+                            binding: ComponentBinding {
+                                authority: batch.root.authority.clone(),
+                                component: ComponentInstanceId::from_generated_bytes(
+                                    [identity_byte; 32],
+                                ),
+                                component_spec: entry.component_spec.clone(),
+                                spec_hash: entry.spec_hash,
+                                role: spec.component_role.clone(),
+                                placement_subnet: batch.root.placement_subnet,
+                                fleet_subnet_root: batch.root.fleet_subnet_root,
+                                canister_id: principal(identity_byte),
+                            },
+                            component_registry_revision: u64::from(identity_byte),
+                            component_registry_content_hash: [identity_byte; 32],
+                        }
+                    })
+                    .collect(),
+            })
+            .collect(),
+    };
+    let (placement_count, component_count) =
+        batch
+            .placements
+            .iter()
+            .fold((0_u32, 0_u32), |(placements, components), placement| {
+                (
+                    placements + 1,
+                    components + u32::try_from(placement.entries.len()).expect("member count"),
+                )
+            });
+    let receipt_content_hash = RootComponentProvisioningReceiptOps::provisioned_content_hash(
+        RootComponentProvisioningProvisionedReceiptAuthority {
+            operation_id: record.operation_id,
+            plan_hash: record.plan_hash,
+            fleet_registry: &record.plan.fleet_registry,
+            configuration_digest: record.plan.configuration_digest,
+            root: &batch.root,
+            result: &result,
+            accepted_at_ns,
+            provisioned_at_ns,
+        },
+    )
+    .expect("terminal receipt hash");
+    RootComponentProvisioningStatusResponse {
+        operation_id: record.operation_id,
+        plan_hash: record.plan_hash,
+        fleet_registry: record.plan.fleet_registry.clone(),
+        configuration_digest: record.plan.configuration_digest,
+        fleet_subnet_root: batch.root.fleet_subnet_root,
+        phase: RootComponentProvisioningPhase::Provisioned,
+        placement_count,
+        component_count,
+        reserved_component_count: component_count,
+        claimed_component_count: component_count,
+        installed_component_count: component_count,
+        registry_committed_component_count: component_count,
+        result: Some(result),
+        accepted_at_ns,
+        provisioned_at_ns: Some(provisioned_at_ns),
         receipt_content_hash,
     }
 }

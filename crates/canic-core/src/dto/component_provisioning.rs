@@ -36,13 +36,27 @@ pub struct FleetComponentProvisioningPrepareRequest {
     pub plan: FleetComponentProvisioningPlan,
 }
 
-/// Controller-authenticated command advancing one exact Coordinator root-acceptance step.
+/// Controller-authenticated command advancing one exact Coordinator provisioning step.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetComponentProvisioningAdvanceRequest {
     pub operation_id: [u8; 32],
     pub plan_hash: [u8; 32],
     pub expected_accepted_root_count: u32,
+    pub expected_provisioned_root_count: u32,
+    pub expected_current_root: Option<FleetComponentProvisioningRootProgress>,
+}
+
+/// Exact root-local cursor copied from passive Coordinator status before one advance.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetComponentProvisioningRootProgress {
+    pub fleet_subnet_root: Principal,
+    pub component_count: u32,
+    pub reserved_component_count: u32,
+    pub claimed_component_count: u32,
+    pub installed_component_count: u32,
+    pub registry_committed_component_count: u32,
 }
 
 /// Exact passive lookup key for one Coordinator-owned provisioning operation.
@@ -59,6 +73,8 @@ pub enum FleetComponentProvisioningPhase {
     Planned,
     AcceptingRoots,
     RootsAccepted,
+    ProvisioningRoots,
+    ComponentsProvisioned,
 }
 
 /// Compact exact status for one Coordinator-owned provisioning operation.
@@ -75,10 +91,14 @@ pub struct FleetComponentProvisioningStatusResponse {
     pub root_batch_count: u32,
     pub accepted_root_count: u32,
     pub acceptance_in_flight_root: Option<Principal>,
+    pub provisioned_root_count: u32,
+    pub current_root: Option<FleetComponentProvisioningRootProgress>,
+    pub provisioning_in_flight_root: Option<Principal>,
     pub group_placement_count: u32,
     pub component_count: u32,
     pub planned_at_ns: u64,
     pub roots_accepted_at_ns: Option<u64>,
+    pub components_provisioned_at_ns: Option<u64>,
 }
 
 /// Fresh-install or monotonic scale-out scope covered by one plan.

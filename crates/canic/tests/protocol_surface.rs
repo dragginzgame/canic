@@ -738,10 +738,17 @@ fn fleet_component_provisioning_plan_surface_is_controller_guarded_and_bounded()
         );
     }
     let advance_env = candid_type_env::<FleetComponentProvisioningAdvanceRequest>();
-    assert!(
-        advance_env.contains("expected_accepted_root_count"),
-        "Fleet Component advance Candid is missing its exact cursor:\n{advance_env}"
-    );
+    for field in [
+        "expected_accepted_root_count",
+        "expected_provisioned_root_count",
+        "expected_current_root",
+        "registry_committed_component_count",
+    ] {
+        assert!(
+            advance_env.contains(field),
+            "Fleet Component advance Candid is missing {field}:\n{advance_env}"
+        );
+    }
     let status_env = candid_type_env::<FleetComponentProvisioningStatusResponse>();
     for field in [
         "operation_id",
@@ -749,9 +756,13 @@ fn fleet_component_provisioning_plan_surface_is_controller_guarded_and_bounded()
         "phase",
         "accepted_root_count",
         "acceptance_in_flight_root",
+        "provisioned_root_count",
+        "current_root",
+        "provisioning_in_flight_root",
         "component_count",
         "planned_at_ns",
         "roots_accepted_at_ns",
+        "components_provisioned_at_ns",
     ] {
         assert!(
             status_env.contains(field),

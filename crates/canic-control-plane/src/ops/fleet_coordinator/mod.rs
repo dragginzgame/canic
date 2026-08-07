@@ -8,7 +8,9 @@ use crate::{
     dto::fleet_coordinator::FleetCoordinatorInitArgs,
     storage::stable::fleet_coordinator::{
         FleetComponentProvisioningRecord, FleetComponentProvisioningRootAcceptanceIntentRecord,
-        FleetComponentProvisioningRootAcceptanceRecord, FleetComponentProvisioningStateRecord,
+        FleetComponentProvisioningRootAcceptanceRecord,
+        FleetComponentProvisioningRootProvisionIntentRecord,
+        FleetComponentProvisioningRootProvisionRecord, FleetComponentProvisioningStateRecord,
         FleetCoordinatorCommitError, FleetCoordinatorCommitOutcome, FleetCoordinatorRegistryRecord,
         FleetCoordinatorRegistryStore, FleetRegistryActivationReceiptRecord,
         FleetServicePublicationReceiptRecord, FleetSubnetRootDrainingPublicationReceiptRecord,
@@ -17,6 +19,8 @@ use crate::{
     view::fleet_coordinator::{
         FleetComponentProvisioningRootAcceptanceCallView,
         FleetComponentProvisioningRootAcceptanceDisposition,
+        FleetComponentProvisioningRootProvisionCallView,
+        FleetComponentProvisioningRootProvisionDisposition,
     },
 };
 use candid::{CandidType, Principal};
@@ -42,9 +46,10 @@ use canic_core::{
         component_provisioning::{
             FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningOperation,
             FleetComponentProvisioningPhase, FleetComponentProvisioningPlan,
-            FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningStatusRequest,
-            FleetComponentProvisioningStatusResponse, FleetSubnetRootProvisioningBatch,
-            RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningPhase,
+            FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningRootProgress,
+            FleetComponentProvisioningStatusRequest, FleetComponentProvisioningStatusResponse,
+            FleetSubnetRootProvisioningBatch, RootComponentProvisioningAcceptanceRequest,
+            RootComponentProvisioningAdvanceRequest, RootComponentProvisioningPhase,
             RootComponentProvisioningStatusResponse,
         },
         fleet_registry::{
@@ -541,6 +546,161 @@ impl FleetCoordinatorOps {
         Ok(result)
     }
 
+    pub(crate) fn advance_component_provisioning_root(
+        request: &FleetComponentProvisioningAdvanceRequest,
+        started_at_ns: u64,
+    ) -> Result<FleetComponentProvisioningRootProvisionDisposition, InternalError> {
+        let current = Self::current()?;
+        let record = require_component_provisioning_record(&current, request)?;
+        let progress = component_provisioning_root_provision_progress(record)?;
+        match classify_root_provision_advance(request, &progress)? {
+            RootProvisionAdvance::Current => {
+                return component_provisioning_status_response(record)
+                    .map(Box::new)
+                    .map(FleetComponentProvisioningRootProvisionDisposition::Current);
+            }
+            RootProvisionAdvance::Reconcile => {
+                let intent = progress.in_flight.as_ref().ok_or_else(|| {
+                    receipt_invariant("root provisioning reconciliation intent disappeared")
+                })?;
+                return Ok(
+                    FleetComponentProvisioningRootProvisionDisposition::Reconcile(
+                        root_provision_call_from_intent(intent),
+                    ),
+                );
+            }
+            RootProvisionAdvance::Begin => {}
+        }
+        if started_at_ns == 0 {
+            return Err(InternalError::invalid_input(
+                "Fleet Component root provisioning start time must be nonzero",
+            ));
+        }
+        let roots_accepted_at_ns = progress.roots_accepted_at_ns.ok_or_else(|| {
+            InternalError::conflict(
+                "Fleet Component root provisioning cannot precede complete root acceptance",
+            )
+        })?;
+        let previous_observed_at_ns = root_provision_previous_observed_at(&progress)?;
+        if started_at_ns < previous_observed_at_ns {
+            return Err(InternalError::invalid_input(
+                "Fleet Component root provisioning start time regressed",
+            ));
+        }
+        let response = progress.current_response.as_ref().ok_or_else(|| {
+            InternalError::conflict("Fleet Component root provisioning cursor is terminal")
+        })?;
+        let call = root_provision_call(record, progress.provisioned_root_count, response)?;
+        let intent = FleetComponentProvisioningRootProvisionIntentRecord {
+            root_index: progress.provisioned_root_count,
+            fleet_subnet_root: call.fleet_subnet_root,
+            request: call.request,
+            started_at_ns,
+        };
+        let acceptance = component_provisioning_root_acceptance_progress(record)?;
+        let mut next = current.clone();
+        component_provisioning_record_mut(&mut next)?.state =
+            FleetComponentProvisioningStateRecord::ProvisioningRoots {
+                planned_at_ns: acceptance.planned_at_ns,
+                acceptances: acceptance.acceptances,
+                roots_accepted_at_ns,
+                provisions: progress.provisions,
+                current: progress.current.map(Box::new),
+                in_flight: Some(intent.clone()),
+            };
+        let next = Self::validate_current(next)?;
+        Self::commit_transition(&current, next)?;
+        Ok(FleetComponentProvisioningRootProvisionDisposition::Invoke(
+            root_provision_call_from_intent(&intent),
+        ))
+    }
+
+    pub(crate) fn record_component_provisioning_root(
+        request: &FleetComponentProvisioningAdvanceRequest,
+        response: RootComponentProvisioningStatusResponse,
+        recorded_at_ns: u64,
+    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        let current = Self::current()?;
+        let record = require_component_provisioning_record(&current, request)?;
+        let mut progress = component_provisioning_root_provision_progress(record)?;
+        if let Some(replayed) =
+            replay_recorded_root_provision(record, request, &response, &progress)?
+        {
+            return Ok(replayed);
+        }
+        if classify_root_provision_advance(request, &progress)? != RootProvisionAdvance::Reconcile {
+            return Err(InternalError::conflict(
+                "Fleet Component root provisioning response has no exact durable pre-call intent",
+            ));
+        }
+        let intent = progress
+            .in_flight
+            .take()
+            .ok_or_else(|| receipt_invariant("root provisioning response intent disappeared"))?;
+        if recorded_at_ns < intent.started_at_ns {
+            return Err(InternalError::invalid_input(
+                "Fleet Component root provisioning observation time regressed",
+            ));
+        }
+        let previous = progress.current_response.as_ref().ok_or_else(|| {
+            receipt_invariant("root provisioning response has no durable predecessor")
+        })?;
+        let acceptance = component_provisioning_root_acceptance(record, intent.root_index)?;
+        validate_root_provision_response(RootProvisionResponseValidation {
+            configuration: &current.component_deployment_configuration,
+            record,
+            root_index: intent.root_index,
+            acceptance: &acceptance,
+            previous,
+            response: &response,
+            started_at_ns: intent.started_at_ns,
+            recorded_at_ns,
+        })?;
+        let observed = FleetComponentProvisioningRootProvisionRecord {
+            started_at_ns: intent.started_at_ns,
+            response,
+            recorded_at_ns,
+        };
+        let root_is_provisioned =
+            observed.response.phase == RootComponentProvisioningPhase::Provisioned;
+        if root_is_provisioned {
+            progress.provisions.push(observed);
+            progress.current = None;
+        } else {
+            progress.current = Some(observed);
+        }
+        let acceptance_progress = component_provisioning_root_acceptance_progress(record)?;
+        let roots_accepted_at_ns = progress.roots_accepted_at_ns.ok_or_else(|| {
+            receipt_invariant("root provisioning state lost its RootsAccepted time")
+        })?;
+        let provisioned_root_count = u32::try_from(progress.provisions.len())
+            .map_err(|_| receipt_invariant("provisioned root count does not fit u32"))?;
+        let mut next = current.clone();
+        let next_record = component_provisioning_record_mut(&mut next)?;
+        if provisioned_root_count == acceptance_progress.root_batch_count {
+            next_record.state = FleetComponentProvisioningStateRecord::ComponentsProvisioned {
+                planned_at_ns: acceptance_progress.planned_at_ns,
+                acceptances: acceptance_progress.acceptances,
+                roots_accepted_at_ns,
+                provisions: progress.provisions,
+                components_provisioned_at_ns: recorded_at_ns,
+            };
+        } else {
+            next_record.state = FleetComponentProvisioningStateRecord::ProvisioningRoots {
+                planned_at_ns: acceptance_progress.planned_at_ns,
+                acceptances: acceptance_progress.acceptances,
+                roots_accepted_at_ns,
+                provisions: progress.provisions,
+                current: progress.current.map(Box::new),
+                in_flight: None,
+            };
+        }
+        let next = Self::validate_current(next)?;
+        let result = component_provisioning_status_response(component_provisioning_record(&next)?)?;
+        Self::commit_transition(&current, next)?;
+        Ok(result)
+    }
+
     #[cfg(test)]
     pub(crate) fn prepare_component_provisioning_for_test(
         config: &ConfigModel,
@@ -579,6 +739,27 @@ impl FleetCoordinatorOps {
     ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
         require_test_component_deployment_configuration(config)?;
         Self::record_component_provisioning_root_acceptance(request, response, recorded_at_ns)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn advance_component_provisioning_root_for_test(
+        config: &ConfigModel,
+        request: &FleetComponentProvisioningAdvanceRequest,
+        started_at_ns: u64,
+    ) -> Result<FleetComponentProvisioningRootProvisionDisposition, InternalError> {
+        require_test_component_deployment_configuration(config)?;
+        Self::advance_component_provisioning_root(request, started_at_ns)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn record_component_provisioning_root_for_test(
+        config: &ConfigModel,
+        request: &FleetComponentProvisioningAdvanceRequest,
+        response: RootComponentProvisioningStatusResponse,
+        recorded_at_ns: u64,
+    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        require_test_component_deployment_configuration(config)?;
+        Self::record_component_provisioning_root(request, response, recorded_at_ns)
     }
 
     #[cfg(test)]
@@ -1299,6 +1480,11 @@ fn validate_component_provisioning_record(
         ));
     }
     validate_component_provisioning_root_acceptance_state(record)?;
+    validate_component_provisioning_root_provision_state(
+        &current.component_deployment_configuration,
+        &source_registry,
+        record,
+    )?;
     validate_service_publication_authority(current, record)?;
     component_provisioning_plan_counts(&record.plan)?;
     Ok(())
@@ -1308,22 +1494,33 @@ fn component_provisioning_status_response(
     record: &FleetComponentProvisioningRecord,
 ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
     let counts = component_provisioning_plan_counts(&record.plan)?;
-    let progress = component_provisioning_root_acceptance_progress(record)?;
+    let acceptance = component_provisioning_root_acceptance_progress(record)?;
+    let provisioning = component_provisioning_root_provision_progress(record)?;
     Ok(FleetComponentProvisioningStatusResponse {
         operation_id: record.operation_id,
         plan_hash: record.plan_hash,
         fleet_registry: record.plan.fleet_registry.clone(),
         configuration_digest: record.plan.configuration_digest,
         operation: record.plan.operation.clone(),
-        phase: progress.phase,
+        phase: acceptance.phase,
         directory_confirmation_root_count: counts.directory_confirmation_roots,
         root_batch_count: counts.root_batches,
-        accepted_root_count: progress.accepted_root_count,
-        acceptance_in_flight_root: progress.in_flight.map(|intent| intent.fleet_subnet_root),
+        accepted_root_count: acceptance.accepted_root_count,
+        acceptance_in_flight_root: acceptance.in_flight.map(|intent| intent.fleet_subnet_root),
+        provisioned_root_count: provisioning.provisioned_root_count,
+        current_root: provisioning
+            .current_response
+            .as_ref()
+            .map(root_provisioning_progress),
+        provisioning_in_flight_root: provisioning
+            .in_flight
+            .as_ref()
+            .map(|intent| intent.fleet_subnet_root),
         group_placement_count: counts.group_placements,
         component_count: counts.components,
-        planned_at_ns: progress.planned_at_ns,
-        roots_accepted_at_ns: progress.roots_accepted_at_ns,
+        planned_at_ns: acceptance.planned_at_ns,
+        roots_accepted_at_ns: acceptance.roots_accepted_at_ns,
+        components_provisioned_at_ns: provisioning.components_provisioned_at_ns,
     })
 }
 
@@ -1338,8 +1535,26 @@ struct FleetComponentProvisioningRootAcceptanceProgress {
     roots_accepted_at_ns: Option<u64>,
 }
 
+#[derive(Clone)]
+struct FleetComponentProvisioningRootProvisionProgress {
+    provisions: Vec<FleetComponentProvisioningRootProvisionRecord>,
+    provisioned_root_count: u32,
+    current: Option<FleetComponentProvisioningRootProvisionRecord>,
+    current_response: Option<RootComponentProvisioningStatusResponse>,
+    in_flight: Option<FleetComponentProvisioningRootProvisionIntentRecord>,
+    roots_accepted_at_ns: Option<u64>,
+    components_provisioned_at_ns: Option<u64>,
+}
+
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum RootAcceptanceAdvance {
+    Begin,
+    Reconcile,
+    Current,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum RootProvisionAdvance {
     Begin,
     Reconcile,
     Current,
@@ -1468,6 +1683,30 @@ fn component_provisioning_root_acceptance_progress(
             None,
             Some(*roots_accepted_at_ns),
         ),
+        FleetComponentProvisioningStateRecord::ProvisioningRoots {
+            planned_at_ns,
+            acceptances,
+            roots_accepted_at_ns,
+            ..
+        } => (
+            *planned_at_ns,
+            FleetComponentProvisioningPhase::ProvisioningRoots,
+            acceptances.clone(),
+            None,
+            Some(*roots_accepted_at_ns),
+        ),
+        FleetComponentProvisioningStateRecord::ComponentsProvisioned {
+            planned_at_ns,
+            acceptances,
+            roots_accepted_at_ns,
+            ..
+        } => (
+            *planned_at_ns,
+            FleetComponentProvisioningPhase::ComponentsProvisioned,
+            acceptances.clone(),
+            None,
+            Some(*roots_accepted_at_ns),
+        ),
     };
     let accepted_root_count = u32::try_from(acceptances.len())
         .map_err(|_| receipt_invariant("accepted root count does not fit u32"))?;
@@ -1482,12 +1721,344 @@ fn component_provisioning_root_acceptance_progress(
     })
 }
 
+fn component_provisioning_root_provision_progress(
+    record: &FleetComponentProvisioningRecord,
+) -> Result<FleetComponentProvisioningRootProvisionProgress, InternalError> {
+    let progress = match &record.state {
+        FleetComponentProvisioningStateRecord::Planned { .. }
+        | FleetComponentProvisioningStateRecord::AcceptingRoots { .. } => {
+            FleetComponentProvisioningRootProvisionProgress {
+                provisions: Vec::new(),
+                provisioned_root_count: 0,
+                current: None,
+                current_response: None,
+                in_flight: None,
+                roots_accepted_at_ns: None,
+                components_provisioned_at_ns: None,
+            }
+        }
+        FleetComponentProvisioningStateRecord::RootsAccepted {
+            acceptances,
+            roots_accepted_at_ns,
+            ..
+        } => FleetComponentProvisioningRootProvisionProgress {
+            provisions: Vec::new(),
+            provisioned_root_count: 0,
+            current: None,
+            current_response: acceptances.first().map(|record| record.response.clone()),
+            in_flight: None,
+            roots_accepted_at_ns: Some(*roots_accepted_at_ns),
+            components_provisioned_at_ns: None,
+        },
+        FleetComponentProvisioningStateRecord::ProvisioningRoots {
+            acceptances,
+            roots_accepted_at_ns,
+            provisions,
+            current,
+            in_flight,
+            ..
+        } => {
+            let provisioned_root_count = u32::try_from(provisions.len())
+                .map_err(|_| receipt_invariant("provisioned root count does not fit u32"))?;
+            let current_response = current.as_deref().map_or_else(
+                || {
+                    acceptances
+                        .get(provisions.len())
+                        .map(|record| record.response.clone())
+                },
+                |record| Some(record.response.clone()),
+            );
+            FleetComponentProvisioningRootProvisionProgress {
+                provisions: provisions.clone(),
+                provisioned_root_count,
+                current: current.as_deref().cloned(),
+                current_response,
+                in_flight: in_flight.clone(),
+                roots_accepted_at_ns: Some(*roots_accepted_at_ns),
+                components_provisioned_at_ns: None,
+            }
+        }
+        FleetComponentProvisioningStateRecord::ComponentsProvisioned {
+            roots_accepted_at_ns,
+            provisions,
+            components_provisioned_at_ns,
+            ..
+        } => FleetComponentProvisioningRootProvisionProgress {
+            provisioned_root_count: u32::try_from(provisions.len())
+                .map_err(|_| receipt_invariant("provisioned root count does not fit u32"))?,
+            provisions: provisions.clone(),
+            current: None,
+            current_response: None,
+            in_flight: None,
+            roots_accepted_at_ns: Some(*roots_accepted_at_ns),
+            components_provisioned_at_ns: Some(*components_provisioned_at_ns),
+        },
+    };
+    Ok(progress)
+}
+
+const fn root_provisioning_progress(
+    response: &RootComponentProvisioningStatusResponse,
+) -> FleetComponentProvisioningRootProgress {
+    FleetComponentProvisioningRootProgress {
+        fleet_subnet_root: response.fleet_subnet_root,
+        component_count: response.component_count,
+        reserved_component_count: response.reserved_component_count,
+        claimed_component_count: response.claimed_component_count,
+        installed_component_count: response.installed_component_count,
+        registry_committed_component_count: response.registry_committed_component_count,
+    }
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+struct RootProvisioningCounts {
+    reserved: u32,
+    claimed: u32,
+    installed: u32,
+    registry_committed: u32,
+}
+
+impl RootProvisioningCounts {
+    const fn from_response(response: &RootComponentProvisioningStatusResponse) -> Self {
+        Self {
+            reserved: response.reserved_component_count,
+            claimed: response.claimed_component_count,
+            installed: response.installed_component_count,
+            registry_committed: response.registry_committed_component_count,
+        }
+    }
+
+    const fn from_progress(progress: FleetComponentProvisioningRootProgress) -> Self {
+        Self {
+            reserved: progress.reserved_component_count,
+            claimed: progress.claimed_component_count,
+            installed: progress.installed_component_count,
+            registry_committed: progress.registry_committed_component_count,
+        }
+    }
+
+    const fn is_terminal(self, component_count: u32) -> bool {
+        self.reserved == component_count
+            && self.claimed == component_count
+            && self.installed == component_count
+            && self.registry_committed == component_count
+    }
+
+    const fn is_canonical(self, component_count: u32) -> bool {
+        self.reserved <= component_count
+            && self.claimed <= component_count
+            && self.installed <= component_count
+            && self.registry_committed <= component_count
+            && (self.claimed == 0 || self.reserved == component_count)
+            && (self.installed == 0 || self.claimed == component_count)
+            && (self.registry_committed == 0 || self.installed == component_count)
+    }
+
+    fn advances_one_step_to(self, next: Self, component_count: u32) -> bool {
+        if !self.is_canonical(component_count) || !next.is_canonical(component_count) {
+            return false;
+        }
+        let reservation = self.claimed == 0
+            && self.installed == 0
+            && self.registry_committed == 0
+            && next.claimed == 0
+            && next.installed == 0
+            && next.registry_committed == 0
+            && self.reserved.checked_add(1) == Some(next.reserved);
+        let claim = self.reserved == next.reserved
+            && self.installed == 0
+            && self.registry_committed == 0
+            && next.installed == 0
+            && next.registry_committed == 0
+            && self.claimed.checked_add(1) == Some(next.claimed);
+        let install = self.reserved == next.reserved
+            && self.claimed == next.claimed
+            && self.registry_committed == 0
+            && next.registry_committed == 0
+            && self.installed.checked_add(1) == Some(next.installed);
+        let registry = self.reserved == next.reserved
+            && self.claimed == next.claimed
+            && self.installed == next.installed
+            && self.registry_committed.checked_add(1) == Some(next.registry_committed);
+        reservation || claim || install || registry
+    }
+}
+
+fn classify_root_provision_advance(
+    request: &FleetComponentProvisioningAdvanceRequest,
+    progress: &FleetComponentProvisioningRootProvisionProgress,
+) -> Result<RootProvisionAdvance, InternalError> {
+    if request.expected_provisioned_root_count == progress.provisioned_root_count {
+        let Some(current) = progress.current_response.as_ref() else {
+            if request.expected_current_root.is_none()
+                && progress.components_provisioned_at_ns.is_some()
+            {
+                return Ok(RootProvisionAdvance::Current);
+            }
+            return Err(InternalError::conflict(
+                "Fleet Component root provisioning expected cursor differs from durable progress",
+            ));
+        };
+        let actual = root_provisioning_progress(current);
+        if request.expected_current_root.as_ref() == Some(&actual) {
+            return Ok(if progress.in_flight.is_some() {
+                RootProvisionAdvance::Reconcile
+            } else {
+                RootProvisionAdvance::Begin
+            });
+        }
+        if let Some(expected) = request.expected_current_root
+            && expected.fleet_subnet_root == actual.fleet_subnet_root
+            && expected.component_count == actual.component_count
+            && RootProvisioningCounts::from_progress(expected).advances_one_step_to(
+                RootProvisioningCounts::from_progress(actual),
+                actual.component_count,
+            )
+        {
+            return Ok(RootProvisionAdvance::Current);
+        }
+        return Err(InternalError::conflict(
+            "Fleet Component root provisioning expected cursor differs from durable progress",
+        ));
+    }
+    if request.expected_provisioned_root_count.checked_add(1)
+        == Some(progress.provisioned_root_count)
+    {
+        let index = usize::try_from(request.expected_provisioned_root_count).map_err(|_| {
+            InternalError::resource_exhausted("provisioned root index does not fit usize")
+        })?;
+        let provision = progress.provisions.get(index).ok_or_else(|| {
+            receipt_invariant("terminal root provisioning receipt is absent at its cursor")
+        })?;
+        if request.expected_current_root.as_ref()
+            == Some(&root_provisioning_progress(&provision.response))
+        {
+            return Ok(RootProvisionAdvance::Current);
+        }
+    }
+    Err(InternalError::conflict(
+        "Fleet Component provisioned root count differs from durable progress",
+    ))
+}
+
+fn root_provision_call(
+    record: &FleetComponentProvisioningRecord,
+    root_index: u32,
+    response: &RootComponentProvisioningStatusResponse,
+) -> Result<FleetComponentProvisioningRootProvisionCallView, InternalError> {
+    let batch = root_batch(record, root_index)?;
+    if response.fleet_subnet_root != batch.root.fleet_subnet_root
+        || response.phase != RootComponentProvisioningPhase::Accepted
+    {
+        return Err(receipt_invariant(
+            "current root provisioning cursor differs from its plan batch",
+        ));
+    }
+    Ok(FleetComponentProvisioningRootProvisionCallView {
+        fleet_subnet_root: batch.root.fleet_subnet_root,
+        request: RootComponentProvisioningAdvanceRequest {
+            operation_id: record.operation_id,
+            plan_hash: record.plan_hash,
+            expected_reserved_component_count: response.reserved_component_count,
+            expected_claimed_component_count: response.claimed_component_count,
+            expected_installed_component_count: response.installed_component_count,
+            expected_registry_committed_component_count: response
+                .registry_committed_component_count,
+        },
+    })
+}
+
+const fn root_provision_call_from_intent(
+    intent: &FleetComponentProvisioningRootProvisionIntentRecord,
+) -> FleetComponentProvisioningRootProvisionCallView {
+    FleetComponentProvisioningRootProvisionCallView {
+        fleet_subnet_root: intent.fleet_subnet_root,
+        request: intent.request,
+    }
+}
+
+fn root_provision_previous_observed_at(
+    progress: &FleetComponentProvisioningRootProvisionProgress,
+) -> Result<u64, InternalError> {
+    if let Some(current) = &progress.current {
+        return Ok(current.recorded_at_ns);
+    }
+    if let Some(provision) = progress.provisions.last() {
+        return Ok(provision.recorded_at_ns);
+    }
+    progress
+        .roots_accepted_at_ns
+        .ok_or_else(|| receipt_invariant("root provisioning lacks RootsAccepted time authority"))
+}
+
+fn component_provisioning_root_acceptance(
+    record: &FleetComponentProvisioningRecord,
+    root_index: u32,
+) -> Result<FleetComponentProvisioningRootAcceptanceRecord, InternalError> {
+    let progress = component_provisioning_root_acceptance_progress(record)?;
+    let index = usize::try_from(root_index)
+        .map_err(|_| InternalError::resource_exhausted("accepted root index does not fit usize"))?;
+    progress
+        .acceptances
+        .get(index)
+        .cloned()
+        .ok_or_else(|| receipt_invariant("accepted root receipt is absent at its cursor"))
+}
+
+fn replay_recorded_root_provision(
+    record: &FleetComponentProvisioningRecord,
+    request: &FleetComponentProvisioningAdvanceRequest,
+    response: &RootComponentProvisioningStatusResponse,
+    progress: &FleetComponentProvisioningRootProvisionProgress,
+) -> Result<Option<FleetComponentProvisioningStatusResponse>, InternalError> {
+    let replayed = if request.expected_provisioned_root_count.checked_add(1)
+        == Some(progress.provisioned_root_count)
+    {
+        let index = usize::try_from(request.expected_provisioned_root_count).map_err(|_| {
+            InternalError::resource_exhausted("provisioned root index does not fit usize")
+        })?;
+        progress.provisions.get(index)
+    } else if request.expected_provisioned_root_count == progress.provisioned_root_count
+        && progress.current.as_ref().is_some_and(|current| {
+            let actual = root_provisioning_progress(&current.response);
+            request.expected_current_root.is_some_and(|expected| {
+                expected.fleet_subnet_root == actual.fleet_subnet_root
+                    && expected.component_count == actual.component_count
+                    && RootProvisioningCounts::from_progress(expected).advances_one_step_to(
+                        RootProvisioningCounts::from_progress(actual),
+                        actual.component_count,
+                    )
+            })
+        })
+    {
+        progress.current.as_ref()
+    } else {
+        None
+    };
+    let Some(replayed) = replayed else {
+        return Ok(None);
+    };
+    if &replayed.response != response {
+        return Err(InternalError::conflict(
+            "Fleet Component root provisioning retry returned different evidence",
+        ));
+    }
+    component_provisioning_status_response(record).map(Some)
+}
+
 fn classify_root_acceptance_advance(
     request: &FleetComponentProvisioningAdvanceRequest,
     progress: &FleetComponentProvisioningRootAcceptanceProgress,
 ) -> Result<RootAcceptanceAdvance, InternalError> {
     if request.expected_accepted_root_count == progress.accepted_root_count {
-        if progress.phase == FleetComponentProvisioningPhase::RootsAccepted {
+        if progress.accepted_root_count == progress.root_batch_count
+            && matches!(
+                progress.phase,
+                FleetComponentProvisioningPhase::RootsAccepted
+                    | FleetComponentProvisioningPhase::ProvisioningRoots
+                    | FleetComponentProvisioningPhase::ComponentsProvisioned
+            )
+        {
             return Ok(RootAcceptanceAdvance::Current);
         }
         return Ok(if progress.in_flight.is_some() {
@@ -1656,6 +2227,23 @@ fn validate_root_acceptance_phase(
             }
             Ok(())
         }
+        FleetComponentProvisioningPhase::ProvisioningRoots
+        | FleetComponentProvisioningPhase::ComponentsProvisioned => {
+            if progress.accepted_root_count != progress.root_batch_count {
+                return Err(receipt_invariant(
+                    "Fleet Component post-acceptance state lacks complete root evidence",
+                ));
+            }
+            let completed_at_ns = progress
+                .roots_accepted_at_ns
+                .ok_or_else(|| receipt_invariant("Fleet Component RootsAccepted time is absent"))?;
+            if completed_at_ns < previous_recorded_at_ns {
+                return Err(receipt_invariant(
+                    "Fleet Component RootsAccepted time precedes root evidence",
+                ));
+            }
+            Ok(())
+        }
     }
 }
 
@@ -1679,6 +2267,17 @@ struct RootAcceptanceResponseProgress<'a> {
     registry_committed_component_count: u32,
     result: Option<&'a canic_core::dto::component_provisioning::RootComponentProvisioningResult>,
     provisioned_at_ns: Option<u64>,
+}
+
+struct RootProvisionResponseValidation<'a> {
+    configuration: &'a canic_core::control_plane_support::config::ComponentDeploymentConfiguration,
+    record: &'a FleetComponentProvisioningRecord,
+    root_index: u32,
+    acceptance: &'a FleetComponentProvisioningRootAcceptanceRecord,
+    previous: &'a RootComponentProvisioningStatusResponse,
+    response: &'a RootComponentProvisioningStatusResponse,
+    started_at_ns: u64,
+    recorded_at_ns: u64,
 }
 
 fn validate_root_acceptance_response(
@@ -1766,6 +2365,316 @@ fn validate_root_acceptance_observation(
     if response.accepted_at_ns < started_at_ns || recorded_at_ns < response.accepted_at_ns {
         return Err(InternalError::invalid_input(
             "Fleet Component root acceptance time evidence is invalid",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_root_provision_response(
+    validation: RootProvisionResponseValidation<'_>,
+) -> Result<(), InternalError> {
+    let RootProvisionResponseValidation {
+        configuration,
+        record,
+        root_index,
+        acceptance,
+        previous,
+        response,
+        started_at_ns,
+        recorded_at_ns,
+    } = validation;
+    let batch = root_batch(record, root_index)?;
+    if previous.phase != RootComponentProvisioningPhase::Accepted {
+        return Err(receipt_invariant(
+            "root provisioning predecessor is not in the Accepted phase",
+        ));
+    }
+    if response.accepted_at_ns != acceptance.response.accepted_at_ns {
+        return Err(InternalError::conflict(
+            "root provisioning response changed its accepted-time authority",
+        ));
+    }
+    match response.phase {
+        RootComponentProvisioningPhase::Accepted => {
+            validate_root_provision_current(record, batch, acceptance, response)?;
+            let previous_counts = RootProvisioningCounts::from_response(previous);
+            let next_counts = RootProvisioningCounts::from_response(response);
+            if !previous_counts.advances_one_step_to(next_counts, response.component_count) {
+                return Err(InternalError::conflict(
+                    "root provisioning response did not advance exactly one bounded cursor",
+                ));
+            }
+        }
+        RootComponentProvisioningPhase::Provisioned => {
+            if !RootProvisioningCounts::from_response(previous)
+                .is_terminal(previous.component_count)
+            {
+                return Err(InternalError::conflict(
+                    "root provisioning terminal response preceded complete root-local cursors",
+                ));
+            }
+            FleetServiceBindingOps::validate_provisioned_root_receipt_compiled(
+                configuration,
+                &record.plan,
+                record.operation_id,
+                record.plan_hash,
+                usize::try_from(root_index).map_err(|_| {
+                    InternalError::resource_exhausted("root provisioning index does not fit usize")
+                })?,
+                response,
+            )?;
+            let provisioned_at_ns = response.provisioned_at_ns.ok_or_else(|| {
+                InternalError::conflict("root Provisioned response has no completion time")
+            })?;
+            if provisioned_at_ns < started_at_ns || recorded_at_ns < provisioned_at_ns {
+                return Err(InternalError::invalid_input(
+                    "root Provisioned response time evidence is invalid",
+                ));
+            }
+        }
+        RootComponentProvisioningPhase::Published
+        | RootComponentProvisioningPhase::RuntimesActive => {
+            return Err(InternalError::conflict(
+                "root provisioning advance crossed the Coordinator publication barrier",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_root_provision_current(
+    record: &FleetComponentProvisioningRecord,
+    batch: &FleetSubnetRootProvisioningBatch,
+    acceptance: &FleetComponentProvisioningRootAcceptanceRecord,
+    response: &RootComponentProvisioningStatusResponse,
+) -> Result<(), InternalError> {
+    let expected_identity = RootAcceptanceResponseIdentity {
+        operation_id: record.operation_id,
+        plan_hash: record.plan_hash,
+        fleet_registry: &record.plan.fleet_registry,
+        configuration_digest: record.plan.configuration_digest,
+        fleet_subnet_root: batch.root.fleet_subnet_root,
+    };
+    let actual_identity = RootAcceptanceResponseIdentity {
+        operation_id: response.operation_id,
+        plan_hash: response.plan_hash,
+        fleet_registry: &response.fleet_registry,
+        configuration_digest: response.configuration_digest,
+        fleet_subnet_root: response.fleet_subnet_root,
+    };
+    let (placement_count, component_count) = root_batch_counts(batch)?;
+    let progress_is_valid = response.phase == RootComponentProvisioningPhase::Accepted
+        && response.placement_count == placement_count
+        && response.component_count == component_count
+        && response.result.is_none()
+        && response.provisioned_at_ns.is_none()
+        && RootProvisioningCounts::from_response(response).is_canonical(component_count);
+    let acceptance_is_exact = response.accepted_at_ns == acceptance.response.accepted_at_ns
+        && response.receipt_content_hash == acceptance.response.receipt_content_hash;
+    if actual_identity != expected_identity || !progress_is_valid || !acceptance_is_exact {
+        return Err(InternalError::conflict(
+            "root provisioning response differs from its exact accepted plan authority",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_component_provisioning_root_provision_state(
+    configuration: &canic_core::control_plane_support::config::ComponentDeploymentConfiguration,
+    source_registry: &FleetRegistry,
+    record: &FleetComponentProvisioningRecord,
+) -> Result<(), InternalError> {
+    let acceptance = component_provisioning_root_acceptance_progress(record)?;
+    let progress = component_provisioning_root_provision_progress(record)?;
+    match acceptance.phase {
+        FleetComponentProvisioningPhase::Planned
+        | FleetComponentProvisioningPhase::AcceptingRoots => {
+            if progress.provisioned_root_count != 0
+                || progress.current_response.is_some()
+                || progress.in_flight.is_some()
+                || progress.roots_accepted_at_ns.is_some()
+            {
+                return Err(receipt_invariant(
+                    "root provisioning evidence exists before complete root acceptance",
+                ));
+            }
+            return Ok(());
+        }
+        FleetComponentProvisioningPhase::RootsAccepted => {
+            if progress.provisioned_root_count != 0
+                || progress.current.is_some()
+                || progress.in_flight.is_some()
+                || progress.current_response.is_none()
+            {
+                return Err(receipt_invariant(
+                    "RootsAccepted state contains invalid root provisioning evidence",
+                ));
+            }
+            return Ok(());
+        }
+        FleetComponentProvisioningPhase::ProvisioningRoots
+        | FleetComponentProvisioningPhase::ComponentsProvisioned => {}
+    }
+    let roots_accepted_at_ns = progress.roots_accepted_at_ns.ok_or_else(|| {
+        receipt_invariant("root provisioning state lacks RootsAccepted time authority")
+    })?;
+    if progress.provisioned_root_count > acceptance.root_batch_count {
+        return Err(receipt_invariant(
+            "provisioned root count exceeds the complete plan",
+        ));
+    }
+    let previous_observed_at_ns = validate_root_provision_receipts(
+        configuration,
+        record,
+        &progress.provisions,
+        roots_accepted_at_ns,
+    )?;
+    validate_current_root_provision_record(record, &progress, previous_observed_at_ns)?;
+    validate_root_provision_intent(record, &progress)?;
+    match acceptance.phase {
+        FleetComponentProvisioningPhase::ProvisioningRoots => {
+            if progress.provisioned_root_count >= acceptance.root_batch_count
+                || progress.components_provisioned_at_ns.is_some()
+            {
+                return Err(receipt_invariant(
+                    "root provisioning remained nonterminal after every planned root",
+                ));
+            }
+        }
+        FleetComponentProvisioningPhase::ComponentsProvisioned => {
+            if progress.provisioned_root_count != acceptance.root_batch_count
+                || progress.current_response.is_some()
+                || progress.in_flight.is_some()
+            {
+                return Err(receipt_invariant(
+                    "ComponentsProvisioned state lacks complete terminal root evidence",
+                ));
+            }
+            let completed_at_ns = progress.components_provisioned_at_ns.ok_or_else(|| {
+                receipt_invariant("ComponentsProvisioned time evidence is absent")
+            })?;
+            if completed_at_ns < previous_observed_at_ns {
+                return Err(receipt_invariant(
+                    "ComponentsProvisioned time precedes terminal root evidence",
+                ));
+            }
+            let receipts = progress
+                .provisions
+                .iter()
+                .map(|provision| provision.response.clone())
+                .collect::<Vec<_>>();
+            FleetServiceBindingOps::compile_initial_compiled(
+                configuration,
+                source_registry,
+                &record.plan,
+                record.operation_id,
+                &receipts,
+            )
+            .map_err(|_| {
+                receipt_invariant(
+                    "complete root provisioning receipts do not compile canonical services",
+                )
+            })?;
+        }
+        _ => unreachable!("pre-provisioning phases returned above"),
+    }
+    Ok(())
+}
+
+fn validate_root_provision_receipts(
+    configuration: &canic_core::control_plane_support::config::ComponentDeploymentConfiguration,
+    record: &FleetComponentProvisioningRecord,
+    provisions: &[FleetComponentProvisioningRootProvisionRecord],
+    roots_accepted_at_ns: u64,
+) -> Result<u64, InternalError> {
+    let mut previous_observed_at_ns = roots_accepted_at_ns;
+    for (index, provision) in provisions.iter().enumerate() {
+        let root_index = u32::try_from(index)
+            .map_err(|_| receipt_invariant("provisioned root index does not fit u32"))?;
+        let accepted = component_provisioning_root_acceptance(record, root_index)?;
+        if provision.started_at_ns < previous_observed_at_ns
+            || provision.recorded_at_ns < provision.started_at_ns
+            || provision.response.accepted_at_ns != accepted.response.accepted_at_ns
+        {
+            return Err(receipt_invariant(
+                "stored root Provisioned response time evidence is invalid",
+            ));
+        }
+        let provisioned_at_ns = provision.response.provisioned_at_ns.ok_or_else(|| {
+            receipt_invariant("stored root Provisioned response has no completion time")
+        })?;
+        if provisioned_at_ns < provision.started_at_ns
+            || provision.recorded_at_ns < provisioned_at_ns
+        {
+            return Err(receipt_invariant(
+                "stored root Provisioned response time evidence is invalid",
+            ));
+        }
+        FleetServiceBindingOps::validate_provisioned_root_receipt_compiled(
+            configuration,
+            &record.plan,
+            record.operation_id,
+            record.plan_hash,
+            index,
+            &provision.response,
+        )
+        .map_err(|_| {
+            receipt_invariant("stored root Provisioned response differs from its plan batch")
+        })?;
+        previous_observed_at_ns = provision.recorded_at_ns;
+    }
+    Ok(previous_observed_at_ns)
+}
+
+fn validate_current_root_provision_record(
+    record: &FleetComponentProvisioningRecord,
+    progress: &FleetComponentProvisioningRootProvisionProgress,
+    previous_observed_at_ns: u64,
+) -> Result<(), InternalError> {
+    let Some(current) = &progress.current else {
+        return Ok(());
+    };
+    if current.started_at_ns < previous_observed_at_ns
+        || current.recorded_at_ns < current.started_at_ns
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            format!(
+                "current root provisioning observation time evidence is invalid: previous {previous_observed_at_ns}, started {}, recorded {}",
+                current.started_at_ns, current.recorded_at_ns
+            ),
+        ));
+    }
+    let batch = root_batch(record, progress.provisioned_root_count)?;
+    let accepted = component_provisioning_root_acceptance(record, progress.provisioned_root_count)?;
+    validate_root_provision_current(record, batch, &accepted, &current.response).map_err(|_| {
+        receipt_invariant("current root provisioning response differs from its plan batch")
+    })
+}
+
+fn validate_root_provision_intent(
+    record: &FleetComponentProvisioningRecord,
+    progress: &FleetComponentProvisioningRootProvisionProgress,
+) -> Result<(), InternalError> {
+    let Some(intent) = &progress.in_flight else {
+        return Ok(());
+    };
+    if intent.root_index != progress.provisioned_root_count
+        || intent.started_at_ns < root_provision_previous_observed_at(progress)?
+    {
+        return Err(receipt_invariant(
+            "root provisioning pre-call intent differs from its durable cursor",
+        ));
+    }
+    let response = progress
+        .current_response
+        .as_ref()
+        .ok_or_else(|| receipt_invariant("root provisioning intent has no current root cursor"))?;
+    let expected = root_provision_call(record, intent.root_index, response)?;
+    if intent.fleet_subnet_root != expected.fleet_subnet_root || intent.request != expected.request
+    {
+        return Err(receipt_invariant(
+            "root provisioning pre-call intent differs from its exact root request",
         ));
     }
     Ok(())

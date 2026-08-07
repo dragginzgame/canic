@@ -1,6 +1,6 @@
 //! Module: workflow::fleet_coordinator
 //!
-//! Responsibility: orchestrate Coordinator genesis, Registry transitions, and plan preparation.
+//! Responsibility: orchestrate Coordinator genesis, Registry transitions, and root provisioning.
 //! Does not own: stable encoding, canonical validation, root effects, or endpoint transport.
 //! Boundary: lifecycle and endpoint APIs delegate here after transport authentication.
 
@@ -13,6 +13,8 @@ use crate::{
     view::fleet_coordinator::{
         FleetComponentProvisioningRootAcceptanceCallView,
         FleetComponentProvisioningRootAcceptanceDisposition,
+        FleetComponentProvisioningRootProvisionCallView,
+        FleetComponentProvisioningRootProvisionDisposition,
     },
 };
 use candid::Principal;
@@ -23,9 +25,9 @@ use canic_core::{
     },
     dto::{
         component_provisioning::{
-            FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningPrepareRequest,
-            FleetComponentProvisioningStatusRequest, FleetComponentProvisioningStatusResponse,
-            RootComponentProvisioningStatusResponse,
+            FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningPhase,
+            FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningStatusRequest,
+            FleetComponentProvisioningStatusResponse, RootComponentProvisioningStatusResponse,
         },
         error::Error,
         fleet_registry::{
@@ -128,16 +130,40 @@ impl FleetCoordinatorWorkflow {
             request,
             IcOps::now_nanos(),
         )?;
-        let call = match disposition {
-            FleetComponentProvisioningRootAcceptanceDisposition::Current(status) => {
-                return Ok(status);
-            }
+        let acceptance_status = match disposition {
+            FleetComponentProvisioningRootAcceptanceDisposition::Current(status) => status,
             FleetComponentProvisioningRootAcceptanceDisposition::Invoke(call)
-            | FleetComponentProvisioningRootAcceptanceDisposition::Reconcile(call) => call,
+            | FleetComponentProvisioningRootAcceptanceDisposition::Reconcile(call) => {
+                let response = accept_root_component_provisioning(call).await?;
+                return FleetCoordinatorOps::record_component_provisioning_root_acceptance(
+                    request,
+                    response,
+                    IcOps::now_nanos(),
+                );
+            }
         };
-        let response = accept_root_component_provisioning(call).await?;
-        FleetCoordinatorOps::record_component_provisioning_root_acceptance(
-            request,
+        if acceptance_status.accepted_root_count != request.expected_accepted_root_count
+            || !matches!(
+                acceptance_status.phase,
+                FleetComponentProvisioningPhase::RootsAccepted
+                    | FleetComponentProvisioningPhase::ProvisioningRoots
+                    | FleetComponentProvisioningPhase::ComponentsProvisioned
+            )
+        {
+            return Ok(acceptance_status);
+        }
+        let disposition =
+            FleetCoordinatorOps::advance_component_provisioning_root(&request, IcOps::now_nanos())?;
+        let call = match disposition {
+            FleetComponentProvisioningRootProvisionDisposition::Current(status) => {
+                return Ok(*status);
+            }
+            FleetComponentProvisioningRootProvisionDisposition::Invoke(call)
+            | FleetComponentProvisioningRootProvisionDisposition::Reconcile(call) => call,
+        };
+        let response = advance_root_component_provisioning(call).await?;
+        FleetCoordinatorOps::record_component_provisioning_root(
+            &request,
             response,
             IcOps::now_nanos(),
         )
@@ -231,6 +257,20 @@ async fn accept_root_component_provisioning(
     let result = CallOps::unbounded_wait(
         call.fleet_subnet_root,
         protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ACCEPT,
+    )
+    .with_arg(call.request)?
+    .execute()
+    .await?;
+    let response: Result<RootComponentProvisioningStatusResponse, Error> = result.candid()?;
+    response.map_err(InternalError::public)
+}
+
+async fn advance_root_component_provisioning(
+    call: FleetComponentProvisioningRootProvisionCallView,
+) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
+    let result = CallOps::unbounded_wait(
+        call.fleet_subnet_root,
+        protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ADVANCE,
     )
     .with_arg(call.request)?
     .execute()

@@ -78,6 +78,9 @@ pub enum FleetServiceBindingOpsError {
     #[error("root Provisioned receipt count {actual} differs from planned root count {expected}")]
     RootReceiptCountMismatch { actual: usize, expected: usize },
 
+    #[error("root Provisioned receipt index {index} is outside {root_count} planned roots")]
+    RootReceiptIndexOutOfBounds { index: usize, root_count: usize },
+
     #[error("root Provisioned receipt counts differ from its exact planned batch")]
     RootReceiptCountsMismatch,
 
@@ -139,6 +142,40 @@ impl FleetServiceBindingOps {
             plan,
             operation_id,
             root_receipts,
+        )
+        .map_err(OpsError::from)
+        .map_err(InternalError::from)
+    }
+
+    /// Validate one terminal root receipt against its exact compiled plan batch.
+    pub fn validate_provisioned_root_receipt_compiled(
+        configuration: &ComponentDeploymentConfiguration,
+        plan: &FleetComponentProvisioningPlan,
+        operation_id: [u8; 32],
+        plan_hash: [u8; 32],
+        root_index: usize,
+        receipt: &RootComponentProvisioningStatusResponse,
+    ) -> Result<(), InternalError> {
+        let batch = plan
+            .batches
+            .get(root_index)
+            .ok_or(FleetServiceBindingOpsError::RootReceiptIndexOutOfBounds {
+                index: root_index,
+                root_count: plan.batches.len(),
+            })
+            .map_err(OpsError::from)
+            .map_err(InternalError::from)?;
+        let authority = BindingCompilationAuthority {
+            operation_id,
+            plan_hash,
+            plan,
+            component_topology: &configuration.component_topology,
+        };
+        validate_root_receipt(
+            batch,
+            receipt,
+            &authority,
+            &mut BindingCompilationLedger::default(),
         )
         .map_err(OpsError::from)
         .map_err(InternalError::from)
