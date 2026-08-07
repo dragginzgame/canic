@@ -482,6 +482,7 @@ mod tests {
                     revision: current.revision,
                     component_specs: Vec::new(),
                     fleet_subnet_roots: Vec::new(),
+                    services: Vec::new(),
                 },
                 manifest: FleetRegistryManifest {
                     authority: current.authority.clone(),

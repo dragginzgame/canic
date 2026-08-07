@@ -7,9 +7,14 @@
 use super::*;
 use crate::{
     bootstrap::parse_config_model,
-    dto::fleet_registry::{FleetSubnetRootEntry, FleetSubnetRootStatus},
+    config::{FleetServiceMemberPurpose, FleetServicePlacementPolicy},
+    dto::fleet_registry::{
+        FleetServiceBinding, FleetServiceComponentBinding, FleetServiceMode, FleetSubnetRootEntry,
+        FleetSubnetRootStatus,
+    },
     ids::{
-        AppId, CanonicalNetworkId, ComponentSpecAdmission, CyclesFundingBudget, FleetBinding,
+        AppId, CanonicalNetworkId, ComponentGroupMemberPath, ComponentGroupPlacementId,
+        ComponentInstanceId, ComponentSpecAdmission, CyclesFundingBudget, FleetBinding,
         FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootLimits,
         FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
     },
@@ -137,6 +142,102 @@ fn root(
     }
 }
 
+fn active_registry(topology: &ComponentTopology) -> FleetRegistry {
+    let authority = authority();
+    let mut joining =
+        validation::compile_genesis(&AppId::from("demo"), authority.clone(), topology)
+            .expect("valid genesis Registry");
+    joining.fleet_subnet_roots = vec![
+        root(topology, 5, 6, &[("alpha", 1)]),
+        root(topology, 7, 8, &[("alpha", 2), ("beta", 2)]),
+    ];
+    joining.revision = 3;
+    FleetRegistryOps::compile_active(&authority, topology, &joining).expect("active Registry")
+}
+
+fn member(
+    purpose: FleetServiceMemberPurpose,
+    component_byte: u8,
+    root_byte: u8,
+    canister_byte: u8,
+    deployment: &str,
+    ordinal: u32,
+    member_path: &[&str],
+) -> FleetServiceComponentBinding {
+    FleetServiceComponentBinding {
+        member_purpose: purpose,
+        component: ComponentInstanceId::from_generated_bytes([component_byte; 32]),
+        fleet_subnet_root: principal(root_byte),
+        canister_id: principal(canister_byte),
+        group_placement: ComponentGroupPlacementId {
+            deployment: deployment.parse().expect("deployment ID"),
+            ordinal,
+        },
+        member_path: ComponentGroupMemberPath::try_from(
+            member_path
+                .iter()
+                .map(|segment| segment.parse().expect("member ID"))
+                .collect::<Vec<_>>(),
+        )
+        .expect("member path"),
+    }
+}
+
+fn authority_replica_service() -> FleetServiceBinding {
+    FleetServiceBinding {
+        service: "database".parse().expect("service ID"),
+        role: "alpha".parse().expect("role"),
+        component_spec: "alpha".parse().expect("Component Spec ID"),
+        mode: FleetServiceMode::AuthorityReplica,
+        placement: FleetServicePlacementPolicy {
+            maximum_members_per_root: 1,
+            minimum_distinct_roots: 2,
+        },
+        members: vec![
+            member(
+                FleetServiceMemberPurpose::Authority,
+                20,
+                6,
+                30,
+                "primary",
+                1,
+                &["database"],
+            ),
+            member(
+                FleetServiceMemberPurpose::Replica,
+                21,
+                8,
+                31,
+                "replica",
+                1,
+                &["database"],
+            ),
+        ],
+    }
+}
+
+fn active_pool_service() -> FleetServiceBinding {
+    FleetServiceBinding {
+        service: "workers".parse().expect("service ID"),
+        role: "beta".parse().expect("role"),
+        component_spec: "beta".parse().expect("Component Spec ID"),
+        mode: FleetServiceMode::ActivePool,
+        placement: FleetServicePlacementPolicy {
+            maximum_members_per_root: 1,
+            minimum_distinct_roots: 1,
+        },
+        members: vec![member(
+            FleetServiceMemberPurpose::PoolMember,
+            22,
+            8,
+            32,
+            "workers",
+            1,
+            &["worker"],
+        )],
+    }
+}
+
 #[test]
 fn genesis_is_revision_one_with_complete_specs_and_no_roots() {
     let topology = topology();
@@ -146,6 +247,7 @@ fn genesis_is_revision_one_with_complete_specs_and_no_roots() {
     assert_eq!(registry.revision, 1);
     assert_eq!(registry.component_specs.len(), 2);
     assert!(registry.fleet_subnet_roots.is_empty());
+    assert!(registry.services.is_empty());
     assert_eq!(
         registry
             .component_specs
@@ -158,6 +260,145 @@ fn genesis_is_revision_one_with_complete_specs_and_no_roots() {
     let bytes = candid::encode_one(&registry).expect("encode Fleet Registry Candid");
     let decoded: FleetRegistry = candid::decode_one(&bytes).expect("decode Fleet Registry Candid");
     assert_eq!(decoded, registry);
+}
+
+#[test]
+fn initial_services_publish_as_one_canonical_registry_revision() {
+    let topology = topology();
+    let active = active_registry(&topology);
+    let services = vec![authority_replica_service()];
+
+    let published = FleetRegistryOps::compile_initial_services(
+        &active.authority,
+        &topology,
+        &active,
+        services.clone(),
+    )
+    .expect("publish complete service set");
+
+    assert_eq!(published.revision, active.revision + 1);
+    assert_eq!(published.services, services);
+    assert_eq!(published.fleet_subnet_roots, active.fleet_subnet_roots);
+    assert_ne!(
+        FleetRegistryOps::version(&active.authority, &topology, &active)
+            .expect("active version")
+            .content_hash,
+        FleetRegistryOps::version(&published.authority, &topology, &published)
+            .expect("published version")
+            .content_hash,
+    );
+    assert_eq!(
+        crate::cdk::utils::hash::hex_bytes(
+            FleetRegistryOps::version(&published.authority, &topology, &published)
+                .expect("published version")
+                .content_hash,
+        ),
+        "98adff7973bce47c3ad807101c49c07a3574498c5f8104c318fdcd90a3b0118b"
+    );
+
+    std::assert_matches!(
+        FleetRegistryOps::compile_initial_services(
+            &published.authority,
+            &topology,
+            &published,
+            published.services.clone(),
+        ),
+        Err(_)
+    );
+    std::assert_matches!(
+        FleetRegistryOps::compile_initial_services(
+            &active.authority,
+            &topology,
+            &active,
+            Vec::new(),
+        ),
+        Err(_)
+    );
+}
+
+#[test]
+fn service_registry_validation_rejects_nearest_authority_substitutions() {
+    let topology = topology();
+    let active = active_registry(&topology);
+    let valid = authority_replica_service();
+
+    let mut cases = Vec::<FleetServiceBinding>::new();
+    let mut noncanonical = valid.clone();
+    noncanonical.members.reverse();
+    cases.push(noncanonical);
+    let mut duplicate_component = valid.clone();
+    duplicate_component.members[1].component = duplicate_component.members[0].component;
+    cases.push(duplicate_component);
+    let mut duplicate_canister = valid.clone();
+    duplicate_canister.members[1].canister_id = duplicate_canister.members[0].canister_id;
+    cases.push(duplicate_canister);
+    let mut wrong_root = valid.clone();
+    wrong_root.members[1].fleet_subnet_root = principal(99);
+    cases.push(wrong_root);
+    let mut wrong_purpose = valid.clone();
+    wrong_purpose.members[1].member_purpose = FleetServiceMemberPurpose::PoolMember;
+    cases.push(wrong_purpose);
+    let mut wrong_spec = valid.clone();
+    wrong_spec.component_spec = "beta".parse().expect("Component Spec ID");
+    cases.push(wrong_spec);
+    let mut excessive_density = valid;
+    excessive_density.placement.maximum_members_per_root = 0;
+    cases.push(excessive_density);
+
+    for service in cases {
+        let mut registry = active.clone();
+        registry.services = vec![service];
+        assert!(
+            validation::validate(&registry.authority, &topology, &registry).is_err(),
+            "invalid service authority was accepted: {:?}",
+            registry.services
+        );
+    }
+}
+
+#[test]
+fn service_registry_rejects_cross_service_identity_reuse_and_noncanonical_order() {
+    let topology = topology();
+    let active = active_registry(&topology);
+    let authority_replica = authority_replica_service();
+    let active_pool = active_pool_service();
+
+    let mut valid = active.clone();
+    valid.services = vec![authority_replica.clone(), active_pool.clone()];
+    validation::validate(&valid.authority, &topology, &valid).expect("canonical distinct services");
+
+    let mut noncanonical = active.clone();
+    noncanonical.services = vec![active_pool.clone(), authority_replica.clone()];
+    std::assert_matches!(
+        validation::validate(&noncanonical.authority, &topology, &noncanonical),
+        Err(FleetRegistryOpsError::NonCanonicalFleetServiceOrder)
+    );
+
+    let mut duplicate_component = active_pool.clone();
+    duplicate_component.members[0].component = authority_replica.members[0].component;
+    let mut duplicate_registry = active.clone();
+    duplicate_registry.services = vec![authority_replica.clone(), duplicate_component];
+    std::assert_matches!(
+        validation::validate(
+            &duplicate_registry.authority,
+            &topology,
+            &duplicate_registry,
+        ),
+        Err(FleetRegistryOpsError::DuplicateFleetServiceComponent { .. })
+    );
+
+    let mut duplicate_canister = active_pool;
+    duplicate_canister.members[0].canister_id = authority_replica.members[0].canister_id;
+    let mut duplicate_registry = active;
+    duplicate_registry.services = vec![authority_replica, duplicate_canister];
+    std::assert_matches!(
+        validation::validate(
+            &duplicate_registry.authority,
+            &topology,
+            &duplicate_registry,
+        ),
+        Err(FleetRegistryOpsError::DuplicateFleetServiceCanister { .. })
+    );
 }
 
 #[test]
@@ -185,7 +426,7 @@ fn canonical_registry_manifest_and_version_are_digest_stable() {
     assert_eq!(version.content_hash, manifest.content_hash);
     assert_eq!(
         crate::cdk::utils::hash::hex_bytes(manifest.content_hash),
-        "5a7ad9941b568f6de577d6f11b6512ad55b429751f7405c350faf57efadb7a0e"
+        "0eee880efb941ed2d3391b53fa8c7c415ffbd600bde63807fa5a681c1ed0f5bc"
     );
 }
 

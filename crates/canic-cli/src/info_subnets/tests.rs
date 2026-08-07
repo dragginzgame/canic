@@ -238,6 +238,7 @@ fn fixture() -> Fixture {
             root(1, 40, FleetSubnetRootStatus::Active),
             root(2, 50, FleetSubnetRootStatus::Active),
         ],
+        services: Vec::new(),
     };
     let manifest = FleetRegistryManifest {
         authority: authority.clone(),

@@ -14,25 +14,25 @@ use canic_core::{
     control_plane_support::config::ComponentTopology,
     dto::fleet_registry::{
         FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
-        FleetRegistryVersion, FleetSubnetRootDeletionExecutionResponse,
+        FleetRegistryVersion, FleetServiceBinding, FleetSubnetRootDeletionExecutionResponse,
         FleetSubnetRootDeletionReadinessIntentResponse, FleetSubnetRootDeletionReadinessResponse,
         FleetSubnetRootDeletionResponse, FleetSubnetRootDrainingPublicationRequest,
         FleetSubnetRootDrainingPublicationResponse, FleetSubnetRootEntry,
         FleetSubnetRootRemovalPublicationRequest, FleetSubnetRootRemovalPublicationResponse,
         FleetSubnetRootSnapshotAcknowledgement,
     },
-    ids::{AppId, FleetRegistryAuthority},
+    ids::{AppId, ComponentDeploymentConfigurationDigest, FleetRegistryAuthority},
 };
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "fleet-coordinator-canister")]
 use std::cell::RefCell;
 
 #[cfg(feature = "fleet-coordinator-canister")]
-// The record may contain one topology, one Registry snapshot, and the
-// root-entry portion of that Registry again as immutable join receipts, one
-// exact acknowledgement per current root, and at most one draining and one
-// removal publication receipt per root.
-const FLEET_COORDINATOR_STATE_MAX_BYTES: u32 = 8_388_608;
+// The record may contain one topology, one Registry snapshot, the root-entry
+// portion of that Registry again as immutable join receipts, the complete
+// service set again as one publication receipt, one exact acknowledgement per
+// current root, and at most one draining and one removal receipt per root.
+const FLEET_COORDINATOR_STATE_MAX_BYTES: u32 = 16_777_216;
 
 #[cfg(feature = "fleet-coordinator-canister")]
 struct FleetCoordinatorRegistryState;
@@ -67,6 +67,7 @@ pub struct FleetCoordinatorRegistryRecord {
     pub root_join_receipts: Vec<FleetSubnetRootJoinReceiptRecord>,
     pub root_snapshot_acknowledgements: Vec<FleetSubnetRootSnapshotAcknowledgement>,
     pub registry_activation_receipt: Option<FleetRegistryActivationReceiptRecord>,
+    pub service_publication_receipt: Option<FleetServicePublicationReceiptRecord>,
     pub root_draining_publication_receipts: Vec<FleetSubnetRootDrainingPublicationReceiptRecord>,
     pub root_removal_publication_receipts: Vec<FleetSubnetRootRemovalPublicationReceiptRecord>,
     pub root_deletion_readiness_intents: Vec<FleetSubnetRootDeletionReadinessIntentResponse>,
@@ -97,6 +98,18 @@ pub struct FleetSubnetRootJoinReceiptRecord {
 pub struct FleetRegistryActivationReceiptRecord {
     pub request: FleetRegistryActivationRequest,
     pub response: FleetRegistryActivationResponse,
+}
+
+/// Persisted exact authority and response for initial Fleet-service publication.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetServicePublicationReceiptRecord {
+    pub operation_id: [u8; 32],
+    pub plan_hash: [u8; 32],
+    pub configuration_digest: ComponentDeploymentConfigurationDigest,
+    pub root_receipt_content_hashes: Vec<[u8; 32]>,
+    pub services: Vec<FleetServiceBinding>,
+    pub previous_version: FleetRegistryVersion,
+    pub version: FleetRegistryVersion,
 }
 
 /// Persisted exact request and response for one root's published `Draining` transition.

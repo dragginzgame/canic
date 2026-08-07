@@ -9,31 +9,44 @@ use crate::{
     storage::stable::fleet_coordinator::{
         FleetCoordinatorCommitError, FleetCoordinatorCommitOutcome, FleetCoordinatorRegistryRecord,
         FleetCoordinatorRegistryStore, FleetRegistryActivationReceiptRecord,
-        FleetSubnetRootDrainingPublicationReceiptRecord, FleetSubnetRootJoinReceiptRecord,
-        FleetSubnetRootRemovalPublicationReceiptRecord,
+        FleetServicePublicationReceiptRecord, FleetSubnetRootDrainingPublicationReceiptRecord,
+        FleetSubnetRootJoinReceiptRecord, FleetSubnetRootRemovalPublicationReceiptRecord,
     },
 };
 use candid::{CandidType, Principal};
 use canic_core::{
     control_plane_support::{
         error::{InternalError, InternalErrorOrigin},
-        ops::fleet_registry::FleetRegistryOps,
-    },
-    dto::fleet_registry::{
-        FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
-        FleetRegistryManifest, FleetRegistrySnapshotResponse, FleetRegistryVersion,
-        FleetSubnetRootDeletionCompletionRequest, FleetSubnetRootDeletionExecutionRequest,
-        FleetSubnetRootDeletionExecutionResponse, FleetSubnetRootDeletionReadinessIntentRequest,
-        FleetSubnetRootDeletionReadinessIntentResponse, FleetSubnetRootDeletionReadinessRequest,
-        FleetSubnetRootDeletionReadinessResponse, FleetSubnetRootDeletionResponse,
-        FleetSubnetRootDeletionStatusRequest, FleetSubnetRootDrainingPublicationRequest,
-        FleetSubnetRootDrainingPublicationResponse, FleetSubnetRootEntry,
-        FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
-        FleetSubnetRootRemovalPublicationRequest, FleetSubnetRootRemovalPublicationResponse,
-        FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
-        FleetSubnetRootStatus,
+        ops::{
+            component_provisioning_plan::{
+                ComponentProvisioningPlanOps, MAX_FLEET_COMPONENT_PROVISIONING_PLAN_BATCHES,
+            },
+            config::ConfigOps,
+            fleet_registry::FleetRegistryOps,
+            fleet_service_binding::FleetServiceBindingOps,
+        },
     },
     dto::fleet_subnet_root::FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
+    dto::{
+        component_provisioning::{
+            FleetComponentProvisioningPlan, RootComponentProvisioningStatusResponse,
+        },
+        fleet_registry::{
+            FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
+            FleetRegistryManifest, FleetRegistrySnapshotResponse, FleetRegistryVersion,
+            FleetSubnetRootDeletionCompletionRequest, FleetSubnetRootDeletionExecutionRequest,
+            FleetSubnetRootDeletionExecutionResponse,
+            FleetSubnetRootDeletionReadinessIntentRequest,
+            FleetSubnetRootDeletionReadinessIntentResponse,
+            FleetSubnetRootDeletionReadinessRequest, FleetSubnetRootDeletionReadinessResponse,
+            FleetSubnetRootDeletionResponse, FleetSubnetRootDeletionStatusRequest,
+            FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingPublicationResponse,
+            FleetSubnetRootEntry, FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
+            FleetSubnetRootRemovalPublicationRequest, FleetSubnetRootRemovalPublicationResponse,
+            FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
+            FleetSubnetRootStatus,
+        },
+    },
     ids::{ComponentTopologyDigest, FleetSubnetRootReleaseSet, SubnetId},
 };
 use serde::Serialize;
@@ -80,6 +93,7 @@ impl FleetCoordinatorOps {
             root_join_receipts: Vec::new(),
             root_snapshot_acknowledgements: Vec::new(),
             registry_activation_receipt: None,
+            service_publication_receipt: None,
             root_draining_publication_receipts: Vec::new(),
             root_removal_publication_receipts: Vec::new(),
             root_deletion_readiness_intents: Vec::new(),
@@ -297,6 +311,132 @@ impl FleetCoordinatorOps {
         let next = Self::validate_current(next)?;
         Self::commit_transition(&current, next)?;
         Ok(response)
+    }
+
+    #[expect(
+        dead_code,
+        reason = "the next Coordinator workflow slice will call the closed publication compiler"
+    )]
+    pub(crate) fn publish_initial_services(
+        plan: &FleetComponentProvisioningPlan,
+        operation_id: [u8; 32],
+        root_receipts: &[RootComponentProvisioningStatusResponse],
+    ) -> Result<FleetRegistryVersion, InternalError> {
+        let current = Self::current()?;
+        let source_registry = initial_active_registry(&current)?;
+        let config = ConfigOps::get()?;
+        let services = FleetServiceBindingOps::compile_initial(
+            config.as_ref(),
+            &source_registry,
+            plan,
+            operation_id,
+            root_receipts,
+        )?;
+        let plan_hash =
+            ComponentProvisioningPlanOps::hash(config.as_ref(), &source_registry, plan)?;
+        let receipt_hashes = root_receipts
+            .iter()
+            .map(|receipt| receipt.receipt_content_hash)
+            .collect::<Vec<_>>();
+        Self::commit_compiled_initial_services(
+            plan.fleet_registry.clone(),
+            operation_id,
+            plan_hash,
+            plan.configuration_digest,
+            receipt_hashes,
+            services,
+        )
+    }
+
+    fn commit_compiled_initial_services(
+        expected_registry: FleetRegistryVersion,
+        operation_id: [u8; 32],
+        plan_hash: [u8; 32],
+        configuration_digest: canic_core::ids::ComponentDeploymentConfigurationDigest,
+        receipt_hashes: Vec<[u8; 32]>,
+        services: Vec<canic_core::dto::fleet_registry::FleetServiceBinding>,
+    ) -> Result<FleetRegistryVersion, InternalError> {
+        let current = Self::current()?;
+        if let Some(receipt) = &current.service_publication_receipt {
+            if service_publication_matches(
+                receipt,
+                operation_id,
+                plan_hash,
+                configuration_digest,
+                &receipt_hashes,
+                &services,
+            ) {
+                return Ok(receipt.version.clone());
+            }
+            return Err(InternalError::conflict(
+                "initial Fleet-service publication already committed against different authority",
+            ));
+        }
+        let source_registry = initial_active_registry(&current)?;
+        if current.registry != source_registry {
+            return Err(InternalError::conflict(
+                "initial Fleet-service publication must precede later Registry transitions",
+            ));
+        }
+
+        let previous_version = FleetRegistryOps::version(
+            &current.authority,
+            &current.component_topology,
+            &current.registry,
+        )?;
+        if previous_version != expected_registry {
+            return Err(InternalError::conflict(
+                "initial Fleet-service publication expected Registry version is stale",
+            ));
+        }
+        let next_registry = if services.is_empty() {
+            current.registry.clone()
+        } else {
+            FleetRegistryOps::compile_initial_services(
+                &current.authority,
+                &current.component_topology,
+                &current.registry,
+                services.clone(),
+            )?
+        };
+        let version = FleetRegistryOps::version(
+            &current.authority,
+            &current.component_topology,
+            &next_registry,
+        )?;
+        let mut next = current.clone();
+        next.registry = next_registry;
+        next.service_publication_receipt = Some(FleetServicePublicationReceiptRecord {
+            operation_id,
+            plan_hash,
+            configuration_digest,
+            root_receipt_content_hashes: receipt_hashes,
+            services,
+            previous_version,
+            version: version.clone(),
+        });
+        let next = Self::validate_current(next)?;
+        Self::commit_transition(&current, next)?;
+        Ok(version)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn commit_compiled_initial_services_for_test(
+        expected_registry: FleetRegistryVersion,
+        operation_id: [u8; 32],
+        plan_hash: [u8; 32],
+        configuration_digest: canic_core::ids::ComponentDeploymentConfigurationDigest,
+        receipt_hashes: Vec<[u8; 32]>,
+        services: Vec<canic_core::dto::fleet_registry::FleetServiceBinding>,
+    ) -> Result<FleetRegistryVersion, InternalError> {
+        Self::commit_compiled_initial_services(
+            expected_registry,
+            operation_id,
+            plan_hash,
+            configuration_digest,
+            receipt_hashes,
+            services,
+        )
     }
 
     pub(crate) fn publish_root_draining(
@@ -919,6 +1059,7 @@ fn canonical_registry_lifecycle_history(
 ) -> Result<Vec<FleetRegistryHistoryPoint>, InternalError> {
     let joining = historical_joining_registry(current)?;
     let (mut historical_registry, mut history) = initial_lifecycle_history(current, joining)?;
+    apply_service_publication_receipt(current, &mut historical_registry, &mut history)?;
     for lifecycle in canonical_lifecycle_receipts(current)? {
         apply_lifecycle_receipt(current, lifecycle, &mut historical_registry, &mut history)?;
     }
@@ -930,7 +1071,8 @@ fn initial_lifecycle_history(
     joining: FleetRegistry,
 ) -> Result<(FleetRegistry, Vec<FleetRegistryHistoryPoint>), InternalError> {
     let Some(receipt) = &current.registry_activation_receipt else {
-        let has_lifecycle_receipts = !current.root_draining_publication_receipts.is_empty()
+        let has_lifecycle_receipts = current.service_publication_receipt.is_some()
+            || !current.root_draining_publication_receipts.is_empty()
             || !current.root_removal_publication_receipts.is_empty();
         if has_lifecycle_receipts || current.registry != joining {
             return Err(receipt_invariant(
@@ -977,6 +1119,134 @@ fn initial_lifecycle_history(
         version,
     }];
     Ok((historical_registry, history))
+}
+
+fn initial_active_registry(
+    current: &FleetCoordinatorRegistryRecord,
+) -> Result<FleetRegistry, InternalError> {
+    let joining = historical_joining_registry(current)?;
+    let (active, _) = initial_lifecycle_history(current, joining)?;
+    if current.registry_activation_receipt.is_none() {
+        return Err(InternalError::conflict(
+            "initial Fleet-service publication requires an active Fleet Registry",
+        ));
+    }
+    Ok(active)
+}
+
+fn apply_service_publication_receipt(
+    current: &FleetCoordinatorRegistryRecord,
+    historical_registry: &mut FleetRegistry,
+    history: &mut Vec<FleetRegistryHistoryPoint>,
+) -> Result<(), InternalError> {
+    let Some(receipt) = &current.service_publication_receipt else {
+        return Ok(());
+    };
+    if !FleetServicePublicationAuthority::from_receipt(receipt).is_complete() {
+        return Err(receipt_invariant(
+            "initial Fleet-service publication receipt authority is incomplete",
+        ));
+    }
+    let previous_version = FleetRegistryOps::version(
+        &current.authority,
+        &current.component_topology,
+        historical_registry,
+    )?;
+    if receipt.previous_version != previous_version {
+        return Err(receipt_invariant(
+            "initial Fleet-service publication source differs from canonical history",
+        ));
+    }
+    let next_registry = if receipt.services.is_empty() {
+        historical_registry.clone()
+    } else {
+        FleetRegistryOps::compile_initial_services(
+            &current.authority,
+            &current.component_topology,
+            historical_registry,
+            receipt.services.clone(),
+        )
+        .map_err(|_| {
+            receipt_invariant("initial Fleet-service publication target Registry cannot be derived")
+        })?
+    };
+    let version = FleetRegistryOps::version(
+        &current.authority,
+        &current.component_topology,
+        &next_registry,
+    )?;
+    if receipt.version != version {
+        return Err(receipt_invariant(
+            "initial Fleet-service publication response differs from canonical history",
+        ));
+    }
+    *historical_registry = next_registry.clone();
+    if history
+        .last()
+        .is_none_or(|point| point.registry != next_registry)
+    {
+        history.push(FleetRegistryHistoryPoint {
+            registry: next_registry,
+            version,
+        });
+    }
+    Ok(())
+}
+
+fn service_publication_matches(
+    receipt: &FleetServicePublicationReceiptRecord,
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    configuration_digest: canic_core::ids::ComponentDeploymentConfigurationDigest,
+    root_receipt_content_hashes: &[[u8; 32]],
+    services: &[canic_core::dto::fleet_registry::FleetServiceBinding],
+) -> bool {
+    let expected = FleetServicePublicationAuthority::from_receipt(receipt);
+    let received = FleetServicePublicationAuthority {
+        operation_id,
+        plan_hash,
+        configuration_digest,
+        root_receipt_content_hashes,
+        services,
+    };
+    expected == received
+}
+
+#[derive(Eq, PartialEq)]
+struct FleetServicePublicationAuthority<'a> {
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    configuration_digest: canic_core::ids::ComponentDeploymentConfigurationDigest,
+    root_receipt_content_hashes: &'a [[u8; 32]],
+    services: &'a [canic_core::dto::fleet_registry::FleetServiceBinding],
+}
+
+impl<'a> FleetServicePublicationAuthority<'a> {
+    fn from_receipt(receipt: &'a FleetServicePublicationReceiptRecord) -> Self {
+        Self {
+            operation_id: receipt.operation_id,
+            plan_hash: receipt.plan_hash,
+            configuration_digest: receipt.configuration_digest,
+            root_receipt_content_hashes: &receipt.root_receipt_content_hashes,
+            services: &receipt.services,
+        }
+    }
+
+    fn is_complete(&self) -> bool {
+        if self.operation_id == [0; 32]
+            || self.plan_hash == [0; 32]
+            || self.configuration_digest.as_bytes() == &[0; 32]
+        {
+            return false;
+        }
+        !self.root_receipt_content_hashes.is_empty()
+            && self.root_receipt_content_hashes.len()
+                <= MAX_FLEET_COMPONENT_PROVISIONING_PLAN_BATCHES
+            && self
+                .root_receipt_content_hashes
+                .iter()
+                .all(|hash| hash != &[0; 32])
+    }
 }
 
 fn apply_lifecycle_receipt(

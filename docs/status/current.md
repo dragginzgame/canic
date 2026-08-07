@@ -14,17 +14,27 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.14`.
-- The latest published release is `v0.101.14` at
-  `74b15d364a3739f31ed429c263415317a747148b`.
-- Open `0.101.15` revalidates the canonical provisioning plan and every exact
-  root `Provisioned` receipt before deriving the complete canonical initial
-  Fleet-service binding set. Authority/Replica and Active Pool mode, density,
-  spread, protected Component binding, Registry evidence and global identity
-  uniqueness fail closed without mutating the Fleet Registry or publishing a
-  Directory. The same draft advances the host-only Subnet Catalog boundary to
-  `ic-query` 0.30.23 while retaining Canic's explicit single-endpoint
-  `UncertifiedQuery` policy; schema-2 caches refresh into schema 3.
+- The workspace package version is `0.101.15`.
+- The latest published release is `v0.101.15` at
+  `3ba3a5d57a5a13578d1c40178bc08421556e9db3`.
+- Open `0.101.16` hard-cuts the canonical Fleet Registry to carry the complete
+  service topology under exact ordering, mode, placement, active-root
+  admission and global Component identity/principal validation. The
+  Coordinator can atomically commit that complete set with its durable exact
+  publication receipt, replay it after restart and reconstruct it before later
+  root lifecycle transitions. The commit primitive remains deliberately
+  unexported until the Coordinator owns a persisted plan and collects
+  authenticated root receipts; Fleet/Component Group Directory publication
+  and runtime activation remain fenced.
+- Released `0.101.15` revalidates the canonical provisioning plan and every
+  exact root `Provisioned` receipt before deriving the complete canonical
+  initial Fleet-service binding set. Authority/Replica and Active Pool mode,
+  density, spread, protected Component binding, Registry evidence and global
+  identity uniqueness fail closed without mutating the Fleet Registry or
+  publishing a Directory. The same release advances the host-only Subnet
+  Catalog boundary to `ic-query` 0.30.23 while retaining Canic's explicit
+  single-endpoint `UncertifiedQuery` policy; schema-2 caches refresh into
+  schema 3.
 - Released `0.101.14` freezes each fully Registry-committed root batch as one
   durable group-partitioned `Provisioned` result. Every member retains its
   exact path, Spec, purpose, effective limits, protected binding and Registry
@@ -2384,13 +2394,15 @@ First primary results:
 The canonical plan, exact root-batch acceptance, canonical root-local
 `ComponentInstanceId` allocation, prepaid-Canister claim, Store-backed
 installation, prepared Registry commitment and exact group-partitioned
-`Provisioned` result are published through immutable `v0.101.14`. Open
-`0.101.15` additionally derives and validates the complete initial
-Fleet-service binding set from every exact root receipt without mutation.
-Continue Slice 3 by extending canonical Fleet Registry validation/encoding and
-performing one atomic Coordinator publication of that exact service set;
-Component Group Directory derivation, Directory delivery and runtime
-activation remain separate later boundaries.
+`Provisioned` result plus receipt-derived service compiler are published
+through immutable `v0.101.15`. Open `0.101.16` hard-cuts the canonical Fleet
+Registry to the service-aware shape and adds one durable atomic
+Registry-plus-receipt publication/replay primitive without exposing a
+caller-supplied authority path. Continue Slice 3 by persisting the complete
+Coordinator-owned plan before effects, collecting authenticated exact root
+results and invoking that closed commit boundary. Component Group Directory
+derivation, Directory delivery and runtime activation remain separate later
+boundaries.
 Do not enable scale-out until its durable Coordinator
 placement ledger can prove ordinal non-reuse and combined density/spread.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for

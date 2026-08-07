@@ -10,10 +10,14 @@ mod validation;
 
 use crate::{
     InternalError,
-    config::{ComponentTopology, ComponentTopologyError},
+    config::{
+        ComponentTopology, ComponentTopologyError, FleetServiceMemberPurpose,
+        FleetServicePlacementPolicy,
+    },
     dto::fleet_registry::{
         FleetComponentSpecEntry, FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistry,
-        FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootDirectoryEntry,
+        FleetRegistryManifest, FleetRegistryVersion, FleetServiceBinding,
+        FleetServiceComponentBinding, FleetServiceMode, FleetSubnetRootDirectoryEntry,
         FleetSubnetRootEntry, FleetSubnetRootStatus,
     },
     ids::{
@@ -84,6 +88,12 @@ pub enum FleetRegistryOpsError {
     #[error("Fleet Registry root join conflicts with an existing Subnet or root principal")]
     FleetSubnetRootJoinIdentityConflict,
 
+    #[error("Fleet Registry initial service publication requires an empty current service set")]
+    FleetServicePublicationRequiresEmptyRegistry,
+
+    #[error("Fleet Registry initial service publication requires a non-empty complete service set")]
+    FleetServicePublicationRequiresServices,
+
     #[error("Fleet Registry root join requires status Joining")]
     FleetSubnetRootJoinRequiresJoining,
 
@@ -116,6 +126,41 @@ pub enum FleetRegistryOpsError {
 
     #[error("Fleet Registry root order is not strictly ascending by physical Subnet")]
     NonCanonicalFleetSubnetRootOrder,
+
+    #[error("Fleet Registry service order is not strictly ascending by service ID")]
+    NonCanonicalFleetServiceOrder,
+
+    #[error("Fleet Registry service '{service}' member order is not canonical")]
+    NonCanonicalFleetServiceMemberOrder { service: crate::ids::FleetServiceId },
+
+    #[error("Fleet Registry service '{service}' has no members")]
+    EmptyFleetService { service: crate::ids::FleetServiceId },
+
+    #[error("Fleet Registry service '{service}' does not match its Fleet Component Spec")]
+    FleetServiceSpecMismatch { service: crate::ids::FleetServiceId },
+
+    #[error("Fleet Registry service '{service}' has an invalid mode-specific member set")]
+    FleetServiceModeMismatch { service: crate::ids::FleetServiceId },
+
+    #[error("Fleet Registry service '{service}' has an invalid placement policy or assignment")]
+    FleetServicePlacementMismatch { service: crate::ids::FleetServiceId },
+
+    #[error("Fleet Registry service '{service}' member names a non-Active or non-admitting root")]
+    FleetServiceRootMismatch { service: crate::ids::FleetServiceId },
+
+    #[error("Fleet Registry service member Component identity is zero")]
+    EmptyFleetServiceComponentIdentity,
+
+    #[error("Fleet Registry service member Canister principal must not be anonymous")]
+    AnonymousFleetServiceComponent,
+
+    #[error("Fleet Registry services reuse Component identity {component}")]
+    DuplicateFleetServiceComponent {
+        component: crate::ids::ComponentInstanceId,
+    },
+
+    #[error("Fleet Registry services reuse Canister principal {canister_id}")]
+    DuplicateFleetServiceCanister { canister_id: Principal },
 
     #[error("Fleet Registry authority epoch must be positive")]
     NonPositiveAuthorityEpoch,
@@ -180,6 +225,18 @@ impl FleetRegistryOps {
         current: &FleetRegistry,
     ) -> Result<FleetRegistry, InternalError> {
         compile_active(expected_authority, topology, current)
+            .map_err(OpsError::from)
+            .map_err(InternalError::from)
+    }
+
+    /// Construct the next canonical snapshot with the complete initial service set.
+    pub fn compile_initial_services(
+        expected_authority: &FleetRegistryAuthority,
+        topology: &ComponentTopology,
+        current: &FleetRegistry,
+        services: Vec<FleetServiceBinding>,
+    ) -> Result<FleetRegistry, InternalError> {
+        compile_initial_services(expected_authority, topology, current, services)
             .map_err(OpsError::from)
             .map_err(InternalError::from)
     }
@@ -388,6 +445,30 @@ fn compile_active(
     Ok(next)
 }
 
+fn compile_initial_services(
+    expected_authority: &FleetRegistryAuthority,
+    topology: &ComponentTopology,
+    current: &FleetRegistry,
+    services: Vec<FleetServiceBinding>,
+) -> Result<FleetRegistry, FleetRegistryOpsError> {
+    validation::validate(expected_authority, topology, current)?;
+    if !current.services.is_empty() {
+        return Err(FleetRegistryOpsError::FleetServicePublicationRequiresEmptyRegistry);
+    }
+    if services.is_empty() {
+        return Err(FleetRegistryOpsError::FleetServicePublicationRequiresServices);
+    }
+
+    let mut next = current.clone();
+    next.revision = next
+        .revision
+        .checked_add(1)
+        .ok_or(FleetRegistryOpsError::RevisionExhausted)?;
+    next.services = services;
+    validation::validate(expected_authority, topology, &next)?;
+    Ok(next)
+}
+
 fn compile_draining(
     expected_authority: &FleetRegistryAuthority,
     topology: &ComponentTopology,
@@ -458,6 +539,10 @@ fn canonical_bytes(
     for root in &registry.fleet_subnet_roots {
         encode_root(&mut encoder, root);
     }
+    encoder.u64(registry.services.len() as u64);
+    for service in &registry.services {
+        encode_service(&mut encoder, service);
+    }
     encoder.finish()
 }
 
@@ -508,6 +593,54 @@ fn encode_limits(encoder: &mut CanonicalEncoder, limits: &FleetSubnetRootLimits)
     encoder.u64(limits.cycles_funding.window_secs);
     encoder.u128(limits.cycles_funding.maximum_cycles.to_u128());
     encoder.u32(limits.maximum_group_placements);
+}
+
+fn encode_service(encoder: &mut CanonicalEncoder, service: &FleetServiceBinding) {
+    encoder.string(service.service.as_str());
+    encoder.string(service.role.as_str());
+    encoder.string(service.component_spec.as_str());
+    encoder.u8(service_mode_tag(service.mode));
+    encode_service_placement(encoder, service.placement);
+    encoder.u64(service.members.len() as u64);
+    for member in &service.members {
+        encode_service_member(encoder, member);
+    }
+}
+
+fn encode_service_placement(
+    encoder: &mut CanonicalEncoder,
+    placement: FleetServicePlacementPolicy,
+) {
+    encoder.u32(placement.maximum_members_per_root);
+    encoder.u32(placement.minimum_distinct_roots);
+}
+
+fn encode_service_member(encoder: &mut CanonicalEncoder, member: &FleetServiceComponentBinding) {
+    encoder.u8(service_member_purpose_tag(member.member_purpose));
+    encoder.bytes(member.component.as_bytes());
+    encoder.bytes(member.fleet_subnet_root.as_slice());
+    encoder.bytes(member.canister_id.as_slice());
+    encoder.string(member.group_placement.deployment.as_str());
+    encoder.u32(member.group_placement.ordinal);
+    encoder.u64(member.member_path.len() as u64);
+    for segment in member.member_path.as_slice() {
+        encoder.string(segment.as_str());
+    }
+}
+
+const fn service_mode_tag(mode: FleetServiceMode) -> u8 {
+    match mode {
+        FleetServiceMode::AuthorityReplica => 0,
+        FleetServiceMode::ActivePool => 1,
+    }
+}
+
+const fn service_member_purpose_tag(purpose: FleetServiceMemberPurpose) -> u8 {
+    match purpose {
+        FleetServiceMemberPurpose::Authority => 0,
+        FleetServiceMemberPurpose::Replica => 1,
+        FleetServiceMemberPurpose::PoolMember => 2,
+    }
 }
 
 const fn status_tag(status: FleetSubnetRootStatus) -> u8 {

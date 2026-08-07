@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.16` hard-cuts the canonical Fleet Registry to carry validated service
+  topology and adds the Coordinator's durable atomic publication/replay
+  primitive while keeping plan orchestration, Directories and runtimes fenced.
+
 - `0.101.15` derives each complete initial Authority/Replica or Active Pool
   service binding from the canonical plan and every exact root `Provisioned`
   receipt, rejecting incomplete, substituted or duplicate evidence before any
