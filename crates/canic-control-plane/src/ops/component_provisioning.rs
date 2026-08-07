@@ -37,6 +37,10 @@ use canic_core::{
     control_plane_support::{
         error::{InternalError, InternalErrorOrigin},
         ops::component_provisioning_plan::RootComponentProvisioningBatchValidation,
+        ops::component_provisioning_receipt::{
+            RootComponentProvisioningProvisionedReceiptAuthority,
+            RootComponentProvisioningReceiptOps,
+        },
     },
     dto::{
         component_deployment::{
@@ -67,8 +71,6 @@ const RESERVATION_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-res
 const CLAIM_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-claim-cursor/v1";
 const INSTALL_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-install-cursor/v1";
 const REGISTRY_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-registry-cursor/v1";
-const PROVISIONED_RECEIPT_DOMAIN: &[u8] =
-    b"canic/root-component-provisioning-provisioned-receipt/v1";
 
 #[derive(CandidType)]
 struct RootComponentProvisioningAcceptanceReceiptAuthority<'a> {
@@ -125,18 +127,6 @@ struct RootComponentProvisioningRegistryCursorAuthority {
     placement_index: u32,
     member_index: u32,
     registry_committed_component_count: u32,
-}
-
-#[derive(CandidType)]
-struct RootComponentProvisioningProvisionedReceiptAuthority<'a> {
-    operation_id: [u8; 32],
-    plan_hash: [u8; 32],
-    fleet_registry: &'a FleetRegistryVersion,
-    configuration_digest: ComponentDeploymentConfigurationDigest,
-    root: &'a canic_core::ids::FleetSubnetRootBinding,
-    result: &'a RootComponentProvisioningResult,
-    accepted_at_ns: u64,
-    provisioned_at_ns: u64,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1439,8 +1429,7 @@ fn provisioned_receipt_hash(
     accepted_at_ns: u64,
     provisioned_at_ns: u64,
 ) -> Result<[u8; 32], InternalError> {
-    domain_separated_candid_hash(
-        PROVISIONED_RECEIPT_DOMAIN,
+    RootComponentProvisioningReceiptOps::provisioned_content_hash(
         RootComponentProvisioningProvisionedReceiptAuthority {
             operation_id: record.operation_id,
             plan_hash: record.plan_hash,

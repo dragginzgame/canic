@@ -2301,9 +2301,9 @@ dependencies = [
 
 [[package]]
 name = "ic-query"
-version = "0.29.3"
+version = "0.30.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbe806058cca75b31f80660986cf84a68f312e54ba31543c3188ef460b5ea77a"
+checksum = "450a84a3ab5a86163d42ed3e78da9757bcba69a25d43b51ff2f2fa5d270b8c63"
 dependencies = [
  "candid",
  "cap-fs-ext",
