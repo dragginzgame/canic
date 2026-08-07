@@ -33,5 +33,6 @@ pub struct FleetComponentProvisioningRootProvisionCallView {
 pub enum FleetComponentProvisioningRootProvisionDisposition {
     Current(Box<FleetComponentProvisioningStatusResponse>),
     Invoke(FleetComponentProvisioningRootProvisionCallView),
+    Publish,
     Reconcile(FleetComponentProvisioningRootProvisionCallView),
 }

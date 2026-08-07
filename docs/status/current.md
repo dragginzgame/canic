@@ -14,17 +14,24 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.18`.
-- The latest published release is `v0.101.18` at
-  `931c75ccfa61db8d5d76611e60d5c12491f9592f`.
-- Open `0.101.19` advances only completely accepted root batches through their
+- The workspace package version is `0.101.19`.
+- The latest published release is `v0.101.19` at
+  `cc16243c5d4b8449a04de87fc9091a76bd25a3eb`.
+- Open `0.101.20` derives the complete initial service set only from the
+  persisted plan and its canonical terminal root receipts, then atomically
+  commits the Fleet Registry snapshot, exact publication receipt and
+  `ServiceTopologyPublished` Coordinator state. A fresh command copied from
+  exact `ComponentsProvisioned` status is required, so replaying the final
+  root command cannot cross the publication boundary. Directory delivery and
+  runtime activation remain separately fenced.
+- Released `0.101.19` advances only completely accepted root batches through their
   existing root-local provisioning journals. The Coordinator persists each
   exact root request before dispatch, reconciles response loss through the
   root's response-idempotent cursor, retains authenticated progress and freezes
   every terminal `Provisioned` receipt in canonical plan order. The complete
   receipt set must recompile one globally valid service topology before the
-  operation reaches `ComponentsProvisioned`. Fleet Registry publication,
-  Directories and runtime activation remain separate fenced boundaries.
+  operation reaches `ComponentsProvisioned`. Fleet Registry publication was
+  retained as a separate fenced boundary.
 - Released `0.101.18` advances the durable Coordinator provisioning operation
   one canonical root acceptance at a time. It records the exact root cursor,
   principal and pre-call time before dispatch; exact retry replays an
@@ -2419,15 +2426,14 @@ First primary results:
 
 ## Next Action
 
-The canonical plan and exact root-batch acceptance are published through
-immutable `v0.101.18`. Open `0.101.19` now drives only those accepted batches
-through the existing root-local identity, prepaid-Canister, Store install and
-prepared Registry journals, then retains every authenticated terminal
-`Provisioned` receipt and revalidates the complete service projection before
-`ComponentsProvisioned`. Continue Slice 3 by invoking the closed atomic Fleet
-Registry publication primitive from that exact terminal receipt set. Component
-Group Directory derivation, Directory delivery and runtime activation remain
-separate later boundaries.
+The canonical provisioning journey through `ComponentsProvisioned` is
+published at immutable `v0.101.19`. Open `0.101.20` atomically commits its
+complete service topology, exact Registry publication receipt and
+`ServiceTopologyPublished` operation state. Continue Slice 3 with the
+root-confirmed publication barrier: synchronize the published Fleet Registry,
+derive the exact Fleet, Component and Component Group Directories and retain
+root publication evidence while Components remain `Prepared`. Runtime
+activation remains a separate later boundary.
 Do not enable scale-out until its durable Coordinator
 placement ledger can prove ordinal non-reuse and combined density/spread.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for

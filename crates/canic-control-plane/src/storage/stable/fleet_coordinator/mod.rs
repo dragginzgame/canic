@@ -152,6 +152,15 @@ pub enum FleetComponentProvisioningStateRecord {
         provisions: Vec<FleetComponentProvisioningRootProvisionRecord>,
         components_provisioned_at_ns: u64,
     },
+    ServiceTopologyPublished {
+        planned_at_ns: u64,
+        acceptances: Vec<FleetComponentProvisioningRootAcceptanceRecord>,
+        roots_accepted_at_ns: u64,
+        provisions: Vec<FleetComponentProvisioningRootProvisionRecord>,
+        components_provisioned_at_ns: u64,
+        published_fleet_registry: FleetRegistryVersion,
+        service_topology_published_at_ns: u64,
+    },
 }
 
 /// Durable pre-call intent for one exact canonical root batch.
