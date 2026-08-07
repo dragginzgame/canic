@@ -75,6 +75,7 @@ pub enum FleetComponentProvisioningPhase {
     RootsAccepted,
     ProvisioningRoots,
     ComponentsProvisioned,
+    ServiceTopologyPublished,
 }
 
 /// Compact exact status for one Coordinator-owned provisioning operation.
@@ -99,6 +100,8 @@ pub struct FleetComponentProvisioningStatusResponse {
     pub planned_at_ns: u64,
     pub roots_accepted_at_ns: Option<u64>,
     pub components_provisioned_at_ns: Option<u64>,
+    pub published_fleet_registry: Option<FleetRegistryVersion>,
+    pub service_topology_published_at_ns: Option<u64>,
 }
 
 /// Fresh-install or monotonic scale-out scope covered by one plan.

@@ -148,6 +148,7 @@ impl FleetCoordinatorWorkflow {
                 FleetComponentProvisioningPhase::RootsAccepted
                     | FleetComponentProvisioningPhase::ProvisioningRoots
                     | FleetComponentProvisioningPhase::ComponentsProvisioned
+                    | FleetComponentProvisioningPhase::ServiceTopologyPublished
             )
         {
             return Ok(acceptance_status);
@@ -160,6 +161,12 @@ impl FleetCoordinatorWorkflow {
             }
             FleetComponentProvisioningRootProvisionDisposition::Invoke(call)
             | FleetComponentProvisioningRootProvisionDisposition::Reconcile(call) => call,
+            FleetComponentProvisioningRootProvisionDisposition::Publish => {
+                return FleetCoordinatorOps::publish_component_provisioning_services(
+                    &request,
+                    IcOps::now_nanos(),
+                );
+            }
         };
         let response = advance_root_component_provisioning(call).await?;
         FleetCoordinatorOps::record_component_provisioning_root(

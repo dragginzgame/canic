@@ -763,6 +763,8 @@ fn fleet_component_provisioning_plan_surface_is_controller_guarded_and_bounded()
         "planned_at_ns",
         "roots_accepted_at_ns",
         "components_provisioned_at_ns",
+        "published_fleet_registry",
+        "service_topology_published_at_ns",
     ] {
         assert!(
             status_env.contains(field),

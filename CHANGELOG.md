@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.20` atomically publishes the complete terminal provisioning result as
+  one canonical Fleet Registry service snapshot and advances the Coordinator
+  to `ServiceTopologyPublished`, while keeping Directories and runtimes fenced.
+
 - `0.101.19` advances every accepted root batch through its existing bounded
   root-local provisioning journal, retaining exact response-loss recovery and
   terminal `Provisioned` receipts in canonical plan order before reaching

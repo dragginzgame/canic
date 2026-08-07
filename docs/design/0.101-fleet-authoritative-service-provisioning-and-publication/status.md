@@ -65,10 +65,13 @@ Date: 2026-08-07
   Coordinator now advances only completely accepted roots through their
   existing bounded journals, retains every authenticated terminal
   `Provisioned` receipt and recompiles the complete service topology before
-  `ComponentsProvisioned`. Closed Registry publication, Directory publication
-  and runtime activation remain unavailable.
+  `ComponentsProvisioned`. A new exact command then derives that service set
+  only from durable authority and atomically commits the canonical Fleet
+  Registry snapshot, exact publication receipt and
+  `ServiceTopologyPublished` operation state. Directory publication and
+  runtime activation remain unavailable.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.18` is released and `0.101.19` is open.
+- Implementation started: yes; `0.101.19` is released and `0.101.20` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -259,14 +262,14 @@ Fleet policy writer.
   pure compiler consumes every exact root `Provisioned` receipt, canonicalizes
   the complete member set and rejects missing, substituted, nonterminal,
   duplicate or placement-policy-invalid evidence before Registry mutation.
-- [ ] Publish each service's complete initial mode-compatible member set in one
-  Fleet Registry revision. The service-aware canonical Registry schema,
-  validation, hashing and closed atomic Coordinator commit/replay primitive are
-  complete. The complete Coordinator plan is now durable before effects with
-  exact status and restart replay; canonical root acceptance dispatch and
-  receipt retention are complete. Root provisioning advance, terminal
-  `Provisioned` receipt acquisition and complete service recompilation are
-  complete. Closed-commit invocation remains before publication can complete.
+- [x] Publish each service's complete initial mode-compatible member set in one
+  Fleet Registry revision. The Coordinator derives the complete set only from
+  its durable plan and canonical terminal root receipts, then commits the
+  Registry snapshot, exact publication receipt and
+  `ServiceTopologyPublished` operation state atomically. A service-free plan
+  records the boundary without inventing a Registry revision. Exact retry and
+  restart reconstruct the committed result, while stale final-root commands
+  cannot initiate publication.
 - [ ] Project exact service ID, mode and purpose-bearing member bindings
   through Fleet Directory.
 - [ ] Derive one root-local Component Group Directory per placement without

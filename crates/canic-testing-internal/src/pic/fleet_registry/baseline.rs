@@ -815,7 +815,7 @@ mod tests {
     }
 
     #[test]
-    fn coordinator_drives_one_root_batch_to_components_provisioned() {
+    fn coordinator_publishes_one_root_batch_service_topology() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let fixture = setup_prepared_grouped_provisioning();
         let registry: Result<FleetRegistry, Error> = fixture
@@ -853,7 +853,7 @@ mod tests {
         let mut status = prepared.expect("prepare Coordinator provisioning");
         assert_eq!(status.phase, FleetComponentProvisioningPhase::Planned);
 
-        while status.phase != FleetComponentProvisioningPhase::ComponentsProvisioned {
+        while status.phase != FleetComponentProvisioningPhase::ServiceTopologyPublished {
             let request = FleetComponentProvisioningAdvanceRequest {
                 operation_id: status.operation_id,
                 plan_hash: status.plan_hash,
@@ -884,6 +884,15 @@ mod tests {
         assert_eq!(status.accepted_root_count, 1);
         assert_eq!(status.provisioned_root_count, 1);
         assert!(status.components_provisioned_at_ns.is_some());
+        assert!(status.published_fleet_registry.is_some());
+        assert!(status.service_topology_published_at_ns.is_some());
+        let published_registry: Result<FleetRegistry, Error> = fixture
+            .pic
+            .query_candid(fixture.coordinator, CANIC_FLEET_REGISTRY, ())
+            .expect("query published grouped provisioning Registry transport");
+        let published_registry =
+            published_registry.expect("query published grouped provisioning Registry");
+        assert_eq!(published_registry.services.len(), 1);
         let root: Result<RootComponentProvisioningStatusResponse, Error> = fixture
             .pic
             .query_candid_as(
