@@ -221,8 +221,6 @@ payload inspection stay on the same path as the runtime bundle.
 Create `apps/<app>/canic.toml`:
 
 ```toml
-controllers = []
-
 [app]
 name = "test"
 

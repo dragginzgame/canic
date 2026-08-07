@@ -5,7 +5,7 @@ This guide documents the canonical shape of `canic.toml`, the configuration file
 At a high level the file describes:
 
 - App identity and package-backed roles (`app`, `roles`).
-- Global settings (`controllers`, `standards`, `app`, `auth`, `log`).
+- Global settings (`standards`, `app`, `auth`, `log`).
 - Flat Component topology under `component_specs.<name>`.
 - One top-level Component role and a flat catalog of every potential
   descendant role per Component Spec.
@@ -68,10 +68,6 @@ Role declarations own package identity. The matching
 `component_specs.<name>` or
 `component_specs.<name>.children.<role>` entry owns permitted topology and
 Component-local policy.
-
-### `controllers = ["aaaaa-aa", ...]`
-
-Optional list of controller principals appended to every provisioned canister.
 
 ### `[app]`
 
@@ -392,8 +388,6 @@ Fields:
 
 ```toml
 # CANIC_CONFIG_EXAMPLE_START
-controllers = ["aaaaa-aa"]
-
 [app]
 name = "example"
 
