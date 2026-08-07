@@ -390,12 +390,24 @@ fn exact_root_batch_validation_returns_bounded_capacity_and_artifact_facts() {
         plan_hash: [14; 32],
         batch: batch.clone(),
     };
+    assert_root_batch_candid_contracts(
+        &request,
+        validation.placement_count,
+        validation.component_count,
+    );
+}
+
+fn assert_root_batch_candid_contracts(
+    request: &RootComponentProvisioningAcceptanceRequest,
+    placement_count: u32,
+    component_count: u32,
+) {
     assert_eq!(
         candid::decode_one::<RootComponentProvisioningAcceptanceRequest>(
-            &candid::encode_one(&request).expect("encode acceptance request")
+            &candid::encode_one(request).expect("encode acceptance request")
         )
         .expect("decode acceptance request"),
-        request
+        *request
     );
     let status_request = RootComponentProvisioningStatusRequest {
         operation_id: request.operation_id,
@@ -426,19 +438,22 @@ fn exact_root_batch_validation_returns_bounded_capacity_and_artifact_facts() {
     let response = RootComponentProvisioningStatusResponse {
         operation_id: request.operation_id,
         plan_hash: request.plan_hash,
-        fleet_registry: request.fleet_registry,
+        fleet_registry: request.fleet_registry.clone(),
         configuration_digest: request.configuration_digest,
         fleet_subnet_root: request.batch.root.fleet_subnet_root,
         phase: RootComponentProvisioningPhase::Accepted,
-        placement_count: validation.placement_count,
-        component_count: validation.component_count,
+        placement_count,
+        component_count,
         reserved_component_count: 0,
         claimed_component_count: 0,
         installed_component_count: 0,
         registry_committed_component_count: 0,
+        published_component_count: 0,
         result: None,
+        publication: None,
         accepted_at_ns: 1,
         provisioned_at_ns: None,
+        published_at_ns: None,
         receipt_content_hash: [15; 32],
     };
     assert_eq!(

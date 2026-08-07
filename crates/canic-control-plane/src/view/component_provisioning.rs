@@ -8,13 +8,17 @@ use canic_core::{
     dto::{
         component_deployment::{
             ComponentDeploymentLabel, ComponentDeploymentLimits, ComponentDeploymentPurpose,
+            ProtectedComponentDeployment,
         },
         component_provisioning::FleetSubnetRootProvisioningBatch,
-        component_provisioning::{RootComponentProvisioningPhase, RootComponentProvisioningResult},
+        component_provisioning::{
+            ComponentGroupDirectory, RootComponentProvisioningPhase,
+            RootComponentProvisioningResult, RootComponentPublicationEvidence,
+        },
         fleet_registry::FleetRegistryVersion,
     },
     ids::{
-        ComponentDeploymentConfigurationDigest, ComponentGroupMemberPath,
+        ComponentBinding, ComponentDeploymentConfigurationDigest, ComponentGroupMemberPath,
         ComponentGroupPlacementId, ComponentGroupSpecId, ComponentSpecId,
     },
 };
@@ -89,7 +93,33 @@ pub struct RootComponentProvisioningView {
     pub registry_cursor: RootComponentProvisioningRegistryCursorView,
     pub phase: RootComponentProvisioningPhase,
     pub result: Option<RootComponentProvisioningResult>,
+    pub publication: Option<RootComponentPublicationEvidence>,
+    pub published_component_count: u32,
+    pub publication_in_flight: Option<RootComponentPublicationIntentView>,
     pub accepted_at_ns: u64,
     pub provisioned_at_ns: Option<u64>,
+    pub publication_started_at_ns: Option<u64>,
+    pub published_at_ns: Option<u64>,
     pub receipt_content_hash: [u8; 32],
+}
+
+/// Read-only pre-call intent for one exact Component Directory delivery.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentPublicationIntentView {
+    pub component_index: u32,
+    pub canister_id: candid::Principal,
+    pub directory_authority_hash: [u8; 32],
+    pub started_at_ns: u64,
+}
+
+/// One exact next prepared Component and its immutable group projection.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentPublicationMemberView {
+    pub component_index: u32,
+    pub member_operation_id: [u8; 32],
+    pub binding: ComponentBinding,
+    pub component_registry_revision: u64,
+    pub component_registry_content_hash: [u8; 32],
+    pub deployment: ProtectedComponentDeployment,
+    pub component_group: ComponentGroupDirectory,
 }

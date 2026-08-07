@@ -8,9 +8,11 @@ use crate::{
     InternalError, InternalErrorOrigin,
     dto::{
         component_provisioning::{
-            FleetSubnetRootProvisioningBatch, RootComponentProvisioningResult,
+            ComponentGroupDirectory, FleetSubnetRootProvisioningBatch,
+            RootComponentProvisioningResult, RootComponentPublicationEvidence,
+            RootProvisionedGroupPlacement,
         },
-        fleet_registry::FleetRegistryVersion,
+        fleet_registry::{FleetDirectorySnapshot, FleetRegistryVersion},
     },
     ids::{ComponentDeploymentConfigurationDigest, FleetSubnetRootBinding},
 };
@@ -20,6 +22,11 @@ use sha2::{Digest, Sha256};
 const ACCEPTANCE_RECEIPT_DOMAIN: &[u8] = b"canic/root-component-provisioning-acceptance-receipt/v1";
 const PROVISIONED_RECEIPT_DOMAIN: &[u8] =
     b"canic/root-component-provisioning-provisioned-receipt/v1";
+const PUBLISHED_RECEIPT_DOMAIN: &[u8] = b"canic/root-component-provisioning-published-receipt/v1";
+const FLEET_DIRECTORY_DOMAIN: &[u8] = b"canic/fleet-directory/v1";
+const COMPONENT_GROUP_DIRECTORY_DOMAIN: &[u8] = b"canic/component-group-directory/v1";
+const GROUP_PLACEMENT_RECEIPT_DOMAIN: &[u8] =
+    b"canic/root-component-provisioning-group-placement-receipt/v1";
 
 /// Exact immutable fields covered by one root's initial `Accepted` receipt.
 #[derive(CandidType)]
@@ -47,6 +54,28 @@ pub struct RootComponentProvisioningProvisionedReceiptAuthority<'a> {
     pub provisioned_at_ns: u64,
 }
 
+/// Exact immutable fields covered by one root's terminal `Published` receipt.
+#[derive(CandidType)]
+pub struct RootComponentProvisioningPublishedReceiptAuthority<'a> {
+    pub operation_id: [u8; 32],
+    pub plan_hash: [u8; 32],
+    pub configuration_digest: ComponentDeploymentConfigurationDigest,
+    pub root: &'a FleetSubnetRootBinding,
+    pub result: &'a RootComponentProvisioningResult,
+    pub publication: &'a RootComponentPublicationEvidence,
+    pub accepted_at_ns: u64,
+    pub provisioned_at_ns: u64,
+    pub published_at_ns: u64,
+}
+
+#[derive(CandidType)]
+struct RootComponentGroupPlacementReceiptAuthority<'a> {
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    root: &'a FleetSubnetRootBinding,
+    placement: &'a RootProvisionedGroupPlacement,
+}
+
 /// Canonical hashing boundary shared by root receipt production and Coordinator verification.
 pub struct RootComponentProvisioningReceiptOps;
 
@@ -70,6 +99,54 @@ impl RootComponentProvisioningReceiptOps {
             PROVISIONED_RECEIPT_DOMAIN,
             authority,
             "root Component provisioning receipt",
+        )
+    }
+
+    /// Hash one exact terminal root publication receipt with its frozen domain.
+    pub fn published_content_hash(
+        authority: RootComponentProvisioningPublishedReceiptAuthority<'_>,
+    ) -> Result<[u8; 32], InternalError> {
+        receipt_content_hash(
+            PUBLISHED_RECEIPT_DOMAIN,
+            authority,
+            "root Component publication receipt",
+        )
+    }
+
+    /// Hash one exact Fleet Directory projection.
+    pub fn fleet_directory_content_hash(
+        directory: &FleetDirectorySnapshot,
+    ) -> Result<[u8; 32], InternalError> {
+        receipt_content_hash(FLEET_DIRECTORY_DOMAIN, directory, "Fleet Directory")
+    }
+
+    /// Hash one exact Component Group Directory projection.
+    pub fn component_group_directory_content_hash(
+        directory: &ComponentGroupDirectory,
+    ) -> Result<[u8; 32], InternalError> {
+        receipt_content_hash(
+            COMPONENT_GROUP_DIRECTORY_DOMAIN,
+            directory,
+            "Component Group Directory",
+        )
+    }
+
+    /// Hash one root-local placement result for Component Group Directory provenance.
+    pub fn group_placement_content_hash(
+        operation_id: [u8; 32],
+        plan_hash: [u8; 32],
+        root: &FleetSubnetRootBinding,
+        placement: &RootProvisionedGroupPlacement,
+    ) -> Result<[u8; 32], InternalError> {
+        receipt_content_hash(
+            GROUP_PLACEMENT_RECEIPT_DOMAIN,
+            RootComponentGroupPlacementReceiptAuthority {
+                operation_id,
+                plan_hash,
+                root,
+                placement,
+            },
+            "root Component Group placement receipt",
         )
     }
 }

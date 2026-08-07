@@ -283,6 +283,7 @@ fn activate_draining_mirror(
                 status: entry.status,
             })
             .collect(),
+        services: vec![],
     };
     let _: FleetSubnetRootRegistryMirrorActivationResponse = call(
         &context.icp,

@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.21` durably publishes and independently verifies every selected
+  root's exact Fleet, Component and Component Group Directories before the
+  Coordinator reaches `DirectoriesConfirmed`, while runtime activation stays
+  fenced.
+
 - `0.101.20` atomically publishes the complete terminal provisioning result as
   one canonical Fleet Registry service snapshot and advances the Coordinator
   to `ServiceTopologyPublished`, while keeping Directories and runtimes fenced.

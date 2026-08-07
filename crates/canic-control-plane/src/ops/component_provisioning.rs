@@ -17,7 +17,8 @@ use crate::{
         RootComponentProvisioningRegistryCursorRecord,
         RootComponentProvisioningReservationCursorRecord, RootComponentProvisioningResultRecord,
         RootComponentProvisioningStateRecordPhase, RootComponentProvisioningStore,
-        RootProvisionedGroupMemberRecord, RootProvisionedGroupPlacementRecord,
+        RootComponentPublicationIntentRecord, RootProvisionedGroupMemberRecord,
+        RootProvisionedGroupPlacementRecord,
     },
     view::{
         component_provisioning::{
@@ -25,6 +26,7 @@ use crate::{
             RootComponentProvisioningInstallCursorView, RootComponentProvisioningMemberView,
             RootComponentProvisioningRegistryCursorView,
             RootComponentProvisioningReservationCursorView, RootComponentProvisioningView,
+            RootComponentPublicationIntentView, RootComponentPublicationMemberView,
         },
         component_registry::{
             ComponentRegistryPartitionView, RootComponentAllocationProgressView,
@@ -40,6 +42,7 @@ use canic_core::{
         ops::component_provisioning_receipt::{
             RootComponentProvisioningAcceptanceReceiptAuthority,
             RootComponentProvisioningProvisionedReceiptAuthority,
+            RootComponentProvisioningPublishedReceiptAuthority,
             RootComponentProvisioningReceiptOps,
         },
     },
@@ -48,14 +51,19 @@ use canic_core::{
             ComponentDeploymentLimits, ComponentDeploymentPurpose, ProtectedComponentDeployment,
         },
         component_provisioning::{
-            RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningAdvanceRequest,
-            RootComponentProvisioningPhase, RootComponentProvisioningResult,
-            RootComponentProvisioningStatusRequest, RootComponentProvisioningStatusResponse,
-            RootProvisionedGroupMember, RootProvisionedGroupPlacement,
+            ComponentDirectoryPublicationEvidence, ComponentGroupDirectory,
+            ComponentGroupDirectoryMember, ComponentGroupDirectoryProvenance,
+            ComponentGroupDirectoryPublicationEvidence, RootComponentProvisioningAcceptanceRequest,
+            RootComponentProvisioningAdvanceRequest, RootComponentProvisioningPhase,
+            RootComponentProvisioningResult, RootComponentProvisioningStatusRequest,
+            RootComponentProvisioningStatusResponse, RootComponentPublicationEvidence,
+            RootComponentPublicationRequest, RootProvisionedGroupMember,
+            RootProvisionedGroupPlacement,
         },
         component_registry::{
             ComponentLifecycleStatus, ComponentProvisioningOrigin, ComponentRegistryHead,
         },
+        fleet_registry::FleetDirectorySnapshot,
     },
     ids::{ComponentBinding, ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentSpecId},
 };
@@ -712,6 +720,310 @@ impl RootComponentProvisioningOps {
         commit_provisioned_result(request, provisioned_at_ns, result)
     }
 
+    /// Begin or replay publication against one exact newer Fleet Directory authority.
+    pub(crate) fn begin_publication(
+        request: &RootComponentPublicationRequest,
+        fleet_directory: &FleetDirectorySnapshot,
+        started_at_ns: u64,
+    ) -> Result<RootComponentProvisioningView, InternalError> {
+        let current_record = RootComponentProvisioningStore::operation(request.operation_id)
+            .ok_or_else(|| {
+                InternalError::unavailable("root Component provisioning operation is not accepted")
+            })?;
+        let current = validated_record(current_record.clone())?;
+        validate_publication_request(request, &current)?;
+        if current.phase == RootComponentProvisioningPhase::Published
+            || current.publication_started_at_ns.is_some()
+        {
+            return Ok(current);
+        }
+        if started_at_ns < current.provisioned_at_ns.unwrap_or(u64::MAX) {
+            return Err(InternalError::invalid_input(
+                "root Component publication start time precedes provisioning",
+            ));
+        }
+        if fleet_directory.provenance.registry != request.published_fleet_registry
+            || fleet_directory.provenance.source_fleet_subnet_root
+                != current.batch.root.fleet_subnet_root
+        {
+            return Err(InternalError::conflict(
+                "root Component publication Fleet Directory differs from requested authority",
+            ));
+        }
+        let RootComponentProvisioningStateRecordPhase::Provisioned {
+            placement_count,
+            component_count,
+            result,
+            accepted_at_ns,
+            provisioned_at_ns,
+            receipt_content_hash,
+        } = current_record.state.clone()
+        else {
+            return Err(InternalError::conflict(
+                "root Component publication requires a terminal provisioned result",
+            ));
+        };
+        let result_view = provisioning_result_from_record(&result);
+        let component_group_directories =
+            result_view
+                .placements
+                .iter()
+                .enumerate()
+                .map(|(index, placement)| {
+                    let directory =
+                        derive_component_group_directory(&current_record, &result_view, index)?;
+                    Ok(ComponentGroupDirectoryPublicationEvidence {
+                    group_placement: placement.group_placement.clone(),
+                    content_hash: RootComponentProvisioningReceiptOps::
+                        component_group_directory_content_hash(&directory)?,
+                })
+                })
+                .collect::<Result<Vec<_>, InternalError>>()?;
+        let publication = RootComponentPublicationEvidence {
+            fleet_registry: request.published_fleet_registry.clone(),
+            fleet_directory_content_hash:
+                RootComponentProvisioningReceiptOps::fleet_directory_content_hash(fleet_directory)?,
+            component_directories: vec![],
+            component_group_directories,
+        };
+        let mut next = current_record.clone();
+        next.state = RootComponentProvisioningStateRecordPhase::Publishing {
+            placement_count,
+            component_count,
+            result,
+            publication,
+            published_component_count: 0,
+            in_flight: None,
+            accepted_at_ns,
+            provisioned_at_ns,
+            publication_started_at_ns: started_at_ns,
+            provisioned_receipt_content_hash: receipt_content_hash,
+        };
+        RootComponentProvisioningStore::replace_operation(&current_record, next.clone())
+            .map_err(map_commit_error)?;
+        validated_record(next)
+    }
+
+    /// Select the next exact prepared Component and its root-derived group projection.
+    pub(crate) fn next_publication_member(
+        view: &RootComponentProvisioningView,
+    ) -> Result<Option<RootComponentPublicationMemberView>, InternalError> {
+        if view.published_component_count == view.component_count {
+            return Ok(None);
+        }
+        let result = view.result.as_ref().ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "root Component publication lacks its provisioned result",
+            )
+        })?;
+        let mut flat_index = 0_u32;
+        for (placement_index, (planned, provisioned)) in view
+            .batch
+            .placements
+            .iter()
+            .zip(&result.placements)
+            .enumerate()
+        {
+            for (entry, member) in planned.entries.iter().zip(&provisioned.members) {
+                if flat_index == view.published_component_count {
+                    return Ok(Some(RootComponentPublicationMemberView {
+                        component_index: flat_index,
+                        member_operation_id: member_operation_id(
+                            view.batch.root.fleet_subnet_root,
+                            view.operation_id,
+                            view.plan_hash,
+                            &planned.group_placement,
+                            &entry.member_path,
+                        )?,
+                        binding: member.binding.clone(),
+                        component_registry_revision: member.component_registry_revision,
+                        component_registry_content_hash: member.component_registry_content_hash,
+                        deployment: ProtectedComponentDeployment::GroupMember {
+                            binding: member.binding.clone(),
+                            configuration_digest: view.configuration_digest,
+                            group_placement: planned.group_placement.clone(),
+                            component_group: planned.component_group.clone(),
+                            member_path: entry.member_path.clone(),
+                            purpose: entry.purpose.clone(),
+                            labels: entry.labels.clone(),
+                            limits: entry.limits.clone(),
+                        },
+                        component_group: derive_component_group_directory_from_view(
+                            view,
+                            result,
+                            placement_index,
+                        )?,
+                    }));
+                }
+                flat_index = flat_index.checked_add(1).ok_or_else(|| {
+                    InternalError::resource_exhausted(
+                        "root Component publication cursor overflowed",
+                    )
+                })?;
+            }
+        }
+        Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component publication cursor is outside the provisioned result",
+        ))
+    }
+
+    /// Persist exact pre-call intent before one Component Directory delivery.
+    pub(crate) fn begin_publication_delivery(
+        request: &RootComponentPublicationRequest,
+        member: &RootComponentPublicationMemberView,
+        directory_authority_hash: [u8; 32],
+        started_at_ns: u64,
+    ) -> Result<RootComponentProvisioningView, InternalError> {
+        let current_record = required_publishing_record(request)?;
+        let current = validated_record(current_record.clone())?;
+        validate_publication_request(request, &current)?;
+        if let Some(intent) = &current.publication_in_flight {
+            return if intent.component_index == member.component_index
+                && intent.canister_id == member.binding.canister_id
+                && intent.directory_authority_hash == directory_authority_hash
+            {
+                Ok(current)
+            } else {
+                Err(InternalError::conflict(
+                    "root Component publication already has different in-flight authority",
+                ))
+            };
+        }
+        if directory_authority_hash == [0; 32]
+            || started_at_ns < current.publication_started_at_ns.unwrap_or(u64::MAX)
+        {
+            return Err(InternalError::invalid_input(
+                "root Component publication delivery authority is invalid",
+            ));
+        }
+        let mut next = current_record.clone();
+        let RootComponentProvisioningStateRecordPhase::Publishing { in_flight, .. } =
+            &mut next.state
+        else {
+            unreachable!("required publishing record changed before local mutation");
+        };
+        *in_flight = Some(RootComponentPublicationIntentRecord {
+            component_index: member.component_index,
+            canister_id: member.binding.canister_id,
+            directory_authority_hash,
+            started_at_ns,
+        });
+        RootComponentProvisioningStore::replace_operation(&current_record, next.clone())
+            .map_err(map_commit_error)?;
+        validated_record(next)
+    }
+
+    /// Commit one independently observed exact Component Directory delivery.
+    pub(crate) fn record_publication_delivery(
+        request: &RootComponentPublicationRequest,
+        member: &RootComponentPublicationMemberView,
+        directory_authority_hash: [u8; 32],
+    ) -> Result<RootComponentProvisioningView, InternalError> {
+        let current_record = required_publishing_record(request)?;
+        let current = validated_record(current_record.clone())?;
+        validate_publication_request(request, &current)?;
+        let intent = current.publication_in_flight.as_ref().ok_or_else(|| {
+            InternalError::conflict(
+                "root Component publication delivery has no durable pre-call intent",
+            )
+        })?;
+        if intent.component_index != member.component_index
+            || intent.canister_id != member.binding.canister_id
+            || intent.directory_authority_hash != directory_authority_hash
+        {
+            return Err(InternalError::conflict(
+                "root Component publication observation differs from pre-call intent",
+            ));
+        }
+        let mut next = current_record.clone();
+        let RootComponentProvisioningStateRecordPhase::Publishing {
+            publication,
+            published_component_count,
+            in_flight,
+            ..
+        } = &mut next.state
+        else {
+            unreachable!("required publishing record changed before local mutation");
+        };
+        publication
+            .component_directories
+            .push(ComponentDirectoryPublicationEvidence {
+                component: member.binding.component,
+                content_hash: member.component_registry_content_hash,
+            });
+        *published_component_count = published_component_count.checked_add(1).ok_or_else(|| {
+            InternalError::resource_exhausted("published Component count overflowed")
+        })?;
+        *in_flight = None;
+        RootComponentProvisioningStore::replace_operation(&current_record, next.clone())
+            .map_err(map_commit_error)?;
+        validated_record(next)
+    }
+
+    /// Freeze one complete response-idempotent root publication receipt.
+    pub(crate) fn finalize_published(
+        request: &RootComponentPublicationRequest,
+        published_at_ns: u64,
+    ) -> Result<RootComponentProvisioningView, InternalError> {
+        let current_record = required_publishing_record(request)?;
+        let current = validated_record(current_record.clone())?;
+        validate_publication_request(request, &current)?;
+        if current.published_component_count != current.component_count
+            || current.publication_in_flight.is_some()
+        {
+            return Err(InternalError::conflict(
+                "root Component publication is not complete",
+            ));
+        }
+        let RootComponentProvisioningStateRecordPhase::Publishing {
+            placement_count,
+            component_count,
+            result,
+            publication,
+            accepted_at_ns,
+            provisioned_at_ns,
+            ..
+        } = current_record.state.clone()
+        else {
+            unreachable!("required publishing record changed before finalization");
+        };
+        if published_at_ns < provisioned_at_ns {
+            return Err(InternalError::invalid_input(
+                "root Component publication completion time precedes provisioning",
+            ));
+        }
+        let result_view = provisioning_result_from_record(&result);
+        let receipt_content_hash = RootComponentProvisioningReceiptOps::published_content_hash(
+            RootComponentProvisioningPublishedReceiptAuthority {
+                operation_id: current_record.operation_id,
+                plan_hash: current_record.plan_hash,
+                configuration_digest: current_record.configuration_digest,
+                root: &current_record.batch.root,
+                result: &result_view,
+                publication: &publication,
+                accepted_at_ns,
+                provisioned_at_ns,
+                published_at_ns,
+            },
+        )?;
+        let mut next = current_record.clone();
+        next.state = RootComponentProvisioningStateRecordPhase::Published {
+            placement_count,
+            component_count,
+            result,
+            publication,
+            accepted_at_ns,
+            provisioned_at_ns,
+            published_at_ns,
+            receipt_content_hash,
+        };
+        RootComponentProvisioningStore::replace_operation(&current_record, next.clone())
+            .map_err(map_commit_error)?;
+        validated_record(next)
+    }
+
     /// Number of distinct accepted or committed placements occupying the root ceiling.
     pub(crate) fn tracked_group_placements() -> Result<u32, InternalError> {
         Ok(validated_aggregate_state()?.tracked_group_placements)
@@ -785,6 +1097,65 @@ impl RootComponentProvisioningOps {
         }
         Ok(())
     }
+}
+
+fn required_publishing_record(
+    request: &RootComponentPublicationRequest,
+) -> Result<RootComponentProvisioningRecord, InternalError> {
+    let record =
+        RootComponentProvisioningStore::operation(request.operation_id).ok_or_else(|| {
+            InternalError::unavailable("root Component provisioning operation is not accepted")
+        })?;
+    if !matches!(
+        record.state,
+        RootComponentProvisioningStateRecordPhase::Publishing { .. }
+    ) {
+        return Err(InternalError::conflict(
+            "root Component provisioning operation is not publishing Directories",
+        ));
+    }
+    Ok(record)
+}
+
+fn validate_publication_request(
+    request: &RootComponentPublicationRequest,
+    view: &RootComponentProvisioningView,
+) -> Result<(), InternalError> {
+    validate_operation_and_plan_hash(request.operation_id, request.plan_hash)?;
+    let count_is_current =
+        request.expected_published_component_count == view.published_component_count;
+    let count_replays_last = request.expected_published_component_count.checked_add(1)
+        == Some(view.published_component_count);
+    let request_is_exact = [
+        request.operation_id == view.operation_id,
+        request.plan_hash == view.plan_hash,
+        count_is_current || count_replays_last,
+        request.published_fleet_registry.authority == view.fleet_registry.authority,
+        request.published_fleet_registry.revision >= view.fleet_registry.revision,
+        request.published_fleet_registry.content_hash != [0; 32],
+    ]
+    .into_iter()
+    .all(|matches| matches);
+    if !request_is_exact {
+        return Err(InternalError::conflict(
+            "root Component publication request differs from durable authority",
+        ));
+    }
+    if request.published_fleet_registry.revision == view.fleet_registry.revision
+        && request.published_fleet_registry != view.fleet_registry
+    {
+        return Err(InternalError::conflict(
+            "root Component publication reuses a Registry revision with different authority",
+        ));
+    }
+    if let Some(publication) = &view.publication
+        && publication.fleet_registry != request.published_fleet_registry
+    {
+        return Err(InternalError::conflict(
+            "root Component publication request names a different Registry",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_acceptance_identity(
@@ -868,8 +1239,13 @@ struct ValidatedProvisioningState {
     component_count: u32,
     cursors: ProvisioningCursorRecords,
     result: Option<RootComponentProvisioningResult>,
+    publication: Option<RootComponentPublicationEvidence>,
+    published_component_count: u32,
+    publication_in_flight: Option<RootComponentPublicationIntentView>,
     accepted_at_ns: u64,
     provisioned_at_ns: Option<u64>,
+    publication_started_at_ns: Option<u64>,
+    published_at_ns: Option<u64>,
     receipt_content_hash: [u8; 32],
 }
 
@@ -940,8 +1316,13 @@ fn validated_record(
         },
         phase: state.phase,
         result: state.result,
+        publication: state.publication,
+        published_component_count: state.published_component_count,
+        publication_in_flight: state.publication_in_flight,
         accepted_at_ns: state.accepted_at_ns,
         provisioned_at_ns: state.provisioned_at_ns,
+        publication_started_at_ns: state.publication_started_at_ns,
+        published_at_ns: state.published_at_ns,
         receipt_content_hash: state.receipt_content_hash,
     })
 }
@@ -959,36 +1340,19 @@ fn validated_record_state(
             registry_cursor,
             accepted_at_ns,
             receipt_content_hash,
-        } => {
-            let request = acceptance_request(record);
-            let expected_hash = acceptance_receipt_hash(
-                &request,
-                placement_count,
-                component_count,
-                accepted_at_ns,
-            )?;
-            if receipt_content_hash != expected_hash {
-                return Err(InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "root Component provisioning acceptance receipt hash is invalid",
-                ));
-            }
-            Ok(ValidatedProvisioningState {
-                phase: RootComponentProvisioningPhase::Accepted,
-                placement_count,
-                component_count,
-                cursors: ProvisioningCursorRecords {
-                    reservation: reservation_cursor,
-                    claim: claim_cursor,
-                    install: install_cursor,
-                    registry: registry_cursor,
-                },
-                result: None,
-                accepted_at_ns,
-                provisioned_at_ns: None,
-                receipt_content_hash,
-            })
-        }
+        } => validated_accepted_state(
+            record,
+            placement_count,
+            component_count,
+            ProvisioningCursorRecords {
+                reservation: reservation_cursor,
+                claim: claim_cursor,
+                install: install_cursor,
+                registry: registry_cursor,
+            },
+            accepted_at_ns,
+            receipt_content_hash,
+        ),
         RootComponentProvisioningStateRecordPhase::Provisioned {
             placement_count,
             component_count,
@@ -1005,7 +1369,85 @@ fn validated_record_state(
             provisioned_at_ns,
             receipt_content_hash,
         ),
+        RootComponentProvisioningStateRecordPhase::Publishing {
+            placement_count,
+            component_count,
+            result,
+            publication,
+            published_component_count,
+            in_flight,
+            accepted_at_ns,
+            provisioned_at_ns,
+            publication_started_at_ns,
+            provisioned_receipt_content_hash,
+        } => validated_publishing_state(
+            record,
+            placement_count,
+            component_count,
+            result,
+            publication,
+            published_component_count,
+            in_flight,
+            accepted_at_ns,
+            provisioned_at_ns,
+            publication_started_at_ns,
+            provisioned_receipt_content_hash,
+        ),
+        RootComponentProvisioningStateRecordPhase::Published {
+            placement_count,
+            component_count,
+            result,
+            publication,
+            accepted_at_ns,
+            provisioned_at_ns,
+            published_at_ns,
+            receipt_content_hash,
+        } => validated_published_state(
+            record,
+            placement_count,
+            component_count,
+            result,
+            publication,
+            accepted_at_ns,
+            provisioned_at_ns,
+            published_at_ns,
+            receipt_content_hash,
+        ),
     }
+}
+
+fn validated_accepted_state(
+    record: &RootComponentProvisioningRecord,
+    placement_count: u32,
+    component_count: u32,
+    cursors: ProvisioningCursorRecords,
+    accepted_at_ns: u64,
+    receipt_content_hash: [u8; 32],
+) -> Result<ValidatedProvisioningState, InternalError> {
+    let request = acceptance_request(record);
+    let expected_hash =
+        acceptance_receipt_hash(&request, placement_count, component_count, accepted_at_ns)?;
+    if receipt_content_hash != expected_hash {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component provisioning acceptance receipt hash is invalid",
+        ));
+    }
+    Ok(ValidatedProvisioningState {
+        phase: RootComponentProvisioningPhase::Accepted,
+        placement_count,
+        component_count,
+        cursors,
+        result: None,
+        publication: None,
+        published_component_count: 0,
+        publication_in_flight: None,
+        accepted_at_ns,
+        provisioned_at_ns: None,
+        publication_started_at_ns: None,
+        published_at_ns: None,
+        receipt_content_hash,
+    })
 }
 
 fn acceptance_request(
@@ -1052,10 +1494,259 @@ fn validated_provisioned_state(
         component_count,
         cursors,
         result: Some(result),
+        publication: None,
+        published_component_count: 0,
+        publication_in_flight: None,
         accepted_at_ns,
         provisioned_at_ns: Some(provisioned_at_ns),
+        publication_started_at_ns: None,
+        published_at_ns: None,
         receipt_content_hash,
     })
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the stable phase validator names every independently persisted publication field"
+)]
+fn validated_publishing_state(
+    record: &RootComponentProvisioningRecord,
+    placement_count: u32,
+    component_count: u32,
+    result_record: RootComponentProvisioningResultRecord,
+    publication: RootComponentPublicationEvidence,
+    published_component_count: u32,
+    in_flight: Option<RootComponentPublicationIntentRecord>,
+    accepted_at_ns: u64,
+    provisioned_at_ns: u64,
+    publication_started_at_ns: u64,
+    provisioned_receipt_content_hash: [u8; 32],
+) -> Result<ValidatedProvisioningState, InternalError> {
+    let provisioned = validated_provisioned_state(
+        record,
+        placement_count,
+        component_count,
+        result_record,
+        accepted_at_ns,
+        provisioned_at_ns,
+        provisioned_receipt_content_hash,
+    )?;
+    let result = provisioned.result.as_ref().ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "publishing Component operation lacks its provisioned result",
+        )
+    })?;
+    if publication_started_at_ns < provisioned_at_ns {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component publication start time precedes provisioning",
+        ));
+    }
+    validate_partial_publication(
+        record,
+        result,
+        &publication,
+        published_component_count,
+        in_flight.as_ref(),
+        publication_started_at_ns,
+    )?;
+    Ok(ValidatedProvisioningState {
+        phase: RootComponentProvisioningPhase::Provisioned,
+        placement_count,
+        component_count,
+        cursors: provisioned.cursors,
+        result: Some(result.clone()),
+        publication: Some(publication),
+        published_component_count,
+        publication_in_flight: in_flight.map(publication_intent_to_view),
+        accepted_at_ns,
+        provisioned_at_ns: Some(provisioned_at_ns),
+        publication_started_at_ns: Some(publication_started_at_ns),
+        published_at_ns: None,
+        receipt_content_hash: provisioned_receipt_content_hash,
+    })
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the stable phase validator names every independently persisted terminal field"
+)]
+fn validated_published_state(
+    record: &RootComponentProvisioningRecord,
+    placement_count: u32,
+    component_count: u32,
+    result_record: RootComponentProvisioningResultRecord,
+    publication: RootComponentPublicationEvidence,
+    accepted_at_ns: u64,
+    provisioned_at_ns: u64,
+    published_at_ns: u64,
+    receipt_content_hash: [u8; 32],
+) -> Result<ValidatedProvisioningState, InternalError> {
+    let result = provisioning_result_from_record(&result_record);
+    validate_provisioned_result(&record.batch, component_count, &result)?;
+    if published_at_ns < provisioned_at_ns {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component publication time precedes provisioning",
+        ));
+    }
+    validate_partial_publication(
+        record,
+        &result,
+        &publication,
+        component_count,
+        None,
+        provisioned_at_ns,
+    )?;
+    let expected = RootComponentProvisioningReceiptOps::published_content_hash(
+        RootComponentProvisioningPublishedReceiptAuthority {
+            operation_id: record.operation_id,
+            plan_hash: record.plan_hash,
+            configuration_digest: record.configuration_digest,
+            root: &record.batch.root,
+            result: &result,
+            publication: &publication,
+            accepted_at_ns,
+            provisioned_at_ns,
+            published_at_ns,
+        },
+    )?;
+    if receipt_content_hash != expected {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component publication receipt hash is invalid",
+        ));
+    }
+    Ok(ValidatedProvisioningState {
+        phase: RootComponentProvisioningPhase::Published,
+        placement_count,
+        component_count,
+        cursors: terminal_cursor_records(record, placement_count, component_count)?,
+        result: Some(result),
+        publication: Some(publication),
+        published_component_count: component_count,
+        publication_in_flight: None,
+        accepted_at_ns,
+        provisioned_at_ns: Some(provisioned_at_ns),
+        publication_started_at_ns: Some(provisioned_at_ns),
+        published_at_ns: Some(published_at_ns),
+        receipt_content_hash,
+    })
+}
+
+fn validate_partial_publication(
+    record: &RootComponentProvisioningRecord,
+    result: &RootComponentProvisioningResult,
+    publication: &RootComponentPublicationEvidence,
+    published_component_count: u32,
+    in_flight: Option<&RootComponentPublicationIntentRecord>,
+    publication_started_at_ns: u64,
+) -> Result<(), InternalError> {
+    if publication.fleet_registry.authority != record.fleet_registry.authority
+        || publication.fleet_registry.revision < record.fleet_registry.revision
+        || publication.fleet_registry.content_hash == [0; 32]
+        || publication.fleet_directory_content_hash == [0; 32]
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component publication Registry and Fleet Directory authority is invalid",
+        ));
+    }
+    if publication.fleet_registry.revision == record.fleet_registry.revision
+        && publication.fleet_registry != record.fleet_registry
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component publication reuses a Registry revision with different authority",
+        ));
+    }
+    let published_count = usize::try_from(published_component_count).map_err(|_| {
+        InternalError::resource_exhausted("published Component count exceeds usize")
+    })?;
+    let component_count = result
+        .placements
+        .iter()
+        .map(|placement| placement.members.len())
+        .sum::<usize>();
+    if published_count > component_count {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "published Component count exceeds the provisioned result",
+        ));
+    }
+    let expected_members = result
+        .placements
+        .iter()
+        .flat_map(|placement| &placement.members)
+        .take(published_count);
+    if publication.component_directories.len() != published_count {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component publication evidence count differs from its cursor",
+        ));
+    }
+    for (member, evidence) in expected_members.zip(&publication.component_directories) {
+        if evidence.component != member.binding.component
+            || evidence.content_hash != member.component_registry_content_hash
+        {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "root Component publication evidence differs from provisioned Registry authority",
+            ));
+        }
+    }
+    if publication.component_group_directories.len() != result.placements.len() {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component Group Directory evidence does not cover every placement",
+        ));
+    }
+    for (index, (placement, evidence)) in result
+        .placements
+        .iter()
+        .zip(&publication.component_group_directories)
+        .enumerate()
+    {
+        let directory = derive_component_group_directory(record, result, index)?;
+        let expected_hash =
+            RootComponentProvisioningReceiptOps::component_group_directory_content_hash(
+                &directory,
+            )?;
+        if evidence.group_placement != placement.group_placement
+            || evidence.content_hash != expected_hash
+        {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "root Component Group Directory evidence differs from its placement receipt",
+            ));
+        }
+    }
+    if let Some(intent) = in_flight {
+        let member = result_member_at(result, intent.component_index)?;
+        if intent.component_index != published_component_count
+            || intent.canister_id != member.binding.canister_id
+            || intent.directory_authority_hash == [0; 32]
+            || intent.started_at_ns < publication_started_at_ns
+        {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "root Component publication intent differs from its next canonical member",
+            ));
+        }
+    }
+    Ok(())
+}
+
+const fn publication_intent_to_view(
+    intent: RootComponentPublicationIntentRecord,
+) -> RootComponentPublicationIntentView {
+    RootComponentPublicationIntentView {
+        component_index: intent.component_index,
+        canister_id: intent.canister_id,
+        directory_authority_hash: intent.directory_authority_hash,
+        started_at_ns: intent.started_at_ns,
+    }
 }
 
 fn terminal_cursor_records(
@@ -1299,6 +1990,128 @@ fn provisioning_result_from_record(
             })
             .collect(),
     }
+}
+
+fn derive_component_group_directory(
+    record: &RootComponentProvisioningRecord,
+    result: &RootComponentProvisioningResult,
+    placement_index: usize,
+) -> Result<ComponentGroupDirectory, InternalError> {
+    derive_component_group_directory_from_parts(
+        record.operation_id,
+        record.plan_hash,
+        &record.batch,
+        result,
+        placement_index,
+    )
+}
+
+fn derive_component_group_directory_from_view(
+    view: &RootComponentProvisioningView,
+    result: &RootComponentProvisioningResult,
+    placement_index: usize,
+) -> Result<ComponentGroupDirectory, InternalError> {
+    derive_component_group_directory_from_parts(
+        view.operation_id,
+        view.plan_hash,
+        &view.batch,
+        result,
+        placement_index,
+    )
+}
+
+fn derive_component_group_directory_from_parts(
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
+    result: &RootComponentProvisioningResult,
+    placement_index: usize,
+) -> Result<ComponentGroupDirectory, InternalError> {
+    let planned = batch.placements.get(placement_index).ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component Group Directory placement is outside the accepted batch",
+        )
+    })?;
+    let provisioned = result.placements.get(placement_index).ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component Group Directory placement is outside the provisioned result",
+        )
+    })?;
+    let placement_matches = [
+        planned.group_placement == provisioned.group_placement,
+        planned.component_group == provisioned.component_group,
+        planned.entries.len() == provisioned.members.len(),
+    ]
+    .into_iter()
+    .all(|matches| matches);
+    if !placement_matches {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Component Group Directory plan and provisioned placement differ",
+        ));
+    }
+    let members = planned
+        .entries
+        .iter()
+        .zip(&provisioned.members)
+        .map(|(entry, member)| {
+            if entry.member_path != member.member_path
+                || entry.component_spec != member.component_spec
+                || entry.purpose != member.purpose
+            {
+                return Err(InternalError::invariant(
+                    InternalErrorOrigin::Storage,
+                    "Component Group Directory member differs from its accepted plan",
+                ));
+            }
+            Ok(ComponentGroupDirectoryMember {
+                member_path: member.member_path.clone(),
+                component_spec: member.component_spec.clone(),
+                purpose: member.purpose.clone(),
+                labels: entry.labels.clone(),
+                binding: member.binding.clone(),
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(ComponentGroupDirectory {
+        provenance: ComponentGroupDirectoryProvenance {
+            authority: batch.root.authority.clone(),
+            fleet_subnet_root: batch.root.fleet_subnet_root,
+            group_placement: provisioned.group_placement.clone(),
+            component_group: provisioned.component_group.clone(),
+            operation_id,
+            plan_hash,
+            placement_receipt_content_hash:
+                RootComponentProvisioningReceiptOps::group_placement_content_hash(
+                    operation_id,
+                    plan_hash,
+                    &batch.root,
+                    provisioned,
+                )?,
+        },
+        members,
+    })
+}
+
+fn result_member_at(
+    result: &RootComponentProvisioningResult,
+    component_index: u32,
+) -> Result<&RootProvisionedGroupMember, InternalError> {
+    let index = usize::try_from(component_index)
+        .map_err(|_| InternalError::resource_exhausted("Component cursor exceeds usize"))?;
+    result
+        .placements
+        .iter()
+        .flat_map(|placement| &placement.members)
+        .nth(index)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "Component publication cursor is outside its provisioned result",
+            )
+        })
 }
 
 fn validate_provisioned_result(
@@ -2225,9 +3038,12 @@ pub fn status_response(
         claimed_component_count: view.claim_cursor.claimed_component_count,
         installed_component_count: view.install_cursor.installed_component_count,
         registry_committed_component_count: view.registry_cursor.registry_committed_component_count,
+        published_component_count: view.published_component_count,
         result: view.result,
+        publication: view.publication,
         accepted_at_ns: view.accepted_at_ns,
         provisioned_at_ns: view.provisioned_at_ns,
+        published_at_ns: view.published_at_ns,
         receipt_content_hash: view.receipt_content_hash,
     }
 }

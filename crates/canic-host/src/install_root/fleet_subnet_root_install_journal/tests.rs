@@ -341,6 +341,7 @@ fn assert_registry_mirror_and_component_registry_journal(
             fleet_subnet_root: root_canister,
             status: canic_core::dto::fleet_registry::FleetSubnetRootStatus::Active,
         }],
+        services: vec![],
     };
     let activation_request = FleetSubnetRootRegistryMirrorActivationRequest {
         previous_registry: version,

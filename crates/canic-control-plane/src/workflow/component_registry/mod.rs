@@ -1109,6 +1109,7 @@ pub async fn quiesce_component(
         let component_authority = ComponentRuntimeDirectoryAuthority {
             fleet: fleet_directory,
             component: component_directory_head(&partition),
+            component_group: None,
         };
         let authority_hash = ComponentRuntimeOps::directory_authority_hash(&component_authority)?;
         let binding = ManagedCanisterBinding::Component(partition.binding.clone());
@@ -1483,7 +1484,7 @@ async fn advance_subtree_removal_phase(
             remove_subtree_leaf_membership(request).await?
         }
         ComponentSubtreeRemovalAction::SynchronizeDirectory(request) => {
-            synchronize_subtree_leaf_directory(request).await?
+            Box::pin(synchronize_subtree_leaf_directory(request)).await?
         }
         ComponentSubtreeRemovalAction::FinalizeLeaf(request) => {
             finalize_subtree_leaf(request).await?
@@ -2176,6 +2177,7 @@ pub async fn synchronize_subtree_leaf_directory(
     let directory_authority = ComponentRuntimeDirectoryAuthority {
         fleet: fleet_directory,
         component: component_directory_head(&partition),
+        component_group: None,
     };
     let directory_authority_hash =
         ComponentRuntimeOps::directory_authority_hash(&directory_authority)?;
@@ -2762,6 +2764,7 @@ pub async fn activate_child_membership(
         authority: ComponentRuntimeDirectoryAuthority {
             fleet: plan.directory_request.authority.fleet.clone(),
             component: component_directory_head(&active_partition),
+            component_group: plan.directory_request.authority.component_group.clone(),
         },
         direct_children: active_component_direct_children(&active_partition, plan.child_canister)?,
     };
@@ -2937,6 +2940,55 @@ pub async fn prepare_component_directories(
     })
 }
 
+/// Deliver and independently verify grouped publication Directories without activating runtime.
+pub(super) async fn prepare_grouped_component_directories(
+    canister: candid::Principal,
+    binding: &ManagedCanisterBinding,
+    deployment: &ProtectedComponentDeployment,
+    request: &ComponentRuntimeDirectoryPreparationRequest,
+    directory_authority_hash: [u8; 32],
+) -> Result<ComponentRuntimeStatusResponse, InternalError> {
+    let observed = query_component_runtime_status(canister).await?;
+    let prepared = match validate_target_directory_status_for_deployment(
+        &observed,
+        binding,
+        deployment,
+        request,
+        directory_authority_hash,
+    )? {
+        ComponentRuntimePhase::AwaitingDirectory => {
+            prepare_target_component_directories(canister, request.clone()).await?
+        }
+        ComponentRuntimePhase::DirectoryPrepared => observed,
+        ComponentRuntimePhase::Active => {
+            return Err(InternalError::conflict(
+                "initial Component runtime became Active before the publication barrier",
+            ));
+        }
+    };
+    let _ = prepared_target_directory_status_for_deployment(
+        &prepared,
+        binding,
+        deployment,
+        request,
+        directory_authority_hash,
+    )?;
+    let independently_observed = query_component_runtime_status(canister).await?;
+    let independently_prepared = prepared_target_directory_status_for_deployment(
+        &independently_observed,
+        binding,
+        deployment,
+        request,
+        directory_authority_hash,
+    )?;
+    if independently_prepared.phase == ComponentRuntimePhase::Active {
+        return Err(InternalError::conflict(
+            "initial Component runtime became Active during Directory publication",
+        ));
+    }
+    Ok(independently_prepared)
+}
+
 /// Prepare one peer Component's Directories for its exact active requester caller.
 pub async fn prepare_peer_component_directories(
     request: RootComponentDirectoryPreparationRequest,
@@ -3029,6 +3081,7 @@ pub async fn activate_component_membership(
         authority: ComponentRuntimeDirectoryAuthority {
             fleet: plan.directory_request.authority.fleet.clone(),
             component: component_directory_head(&active_partition),
+            component_group: plan.directory_request.authority.component_group.clone(),
         },
         direct_children: active_component_direct_children(&active_partition, plan.target_canister)?,
     };
@@ -3064,7 +3117,7 @@ pub async fn activate_peer_component_membership(
     request: RootComponentMembershipActivationRequest,
 ) -> Result<RootComponentMembershipActivationResponse, InternalError> {
     require_active_peer_allocation_caller(request.operation_id)?;
-    activate_component_membership(request).await
+    Box::pin(activate_component_membership(request)).await
 }
 
 async fn synchronize_active_membership(
@@ -3258,6 +3311,7 @@ async fn verify_initial_component_convergence(operation_id: [u8; 32]) -> Result<
         authority: ComponentRuntimeDirectoryAuthority {
             fleet: plan.directory_request.authority.fleet.clone(),
             component: component_directory_head(&active_partition),
+            component_group: plan.directory_request.authority.component_group.clone(),
         },
         direct_children: active_component_direct_children(&active_partition, plan.target_canister)?,
     };
@@ -4497,6 +4551,7 @@ async fn prepared_component_runtime_plan(
     let authority = ComponentRuntimeDirectoryAuthority {
         fleet: fleet_directory,
         component: component_directory_head(&partition),
+        component_group: None,
     };
     let directory_authority_hash = ComponentRuntimeOps::directory_authority_hash(&authority)?;
     if committed_directory_receipt(&allocation)?.directory_authority_hash
@@ -4676,6 +4731,7 @@ fn child_directory_request(
         authority: ComponentRuntimeDirectoryAuthority {
             fleet,
             component: component_directory_head(partition),
+            component_group: None,
         },
         direct_children: active_component_direct_children(partition, child_canister)?,
     };
@@ -4705,7 +4761,7 @@ fn active_component_direct_children_for_authority(
     active_component_direct_children(&partition, parent_canister_id)
 }
 
-fn active_component_direct_children(
+pub(super) fn active_component_direct_children(
     partition: &ComponentRegistryPartitionView,
     parent_canister_id: candid::Principal,
 ) -> Result<Vec<ComponentRuntimeDirectChild>, InternalError> {
@@ -5260,6 +5316,23 @@ fn validate_target_directory_status(
     request: &ComponentRuntimeDirectoryPreparationRequest,
     authority_hash: [u8; 32],
 ) -> Result<ComponentRuntimePhase, InternalError> {
+    let deployment = ungrouped_component_deployment(binding);
+    validate_target_directory_status_for_deployment(
+        status,
+        binding,
+        &deployment,
+        request,
+        authority_hash,
+    )
+}
+
+fn validate_target_directory_status_for_deployment(
+    status: &ComponentRuntimeStatusResponse,
+    binding: &ManagedCanisterBinding,
+    deployment: &ProtectedComponentDeployment,
+    request: &ComponentRuntimeDirectoryPreparationRequest,
+    authority_hash: [u8; 32],
+) -> Result<ComponentRuntimePhase, InternalError> {
     let direct_children_hash = ComponentRuntimeOps::direct_children_hash(&request.direct_children)?;
     if status.operation_id != request.operation_id {
         return Err(InternalError::conflict(
@@ -5271,7 +5344,7 @@ fn validate_target_directory_status(
             "Component runtime Directory status has a different protected binding",
         ));
     }
-    if !target_deployment_matches(status, binding) {
+    if status.deployment.as_ref() != deployment {
         return Err(InternalError::conflict(
             "Component runtime Directory status has a different protected deployment context",
         ));
@@ -5308,6 +5381,7 @@ fn validate_target_directory_status(
     }
 }
 
+#[cfg(test)]
 fn target_deployment_matches(
     status: &ComponentRuntimeStatusResponse,
     binding: &ManagedCanisterBinding,
@@ -5346,7 +5420,30 @@ fn prepared_target_directory_status(
     request: &ComponentRuntimeDirectoryPreparationRequest,
     authority_hash: [u8; 32],
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
-    match validate_target_directory_status(status, binding, request, authority_hash)? {
+    let deployment = ungrouped_component_deployment(binding);
+    prepared_target_directory_status_for_deployment(
+        status,
+        binding,
+        &deployment,
+        request,
+        authority_hash,
+    )
+}
+
+fn prepared_target_directory_status_for_deployment(
+    status: &ComponentRuntimeStatusResponse,
+    binding: &ManagedCanisterBinding,
+    deployment: &ProtectedComponentDeployment,
+    request: &ComponentRuntimeDirectoryPreparationRequest,
+    authority_hash: [u8; 32],
+) -> Result<ComponentRuntimeStatusResponse, InternalError> {
+    match validate_target_directory_status_for_deployment(
+        status,
+        binding,
+        deployment,
+        request,
+        authority_hash,
+    )? {
         ComponentRuntimePhase::DirectoryPrepared => Ok(status.clone()),
         ComponentRuntimePhase::Active => Ok(ComponentRuntimeStatusResponse {
             operation_id: request.operation_id,
@@ -6344,7 +6441,9 @@ fn partition_response(
     }
 }
 
-fn component_directory_head(partition: &ComponentRegistryPartitionView) -> ComponentDirectoryHead {
+pub(super) fn component_directory_head(
+    partition: &ComponentRegistryPartitionView,
+) -> ComponentDirectoryHead {
     ComponentDirectoryHead {
         provenance: ComponentDirectoryProvenance {
             component: partition.binding.clone(),
@@ -7670,6 +7769,7 @@ fn validate_component_draining(
                 },
                 descendant_count: draining.descendant_count,
             },
+            component_group: None,
         };
         if ComponentRuntimeOps::directory_authority_hash(&authority)?
             != draining.directory_authority_hash

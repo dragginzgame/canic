@@ -853,6 +853,7 @@ pub struct ComponentDirectoryPageResponse {
 pub struct ComponentRuntimeDirectoryAuthority {
     pub fleet: FleetDirectorySnapshot,
     pub component: ComponentDirectoryHead,
+    pub component_group: Option<crate::dto::component_provisioning::ComponentGroupDirectory>,
 }
 
 ///
@@ -2468,8 +2469,10 @@ mod tests {
                         status: crate::dto::fleet_registry::FleetSubnetRootStatus::Active,
                     },
                 ],
+                services: vec![],
             },
             component: commit_response.directory.clone(),
+            component_group: None,
         };
         let activation = ComponentRuntimeActivationEvidence {
             directory_authority_hash: [29; 32],
@@ -2529,6 +2532,7 @@ mod tests {
         let active_authority = ComponentRuntimeDirectoryAuthority {
             fleet: runtime_authority.fleet,
             component: active_directory.clone(),
+            component_group: None,
         };
         let membership_response = RootComponentChildMembershipActivationResponse {
             committed: commit_response.clone(),

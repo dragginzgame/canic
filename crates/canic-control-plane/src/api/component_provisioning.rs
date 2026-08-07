@@ -11,6 +11,7 @@ use canic_core::{
         component_provisioning::{
             RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningAdvanceRequest,
             RootComponentProvisioningStatusRequest, RootComponentProvisioningStatusResponse,
+            RootComponentPublicationRequest,
         },
         error::Error,
     },
@@ -43,5 +44,16 @@ impl RootComponentProvisioningApi {
         request: RootComponentProvisioningStatusRequest,
     ) -> Result<RootComponentProvisioningStatusResponse, Error> {
         component_provisioning::status(IcOps::msg_caller(), request).map_err(Into::into)
+    }
+
+    pub async fn publish(
+        request: RootComponentPublicationRequest,
+    ) -> Result<RootComponentProvisioningStatusResponse, Error> {
+        Box::pin(component_provisioning::publish(
+            IcOps::msg_caller(),
+            request,
+        ))
+        .await
+        .map_err(Into::into)
     }
 }

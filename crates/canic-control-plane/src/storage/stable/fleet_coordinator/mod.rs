@@ -19,7 +19,7 @@ use canic_core::{
     dto::{
         component_provisioning::{
             FleetComponentProvisioningPlan, RootComponentProvisioningAdvanceRequest,
-            RootComponentProvisioningStatusResponse,
+            RootComponentProvisioningStatusResponse, RootComponentPublicationRequest,
         },
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
@@ -161,6 +161,29 @@ pub enum FleetComponentProvisioningStateRecord {
         published_fleet_registry: FleetRegistryVersion,
         service_topology_published_at_ns: u64,
     },
+    ConfirmingDirectories {
+        planned_at_ns: u64,
+        acceptances: Vec<FleetComponentProvisioningRootAcceptanceRecord>,
+        roots_accepted_at_ns: u64,
+        provisions: Vec<FleetComponentProvisioningRootProvisionRecord>,
+        components_provisioned_at_ns: u64,
+        published_fleet_registry: FleetRegistryVersion,
+        service_topology_published_at_ns: u64,
+        confirmations: Vec<FleetComponentDirectoryConfirmationRecord>,
+        current: Option<Box<FleetComponentDirectoryConfirmationRecord>>,
+        in_flight: Option<Box<FleetComponentDirectoryConfirmationIntentRecord>>,
+    },
+    DirectoriesConfirmed {
+        planned_at_ns: u64,
+        acceptances: Vec<FleetComponentProvisioningRootAcceptanceRecord>,
+        roots_accepted_at_ns: u64,
+        provisions: Vec<FleetComponentProvisioningRootProvisionRecord>,
+        components_provisioned_at_ns: u64,
+        published_fleet_registry: FleetRegistryVersion,
+        service_topology_published_at_ns: u64,
+        confirmations: Vec<FleetComponentDirectoryConfirmationRecord>,
+        directories_confirmed_at_ns: u64,
+    },
 }
 
 /// Durable pre-call intent for one exact canonical root batch.
@@ -191,6 +214,23 @@ pub struct FleetComponentProvisioningRootProvisionIntentRecord {
 /// Latest authenticated root provisioning response retained with observation time.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetComponentProvisioningRootProvisionRecord {
+    pub started_at_ns: u64,
+    pub response: RootComponentProvisioningStatusResponse,
+    pub recorded_at_ns: u64,
+}
+
+/// Durable pre-call intent for one exact root Directory publication cursor.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetComponentDirectoryConfirmationIntentRecord {
+    pub root_index: u32,
+    pub fleet_subnet_root: Principal,
+    pub request: RootComponentPublicationRequest,
+    pub started_at_ns: u64,
+}
+
+/// Latest authenticated root Directory publication response and observation time.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetComponentDirectoryConfirmationRecord {
     pub started_at_ns: u64,
     pub response: RootComponentProvisioningStatusResponse,
     pub recorded_at_ns: u64,

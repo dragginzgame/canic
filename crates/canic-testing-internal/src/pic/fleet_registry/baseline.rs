@@ -815,9 +815,18 @@ mod tests {
     }
 
     #[test]
-    fn coordinator_publishes_one_root_batch_service_topology() {
+    fn coordinator_confirms_one_root_batch_directories_without_runtime_activation() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let fixture = setup_prepared_grouped_provisioning();
+        let prepared = prepare_coordinator_grouped_plan(&fixture);
+        let confirmed = drive_coordinator_directory_confirmation(&fixture, prepared);
+        assert_confirmed_grouped_directories(&fixture, &confirmed);
+    }
+
+    #[cfg(test)]
+    fn prepare_coordinator_grouped_plan(
+        fixture: &PreparedGroupedProvisioningFixture,
+    ) -> FleetComponentProvisioningStatusResponse {
         let registry: Result<FleetRegistry, Error> = fixture
             .pic
             .query_candid(fixture.coordinator, CANIC_FLEET_REGISTRY, ())
@@ -850,16 +859,26 @@ mod tests {
                 },),
             )
             .expect("prepare Coordinator provisioning transport");
-        let mut status = prepared.expect("prepare Coordinator provisioning");
+        let status = prepared.expect("prepare Coordinator provisioning");
         assert_eq!(status.phase, FleetComponentProvisioningPhase::Planned);
+        status
+    }
 
-        while status.phase != FleetComponentProvisioningPhase::ServiceTopologyPublished {
+    #[cfg(test)]
+    fn drive_coordinator_directory_confirmation(
+        fixture: &PreparedGroupedProvisioningFixture,
+        mut status: FleetComponentProvisioningStatusResponse,
+    ) -> FleetComponentProvisioningStatusResponse {
+        while status.phase != FleetComponentProvisioningPhase::DirectoriesConfirmed {
             let request = FleetComponentProvisioningAdvanceRequest {
                 operation_id: status.operation_id,
                 plan_hash: status.plan_hash,
+                expected_phase: status.phase,
                 expected_accepted_root_count: status.accepted_root_count,
                 expected_provisioned_root_count: status.provisioned_root_count,
+                expected_directory_confirmed_root_count: status.directory_confirmed_root_count,
                 expected_current_root: status.current_root,
+                expected_current_publication: status.current_publication,
             };
             let advanced: Result<FleetComponentProvisioningStatusResponse, Error> = fixture
                 .pic
@@ -869,7 +888,12 @@ mod tests {
                     (request,),
                 )
                 .expect("advance Coordinator provisioning transport");
-            let advanced = advanced.expect("advance Coordinator provisioning");
+            let advanced = advanced.unwrap_or_else(|error| {
+                panic!(
+                    "advance Coordinator provisioning from phase {:?} with root cursor {:?} and Directory cursor {:?}: {error:?}",
+                    status.phase, status.current_root, status.current_publication,
+                )
+            });
             let replayed: Result<FleetComponentProvisioningStatusResponse, Error> = fixture
                 .pic
                 .update_candid(
@@ -881,11 +905,21 @@ mod tests {
             assert_eq!(replayed.expect("replay Coordinator provisioning"), advanced);
             status = advanced;
         }
+        status
+    }
+
+    #[cfg(test)]
+    fn assert_confirmed_grouped_directories(
+        fixture: &PreparedGroupedProvisioningFixture,
+        status: &FleetComponentProvisioningStatusResponse,
+    ) {
         assert_eq!(status.accepted_root_count, 1);
         assert_eq!(status.provisioned_root_count, 1);
         assert!(status.components_provisioned_at_ns.is_some());
         assert!(status.published_fleet_registry.is_some());
         assert!(status.service_topology_published_at_ns.is_some());
+        assert_eq!(status.directory_confirmed_root_count, 1);
+        assert!(status.directories_confirmed_at_ns.is_some());
         let published_registry: Result<FleetRegistry, Error> = fixture
             .pic
             .query_candid(fixture.coordinator, CANIC_FLEET_REGISTRY, ())
@@ -905,10 +939,43 @@ mod tests {
                 },),
             )
             .expect("query root provisioning status transport");
+        let root = root.expect("query root provisioning status");
+        assert_eq!(root.phase, RootComponentProvisioningPhase::Published);
+        assert_eq!(root.published_component_count, root.component_count);
+        let publication = root
+            .publication
+            .as_ref()
+            .expect("Published root has exact Directory evidence");
         assert_eq!(
-            root.expect("query root provisioning status").phase,
-            RootComponentProvisioningPhase::Provisioned
+            publication.component_directories.len(),
+            usize::try_from(root.component_count).expect("bounded Component count")
         );
+        assert_eq!(publication.component_group_directories.len(), 1);
+        for member in root
+            .result
+            .as_ref()
+            .expect("Published root retains provisioned result")
+            .placements
+            .iter()
+            .flat_map(|placement| &placement.members)
+        {
+            let runtime: Result<ComponentRuntimeStatusResponse, Error> = fixture
+                .pic
+                .query_candid_as(
+                    member.binding.canister_id,
+                    fixture.root.root_id,
+                    CANIC_COMPONENT_RUNTIME_STATUS,
+                    (),
+                )
+                .expect("query published Component runtime transport");
+            let runtime = runtime.expect("query published Component runtime");
+            assert_eq!(runtime.phase, ComponentRuntimePhase::DirectoryPrepared);
+            let authority = runtime
+                .authority
+                .expect("Directory-prepared Component retains authority");
+            assert_eq!(authority.fleet.services.len(), 1);
+            assert!(authority.component_group.is_some());
+        }
         assert_prepared(&fixture.pic, fixture.root.root_id);
     }
 
@@ -3604,6 +3671,7 @@ mod tests {
                     status: entry.status,
                 })
                 .collect(),
+            services: vec![],
         };
         let request = FleetSubnetRootRegistryMirrorActivationRequest {
             previous_registry: root_draining.active_registry.clone(),
@@ -3783,6 +3851,7 @@ mod tests {
                     status: entry.status,
                 })
                 .collect(),
+            services: vec![],
         };
         let activation_request = FleetSubnetRootRegistryMirrorActivationRequest {
             previous_registry: activated.previous_version,

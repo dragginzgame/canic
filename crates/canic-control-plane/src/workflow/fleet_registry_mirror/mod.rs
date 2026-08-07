@@ -183,6 +183,49 @@ pub async fn active_status(
     }
 }
 
+/// Advance one Prepared root to the exact Coordinator-published service Registry.
+pub async fn advance_for_component_publication(
+    previous_registry: FleetRegistryVersion,
+    expected_registry: FleetRegistryVersion,
+    store_bootstrap: canic_core::dto::root_store::RootStoreBootstrapRequest,
+) -> Result<FleetSubnetRootRegistryMirrorActivationResponse, InternalError> {
+    let (authority, root) = validated_root_authority()?;
+    root_store::status(store_bootstrap.clone()).await?;
+    if previous_registry == expected_registry {
+        let active = validated_active(&authority, root)?;
+        if active.snapshot.version != expected_registry {
+            return Err(InternalError::conflict(
+                "root Fleet Registry mirror differs from unchanged publication authority",
+            ));
+        }
+        return Ok(active_response(root, &active));
+    }
+    let snapshot = fetch_snapshot(authority.binding.authority.binding.coordinator).await?;
+    let expected_directory = FleetRegistryOps::directory_for_root(
+        &authority.binding.authority,
+        &ConfigOps::component_topology()?,
+        &snapshot.registry,
+        root,
+    )?;
+    let request = FleetSubnetRootRegistryMirrorActivationRequest {
+        previous_registry,
+        expected_registry,
+        expected_directory,
+        store_bootstrap,
+    };
+    validate_transition_request(&authority, &request)?;
+    let directory = validate_target(&authority, root, &request, &snapshot)?;
+    let current = validated_active(&authority, root)?;
+    match classify_active_transition(&current, &request)? {
+        ActiveMirrorTransition::Current => Ok(active_response(root, &current)),
+        ActiveMirrorTransition::Advance => {
+            FleetRegistryMirrorOps::commit_active(request.previous_registry, snapshot, directory);
+            let active = validated_active(&authority, root)?;
+            Ok(active_response(root, &active))
+        }
+    }
+}
+
 async fn fetch_snapshot(
     coordinator: candid::Principal,
 ) -> Result<FleetRegistrySnapshotResponse, InternalError> {
@@ -518,6 +561,7 @@ mod tests {
                 source_fleet_subnet_root: candid::Principal::from_slice(&[4; 29]),
             },
             fleet_subnet_roots: Vec::new(),
+            services: Vec::new(),
         }
     }
 

@@ -27,6 +27,7 @@ use canic_core::{
             component_provisioning_plan::{
                 ComponentProvisioningPlanOps, RootComponentProvisioningBatchValidation,
             },
+            component_runtime::ComponentRuntimeOps,
             config::ConfigOps,
             ic::IcOps,
         },
@@ -36,12 +37,18 @@ use canic_core::{
         component_provisioning::{
             RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningAdvanceRequest,
             RootComponentProvisioningStatusRequest, RootComponentProvisioningStatusResponse,
+            RootComponentPublicationRequest,
         },
-        component_registry::{ComponentProvisioningOrigin, RootComponentAllocationRequest},
+        component_registry::{
+            ComponentLifecycleStatus, ComponentProvisioningOrigin,
+            ComponentRuntimeDirectoryAuthority, ComponentRuntimeDirectoryPreparationRequest,
+            RootComponentAllocationRequest,
+        },
         fleet_activation::FleetActivationPhase,
         fleet_registry::FleetSubnetRootStatus,
         fleet_subnet_root::FleetSubnetRootAuthority,
     },
+    ids::ManagedCanisterBinding,
 };
 
 /// Durably accept one complete root batch under the exact protected Coordinator.
@@ -155,6 +162,140 @@ pub async fn advance(
     Ok(crate::ops::component_provisioning::status_response(
         advanced,
     ))
+}
+
+/// Advance one exact Fleet/Component/Component Group Directory publication step.
+pub async fn publish(
+    caller: Principal,
+    request: RootComponentPublicationRequest,
+) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
+    let (authority, root) = validated_root_authority()?;
+    require_coordinator(caller, authority.binding.authority.binding.coordinator)?;
+    if FleetActivationWorkflow::status()?.phase != FleetActivationPhase::Prepared {
+        return Err(InternalError::conflict(
+            "root Component Directory publication requires runtime Prepared",
+        ));
+    }
+    let before = RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
+        operation_id: request.operation_id,
+        plan_hash: request.plan_hash,
+    })?;
+    let registry = ComponentRegistryOps::current().ok_or_else(|| {
+        InternalError::unavailable("root Component Registry authority has not been prepared")
+    })?;
+    validate_component_registry_authority(
+        &registry,
+        &authority.binding,
+        authority.initial_release_set,
+        &request.published_fleet_registry,
+    )?;
+    let mirror = super::fleet_registry_mirror::advance_for_component_publication(
+        before.fleet_registry.clone(),
+        request.published_fleet_registry.clone(),
+        registry.store_bootstrap.clone(),
+    )
+    .await?;
+    if mirror.fleet_subnet_root != root || mirror.version != request.published_fleet_registry {
+        return Err(InternalError::conflict(
+            "root Fleet Registry mirror differs from Component publication authority",
+        ));
+    }
+    let current = RootComponentProvisioningOps::begin_publication(
+        &request,
+        &mirror.directory,
+        IcOps::now_nanos(),
+    )?;
+    if request.expected_published_component_count < current.published_component_count
+        || current.phase
+            == canic_core::dto::component_provisioning::RootComponentProvisioningPhase::Published
+    {
+        return Ok(crate::ops::component_provisioning::status_response(current));
+    }
+    let Some(member) = RootComponentProvisioningOps::next_publication_member(&current)? else {
+        return RootComponentProvisioningOps::finalize_published(&request, IcOps::now_nanos())
+            .map(crate::ops::component_provisioning::status_response);
+    };
+    publish_component_directory(&request, member, mirror.directory).await
+}
+
+async fn publish_component_directory(
+    request: &RootComponentPublicationRequest,
+    member: crate::view::component_provisioning::RootComponentPublicationMemberView,
+    fleet_directory: canic_core::dto::fleet_registry::FleetDirectorySnapshot,
+) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
+    let partition =
+        ComponentRegistryOps::partition(member.binding.component)?.ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "published Component has no Registry partition",
+            )
+        })?;
+    validate_publication_partition(&member, &partition)?;
+    let directory_request = ComponentRuntimeDirectoryPreparationRequest {
+        operation_id: member.member_operation_id,
+        authority: ComponentRuntimeDirectoryAuthority {
+            fleet: fleet_directory,
+            component: super::component_registry::component_directory_head(&partition),
+            component_group: Some(member.component_group.clone()),
+        },
+        direct_children: super::component_registry::active_component_direct_children(
+            &partition,
+            member.binding.canister_id,
+        )?,
+    };
+    let directory_authority_hash =
+        ComponentRuntimeOps::directory_authority_hash(&directory_request.authority)?;
+    let current = RootComponentProvisioningOps::begin_publication_delivery(
+        request,
+        &member,
+        directory_authority_hash,
+        IcOps::now_nanos(),
+    )?;
+    let intent = current.publication_in_flight.as_ref().ok_or_else(|| {
+        InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component publication pre-call intent was not retained",
+        )
+    })?;
+    if intent.component_index != member.component_index
+        || intent.canister_id != member.binding.canister_id
+        || intent.directory_authority_hash != directory_authority_hash
+    {
+        return Err(InternalError::conflict(
+            "Component publication pre-call intent differs from derived authority",
+        ));
+    }
+    let binding = ManagedCanisterBinding::Component(member.binding.clone());
+    let _observed = super::component_registry::prepare_grouped_component_directories(
+        member.binding.canister_id,
+        &binding,
+        &member.deployment,
+        &directory_request,
+        directory_authority_hash,
+    )
+    .await?;
+    RootComponentProvisioningOps::record_publication_delivery(
+        request,
+        &member,
+        directory_authority_hash,
+    )
+    .map(crate::ops::component_provisioning::status_response)
+}
+
+fn validate_publication_partition(
+    member: &crate::view::component_provisioning::RootComponentPublicationMemberView,
+    partition: &crate::view::component_registry::ComponentRegistryPartitionView,
+) -> Result<(), InternalError> {
+    if partition.status != ComponentLifecycleStatus::Prepared
+        || partition.binding != member.binding
+        || partition.revision != member.component_registry_revision
+        || partition.content_hash != member.component_registry_content_hash
+    {
+        return Err(InternalError::conflict(
+            "Component publication Registry partition differs from provisioned authority",
+        ));
+    }
+    Ok(())
 }
 
 fn advance_member_reservation(

@@ -10,7 +10,9 @@ use canic_core::{
     },
     dto::{
         component_deployment::{ComponentDeploymentLimits, ComponentDeploymentPurpose},
-        component_provisioning::FleetSubnetRootProvisioningBatch,
+        component_provisioning::{
+            FleetSubnetRootProvisioningBatch, RootComponentPublicationEvidence,
+        },
         fleet_registry::FleetRegistryVersion,
     },
     eager_static,
@@ -157,6 +159,37 @@ pub enum RootComponentProvisioningStateRecordPhase {
         provisioned_at_ns: u64,
         receipt_content_hash: [u8; 32],
     },
+    Publishing {
+        placement_count: u32,
+        component_count: u32,
+        result: RootComponentProvisioningResultRecord,
+        publication: RootComponentPublicationEvidence,
+        published_component_count: u32,
+        in_flight: Option<RootComponentPublicationIntentRecord>,
+        accepted_at_ns: u64,
+        provisioned_at_ns: u64,
+        publication_started_at_ns: u64,
+        provisioned_receipt_content_hash: [u8; 32],
+    },
+    Published {
+        placement_count: u32,
+        component_count: u32,
+        result: RootComponentProvisioningResultRecord,
+        publication: RootComponentPublicationEvidence,
+        accepted_at_ns: u64,
+        provisioned_at_ns: u64,
+        published_at_ns: u64,
+        receipt_content_hash: [u8; 32],
+    },
+}
+
+/// Durable pre-call intent for one exact prepared Component Directory delivery.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentPublicationIntentRecord {
+    pub component_index: u32,
+    pub canister_id: candid::Principal,
+    pub directory_authority_hash: [u8; 32],
+    pub started_at_ns: u64,
 }
 
 /// Persisted Component occurrence in one terminal root provisioning result.

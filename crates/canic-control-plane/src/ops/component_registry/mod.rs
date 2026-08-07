@@ -10107,6 +10107,7 @@ fn committed_records(
         ComponentRuntimeOps::directory_authority_hash(&ComponentRuntimeDirectoryAuthority {
             fleet: fleet_directory.clone(),
             component: directory,
+            component_group: None,
         })?;
     let mut next_record = record.clone();
     next_record.progress = RootComponentAllocationProgressRecord::Committed {
@@ -10313,6 +10314,7 @@ fn component_directory_authority_hash(
             },
             descendant_count,
         },
+        component_group: None,
     })
 }
 
@@ -10627,6 +10629,7 @@ fn validate_membership_directory_authority_hash(
             },
             descendant_count: 0,
         },
+        component_group: None,
     };
     if ComponentRuntimeOps::directory_authority_hash(&authority)?
         != membership.directory_authority_hash
@@ -10656,6 +10659,7 @@ fn validate_child_directory_authority_hash(
             },
             descendant_count: commitment.committed_descendants,
         },
+        component_group: None,
     };
     if ComponentRuntimeOps::directory_authority_hash(&authority)?
         != commitment.directory_authority_hash
@@ -10685,6 +10689,7 @@ fn validate_child_membership_directory_authority_hash(
             },
             descendant_count: membership.committed_descendants,
         },
+        component_group: None,
     };
     if ComponentRuntimeOps::directory_authority_hash(&authority)?
         != membership.directory_authority_hash
@@ -10714,6 +10719,7 @@ fn validate_directory_authority_hash(
             },
             descendant_count: 0,
         },
+        component_group: None,
     };
     if ComponentRuntimeOps::directory_authority_hash(&authority)?
         != commitment.directory_authority_hash
@@ -14949,6 +14955,7 @@ mod tests {
                 },
                 descendant_count: partition.committed_descendants,
             },
+            component_group: None,
         };
         let directory_authority_hash =
             ComponentRuntimeOps::directory_authority_hash(&directory_authority)
@@ -15462,6 +15469,7 @@ mod tests {
                 },
                 descendant_count: partition.committed_descendants,
             },
+            component_group: None,
         };
         let authority_hash = ComponentRuntimeOps::directory_authority_hash(&directory_authority)
             .expect("draining Directory authority hash");
@@ -15654,6 +15662,7 @@ mod tests {
                 },
                 descendant_count: partition.committed_descendants,
             },
+            component_group: None,
         };
         let directory_authority_hash =
             ComponentRuntimeOps::directory_authority_hash(&directory_authority)
@@ -15780,6 +15789,7 @@ mod tests {
                 },
                 descendant_count: partition.committed_descendants,
             },
+            component_group: None,
         };
         let directory_authority_hash =
             ComponentRuntimeOps::directory_authority_hash(&directory_authority)
@@ -17339,6 +17349,7 @@ mod tests {
                 fleet_subnet_root: root.fleet_subnet_root,
                 status: FleetSubnetRootStatus::Active,
             }],
+            services: vec![],
         }
     }
 
@@ -17461,6 +17472,7 @@ mod tests {
                 },
                 descendant_count: 0,
             },
+            component_group: None,
         };
         let authority_hash = ComponentRuntimeOps::directory_authority_hash(&directory_authority)
             .expect("empty draining Directory authority hash");
