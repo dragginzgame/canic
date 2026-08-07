@@ -28,6 +28,45 @@ pub struct FleetComponentProvisioningPlan {
     pub batches: Vec<FleetSubnetRootProvisioningBatch>,
 }
 
+/// Controller-authenticated command that durably freezes one complete plan.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetComponentProvisioningPrepareRequest {
+    pub operation_id: [u8; 32],
+    pub plan: FleetComponentProvisioningPlan,
+}
+
+/// Exact passive lookup key for one Coordinator-owned provisioning operation.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetComponentProvisioningStatusRequest {
+    pub operation_id: [u8; 32],
+    pub plan_hash: [u8; 32],
+}
+
+/// Durable Coordinator progress exposed without returning the complete plan.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum FleetComponentProvisioningPhase {
+    Planned,
+}
+
+/// Compact exact status for one Coordinator-owned provisioning operation.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetComponentProvisioningStatusResponse {
+    pub operation_id: [u8; 32],
+    pub plan_hash: [u8; 32],
+    pub fleet_registry: FleetRegistryVersion,
+    pub configuration_digest: ComponentDeploymentConfigurationDigest,
+    pub operation: FleetComponentProvisioningOperation,
+    pub phase: FleetComponentProvisioningPhase,
+    pub directory_confirmation_root_count: u32,
+    pub root_batch_count: u32,
+    pub group_placement_count: u32,
+    pub component_count: u32,
+    pub planned_at_ns: u64,
+}
+
 /// Fresh-install or monotonic scale-out scope covered by one plan.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]

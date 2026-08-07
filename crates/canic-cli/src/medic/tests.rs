@@ -562,7 +562,6 @@ fn workspace_config_quality_checks_validate_role_package_metadata() {
     let config = write_medic_config(
         &root,
         r#"
-controllers = []
 [app]
 name = "demo"
 
@@ -613,7 +612,6 @@ fn workspace_config_quality_checks_fail_on_missing_or_mismatched_package_metadat
     let config = write_medic_config(
         &root,
         r#"
-controllers = []
 [app]
 name = "demo"
 
@@ -671,7 +669,6 @@ fn workspace_config_quality_checks_report_missing_required_canic_features() {
     let config = write_medic_config(
         &root,
         r#"
-controllers = []
 [app]
 name = "demo"
 
@@ -738,7 +735,6 @@ fn workspace_config_quality_checks_accept_required_canic_features() {
     let config = write_medic_config(
         &root,
         r#"
-controllers = []
 [app]
 name = "demo"
 
@@ -796,7 +792,6 @@ fn workspace_config_quality_checks_reject_workspace_canic_features() {
     let config = write_medic_config(
         &root,
         r#"
-controllers = []
 [app]
 name = "demo"
 
@@ -853,7 +848,6 @@ fn workspace_config_quality_checks_reject_package_feature_forwarding() {
     let config = write_medic_config(
         &root,
         r#"
-controllers = []
 [app]
 name = "demo"
 

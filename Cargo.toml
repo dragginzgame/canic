@@ -25,7 +25,6 @@ members = [
     "canisters/test/cycles_ledger_stub",
     "canisters/test/delegation_issuer_stub",
     "canisters/test/delegation_root_stub",
-    "canisters/test/fleet_coordinator_stub",
     "canisters/test/intent_authority",
     "canisters/test/payload_limit_probe",
     "canisters/test/project_hub_stub",
@@ -37,6 +36,7 @@ members = [
     "crates/canic-cli",
     "crates/canic-control-plane",
     "crates/canic-core",
+    "crates/canic-fleet-coordinator",
     "crates/canic-host",
     "crates/canic-macros",
     "crates/canic-testing-internal",
@@ -66,6 +66,7 @@ canic = { version = "0.101.16", path = "crates/canic", default-features = false 
 canic-backup = { version = "0.101.16", path = "crates/canic-backup" }
 canic-control-plane = { version = "0.101.16", path = "crates/canic-control-plane", default-features = false }
 canic-core = { version = "0.101.16", path = "crates/canic-core" }
+canic-fleet-coordinator = { version = "0.101.16", path = "crates/canic-fleet-coordinator" }
 canic-host = { version = "0.101.16", path = "crates/canic-host" }
 canic-macros = { version = "0.101.16", path = "crates/canic-macros" }
 canic-testing-internal = { version = "0.101.16", path = "crates/canic-testing-internal" }
@@ -141,6 +142,7 @@ canic-backup = { path = "crates/canic-backup" }
 canic-cli = { path = "crates/canic-cli" }
 canic-control-plane = { path = "crates/canic-control-plane" }
 canic-core = { path = "crates/canic-core" }
+canic-fleet-coordinator = { path = "crates/canic-fleet-coordinator" }
 canic-macros = { path = "crates/canic-macros" }
 canic-host = { path = "crates/canic-host" }
 canic-wasm-store = { path = "crates/canic-wasm-store" }

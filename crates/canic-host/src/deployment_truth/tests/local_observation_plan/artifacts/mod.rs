@@ -42,6 +42,7 @@ fn local_artifact_manifest_collects_roles_and_release_set_hashes() {
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
     write_local_network_authority(&icp_root, "local");
+    write_artifact(&icp_root, "fleet_coordinator", b"coordinator-artifact");
     write_artifact(&icp_root, "root", b"root-artifact");
     write_artifact(&icp_root, "wasm_store", b"wasm-store-artifact");
     write_artifact(&icp_root, "user_hub", b"user-hub-artifact");
@@ -56,7 +57,7 @@ fn local_artifact_manifest_collects_roles_and_release_set_hashes() {
     });
 
     assert_eq!(manifest.manifest_id, "local:local:demo:artifacts");
-    assert_eq!(manifest.role_artifacts.len(), 3);
+    assert_eq!(manifest.role_artifacts.len(), 4);
     assert!(
         manifest
             .role_artifacts
@@ -73,6 +74,12 @@ fn local_artifact_manifest_collects_roles_and_release_set_hashes() {
         wasm_store.observed_wasm_gz_file_sha256_source,
         Some(ArtifactDigestSourceV1::ObservedFileDigest)
     );
+    let coordinator = manifest
+        .role_artifacts
+        .iter()
+        .find(|artifact| artifact.role == "fleet_coordinator")
+        .expect("Fleet Coordinator artifact");
+    assert_eq!(coordinator.source, ArtifactSourceV1::FleetCoordinator);
     let user_hub = manifest
         .role_artifacts
         .iter()
@@ -127,7 +134,7 @@ fn local_artifact_manifest_requires_selected_environment_artifact_root() {
     });
 
     assert_eq!(manifest.artifact_root, None);
-    assert_eq!(manifest.role_artifacts.len(), 3);
+    assert_eq!(manifest.role_artifacts.len(), 4);
     assert!(manifest.role_artifacts.iter().all(|artifact| {
         artifact
             .wasm_gz_path
@@ -172,7 +179,7 @@ fn local_deployment_check_rejects_missing_exact_artifact_root() {
     })
     .expect("check local deployment");
 
-    assert_eq!(check.plan.role_artifacts.len(), 3);
+    assert_eq!(check.plan.role_artifacts.len(), 4);
     assert!(check.inventory.observed_artifacts.is_empty());
     assert!(check.report.hard_failures.iter().any(|finding| {
         finding.code == "artifact_missing" && finding.subject.as_deref() == Some("root")
@@ -187,6 +194,7 @@ fn local_deployment_check_separates_target_environment_from_artifact_environment
     let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
+    write_artifact(&icp_root, "fleet_coordinator", b"coordinator-artifact");
     write_artifact(&icp_root, "root", b"root-artifact");
     write_artifact(&icp_root, "wasm_store", b"wasm-store-artifact");
     write_artifact(&icp_root, "user_hub", b"user-hub-artifact");
@@ -212,8 +220,8 @@ fn local_deployment_check_separates_target_environment_from_artifact_environment
     .expect("check local deployment");
 
     assert_eq!(check.plan.deployment_identity.environment, "staging");
-    assert_eq!(check.plan.role_artifacts.len(), 3);
-    assert_eq!(check.inventory.observed_artifacts.len(), 3);
+    assert_eq!(check.plan.role_artifacts.len(), 4);
+    assert_eq!(check.inventory.observed_artifacts.len(), 4);
     assert!(check.report.hard_failures.iter().all(|finding| {
         !matches!(
             finding.code.as_str(),
@@ -232,11 +240,11 @@ fn local_deployment_check_observes_only_the_exact_release_artifact_root() {
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
     write_local_network_authority(&icp_root, "local");
 
-    for role in ["root", "wasm_store", "user_hub"] {
+    for role in ["fleet_coordinator", "root", "wasm_store", "user_hub"] {
         write_artifact(&icp_root, role, b"stale-shared-artifact");
     }
     let release_artifact_root = icp_root.join(".canic/release-builds/exact/artifacts");
-    for role in ["root", "wasm_store", "user_hub"] {
+    for role in ["fleet_coordinator", "root", "wasm_store", "user_hub"] {
         write_artifact_at_root(&release_artifact_root, role, b"exact-release-artifact");
     }
 
@@ -299,6 +307,12 @@ fn local_artifact_manifest_records_missing_artifacts_as_gaps() {
             .unresolved_artifacts
             .iter()
             .any(|gap| gap.key == "local_artifacts.release_set_manifest")
+    );
+    assert!(
+        manifest
+            .unresolved_artifacts
+            .iter()
+            .any(|gap| gap.key == "local_artifacts.fleet_coordinator")
     );
     assert!(
         manifest

@@ -8,7 +8,6 @@ fn install_truth_gate_lines_include_warning_codes() {
     fs::write(
         &config_path,
         r#"
-controllers = []
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -124,7 +123,6 @@ fn install_truth_gate_lines_distinguish_plan_assumptions() {
     fs::write(
         &config_path,
         r#"
-controllers = []
 [app]
 name = "demo"
 init_mode = "enabled"

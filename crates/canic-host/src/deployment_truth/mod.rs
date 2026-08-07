@@ -77,11 +77,14 @@ pub use text::deployment_comparison_report_text;
 
 pub const DEPLOYMENT_TRUTH_SCHEMA_VERSION: u32 = 1;
 const ROOT_ROLE: &str = "root";
-const IMPLICIT_WASM_STORE_ROLE: &str = "wasm_store";
+const FLEET_COORDINATOR_ROLE: &str = "fleet_coordinator";
+const WASM_STORE_ROLE: &str = "wasm_store";
 
-fn deployment_truth_roles_with_implicit_wasm_store(mut roles: Vec<String>) -> Vec<String> {
-    if !roles.iter().any(|role| role == IMPLICIT_WASM_STORE_ROLE) {
-        roles.push(IMPLICIT_WASM_STORE_ROLE.to_string());
+fn deployment_truth_roles_with_built_in_infrastructure(mut roles: Vec<String>) -> Vec<String> {
+    for role in [FLEET_COORDINATOR_ROLE, WASM_STORE_ROLE] {
+        if !roles.iter().any(|candidate| candidate == role) {
+            roles.push(role.to_string());
+        }
     }
     roles.sort_by(|left, right| {
         deployment_truth_role_rank(left)
@@ -94,15 +97,17 @@ fn deployment_truth_roles_with_implicit_wasm_store(mut roles: Vec<String>) -> Ve
 
 fn deployment_truth_role_rank(role: &str) -> u8 {
     match role {
-        ROOT_ROLE => 0,
-        IMPLICIT_WASM_STORE_ROLE => 1,
-        _ => 2,
+        FLEET_COORDINATOR_ROLE => 0,
+        ROOT_ROLE => 1,
+        WASM_STORE_ROLE => 2,
+        _ => 3,
     }
 }
 
 fn deployment_truth_artifact_source(role: &str) -> ArtifactSourceV1 {
     match role {
-        IMPLICIT_WASM_STORE_ROLE => ArtifactSourceV1::WasmStore,
+        FLEET_COORDINATOR_ROLE => ArtifactSourceV1::FleetCoordinator,
+        WASM_STORE_ROLE => ArtifactSourceV1::WasmStore,
         _ => ArtifactSourceV1::LocalBuild,
     }
 }

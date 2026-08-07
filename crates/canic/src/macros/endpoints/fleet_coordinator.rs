@@ -4,7 +4,7 @@
 //! Does not own: Registry state, validation, lifecycle orchestration, or root behavior.
 //! Boundary: every export delegates immediately to the Coordinator API facade.
 
-/// Emit controller-facing canonical Fleet Registry query endpoints.
+/// Emit the controller-facing Fleet Coordinator endpoint surface.
 #[macro_export]
 macro_rules! canic_emit_fleet_coordinator_endpoints {
     () => {
@@ -66,6 +66,27 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
             request: ::canic::dto::fleet_registry::FleetRegistryActivationRequest,
         ) -> Result<::canic::dto::fleet_registry::FleetRegistryActivationResponse, ::canic::Error> {
             $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::activate_registry(
+                request,
+            )
+        }
+
+        #[$crate::canic_update(
+            requires(caller::is_controller()),
+            payload(max_bytes = ::canic::__internal::core::control_plane_support::ops::component_provisioning_plan::MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CANONICAL_BYTES)
+        )]
+        async fn canic_fleet_component_provisioning_prepare(
+            request: ::canic::dto::component_provisioning::FleetComponentProvisioningPrepareRequest,
+        ) -> Result<::canic::dto::component_provisioning::FleetComponentProvisioningStatusResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::prepare_component_provisioning(
+                request,
+            )
+        }
+
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_fleet_component_provisioning_status(
+            request: ::canic::dto::component_provisioning::FleetComponentProvisioningStatusRequest,
+        ) -> Result<::canic::dto::component_provisioning::FleetComponentProvisioningStatusResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::component_provisioning_status(
                 request,
             )
         }

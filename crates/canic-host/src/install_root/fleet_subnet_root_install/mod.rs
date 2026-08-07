@@ -18,8 +18,9 @@ use super::{
     },
     operations::{
         CreationEffectRequest, EffectAction, InstallArtifact, InstallEffectRequest,
-        execute_or_observe_creation, execute_or_observe_install, observe_controllers, query_no_arg,
-        require_expected_module_hash, resolve_install_artifact,
+        active_installation_controller, execute_or_observe_creation, execute_or_observe_install,
+        query_no_arg, require_expected_controllers, require_expected_module_hash,
+        resolve_install_artifact,
     },
 };
 use crate::{
@@ -78,9 +79,6 @@ enum RootInstallStateError {
 
     #[error("Wasm Store protected authority query differs from exact planned binding")]
     WasmStoreAuthorityMismatch,
-
-    #[error("Wasm Store temporary controllers differ from installer-plus-root authority")]
-    WasmStoreTemporaryControllersMismatch,
 
     #[error("Fleet Subnet Root installation exceeded its bounded phase transitions")]
     TransitionBoundExceeded,
@@ -154,7 +152,12 @@ fn drive_root_install(
         current = match current.journal.phase {
             FleetSubnetRootInstallPhase::Planned => {
                 prepare_creation_result(&create_result_path(&current.path), "Fleet Subnet Root")?;
-                begin_root_creation(&current)?
+                let installation_controller = active_installation_controller(&super::install_icp(
+                    icp_root,
+                    environment,
+                    local_replica,
+                ))?;
+                begin_root_creation(&current, installation_controller)?
             }
             FleetSubnetRootInstallPhase::RootCreationInFlight => {
                 recover_or_create_root(icp_root, environment, local_replica, &current)?
@@ -164,9 +167,7 @@ fn drive_root_install(
                     &wasm_store_create_result_path(&current.path),
                     "Wasm Store",
                 )?;
-                let installation_controller =
-                    active_installation_controller(icp_root, environment, local_replica)?;
-                begin_wasm_store_creation(&current, installation_controller)?
+                begin_wasm_store_creation(&current)?
             }
             FleetSubnetRootInstallPhase::WasmStoreCreationInFlight => {
                 recover_or_create_wasm_store(icp_root, environment, local_replica, &current)?
@@ -236,6 +237,10 @@ fn recover_or_create_root(
     current: &ResolvedFleetSubnetRootInstall,
 ) -> Result<ResolvedFleetSubnetRootInstall, Box<dyn std::error::Error>> {
     let result_path = create_result_path(&current.path);
+    let installation_controller = current
+        .journal
+        .installation_controller
+        .expect("root creation intent retains its installation controller");
     let evidence = execute_or_observe_creation(CreationEffectRequest {
         icp_root,
         environment,
@@ -244,7 +249,7 @@ fn recover_or_create_root(
         subject: "Fleet Subnet Root",
         placement_subnet: current.journal.root_plan.placement_subnet,
         funding: &current.journal.root_plan.root_creation_funding,
-        controllers: &[],
+        controllers: std::slice::from_ref(&installation_controller),
         action: EffectAction::from_advanced(current.advanced),
         expected_module_hash: current.journal.expected_root_module_hash,
     })?;
@@ -322,25 +327,7 @@ fn recover_or_create_wasm_store(
         }
         .into());
     };
-    let observed_controllers = observe_controllers(
-        &super::install_icp(icp_root, environment, local_replica),
-        wasm_store,
-    )?;
-    if observed_controllers != temporary_store_controllers(&current.journal) {
-        return Err(RootInstallStateError::WasmStoreTemporaryControllersMismatch.into());
-    }
     record_wasm_store_created(current, wasm_store).map_err(Into::into)
-}
-
-fn active_installation_controller(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
-) -> Result<Principal, Box<dyn std::error::Error>> {
-    let text =
-        super::install_icp(icp_root, environment, local_replica).identity_principal_text()?;
-    let controller = Principal::from_text(text.trim())?;
-    Ok(controller)
 }
 
 fn temporary_store_controllers(journal: &FleetSubnetRootInstallJournal) -> Vec<Principal> {
@@ -414,6 +401,16 @@ fn verify_live_infrastructure(
         .fleet_subnet_root
         .expect("installed root journal retains its principal");
     let icp = super::install_icp(icp_root, environment, local_replica);
+    require_expected_controllers(
+        &icp,
+        fleet_subnet_root,
+        std::slice::from_ref(
+            &journal
+                .installation_controller
+                .expect("installed root retains its installation controller"),
+        ),
+        "Fleet Subnet Root",
+    )?;
     require_expected_module_hash(
         &icp,
         fleet_subnet_root,
@@ -462,10 +459,12 @@ fn verify_live_infrastructure(
     validate_live_root_activation_status(journal_path, journal, &store_status)
         .map_err(|_| RootInstallStateError::ActivationStatusMismatch)?;
     let expected_store = expected_wasm_store_authority(journal)?;
-    let observed_controllers = observe_controllers(&icp, wasm_store)?;
-    if observed_controllers != temporary_store_controllers(journal) {
-        return Err(RootInstallStateError::WasmStoreTemporaryControllersMismatch.into());
-    }
+    require_expected_controllers(
+        &icp,
+        wasm_store,
+        &temporary_store_controllers(journal),
+        "Wasm Store",
+    )?;
     let observed_store = query_no_arg::<FleetSubnetWasmStoreAuthority>(
         &icp,
         wasm_store,

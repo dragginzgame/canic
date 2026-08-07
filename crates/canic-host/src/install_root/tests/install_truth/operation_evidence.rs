@@ -9,9 +9,16 @@ fn build_install_targets_operation_owns_current_install_evidence() {
 
     assert_eq!(
         operation.evidence(),
-        ["build_target:root", "build_target:wasm_store"]
+        [
+            "build_target:fleet_coordinator",
+            "build_target:root",
+            "build_target:wasm_store",
+        ]
     );
-    assert_eq!(operation.role_names(), ["root", "wasm_store"]);
+    assert_eq!(
+        operation.role_names(),
+        ["fleet_coordinator", "root", "wasm_store"]
+    );
 }
 
 #[test]

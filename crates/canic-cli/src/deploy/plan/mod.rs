@@ -41,7 +41,6 @@ const ASSUMPTION_PREFIX_LOCAL_ARTIFACTS: &str = "local_artifacts.";
 const ASSUMPTION_PREFIX_LOCAL_CONFIG: &str = "local_config.";
 const ASSUMPTION_PREFIX_FLEET_CATALOG: &str = "fleet_catalog.";
 const ASSUMPTION_PREFIX_UNSUPPORTED: &str = "unsupported.";
-const ASSUMPTION_KEY_LOCAL_CONFIG_CONTROLLERS: &str = "local_config.controllers";
 const ASSUMPTION_KEY_LOCAL_CONFIG_POOLS: &str = "local_config.pools";
 const ASSUMPTION_KEY_LOCAL_CONFIG_ROLES: &str = "local_config.roles";
 pub(super) fn run<I>(args: I) -> Result<(), DeployCommandError>
@@ -189,8 +188,8 @@ mod tests {
     #[test]
     fn blocked_status_wins_when_no_unsupported_assumption_exists() {
         let plan = plan_with_assumptions([assumption(
-            ASSUMPTION_KEY_LOCAL_CONFIG_CONTROLLERS,
-            "could not resolve configured controllers",
+            ASSUMPTION_KEY_LOCAL_CONFIG_ROLES,
+            "could not resolve configured roles",
         )]);
 
         let blockers = plan_blockers(&plan);
@@ -198,7 +197,7 @@ mod tests {
         let warnings = plan_warnings(&plan);
 
         assert_eq!(blockers.len(), 1);
-        assert_eq!(blockers[0].category, CATEGORY_AUTHORITY);
+        assert_eq!(blockers[0].category, CATEGORY_CONFIG);
         assert_eq!(blockers[0].severity, SEVERITY_BLOCKED);
         assert!(assumptions.is_empty());
         assert!(warnings.is_empty());

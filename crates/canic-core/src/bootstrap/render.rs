@@ -5,9 +5,8 @@
 //! Boundary: host-side bootstrap tooling calls this before embedding generated source.
 
 #[cfg(test)]
-use crate::config::schema::IcpRefillPolicy;
+use crate::{cdk::candid::Principal, config::schema::IcpRefillPolicy};
 use crate::{
-    cdk::candid::Principal,
     config::{
         ComponentDeploymentLabelKey, ComponentDeploymentLabelValue, FleetServiceMemberPurpose,
         schema::{
@@ -45,7 +44,6 @@ pub fn config_model(config: &ConfigModel) -> String {
 
 // Render the top-level configuration model into a portable Rust expression.
 fn render_config_model(config: &ConfigModel) -> TokenStream {
-    let controllers = render_vec(config.controllers.iter(), render_principal);
     let standards = render_option(config.standards.as_ref(), render_standards);
     let log = render_log_config(&config.log);
     let auth = render_auth_config(&config.auth);
@@ -73,7 +71,6 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
     let services = render_services_config(&config.services);
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ConfigModel {
-            controllers: #controllers,
             standards: #standards,
             log: #log,
             auth: #auth,
@@ -113,6 +110,7 @@ fn render_role_declaration_kind(kind: RoleDeclarationKind) -> TokenStream {
 }
 
 // Render a principal as a byte-based constructor to avoid runtime text parsing.
+#[cfg(test)]
 fn render_principal(principal: &Principal) -> TokenStream {
     let bytes = principal.as_slice().iter().copied();
     quote! {

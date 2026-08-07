@@ -3,6 +3,40 @@ use crate::test_support::temp_dir;
 use canic_core::{ids::BuildNetwork, role_contract::CanicFeatureKey};
 
 #[test]
+fn canonical_fleet_coordinator_package_satisfies_its_runtime_only_contract() {
+    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let manifest_path = workspace_root.join("crates/canic-fleet-coordinator/Cargo.toml");
+    let validation =
+        validate_built_in_fleet_coordinator_package(&manifest_path, PackageValidationMode::Build);
+    let RolePackageValidation::Supported(evidence) = validation else {
+        panic!("canonical package should satisfy the package contract: {validation:?}");
+    };
+
+    assert_eq!(evidence.role_package_name, CANONICAL_PACKAGE_NAME);
+    assert_eq!(
+        evidence.direct_features,
+        std::collections::BTreeSet::from([CanicFeatureKey::FleetCoordinatorCanister])
+    );
+}
+
+#[test]
+fn workspace_resolution_prefers_the_canonical_fleet_coordinator_package() {
+    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let metadata = cargo_metadata(&workspace_root, true).expect("resolve workspace metadata");
+    let canic_package = resolved_canic_package(&metadata).expect("resolve exact Canic package");
+    let source = resolve_canonical_fleet_coordinator_source(&metadata, canic_package)
+        .expect("resolve canonical Coordinator source")
+        .expect("canonical Coordinator package");
+
+    assert_eq!(source.package_name, CANONICAL_PACKAGE_NAME);
+    assert!(
+        source
+            .manifest_path
+            .ends_with("crates/canic-fleet-coordinator/Cargo.toml")
+    );
+}
+
+#[test]
 fn generated_fleet_coordinator_wrapper_satisfies_its_runtime_only_contract() {
     let root = temp_dir("canic-generated-fleet-coordinator-contract");
     let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");

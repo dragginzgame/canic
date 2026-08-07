@@ -56,6 +56,42 @@ pub(in crate::install_root) enum CanisterControllerObservationError {
 }
 
 #[derive(Debug, ThisError)]
+pub(in crate::install_root) enum InstallationControllerObservationError {
+    #[error("failed to resolve the active ICP installation identity: {source}")]
+    Invocation {
+        #[source]
+        source: IcpCommandError,
+    },
+
+    #[error("ICP CLI returned invalid installation identity {observed:?}")]
+    InvalidPrincipal { observed: String },
+
+    #[error("ICP CLI returned the anonymous Principal as the installation identity")]
+    Anonymous,
+}
+
+#[derive(Debug, ThisError)]
+pub(in crate::install_root) enum ExpectedCanisterControllersError {
+    #[error("{subject} creation authority must contain at least one controller")]
+    Empty { subject: &'static str },
+
+    #[error("{subject} creation authority contains the anonymous controller")]
+    Anonymous { subject: &'static str },
+
+    #[error(transparent)]
+    Observation(#[from] CanisterControllerObservationError),
+
+    #[error(
+        "{subject} controllers differ from exact creation authority: expected {expected:?}, observed {observed:?}"
+    )]
+    Mismatch {
+        subject: &'static str,
+        expected: Vec<Principal>,
+        observed: Vec<Principal>,
+    },
+}
+
+#[derive(Debug, ThisError)]
 pub(in crate::install_root) enum CanisterModuleStateError {
     #[error("{subject} {canister} already has its expected module before install intent")]
     ExpectedModulePresent {
@@ -140,6 +176,49 @@ pub(in crate::install_root) fn observe_controllers(
     controllers.sort();
     controllers.dedup();
     Ok(controllers)
+}
+
+pub(in crate::install_root) fn active_installation_controller(
+    icp: &IcpCli,
+) -> Result<Principal, InstallationControllerObservationError> {
+    let observed = icp
+        .identity_principal_text()
+        .map_err(|source| InstallationControllerObservationError::Invocation { source })?;
+    let controller = Principal::from_text(observed.trim()).map_err(|_| {
+        InstallationControllerObservationError::InvalidPrincipal {
+            observed: observed.clone(),
+        }
+    })?;
+    if controller == Principal::anonymous() {
+        return Err(InstallationControllerObservationError::Anonymous);
+    }
+    Ok(controller)
+}
+
+pub(in crate::install_root) fn require_expected_controllers(
+    icp: &IcpCli,
+    canister: Principal,
+    expected: &[Principal],
+    subject: &'static str,
+) -> Result<(), ExpectedCanisterControllersError> {
+    if expected.is_empty() {
+        return Err(ExpectedCanisterControllersError::Empty { subject });
+    }
+    if expected.contains(&Principal::anonymous()) {
+        return Err(ExpectedCanisterControllersError::Anonymous { subject });
+    }
+    let mut expected = expected.to_vec();
+    expected.sort();
+    expected.dedup();
+    let observed = observe_controllers(icp, canister)?;
+    if observed != expected {
+        return Err(ExpectedCanisterControllersError::Mismatch {
+            subject,
+            expected,
+            observed,
+        });
+    }
+    Ok(())
 }
 
 pub(in crate::install_root) fn require_uninstalled_created_canister(

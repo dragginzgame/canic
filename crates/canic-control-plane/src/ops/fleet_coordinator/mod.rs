@@ -7,6 +7,7 @@
 use crate::{
     dto::fleet_coordinator::FleetCoordinatorInitArgs,
     storage::stable::fleet_coordinator::{
+        FleetComponentProvisioningRecord, FleetComponentProvisioningStateRecord,
         FleetCoordinatorCommitError, FleetCoordinatorCommitOutcome, FleetCoordinatorRegistryRecord,
         FleetCoordinatorRegistryStore, FleetRegistryActivationReceiptRecord,
         FleetServicePublicationReceiptRecord, FleetSubnetRootDrainingPublicationReceiptRecord,
@@ -16,6 +17,7 @@ use crate::{
 use candid::{CandidType, Principal};
 use canic_core::{
     control_plane_support::{
+        config::ConfigModel,
         error::{InternalError, InternalErrorOrigin},
         ops::{
             component_provisioning_plan::{
@@ -29,7 +31,10 @@ use canic_core::{
     dto::fleet_subnet_root::FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
     dto::{
         component_provisioning::{
-            FleetComponentProvisioningPlan, RootComponentProvisioningStatusResponse,
+            FleetComponentProvisioningOperation, FleetComponentProvisioningPhase,
+            FleetComponentProvisioningPlan, FleetComponentProvisioningPrepareRequest,
+            FleetComponentProvisioningStatusRequest, FleetComponentProvisioningStatusResponse,
+            RootComponentProvisioningStatusResponse,
         },
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
@@ -47,7 +52,10 @@ use canic_core::{
             FleetSubnetRootStatus,
         },
     },
-    ids::{ComponentTopologyDigest, FleetSubnetRootReleaseSet, SubnetId},
+    ids::{
+        ComponentDeploymentConfigurationDigest, ComponentTopologyDigest, FleetSubnetRootReleaseSet,
+        SubnetId,
+    },
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -93,6 +101,7 @@ impl FleetCoordinatorOps {
             root_join_receipts: Vec::new(),
             root_snapshot_acknowledgements: Vec::new(),
             registry_activation_receipt: None,
+            component_provisioning: None,
             service_publication_receipt: None,
             root_draining_publication_receipts: Vec::new(),
             root_removal_publication_receipts: Vec::new(),
@@ -313,6 +322,118 @@ impl FleetCoordinatorOps {
         Ok(response)
     }
 
+    pub(crate) fn prepare_component_provisioning(
+        request: FleetComponentProvisioningPrepareRequest,
+        planned_at_ns: u64,
+    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        let config = ConfigOps::get()?;
+        Self::prepare_component_provisioning_with_config(config.as_ref(), request, planned_at_ns)
+    }
+
+    pub(crate) fn component_provisioning_status(
+        request: FleetComponentProvisioningStatusRequest,
+    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        let config = ConfigOps::get()?;
+        Self::component_provisioning_status_with_config(config.as_ref(), request)
+    }
+
+    fn prepare_component_provisioning_with_config(
+        config: &ConfigModel,
+        request: FleetComponentProvisioningPrepareRequest,
+        planned_at_ns: u64,
+    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        let current = Self::current_with_provisioning_config(config)?;
+        if let Some(existing) = &current.component_provisioning {
+            if existing.operation_id == request.operation_id && existing.plan == request.plan {
+                return component_provisioning_status_response(existing);
+            }
+            return Err(InternalError::conflict(
+                "Fleet Component provisioning already contains different protected plan authority",
+            ));
+        }
+        if request.operation_id == [0; 32] {
+            return Err(InternalError::invalid_input(
+                "Fleet Component provisioning operation ID must be nonzero",
+            ));
+        }
+        if planned_at_ns == 0 {
+            return Err(InternalError::invalid_input(
+                "Fleet Component provisioning planned time must be nonzero",
+            ));
+        }
+        if request.plan.operation != FleetComponentProvisioningOperation::FreshInstall {
+            return Err(InternalError::invalid_input(
+                "Fleet Component provisioning preparation currently accepts only fresh installation",
+            ));
+        }
+        if current.service_publication_receipt.is_some() {
+            return Err(InternalError::conflict(
+                "Fleet Component provisioning plan must precede Fleet-service publication",
+            ));
+        }
+        let source_registry = initial_active_registry(&current)?;
+        if current.registry != source_registry {
+            return Err(InternalError::conflict(
+                "Fleet Component provisioning plan must precede later Registry transitions",
+            ));
+        }
+        ComponentProvisioningPlanOps::validate(config, &source_registry, &request.plan)?;
+        let plan_hash =
+            ComponentProvisioningPlanOps::hash(config, &source_registry, &request.plan)?;
+        let record = FleetComponentProvisioningRecord {
+            operation_id: request.operation_id,
+            plan_hash,
+            plan: request.plan,
+            state: FleetComponentProvisioningStateRecord::Planned { planned_at_ns },
+        };
+        let mut next = current.clone();
+        next.component_provisioning = Some(record.clone());
+        let next = Self::validate_current_with_provisioning_config(next, config)?;
+        Self::commit_transition(&current, next)?;
+        component_provisioning_status_response(&record)
+    }
+
+    fn component_provisioning_status_with_config(
+        config: &ConfigModel,
+        request: FleetComponentProvisioningStatusRequest,
+    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        let current = Self::current_with_provisioning_config(config)?;
+        let record = current.component_provisioning.as_ref().ok_or_else(|| {
+            InternalError::unavailable("Fleet Component provisioning plan is not prepared")
+        })?;
+        if record.operation_id != request.operation_id || record.plan_hash != request.plan_hash {
+            return Err(InternalError::conflict(
+                "Fleet Component provisioning status names different protected plan authority",
+            ));
+        }
+        component_provisioning_status_response(record)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn prepare_component_provisioning_for_test(
+        config: &ConfigModel,
+        request: FleetComponentProvisioningPrepareRequest,
+        planned_at_ns: u64,
+    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        Self::prepare_component_provisioning_with_config(config, request, planned_at_ns)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn component_provisioning_status_for_test(
+        config: &ConfigModel,
+        request: FleetComponentProvisioningStatusRequest,
+    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        Self::component_provisioning_status_with_config(config, request)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn require_root_lifecycle_open_for_test(
+        config: &ConfigModel,
+    ) -> Result<(), InternalError> {
+        let current = Self::current_with_provisioning_config(config)?;
+        require_grouped_root_lifecycle_open(&current)
+    }
+
     #[expect(
         dead_code,
         reason = "the next Coordinator workflow slice will call the closed publication compiler"
@@ -443,6 +564,7 @@ impl FleetCoordinatorOps {
         request: FleetSubnetRootDrainingPublicationRequest,
     ) -> Result<FleetSubnetRootDrainingPublicationResponse, InternalError> {
         let current = Self::current()?;
+        require_grouped_root_lifecycle_open(&current)?;
         if let Some(receipt) = current
             .root_draining_publication_receipts
             .iter()
@@ -512,6 +634,7 @@ impl FleetCoordinatorOps {
             ));
         }
         let current = Self::current()?;
+        require_grouped_root_lifecycle_open(&current)?;
         if let Some(receipt) = current
             .root_removal_publication_receipts
             .iter()
@@ -867,15 +990,47 @@ impl FleetCoordinatorOps {
     }
 
     fn current() -> Result<FleetCoordinatorRegistryRecord, InternalError> {
-        FleetCoordinatorRegistryStore::export()
+        let current = FleetCoordinatorRegistryStore::export()
             .current
             .ok_or_else(|| {
                 InternalError::unavailable("Fleet Coordinator genesis is not initialized")
-            })
-            .and_then(Self::validate_current)
+            })?;
+        Self::validate_current(current)
+    }
+
+    fn current_with_provisioning_config(
+        config: &ConfigModel,
+    ) -> Result<FleetCoordinatorRegistryRecord, InternalError> {
+        let current = FleetCoordinatorRegistryStore::export()
+            .current
+            .ok_or_else(|| {
+                InternalError::unavailable("Fleet Coordinator genesis is not initialized")
+            })?;
+        Self::validate_current_with_provisioning_config(current, config)
     }
 
     fn validate_current(
+        current: FleetCoordinatorRegistryRecord,
+    ) -> Result<FleetCoordinatorRegistryRecord, InternalError> {
+        let current = Self::validate_current_registry(current)?;
+        let Some(_) = &current.component_provisioning else {
+            return Ok(current);
+        };
+        let config = ConfigOps::get()?;
+        validate_component_provisioning_record(&current, config.as_ref())?;
+        Ok(current)
+    }
+
+    fn validate_current_with_provisioning_config(
+        current: FleetCoordinatorRegistryRecord,
+        config: &ConfigModel,
+    ) -> Result<FleetCoordinatorRegistryRecord, InternalError> {
+        let current = Self::validate_current_registry(current)?;
+        validate_component_provisioning_record(&current, config)?;
+        Ok(current)
+    }
+
+    fn validate_current_registry(
         current: FleetCoordinatorRegistryRecord,
     ) -> Result<FleetCoordinatorRegistryRecord, InternalError> {
         if current.authority != current.registry.authority {
@@ -916,6 +1071,168 @@ impl FleetCoordinatorOps {
             }
         })
     }
+}
+
+fn validate_component_provisioning_record(
+    current: &FleetCoordinatorRegistryRecord,
+    config: &ConfigModel,
+) -> Result<(), InternalError> {
+    let Some(record) = &current.component_provisioning else {
+        return Ok(());
+    };
+    if record.operation_id == [0; 32] {
+        return Err(receipt_invariant(
+            "Fleet Component provisioning operation ID is zero",
+        ));
+    }
+    if record.plan_hash == [0; 32] {
+        return Err(receipt_invariant(
+            "Fleet Component provisioning plan hash is zero",
+        ));
+    }
+    let FleetComponentProvisioningStateRecord::Planned { planned_at_ns } = record.state;
+    if planned_at_ns == 0 {
+        return Err(receipt_invariant(
+            "Fleet Component provisioning planned time is zero",
+        ));
+    }
+    if record.plan.operation != FleetComponentProvisioningOperation::FreshInstall {
+        return Err(receipt_invariant(
+            "Fleet Component provisioning record contains an unavailable operation kind",
+        ));
+    }
+    let source_registry = initial_active_registry(current)?;
+    ComponentProvisioningPlanOps::validate(config, &source_registry, &record.plan).map_err(|_| {
+        receipt_invariant(
+            "Fleet Component provisioning plan differs from canonical configuration or Registry authority",
+        )
+    })?;
+    let plan_hash = ComponentProvisioningPlanOps::hash(config, &source_registry, &record.plan)
+        .map_err(|_| {
+            receipt_invariant("Fleet Component provisioning plan hash cannot be rederived")
+        })?;
+    if record.plan_hash != plan_hash {
+        return Err(receipt_invariant(
+            "Fleet Component provisioning plan hash differs from canonical bytes",
+        ));
+    }
+    validate_service_publication_authority(current, record)?;
+    component_provisioning_plan_counts(&record.plan)?;
+    Ok(())
+}
+
+fn component_provisioning_status_response(
+    record: &FleetComponentProvisioningRecord,
+) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+    let counts = component_provisioning_plan_counts(&record.plan)?;
+    let FleetComponentProvisioningStateRecord::Planned { planned_at_ns } = record.state;
+    Ok(FleetComponentProvisioningStatusResponse {
+        operation_id: record.operation_id,
+        plan_hash: record.plan_hash,
+        fleet_registry: record.plan.fleet_registry.clone(),
+        configuration_digest: record.plan.configuration_digest,
+        operation: record.plan.operation.clone(),
+        phase: FleetComponentProvisioningPhase::Planned,
+        directory_confirmation_root_count: counts.directory_confirmation_roots,
+        root_batch_count: counts.root_batches,
+        group_placement_count: counts.group_placements,
+        component_count: counts.components,
+        planned_at_ns,
+    })
+}
+
+#[derive(Clone, Copy)]
+struct FleetComponentProvisioningPlanCounts {
+    directory_confirmation_roots: u32,
+    root_batches: u32,
+    group_placements: u32,
+    components: u32,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+struct FleetComponentProvisioningAuthority {
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    configuration_digest: ComponentDeploymentConfigurationDigest,
+}
+
+const fn component_provisioning_authority(
+    record: &FleetComponentProvisioningRecord,
+) -> FleetComponentProvisioningAuthority {
+    FleetComponentProvisioningAuthority {
+        operation_id: record.operation_id,
+        plan_hash: record.plan_hash,
+        configuration_digest: record.plan.configuration_digest,
+    }
+}
+
+const fn service_publication_authority(
+    receipt: &FleetServicePublicationReceiptRecord,
+) -> FleetComponentProvisioningAuthority {
+    FleetComponentProvisioningAuthority {
+        operation_id: receipt.operation_id,
+        plan_hash: receipt.plan_hash,
+        configuration_digest: receipt.configuration_digest,
+    }
+}
+
+fn validate_service_publication_authority(
+    current: &FleetCoordinatorRegistryRecord,
+    record: &FleetComponentProvisioningRecord,
+) -> Result<(), InternalError> {
+    let Some(receipt) = &current.service_publication_receipt else {
+        return Ok(());
+    };
+    if component_provisioning_authority(record) != service_publication_authority(receipt) {
+        return Err(receipt_invariant(
+            "Fleet-service publication receipt differs from its provisioning plan",
+        ));
+    }
+    Ok(())
+}
+
+fn component_provisioning_plan_counts(
+    plan: &FleetComponentProvisioningPlan,
+) -> Result<FleetComponentProvisioningPlanCounts, InternalError> {
+    let directory_confirmation_roots = u32::try_from(plan.directory_confirmation_roots.len())
+        .map_err(|_| receipt_invariant("Directory confirmation root count does not fit u32"))?;
+    let root_batches = u32::try_from(plan.batches.len())
+        .map_err(|_| receipt_invariant("root batch count does not fit u32"))?;
+    let mut group_placements = 0_u32;
+    let mut components = 0_u32;
+    for batch in &plan.batches {
+        let batch_placements = u32::try_from(batch.placements.len())
+            .map_err(|_| receipt_invariant("root batch placement count does not fit u32"))?;
+        group_placements = group_placements
+            .checked_add(batch_placements)
+            .ok_or_else(|| {
+                receipt_invariant("Fleet Component provisioning placement count overflowed")
+            })?;
+        for placement in &batch.placements {
+            let members = u32::try_from(placement.entries.len())
+                .map_err(|_| receipt_invariant("group placement member count does not fit u32"))?;
+            components = components.checked_add(members).ok_or_else(|| {
+                receipt_invariant("Fleet Component provisioning Component count overflowed")
+            })?;
+        }
+    }
+    Ok(FleetComponentProvisioningPlanCounts {
+        directory_confirmation_roots,
+        root_batches,
+        group_placements,
+        components,
+    })
+}
+
+fn require_grouped_root_lifecycle_open(
+    current: &FleetCoordinatorRegistryRecord,
+) -> Result<(), InternalError> {
+    if current.component_provisioning.is_some() {
+        return Err(InternalError::conflict(
+            "Fleet Subnet Root lifecycle is fenced while grouped Component provisioning authority exists",
+        ));
+    }
+    Ok(())
 }
 
 fn require_snapshot_root(

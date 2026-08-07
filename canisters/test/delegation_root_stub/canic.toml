@@ -1,4 +1,3 @@
-controllers = []
 [app]
 name = "delegation_root_stub"
 

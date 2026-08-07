@@ -154,11 +154,6 @@ pub trait Validate {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ConfigModel {
-    /// Controllers for the canister.
-    /// Stored as a Vec because they are appended directly to controller args.
-    #[serde(default)]
-    pub controllers: Vec<Principal>,
-
     #[serde(default)]
     pub standards: Option<Standards>,
 

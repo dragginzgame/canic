@@ -1,4 +1,3 @@
-controllers = []
 [app]
 name = "payload_limit_probe"
 init_mode = "enabled"

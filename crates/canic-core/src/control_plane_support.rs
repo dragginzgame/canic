@@ -1,5 +1,5 @@
 pub mod error {
-    pub use crate::error::{InternalError, InternalErrorOrigin};
+    pub use crate::error::{InternalError, InternalErrorClass, InternalErrorOrigin};
 }
 
 pub mod config {
@@ -7,7 +7,7 @@ pub mod config {
         pub use crate::config::schema::ComponentChildKind;
     }
 
-    pub use crate::config::{ComponentProvisioningGrant, ComponentTopology};
+    pub use crate::config::{ComponentProvisioningGrant, ComponentTopology, ConfigModel};
 }
 
 pub mod format {

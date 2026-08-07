@@ -5,7 +5,7 @@ use crate::{
     bootstrap,
     config::schema::ConfigModel,
     dto::fleet_subnet_root::FleetSubnetRootInitArgs,
-    lifecycle::{LifecyclePhase, config_with_current_root_controller, lifecycle_trap},
+    lifecycle::{LifecyclePhase, lifecycle_trap},
     workflow,
 };
 
@@ -21,7 +21,6 @@ pub fn init_root_canister_before_bootstrap(
         LifecycleMetricOutcome::Started,
     );
 
-    let config = config_with_current_root_controller(config);
     if let Err(err) = bootstrap::init_compiled_config(config, config_source) {
         LifecycleMetricsApi::record_runtime(
             LifecycleMetricPhase::Init,

@@ -139,7 +139,6 @@ fn scaffold_app_writes_root_and_app_files() {
     let app_manifest =
         fs::read_to_string(result.app_dir.join("Cargo.toml")).expect("read app manifest");
 
-    assert!(config.contains("controllers = []"));
     assert!(config.contains("[app]"));
     assert!(config.contains("name = \"my_app\""));
     assert!(config.contains("[auth.delegated_tokens]"));

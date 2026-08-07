@@ -13,7 +13,6 @@ mod profiles;
 mod serialization;
 
 const CONFIG: &str = r#"
-controllers = []
 [app]
 name = "demo"
 
@@ -37,7 +36,6 @@ maximum_instances = 1
 "#;
 
 const BROWNFIELD_CONFIG: &str = r#"
-controllers = []
 [app]
 name = "demo"
 
@@ -49,7 +47,6 @@ package = "root"
 "#;
 
 const STANDALONE_CONFIG: &str = r#"
-controllers = []
 [app]
 name = "demo"
 
@@ -59,7 +56,6 @@ package = "worker"
 "#;
 
 const LEAF_ONLY_CONFIG: &str = r#"
-controllers = []
 [app]
 name = "demo"
 

@@ -7,8 +7,10 @@ use ic_testkit::artifacts::{
     build_wasm_canisters_cached_batch_with_config_and_progress,
 };
 use std::{
+    fs,
     path::{Path, PathBuf},
     process::{Command, Output},
+    sync::OnceLock,
     time::Duration,
 };
 
@@ -25,6 +27,62 @@ pub(super) const INTERNAL_TEST_RELEASE_BUILD_ID: (&str, &str) = (
     canic_core::ids::RELEASE_BUILD_ID_ENV,
     "1111111111111111111111111111111111111111111111111111111111111111",
 );
+
+pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> Vec<u8> {
+    static WASM: OnceLock<Vec<u8>> = OnceLock::new();
+    WASM.get_or_init(|| {
+        let config_path = workspace_root.join("apps/test/canic.toml");
+        let target_dir = workspace_root.join("target/test-artifacts/fleet-coordinator-artifact");
+        let artifact_path = workspace_root
+            .join(".canic/release-builds")
+            .join(INTERNAL_TEST_RELEASE_BUILD_ID.1)
+            .join("artifacts/fleet_coordinator/fleet_coordinator.wasm");
+        let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+        let output = Command::new(cargo)
+            .current_dir(workspace_root)
+            .env("CARGO_INCREMENTAL", "0")
+            .env("CARGO_TARGET_DIR", target_dir)
+            .env("ICP_ENVIRONMENT", "local")
+            .env(INTERNAL_TEST_ENDPOINTS_ENV.0, INTERNAL_TEST_ENDPOINTS_ENV.1)
+            .env(
+                INTERNAL_TEST_RELEASE_BUILD_ID.0,
+                INTERNAL_TEST_RELEASE_BUILD_ID.1,
+            )
+            .args([
+                "run",
+                "-q",
+                "--profile",
+                "fast",
+                "-p",
+                "canic-host",
+                "--example",
+                "build_artifact",
+                "--locked",
+                "--",
+                "fleet_coordinator",
+                "fast",
+                workspace_root.to_str().expect("workspace root UTF-8"),
+                workspace_root.to_str().expect("ICP root UTF-8"),
+                config_path.to_str().expect("config path UTF-8"),
+                "--release-build-id",
+                INTERNAL_TEST_RELEASE_BUILD_ID.1,
+            ])
+            .output()
+            .expect("run canonical Fleet Coordinator artifact builder");
+        assert!(
+            output.status.success(),
+            "canonical Fleet Coordinator artifact build failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        fs::read(&artifact_path).unwrap_or_else(|error| {
+            panic!(
+                "read canonical Fleet Coordinator artifact {}: {error}",
+                artifact_path.display()
+            )
+        })
+    })
+    .clone()
+}
 
 ///
 /// CanicWasmBuildProfile

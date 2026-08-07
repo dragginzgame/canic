@@ -4,7 +4,6 @@ use canic_core::bootstrap::{ConfigError, parse_config_model};
 #[test]
 fn configured_release_roles_filters_root_and_wasm_store() {
     let config = r#"
-controllers = []
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -43,7 +42,6 @@ maximum_instances = 1
 #[test]
 fn configured_deployable_surfaces_exclude_declared_only_roles() {
     let config = r#"
-controllers = []
 [app]
 name = "demo"
 

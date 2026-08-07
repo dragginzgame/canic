@@ -3,7 +3,6 @@ use super::super::*;
 #[test]
 fn configured_pool_expectations_lists_component_pools() {
     let config = r#"
-controllers = []
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -124,7 +123,6 @@ maximum_instances_per_parent = 20_000
 #[test]
 fn configured_role_auto_create_lists_component_roles() {
     let config = r#"
-controllers = []
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -183,7 +181,6 @@ maximum_instances = 1
 #[test]
 fn configured_bootstrap_roles_include_only_bootstrap_obligations() {
     let config = r#"
-controllers = []
 [app]
 name = "demo"
 init_mode = "enabled"

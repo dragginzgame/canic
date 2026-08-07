@@ -32,6 +32,9 @@ use canic::{
     },
     dto::blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
     dto::cascade::StateSnapshotInput,
+    dto::component_provisioning::{
+        FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningStatusResponse,
+    },
     dto::cycles::Cycles,
     dto::env::{EnvBootstrapArgs, EnvSnapshotResponse},
     dto::fleet_activation::FleetActivationStatusResponse,
@@ -670,6 +673,63 @@ fn fleet_subnet_root_join_is_a_controller_update_on_the_coordinator_surface() {
 }
 
 #[test]
+fn fleet_component_provisioning_plan_surface_is_controller_guarded_and_bounded() {
+    assert_eq!(
+        canic::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_PREPARE,
+        "canic_fleet_component_provisioning_prepare"
+    );
+    assert_eq!(
+        canic::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_STATUS,
+        "canic_fleet_component_provisioning_status"
+    );
+    let source =
+        read_text(&workspace_root().join("crates/canic/src/macros/endpoints/fleet_coordinator.rs"));
+    let prepare = preceding_attribute_context(
+        &source,
+        "async fn canic_fleet_component_provisioning_prepare(",
+    );
+    assert!(
+        prepare.contains("requires(caller::is_controller())")
+            && prepare.contains("payload(max_bytes"),
+        "Fleet Component plan preparation must remain controller guarded and payload bounded"
+    );
+    assert!(
+        preceding_attribute_context(
+            &source,
+            "async fn canic_fleet_component_provisioning_status(",
+        )
+        .contains("canic_query(requires(caller::is_controller()))"),
+        "Fleet Component plan status must remain a controller-guarded query"
+    );
+
+    let prepare_env = candid_type_env::<FleetComponentProvisioningPrepareRequest>();
+    for field in [
+        "operation_id",
+        "plan",
+        "directory_confirmation_roots",
+        "batches",
+    ] {
+        assert!(
+            prepare_env.contains(field),
+            "Fleet Component preparation Candid is missing {field}:\n{prepare_env}"
+        );
+    }
+    let status_env = candid_type_env::<FleetComponentProvisioningStatusResponse>();
+    for field in [
+        "operation_id",
+        "plan_hash",
+        "phase",
+        "component_count",
+        "planned_at_ns",
+    ] {
+        assert!(
+            status_env.contains(field),
+            "Fleet Component status Candid is missing {field}:\n{status_env}"
+        );
+    }
+}
+
+#[test]
 fn fleet_registry_snapshot_synchronization_protocol_and_guards_are_pinned() {
     assert_fleet_registry_protocol_constants();
 
@@ -774,6 +834,16 @@ fn assert_fleet_registry_protocol_constants() {
             canic::protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
             canic_core::protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
             "canic_fleet_registry_activate",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_PREPARE,
+            canic_core::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_PREPARE,
+            "canic_fleet_component_provisioning_prepare",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_STATUS,
+            canic_core::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_STATUS,
+            "canic_fleet_component_provisioning_status",
         ),
         (
             canic::protocol::CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,

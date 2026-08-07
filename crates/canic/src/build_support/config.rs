@@ -151,8 +151,7 @@ pub fn standalone_config_source(role: &str) -> String {
     );
 
     format!(
-        r#"controllers = []
-[app]
+        r#"[app]
 name = "standalone"
 init_mode = "enabled"
 

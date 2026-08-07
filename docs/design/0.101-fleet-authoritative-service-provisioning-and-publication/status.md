@@ -52,11 +52,14 @@ Date: 2026-08-07
   Registry now carries the complete service set under strict ordering,
   mode, placement, active-root admission and global identity validation, and
   the Coordinator has one closed atomic Registry-plus-receipt commit/replay
-  primitive. Coordinator-owned plan persistence and authenticated root-result
-  collection are not yet wired to that primitive, so live publication,
-  Directory publication and runtime activation remain unavailable.
+  primitive. The Coordinator now validates and durably freezes the complete
+  fresh-install plan before effects, exposes compact exact status and replay,
+  revalidates that authority after restart and fences grouped root lifecycle.
+  Authenticated root-result collection is not yet wired to the closed commit,
+  so live publication, Directory publication and runtime activation remain
+  unavailable.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.15` is released and `0.101.16` is open.
+- Implementation started: yes; `0.101.16` is released and `0.101.17` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -243,8 +246,9 @@ Fleet policy writer.
 - [ ] Publish each service's complete initial mode-compatible member set in one
   Fleet Registry revision. The service-aware canonical Registry schema,
   validation, hashing and closed atomic Coordinator commit/replay primitive are
-  complete; durable Coordinator plan orchestration and authenticated root
-  receipt acquisition remain before the publication path can be exposed.
+  complete. The complete Coordinator plan is now durable before effects with
+  exact status and restart replay; authenticated root receipt acquisition and
+  closed-commit invocation remain before publication can complete.
 - [ ] Project exact service ID, mode and purpose-bearing member bindings
   through Fleet Directory.
 - [ ] Derive one root-local Component Group Directory per placement without

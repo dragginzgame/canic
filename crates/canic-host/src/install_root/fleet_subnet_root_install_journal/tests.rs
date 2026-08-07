@@ -10,7 +10,7 @@ use crate::{
         PlannedFleetCoordinator, PlannedFleetSubnetRoot,
     },
     install_root::fleet_subnet_root_install_journal::{
-        FleetSubnetRootInstallPhase, PlanFleetSubnetRootInstallRequest,
+        FleetSubnetRootInstallPhase, JOURNAL_SCHEMA_VERSION, PlanFleetSubnetRootInstallRequest,
         begin_component_registry_preparation, begin_registry_join,
         begin_registry_mirror_activation, begin_registry_sync, begin_root_activation,
         begin_root_activation_preparation, begin_root_creation, begin_root_install,
@@ -68,6 +68,11 @@ use canic_core::{
 };
 
 #[test]
+fn root_journal_keeps_the_single_current_pre_one_schema_identifier() {
+    assert_eq!(JOURNAL_SCHEMA_VERSION, 1);
+}
+
+#[test]
 fn journals_each_root_effect_and_verifies_exact_protected_authority() {
     let root = temp_dir("fleet-subnet-root-install-journal");
     let fixture = fixture(&root);
@@ -80,15 +85,19 @@ fn journals_each_root_effect_and_verifies_exact_protected_authority() {
         CanicInfrastructureRole::WasmStore
     );
 
-    let creating = begin_root_creation(&planned).expect("begin creation");
+    let installation_controller = Principal::from_slice(&[56]);
+    let creating = begin_root_creation(&planned, installation_controller).expect("begin creation");
     assert_eq!(
         creating.journal.phase,
         FleetSubnetRootInstallPhase::RootCreationInFlight
     );
+    assert_eq!(
+        creating.journal.installation_controller,
+        Some(installation_controller)
+    );
     let root_canister = Principal::from_slice(&[44]);
     let created = record_root_created(&creating, root_canister).expect("record root");
-    let creating_store = begin_wasm_store_creation(&created, Principal::from_slice(&[56]))
-        .expect("begin Store creation");
+    let creating_store = begin_wasm_store_creation(&created).expect("begin Store creation");
     let store_canister = Principal::from_slice(&[55]);
     let store_created =
         record_wasm_store_created(&creating_store, store_canister).expect("record Store");
@@ -121,12 +130,14 @@ fn exact_retry_recovers_in_flight_root_without_advancing_it() {
     let root = temp_dir("fleet-subnet-root-install-journal-retry");
     let fixture = fixture(&root);
     let planned = plan(&fixture).expect("plan root");
-    let creating = begin_root_creation(&planned).expect("begin creation");
+    let installation_controller = Principal::from_slice(&[56]);
+    let creating = begin_root_creation(&planned, installation_controller).expect("begin creation");
 
     let recovered = plan(&fixture).expect("recover root");
     assert_eq!(recovered.journal, creating.journal);
     assert!(!recovered.advanced);
-    let repeated = begin_root_creation(&recovered).expect("recover creation intent");
+    let repeated =
+        begin_root_creation(&recovered, installation_controller).expect("recover creation intent");
     assert_eq!(repeated.journal, creating.journal);
     assert!(!repeated.advanced);
 }
@@ -542,10 +553,11 @@ fn install_infrastructure(
     planned: &super::ResolvedFleetSubnetRootInstall,
     root_canister: Principal,
 ) -> super::ResolvedFleetSubnetRootInstall {
-    let creating = begin_root_creation(planned).expect("begin root creation");
+    let creating =
+        begin_root_creation(planned, Principal::from_slice(&[56])).expect("begin root creation");
     let root_created = record_root_created(&creating, root_canister).expect("record root");
-    let creating_store = begin_wasm_store_creation(&root_created, Principal::from_slice(&[56]))
-        .expect("begin Wasm Store creation");
+    let creating_store =
+        begin_wasm_store_creation(&root_created).expect("begin Wasm Store creation");
     let store_created = record_wasm_store_created(&creating_store, Principal::from_slice(&[55]))
         .expect("record Wasm Store");
     let installing_store =

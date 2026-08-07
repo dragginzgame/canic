@@ -31,11 +31,10 @@ pub(super) use mutation::{
 pub use projection::configured_release_roles_from_config;
 pub(super) use projection::{
     app_identity_from_source, configured_bootstrap_roles_from_config,
-    configured_controllers_from_config, configured_deployable_roles_from_config,
-    configured_pool_expectations_from_config, configured_role_auto_create_from_config,
-    configured_role_details_from_config, configured_role_kinds_from_config,
-    configured_role_lifecycle_from_config, configured_role_metrics_profiles_from_config,
-    configured_role_topups_from_config,
+    configured_deployable_roles_from_config, configured_pool_expectations_from_config,
+    configured_role_auto_create_from_config, configured_role_details_from_config,
+    configured_role_kinds_from_config, configured_role_lifecycle_from_config,
+    configured_role_metrics_profiles_from_config, configured_role_topups_from_config,
 };
 
 /// One immutable, validated view of an App configuration file.
@@ -97,11 +96,6 @@ impl AppConfigSnapshot {
     #[must_use]
     pub fn bootstrap_roles(&self) -> Vec<String> {
         configured_bootstrap_roles_from_config(&self.config)
-    }
-
-    #[must_use]
-    pub fn controllers(&self) -> Vec<String> {
-        configured_controllers_from_config(&self.config)
     }
 
     #[must_use]

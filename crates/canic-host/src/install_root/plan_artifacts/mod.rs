@@ -265,7 +265,7 @@ mod tests {
             vec![
                 (
                     crate::release_set::CanicInfrastructureRole::FleetCoordinator,
-                    "canic-generated-fleet-coordinator",
+                    "canic-fleet-coordinator",
                 ),
                 (
                     crate::release_set::CanicInfrastructureRole::FleetSubnetRoot,
@@ -421,7 +421,7 @@ maximum_instances = 1
         vec![
             CanicInfrastructureArtifactBuildOutput {
                 role: crate::release_set::CanicInfrastructureRole::FleetCoordinator,
-                package: "canic-generated-fleet-coordinator".to_string(),
+                package: "canic-fleet-coordinator".to_string(),
                 release_build_id,
                 wasm_path: coordinator.output.wasm_path,
                 wasm_gz_path: coordinator.output.wasm_gz_path,

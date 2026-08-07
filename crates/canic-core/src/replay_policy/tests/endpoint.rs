@@ -565,6 +565,28 @@ fn fleet_subnet_root_physical_deletion_handoff_is_durable_and_costed() {
 }
 
 #[test]
+fn fleet_component_plan_preparation_is_response_idempotent() {
+    let prepare = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_fleet_component_provisioning_prepare")
+        .expect("Fleet Component provisioning prepare policy entry");
+    assert_eq!(
+        prepare.replay_policy,
+        ReplayPolicy::ResponseIdempotent {
+            command_kind: replay_command_kind("fleet_component_provisioning.prepare.v1"),
+        }
+    );
+    assert_eq!(prepare.cost_class, CostClass::None);
+
+    let status = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_fleet_component_provisioning_status")
+        .expect("Fleet Component provisioning status policy entry");
+    assert_eq!(status.endpoint_kind, EndpointKind::Query);
+    assert_eq!(status.replay_policy, ReplayPolicy::QueryOrReadOnly);
+}
+
+#[test]
 fn fleet_registry_mirror_activation_is_snapshot_convergent() {
     let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()

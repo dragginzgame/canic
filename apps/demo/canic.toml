@@ -1,6 +1,5 @@
 # Minimal Canic demo fleet for quick root-plus-app and sharding experiments.
 
-controllers = []
 [app]
 name = "demo"
 

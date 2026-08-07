@@ -176,6 +176,8 @@ The workspace keeps Rust crates under [crates/](crates/) and App fixtures under
 * [crates/canic-control-plane/](crates/canic-control-plane/) - Fleet
   Coordinator, Fleet Subnet Root, and Store control-plane runtime support
   built on `canic-core`.
+* [crates/canic-fleet-coordinator/](crates/canic-fleet-coordinator/) - canonical
+  runtime-only Fleet Coordinator canister artifact source.
 * [crates/canic-wasm-store/](crates/canic-wasm-store/) - canonical implicit
   bootstrap `wasm_store` canister crate.
 * [crates/canic-cli/](crates/canic-cli/) - published `canic` operator binary.

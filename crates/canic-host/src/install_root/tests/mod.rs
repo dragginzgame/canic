@@ -164,7 +164,6 @@ fn install_snapshot_accepts_multiple_flat_component_specs() {
     fs::write(
         &config_path,
         r#"
-controllers = []
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -232,7 +231,6 @@ fn assert_before(source: &str, before: &str, after: &str) {
 fn demo_config_source(attached: &str) -> String {
     format!(
         r#"
-controllers = []
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -302,7 +300,6 @@ fn write_demo_root_only_config(config_path: &Path) {
     fs::write(
         config_path,
         r#"
-controllers = []
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -336,7 +333,6 @@ fn demo_install_deployment_truth_check(root_name: &str) -> (PathBuf, DeploymentC
     fs::write(
         &config_path,
         r#"
-controllers = []
 [app]
 name = "demo"
 init_mode = "enabled"

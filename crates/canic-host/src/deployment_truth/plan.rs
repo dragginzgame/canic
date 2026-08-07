@@ -37,7 +37,7 @@ pub fn build_local_deployment_plan_at_root(
 ) -> DeploymentPlanV1 {
     let config = deployment_config_path(&request.workspace_root, request.config_path.as_deref());
     let mut unresolved_assumptions = Vec::new();
-    let (roles, expected_controllers, expected_pool) = match AppConfigSnapshot::load(&config) {
+    let (roles, expected_pool) = match AppConfigSnapshot::load(&config) {
         Ok(snapshot) => {
             if snapshot.app_id() != request.app {
                 unresolved_assumptions.push(assumption(
@@ -51,8 +51,7 @@ pub fn build_local_deployment_plan_at_root(
                 ));
             }
             (
-                deployment_truth_roles_with_implicit_wasm_store(snapshot.bootstrap_roles()),
-                snapshot.controllers(),
+                deployment_truth_roles_with_built_in_infrastructure(snapshot.bootstrap_roles()),
                 local_expected_pool(snapshot.pool_expectations()),
             )
         }
@@ -60,7 +59,6 @@ pub fn build_local_deployment_plan_at_root(
             for (code, subject) in [
                 ("local_config.app", "App identity"),
                 ("local_config.roles", "configured roles"),
-                ("local_config.controllers", "configured controllers"),
                 ("local_config.pools", "configured pool expectations"),
             ] {
                 unresolved_assumptions.push(assumption(
@@ -71,7 +69,7 @@ pub fn build_local_deployment_plan_at_root(
                     ),
                 ));
             }
-            (Vec::new(), Vec::new(), Vec::new())
+            (Vec::new(), Vec::new())
         }
     };
     let resolved_fleet = local_fleet_identity(request, &mut unresolved_assumptions);
@@ -89,7 +87,7 @@ pub fn build_local_deployment_plan_at_root(
         &mut unresolved_assumptions,
         artifact_manifest.unresolved_artifacts,
     );
-    let authority_profile = local_authority_profile(request, expected_controllers);
+    let authority_profile = local_authority_profile(request);
     let role_artifacts = local_plan_role_artifacts(
         artifact_manifest.role_artifacts,
         &request.build_profile,
@@ -280,16 +278,15 @@ fn local_deployment_identity(
     }
 }
 
-fn local_authority_profile(
-    request: &LocalDeploymentPlanRequest,
-    expected_controllers: Vec<String>,
-) -> AuthorityProfileV1 {
+fn local_authority_profile(request: &LocalDeploymentPlanRequest) -> AuthorityProfileV1 {
+    // One App-level controller set cannot represent the role-specific authority
+    // retained by Coordinator/root/Store install journals and verified live.
     AuthorityProfileV1 {
         profile_id: format!(
             "local:{}:{}:authority",
             request.environment, request.fleet_name
         ),
-        expected_controllers,
+        expected_controllers: Vec::new(),
         staging_controllers: Vec::new(),
         emergency_controllers: Vec::new(),
     }

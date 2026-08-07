@@ -17,7 +17,7 @@ pub(super) fn observe_local_config_facts(
     let (app, roles) = match AppConfigSnapshot::load(config) {
         Ok(snapshot) => (
             snapshot.app_id().to_string(),
-            deployment_truth_roles_with_implicit_wasm_store(snapshot.deployable_roles()),
+            deployment_truth_roles_with_built_in_infrastructure(snapshot.deployable_roles()),
         ),
         Err(err) => {
             for (code, subject) in [

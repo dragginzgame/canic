@@ -971,7 +971,6 @@ fn canic_toml(name: &str) -> String {
     format!(
         r#"# Minimal Canic App config.
 
-controllers = []
 [app]
 name = "{name}"
 

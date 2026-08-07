@@ -142,8 +142,9 @@ mod tests {
 
     use crate::pic::{
         CanicWasmBuildProfile,
-        artifacts::build_internal_test_wasm_canisters_with_env,
-        build_internal_test_wasm_canisters,
+        artifacts::{
+            build_canonical_fleet_coordinator_wasm, build_internal_test_wasm_canisters_with_env,
+        },
         canic::{
             ManagedRootInstallInput, adopt_sibling_wasm_store,
             install_root_args_with_release_set_digest_and_coordinator, managed_test_init_identity,
@@ -270,7 +271,6 @@ mod tests {
         ids::WasmStoreGcMode,
     };
 
-    const COORDINATOR_PACKAGE: &str = "fleet_coordinator_stub";
     const ISSUER_PACKAGE: &str = "delegation_issuer_stub";
     const PROJECT_HUB_PACKAGE: &str = "project_hub_stub";
     const PROJECT_INSTANCE_PACKAGE: &str = "project_instance_stub";
@@ -4884,23 +4884,8 @@ mod tests {
     }
 
     fn build_test_coordinator_wasm() -> Vec<u8> {
-        static WASM: OnceLock<Vec<u8>> = OnceLock::new();
-        WASM.get_or_init(|| {
-            let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-            let target_dir = test_target_dir(&workspace_root, "fleet-registry-sync");
-            build_internal_test_wasm_canisters(
-                &workspace_root,
-                &target_dir,
-                &[COORDINATOR_PACKAGE],
-                CanicWasmBuildProfile::Fast,
-            );
-            read_wasm(
-                &target_dir,
-                COORDINATOR_PACKAGE,
-                CanicWasmBuildProfile::Fast.target_dir_name(),
-            )
-        })
-        .clone()
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        build_canonical_fleet_coordinator_wasm(&workspace_root)
     }
 
     fn build_root_store_fixture() -> RootStoreFixture {

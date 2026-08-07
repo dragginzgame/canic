@@ -1,7 +1,7 @@
 //! Module: workflow::fleet_coordinator
 //!
-//! Responsibility: orchestrate fresh Coordinator genesis and read-only Registry projections.
-//! Does not own: stable encoding, canonical Registry validation, or endpoint transport.
+//! Responsibility: orchestrate Coordinator genesis, Registry transitions, and plan preparation.
+//! Does not own: stable encoding, canonical validation, root effects, or endpoint transport.
 //! Boundary: lifecycle and endpoint APIs delegate here after transport authentication.
 
 #[cfg(test)]
@@ -13,18 +13,25 @@ use crate::{
 use candid::Principal;
 use canic_core::{
     control_plane_support::{error::InternalError, ops::ic::IcOps},
-    dto::fleet_registry::{
-        FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
-        FleetRegistryManifest, FleetRegistrySnapshotResponse, FleetRegistryVersion,
-        FleetSubnetRootDeletionCompletionRequest, FleetSubnetRootDeletionExecutionRequest,
-        FleetSubnetRootDeletionExecutionResponse, FleetSubnetRootDeletionReadinessIntentRequest,
-        FleetSubnetRootDeletionReadinessIntentResponse, FleetSubnetRootDeletionReadinessRequest,
-        FleetSubnetRootDeletionReadinessResponse, FleetSubnetRootDeletionResponse,
-        FleetSubnetRootDeletionStatusRequest, FleetSubnetRootDrainingPublicationRequest,
-        FleetSubnetRootDrainingPublicationResponse, FleetSubnetRootJoinRequest,
-        FleetSubnetRootJoinResponse, FleetSubnetRootRemovalPublicationRequest,
-        FleetSubnetRootRemovalPublicationResponse, FleetSubnetRootSnapshotAcknowledgement,
-        FleetSubnetRootSnapshotAcknowledgementRequest,
+    dto::{
+        component_provisioning::{
+            FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningStatusRequest,
+            FleetComponentProvisioningStatusResponse,
+        },
+        fleet_registry::{
+            FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
+            FleetRegistryManifest, FleetRegistrySnapshotResponse, FleetRegistryVersion,
+            FleetSubnetRootDeletionCompletionRequest, FleetSubnetRootDeletionExecutionRequest,
+            FleetSubnetRootDeletionExecutionResponse,
+            FleetSubnetRootDeletionReadinessIntentRequest,
+            FleetSubnetRootDeletionReadinessIntentResponse,
+            FleetSubnetRootDeletionReadinessRequest, FleetSubnetRootDeletionReadinessResponse,
+            FleetSubnetRootDeletionResponse, FleetSubnetRootDeletionStatusRequest,
+            FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingPublicationResponse,
+            FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
+            FleetSubnetRootRemovalPublicationRequest, FleetSubnetRootRemovalPublicationResponse,
+            FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
+        },
     },
 };
 
@@ -89,6 +96,18 @@ impl FleetCoordinatorWorkflow {
         request: FleetRegistryActivationRequest,
     ) -> Result<FleetRegistryActivationResponse, InternalError> {
         FleetCoordinatorOps::activate_registry(request)
+    }
+
+    pub(crate) fn prepare_component_provisioning(
+        request: FleetComponentProvisioningPrepareRequest,
+    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        FleetCoordinatorOps::prepare_component_provisioning(request, IcOps::now_nanos())
+    }
+
+    pub(crate) fn component_provisioning_status(
+        request: FleetComponentProvisioningStatusRequest,
+    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        FleetCoordinatorOps::component_provisioning_status(request)
     }
 
     pub(crate) fn publish_root_draining(

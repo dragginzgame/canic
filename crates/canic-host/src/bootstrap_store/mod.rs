@@ -162,7 +162,7 @@ pub fn resolved_canic_package(
         .collect::<Vec<_>>();
     let [package] = matches.as_slice() else {
         return Err(format!(
-            "bootstrap wasm_store requires exactly one resolved 'canic' package; found {}",
+            "built-in artifact source requires exactly one resolved 'canic' package; found {}",
             matches.len()
         )
         .into());
@@ -405,7 +405,7 @@ pub fn generated_wasm_store_wrapper_patch_table(
     }
 }
 
-fn require_package_manifest_identity(
+pub fn require_package_manifest_identity(
     manifest_path: &Path,
     expected_name: &str,
     expected_version: &str,
@@ -434,7 +434,7 @@ fn require_package_manifest_identity(
             .and_then(toml::Value::as_str)
             .unwrap_or("<not an exact or workspace version>");
         return Err(format!(
-            "bootstrap Wasm-store sibling {} must be package {expected_name} {expected_version}; found {name} {observed_version}",
+            "built-in artifact sibling {} must be package {expected_name} {expected_version}; found {name} {observed_version}",
             manifest_path.display()
         )
         .into());
@@ -442,7 +442,7 @@ fn require_package_manifest_identity(
     Ok(())
 }
 
-fn registry_package_version_suffix<'a>(
+pub fn registry_package_version_suffix<'a>(
     manifest_path: &'a Path,
     crate_name: &str,
 ) -> Option<&'a str> {
