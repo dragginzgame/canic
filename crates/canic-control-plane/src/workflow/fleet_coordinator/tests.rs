@@ -492,7 +492,7 @@ fn assert_invalid_plan_identity_rejects_before_persistence(
     let mut zero_operation = request.clone();
     zero_operation.operation_id = [0; 32];
     let invalid = crate::ops::fleet_coordinator::FleetCoordinatorOps::
-        prepare_component_provisioning_for_test(&config, zero_operation, 92)
+        prepare_component_provisioning_for_test(config, zero_operation, 92)
         .expect_err("zero operation ID must reject before persistence");
     assert_eq!(
         invalid.public_error().map(|error| error.code),
