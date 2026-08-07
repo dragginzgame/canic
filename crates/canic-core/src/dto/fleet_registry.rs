@@ -4,13 +4,19 @@
 //! Does not own: validation, canonical encoding, persistence, or lifecycle transitions.
 //! Boundary: Coordinator and Fleet Subnet Root workflows validate these passive shapes.
 
-use crate::dto::{
-    fleet_subnet_root::{FleetSubnetRootDrainingResponse, FleetSubnetRootFinalInventoryResponse},
-    root_store::RootStoreBootstrapRequest,
-};
-use crate::ids::{
-    CanisterRole, ComponentSpecAdmission, ComponentSpecId, ComponentTopologyDigest,
-    FleetRegistryAuthority, FleetSubnetRootLimits, FleetSubnetRootReleaseSet, SubnetId,
+use crate::{
+    config::{FleetServiceMemberPurpose, FleetServicePlacementPolicy},
+    dto::{
+        fleet_subnet_root::{
+            FleetSubnetRootDrainingResponse, FleetSubnetRootFinalInventoryResponse,
+        },
+        root_store::RootStoreBootstrapRequest,
+    },
+    ids::{
+        CanisterRole, ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentInstanceId,
+        ComponentSpecAdmission, ComponentSpecId, ComponentTopologyDigest, FleetRegistryAuthority,
+        FleetServiceId, FleetSubnetRootLimits, FleetSubnetRootReleaseSet, SubnetId,
+    },
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
@@ -58,6 +64,37 @@ pub struct FleetSubnetRootEntry {
     pub active_release_set: FleetSubnetRootReleaseSet,
     pub limits: FleetSubnetRootLimits,
     pub status: FleetSubnetRootStatus,
+}
+
+/// Published service mode after configuration-only Authority selectors have been resolved.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum FleetServiceMode {
+    AuthorityReplica,
+    ActivePool,
+}
+
+/// One exact configured Component member of a published Fleet service.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetServiceComponentBinding {
+    pub member_purpose: FleetServiceMemberPurpose,
+    pub component: ComponentInstanceId,
+    pub fleet_subnet_root: Principal,
+    pub canister_id: Principal,
+    pub group_placement: ComponentGroupPlacementId,
+    pub member_path: ComponentGroupMemberPath,
+}
+
+/// Complete configured member set for one logical Fleet service.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetServiceBinding {
+    pub service: FleetServiceId,
+    pub role: CanisterRole,
+    pub component_spec: ComponentSpecId,
+    pub mode: FleetServiceMode,
+    pub placement: FleetServicePlacementPolicy,
+    pub members: Vec<FleetServiceComponentBinding>,
 }
 
 ///

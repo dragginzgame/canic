@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.15` derives each complete initial Authority/Replica or Active Pool
+  service binding from the canonical plan and every exact root `Provisioned`
+  receipt, rejecting incomplete, substituted or duplicate evidence before any
+  Fleet Registry mutation, while advancing the host-only Subnet Catalog to
+  `ic-query` 0.30.23 and its schema-3 evidence contract.
+
 - `0.101.14` freezes every Registry-committed root batch as one exact,
   group-partitioned `Provisioned` result with durable terminal replay while
   keeping publication and activation fenced, and advances shared test-Wasm

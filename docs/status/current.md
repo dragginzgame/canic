@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-06
+Last updated: 2026-08-07
 
 ## Purpose
 
@@ -14,10 +14,18 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.13`.
-- The latest published release is `v0.101.13` at
-  `e82b0385244a0ab596a05fed1b924f2e47ae6d2b`.
-- Open `0.101.14` freezes each fully Registry-committed root batch as one
+- The workspace package version is `0.101.14`.
+- The latest published release is `v0.101.14` at
+  `74b15d364a3739f31ed429c263415317a747148b`.
+- Open `0.101.15` revalidates the canonical provisioning plan and every exact
+  root `Provisioned` receipt before deriving the complete canonical initial
+  Fleet-service binding set. Authority/Replica and Active Pool mode, density,
+  spread, protected Component binding, Registry evidence and global identity
+  uniqueness fail closed without mutating the Fleet Registry or publishing a
+  Directory. The same draft advances the host-only Subnet Catalog boundary to
+  `ic-query` 0.30.23 while retaining Canic's explicit single-endpoint
+  `UncertifiedQuery` policy; schema-2 caches refresh into schema 3.
+- Released `0.101.14` freezes each fully Registry-committed root batch as one
   durable group-partitioned `Provisioned` result. Every member retains its
   exact path, Spec, purpose, effective limits, protected binding and Registry
   head under a domain-separated terminal receipt; exact retries and restart
@@ -2375,12 +2383,14 @@ First primary results:
 
 The canonical plan, exact root-batch acceptance, canonical root-local
 `ComponentInstanceId` allocation, prepaid-Canister claim, Store-backed
-installation and prepared Registry commitment are published through immutable
-`v0.101.13`. Open `0.101.14` additionally freezes the complete exact
-group-partitioned `Provisioned` result and terminal retry receipt. Continue
-Slice 3 by deriving the complete Fleet-service topology from exact root results
-before one atomic Coordinator Registry publication; Component Group/Fleet
-Directory delivery and runtime activation remain separate later boundaries.
+installation, prepared Registry commitment and exact group-partitioned
+`Provisioned` result are published through immutable `v0.101.14`. Open
+`0.101.15` additionally derives and validates the complete initial
+Fleet-service binding set from every exact root receipt without mutation.
+Continue Slice 3 by extending canonical Fleet Registry validation/encoding and
+performing one atomic Coordinator publication of that exact service set;
+Component Group Directory derivation, Directory delivery and runtime
+activation remain separate later boundaries.
 Do not enable scale-out until its durable Coordinator
 placement ledger can prove ordinal non-reuse and combined density/spread.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for

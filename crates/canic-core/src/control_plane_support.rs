@@ -60,6 +60,13 @@ pub mod ops {
         };
     }
 
+    pub mod component_provisioning_receipt {
+        pub use crate::ops::component_provisioning_receipt::{
+            RootComponentProvisioningProvisionedReceiptAuthority,
+            RootComponentProvisioningReceiptOps,
+        };
+    }
+
     pub mod cost_guard {
         pub use crate::ops::cost_guard::{
             CostGuardPermit, CostGuardRequest, CostGuardReserveError, CostGuardReservePublicKind,
@@ -70,6 +77,10 @@ pub mod ops {
         pub use crate::ops::fleet_registry::{
             FleetRegistryOps, MAX_FLEET_REGISTRY_CANONICAL_BYTES,
         };
+    }
+
+    pub mod fleet_service_binding {
+        pub use crate::ops::fleet_service_binding::FleetServiceBindingOps;
     }
 
     pub mod ic {

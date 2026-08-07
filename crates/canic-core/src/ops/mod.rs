@@ -19,11 +19,13 @@ pub mod cascade;
 #[cfg(feature = "blob-storage-billing")]
 pub mod cashier;
 pub mod component_provisioning_plan;
+pub mod component_provisioning_receipt;
 pub mod component_runtime;
 pub mod config;
 pub mod cost_guard;
 pub mod fleet_activation;
 pub mod fleet_registry;
+pub mod fleet_service_binding;
 pub mod ic;
 pub mod perf;
 pub mod placement;
@@ -72,6 +74,9 @@ pub enum OpsError {
 
     #[error(transparent)]
     FleetRegistry(#[from] fleet_registry::FleetRegistryOpsError),
+
+    #[error(transparent)]
+    FleetServiceBinding(#[from] fleet_service_binding::FleetServiceBindingOpsError),
 
     #[error(transparent)]
     IcInfra(#[from] crate::infra::ic::IcInfraError),

@@ -1,6 +1,6 @@
 # Canic 0.101 Implementation Status
 
-Date: 2026-08-06
+Date: 2026-08-07
 
 ## Status
 
@@ -45,10 +45,13 @@ Date: 2026-08-06
   domain-separated terminal receipt. A focused PocketIC root proves the
   complete accept/reserve/claim/install/commit/provision/replay path against one
   canonical Project Hub group placement and the continued Directory/runtime
-  fence afterward. Directory publication and runtime activation remain
-  unimplemented.
+  fence afterward. A Coordinator-ready pure compiler now revalidates the
+  complete plan and every exact root receipt, then derives canonical
+  Authority/Replica and Active Pool bindings with mode, density, spread and
+  global identity uniqueness checked before mutation. Fleet Registry commit,
+  Directory publication and runtime activation remain unimplemented.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.13` is released and `0.101.14` is open.
+- Implementation started: yes; `0.101.14` is released and `0.101.15` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -227,8 +230,11 @@ Fleet policy writer.
 
 ## Slice 3 — Service Topology and Directories
 
-- [ ] Resolve exactly one Authority plus zero or more same-Spec Replicas for
-  AuthorityReplica, and one or more same-Spec Pool members for ActivePool.
+- [x] Resolve exactly one Authority plus zero or more same-Spec Replicas for
+  AuthorityReplica, and one or more same-Spec Pool members for ActivePool. The
+  pure compiler consumes every exact root `Provisioned` receipt, canonicalizes
+  the complete member set and rejects missing, substituted, nonterminal,
+  duplicate or placement-policy-invalid evidence before Registry mutation.
 - [ ] Publish each service's complete initial mode-compatible member set in one
   Fleet Registry revision.
 - [ ] Project exact service ID, mode and purpose-bearing member bindings
