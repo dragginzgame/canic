@@ -23,11 +23,12 @@ use canic_core::{
         fleet_registry::FleetRegistryVersion,
     },
     ids::{
-        AppId, CanisterRole, CanonicalNetworkId, ComponentGroupMemberPath, ComponentInstanceId,
-        ComponentSpecAdmission, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
-        FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetCanisterPoolConfig,
-        FleetSubnetRootBinding, FleetSubnetRootLimits, FleetSubnetRootReleaseSet, IntentId,
-        ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
+        AppId, CanisterRole, CanonicalNetworkId, ComponentDeploymentConfigurationDigest,
+        ComponentGroupMemberPath, ComponentInstanceId, ComponentSpecAdmission, CyclesFundingBudget,
+        FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority,
+        FleetSubnetCanisterPoolConfig, FleetSubnetRootBinding, FleetSubnetRootLimits,
+        FleetSubnetRootReleaseSet, IntentId, ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest,
+        SubnetId,
     },
 };
 use std::collections::{BTreeMap, BTreeSet};

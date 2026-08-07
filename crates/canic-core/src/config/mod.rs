@@ -20,7 +20,7 @@ use std::{cell::RefCell, sync::Arc};
 use thiserror::Error as ThisError;
 
 pub use component_deployment_configuration::{
-    ComponentDeploymentConfigurationDigestError,
+    ComponentDeploymentConfiguration, ComponentDeploymentConfigurationDigestError,
     MAX_COMPONENT_DEPLOYMENT_CONFIGURATION_CANONICAL_BYTES,
 };
 pub use component_group::{

@@ -5,8 +5,10 @@
 
 use super::*;
 use crate::storage::stable::fleet_coordinator::{
-    FleetCoordinatorRegistryData, FleetCoordinatorRegistryStore,
+    FleetComponentProvisioningStateRecord, FleetCoordinatorRegistryData,
+    FleetCoordinatorRegistryStore,
 };
+use crate::view::fleet_coordinator::FleetComponentProvisioningRootAcceptanceDisposition;
 use canic_core::{
     bootstrap::{
         compiled::{FleetServiceMemberPurpose, FleetServicePlacementPolicy},
@@ -18,16 +20,22 @@ use canic_core::{
         error::InternalErrorClass,
         ops::{
             component_provisioning_plan::ComponentProvisioningPlanOps,
+            component_provisioning_receipt::{
+                RootComponentProvisioningAcceptanceReceiptAuthority,
+                RootComponentProvisioningReceiptOps,
+            },
             fleet_registry::FleetRegistryOps,
         },
     },
     dto::{
         component_provisioning::{
             ComponentGroupPlacementPlan, ComponentGroupPlanEntry,
-            FleetComponentProvisioningOperation, FleetComponentProvisioningPhase,
-            FleetComponentProvisioningPlan, FleetComponentProvisioningPrepareRequest,
-            FleetComponentProvisioningStatusRequest, FleetComponentProvisioningStatusResponse,
-            FleetSubnetRootProvisioningBatch,
+            FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningOperation,
+            FleetComponentProvisioningPhase, FleetComponentProvisioningPlan,
+            FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningStatusRequest,
+            FleetComponentProvisioningStatusResponse, FleetSubnetRootProvisioningBatch,
+            RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningPhase,
+            RootComponentProvisioningStatusResponse,
         },
         error::ErrorCode,
         fleet_registry::{
@@ -98,9 +106,9 @@ fn coordinator_config() -> ConfigModel {
 }
 
 fn init_args(coordinator: Principal) -> FleetCoordinatorInitArgs {
-    let component_topology = coordinator_config()
-        .compile_component_topology()
-        .expect("Component Topology");
+    let component_deployment_configuration = coordinator_config()
+        .compile_component_deployment_configuration()
+        .expect("Component deployment configuration");
     FleetCoordinatorInitArgs {
         configured_app: AppId::from("demo"),
         authority: FleetRegistryAuthority {
@@ -117,7 +125,7 @@ fn init_args(coordinator: Principal) -> FleetCoordinatorInitArgs {
             },
             epoch: 1,
         },
-        component_topology,
+        component_deployment_configuration,
     }
 }
 
@@ -166,6 +174,22 @@ fn protected_init_commits_exact_genesis_and_supports_exact_retry() {
         wrong_canister.public_error().map(|error| error.code),
         Some(ErrorCode::InvalidInput)
     );
+
+    let durable = FleetCoordinatorRegistryStore::export();
+    let mut corrupted = durable.clone();
+    corrupted
+        .current
+        .as_mut()
+        .expect("Coordinator state")
+        .component_deployment_configuration
+        .component_topology
+        .component_specs[0]
+        .spec_hash[0] ^= 1;
+    FleetCoordinatorRegistryStore::import(corrupted);
+    let invalid = FleetCoordinatorWorkflow::registry()
+        .expect_err("corrupt durable compiled configuration must fail closed");
+    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    FleetCoordinatorRegistryStore::import(durable);
 }
 
 #[test]
@@ -173,7 +197,10 @@ fn root_join_compare_and_commit_retains_exact_response_receipts() {
     FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
     let coordinator = principal(13);
     let args = init_args(coordinator);
-    let topology = args.component_topology.clone();
+    let topology = args
+        .component_deployment_configuration
+        .component_topology
+        .clone();
     FleetCoordinatorWorkflow::initialize(args, principal(14), true, coordinator)
         .expect("commit genesis");
 
@@ -515,9 +542,12 @@ fn assert_prepared_plan_summary(
     assert_eq!(prepared.phase, FleetComponentProvisioningPhase::Planned);
     assert_eq!(prepared.directory_confirmation_root_count, 2);
     assert_eq!(prepared.root_batch_count, 2);
+    assert_eq!(prepared.accepted_root_count, 0);
+    assert_eq!(prepared.acceptance_in_flight_root, None);
     assert_eq!(prepared.group_placement_count, 2);
     assert_eq!(prepared.component_count, 2);
     assert_eq!(prepared.planned_at_ns, 92);
+    assert_eq!(prepared.roots_accepted_at_ns, None);
 }
 
 fn assert_prepared_plan_replays_exactly(
@@ -609,6 +639,281 @@ fn assert_conflicting_plan_authority_fails_closed(
     FleetCoordinatorRegistryStore::import(durable.clone());
 }
 
+#[test]
+fn coordinator_journals_each_root_acceptance_and_reconciles_lost_responses() {
+    let (config, plan_hash) = prepare_two_root_acceptance_plan();
+
+    let first_request = root_acceptance_advance_request(plan_hash, 0);
+    let first_call = expect_root_acceptance_call(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            advance_component_provisioning_root_acceptance_for_test(
+                &config,
+                first_request,
+                103,
+            )
+            .expect("journal first root intent"),
+        false,
+    );
+    assert_first_root_intent_is_durable(&config, plan_hash, first_call.fleet_subnet_root);
+    let durable_intent = FleetCoordinatorRegistryStore::export();
+    FleetCoordinatorRegistryStore::import(durable_intent.clone());
+    let reconciled_call = expect_root_acceptance_call(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            advance_component_provisioning_root_acceptance_for_test(
+                &config,
+                first_request,
+                999,
+            )
+            .expect("reconcile first root intent"),
+        true,
+    );
+    assert_eq!(reconciled_call.request, first_call.request);
+    assert_eq!(FleetCoordinatorRegistryStore::export(), durable_intent);
+
+    let early_response = accepted_root_response(&first_call.request, 102);
+    let invalid_time = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_provisioning_root_acceptance_for_test(
+            &config,
+            first_request,
+            early_response,
+            105,
+        )
+        .expect_err("root acceptance cannot predate its durable call intent");
+    assert_eq!(
+        invalid_time.public_error().map(|error| error.code),
+        Some(ErrorCode::InvalidInput)
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), durable_intent);
+
+    let first_response = accepted_root_response(&first_call.request, 104);
+    let first_status = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_provisioning_root_acceptance_for_test(
+            &config,
+            first_request,
+            first_response.clone(),
+            105,
+        )
+        .expect("record first root acceptance");
+    assert_root_acceptance_status(
+        &first_status,
+        FleetComponentProvisioningPhase::AcceptingRoots,
+        1,
+    );
+    assert_first_root_acceptance_replays(&config, first_request, first_response, &first_status);
+
+    accept_second_root_and_reject_substitution(&config, plan_hash);
+    assert_corrupt_root_acceptance_fails_closed(&config, plan_hash);
+}
+
+fn prepare_two_root_acceptance_plan() -> (ConfigModel, [u8; 32]) {
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+    let config = coordinator_config();
+    let (_, _, _) = activate_two_roots(principal(100));
+    let registry = FleetCoordinatorWorkflow::registry().expect("active Registry");
+    let plan = fresh_component_plan(&config, &registry);
+    let plan_hash =
+        ComponentProvisioningPlanOps::hash(&config, &registry, &plan).expect("canonical plan hash");
+    crate::ops::fleet_coordinator::FleetCoordinatorOps::prepare_component_provisioning_for_test(
+        &config,
+        FleetComponentProvisioningPrepareRequest {
+            operation_id: [101; 32],
+            plan,
+        },
+        102,
+    )
+    .expect("prepare complete plan");
+    (config, plan_hash)
+}
+
+fn assert_first_root_intent_is_durable(
+    config: &ConfigModel,
+    plan_hash: [u8; 32],
+    fleet_subnet_root: Principal,
+) {
+    let in_flight =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::component_provisioning_status_for_test(
+            config,
+            FleetComponentProvisioningStatusRequest {
+                operation_id: [101; 32],
+                plan_hash,
+            },
+        )
+        .expect("durable first root intent status");
+    assert_eq!(
+        in_flight.phase,
+        FleetComponentProvisioningPhase::AcceptingRoots
+    );
+    assert_eq!(in_flight.accepted_root_count, 0);
+    assert_eq!(in_flight.acceptance_in_flight_root, Some(fleet_subnet_root));
+}
+
+fn assert_first_root_acceptance_replays(
+    config: &ConfigModel,
+    request: FleetComponentProvisioningAdvanceRequest,
+    response: RootComponentProvisioningStatusResponse,
+    expected_status: &FleetComponentProvisioningStatusResponse,
+) {
+    assert_eq!(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            record_component_provisioning_root_acceptance_for_test(
+                config, request, response, 999,
+            )
+            .expect("replay after Coordinator response commit"),
+        expected_status.clone()
+    );
+
+    let replay = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        advance_component_provisioning_root_acceptance_for_test(config, request, 999)
+        .expect("first root exact retry");
+    let FleetComponentProvisioningRootAcceptanceDisposition::Current(replayed) = replay else {
+        panic!("committed root acceptance must replay current status")
+    };
+    assert_eq!(replayed, *expected_status);
+}
+
+fn root_acceptance_advance_request(
+    plan_hash: [u8; 32],
+    expected_accepted_root_count: u32,
+) -> FleetComponentProvisioningAdvanceRequest {
+    FleetComponentProvisioningAdvanceRequest {
+        operation_id: [101; 32],
+        plan_hash,
+        expected_accepted_root_count,
+    }
+}
+
+fn expect_root_acceptance_call(
+    disposition: FleetComponentProvisioningRootAcceptanceDisposition,
+    reconcile: bool,
+) -> crate::view::fleet_coordinator::FleetComponentProvisioningRootAcceptanceCallView {
+    match (disposition, reconcile) {
+        (FleetComponentProvisioningRootAcceptanceDisposition::Invoke(call), false)
+        | (FleetComponentProvisioningRootAcceptanceDisposition::Reconcile(call), true) => call,
+        _ => panic!("root acceptance disposition differs from expected call boundary"),
+    }
+}
+
+fn accepted_root_response(
+    request: &RootComponentProvisioningAcceptanceRequest,
+    accepted_at_ns: u64,
+) -> RootComponentProvisioningStatusResponse {
+    let placement_count = u32::try_from(request.batch.placements.len()).expect("placement count");
+    let component_count = request
+        .batch
+        .placements
+        .iter()
+        .map(|placement| u32::try_from(placement.entries.len()).expect("member count"))
+        .sum();
+    let receipt_content_hash = RootComponentProvisioningReceiptOps::acceptance_content_hash(
+        RootComponentProvisioningAcceptanceReceiptAuthority {
+            operation_id: request.operation_id,
+            plan_hash: request.plan_hash,
+            fleet_registry: &request.fleet_registry,
+            configuration_digest: request.configuration_digest,
+            batch: &request.batch,
+            placement_count,
+            component_count,
+            accepted_at_ns,
+        },
+    )
+    .expect("acceptance receipt hash");
+    RootComponentProvisioningStatusResponse {
+        operation_id: request.operation_id,
+        plan_hash: request.plan_hash,
+        fleet_registry: request.fleet_registry.clone(),
+        configuration_digest: request.configuration_digest,
+        fleet_subnet_root: request.batch.root.fleet_subnet_root,
+        phase: RootComponentProvisioningPhase::Accepted,
+        placement_count,
+        component_count,
+        reserved_component_count: 0,
+        claimed_component_count: 0,
+        installed_component_count: 0,
+        registry_committed_component_count: 0,
+        result: None,
+        accepted_at_ns,
+        provisioned_at_ns: None,
+        receipt_content_hash,
+    }
+}
+
+fn assert_root_acceptance_status(
+    status: &FleetComponentProvisioningStatusResponse,
+    phase: FleetComponentProvisioningPhase,
+    accepted_root_count: u32,
+) {
+    assert_eq!(status.phase, phase);
+    assert_eq!(status.accepted_root_count, accepted_root_count);
+    assert_eq!(status.acceptance_in_flight_root, None);
+}
+
+fn accept_second_root_and_reject_substitution(config: &ConfigModel, plan_hash: [u8; 32]) {
+    let request = root_acceptance_advance_request(plan_hash, 1);
+    let call = expect_root_acceptance_call(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            advance_component_provisioning_root_acceptance_for_test(config, request, 106)
+            .expect("journal second root intent"),
+        false,
+    );
+    let durable_intent = FleetCoordinatorRegistryStore::export();
+    let mut substituted = accepted_root_response(&call.request, 107);
+    substituted.fleet_subnet_root = principal(108);
+    let conflict = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_provisioning_root_acceptance_for_test(
+            config,
+            request,
+            substituted,
+            108,
+        )
+        .expect_err("substituted root response must reject");
+    assert_eq!(
+        conflict.public_error().map(|error| error.code),
+        Some(ErrorCode::Conflict)
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), durable_intent);
+
+    let complete = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_provisioning_root_acceptance_for_test(
+            config,
+            request,
+            accepted_root_response(&call.request, 107),
+            109,
+        )
+        .expect("record second root acceptance");
+    assert_root_acceptance_status(&complete, FleetComponentProvisioningPhase::RootsAccepted, 2);
+    assert_eq!(complete.roots_accepted_at_ns, Some(109));
+}
+
+fn assert_corrupt_root_acceptance_fails_closed(config: &ConfigModel, plan_hash: [u8; 32]) {
+    let exact = FleetCoordinatorRegistryStore::export();
+    let mut corrupted = exact.clone();
+    let record = corrupted
+        .current
+        .as_mut()
+        .expect("Coordinator state")
+        .component_provisioning
+        .as_mut()
+        .expect("provisioning record");
+    let FleetComponentProvisioningStateRecord::RootsAccepted { acceptances, .. } =
+        &mut record.state
+    else {
+        panic!("two accepted roots must be terminal")
+    };
+    acceptances[0].response.receipt_content_hash[0] ^= 1;
+    FleetCoordinatorRegistryStore::import(corrupted);
+    let invalid =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::component_provisioning_status_for_test(
+            config,
+            FleetComponentProvisioningStatusRequest {
+                operation_id: [101; 32],
+                plan_hash,
+            },
+        )
+        .expect_err("corrupt accepted root evidence must fail closed");
+    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    FleetCoordinatorRegistryStore::import(exact);
+}
+
 fn activate_two_roots(
     coordinator: Principal,
 ) -> (
@@ -617,7 +922,10 @@ fn activate_two_roots(
     FleetRegistryVersion,
 ) {
     let args = init_args(coordinator);
-    let topology = args.component_topology.clone();
+    let topology = args
+        .component_deployment_configuration
+        .component_topology
+        .clone();
     FleetCoordinatorWorkflow::initialize(args, principal(60), true, coordinator)
         .expect("commit genesis");
     let first = joining_entry(&topology, 61, 62, 1);

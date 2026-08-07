@@ -7,23 +7,32 @@
 use crate::{
     dto::fleet_coordinator::FleetCoordinatorInitArgs,
     storage::stable::fleet_coordinator::{
-        FleetComponentProvisioningRecord, FleetComponentProvisioningStateRecord,
+        FleetComponentProvisioningRecord, FleetComponentProvisioningRootAcceptanceIntentRecord,
+        FleetComponentProvisioningRootAcceptanceRecord, FleetComponentProvisioningStateRecord,
         FleetCoordinatorCommitError, FleetCoordinatorCommitOutcome, FleetCoordinatorRegistryRecord,
         FleetCoordinatorRegistryStore, FleetRegistryActivationReceiptRecord,
         FleetServicePublicationReceiptRecord, FleetSubnetRootDrainingPublicationReceiptRecord,
         FleetSubnetRootJoinReceiptRecord, FleetSubnetRootRemovalPublicationReceiptRecord,
     },
+    view::fleet_coordinator::{
+        FleetComponentProvisioningRootAcceptanceCallView,
+        FleetComponentProvisioningRootAcceptanceDisposition,
+    },
 };
 use candid::{CandidType, Principal};
+#[cfg(test)]
+use canic_core::control_plane_support::config::ConfigModel;
 use canic_core::{
     control_plane_support::{
-        config::ConfigModel,
         error::{InternalError, InternalErrorOrigin},
         ops::{
             component_provisioning_plan::{
                 ComponentProvisioningPlanOps, MAX_FLEET_COMPONENT_PROVISIONING_PLAN_BATCHES,
             },
-            config::ConfigOps,
+            component_provisioning_receipt::{
+                RootComponentProvisioningAcceptanceReceiptAuthority,
+                RootComponentProvisioningReceiptOps,
+            },
             fleet_registry::FleetRegistryOps,
             fleet_service_binding::FleetServiceBindingOps,
         },
@@ -31,9 +40,11 @@ use canic_core::{
     dto::fleet_subnet_root::FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
     dto::{
         component_provisioning::{
-            FleetComponentProvisioningOperation, FleetComponentProvisioningPhase,
-            FleetComponentProvisioningPlan, FleetComponentProvisioningPrepareRequest,
-            FleetComponentProvisioningStatusRequest, FleetComponentProvisioningStatusResponse,
+            FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningOperation,
+            FleetComponentProvisioningPhase, FleetComponentProvisioningPlan,
+            FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningStatusRequest,
+            FleetComponentProvisioningStatusResponse, FleetSubnetRootProvisioningBatch,
+            RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningPhase,
             RootComponentProvisioningStatusResponse,
         },
         fleet_registry::{
@@ -85,18 +96,19 @@ impl FleetCoordinatorOps {
                 "Fleet Coordinator authority principal does not match the installed canister",
             ));
         }
-        args.component_topology
-            .canonical_bytes()
+        args.component_deployment_configuration
+            .digest()
             .map_err(|error| InternalError::invalid_input(error.to_string()))?;
+        let component_topology = &args.component_deployment_configuration.component_topology;
         let registry = FleetRegistryOps::compile_genesis(
             &args.configured_app,
             args.authority.clone(),
-            &args.component_topology,
+            component_topology,
         )?;
         Ok(FleetCoordinatorRegistryRecord {
             configured_app: args.configured_app,
             authority: args.authority,
-            component_topology: args.component_topology,
+            component_deployment_configuration: args.component_deployment_configuration,
             registry,
             root_join_receipts: Vec::new(),
             root_snapshot_acknowledgements: Vec::new(),
@@ -152,7 +164,9 @@ impl FleetCoordinatorOps {
 
         let current_version = FleetRegistryOps::version(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             &current.registry,
         )?;
         if request.expected_registry != current_version {
@@ -162,7 +176,9 @@ impl FleetCoordinatorOps {
         }
         let next_registry = FleetRegistryOps::compile_joining(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             &current.registry,
             request.entry.clone(),
         )?;
@@ -174,7 +190,9 @@ impl FleetCoordinatorOps {
         }
         let version = FleetRegistryOps::version(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             &next_registry,
         )?;
         let mut next = current.clone();
@@ -197,7 +215,9 @@ impl FleetCoordinatorOps {
         let current = Self::current()?;
         FleetRegistryOps::manifest(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             &current.registry,
         )
     }
@@ -209,7 +229,9 @@ impl FleetCoordinatorOps {
         require_snapshot_root(&current, caller)?;
         let manifest = FleetRegistryOps::manifest(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             &current.registry,
         )?;
         let version = FleetRegistryVersion {
@@ -233,7 +255,9 @@ impl FleetCoordinatorOps {
         require_joining_root(&current, caller)?;
         let current_version = FleetRegistryOps::version(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             &current.registry,
         )?;
         if request.version != current_version {
@@ -286,7 +310,9 @@ impl FleetCoordinatorOps {
         require_all_roots_joining(&current)?;
         let current_version = FleetRegistryOps::version(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             &current.registry,
         )?;
         if request.expected_registry != current_version {
@@ -298,12 +324,16 @@ impl FleetCoordinatorOps {
 
         let next_registry = FleetRegistryOps::compile_active(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             &current.registry,
         )?;
         let version = FleetRegistryOps::version(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             &next_registry,
         )?;
         let response = FleetRegistryActivationResponse {
@@ -326,23 +356,7 @@ impl FleetCoordinatorOps {
         request: FleetComponentProvisioningPrepareRequest,
         planned_at_ns: u64,
     ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
-        let config = ConfigOps::get()?;
-        Self::prepare_component_provisioning_with_config(config.as_ref(), request, planned_at_ns)
-    }
-
-    pub(crate) fn component_provisioning_status(
-        request: FleetComponentProvisioningStatusRequest,
-    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
-        let config = ConfigOps::get()?;
-        Self::component_provisioning_status_with_config(config.as_ref(), request)
-    }
-
-    fn prepare_component_provisioning_with_config(
-        config: &ConfigModel,
-        request: FleetComponentProvisioningPrepareRequest,
-        planned_at_ns: u64,
-    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
-        let current = Self::current_with_provisioning_config(config)?;
+        let current = Self::current()?;
         if let Some(existing) = &current.component_provisioning {
             if existing.operation_id == request.operation_id && existing.plan == request.plan {
                 return component_provisioning_status_response(existing);
@@ -377,9 +391,16 @@ impl FleetCoordinatorOps {
                 "Fleet Component provisioning plan must precede later Registry transitions",
             ));
         }
-        ComponentProvisioningPlanOps::validate(config, &source_registry, &request.plan)?;
-        let plan_hash =
-            ComponentProvisioningPlanOps::hash(config, &source_registry, &request.plan)?;
+        ComponentProvisioningPlanOps::validate_compiled(
+            &current.component_deployment_configuration,
+            &source_registry,
+            &request.plan,
+        )?;
+        let plan_hash = ComponentProvisioningPlanOps::hash_compiled(
+            &current.component_deployment_configuration,
+            &source_registry,
+            &request.plan,
+        )?;
         let record = FleetComponentProvisioningRecord {
             operation_id: request.operation_id,
             plan_hash,
@@ -388,16 +409,15 @@ impl FleetCoordinatorOps {
         };
         let mut next = current.clone();
         next.component_provisioning = Some(record.clone());
-        let next = Self::validate_current_with_provisioning_config(next, config)?;
+        let next = Self::validate_current(next)?;
         Self::commit_transition(&current, next)?;
         component_provisioning_status_response(&record)
     }
 
-    fn component_provisioning_status_with_config(
-        config: &ConfigModel,
+    pub(crate) fn component_provisioning_status(
         request: FleetComponentProvisioningStatusRequest,
     ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
-        let current = Self::current_with_provisioning_config(config)?;
+        let current = Self::current()?;
         let record = current.component_provisioning.as_ref().ok_or_else(|| {
             InternalError::unavailable("Fleet Component provisioning plan is not prepared")
         })?;
@@ -409,13 +429,126 @@ impl FleetCoordinatorOps {
         component_provisioning_status_response(record)
     }
 
+    pub(crate) fn advance_component_provisioning_root_acceptance(
+        request: FleetComponentProvisioningAdvanceRequest,
+        started_at_ns: u64,
+    ) -> Result<FleetComponentProvisioningRootAcceptanceDisposition, InternalError> {
+        let current = Self::current()?;
+        let record = require_component_provisioning_record(&current, &request)?;
+        let progress = component_provisioning_root_acceptance_progress(record)?;
+        match classify_root_acceptance_advance(&request, &progress)? {
+            RootAcceptanceAdvance::Current => {
+                return component_provisioning_status_response(record)
+                    .map(FleetComponentProvisioningRootAcceptanceDisposition::Current);
+            }
+            RootAcceptanceAdvance::Reconcile => {
+                let call = root_acceptance_call(record, progress.accepted_root_count)?;
+                return Ok(FleetComponentProvisioningRootAcceptanceDisposition::Reconcile(call));
+            }
+            RootAcceptanceAdvance::Begin => {}
+        }
+        if started_at_ns == 0 {
+            return Err(InternalError::invalid_input(
+                "Fleet Component root acceptance start time must be nonzero",
+            ));
+        }
+        if progress.accepted_root_count == progress.root_batch_count {
+            let mut next = current.clone();
+            let next_record = component_provisioning_record_mut(&mut next)?;
+            next_record.state = FleetComponentProvisioningStateRecord::RootsAccepted {
+                planned_at_ns: progress.planned_at_ns,
+                acceptances: progress.acceptances,
+                roots_accepted_at_ns: started_at_ns,
+            };
+            let next = Self::validate_current(next)?;
+            let response =
+                component_provisioning_status_response(component_provisioning_record(&next)?)?;
+            Self::commit_transition(&current, next)?;
+            return Ok(FleetComponentProvisioningRootAcceptanceDisposition::Current(response));
+        }
+        let call = root_acceptance_call(record, progress.accepted_root_count)?;
+        let intent = FleetComponentProvisioningRootAcceptanceIntentRecord {
+            root_index: progress.accepted_root_count,
+            fleet_subnet_root: call.fleet_subnet_root,
+            started_at_ns,
+        };
+        let mut next = current.clone();
+        component_provisioning_record_mut(&mut next)?.state =
+            FleetComponentProvisioningStateRecord::AcceptingRoots {
+                planned_at_ns: progress.planned_at_ns,
+                acceptances: progress.acceptances,
+                in_flight: Some(intent),
+            };
+        let next = Self::validate_current(next)?;
+        Self::commit_transition(&current, next)?;
+        Ok(FleetComponentProvisioningRootAcceptanceDisposition::Invoke(
+            call,
+        ))
+    }
+
+    pub(crate) fn record_component_provisioning_root_acceptance(
+        request: FleetComponentProvisioningAdvanceRequest,
+        response: RootComponentProvisioningStatusResponse,
+        recorded_at_ns: u64,
+    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        let current = Self::current()?;
+        let record = require_component_provisioning_record(&current, &request)?;
+        let mut progress = component_provisioning_root_acceptance_progress(record)?;
+        if progress.accepted_root_count > request.expected_accepted_root_count {
+            return replay_recorded_root_acceptance(record, &request, &response, &progress);
+        }
+        if progress.accepted_root_count != request.expected_accepted_root_count {
+            return Err(InternalError::conflict(
+                "Fleet Component root acceptance cursor differs from durable progress",
+            ));
+        }
+        let intent = progress.in_flight.ok_or_else(|| {
+            InternalError::conflict(
+                "Fleet Component root acceptance response has no durable pre-call intent",
+            )
+        })?;
+        let batch = root_batch(record, intent.root_index)?;
+        validate_root_acceptance_response(record, batch, &response)?;
+        validate_root_acceptance_observation(intent.started_at_ns, &response, recorded_at_ns)?;
+        progress
+            .acceptances
+            .push(FleetComponentProvisioningRootAcceptanceRecord {
+                started_at_ns: intent.started_at_ns,
+                response,
+                recorded_at_ns,
+            });
+        let accepted_root_count = u32::try_from(progress.acceptances.len()).map_err(|_| {
+            InternalError::resource_exhausted("Fleet Component root acceptance count exceeds u32")
+        })?;
+        let mut next = current.clone();
+        let next_record = component_provisioning_record_mut(&mut next)?;
+        next_record.state = if accepted_root_count == progress.root_batch_count {
+            FleetComponentProvisioningStateRecord::RootsAccepted {
+                planned_at_ns: progress.planned_at_ns,
+                acceptances: progress.acceptances,
+                roots_accepted_at_ns: recorded_at_ns,
+            }
+        } else {
+            FleetComponentProvisioningStateRecord::AcceptingRoots {
+                planned_at_ns: progress.planned_at_ns,
+                acceptances: progress.acceptances,
+                in_flight: None,
+            }
+        };
+        let next = Self::validate_current(next)?;
+        let result = component_provisioning_status_response(component_provisioning_record(&next)?)?;
+        Self::commit_transition(&current, next)?;
+        Ok(result)
+    }
+
     #[cfg(test)]
     pub(crate) fn prepare_component_provisioning_for_test(
         config: &ConfigModel,
         request: FleetComponentProvisioningPrepareRequest,
         planned_at_ns: u64,
     ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
-        Self::prepare_component_provisioning_with_config(config, request, planned_at_ns)
+        require_test_component_deployment_configuration(config)?;
+        Self::prepare_component_provisioning(request, planned_at_ns)
     }
 
     #[cfg(test)]
@@ -423,14 +556,37 @@ impl FleetCoordinatorOps {
         config: &ConfigModel,
         request: FleetComponentProvisioningStatusRequest,
     ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
-        Self::component_provisioning_status_with_config(config, request)
+        require_test_component_deployment_configuration(config)?;
+        Self::component_provisioning_status(request)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn advance_component_provisioning_root_acceptance_for_test(
+        config: &ConfigModel,
+        request: FleetComponentProvisioningAdvanceRequest,
+        started_at_ns: u64,
+    ) -> Result<FleetComponentProvisioningRootAcceptanceDisposition, InternalError> {
+        require_test_component_deployment_configuration(config)?;
+        Self::advance_component_provisioning_root_acceptance(request, started_at_ns)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn record_component_provisioning_root_acceptance_for_test(
+        config: &ConfigModel,
+        request: FleetComponentProvisioningAdvanceRequest,
+        response: RootComponentProvisioningStatusResponse,
+        recorded_at_ns: u64,
+    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        require_test_component_deployment_configuration(config)?;
+        Self::record_component_provisioning_root_acceptance(request, response, recorded_at_ns)
     }
 
     #[cfg(test)]
     pub(crate) fn require_root_lifecycle_open_for_test(
         config: &ConfigModel,
     ) -> Result<(), InternalError> {
-        let current = Self::current_with_provisioning_config(config)?;
+        require_test_component_deployment_configuration(config)?;
+        let current = Self::current()?;
         require_grouped_root_lifecycle_open(&current)
     }
 
@@ -445,16 +601,18 @@ impl FleetCoordinatorOps {
     ) -> Result<FleetRegistryVersion, InternalError> {
         let current = Self::current()?;
         let source_registry = initial_active_registry(&current)?;
-        let config = ConfigOps::get()?;
-        let services = FleetServiceBindingOps::compile_initial(
-            config.as_ref(),
+        let services = FleetServiceBindingOps::compile_initial_compiled(
+            &current.component_deployment_configuration,
             &source_registry,
             plan,
             operation_id,
             root_receipts,
         )?;
-        let plan_hash =
-            ComponentProvisioningPlanOps::hash(config.as_ref(), &source_registry, plan)?;
+        let plan_hash = ComponentProvisioningPlanOps::hash_compiled(
+            &current.component_deployment_configuration,
+            &source_registry,
+            plan,
+        )?;
         let receipt_hashes = root_receipts
             .iter()
             .map(|receipt| receipt.receipt_content_hash)
@@ -502,7 +660,9 @@ impl FleetCoordinatorOps {
 
         let previous_version = FleetRegistryOps::version(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             &current.registry,
         )?;
         if previous_version != expected_registry {
@@ -515,14 +675,18 @@ impl FleetCoordinatorOps {
         } else {
             FleetRegistryOps::compile_initial_services(
                 &current.authority,
-                &current.component_topology,
+                &current
+                    .component_deployment_configuration
+                    .component_topology,
                 &current.registry,
                 services.clone(),
             )?
         };
         let version = FleetRegistryOps::version(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             &next_registry,
         )?;
         let mut next = current.clone();
@@ -584,7 +748,9 @@ impl FleetCoordinatorOps {
         }
         let previous_version = FleetRegistryOps::version(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             &current.registry,
         )?;
         if request.expected_registry != previous_version {
@@ -597,13 +763,17 @@ impl FleetCoordinatorOps {
 
         let next_registry = FleetRegistryOps::compile_draining(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             &current.registry,
             request.root_draining.fleet_subnet_root,
         )?;
         let version = FleetRegistryOps::version(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             &next_registry,
         )?;
         let response = FleetSubnetRootDrainingPublicationResponse {
@@ -649,7 +819,9 @@ impl FleetCoordinatorOps {
         }
         let previous_version = FleetRegistryOps::version(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             &current.registry,
         )?;
         if request.expected_registry != previous_version {
@@ -669,13 +841,17 @@ impl FleetCoordinatorOps {
 
         let next_registry = FleetRegistryOps::compile_removed(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             &current.registry,
             request.final_inventory.fleet_subnet_root,
         )?;
         let version = FleetRegistryOps::version(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             &next_registry,
         )?;
         let response = FleetSubnetRootRemovalPublicationResponse {
@@ -984,7 +1160,9 @@ impl FleetCoordinatorOps {
         let current = Self::current()?;
         FleetRegistryOps::version(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             &current.registry,
         )
     }
@@ -998,35 +1176,11 @@ impl FleetCoordinatorOps {
         Self::validate_current(current)
     }
 
-    fn current_with_provisioning_config(
-        config: &ConfigModel,
-    ) -> Result<FleetCoordinatorRegistryRecord, InternalError> {
-        let current = FleetCoordinatorRegistryStore::export()
-            .current
-            .ok_or_else(|| {
-                InternalError::unavailable("Fleet Coordinator genesis is not initialized")
-            })?;
-        Self::validate_current_with_provisioning_config(current, config)
-    }
-
     fn validate_current(
         current: FleetCoordinatorRegistryRecord,
     ) -> Result<FleetCoordinatorRegistryRecord, InternalError> {
         let current = Self::validate_current_registry(current)?;
-        let Some(_) = &current.component_provisioning else {
-            return Ok(current);
-        };
-        let config = ConfigOps::get()?;
-        validate_component_provisioning_record(&current, config.as_ref())?;
-        Ok(current)
-    }
-
-    fn validate_current_with_provisioning_config(
-        current: FleetCoordinatorRegistryRecord,
-        config: &ConfigModel,
-    ) -> Result<FleetCoordinatorRegistryRecord, InternalError> {
-        let current = Self::validate_current_registry(current)?;
-        validate_component_provisioning_record(&current, config)?;
+        validate_component_provisioning_record(&current)?;
         Ok(current)
     }
 
@@ -1045,9 +1199,17 @@ impl FleetCoordinatorOps {
                 "stored Fleet Coordinator App does not match its authority",
             ));
         }
+        current
+            .component_deployment_configuration
+            .digest()
+            .map_err(|_| {
+                receipt_invariant("stored Component deployment configuration is invalid")
+            })?;
         FleetRegistryOps::validate(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             &current.registry,
         )?;
         validate_root_join_receipts(&current)?;
@@ -1073,9 +1235,28 @@ impl FleetCoordinatorOps {
     }
 }
 
+#[cfg(test)]
+fn require_test_component_deployment_configuration(
+    config: &ConfigModel,
+) -> Result<(), InternalError> {
+    let expected = config
+        .compile_component_deployment_configuration()
+        .map_err(|error| InternalError::invalid_input(error.to_string()))?;
+    let current = FleetCoordinatorRegistryStore::export()
+        .current
+        .ok_or_else(|| {
+            InternalError::unavailable("Fleet Coordinator genesis is not initialized")
+        })?;
+    if current.component_deployment_configuration != expected {
+        return Err(InternalError::conflict(
+            "test Component deployment configuration differs from durable Coordinator authority",
+        ));
+    }
+    Ok(())
+}
+
 fn validate_component_provisioning_record(
     current: &FleetCoordinatorRegistryRecord,
-    config: &ConfigModel,
 ) -> Result<(), InternalError> {
     let Some(record) = &current.component_provisioning else {
         return Ok(());
@@ -1090,32 +1271,34 @@ fn validate_component_provisioning_record(
             "Fleet Component provisioning plan hash is zero",
         ));
     }
-    let FleetComponentProvisioningStateRecord::Planned { planned_at_ns } = record.state;
-    if planned_at_ns == 0 {
-        return Err(receipt_invariant(
-            "Fleet Component provisioning planned time is zero",
-        ));
-    }
     if record.plan.operation != FleetComponentProvisioningOperation::FreshInstall {
         return Err(receipt_invariant(
             "Fleet Component provisioning record contains an unavailable operation kind",
         ));
     }
     let source_registry = initial_active_registry(current)?;
-    ComponentProvisioningPlanOps::validate(config, &source_registry, &record.plan).map_err(|_| {
+    ComponentProvisioningPlanOps::validate_compiled(
+        &current.component_deployment_configuration,
+        &source_registry,
+        &record.plan,
+    )
+    .map_err(|_| {
         receipt_invariant(
             "Fleet Component provisioning plan differs from canonical configuration or Registry authority",
         )
     })?;
-    let plan_hash = ComponentProvisioningPlanOps::hash(config, &source_registry, &record.plan)
-        .map_err(|_| {
-            receipt_invariant("Fleet Component provisioning plan hash cannot be rederived")
-        })?;
+    let plan_hash = ComponentProvisioningPlanOps::hash_compiled(
+        &current.component_deployment_configuration,
+        &source_registry,
+        &record.plan,
+    )
+    .map_err(|_| receipt_invariant("Fleet Component provisioning plan hash cannot be rederived"))?;
     if record.plan_hash != plan_hash {
         return Err(receipt_invariant(
             "Fleet Component provisioning plan hash differs from canonical bytes",
         ));
     }
+    validate_component_provisioning_root_acceptance_state(record)?;
     validate_service_publication_authority(current, record)?;
     component_provisioning_plan_counts(&record.plan)?;
     Ok(())
@@ -1125,20 +1308,41 @@ fn component_provisioning_status_response(
     record: &FleetComponentProvisioningRecord,
 ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
     let counts = component_provisioning_plan_counts(&record.plan)?;
-    let FleetComponentProvisioningStateRecord::Planned { planned_at_ns } = record.state;
+    let progress = component_provisioning_root_acceptance_progress(record)?;
     Ok(FleetComponentProvisioningStatusResponse {
         operation_id: record.operation_id,
         plan_hash: record.plan_hash,
         fleet_registry: record.plan.fleet_registry.clone(),
         configuration_digest: record.plan.configuration_digest,
         operation: record.plan.operation.clone(),
-        phase: FleetComponentProvisioningPhase::Planned,
+        phase: progress.phase,
         directory_confirmation_root_count: counts.directory_confirmation_roots,
         root_batch_count: counts.root_batches,
+        accepted_root_count: progress.accepted_root_count,
+        acceptance_in_flight_root: progress.in_flight.map(|intent| intent.fleet_subnet_root),
         group_placement_count: counts.group_placements,
         component_count: counts.components,
-        planned_at_ns,
+        planned_at_ns: progress.planned_at_ns,
+        roots_accepted_at_ns: progress.roots_accepted_at_ns,
     })
+}
+
+#[derive(Clone)]
+struct FleetComponentProvisioningRootAcceptanceProgress {
+    planned_at_ns: u64,
+    phase: FleetComponentProvisioningPhase,
+    acceptances: Vec<FleetComponentProvisioningRootAcceptanceRecord>,
+    accepted_root_count: u32,
+    root_batch_count: u32,
+    in_flight: Option<FleetComponentProvisioningRootAcceptanceIntentRecord>,
+    roots_accepted_at_ns: Option<u64>,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum RootAcceptanceAdvance {
+    Begin,
+    Reconcile,
+    Current,
 }
 
 #[derive(Clone, Copy)]
@@ -1189,6 +1393,398 @@ fn validate_service_publication_authority(
         ));
     }
     Ok(())
+}
+
+fn require_component_provisioning_record<'a>(
+    current: &'a FleetCoordinatorRegistryRecord,
+    request: &FleetComponentProvisioningAdvanceRequest,
+) -> Result<&'a FleetComponentProvisioningRecord, InternalError> {
+    let record = component_provisioning_record(current).map_err(|_| {
+        InternalError::unavailable("Fleet Component provisioning plan is not prepared")
+    })?;
+    if record.operation_id != request.operation_id {
+        return Err(InternalError::conflict(
+            "Fleet Component provisioning advance names different protected plan authority",
+        ));
+    }
+    if record.plan_hash != request.plan_hash {
+        return Err(InternalError::conflict(
+            "Fleet Component provisioning advance names different protected plan authority",
+        ));
+    }
+    Ok(record)
+}
+
+fn component_provisioning_record(
+    current: &FleetCoordinatorRegistryRecord,
+) -> Result<&FleetComponentProvisioningRecord, InternalError> {
+    current
+        .component_provisioning
+        .as_ref()
+        .ok_or_else(|| receipt_invariant("Fleet Component provisioning record disappeared"))
+}
+
+fn component_provisioning_record_mut(
+    current: &mut FleetCoordinatorRegistryRecord,
+) -> Result<&mut FleetComponentProvisioningRecord, InternalError> {
+    current
+        .component_provisioning
+        .as_mut()
+        .ok_or_else(|| receipt_invariant("Fleet Component provisioning record disappeared"))
+}
+
+fn component_provisioning_root_acceptance_progress(
+    record: &FleetComponentProvisioningRecord,
+) -> Result<FleetComponentProvisioningRootAcceptanceProgress, InternalError> {
+    let root_batch_count = u32::try_from(record.plan.batches.len())
+        .map_err(|_| receipt_invariant("root batch count does not fit u32"))?;
+    let (planned_at_ns, phase, acceptances, in_flight, roots_accepted_at_ns) = match &record.state {
+        FleetComponentProvisioningStateRecord::Planned { planned_at_ns } => (
+            *planned_at_ns,
+            FleetComponentProvisioningPhase::Planned,
+            Vec::new(),
+            None,
+            None,
+        ),
+        FleetComponentProvisioningStateRecord::AcceptingRoots {
+            planned_at_ns,
+            acceptances,
+            in_flight,
+        } => (
+            *planned_at_ns,
+            FleetComponentProvisioningPhase::AcceptingRoots,
+            acceptances.clone(),
+            *in_flight,
+            None,
+        ),
+        FleetComponentProvisioningStateRecord::RootsAccepted {
+            planned_at_ns,
+            acceptances,
+            roots_accepted_at_ns,
+        } => (
+            *planned_at_ns,
+            FleetComponentProvisioningPhase::RootsAccepted,
+            acceptances.clone(),
+            None,
+            Some(*roots_accepted_at_ns),
+        ),
+    };
+    let accepted_root_count = u32::try_from(acceptances.len())
+        .map_err(|_| receipt_invariant("accepted root count does not fit u32"))?;
+    Ok(FleetComponentProvisioningRootAcceptanceProgress {
+        planned_at_ns,
+        phase,
+        acceptances,
+        accepted_root_count,
+        root_batch_count,
+        in_flight,
+        roots_accepted_at_ns,
+    })
+}
+
+fn classify_root_acceptance_advance(
+    request: &FleetComponentProvisioningAdvanceRequest,
+    progress: &FleetComponentProvisioningRootAcceptanceProgress,
+) -> Result<RootAcceptanceAdvance, InternalError> {
+    if request.expected_accepted_root_count == progress.accepted_root_count {
+        if progress.phase == FleetComponentProvisioningPhase::RootsAccepted {
+            return Ok(RootAcceptanceAdvance::Current);
+        }
+        return Ok(if progress.in_flight.is_some() {
+            RootAcceptanceAdvance::Reconcile
+        } else {
+            RootAcceptanceAdvance::Begin
+        });
+    }
+    if request.expected_accepted_root_count.checked_add(1) == Some(progress.accepted_root_count) {
+        return Ok(RootAcceptanceAdvance::Current);
+    }
+    Err(InternalError::conflict(
+        "Fleet Component root acceptance expected count differs from durable progress",
+    ))
+}
+
+fn root_acceptance_call(
+    record: &FleetComponentProvisioningRecord,
+    root_index: u32,
+) -> Result<FleetComponentProvisioningRootAcceptanceCallView, InternalError> {
+    let batch = root_batch(record, root_index)?;
+    Ok(FleetComponentProvisioningRootAcceptanceCallView {
+        fleet_subnet_root: batch.root.fleet_subnet_root,
+        request: RootComponentProvisioningAcceptanceRequest {
+            fleet_registry: record.plan.fleet_registry.clone(),
+            configuration_digest: record.plan.configuration_digest,
+            operation_id: record.operation_id,
+            plan_hash: record.plan_hash,
+            batch: batch.clone(),
+        },
+    })
+}
+
+fn root_batch(
+    record: &FleetComponentProvisioningRecord,
+    root_index: u32,
+) -> Result<&FleetSubnetRootProvisioningBatch, InternalError> {
+    let index = usize::try_from(root_index).map_err(|_| {
+        InternalError::resource_exhausted("Fleet Component root index does not fit usize")
+    })?;
+    record.plan.batches.get(index).ok_or_else(|| {
+        InternalError::conflict("Fleet Component root acceptance cursor is terminal")
+    })
+}
+
+fn replay_recorded_root_acceptance(
+    record: &FleetComponentProvisioningRecord,
+    request: &FleetComponentProvisioningAdvanceRequest,
+    response: &RootComponentProvisioningStatusResponse,
+    progress: &FleetComponentProvisioningRootAcceptanceProgress,
+) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+    if request.expected_accepted_root_count.checked_add(1) != Some(progress.accepted_root_count) {
+        return Err(InternalError::conflict(
+            "Fleet Component root acceptance response is older than one durable step",
+        ));
+    }
+    let index = usize::try_from(request.expected_accepted_root_count).map_err(|_| {
+        InternalError::resource_exhausted("Fleet Component root index does not fit usize")
+    })?;
+    let recorded = progress.acceptances.get(index).ok_or_else(|| {
+        receipt_invariant("recorded root acceptance is absent at its durable cursor")
+    })?;
+    if &recorded.response != response {
+        return Err(InternalError::conflict(
+            "Fleet Component root acceptance retry returned different evidence",
+        ));
+    }
+    component_provisioning_status_response(record)
+}
+
+fn validate_component_provisioning_root_acceptance_state(
+    record: &FleetComponentProvisioningRecord,
+) -> Result<(), InternalError> {
+    let progress = component_provisioning_root_acceptance_progress(record)?;
+    if progress.planned_at_ns == 0 {
+        return Err(receipt_invariant(
+            "Fleet Component provisioning planned time is zero",
+        ));
+    }
+    if progress.accepted_root_count > progress.root_batch_count {
+        return Err(receipt_invariant(
+            "Fleet Component accepted root count exceeds its complete plan",
+        ));
+    }
+    let mut previous_recorded_at_ns = progress.planned_at_ns;
+    for (index, acceptance) in progress.acceptances.iter().enumerate() {
+        let root_index = u32::try_from(index)
+            .map_err(|_| receipt_invariant("accepted root index does not fit u32"))?;
+        let batch = root_batch(record, root_index)?;
+        validate_root_acceptance_response(record, batch, &acceptance.response).map_err(|_| {
+            receipt_invariant("stored root acceptance differs from its exact plan batch")
+        })?;
+        if acceptance.started_at_ns < previous_recorded_at_ns {
+            return Err(receipt_invariant(
+                "Fleet Component root acceptance time evidence is invalid",
+            ));
+        }
+        validate_root_acceptance_observation(
+            acceptance.started_at_ns,
+            &acceptance.response,
+            acceptance.recorded_at_ns,
+        )
+        .map_err(|_| {
+            receipt_invariant("Fleet Component root acceptance time evidence is invalid")
+        })?;
+        previous_recorded_at_ns = acceptance.recorded_at_ns;
+    }
+    validate_root_acceptance_phase(record, &progress, previous_recorded_at_ns)
+}
+
+fn validate_root_acceptance_phase(
+    record: &FleetComponentProvisioningRecord,
+    progress: &FleetComponentProvisioningRootAcceptanceProgress,
+    previous_recorded_at_ns: u64,
+) -> Result<(), InternalError> {
+    match progress.phase {
+        FleetComponentProvisioningPhase::Planned => Ok(()),
+        FleetComponentProvisioningPhase::AcceptingRoots => {
+            if matches!(
+                (progress.accepted_root_count, progress.in_flight),
+                (0, None)
+            ) {
+                return Err(receipt_invariant(
+                    "Fleet Component root acceptance has neither progress nor pre-call intent",
+                ));
+            }
+            if progress.accepted_root_count >= progress.root_batch_count {
+                return Err(receipt_invariant(
+                    "Fleet Component root acceptance remained nonterminal after every root",
+                ));
+            }
+            let Some(intent) = progress.in_flight else {
+                return Ok(());
+            };
+            if intent.root_index != progress.accepted_root_count {
+                return Err(receipt_invariant(
+                    "Fleet Component root acceptance intent differs from its durable cursor",
+                ));
+            }
+            let batch = root_batch(record, intent.root_index)?;
+            if intent.fleet_subnet_root != batch.root.fleet_subnet_root {
+                return Err(receipt_invariant(
+                    "Fleet Component root acceptance intent names a different root",
+                ));
+            }
+            if intent.started_at_ns < previous_recorded_at_ns {
+                return Err(receipt_invariant(
+                    "Fleet Component root acceptance intent time regressed",
+                ));
+            }
+            Ok(())
+        }
+        FleetComponentProvisioningPhase::RootsAccepted => {
+            if progress.accepted_root_count != progress.root_batch_count {
+                return Err(receipt_invariant(
+                    "Fleet Component RootsAccepted state lacks complete root evidence",
+                ));
+            }
+            let completed_at_ns = progress
+                .roots_accepted_at_ns
+                .ok_or_else(|| receipt_invariant("Fleet Component RootsAccepted time is absent"))?;
+            if completed_at_ns < previous_recorded_at_ns {
+                return Err(receipt_invariant(
+                    "Fleet Component RootsAccepted time precedes root evidence",
+                ));
+            }
+            Ok(())
+        }
+    }
+}
+
+#[derive(Eq, PartialEq)]
+struct RootAcceptanceResponseIdentity<'a> {
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    fleet_registry: &'a FleetRegistryVersion,
+    configuration_digest: ComponentDeploymentConfigurationDigest,
+    fleet_subnet_root: Principal,
+}
+
+#[derive(Eq, PartialEq)]
+struct RootAcceptanceResponseProgress<'a> {
+    phase: RootComponentProvisioningPhase,
+    placement_count: u32,
+    component_count: u32,
+    reserved_component_count: u32,
+    claimed_component_count: u32,
+    installed_component_count: u32,
+    registry_committed_component_count: u32,
+    result: Option<&'a canic_core::dto::component_provisioning::RootComponentProvisioningResult>,
+    provisioned_at_ns: Option<u64>,
+}
+
+fn validate_root_acceptance_response(
+    record: &FleetComponentProvisioningRecord,
+    batch: &FleetSubnetRootProvisioningBatch,
+    response: &RootComponentProvisioningStatusResponse,
+) -> Result<(), InternalError> {
+    let expected_identity = RootAcceptanceResponseIdentity {
+        operation_id: record.operation_id,
+        plan_hash: record.plan_hash,
+        fleet_registry: &record.plan.fleet_registry,
+        configuration_digest: record.plan.configuration_digest,
+        fleet_subnet_root: batch.root.fleet_subnet_root,
+    };
+    let actual_identity = RootAcceptanceResponseIdentity {
+        operation_id: response.operation_id,
+        plan_hash: response.plan_hash,
+        fleet_registry: &response.fleet_registry,
+        configuration_digest: response.configuration_digest,
+        fleet_subnet_root: response.fleet_subnet_root,
+    };
+    if actual_identity != expected_identity {
+        return Err(InternalError::conflict(
+            "root acceptance response differs from protected Coordinator authority",
+        ));
+    }
+    let (placement_count, component_count) = root_batch_counts(batch)?;
+    let expected_progress = RootAcceptanceResponseProgress {
+        phase: RootComponentProvisioningPhase::Accepted,
+        placement_count,
+        component_count,
+        reserved_component_count: 0,
+        claimed_component_count: 0,
+        installed_component_count: 0,
+        registry_committed_component_count: 0,
+        result: None,
+        provisioned_at_ns: None,
+    };
+    let actual_progress = RootAcceptanceResponseProgress {
+        phase: response.phase,
+        placement_count: response.placement_count,
+        component_count: response.component_count,
+        reserved_component_count: response.reserved_component_count,
+        claimed_component_count: response.claimed_component_count,
+        installed_component_count: response.installed_component_count,
+        registry_committed_component_count: response.registry_committed_component_count,
+        result: response.result.as_ref(),
+        provisioned_at_ns: response.provisioned_at_ns,
+    };
+    if actual_progress != expected_progress {
+        return Err(InternalError::conflict(
+            "root acceptance response does not describe the exact initial Accepted state",
+        ));
+    }
+    if response.accepted_at_ns == 0 {
+        return Err(InternalError::conflict(
+            "root acceptance response does not describe the exact initial Accepted state",
+        ));
+    }
+    let receipt_content_hash = RootComponentProvisioningReceiptOps::acceptance_content_hash(
+        RootComponentProvisioningAcceptanceReceiptAuthority {
+            operation_id: record.operation_id,
+            plan_hash: record.plan_hash,
+            fleet_registry: &record.plan.fleet_registry,
+            configuration_digest: record.plan.configuration_digest,
+            batch,
+            placement_count,
+            component_count,
+            accepted_at_ns: response.accepted_at_ns,
+        },
+    )?;
+    if response.receipt_content_hash != receipt_content_hash {
+        return Err(InternalError::conflict(
+            "root acceptance response receipt hash is not canonical",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_root_acceptance_observation(
+    started_at_ns: u64,
+    response: &RootComponentProvisioningStatusResponse,
+    recorded_at_ns: u64,
+) -> Result<(), InternalError> {
+    if response.accepted_at_ns < started_at_ns || recorded_at_ns < response.accepted_at_ns {
+        return Err(InternalError::invalid_input(
+            "Fleet Component root acceptance time evidence is invalid",
+        ));
+    }
+    Ok(())
+}
+
+fn root_batch_counts(
+    batch: &FleetSubnetRootProvisioningBatch,
+) -> Result<(u32, u32), InternalError> {
+    let placement_count = u32::try_from(batch.placements.len())
+        .map_err(|_| receipt_invariant("root batch placement count does not fit u32"))?;
+    let mut component_count = 0_u32;
+    for placement in &batch.placements {
+        let members = u32::try_from(placement.entries.len())
+            .map_err(|_| receipt_invariant("root batch member count does not fit u32"))?;
+        component_count = component_count
+            .checked_add(members)
+            .ok_or_else(|| receipt_invariant("root batch Component count overflowed"))?;
+    }
+    Ok((placement_count, component_count))
 }
 
 fn component_provisioning_plan_counts(
@@ -1293,7 +1889,9 @@ fn validate_root_snapshot_acknowledgements(
 ) -> Result<(), InternalError> {
     let version = FleetRegistryOps::version(
         &current.authority,
-        &current.component_topology,
+        &current
+            .component_deployment_configuration
+            .component_topology,
         &current.registry,
     )?;
     let mut previous: Option<Principal> = None;
@@ -1396,8 +1994,13 @@ fn initial_lifecycle_history(
                 "Fleet Registry contains transitioned roots without an activation receipt",
             ));
         }
-        let version =
-            FleetRegistryOps::version(&current.authority, &current.component_topology, &joining)?;
+        let version = FleetRegistryOps::version(
+            &current.authority,
+            &current
+                .component_deployment_configuration
+                .component_topology,
+            &joining,
+        )?;
         return Ok((
             joining.clone(),
             vec![FleetRegistryHistoryPoint {
@@ -1411,15 +2014,27 @@ fn initial_lifecycle_history(
             "active Fleet Registry retains stale Joining acknowledgements",
         ));
     }
-    let previous_version =
-        FleetRegistryOps::version(&current.authority, &current.component_topology, &joining)
-            .map_err(|_| receipt_invariant("activation source version cannot be derived"))?;
-    let historical_registry =
-        FleetRegistryOps::compile_active(&current.authority, &current.component_topology, &joining)
-            .map_err(|_| receipt_invariant("activation target Registry cannot be derived"))?;
+    let previous_version = FleetRegistryOps::version(
+        &current.authority,
+        &current
+            .component_deployment_configuration
+            .component_topology,
+        &joining,
+    )
+    .map_err(|_| receipt_invariant("activation source version cannot be derived"))?;
+    let historical_registry = FleetRegistryOps::compile_active(
+        &current.authority,
+        &current
+            .component_deployment_configuration
+            .component_topology,
+        &joining,
+    )
+    .map_err(|_| receipt_invariant("activation target Registry cannot be derived"))?;
     let version = FleetRegistryOps::version(
         &current.authority,
-        &current.component_topology,
+        &current
+            .component_deployment_configuration
+            .component_topology,
         &historical_registry,
     )
     .map_err(|_| receipt_invariant("activation target version cannot be derived"))?;
@@ -1466,7 +2081,9 @@ fn apply_service_publication_receipt(
     }
     let previous_version = FleetRegistryOps::version(
         &current.authority,
-        &current.component_topology,
+        &current
+            .component_deployment_configuration
+            .component_topology,
         historical_registry,
     )?;
     if receipt.previous_version != previous_version {
@@ -1479,7 +2096,9 @@ fn apply_service_publication_receipt(
     } else {
         FleetRegistryOps::compile_initial_services(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             historical_registry,
             receipt.services.clone(),
         )
@@ -1489,7 +2108,9 @@ fn apply_service_publication_receipt(
     };
     let version = FleetRegistryOps::version(
         &current.authority,
-        &current.component_topology,
+        &current
+            .component_deployment_configuration
+            .component_topology,
         &next_registry,
     )?;
     if receipt.version != version {
@@ -1574,7 +2195,9 @@ fn apply_lifecycle_receipt(
 ) -> Result<(), InternalError> {
     let previous_version = FleetRegistryOps::version(
         &current.authority,
-        &current.component_topology,
+        &current
+            .component_deployment_configuration
+            .component_topology,
         historical_registry,
     )
     .map_err(|_| receipt_invariant("root lifecycle source version cannot be derived"))?;
@@ -1597,7 +2220,9 @@ fn apply_lifecycle_receipt(
     }
     let version = FleetRegistryOps::version(
         &current.authority,
-        &current.component_topology,
+        &current
+            .component_deployment_configuration
+            .component_topology,
         &next_registry,
     )
     .map_err(|_| receipt_invariant("root lifecycle target version cannot be derived"))?;
@@ -1621,14 +2246,18 @@ fn apply_draining_receipt(
         })?;
     let next_registry = FleetRegistryOps::compile_draining(
         &current.authority,
-        &current.component_topology,
+        &current
+            .component_deployment_configuration
+            .component_topology,
         historical_registry,
         receipt.request.root_draining.fleet_subnet_root,
     )
     .map_err(|_| receipt_invariant("root draining target Registry cannot be derived"))?;
     let version = FleetRegistryOps::version(
         &current.authority,
-        &current.component_topology,
+        &current
+            .component_deployment_configuration
+            .component_topology,
         &next_registry,
     )?;
     let response =
@@ -1659,14 +2288,18 @@ fn apply_removal_receipt(
     })?;
     let next_registry = FleetRegistryOps::compile_removed(
         &current.authority,
-        &current.component_topology,
+        &current
+            .component_deployment_configuration
+            .component_topology,
         historical_registry,
         receipt.request.final_inventory.fleet_subnet_root,
     )
     .map_err(|_| receipt_invariant("root removal target Registry cannot be derived"))?;
     let version = FleetRegistryOps::version(
         &current.authority,
-        &current.component_topology,
+        &current
+            .component_deployment_configuration
+            .component_topology,
         &next_registry,
     )?;
     let response =
@@ -1796,7 +2429,9 @@ fn historical_joining_registry(
     let mut historical_registry = FleetRegistryOps::compile_genesis(
         &current.configured_app,
         current.authority.clone(),
-        &current.component_topology,
+        &current
+            .component_deployment_configuration
+            .component_topology,
     )
     .map_err(|_| receipt_invariant("Fleet Registry join receipt genesis is not canonical"))?;
     for receipt in &current.root_join_receipts {
@@ -1807,14 +2442,18 @@ fn historical_joining_registry(
         }
         historical_registry = FleetRegistryOps::compile_joining(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             &historical_registry,
             receipt.entry.clone(),
         )
         .map_err(|_| receipt_invariant("Fleet Registry join receipt history is not canonical"))?;
         let historical_version = FleetRegistryOps::version(
             &current.authority,
-            &current.component_topology,
+            &current
+                .component_deployment_configuration
+                .component_topology,
             &historical_registry,
         )
         .map_err(|_| receipt_invariant("Fleet Registry join receipt version cannot be derived"))?;

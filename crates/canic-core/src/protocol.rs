@@ -17,6 +17,8 @@ pub const CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS: &str =
 pub const CANIC_FLEET_REGISTRY_ACTIVATE: &str = "canic_fleet_registry_activate";
 pub const CANIC_FLEET_COMPONENT_PROVISIONING_PREPARE: &str =
     "canic_fleet_component_provisioning_prepare";
+pub const CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE: &str =
+    "canic_fleet_component_provisioning_advance";
 pub const CANIC_FLEET_COMPONENT_PROVISIONING_STATUS: &str =
     "canic_fleet_component_provisioning_status";
 pub const CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING: &str =

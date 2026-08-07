@@ -13,8 +13,8 @@ use canic_core::{
     control_plane_support::ops::runtime::env::EnvOps,
     dto::{
         component_provisioning::{
-            FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningStatusRequest,
-            FleetComponentProvisioningStatusResponse,
+            FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningPrepareRequest,
+            FleetComponentProvisioningStatusRequest, FleetComponentProvisioningStatusResponse,
         },
         error::Error,
         fleet_registry::{
@@ -106,6 +106,14 @@ impl FleetCoordinatorApi {
         request: FleetComponentProvisioningStatusRequest,
     ) -> Result<FleetComponentProvisioningStatusResponse, Error> {
         FleetCoordinatorWorkflow::component_provisioning_status(request).map_err(Into::into)
+    }
+
+    pub async fn advance_component_provisioning(
+        request: FleetComponentProvisioningAdvanceRequest,
+    ) -> Result<FleetComponentProvisioningStatusResponse, Error> {
+        FleetCoordinatorWorkflow::advance_component_provisioning(request)
+            .await
+            .map_err(Into::into)
     }
 
     pub fn publish_root_draining(

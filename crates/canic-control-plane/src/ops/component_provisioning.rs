@@ -38,6 +38,7 @@ use canic_core::{
         error::{InternalError, InternalErrorOrigin},
         ops::component_provisioning_plan::RootComponentProvisioningBatchValidation,
         ops::component_provisioning_receipt::{
+            RootComponentProvisioningAcceptanceReceiptAuthority,
             RootComponentProvisioningProvisionedReceiptAuthority,
             RootComponentProvisioningReceiptOps,
         },
@@ -55,34 +56,17 @@ use canic_core::{
         component_registry::{
             ComponentLifecycleStatus, ComponentProvisioningOrigin, ComponentRegistryHead,
         },
-        fleet_registry::FleetRegistryVersion,
     },
-    ids::{
-        ComponentBinding, ComponentDeploymentConfigurationDigest, ComponentGroupMemberPath,
-        ComponentGroupPlacementId, ComponentSpecId,
-    },
+    ids::{ComponentBinding, ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentSpecId},
 };
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
-const ACCEPTANCE_RECEIPT_DOMAIN: &[u8] = b"canic/root-component-provisioning-acceptance-receipt/v1";
 const MEMBER_OPERATION_DOMAIN: &[u8] = b"canic/root-component-provisioning-member-operation/v1";
 const RESERVATION_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-reservation-cursor/v1";
 const CLAIM_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-claim-cursor/v1";
 const INSTALL_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-install-cursor/v1";
 const REGISTRY_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-registry-cursor/v1";
-
-#[derive(CandidType)]
-struct RootComponentProvisioningAcceptanceReceiptAuthority<'a> {
-    operation_id: [u8; 32],
-    plan_hash: [u8; 32],
-    fleet_registry: &'a FleetRegistryVersion,
-    configuration_digest: ComponentDeploymentConfigurationDigest,
-    batch: &'a canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
-    placement_count: u32,
-    component_count: u32,
-    accepted_at_ns: u64,
-}
 
 #[derive(CandidType)]
 struct RootComponentProvisioningMemberOperationAuthority<'a> {
@@ -2188,27 +2172,18 @@ fn acceptance_receipt_hash(
     component_count: u32,
     accepted_at_ns: u64,
 ) -> Result<[u8; 32], InternalError> {
-    let authority = RootComponentProvisioningAcceptanceReceiptAuthority {
-        operation_id: request.operation_id,
-        plan_hash: request.plan_hash,
-        fleet_registry: &request.fleet_registry,
-        configuration_digest: request.configuration_digest,
-        batch: &request.batch,
-        placement_count,
-        component_count,
-        accepted_at_ns,
-    };
-    let bytes = candid::encode_one(authority).map_err(|error| {
-        InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            format!("could not encode root provisioning acceptance receipt: {error}"),
-        )
-    })?;
-    let mut hasher = Sha256::new();
-    hasher.update(ACCEPTANCE_RECEIPT_DOMAIN);
-    hasher.update((bytes.len() as u64).to_be_bytes());
-    hasher.update(bytes);
-    Ok(hasher.finalize().into())
+    RootComponentProvisioningReceiptOps::acceptance_content_hash(
+        RootComponentProvisioningAcceptanceReceiptAuthority {
+            operation_id: request.operation_id,
+            plan_hash: request.plan_hash,
+            fleet_registry: &request.fleet_registry,
+            configuration_digest: request.configuration_digest,
+            batch: &request.batch,
+            placement_count,
+            component_count,
+            accepted_at_ns,
+        },
+    )
 }
 
 fn map_commit_error(error: RootComponentProvisioningCommitError) -> InternalError {

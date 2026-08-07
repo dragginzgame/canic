@@ -5,15 +5,21 @@
 //! Boundary: Coordinator ops may commit or export one complete validated record.
 
 #[cfg(feature = "fleet-coordinator-canister")]
+use std::cell::RefCell;
+
+use candid::Principal;
+#[cfg(feature = "fleet-coordinator-canister")]
 use canic_core::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     eager_static, impl_storable_bounded,
     role_contract::allocation::memory::control_plane::FLEET_COORDINATOR_REGISTRY_ID,
 };
 use canic_core::{
-    control_plane_support::config::ComponentTopology,
+    control_plane_support::config::ComponentDeploymentConfiguration,
     dto::{
-        component_provisioning::FleetComponentProvisioningPlan,
+        component_provisioning::{
+            FleetComponentProvisioningPlan, RootComponentProvisioningStatusResponse,
+        },
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
             FleetRegistryVersion, FleetServiceBinding, FleetSubnetRootDeletionExecutionResponse,
@@ -27,16 +33,15 @@ use canic_core::{
     ids::{AppId, ComponentDeploymentConfigurationDigest, FleetRegistryAuthority},
 };
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "fleet-coordinator-canister")]
-use std::cell::RefCell;
 
 #[cfg(feature = "fleet-coordinator-canister")]
-// The record may contain one topology, one Registry snapshot, the root-entry
-// portion of that Registry again as immutable join receipts, the complete
-// Component provisioning plan, the complete service set again as one
+// The record may contain one complete compiled deployment configuration, one
+// Registry snapshot, the root-entry portion of that Registry again as
+// immutable join receipts, the complete Component provisioning plan plus one
+// compact acceptance per planned root, the complete service set again as one
 // publication receipt, one exact acknowledgement per current root, and at
 // most one draining and one removal receipt per root.
-const FLEET_COORDINATOR_STATE_MAX_BYTES: u32 = 16_777_216;
+const FLEET_COORDINATOR_STATE_MAX_BYTES: u32 = 33_554_432;
 
 #[cfg(feature = "fleet-coordinator-canister")]
 struct FleetCoordinatorRegistryState;
@@ -66,7 +71,7 @@ eager_static! {
 pub struct FleetCoordinatorRegistryRecord {
     pub configured_app: AppId,
     pub authority: FleetRegistryAuthority,
-    pub component_topology: ComponentTopology,
+    pub component_deployment_configuration: ComponentDeploymentConfiguration,
     pub registry: FleetRegistry,
     pub root_join_receipts: Vec<FleetSubnetRootJoinReceiptRecord>,
     pub root_snapshot_acknowledgements: Vec<FleetSubnetRootSnapshotAcknowledgement>,
@@ -115,9 +120,37 @@ pub struct FleetComponentProvisioningRecord {
 }
 
 /// Monotonic durable Coordinator provisioning state implemented in this slice.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum FleetComponentProvisioningStateRecord {
-    Planned { planned_at_ns: u64 },
+    Planned {
+        planned_at_ns: u64,
+    },
+    AcceptingRoots {
+        planned_at_ns: u64,
+        acceptances: Vec<FleetComponentProvisioningRootAcceptanceRecord>,
+        in_flight: Option<FleetComponentProvisioningRootAcceptanceIntentRecord>,
+    },
+    RootsAccepted {
+        planned_at_ns: u64,
+        acceptances: Vec<FleetComponentProvisioningRootAcceptanceRecord>,
+        roots_accepted_at_ns: u64,
+    },
+}
+
+/// Durable pre-call intent for one exact canonical root batch.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetComponentProvisioningRootAcceptanceIntentRecord {
+    pub root_index: u32,
+    pub fleet_subnet_root: Principal,
+    pub started_at_ns: u64,
+}
+
+/// Authenticated root acceptance retained with Coordinator observation time.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetComponentProvisioningRootAcceptanceRecord {
+    pub started_at_ns: u64,
+    pub response: RootComponentProvisioningStatusResponse,
+    pub recorded_at_ns: u64,
 }
 
 /// Persisted exact authority and response for initial Fleet-service publication.

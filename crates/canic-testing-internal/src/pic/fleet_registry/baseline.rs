@@ -3612,7 +3612,10 @@ mod tests {
                 .app
                 .clone(),
             authority: fixture.init_args.authority.binding.authority.clone(),
-            component_topology: config.component_topology().clone(),
+            component_deployment_configuration: config
+                .model()
+                .compile_component_deployment_configuration()
+                .expect("compile Coordinator Component deployment configuration"),
         };
         pic.install_canister(
             coordinator,

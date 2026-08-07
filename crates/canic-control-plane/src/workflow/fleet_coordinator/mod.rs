@@ -8,16 +8,26 @@
 mod tests;
 
 use crate::{
-    dto::fleet_coordinator::FleetCoordinatorInitArgs, ops::fleet_coordinator::FleetCoordinatorOps,
+    dto::fleet_coordinator::FleetCoordinatorInitArgs,
+    ops::fleet_coordinator::FleetCoordinatorOps,
+    view::fleet_coordinator::{
+        FleetComponentProvisioningRootAcceptanceCallView,
+        FleetComponentProvisioningRootAcceptanceDisposition,
+    },
 };
 use candid::Principal;
 use canic_core::{
-    control_plane_support::{error::InternalError, ops::ic::IcOps},
+    control_plane_support::{
+        error::InternalError,
+        ops::ic::{IcOps, call::CallOps},
+    },
     dto::{
         component_provisioning::{
-            FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningStatusRequest,
-            FleetComponentProvisioningStatusResponse,
+            FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningPrepareRequest,
+            FleetComponentProvisioningStatusRequest, FleetComponentProvisioningStatusResponse,
+            RootComponentProvisioningStatusResponse,
         },
+        error::Error,
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
             FleetRegistryManifest, FleetRegistrySnapshotResponse, FleetRegistryVersion,
@@ -33,6 +43,7 @@ use canic_core::{
             FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
         },
     },
+    protocol,
 };
 
 ///
@@ -108,6 +119,28 @@ impl FleetCoordinatorWorkflow {
         request: FleetComponentProvisioningStatusRequest,
     ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
         FleetCoordinatorOps::component_provisioning_status(request)
+    }
+
+    pub(crate) async fn advance_component_provisioning(
+        request: FleetComponentProvisioningAdvanceRequest,
+    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        let disposition = FleetCoordinatorOps::advance_component_provisioning_root_acceptance(
+            request,
+            IcOps::now_nanos(),
+        )?;
+        let call = match disposition {
+            FleetComponentProvisioningRootAcceptanceDisposition::Current(status) => {
+                return Ok(status);
+            }
+            FleetComponentProvisioningRootAcceptanceDisposition::Invoke(call)
+            | FleetComponentProvisioningRootAcceptanceDisposition::Reconcile(call) => call,
+        };
+        let response = accept_root_component_provisioning(call).await?;
+        FleetCoordinatorOps::record_component_provisioning_root_acceptance(
+            request,
+            response,
+            IcOps::now_nanos(),
+        )
     }
 
     pub(crate) fn publish_root_draining(
@@ -190,4 +223,18 @@ impl FleetCoordinatorWorkflow {
     pub(crate) fn version() -> Result<FleetRegistryVersion, InternalError> {
         FleetCoordinatorOps::version()
     }
+}
+
+async fn accept_root_component_provisioning(
+    call: FleetComponentProvisioningRootAcceptanceCallView,
+) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
+    let result = CallOps::unbounded_wait(
+        call.fleet_subnet_root,
+        protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ACCEPT,
+    )
+    .with_arg(call.request)?
+    .execute()
+    .await?;
+    let response: Result<RootComponentProvisioningStatusResponse, Error> = result.candid()?;
+    response.map_err(InternalError::public)
 }

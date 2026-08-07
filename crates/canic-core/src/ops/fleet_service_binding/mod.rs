@@ -10,8 +10,8 @@ mod tests;
 use crate::{
     InternalError,
     config::{
-        ComponentDeploymentPurpose, ComponentTopology, ConfigModel, FleetServiceMemberPurpose,
-        FleetServiceTarget, FleetServiceTargetMode,
+        ComponentDeploymentConfiguration, ComponentDeploymentPurpose, ComponentTopology,
+        ConfigModel, FleetServiceMemberPurpose, FleetServiceTarget, FleetServiceTargetMode,
     },
     dto::{
         component_provisioning::{
@@ -117,9 +117,31 @@ impl FleetServiceBindingOps {
         operation_id: [u8; 32],
         root_receipts: &[RootComponentProvisioningStatusResponse],
     ) -> Result<Vec<FleetServiceBinding>, InternalError> {
-        compile_initial(config, registry, plan, operation_id, root_receipts)
+        let configuration = config
+            .compile_component_deployment_configuration()
+            .map_err(|error| FleetServiceBindingOpsError::Configuration(error.to_string()))
             .map_err(OpsError::from)
-            .map_err(InternalError::from)
+            .map_err(InternalError::from)?;
+        Self::compile_initial_compiled(&configuration, registry, plan, operation_id, root_receipts)
+    }
+
+    /// Compile initial services from one exact decoded provisioning configuration.
+    pub fn compile_initial_compiled(
+        configuration: &ComponentDeploymentConfiguration,
+        registry: &FleetRegistry,
+        plan: &FleetComponentProvisioningPlan,
+        operation_id: [u8; 32],
+        root_receipts: &[RootComponentProvisioningStatusResponse],
+    ) -> Result<Vec<FleetServiceBinding>, InternalError> {
+        compile_initial_compiled_configuration(
+            configuration,
+            registry,
+            plan,
+            operation_id,
+            root_receipts,
+        )
+        .map_err(OpsError::from)
+        .map_err(InternalError::from)
     }
 }
 
@@ -181,8 +203,8 @@ struct ResultMemberPlacementAuthority {
     fleet_subnet_root: Principal,
 }
 
-fn compile_initial(
-    config: &ConfigModel,
+fn compile_initial_compiled_configuration(
+    configuration: &ComponentDeploymentConfiguration,
     registry: &FleetRegistry,
     plan: &FleetComponentProvisioningPlan,
     operation_id: [u8; 32],
@@ -191,9 +213,9 @@ fn compile_initial(
     if operation_id == [0; 32] {
         return Err(FleetServiceBindingOpsError::EmptyOperationId);
     }
-    ComponentProvisioningPlanOps::validate(config, registry, plan)
+    ComponentProvisioningPlanOps::validate_compiled(configuration, registry, plan)
         .map_err(|error| FleetServiceBindingOpsError::Plan(error.to_string()))?;
-    let plan_hash = ComponentProvisioningPlanOps::hash(config, registry, plan)
+    let plan_hash = ComponentProvisioningPlanOps::hash_compiled(configuration, registry, plan)
         .map_err(|error| FleetServiceBindingOpsError::Plan(error.to_string()))?;
     if root_receipts.len() != plan.batches.len() {
         return Err(FleetServiceBindingOpsError::RootReceiptCountMismatch {
@@ -201,17 +223,11 @@ fn compile_initial(
             expected: plan.batches.len(),
         });
     }
-    let component_topology = config
-        .compile_component_topology()
-        .map_err(|error| FleetServiceBindingOpsError::Configuration(error.to_string()))?;
-    let service_topology = config
-        .compile_fleet_service_topology()
-        .map_err(|error| FleetServiceBindingOpsError::Configuration(error.to_string()))?;
     let authority = BindingCompilationAuthority {
         operation_id,
         plan_hash,
         plan,
-        component_topology: &component_topology,
+        component_topology: &configuration.component_topology,
     };
     let mut ledger = BindingCompilationLedger::default();
 
@@ -219,7 +235,8 @@ fn compile_initial(
         validate_root_receipt(batch, receipt, &authority, &mut ledger)?;
     }
 
-    let services = service_topology
+    let services = configuration
+        .fleet_service_topology
         .targets
         .iter()
         .map(|target| compile_service(target, &mut ledger.candidates))
@@ -228,6 +245,26 @@ fn compile_initial(
         return Err(FleetServiceBindingOpsError::UnexpectedService { service });
     }
     Ok(services)
+}
+
+#[cfg(test)]
+fn compile_initial(
+    config: &ConfigModel,
+    registry: &FleetRegistry,
+    plan: &FleetComponentProvisioningPlan,
+    operation_id: [u8; 32],
+    root_receipts: &[RootComponentProvisioningStatusResponse],
+) -> Result<Vec<FleetServiceBinding>, FleetServiceBindingOpsError> {
+    let configuration = config
+        .compile_component_deployment_configuration()
+        .map_err(|error| FleetServiceBindingOpsError::Configuration(error.to_string()))?;
+    compile_initial_compiled_configuration(
+        &configuration,
+        registry,
+        plan,
+        operation_id,
+        root_receipts,
+    )
 }
 
 fn validate_root_receipt(

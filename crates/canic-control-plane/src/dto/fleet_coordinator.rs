@@ -6,7 +6,7 @@
 
 use candid::CandidType;
 use canic_core::{
-    control_plane_support::config::ComponentTopology,
+    control_plane_support::config::ComponentDeploymentConfiguration,
     ids::{AppId, FleetRegistryAuthority},
 };
 use serde::Deserialize;
@@ -14,12 +14,12 @@ use serde::Deserialize;
 ///
 /// FleetCoordinatorInitArgs
 ///
-/// Exact authority and topology installed into a fresh Fleet Coordinator.
+/// Exact authority and compiled provisioning configuration installed into a fresh Coordinator.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct FleetCoordinatorInitArgs {
     pub configured_app: AppId,
     pub authority: FleetRegistryAuthority,
-    pub component_topology: ComponentTopology,
+    pub component_deployment_configuration: ComponentDeploymentConfiguration,
 }

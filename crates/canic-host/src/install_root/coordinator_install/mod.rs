@@ -94,7 +94,9 @@ pub(super) fn install_and_verify_fleet_coordinator(
     fleet_install_plan: &PersistedFleetInstallPlan,
 ) -> Result<VerifiedFleetCoordinator, Box<dyn std::error::Error>> {
     let config = AppConfigSnapshot::load(config_path)?;
-    let component_topology = config.model().compile_component_topology()?;
+    let component_deployment_configuration = config
+        .model()
+        .compile_component_deployment_configuration()?;
     let infrastructure_manifest = load_persisted_canic_infrastructure_artifact_manifest(
         icp_root,
         fleet_install_plan.plan.release_build_id,
@@ -108,7 +110,7 @@ pub(super) fn install_and_verify_fleet_coordinator(
     let mut current = plan_fleet_coordinator_install(PlanFleetCoordinatorInstallRequest {
         fleet_install_plan,
         infrastructure_manifest: &infrastructure_manifest,
-        component_topology,
+        component_deployment_configuration,
     })?;
 
     for _ in 0..MAX_COORDINATOR_TRANSITIONS {
@@ -310,12 +312,16 @@ fn verify_live_coordinator_current(
     let live = query_live_registry(&icp, coordinator)?;
     FleetRegistryOps::validate(
         &expected.init_args.authority,
-        &journal.component_topology,
+        &journal
+            .component_deployment_configuration
+            .component_topology,
         &live.registry,
     )?;
     let expected_manifest = FleetRegistryOps::manifest(
         &expected.init_args.authority,
-        &journal.component_topology,
+        &journal
+            .component_deployment_configuration
+            .component_topology,
         &live.registry,
     )?;
     if live.manifest != expected_manifest {
@@ -323,7 +329,9 @@ fn verify_live_coordinator_current(
     }
     let expected_version = FleetRegistryOps::version(
         &expected.init_args.authority,
-        &journal.component_topology,
+        &journal
+            .component_deployment_configuration
+            .component_topology,
         &live.registry,
     )?;
     if live.version != expected_version {
@@ -349,15 +357,29 @@ fn expected_genesis(
     let registry = FleetRegistryOps::compile_genesis(
         &journal.fleet.app,
         authority.clone(),
-        &journal.component_topology,
+        &journal
+            .component_deployment_configuration
+            .component_topology,
     )?;
-    let manifest = FleetRegistryOps::manifest(&authority, &journal.component_topology, &registry)?;
-    let version = FleetRegistryOps::version(&authority, &journal.component_topology, &registry)?;
+    let manifest = FleetRegistryOps::manifest(
+        &authority,
+        &journal
+            .component_deployment_configuration
+            .component_topology,
+        &registry,
+    )?;
+    let version = FleetRegistryOps::version(
+        &authority,
+        &journal
+            .component_deployment_configuration
+            .component_topology,
+        &registry,
+    )?;
     Ok(ExpectedCoordinatorGenesis {
         init_args: FleetCoordinatorInitArgs {
             configured_app: journal.fleet.app.clone(),
             authority,
-            component_topology: journal.component_topology.clone(),
+            component_deployment_configuration: journal.component_deployment_configuration.clone(),
         },
         registry,
         manifest,
@@ -392,10 +414,24 @@ mod tests {
                 },
                 epoch: 1,
             },
-            component_topology: canic_core::bootstrap::compiled::ComponentTopology {
-                component_specs: Vec::new(),
-                provisioning_grants: Vec::new(),
-            },
+            component_deployment_configuration:
+                canic_core::bootstrap::compiled::ComponentDeploymentConfiguration {
+                    component_topology: canic_core::bootstrap::compiled::ComponentTopology {
+                        component_specs: Vec::new(),
+                        provisioning_grants: Vec::new(),
+                    },
+                    component_group_topology:
+                        canic_core::bootstrap::compiled::ComponentGroupTopology {
+                            component_groups: Vec::new(),
+                        },
+                    deployment_topology:
+                        canic_core::bootstrap::compiled::ComponentGroupDeploymentTopology {
+                            component_group_deployments: Vec::new(),
+                        },
+                    fleet_service_topology: canic_core::bootstrap::compiled::FleetServiceTopology {
+                        targets: Vec::new(),
+                    },
+                },
         };
         let root = crate::test_support::temp_dir("canic-binary-coordinator-install-args");
         let path = root.join(COORDINATOR_INSTALL_ARGS_FILE);

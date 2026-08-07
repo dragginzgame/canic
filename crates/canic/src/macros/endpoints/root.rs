@@ -174,7 +174,11 @@ macro_rules! canic_emit_root_admin_endpoints {
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_registry_status(request).await
         }
 
-        #[$crate::canic_update(internal, public)]
+        #[$crate::canic_update(
+            internal,
+            public,
+            payload(max_bytes = ::canic::__internal::core::control_plane_support::ops::component_provisioning_plan::MAX_FLEET_SUBNET_ROOT_PROVISIONING_ACCEPTANCE_PAYLOAD_BYTES)
+        )]
         async fn canic_root_component_provisioning_accept(
             request: ::canic::dto::component_provisioning::RootComponentProvisioningAcceptanceRequest,
         ) -> Result<::canic::dto::component_provisioning::RootComponentProvisioningStatusResponse, ::canic::Error> {

@@ -7,6 +7,7 @@ use crate::{
     test_support::temp_dir,
 };
 use canic_core::{
+    bootstrap::compiled::ComponentTopology,
     control_plane_support::ops::fleet_registry::FleetRegistryOps,
     ids::{
         AppId, CanonicalNetworkId, FleetCoordinatorBinding, FleetId, FleetKey,
@@ -27,7 +28,7 @@ fn journals_every_coordinator_effect_before_advancing() {
     let planned = plan_fleet_coordinator_install(PlanFleetCoordinatorInstallRequest {
         fleet_install_plan: &plan,
         infrastructure_manifest: &manifest,
-        component_topology: empty_topology(),
+        component_deployment_configuration: empty_deployment_configuration(),
     })
     .expect("plan Coordinator install");
     assert_eq!(planned.journal.phase, FleetCoordinatorInstallPhase::Planned);
@@ -69,15 +70,30 @@ fn journals_every_coordinator_effect_before_advancing() {
     let registry = FleetRegistryOps::compile_genesis(
         &installed.journal.fleet.app,
         authority.clone(),
-        &installed.journal.component_topology,
+        &installed
+            .journal
+            .component_deployment_configuration
+            .component_topology,
     )
     .expect("compile Registry genesis");
-    let manifest =
-        FleetRegistryOps::manifest(&authority, &installed.journal.component_topology, &registry)
-            .expect("Registry manifest");
-    let version =
-        FleetRegistryOps::version(&authority, &installed.journal.component_topology, &registry)
-            .expect("Registry version");
+    let manifest = FleetRegistryOps::manifest(
+        &authority,
+        &installed
+            .journal
+            .component_deployment_configuration
+            .component_topology,
+        &registry,
+    )
+    .expect("Registry manifest");
+    let version = FleetRegistryOps::version(
+        &authority,
+        &installed
+            .journal
+            .component_deployment_configuration
+            .component_topology,
+        &registry,
+    )
+    .expect("Registry version");
     let verified =
         record_coordinator_verified(&installed, manifest, version).expect("record verification");
     assert_eq!(
@@ -95,7 +111,7 @@ fn exact_retry_recovers_in_flight_without_advancing_again() {
     let planned = plan_fleet_coordinator_install(PlanFleetCoordinatorInstallRequest {
         fleet_install_plan: &plan,
         infrastructure_manifest: &manifest,
-        component_topology: empty_topology(),
+        component_deployment_configuration: empty_deployment_configuration(),
     })
     .expect("plan Coordinator install");
     let installation_controller = Principal::from_slice(&[89]);
@@ -105,7 +121,7 @@ fn exact_retry_recovers_in_flight_without_advancing_again() {
     let recovered = plan_fleet_coordinator_install(PlanFleetCoordinatorInstallRequest {
         fleet_install_plan: &plan,
         infrastructure_manifest: &manifest,
-        component_topology: empty_topology(),
+        component_deployment_configuration: empty_deployment_configuration(),
     })
     .expect("recover Coordinator install");
 
@@ -174,5 +190,20 @@ fn empty_topology() -> ComponentTopology {
     ComponentTopology {
         component_specs: Vec::new(),
         provisioning_grants: Vec::new(),
+    }
+}
+
+fn empty_deployment_configuration() -> ComponentDeploymentConfiguration {
+    ComponentDeploymentConfiguration {
+        component_topology: empty_topology(),
+        component_group_topology: canic_core::bootstrap::compiled::ComponentGroupTopology {
+            component_groups: Vec::new(),
+        },
+        deployment_topology: canic_core::bootstrap::compiled::ComponentGroupDeploymentTopology {
+            component_group_deployments: Vec::new(),
+        },
+        fleet_service_topology: canic_core::bootstrap::compiled::FleetServiceTopology {
+            targets: Vec::new(),
+        },
     }
 }

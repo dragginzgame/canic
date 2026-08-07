@@ -33,7 +33,8 @@ use canic::{
     dto::blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
     dto::cascade::StateSnapshotInput,
     dto::component_provisioning::{
-        FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningStatusResponse,
+        FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningPrepareRequest,
+        FleetComponentProvisioningStatusResponse,
     },
     dto::cycles::Cycles,
     dto::env::{EnvBootstrapArgs, EnvSnapshotResponse},
@@ -682,6 +683,10 @@ fn fleet_component_provisioning_plan_surface_is_controller_guarded_and_bounded()
         canic::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_STATUS,
         "canic_fleet_component_provisioning_status"
     );
+    assert_eq!(
+        canic::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE,
+        "canic_fleet_component_provisioning_advance"
+    );
     let source =
         read_text(&workspace_root().join("crates/canic/src/macros/endpoints/fleet_coordinator.rs"));
     let prepare = preceding_attribute_context(
@@ -692,6 +697,24 @@ fn fleet_component_provisioning_plan_surface_is_controller_guarded_and_bounded()
         prepare.contains("requires(caller::is_controller())")
             && prepare.contains("payload(max_bytes"),
         "Fleet Component plan preparation must remain controller guarded and payload bounded"
+    );
+    assert!(
+        preceding_attribute_context(
+            &source,
+            "async fn canic_fleet_component_provisioning_advance(",
+        )
+        .contains("canic_update(requires(caller::is_controller()))"),
+        "Fleet Component plan advance must remain a controller-guarded update"
+    );
+    let root_source =
+        read_text(&workspace_root().join("crates/canic/src/macros/endpoints/root.rs"));
+    let root_accept = preceding_attribute_context(
+        &root_source,
+        "async fn canic_root_component_provisioning_accept(",
+    );
+    assert!(
+        root_acceptance_is_bounded_public_update(&root_accept),
+        "root Component plan acceptance must remain an internal public and payload-bounded update"
     );
     assert!(
         preceding_attribute_context(
@@ -714,13 +737,21 @@ fn fleet_component_provisioning_plan_surface_is_controller_guarded_and_bounded()
             "Fleet Component preparation Candid is missing {field}:\n{prepare_env}"
         );
     }
+    let advance_env = candid_type_env::<FleetComponentProvisioningAdvanceRequest>();
+    assert!(
+        advance_env.contains("expected_accepted_root_count"),
+        "Fleet Component advance Candid is missing its exact cursor:\n{advance_env}"
+    );
     let status_env = candid_type_env::<FleetComponentProvisioningStatusResponse>();
     for field in [
         "operation_id",
         "plan_hash",
         "phase",
+        "accepted_root_count",
+        "acceptance_in_flight_root",
         "component_count",
         "planned_at_ns",
+        "roots_accepted_at_ns",
     ] {
         assert!(
             status_env.contains(field),
@@ -834,6 +865,11 @@ fn assert_fleet_registry_protocol_constants() {
             canic::protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
             canic_core::protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
             "canic_fleet_registry_activate",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE,
+            canic_core::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE,
+            "canic_fleet_component_provisioning_advance",
         ),
         (
             canic::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_PREPARE,
@@ -1195,21 +1231,7 @@ fn assert_root_registry_mirror_guards(root: &str) {
             .contains("canic_query(composite, requires(caller::is_controller()))"),
         "root Component Registry status must remain a controller-guarded composite query"
     );
-    assert!(
-        preceding_attribute_context(root, "async fn canic_root_component_provisioning_accept(")
-            .contains("canic_update(internal, public)"),
-        "root Component provisioning acceptance must remain a public update authenticated by workflow"
-    );
-    assert!(
-        preceding_attribute_context(root, "async fn canic_root_component_provisioning_advance(")
-            .contains("canic_update(internal, public)"),
-        "root Component provisioning advance must remain a public update authenticated by workflow"
-    );
-    assert!(
-        preceding_attribute_context(root, "async fn canic_root_component_provisioning_status(")
-            .contains("canic_query(internal, public)"),
-        "root Component provisioning status must remain a public query authenticated by workflow"
-    );
+    assert_root_component_provisioning_guards(root);
     assert!(
         preceding_attribute_context(root, "async fn canic_root_component_allocate(")
             .contains("canic_update(requires(caller::is_controller()))"),
@@ -1274,6 +1296,32 @@ fn assert_root_registry_mirror_guards(root: &str) {
             .contains("canic_query(internal, public)"),
         "root Component Directory pages must remain public queries authenticated by workflow"
     );
+}
+
+fn assert_root_component_provisioning_guards(root: &str) {
+    let acceptance =
+        preceding_attribute_context(root, "async fn canic_root_component_provisioning_accept(");
+    assert!(
+        root_acceptance_is_bounded_public_update(&acceptance),
+        "root Component provisioning acceptance must remain a public update authenticated by workflow"
+    );
+    assert!(
+        preceding_attribute_context(root, "async fn canic_root_component_provisioning_advance(")
+            .contains("canic_update(internal, public)"),
+        "root Component provisioning advance must remain a public update authenticated by workflow"
+    );
+    assert!(
+        preceding_attribute_context(root, "async fn canic_root_component_provisioning_status(")
+            .contains("canic_query(internal, public)"),
+        "root Component provisioning status must remain a public query authenticated by workflow"
+    );
+}
+
+fn root_acceptance_is_bounded_public_update(attribute: &str) -> bool {
+    let is_internal_public = attribute.contains("internal") && attribute.contains("public");
+    let has_exact_envelope = attribute.contains("payload(max_bytes")
+        && attribute.contains("MAX_FLEET_SUBNET_ROOT_PROVISIONING_ACCEPTANCE_PAYLOAD_BYTES");
+    attribute.contains("canic_update(") && is_internal_public && has_exact_envelope
 }
 
 fn assert_peer_component_guards(root: &str) {

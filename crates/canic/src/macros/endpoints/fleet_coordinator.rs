@@ -82,6 +82,15 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
             )
         }
 
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_fleet_component_provisioning_advance(
+            request: ::canic::dto::component_provisioning::FleetComponentProvisioningAdvanceRequest,
+        ) -> Result<::canic::dto::component_provisioning::FleetComponentProvisioningStatusResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::advance_component_provisioning(
+                request,
+            ).await
+        }
+
         #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_fleet_component_provisioning_status(
             request: ::canic::dto::component_provisioning::FleetComponentProvisioningStatusRequest,

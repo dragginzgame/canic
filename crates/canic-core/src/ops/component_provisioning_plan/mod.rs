@@ -12,10 +12,10 @@ use crate::{
     InternalError,
     cdk::types::Cycles,
     config::{
-        ComponentDeploymentLimits, ComponentDeploymentPurpose, ComponentGroupDeploymentSpec,
-        ComponentGroupDeploymentTopology, ComponentTopology, ConfigModel,
-        FlattenedComponentGroupDeploymentMember, FleetServiceMemberPurpose, FleetServiceTopology,
-        MAX_COMPONENT_GROUP_DEPLOYMENT_MEMBERS,
+        ComponentDeploymentConfiguration, ComponentDeploymentLimits, ComponentDeploymentPurpose,
+        ComponentGroupDeploymentSpec, ComponentGroupDeploymentTopology, ComponentTopology,
+        ConfigModel, FlattenedComponentGroupDeploymentMember, FleetServiceMemberPurpose,
+        FleetServiceTopology, MAX_COMPONENT_GROUP_DEPLOYMENT_MEMBERS,
     },
     dto::{
         component_provisioning::{
@@ -56,6 +56,9 @@ pub const MAX_FLEET_COMPONENT_PROVISIONING_PLAN_ENTRIES: usize =
     MAX_COMPONENT_GROUP_DEPLOYMENT_MEMBERS;
 /// Maximum canonical bytes accepted for one root's exact batch.
 pub const MAX_FLEET_SUBNET_ROOT_PROVISIONING_BATCH_CANONICAL_BYTES: usize = 8_388_608;
+/// Maximum Candid payload bytes for the batch plus its fixed acceptance authority.
+pub const MAX_FLEET_SUBNET_ROOT_PROVISIONING_ACCEPTANCE_PAYLOAD_BYTES: usize =
+    MAX_FLEET_SUBNET_ROOT_PROVISIONING_BATCH_CANONICAL_BYTES + 65_536;
 
 /// Validated local capacity and artifact facts derived from one exact root batch.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -197,7 +200,19 @@ impl ComponentProvisioningPlanOps {
         registry: &FleetRegistry,
         plan: &FleetComponentProvisioningPlan,
     ) -> Result<(), InternalError> {
-        validate(config, registry, plan)
+        let compiled = compile_configuration(config)
+            .map_err(OpsError::from)
+            .map_err(InternalError::from)?;
+        Self::validate_compiled(&compiled, registry, plan)
+    }
+
+    /// Validate one plan against an exact decoded compiled configuration authority.
+    pub fn validate_compiled(
+        configuration: &ComponentDeploymentConfiguration,
+        registry: &FleetRegistry,
+        plan: &FleetComponentProvisioningPlan,
+    ) -> Result<(), InternalError> {
+        validate_compiled_configuration(configuration, registry, plan)
             .map_err(OpsError::from)
             .map_err(InternalError::from)
     }
@@ -208,7 +223,19 @@ impl ComponentProvisioningPlanOps {
         registry: &FleetRegistry,
         plan: &FleetComponentProvisioningPlan,
     ) -> Result<Vec<u8>, InternalError> {
-        canonical_bytes(config, registry, plan)
+        let compiled = compile_configuration(config)
+            .map_err(OpsError::from)
+            .map_err(InternalError::from)?;
+        Self::canonical_bytes_compiled(&compiled, registry, plan)
+    }
+
+    /// Return canonical plan bytes under an exact decoded compiled configuration authority.
+    pub fn canonical_bytes_compiled(
+        configuration: &ComponentDeploymentConfiguration,
+        registry: &FleetRegistry,
+        plan: &FleetComponentProvisioningPlan,
+    ) -> Result<Vec<u8>, InternalError> {
+        canonical_bytes_compiled_configuration(configuration, registry, plan)
             .map_err(OpsError::from)
             .map_err(InternalError::from)
     }
@@ -219,9 +246,19 @@ impl ComponentProvisioningPlanOps {
         registry: &FleetRegistry,
         plan: &FleetComponentProvisioningPlan,
     ) -> Result<[u8; 32], InternalError> {
-        let bytes = canonical_bytes(config, registry, plan)
+        let compiled = compile_configuration(config)
             .map_err(OpsError::from)
             .map_err(InternalError::from)?;
+        Self::hash_compiled(&compiled, registry, plan)
+    }
+
+    /// Hash one plan under an exact decoded compiled configuration authority.
+    pub fn hash_compiled(
+        configuration: &ComponentDeploymentConfiguration,
+        registry: &FleetRegistry,
+        plan: &FleetComponentProvisioningPlan,
+    ) -> Result<[u8; 32], InternalError> {
+        let bytes = Self::canonical_bytes_compiled(configuration, registry, plan)?;
         Ok(Sha256::digest(bytes).into())
     }
 
@@ -234,8 +271,11 @@ impl ComponentProvisioningPlanOps {
         expected_root: &FleetSubnetRootBinding,
         batch: &FleetSubnetRootProvisioningBatch,
     ) -> Result<RootComponentProvisioningBatchValidation, InternalError> {
-        validate_root_batch(
-            config,
+        let compiled = compile_configuration(config)
+            .map_err(OpsError::from)
+            .map_err(InternalError::from)?;
+        validate_root_batch_compiled(
+            &compiled,
             registry,
             fleet_registry,
             configuration_digest,
@@ -255,8 +295,11 @@ impl ComponentProvisioningPlanOps {
         expected_root: &FleetSubnetRootBinding,
         batch: &FleetSubnetRootProvisioningBatch,
     ) -> Result<Vec<u8>, InternalError> {
-        validate_root_batch(
-            config,
+        let compiled = compile_configuration(config)
+            .map_err(OpsError::from)
+            .map_err(InternalError::from)?;
+        validate_root_batch_compiled(
+            &compiled,
             registry,
             fleet_registry,
             configuration_digest,
@@ -274,24 +317,58 @@ impl ComponentProvisioningPlanOps {
     }
 }
 
+fn compile_configuration(
+    config: &ConfigModel,
+) -> Result<ComponentDeploymentConfiguration, ComponentProvisioningPlanOpsError> {
+    config
+        .compile_component_deployment_configuration()
+        .map_err(|error| ComponentProvisioningPlanOpsError::Configuration(error.to_string()))
+}
+
+#[cfg(test)]
 fn validate(
     config: &ConfigModel,
     registry: &FleetRegistry,
     plan: &FleetComponentProvisioningPlan,
 ) -> Result<(), ComponentProvisioningPlanOpsError> {
-    let component_topology = config
-        .compile_component_topology()
+    let configuration = compile_configuration(config)?;
+    validate_compiled_configuration(&configuration, registry, plan)
+}
+
+#[cfg(test)]
+fn validate_root_batch(
+    config: &ConfigModel,
+    registry: &FleetRegistry,
+    fleet_registry: &FleetRegistryVersion,
+    configuration_digest: ComponentDeploymentConfigurationDigest,
+    expected_root: &FleetSubnetRootBinding,
+    batch: &FleetSubnetRootProvisioningBatch,
+) -> Result<RootComponentProvisioningBatchValidation, ComponentProvisioningPlanOpsError> {
+    let configuration = compile_configuration(config)?;
+    validate_root_batch_compiled(
+        &configuration,
+        registry,
+        fleet_registry,
+        configuration_digest,
+        expected_root,
+        batch,
+    )
+}
+
+fn validate_compiled_configuration(
+    configuration: &ComponentDeploymentConfiguration,
+    registry: &FleetRegistry,
+    plan: &FleetComponentProvisioningPlan,
+) -> Result<(), ComponentProvisioningPlanOpsError> {
+    let expected_digest = configuration
+        .digest()
         .map_err(|error| ComponentProvisioningPlanOpsError::Configuration(error.to_string()))?;
-    let deployment_topology = config
-        .compile_component_group_deployment_topology()
-        .map_err(|error| ComponentProvisioningPlanOpsError::Configuration(error.to_string()))?;
-    let service_topology = config
-        .compile_fleet_service_topology()
-        .map_err(|error| ComponentProvisioningPlanOpsError::Configuration(error.to_string()))?;
-    let expected_digest = config
-        .compile_component_deployment_configuration_digest()
-        .map_err(|error| ComponentProvisioningPlanOpsError::Configuration(error.to_string()))?;
-    validate_plan_authority(registry, plan, &component_topology, expected_digest)?;
+    validate_plan_authority(
+        registry,
+        plan,
+        &configuration.component_topology,
+        expected_digest,
+    )?;
     validate_bounds(plan)?;
     validate_confirmation_roots(registry, plan)?;
 
@@ -306,8 +383,8 @@ fn validate(
         let _validation = validate_batch(
             registry,
             batch,
-            &component_topology,
-            &deployment_topology,
+            &configuration.component_topology,
+            &configuration.deployment_topology,
             &mut ledger,
         )?;
         if plan
@@ -319,35 +396,34 @@ fn validate(
         }
     }
 
-    validate_operation(plan, &deployment_topology, &service_topology, &ledger)
+    validate_operation(
+        plan,
+        &configuration.deployment_topology,
+        &configuration.fleet_service_topology,
+        &ledger,
+    )
 }
 
-fn validate_root_batch(
-    config: &ConfigModel,
+fn validate_root_batch_compiled(
+    configuration: &ComponentDeploymentConfiguration,
     registry: &FleetRegistry,
     fleet_registry: &FleetRegistryVersion,
     configuration_digest: ComponentDeploymentConfigurationDigest,
     expected_root: &FleetSubnetRootBinding,
     batch: &FleetSubnetRootProvisioningBatch,
 ) -> Result<RootComponentProvisioningBatchValidation, ComponentProvisioningPlanOpsError> {
-    let component_topology = config
-        .compile_component_topology()
-        .map_err(|error| ComponentProvisioningPlanOpsError::Configuration(error.to_string()))?;
-    let deployment_topology = config
-        .compile_component_group_deployment_topology()
-        .map_err(|error| ComponentProvisioningPlanOpsError::Configuration(error.to_string()))?;
-    let service_topology = config
-        .compile_fleet_service_topology()
-        .map_err(|error| ComponentProvisioningPlanOpsError::Configuration(error.to_string()))?;
-    let expected_digest = config
-        .compile_component_deployment_configuration_digest()
+    let expected_digest = configuration
+        .digest()
         .map_err(|error| ComponentProvisioningPlanOpsError::Configuration(error.to_string()))?;
     if configuration_digest != expected_digest {
         return Err(ComponentProvisioningPlanOpsError::ConfigurationDigestMismatch);
     }
-    let expected_registry =
-        FleetRegistryOps::version(&registry.authority, &component_topology, registry)
-            .map_err(|error| ComponentProvisioningPlanOpsError::FleetRegistry(error.to_string()))?;
+    let expected_registry = FleetRegistryOps::version(
+        &registry.authority,
+        &configuration.component_topology,
+        registry,
+    )
+    .map_err(|error| ComponentProvisioningPlanOpsError::FleetRegistry(error.to_string()))?;
     if fleet_registry != &expected_registry {
         return Err(ComponentProvisioningPlanOpsError::FleetRegistryVersionMismatch);
     }
@@ -359,11 +435,15 @@ fn validate_root_batch(
     let validation = validate_batch(
         registry,
         batch,
-        &component_topology,
-        &deployment_topology,
+        &configuration.component_topology,
+        &configuration.deployment_topology,
         &mut ledger,
     )?;
-    validate_root_batch_density(batch, &deployment_topology, &service_topology)?;
+    validate_root_batch_density(
+        batch,
+        &configuration.deployment_topology,
+        &configuration.fleet_service_topology,
+    )?;
     Ok(validation)
 }
 
@@ -881,15 +961,25 @@ impl PlanValidationLedger {
     }
 }
 
+fn canonical_bytes_compiled_configuration(
+    configuration: &ComponentDeploymentConfiguration,
+    registry: &FleetRegistry,
+    plan: &FleetComponentProvisioningPlan,
+) -> Result<Vec<u8>, ComponentProvisioningPlanOpsError> {
+    validate_compiled_configuration(configuration, registry, plan)?;
+    let mut encoder = CanonicalEncoder::new();
+    encode_plan(&mut encoder, plan);
+    encoder.finish()
+}
+
+#[cfg(test)]
 fn canonical_bytes(
     config: &ConfigModel,
     registry: &FleetRegistry,
     plan: &FleetComponentProvisioningPlan,
 ) -> Result<Vec<u8>, ComponentProvisioningPlanOpsError> {
-    validate(config, registry, plan)?;
-    let mut encoder = CanonicalEncoder::new();
-    encode_plan(&mut encoder, plan);
-    encoder.finish()
+    let configuration = compile_configuration(config)?;
+    canonical_bytes_compiled_configuration(&configuration, registry, plan)
 }
 
 fn encode_plan(encoder: &mut CanonicalEncoder, plan: &FleetComponentProvisioningPlan) {
